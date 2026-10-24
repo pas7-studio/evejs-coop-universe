@@ -1,3 +1,40 @@
+## Native player consequences — October 24
+
+The free-roaming Living Universe now attaches **actual player choices**
+to stock EveJS standings rather than storing an unrelated reputation
+score. The source of the event is the upstream mining NPC fleet's
+processed aggression record, not a timed scripted encounter.
+
+- `coopNativeConsequences.js` only accepts a mining aggressor when
+  the authoritative scene has a matching real character session/ship
+  or that character's explicitly owned drone. NPC pilot IDs cannot
+  accidentally affect a player.
+- Real mining assault events are journaled and deduplicated by character,
+  fleet, system and 15-minute window, then applied using EveJS
+  `standingRuntime.applyStandingChanges()` (event 76). A raw
+  standing penalty of -0.25 is issued for an attributable attack.
+- The **existing** NPC mining fleet standings policy then controls
+  its response: friendly 0, neutral 2, hostile 4 defenders under
+  the game-night configuration. The engine, not our overlay,
+  decides target validity, weapons, and actual standings math.
+- A native wreck of a durable named pirate may produce a raw -0.12
+  standing change with the pirate's owner only when EveJS supplies
+  an authenticated killer character. The native controller target
+  is inspected to see if that pirate was really hunting a miner
+  from an existing EveJS mining fleet. If so, the verified player
+  earns +0.18 raw standing with that miner's faction/corporation.
+- Event IDs are persisted to
+  `/var/lib/evejs/coop-player-consequences.json`. Failed or ambiguous
+  standing updates do not blindly retry and double-apply on restart.
+  The user receives an ordinary targeted EveJS local-chat notice
+  for confirmed updates and `-Action Party` can display the last
+  20 observed standing changes.
+
+The original native combat, standings, mining behavior, and
+kill ownership remain authoritative. A real two-client Docker test
+is still required to validate the client-side standings interface
+and verified kill options for the pinned EveJS runtime.
+
 
 ## Native EveJS industry and emergent piracy — current preferred path
 
