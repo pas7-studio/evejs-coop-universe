@@ -22,6 +22,8 @@ $materializerSource=Join-Path $PSScriptRoot '../integration/coopNpcMaterializer.
 $materializerTarget=Join-Path $server 'space/coopNpcMaterializer.js'
 $identitySource=Join-Path $PSScriptRoot '../integration/coopIdentityRegistry.cjs'
 $identityTarget=Join-Path $server 'space/coopIdentityRegistry.js'
+$economySource=Join-Path $PSScriptRoot '../integration/coopVirtualEconomy.cjs'
+$economyTarget=Join-Path $server 'space/coopVirtualEconomy.js'
 $expected='c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
 $rev=(& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
 if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" }
@@ -72,6 +74,7 @@ if($Remove) {
   if(Test-Path -LiteralPath $virtualRuntimeTarget){Remove-Item -LiteralPath $virtualRuntimeTarget -Force}
   if(Test-Path -LiteralPath $materializerTarget){Remove-Item -LiteralPath $materializerTarget -Force}
   if(Test-Path -LiteralPath $identityTarget){Remove-Item -LiteralPath $identityTarget -Force}
+  if(Test-Path -LiteralPath $economyTarget){Remove-Item -LiteralPath $economyTarget -Force}
 } else {
   Copy-Item -LiteralPath $probeSource -Destination $probeTarget -Force
   Copy-Item -LiteralPath $npcSource -Destination $npcTarget -Force
@@ -81,5 +84,6 @@ if($Remove) {
   Copy-Item -LiteralPath $virtualRuntimeSource -Destination $virtualRuntimeTarget -Force
   Copy-Item -LiteralPath $materializerSource -Destination $materializerTarget -Force
   Copy-Item -LiteralPath $identitySource -Destination $identityTarget -Force
+  Copy-Item -LiteralPath $economySource -Destination $economyTarget -Force
 }
 Write-Host 'Co-op probe installation complete. Set EVEJS_COOP_EVENTS_FILE within the server container to enable JSONL event output.'
