@@ -88,7 +88,7 @@ test("LootPickup gate requires same wreck, real source debit, and authenticated 
   "AWAITING_AUTHENTICATED_NATIVE_LOOT_PICKUP");
  const failed=pickup.replace("VERIFIED_NATIVE_LOOT_PICKUP","NATIVE_LOOT_SOURCE_NOT_REMOVED");
  assert.equal(summarize([...base,failed].join("\n"),opts).status,
-  "AWAITING_AUTHENTICATED_NATIVE_LOOT_PICKUP");
+  "BLOCKED_NATIVE_LOOT_SOURCE_MUTATION");
  assert.equal(summarize([...base,pickup,failed].join("\n"),opts).status,
   "BLOCKED_NATIVE_LOOT_SOURCE_MUTATION");
  const partial=pickup.replace("VERIFIED_NATIVE_LOOT_PICKUP","NATIVE_LOOT_SOURCE_NOT_DECREMENTED");
