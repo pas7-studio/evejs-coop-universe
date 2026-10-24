@@ -25,7 +25,13 @@ function observeSession(session,ship){
       const scene=runtime.ensureScene(systemID,{refreshStargates:false});
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
+        const {createRegistry}=require("./coopIdentityRegistry");
+        const registry=createRegistry({
+          file:process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json",
+          exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id))
+        });
         bridge=createBridge({
+          registry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
           exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
           spawn:(system,pilot)=>npc.spawnBatchInSystem(system,{
