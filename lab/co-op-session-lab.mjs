@@ -62,7 +62,7 @@ export async function startLab({ port = 0, host = '127.0.0.1' } = {}) {
     }
   };
 }
-if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1].replaceAll('\\', '/')).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const lab = await startLab({ port: Number(process.env.LAB_PORT || 28000) });
   console.log('Co-op session fixture on 127.0.0.1:' + lab.port + ' (localhost ONLY)');
   for (const sig of ['SIGINT', 'SIGTERM']) process.once(sig, () => lab.close().then(() => process.exit(0)));
