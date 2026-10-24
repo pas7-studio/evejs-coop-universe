@@ -1,6 +1,6 @@
 # Client-free native NPC activity gate (manual only)
 
-**State:** the owner reported the local backend/overlay healthy on 2026-10-25, but the live headless event log is **missing** and no physical NPC gameplay is verified. See [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md). It is not proof of playable EVE-client combat.
+**State (2026-10-25):** a tester confirmed real headless event logging, but World is still BLOCKED. Jita 30000142 legitimately has **zero SDE asteroid belts**; Perimeter 30000144 has **three**. Validate physical mining in Perimeter, and Jita non-mining NPCs separately. No actual NPC gameplay or client view is yet verified. See [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md).
 GitHub Actions / remote CI are explicitly prohibited by the repository owner.
 
 ## Purpose
@@ -50,8 +50,8 @@ node --check scripts/coop-world-report.cjs
 
 # Existing running server: diagnose missing native events without rebuilds.
 .\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
-# Only if the real event stream is present:
-.\scripts\Local-Two-Client-Test.ps1 -Action World -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+# Once the real event stream exists: mining test on the real Perimeter belts.
+.\scripts\Local-Two-Client-Test.ps1 -Action World -WorldSystemID 30000144 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
 ```
 
 The `World` action now invokes the report with `--require-activity`. An early
@@ -63,6 +63,21 @@ and runtime environment; a missing client does **not** explain an absent
 headless boot-request event.
 To diagnose failures, inspect the ordinary `-Action Logs` output and the
 event log inside the server container; never infer success from flags alone.
+
+## 2026-10-25 SDE / native spawn diagnostics
+
+`World` now defaults to **Perimeter**, where genuine asteroid belts exist.
+A specifically requested Jita mining test returns
+`SYSTEM_HAS_NO_NATIVE_MINING_BELTS` rather than claiming global SDE
+corruption. The headless driver reports SDE vs scene belt counts in
+`living-native-system-site-readiness`, and explicit resident,
+candidate, existing fleet, and `spawnErrors` data in
+`living-native-materialization-attempt`.
+The 0 named NPC result **remains unverified** until the updated report
+explains it.
+
+Do not add artificial belts, clear `evejs-data`, reset virtual
+pilot identity, or repeat npm audit to make the test pass.
 
 ## Acceptance matrix
 
