@@ -10,9 +10,13 @@ function notifyRaid(scene,actions=[],send){
   if(!session?.characterID||session?._space?.initialStateSent!==true)continue;
   try{
    const role=events[0].targetRole==="hauler"?"ore transport":"mining vessel";
+   const target=scene.getEntityByID?.(Number(events[0].targetID));
+   const {nearest}=require("./coopSystemIntel");
+   const waypoint=nearest(scene,target);
+   const location=waypoint?" near "+waypoint.name.replace(/[<>]/g,"").slice(0,60):" in this system";
    const text=events[0].action==="attack"
-     ?"[Living Universe] An NPC pirate is attacking an "+role+" in this system. The miners may need help."
-     :"[Living Universe] Sensors report an NPC pirate moving toward an ore-bearing "+role+".";
+     ?"[Living Universe] NPC pirate engaging an "+role+location+". You can help the convoy or join the raid."
+     :"[Living Universe] Pirate approaching a loaded "+role+location+". Investigate or escort it.";
    deliver(session,text);sent++;
   }catch(error){console.warn("[CoopWorldSignals] Local notification",error.message);}
  }
