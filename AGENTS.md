@@ -26,6 +26,16 @@ server contract tests with observed EVE client gameplay.
 - Do not change task status to DONE on documentation alone.
 - Never commit credentials, client data, dynamic databases, certificates, binaries, screenshots of personal information, or session tokens.
 
+## NPC system transitions: identity and cargo must survive
+
+See `docs/NATIVE_NPC_GATE_TRAVEL.md`. Do not confuse native warp to a
+real reciprocal stargate with a completed solar-system transition. The
+opt-in transfer code is OFF by default pending live EveJS QA. Never fake
+jump success or change virtual system IDs before the exact same native
+ship, controller, modules and cargo are verified at the destination.
+Recover in-flight transfer journals **before** pruning persisted NPC
+identity links. No GitHub Actions or automatic deployments.
+
 ## Stock native mining fleet must not block co-op NPCs
 
 When EveJS native mining is enabled, the two real stock `miner` and
