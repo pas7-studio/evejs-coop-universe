@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','Combat','FinalBlow','Market','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -137,13 +137,18 @@ switch ($Action) {
         $events | & node $report
         if ($LASTEXITCODE -ne 0) { throw 'Could not generate co-op scene report.' }
     }
+    'DiagnoseWorld' {
+        Assert-BackendPrerequisites
+        & (Join-Path $PSScriptRoot 'Diagnose-LivingWorld.ps1') -CodePath $CodePath
+        if (-not $?) { throw 'Read-only Living Universe diagnostic failed.' }
+    }
     'World' {
         Assert-BackendPrerequisites
         if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for world report.' }
         $options=Get-ComposeArgs
         $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
         if ($LASTEXITCODE -ne 0) {
-            throw 'No headless/native world evidence yet. Run -Action CoopStart, inspect server startup logs, then retry. Client playtest is separate.'
+            throw 'BLOCKED_TELEMETRY: missing /var/lib/evejs/coop-events.jsonl. Run -Action DiagnoseWorld to inspect the running overlay, startup hook and log path WITHOUT restarting. Headless boot should emit a boot-requested event before any game client logs in; do not substitute npm audit or TCP tests.'
         }
         $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity
         if ($LASTEXITCODE -ne 0) {
