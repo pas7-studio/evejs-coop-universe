@@ -1,4 +1,54 @@
 
+## Native EveJS industry and emergent piracy — current preferred path
+
+Instead of programming a second mining engine, LivingCoop now enables the
+**existing pinned EveJS NPC mining fleets**:
+
+- \`EVEJS_MINING_NPC_STARTUP_ENABLED=true\` with **one fleet per configured
+  system**, **two native miners and one native hauler**. Mining modules
+  select real mineable asteroid entities, deplete rocks using native mining
+  runtime, and produce actual ore stacks in \`nativeNpcStore\`.
+- Available durable virtual miner and hauler identities are bound to
+  **those real EveJS ships**, and no generic hostile-profile NPCs are
+  spawned as substitute workers. The virtual world continues to own
+  names, histories, injuries and faction bookkeeping; EveJS remains
+  authoritative for the physical ships, real ore, weapons and wrecks.
+- \`coopNativeHaulCargo.js\` changes the pinned native haul handoff:
+  instead of simply erasing ore at pickup, the SAME cargo item IDs are
+  transferred from the miner's native NPC cargo record to the
+  hauler's native NPC cargo record. A destroyed loaded hauler therefore
+  carries lootable ore through EveJS's unchanged wreck service.
+  Once the hauler reaches its origin, cargo unloads into a
+  **virtual depot sink**. Stock EVE station inventory, wallet and market
+  transactions are not yet credited.
+- \`coopNativeRaids.js\` periodically notices miners/haulers already
+  carrying ore and commands **existing named pirates** to warp to the
+  target and, when in range, attack using native \`npcRuntime\` orders.
+  These orders never create new NPC enemies, force destruction, or
+  change ship HP directly. The pinned mining fleet AI independently
+  tracks aggression and can dispatch its stock response wing.
+- \`coopWorldSignals.js\` reports organically triggered piracy through
+  the existing EveJS local chat system, informing players in-system
+  about a real conflict they can investigate. It does not spoof an
+  NPC speaker or announce fictional wins.
+- To fit a brief co-op session, the stock hauler is eligible after
+  3 minutes rather than its 90-minute default; minimum trip spacing
+  is 10 minutes, with the stock ore capacity threshold tuned to 20%.
+  These are pacing settings on existing EveJS behaviors, NOT arena waves.
+
+The current configuration remains opt-in under \`-LivingCoop\`.
+\`-Action CoopStart\` chooses that mode by default. The legacy scripted
+encounter director remains a separate explicit developer-only option.
+
+**Current realism boundary:** ore extraction, finite rocks, NPC cargo
+handoff, native combat, native wreck loot and fleet aggression response
+are integrated in source. The simulated depot is not connected to the
+EveJS market or real station inventory. Stock native mining fleets are
+transient and must be restored by the EveJS startup rules when scenes
+load. Real remote-client/TLS and two-client battle behavior still
+need live Docker verification before gameplay can be declared proven.
+
+
 
 ## Current preferred mode: free-roaming Living Universe (supersedes arena mode)
 
