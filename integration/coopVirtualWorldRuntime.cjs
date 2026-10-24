@@ -10,7 +10,12 @@ function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
  const depot=require("./coopNativeDepot").getNativeDepot();
  const result=economy.syncNativeDeliveries(depot.snapshot().totals);
- if(result.quantity>0)console.info("[CoopLivingWorld] Real NPC ore delivered to virtual system supply",JSON.stringify(result));
+ if(result.quantity>0){
+  console.info("[CoopLivingWorld] Real NPC ore delivered to virtual system supply",JSON.stringify(result));
+  require("./coopRuntimeProbe").observe("living-real-ore-delivery",null,null,{
+    quantity:result.quantity,systemTotals:depot.snapshot().totals
+  });
+ }
 }
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
