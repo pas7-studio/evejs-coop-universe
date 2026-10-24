@@ -307,3 +307,31 @@ physical-NPC persistence engine.
 `node --test tests/coop-identity-registry.test.mjs` exercises restart reuse,
 duplicate suppression, and invalid link rejection. This remains unverified
 on the real two-client Docker server.
+
+## Autonomous virtual NPC production and faction pressure
+
+An optional `coopVirtualEconomy.js` advances once per minute alongside
+the virtual world timer. Pilots receive stable roles (miner, hauler, trader,
+patrol) in the separate, durable virtual simulation. Mining adds ore,
+hauling converts available ore into goods, trading consumes goods and
+records credits/demand, and patrols raise system security. A `recordLoss()`
+API records bounded hostile losses, reduces security and increases demand.
+
+All values live in `/var/lib/evejs/coop-economy.json` on the existing
+EveJS volume. The elapsed-time catch-up is capped at 1440 ticks per
+invocation to avoid large single-tick stalls after long downtime. Resource
+balances are bounded and never negative.
+
+Enable with the current virtual population and materialization overlay:
+
+```powershell
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnableVirtualWorld -EnableVirtualEconomy -MaterializeVirtualNpcs -VirtualPopulation 16 -MaterializeLimit 2
+```
+
+This is a **closed virtual accounting model**, not the authoritative EveJS
+market or inventory. It does not issue player market orders, create real
+mineral items, spawn physical transporters, debit player wallets or update
+corporation standings. Its loss-event API is not yet connected to native
+killmails, so battle outcomes do not automatically feed faction demand.
+The virtual runtime still first initializes on a player's in-space login.
+Native client/gameplay validation has not been performed.
