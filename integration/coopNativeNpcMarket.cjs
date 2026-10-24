@@ -155,7 +155,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
     x.source==="seed"&&Number(x.station_id)===pre.stationID&&
     Number(x.type_id)===pre.typeID&&
     Number(x.vol_remaining)>=1&&Number(x.price)>0&&
-    Number(x.price)<=maxPrice&&Number.isSafeInteger(Number(x.order_id)));
+    Number(x.price)<=maxPrice&&/^\\d+$/.test(String(x.order_id||"")));
    if(!row)return status("NO_SEEDED_COUNTERPARTY");
    const price=amount(row.price),maxOrder=Math.min(maxQuantity,Number(row.vol_remaining));
    if(price===null||price<=0||maxOrder<1)return status("INVALID_SEEDED_ORDER");
@@ -167,7 +167,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
    }else{
     const type=resolveType(pre.typeID);
     if(!type||Number(type.typeID)!==pre.typeID||!pos(type.groupID)||!pos(type.categoryID)||
-     !Number.isFinite(type.volume)||type.volume<0)return status("UNKNOWN_NATIVE_ITEM_TYPE");
+     !Number.isFinite(Number(type.volume))||Number(type.volume)<0)return status("UNKNOWN_NATIVE_ITEM_TYPE");
     quantity=Math.min(maxOrder,Math.floor(pre.balance/price));
     if(quantity<1)return status("INSUFFICIENT_EARNED_ISK");
     allocated=store.allocateCargoID({transient:false});
@@ -200,7 +200,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
      error:String(error?.message||error).slice(0,120)};
    }
    const fill=pre.side==="sell"?Number(ack?.filled_quantity)===quantity&&
-    Number(ack?.order_id)===Number(row.order_id)&&
+    String(ack?.order_id)===String(row.order_id)&&
     ack.bid===true&&Number(ack?.station_id)===pre.stationID&&
     Number(ack?.type_id)===pre.typeID:
     Number(ack?.station_id)===pre.stationID&&
