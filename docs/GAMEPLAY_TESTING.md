@@ -77,6 +77,31 @@ A healthy `server` container + `EVEJS_COOP_* = 1` does **not** imply that the he
 
 If necessary collect only the **relevant redacted** diagnostic evidence and a small recent server log excerpt. Never publish all environment variables, tokens, character IDs, private IPs, keys, or the full production logs.
 
+## Per-system diagnosis from 2026-10-25: Jita is NOT a mining test
+
+The tester measured **Jita (30000142)** with 66 waypoints, 18 stations,
+7 gates and **zero asteroid belts**; this is legitimate per-system SDE,
+not evidence that global SDE generation is broken. The route also
+includes **Perimeter (30000144)**, which has three genuine SDE belts.
+Use `-WorldSystemID 30000144` for the physical mining World gate,
+while separately validating Jita NPC patrols/traders. Never manufacture
+asteroid entities in Jita.
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action World -WorldSystemID 30000144
+```
+
+If Perimeter lacks physical fleet or named NPC assignments, read the
+new `systemSiteReadiness` and `nativeMaterializerAttempt` sections of
+the World report. `living-native-materialization-attempt` exposes
+candidate counts and exact native spawn errors. The first report from
+the tester (revision `a087167`) does **not** validate these fixes or
+prove that Perimeter will have sufficient ore/active NPCs.
+
+**Jita may become headless-ready with real named non-mining NPCs**, but
+its imaginary miners cannot make mining pass. No client is required to
+obtain the real server-side bootstrap/scene evidence.
+
 ## Phase 2 — prove actual physical NPC scene activity on server (NO CLIENT REQUIRED)
 
 After Phase 1 produces real events, run:
