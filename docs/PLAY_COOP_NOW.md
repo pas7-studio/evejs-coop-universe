@@ -38,28 +38,23 @@ The tactical logic is independently unit-verified; the actual EVE
 client visuals, damage simulation, warp arrival and shared combat
 still need a live client playtest.
 
-**Work order:** finish this NPC combat block first. Treat real
-two-client/fleet/loot/reconnect as a later *single P0 block*. After
-that, integrate physical NPC gate travel and authentic player-visible
-market trading as another block. Finally build individual NPC memories
-and long-running faction stories.
+**Testing priority:** prove real headless NPC events and activity first; only then the visible EVE client and two-player gates. P1 features stay disabled until separately tested. See [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md).
 
-
-## Experimental headless native NPC boot (new code, not live-proven)
+## Experimental headless native NPC boot## Experimental headless native NPC boot (new code, not live-proven)
 
 The LivingCoop overlay now requests a bounded **server-side bootstrap**
 of both configured systems after startup; it no longer needs the
 first player's login just to attempt native NPC scene materialization.
 It checks actual EveJS asteroid belts, stock mining ships and physically
-linked named NPC ships. Missing scene elements remain PENDING and are
-retried a limited number of times, rather than being reported as success.
+linked named NPC ships. Missing scene elements remain PENDING and are retried with bounded
+backoff, rather than being reported as success.
 The server writes `living-headless-boot-requested` and
 `living-headless-boot-system` diagnostics into the regular persistent
 event log. This code has **not** been verified inside a live EveJS container.
 
-With the updated overlay installed, use `-Action CoopStart`, inspect the
-server logs, then `-Action World` even without a client to assess
-real server-side topology and NPC entities. A physical server-side
+For an already installed overlay, use **read-only** `-Action DiagnoseWorld`
+and then `-Action World` without a client to assess native topology and
+NPC activity. `-Action CoopStart` is for explicit deployment only. A physical server-side
 ready result is only a **READY_FOR_CLIENT_PLAYTEST** gate, not proof
 of client rendering, combat, fleet movement, player loot or reconnection.
 
@@ -80,61 +75,16 @@ claim until native-client observation confirms actual delivery.
 **No GitHub Actions / CI**: automatic workflows were removed by owner request.
 Run local tests manually when needed; do not add or trigger remote CI.
 
-## October 24: verified backend is not yet verified Living Universe
+## Current operator result — October 25, 2026
 
-A client-free verifier run demonstrated 44 passing local tests, 27
-passing pinned EveJS upstream contract tests, a healthy backend, two
-concurrent TCP sockets, reconnect and loopback-only Compose ports.
-These prove useful *server contracts*; they do not prove that compatible
-EVE clients can log in, see each other's ships or interact with NPCs.
+The existing run at project commit `cc5ce83` confirmed backend health and
+72 local / 27 upstream contract tests, but **no native NPC event file**.
+The immediate task is read-only `-Action DiagnoseWorld`, then `World`
+after the event stream is fixed. Backend/Powershell/NPM auditing is not
+a substitute for verifying the live world. See
+[GAMEPLAY_TESTING](GAMEPLAY_TESTING.md).
 
-The upstream contract log prints \`Loaded 0 systems, 0 asteroid belts\`
-under its isolated fixture. That is **not** proof the actual container
-has no star systems. A separate live runtime check is required.
-
-The verifier now uses a separate attested temporary EveJS gameStore for
-each upstream test. It never runs \`node --test\` against the persistent
-live server database. It also starts the complete installed
-\`compose.coop-probe.yaml\` overlay rather than silently starting only
-the base EveJS Compose file.
-
-For an **opt-in native Living Universe configuration gate**, first
-deploy the world, then run:
-
-~~~powershell
-cd H:\projects\evejs-coop-universe
-git pull
-.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
-.\scripts\Verify-Local-Coop.ps1 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -IncludeUpstreamTests -RequireLivingUniverse
-~~~
-
-\`-RequireLivingUniverse\` checks that the *running* server container has
-the required virtual-world, native-mining, pirate-raid and intel flags.
-It does not count NPC ships or claim any client-side gameplay pass.
-
-**After starting an actual compatible game client, logging in and
-undocking**, run:
-
-~~~powershell
-.\scripts\Local-Two-Client-Test.ps1 -Action World -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
-.\scripts\Local-Two-Client-Test.ps1 -Action Party -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
-~~~
-
-\`World\` requires fresh server-side evidence from the real game scene:
-at least one authentic asteroid belt, a physical EveJS mining fleet
-with a miner and hauler, and at least one physical NPC assignment.
-It displays exactly what is missing and does not accept virtual
-resident counts or TCP reconnect as substitutes.
-
-Only once this is confirmed should you attempt both real client
-windows, mutual ship visibility, fleet warp, actual NPC engagement,
-wreck looting, disconnect/reconnect and a test from a second PC.
-
-No game data volumes are wiped by these commands. Keep all server
-ports bound to loopback and use only an authenticated private tunnel
-for a remote authorized client.
-
-# Play EveJS Living Universe with a friend
+# Play EveJS Living Universe with a friend# Play EveJS Living Universe with a friend
 
 **No arenas and no scripted PvE waves in the default game mode.** Both
 players enter one persistent EveJS world, encounter named, autonomous
@@ -143,33 +93,29 @@ trade, or use ordinary fleet mechanics.
 
 This integration still requires verification with real EVE clients.
 
-## Setup once
+## Test the existing deployed world
 
-Windows 11, Linux-mode Docker Desktop, Node 22+, Git, the pinned EveJS
-server revision c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f, and two
-independently authorized compatible EVE client accounts/installations
-are required. The project defaults to C:\Games\EveCoopProject and the
-upstream checkout to C:\Games\EveCoop\upstream-evejs\Code.
+Do **not** run `git pull`, `Prepare`, `CoopStart`, a market rebuild,
+or patch installation merely to verify an already-running universe.
+These commands belong to deliberate setup/update workflows
+([FIRST_RUN](FIRST_RUN.md)) and may mutate state or replace local test fixes.
 
-~~~powershell
-cd C:\Games\EveCoopProject
-git pull
-.\scripts\Local-Two-Client-Test.ps1 -Action Prepare
-~~~
+From your existing co-op project checkout, with the already-running
+server:
 
-Do not repeat the initial market build each time you play.
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
+.\scripts\Local-Two-Client-Test.ps1 -Action World
+```
 
-## Start the actual persistent NPC universe
+When `World` has actual physical server evidence, test one authorized
+compatible client manually before using `LaunchTwo` and `Party`. A
+headless boot event does not require any client. Follow the ordered
+[gameplay acceptance matrix](GAMEPLAY_TESTING.md).
 
-~~~powershell
-cd C:\Games\EveCoopProject
-git pull
-.\scripts\Install-Coop-RuntimeProbe.ps1 -DryRun
-.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart
-.\scripts\Local-Two-Client-Test.ps1 -Action Status
-~~~
+## Living Universe behavior to look for
 
-This now enables a world with **20 persistent NPC identities** across
+This now enables a world withThis now enables a world with **20 persistent NPC identities** across
 two solar systems and at most six native physical NPC ships in each
 visited system. NPC roles include **miners, haulers, traders, patrols
 and pirates**. Their ship names show their occupation. Pirates retain
@@ -248,14 +194,16 @@ combat, that loot-sharing works, or that network credentials are valid.
 
 ## Important limitations
 
-**Real mining and haul cargo are now integrated with stock EveJS**,
+**Real mining and haul cargo are implemented against stock EveJS APIs**,
 including physical mineable-rock depletion and ore in native NPC cargo.
 However, unloading currently removes cargo into a virtual depot;
 it does not debit or credit real EveJS station inventories, contracts,
-player wallets or sell orders. Virtual NPC trading and faction
-shipbuilding are separate simulations, not stock market transactions. Physical NPC ships remain in their actual solar system; only
-non-materialized virtual pilots advance between systems asynchronously.
-Native cross-system NPC gate jumps remain unfinished.
+player wallets or independent NPC-owned sell orders. The separate
+seed-market adapter and same-ship stargate transfer are experimental,
+**off by default and not live verified**; see
+[NATIVE_NPC_MARKET](NATIVE_NPC_MARKET.md) and
+[NATIVE_NPC_GATE_TRAVEL](NATIVE_NPC_GATE_TRAVEL.md).
+Never claim a virtual route proves real inter-system travel.
 
 Two-client login, loot observation, fleet warp, reconnect and second-PC
 TLS/certificate compatibility require a real two-client game test.
