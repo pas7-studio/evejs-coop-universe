@@ -92,8 +92,15 @@ function noteMiningAggression(scene,fleet,aggressor,occurredAt){
  if(process.env.EVEJS_COOP_PLAYER_CONSEQUENCES!=="1")return {status:"DISABLED"};
  try{
   const resolved=require("../services/mining/miningNpcStandings");
-  const characterID=resolved.resolveEntityCharacterID(aggressor);
-  if(!positive(characterID))return {status:"IGNORED_NONPLAYER"};
+  // NPCs may carry synthetic pilotCharacterIDs. Only a verifiable player
+  // session (or their owned drone) may receive a real standing penalty.
+  const shooterID=positive(aggressor?.itemID);
+  const session=Array.from(scene?.sessions?.values?.()||[]).find(session=>
+   positive(session?.characterID)&&
+   (positive(session?._space?.shipID)===shooterID||
+    (String(aggressor?.kind)==="drone"&&positive(aggressor?.ownerID)===positive(session.characterID))));
+  const characterID=positive(session?.characterID);
+  if(!characterID)return {status:"IGNORED_NONPLAYER"};
   const victim=(fleet.minerEntityIDs||[]).concat(fleet.haulerEntityIDs||[])
    .map(id=>scene?.getEntityByID(id)).find(Boolean);
   if(!victim)return {status:"NO_FLEET_SHIP"};
