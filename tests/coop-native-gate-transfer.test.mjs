@@ -57,7 +57,11 @@ function fixture(){
    link={...link,systemID:to};return {status:"RELOCATED"};
   }
  };
- const deps={sceneForSystem:id=>scenes.get(id),store,service,
+ const nativeGates=new Map([
+  [900,{itemID:900,solarSystemID:A,destinationID:901}],
+  [901,{itemID:901,solarSystemID:B,destinationID:900}]
+ ]);
+ const deps={sceneForSystem:id=>scenes.get(id),getGate:id=>nativeGates.get(id),store,service,
   registry,getController:id=>runtimeControl?.entityID===id?runtimeControl:null,
   journalDir:path.join(temp,"transactions")};
  const gate={sourceSystemID:A,destinationSystemID:B,sourceGateID:900,destinationGateID:901};
