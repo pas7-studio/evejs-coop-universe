@@ -1,7 +1,7 @@
 "use strict";
 // Bounded offline simulation. Virtual resources are NOT EveJS market inventory.
 const fs=require("node:fs"),path=require("node:path");
-const ROLES=["miner","hauler","patrol","trader"];
+const ROLES=["miner","hauler","patrol","trader","pirate"];
 const cap=n=>Math.max(0,Math.min(1000000,Math.floor(Number(n)||0)));
 function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440}){
  if(!file||!Number.isInteger(stepMs)||stepMs<10000||!Number.isInteger(maxCatchup)||maxCatchup<1||maxCatchup>10000)throw Error("invalid economy settings");
@@ -27,6 +27,14 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
    if(agent.role==="hauler"){const qty=Math.min(2,sys.ore,1000000-sys.goods);sys.ore-=qty;sys.goods+=qty;agent.credits=cap(agent.credits+qty);agent.completed+=qty;}
    if(agent.role==="trader"){const qty=Math.min(2,sys.goods);sys.goods-=qty;sys.demand=cap(sys.demand+qty);agent.credits=cap(agent.credits+qty*3);agent.completed+=qty;}
    if(agent.role==="patrol"){sys.security=Math.min(100,sys.security+1);agent.completed++;}
+   if(agent.role==="pirate"){
+     const stolen=Math.min(2,sys.goods);
+     sys.goods-=stolen;
+     agent.credits=cap(agent.credits+stolen*2);
+     agent.completed+=stolen;
+     sys.security=Math.max(0,sys.security-1);
+     sys.demand=cap(sys.demand+stolen);
+   }
    sys.demand=cap(Math.max(0,sys.demand-1)+(sys.goods<25?1:0));
   }
  }
