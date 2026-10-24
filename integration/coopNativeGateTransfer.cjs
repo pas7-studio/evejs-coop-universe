@@ -12,9 +12,10 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 const itemsSignature=x=>JSON.stringify(x.map(v=>clone(v))
  .sort((a,b)=>Number(a.cargoID||a.moduleID)-Number(b.cargoID||b.moduleID)));
 function createNativeGateTransfer({sceneForSystem,store,service,getController,
- registry,journalDir="/var/lib/evejs/coop-native-transfers",clock=()=>Date.now()}={}){
+ registry,journalDir="/var/lib/evejs/coop-native-transfers",clock=()=>Date.now(),isScrambled=()=>false}={}){
  if(typeof sceneForSystem!=="function"||!store||!service||
-  typeof getController!=="function"||typeof registry?.relocate!=="function"||
+  typeof getController!=="function"||typeof isScrambled!=="function"||
+  typeof registry?.relocate!=="function"||
   typeof service.dematerializeNativeController!=="function"||
   typeof service.materializeStoredNativeController!=="function"||
   !["getNativeEntity","getNativeController","listNativeModulesForEntity",
@@ -94,7 +95,7 @@ function createNativeGateTransfer({sceneForSystem,store,service,getController,
    ship?.nativeNpc!==true||ship.kind!=="ship"||ship.session?.characterID||
    !vector(ship.position)||!controller||Number(controller.entityID)!==id||
    Number(controller.systemID)!==source||Number(controller.currentTargetID)>0||
-   controller.manualOrder?.type==="attack"||
+   controller.manualOrder?.type==="attack"||isScrambled(ship)||
    ship.activeModuleEffects?.size>0||String(ship.mode||"").toUpperCase().includes("WARP"))
    return {success:false,errorMsg:"NATIVE_GATE_PREFLIGHT_REJECTED"};
   const sourceGate=sourceScene.staticEntities?.find(x=>Number(x.itemID)===Number(gate.sourceGateID)&&x.kind==="stargate");
@@ -150,8 +151,11 @@ function createNativeGateTransfer({sceneForSystem,store,service,getController,
     throw Error("NATIVE_FITTING_OR_CARGO_CHANGED");
    const moved=registry.relocate(pilotID,source,id,dest);
    if(moved.status!=="RELOCATED")throw Error("DURABLE_IDENTITY_RELOCATION_FAILED:"+moved.status);
-   entry.phase="COMMITTED";save(pilotID,entry);
-   try{remove(pilotID);}catch(error){/* a recovered COMMITTED journal is safe */}
+   // A successful relocation must NOT be rolled back merely because
+   // journal cleanup or the final journal update fails.
+   entry.phase="COMMITTED";
+   try{save(pilotID,entry);}catch(_ignored){}
+   try{remove(pilotID);}catch(_ignored){/* recoverPending clears later */}
    return {success:true,entityID:id,systemID:dest,
     verifiedSourceAbsent:true,verifiedDestinationPresent:true,
     preservedCargo:true,preservedModules:true};
