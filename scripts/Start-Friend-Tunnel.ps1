@@ -3,14 +3,14 @@
 param(
   [ValidateSet('Start','Check','Verify')]
   [string]$Action='Check',
-  [Parameter(Mandatory=$true)]
   [string]$HostVpnIPv4,
-  [Parameter(Mandatory=$true)]
   [string]$SshUser,
   [int]$SshPort=22,
   [string]$IdentityFile=''
 )
 $ErrorActionPreference='Stop'
+if($Action -ne 'Verify'){
+if(-not $SshUser -or -not $HostVpnIPv4){throw 'Provide -SshUser and -HostVpnIPv4 for Check or Start.'}
 if($SshUser -notmatch '^[A-Za-z0-9._-]{1,64}$'){throw 'SshUser must be an unambiguous SSH username.'}
 if($SshPort -lt 1 -or $SshPort -gt 65535){throw 'Invalid SSH port.'}
 # Opt-in overlay is intentionally restricted to Tailscale's IPv4 CGNAT range.
@@ -21,6 +21,7 @@ if($octets.Length -ne 4 -or $octets[0] -ne 100 -or $octets[1] -lt 64 -or $octets
   throw 'HostVpnIPv4 must be a verified Tailscale-range 100.64.0.0/10 address. No public-IP forwarding.'
 }
 if($IdentityFile -and -not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)){throw "Missing SSH identity key: $IdentityFile"}
+}
 if($Action -eq 'Verify'){
   $ports=@(443,5222,26000,26001,26002)
   $failed=$false
