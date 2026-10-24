@@ -18,6 +18,17 @@ The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
 available; do not reintroduce automatic remote runs.
 
+**2026-10-25 tested blocker update:** Headless event stream and boot
+request are confirmed live at tester revision `a087167`. The reported
+`World` failure selected Jita 30000142, which legitimately has no
+asteroid belts. Mining must be tested on Perimeter 30000144 (three SDE
+belts). This feature branch now distinguishes system-specific real SDE
+zero-belt status, accepts real named non-miners in beltless systems,
+and emits precise materializer spawn failures. **No real named NPC,
+mining ore growth, moving fleet or client gameplay has yet passed.**
+Use `World -WorldSystemID 30000144` on the updated overlay. Do not
+repeat npm audit or previous backend checks to replace this result.
+
 **Current manual verification gate: first recover missing headless
 telemetry, then verify physical NPC activity.** Start with
 [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md), **not** backend regressions,
