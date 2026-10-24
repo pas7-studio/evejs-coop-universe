@@ -71,7 +71,15 @@ cd C:\Games\EveCoopProject
 ```
 
 **The IPv4 address and username above are examples; do not use them
-unchanged.** Leave the terminal open while playing. `Ctrl+C` closes
+unchanged.** Leave the terminal open while playing. In **another** PowerShell
+window on the friend's PC, check the five tunnel ports and HTTP service:
+
+```powershell
+.\scripts\Start-Friend-Tunnel.ps1 -Action Verify
+```
+
+This verifies loopback transport only, not the login or certificate
+identity. `Ctrl+C` closes
 the forwarded connections. There is no public listener on the friend's
 machine: each `-L` bind is explicitly `127.0.0.1`.
 
