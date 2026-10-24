@@ -27,14 +27,18 @@ function Record([string]$Name,[string]$Status,[string]$Detail) {
 }
 function RunExternal([string]$Name,[string]$Exe,[string[]]$Args,[string]$LogName) {
   $log = Join-Path $runDir $LogName
+  $errLog = Join-Path $runDir ($LogName + '.stderr')
   try {
-    # Call executable through Start-Process to prevent child script exit codes
-    # from aborting our entire evidence collection.
-    $proc = Start-Process -FilePath $Exe -ArgumentList $Args -Wait -PassThru -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError (Join-Path $runDir ($LogName + '.stderr'))
-    if ($proc.ExitCode -eq 0) { Record $Name 'PASS' "exit=0; log=$LogName"; return $true }
-    Record $Name 'FAIL' "exit=$($proc.ExitCode); log=$LogName"; return $false
+    # Invoke executables with an argument ARRAY. Start-Process flattens its
+    # ArgumentList into a single string and breaks paths containing spaces.
+    # Check-Backend.ps1 is run through the PowerShell executable, not dot-sourced,
+    # so a child exit cannot terminate this orchestrator.
+    & $Exe @Args 1> $log 2> $errLog
+    $exitCode = $LASTEXITCODE
+    if ($exitCode -eq 0) { Record $Name 'PASS' "exit=0; log=$LogName"; return $true }
+    Record $Name 'FAIL' "exit=$exitCode; log=$LogName"; return $false
   } catch {
-    Record $Name 'FAIL' $_.Exception.Message
+    Record $Name 'FAIL' "$($_.Exception.Message); log=$LogName"
     return $false
   }
 }
