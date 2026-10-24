@@ -66,6 +66,58 @@ function transform(source,spec,remove){
   const newBlock=oldBlock.replace(oldArrival,newArrival);
   if(count(text,oldBlock)+count(text,newBlock)!==1)throw Error("Unexpected EveJS NPC haul arrival location");
   text=remove?text.replace(newBlock,oldBlock):text.replace(oldBlock,newBlock);
+
+  const eol=text.includes("\r\n")?"\r\n":"\n";
+  const loadedMarker='  const ingressDurationMs = Math.max(';
+  const completeFn='function completeHaulCycle(scene, fleetRecord, now) {';
+  const loadedBlock=[
+    '  if (process.env.EVEJS_COOP_NATIVE_HAUL_CARGO === "1") {',
+    '    fleetRecord.state = "loaded";',
+    '    fleetRecord.loadedUntilMs = now + Math.max(30000, Math.min(240000, Number(process.env.EVEJS_COOP_HAULER_HOLD_MS || 120000)));',
+    '    fleetRecord.lastHauledVolumeM3 = hauledVolumeM3;',
+    '    fleetRecord.lastHauledAtMs = now;',
+    '    fleetRecord.nextThinkAtMs = fleetRecord.loadedUntilMs;',
+    '    return;',
+    '  }',
+    ''
+  ].join(eol);
+  const loadedHandler=[
+    '  if (fleetRecord.state === "loaded") {',
+    '    if (now < toFiniteNumber(fleetRecord.loadedUntilMs, 0)) return;',
+    '    const ingressMs = Math.max(250, toFiniteNumber(config.miningNpcWarpIngressDurationMs, DEFAULT_MINING_WARP_INGRESS_DURATION_MS));',
+    '    if (fleetRecord.originAnchor && fleetRecord.originAnchor.position) {',
+    '      for (const entityID of fleetRecord.haulerEntityIDs || []) {',
+    '        npcService.runtime.warpToPoint(entityID, fleetRecord.originAnchor.position, {',
+    '          forceImmediateStart: true, broadcastWarpStartToVisibleSessions: true,',
+    '          visibilitySuppressMs: 250, ingressDurationMs: ingressMs',
+    '        });',
+    '      }',
+    '    }',
+    '    fleetRecord.haulerNextArrivalAtMs = now + getHaulerRepeatDelayMs();',
+    '    fleetRecord.state = "haulereturn";',
+    '    fleetRecord.haulerReturnAtMs = now + ingressMs;',
+    '    fleetRecord.nextThinkAtMs = fleetRecord.haulerReturnAtMs;',
+    '    return;',
+    '  }',
+    ''
+  ].join(eol);
+  if(remove){
+    if(count(text,loadedBlock)===1)text=text.replace(loadedBlock,'');
+    else if(count(text,loadedBlock)!==0)throw Error("Unexpected native hauler hold patch state");
+    if(count(text,loadedHandler)===1)text=text.replace(loadedHandler,'');
+    else if(count(text,loadedHandler)!==0)throw Error("Unexpected native hauler loaded handler state");
+  }else{
+    if(count(text,loadedBlock)===0){
+      const pos=text.indexOf(completeFn),at=pos<0?-1:text.indexOf(loadedMarker,pos);
+      if(pos<0||at<0)throw Error("Missing native hauler departure anchor");
+      text=text.slice(0,at)+loadedBlock+text.slice(at);
+    }
+    if(count(text,loadedHandler)===0){
+      const gate='  if (fleetRecord.state === "haulereturn") {';
+      if(count(text,gate)!==1)throw Error("Unknown native hauler return state");
+      text=text.replace(gate,loadedHandler+gate);
+    }
+  }
  }
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
