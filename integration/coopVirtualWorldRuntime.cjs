@@ -180,7 +180,9 @@ function advanceNativeTactics(){
    }
   });
  }
- const ships=bridge.snapshot(),pilotData=new Map(world.snapshot().pilots.map(p=>[p.id,p]));
+ const ships=[...new Map([...bridge.snapshot(),...Object.values(identityRegistry?.snapshot().links||{})]
+  .filter(x=>x.entityID&&x.pilotID).map(x=>[Number(x.entityID),x])).values()],
+  pilotData=new Map(world.snapshot().pilots.map(p=>[p.id,p]));
  const roles=economy?.snapshot().pilots||{};
  for(const systemID of visitedSystems){
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
@@ -194,6 +196,16 @@ function advanceNativeTactics(){
    systemID,scene,assignments,controllers:activeControllers,
    waypoints:require("./coopNpcTopology").waypoints(scene),
    isScrambled:entity=>scramble.isEntityWarpScrambled(entity),
+   additionalResponders:(victim,attackerID,liveScene)=>{
+    if(process.env.EVEJS_COOP_NPC_MEMORY!=="1")return 0;
+    const aggressor=liveScene?.getEntityByID(attackerID);
+    const characterID=require("./coopNativeConsequences").resolveAuthenticatedPlayerID(liveScene,aggressor);
+    if(!characterID)return 0;
+    const memory=require("./coopNpcMemory").getNativeMemory().recall({
+     pilotID:victim.pilotID,characterID
+    });
+    return memory.status==="KNOWN"&&memory.score<=-30?1:0;
+   },
    health:entity=>{
     const max=damage.getEntityMaxHealthLayers(entity),
       now=damage.getEntityCurrentHealthLayers(entity,max);
