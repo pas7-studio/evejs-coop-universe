@@ -154,7 +154,7 @@ occur, `BLOCKED` when a named prerequisite prevents an attempt.
 | NPC memory and standings | Persisted named-NPC relation and actual `living-player-consequence` where relevant | Same NPC recognizes actual returning player only if conditions met; a saved memory record alone is not a conversation |
 | Two-player encounter | Two real authenticated characters on same grid; server `Party` events | Both clients see and can interact with the same NPC and each other, then reconnect without ship duplication |
 | Stargate NPC travel (experimental) | When separately enabled, `living-native-gate-approach` then `living-native-gate-transfer` with same native entity and cargo | Arrival across real gate and same ship state after recovery. **Default OFF; not part of baseline World PASS** |
-| Native seed-market NPC trade (experimental) | When separately enabled, `-Action Market` requires sale followed by purchase with exact seed RPC / inventory / wallet | Real daemon order/stock changes and same NPC cargo. **Default OFF; this does not prove personal player-compatible NPC orders** |
+| Native seed-market NPC trade (experimental) | When separately enabled, `living-native-market-trade` events and `-Action Market` require sale followed by purchase with exact seed RPC / inventory / wallet | Real daemon order/stock changes and same NPC cargo. **Default OFF; this does not prove personal player-compatible NPC orders** |
 
 **How long to observe:** The ordinary world simulation has periodic
 ticks and headless retries; don't demand that a natural pirate fight,
