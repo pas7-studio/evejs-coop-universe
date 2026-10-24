@@ -87,3 +87,4 @@ jobs:
           node scripts/verifyOwnerDamageMovementParity.js
           node scripts/verifyTargetKillModuleTeardown.js
           node scripts/verifyDestinyAuthorityDropAndFx.js
+          node scripts/verifyMovementWarpParity.js
