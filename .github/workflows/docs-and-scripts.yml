@@ -22,6 +22,7 @@ jobs:
           test -f scripts/Check-Backend.ps1
           test -f scripts/Audit-Network.ps1
           test -f scripts/Test-XEveBaseline.ps1
+          test -f scripts/Test-ComposeSafety.ps1
           ! git ls-files | grep -E '(^|/)(\.env$|node_modules/|ResFiles/|blue\.dll$|.*\.(pem|pfx|sqlite3?|db)$)'
       - name: PowerShell parser check
         shell: pwsh
