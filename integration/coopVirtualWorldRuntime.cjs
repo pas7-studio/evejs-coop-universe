@@ -28,7 +28,10 @@ function start(){
  const {createLife}=require("./coopNpcLife");
  life=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
   recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
- world.advance();
+ // Headless bootstrap must resolve persisted native pilot links before
+ // advancing virtual travel; otherwise a real parked ship can be
+ // virtually transported to another system during process startup.
+ if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1")world.advance();
  if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY==="1"){
    const {createEconomy}=require("./coopVirtualEconomy");
    economy=createEconomy({
@@ -51,7 +54,8 @@ function start(){
      if(identityRegistry)for(const [pilotID,entry] of Object.entries(identityRegistry.snapshot().links)){
        if(!pins[pilotID]&&identityRegistry.get(pilotID))pins[pilotID]=entry.systemID;
      }
-     world.advance(pins);
+     if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||identityRegistry)
+       world.advance(pins);
      if(economy)economy.advance(world.snapshot().pilots);
    syncNativeDeliveries();
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
