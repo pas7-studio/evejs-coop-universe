@@ -13,6 +13,7 @@ function routeForRole(scene,role){
   case "hauler":return [select(["asteroidBelt"])[0],select(["station"])[0],select(["stargate"])[0]].filter(Boolean);
   case "trader":return select(["station","stargate"]).slice(0,6);
   case "patrol":return select(["stargate","station"]).slice(0,6);
+  case "pirate":return select(["asteroidBelt","stargate"]).slice(0,6);
   default:return select(["station","stargate","asteroidBelt"]).slice(0,4);
  }
 }
@@ -26,6 +27,13 @@ function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dw
    if(!system||!id)continue;
    const scene=sceneForSystem(system),ship=scene?.getEntityByID?.(id);
    if(!ship||ship.kind!=="ship")continue;
+   // Never interrupt a live EveJS NPC combat controller to force a
+   // scheduled trade/patrol/raid waypoint. Native combat takes priority.
+   try{
+     const controller=require("./npc/npcRegistry").getControllerByEntityID(id);
+     if(Number(controller?.currentTargetID)>0)continue;
+   }catch{} 
+
    const role=String(roles[assignment.pilotID]?.role||"patrol");
    const route=routeForRole(scene,role);
    if(!route.length)continue;
