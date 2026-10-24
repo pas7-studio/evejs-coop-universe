@@ -3,6 +3,7 @@
 let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
+const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0;
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -67,6 +68,13 @@ function advanceNativePatrolRoutes(){
   const result=patrolNavigator.tick(Number(systemID),entityIDs);
   if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
  }
+}
+function ensureNativeMining(scene){
+ if(process.env.EVEJS_COOP_NATIVE_MINING!=="1"||!scene||initializedNativeMiningScenes.has(scene))return;
+ // The stock mining scene lifecycle is designed to be idempotent:
+ // its mining NPC startup registry prevents duplicate fleet seeding.
+ require("../services/mining/miningRuntime").handleSceneCreated(scene);
+ initializedNativeMiningScenes.add(scene);
 }
 function ensureCivilianOrders(runtime,npc){
  if(civilianOrders)return;
@@ -143,6 +151,7 @@ function observeSession(session,ship){
       const runtime=require("./runtime");
       const npc=require("./npc/npcRuntime");
       const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+      ensureNativeMining(scene);
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
         const {createRegistry}=require("./coopIdentityRegistry");
