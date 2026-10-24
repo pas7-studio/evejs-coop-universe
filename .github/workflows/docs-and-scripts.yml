@@ -45,6 +45,10 @@ jobs:
           }
           if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
 
+      - name: Verify fail-closed backend reports without Docker
+        shell: pwsh
+        run: ./tests/Verify-Local-Coop.SelfTest.ps1
+
       - name: Test baseline compatibility guard
         shell: pwsh
         run: |
