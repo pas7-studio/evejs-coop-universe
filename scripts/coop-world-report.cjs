@@ -16,13 +16,19 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}
   }catch{invalid++;}
  }
  rows.sort((a,b)=>a._time-b._time);
- const topology=[...rows].reverse().find(e=>e.event==="living-world-topology"&&positive(e.systemID));
+ const latestBoot=[...rows].reverse().find(e=>e.event==="living-headless-boot-requested");
+ const topology=[...rows].reverse().find(e=>e.event==="living-world-topology"&&positive(e.systemID)&&
+  (!latestBoot||e._time>=latestBoot._time));
  const systemID=positive(topology?.systemID);
  const related=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&e._time>=topology._time-1000);
- const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID);
+ const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
- const activitySamples=related.filter(e=>e.event==="living-native-activity"&&e.status==="SAMPLED");
+ // Activity may precede a fresh topology refresh. Restrict it to the
+ // current server boot, never borrow evidence from a previous process.
+ const activitySamples=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&
+  e.event==="living-native-activity"&&e.status==="SAMPLED"&&
+  (!latestBoot||e._time>=latestBoot._time));
  // Movement and cargo growth must be measured between two native scene
  // samples; a flag, controller order or stationary ship cannot fake them.
  const activity={
