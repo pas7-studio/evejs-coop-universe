@@ -109,7 +109,13 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
    Number(gateTo.destinationID)!==Number(gate.sourceGateID))
    return {success:false,errorMsg:"RECIPROCAL_STARGATE_NOT_VERIFIED"};
   const sourceGate=sourceScene.staticEntities?.find(x=>Number(x.itemID)===Number(gate.sourceGateID)&&x.kind==="stargate");
-  if(!sourceGate||!vector(sourceGate.position)||dist(ship.position,sourceGate.position)>30000)
+  const gateSurfaceDistance=sourceGate&&vector(sourceGate.position)
+   ?Math.max(0,dist(ship.position,sourceGate.position)-
+     Math.max(0,Number(ship.radius)||0)-
+     Math.max(0,Number(sourceGate.radius)||0))
+   :Infinity;
+  // Same physical jump range as pinned EveJS transitions.js (2500 m).
+  if(!sourceGate||!vector(sourceGate.position)||gateSurfaceDistance>2500)
    return {success:false,errorMsg:"NPC_NOT_AT_PHYSICAL_GATE"};
   const destinationScene=sceneForSystem(dest);
   const destinationGate=destinationScene?.staticEntities?.find(x=>
