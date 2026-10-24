@@ -34,6 +34,34 @@ market trading as another block. Finally build individual NPC memories
 and long-running faction stories.
 
 
+## Experimental headless native NPC boot (new code, not live-proven)
+
+The LivingCoop overlay now requests a bounded **server-side bootstrap**
+of both configured systems after startup; it no longer needs the
+first player's login just to attempt native NPC scene materialization.
+It checks actual EveJS asteroid belts, stock mining ships and physically
+linked named NPC ships. Missing scene elements remain PENDING and are
+retried a limited number of times, rather than being reported as success.
+The server writes `living-headless-boot-requested` and
+`living-headless-boot-system` diagnostics into the regular persistent
+event log. This code has **not** been verified inside a live EveJS container.
+
+With the updated overlay installed, use `-Action CoopStart`, inspect the
+server logs, then `-Action World` even without a client to assess
+real server-side topology and NPC entities. A physical server-side
+ready result is only a **READY_FOR_CLIENT_PLAYTEST** gate, not proof
+of client rendering, combat, fleet movement, player loot or reconnection.
+
+Individual remembered NPCs may also acknowledge a previously encountered
+authenticated player in a **private system notification**, but only
+when both the real player ship and the named native NPC ship are within
+80 km in the same system. These notifications are throttled and are
+not fake player chat or a complete dialogue engine. No gameplay
+claim until native-client observation confirms actual delivery.
+
+**No GitHub Actions / CI**: automatic workflows were removed by owner request.
+Run local tests manually when needed; do not add or trigger remote CI.
+
 ## October 24: verified backend is not yet verified Living Universe
 
 A client-free verifier run demonstrated 44 passing local tests, 27
