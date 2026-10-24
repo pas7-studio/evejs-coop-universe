@@ -161,6 +161,7 @@ function advanceNativeTactics(){
    warpToEntity:(id,targetID,options)=>npc.warpToEntity(id,targetID,options),
    attack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
    resumeBehavior:id=>npc.resumeBehavior(id),
+   stopOrder:id=>npc.issueOrder(id,{type:"stop"}),
    notify:event=>{
     require("./coopRuntimeProbe").observe("living-npc-tactical-event",null,
      {spaceState:{systemID:event.systemID}},{...event});
