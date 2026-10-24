@@ -21,6 +21,14 @@ Require real native coordinate changes plus cargo growth or a controller
 target. This branch adds the sampler and strict local World report, but
 no live Docker-native activity has been verified yet.
 
+**Native NPC combat blocker addressed in code:** the pinned engine's generic
+NPC-vs-NPC friendly-target check is now bypassed **only** for actual linked
+opposing-faction native ships with valid attack or fresh retaliation intent.
+Real successful native weapon activation/missile launch telemetry must match
+observed native HP loss and a physical loot-bearing wreck for the strict local
+Combat gate. This is still **not** actual Docker/playable-client confirmation
+or exact final-blow attribution. See `docs/HEADLESS_NPC_VALIDATION.md`.
+
 The native NPC fight/retreat/reinforcement slice has code and tests, but
 still requires live server/client verification. The active reviewable
 work is **P1 personal NPC memory** and the **P2 factual faction chronicle**.
