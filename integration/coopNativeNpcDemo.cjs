@@ -132,4 +132,15 @@ function maybeSpawn(session,ship) {
     }
   });
 }
-module.exports={maybeSpawn};
+function confirmedWreck(systemID,npcID,wreckID){
+  const ids=liveEncounterIDs.get(positive(systemID));
+  if(!ids||!ids.includes(positive(npcID)))return false;
+  const remaining=ids.filter(id=>id!==positive(npcID));
+  if(remaining.length)liveEncounterIDs.set(positive(systemID),remaining);
+  else liveEncounterIDs.delete(positive(systemID));
+  require("./coopRuntimeProbe").observe("coop-encounter-kill",null,{
+    itemID:npcID,spaceState:{systemID}
+  },{npcID,wreckID});
+  return true;
+}
+module.exports={maybeSpawn,confirmedWreck};
