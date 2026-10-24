@@ -20,11 +20,11 @@ function routeForRole(scene,role){
 function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dwellMs=120000}){
  if(typeof sceneForSystem!=="function"||typeof warp!=="function"||typeof orbit!=="function")throw Error("native scene and movement required");
  const history=new Map();
- function tick(assignments,roles={}){
+ function tick(assignments,roles={},options={}){
   const result=[];
   for(const assignment of assignments||[]){
    const system=positive(assignment.systemID),id=positive(assignment.entityID);
-   if(!system||!id)continue;
+   if(!system||!id||options.blockedIDs?.has(id))continue;
    const scene=sceneForSystem(system),ship=scene?.getEntityByID?.(id);
    if(!ship||ship.kind!=="ship")continue;
    // Never interrupt a live EveJS NPC combat controller to force a
