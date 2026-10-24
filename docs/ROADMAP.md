@@ -24,7 +24,7 @@ produced zero identity links. Added system-specific native mining
 startup policy witness to headless event and World report so disabled
 or excluded Perimeter fleet seeding is distinguished from absent SDE
 belts. This does not force a fleet, alter world data or reset named
-pilot identity. 61/61 relevant isolated regression tests PASS.
+pilot identity. 64/64 relevant isolated regression tests PASS.
 **Physical named NPCs and client gameplay remain unverified.**
 
 **P0 implementation follow-up (awaiting local client test):** repaired
