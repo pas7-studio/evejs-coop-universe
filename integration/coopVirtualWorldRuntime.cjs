@@ -5,6 +5,7 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0;
+let intelAnnouncer=null;
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
@@ -227,6 +228,23 @@ function observeSession(session,ship){
           session,ship,probe,intervalMs:1000,maxSamples:180,
           onConfirmedWreck:wreck=>confirmedWreck(session,ship,wreck.sourceNpcID,wreck.wreckID)
         });
+      }
+      if(session&&process.env.EVEJS_COOP_LOCAL_INTEL==="1"){
+        try{
+          if(!intelAnnouncer){
+            const {createAnnouncer}=require("./coopSystemIntel");
+            intelAnnouncer=createAnnouncer({
+              send:(pilot,message)=>require("../services/chat/chatHub").sendSystemMessage(pilot,message)
+            });
+          }
+          const pirateIDs=result.filter(x=>x.entityID&&pilotsByID.get(x.pilotID)?.role==="pirate")
+            .map(x=>x.entityID);
+          const intel=intelAnnouncer.announce(session,scene,{fleets:industry.fleets,pirateIDs});
+          if(intel.status==="DELIVERED")
+            require("./coopRuntimeProbe").observe("living-local-intel",session,ship,{
+              locationCount:intel.activity.length,messages:intel.messages
+            });
+        }catch(error){console.warn("[CoopSystemIntel]",error.message);}
       }
       const civilianActions=advanceNativeCivilianOrders();
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
