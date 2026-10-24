@@ -152,3 +152,24 @@ test("failed durable NPC identity write never triggers a duplicate physical spaw
  assert.equal(links[pilot.id].entityID,5001);
  assert.equal(spawns,1);
 });
+
+test("stale process-local pilot mapping must not override a different live durable identity",()=>{
+ const live=new Set([501,502]);
+ let registryLink=0;
+ const links={};
+ const registry={prune:()=>0,get:id=>links[id]||null,
+  snapshot:()=>({links}),link:(p,systemID,id)=>{
+   registryLink++;if(registryLink===1)throw Error("temporary write failure");
+   return links[p.id]={pilotID:p.id,systemID,entityID:id,role:p.role};
+  }};
+ const pilot={id:"coop-pilot-010",role:"patrol"},bridge=createBridge({
+  limit:2,registry,exists:(_s,id)=>live.has(id),
+  spawn:()=>({success:true,data:{spawned:[{entity:{itemID:501}}]}})
+ });
+ assert.equal(bridge.reconcile(30000144,[pilot])[0].error,"IDENTITY_LINK_FAILED");
+ links[pilot.id]={pilotID:pilot.id,systemID:30000144,entityID:502};
+ const result=bridge.reconcile(30000144,[pilot]);
+ assert.equal(result[0].error,"IDENTITY_CONFLICT");
+ assert.equal(result[0].provisionalEntityID,501);
+ assert.equal(links[pilot.id].entityID,502);
+});
