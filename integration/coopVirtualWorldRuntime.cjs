@@ -95,6 +95,16 @@ function start(){
  }
  scheduleHeadlessWorldBoot(route);
 }
+// Rapid bounded bootstrap attempts, then bounded low-frequency rechecks.
+// A temporarily absent EveJS static-data store must not permanently disable
+// autonomous NPCs until the next server restart.
+function nextHeadlessRetryMs(attempts){
+ const count=Math.max(1,Number(attempts)||1);
+ if(count<6)return 30000;
+ if(count<12)return 5*60000;
+ if(count<18)return 10*60000;
+ return 15*60000;
+}
 // Initialize real EveJS scenes without waiting for a human to log in.
 // This is not a client/gameplay proof: only existing native entities count.
 function scheduleHeadlessWorldBoot(route){
@@ -137,12 +147,15 @@ function scheduleHeadlessWorldBoot(route){
      {spaceState:{systemID}},{attempt:attempts,status:"FAILED",reason:String(error.message).slice(0,120)});
    }
   }
-  if(systems.size&&attempts<6){
-   headlessBootTimer=setTimeout(attempt,30000);
+  if(systems.size){
+   const retryMs=nextHeadlessRetryMs(attempts);
+   // One warning at the end of quick boot, then infrequent unresolved
+   // warnings. Continue trying autonomously; never busy-loop.
+   if(attempts===6||(attempts>6&&(attempts-6)%12===0))
+    require("./coopRuntimeProbe").observe("living-headless-boot-incomplete",null,null,
+     {pendingSystems:[...systems],attempts,retryMs,retrying:true});
+   headlessBootTimer=setTimeout(attempt,retryMs);
    headlessBootTimer.unref?.();
-  }else if(systems.size){
-   require("./coopRuntimeProbe").observe("living-headless-boot-incomplete",null,null,
-    {pendingSystems:[...systems],attempts});
   }
  };
  headlessBootTimer=setTimeout(attempt,10000);
@@ -675,4 +688,4 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID){
    });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck};
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs};
