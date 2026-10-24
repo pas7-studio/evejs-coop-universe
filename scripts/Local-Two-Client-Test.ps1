@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','Combat','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','Combat','FinalBlow','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -164,6 +164,16 @@ switch ($Action) {
             throw 'NPC battle gate not proven: require real NPC weapon activation or missile launch, linked HP loss, native physical wreck and stored loot. See report.'
         }
         Write-Host '[COMBAT] Correlated named-NPC HP reduction, physical wreck and saved loot observed on server. Shooter attribution and real EVE client gameplay remain unproven.'
+    }
+    'FinalBlow' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ required for native source attribution.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No native destruction evidence. Confirm LivingCoop runtime and inspect server logs.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-combat --require-weapon --require-final-attacker
+        if ($LASTEXITCODE -ne 0) { throw 'EveJS did not prove an explicitly supplied native destruction attacker for the correlated weapon/HP/wreck/loot chain.' }
+        Write-Host '[FINAL BLOW] EveJS explicitly provided a native destruction attacker linked to real weapon, HP loss, wreck and stored loot; verify client behavior separately.'
     }
     'Logs' {
         Assert-BackendPrerequisites
