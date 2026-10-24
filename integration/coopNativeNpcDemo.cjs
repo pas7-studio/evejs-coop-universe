@@ -36,6 +36,12 @@ function maybeSpawn(session,ship) {
         error:result?.success===true?undefined:String(result?.errorMsg||"NPC_SPAWN_FAILED"),
       });
       if(result?.success===true && spawned.length){
+        const npcIDs=spawned.map(x=>positive(x?.entity?.itemID)).filter(Boolean);
+        const pilotShipIDs=recipients.map(x=>positive(x?._space?.shipID)).filter(Boolean);
+        require("./coopCombatProbe").launch({
+          scene,shipIDs:pilotShipIDs,npcIDs,probe,session,ship,
+          intervalMs:1000,maxSamples:60
+        });
         // Give the normal EveJS visibility tick time to deliver entities.
         // Observe only; never force AddBalls or bypass watcher relevance.
         const timer=setTimeout(()=>{
