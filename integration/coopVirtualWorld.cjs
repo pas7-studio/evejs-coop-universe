@@ -5,7 +5,7 @@ const fs=require("node:fs"),path=require("node:path");
 function integer(v){const x=Number(v);return Number.isSafeInteger(x)&&x>0?x:null;}
 const CALLSIGNS=["Rook","Ember","Kestrel","Nyx","Solace","Vega","Drift","Mara","Orion","Talon","Iris","Harrow","Sable","Arden","Rift","Cinder"];
 const SURNAMES=["Voss","Kade","Renn","Vale","Nadir","Soren","Rooke","Hale","Morrow","Quill","Tarin","Fenn","Keir","Dane","Solan","Vey"];
-function pilotName(i){return CALLSIGNS[i%CALLSIGNS.length]+" "+SURNAMES[(i*5+3)%SURNAMES.length]+(i>=256?" "+String(i+1):"");}
+function pilotName(i){return CALLSIGNS[i%CALLSIGNS.length]+" "+SURNAMES[(i*5+Math.floor(i/CALLSIGNS.length)*7+3)%SURNAMES.length]+(i>=256?" "+String(i+1):"");}
 function createWorld({file,route,population=16,clock=()=>Date.now(),travelMs=120000}){
  if(!file||!Array.isArray(route)||route.length<2||route.some(x=>!integer(x)))throw Error("valid route and file required");
  if(!Number.isInteger(population)||population<1||population>100)throw Error("population cap 1..100");
