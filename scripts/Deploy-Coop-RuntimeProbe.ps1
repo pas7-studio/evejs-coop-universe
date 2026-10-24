@@ -126,6 +126,8 @@ if ($usePatrols) {
 if ($LivingCoop) {
   # Use existing, real EveJS mining, cargo, defenders and standing policy.
   $yamlLines += "      EVEJS_COOP_NATIVE_MINING: '1'"
+  # A failed first native mining spawn must be retryable; never duplicate an already seeded fleet.
+  $yamlLines += "      EVEJS_COOP_MINING_STARTUP_RETRY: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
   $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
   $yamlLines += "      EVEJS_COOP_HAULER_HOLD_MS: '120000'"
