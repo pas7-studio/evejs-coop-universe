@@ -41,8 +41,9 @@ function start(){
      if(economy)economy.advance(world.snapshot().pilots);
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
      advanceNativePatrolRoutes();
-     advanceNativeCivilianOrders();
+     // Raids own their NPC movement while pursuing real cargo ships.
      advanceNativeRaids();
+     advanceNativeCivilianOrders();
      // A recovered NPC returns to a living system without player re-login.
      if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
        for(const systemID of visitedSystems){
@@ -89,7 +90,11 @@ function advanceNativeCivilianOrders(){
  if(!bridge||!civilianOrders||process.env.EVEJS_COOP_MATERIALIZE_NPCS!=="1")return [];
  const current=new Map(world.snapshot().pilots.map(p=>[p.id,p.systemID]));
  const assignments=bridge.snapshot().filter(p=>current.get(p.pilotID)===p.systemID);
- const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{});
+ const blockedIDs=raidDirector?.activePirateIDs?.(systemID=>{
+  const runtime=require("./runtime");
+  return runtime.ensureScene(systemID,{refreshStargates:false});
+ })||new Set();
+ const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{},{blockedIDs});
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
 }
