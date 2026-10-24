@@ -13,7 +13,8 @@ param(
   [string]$EvidenceRoot = '',
   [switch]$StartBackend,
   [switch]$IncludeUpstreamTests,
-  [int]$HealthTimeoutSeconds = 360
+  [int]$HealthTimeoutSeconds = 360,
+  [switch]$AllowUnpinnedUpstream
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -63,6 +64,11 @@ try {
   if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw 'Docker Desktop Linux containers are required' }
   Record 'Prerequisites' 'PASS' "Node=$(& node --version); Docker linux; EveJS present"
   $rev = (& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
+  $expectedRev = 'c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
+  if ($rev -ne $expectedRev) {
+    if (-not $AllowUnpinnedUpstream) { throw "EveJS checkout $rev differs from tested pin $expectedRev. Supply -AllowUnpinnedUpstream ONLY for explicit exploratory testing." }
+    Record 'Upstream revision' 'WARNING' "Unpinned EveJS revision: $rev"
+  } else { Record 'Upstream revision' 'PASS' $rev }
   $projectRev = (& git -C $projectRoot rev-parse HEAD 2>$null | Out-String).Trim()
   Set-Content -LiteralPath (Join-Path $runDir 'revisions.txt') -Value @("Project=$projectRev","EveJS=$rev") -Encoding UTF8
   $safe = RunExternal 'Loopback Compose safety' $ps @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1'),'-CodePath',$CodePath) 'compose-safety.log'
@@ -70,8 +76,8 @@ try {
   if ($StartBackend -and $safe) {
     $started = RunExternal 'Docker Compose up' $docker @('compose','--project-directory',$CodePath,'-f',(Join-Path $CodePath 'compose.yaml'),'up','--detach') 'compose-up.log'
   } else { $started = $true }
-  if (-not $safe -or -not $started) {
-    Record 'Backend gate' 'BLOCKED' 'Safety or startup failed'
+  if (-not $safe -or -not $selftest -or -not $started) {
+    Record 'Backend gate' 'BLOCKED' 'Safety, regression tests, or startup failed'
   } else {
     $deadline=(Get-Date).AddSeconds($HealthTimeoutSeconds)
     $healthy=$false
@@ -107,7 +113,11 @@ try {
       'tests/upstream-two-ship-projection.test.mjs',
       'tests/upstream-ship-prime-recipients.test.mjs'
     ) | ForEach-Object { Join-Path $projectRoot $_ }
-    $null=RunExternal 'EveJS scene/session contract tests' $node (@('--test')+$testFiles) 'upstream-contracts.log'
+    if (-not (Test-Path (Join-Path $CodePath 'server/node_modules'))) {
+      Record 'EveJS scene/session contract tests' 'BLOCKED' 'Upstream dependencies absent: run npm ci in EveJS/Code/server'
+    } else {
+      $null=RunExternal 'EveJS scene/session contract tests' $node (@('--test')+$testFiles) 'upstream-contracts.log'
+    }
   }
 } catch {
   Record 'Verification setup' 'FAIL' $_.Exception.Message
