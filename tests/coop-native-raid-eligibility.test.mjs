@@ -40,10 +40,12 @@ test("pirate must have exact active co-op pilot link; prevent role spoof and for
 test("authoritative EveJS fleet members are validated as live native hulls",()=>{
  const ships=new Map([[201,target],[202,{itemID:202,kind:"ship",nativeNpc:false}],
   [203,{itemID:203,kind:"station",nativeNpc:true}]]);
- const scene={getEntityByID:id=>ships.get(id)};
+ const scene={systemID,getEntityByID:id=>ships.get(id)};
  const fleets=[{systemID,minerEntityIDs:[201,201,202,203],haulerEntityIDs:[204]}];
  assert.deepEqual(liveFleetShips(fleets,scene),[{id:201,role:"miner"}]);
- assert.deepEqual(liveFleetShips(fleets,{getEntityByID:()=>null}),[]);
+ assert.deepEqual(liveFleetShips(fleets,{...scene,getEntityByID:()=>null}),[]);
+ assert.deepEqual(liveFleetShips([{systemID:30000142,minerEntityIDs:[201]}],scene),[]);
+ assert.deepEqual(liveFleetShips(fleets,{getEntityByID:id=>ships.get(id)}),[]);
 });
 function runHostility({attack=true,member=true,npcRaids=true,sourceLink=source,playerTarget=false}={}){
  const targetShip={...target,nativeNpc:!playerTarget};
