@@ -177,6 +177,20 @@ attach those report fields **without replaying backend or npm audit**.
 Keep volume `evejs-data`, persistent NPC links and local upstream
 test fixes intact.
 
+## Durable named NPC restart (separate controlled gate)
+
+A new [durable native NPC runbook](NATIVE_NPC_DURABILITY.md)
+explains how to verify same-ID persistence across an authorized
+server restart. Do not restart as part of the ordinary read-only
+`DiagnoseWorld`/`World` check. When the owner approves a
+controlled restart, preserve `evejs-data` and look for
+`nativeDurableRecovery.status=OK`, nonzero
+`recovered`/`alreadyPhysical`, and the same real NPC entity ID
+in the physical scene. A failure
+`BLOCKED_DURABLE_NPC_RECOVERY` is **not** a reason to delete
+the registry. The new source-side check does not yet prove
+in-client position, damage or inventory continuity.
+
 ## Phase 3 — prove a real compatible EVE client (HUMAN OPERATOR)
 
 Only use a lawfully usable and explicitly authorized compatible client. The upstream-targeted build and setup expectations are documented in `docs/SETUP_WINDOWS.md`; this project provides **no client binaries, compatibility bypass or DRM workaround**.
