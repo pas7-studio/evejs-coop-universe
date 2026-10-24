@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -70,7 +70,33 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const nativeWeaponChain=wrecks.find(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0&&
   linkedWeaponDamage.some(d=>Number(d.victimEntityID)===Number(w.victimEntityID)&&
    d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
+ // Only the native destruction call's explicit attackerEntity parameter
+ // may qualify as upstream attribution. A recent lock or weapon event is
+ // not a substitute if EveJS omits that parameter.
+ const upstreamAttackers=combatRows.filter(e=>
+  e.event==="living-native-destruction-attacker"&&
+  e.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"&&
+  positive(e.wreckID)&&positive(e.attackerEntityID)&&positive(e.victimEntityID)&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.attackerPilotID||""))&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||"")));
+ const nativeAttackerChain=upstreamAttackers.find(e=>wrecks.some(w=>
+  Number(w.wreckID)===Number(e.wreckID)&&
+  Number(w.victimEntityID)===Number(e.victimEntityID)&&
+  w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0)&&
+  linkedWeaponDamage.some(d=>
+   Number(d.victimEntityID)===Number(e.victimEntityID)&&
+   d.victimPilotID===e.victimPilotID&&
+   d.attackerPilotIDs.includes(e.attackerPilotID)&&
+   d._observedAt<=e._time&&e._time-d._observedAt<=10*60000)&&
+  weapons.some(w=>
+   w.attackerPilotID===e.attackerPilotID&&
+   Number(w.attackerEntityID)===Number(e.attackerEntityID)&&
+   Number(w.victimEntityID)===Number(e.victimEntityID)&&
+   w._time<=e._time&&e._time-w._time<=10*60000));
  const combat={
+  upstreamAttackerEvents:upstreamAttackers.length,
+  nativeAttackerChainWreckID:nativeAttackerChain?.wreckID||null,
+  nativeAttackerPilotID:nativeAttackerChain?.attackerPilotID||null,
   witnessedNativeWeaponEvents:weapons.length,
   weaponCorrelatedDamageEvents:linkedWeaponDamage.length,
   nativeWeaponDamageWreckLootID:nativeWeaponChain?.wreckID||null,
@@ -118,11 +144,15 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  // readiness is not a prerequisite for combat between two other named NPCs.
  // It still requires actual authoritative scene topology and the strict
  // source-weapon -> HP -> physical wreck -> stored loot evidence below.
- if(requireCombat||requireWeapon){
+ if(requireCombat||requireWeapon||requireFinalAttacker){
   if(topology&&scenery.waypoints>0){
    status="READY_FOR_CLIENT_PLAYTEST";
    blockers.length=0;
   }
+ }
+ if(requireFinalAttacker&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeAttackerChain){
+  status="AWAITING_UPSTREAM_DESTRUCTION_ATTACKER";
+  blockers.push("No matching explicit attackerEntity from native EveJS wreck creation joined to the same attacker/victim weapon, HP loss, real wreck and stored loot. Target selection is not final-blow identity.");
  }
  if(requireWeapon&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeWeaponChain){
   status="AWAITING_NATIVE_WEAPON_CHAIN";
@@ -161,7 +191,8 @@ if(require.main===module){
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw Error("--window-minutes must be 1..240");
   const report=summarize(fs.readFileSync(0,"utf8"),{
    windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
-   requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon")
+   requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
+   requireFinalAttacker:args.includes("--require-final-attacker")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
