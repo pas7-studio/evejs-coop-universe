@@ -161,3 +161,31 @@ initial timer. All fleets remain bound by actual mined ore supply.
 `-Action Party` now includes ore quantities still on miners and ore
 loaded onto physical NPC haulers. These measurements are sampled server
 evidence, not a guaranteed live tactical UI.
+
+### Real player consequences: reputation is not just a log entry
+
+When a verified player attacks a real EveJS mining fleet, LivingCoop
+records a **combat standing transaction** using the original EveJS
+standingRuntime.applyStandingChanges API against the physical NPC's
+faction/corporation owner. At most one penalty per player and fleet
+per 15-minute window is allowed, with a durable event ledger.
+
+The initial mining-fleet assault records a raw -0.25 standing change.
+Stock EveJS standing calculations remain authoritative. A low-standing
+aggressor faces four mining-fleet defenders, compared with two for
+neutral and zero for friendly players. Autonomous NPC pirate raids do
+not penalize synthetic characters: real player sessions are required.
+
+Destroying a named pirate can change standing with its owner **only
+when native wreck options prove an authenticated player killer**.
+When the pirate was targeting a real mining ship, that player may also
+receive +0.18 raw standing with its faction/corporation owner.
+
+The game uses native EveJS standings, not a separate reputation counter.
+Durable event IDs prevent duplicate penalties/rewards across restarts.
+The game sends targeted local-chat notices for applied changes; the
+Party diagnostic includes the recent standings events. Unattributed
+kills receive no invented reward.
+
+Actual client standings display and combat kill attribution still
+need live Docker verification with both players.
