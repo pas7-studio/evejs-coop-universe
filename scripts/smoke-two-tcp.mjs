@@ -13,10 +13,12 @@ if (host !== '127.0.0.1' && host !== '::1') {
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port');
 if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 30000) throw new Error('Invalid timeout');
 const clients = [];
+const socketClosed = new WeakSet();
 function connectOne(label) {
   return new Promise((resolve, reject) => {
     const socket = net.createConnection({ host, port });
     clients.push(socket);
+    socket.on('close', () => socketClosed.add(socket));
     let settled = false;
     const timer = setTimeout(() => fail(new Error(label + ': connect timeout')), timeoutMs);
     function cleanup() { clearTimeout(timer); }
@@ -25,6 +27,7 @@ function connectOne(label) {
       settled = true; cleanup(); socket.destroy(); reject(err);
     }
     socket.on('error', fail);
+    socket.on('end', () => socketClosed.add(socket));
     socket.once('connect', () => {
       if (settled) return;
       settled = true; cleanup(); resolve(socket);
@@ -35,9 +38,9 @@ try {
   // Open both connections before either is closed: tests simultaneous accepts.
   const a = await connectOne('client A');
   const b = await connectOne('client B');
-  if (a.destroyed || b.destroyed) throw new Error('Server closed one TCP session immediately');
+  if (a.destroyed || b.destroyed || socketClosed.has(a) || socketClosed.has(b)) throw new Error('Server closed one TCP session immediately');
   await delay(250);
-  if (a.destroyed || b.destroyed) throw new Error('Server closed a TCP session during idle smoke');
+  if (a.destroyed || b.destroyed || socketClosed.has(a) || socketClosed.has(b)) throw new Error('Server closed a TCP session during idle smoke');
   console.log(JSON.stringify({
     status: 'TRANSPORT_ONLY_PASS',
     host, port,
