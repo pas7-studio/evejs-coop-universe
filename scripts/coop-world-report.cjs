@@ -194,6 +194,12 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const matchedNativePickup=nativeLootPickups.find(e=>stockLootWreck&&
   Number(e.wreckID)===Number(stockLootWreck.wreckID)&&
   e._time>=stockLootWreck._time);
+ const unsafeNativeLoot=rows.filter(e=>e.event==="living-native-loot-pickup"&&
+  (e.status==="NATIVE_LOOT_SOURCE_NOT_REMOVED"||
+   e.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED")&&
+  stockLootWreck&&positive(e.systemID)===systemID&&
+  Number(e.wreckID)===Number(stockLootWreck.wreckID)&&
+  e._time>=stockLootWreck._time);
  const stockRaid={
   verifiedNativeWeaponEvents:stockWeapons.length,
   measuredStockFleetHpLossEvents:stockDamage.length,
@@ -202,6 +208,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   correlatedPhysicalWreckID:matchedStockWreck?.wreckID||null,
   correlatedWreckWithStoredLootID:stockLootWreck?.wreckID||null,
   verifiedNativePickupEvents:nativeLootPickups.length,
+  unsafeNativeLootSourceMutations:unsafeNativeLoot.length,
   correlatedVerifiedPickupItemID:matchedNativePickup?.wreckItemID||null,
   correlatedVerifiedLooterID:matchedNativePickup?.characterID||null,
   status:stockLootWreck?"CORRELATED_STOCK_WEAPON_HP_WRECK_AND_STORED_LOOT":
@@ -291,6 +298,11 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  if(requireStockWreckLoot&&status==="READY_FOR_CLIENT_PLAYTEST"&&!stockLootWreck){
   status="AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN";
   blockers.push("No physical EveJS stock miner wreck with nonempty persisted loot correlated to native pirate weapon activation and measured HP loss on the same real victim. An attack order, empty wreck or fabricated inventory is insufficient.");
+ }
+ if(requireNativeLootPickup&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    unsafeNativeLoot.length){
+  status="BLOCKED_NATIVE_LOOT_SOURCE_MUTATION";
+  blockers.push("Upstream EveJS successfully granted native wreck loot but did not remove or correctly decrement the same source item. This may permit duplicate pickups; preserve the world and investigate before asserting shared-loot safety.");
  }
  if(requireNativeLootPickup&&status==="READY_FOR_CLIENT_PLAYTEST"&&
     !matchedNativePickup){
