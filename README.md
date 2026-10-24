@@ -41,37 +41,31 @@ Expected v0.12.3.1 archive hash per X-Eve authors:
 
 **Important:** `gameboys84/EveJS` main is *not* automatically the v0.12.3.1 archive accepted by the X-Eve installer. Never force a patch into a mismatched tree.
 
-## Play co-op on one host (experimental)
+## Play together in a living universe (experimental)
 
-For two *separate* authorized accounts and client instances, use
-[PLAY_COOP_NOW](docs/PLAY_COOP_NOW.md). The recommended first game night
-runs one native EveJS server with a bounded, repeatable NPC encounter
-loop **only when two distinct pilots are on the same grid**. The
-server continues checking proximity after warp so meeting up does not
-require either player to relog. It keeps the experimental virtual
-economy and NPC faction simulations disabled until the base two-pilot
-client gameplay works.
+The default [game-night setup](docs/PLAY_COOP_NOW.md) runs one native
+EveJS server with **autonomous named miners, haulers, traders, patrols and
+pirates**. Explore and fight ships that already belong to the world:
+**no player-triggered PvE arena, no automatic waves**. NPCs have
+persistent identities, physical movement, real native combat and wrecks,
+and a recorded recovery delay after their ship is destroyed.
 
-```powershell
+~~~powershell
 cd C:\Games\EveCoopProject
 git pull
-.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -NpcSystemID 30000142
+.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart
 .\scripts\Local-Two-Client-Test.ps1 -Action LaunchTwo -ConfirmClientPermission
 .\scripts\Local-Two-Client-Test.ps1 -Action Party
-```
+~~~
 
-`CoopStart` is intended for an **already bootstrapped** EveJS database.
-For a brand-new world run `-Action Prepare` once as documented.
+The first-time upstream database preparation is documented separately.
+Native ship movement/combat is implemented in the pinned EveJS overlay;
+background NPC market accounting is **not** yet authoritative EveJS
+mining, cargo or player-market trading.
 
-The new installer performs a pinned-source preflight and syntax-check
-before applying changes, and supports `-DryRun` and `-Remove`.
-
-**Second PC:** An experimental [VPN-only SSH loopback tunneling
-helper](docs/FRIEND_PC_PRIVATE_TUNNEL.md) now forwards only the five
-client-facing ports from an authenticated Tailscale peer. Docker
-remains bound to localhost. The helper is not yet verified with a
-working friend-side EVE client, and never forwards the market or admin
-ports.
+[Two-PC authenticated loopback tunnel](docs/FRIEND_PC_PRIVATE_TUNNEL.md)
+is experimental. Neither real two-client game rendering nor friend-PC
+TLS/login has been live-verified.
 
 ## First milestone
 
