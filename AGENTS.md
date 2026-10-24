@@ -1,6 +1,6 @@
 # Agent operating agreement
 
-Read `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/UPSTREAM.md`, and `docs/SETUP_WINDOWS.md` before any changes.
+For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` and relevant upstream docs as needed.
 
 ## Primary goal for game-test agents (2026-10-25): prove gameplay, NOT scan dependencies
 
@@ -115,11 +115,21 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
-## Current owner-directed NPC feature block (2026-10-24)
-Review [NPC memory and faction chronicle](docs/NPC_MEMORY_AND_FACTION_CHRONICLE.md).
-Implement and test NPC-MEM-001/002/003 and NPC-FACTION-001 without
-substituting fabricated ship events or virtual market orders for native
-EveJS outcomes. This is not permission to bypass the P0 network/client
-legal and security gates, which are postponed as a separate block.
-The real two-client gameplay and NPC inter-system/market-order acceptance
-tests remain unverified. Do not mark these systems DONE on unit tests alone.
+## Current acceptance goal — 2026-10-25
+
+The owner has already validated the backend at commit `cc5ce83` but not
+gameplay. **First prove the installed headless startup path and event
+writer**; `living-headless-boot-requested` is expected without clients.
+Then prove actual native NPC movement/interaction in `World`. Only
+after that ask the operator for one authorized client, then two
+characters, and capture separate visual/server evidence.
+
+If the event file is missing, investigate `BLOCKED_TELEMETRY` rather
+than asking for a client or running npm audit. If any step is blocked,
+record the single next actionable diagnostic and stop; do not repeat
+previously passed checks. Apply prior backend PASS only to its exact
+recorded project/upstream revision. Follow
+`docs/GAMEPLAY_TESTING.md` and `docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md`.
+
+**The two-client gameplay and real native transfer/market activity
+remain unverified.** No GitHub CI and no merges without owner consent.
