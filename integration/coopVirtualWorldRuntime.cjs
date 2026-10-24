@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null;
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
@@ -65,4 +65,19 @@ function observeSession(session,ship){
   });
  }catch(error){console.warn("[CoopVirtualWorld] observe",error.message);}
 }
-module.exports={start,observeSession};
+function confirmedWreck(session,ship,npcID,wreckID){
+ if(!economy)return;
+ try{
+  if(!lossBridge){
+   const {createLossBridge}=require("./coopNpcLossBridge");
+   lossBridge=createLossBridge({
+    file:process.env.EVEJS_COOP_LOSS_LEDGER_FILE||"/var/lib/evejs/coop-loss-ledger.json",
+    recordLoss:(system,amount)=>economy.recordLoss(system,amount)
+   });
+  }
+  const systemID=Number(ship?.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
+  const result=lossBridge.accept({systemID,npcID,wreckID});
+  require("./coopRuntimeProbe").observe("virtual-economy-npc-loss",session,ship,{npcID,wreckID,status:result.status});
+ }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
+}
+module.exports={start,observeSession,confirmedWreck};
