@@ -5,7 +5,10 @@ function presentVirtualPilot(scene,entityID,pilot){
  if(!scene||typeof scene.getEntityByID!=="function"||!pilot?.id)return {status:"INVALID"};
  const ship=scene.getEntityByID(Number(entityID));
  if(!ship||ship.kind!=="ship")return {status:"NOT_A_SHIP"};
- const name=String(pilot.name||pilot.id).trim().slice(0,90);
+ const roleLabels={miner:"Miner",hauler:"Hauler",trader:"Trader",patrol:"Patrol",pirate:"Pirate"};
+ const role=roleLabels[pilot.role]||"";
+ const base=String(pilot.name||pilot.id).trim();
+ const name=(base+(role?" ["+role+"]":"")).slice(0,90);
  if(!name)return {status:"NO_NAME"};
  if(ship.coopVirtualPilotID&&ship.coopVirtualPilotID!==pilot.id)return {status:"IDENTITY_CONFLICT"};
  if(ship.coopVirtualPilotID===pilot.id&&ship.itemName===name)return {status:"UNCHANGED"};
