@@ -322,3 +322,23 @@ For an additional stricter read-only gate, run:
 It requires one real victim across verified native weapon event, measured HP decrease, physical EveJS wreck, and a nonempty stored loot inventory. Missing or mismatched wrecks, other-system ships, fabricated items, empty wrecks, or wrecks preceding the observed damage cannot pass. If the upstream fleet record is already pruned before the wreck hook, this observer intentionally **fails closed** rather than claiming an unproven stock-fleet origin.
 
 `StockRaidLoot` proves server-side correlation only, **not** final-shot attribution or that either EVE client has successfully opened the wreck. Two authenticated pilots must still verify live shared loot, one-time item withdrawal, coordinated fleet warp and reconnection.
+
+## P0 — native loot withdrawal proof (not just items in a wreck)
+
+A real wreck with persisted items is not yet proof that a real authorized EVE character can withdraw them. The reversible LivingCoop overlay enables **read-only** `EVEJS_COOP_NATIVE_LOOT_EVIDENCE=1`. On a successful upstream EveJS `transferNativeWreckItemToCharacterLocation`, the observer verifies:
+
+- a real physical native wreck in the same solar system, its source entity and unchanged native identity;
+- exactly one authenticated in-space character session, with an actual ship physically registered in that EveJS scene;
+- upstream's successful native item grant **and** the authoritative wreck-item store changed correctly: a full withdrawal removed the item; a partial withdrawal reduced its quantity by the exact amount.
+
+Only this combination emits `living-native-loot-pickup` with `VERIFIED_NATIVE_LOOT_PICKUP`. If EveJS granted an item but **did not remove/decrement it from the wreck**, it instead emits a source inconsistency status and never certifies the pickup. No new item, synthetic character, fallback wreck or manual loot grant is created.
+
+A separate **read-only** local command requires the full native stock-miner PvE chain (weapon event → physical HP loss → native wreck → nonempty native loot) **plus** a subsequent actual successful pickup by an authenticated character from that **same wreck**:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action LootPickup -WorldSystemID 30000144
+```
+
+**Known upstream issue to treat as a test blocker, not a gameplay PASS:** The pinned EveJS native wreck transfer currently grants inventory before decrementing the source wreck item and does not check the result of the full-item deletion. A failed source mutation could leave duplicated inventory. The optional observer flags that state; it does not change transaction ordering, rollback or native inventory code in an untested shared world. Until real two-client QA demonstrates correct one-time removal and both clients see the updated wreck, shared loot remains **UNVERIFIED**.
+
+Regression coverage: `tests/coop-native-loot-pickup.test.mjs` (authenticated full/partial pickup, exact source debit, missing/duplicate session, incorrect or unphysical wreck, unsuccessful grant, wrong-wreck log, and independent report gate). A green `LootPickup` means **one physical server-side item transfer**, not proof of two real clients, another player's refresh, player-vs-pirate combat, or killer attribution.
