@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolOrders=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null;
 const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -27,9 +27,26 @@ function start(){
      world.advance();
      if(economy)economy.advance(world.snapshot().pilots);
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
+     advanceNativePatrolRoutes();
    }catch(e){console.warn("[CoopVirtualWorld] tick",e.message);}
  },30000);
  timer.unref?.();
+}
+function ensurePatrolNavigator(runtime,npc){
+ if(patrolNavigator)return;
+ const {createPatrolNavigator}=require("./coopPatrolNavigator");
+ patrolNavigator=createPatrolNavigator({
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  warp:(id,point,options)=>npc.warpToPoint(id,point,options),
+  orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
+ });
+}
+function advanceNativePatrolRoutes(){
+ if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
+ for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
+  const result=patrolNavigator.tick(Number(systemID),entityIDs);
+  if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
+ }
 }
 function observeSession(session,ship){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
@@ -54,10 +71,17 @@ function observeSession(session,ship){
           registry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
           exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
-          spawn:(system,pilot)=>npc.spawnBatchInSystem(system,{
-            amount:1,entityType:"npc",transient:true,broadcast:true,
-            defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
-          })
+          spawn:(system,pilot)=>{
+            const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
+            const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
+            if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
+            return npc.spawnBatchInSystem(system,{
+              ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
+              defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+              // A virtual miner/trader should not automatically shoot players.
+              behaviorOverrides:{autoAggro:false,autoActivateWeapons:false,targetPreference:"none"}
+            });
+          }
         });
       }
       const result=bridge.reconcile(systemID,residents);
@@ -83,28 +107,26 @@ function observeSession(session,ship){
       if(!patrolDirector){
         const {createPatrolDirector}=require("./coopFactionPatrolRuntime");
         patrolDirector=createPatrolDirector({
-          spawn:(id)=>npc.spawnBatchInSystem(id,{
-            amount:1,entityType:"npc",transient:true,broadcast:true,
-            defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile"
-          }),
+          spawn:(id)=>{
+            const nativeScene=runtime.ensureScene(id,{refreshStargates:false});
+            const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
+            if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
+            return npc.spawnBatchInSystem(id,{
+              ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
+              defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+              behaviorOverrides:{autoAggro:false,autoActivateWeapons:false,targetPreference:"none"}
+            });
+          },
           exists:(id,entityID)=>Boolean(runtime.ensureScene(id,{refreshStargates:false})?.getEntityByID(entityID))
         });
       }
       const factions=Object.values(factionDirector.snapshot().factions);
       const deployment=patrolDirector.reconcile(systemID,factions);
       if(deployment.active?.length){
-        const anchorID=Number(ship?.itemID);
-        if(!patrolOrders){
-          const {createPatrolOrders}=require("./coopPatrolOrders");
-          patrolOrders=createPatrolOrders({
-            orbit:(npcID,targetID,distance)=>npc.orbit(npcID,targetID,distance),
-            exists:(id,entityID)=>Boolean(runtime.ensureScene(id,{refreshStargates:false})?.getEntityByID(entityID))
-          });
-        }
-        // A player's ship is a temporary demonstration anchor, not a
-        // permanent route waypoint or an automatic hostile attack target.
-        const orders=patrolOrders.assign(systemID,deployment.active,anchorID);
-        require("./coopRuntimeProbe").observe("virtual-faction-patrol-orders",session,ship,orders);
+        // Real point-of-interest warps; no player ship orbit anchor.
+        ensurePatrolNavigator(runtime,npc);
+        const routeOrders=patrolNavigator.tick(systemID,deployment.active);
+        require("./coopRuntimeProbe").observe("virtual-faction-patrol-route",session,ship,routeOrders);
       }
       require("./coopRuntimeProbe").observe("virtual-faction-patrol",session,ship,deployment);
     }catch(error){console.warn("[CoopFactionPatrol]",error.message);}
