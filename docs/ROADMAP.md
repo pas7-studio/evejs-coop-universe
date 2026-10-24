@@ -10,6 +10,10 @@ The following priority blocks are **deferred**, not cancelled:
 - P1: native NPC transit between systems and real NPC market buy/sell
   orders (separate implementation block, not part of this branch).
 
+The owner has explicitly prohibited **GitHub Actions and remote CI**.
+All GitHub workflow files have been removed. Keep local test scripts
+available; do not reintroduce automatic remote runs.
+
 The native NPC fight/retreat/reinforcement slice has code and tests, but
 still requires live server/client verification. The active reviewable
 work is **P1 personal NPC memory** and the **P2 factual faction chronicle**.
