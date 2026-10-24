@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -22,6 +22,19 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
  const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID);
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
+ const activitySamples=related.filter(e=>e.event==="living-native-activity"&&e.status==="SAMPLED");
+ // Movement and cargo growth must be measured between two native scene
+ // samples; a flag, controller order or stationary ship cannot fake them.
+ const activity={
+  samples:activitySamples.length,
+  movedShips:activitySamples.reduce((n,e)=>n+Math.max(0,Number(e.observedMovement)||0),0),
+  oreGrowth:activitySamples.reduce((n,e)=>n+Math.max(0,Number(e.oreGrowth)||0),0),
+  targetingSamples:activitySamples.reduce((n,e)=>n+Math.max(0,Number(e.engagedNativeNpcs)||0),0),
+  lastPhysicalNpcShips:Math.max(0,Number(activitySamples.at(-1)?.physicalNpcShips)||0)
+ };
+ activity.status=activity.movedShips>0&&(activity.oreGrowth>0||activity.targetingSamples>0)
+  ?"MOVEMENT_AND_INTERACTION_OBSERVED":activity.movedShips||activity.oreGrowth||activity.targetingSamples
+  ?"PARTIAL_NATIVE_ACTIVITY":"NO_PHYSICAL_ACTIVITY_EVIDENCE";
  const realFleets=industry?.fleets||[];
  const minerShips=realFleets.reduce((sum,f)=>sum+(f.minerIDs?.length||0),0);
  const haulerShips=realFleets.reduce((sum,f)=>sum+(f.haulerIDs?.length||0),0);
@@ -51,10 +64,15 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
    status="NO_LIVING_NPC_SHIPS";
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
+ if(requireActivity&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    activity.status!=="MOVEMENT_AND_INTERACTION_OBSERVED"){
+  status="AWAITING_NATIVE_ACTIVITY";
+  blockers.push("Physical NPC ships are present, but genuine movement AND cargo growth or active native targeting have not both been observed across native snapshots.");
+ }
  return {status,systemID,topologyAt:topology?.at||null,
   evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
   headlessBootStatus:headless?.status||null,
-  evidenceWindowMinutes:windowMinutes,scenery,
+  evidenceWindowMinutes:windowMinutes,scenery,activity,
   actualMiningFleets:realFleets.length,actualMinerShips:minerShips,
   actualHaulerShips:haulerShips,
   physicalNpcShipAssignments:Object.values(roles).reduce((a,b)=>a+b,0),
@@ -62,6 +80,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
   invalidLogLines:invalid,blockers,
   limits:[
    "Server-side actual EveJS scene observations only; headless evidence does not imply a game client has logged in.",
+   "Native active targeting is not proof of weapon damage, destroyed ships or real player/NPC combat.",
    "Does not prove client rendering, real mining laser behavior, damage/loot, second-client login or friend-PC networking."
   ]};
 }
@@ -70,7 +89,9 @@ if(require.main===module){
   const args=process.argv.slice(2),p=args.indexOf("--window-minutes");
   const minutes=p>=0?Number(args[p+1]):20;
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw Error("--window-minutes must be 1..240");
-  const report=summarize(fs.readFileSync(0,"utf8"),{windowMinutes:minutes});
+  const report=summarize(fs.readFileSync(0,"utf8"),{
+   windowMinutes:minutes,requireActivity:args.includes("--require-activity")
+  });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
  }catch(error){console.error("Living world verification failed:",error.message);process.exitCode=1;}
