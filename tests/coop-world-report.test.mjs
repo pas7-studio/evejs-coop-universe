@@ -170,7 +170,7 @@ test("strict weapon chain needs a genuine native launch/activation from same NPC
   attackerEntityID:101,attackerPilotID:"coop-pilot-001",
   victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
  });
- const good=summarize(combatFixture()+"\\n"+launch,{now,requireCombat:true,requireWeapon:true});
+ const good=summarize(combatFixture()+"\n"+launch,{now,requireCombat:true,requireWeapon:true});
  assert.equal(good.status,"READY_FOR_CLIENT_PLAYTEST");
  assert.equal(good.combat.nativeWeaponDamageWreckLootID,900);
  assert.equal(good.combat.weaponCorrelatedDamageEvents,1);
@@ -190,7 +190,7 @@ test("weapon activity of different NPC or victim does not claim a battle outcome
    victimEntityID:102,victimPilotID:"coop-pilot-002",
    moduleID:99,...changes
   });
-  const r=summarize(combatFixture()+"\\n"+witness,{now,requireWeapon:true});
+  const r=summarize(combatFixture()+"\n"+witness,{now,requireWeapon:true});
   assert.equal(r.status,"AWAITING_NATIVE_WEAPON_CHAIN");
  }
 });
