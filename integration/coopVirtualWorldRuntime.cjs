@@ -145,11 +145,17 @@ function scheduleHeadlessWorldBoot(route){
     const fleetShips=miningEnabled
      ?(require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID)||[])
        .flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
-       .filter(id=>scene?.getEntityByID?.(Number(id)))
+       .filter(id=>{
+        const entity=scene?.getEntityByID?.(Number(id));
+        return entity?.nativeNpc===true&&entity?.kind==="ship";
+       })
      :[];
     const links=Object.values(identityRegistry?.snapshot().links||{})
-     .filter(link=>Number(link.systemID)===systemID&&
-      scene?.getEntityByID?.(Number(link.entityID)));
+     .filter(link=>{
+      if(Number(link.systemID)!==systemID)return false;
+      const ship=scene?.getEntityByID?.(Number(link.entityID));
+      return ship?.kind==="ship"&&ship.nativeNpc===true;
+     });
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
     const sdeBelts=require("./worldData").getAsteroidBeltsForSystem(systemID).length;
@@ -696,7 +702,10 @@ function observeSession(session,ship){
         const {createRegistry}=require("./coopIdentityRegistry");
         identityRegistry=createRegistry({
           file:process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json",
-          exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id))
+          exists:(system,id)=>{
+           const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
+           return ship?.kind==="ship"&&ship.nativeNpc===true;
+          }
         });
         // Repair any interrupted native gate transfer before the next
         // materializer.prune() can treat its temporarily missing source ship
@@ -706,7 +715,10 @@ function observeSession(session,ship){
           registry:identityRegistry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
           exemptRoles:nativeMining?["miner","hauler"]:[],
-          exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
+          exists:(system,id)=>{
+           const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
+           return ship?.kind==="ship"&&ship.nativeNpc===true;
+          },
           spawn:(system,pilot)=>{
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
             const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
