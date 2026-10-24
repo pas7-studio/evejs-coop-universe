@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,encounters=0,kills=0;
+ const pilots=new Map();let lastScene=null,encounters=0,kills=0,coopWrecks=0,partyReady=0;
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -31,6 +31,8 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    pilots.set(id,{...(pilots.get(id)||{}),characterID:id,lastSeen:e.at,active:false});
   }
   if(e.event==="native-npc-spawn"&&e.success)encounters++;
+  if(e.event==="coop-encounter-kill")coopWrecks++;
+  if(e.event==="coop-party-proximity"&&e.ready)partyReady++;
   if(e.event==="native-npc-kill-consequence"&&e.status==="COMMITTED")kills++;
  }
  const active=[...pilots.values()].filter(p=>p.active);
@@ -49,7 +51,8 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
  return {status,clientRenderingVerified:false,windowMinutes,
    activeCharacterIDs:active.map(p=>p.characterID),activePilotCount:active.length,
    sharedScenePilotCount:sceneActive.length,serverMutualVisibility:mutualSeen,
-   npcEncountersObserved:encounters,npcEconomicLossesObserved:kills,
+   npcEncountersObserved:encounters,cooperativeWreckKillsObserved:coopWrecks,
+   partyRendezvousObserved:partyReady,npcEconomicLossesObserved:kills,
    evidenceEvents:events.length,invalidLines,lastSceneAt:lastScene?.at||null,
    warnings:[
     "Live client rendering, controls, authenticated gameplay and friend-PC network access are not certified by JSONL evidence.",
