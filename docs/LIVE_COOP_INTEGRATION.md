@@ -230,10 +230,8 @@ It creates a bounded set of persistent named NPC identities, with faction,
 current system, route index, scheduled departure, and cumulative journeys.
 Travel is advanced by elapsed wall-clock time, including catch-up across
 server restarts, rather than replaying every intermediate simulation tick.
-No player connection is necessary *after the first initialization*: its
-30-second timer continues advancing while the server process remains alive.
-The initial runtime is currently started by the first successful in-space
-login; this is **not yet a standalone boot-time background service**.
+The 30-second virtual-world tick now starts from the pinned EveJS TCP server
+startup hook. It advances even if no player has logged in.
 
 Virtual NPCs do not automatically materialize as physical ships. The new
 records are therefore not combat-capable native entities and do not appear
@@ -333,7 +331,7 @@ market or inventory. It does not issue player market orders, create real
 mineral items, spawn physical transporters, debit player wallets or update
 corporation standings. Its loss-event API is not yet connected to native
 killmails, so battle outcomes do not automatically feed faction demand.
-The virtual runtime still first initializes on a player's in-space login.
+The virtual runtime now initializes on the game server startup path.
 Native client/gameplay validation has not been performed.
 
 ## Confirmed NPC losses affect the virtual economy
@@ -446,17 +444,17 @@ persistent strategic assets.
 
 ## Native patrol movement orders
 
-The faction patrol bridge now issues actual `npcRuntime.orbit()` orders
-to live patrol ships after deployment, using the arriving player's ship
-as a temporary *demonstration anchor*. This is not a persistent patrol
+Earlier versions of the faction patrol bridge issued `npcRuntime.orbit()`
+orders around the arriving player's ship. **This behavior is superseded**
+by POI-based native warps under `coopPatrolNavigator.js`. This is not a persistent patrol
 route, convoy escort, target selection, or attack command. The default
 orbit distance is 10 km. A per-NPC two-minute cooldown prevents repeated
 logins from spamming movement commands. Dead/despawned entities are
 ignored. The command never applies synthetic damage or bypasses EveJS
 movement/visibility.
 
-Because a player's ship is the anchor, these patrol NPCs may approach
-the player. The default pool is still `npc_hostiles`, meaning the native
+Patrols now navigate real stargates/stations/belts instead of choosing
+players as movement anchors. The default pool is still `npc_hostiles`, meaning the native
 AI can engage according to its own settings. Do not enable this opt-in
 mode on a shared production game server before live gameplay validation.
 A later revision should anchor patrols to native stargates/POIs instead.
