@@ -49,7 +49,7 @@ co-op overlay, builds the image and starts one authoritative Docker server.
 It does **not** enable experimental virtual-world economics or faction
 spawns. It enables **repeatable native NPC encounters**: no new enemy
 batch while a prior encounter NPC is still alive, 12-minute default
-cooldown between successful batches, and a persisted cap of 20 batches.
+cooldown between successful batches, and a persisted limit of 20 batches **per 24-hour window**.
 The actual spawn requires two distinct Ballpark-ready characters
 within 250 km in the selected system. A server-side coordinator
 keeps checking proximity after both have logged in, so you may
@@ -140,8 +140,9 @@ challenging cooperative fight, select two or three:
 .\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -NpcSystemID 30000142 -EnemyCount 2 -EncounterCooldownMinutes 8 -MaxEncounterBatches 30
 ```
 
-Allowed enemy count is 1–3. The cooldown is measured in minutes and the
-limit is a persisted count of successful spawn batches (not killed ships).
+Allowed enemy count is 1–3. The cooldown is measured in minutes and the daily limit counts successful
+spawn batches (not killed ships), automatically renewing every 24 hours.
+Cumulative successful spawns remain recorded for operator diagnostics.
 The authoritative EveJS NPC runtime determines which targets the enemies
 attack, damage, drops and available salvage. There is no artificial combat
 damage or invented inventory.
