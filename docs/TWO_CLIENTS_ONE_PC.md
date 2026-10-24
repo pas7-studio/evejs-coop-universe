@@ -81,6 +81,6 @@ git pull
 .\scripts\Local-Two-Client-Test.ps1 -Action Logs
 ```
 
-The `Smoke` action uses Node.js 22+ and connects only to `127.0.0.1:26000`. It creates two overlapping TCP sockets, holds them briefly, then closes both. Expected output: `TRANSPORT_ONLY_PASS`; if a socket cannot connect or gets closed before the hold check, the command exits nonzero. The probe never sends guessed EVE protocol bytes, never logs in, and cannot by itself verify the game.
+The `Smoke` action uses Node.js 22+ and connects only to `127.0.0.1:26000`. It opens two overlapping TCP sockets, holds both, closes the first, reconnects it as a third connection while the second stays open, and then closes both. Expected output: `TRANSPORT_RECONNECT_PASS`; if a socket cannot connect or gets closed before the hold check, the command exits nonzero. The probe never sends guessed EVE protocol bytes, never logs in, and cannot by itself verify the game.
 
-Agent acceptance: `Start` reports healthy Docker services; `Smoke` reports `TRANSPORT_ONLY_PASS`; `Logs` provides the evidence. If these pass, mark **TCP transport readiness only**, not the two-client milestone.
+Agent acceptance: `Start` reports healthy Docker services; `Smoke` reports `TRANSPORT_RECONNECT_PASS`; `Logs` provides the evidence. If these pass, mark **TCP transport readiness only**, not the two-client milestone.
