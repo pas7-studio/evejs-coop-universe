@@ -473,3 +473,16 @@ test("failed client slim broadcast is reported separately from native NPC spawn"
  assert.equal(result.status,"READY_FOR_CLIENT_PLAYTEST");
  assert.equal(result.nativePresentationPending[0].reason,"BROADCAST_FAILED");
 });
+
+test("headless boot timer witness differentiates a fired timer from a missing system result",()=>{
+ const logs=[
+  event("living-headless-boot-requested",{systems:[30000142,30000144]}),
+  event("living-headless-boot-attempt",{attempt:2,pendingSystems:[30000142,30000144]}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:33,realAsteroidBelts:3})
+ ].join("\n");
+ const r=summarize(logs,{now,systemID:30000144});
+ assert.equal(r.headlessAttemptCount,2);
+ assert.deepEqual(r.headlessPendingSystems,[30000142,30000144]);
+ assert.equal(r.headlessBootStatus,null);
+ assert.notEqual(r.status,"READY_FOR_CLIENT_PLAYTEST");
+});
