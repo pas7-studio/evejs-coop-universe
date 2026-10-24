@@ -260,3 +260,28 @@ Next integration frontier: native scene materialization of *specific* virtual
 pilot identities with de-duplication, and then server-owned faction/economy
 activity. Avoid equating these virtual records with real NPC ships until that
 bridge is implemented and verified.
+
+## Optional materialization of virtual identities
+
+The virtual-world adapter can now create *actual* native EveJS NPCs for
+virtual pilots resident in the system when an in-space pilot arrives.
+The process-local `coopNpcMaterializer.js` maps virtual pilot IDs to
+native NPC entity IDs, prevents duplicate spawning on a second login and
+limits active materializations per system. If a tracked native entity is
+destroyed, its mapping can be reused at a later player arrival.
+
+```powershell
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnableVirtualWorld -MaterializeVirtualNpcs -VirtualPopulation 16 -MaterializeLimit 2
+```
+
+This is explicitly **opt-in**. Mapping is not yet durable across container
+restart. Native NPCs retain their *own* stock EveJS names/behavior; the
+virtual pilot name, faction, memories, and itinerary are **not yet
+projected into the actual physical ship**. Virtual NPC routes update in
+the background, but an NPC already spawned into a scene does not
+automatically jump systems with the virtual record. This is a first
+materialization bridge, not the completed autonomous Living Universe.
+
+No physical NPC spawn happens just because time advances; a player in
+the target system triggers the bridge. The native combat and loot engine
+continues to own all physical interactions.
