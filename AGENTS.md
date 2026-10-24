@@ -115,6 +115,16 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
+## Current co-op code milestone: shared native fleet warp
+
+See `docs/COOP_FLEET_WARP.md`. The owner wants TWO playable clients,
+not extra virtual fleet mechanics. The new opt-in native EveJS follower
+guard checks actual same-scene live ships; it never invents session,
+warp, landing or in-client success. `-Action Party` now reports native
+follower warp command acceptance, failure and skips. Never treat a
+server-side accepted order as in-client warp/landing proof. Run only
+manual tests and never GitHub Actions.
+
 ## Current acceptance goal — 2026-10-25
 
 The owner has already validated the backend at commit `cc5ce83` but not
