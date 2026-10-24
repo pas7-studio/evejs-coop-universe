@@ -1,0 +1,113 @@
+# Friend on a second PC: private loopback tunneling experiment
+
+**Status: implemented client-side SSH tunnel, not yet verified with the
+proprietary EVE client.** This is an *optional*, authenticated connection
+path, not a promise that all original launcher, TLS, chat and game
+protocol assumptions will work remotely.
+
+## Why not just expose the server?
+
+The pinned EveJS Docker Compose publishes game and companion interfaces
+to `127.0.0.1` only. Its launcher explicitly expects
+`start.ini` to use `127.0.0.1`; the server also advertises loopback
+image/proxy URLs. Publishing `26000` on a public interface would be both
+unsafe and insufficient.
+
+An SSH tunnel lets a separately authorized client on the friend's PC
+connect to **its own** loopback addresses, securely forwarded across
+a private Tailscale connection to the host PC's loopback-only EveJS
+listeners. The host continues to run exactly one authoritative server.
+
+## Exact local ports from pinned `Code/compose.yaml`
+
+| Friend's 127.0.0.1 | Host's 127.0.0.1 | EveJS service |
+| --- | --- | --- |
+| 26000 | 26000 | Game TCP |
+| 26001 | 26001 | Image server |
+| 26002 | 26002 | HTTP/microservices proxy |
+| 443 | 443 | Local HTTPS/CDN interception |
+| 5222 | 5222 | Chat/XMPP |
+
+Host port `443` maps to container port `26003`; **do not**
+forward internal container port `26003`. Port `40110` (market
+health) and administrative interfaces must never be forwarded to
+the friend.
+
+## Requirements and trust boundaries
+
+1. Both machines belong to the same authorized private tailnet. Record
+   the *host's* real tailnet IPv4 (100.64.0.0/10) and verify the
+   friend's device is permitted by Tailscale policy.
+2. The host has a key-only SSH account that can forward only the five
+   listed 127.0.0.1 destinations. Restrict the SSH service and host
+   firewall to the Tailscale interface and your friend's verified tailnet
+   IP. **Do not enable an internet-facing SSH listener** and do not
+   widen Docker's loopback port bindings.
+3. The friend validates the host SSH fingerprint out-of-band and stores
+   it in their `known_hosts`. The script deliberately enforces
+   `StrictHostKeyChecking=yes` and `BatchMode=yes`: it will not
+   auto-trust an unknown server or fall back to password prompts.
+4. The friend needs an independently authorized, compatible EveJS
+   client installation with its own resource cache and launcher.
+   **Never copy executable patches, account credentials, private keys
+   or host server certificate private keys** to the friend.
+5. The friend's trust chain may need the host's **public** certificate
+   authority certificate, verified out-of-band; separately generated
+   local EveJS certificates may not match tunneled HTTPS. Review and
+   trust only the host public certificate, never its signing key.
+6. Check that none of the five loopback ports is occupied on the
+   friend's Windows machine. You cannot run another local EveJS server
+   simultaneously with this tunnel.
+
+## Friend's Windows commands
+
+Use a trusted SSH key already authorized on the host. From this
+orchestration repository:
+
+```powershell
+cd C:\Games\EveCoopProject
+.\scripts\Start-Friend-Tunnel.ps1 -Action Check -HostVpnIPv4 100.101.102.103 -SshUser coopguest
+.\scripts\Start-Friend-Tunnel.ps1 -Action Start -HostVpnIPv4 100.101.102.103 -SshUser coopguest -IdentityFile "$env:USERPROFILE\.ssh\id_ed25519"
+```
+
+**The IPv4 address and username above are examples; do not use them
+unchanged.** Leave the terminal open while playing. `Ctrl+C` closes
+the forwarded connections. There is no public listener on the friend's
+machine: each `-L` bind is explicitly `127.0.0.1`.
+
+On the host, start the game once:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -NpcSystemID 30000142
+.\scripts\Local-Two-Client-Test.ps1 -Action LaunchOne -ConfirmClientPermission
+```
+
+Then, with the tunnel already open, the friend uses their own
+lawfully configured `Play.bat` / compatible launcher against local
+127.0.0.1. **Do not rerun server initialization on the friend's PC.**
+
+## Verification stages
+
+- **SSH:** Check tunnel exits with a host-key/authentication error if
+  unknown or wrong. Confirm the five loopback ports are listening
+  locally after SSH connects.
+- **HTTP:** `Invoke-WebRequest -UseBasicParsing http://127.0.0.1:26002/health`
+  on the friend PC should contact the host service. This is not an
+  authenticated login test.
+- **Game:** The friend can complete a separate authorized login while
+  host character remains online.
+- **World:** Both ships are in the same scene, move, warp, attack one
+  common NPC, and observe one wreck.
+- **Recovery:** Close the tunnel; host character remains active. Restore
+  the tunnel, reconnect the friend; no duplicate ships or lost items.
+- **Security:** Verify the game/CDN/chat ports are still bound to
+  loopback on the host. A non-tailnet peer must not reach host SSH.
+
+If a TCP tunnel succeeds but the remote client fails, first inspect
+certificate trust, launcher-local dependencies, XMPP/proxy redirects
+and the generated sanitized diagnostics. **Do not** weaken SSH host
+verification, expose public game ports, bypass EVE client security or
+declare multi-device support verified.
+
+This tunnel is an interim test approach, not a production remote
+network architecture or permission to redistribute proprietary clients.
