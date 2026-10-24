@@ -19,6 +19,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
  const topology=[...rows].reverse().find(e=>e.event==="living-world-topology"&&positive(e.systemID));
  const systemID=positive(topology?.systemID);
  const related=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&e._time>=topology._time-1000);
+ const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID);
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
  const realFleets=industry?.fleets||[];
@@ -37,7 +38,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
  };
  let status="AWAITING_INGAME_ARRIVAL";
  const blockers=[];
- if(!topology)blockers.push("Log in using a real EVE client, undock and enter a system; TCP reconnect is insufficient.");
+ if(!topology)blockers.push("No native topology evidence. Start LivingCoop headless world boot or enter space with a real permitted EVE client; TCP reconnect is insufficient.");
  else {
   if(!scenery.waypoints||!scenery.asteroidBelts){
    blockers.push("The authoritative runtime scene has no real mining belt/waypoints. Check database generation and static reference data.");
@@ -51,6 +52,8 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
  return {status,systemID,topologyAt:topology?.at||null,
+  evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
+  headlessBootStatus:headless?.status||null,
   evidenceWindowMinutes:windowMinutes,scenery,
   actualMiningFleets:realFleets.length,actualMinerShips:minerShips,
   actualHaulerShips:haulerShips,
@@ -58,7 +61,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
   physicalNpcRoles:roles,oreOnRealHaulers:realFleets.reduce((n,f)=>n+Math.max(0,Number(f.loadedHaulerOreQuantity)||0),0),
   invalidLogLines:invalid,blockers,
   limits:[
-   "Server-side actual EveJS scene observations only.",
+   "Server-side actual EveJS scene observations only; headless evidence does not imply a game client has logged in.",
    "Does not prove client rendering, real mining laser behavior, damage/loot, second-client login or friend-PC networking."
   ]};
 }
