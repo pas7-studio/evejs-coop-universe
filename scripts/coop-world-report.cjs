@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -120,6 +120,34 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    damage.length&&wrecks.length?"UNMATCHED_DAMAGE_AND_WRECK":
    damage.length?"DAMAGE_ONLY":wrecks.length?"WRECK_ONLY":"NO_NPC_COMBAT_EVIDENCE"
  };
+ // Only the native market adapter's settled proof can qualify. A virtual
+ // ISK change, projected NPC identity or raw order-book row is not a trade.
+ const nativeTrades=rows.filter(e=>e.event==="living-native-market-trade"&&
+  e.status==="TRADE_SETTLED"&&e.marketOrderSource==="EVEJS_SEED"&&
+  e.nativeCargoVerified===true&&e.marketRPCAcknowledged===true&&
+  positive(e.systemID)&&/^coop-pilot-[0-9]{3,}$/.test(String(e.pilotID||""))&&
+  positive(e.entityID)&&positive(e.stationID)&&positive(e.typeID)&&
+  Number.isInteger(Number(e.quantity))&&Number(e.quantity)>0&&
+  Number(e.price)>0&&Number.isFinite(Number(e.price))&&
+  /^[0-9]+$/.test(String(e.marketOrderID||""))&&
+  ((e.side==="sell"&&e.marketRPC==="FillOrder")||
+   (e.side==="buy"&&e.marketRPC==="AdjustSeedStock"))&&
+  (!latestBoot||e._time>=latestBoot._time));
+ const nativeSystemTrades=nativeTrades.filter(e=>e.systemID===systemID);
+ const nativeSell=nativeSystemTrades.filter(e=>e.side==="sell");
+ const nativeBuy=nativeSystemTrades.filter(e=>e.side==="buy");
+ const chain=nativeBuy.find(b=>nativeSell.some(s=>
+  s.pilotID===b.pilotID&&Number(s.entityID)===Number(b.entityID)&&
+  s._time<=b._time&&b._time-s._time<=60*60000));
+ const market={
+  settledTrades:nativeSystemTrades.length,
+  nativeSeedSales:nativeSell.length,
+  nativeSeedPurchases:nativeBuy.length,
+  sellThenBuyPilotID:chain?.pilotID||null,
+  status:chain?"NATIVE_SEED_SALE_AND_PURCHASE_VERIFIED":
+   nativeSell.length?"NATIVE_SEED_SALE_ONLY":
+   nativeBuy.length?"NATIVE_SEED_PURCHASE_ONLY":"NO_NATIVE_MARKET_TRADE"
+ };
  const realFleets=industry?.fleets||[];
  const minerShips=realFleets.reduce((sum,f)=>sum+(f.minerIDs?.length||0),0);
  const haulerShips=realFleets.reduce((sum,f)=>sum+(f.haulerIDs?.length||0),0);
@@ -153,7 +181,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  // readiness is not a prerequisite for combat between two other named NPCs.
  // It still requires actual authoritative scene topology and the strict
  // source-weapon -> HP -> physical wreck -> stored loot evidence below.
- if(requireCombat||requireWeapon||requireFinalAttacker){
+ if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket){
   if(topology&&scenery.waypoints>0){
    status="READY_FOR_CLIENT_PLAYTEST";
    blockers.length=0;
@@ -172,6 +200,10 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   status="AWAITING_NPC_COMBAT_LOOT";
   blockers.push("No matching same-victim native NPC-on-NPC HP drop, physical wreck and persisted loot items observed. A target lock alone is insufficient.");
  }
+ if(requireMarket&&status==="READY_FOR_CLIENT_PLAYTEST"&&!chain){
+  status="AWAITING_NATIVE_MARKET_TRADE";
+  blockers.push("No matching physically settled native NPC sale into EveJS seed demand followed by an actual stock purchase with the same ship and earned ISK.");
+ }
  if(requireActivity&&status==="READY_FOR_CLIENT_PLAYTEST"&&
     activity.status!=="MOVEMENT_AND_INTERACTION_OBSERVED"){
   status="AWAITING_NATIVE_ACTIVITY";
@@ -180,7 +212,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  return {status,systemID,topologyAt:topology?.at||null,
   evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
   headlessBootStatus:headless?.status||null,
-  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,
+  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
   actualMiningFleets:realFleets.length,actualMinerShips:minerShips,
   actualHaulerShips:haulerShips,
   physicalNpcShipAssignments:Object.values(roles).reduce((a,b)=>a+b,0),
@@ -190,6 +222,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    "Server-side actual EveJS scene observations only; headless evidence does not imply a game client has logged in.",
    "Correlated NPC controller target and HP loss do not identify the actual killer without native damage attribution.",
    "Native active targeting is not proof of weapon damage, destroyed ships or real player/NPC combat.",
+   "NPC market gate verifies existing EveJS seed-order trades only; independent player-compatible NPC order ownership, wallet and escrow still need implementation.",
    "Does not prove client rendering, real mining laser behavior, damage/loot, second-client login or friend-PC networking."
   ]};
 }
@@ -201,7 +234,8 @@ if(require.main===module){
   const report=summarize(fs.readFileSync(0,"utf8"),{
    windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
    requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
-   requireFinalAttacker:args.includes("--require-final-attacker")
+   requireFinalAttacker:args.includes("--require-final-attacker"),
+   requireMarket:args.includes("--require-market")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
