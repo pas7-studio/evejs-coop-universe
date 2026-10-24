@@ -71,7 +71,7 @@ fi
 '@
 
 Write-Host '[DIAGNOSE] Inspecting effective running server; no container or game-data changes will be made.'
-& docker compose @argsList exec -T server sh -c $readOnlyCheck
+$readOnlyCheck -split "`n" | & docker compose @argsList exec -T server sh -s
 if ($LASTEXITCODE -ne 0) {
     throw 'Cannot inspect the running EveJS server container; check its state with -Action Status'
 }
