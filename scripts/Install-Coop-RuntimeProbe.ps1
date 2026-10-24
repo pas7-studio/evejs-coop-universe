@@ -18,6 +18,8 @@ $virtualSource=Join-Path $PSScriptRoot '../integration/coopVirtualWorld.cjs'
 $virtualTarget=Join-Path $server 'space/coopVirtualWorld.js'
 $virtualRuntimeSource=Join-Path $PSScriptRoot '../integration/coopVirtualWorldRuntime.cjs'
 $virtualRuntimeTarget=Join-Path $server 'space/coopVirtualWorldRuntime.js'
+$materializerSource=Join-Path $PSScriptRoot '../integration/coopNpcMaterializer.cjs'
+$materializerTarget=Join-Path $server 'space/coopNpcMaterializer.js'
 $expected='c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
 $rev=(& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
 if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" }
@@ -66,6 +68,7 @@ if($Remove) {
   if(Test-Path -LiteralPath $directorTarget){Remove-Item -LiteralPath $directorTarget -Force}
   if(Test-Path -LiteralPath $virtualTarget){Remove-Item -LiteralPath $virtualTarget -Force}
   if(Test-Path -LiteralPath $virtualRuntimeTarget){Remove-Item -LiteralPath $virtualRuntimeTarget -Force}
+  if(Test-Path -LiteralPath $materializerTarget){Remove-Item -LiteralPath $materializerTarget -Force}
 } else {
   Copy-Item -LiteralPath $probeSource -Destination $probeTarget -Force
   Copy-Item -LiteralPath $npcSource -Destination $npcTarget -Force
@@ -73,5 +76,6 @@ if($Remove) {
   Copy-Item -LiteralPath $directorSource -Destination $directorTarget -Force
   Copy-Item -LiteralPath $virtualSource -Destination $virtualTarget -Force
   Copy-Item -LiteralPath $virtualRuntimeSource -Destination $virtualRuntimeTarget -Force
+  Copy-Item -LiteralPath $materializerSource -Destination $materializerTarget -Force
 }
 Write-Host 'Co-op probe installation complete. Set EVEJS_COOP_EVENTS_FILE within the server container to enable JSONL event output.'
