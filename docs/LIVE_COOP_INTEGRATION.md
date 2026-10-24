@@ -1,3 +1,33 @@
+## First-play hardening — actual local player experience
+
+The default LivingCoop setup now includes a server-derived activity brief
+on pilot arrival: named actual asteroid belts/gates when a loaded hauler,
+mining fleet or pirate is physically near the POI. No invented enemy
+spawns or waypoint coordinates are used.
+
+- The previously corrupted `Deploy-Coop-RuntimeProbe.ps1` has been
+  replaced with one clean and validated script. Its patch preflight is
+  transactional; the merged Compose configuration is rejected if any
+  published service binds to a public interface.
+- Real hauling manifest records contain `coopHaulFleetID`: the stock
+  NPC cargo store persists these additional fields. Only cargo tagged
+  for this actual mining fleet is unloaded, leaving other cargo on the
+  transport intact for genuine native wreck drops.
+- NPC pirates' temporary native pursuit orders override wandering
+  route instructions; after a target vanishes, pirates may resume normal
+  behavior.
+- `coopNativeDepot` stores real cargoID receipts in the persistent
+  EveJS volume; `coopVirtualEconomy.syncNativeDeliveries()` consumes
+  monotonic per-system totals. A single shipment affects virtual system
+  supply exactly once, including after container restarts. The
+  real EveJS market, wallet and station inventory are unchanged.
+- `Party` diagnostics include ore delivery impacts on system supply.
+
+Validation in this repository uses syntax checks, mock native-world
+scenarios, and reversible-patch checks against the upstream pinned
+EveJS sources. An actual Windows PowerShell execution, Linux container
+startup and two compatible EVE clients have **not** yet been exercised.
+
 ## Native player consequences — October 24
 
 The free-roaming Living Universe now attaches **actual player choices**
