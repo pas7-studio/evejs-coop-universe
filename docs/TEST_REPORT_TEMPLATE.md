@@ -1,5 +1,12 @@
 # Verification report template
 
+**For initial installation and backend readiness ONLY.** For the current
+operator request to test gameplay, use
+[GAMEPLAY_TEST_REPORT_TEMPLATE](GAMEPLAY_TEST_REPORT_TEMPLATE.md), which
+requires physical NPC evidence, client observations and independent
+PASS/BLOCKED statuses. Do not infer gameplay success from this template.
+
+
 Date/time and timezone:
 Operator and OS:
 Docker version and engine mode:
