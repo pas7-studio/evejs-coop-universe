@@ -6,6 +6,35 @@ A community-oriented **two-player cooperative world** concept built *around* [Ev
 
 > Independent, unofficial project. Not affiliated with CCP Games, EveJS or X-Eve maintainers. **Do not distribute game clients, modified client binaries, proprietary assets, certificates, private configuration or databases.** The EVE client terms and upstream licensing need review/permission before client modification, remote multiplayer deployment or redistribution. An open-source server license does **not** authorize use of CCP's client.
 
+## How to verify the actual game (not just Docker)
+
+**Start with [Gameplay acceptance and agent instructions](docs/GAMEPLAY_TESTING.md).**
+The companion [gameplay report template](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md)
+separates genuine NPC and client observations from unit tests and TCP sockets.
+
+The reported 2026-10-25 run at project revision `cc5ce83` passed
+**72 local checks / 27 upstream contract checks**, plus Docker and raw
+TCP checks, but **did not prove NPCs or real players in-game**.
+Its first unresolved gate is a **missing headless event file**:
+`/var/lib/evejs/coop-events.jsonl`. This is a telemetry/startup blocker,
+**not by itself a missing-client blocker**. For a running deployed overlay:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+.\scripts\Local-Two-Client-Test.ps1 -Action World -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+```
+
+`DiagnoseWorld` is read-only and checks the running container's flags,
+installed overlay files, log path and startup diagnostics. `World` is
+a **server-native scene/activity check**; no client is needed for the
+initial `living-headless-boot-requested` event. After that, actual
+rendering, targeting and two-player gameplay require a compatible,
+independently authorized EVE client and human confirmation.
+
+**Do not rerun npm audit for gameplay validation**. Seven previously
+reported dependency advisories are a separate security-remediation
+track; the game remains loopback-only. No GitHub Actions/remote CI.
+
 ## What this repository contains
 
 **Executable, optional server-side integration overlay and Windows runbooks.** This repo contains NPC/world modules, reversible source hooks, deployment scripts, and read-only live two-pilot evidence tools. It does **not** include a proprietary EVE client, a standalone complete game server, or a verified VPN gateway. Do not mistake a committed integration for proven end-to-end gameplay.
