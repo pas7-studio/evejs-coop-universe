@@ -11,10 +11,11 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const total=(price,qty)=>Math.round(price*qty*100)/100;
 const status=e=>({status:e});
-function createNpcMarketTrader({call,store,registry,getStation,resolveType,sceneForSystem,
+function createNpcMarketTrader({call,store,registry,getStation,resolveType,sceneForSystem,getController,
  root="/var/lib/evejs/coop-native-market",clock=()=>Date.now(),
  maxQuantity=10,maxPrice=1000000,cooldownMs=300000}={}){
- if(typeof call!=="function"||typeof sceneForSystem!=="function"||!store||typeof registry?.snapshot!=="function"||
+ if(typeof call!=="function"||typeof sceneForSystem!=="function"||typeof getController!=="function"||
+  !store||typeof registry?.snapshot!=="function"||
   typeof getStation!=="function"||typeof resolveType!=="function"||
   !["getNativeEntity","listNativeCargoForEntity","upsertNativeCargo",
    "removeNativeCargo","allocateCargoID","buildNativeCargoItems"].every(k=>typeof store[k]==="function")||
@@ -154,6 +155,18 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     Math.max(0,Number(physicalStation.radius)||0)-
     Math.max(0,Number(ship.radius)||0)>10000)
    return status("NOT_AT_NATIVE_STATION");
+  const players=new Set(Array.from(scene?.sessions?.values?.()||[])
+   .map(x=>pos(x?._space?.shipID)).filter(Boolean));
+  if(players.has(id))return status("PLAYER_SHIP_EXCLUDED");
+  const controller=getController(id);
+  const aggressionAge=Date.now()-Number(controller?.lastAggressedAtMs);
+  if(!controller||Number(controller.entityID)!==id||
+   Number(controller.systemID)!==Number(scene.systemID)||
+   Number(controller.currentTargetID)>0||controller.manualOrder?.type==="attack"||
+   Number(controller.lastAggressorID)>0&&
+    Number.isFinite(aggressionAge)&&aggressionAge>=0&&aggressionAge<=120000||
+   String(ship.mode||"").toUpperCase().includes("WARP")||
+   ship.pendingWarp||ship.warpState)return status("NATIVE_NPC_BUSY");
   if(side==="buy"&&!buyTypes.includes(type)||side==="sell"&&!sellTypes.includes(type))
    return status("TYPE_NOT_ALLOWLISTED");
   const native=store.getNativeEntity(id);
