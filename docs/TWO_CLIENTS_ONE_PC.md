@@ -1,6 +1,6 @@
 # One Windows PC: EveJS server + two client launchers
 
-**Experimental operator runbook.** This is a reproducible attempt, not proof that the upstream client permits two simultaneous instances. The server stays local-only. Use **two different test accounts and characters**. You must already have lawful access and permissions to use a compatible client build; this repository neither provides nor patches proprietary client assets.
+**Optional authorized-client runbook, reached only after `DiagnoseWorld` / `World` server acceptance in [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md). Do not use this to diagnose the missing event file.** Experimental operator runbook. This is a reproducible attempt, not proof that the upstream client permits two simultaneous instances. The server stays local-only. Use **two different test accounts and characters**. You must already have lawful access and permissions to use a compatible client build; this repository neither provides nor patches proprietary client assets.
 
 ## One-time setup (PowerShell on Windows 11)
 
@@ -23,7 +23,7 @@ The `Prepare` operation can download dependencies, initialize the game database,
 ```powershell
 cd C:\Games\EveCoopProject
 
-# 1. Start one authoritative server and market via Docker
+# 1. Only if server is not running: start one authoritative server and market via Docker
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Local-Two-Client-Test.ps1 -Action Start -HealthTimeoutSeconds 240
 
 # 2. Check server / health
@@ -75,7 +75,7 @@ When Docker is healthy, check that the actual EveJS TCP game listener accepts **
 
 ```powershell
 cd C:\Games\EveCoopProject
-git pull
+# Fresh transport regression only; not a routine game test.
 .\scripts\Local-Two-Client-Test.ps1 -Action Start
 .\scripts\Local-Two-Client-Test.ps1 -Action Smoke
 .\scripts\Local-Two-Client-Test.ps1 -Action Logs
@@ -83,4 +83,4 @@ git pull
 
 The `Smoke` action uses Node.js 22+ and connects only to `127.0.0.1:26000`. It opens two overlapping TCP sockets, holds both, closes the first, reconnects it as a third connection while the second stays open, and then closes both. Expected output: `TRANSPORT_RECONNECT_PASS`; if a socket cannot connect or gets closed before the hold check, the command exits nonzero. The probe never sends guessed EVE protocol bytes, never logs in, and cannot by itself verify the game.
 
-Agent acceptance: `Start` reports healthy Docker services; `Smoke` reports `TRANSPORT_RECONNECT_PASS`; `Logs` provides the evidence. If these pass, mark **TCP transport readiness only**, not the two-client milestone.
+Backend/transport-only acceptance: `Start` reports healthy Docker services; `Smoke` reports `TRANSPORT_RECONNECT_PASS`; `Logs` provides the evidence. If these pass, mark **TCP transport readiness only**, not the two-client milestone.
