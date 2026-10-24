@@ -1,6 +1,6 @@
 # Delivery roadmap — agent-ready tasks
 
-Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **DONE** evidence in commit and automated/manual test linked. Nothing below is claimed implemented.
+Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **IMPLEMENTED_UNVERIFIED** code exists but live evidence is missing; **DONE** actual acceptance evidence recorded. The gameplay test order is in GAMEPLAY_TESTING.md.
 
 ## Owner-defined current execution order (2026-10-24)
 
