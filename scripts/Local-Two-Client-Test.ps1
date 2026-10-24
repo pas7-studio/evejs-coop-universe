@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchTwo','Status','Smoke','Party','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -75,6 +75,14 @@ switch ($Action) {
         Write-Host '[COOP] Use separate accounts. Fly both ships onto the same grid in the configured system.'
         Write-Host '[COOP] Run -Action Party to inspect actual shared-scene evidence.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
+    }
+    'LaunchOne' {
+        Assert-BackendPrerequisites
+        if (-not $ConfirmClientPermission) { throw 'Pass -ConfirmClientPermission only for an authorized compatible client.' }
+        if (-not (Test-Path -LiteralPath $play -PathType Leaf)) { throw "Missing Play.bat: $play" }
+        Start-Process -FilePath 'cmd.exe' -ArgumentList '/k call Play.bat' -WorkingDirectory $CodePath | Out-Null
+        Write-Host '[PLAY] Started one local game client. Use the same authoritative Docker server for the second pilot.'
+        Write-Warning 'For a second PC use only a separately authorized client and a verified private tunnel; no public ports.'
     }
     'LaunchTwo' {
         Assert-BackendPrerequisites
