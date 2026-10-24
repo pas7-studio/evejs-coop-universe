@@ -1,0 +1,53 @@
+"use strict";
+// Real native ship movement for materialized virtual workers; economic ledger
+// remains virtual until an authorized EveJS inventory/market bridge exists.
+const {waypoints}=require("./coopNpcTopology");
+const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
+const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+const valid=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinite(p[k]));
+function routeForRole(scene,role){
+ const all=waypoints(scene);
+ const select=kinds=>all.filter(w=>kinds.includes(w.kind));
+ switch(role){
+  case "miner":return select(["asteroidBelt"]).concat(select(["station"])).slice(0,4);
+  case "hauler":return [select(["asteroidBelt"])[0],select(["station"])[0],select(["stargate"])[0]].filter(Boolean);
+  case "trader":return select(["station","stargate"]).slice(0,6);
+  case "patrol":return select(["stargate","station"]).slice(0,6);
+  default:return select(["station","stargate","asteroidBelt"]).slice(0,4);
+ }
+}
+function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dwellMs=120000}){
+ if(typeof sceneForSystem!=="function"||typeof warp!=="function"||typeof orbit!=="function")throw Error("native scene and movement required");
+ const history=new Map();
+ function tick(assignments,roles={}){
+  const result=[];
+  for(const assignment of assignments||[]){
+   const system=positive(assignment.systemID),id=positive(assignment.entityID);
+   if(!system||!id)continue;
+   const scene=sceneForSystem(system),ship=scene?.getEntityByID?.(id);
+   if(!ship||ship.kind!=="ship")continue;
+   const role=String(roles[assignment.pilotID]?.role||"patrol");
+   const route=routeForRole(scene,role);
+   if(!route.length)continue;
+   const key=system+":"+id,previous=history.get(key)||{index:0,nextAt:0};
+   if(clock()<previous.nextAt||String(ship.mode||"").toUpperCase().includes("WARP")||!valid(ship.position))continue;
+   const target=route[previous.index%route.length];
+   if(!target)continue;
+   let order=null,action="";
+   if(distance(ship.position,target.position)>250000){
+    action="warp";order=warp(id,{...target.position},{targetEntityID:target.id});
+   }else if(id!==target.id){
+    action="orbit";order=orbit(id,target.id,role==="miner"?12000:15000);
+   }
+   previous.nextAt=clock()+(order?.success===true?dwellMs:60000);
+   if(order?.success===true){
+    previous.index=(previous.index+1)%route.length;
+    result.push({pilotID:assignment.pilotID,entityID:id,role,action,targetID:target.id,targetKind:target.kind});
+   }
+   history.set(key,previous);
+  }
+  return result;
+ }
+ return {tick,snapshot:()=>[...history].map(([id,state])=>({id,...state}))};
+}
+module.exports={createCivilianOrders,routeForRole};
