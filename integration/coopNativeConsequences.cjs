@@ -7,7 +7,7 @@ const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const finite=x=>Number.isFinite(Number(x))?Number(x):0;
 function createConsequences({file,apply,clock=()=>Date.now()}){
  if(!file||typeof apply!=="function")throw Error("standing ledger requires file and EveJS callback");
- let state={version:1,events:{},totals:{assault:0,pirateKill:0}};
+ let state={version:1,events:{},totals:{assault:0,pirateKill:0,defense:0}};
  try{
   const saved=JSON.parse(fs.readFileSync(file,"utf8"));
   if(saved?.version!==1||!saved.events||!saved.totals)throw Error("invalid saved standing ledger");
@@ -52,6 +52,15 @@ function createConsequences({file,apply,clock=()=>Date.now()}){
    description:"Attacked an EveJS mining fleet"
   });
  }
+ function onMinerDefense({characterID,ownerID,systemID,wreckID}){
+  if(![characterID,ownerID,systemID,wreckID].every(positive))
+   return {status:"IGNORED_UNATTRIBUTED"};
+  return applyOnce({
+   key:"miner-defense:"+wreckID,characterID,ownerID,systemID,
+   rawChange:0.18,kind:"defense",
+   description:"Stopped an NPC pirate attacking a real mining fleet"
+  });
+ }
  function onPirateKill({characterID,ownerID,systemID,wreckID}){
   if(![characterID,ownerID,systemID,wreckID].every(positive))
    return {status:"IGNORED_UNATTRIBUTED"};
@@ -62,7 +71,7 @@ function createConsequences({file,apply,clock=()=>Date.now()}){
    rawChange:-0.12,kind:"pirateKill",description:"Destroyed a named pirate NPC"
   });
  }
- return {onMiningAggression,onPirateKill,snapshot:()=>structuredClone(state)};
+ return {onMiningAggression,onPirateKill,onMinerDefense,snapshot:()=>structuredClone(state)};
 }
 let singleton=null;
 function getNative(){
@@ -100,7 +109,7 @@ function noteMiningAggression(scene,fleet,aggressor,occurredAt){
   return result;
  }catch(error){console.warn("[CoopConsequences] Mining attack",error.message);return {status:"ERROR"};}
 }
-function noteNativeWreck(systemID,npcID,wreckID,ship,options={}){
+function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null){
  if(process.env.EVEJS_COOP_PLAYER_CONSEQUENCES!=="1")return {status:"DISABLED"};
  try{
   const characterID=positive(options.killerCharacterID||options.ownerCharacterID||options.characterID);
@@ -116,6 +125,24 @@ function noteNativeWreck(systemID,npcID,wreckID,ship,options={}){
   if(outcome.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
    {spaceState:{systemID}},
    {characterID,ownerID,kind:"pirateKill",rawChange:-0.12,pilotID:link.pilotID});
+  // Give standing with the *real* mining corporation only when native
+  // combat evidence proves this pirate was targeting one of its ships.
+  const targetID=positive(controller?.currentTargetID||controller?.preferredTargetID);
+  if(targetID){
+   const mining=require("../services/mining/miningNpcOperations");
+   const runtime=require("./runtime");
+   const scene=runtime.ensureScene(Number(systemID),{refreshStargates:false});
+   const fleet=(mining.getMiningFleetsForSystem(Number(systemID))||[]).find(f=>
+    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])].some(id=>Number(id)===targetID));
+   const miner=scene?.getEntityByID(targetID);
+   if(fleet&&miner){
+    const minerOwnerID=positive(miner.factionID)||positive(miner.corporationID)||positive(miner.ownerID);
+    const defended=getNative().onMinerDefense({characterID,ownerID:minerOwnerID,systemID,wreckID});
+    if(defended.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
+     {spaceState:{systemID}},
+     {characterID,ownerID:minerOwnerID,kind:"defense",rawChange:0.18,pilotID:link.pilotID});
+   }
+  }
   return outcome;
  }catch(error){console.warn("[CoopConsequences] Native NPC wreck",error.message);return {status:"ERROR"};}
 }
