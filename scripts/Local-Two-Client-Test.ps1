@@ -72,13 +72,13 @@ switch ($Action) {
         if ($NpcSystemID -le 0) { throw 'NpcSystemID must be a positive EveJS system ID.' }
         & (Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1') -CodePath $CodePath
         if ($LASTEXITCODE -ne 0) { throw 'Unsafe Compose configuration.' }
-        # Real source integration, one native encounter for a two-character party.
-        # No market rebuild, database reset, open public ports or experimental
-        # virtual economies in the recommended first-play path.
-        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -CoopCombat -NpcCount 1 -NpcSystemID $NpcSystemID
+        # Real native co-op encounter loop, not a disposable one-spawn demo.
+        # Persist the cooldown, prevent overlapping ships, and cap encounters.
+        # No market rebuild, database reset, public listeners, or virtual economy.
+        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -CoopCombat -EnablePersistentEncounters -EncounterCooldownMinutes 12 -EncounterMaxSpawns 20 -NpcCount 1 -NpcSystemID $NpcSystemID
         if (-not $?) { throw 'Co-op runtime deployment failed.' }
         Wait-BackendHealthy
-        Write-Host '[COOP] Backend ready for two private LOCAL clients.'
+        Write-Host '[COOP] Backend ready for two private LOCAL clients: one active NPC encounter at a time, 12-minute cooldown, persistent cap of 20 spawns.'
         Write-Host '[COOP] Use separate accounts. Fly both ships onto the same grid in the configured system.'
         Write-Host '[COOP] Run -Action Party to inspect actual shared-scene evidence.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
