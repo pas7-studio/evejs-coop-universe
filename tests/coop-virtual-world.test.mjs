@@ -36,3 +36,23 @@ test('population cap and route validation reject unsafe configuration',()=>fixtu
  assert.throws(()=>createWorld({file,route:[30000142],population:1}),/valid route/);
  assert.throws(()=>createWorld({file,route:[30000142,30000144],population:101}),/population cap/);
 }));
+
+test('saved Living Universe grows from 16 to 20 identities without deleting prior pilot history',()=>fixture(file=>{
+ let now=1000;const clock=()=>now,route=[30000142,30000144];
+ const world=createWorld({file,route,population:16,travelMs:10000,clock});
+ const original=world.snapshot().pilots.map(p=>({id:p.id,name:p.name}));
+ now+=30000;world.advance();
+ const upgraded=createWorld({file,route,population:20,travelMs:10000,clock});
+ assert.equal(upgraded.snapshot().pilots.length,20);
+ for(let i=0;i<16;i++){assert.equal(upgraded.snapshot().pilots[i].id,original[i].id);assert.equal(upgraded.snapshot().pilots[i].name,original[i].name);}
+ assert.equal(new Set(upgraded.snapshot().pilots.map(p=>p.id)).size,20);
+}));
+test('a real native NPC ship pins its virtual pilot to the physical system',()=>fixture(file=>{
+ let now=1000;
+ const world=createWorld({file,route:[30000142,30000144],population:2,travelMs:10000,clock:()=>now});
+ now+=100000;
+ world.advance({'coop-pilot-001':30000142});
+ const pilot=world.snapshot().pilots.find(p=>p.id==='coop-pilot-001');
+ assert.equal(pilot.systemID,30000142);
+ assert.equal(pilot.nextMoveAt,now+10000);
+}));
