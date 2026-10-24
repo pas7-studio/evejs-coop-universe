@@ -159,7 +159,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    .map(x=>pos(x?._space?.shipID)).filter(Boolean));
   if(players.has(id))return status("PLAYER_SHIP_EXCLUDED");
   const controller=getController(id);
-  const aggressionAge=Date.now()-Number(controller?.lastAggressedAtMs);
+  const aggressionAge=clock()-Number(controller?.lastAggressedAtMs);
   if(!controller||Number(controller.entityID)!==id||
    Number(controller.systemID)!==Number(scene.systemID)||
    Number(controller.currentTargetID)>0||controller.manualOrder?.type==="attack"||
