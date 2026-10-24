@@ -5,7 +5,7 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0;
-let intelAnnouncer=null;
+let intelAnnouncer=null,recognitionAnnouncer=null;
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
  const depot=require("./coopNativeDepot").getNativeDepot();
@@ -58,6 +58,7 @@ function start(){
      // Raids own their NPC movement while pursuing real cargo ships.
      advanceNativeRaids();
      advanceNativeTactics();
+     advanceNpcRecognition();
      advanceNativeCivilianOrders();
      // A recovered NPC returns to a living system without player re-login.
      if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
@@ -233,6 +234,27 @@ function advanceNativeTactics(){
  }
 }
 
+function advanceNpcRecognition(){
+ if(process.env.EVEJS_COOP_NPC_MEMORY!=="1"||!identityRegistry||!visitedSystems.size)return;
+ const runtime=require("./runtime");
+ if(!recognitionAnnouncer){
+  const {createRecognition}=require("./coopNpcRecognition");
+  recognitionAnnouncer=createRecognition({
+   lookup:query=>require("./coopNpcMemory").getNativeMemory().recall(query),
+   send:(session,message)=>require("../services/chat/chatHub").sendSystemMessage(session,message)
+  });
+ }
+ const links=Object.values(identityRegistry.snapshot().links||{});
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  if(!scene?.sessions?.values)continue;
+  for(const session of scene.sessions.values()){
+   const result=recognitionAnnouncer.tick({session,scene,links});
+   if(result.status==="DELIVERED")require("./coopRuntimeProbe").observe(
+    "living-npc-recognizes-player",session,null,result);
+  }
+ }
+}
 function observeSession(session,ship){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
