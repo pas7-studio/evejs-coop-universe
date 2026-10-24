@@ -186,6 +186,30 @@ function ensurePatrolNavigator(runtime,npc){
   orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
  });
 }
+function ensureNativeGateTransfer(runtime){
+ if(process.env.EVEJS_COOP_NATIVE_GATE_APPROACH!=="1"||
+  process.env.EVEJS_COOP_NATIVE_GATE_TRANSFER!=="1"||
+  nativeGateTransfer)return;
+ if(!identityRegistry)throw Error("NATIVE_GATE_TRANSFER_IDENTITY_UNAVAILABLE");
+ const worldData=require("./worldData"),controllers=require("./npc/npcRegistry");
+ const store=require("./npc/nativeNpcStore");
+ const service=require("./npc/nativeNpcService");
+ const scrambled=require("./modules/hostileModuleRuntime");
+ const prepared=require("./coopNativeGateTransfer").createNativeGateTransfer({
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getGate:id=>worldData.getStargateByID(id),
+  store,service,getController:id=>controllers.getControllerByEntityID(id),
+  registry:identityRegistry,isScrambled:ship=>scrambled.isEntityWarpScrambled(ship)
+ });
+ // Must run BEFORE bridge.reconcile() invokes registry.prune(); otherwise
+ // an interrupted in-transit ship can lose its durable pilot link.
+ const recovered=prepared.recoverPending();
+ if(recovered.status==="NEEDS_OPERATOR_REPAIR")
+  throw Error("NATIVE_GATE_TRANSFER_REPAIR_REQUIRED: "+JSON.stringify(recovered.pending).slice(0,240));
+ if(recovered.recovered)
+  require("./coopRuntimeProbe").observe("living-native-gate-recovery",null,null,recovered);
+ nativeGateTransfer=prepared;
+}
 function advanceNativeGateApproach(){
  if(process.env.EVEJS_COOP_NATIVE_GATE_APPROACH!=="1"||
   !bridge||!identityRegistry||!world||!visitedSystems.size)return;
@@ -194,26 +218,10 @@ function advanceNativeGateApproach(){
  if(route.length<2)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
  const worldData=require("./worldData"),controllers=require("./npc/npcRegistry");
- // Both flags are independently opt-in. The current deploy preset
- // intentionally enables neither, so existing owner playtests are untouched.
- if(process.env.EVEJS_COOP_NATIVE_GATE_TRANSFER==="1"&&!nativeGateTransfer){
-  const store=require("./npc/nativeNpcStore");
-  const service=require("./npc/nativeNpcService");
-  const scrambled=require("./modules/hostileModuleRuntime");
-  const prepared=require("./coopNativeGateTransfer").createNativeGateTransfer({
-   sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
-   getGate:id=>worldData.getStargateByID(id),
-   store,service,getController:id=>controllers.getControllerByEntityID(id),
-   registry:identityRegistry,
-   isScrambled:ship=>scrambled.isEntityWarpScrambled(ship)
-  });
-  const recovered=prepared.recoverPending();
-  if(recovered.status==="NEEDS_OPERATOR_REPAIR")
-   throw Error("NATIVE_GATE_TRANSFER_REPAIR_REQUIRED: "+JSON.stringify(recovered.pending).slice(0,240));
-  if(recovered.recovered)
-   require("./coopRuntimeProbe").observe("living-native-gate-recovery",null,null,recovered);
-  nativeGateTransfer=prepared;
- }
+ // Both flags are opt-in and OFF by default. If the world is already
+ // initialized, this call is idempotent; otherwise observeSession() recovers
+ // before any registry pruning on first native boot.
+ ensureNativeGateTransfer(runtime);
  if(!gateTravelDirector){
   gateTravelDirector=require("./coopNpcGateTravel").createGateTravel({
    warp:(entityID,gateID,options)=>npc.warpToEntity(entityID,gateID,options),
@@ -552,6 +560,10 @@ function observeSession(session,ship){
           file:process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json",
           exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id))
         });
+        // Repair any interrupted native gate transfer before the next
+        // materializer.prune() can treat its temporarily missing source ship
+        // as a dead NPC and erase the identity required for rollback.
+        ensureNativeGateTransfer(runtime);
         bridge=createBridge({
           registry:identityRegistry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
