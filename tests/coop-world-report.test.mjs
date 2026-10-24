@@ -255,3 +255,70 @@ test("explicit native destruction source must match exact attacker, wreck and so
  });
  assert.equal(summarize(base+"\n"+wrong,{now,requireFinalAttacker:true}).status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
 });
+
+
+test("combat must not correlate a reused entity ID with a different named NPC",()=>{
+ const original=event("living-native-combat-damage",{events:[{
+  systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+  healthLossHP:20,attackerPilotIDs:["coop-pilot-001"]
+ }]});
+ const changedVictim=event("living-native-wreck-evidence",{
+  status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-099",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ const topology=event("living-world-topology",{realWaypoints:4,realAsteroidBelts:0});
+ const bad=summarize([topology,original,changedVictim].join("\n"),{now,requireCombat:true});
+ assert.equal(bad.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(bad.combat.status,"UNMATCHED_DAMAGE_AND_WRECK");
+});
+test("native terminal HP observation precedes wreck evidence even for fast kills",()=>{
+ const time=secs=>new Date(now-secs*1000).toISOString();
+ const topology=event("living-world-topology",{realWaypoints:4,realAsteroidBelts:0});
+ const weapon=event("living-native-weapon-event",{
+  at:time(60),status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002"
+ });
+ const hp=event("living-native-combat-damage",{
+  at:time(50),terminalNativeWreckID:900,events:[{
+   systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+   healthLossHP:47,attackerPilotIDs:["coop-pilot-001"],attackerEntityIDs:[101]
+  }]
+ });
+ const wreck=event("living-native-wreck-evidence",{
+  at:time(40),status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ const good=summarize([topology,weapon,hp,wreck].join("\n"),{now,requireCombat:true,requireWeapon:true});
+ assert.equal(good.status,"READY_FOR_CLIENT_PLAYTEST");
+ const outOfOrder=event("living-native-wreck-evidence",{
+  at:time(55),status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ assert.equal(summarize([topology,weapon,hp,outOfOrder].join("\n"),
+  {now,requireCombat:true,requireWeapon:true}).status,"AWAITING_NATIVE_WEAPON_CHAIN");
+});
+test("native HP correlation checks actual attacker entity when it is provided",()=>{
+ const topology=event("living-world-topology",{realWaypoints:4,realAsteroidBelts:0});
+ const hit=event("living-native-combat-damage",{events:[{
+  systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+  healthLossHP:47,attackerPilotIDs:["coop-pilot-001"],attackerEntityIDs:[999]
+ }]});
+ const shot=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002"
+ });
+ const wreck=event("living-native-wreck-evidence",{
+  status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ const result=summarize([topology,shot,hit,wreck].join("\n"),
+  {now,requireCombat:true,requireWeapon:true});
+ assert.equal(result.status,"AWAITING_NATIVE_WEAPON_CHAIN");
+ assert.equal(result.combat.weaponCorrelatedDamageEvents,0);
+});
