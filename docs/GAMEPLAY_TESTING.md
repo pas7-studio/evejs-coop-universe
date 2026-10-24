@@ -266,3 +266,19 @@ Do not report a global `PASS` for World/gameplay until each requested stage pass
 The already-discovered seven npm advisories remain important but **out-of-scope for this gameplay run**; keep loopback binding and record them separately for authorized remediation. Do not pretend an npm audit is a real player experience test.
 
 Related: [HEADLESS_NPC_VALIDATION.md](HEADLESS_NPC_VALIDATION.md), [TWO_CLIENTS_ONE_PC.md](TWO_CLIENTS_ONE_PC.md), [VERIFY_BACKEND_ONE_COMMAND.md](VERIFY_BACKEND_ONE_COMMAND.md), [NATIVE_NPC_GATE_TRAVEL.md](NATIVE_NPC_GATE_TRAVEL.md), [NATIVE_NPC_MARKET.md](NATIVE_NPC_MARKET.md).
+
+## P0 — stock-fleet pirate PvE permission and proof
+
+The previous raid selector required *both* the pirate and target to have named co-op identities with opposite factions. Upstream native EveJS independently marks NPC-to-NPC actors friendly in its combat targeting loop. Consequently, a real stock miner with ore but no co-op name could never become a valid pirate damage target. The new opt-in LivingCoop policy is intentionally narrow: a **currently linked named pirate** may be issued an attack order against a **genuine physical member of the active EveJS mining fleet**, even when that miner does not have a named identity. A named miner/hauler must still belong to the opposing faction; attacks against arbitrary NPCs or player ships remain disallowed.
+
+The same permit is enforced at (1) raid target selection and (2) EveJS native combat friendliness. The patch does not create enemies, loot, damage, belts, scripted combat waves, or a fake victory event. `coopNativeRaidEligibility.cjs` is installed through the pinned reversible overlay; isolated permission and native-hook tests are listed in the manual verifier. No Docker/client proof is claimed.
+
+**Operator acceptance on Perimeter 30000144** (after explicitly approved overlay update, preserving `evejs-data` and local upstream test fixes):
+
+1. `DiagnoseWorld` then `World -WorldSystemID 30000144` must show real belts, real fleet members and at least one physical named NPC. Record any materialization failures rather than retrying generic backend checks.
+2. Confirm real mining fleet cargo grows. A pirate raid should acquire an **actual** ore-bearing miner or hauler. Record the successful `living-pirate-raid` native attack order, not just a warp.
+3. Confirm native damage/HP changes or a real wreck attributable to actual weapons. A successful native order alone is **not** proof of combat damage.
+4. Both authorized EVE clients must independently see the same physical targets/wreck. Let player A loot an item; player B must see its updated state and cannot take the same item again.
+5. Reconnect each pilot without losing their ship; test fleet warp orders and separately verify both ships' arrivals before claiming the complete two-player PvE gate.
+
+If any step fails, keep PR #2 Draft and attach `DiagnoseWorld`, `World`, `Party`, a sanitized event excerpt and exact deployed commit SHA. Do not reset Docker volumes, rebuild market data, or merge solely to investigate.
