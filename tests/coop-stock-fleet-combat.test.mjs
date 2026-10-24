@@ -5,6 +5,7 @@ const require=createRequire(import.meta.url);
 const {createStockFleetCombatEvidence}=require("../integration/coopStockFleetCombatEvidence.cjs");
 const {verify}=require("../integration/coopNpcWeaponEvidence.cjs");
 const {summarize}=require("../scripts/coop-world-report.cjs");
+const {verifyStockFleetWreck}=require("../integration/coopStockFleetWreckEvidence.cjs");
 const systemID=30000144;
 const pirate={itemID:10,kind:"ship",nativeNpc:true};
 const miner={itemID:20,kind:"ship",nativeNpc:true};
@@ -93,4 +94,68 @@ test("StockRaid report pairs genuine weapon and physical HP drop but not a wreck
  const elsewhere=damage.replace('"victimEntityID":20','"victimEntityID":21');
  assert.equal(summarize([topology,weapon,elsewhere].join("\n"),opts).status,
   "AWAITING_STOCK_FLEET_WEAPON_HP_CHAIN");
+});
+
+test("native mining wreck requires actual fleet membership, physical entity and stored items",()=>{
+ const wreckID=901;
+ const wreck={wreckID,systemID,sourceEntityID:20,launcherID:20};
+ const nativeWreck={itemID:901,nativeNpcWreck:true,launcherID:20};
+ const wreckScene={systemID,getEntityByID:id=>id===901?nativeWreck:null};
+ const items=[{wreckItemID:5001,wreckID,typeID:34,quantity:120}];
+ const params={systemID,ship:miner,wreckID,scene:wreckScene,
+  fleets:[{systemID,minerEntityIDs:[20]}],
+  getWreck:()=>wreck,getWreckItems:()=>items};
+ const result=verifyStockFleetWreck(params);
+ assert.equal(result.status,"PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED");
+ assert.equal(result.storedItemCount,1);
+ assert.equal(result.storedQuantity,120);
+ assert.equal(verifyStockFleetWreck({...params,fleets:[]}).status,
+  "NOT_ACTIVE_NATIVE_STOCK_FLEET");
+ assert.equal(verifyStockFleetWreck({...params,scene:{...wreckScene,getEntityByID:()=>null}}).status,
+  "STOCK_WRECK_NOT_PHYSICAL");
+ assert.equal(verifyStockFleetWreck({...params,ship:{...miner,nativeNpc:false}}).status,
+  "INVALID_STOCK_WRECK");
+ assert.equal(verifyStockFleetWreck({...params,getWreckItems:()=>[{...items[0],quantity:0}]}).status,
+  "INVALID_STOCK_WRECK_ITEMS");
+ const empty=verifyStockFleetWreck({...params,getWreckItems:()=>[]});
+ assert.equal(empty.status,"PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED");
+ assert.equal(empty.lootStatus,"NATIVE_WRECK_EMPTY");
+});
+test("StockRaidLoot requires the same native victim weapon -> HP -> physical loot wreck",()=>{
+ const now=Date.parse("2026-10-25T09:00:00Z");
+ const row=(event,t,extra={})=>JSON.stringify({
+  at:new Date(now+t*1000).toISOString(),event,systemID,...extra
+ });
+ const topology=row("living-world-topology",1,{realWaypoints:3,realAsteroidBelts:3});
+ const weapon=row("living-native-weapon-event",4,{
+  status:"VERIFIED_NATIVE_STOCK_FLEET_WEAPON_EVENT",
+  attackerEntityID:10,attackerPilotID:"coop-pilot-010",
+  victimEntityID:20,victimRole:"miner",kind:"module-activation",moduleID:3000
+ });
+ const damage=row("living-native-stock-fleet-combat",9,{
+  status:"SAMPLED",events:[{victimEntityID:20,healthLossHP:40,
+   attackerPilotIDs:["coop-pilot-010"],attackerEntityIDs:[10]}]
+ });
+ const wreck=row("living-native-stock-fleet-wreck-evidence",12,{
+  status:"PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED",wreckID:901,
+  victimEntityID:20,victimRole:"miner",lootStatus:"ITEMS_STORED",
+  storedItemCount:1,storedQuantity:120
+ });
+ const opts={now:now+20000,systemID,requireStockWreckLoot:true,requireStockRaid:true};
+ const good=summarize([topology,weapon,damage,wreck].join("\n"),opts);
+ assert.equal(good.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(good.stockRaid.correlatedWreckWithStoredLootID,901);
+ assert.equal(good.stockRaid.status,"CORRELATED_STOCK_WEAPON_HP_WRECK_AND_STORED_LOOT");
+ const empty=wreck.replace('"storedItemCount":1','"storedItemCount":0');
+ assert.equal(summarize([topology,weapon,damage,empty].join("\n"),opts).status,
+  "AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN");
+ const wrong=wreck.replace('"victimEntityID":20','"victimEntityID":21');
+ assert.equal(summarize([topology,weapon,damage,wrong].join("\n"),opts).status,
+  "AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN");
+ const early=row("living-native-stock-fleet-wreck-evidence",7,{
+  status:"PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED",wreckID:901,
+  victimEntityID:20,lootStatus:"ITEMS_STORED",storedItemCount:1
+ });
+ assert.equal(summarize([topology,weapon,damage,early].join("\n"),opts).status,
+  "AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN");
 });
