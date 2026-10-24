@@ -26,6 +26,9 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const headlessAttempt=[...rows].reverse().find(e=>e.event==="living-headless-boot-attempt"&&
   (!latestBoot||e._time>=latestBoot._time));
+ const durableRecovery=[...rows].reverse().find(e=>
+  e.event==="living-native-durable-recovery"&&
+  (!latestBoot||e._time>=latestBoot._time));
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
  const siteReadiness=[...rows].reverse().find(e=>e.event==="living-native-system-site-readiness"&&
@@ -243,11 +246,27 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   status="AWAITING_NATIVE_ACTIVITY";
   blockers.push("Physical NPC ships are present, but genuine movement AND cargo growth or active native targeting have not both been observed across native snapshots.");
  }
+ // A corrupt durable NPC record is a safety-critical blocker even if
+ // mining activity or a separate combat/market gate otherwise passed.
+ if(durableRecovery?.status==="NEEDS_OPERATOR_REPAIR"){
+  status="BLOCKED_DURABLE_NPC_RECOVERY";
+  blockers.unshift("Persistent named NPC cannot be restored safely: "+
+   (durableRecovery.errors||[]).slice(0,5).map(x=>
+    String(x.pilotID||"unknown")+":"+String(x.reason||"UNKNOWN")
+   ).join("; ")+". Preserve evejs-data and the co-op registry; operator repair required.");
+ }
  return {status,systemID,topologyAt:topology?.at||null,
   evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
   headlessBootStatus:headless?.status||null,
   headlessAttemptCount:Math.max(0,Number(headlessAttempt?.attempt)||0),
   headlessPendingSystems:headlessAttempt?.pendingSystems||[],
+  nativeDurableRecovery:durableRecovery?{
+   status:durableRecovery.status,
+   recovered:Number(durableRecovery.recovered)||0,
+   alreadyPhysical:Number(durableRecovery.alreadyPhysical)||0,
+   legacyTransient:Number(durableRecovery.legacyTransient)||0,
+   confirmedLosses:Number(durableRecovery.confirmedLosses)||0,
+   errors:durableRecovery.errors||[]}:null,
   evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
   systemSiteReadiness:siteReadiness?{
    status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
