@@ -8,7 +8,7 @@ function fixture(){
  const ship={itemID:entityID,kind:"ship",nativeNpc:true,position:{x:10,y:20,z:30}};
  const ships=new Map();
  const scene={systemID,getEntityByID:id=>ships.get(id)||null};
- const link={pilotID:"coop-pilot-006",systemID,entityID};
+ const link={pilotID:"coop-pilot-006",systemID,entityID,linkedAt:50000};
  const links={ [link.pilotID]:link };
  const entity={entityID,systemID,nativeNpc:true,transient:false};
  const controller={entityID,systemID,transient:false,profileID:"generic_hostile"};
@@ -132,4 +132,16 @@ test("unrelated, mismatched or unverifiable wreck cannot erase a durable NPC",()
   assert.equal(r.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
   assert.equal(r.confirmedLosses,0);
  }
+});
+
+
+test("stale previous wreck cannot erase a newer persistent ship with same native ID",()=>{
+ const x=fixture();x.entities.clear();x.controllers.clear();x.link.durable=true;
+ const r=restoreNamedShips({...x.deps,lostShips:[{
+  pilotID:x.link.pilotID,shipID:x.link.entityID,systemID:x.link.systemID,
+  wreckID:980300000021,lostAt:x.link.linkedAt-1
+ }]});
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
+ assert.equal(r.confirmedLosses,0);
 });
