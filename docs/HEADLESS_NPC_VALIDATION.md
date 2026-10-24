@@ -1,7 +1,6 @@
 # Client-free native NPC activity gate (manual only)
 
-**State:** implementation in the feature branch; **not yet validated** against a
-live pinned EveJS Docker container. It is not proof of playable EVE-client combat.
+**State:** the owner reported the local backend/overlay healthy on 2026-10-25, but the live headless event log is **missing** and no physical NPC gameplay is verified. See [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md). It is not proof of playable EVE-client combat.
 GitHub Actions / remote CI are explicitly prohibited by the repository owner.
 
 ## Purpose
@@ -49,14 +48,19 @@ node --check integration/coopNativeActivity.cjs
 node --check integration/coopVirtualWorldRuntime.cjs
 node --check scripts/coop-world-report.cjs
 
-# Use your actual pinned EveJS Code directory:
-.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+# Existing running server: diagnose missing native events without rebuilds.
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+# Only if the real event stream is present:
 .\scripts\Local-Two-Client-Test.ps1 -Action World -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
 ```
 
 The `World` action now invokes the report with `--require-activity`. An early
-attempt can legitimately return `AWAITING_NATIVE_ACTIVITY`; repeat the
-read-only World check after the native simulation has processed more ticks.
+attempt can legitimately return `AWAITING_NATIVE_ACTIVITY`; observe a
+real simulation interval and repeat the read-only World check **once**.
+If `/var/lib/evejs/coop-events.jsonl` does not exist, classify it as
+`BLOCKED_TELEMETRY` and use `DiagnoseWorld` to inspect the startup hook
+and runtime environment; a missing client does **not** explain an absent
+headless boot-request event.
 To diagnose failures, inspect the ordinary `-Action Logs` output and the
 event log inside the server container; never infer success from flags alone.
 
@@ -78,8 +82,9 @@ The strict World gate requires physical NPCs, stock mining/mining belts,
 real named NPC links and **both** observed motion **and** a real cargo growth
 or controller-target event within the evidence window. Statuses never claim
 native damage, fleet cooperation, wreck loot, two-client rendering or remote
-multiplayer works. The original 67 local/27 upstream PASS report predates
-this branch; do not reuse those counts as validation for this change.
+multiplayer works. The owner reported 72 local/27 upstream PASS on project commit `cc5ce83`
+(2026-10-25). Those are **backend-only** results and do not validate
+subsequent feature commits or actual NPC movement.
 
 ## P0 fix: stock native mining fleet no longer consumes co-op spawn slots
 
