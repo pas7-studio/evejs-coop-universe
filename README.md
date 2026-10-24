@@ -58,3 +58,7 @@ Public Internet hosting, bypassing upstream authentication, bypassing CCP licens
 No third-party source has been copied into this repository. Keep each upstream's license and attribution when/if importing lawfully; EveJS states AGPL-3.0-only, while X-Eve licenses original contributions separately. Before importing a patch, review provenance and compatibility. Contributions should be small, reproducible, tested, and submitted upstream when appropriate.
 
 See [UPSTREAM](docs/UPSTREAM.md) for references and caveats.
+
+## Deployment entrypoint (Windows 11)
+
+Start with [FIRST_RUN.md](docs/FIRST_RUN.md). The repository now includes a [read-only prerequisite check](scripts/Preflight.ps1), a [non-destructive upstream clone helper](scripts/Fetch-Upstream.ps1), [agent instructions](AGENTS.md), and a [verification template](docs/TEST_REPORT_TEMPLATE.md). Scripts are newly authored and **have not been executed on your machine**; upstream Docker and client compatibility remain to be confirmed.
