@@ -43,6 +43,14 @@ test("already live named ship is not materialized twice",()=>{
  assert.equal(restoreNamedShips(x.deps).alreadyPhysical,1);
  assert.equal(x.getCalls(),0);
 });
+test("missing native record for durable named pilot blocks unsafe recreation",()=>{
+ const x=fixture();x.entities.clear();x.controllers.clear();
+ x.link.durable=true;
+ const r=restoreNamedShips(x.deps);
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
+ assert.equal(x.getCalls(),0);
+});
 test("legacy transient-only saved identity is NOT falsely reported as restored",()=>{
  const x=fixture();x.entities.clear();x.controllers.clear();
  const r=restoreNamedShips(x.deps);
