@@ -443,3 +443,20 @@ haulers or traverse gates, and deployment only occurs upon a player's
 in-space arrival. It is disabled unless explicitly enabled. Validate
 client combat/faction behavior in Docker before treating these NPCs as
 persistent strategic assets.
+
+## Native patrol movement orders
+
+The faction patrol bridge now issues actual `npcRuntime.orbit()` orders
+to live patrol ships after deployment, using the arriving player's ship
+as a temporary *demonstration anchor*. This is not a persistent patrol
+route, convoy escort, target selection, or attack command. The default
+orbit distance is 10 km. A per-NPC two-minute cooldown prevents repeated
+logins from spamming movement commands. Dead/despawned entities are
+ignored. The command never applies synthetic damage or bypasses EveJS
+movement/visibility.
+
+Because a player's ship is the anchor, these patrol NPCs may approach
+the player. The default pool is still `npc_hostiles`, meaning the native
+AI can engage according to its own settings. Do not enable this opt-in
+mode on a shared production game server before live gameplay validation.
+A later revision should anchor patrols to native stargates/POIs instead.
