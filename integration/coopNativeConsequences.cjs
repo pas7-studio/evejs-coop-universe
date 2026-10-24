@@ -131,8 +131,14 @@ function noteMiningAggression(scene,fleet,aggressor,occurredAt){
 function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null){
  if(process.env.EVEJS_COOP_PLAYER_CONSEQUENCES!=="1")return {status:"DISABLED"};
  try{
-  const characterID=positive(options.killerCharacterID||options.ownerCharacterID||options.characterID);
-  if(!characterID)return {status:"IGNORED_UNATTRIBUTED"};
+  // ownerCharacterID in EveJS wreck options may denote the *victim*.
+  // Never reward a kill without an authenticated, attributable attacker.
+  const proposed=positive(options.killerCharacterID||options.attackerEntity?.session?.characterID);
+  if(!proposed)return {status:"IGNORED_UNATTRIBUTED"};
+  const liveScene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
+  const characterID=Array.from(liveScene?.sessions?.values?.()||[])
+   .some(x=>positive(x?.characterID)===proposed)?proposed:null;
+  if(!characterID)return {status:"IGNORED_UNAUTHENTICATED"};
   const regPath=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   let saved;
   try{saved=JSON.parse(fs.readFileSync(regPath,"utf8"));}catch(e){if(e.code==="ENOENT")return {status:"UNLINKED"};throw e;}
