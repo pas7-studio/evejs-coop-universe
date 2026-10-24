@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -49,13 +49,31 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
     Number(e.healthLossHP)>0&&Array.isArray(e.attackerPilotIDs)&&
     e.attackerPilotIDs.some(x=>/^coop-pilot-[0-9]{3,}$/.test(String(x))))
    .map(e=>({...e,_observedAt:row._time})));
+ const weapons=combatRows.filter(e=>e.event==="living-native-weapon-event"&&
+  e.status==="VERIFIED_NATIVE_WEAPON_EVENT"&&
+  (e.kind==="missile-launch"||e.kind==="module-activation")&&
+  positive(e.attackerEntityID)&&positive(e.victimEntityID)&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.attackerPilotID||""))&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||"")));
+ const linkedWeaponDamage=damage.filter(d=>weapons.some(w=>
+  Number(w.victimEntityID)===Number(d.victimEntityID)&&
+  w.victimPilotID===d.victimPilotID&&
+  d.attackerPilotIDs.includes(w.attackerPilotID)&&
+  w._time<=d._observedAt&&
+  d._observedAt-w._time<=10*60000));
  const wrecks=combatRows.filter(e=>e.event==="living-native-wreck-evidence"&&
   e.status==="PHYSICAL_NATIVE_WRECK_VERIFIED"&&positive(e.wreckID)&&
   positive(e.victimEntityID));
  const matched=wrecks.find(w=>damage.some(d=>
   Number(d.victimEntityID)===Number(w.victimEntityID)&&
   d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
+ const nativeWeaponChain=wrecks.find(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0&&
+  linkedWeaponDamage.some(d=>Number(d.victimEntityID)===Number(w.victimEntityID)&&
+   d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
  const combat={
+  witnessedNativeWeaponEvents:weapons.length,
+  weaponCorrelatedDamageEvents:linkedWeaponDamage.length,
+  nativeWeaponDamageWreckLootID:nativeWeaponChain?.wreckID||null,
   observedNpcOnNpcDamage:damage.length,physicalWrecks:wrecks.length,
   storedLootWrecks:wrecks.filter(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0).length,
   matchingWreckID:matched?.wreckID||null,
@@ -96,6 +114,10 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    status="NO_LIVING_NPC_SHIPS";
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
+ if(requireWeapon&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeWeaponChain){
+  status="AWAITING_NATIVE_WEAPON_CHAIN";
+  blockers.push("No verified native NPC weapon activation or missile launch linked to same-victim HP loss, physical wreck and persisted loot. This does not certify final-hit attribution.");
+ }
  if(requireCombat&&status==="READY_FOR_CLIENT_PLAYTEST"&&
     combat.status!=="CORRELATED_DAMAGE_WRECK_AND_LOOT"){
   status="AWAITING_NPC_COMBAT_LOOT";
@@ -129,7 +151,7 @@ if(require.main===module){
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw Error("--window-minutes must be 1..240");
   const report=summarize(fs.readFileSync(0,"utf8"),{
    windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
-   requireCombat:args.includes("--require-combat")
+   requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
