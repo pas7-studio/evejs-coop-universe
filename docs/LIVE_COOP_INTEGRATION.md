@@ -222,3 +222,41 @@ made by this feature.
 Local deterministic tests:
 `node --test tests/coop-encounter-director.test.mjs`.
 Full Docker/gameplay tests still require the user-owned Windows setup.
+
+## Virtual NPC world: persistent identities and offline routes
+
+The optional `coopVirtualWorld.cjs` is a separate **virtual** world layer.
+It creates a bounded set of persistent named NPC identities, with faction,
+current system, route index, scheduled departure, and cumulative journeys.
+Travel is advanced by elapsed wall-clock time, including catch-up across
+server restarts, rather than replaying every intermediate simulation tick.
+No player connection is necessary *after the first initialization*: its
+30-second timer continues advancing while the server process remains alive.
+The initial runtime is currently started by the first successful in-space
+login; this is **not yet a standalone boot-time background service**.
+
+Virtual NPCs do not automatically materialize as physical ships. The new
+records are therefore not combat-capable native entities and do not appear
+in client Local/chat or overview. The integration reports local virtual
+residents through the opt-in JSONL `virtual-world-presence` event only.
+Do not mistake this milestone for a finished Living Universe.
+
+Enable on the disposable Docker test instance:
+
+```powershell
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnableVirtualWorld -VirtualPopulation 16 -VirtualTravelSeconds 120
+```
+
+The state is stored in EveJS's existing `evejs-data` volume as
+`/var/lib/evejs/coop-virtual-world.json`. The default demonstration route
+is `30000142,30000144`. The implementation caps population at 100.
+Routes must be two or more positive system IDs. Run module tests locally:
+
+```powershell
+node --test .\tests\coop-virtual-world.test.mjs
+```
+
+Next integration frontier: native scene materialization of *specific* virtual
+pilot identities with de-duplication, and then server-owned faction/economy
+activity. Avoid equating these virtual records with real NPC ships until that
+bridge is implemented and verified.
