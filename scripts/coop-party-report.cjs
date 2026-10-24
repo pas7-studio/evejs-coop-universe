@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[],oreDelivered=0;
+ const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[],oreDelivered=0,tacticalRetreats=0,helpCalls=0,reinforcements=0;
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -35,6 +35,11 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }
   if(e.event==="living-native-industry"&&Array.isArray(e.fleets))lastNativeIndustry=e;
   if(e.event==="living-real-ore-delivery")oreDelivered+=Math.max(0,Number(e.quantity)||0);
+  if(e.event==="living-npc-tactical-event"){
+    if(e.kind==="npc-retreat")tacticalRetreats++;
+    if(e.kind==="npc-help-request")helpCalls++;
+    if(e.kind==="reinforcement-attack"||e.kind==="reinforcement-warp")reinforcements++;
+  }
   if(e.event==="living-pirate-raid")pirateRaids+=(e.actions||[]).length;
   if(e.event==="living-player-consequence")standingEvents.push({characterID:e.characterID,kind:e.kind,ownerID:e.ownerID,rawChange:e.rawChange,at:e.at});
   if(e.event==="living-hauler-loaded")haulerLoads++;
@@ -71,6 +76,9 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
     oreQuantityOnPhysicalHaulers:f.loadedHaulerOreQuantity||0
    }))||[],
    organicPirateRaidOrdersObserved:pirateRaids,
+   npcTacticalRetreatsObserved:tacticalRetreats,
+   npcHelpCallsObserved:helpCalls,
+   npcReinforcementOrdersObserved:reinforcements,
    physicalHaulerLoadsObserved:haulerLoads,
    physicalHaulerUnloadsObserved:haulerDeliveries,
    actualOreSuppliedToWorldDuringWindow:oreDelivered,
