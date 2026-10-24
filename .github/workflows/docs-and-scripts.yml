@@ -29,6 +29,6 @@ jobs:
             $tokens = $null
             $parseErrors = $null
             [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
-            $errors += @($parseErrors)
+            if ($parseErrors) { $errors += $parseErrors }
           }
           if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
