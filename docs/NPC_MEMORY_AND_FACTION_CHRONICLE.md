@@ -116,6 +116,23 @@ causes the migration to refuse to proceed rather than overwrite evidence.
 Existing virtual faction history remains in its existing file and should
 be reviewed after a migration.
 
+### NPC-vs-NPC hostility is now opt-in and faction-restricted
+
+Pinned EveJS previously treated NPC-vs-NPC targeting as friendly, even when
+the server had accepted an attack order. A reversible conditional hook now
+checks both ship entities, both native controllers, named persistent identities,
+same-system links, actual faction mismatch, and a current manual attack order.
+Retaliation permission requires a native recorded aggressor within five minutes.
+It never enables universal NPC friendly fire.
+
+Named pirates select only cross-faction linked stock miner/hauler targets.
+The native combat evidence also records genuine successful missile launches
+or weapon module activations; neither constitutes confirmed damage or final
+killer credit. The strict manual Combat gate joins that exact attacker/victim
+pair to observed HP loss and a native physical wreck with stored loot. Source
+modules and native patch are tracked in
+`docs/HEADLESS_NPC_VALIDATION.md`. No remote CI is permitted.
+
 ## 3. Review and verification checklist
 
 1. Run `node --test tests/coop-npc-memory.test.mjs tests/coop-npc-tactics.test.mjs tests/coop-faction-director.test.mjs`.
