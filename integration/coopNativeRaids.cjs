@@ -38,7 +38,10 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
     result=attack(id,target.id,{allowWeapons:true,keepLock:true});
     action="attack";
    }
-   leases.set(key,{nextAt:clock()+(result?.success===true?cooldownMs:60000),targetID:target.id});
+   // Warping to the convoy is only the approach, not the raid itself:
+   // reevaluate soon after landing and issue a genuine weapon attack.
+   const retryMs=result?.success===true?(action==="attack"?cooldownMs:15000):60000;
+   leases.set(key,{nextAt:clock()+retryMs,targetID:target.id});
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,targetRole:target.role,action});
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
