@@ -39,6 +39,10 @@ function createBridge({spawn,exists,limit=3,registry=null}){
   }
   return results;
  }
- return {reconcile,snapshot:()=>Array.from(assignments,([pilotID,value])=>({pilotID,...value}))};
+ function snapshot(){
+  for(const [pilotID,value] of assignments)if(!exists(value.systemID,value.entityID))assignments.delete(pilotID);
+  return Array.from(assignments,([pilotID,value])=>({pilotID,...value}));
+ }
+ return {reconcile,snapshot};
 }
 module.exports={createBridge};
