@@ -111,3 +111,22 @@ state; it does not prove client rendering or the outcome of combat.
 The native NPC demo currently spawns once per server process. Restarting
 the server allows a fresh demo encounter, so use only a disposable test
 universe. The integration is not a substitute for X-Eve Living Universe.
+
+## Native combat observation
+
+With `-EnableNativeNpcDemo`, the integration installs the opt-in
+`coopCombatProbe.js` in the actual EveJS server. Once native spawn succeeds,
+the probe samples for **at most 60 seconds, once per second**. JSONL events
+`native-npc-combat-sample` include each tracked NPC and pilot ship's current
+`conditionState.shieldCharge`, `armorDamage`, `damage`, movement mode,
+presence/absence and which observers currently see each entity.
+
+This does not synthesize damage, force targeting, issue illegal PvP commands or
+claim NPC kills. The **server engine remains authoritative** for targeting,
+module timers, damage, wreck generation and loot. To see an actual fight,
+both players should use normal client controls to attack the same NPC.
+A disappearing NPC entity is reported as missing, not automatically as a kill;
+compare the actual server killmail/wreck evidence before claiming victory.
+
+The observational sampler also handles a missing NPC entity without crashing
+the game, uses unref'd timers, and stops after the configured window.
