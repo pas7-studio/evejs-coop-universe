@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null;
 const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -9,6 +9,9 @@ function start(){
  world=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
    route,population:Number(process.env.EVEJS_COOP_VIRTUAL_POPULATION||16),
    travelMs:Number(process.env.EVEJS_COOP_VIRTUAL_TRAVEL_MS||120000)});
+ const {createLife}=require("./coopNpcLife");
+ life=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
+  recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
  world.advance();
  if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY==="1"){
    const {createEconomy}=require("./coopVirtualEconomy");
@@ -24,7 +27,10 @@ function start(){
  }
  timer=setInterval(()=>{
    try {
-     world.advance();
+     // Physical NPC ships stay in their actual EveJS solar system.
+     const pins={};
+     if(bridge)for(const entry of bridge.snapshot())pins[entry.pilotID]=entry.systemID;
+     world.advance(pins);
      if(economy)economy.advance(world.snapshot().pilots);
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
      advanceNativePatrolRoutes();
@@ -71,7 +77,15 @@ function observeSession(session,ship){
  try{
   start();
   const systemID=Number(ship?.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
-  const residents=world.residents(systemID);
+  const allResidents=world.residents(systemID);
+  const roles=economy?.snapshot().pilots||{};
+  const ranks={pirate:0,miner:1,hauler:2,trader:3,patrol:4};
+  const residents=allResidents.map(p=>({
+    ...p,role:roles[p.id]?.role||
+      ["miner","hauler","patrol","trader","pirate"][(Number(p.id.slice(-3))-1)%5]
+  })).filter(p=>life?.canFly(p.id)!==false)
+    .sort((a,b)=>(ranks[a.role]??5)-(ranks[b.role]??5)||a.id.localeCompare(b.id));
+  for(const p of residents)life?.recover(p.id);
   if(economy)economy.advance(world.snapshot().pilots);
   if(process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"&&residents.length){
     try{
@@ -93,11 +107,15 @@ function observeSession(session,ship){
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
             const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
+            const hostile=pilot.role==="pirate";
             return npc.spawnBatchInSystem(system,{
               ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
               defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
-              // A virtual miner/trader should not automatically shoot players.
-              behaviorOverrides:{autoAggro:false,autoActivateWeapons:false,targetPreference:"none"}
+              // Pirates retain native EveJS aggression. Civilians and ordinary
+              // guards move and work without automatically attacking players.
+              ...(hostile?{}:{behaviorOverrides:{
+                autoAggro:false,autoActivateWeapons:false,targetPreference:"none"
+              }})
             });
           }
         });
@@ -189,26 +207,36 @@ function confirmedWreck(session,ship,npcID,wreckID){
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
 function confirmedNativeNpcWreck(systemID,npcID,wreckID){
- if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY!=="1"||process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
+ if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
-  // Account only NPCs explicitly linked to our virtual population.
+  // A real wreck is the ONLY authority to mark a named pilot as defeated.
   const fs=require("node:fs");
   const linksFile=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   let registry;
-  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}catch(e){if(e.code==="ENOENT")return;throw e;}
-  const link=Object.values(registry?.links||{}).find(x=>Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
+  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}catch(error){if(error.code==="ENOENT")return;throw error;}
+  const link=Object.values(registry?.links||{}).find(x=>
+   Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
   if(!link)return;
   start();
-  if(!economy)return;
+  const killed=life.markLoss({pilotID:link.pilotID,systemID,shipID:npcID,wreckID});
+  require("./coopRuntimeProbe").observe("living-npc-destroyed",null,
+   {itemID:npcID,spaceState:{systemID}},{
+    pilotID:link.pilotID,name:link.name,faction:link.faction,
+    status:killed.status,recoveryAt:killed.readyAt,wreckID
+   });
+  if(killed.status!=="RECOVERING"||!economy)return;
   const {createLossBridge}=require("./coopNpcLossBridge");
   if(!lossBridge)lossBridge=createLossBridge({
    file:process.env.EVEJS_COOP_LOSS_LEDGER_FILE||"/var/lib/evejs/coop-loss-ledger.json",
    recordLoss:(system,amount)=>economy.recordLoss(system,amount)
   });
-  const result=lossBridge.accept({systemID,npcID,wreckID});
-  if(result.status==="COMMITTED"&&factionDirector)factionDirector.onLoss({eventID:"wreck:"+wreckID,faction:link.faction||"independent",systemID});
-  require("./coopRuntimeProbe").observe("native-npc-kill-consequence",null,
-   {itemID:npcID,spaceState:{systemID}},{npcID,wreckID,status:result.status});
+  const result=lossBridge.accept({systemID,npcID,wreckID,pilotID:link.pilotID});
+  if(result.status==="COMMITTED"&&factionDirector)
+   factionDirector.onLoss({eventID:"wreck:"+wreckID,faction:link.faction||"independent",systemID});
+  require("./coopRuntimeProbe").observe("living-npc-economic-loss",null,
+   {itemID:npcID,spaceState:{systemID}},{
+    pilotID:link.pilotID,name:link.name,wreckID,status:result.status
+   });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
 module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck};
