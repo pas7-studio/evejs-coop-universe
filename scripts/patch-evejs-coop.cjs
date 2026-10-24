@@ -105,10 +105,14 @@ function transform(source,spec,remove){
    ...originalReturn.split(eol)
   ].join(eol);
   if(count(text,before)+count(text,after)!==1||
-     count(text,originalReturn)+count(text,fixedReturn)!==1)
+     count(text,originalReturn)!==1||count(text,fixedReturn)>1)
    throw Error("Unrecognized native NPC mixed persistent/transient ID allocator");
   text=remove?text.replace(after,before):text.replace(before,after);
-  text=remove?text.replace(fixedReturn,originalReturn):text.replace(originalReturn,fixedReturn);
+  if(remove){
+   if(count(text,fixedReturn)===1)text=text.replace(fixedReturn,originalReturn);
+  }else if(count(text,fixedReturn)===0){
+   text=text.replace(originalReturn,fixedReturn);
+  }
  }
  if(spec.file.endsWith("nativeNpcWreckService.js")){
   if(count(text,lootOld)+count(text,lootNew)!==1)throw Error("Ambiguous native wreck refresh");
