@@ -1,3 +1,14 @@
+> **Current testing priority (2026-10-25):** See
+> [GAMEPLAY_TESTING.md](GAMEPLAY_TESTING.md) first. A healthy Docker backend
+> and passing regression suite **do not prove actual NPC gameplay**.
+> Missing `/var/lib/evejs/coop-events.jsonl` with headless boot enabled
+> means `BLOCKED_TELEMETRY`: use the read-only
+> `Local-Two-Client-Test.ps1 -Action DiagnoseWorld`. The headless boot
+> request should be logged even with no real client. Do not rerun
+> npm audit or rebuild market data to overcome a missing event file.
+> A compatible authorized EVE client and human observation are required
+> for actual visible gameplay and two-character `Party` acceptance.
+
 ## Autonomous NPC battles, retreats and rescue
 
 The default LivingCoop now enables native tactical decisions for
