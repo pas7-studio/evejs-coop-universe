@@ -47,8 +47,11 @@ jobs:
           $correct = (Get-FileHash -Algorithm SHA256 $sample).Hash
           & ./scripts/Test-XEveBaseline.ps1 -ArchivePath $sample -ExpectedSha256 $correct
           if ($LASTEXITCODE -ne 0) { throw 'Expected a valid hash to pass' }
-          & ./scripts/Test-XEveBaseline.ps1 -ArchivePath $sample
-          if ($LASTEXITCODE -eq 0) { throw 'Expected incompatible hash to fail' }
+          # Expected failure must run in a child PowerShell process: Write-Error
+          # with ErrorActionPreference=Stop can terminate the current CI step.
+          & pwsh -NoProfile -NonInteractive -File ./scripts/Test-XEveBaseline.ps1 -ArchivePath $sample 2>&1 | Out-String | Write-Host
+          $negativeExitCode = $LASTEXITCODE
+          if ($negativeExitCode -eq 0) { throw 'Expected incompatible hash to fail' }
 
       - name: Two independent TCP sessions (standalone test fixture)
         shell: bash
