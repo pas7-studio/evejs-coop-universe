@@ -76,3 +76,53 @@ test('false wreck IDs, wrong ship source, vanished physical wreck never certify 
  a.entity.nativeNpcWreck=true;a.items=[{wreckItemID:5,wreckID:1002,typeID:34,quantity:100}];
  assert.equal(verifyWreck(opts).status,'INVALID_STORED_ITEMS');
 });
+
+test("native wreck callback captures a fast lethal HP drop missed between periodic samples",()=>{
+ let now=1000;
+ const {scene,ships}=makeScene();
+ const attacker=ships.get(51),victim=ships.get(52);
+ attacker.nativeNpc=true;victim.nativeNpc=true;
+ const m=createCombatEvidence({clock:()=>now});
+ const opts={systemID,scene,links,getHealth:s=>s.hp,
+  getController:id=>id===51?{currentTargetID:52}:null};
+ assert.equal(m.sample(opts).damageEvents,0);
+ victim.hp={shield:0,armor:0,structure:0};now+=1000;
+ // EveJS has removed the destroyed ship, but passes the source object.
+ ships.delete(52);
+ const r=m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-002",
+  ship:victim,wreckID:500,getHealth:s=>s.hp});
+ assert.equal(r.status,"NATIVE_TERMINAL_HP_DROP");
+ assert.equal(r.event.nativeWreckID,500);
+ assert.equal(r.event.healthLossHP,340);
+ assert.deepEqual(r.event.attackerPilotIDs,["coop-pilot-001"]);
+ assert.deepEqual(r.event.attackerEntityIDs,[51]);
+ assert.equal(m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-002",
+  ship:victim,wreckID:500,getHealth:s=>s.hp}).status,"NO_PREVIOUS_NATIVE_HP");
+});
+test("terminal proof never invents damage without an earlier same-pilot physical sample",()=>{
+ let now=1000;
+ const {scene,ships}=makeScene(),victim=ships.get(52);
+ victim.nativeNpc=true;
+ const m=createCombatEvidence({clock:()=>now});
+ assert.equal(m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-002",
+  ship:victim,wreckID:500,getHealth:s=>s.hp}).status,"NO_PREVIOUS_NATIVE_HP");
+ m.sample({systemID,scene,links,getHealth:s=>s.hp,getController:()=>null});
+ now+=31000;victim.hp.shield=0;
+ assert.equal(m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-002",
+  ship:victim,wreckID:500,getHealth:s=>s.hp}).status,"STALE_TERMINAL_HP");
+ assert.equal(m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-099",
+  ship:victim,wreckID:500,getHealth:s=>s.hp}).status,"NO_PREVIOUS_NATIVE_HP");
+});
+test("terminal callback with unchanged native HP is not treated as a hit",()=>{
+ let now=1000;
+ const {scene,ships}=makeScene(),victim=ships.get(52);
+ victim.nativeNpc=true;
+ const m=createCombatEvidence({clock:()=>now});
+ m.sample({systemID,scene,links,getHealth:s=>s.hp,getController:()=>null});
+ now+=1000;
+ assert.equal(m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-002",
+  ship:victim,wreckID:500,getHealth:s=>s.hp}).status,"NO_OBSERVED_TERMINAL_LOSS");
+ victim.nativeNpc=false;
+ assert.equal(m.terminalDamage({systemID,entityID:52,pilotID:"coop-pilot-002",
+  ship:victim,wreckID:500,getHealth:s=>s.hp}).status,"INVALID_NATIVE_TERMINAL");
+});
