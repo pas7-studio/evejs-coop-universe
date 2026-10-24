@@ -1,3 +1,58 @@
+
+## October 24: verified backend is not yet verified Living Universe
+
+A client-free verifier run demonstrated 44 passing local tests, 27
+passing pinned EveJS upstream contract tests, a healthy backend, two
+concurrent TCP sockets, reconnect and loopback-only Compose ports.
+These prove useful *server contracts*; they do not prove that compatible
+EVE clients can log in, see each other's ships or interact with NPCs.
+
+The upstream contract log prints \`Loaded 0 systems, 0 asteroid belts\`
+under its isolated fixture. That is **not** proof the actual container
+has no star systems. A separate live runtime check is required.
+
+The verifier now uses a separate attested temporary EveJS gameStore for
+each upstream test. It never runs \`node --test\` against the persistent
+live server database. It also starts the complete installed
+\`compose.coop-probe.yaml\` overlay rather than silently starting only
+the base EveJS Compose file.
+
+For an **opt-in native Living Universe configuration gate**, first
+deploy the world, then run:
+
+~~~powershell
+cd H:\projects\evejs-coop-universe
+git pull
+.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+.\scripts\Verify-Local-Coop.ps1 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -IncludeUpstreamTests -RequireLivingUniverse
+~~~
+
+\`-RequireLivingUniverse\` checks that the *running* server container has
+the required virtual-world, native-mining, pirate-raid and intel flags.
+It does not count NPC ships or claim any client-side gameplay pass.
+
+**After starting an actual compatible game client, logging in and
+undocking**, run:
+
+~~~powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action World -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+.\scripts\Local-Two-Client-Test.ps1 -Action Party -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+~~~
+
+\`World\` requires fresh server-side evidence from the real game scene:
+at least one authentic asteroid belt, a physical EveJS mining fleet
+with a miner and hauler, and at least one physical NPC assignment.
+It displays exactly what is missing and does not accept virtual
+resident counts or TCP reconnect as substitutes.
+
+Only once this is confirmed should you attempt both real client
+windows, mutual ship visibility, fleet warp, actual NPC engagement,
+wreck looting, disconnect/reconnect and a test from a second PC.
+
+No game data volumes are wiped by these commands. Keep all server
+ports bound to loopback and use only an authenticated private tunnel
+for a remote authorized client.
+
 # Play EveJS Living Universe with a friend
 
 **No arenas and no scripted PvE waves in the default game mode.** Both
