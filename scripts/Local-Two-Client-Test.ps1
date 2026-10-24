@@ -8,6 +8,8 @@ param(
     [int]$LaunchGapSeconds = 20,
     [int]$HealthTimeoutSeconds = 240,
     [int]$NpcSystemID = 30000142,
+    # Dedicated physical-mining World gate: Jita legitimately has zero belts.
+    [int]$WorldSystemID = 30000144,
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -150,11 +152,11 @@ switch ($Action) {
         if ($LASTEXITCODE -ne 0) {
             throw 'BLOCKED_TELEMETRY: missing /var/lib/evejs/coop-events.jsonl. Run -Action DiagnoseWorld to inspect the running overlay, startup hook and log path WITHOUT restarting. Headless boot should emit a boot-requested event before any game client logs in; do not substitute npm audit or TCP tests.'
         }
-        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity --system-id $WorldSystemID
         if ($LASTEXITCODE -ne 0) {
             throw 'Physical NPC activity is not yet confirmed. Inspect movement, ore and native target evidence in the report, then -Action Logs.'
         }
-        Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed by the server. Client login, rendering, combat and loot remain unverified.'
+        Write-Host "[WORLD] Native mining+physical NPC evidence verified for $WorldSystemID. Client rendering, combat and loot remain unverified."
     }
     'Combat' {
         Assert-BackendPrerequisites
