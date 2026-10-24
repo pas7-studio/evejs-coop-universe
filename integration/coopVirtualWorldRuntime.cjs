@@ -681,7 +681,9 @@ function observeSession(session,ship){
   if(session)visitedSystems.add(systemID);
   const allResidents=world.residents(systemID);
   const roles=economy?.snapshot().pilots||{};
-  const ranks={pirate:0,miner:1,hauler:2,trader:3,patrol:4};
+  // Reserve scarce named hull slots for playable PvE: pirates and patrols
+  // before non-combat traders. Native miners/haulers are linked separately.
+  const ranks={pirate:0,patrol:1,trader:2,miner:3,hauler:4};
   const residents=allResidents.map(p=>({
     ...p,role:roles[p.id]?.role||
       ["miner","hauler","patrol","trader","pirate"][(Number(p.id.slice(-3))-1)%5]
