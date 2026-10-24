@@ -39,7 +39,7 @@ test("LivingCoop joins two real sessions on grid and sends exactly one native re
  assert.equal(f.greetings.length,0);
  f.scene.sessions.set(502,f.b);
  assert.equal(f.logic.register(f.b,f.shipB),true);
- assert.deepEqual(f.greetings,[[501,502]]);
+ assert.deepEqual(f.greetings.map(row=>Array.from(row)),[[501,502]]);
  assert.equal(f.events.some(e=>e.name==="coop-party-proximity"&&e.ready===true),true);
  f.logic.tick();
  assert.equal(f.greetings.length,1);
