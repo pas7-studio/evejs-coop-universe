@@ -30,3 +30,18 @@ test("non-mining native world requires real scene anchor and named physical NPC 
  assert.equal(isHeadlessNativeReady({miningEnabled:false,physicalNpcCount:1,
   waypointCount:0,beltCount:0,physicalMiningShips:0}),false);
 });
+
+test("beltless Jita can be ready with actual nonmining NPCs and no fake asteroids",()=>{
+ assert.equal(isHeadlessNativeReady({miningEnabled:true,physicalNpcCount:2,
+  waypointCount:66,beltCount:0,physicalMiningShips:0,sdeBeltCount:0}),true);
+ assert.equal(isHeadlessNativeReady({miningEnabled:true,physicalNpcCount:0,
+  waypointCount:66,beltCount:0,physicalMiningShips:0,sdeBeltCount:0}),false);
+});
+test("Perimeter with SDE belts must show actual scene belts and native mining ships",()=>{
+ assert.equal(isHeadlessNativeReady({miningEnabled:true,physicalNpcCount:2,
+  waypointCount:30,beltCount:0,physicalMiningShips:3,sdeBeltCount:3}),false);
+ assert.equal(isHeadlessNativeReady({miningEnabled:true,physicalNpcCount:2,
+  waypointCount:30,beltCount:3,physicalMiningShips:0,sdeBeltCount:3}),false);
+ assert.equal(isHeadlessNativeReady({miningEnabled:true,physicalNpcCount:2,
+  waypointCount:30,beltCount:3,physicalMiningShips:3,sdeBeltCount:3}),true);
+});
