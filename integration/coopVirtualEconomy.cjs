@@ -57,6 +57,25 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
   const entry={type:"loss",systemID:Number(systemID),amount:n,at:clock()};
   state.events.push(entry);if(state.events.length>100)state.events.shift();persist();return entry;
  }
- return {advance,recordLoss,snapshot:()=>structuredClone(state)};
+ function syncNativeDeliveries(totals={}){
+  let accepted=0,modified=false;
+  for(const [id,total] of Object.entries(totals)){
+   const systemID=Number(id),count=Number(total);
+   if(!Number.isSafeInteger(systemID)||systemID<=0||
+      !Number.isSafeInteger(count)||count<0)continue;
+   const sys=ensure(systemID),before=Math.max(0,Number(sys.nativeDelivered)||0);
+   if(count<=before)continue;
+   const gained=count-before;
+   sys.goods=cap(sys.goods+gained);
+   sys.demand=Math.max(0,cap(sys.demand-gained));
+   sys.nativeDelivered=count;
+   accepted+=gained;modified=true;
+   state.events.push({type:"real-ore-delivery",systemID,amount:gained,at:clock()});
+  }
+  if(state.events.length>100)state.events=state.events.slice(-100);
+  if(modified)persist();
+  return {status:modified?"UPDATED":"UNCHANGED",quantity:accepted};
+ }
+ return {advance,recordLoss,syncNativeDeliveries,snapshot:()=>structuredClone(state)};
 }
 module.exports={createEconomy};
