@@ -15,7 +15,7 @@ function restoreNamedShips({registry,store,service,sceneForSystem,lostShips=[],m
  if(links.length>maxLinks)return {status:"NEEDS_OPERATOR_REPAIR",
   reason:"TOO_MANY_LINKS",recovered:0,alreadyPhysical:0,legacyTransient:0,errors:[]};
  const stats={status:"OK",recovered:0,alreadyPhysical:0,
-  legacyTransient:0,errors:[]};
+  legacyTransient:0,confirmedLosses:0,errors:[]};
  const ids=new Set();
  for(const link of links){
   const id=positive(link?.entityID),systemID=positive(link?.systemID);
