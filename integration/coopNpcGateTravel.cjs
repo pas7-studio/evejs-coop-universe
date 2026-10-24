@@ -119,6 +119,19 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
   if(pending.size>500)for(const [key,p] of pending)if(p.nextAt<now-3600000)pending.delete(key);
   return {status:"OK",gateCount:gates.length,orders,observations};
  }
- return {tick,snapshot:()=>[...pending].map(([key,p])=>({key,...p}))};
+ function activeIDs(){
+  const now=clock(),ids=new Set();
+  for(const [key,p] of pending){
+   if(p.nextAt<=now){
+    if(now-p.nextAt>60000)pending.delete(key);
+    continue;
+   }
+   const id=pos(key.split(":")[1]);
+   if(id&&["NATIVE_GATE_WARP","AWAITING_NATIVE_TRANSFER"].includes(p.phase))
+    ids.add(id);
+  }
+  return ids;
+ }
+ return {tick,activeIDs,snapshot:()=>[...pending].map(([key,p])=>({key,...p}))};
 }
 module.exports={connectedGates,createGateTravel};
