@@ -58,7 +58,8 @@ test("saved miner role alone never exempts a ship absent from a real EveJS fleet
   a:{pilotID:"a",role:"miner",entityID:101,systemID:30000142},
   b:{pilotID:"b",role:"hauler",entityID:102,systemID:30000142}
  };
- const registry={prune:()=>0,snapshot:()=>({links}),get:()=>null};
+ const registry={prune:()=>0,snapshot:()=>({links}),get:()=>null,
+  link:(pilot,systemID,entityID)=>links[pilot.id]={pilotID:pilot.id,systemID,entityID,role:pilot.role}};
  let spawned=0;
  const bridge=createBridge({limit:2,registry,exemptRoles:["miner","hauler"],
   exists:(_s,id)=>[101,102].includes(id),
