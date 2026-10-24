@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo"];
 const specs=[
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
   {anchor:"  persistCharacterLogoffState(session);",line:'  require("../../space/coopRuntimeProbe").observe("disconnect-after-persist", session, null);',after:true}
@@ -22,6 +22,7 @@ const specs=[
  {file:"server/src/network/tcp/index.js",patches:[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
  ]},
+ {file:"server/src/services/mining/miningNpcOperations.js",patches:[]},
  {file:"server/src/space/npc/nativeNpcWreckService.js",patches:[
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopVirtualWorldRuntime").confirmedNativeNpcWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional integration */ }'},
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopNativeNpcDemo").confirmedWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional co-op kill tracking */ }'}
@@ -51,6 +52,20 @@ function transform(source,spec,remove){
  if(spec.file.endsWith("nativeNpcWreckService.js")){
   if(count(text,lootOld)+count(text,lootNew)!==1)throw Error("Ambiguous native wreck refresh");
   text=remove?text.replace(lootNew,lootOld):text.replace(lootOld,lootNew);
+ }
+ if(spec.file.endsWith("miningNpcOperations.js")){
+  // Replace the vanilla "miner ore disappears during hauling" path with
+  // a real native cargo reparent to a live hauler ship. Keep fallback.
+  const oldTransfer='    hauledVolumeM3 += clearNpcMiningCargo(entity);';
+  const newTransfer='    hauledVolumeM3 += process.env.EVEJS_COOP_NATIVE_HAUL_CARGO === "1" ? require("../../space/coopNativeHaulCargo").transferCargo(scene, fleetRecord, entity) : clearNpcMiningCargo(entity);';
+  const oldArrival='      fleetRecord.state = "mining";';
+  const newArrival='      if (process.env.EVEJS_COOP_NATIVE_HAUL_CARGO === "1") require("../../space/coopNativeHaulCargo").unloadCargo(scene, fleetRecord);'+(text.includes("\r\n")?"\r\n":"\n")+oldArrival;
+  if(count(text,oldTransfer)+count(text,newTransfer)!==1)throw Error("Unexpected EveJS NPC haul transfer location");
+  text=remove?text.replace(newTransfer,oldTransfer):text.replace(oldTransfer,newTransfer);
+  const oldBlock='  if (fleetRecord.state === "haulereturn") {'+(text.includes("\r\n")?"\r\n":"\n")+'    if (now >= toFiniteNumber(fleetRecord.haulerReturnAtMs, 0)) {'+(text.includes("\r\n")?"\r\n":"\n")+oldArrival;
+  const newBlock=oldBlock.replace(oldArrival,newArrival);
+  if(count(text,oldBlock)+count(text,newBlock)!==1)throw Error("Unexpected EveJS NPC haul arrival location");
+  text=remove?text.replace(newBlock,oldBlock):text.replace(oldBlock,newBlock);
  }
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
