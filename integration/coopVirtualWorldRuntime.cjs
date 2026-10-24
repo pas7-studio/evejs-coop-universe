@@ -215,6 +215,20 @@ function advanceNativeTactics(){
     };
    }
   });
+  // Persist only genuine successful native NPC attack orders, not virtual
+  // background timers or imagined battle outcomes.
+  if(factionDirector)for(const event of output.events){
+   if(event.kind!=="reinforcement-attack")continue;
+   const byEntity=new Map(assignments.map(x=>[Number(x.entityID),x]));
+   const aggressor=byEntity.get(Number(event.responderID));
+   const defender=byEntity.get(Number(event.targetID));
+   if(!aggressor||!defender||aggressor.faction===defender.faction)continue;
+   factionDirector.onEngagement({
+    eventID:"native-order:"+systemID+":"+event.responderID+":"+event.targetID+":"+Math.floor(Date.now()/600000),
+    aggressorFaction:aggressor.faction,defenderFaction:defender.faction,systemID,
+    attackerPilotID:aggressor.pilotID,defenderPilotID:defender.pilotID
+   });
+  }
   if(output.events.length)console.info("[CoopLivingWorld] Native tactics",JSON.stringify({systemID,events:output.events}));
  }
 }
