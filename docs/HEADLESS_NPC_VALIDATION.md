@@ -80,6 +80,7 @@ Per-system native mining startup diagnostics now include
 `systemSiteReadiness.stockMiningStartup.status`: 
 `MINING_STARTUP_ELIGIBLE`, `NATIVE_MINING_STARTUP_DISABLED`,
 `NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM`,
+`NATIVE_MINING_FLEET_COUNT_ZERO`, `NATIVE_MINING_AUTO_MINE_DISABLED`,
 `SYSTEM_HAS_NO_SDE_BELTS` or `SYSTEM_SDE_BELTS_NOT_IN_SCENE`.
 An eligible config does not imply a physical fleet actually exists.
 No changes to native EveJS mining seeding or the owner's saved
@@ -87,8 +88,8 @@ No changes to native EveJS mining seeding or the owner's saved
 a startup exclusion/disablement alongside `NO_NATIVE_MINING_FLEET`
 instead of treating all such cases as missing SDE.
 
-New isolated regression: 6 native-scene policy tests,
-2 startup-explanation report tests; 61/61 relevant tests PASS.
+New isolated regression: 8 native-scene policy tests,
+3 startup-explanation report tests; 64/64 relevant tests PASS.
 No local Docker/player proof for this new code yet.
 
 ## 2026-10-25 SDE / native spawn diagnostics
