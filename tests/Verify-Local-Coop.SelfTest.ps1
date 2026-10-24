@@ -20,7 +20,7 @@ function Assert-FailureReport([string]$Case, [string[]]$Arguments, [string]$Requ
   if (-not ($report.results | Where-Object { $_.status -eq 'FAIL' -and $_.detail -like "*$RequiredMessage*" })) {
     throw "$Case missing expected error '$RequiredMessage': $($report | ConvertTo-Json -Depth 8)"
   }
-  Write-Host "[PASS] $Case: nonzero exit, FAIL report, expected diagnostic"
+  Write-Host "[PASS] ${Case}: nonzero exit, FAIL report, expected diagnostic"
 }
 
 try {
