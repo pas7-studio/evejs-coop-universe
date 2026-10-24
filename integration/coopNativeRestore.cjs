@@ -32,7 +32,9 @@ function restoreNamedShips({registry,store,service,sceneForSystem,lostShips=[],m
   if(!entity&&!controller){
    const lost=Array.isArray(lostShips)&&lostShips.some(loss=>
     loss?.pilotID===pilotID&&positive(loss.shipID)===id&&
-    positive(loss.systemID)===systemID&&positive(loss.wreckID));
+    positive(loss.systemID)===systemID&&positive(loss.wreckID)&&
+    positive(loss.lostAt)&&positive(link.linkedAt)&&
+    Number(loss.lostAt)>=Number(link.linkedAt));
    if(lost)stats.confirmedLosses++;
    else if(link.durable===true)stats.errors.push({pilotID,entityID:id,
     reason:"DURABLE_NATIVE_RECORD_MISSING"});
