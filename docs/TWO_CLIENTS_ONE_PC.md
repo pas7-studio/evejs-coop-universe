@@ -24,7 +24,7 @@ The `Prepare` operation can download dependencies, initialize the game database,
 cd C:\Games\EveCoopProject
 
 # 1. Start one authoritative server and market via Docker
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Local-Two-Client-Test.ps1 -Action Start
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Local-Two-Client-Test.ps1 -Action Start -HealthTimeoutSeconds 240
 
 # 2. Check server / health
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Local-Two-Client-Test.ps1 -Action Status
@@ -60,3 +60,11 @@ For each stage use PASS/FAIL/BLOCKED, steps to reproduce, exact EveJS commit, ve
 - Upstream Docker Compose intentionally publishes localhost-only ports. No public Internet, router port forwarding or VPN exposure.
 - X-Eve Living Universe patch requires its exact pinned EveJS baseline and is **not** applied here.
 - No automatic bypass of EVE launch restrictions/DRM or proprietary client modification.
+
+## Startup resilience (updated)
+
+The `Start` action now polls `Check-Backend.ps1` up to `HealthTimeoutSeconds` (default 240) rather than failing on the first unhealthy Docker Compose snapshot. EveJS initializes slowly and the Compose server healthcheck has a two-minute start period. The parameter accepts 15–900 seconds.
+
+The `LaunchTwo` action also uses the upstream `Play.bat` from an explicitly set working directory without fragile nested `cmd.exe /k cd /d` quotation. This fixes command-line quoting, **not** any upstream client concurrency restrictions.
+
+Agent rule: if `Start` fails after the timeout, capture `-Action Logs` and report the failing service and last errors. Do not re-run `Prepare` (market rebuild) just to resolve a slow startup.
