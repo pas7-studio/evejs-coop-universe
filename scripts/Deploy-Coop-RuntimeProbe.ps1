@@ -61,6 +61,17 @@ services:
     $yaml += "      EVEJS_COOP_VIRTUAL_ECONOMY: '1'`n"
     $yaml += "      EVEJS_COOP_ECONOMY_FILE: '/var/lib/evejs/coop-economy.json'`n"
   }
+  if($LivingCoop){
+    # Reuse stock EveJS miners, mining modules, real asteroid depletion,
+    # actual native NPC cargo and the existing miner distress/response AI.
+    $yaml += "      EVEJS_COOP_NATIVE_MINING: '1'`n"
+    $yaml += "      EVEJS_MINING_NPC_STARTUP_ENABLED: 'true'`n"
+    $yaml += "      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: '$VirtualRouteSystems'`n"
+    $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_COUNT: '1'`n"
+    $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_MINER_COUNT: '2'`n"
+    $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_HAULER_COUNT: '1'`n"
+    $yaml += "      EVEJS_MINING_NPC_FLEET_AUTO_MINE_ENABLED: 'true'`n"
+  }
   if($EnableFactionPatrols -or $LivingCoop){
     $yaml += "      EVEJS_COOP_FACTION_PATROLS: '1'`n"
   }
