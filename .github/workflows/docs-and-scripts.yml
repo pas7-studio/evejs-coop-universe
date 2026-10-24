@@ -20,6 +20,8 @@ jobs:
           test -f scripts/Preflight.ps1
           test -f scripts/Fetch-Upstream.ps1
           test -f scripts/Check-Backend.ps1
+          test -f scripts/Audit-Network.ps1
+          test -f scripts/Test-XEveBaseline.ps1
           ! git ls-files | grep -E '(^|/)(\.env$|node_modules/|ResFiles/|blue\.dll$|.*\.(pem|pfx|sqlite3?|db)$)'
       - name: PowerShell parser check
         shell: pwsh
@@ -32,3 +34,14 @@ jobs:
             if ($parseErrors) { $errors += $parseErrors }
           }
           if ($errors.Count -gt 0) { $errors | Format-List; exit 1 }
+
+      - name: Test baseline compatibility guard
+        shell: pwsh
+        run: |
+          $sample = Join-Path $env:RUNNER_TEMP 'baseline-fixture.bin'
+          [System.IO.File]::WriteAllText($sample, 'evejs-coop-test-fixture')
+          $correct = (Get-FileHash -Algorithm SHA256 $sample).Hash
+          & ./scripts/Test-XEveBaseline.ps1 -ArchivePath $sample -ExpectedSha256 $correct
+          if ($LASTEXITCODE -ne 0) { throw 'Expected a valid hash to pass' }
+          & ./scripts/Test-XEveBaseline.ps1 -ArchivePath $sample
+          if ($LASTEXITCODE -eq 0) { throw 'Expected incompatible hash to fail' }
