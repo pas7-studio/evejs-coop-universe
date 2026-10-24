@@ -32,6 +32,7 @@ function schedule(session,ship,reason="transition"){
    scheduled.delete(session);
    require("./coopRuntimeProbe").observe("space-arrival",session,ship,{reason,ballparkReady:true});
    require("./coopDuoPresence").observe(session,ship,reason);
+   require("./coopDuoCoordinator").register(session,ship);
    require("./coopVirtualWorldRuntime").observeSession(session,ship);
    require("./coopNativeNpcDemo").maybeSpawn(session,ship);
   }catch(error){
