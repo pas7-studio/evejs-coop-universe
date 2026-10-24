@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,systemID:requestedSystemID=null}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -17,13 +17,23 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  }
  rows.sort((a,b)=>a._time-b._time);
  const latestBoot=[...rows].reverse().find(e=>e.event==="living-headless-boot-requested");
+ const targetID=positive(requestedSystemID);
  const topology=[...rows].reverse().find(e=>e.event==="living-world-topology"&&positive(e.systemID)&&
+  (!targetID||positive(e.systemID)===targetID)&&
   (!latestBoot||e._time>=latestBoot._time));
- const systemID=positive(topology?.systemID);
+ const systemID=targetID||positive(topology?.systemID);
  const related=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&e._time>=topology._time-1000);
  const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
+ const siteReadiness=[...rows].reverse().find(e=>e.event==="living-native-system-site-readiness"&&
+  positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
+ const spawnAttempt=[...rows].reverse().find(e=>e.event==="living-native-materialization-attempt"&&
+  positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
+ const availableMiningSystems=[...new Map(rows.filter(e=>e.event==="living-world-topology"&&
+  positive(e.systemID)&&(!latestBoot||e._time>=latestBoot._time))
+  .map(e=>[positive(e.systemID),e])).values()]
+  .filter(e=>Number(e.realAsteroidBelts)>0).map(e=>positive(e.systemID)).sort((a,b)=>a-b);
  // Activity may precede a fresh topology refresh. Restrict it to the
  // current server boot, never borrow evidence from a previous process.
  const activitySamples=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&
@@ -166,14 +176,26 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const blockers=[];
  if(!topology)blockers.push("No native topology evidence. Start LivingCoop headless world boot or enter space with a real permitted EVE client; TCP reconnect is insufficient.");
  else {
-  if(!scenery.waypoints||!scenery.asteroidBelts){
-   blockers.push("The authoritative runtime scene has no real mining belt/waypoints. Check database generation and static reference data.");
+  if(!scenery.waypoints){
+   blockers.push("The target system has no authoritative static waypoints; inspect its real EveJS scene generation.");
    status="MISSING_NATIVE_WORLD_DATA";
+  }else if(!scenery.asteroidBelts){
+   blockers.push(siteReadiness?.status==="SDE_SYSTEM_HAS_NO_BELTS"?
+    "This system legitimately has zero SDE asteroid belts (Jita is a trade hub). Select a real belt-bearing system, e.g. -WorldSystemID 30000144 for Perimeter; no synthetic belts will be spawned.":
+    "The target scene has no real asteroid belts; compare system-specific SDE belt count with physical scene count.");
+   status=siteReadiness?.status==="SDE_SYSTEM_HAS_NO_BELTS"?"SYSTEM_HAS_NO_NATIVE_MINING_BELTS":"MISSING_NATIVE_WORLD_DATA";
   }else if(!industry||minerShips<1||haulerShips<1){
    blockers.push("No physical EveJS miner and hauler fleet observed in this solar system.");
    status="NO_NATIVE_MINING_FLEET";
   }else if(!materialization||!Object.values(roles).some(n=>n>0)){
-   blockers.push("No real NPC ship assignment observed in a physical EveJS scene.");
+   const details=spawnAttempt?.spawnErrors?.length?
+    " Native spawn failures: "+spawnAttempt.spawnErrors.map(x=>x.pilotID+":"+x.error).join("; "):
+    spawnAttempt?" Native pilot attempts: residents="+spawnAttempt.residents+
+     " eligible="+spawnAttempt.eligibleResidents+
+     " candidateSpawns="+spawnAttempt.requestedSpawns+
+     " successes="+spawnAttempt.successfulAssignments+
+     " stockFleetShips="+spawnAttempt.miningFleetShips+".":" No materializer-attempt event yet.";
+   blockers.push("No real named NPC assignment observed in this authoritative EveJS scene."+details);
    status="NO_LIVING_NPC_SHIPS";
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
@@ -213,6 +235,17 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
   headlessBootStatus:headless?.status||null,
   evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
+  systemSiteReadiness:siteReadiness?{
+   status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
+   realAsteroidBelts:siteReadiness.realAsteroidBelts}:null,
+  nativeMaterializerAttempt:spawnAttempt?{
+   residents:spawnAttempt.residents,eligibleResidents:spawnAttempt.eligibleResidents,
+   requestedSpawns:spawnAttempt.requestedSpawns,
+   successfulAssignments:spawnAttempt.successfulAssignments,
+   spawnErrors:spawnAttempt.spawnErrors||[],
+   miningFleetShips:spawnAttempt.miningFleetShips,
+   linkedIndustryPilots:spawnAttempt.linkedIndustryPilots}:null,
+  availableMiningSystems,
   actualMiningFleets:realFleets.length,actualMinerShips:minerShips,
   actualHaulerShips:haulerShips,
   physicalNpcShipAssignments:Object.values(roles).reduce((a,b)=>a+b,0),
@@ -231,8 +264,11 @@ if(require.main===module){
   const args=process.argv.slice(2),p=args.indexOf("--window-minutes");
   const minutes=p>=0?Number(args[p+1]):20;
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw Error("--window-minutes must be 1..240");
+  const sysParam=args.indexOf("--system-id");
+  const selected=sysParam>=0?Number(args[sysParam+1]):null;
+  if(sysParam>=0&&!(positive(selected)))throw Error("--system-id must be positive integer");
   const report=summarize(fs.readFileSync(0,"utf8"),{
-   windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
+   systemID:selected,windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
    requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
    requireFinalAttacker:args.includes("--require-final-attacker"),
    requireMarket:args.includes("--require-market")
