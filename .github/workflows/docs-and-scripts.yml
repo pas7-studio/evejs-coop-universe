@@ -27,6 +27,12 @@ jobs:
           test -f scripts/Test-XEveBaseline.ps1
           test -f scripts/Test-ComposeSafety.ps1
           ! git ls-files | grep -E '(^|/)(\.env$|node_modules/|ResFiles/|blue\.dll$|.*\.(pem|pfx|sqlite3?|db)$)'
+      - name: One-command backend runner is present
+        shell: bash
+        run: |
+          test -f scripts/Verify-Local-Coop.ps1
+          test -f docs/VERIFY_BACKEND_ONE_COMMAND.md
+
       - name: PowerShell parser check
         shell: pwsh
         run: |
