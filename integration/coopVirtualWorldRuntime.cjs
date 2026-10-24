@@ -113,11 +113,14 @@ function nextHeadlessRetryMs(attempts){
  return 15*60000;
 }
 function isHeadlessNativeReady({miningEnabled=true,physicalNpcCount=0,
- beltCount=0,physicalMiningShips=0,waypointCount=0}={}){
- // In non-mining configurations no stock mining fleet is expected.
- // Require at least one real static anchor and a named native ship.
+ beltCount=0,physicalMiningShips=0,waypointCount=0,sdeBeltCount=null}={}){
+ // A beltless solar system is legitimately not mineable. Require mining
+ // fleet/physical belts only when the authoritative SDE says the *system*
+ // has mining belts. Never invent a Jita belt or treat it as corrupt data.
+ const hasSdeEvidence=Number.isSafeInteger(sdeBeltCount)&&sdeBeltCount>=0;
+ const miningRequired=miningEnabled&&(!hasSdeEvidence||sdeBeltCount>0);
  return physicalNpcCount>0&&waypointCount>0&&
-  (!miningEnabled||(beltCount>0&&physicalMiningShips>0));
+  (!miningRequired||(beltCount>0&&physicalMiningShips>0));
 }
 // Initialize real EveJS scenes without waiting for a human to log in.
 // This is not a client/gameplay proof: only existing native entities count.
@@ -161,7 +164,8 @@ function scheduleHeadlessWorldBoot(route){
     const verified=isHeadlessNativeReady({
      miningEnabled,
      physicalNpcCount:links.length,waypointCount:topology.length,
-     beltCount,physicalMiningShips:fleetShips.length
+     beltCount,physicalMiningShips:fleetShips.length,
+     sdeBeltCount:sdeBelts
     });
     // A real named native NPC can operate even if stock mining or static
     // topology is incomplete. Readiness remains a stricter separate gate.
@@ -170,7 +174,9 @@ function scheduleHeadlessWorldBoot(route){
     require("./coopRuntimeProbe").observe("living-headless-boot-system",null,
      {spaceState:{systemID}},
      {attempt:attempts,status:verified?"NATIVE_SCENE_READY":"PENDING_NATIVE_SCENE",
-      realAsteroidBelts:beltCount,physicalMiningShips:fleetShips.length,
+      realAsteroidBelts:beltCount,authoritativeSdeBelts:sdeBelts,
+      miningApplicable:miningEnabled&&sdeBelts>0,
+      physicalMiningShips:fleetShips.length,
       actualNamedNpcShips:links.length,sceneReady:Boolean(scene)});
    }catch(error){
     console.warn("[CoopHeadlessWorld] system "+systemID,error.message);
