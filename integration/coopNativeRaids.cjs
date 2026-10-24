@@ -21,13 +21,38 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
   for(const rawID of pirates){
    const id=pos(rawID),ship=id&&scene.getEntityByID(id);
    if(!ship||!valid(ship.position)||String(ship.mode||"").includes("WARP"))continue;
-   const key=systemID+":"+id,old=leases.get(key);
-   if(old&&clock()<old.nextAt&&scene.getEntityByID(old.targetID))continue;
-   const activeTarget=pos(getController(id)?.currentTargetID);
-   if(activeTarget&&scene.getEntityByID(activeTarget))continue;
-   const target=candidates.filter(x=>x.id!==id&&canAttack({systemID,pirateID:id,targetID:x.id}))
-     .sort((a,b)=>(b.role==="hauler"?1:0)-(a.role==="hauler"?1:0)||
-       range(ship.position,a.ship.position)-range(ship.position,b.ship.position))[0];
+   const key=systemID+":"+id,old=leases.get(key),now=clock();
+   if(old&&now<old.nextAt&&scene.getEntityByID(old.targetID))continue;
+   const controller=getController(id);
+   const activeTarget=pos(controller?.currentTargetID);
+   const manual=controller?.manualOrder;
+   const manualTarget=pos(manual?.targetID);
+   // A live native player battle or somebody else's explicit NPC command
+   // always takes priority. A passive currentTargetID is NOT proof that
+   // our prior warp-to-miner approach has become a weapon attack.
+   const playerShipIDs=new Set(Array.from(scene.sessions?.values?.()||[])
+     .map(s=>pos(s?._space?.shipID)).filter(Boolean));
+   const ownedApproach=old?.phase==="warp-to-hauler"&&
+    old.targetID===activeTarget&&Boolean(scene.getEntityByID(activeTarget));
+   if(activeTarget&&scene.getEntityByID(activeTarget)){
+    if(playerShipIDs.has(activeTarget))continue;
+    if(manual?.type==="attack"&&manualTarget===activeTarget)continue;
+    if(manual&&manual.type!=="resumeBehavior"&&
+      (!ownedApproach||manual.type!=="warp"))continue;
+    // Keep native unsolicited combat/retaliation from being hijacked.
+    const aggroAt=Number(controller?.lastAggressedAtMs);
+    if(Number.isFinite(aggroAt)&&aggroAt>0&&now>=aggroAt&&
+      now-aggroAt<120000)continue;
+   }else if(manual&&manual.type!=="resumeBehavior"&&
+      !(old?.phase==="warp-to-hauler"&&manual.type==="warp"))continue;
+   // After an approach, prefer the very same *still authorized* hull.
+   // The convoy may move, but the raid should not silently target-hop.
+   const authorized=candidates.filter(x=>x.id!==id&&
+    canAttack({systemID,pirateID:id,targetID:x.id}));
+   const target=authorized.find(x=>old?.phase==="warp-to-hauler"&&
+    x.id===old.targetID)||
+    authorized.sort((a,b)=>(b.role==="hauler"?1:0)-(a.role==="hauler"?1:0)||
+      range(ship.position,a.ship.position)-range(ship.position,b.ship.position))[0];
    if(!target)continue;
    const distance=range(ship.position,target.ship.position);
    let result,action;
@@ -41,7 +66,7 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
    // Warping to the convoy is only the approach, not the raid itself:
    // reevaluate soon after landing and issue a genuine weapon attack.
    const retryMs=result?.success===true?(action==="attack"?cooldownMs:15000):60000;
-   leases.set(key,{nextAt:clock()+retryMs,targetID:target.id,phase:action});
+   leases.set(key,{nextAt:now+retryMs,targetID:target.id,phase:action});
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,targetRole:target.role,action});
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
