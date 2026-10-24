@@ -292,3 +292,19 @@ For Perimeter 30000144, `DiagnoseWorld` now prints the effective retry and nativ
 **New P0 regression suite:** `coop-mining-startup-retry.test.mjs` covers failed first spawn, partial multi-fleet recovery, exact rollback, repeated apply, disabled opt-in, and partial-patch rejection. `coop-mining-startup-world-report.test.mjs` covers failure reason, recovery signal, and strict per-system filtering. `coop-npc-role-priority.test.mjs` ensures low NPC caps still prioritize pirates and patrols; normal `-Action CoopStart` continues to explicitly request 6 named hull slots per system.
 
 If `World` still reports `NO_NATIVE_MINING_FLEET`, use `nativeMiningStartupOutcome.error` and the current `systemSiteReadiness.stockMiningStartup`. If named NPCs still equal zero while stock mining succeeds, focus exclusively on `nativeMaterializerAttempt.spawnErrors`, not on mining startup. Preserve `evejs-data`, retain the exact deployed overlay SHA, and do not run CI or market rebuild to overcome a gameplay blocker.
+
+## P0 — prove real pirate fire against stock EveJS miners
+
+The native EveJS pirate-raids policy legitimately targets *unnamed* stock mining NPCs. The existing strict `Combat` and `FinalBlow` evidence gates require **both victim and attacker to have durable co-op pilot names**, so they cannot recognize a named pirate damaging a stock miner, even when the damage is real.
+
+The opt-in `StockRaid` gate now measures the hull's **actual EveJS shield/armor/structure HP drop** between two native scene samples (`living-native-stock-fleet-combat`) and pairs that evidence with a **successful native NPC missile launch or weapon activation** (`living-native-weapon-event` status `VERIFIED_NATIVE_STOCK_FLEET_WEAPON_EVENT`). The attacker must have an active linked named pirate identity and actual EveJS attack order; the victim must be an actual native ship in the authoritative stock EveJS mining fleet, not a player ship, arbitrary NPC or nonexistent fleet entry. A named miner remains under the separate named combat witness. Correlate attacker ID, pilot ID, target physical entity ID, and event timing; the observer never writes HP, issues orders, creates wrecks or grants kill credit.
+
+Read-only verification on **Perimeter 30000144** after explicit deployment:
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
+.\scripts\Local-Two-Client-Test.ps1 -Action StockRaid -WorldSystemID 30000144
+```
+
+`StockRaid` returns `AWAITING_STOCK_FLEET_WEAPON_HP_CHAIN` until the **same physical victim** has both a verified weapon event and measured native HP loss. This is stronger than mere target acquisition but **does not prove** a kill, native wreck, persisted loot, a specific weapon's hit or either client's view. Keep `Combat` and `FinalBlow` strict for named-to-named battles; never claim those gates pass based on a stock-miner observation. Player-vs-pirate combat, shared wreck interaction and two-player warp/reconnect still require authenticated in-client validation.
+
+Isolated `tests/coop-stock-fleet-combat.test.mjs` covers attack-order requirement, physical HP deltas, verified native weapon events, player-ship rejection, named-victim separation and cross-target event rejection. These tests are included in `Verify-Local-Coop.ps1`. No Docker, CI, or real two-client execution is claimed in this change.
