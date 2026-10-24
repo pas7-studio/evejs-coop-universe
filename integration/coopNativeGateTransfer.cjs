@@ -19,7 +19,8 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
   typeof service.dematerializeNativeController!=="function"||
   typeof service.materializeStoredNativeController!=="function"||
   !["getNativeEntity","getNativeController","listNativeModulesForEntity",
-   "listNativeCargoForEntity","upsertNativeEntity","upsertNativeController"]
+   "listNativeCargoForEntity","upsertNativeEntity","upsertNativeController",
+   "upsertNativeModule","upsertNativeCargo"]
    .every(k=>typeof store[k]==="function"))throw Error("native gate transfer dependencies required");
  const journalFile=id=>path.join(journalDir,id+".json");
  const save=(id,value)=>{
@@ -46,6 +47,10 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
   }
   write("upsertNativeEntity",entry.restoreEntity);
   write("upsertNativeController",entry.restoreController);
+  // Restore original native module and cargo rows, preserving their
+  // exact IDs and quantities even after a crash during transient writes.
+  for(const row of entry.restoreModules)write("upsertNativeModule",row);
+  for(const row of entry.restoreCargo)write("upsertNativeCargo",row);
   if(!physical(source,id)){
    const restored=service.materializeStoredNativeController(source,id,{broadcast:true});
    if(restored?.success!==true||!physical(source,id))throw Error("SOURCE_REMATERIALIZE_FAILED");
@@ -67,7 +72,8 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
    catch(e){pending.push({file:filename,error:"CORRUPT_JOURNAL"});continue;}
    if(!validID(entry.pilotID)||!positive(entry.entityID)||
     !positive(entry.sourceSystemID)||!positive(entry.destinationSystemID)||
-    !entry.restoreEntity||!entry.restoreController){
+    !entry.restoreEntity||!entry.restoreController||
+    !Array.isArray(entry.restoreModules)||!Array.isArray(entry.restoreCargo)){
     pending.push({file:filename,error:"INVALID_JOURNAL"});continue;
    }
    const native=store.getNativeEntity(entry.entityID),link=registry.snapshot().links?.[entry.pilotID];
@@ -128,13 +134,16 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
   const beforeEntity=store.getNativeEntity(id),beforeController=store.getNativeController(id);
   if(Number(beforeEntity?.systemID)!==source||Number(beforeController?.systemID)!==source)
    return {success:false,errorMsg:"SOURCE_NATIVE_RECORD_MISMATCH"};
-  const moduleSig=itemsSignature(store.listNativeModulesForEntity(id)||[]),
-   cargoSig=itemsSignature(store.listNativeCargoForEntity(id)||[]);
+  const originalModules=clone(store.listNativeModulesForEntity(id)||[]),
+   originalCargo=clone(store.listNativeCargoForEntity(id)||[]);
+  const moduleSig=itemsSignature(originalModules),
+   cargoSig=itemsSignature(originalCargo);
   if(fs.existsSync(journalFile(pilotID)))
    return {success:false,errorMsg:"UNRESOLVED_NATIVE_TRANSFER_JOURNAL"};
   const entry={version:1,pilotID,entityID:id,sourceSystemID:source,
    destinationSystemID:dest,startedAt:clock(),phase:"PREPARED",
-   restoreEntity:clone(beforeEntity),restoreController:clone(beforeController)};
+   restoreEntity:clone(beforeEntity),restoreController:clone(beforeController),
+   restoreModules:originalModules,restoreCargo:originalCargo};
   try{save(pilotID,entry);}
   catch(error){return {success:false,errorMsg:"TRANSFER_JOURNAL_NOT_WRITABLE"};}
   try{
