@@ -6,11 +6,12 @@ const {patchStartupRecovery}=
  require("../scripts/coop-mining-startup-recovery-patch.cjs");
 const fixture="function handleSceneCreated(scene) {\n  const startupKey = String(scene.systemID) + \":\" + String(resolveStartupFleetCount());\n  if (startupSceneSeedSet.has(startupKey)) return;\n  startupSceneSeedSet.add(startupKey);\n  const fleetCount = resolveStartupFleetCount();\n  if (fleetCount <= 0) return;\n  for (let index = 0; index < fleetCount; index += 1) {\n    const spawnResult = spawnMiningFleetInternal(scene,index);\n    if (!spawnResult.success || !spawnResult.data) continue;\n    createMiningFleetRecord({\n      source:\"startup\",\n      startupKey:String(scene.systemID)+\":\"+String(index+1),\n      systemID:scene.systemID\n    });\n  }\n}\n\nfunction deactivateMiningModulesForEntity() {}\n";
 function harness(source,{enabled=true,fleetCount=1,outcomes=[]}={}){
- const records=[],seeded=new Set(),attempts=[];
- const start=new Function("process","startupSceneSeedSet","resolveStartupFleetCount",
+ const records=[],seeded=new Set(),attempts=[],events=[];
+ const start=new Function("require","console","process","startupSceneSeedSet","resolveStartupFleetCount",
   "spawnMiningFleetInternal","createMiningFleetRecord","getMiningFleetsForSystem",
   source+"; return handleSceneCreated;");
- const run=start({env:{EVEJS_COOP_MINING_STARTUP_RETRY:enabled?"1":"0"}},
+ const run=start(()=>({observe:(_name,_session,_ship,extra)=>events.push(extra)}),
+  {warn:()=>{}},{env:{EVEJS_COOP_MINING_STARTUP_RETRY:enabled?"1":"0"}},
   seeded,()=>fleetCount,
   (_scene,index)=>{
    attempts.push(index);
@@ -18,7 +19,7 @@ function harness(source,{enabled=true,fleetCount=1,outcomes=[]}={}){
    return {success,data:success?{}:null};
   },record=>records.push(record),
   systemID=>records.filter(record=>record.systemID===systemID));
- return {run:()=>run({systemID:30000144}),records,attempts,seeded};
+ return {run:()=>run({systemID:30000144}),records,attempts,seeded,events};
 }
 test("native mining startup retry patch is source-idempotent and exactly removable",()=>{
  const applied=patchStartupRecovery(fixture);
@@ -32,6 +33,7 @@ test("first failed fleet may retry without creating any fake ship or duplicate",
  h.run();assert.equal(h.records.length,0);assert.equal(h.seeded.size,0);
  h.run();assert.equal(h.records.length,1);assert.equal(h.seeded.size,1);
  h.run();assert.deepEqual(h.attempts,[0,0]);
+ assert.deepEqual(h.events.map(e=>e.status),["FAILED","SEEDED"]);
 });
 test("partial two-fleet startup retries only the missing real slot",()=>{
  const h=harness(patchStartupRecovery(fixture),{
