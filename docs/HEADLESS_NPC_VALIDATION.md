@@ -81,6 +81,64 @@ native damage, fleet cooperation, wreck loot, two-client rendering or remote
 multiplayer works. The original 67 local/27 upstream PASS report predates
 this branch; do not reuse those counts as validation for this change.
 
+## P0 fix: stock native mining fleet no longer consumes co-op spawn slots
+
+`coopNpcMaterializer` previously counted **every** persistent linked native
+ship against the `EVEJS_COOP_MATERIALIZE_LIMIT`, including EveJS stock
+miners and haulers registered by `coopNativeIndustry`. With the default
+limit 2, those two mining ships could fully occupy the budget, preventing
+named pirates and patrols from spawning. This explains why valid native raid
+logic could be impossible to exercise even in a scene containing a real
+mining fleet.
+
+With native mining enabled, stock `miner`/`hauler` links are exempt
+from the bridge's *additional* spawn cap; co-op-spawned pirates, traders
+and patrols still count. Without native mining, the fallback retains the
+original cap across all roles. The bridge remains bounded by a maximum
+of 10 additional co-op ships per solar system. Regression tests cover
+restart/existing stock links, fallback behavior and no duplicate spawns.
+
+## Optional upstream destruction attacker: separate strict gate
+
+Pinned EveJS routes native ship destruction through
+`shipDestruction.destroyShipEntityWithWreck` to
+`nativeNpcWreckService.destroyNativeNpcEntityWithWreck`, with an
+`options` object. This may contain the actual native
+`options.attackerEntity` provided by the upstream destruction caller.
+It is not guaranteed to be populated on every kill.
+
+A reversible, read-only hook **after actual wreck spawn** emits
+`living-native-destruction-attacker` only for a named victim with a
+physical native wreck. The `coopNpcDestructionAttacker` guard verifies:
+- victim native ship matches the authoritative wreck source and system;
+- actual native wreck entity is present in the scene;
+- attacker was explicitly passed in `options.attackerEntity`, is a
+  real native ship still present in the scene, and is persistently
+  mapped to a different named NPC in that same system;
+- neither attacker nor victim is a currently authenticated player's ship.
+
+If native EveJS supplies no attacker, status is
+`UPSTREAM_ATTACKER_NOT_PROVIDED` and **no identity is inferred**.
+An unrelated controller target, weapon activation, or faction label
+must never substitute for the missing native parameter.
+
+Run the **separate** manual strict gate:
+
+```powershell
+node --test tests/coop-npc-materializer.test.mjs tests/coop-npc-destruction-attacker.test.mjs
+.\scripts\Local-Two-Client-Test.ps1 -Action FinalBlow -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+```
+
+The `FinalBlow` action requires `--require-combat --require-weapon
+--require-final-attacker`: exact native destruction caller attacker,
+matching native weapon event, observed HP loss, same wreck, and
+nonempty persisted loot. If upstream does not supply an attacker,
+the report returns `AWAITING_UPSTREAM_DESTRUCTION_ATTACKER`.
+This is stronger native-source attribution than temporal correlation,
+but still requires a **real Docker run** before claiming verified
+NPC gameplay, and the native caller's semantics must be validated
+before calling it the exact fatal weapon hit.
+
 ## P1 combat enablement: native friend/foe guard and weapon witnesses
 
 Pinned EveJS `npcBehaviorLoop.isFriendlyCombatTarget` treats almost all NPC
