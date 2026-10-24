@@ -254,12 +254,16 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     return {status:"RPC_OUTCOME_UNKNOWN",pilotID:pre.pilotID,
      error:String(error?.message||error).slice(0,120)};
    }
+   // A seeded market price can move while the RPC is in flight. Never
+   // settle an NPC wallet using a stale quote or a different order book row.
+   const priceMatches=amount(ack?.price)===price;
    const fill=pre.side==="sell"?Number(ack?.filled_quantity)===quantity&&
     String(ack?.order_id)===String(row.order_id)&&
     ack.bid===true&&Number(ack?.station_id)===pre.stationID&&
-    Number(ack?.type_id)===pre.typeID:
+    Number(ack?.type_id)===pre.typeID&&priceMatches:
     Number(ack?.station_id)===pre.stationID&&
-    Number(ack?.type_id)===pre.typeID;
+    Number(ack?.type_id)===pre.typeID&&
+    Number.isSafeInteger(Number(ack?.quantity))&&Number(ack.quantity)>=0&&priceMatches;
    if(!fill)return {status:"RPC_ACK_NOT_VERIFIABLE",pilotID:pre.pilotID};
    tx.ack=ack;tx.phase="RPC_ACK";atomic(txPath(pre.pilotID),tx);
    const settled=applyAck(tx);unlink(txPath(pre.pilotID));
