@@ -13,6 +13,7 @@ function schedule(session,ship,reason="transition"){
    if(Number(session?._space?.shipID||expectedID)!==expectedID)return;
    const currentSystem=Number(session?._space?.systemID||session?.solarsystemid||expectedSystem);
    if(expectedSystem&&currentSystem&&expectedSystem!==currentSystem)return;
+   require("./coopDuoPresence").observe(session,ship,reason);
    require("./coopVirtualWorldRuntime").observeSession(session,ship);
    require("./coopNativeNpcDemo").maybeSpawn(session,ship);
   }catch(error){console.warn("[CoopSessionPresence]",reason,error.message);}
