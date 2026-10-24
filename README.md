@@ -83,8 +83,8 @@ and a recorded recovery delay after their ship is destroyed.
 cd C:\Games\EveCoopProject
 .\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
 .\scripts\Local-Two-Client-Test.ps1 -Action World
-.\scripts\Local-Two-Client-Test.ps1 -Action LaunchTwo -ConfirmClientPermission
-.\scripts\Local-Two-Client-Test.ps1 -Action Party
+# Only after real server World PASS, verify one compatible client manually.
+# Two-client LaunchTwo and Party are separate later acceptance gates.
 ~~~
 
 The first-time upstream database preparation is documented separately.
@@ -96,8 +96,7 @@ moves through the native NPC cargo store and becomes real EveJS wreck
 loot on destruction. The game-night overlay now also records player
 attacks and verified pirate-defense kills in **EveJS's actual standings
 system**, changing the size of mining-fleet security responses.
-**Final depot unloading and trader market orders remain virtual**,
-not real station inventories or sell orders.
+**Independent NPC-owned player-market orders remain unverified.** The optional seed-market transaction adapter is disabled by default and has only isolated tests; see [Native NPC Market](docs/NATIVE_NPC_MARKET.md).
 
 [Two-PC authenticated loopback tunnel](docs/FRIEND_PC_PRIVATE_TUNNEL.md)
 is experimental. Neither real two-client game rendering nor friend-PC
@@ -123,7 +122,7 @@ See [UPSTREAM](docs/UPSTREAM.md) for references and caveats.
 
 ## Deployment entrypoint (Windows 11)
 
-Start with [FIRST_RUN.md](docs/FIRST_RUN.md). The repository now includes a [read-only prerequisite check](scripts/Preflight.ps1), a [non-destructive upstream clone helper](scripts/Fetch-Upstream.ps1), [agent instructions](AGENTS.md), and a [verification template](docs/TEST_REPORT_TEMPLATE.md). Scripts are newly authored and **have not been executed on your machine**; upstream Docker and client compatibility remain to be confirmed.
+Use [FIRST_RUN.md](docs/FIRST_RUN.md) **only for a fresh installation**. For the existing, already-deployed world use [GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md) and preserve the upstream working tree, local test adapters and persistent volumes. Never repeat one-time initialization to diagnose missing NPC events.
 
 ## One-PC server + two-client test for agents
 
@@ -131,4 +130,4 @@ See [TWO_CLIENTS_ONE_PC.md](docs/TWO_CLIENTS_ONE_PC.md) for copy-paste Windows c
 
 ## Agent backend gate (no proprietary client required)
 
-Run `powershell -ExecutionPolicy Bypass -File .\\scripts\\Verify-Local-Coop.ps1 -StartBackend -IncludeUpstreamTests` to validate Docker safety/health, two simultaneous TCP sockets and real EveJS scene/session contracts, with one structured `test-results/verify-*/report.json` and diagnostics. See [VERIFY_BACKEND_ONE_COMMAND.md](docs/VERIFY_BACKEND_ONE_COMMAND.md) for prerequisites and the exact PASS/FAIL interpretation. **A PASS proves only the selected server-side checks, not a playable two-client game.**
+Run the optional [backend verifier](docs/VERIFY_BACKEND_ONE_COMMAND.md) on a new installation or when backend changes require regression checking. The 2026-10-25 backend evidence is already recorded for its tested revision. Do not rerun it as a substitute for gameplay: a backend PASS is not an NPC or two-player PASS.
