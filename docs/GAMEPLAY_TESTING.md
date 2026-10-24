@@ -124,6 +124,24 @@ Optional more demanding server-only gates, after the relevant organic action act
 
 `Combat` needs verified native NPC weapon event + real HP loss + physical wreck + persisted loot. `FinalBlow` additionally requires EveJS to have **explicitly passed** a native attacker to the wreck path. Their absence is not an excuse to manufacture a battle, spawn a scripted wave or fabricate kill attribution. Keep market / native gate transfer experiments OFF during baseline gameplay acceptance.
 
+## P0 no-NPC scene recovery (new code, not yet live tested)
+
+When a real scene is loaded but its first native NPC spawn fails,
+the new `coopHeadlessScenePolicy` keeps it in the periodic
+reconciliation set rather than waiting only for the escalating
+headless retry timer. The scene must contain actual authoritative
+static waypoints; an arbitrary system ID or virtual population is
+not sufficient.
+
+After the owner-approved overlay refresh, use read-only
+`-Action World -WorldSystemID 30000144` and inspect:
+`headlessAttemptCount`, `systemSiteReadiness.trackingForReconcile`,
+`systemSiteReadiness.stockMiningStartup.status`,
+`nativeMaterializerAttempt.spawnErrors` and the actual native
+fleet/cargo/activity. If the startup configuration has excluded
+Perimeter, report that exact configuration issue **without**
+fabricating a mining fleet or resetting persistent data.
+
 ## Physical named NPC reliability — native-client broadcast and durable links
 
 The current P0 overlay now changes `coopNpcPresentation` to call pinned
