@@ -51,7 +51,11 @@ jobs:
           if ($LASTEXITCODE -eq 0) { throw 'Expected incompatible hash to fail' }
 
       - name: Two independent TCP sessions (standalone test fixture)
-        run: node --test ./lab/co-op-session-lab.test.mjs
+        shell: bash
+        run: |
+          mkdir -p evidence
+          set -o pipefail
+          node --test ./lab/co-op-session-lab.test.mjs 2>&1 | tee evidence/lab-tests.log
 
       - name: Fetch pinned upstream registry for integration contract tests
         shell: bash
@@ -72,7 +76,11 @@ jobs:
       - name: Test real EveJS session registry with two synthetic players
         env:
           EVEJS_CODE_PATH: ${{ runner.temp }}/evejs-upstream/Code
-        run: node --test ./tests/upstream-session-registry.test.mjs ./tests/upstream-two-observers.test.mjs ./tests/upstream-ship-prime-recipients.test.mjs ./tests/upstream-two-observer-warp.test.mjs
+        shell: bash
+        run: |
+          mkdir -p evidence
+          set -o pipefail
+          node --test ./tests/upstream-session-registry.test.mjs ./tests/upstream-two-observers.test.mjs ./tests/upstream-ship-prime-recipients.test.mjs ./tests/upstream-two-observer-warp.test.mjs 2>&1 | tee evidence/upstream-session-and-scene.log
 
       - name: Run upstream scene observer and movement parity checks
         env:
@@ -82,12 +90,16 @@ jobs:
         run: |
           set -eu
           cd "$RUNNER_TEMP/evejs-upstream/Code/server"
-          node scripts/verifyMovementRemovalParity.js
-          node scripts/verifyJoltsObserverParity.js
-          node scripts/verifyOwnerDamageMovementParity.js
-          node scripts/verifyTargetKillModuleTeardown.js
-          node scripts/verifyDestinyAuthorityDropAndFx.js
-          node scripts/verifyMovementWarpParity.js
+          mkdir -p "$GITHUB_WORKSPACE/evidence"
+          set -o pipefail
+          {
+            node scripts/verifyMovementRemovalParity.js
+            node scripts/verifyJoltsObserverParity.js
+            node scripts/verifyOwnerDamageMovementParity.js
+            node scripts/verifyTargetKillModuleTeardown.js
+            node scripts/verifyDestinyAuthorityDropAndFx.js
+            node scripts/verifyMovementWarpParity.js
+          } 2>&1 | tee "$GITHUB_WORKSPACE/evidence/upstream-regressions.log"
 
       - name: Persist verification manifest
         if: always()
@@ -108,5 +120,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ci-verification-manifest
-          path: evidence/manifest.txt
+          path: evidence/
           if-no-files-found: error
