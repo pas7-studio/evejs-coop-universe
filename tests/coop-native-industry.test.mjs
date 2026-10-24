@@ -62,3 +62,29 @@ test("organic pirate chooses ore-bearing real native miner, never spawns an enem
  now+=480000;
  assert.equal(raids.tick(params).actions.length,1);
 });
+
+test("pirate resumes after real warp arrival and attacks instead of waiting eight minutes",()=>{
+ let now=1000000;const ships=new Map([
+  [901,{itemID:901,position:{x:0,y:0,z:0},mode:"STOP"}],
+  [202,{itemID:202,position:{x:1000000,y:0,z:0},mode:"STOP"}]
+ ]);const orders=[];
+ const director=createRaids({clock:()=>now,warp:(id,target)=>{orders.push(["warp",id,target]);return {success:true}},
+  attack:(id,target)=>{orders.push(["attack",id,target]);return {success:true}}});
+ const params={systemID:30000142,scene:{getEntityByID:id=>ships.get(id)},pirates:[901],
+  fleetShips:[{id:202,role:"hauler"}],getCargo:()=>[{typeID:34,moduleID:0,quantity:55}],getController:()=>null};
+ assert.equal(director.tick(params).actions[0].action,"warp-to-hauler");
+ now+=30000;ships.get(901).position.x=999000;
+ assert.equal(director.tick(params).actions[0].action,"attack");
+ assert.deepEqual(orders,[["warp",901,202],["attack",901,202]]);
+});
+test("real NPC raid informs only local ready pilots using existing server chat",()=>{
+ const {notifyRaid}=require("../integration/coopWorldSignals.cjs");
+ const ready={characterID:1,_space:{initialStateSent:true}},notReady={characterID:2,_space:{initialStateSent:false}};
+ const seen=[];
+ const result=notifyRaid({sessions:new Map([[1,ready],[2,notReady]])},
+  [{action:"attack",targetRole:"hauler",targetID:202}],
+  (session,msg)=>seen.push([session.characterID,msg]));
+ assert.equal(result.sent,1);
+ assert.equal(seen[0][0],1);
+ assert.match(seen[0][1],/ore transport/);
+});
