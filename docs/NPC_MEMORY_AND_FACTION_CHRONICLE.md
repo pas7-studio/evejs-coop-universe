@@ -83,6 +83,24 @@ their losses and economy. Never conflate our narrative faction tags
 - NPC trading with live EveJS sell/buy orders and stock transfers.
 - In-game delivery of a filtered timeline and meaningful named-NPC dialogue.
 
+## Additional slice: visible recognition and headless physical NPC boot
+
+- `coopNpcRecognition.cjs` checks authenticated player sessions, a native
+  player ship and an actual named NPC within 80 km before sending one
+  private EveJS system notice. It is not a simulated NPC chat message.
+  Per-player and per-NPC cooldowns avoid spamming. The response text
+  depends on persisted memory; unknown players get no notification.
+- The LivingCoop server may bootstrap both configured native scenes
+  independently of client login with at most six bounded attempts and
+  truthful per-system evidence. It must never count a successful flag
+  check, a virtual pilot, or an empty scene as an actual NPC ship.
+- Native pirate attack orders are now included in the factual faction
+  chronicle when both physical NPCs have persistent named identities.
+  A warp order is not a battle; even a successful attack order does not
+  certify a kill or territorial change.
+- The code remains unverified in the actual Docker container and game
+  client. No remote CI automation is permitted by the repository owner.
+
 ## 3. Review and verification checklist
 
 1. Run `node --test tests/coop-npc-memory.test.mjs tests/coop-npc-tactics.test.mjs tests/coop-faction-director.test.mjs`.
