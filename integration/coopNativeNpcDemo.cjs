@@ -23,9 +23,15 @@ function maybeSpawn(session,ship) {
         // Use upstream's standard native pool, not an invented NPC type.
         defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
       });
+      const spawned=Array.isArray(result?.data?.spawned)?result.data.spawned:[];
+      const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
+      const recipients=Array.from(scene?.sessions?.values?.()||[]).filter(x=>x?.socket?.destroyed!==true&&x?._space?.initialStateSent===true);
       require("./coopRuntimeProbe").observe("native-npc-spawn",session,ship,{
         success:result?.success===true,
-        spawnedCount:Array.isArray(result?.data?.spawned)?result.data.spawned.length:0,
+        spawnedCount:spawned.length,
+        spawnedEntityIDs:spawned.map(x=>positive(x?.entity?.itemID)).filter(Boolean),
+        activeObservers:recipients.length,
+        observerCharacterIDs:recipients.map(x=>positive(x?.characterID)).filter(Boolean),
         error:result?.success===true?undefined:String(result?.errorMsg||"NPC_SPAWN_FAILED"),
       });
     }catch(error){
