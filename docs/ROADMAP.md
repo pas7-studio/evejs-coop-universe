@@ -23,6 +23,21 @@ Require real native coordinate changes plus cargo growth or a controller
 target. This branch adds the sampler and strict local World report, but
 no live Docker-native activity has been verified yet.
 
+**Native NPC trading with real EveJS seeded market (P1, guarded):**
+Physical named traders and haulers can sell existing native cargo to actual
+`source="seed"` buy orders via market daemon `FillOrder` and buy seeded
+station stock via `AdjustSeedStock` using only previously earned NPC ISK.
+Transactions revalidate physical station proximity, source inventory,
+real ship cargo capacity, exact price and remote acknowledgements. The
+same native ship's cargo cache and durable store are synchronized before
+ledger settlement. Per-pilot transaction journals prevent automatic
+double-fills after uncertain RPC responses. Both the market flag and
+buy/sell type allowlists are empty/OFF by default. 12/12 transaction
+and 24/24 report assertions passed in isolation. **This is NOT a
+personal NPC-owned market order/escrow implementation, and no real
+Docker/client market trade has been confirmed.**
+See [NATIVE_NPC_MARKET](NATIVE_NPC_MARKET.md).
+
 **New physical NPC stargate transition implementation (P1, gated):**
 Named traders and patrols can use real reciprocal EveJS stargate pairs and
 native warp orders. A separately opt-in native transfer preserves the same
