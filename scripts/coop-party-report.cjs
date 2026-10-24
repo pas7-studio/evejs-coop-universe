@@ -65,7 +65,8 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    realMiningFleetsLastSeen:lastNativeIndustry?.fleets?.map(f=>({
     fleetID:f.fleetID,state:f.state,miners:f.minerIDs?.length||0,
     haulers:f.haulerIDs?.length||0,defenders:f.responseIDs?.length||0,
-    oreQuantityInRealNpcCargo:f.oreQuantity||0
+    oreQuantityInRealNpcCargo:f.oreQuantity||0,
+    oreQuantityOnPhysicalHaulers:f.loadedHaulerOreQuantity||0
    }))||[],
    organicPirateRaidOrdersObserved:pirateRaids,
    physicalHaulerLoadsObserved:haulerLoads,
