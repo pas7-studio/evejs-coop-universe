@@ -722,10 +722,24 @@ function observeSession(session,ship){
            return ship?.kind==="ship"&&ship.nativeNpc===true;
           }
         });
-        // Repair any interrupted native gate transfer before the next
-        // materializer.prune() can treat its temporarily missing source ship
-        // as a dead NPC and erase the identity required for rollback.
+        // Recover an interrupted native gate movement first; then restore
+        // saved real NPC hulls before the materializer may prune stale links.
         ensureNativeGateTransfer(runtime);
+        if(process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"){
+          const recovered=require("./coopNativeRestore").restoreNamedShips({
+            registry:identityRegistry,sceneForSystem:id=>
+             runtime.ensureScene(id,{refreshStargates:false}),
+            store:require("./npc/nativeNpcStore"),
+            service:require("./npc/nativeNpcService")
+          });
+          require("./coopRuntimeProbe").observe("living-native-durable-recovery",null,null,
+           {status:recovered.status,recovered:recovered.recovered,
+            alreadyPhysical:recovered.alreadyPhysical,
+            legacyTransient:recovered.legacyTransient,
+            errors:recovered.errors});
+          if(recovered.status!=="OK")
+           throw Error("DURABLE_NPC_RECOVERY_REQUIRES_REPAIR: "+JSON.stringify(recovered.errors).slice(0,210));
+        }
         bridge=createBridge({
           registry:identityRegistry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
@@ -740,7 +754,9 @@ function observeSession(session,ship){
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             const hostile=pilot.role==="pirate";
             return npc.spawnBatchInSystem(system,{
-              ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
+              ...anchor,amount:1,entityType:"npc",
+              transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
+              broadcast:true,
               defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
               // Pirates retain native EveJS aggression. Civilians and ordinary
               // guards move and work without automatically attacking players.
