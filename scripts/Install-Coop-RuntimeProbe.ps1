@@ -14,13 +14,17 @@ $combatSource=Join-Path $PSScriptRoot '../integration/coopCombatProbe.cjs'
 $combatTarget=Join-Path $server 'space/coopCombatProbe.js'
 $directorSource=Join-Path $PSScriptRoot '../integration/coopEncounterDirector.cjs'
 $directorTarget=Join-Path $server 'space/coopEncounterDirector.js'
+$virtualSource=Join-Path $PSScriptRoot '../integration/coopVirtualWorld.cjs'
+$virtualTarget=Join-Path $server 'space/coopVirtualWorld.js'
+$virtualRuntimeSource=Join-Path $PSScriptRoot '../integration/coopVirtualWorldRuntime.cjs'
+$virtualRuntimeTarget=Join-Path $server 'space/coopVirtualWorldRuntime.js'
 $expected='c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
 $rev=(& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
 if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" }
 $patches=@(
   @{ path=(Join-Path $server 'services/_shared/sessionDisconnect.js'); marker='  persistCharacterLogoffState(session);'; injection='  require("../../space/coopRuntimeProbe").observe("disconnect-before-persist", session, null);' },
   @{ path=(Join-Path $server 'space/transitions.js'); marker='  const attachElapsedMs = Date.now() - attachStartedAtMs;'; injection='  require("./coopRuntimeProbe").observe("space-login-attach", session, activeShip, { attached: Boolean(shipEntity) });' },
-  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const hydrationQueuedAtMs = Date.now();'; injection='  require("./coopNativeNpcDemo").maybeSpawn(session, activeShip);' }
+  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const hydrationQueuedAtMs = Date.now();'; injection='  require("./coopNativeNpcDemo").maybeSpawn(session, activeShip); require("./coopVirtualWorldRuntime").observeSession(session, activeShip);' }
 )
 foreach($p in $patches) {
   if(-not (Test-Path -LiteralPath $p.path)){throw "Missing upstream file: $($p.path)"}
@@ -59,10 +63,14 @@ if($Remove) {
   if(Test-Path -LiteralPath $npcTarget){Remove-Item -LiteralPath $npcTarget -Force}
   if(Test-Path -LiteralPath $combatTarget){Remove-Item -LiteralPath $combatTarget -Force}
   if(Test-Path -LiteralPath $directorTarget){Remove-Item -LiteralPath $directorTarget -Force}
+  if(Test-Path -LiteralPath $virtualTarget){Remove-Item -LiteralPath $virtualTarget -Force}
+  if(Test-Path -LiteralPath $virtualRuntimeTarget){Remove-Item -LiteralPath $virtualRuntimeTarget -Force}
 } else {
   Copy-Item -LiteralPath $probeSource -Destination $probeTarget -Force
   Copy-Item -LiteralPath $npcSource -Destination $npcTarget -Force
   Copy-Item -LiteralPath $combatSource -Destination $combatTarget -Force
   Copy-Item -LiteralPath $directorSource -Destination $directorTarget -Force
+  Copy-Item -LiteralPath $virtualSource -Destination $virtualTarget -Force
+  Copy-Item -LiteralPath $virtualRuntimeSource -Destination $virtualRuntimeTarget -Force
 }
 Write-Host 'Co-op probe installation complete. Set EVEJS_COOP_EVENTS_FILE within the server container to enable JSONL event output.'
