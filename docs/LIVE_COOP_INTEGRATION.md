@@ -417,3 +417,29 @@ Materialized native NPC casualties are linked by the existing identity
 registry and loss ledger; unrelated stock EveJS NPC kills are not attributed
 to our virtual factions. The real EveJS reputation, crimewatch, and market
 remain unchanged. The module must still be validated on the running server.
+
+## Faction strategy → native physical patrols
+
+The opt-in `coopFactionPatrolRuntime.js` reads faction plans when a
+pilot enters a system. For factions with `patrolPriority >= 20` and at
+least one virtual readiness unit, it may create an actual NPC ship
+through pinned EveJS `npcRuntime.spawnBatchInSystem`.
+
+Deployment is bounded: **at most two observed live patrol ships per
+system per game-server process**, with a five-minute spawn cooldown.
+It checks existing native entity IDs before replacing destroyed ships.
+The module does not bypass native damage, NPC controllers or wreck
+creation.
+
+```powershell
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnableVirtualWorld -EnableVirtualEconomy -EnableFactionPatrols -VirtualPopulation 16
+```
+
+This is intentionally a limited bridge, **not yet a production faction
+military service**: physical patrol ship IDs are process-local, virtual
+readiness is a planning signal rather than inventory debit, stock
+`npc_hostiles` is used regardless of faction, NPCs do not escort actual
+haulers or traverse gates, and deployment only occurs upon a player's
+in-space arrival. It is disabled unless explicitly enabled. Validate
+client combat/faction behavior in Docker before treating these NPCs as
+persistent strategic assets.
