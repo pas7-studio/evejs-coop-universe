@@ -651,7 +651,7 @@ function confirmedWreck(session,ship,npcID,wreckID){
   require("./coopRuntimeProbe").observe("virtual-economy-npc-loss",session,ship,{npcID,wreckID,status:result.status});
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
-function confirmedNativeNpcWreck(systemID,npcID,wreckID){
+function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
   // A real wreck is the ONLY authority to mark a named pilot as defeated.
@@ -677,6 +677,29 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID){
   require("./coopRuntimeProbe").observe("living-native-wreck-evidence",null,
    {spaceState:{systemID}},proof);
   if(proof.status!=="PHYSICAL_NATIVE_WRECK_VERIFIED")return;
+  // The ship is already removed from the EveJS scene at this point,
+  // but its authoritative source object is still held by the wreck
+  // service. Capture a missed final HP delta only against a fresh
+  // earlier native scene sample; never synthesize a fatal hit.
+  if(combatEvidenceDirector&&destroyedShip){
+   try{
+    const damage=require("./combat/damage");
+    const terminal=combatEvidenceDirector.terminalDamage({
+     systemID,entityID:npcID,pilotID:link.pilotID,
+     ship:destroyedShip,wreckID,
+     getHealth:entity=>{
+      const max=damage.getEntityMaxHealthLayers(entity);
+      if(!Object.values(max).some(n=>n>0))return null;
+      return damage.getEntityCurrentHealthLayers(entity,max);
+     }
+    });
+    if(terminal.status==="NATIVE_TERMINAL_HP_DROP")
+     require("./coopRuntimeProbe").observe("living-native-combat-damage",null,
+      {spaceState:{systemID}},{status:"SAMPLED",systemID,
+       damageEvents:1,correlatedNpcDamage:terminal.event.attackerPilotIDs.length?1:0,
+       terminalNativeWreckID:wreckID,events:[terminal.event]});
+   }catch(error){console.warn("[CoopNativeCombatEvidence] terminal HP",error.message);}
+  }
   start();
   const killed=life.markLoss({pilotID:link.pilotID,systemID,shipID:npcID,wreckID});
   require("./coopRuntimeProbe").observe("living-npc-destroyed",null,
