@@ -32,6 +32,8 @@ echo "Headless boot flag: ${EVEJS_COOP_HEADLESS_WORLD_BOOT:-UNSET}"
 echo "Materialization flag: ${EVEJS_COOP_MATERIALIZE_NPCS:-UNSET}"
 echo "Native mining flag: ${EVEJS_COOP_NATIVE_MINING:-UNSET}"
 echo "Native mining retry flag: ${EVEJS_COOP_MINING_STARTUP_RETRY:-UNSET}"
+echo "Native loot quarantine enabled: ${EVEJS_COOP_NATIVE_LOOT_QUARANTINE:-UNSET}"
+echo "Native loot quarantine file: ${EVEJS_COOP_NATIVE_LOOT_QUARANTINE_FILE:-UNSET}"
 echo "Native mining configured startup fleets: ${EVEJS_MINING_NPC_STARTUP_FLEET_COUNT:-UNSET}"
 echo "Telemetry file setting: ${EVEJS_COOP_EVENTS_FILE:-UNSET}"
 if [ -f /app/server/src/space/coopVirtualWorldRuntime.js ]; then
