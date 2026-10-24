@@ -31,6 +31,8 @@ echo "Virtual world flag: ${EVEJS_COOP_VIRTUAL_WORLD:-UNSET}"
 echo "Headless boot flag: ${EVEJS_COOP_HEADLESS_WORLD_BOOT:-UNSET}"
 echo "Materialization flag: ${EVEJS_COOP_MATERIALIZE_NPCS:-UNSET}"
 echo "Native mining flag: ${EVEJS_COOP_NATIVE_MINING:-UNSET}"
+echo "Native mining retry flag: ${EVEJS_COOP_MINING_STARTUP_RETRY:-UNSET}"
+echo "Native mining configured startup fleets: ${EVEJS_MINING_NPC_STARTUP_FLEET_COUNT:-UNSET}"
 echo "Telemetry file setting: ${EVEJS_COOP_EVENTS_FILE:-UNSET}"
 if [ -f /app/server/src/space/coopVirtualWorldRuntime.js ]; then
   echo "World overlay module: INSTALLED"
@@ -66,6 +68,8 @@ else
     grep -c '"event":"living-world-topology"' "$EVEJS_COOP_EVENTS_FILE" || true
     echo "Real activity events:"
     grep -c '"event":"living-native-activity"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Native mining startup outcomes:"
+    grep -c '"event":"living-native-mining-startup-slot"' "$EVEJS_COOP_EVENTS_FILE" || true
   fi
 fi
 '@
@@ -81,7 +85,7 @@ $lines = @(& docker compose @argsList logs --no-color --tail 250 server 2>&1)
 if ($LASTEXITCODE -ne 0) {
     Write-Warning 'Could not read recent server logs'
 } else {
-    $matchesFound = @($lines | Select-String -Pattern '\[CoopVirtualWorld\]|\[CoopProbe\]|\[CoopLivingWorld\]|living-headless-boot|NATIVE_SCENE|CoopNpc' | Select-Object -Last 35)
+    $matchesFound = @($lines | Select-String -Pattern '\[CoopVirtualWorld\]|\[CoopProbe\]|\[CoopLivingWorld\]|living-headless-boot|NATIVE_SCENE|CoopNpc|CoopMiningRetry' | Select-Object -Last 35)
     if ($matchesFound.Count -eq 0) {
         Write-Host 'No matching recent messages. This does not establish that the startup hook executed.'
     } else {
