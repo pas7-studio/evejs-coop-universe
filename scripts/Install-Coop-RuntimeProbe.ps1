@@ -34,6 +34,24 @@ foreach($p in $patches) {
     Write-Host "[REMOVED] $($p.path)"
   } else { Write-Host "[UNCHANGED] $($p.path)" }
 }
+# After a successful native wreck item transfer, the upstream refresh updates
+# the server-side entity but does not notify the other clients about isEmpty.
+# Replace exactly one known call with the same refresh plus slim-item broadcast.
+# This does not grant items, bypass access, or change authoritative loot logic.
+$wreckFile=Join-Path $server 'space/npc/nativeNpcWreckService.js'
+$before='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID);'
+$after='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });'
+if(-not (Test-Path -LiteralPath $wreckFile)){throw "Missing upstream wreck file: $wreckFile"}
+$wreckText=[System.IO.File]::ReadAllText($wreckFile)
+$from=if($Remove){$after}else{$before}
+$to=if($Remove){$before}else{$after}
+if($wreckText.Contains($from)){
+  if($wreckText.Split(@($from),[System.StringSplitOptions]::None).Count -ne 2){throw 'Ambiguous wreck refresh call; refuse to patch'}
+  $wreckText=$wreckText.Replace($from,$to)
+  [System.IO.File]::WriteAllText($wreckFile,$wreckText,[System.Text.UTF8Encoding]::new($false))
+  Write-Host "[WRECK SYNC] $wreckFile"
+} elseif(-not $wreckText.Contains($to)){throw 'Unknown wreck refresh implementation; refuse to patch'}
+
 if($Remove) {
   if(Test-Path -LiteralPath $probeTarget){Remove-Item -LiteralPath $probeTarget -Force}
   if(Test-Path -LiteralPath $npcTarget){Remove-Item -LiteralPath $npcTarget -Force}
