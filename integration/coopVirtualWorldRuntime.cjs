@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null;
 const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -28,6 +28,7 @@ function start(){
      if(economy)economy.advance(world.snapshot().pilots);
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
      advanceNativePatrolRoutes();
+     advanceNativeCivilianOrders();
    }catch(e){console.warn("[CoopVirtualWorld] tick",e.message);}
  },30000);
  timer.unref?.();
@@ -47,6 +48,23 @@ function advanceNativePatrolRoutes(){
   const result=patrolNavigator.tick(Number(systemID),entityIDs);
   if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
  }
+}
+function ensureCivilianOrders(runtime,npc){
+ if(civilianOrders)return;
+ const {createCivilianOrders}=require("./coopCivilianOrders");
+ civilianOrders=createCivilianOrders({
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  warp:(id,point,options)=>npc.warpToPoint(id,point,options),
+  orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
+ });
+}
+function advanceNativeCivilianOrders(){
+ if(!bridge||!civilianOrders||process.env.EVEJS_COOP_MATERIALIZE_NPCS!=="1")return [];
+ const current=new Map(world.snapshot().pilots.map(p=>[p.id,p.systemID]));
+ const assignments=bridge.snapshot().filter(p=>current.get(p.pilotID)===p.systemID);
+ const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{});
+ if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
+ return orders;
 }
 function observeSession(session,ship){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
@@ -85,6 +103,7 @@ function observeSession(session,ship){
         });
       }
       const result=bridge.reconcile(systemID,residents);
+      ensureCivilianOrders(runtime,npc);
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const present=require("./coopNpcPresentation").presentVirtualPilot;
       const presented=[];
@@ -105,7 +124,9 @@ function observeSession(session,ship){
           onConfirmedWreck:wreck=>confirmedWreck(session,ship,wreck.sourceNpcID,wreck.wreckID)
         });
       }
+      const civilianActions=advanceNativeCivilianOrders();
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
+        civilianActions,
         assignments:result,sceneReady:Boolean(scene)
       });
     }catch(error){console.warn("[CoopMaterializer]",error.message);}
