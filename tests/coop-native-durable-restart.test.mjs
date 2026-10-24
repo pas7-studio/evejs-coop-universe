@@ -101,3 +101,35 @@ test("invalid dependencies or excessive persisted links are rejected without spa
  assert.equal(restoreNamedShips({...x.deps,maxLinks:0}).status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(x.getCalls(),0);
 });
+
+
+test("authoritative persisted NPC wreck permits clone recovery without reusing destroyed ship",()=>{
+ const x=fixture();x.entities.clear();x.controllers.clear();x.link.durable=true;
+ const r=restoreNamedShips({...x.deps,lostShips:[{
+  pilotID:x.link.pilotID,shipID:x.link.entityID,systemID:x.link.systemID,
+  wreckID:980300000015,lostAt:100000,readyAt:300000
+ }]});
+ assert.equal(r.status,"OK");
+ assert.equal(r.confirmedLosses,1);
+ assert.equal(r.recovered,0);
+ assert.equal(r.errors.length,0);
+ assert.equal(x.getCalls(),0);
+});
+test("unrelated, mismatched or unverifiable wreck cannot erase a durable NPC",()=>{
+ const x=fixture();x.entities.clear();x.controllers.clear();x.link.durable=true;
+ for(const proof of [
+  {pilotID:"coop-pilot-999",shipID:x.link.entityID,
+   systemID:x.link.systemID,wreckID:123},
+  {pilotID:x.link.pilotID,shipID:9001,
+   systemID:x.link.systemID,wreckID:123},
+  {pilotID:x.link.pilotID,shipID:x.link.entityID,
+   systemID:30000142,wreckID:123},
+  {pilotID:x.link.pilotID,shipID:x.link.entityID,
+   systemID:x.link.systemID,wreckID:0}
+ ]){
+  const r=restoreNamedShips({...x.deps,lostShips:[proof]});
+  assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(r.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
+  assert.equal(r.confirmedLosses,0);
+ }
+});
