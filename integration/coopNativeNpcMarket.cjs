@@ -1,0 +1,223 @@
+"use strict";
+// Real, bounded NPC trades against EXISTING EveJS seed market orders.
+// Never place unbacked player orders, forge a session, or touch player escrow.
+// All external market calls are journaled; ambiguous RPC failures halt the pilot.
+const fs=require("node:fs"),path=require("node:path");
+const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
+const pilotName=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
+const amount=x=>Number.isFinite(Number(x))&&Number(x)>=0?Math.round(Number(x)*100)/100:null;
+const vec=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+const copy=x=>JSON.parse(JSON.stringify(x));
+const total=(price,qty)=>Math.round(price*qty*100)/100;
+const status=e=>({status:e});
+function createNpcMarketTrader({call,store,registry,getStation,resolveType,
+ root="/var/lib/evejs/coop-native-market",clock=()=>Date.now(),
+ maxQuantity=10,maxPrice=1000000,cooldownMs=300000}={}){
+ if(typeof call!=="function"||!store||typeof registry?.snapshot!=="function"||
+  typeof getStation!=="function"||typeof resolveType!=="function"||
+  !["getNativeEntity","listNativeCargoForEntity","upsertNativeCargo",
+   "removeNativeCargo","allocateCargoID"].every(k=>typeof store[k]==="function")||
+  !Number.isSafeInteger(maxQuantity)||maxQuantity<1||maxQuantity>100||
+  !Number.isFinite(maxPrice)||maxPrice<=0||
+  !Number.isSafeInteger(cooldownMs)||cooldownMs<30000)
+  throw Error("invalid native NPC market dependencies or safety caps");
+ const ledgerFile=path.join(root,"ledger.json"),active=new Set();
+ let ledger;
+ try{ledger=JSON.parse(fs.readFileSync(ledgerFile,"utf8"));}
+ catch(e){if(e.code!=="ENOENT")throw e;ledger={version:1,pilots:{}};}
+ if(ledger?.version!==1||!ledger.pilots||typeof ledger.pilots!=="object")
+  throw Error("NPC_MARKET_LEDGER_INVALID");
+ const txPath=id=>path.join(root,"tx",id+".json");
+ function atomic(file,obj){
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  const temp=file+".tmp-"+process.pid;
+  fs.writeFileSync(temp,JSON.stringify(obj));
+  fs.renameSync(temp,file);
+ }
+ function unlink(file){try{fs.unlinkSync(file);}catch(e){if(e.code!=="ENOENT")throw e;}}
+ const account=id=>{
+  const a=ledger.pilots[id];
+  if(!a)return {balance:0,lastTradeAt:0,tradeCount:0};
+  if(amount(a.balance)===null||!Number.isFinite(a.lastTradeAt)||
+   !Number.isSafeInteger(a.tradeCount)||a.tradeCount<0)throw Error("NPC_MARKET_ACCOUNT_INVALID");
+  return a;
+ };
+ function sameCargo(now,before,after){
+  if(now===null)return after===0;
+  return Number(now.quantity)===before||Number(now.quantity)===after;
+ }
+ function applyAck(tx){
+  const entry=store.getNativeEntity(tx.entityID);
+  if(!entry||!pilotName(tx.pilotID)||!pos(tx.entityID)||
+   !Number.isSafeInteger(tx.quantity)||tx.quantity<1||
+   amount(tx.beforeBalance)===null||amount(tx.afterBalance)===null||
+   !tx.ack||Number(tx.ack.station_id||tx.ack.stationID)!==tx.stationID)
+   throw Error("NPC_MARKET_ACK_INVALID");
+  const acc=account(tx.pilotID);
+  if(acc.balance!==tx.beforeBalance&&acc.balance!==tx.afterBalance)
+   throw Error("NPC_MARKET_BALANCE_CONFLICT");
+  if(tx.side==="sell"){
+   const cargo=(store.listNativeCargoForEntity(tx.entityID)||[])
+    .find(c=>Number(c.cargoID)===tx.cargoID)||null;
+   if(cargo&&(Number(cargo.entityID)!==tx.entityID||Number(cargo.typeID)!==tx.typeID))
+    throw Error("NPC_MARKET_CARGO_IDENTITY_CHANGED");
+   if(!sameCargo(cargo,tx.beforeQuantity,tx.afterQuantity))
+    throw Error("NPC_MARKET_CARGO_CONFLICT");
+   if(tx.afterQuantity===0&&cargo){
+    const r=store.removeNativeCargo(tx.cargoID);
+    if(r?.success!==true)throw Error("NPC_MARKET_CARGO_REMOVE_FAILED");
+   }else if(tx.afterQuantity>0&&cargo&&Number(cargo.quantity)===tx.beforeQuantity){
+    const r=store.upsertNativeCargo({...cargo,quantity:tx.afterQuantity},{transient:cargo.transient===true});
+    if(r?.success!==true)throw Error("NPC_MARKET_CARGO_WRITE_FAILED");
+   }else if(tx.afterQuantity>0&&!cargo)throw Error("NPC_MARKET_CARGO_MISSING");
+  }else if(tx.side==="buy"){
+   const cargo=(store.listNativeCargoForEntity(tx.entityID)||[])
+    .find(c=>Number(c.cargoID)===tx.cargoID)||null;
+   if(cargo&&(Number(cargo.entityID)!==tx.entityID||
+     Number(cargo.typeID)!==tx.typeID||Number(cargo.quantity)!==tx.quantity))
+    throw Error("NPC_MARKET_PURCHASE_CARGO_CONFLICT");
+   if(!cargo){
+    const r=store.upsertNativeCargo(copy(tx.newCargo),{transient:false});
+    if(r?.success!==true)throw Error("NPC_MARKET_PURCHASE_CARGO_WRITE_FAILED");
+   }
+  }else throw Error("NPC_MARKET_SIDE_INVALID");
+  // Persist verified inventory before wallet update; recovery recognizes
+  // either old or final wallet balance and never applies both twice.
+  if(acc.balance===tx.beforeBalance){
+   ledger.pilots[tx.pilotID]={balance:tx.afterBalance,lastTradeAt:tx.at,
+    tradeCount:acc.tradeCount+1};
+   atomic(ledgerFile,ledger);
+  }
+  return {status:"TRADE_SETTLED",side:tx.side,pilotID:tx.pilotID,
+   entityID:tx.entityID,stationID:tx.stationID,typeID:tx.typeID,
+   quantity:tx.quantity,price:tx.price,balance:tx.afterBalance};
+ }
+ function recover(){
+  let files;
+  try{files=fs.readdirSync(path.join(root,"tx")).filter(x=>/^coop-pilot-[0-9]{3,}\.json$/.test(x));}
+  catch(e){if(e.code==="ENOENT")return {status:"CLEAN",recovered:0};throw e;}
+  const pending=[];let recovered=0;
+  for(const f of files){
+   const file=path.join(root,"tx",f);
+   let tx;
+   try{tx=JSON.parse(fs.readFileSync(file,"utf8"));}
+   catch(_){pending.push({file:f,reason:"CORRUPT_JOURNAL"});continue;}
+   if(tx.phase==="PREPARED"){unlink(file);recovered++;continue;}
+   if(tx.phase!=="RPC_ACK"){
+    pending.push({file:f,reason:"RPC_OUTCOME_UNKNOWN"});continue;
+   }
+   try{applyAck(tx);unlink(file);recovered++;}
+   catch(e){pending.push({file:f,reason:String(e.message).slice(0,100)});}
+  }
+  return {status:pending.length?"NEEDS_OPERATOR_REPAIR":files.length?"RECOVERED":"CLEAN",recovered,pending};
+ }
+ function offer({scene,entityID,pilotID,stationID,side,typeID,
+  buyTypes=[],sellTypes=[]}={}){
+  const id=pos(entityID),station=pos(stationID),type=pos(typeID);
+  if(!id||!pilotName(pilotID)||!station||!type||
+   !["buy","sell"].includes(side))return status("INVALID_TRADE");
+  const link=registry.snapshot().links?.[pilotID];
+  const ship=scene?.getEntityByID?.(id);
+  const st=getStation(station);
+  if(!ship||ship.nativeNpc!==true||ship.kind!=="ship"||
+   Number(link?.entityID)!==id||Number(link?.systemID)!==Number(scene.systemID)||
+   !st||Number(st.itemID)!==station||Number(st.solarSystemID)!==Number(scene.systemID)||
+   !vec(ship.position)||!vec(st.position)||ship.session?.characterID||
+   dist(ship.position,st.position)-Math.max(0,Number(st.radius)||0)-
+    Math.max(0,Number(ship.radius)||0)>10000)
+   return status("NOT_AT_NATIVE_STATION");
+  if(side==="buy"&&!buyTypes.includes(type)||side==="sell"&&!sellTypes.includes(type))
+   return status("TYPE_NOT_ALLOWLISTED");
+  const native=store.getNativeEntity(id);
+  if(!native||Number(native.systemID)!==Number(scene.systemID))return status("NATIVE_SHIP_NOT_PERSISTED");
+  const stock=(store.listNativeCargoForEntity(id)||[]).filter(c=>
+   Number(c.typeID)===type&&Number(c.entityID)===id&&
+   Number(c.moduleID||0)===0&&c.singleton!==true&&Number(c.quantity)>0);
+  const balance=account(pilotID).balance;
+  return {status:"ELIGIBLE",pilotID,entityID:id,stationID:station,
+   systemID:Number(scene.systemID),side,typeID:type,
+   native,stock,balance};
+ }
+ async function execute(params={}){
+  const pre=offer(params);
+  if(pre.status!=="ELIGIBLE")return pre;
+  if(active.has(pre.pilotID))return status("TRADE_BUSY");
+  if(fs.existsSync(txPath(pre.pilotID)))return status("UNRESOLVED_MARKET_JOURNAL");
+  const acc=account(pre.pilotID),now=clock();
+  if(now<acc.lastTradeAt+cooldownMs)return status("COOLDOWN");
+  active.add(pre.pilotID);
+  try{
+   const station=getStation(pre.stationID);
+   const book=await call("GetOrders",{region_id:Number(station.regionID),type_id:pre.typeID});
+   const rows=pre.side==="sell"?book?.buys:book?.sells;
+   const row=(Array.isArray(rows)?rows:[]).find(x=>
+    x.source==="seed"&&Number(x.station_id)===pre.stationID&&
+    Number(x.type_id)===pre.typeID&&
+    Number(x.vol_remaining)>=1&&Number(x.price)>0&&
+    Number(x.price)<=maxPrice&&Number.isSafeInteger(Number(x.order_id)));
+   if(!row)return status("NO_SEEDED_COUNTERPARTY");
+   const price=amount(row.price),maxOrder=Math.min(maxQuantity,Number(row.vol_remaining));
+   if(price===null||price<=0||maxOrder<1)return status("INVALID_SEEDED_ORDER");
+   let quantity,cargo=null,newCargo=null,allocated=null;
+   if(pre.side==="sell"){
+    cargo=pre.stock.sort((a,b)=>Number(a.cargoID)-Number(b.cargoID))[0];
+    if(!cargo)return status("NO_REAL_NATIVE_CARGO");
+    quantity=Math.min(maxOrder,Number(cargo.quantity));
+   }else{
+    const type=resolveType(pre.typeID);
+    if(!type||Number(type.typeID)!==pre.typeID||!pos(type.groupID)||!pos(type.categoryID)||
+     !Number.isFinite(type.volume)||type.volume<0)return status("UNKNOWN_NATIVE_ITEM_TYPE");
+    quantity=Math.min(maxOrder,Math.floor(pre.balance/price));
+    if(quantity<1)return status("INSUFFICIENT_EARNED_ISK");
+    allocated=store.allocateCargoID({transient:false});
+    if(allocated?.success!==true||!pos(allocated.data))return status("CARGO_ID_ALLOCATION_FAILED");
+    newCargo={cargoID:Number(allocated.data),entityID:pre.entityID,
+     ownerID:Number(pre.native.ownerID),moduleID:0,typeID:pre.typeID,
+     groupID:Number(type.groupID),categoryID:Number(type.categoryID),
+     itemName:String(type.name||""),quantity,singleton:false,flagID:5,
+     moduleState:null,transient:false};
+   }
+   const tx={version:1,phase:"PREPARED",at:now,pilotID:pre.pilotID,
+    entityID:pre.entityID,stationID:pre.stationID,typeID:pre.typeID,
+    side:pre.side,quantity,price,cargoID:pre.side==="sell"?Number(cargo.cargoID):Number(allocated.data),
+    beforeQuantity:pre.side==="sell"?Number(cargo.quantity):0,
+    afterQuantity:pre.side==="sell"?Number(cargo.quantity)-quantity:quantity,
+    newCargo,beforeBalance:pre.balance,
+    afterBalance:amount(pre.balance+(pre.side==="sell"?1:-1)*total(price,quantity))};
+   if(tx.afterBalance===null||tx.afterBalance<0)return status("BALANCE_OVERFLOW");
+   atomic(txPath(pre.pilotID),tx);
+   tx.phase="RPC_CALLING";atomic(txPath(pre.pilotID),tx);
+   let ack;
+   try{
+    ack=pre.side==="sell"?
+     await call("FillOrder",{order_id:row.order_id,fill_quantity:quantity}):
+     await call("AdjustSeedStock",{station_id:pre.stationID,
+      type_id:pre.typeID,delta_quantity:-quantity,reason:"coop_native_npc_purchase"});
+   }catch(error){
+    // The daemon may have committed despite an RPC timeout. Do not retry.
+    return {status:"RPC_OUTCOME_UNKNOWN",pilotID:pre.pilotID,
+     error:String(error?.message||error).slice(0,120)};
+   }
+   const fill=pre.side==="sell"?Number(ack?.filled_quantity)===quantity&&
+    Number(ack?.order_id)===Number(row.order_id)&&
+    ack.bid===true&&Number(ack?.station_id)===pre.stationID&&
+    Number(ack?.type_id)===pre.typeID:
+    Number(ack?.station_id)===pre.stationID&&
+    Number(ack?.type_id)===pre.typeID;
+   if(!fill)return {status:"RPC_ACK_NOT_VERIFIABLE",pilotID:pre.pilotID};
+   tx.ack=ack;tx.phase="RPC_ACK";atomic(txPath(pre.pilotID),tx);
+   const settled=applyAck(tx);unlink(txPath(pre.pilotID));
+   // Price-history updates are not necessary for inventory/wallet settlement;
+   // a failed history write must never repeat a trade.
+   try{await call("RecordTrade",{type_id:pre.typeID,price,quantity});}
+   catch(_){}
+   return settled;
+  }catch(error){
+   return {status:"NEEDS_MARKET_REPAIR",pilotID:pre.pilotID,
+    reason:String(error?.message||error).slice(0,120)};
+  }finally{active.delete(pre.pilotID);}
+ }
+ return {offer,execute,recover,snapshot:()=>copy(ledger)};
+}
+module.exports={createNpcMarketTrader};
