@@ -12,6 +12,8 @@ $npcSource=Join-Path $PSScriptRoot '../integration/coopNativeNpcDemo.cjs'
 $npcTarget=Join-Path $server 'space/coopNativeNpcDemo.js'
 $combatSource=Join-Path $PSScriptRoot '../integration/coopCombatProbe.cjs'
 $combatTarget=Join-Path $server 'space/coopCombatProbe.js'
+$directorSource=Join-Path $PSScriptRoot '../integration/coopEncounterDirector.cjs'
+$directorTarget=Join-Path $server 'space/coopEncounterDirector.js'
 $expected='c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
 $rev=(& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
 if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" }
@@ -56,9 +58,11 @@ if($Remove) {
   if(Test-Path -LiteralPath $probeTarget){Remove-Item -LiteralPath $probeTarget -Force}
   if(Test-Path -LiteralPath $npcTarget){Remove-Item -LiteralPath $npcTarget -Force}
   if(Test-Path -LiteralPath $combatTarget){Remove-Item -LiteralPath $combatTarget -Force}
+  if(Test-Path -LiteralPath $directorTarget){Remove-Item -LiteralPath $directorTarget -Force}
 } else {
   Copy-Item -LiteralPath $probeSource -Destination $probeTarget -Force
   Copy-Item -LiteralPath $npcSource -Destination $npcTarget -Force
   Copy-Item -LiteralPath $combatSource -Destination $combatTarget -Force
+  Copy-Item -LiteralPath $directorSource -Destination $directorTarget -Force
 }
 Write-Host 'Co-op probe installation complete. Set EVEJS_COOP_EVENTS_FILE within the server container to enable JSONL event output.'
