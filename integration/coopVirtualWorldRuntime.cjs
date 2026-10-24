@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -61,6 +61,7 @@ function start(){
      advanceNativeTactics();
      advanceNpcRecognition();
      advanceNativeCivilianOrders();
+     observeNativeActivity();
      // A recovered NPC returns to a living system without player re-login.
      if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
        for(const systemID of visitedSystems){
@@ -99,7 +100,10 @@ function scheduleHeadlessWorldBoot(route){
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
     const verified=beltCount>0&&fleetShips.length>0&&links.length>0;
-    if(verified){visitedSystems.add(systemID);systems.delete(systemID);}
+    // A real named native NPC can operate even if stock mining or static
+    // topology is incomplete. Readiness remains a stricter separate gate.
+    if(links.length)visitedSystems.add(systemID);
+    if(verified)systems.delete(systemID);
     require("./coopRuntimeProbe").observe("living-headless-boot-system",null,
      {spaceState:{systemID}},
      {attempt:attempts,status:verified?"NATIVE_SCENE_READY":"PENDING_NATIVE_SCENE",
@@ -157,6 +161,31 @@ function ensureCivilianOrders(runtime,npc){
   warp:(id,point,options)=>npc.warpToPoint(id,point,options),
   orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
  });
+}
+function observeNativeActivity(){
+ if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||!identityRegistry||!visitedSystems.size)return;
+ if(!activityDirector)activityDirector=require("./coopNativeActivity").createActivity();
+ const runtime=require("./runtime");
+ const store=require("./npc/nativeNpcStore");
+ const registry=require("./npc/npcRegistry");
+ const links=Object.values(identityRegistry.snapshot().links||{});
+ for(const systemID of visitedSystems){
+  try{
+   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+   const sample=activityDirector.sample({
+    systemID,scene,links,
+    getCargo:id=>store.listNativeCargoForEntity(id),
+    getController:id=>registry.getControllerByEntityID(id)
+   });
+   // A sample with no activity is not a PASS. Emit occasional liveness
+   // evidence without growing the log on every quiet NPC tick.
+   if(sample.status==="SAMPLED"&&
+      (sample.observedMovement||sample.oreGrowth||sample.engagedNativeNpcs||backgroundTicks%10===0)){
+     require("./coopRuntimeProbe").observe("living-native-activity",null,
+      {spaceState:{systemID}},sample);
+   }
+  }catch(error){console.warn("[CoopNativeActivity] sample",systemID,error.message);}
+ }
 }
 function advanceNativeCivilianOrders(){
  if(!bridge||!civilianOrders||process.env.EVEJS_COOP_MATERIALIZE_NPCS!=="1")return [];
