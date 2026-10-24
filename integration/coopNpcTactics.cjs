@@ -13,7 +13,7 @@ function createTactics({
   !Number.isInteger(maxResponders)||maxResponders<1||maxResponders>3||
   callCooldownMs<30000||retreatCooldownMs<60000)throw Error("invalid native NPC tactics");
  const calls=new Map(),retreats=new Map(),responses=new Map();
- const fresh=(id,map,ms)=>clock()-(map.get(id)||-Infinity)>=ms;
+ const fresh=(id,map,ms)=>!map.has(id)||clock()-map.get(id)>=ms;
  function tick({systemID,scene,assignments=[],controllers={},health,waypoints=[],isScrambled=()=>false}={}){
   const system=positive(systemID);
   if(!system||!scene?.getEntityByID||typeof health!=="function")return {status:"NO_SCENE",events:[],engagedIDs:[]};
@@ -52,6 +52,7 @@ function createTactics({
     }
    }
   }
+  let rescueCalls=0;
   for(const victim of present.values()){
    const c=controllers[victim.entityID];
    if(!c)continue;
@@ -85,14 +86,15 @@ function createTactics({
    // Same-faction escorts defend actual victims. Pirates help pirates;
    // security patrols defend miners, haulers and traders.
    const key=system+":"+victim.entityID+":"+attackerID;
-   if(!fresh(key,calls,callCooldownMs))continue;
+   if(rescueCalls>=2||!fresh(key,calls,callCooldownMs))continue;
    const helpers=[...present.values()].filter(helper=>{
     if(helper.entityID===victim.entityID||helper.entityID===attackerID||
       helper.faction!==victim.faction||engaged.has(helper.entityID)||responses.has(helper.entityID))return false;
     if(victim.role==="pirate")return helper.role==="pirate";
     return helper.role==="patrol";
    }).filter(helper=>!positive(controllers[helper.entityID]?.currentTargetID) &&
-     !positive(controllers[helper.entityID]?.lastAggressorID) &&
+     !(positive(controllers[helper.entityID]?.lastAggressorID) &&
+       now-(Number(controllers[helper.entityID]?.lastAggressedAtMs)||0)<120000) &&
      pos(helper.ship.position)&&pos(attacker.position))
      .sort((a,b)=>meters(a.ship.position,attacker.position)-meters(b.ship.position,attacker.position))
      .slice(0,maxResponders);
@@ -112,6 +114,7 @@ function createTactics({
    }
    if(mobilized){
     calls.set(key,now);
+    rescueCalls++;
     events.push({kind:"npc-help-request",systemID:system,entityID:victim.entityID,
      pilotID:victim.pilotID,attackerID,responders:mobilized});
    }
