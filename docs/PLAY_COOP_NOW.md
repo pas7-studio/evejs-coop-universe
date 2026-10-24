@@ -52,6 +52,13 @@ real server-side topology and NPC entities. A physical server-side
 ready result is only a **READY_FOR_CLIENT_PLAYTEST** gate, not proof
 of client rendering, combat, fleet movement, player loot or reconnection.
 
+For established 20-NPC saves, `CoopStart` enables the faction-layout-v2
+migration. It creates `coop-virtual-world.json.pre-faction-layout-v2.bak`
+before any pilot faction remapping. Pilot names, IDs, travel progress
+and live EveJS ship references are retained; old named-NPC narrative
+faction allegiance may change. A conflicting backup fails closed.
+Review the backup before restoring an older world or making manual edits.
+
 Individual remembered NPCs may also acknowledge a previously encountered
 authenticated player in a **private system notification**, but only
 when both the real player ship and the named native NPC ship are within
