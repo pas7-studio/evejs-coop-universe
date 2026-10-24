@@ -57,3 +57,12 @@ The verifier **requires the tested EveJS commit** `c3ea396b6761a0ed3e71ad5b8dd75
 Node.js 22+ and `-HealthTimeoutSeconds` in the range 15–900 are mandatory. If the standalone regression tests fail, the backend test gate is BLOCKED instead of running a misleading real-port probe. If `-IncludeUpstreamTests` is requested and `Code/server/node_modules` is absent, the report marks that stage BLOCKED rather than silently skipping it.
 
 The upstream code revision and project revision are captured in `revisions.txt`; copy only redacted `report.json` and relevant failing logs back to the agent. The actual TCP check is strictly a transport smoke test and the synthetic in-process checks are not proof that two real EVE accounts can log in.
+
+## Actual EveJS reconnect path (verified from pinned source)
+
+Do **not** wire `scripts/coop-reconnect-guard.mjs` into the live login path. That module is a standalone model/contract fixture and does not persist a character or account state. The actual upstream already implements takeover/disconnect:
+- `Code/server/src/services/character/charService.js`: `evictPriorSession()` invokes the canonical disconnect then unregisters and destroys the displaced session's socket.
+- `Code/server/src/network/tcp/index.js`: both socket `close` and `error` invoke disconnect and unregister.
+- `Code/server/src/services/_shared/sessionDisconnect.js`: `persistCharacterLogoffState()` records ship state (including emergency warp rules), `spaceRuntime.detachSession()` removes the observer, and chat/trade/presence are cleaned up.
+
+These assertions are in `tests/upstream-live-reconnect-contract.test.mjs`, run by CI and `Verify-Local-Coop.ps1 -IncludeUpstreamTests`. They are **static source-contract checks**, not execution of disconnect against a real database. Do not claim persistence PASS until the server E2E test demonstrates restored ship state for a reconnected account.
