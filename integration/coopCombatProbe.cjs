@@ -14,6 +14,19 @@ function entitySample(entity){
    destroyed:Boolean(entity.destroyed||entity.isDestroyed),
  };
 }
+function wreckSamples(scene,npcIDs){
+ const entities=scene?.dynamicEntities;
+ if(!(entities instanceof Map))return [];
+ return Array.from(entities.values()).filter(entity=>
+   entity?.nativeNpcWreck===true &&
+   npcIDs.some(id=>Number(entity.launcherID)===Number(id))
+ ).map(entity=>({
+   wreckID:num(entity.itemID),sourceNpcID:num(entity.launcherID),
+   kind:String(entity.kind||""),isEmpty:Boolean(entity.isEmpty),
+   position:entity.position&&['x','y','z'].every(k=>Number.isFinite(Number(entity.position[k])))
+     ? {x:num(entity.position.x),y:num(entity.position.y),z:num(entity.position.z)}:null
+ }));
+}
 function launch({scene,shipIDs,npcIDs,probe,session,ship,intervalMs=1000,maxSamples=60}){
  const allIDs=[...new Set([...shipIDs,...npcIDs].map(num).filter(x=>x>0))];
  if(!scene||typeof scene.getEntityByID!=="function"||typeof probe?.observe!=="function")return;
@@ -22,12 +35,14 @@ function launch({scene,shipIDs,npcIDs,probe,session,ship,intervalMs=1000,maxSamp
    try {
      count++;
      const entities=allIDs.map(id=>({id,sample:entitySample(scene.getEntityByID(id))}));
+     const wrecks=wreckSamples(scene,npcIDs);
      const observers=Array.from(scene.sessions?.values?.()||[])
        .filter(x=>x?.socket?.destroyed!==true)
        .map(x=>({characterID:num(x.characterID),shipID:num(x?._space?.shipID),
-         visibleEntityIDs:allIDs.filter(id=>x?._space?.visibleDynamicEntityIDs?.has(id))}));
-     probe.observe("native-npc-combat-sample",session,ship,{sample:count,entities,observers});
-     if(count>=maxSamples||npcIDs.every(id=>!scene.getEntityByID(id)))clearInterval(timer);
+         visibleEntityIDs:allIDs.filter(id=>x?._space?.visibleDynamicEntityIDs?.has(id)),
+         visibleWreckIDs:wrecks.map(w=>w.wreckID).filter(id=>x?._space?.visibleDynamicEntityIDs?.has(id))}));
+     probe.observe("native-npc-combat-sample",session,ship,{sample:count,entities,wrecks,observers});
+     if(count>=maxSamples)clearInterval(timer);
    }catch(error){
      clearInterval(timer);
      try{console.warn("[CoopCombatProbe] sample failed:",error.message);}catch{}
@@ -36,4 +51,4 @@ function launch({scene,shipIDs,npcIDs,probe,session,ship,intervalMs=1000,maxSamp
  timer.unref?.();
  return ()=>clearInterval(timer);
 }
-module.exports={launch,entitySample};
+module.exports={launch,entitySample,wreckSamples};
