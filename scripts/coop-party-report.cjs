@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,encounters=0,kills=0,coopWrecks=0,partyReady=0;
+ const pilots=new Map();let lastScene=null,lastLivingShips=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0;
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -30,6 +30,10 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }else if(id&&e.event==="disconnect-after-persist"){
    pilots.set(id,{...(pilots.get(id)||{}),characterID:id,lastSeen:e.at,active:false});
   }
+  if(e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips)){
+    lastLivingShips=e.livingShips;
+  }
+  if(e.event==="living-npc-destroyed"&&e.status==="RECOVERING")livingLosses++;
   if(e.event==="native-npc-spawn"&&e.success)encounters++;
   if(e.event==="coop-encounter-kill")coopWrecks++;
   if(e.event==="coop-party-proximity"&&e.ready)partyReady++;
@@ -51,7 +55,10 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
  return {status,clientRenderingVerified:false,windowMinutes,
    activeCharacterIDs:active.map(p=>p.characterID),activePilotCount:active.length,
    sharedScenePilotCount:sceneActive.length,serverMutualVisibility:mutualSeen,
-   npcEncountersObserved:encounters,cooperativeWreckKillsObserved:coopWrecks,
+   livingNpcShipAssignmentsObserved:lastLivingShips?.length||0,
+   livingNpcRolesObserved:lastLivingShips?.map(x=>({pilotID:x.pilotID,role:x.role}))||[],
+   livingNpcShipLossesObserved:livingLosses,
+   legacyArenaEncountersObserved:encounters,legacyArenaWreckKillsObserved:coopWrecks,
    partyRendezvousObserved:partyReady,npcEconomicLossesObserved:kills,
    evidenceEvents:events.length,invalidLines,lastSceneAt:lastScene?.at||null,
    warnings:[
