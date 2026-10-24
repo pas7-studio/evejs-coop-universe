@@ -11,22 +11,33 @@ function createWorld({file,route,population=16,clock=()=>Date.now(),travelMs=120
  if(!Number.isInteger(population)||population<1||population>100)throw Error("population cap 1..100");
  if(!Number.isInteger(travelMs)||travelMs<10000)throw Error("travelMs must be >= 10000");
  const persist=s=>{fs.mkdirSync(path.dirname(file),{recursive:true});const t=file+".tmp-"+process.pid;fs.writeFileSync(t,JSON.stringify(s));fs.renameSync(t,file);};
+ const makePilot=(i,now)=>({
+   id:"coop-pilot-"+String(i+1).padStart(3,"0"),
+   name:pilotName(i),
+   faction:i%2?"frontier":"independent",
+   routeIndex:i%route.length,
+   systemID:route[i%route.length],
+   nextMoveAt:now+travelMs*(1+(i%4)),
+   journeys:0
+ });
  let state;
  try{state=JSON.parse(fs.readFileSync(file,"utf8"));}catch(e){if(e.code!=="ENOENT")throw e;}
  if(!state){
    const now=clock();
-   state={version:1,lastAdvancedAt:now,pilots:Array.from({length:population},(_,i)=>({
-     id:"coop-pilot-"+String(i+1).padStart(3,"0"),
-     name:pilotName(i),
-     faction:i%2?"frontier":"independent",
-     routeIndex:i%route.length,
-     systemID:route[i%route.length],
-     nextMoveAt:now+travelMs*(1+(i%4)),
-     journeys:0
-   }))};
+   state={version:1,lastAdvancedAt:now,pilots:Array.from({length:population},(_,i)=>makePilot(i,now))};
    persist(state);
  }
  if(state.version!==1||!Array.isArray(state.pilots)||state.pilots.length>100)throw Error("invalid saved world");
+ // Increase population on upgrades without wiping established pilot history
+ // or destroying already materialized native ships.
+ if(state.pilots.length<population){
+   const now=clock(),ids=new Set(state.pilots.map(p=>p.id));
+   for(let i=0;state.pilots.length<population&&i<100;i++){
+     const candidate=makePilot(i,now);
+     if(!ids.has(candidate.id)){state.pilots.push(candidate);ids.add(candidate.id);}
+   }
+   persist(state);
+ }
  function advance(physicalLocations={}){
    const now=clock();
    if(now<state.lastAdvancedAt)return {status:"CLOCK_REWIND",moves:0};
