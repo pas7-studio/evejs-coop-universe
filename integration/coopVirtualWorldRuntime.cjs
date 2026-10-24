@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null;
+let world=null,timer=null,bridge=null;
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
@@ -18,6 +18,28 @@ function observeSession(session,ship){
   start();
   const systemID=Number(ship?.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
   const residents=world.residents(systemID);
+  if(process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"&&residents.length){
+    try{
+      const runtime=require("./runtime");
+      const npc=require("./npc/npcRuntime");
+      const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+      if(!bridge){
+        const {createBridge}=require("./coopNpcMaterializer");
+        bridge=createBridge({
+          limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
+          exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
+          spawn:(system,pilot)=>npc.spawnBatchInSystem(system,{
+            amount:1,entityType:"npc",transient:true,broadcast:true,
+            defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+          })
+        });
+      }
+      const result=bridge.reconcile(systemID,residents);
+      require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
+        assignments:result,sceneReady:Boolean(scene)
+      });
+    }catch(error){console.warn("[CoopMaterializer]",error.message);}
+  }
   require("./coopRuntimeProbe").observe("virtual-world-presence",session,ship,{
     residentCount:residents.length,residents:residents.map(p=>({id:p.id,faction:p.faction,journeys:p.journeys}))
   });
