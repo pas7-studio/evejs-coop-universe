@@ -1,12 +1,13 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','LaunchTwo','Status','Smoke','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchTwo','Status','Smoke','Party','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
     [int]$LaunchGapSeconds = 20,
     [int]$HealthTimeoutSeconds = 240,
+    [int]$NpcSystemID = 30000142,
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -58,6 +59,23 @@ switch ($Action) {
         Wait-BackendHealthy
         Write-Host 'Server running. Next: -Action LaunchTwo'
     }
+    'CoopStart' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ required for pinned overlay.' }
+        if ($NpcSystemID -le 0) { throw 'NpcSystemID must be a positive EveJS system ID.' }
+        & (Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1') -CodePath $CodePath
+        if ($LASTEXITCODE -ne 0) { throw 'Unsafe Compose configuration.' }
+        # Real source integration, one native encounter for a two-character party.
+        # No market rebuild, database reset, open public ports or experimental
+        # virtual economies in the recommended first-play path.
+        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -CoopCombat -NpcCount 1 -NpcSystemID $NpcSystemID
+        if (-not $?) { throw 'Co-op runtime deployment failed.' }
+        Wait-BackendHealthy
+        Write-Host '[COOP] Backend ready for two private LOCAL clients.'
+        Write-Host '[COOP] Use separate accounts. Fly both ships onto the same grid in the configured system.'
+        Write-Host '[COOP] Run -Action Party to inspect actual shared-scene evidence.'
+        Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
+    }
     'LaunchTwo' {
         Assert-BackendPrerequisites
         if (-not $ConfirmClientPermission) { throw 'Explicitly pass -ConfirmClientPermission after confirming lawful client access, setup and permissions.' }
@@ -89,6 +107,17 @@ switch ($Action) {
         & node $probe
         if ($LASTEXITCODE -ne 0) { throw 'Two concurrent TCP connections to EveJS game port failed.' }
         Write-Host 'Transport only: this is NOT a two-player login or gameplay PASS.'
+    }
+    'Party' {
+        Assert-BackendPrerequisites
+        $report=Join-Path $PSScriptRoot 'coop-party-report.cjs'
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for the party report.' }
+        $events=@(& docker compose --project-directory $CodePath -f $compose exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No live co-op event log yet. Run -Action CoopStart, enter space with both characters, and retry.'
+        }
+        $events | & node $report
+        if ($LASTEXITCODE -ne 0) { throw 'Could not generate co-op scene report.' }
     }
     'Logs' {
         Assert-BackendPrerequisites
