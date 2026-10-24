@@ -115,6 +115,22 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
+## Immediate World gameplay blocker — real system mining, not generic SDE
+
+2026-10-25 owner test at `a087167` confirmed healthy live overlay and
+headless boot events. The first `World` run selected **Jita
+(30000142)** which has legitimately zero asteroid belts. **Use
+Perimeter (30000144) with real SDE belts for the mining World gate.**
+Do not fabricate scene belts or claim Jita must have a belt. A report
+with `physicalNpcShipAssignments=0` remains unverified independently.
+
+The new `World -WorldSystemID 30000144` report includes
+`systemSiteReadiness` and `nativeMaterializerAttempt.spawnErrors`,
+so test agents fix the *actual* next source failure, not random
+dependency issues. `DiagnoseWorld` now pipes the full multiline
+read-only shell script over stdin; it must not print only a header.
+Do not run npm audit, reinitialize market, delete volumes or run CI.
+
 ## Current co-op code milestone: shared native fleet warp
 
 See `docs/COOP_FLEET_WARP.md`. The owner wants TWO playable clients,
