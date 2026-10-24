@@ -1,54 +1,54 @@
 #!/usr/bin/env node
-// Non-authenticated transport smoke test: two concurrent TCP connections to the
-// actual EveJS port. Does NOT claim game protocol, login or co-op is operational.
+// Real TCP listener probe: two overlapping connections, A disconnect/reconnect,
+// and B remaining connected. No EVE protocol messages are transmitted.
 import net from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const host = process.env.EVEJS_TEST_HOST || '127.0.0.1';
 const port = Number(process.env.EVEJS_TEST_PORT || 26000);
 const timeoutMs = Number(process.env.EVEJS_TEST_TIMEOUT_MS || 5000);
-if (host !== '127.0.0.1' && host !== '::1') {
-  throw new Error('Local test only: set EVEJS_TEST_HOST to a loopback address');
-}
+const holdMs = Number(process.env.EVEJS_TEST_HOLD_MS || 500);
+if (!['127.0.0.1','::1'].includes(host)) throw new Error('Loopback only');
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid port');
 if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 30000) throw new Error('Invalid timeout');
-const clients = [];
-const socketClosed = new WeakSet();
-function connectOne(label) {
+if (!Number.isInteger(holdMs) || holdMs < 100 || holdMs > 10000) throw new Error('Invalid hold');
+const sockets = new Set();
+const closed = new WeakSet();
+function connect(label) {
   return new Promise((resolve, reject) => {
-    const socket = net.createConnection({ host, port });
-    clients.push(socket);
-    socket.on('close', () => socketClosed.add(socket));
-    socket.on('end', () => socketClosed.add(socket));
-    let settled = false;
-    const timer = setTimeout(() => fail(new Error(label + ': connect timeout')), timeoutMs);
-    function cleanup() { clearTimeout(timer); }
-    function fail(err) {
-      if (settled) return;
-      settled = true; cleanup(); socket.destroy(); reject(err);
-    }
-    socket.on('error', fail);
-    socket.once('connect', () => {
-      if (settled) return;
-      settled = true; cleanup(); resolve(socket);
-    });
+    const socket = net.createConnection({host,port});
+    sockets.add(socket);
+    socket.on('end',()=>closed.add(socket));
+    socket.on('close',()=>{closed.add(socket);sockets.delete(socket);});
+    // Always retain an error listener after connect to avoid unhandled errors.
+    socket.on('error',err=>{if (!settled) fail(err); else closed.add(socket);});
+    let settled=false;
+    const timer=setTimeout(()=>fail(new Error(label+': timeout')),timeoutMs);
+    function fail(err){if(settled)return;settled=true;clearTimeout(timer);socket.destroy();reject(err);}
+    socket.once('connect',()=>{if(settled)return;settled=true;clearTimeout(timer);resolve(socket);});
   });
 }
-try {
-  // Open both connections before either is closed: tests simultaneous accepts.
-  const [a, b] = await Promise.all([connectOne('client A'), connectOne('client B')]);
-  if (a.destroyed || b.destroyed || socketClosed.has(a) || socketClosed.has(b)) throw new Error('Server closed one TCP session immediately');
-  await delay(250);
-  if (a.destroyed || b.destroyed || socketClosed.has(a) || socketClosed.has(b)) throw new Error('Server closed a TCP session during idle smoke');
-  console.log(JSON.stringify({
-    status: 'TRANSPORT_ONLY_PASS',
-    host, port,
-    simultaneousSockets: 2,
-    disclaimer: 'No EVE protocol, login, player state, visibility or persistence validated'
-  }, null, 2));
-} catch (err) {
-  console.error('TRANSPORT_SMOKE_FAIL:', err?.message || err);
-  process.exitCode = 1;
-} finally {
-  for (const socket of clients) socket.destroy();
+function assertActive(socket,label){
+  if (!socket || socket.destroyed || closed.has(socket) || socket.writableEnded || socket.readableEnded)
+    throw new Error(label+': socket closed unexpectedly');
 }
+try {
+  const [a,b] = await Promise.all([connect('A'),connect('B')]);
+  assertActive(a,'A');assertActive(b,'B');
+  await delay(holdMs);
+  assertActive(a,'A');assertActive(b,'B');
+  a.destroy();
+  const replacement=await connect('A-reconnect');
+  assertActive(replacement,'A-reconnect');
+  assertActive(b,'B-survivor');
+  await delay(holdMs);
+  assertActive(replacement,'A-reconnect');assertActive(b,'B-survivor');
+  console.log(JSON.stringify({
+    status:'TRANSPORT_RECONNECT_PASS',host,port,
+    concurrentSessions:2,replacements:1,holdMs,
+    disclaimer:'TCP only: no EVE handshake, authentication, in-world movement or NPC'
+  },null,2));
+} catch(err){
+  console.error('TRANSPORT_SMOKE_FAIL:',err?.message||err);
+  process.exitCode=1;
+} finally {for(const s of sockets)s.destroy();}
