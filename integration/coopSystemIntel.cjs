@@ -60,7 +60,7 @@ function createAnnouncer({send,clock=()=>Date.now(),cooldownMs=90000}={}){
   if(!charID||!systemID||session?._space?.initialStateSent!==true)return {status:"CLIENT_NOT_READY"};
   const data=build(scene,options),key=charID+":"+systemID,previous=last.get(key)||0;
   if(data.status!=="ACTIVE")return {status:"QUIET",activity:data.activity};
-  if(clock()-previous<cooldownMs)return {status:"COOLDOWN",activity:data.activity};
+  if(last.has(key)&&clock()-previous<cooldownMs)return {status:"COOLDOWN",activity:data.activity};
   let delivered=0;
   for(const message of data.messages.slice(0,3)){
    try{send(session,message);delivered++;}catch(e){console.warn("[CoopIntel] chat",e.message);break;}
