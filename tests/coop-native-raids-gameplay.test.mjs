@@ -52,6 +52,15 @@ test("pirate never steals an ongoing native player engagement",()=>{
  assert.equal(f.tick().actions.length,0);
  assert.equal(f.nativeOrders.length,0);
 });
+test("a native pirate already targeting another real NPC is never hijacked",()=>{
+ const f=fixture();
+ const enemy={itemID:333,kind:"ship",nativeNpc:true,
+  position:{x:50000,y:0,z:0},mode:"STOP"};
+ f.ships.set(333,enemy);
+ f.controller.currentTargetID=333;
+ assert.equal(f.tick().actions.length,0);
+ assert.equal(f.nativeOrders.length,0);
+});
 test("manual NPC orders, recent retaliation and warp state prevent forced raids",()=>{
  const f=fixture();
  f.controller.manualOrder={type:"holdFire"};
