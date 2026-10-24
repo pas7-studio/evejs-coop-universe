@@ -46,3 +46,20 @@ test('invalid settings cannot create unbounded NPC batches',()=>{
   assert.throws(()=>createDirector({filename:f.filename,spawn:()=>({success:true}),maxSpawns:1001}),/invalid spawn cap/);
  }finally{f.cleanup();}
 });
+
+test('daily encounter cap renews without erasing lifetime kills or restarting game server',()=>{
+ const f=fixture();try{
+  const first=f.build();
+  assert.equal(first.onPilotArrived(30000142).status,'SPAWNED');
+  f.advance(60000);
+  assert.equal(first.onPilotArrived(30000142).status,'SPAWNED');
+  f.advance(60000);
+  assert.equal(first.onPilotArrived(30000142).status,'SPAWN_CAP');
+  f.advance(86400000);
+  const afterDay=f.build();
+  const result=afterDay.onPilotArrived(30000142);
+  assert.equal(result.status,'SPAWNED');
+  assert.equal(result.spawns,1);
+  assert.equal(result.totalSpawns,3);
+ }finally{f.cleanup();}
+});
