@@ -41,3 +41,11 @@ Each run writes `test-results/verify-YYYYMMDD-HHMMSS/` containing `report.json`,
 **What counts as success:** loopback-only Compose ports, backend health, two concurrent accepted raw TCP sockets, and optional synthetic server-side EveJS scene tests. **What is NOT verified:** EVE protocol handshake, two actual authorized accounts, shared movement, weapons, NPCs, or the proprietary client. Those gates must remain blocked until actual clients are tested.
 
 If unsuccessful, agents should paste the redacted `report.json` and the failing step's log, not rerun market rebuild or delete Docker volumes. Never publish unredacted logs.
+
+## Shared-space integrity diagnostics
+
+The backend gate now includes `tests/coop-scene-audit.test.mjs` (deterministic read-only auditor regression suite) and, with `-IncludeUpstreamTests`, `tests/upstream-coop-scene-audit.test.mjs` against an actual EveJS `SolarSystemScene` plus the real session registry.
+
+The reusable `scripts/coop-scene-audit.mjs` exports `auditCoopScene(scene, {minimumPilots, registryLookup})`. Supply the current scene and optionally the authoritative `registry.findSessionByCharacterID`. The JSON-safe output reports PASS/FAIL, live pilots and ship IDs, reciprocal visibility, stale sessions, duplicate identities or ships, missing ship entities, and registry mismatch. Visibility asymmetry is a warning rather than a hard failure because bubble visibility can transition asynchronously. The audit performs no scene mutations.
+
+**Acceptance boundary:** this is an in-process snapshot of server state; it is not a simulation tick, network login, movement physics or client compatibility proof. Upstream integration tests require the pinned EveJS checkout and its dependencies.
