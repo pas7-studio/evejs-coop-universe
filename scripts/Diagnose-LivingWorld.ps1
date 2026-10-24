@@ -74,6 +74,8 @@ else
     grep -c '"event":"living-native-stock-fleet-combat"' "$EVEJS_COOP_EVENTS_FILE" || true
     echo "Observed native weapon events:"
     grep -c '"event":"living-native-weapon-event"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Observed native loot pickup events:"
+    grep -c '"event":"living-native-loot-pickup"' "$EVEJS_COOP_EVENTS_FILE" || true
   fi
 fi
 '@
