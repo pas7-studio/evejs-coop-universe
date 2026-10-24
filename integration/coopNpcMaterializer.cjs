@@ -21,7 +21,13 @@ function createBridge({spawn,exists,limit=3,registry=null}){
   for(const pilot of pilots||[]){
     if(!pilot?.id||!current.has(pilot.id))continue;
     const prior=assignments.get(pilot.id)||registry?.get(pilot.id);
-    if(prior&&exists(prior.systemID,prior.entityID)){results.push({pilotID:pilot.id,entityID:prior.entityID,reused:true});continue;}
+    if(prior&&exists(prior.systemID,prior.entityID)){
+      assignments.set(pilot.id,{systemID:prior.systemID,entityID:prior.entityID});
+      if(Number(prior.systemID)!==Number(systemID)){
+        results.push({pilotID:pilot.id,pendingTransit:true,existingSystemID:prior.systemID});
+      }else results.push({pilotID:pilot.id,entityID:prior.entityID,reused:true});
+      continue;
+    }
     if(occupied>=limit)continue;
     const result=spawn(systemID,pilot);
     const entityID=ids(result?.data?.spawned)[0];
