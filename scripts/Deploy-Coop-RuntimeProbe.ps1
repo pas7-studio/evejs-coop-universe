@@ -136,6 +136,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_RIVAL_NPC_COMBAT: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_SAFETY: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_WEAPON_EVIDENCE: '1'"
+  $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_HEADLESS_WORLD_BOOT: '1'"
   # Enable durable named hulls only as part of an explicitly approved LivingCoop deployment.
   $yamlLines += "      EVEJS_COOP_DURABLE_NPC_SHIPS: '1'"
