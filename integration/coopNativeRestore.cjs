@@ -6,7 +6,7 @@
 const positive=x=>{const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:null};
 const validShip=(ship,id)=>Boolean(ship&&ship.kind==="ship"&&
  ship.nativeNpc===true&&positive(ship.itemID)===id);
-function restoreNamedShips({registry,store,service,sceneForSystem,maxLinks=100}={}){
+function restoreNamedShips({registry,store,service,sceneForSystem,lostShips=[],maxLinks=100}={}){
  if(typeof registry?.snapshot!=="function"||typeof store?.getNativeEntity!=="function"||
   typeof store?.getNativeController!=="function"||
   typeof service?.materializeStoredNativeController!=="function"||
