@@ -8,7 +8,9 @@ const haulFlag="coopHaulFleetID";
 function dependenciesOf(options={}){
  return {store:options.store||require("./npc/nativeNpcStore"),
  probe:options.probe||require("./coopRuntimeProbe"),
- depot:options.depot||null};
+ depot:options.depot||(
+  process.env.EVEJS_COOP_NATIVE_HAUL_CARGO==="1"
+  ?require("./coopNativeDepot").getNativeDepot():null)};
 }
 function transferCargo(scene,fleet,miner,options={}){
  try{
