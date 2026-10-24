@@ -19,12 +19,12 @@ function connectOne(label) {
     clients.push(socket);
     let settled = false;
     const timer = setTimeout(() => fail(new Error(label + ': connect timeout')), timeoutMs);
-    function cleanup() { clearTimeout(timer); socket.removeListener('error', fail); }
+    function cleanup() { clearTimeout(timer); }
     function fail(err) {
       if (settled) return;
       settled = true; cleanup(); socket.destroy(); reject(err);
     }
-    socket.once('error', fail);
+    socket.on('error', fail);
     socket.once('connect', () => {
       if (settled) return;
       settled = true; cleanup(); resolve(socket);
