@@ -46,14 +46,20 @@ git pull
 
 `CoopStart` validates the pinned source, updates the reversible
 co-op overlay, builds the image and starts one authoritative Docker server.
-It does **not** enable background virtual-world simulations, economic
-experiments or faction spawns. It enables a single opt-in native NPC
-encounter, which will spawn only after **two distinct, Ballpark-ready
-characters** are in the specified system within 250 km of one another.
+It does **not** enable experimental virtual-world economics or faction
+spawns. It enables **repeatable native NPC encounters**: no new enemy
+batch while a prior encounter NPC is still alive, 12-minute default
+cooldown between successful batches, and a persisted cap of 20 batches.
+The actual spawn requires two distinct Ballpark-ready characters
+within 250 km in the selected system. A server-side coordinator
+keeps checking proximity after both have logged in, so you may
+warp to each other *later* without logging out to start combat.
 
 If the intended play system is different, supply its numeric EveJS ID
 via `-NpcSystemID`. Both ships must physically fly to that system and
-come onto the same grid. The first character alone will not trigger combat.
+come onto the same grid. The first character alone will not trigger combat. Both players can
+fly separately and later rendezvous; the game server rechecks the grid
+every four seconds.
 
 ## Two clients and gameplay
 
@@ -123,3 +129,32 @@ install/remove operations across Windows CRLF and upstream LF files.
 authenticated logins, cross-PC play, PvE/loot visibility and reconnect
 persistency have not been proven on the user's machine. Keep those
 acceptance checks explicit rather than claiming a successful session.
+
+
+### Change combat difficulty without changing code
+
+The first-play defaults to **one enemy ship per encounter**. For a more
+challenging cooperative fight, select two or three:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -NpcSystemID 30000142 -EnemyCount 2 -EncounterCooldownMinutes 8 -MaxEncounterBatches 30
+```
+
+Allowed enemy count is 1–3. The cooldown is measured in minutes and the
+limit is a persisted count of successful spawn batches (not killed ships).
+The authoritative EveJS NPC runtime determines which targets the enemies
+attack, damage, drops and available salvage. There is no artificial combat
+damage or invented inventory.
+
+An existing encounter must disappear from the authoritative scene before
+the next batch may start; this prevents two logins or repeated grid checks
+from multiplying live enemies. If an encounter ends, stay together on the
+same grid and the next one may spawn once its cooldown expires.
+
+`-Action Party` also reports a `cooperativeWreckKillsObserved` count
+from actual EveJS native wreck creation. It does not automatically mean
+that loot was transferred successfully; check both clients' cargo state.
+
+For other commands (`Start`, `Stop`, `Party`, `Status`, `Logs`),
+the game-night script now uses the installed co-op Compose override too.
+Running `Start` should not silently drop your co-op environment flags.
