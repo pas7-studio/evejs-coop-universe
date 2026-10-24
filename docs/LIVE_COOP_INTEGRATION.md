@@ -177,3 +177,48 @@ the old call occurs exactly once and supports `-Remove` to restore it.
 For acceptance: after both pilots see the same wreck, loot the final item as
 pilot A; verify that the wreck's emptied state updates for B without
 reloading the system. This is not yet proven with a client and live database.
+
+## Restart-safe encounter director — larger functional milestone
+
+The optional `integration/coopEncounterDirector.cjs` is a durable,
+bounded encounter schedule for **native EveJS NPCs**. It is **not** the
+incompatible X-Eve patch and does not create fake online players.
+
+The director persists a per-system record in
+`/var/lib/evejs/coop-encounters.json`, which lives on the existing
+`evejs-data` volume. Each eligible in-space login can request one
+native NPC batch only when a cooldown has elapsed. The scheduler writes
+the next allowed time **before** invoking the native spawn, to prevent
+rapid retries if a spawn fails. A per-system lifetime spawn cap avoids
+unbounded accumulation. Restarting the server reloads this schedule.
+
+To enable it on a disposable test universe:
+
+```powershell
+cd C:\Games\EveCoopProject
+git pull
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnablePersistentEncounters -NpcSystemID 30000142 -NpcCount 1 -EncounterCooldownMinutes 60 -EncounterMaxSpawns 24
+```
+
+Without `-EnablePersistentEncounters`, this director is disabled. The
+legacy `-EnableNativeNpcDemo` still performs a one-time process-local
+encounter. The two flags should not be combined; use the persistent flag
+alone for this scenario.
+
+State entries contain the next eligible timestamp, visit attempts and
+successful spawn-batch counts. They do **not** hold authoritative ship
+health, positions, market assets or client identities. Spawned NPCs still
+belong to upstream's native NPC controller/runtime and native wreck/loot
+systems.
+
+**Deliberate scope limit:** this is a persistent *encounter schedule*,
+not a persistent 5,000-NPC living universe. It does not yet model
+off-grid interstellar travel, economic supply/demand, NPC factions'
+strategic decisions or independent simulation while no pilot logs in.
+Those features require a separate world-simulation service compatible
+with this pinned EveJS revision. No claims of that functionality are
+made by this feature.
+
+Local deterministic tests:
+`node --test tests/coop-encounter-director.test.mjs`.
+Full Docker/gameplay tests still require the user-owned Windows setup.
