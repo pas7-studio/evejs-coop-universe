@@ -4,7 +4,7 @@ let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirect
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0;
+let backgroundTicks=0,headlessBootTimer=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
@@ -69,6 +69,57 @@ function start(){
    }catch(e){console.warn("[CoopVirtualWorld] tick",e.message);}
  },30000);
  timer.unref?.();
+ scheduleHeadlessWorldBoot(route);
+}
+// Initialize real EveJS scenes without waiting for a human to log in.
+// This is not a client/gameplay proof: only existing native entities count.
+function scheduleHeadlessWorldBoot(route){
+ if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||headlessBootTimer)return;
+ const systems=new Set(route.filter(id=>Number.isSafeInteger(id)&&id>0));
+ if(!systems.size)return;
+ require("./coopRuntimeProbe").observe("living-headless-boot-requested",null,null,
+  {systems:[...systems],status:"SCHEDULED_NOT_VERIFIED"});
+ let attempts=0;
+ const attempt=()=>{
+  headlessBootTimer=null;
+  attempts++;
+  const runtime=require("./runtime");
+  const mining=require("../services/mining/miningNpcOperations");
+  for(const systemID of [...systems]){
+   try{
+    observeSession(null,{itemID:0,spaceState:{systemID}});
+    const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+    const fleetShips=(mining.getMiningFleetsForSystem(systemID)||[])
+     .flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
+     .filter(id=>scene?.getEntityByID?.(Number(id)));
+    const links=Object.values(identityRegistry?.snapshot().links||{})
+     .filter(link=>Number(link.systemID)===systemID&&
+      scene?.getEntityByID?.(Number(link.entityID)));
+    const topology=require("./coopNpcTopology").waypoints(scene);
+    const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
+    const verified=beltCount>0&&fleetShips.length>0&&links.length>0;
+    if(verified){visitedSystems.add(systemID);systems.delete(systemID);}
+    require("./coopRuntimeProbe").observe("living-headless-boot-system",null,
+     {spaceState:{systemID}},
+     {attempt:attempts,status:verified?"NATIVE_SCENE_READY":"PENDING_NATIVE_SCENE",
+      realAsteroidBelts:beltCount,physicalMiningShips:fleetShips.length,
+      actualNamedNpcShips:links.length,sceneReady:Boolean(scene)});
+   }catch(error){
+    console.warn("[CoopHeadlessWorld] system "+systemID,error.message);
+    require("./coopRuntimeProbe").observe("living-headless-boot-system",null,
+     {spaceState:{systemID}},{attempt:attempts,status:"FAILED",reason:String(error.message).slice(0,120)});
+   }
+  }
+  if(systems.size&&attempts<6){
+   headlessBootTimer=setTimeout(attempt,30000);
+   headlessBootTimer.unref?.();
+  }else if(systems.size){
+   require("./coopRuntimeProbe").observe("living-headless-boot-incomplete",null,null,
+    {pendingSystems:[...systems],attempts});
+  }
+ };
+ headlessBootTimer=setTimeout(attempt,10000);
+ headlessBootTimer.unref?.();
 }
 function ensurePatrolNavigator(runtime,npc){
  if(patrolNavigator)return;
@@ -355,6 +406,9 @@ function observeSession(session,ship){
         if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
         const npcID=entry.entityID;
         observedNpcIDs.add(npcID);
+        // Headless boot has no authenticated player ship. Do not open
+        // a bogus 0-ship combat probe; native wreck hooks still record losses.
+        if(!session||!Number.isSafeInteger(Number(ship?.itemID))||Number(ship.itemID)<=0)continue;
         const probe=require("./coopRuntimeProbe");
         require("./coopCombatProbe").launch({
           scene,shipIDs:[Number(ship.itemID)],npcIDs:[npcID],
