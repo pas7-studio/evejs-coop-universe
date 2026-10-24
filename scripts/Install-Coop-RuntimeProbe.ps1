@@ -47,7 +47,8 @@ $patches=@(
   @{ path=(Join-Path $server 'services/_shared/sessionDisconnect.js'); marker='  persistCharacterLogoffState(session);'; injection='  require("../../space/coopRuntimeProbe").observe("disconnect-before-persist", session, null);' },
   @{ path=(Join-Path $server 'space/transitions.js'); marker='  const attachElapsedMs = Date.now() - attachStartedAtMs;'; injection='  require("./coopRuntimeProbe").observe("space-login-attach", session, activeShip, { attached: Boolean(shipEntity) });' },
   @{ path=(Join-Path $server 'space/transitions.js'); marker='  const hydrationQueuedAtMs = Date.now();'; injection='  require("./coopNativeNpcDemo").maybeSpawn(session, activeShip);' },
-  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const hydrationQueuedAtMs = Date.now();'; injection='  require("./coopVirtualWorldRuntime").observeSession(session, activeShip);' }
+  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const hydrationQueuedAtMs = Date.now();'; injection='  require("./coopVirtualWorldRuntime").observeSession(session, activeShip);' },
+  @{ path=(Join-Path $server 'network/tcp/index.js'); marker='      tidiAutoscaler.init();'; injection='      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }' }
 )
 foreach($p in $patches) {
   if(-not (Test-Path -LiteralPath $p.path)){throw "Missing upstream file: $($p.path)"}
