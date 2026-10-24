@@ -12,6 +12,11 @@ function verify({scene,victim,wreck,options={},links=[]}={}){
   Number(wreck.sourceEntityID)!==victimID||
   Number(wreck.launcherID)!==victimID||!Array.isArray(links))
   return {status:"INVALID_NATIVE_DESTRUCTION"};
+ const physicalWreck=scene.getEntityByID?.(wreckID);
+ if(physicalWreck?.nativeNpcWreck!==true||
+  Number(physicalWreck.itemID)!==wreckID||
+  Number(physicalWreck.launcherID)!==victimID)
+  return {status:"PHYSICAL_WRECK_MISSING"};
  const v=links.find(x=>named(x?.pilotID)&&Number(x.systemID)===systemID&&
   Number(x.entityID)===victimID);
  if(!v)return {status:"VICTIM_NOT_NAMED"};
