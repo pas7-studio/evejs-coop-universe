@@ -358,3 +358,21 @@ duplicate loss accounting over promising exactly-once atomic commits
 across two separate JSON files. This is not a full transactional system.
 The materialized virtual-pilot NPC path is not yet wired to this
 callback; the integration currently observes demo NPC combat only.
+
+## Materialized virtual NPC → confirmed wreck → virtual economy
+
+The `coopVirtualWorldRuntime` materialization path now attaches the same
+native combat/wreck observer used by demo encounters. Each unique
+materialized NPC ship ID receives a bounded 180-second observer; when the
+actual native EveJS scene contains a matching wreck, it passes the
+source NPC and wreck IDs to `confirmedWreck()`, which records the loss in
+the persisted virtual economy when enabled.
+
+This connects materialized virtual pilots' **physical ship destruction**
+to the existing economic loss accounting. It does **not** yet mark the
+virtual pilot permanently dead or prevent a future ship replacement;
+the virtual identity registry currently prunes destroyed physical
+links. A kill after the 180-second observation window is not captured
+by this instrumentation. The next engineering step should replace
+time-limited sampling with a lifecycle event hook in the native NPC
+destruction service, plus durable per-pilot death/recovery state.
