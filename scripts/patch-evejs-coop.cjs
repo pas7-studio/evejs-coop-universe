@@ -221,14 +221,19 @@ function transform(source,spec,remove){
    '}',
    ''
   ].join(eol);
-  if(count(section,oldGuard)+count(section,newGuard)!==1||
-   count(section,oldLoop)+count(section,newLoop)!==1||
-   count(section,oldTail)+count(section,newTail)!==1)
-   throw Error("Unexpected native mining startup source");
-  if(remove){
+  // The patched text embeds the old guard/loop as substrings.
+  // Distinguish complete states by unique multi-line markers instead
+  // of double-counting anchors, rejecting any partially-applied patch.
+  const patched=count(section,newGuard)===1&&count(section,newLoop)===1&&
+   count(section,newTail)===1;
+  const clean=count(section,newGuard)===0&&count(section,newLoop)===0&&
+   count(section,newTail)===0&&count(section,oldGuard)===1&&
+   count(section,oldLoop)===1&&count(section,oldTail)===1;
+  if(!patched&&!clean)throw Error("Unexpected native mining startup recovery source");
+  if(remove&&patched){
    section=section.replace(newGuard,oldGuard).replace(newLoop,oldLoop)
     .replace(newTail,oldTail);
-  }else{
+  }else if(!remove&&clean){
    section=section.replace(oldGuard,newGuard).replace(oldLoop,newLoop)
     .replace(oldTail,newTail);
   }
