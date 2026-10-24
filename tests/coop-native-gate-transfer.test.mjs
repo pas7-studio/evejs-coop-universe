@@ -122,6 +122,18 @@ test("a non-native player ship, combat active module or warp scramble prevents s
   assert.equal(x.source.getEntityByID(100).itemID,100);
  }finally{x.cleanup()}
 });
+test("native gate migration refuses a ship too far from the 2500m surface jump range",()=>{
+ const x=fixture();
+ try{
+  const native=createNativeGateTransfer(x.deps);
+  x.source.getEntityByID(100).position.x+=3000;
+  const result=x.call(native.transfer);
+  assert.equal(result.success,false);
+  assert.equal(result.errorMsg,"NPC_NOT_AT_PHYSICAL_GATE");
+  assert.equal(x.source.getEntityByID(100).itemID,100);
+  assert.equal(x.getEntity().systemID,A);
+ }finally{x.cleanup()}
+});
 test("crash journal reverts half-applied native store relocation to original source",()=>{
  const x=fixture();
  try{
