@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -82,7 +82,7 @@ switch ($Action) {
         Write-Host ("[COOP] Living Universe running. 20 named persistent pilots across route $virtualRoute; up to 6 materialized NPCs per visited system.")
         Write-Host '[COOP] NPC pirates, civilians and faction patrols follow autonomous activity; engage their real ships in space.'
         Write-Host '[COOP] No waves or player-triggered combat arenas. NPC ship losses persist with a recovery delay.'
-        Write-Host '[COOP] Use -Action Party to inspect actual shared-scene and NPC death evidence.'
+        Write-Host '[COOP] First inspect headless NPC with DiagnoseWorld and World; Party is for two authenticated players.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
     }
     'LaunchOne' {
@@ -132,10 +132,15 @@ switch ($Action) {
         $options=Get-ComposeArgs
         $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
         if ($LASTEXITCODE -ne 0) {
-            throw 'No live co-op event log yet. Run -Action CoopStart, enter space with both characters, and retry.'
+            throw 'BLOCKED_TELEMETRY_OR_CLIENT: use DiagnoseWorld first, then check that both real characters reached space. Do not repeat deployment just for this failure.'
         }
         $events | & node $report
         if ($LASTEXITCODE -ne 0) { throw 'Could not generate co-op scene report.' }
+    }
+    'DiagnoseWorld' {
+        Assert-BackendPrerequisites
+        & (Join-Path $PSScriptRoot 'Diagnose-LivingWorld.ps1') -CodePath $CodePath
+        if (-not $?) { throw 'Read-only Living Universe diagnostic failed.' }
     }
     'World' {
         Assert-BackendPrerequisites
@@ -143,13 +148,47 @@ switch ($Action) {
         $options=Get-ComposeArgs
         $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
         if ($LASTEXITCODE -ne 0) {
-            throw 'No living world evidence yet. Run -Action CoopStart, enter space with a game client, and retry.'
+            throw 'BLOCKED_TELEMETRY: missing /var/lib/evejs/coop-events.jsonl. Run -Action DiagnoseWorld to inspect the running overlay, startup hook and log path WITHOUT restarting. Headless boot should emit a boot-requested event before any game client logs in; do not substitute npm audit or TCP tests.'
         }
-        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs')
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity
         if ($LASTEXITCODE -ne 0) {
-            throw 'Living Universe is not yet confirmed from real scene evidence. Inspect the report above and -Action Logs.'
+            throw 'Physical NPC activity is not yet confirmed. Inspect movement, ore and native target evidence in the report, then -Action Logs.'
         }
-        Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed. This is not proof of client-side gameplay.'
+        Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed by the server. Client login, rendering, combat and loot remain unverified.'
+    }
+    'Combat' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native combat evidence.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No native NPC battle log. Start LivingCoop locally; do not infer combat from healthy Docker or TCP.'
+        }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-combat --require-weapon
+        if ($LASTEXITCODE -ne 0) {
+            throw 'NPC battle gate not proven: require real NPC weapon activation or missile launch, linked HP loss, native physical wreck and stored loot. See report.'
+        }
+        Write-Host '[COMBAT] Correlated named-NPC HP reduction, physical wreck and saved loot observed on server. Shooter attribution and real EVE client gameplay remain unproven.'
+    }
+    'FinalBlow' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ required for native source attribution.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No native destruction evidence. Confirm LivingCoop runtime and inspect server logs.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-combat --require-weapon --require-final-attacker
+        if ($LASTEXITCODE -ne 0) { throw 'EveJS did not prove an explicitly supplied native destruction attacker for the correlated weapon/HP/wreck/loot chain.' }
+        Write-Host '[FINAL BLOW] EveJS explicitly provided a native destruction attacker linked to real weapon, HP loss, wreck and stored loot; verify client behavior separately.'
+    }
+    'Market' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native NPC market evidence.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No native market events. Enable the opt-in NPC market only on an isolated, backed-up test world.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-market --window-minutes 60
+        if ($LASTEXITCODE -ne 0) { throw 'No native NPC seeded sale followed by purchased stock backed by earned ISK and physical cargo. See report.' }
+        Write-Host '[MARKET] The same named native NPC settled a seeded sale and a stock purchase with real market daemon RPC and cargo. This does not certify independent NPC-owned player-market orders.'
     }
     'Logs' {
         Assert-BackendPrerequisites

@@ -8,7 +8,7 @@ const range=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
  if(typeof warp!=="function"||typeof attack!=="function"||cooldownMs<60000)throw Error("invalid native raid API");
  const leases=new Map();
- function tick({systemID,scene,pirates=[],fleetShips=[],getCargo=()=>[],getController=()=>null}){
+ function tick({systemID,scene,pirates=[],fleetShips=[],getCargo=()=>[],getController=()=>null,canAttack=()=>true}){
   if(!pos(systemID)||!scene?.getEntityByID)return {status:"SCENE_MISSING",actions:[]};
   const candidates=fleetShips.filter(t=>pos(t.id)&&["miner","hauler"].includes(t.role))
     .map(t=>{
@@ -25,7 +25,7 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
    if(old&&clock()<old.nextAt&&scene.getEntityByID(old.targetID))continue;
    const activeTarget=pos(getController(id)?.currentTargetID);
    if(activeTarget&&scene.getEntityByID(activeTarget))continue;
-   const target=candidates.filter(x=>x.id!==id)
+   const target=candidates.filter(x=>x.id!==id&&canAttack({systemID,pirateID:id,targetID:x.id}))
      .sort((a,b)=>(b.role==="hauler"?1:0)-(a.role==="hauler"?1:0)||
        range(ship.position,a.ship.position)-range(ship.position,b.ship.position))[0];
    if(!target)continue;

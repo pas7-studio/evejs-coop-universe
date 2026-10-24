@@ -1,6 +1,6 @@
 # One-command server verification for agents (Windows 11)
 
-This is the client-free **backend gate** for one EveJS server and two simultaneous TCP sessions. It does not pretend to authenticate two EVE accounts or run NPC gameplay. No proprietary client is necessary. Read the exact PASS/FAIL report rather than assuming success because the scripts launched.
+**Optional backend-only verification for a new build, changed server code or a reproducible regression. Not the default gameplay acceptance workflow.** For an already-running universe follow [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md) and start at `-Action DiagnoseWorld`, not here. This is the client-free **backend gate** for one EveJS server and two simultaneous TCP sessions. It does not pretend to authenticate two EVE accounts or run NPC gameplay. No proprietary client is necessary. Read the exact PASS/FAIL report rather than assuming success because the scripts launched.
 
 ## Prerequisites
 
@@ -10,16 +10,17 @@ Docker Desktop in Linux-container mode, Git, Node.js 22+, PowerShell 5.1+, an ex
 
 ```powershell
 cd C:\Games\EveCoopProject
-git pull
+# Explicitly verify the intended branch and preserve any local fixes first.
+git rev-parse HEAD
 
-# First deployment: once, if the market/bootstrap has not been prepared.
+# Fresh installation only, if market/bootstrap has never been prepared.
 .\scripts\Local-Two-Client-Test.ps1 -Action Prepare
 
 # Backend gate: boot, validate safety, real TCP sockets, regression tests, collect evidence.
 .\scripts\Verify-Local-Coop.ps1 -StartBackend -HealthTimeoutSeconds 360
 ```
 
-For the **real EveJS scene/registry** test suite, first install the upstream server dependencies (once, or after lockfile changes):
+For the **isolated EveJS scene/registry** test suite, install upstream server dependencies only when missing on a **disposable/authorized test checkout** (once, or after a deliberate lockfile change). This is not required to prove an already running game:
 
 ```powershell
 cd C:\Games\EveCoop\upstream-evejs\Code\server
@@ -28,7 +29,7 @@ cd C:\Games\EveCoopProject
 .\scripts\Verify-Local-Coop.ps1 -IncludeUpstreamTests -HealthTimeoutSeconds 360
 ```
 
-Run with both switches to start and test in one command:
+For a **fresh/test backend** only, run both switches to start and test in one command:
 
 ```powershell
 .\scripts\Verify-Local-Coop.ps1 -StartBackend -IncludeUpstreamTests
@@ -65,4 +66,4 @@ Do **not** wire `scripts/coop-reconnect-guard.mjs` into the live login path. Tha
 - `Code/server/src/network/tcp/index.js`: both socket `close` and `error` invoke disconnect and unregister.
 - `Code/server/src/services/_shared/sessionDisconnect.js`: `persistCharacterLogoffState()` records ship state (including emergency warp rules), `spaceRuntime.detachSession()` removes the observer, and chat/trade/presence are cleaned up.
 
-These assertions are in `tests/upstream-live-reconnect-contract.test.mjs`, run by CI and `Verify-Local-Coop.ps1 -IncludeUpstreamTests`. They are **static source-contract checks**, not execution of disconnect against a real database. Do not claim persistence PASS until the server E2E test demonstrates restored ship state for a reconnected account.
+These assertions are in `tests/upstream-live-reconnect-contract.test.mjs`, run manually by `Verify-Local-Coop.ps1 -IncludeUpstreamTests`. They are **static source-contract checks**, not execution of disconnect against a real database. Do not claim persistence PASS until the server E2E test demonstrates restored ship state for a reconnected account.

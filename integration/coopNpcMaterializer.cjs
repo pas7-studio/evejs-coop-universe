@@ -3,11 +3,13 @@
 // scene. A mapping is process-local: native EveJS remains authoritative.
 
 function ids(entries){return (Array.isArray(entries)?entries:[]).map(x=>Number(x?.entity?.itemID)).filter(x=>Number.isSafeInteger(x)&&x>0);}
-function createBridge({spawn,exists,limit=3,registry=null}){
+function createBridge({spawn,exists,limit=3,registry=null,exemptRoles=[]}){
  if(typeof spawn!=="function"||typeof exists!=="function")throw Error("native spawn and exists required");
  if(!Number.isInteger(limit)||limit<1||limit>10)throw Error("materialization limit 1..10");
+ if(!Array.isArray(exemptRoles)||exemptRoles.some(x=>!["miner","hauler"].includes(x)))throw Error("unsupported exempt native role");
+ const exemptions=new Set(exemptRoles);
  const assignments=new Map();
- function reconcile(systemID,pilots){
+ function reconcile(systemID,pilots,{exemptEntityIDs=[]}={}){
   const current=new Set((pilots||[]).map(p=>p.id));
   // Do not delete native NPCs when virtual travel changes: they may be in
   // combat or observed. Merely release dead mappings.
@@ -17,7 +19,18 @@ function createBridge({spawn,exists,limit=3,registry=null}){
   }
   const results=[];
   const stored=registry?Object.values(registry.snapshot().links).filter(x=>x.systemID===systemID&&exists(x.systemID,x.entityID)):[];
-  let occupied=new Set([...Array.from(assignments.values()).filter(x=>x.systemID===systemID).map(x=>x.entityID),...stored.map(x=>x.entityID)]).size;
+  // Roles in saved links are not proof of provenance: an old co-op-spawned
+  // miner can remain linked after a configuration change. An exemption
+  // needs BOTH a miner/hauler role and membership in an authoritative live
+  // EveJS mining fleet; fallback co-op ships must still consume capacity.
+  const nativeFleetIDs=new Set((Array.isArray(exemptEntityIDs)?exemptEntityIDs:[])
+   .map(Number).filter(id=>Number.isSafeInteger(id)&&id>0));
+  const isExempt=entry=>exemptions.has(entry.role)&&nativeFleetIDs.has(Number(entry.entityID));
+  const occupiedEntities=new Set([
+   ...Array.from(assignments.values()).filter(x=>Number(x.systemID)===Number(systemID)).map(x=>x.entityID),
+   ...stored.filter(x=>!isExempt(x)).map(x=>Number(x.entityID))
+  ]);
+  let occupied=occupiedEntities.size;
   for(const pilot of pilots||[]){
     if(!pilot?.id||!current.has(pilot.id))continue;
     const prior=assignments.get(pilot.id)||registry?.get(pilot.id);

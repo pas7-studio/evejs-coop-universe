@@ -14,7 +14,7 @@ function createTactics({
   callCooldownMs<30000||retreatCooldownMs<60000)throw Error("invalid native NPC tactics");
  const calls=new Map(),retreats=new Map(),retreatCooldowns=new Map(),responses=new Map();
  const fresh=(id,map,ms)=>!map.has(id)||clock()-map.get(id)>=ms;
- function tick({systemID,scene,assignments=[],controllers={},health,waypoints=[],isScrambled=()=>false}={}){
+ function tick({systemID,scene,assignments=[],controllers={},health,waypoints=[],isScrambled=()=>false,additionalResponders=()=>0}={}){
   const system=positive(systemID);
   if(!system||!scene?.getEntityByID||typeof health!=="function")return {status:"NO_SCENE",events:[],engagedIDs:[]};
   const now=clock(),events=[],present=new Map();
@@ -111,6 +111,10 @@ function createTactics({
    // security patrols defend miners, haulers and traders.
    const key=system+":"+victim.entityID+":"+attackerID;
    if(rescueCalls>=2||!fresh(key,calls,callCooldownMs))continue;
+   // A documented repeat aggressor may draw ONE additional existing patrol;
+   // never spawn a defender or override EveJS's native combat and warp.
+   let bonus=0;
+   try{bonus=additionalResponders(victim,attackerID,scene)===1?1:0;}catch(error){console.warn("[CoopNpcTactics] memory lookup",error.message);}
    const helpers=[...present.values()].filter(helper=>{
     if(helper.entityID===victim.entityID||helper.entityID===attackerID||
       helper.faction!==victim.faction||engaged.has(helper.entityID)||responses.has(helper.entityID))return false;
@@ -121,7 +125,7 @@ function createTactics({
        now-(Number(controllers[helper.entityID]?.lastAggressedAtMs)||0)<120000) &&
      pos(helper.ship.position)&&pos(attacker.position))
      .sort((a,b)=>meters(a.ship.position,attacker.position)-meters(b.ship.position,attacker.position))
-     .slice(0,maxResponders);
+     .slice(0,Math.min(3,maxResponders+bonus));
    let mobilized=0;
    for(const helper of helpers){
     const far=meters(helper.ship.position,attacker.position)>250000;

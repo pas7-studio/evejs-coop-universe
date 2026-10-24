@@ -10,6 +10,11 @@ function createFactionDirector({file,clock=()=>Date.now(),buildMinutes=30}){
  try{state=JSON.parse(fs.readFileSync(file,"utf8"));if(state.version!==1||!state.factions)throw Error("invalid faction state");}
  catch(e){if(e.code!=="ENOENT")throw e;}
  state??={version:1,factions:{},processed:{},lastTickAt:clock()};
+ // Schema v1 extension: retain older saves without resetting earned losses.
+ state.chronicle??=[];state.rivalries??={};
+ if(!Array.isArray(state.chronicle)||typeof state.rivalries!=="object"||!state.rivalries)
+  throw Error("invalid saved faction chronicle");
+ const append=(row)=>{state.chronicle.push(row);if(state.chronicle.length>1000)state.chronicle.splice(0,state.chronicle.length-1000);};
  const persist=()=>{fs.mkdirSync(path.dirname(file),{recursive:true});const t=file+".tmp-"+process.pid;fs.writeFileSync(t,JSON.stringify(state));fs.renameSync(t,file);};
  const key=(faction,systemID)=>String(faction||"independent").slice(0,48)+"@"+systemID;
  const get=(faction,systemID)=>state.factions[key(faction,systemID)]??={faction:String(faction||"independent"),systemID:Number(systemID),losses:0,replacementDemand:0,readiness:0,threat:0,patrolPriority:0,shipsRebuilt:0};
@@ -23,8 +28,43 @@ function createFactionDirector({file,clock=()=>Date.now(),buildMinutes=30}){
   entry.patrolPriority=Math.min(100,entry.patrolPriority+20);
   state.factions[key(faction,systemID)]=entry;
   state.processed[String(eventID)]=true;
+  append({eventID:String(eventID),kind:"CONFIRMED_NPC_LOSS",faction:entry.faction,
+   systemID:entry.systemID,occurredAt:clock(),losses:entry.losses,replacementDemand:entry.replacementDemand});
   persist();
   return {status:"RECORDED",faction:entry.faction,systemID:entry.systemID};
+ }
+ // An attack order counts as tension, never as a confirmed kill or conquest.
+ // The two faction tags belong to our named NPC layer, not EveJS ownerIDs.
+ function onEngagement({eventID,aggressorFaction,defenderFaction,systemID,attackerPilotID,defenderPilotID}={}){
+  if(!eventID||!positive(systemID)||!String(aggressorFaction||"").trim()||
+    !String(defenderFaction||"").trim()||aggressorFaction===defenderFaction||
+    !/^coop-pilot-[0-9]{3,}$/.test(String(attackerPilotID))||
+    !/^coop-pilot-[0-9]{3,}$/.test(String(defenderPilotID)))return {status:"INVALID"};
+  const eventKey=String(eventID);
+  if(state.processed[eventKey])return {status:"DUPLICATE"};
+  const pair=[String(aggressorFaction).slice(0,48),String(defenderFaction).slice(0,48)].sort();
+  const rivalryKey=pair.join("|")+"@"+systemID;
+  const rivalry=state.rivalries[rivalryKey]??={factions:pair,systemID:Number(systemID),engagementOrders:0,phase:"CONTACT"};
+  rivalry.engagementOrders=bounded(rivalry.engagementOrders+1);
+  rivalry.phase=rivalry.engagementOrders>=6?"SUSTAINED_TENSION":
+    rivalry.engagementOrders>=3?"ESCALATING":"CONTACT";
+  rivalry.lastAt=clock();
+  state.rivalries[rivalryKey]=rivalry;
+  const defender=get(defenderFaction,systemID);
+  defender.threat=bounded(defender.threat+3);
+  defender.patrolPriority=Math.min(100,defender.patrolPriority+5);
+  state.factions[key(defenderFaction,systemID)]=defender;
+  state.processed[eventKey]=true;
+  append({eventID:eventKey,kind:"NATIVE_ATTACK_ORDER",aggressorFaction:pair.includes(aggressorFaction)?aggressorFaction:String(aggressorFaction),
+   defenderFaction:String(defenderFaction),attackerPilotID,defenderPilotID,
+   systemID:Number(systemID),occurredAt:clock()});
+  persist();
+  return {status:"RECORDED",phase:rivalry.phase,engagementOrders:rivalry.engagementOrders};
+ }
+ function recentForSystem(systemID,limit=10){
+  if(!positive(systemID))return [];
+  const max=Math.max(1,Math.min(50,Math.floor(Number(limit)||10)));
+  return structuredClone(state.chronicle.filter(e=>Number(e.systemID)===Number(systemID)).slice(-max).reverse());
  }
  function advance(virtualEconomySystems={}){
   const now=clock(),duration=buildMinutes*60000;
@@ -47,6 +87,6 @@ function createFactionDirector({file,clock=()=>Date.now(),buildMinutes=30}){
   if(steps){state.lastTickAt+=steps*duration;persist();}
   return {status:"OK",completed,steps};
  }
- return {onLoss,advance,snapshot:()=>structuredClone(state)};
+ return {onLoss,onEngagement,recentForSystem,advance,snapshot:()=>structuredClone(state)};
 }
 module.exports={createFactionDirector};

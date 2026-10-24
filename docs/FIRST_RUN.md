@@ -1,6 +1,6 @@
 # First-run operator runbook
 
-This is a **backend-first** runbook. No complete game has been tested in this repository; EVE-client-dependent gameplay is blocked until compatible, permitted client availability is established.
+**Fresh installation ONLY.** Do not follow this runbook for an already-running game. For the operator's existing EveJS server and the unresolved missing headless event log, use [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md) starting with read-only `-Action DiagnoseWorld`. An authorized client is needed later for visible gameplay, but **not** to trigger headless boot telemetry.
 
 ## 1. Clone the orchestration project
 
@@ -20,7 +20,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Fetch-Upstream.ps1
 
 The script will clone EveJS and X-Eve into `C:\Games\EveCoop\`; it prints exact revision IDs. It neither modifies your official client nor applies a patch. Record these SHAs in a private notebook (do not commit any secrets). Re-running deliberately leaves existing repositories alone.
 
-## 3. Backend Docker only
+## 3. First-time backend initialization only (never routine gameplay testing)
 
 ```powershell
 cd C:\Games\EveCoop\upstream-evejs\Code
@@ -33,7 +33,7 @@ docker compose ps --all
 docker compose logs --tail=150 init market server
 ```
 
-Do not run Docker for the same game at the same time as native Windows server processes. If a command fails, stop and inspect the exact error; do not erase volumes or databases to troubleshoot reflexively.
+The initialization commands above rebuild market state. Do not run them on a persistent installation or merely to diagnose missing NPC events. Do not run Docker for the same game at the same time as native Windows server processes. If a command fails, stop and inspect the exact error; do not erase volumes or databases to troubleshoot reflexively.
 
 ## 4. Health criteria
 - Docker uses Linux containers.
@@ -52,9 +52,9 @@ Do not run the X-Eve installer against the repository cloned in step 2. Find a l
 
 ## 7. Report back
 
-Use `docs/TEST_REPORT_TEMPLATE.md`. Include anonymized output of `docker compose ps --all`, selected log lines, SHA of upstream checkouts, actual client-build availability, and any failures.
+Use `docs/TEST_REPORT_TEMPLATE.md` for fresh setup, or `docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md` for actual NPC/client acceptance. Include anonymized output of `docker compose ps --all`, selected log lines, SHA of upstream checkouts, actual client-build availability, and any failures.
 
-## Extra: compatibility guard and backend diagnostic
+## Extra: optional fresh-setup compatibility checks (not the gameplay gate)
 
 To validate **only** the X-Eve documented archive identity (not a server checkout):
 ```powershell
@@ -77,7 +77,7 @@ To discover upstream network dependencies:
 
 Treat this generated report as local investigation, not as permission to expose game ports.
 
-## Docker security verification before deployment
+## Docker listener safety for fresh deployment (not a recurring game test)
 
 From this orchestration repository, after fetching upstream:
 ```powershell

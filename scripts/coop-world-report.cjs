@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -16,11 +16,138 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
   }catch{invalid++;}
  }
  rows.sort((a,b)=>a._time-b._time);
- const topology=[...rows].reverse().find(e=>e.event==="living-world-topology"&&positive(e.systemID));
+ const latestBoot=[...rows].reverse().find(e=>e.event==="living-headless-boot-requested");
+ const topology=[...rows].reverse().find(e=>e.event==="living-world-topology"&&positive(e.systemID)&&
+  (!latestBoot||e._time>=latestBoot._time));
  const systemID=positive(topology?.systemID);
  const related=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&e._time>=topology._time-1000);
+ const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
+ // Activity may precede a fresh topology refresh. Restrict it to the
+ // current server boot, never borrow evidence from a previous process.
+ const activitySamples=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&
+  e.event==="living-native-activity"&&e.status==="SAMPLED"&&
+  (!latestBoot||e._time>=latestBoot._time));
+ // Movement and cargo growth must be measured between two native scene
+ // samples; a flag, controller order or stationary ship cannot fake them.
+ const activity={
+  samples:activitySamples.length,
+  movedShips:activitySamples.reduce((n,e)=>n+Math.max(0,Number(e.observedMovement)||0),0),
+  oreGrowth:activitySamples.reduce((n,e)=>n+Math.max(0,Number(e.oreGrowth)||0),0),
+  targetingSamples:activitySamples.reduce((n,e)=>n+Math.max(0,Number(e.engagedNativeNpcs)||0),0),
+  lastPhysicalNpcShips:Math.max(0,Number(activitySamples.at(-1)?.physicalNpcShips)||0)
+ };
+ activity.status=activity.movedShips>0&&(activity.oreGrowth>0||activity.targetingSamples>0)
+  ?"MOVEMENT_AND_INTERACTION_OBSERVED":activity.movedShips||activity.oreGrowth||activity.targetingSamples
+  ?"PARTIAL_NATIVE_ACTIVITY":"NO_PHYSICAL_ACTIVITY_EVIDENCE";
+ const combatRows=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&
+  (!latestBoot||e._time>=latestBoot._time));
+ const damage= combatRows.filter(e=>e.event==="living-native-combat-damage")
+  .flatMap(row=>(Array.isArray(row.events)?row.events:[])
+   .filter(e=>positive(e.victimEntityID)&&positive(e.systemID)===systemID&&
+    /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||""))&&
+    Number(e.healthLossHP)>0&&Array.isArray(e.attackerPilotIDs)&&
+    e.attackerPilotIDs.some(x=>/^coop-pilot-[0-9]{3,}$/.test(String(x))))
+   .map(e=>({...e,_observedAt:row._time})));
+ const weapons=combatRows.filter(e=>e.event==="living-native-weapon-event"&&
+  e.status==="VERIFIED_NATIVE_WEAPON_EVENT"&&
+  (e.kind==="missile-launch"||e.kind==="module-activation")&&
+  positive(e.attackerEntityID)&&positive(e.victimEntityID)&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.attackerPilotID||""))&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||"")));
+ const linkedWeaponDamage=damage.filter(d=>weapons.some(w=>
+  Number(w.victimEntityID)===Number(d.victimEntityID)&&
+  w.victimPilotID===d.victimPilotID&&
+  d.attackerPilotIDs.includes(w.attackerPilotID)&&
+  (!Array.isArray(d.attackerEntityIDs)||
+   d.attackerEntityIDs.includes(Number(w.attackerEntityID)))&&
+  w._time<=d._observedAt&&
+  d._observedAt-w._time<=10*60000));
+ const wrecks=combatRows.filter(e=>e.event==="living-native-wreck-evidence"&&
+  e.status==="PHYSICAL_NATIVE_WRECK_VERIFIED"&&positive(e.wreckID)&&
+  positive(e.victimEntityID)&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||"")));
+ const matched=wrecks.find(w=>damage.some(d=>
+  Number(d.victimEntityID)===Number(w.victimEntityID)&&
+  d.victimPilotID===w.victimPilotID&&
+  d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
+ const nativeWeaponChain=wrecks.find(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0&&
+  linkedWeaponDamage.some(d=>Number(d.victimEntityID)===Number(w.victimEntityID)&&
+   d.victimPilotID===w.victimPilotID&&
+   d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
+ // Only the native destruction call's explicit attackerEntity parameter
+ // may qualify as upstream attribution. A recent lock or weapon event is
+ // not a substitute if EveJS omits that parameter.
+ const upstreamAttackers=combatRows.filter(e=>
+  e.event==="living-native-destruction-attacker"&&
+  e.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"&&
+  positive(e.wreckID)&&positive(e.attackerEntityID)&&positive(e.victimEntityID)&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.attackerPilotID||""))&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||"")));
+ const nativeAttackerChain=upstreamAttackers.find(e=>wrecks.some(w=>
+  Number(w.wreckID)===Number(e.wreckID)&&
+  Number(w.victimEntityID)===Number(e.victimEntityID)&&
+  w.victimPilotID===e.victimPilotID&&
+  w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0)&&
+  linkedWeaponDamage.some(d=>
+   Number(d.victimEntityID)===Number(e.victimEntityID)&&
+   d.victimPilotID===e.victimPilotID&&
+   d.attackerPilotIDs.includes(e.attackerPilotID)&&
+   (!Array.isArray(d.attackerEntityIDs)||
+    d.attackerEntityIDs.includes(Number(e.attackerEntityID)))&&
+   d._observedAt<=e._time&&e._time-d._observedAt<=10*60000)&&
+  weapons.some(w=>
+   w.attackerPilotID===e.attackerPilotID&&
+   Number(w.attackerEntityID)===Number(e.attackerEntityID)&&
+   Number(w.victimEntityID)===Number(e.victimEntityID)&&
+   w._time<=e._time&&e._time-w._time<=10*60000));
+ const combat={
+  upstreamAttackerEvents:upstreamAttackers.length,
+  nativeAttackerChainWreckID:nativeAttackerChain?.wreckID||null,
+  nativeAttackerPilotID:nativeAttackerChain?.attackerPilotID||null,
+  witnessedNativeWeaponEvents:weapons.length,
+  weaponCorrelatedDamageEvents:linkedWeaponDamage.length,
+  nativeWeaponDamageWreckLootID:nativeWeaponChain?.wreckID||null,
+  observedNpcOnNpcDamage:damage.length,physicalWrecks:wrecks.length,
+  storedLootWrecks:wrecks.filter(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0).length,
+  matchingWreckID:matched?.wreckID||null,
+  // A target lock is not authoritative killer attribution; real hits and
+  // physical wreck plus stored loot are facts, not proof of the specific shooter.
+  status:matched?.lootStatus==="ITEMS_STORED"&&Number(matched.storedItemCount)>0
+   ?"CORRELATED_DAMAGE_WRECK_AND_LOOT":
+   matched?"CORRELATED_DAMAGE_WITH_EMPTY_WRECK":
+   damage.length&&wrecks.length?"UNMATCHED_DAMAGE_AND_WRECK":
+   damage.length?"DAMAGE_ONLY":wrecks.length?"WRECK_ONLY":"NO_NPC_COMBAT_EVIDENCE"
+ };
+ // Only the native market adapter's settled proof can qualify. A virtual
+ // ISK change, projected NPC identity or raw order-book row is not a trade.
+ const nativeTrades=rows.filter(e=>e.event==="living-native-market-trade"&&
+  e.status==="TRADE_SETTLED"&&e.marketOrderSource==="EVEJS_SEED"&&
+  e.nativeCargoVerified===true&&e.marketRPCAcknowledged===true&&
+  positive(e.systemID)&&/^coop-pilot-[0-9]{3,}$/.test(String(e.pilotID||""))&&
+  positive(e.entityID)&&positive(e.stationID)&&positive(e.typeID)&&
+  Number.isInteger(Number(e.quantity))&&Number(e.quantity)>0&&
+  Number(e.price)>0&&Number.isFinite(Number(e.price))&&
+  /^[0-9]+$/.test(String(e.marketOrderID||""))&&
+  ((e.side==="sell"&&e.marketRPC==="FillOrder")||
+   (e.side==="buy"&&e.marketRPC==="AdjustSeedStock"))&&
+  (!latestBoot||e._time>=latestBoot._time));
+ const nativeSystemTrades=nativeTrades.filter(e=>e.systemID===systemID);
+ const nativeSell=nativeSystemTrades.filter(e=>e.side==="sell");
+ const nativeBuy=nativeSystemTrades.filter(e=>e.side==="buy");
+ const chain=nativeBuy.find(b=>nativeSell.some(s=>
+  s.pilotID===b.pilotID&&Number(s.entityID)===Number(b.entityID)&&
+  s._time<=b._time&&b._time-s._time<=60*60000));
+ const market={
+  settledTrades:nativeSystemTrades.length,
+  nativeSeedSales:nativeSell.length,
+  nativeSeedPurchases:nativeBuy.length,
+  sellThenBuyPilotID:chain?.pilotID||null,
+  status:chain?"NATIVE_SEED_SALE_AND_PURCHASE_VERIFIED":
+   nativeSell.length?"NATIVE_SEED_SALE_ONLY":
+   nativeBuy.length?"NATIVE_SEED_PURCHASE_ONLY":"NO_NATIVE_MARKET_TRADE"
+ };
  const realFleets=industry?.fleets||[];
  const minerShips=realFleets.reduce((sum,f)=>sum+(f.minerIDs?.length||0),0);
  const haulerShips=realFleets.reduce((sum,f)=>sum+(f.haulerIDs?.length||0),0);
@@ -37,7 +164,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
  };
  let status="AWAITING_INGAME_ARRIVAL";
  const blockers=[];
- if(!topology)blockers.push("Log in using a real EVE client, undock and enter a system; TCP reconnect is insufficient.");
+ if(!topology)blockers.push("No native topology evidence. Start LivingCoop headless world boot or enter space with a real permitted EVE client; TCP reconnect is insufficient.");
  else {
   if(!scenery.waypoints||!scenery.asteroidBelts){
    blockers.push("The authoritative runtime scene has no real mining belt/waypoints. Check database generation and static reference data.");
@@ -50,15 +177,52 @@ function summarize(input,{now=Date.now(),windowMinutes=20}={}){
    status="NO_LIVING_NPC_SHIPS";
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
+ // Combat is an independent native-world gate: miner+hauler economic
+ // readiness is not a prerequisite for combat between two other named NPCs.
+ // It still requires actual authoritative scene topology and the strict
+ // source-weapon -> HP -> physical wreck -> stored loot evidence below.
+ if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket){
+  if(topology&&scenery.waypoints>0){
+   status="READY_FOR_CLIENT_PLAYTEST";
+   blockers.length=0;
+  }
+ }
+ if(requireFinalAttacker&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeAttackerChain){
+  status="AWAITING_UPSTREAM_DESTRUCTION_ATTACKER";
+  blockers.push("No matching explicit attackerEntity from native EveJS wreck creation joined to the same attacker/victim weapon, HP loss, real wreck and stored loot. Target selection is not final-blow identity.");
+ }
+ if(requireWeapon&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeWeaponChain){
+  status="AWAITING_NATIVE_WEAPON_CHAIN";
+  blockers.push("No verified native NPC weapon activation or missile launch linked to same-victim HP loss, physical wreck and persisted loot. This does not certify final-hit attribution.");
+ }
+ if(requireCombat&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    combat.status!=="CORRELATED_DAMAGE_WRECK_AND_LOOT"){
+  status="AWAITING_NPC_COMBAT_LOOT";
+  blockers.push("No matching same-victim native NPC-on-NPC HP drop, physical wreck and persisted loot items observed. A target lock alone is insufficient.");
+ }
+ if(requireMarket&&status==="READY_FOR_CLIENT_PLAYTEST"&&!chain){
+  status="AWAITING_NATIVE_MARKET_TRADE";
+  blockers.push("No matching physically settled native NPC sale into EveJS seed demand followed by an actual stock purchase with the same ship and earned ISK.");
+ }
+ if(requireActivity&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    activity.status!=="MOVEMENT_AND_INTERACTION_OBSERVED"){
+  status="AWAITING_NATIVE_ACTIVITY";
+  blockers.push("Physical NPC ships are present, but genuine movement AND cargo growth or active native targeting have not both been observed across native snapshots.");
+ }
  return {status,systemID,topologyAt:topology?.at||null,
-  evidenceWindowMinutes:windowMinutes,scenery,
+  evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
+  headlessBootStatus:headless?.status||null,
+  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
   actualMiningFleets:realFleets.length,actualMinerShips:minerShips,
   actualHaulerShips:haulerShips,
   physicalNpcShipAssignments:Object.values(roles).reduce((a,b)=>a+b,0),
   physicalNpcRoles:roles,oreOnRealHaulers:realFleets.reduce((n,f)=>n+Math.max(0,Number(f.loadedHaulerOreQuantity)||0),0),
   invalidLogLines:invalid,blockers,
   limits:[
-   "Server-side actual EveJS scene observations only.",
+   "Server-side actual EveJS scene observations only; headless evidence does not imply a game client has logged in.",
+   "Correlated NPC controller target and HP loss do not identify the actual killer without native damage attribution.",
+   "Native active targeting is not proof of weapon damage, destroyed ships or real player/NPC combat.",
+   "NPC market gate verifies existing EveJS seed-order trades only; independent player-compatible NPC order ownership, wallet and escrow still need implementation.",
    "Does not prove client rendering, real mining laser behavior, damage/loot, second-client login or friend-PC networking."
   ]};
 }
@@ -67,7 +231,12 @@ if(require.main===module){
   const args=process.argv.slice(2),p=args.indexOf("--window-minutes");
   const minutes=p>=0?Number(args[p+1]):20;
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw Error("--window-minutes must be 1..240");
-  const report=summarize(fs.readFileSync(0,"utf8"),{windowMinutes:minutes});
+  const report=summarize(fs.readFileSync(0,"utf8"),{
+   windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
+   requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
+   requireFinalAttacker:args.includes("--require-final-attacker"),
+   requireMarket:args.includes("--require-market")
+  });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
  }catch(error){console.error("Living world verification failed:",error.message);process.exitCode=1;}

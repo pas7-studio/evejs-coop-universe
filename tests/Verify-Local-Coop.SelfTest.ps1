@@ -20,11 +20,11 @@ function Assert-FailureReport([string]$Case, [string[]]$Arguments, [string]$Requ
   if (-not ($report.results | Where-Object { $_.status -eq 'FAIL' -and $_.detail -like "*$RequiredMessage*" })) {
     throw "$Case missing expected error '$RequiredMessage': $($report | ConvertTo-Json -Depth 8)"
   }
-  Write-Host "[PASS] $Case: nonzero exit, FAIL report, expected diagnostic"
+  Write-Host "[PASS] ${Case}: nonzero exit, FAIL report, expected diagnostic"
 }
 
 try {
-  Assert-FailureReport 'invalid-timeout' @('-HealthTimeoutSeconds','10') 'HealthTimeoutSeconds must be 15..900'
+  Assert-FailureReport 'invalid-timeout' @('-CodePath',(Join-Path $root 'no-evejs-code'),'-HealthTimeoutSeconds','10') 'HealthTimeoutSeconds must be 15..900'
   Assert-FailureReport 'missing-checkout' @('-CodePath',(Join-Path $root 'no-evejs-code')) 'Missing upstream compose.yaml'
   Write-Host '[PASS] Verifier negative regression suite'
 } finally {

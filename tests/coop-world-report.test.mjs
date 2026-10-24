@@ -45,3 +45,344 @@ test("no native miners cannot be masked by many virtual residents",()=>{
  ].join("\n");
  assert.equal(summarize(input,{now}).status,"NO_NATIVE_MINING_FLEET");
 });
+
+test("headless physical NPC evidence is playable-world server readiness, not real client success",()=>{
+ const input=[
+  event("living-headless-boot-requested",{status:"SCHEDULED_NOT_VERIFIED"}),
+  event("living-world-topology",{realWaypoints:5,realAsteroidBelts:1,
+   realStargates:2,sceneReady:true,evidenceSource:"HEADLESS_NATIVE_SCENE"}),
+  event("living-native-industry",{fleets:[{fleetID:11,minerIDs:[1001],haulerIDs:[1002]}]}),
+  event("virtual-world-materialization",{livingShips:[
+   {pilotID:"coop-pilot-001",entityID:1001,role:"miner"},
+   {pilotID:"coop-pilot-005",entityID:1003,role:"pirate"}
+  ]}),
+  event("living-headless-boot-system",{status:"NATIVE_SCENE_READY",
+   physicalMiningShips:2,actualNamedNpcShips:2})
+ ].join("\n");
+ const result=summarize(input,{now});
+ assert.equal(result.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(result.evidenceSource,"HEADLESS_NATIVE_SCENE");
+ assert.equal(result.headlessBootStatus,"NATIVE_SCENE_READY");
+ assert.ok(result.limits.some(x=>x.includes("headless evidence")));
+});
+test("headless boot flags alone cannot count as real NPC materialization",()=>{
+ const input=[
+  event("living-headless-boot-requested",{status:"SCHEDULED_NOT_VERIFIED"}),
+  event("living-headless-boot-system",{status:"PENDING_NATIVE_SCENE",
+   physicalMiningShips:0,actualNamedNpcShips:0})
+ ].join("\n");
+ assert.notEqual(summarize(input,{now}).status,"READY_FOR_CLIENT_PLAYTEST");
+});
+
+test("strict World gate rejects physical ships without sampled motion and interaction",()=>{
+ const input=[
+  event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+  event("living-native-industry",{fleets:[{fleetID:7,minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10,role:"miner"}]})
+ ].join("\n");
+ const loose=summarize(input,{now});
+ const strict=summarize(input,{now,requireActivity:true});
+ assert.equal(loose.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(strict.status,"AWAITING_NATIVE_ACTIVITY");
+ assert.equal(strict.activity.status,"NO_PHYSICAL_ACTIVITY_EVIDENCE");
+});
+test("strict World gate accepts only movement AND native ore or targeting evidence",()=>{
+ const input=[
+  event("living-headless-boot-requested",{status:"SCHEDULED_NOT_VERIFIED"}),
+  event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2,evidenceSource:"HEADLESS_NATIVE_SCENE"}),
+  event("living-native-industry",{fleets:[{fleetID:7,minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10,role:"miner"}]}),
+  event("living-native-activity",{status:"SAMPLED",physicalNpcShips:2,observedMovement:1,
+   oreGrowth:0,engagedNativeNpcs:1})
+ ].join("\n");
+ const result=summarize(input,{now,requireActivity:true});
+ assert.equal(result.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(result.activity.status,"MOVEMENT_AND_INTERACTION_OBSERVED");
+ assert.equal(result.activity.movedShips,1);
+ assert.equal(result.activity.targetingSamples,1);
+});
+test("strict World refuses moving ships without any real interaction",()=>{
+ const input=[
+  event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+  event("living-native-industry",{fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10}]}),
+  event("living-native-activity",{status:"SAMPLED",observedMovement:2,oreGrowth:0,engagedNativeNpcs:0})
+ ].join("\n");
+ assert.equal(summarize(input,{now,requireActivity:true}).status,"AWAITING_NATIVE_ACTIVITY");
+});
+test("strict World does not accept previous-boot native evidence",()=>{
+ const earlier=(name,extra={})=>JSON.stringify({at:new Date(now-90000).toISOString(),
+  event:name,systemID:30000142,...extra});
+ const newer=(name,extra={})=>JSON.stringify({at:new Date(now-10000).toISOString(),
+  event:name,systemID:30000142,...extra});
+ const input=[
+  earlier("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+  earlier("living-native-industry",{fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  earlier("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10}]}),
+  earlier("living-native-activity",{status:"SAMPLED",observedMovement:1,oreGrowth:1}),
+  newer("living-headless-boot-requested",{status:"SCHEDULED_NOT_VERIFIED"})
+ ].join("\n");
+ const result=summarize(input,{now,requireActivity:true});
+ assert.equal(result.status,"AWAITING_INGAME_ARRIVAL");
+ assert.equal(result.activity.movedShips,0);
+});
+
+const combatFixture=({victim=102,loot=2,damage=true}={})=>[
+ event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+ event("living-native-industry",{fleets:[{minerIDs:[101],haulerIDs:[102]}]}),
+ event("virtual-world-materialization",{livingShips:[
+  {pilotID:"coop-pilot-001",entityID:101,role:"miner"},
+  {pilotID:"coop-pilot-002",entityID:102,role:"hauler"}
+ ]}),
+ ...(damage?[event("living-native-combat-damage",{events:[{
+  systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+  healthLossHP:17,attackerPilotIDs:["coop-pilot-001"],
+  attribution:"CORRELATED_TARGET_ONLY_NOT_KILL_CREDIT"
+ }]})]:[]),
+ event("living-native-wreck-evidence",{status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:victim,victimPilotID:"coop-pilot-002",
+  wreckID:900,storedItemCount:loot,lootStatus:loot?"ITEMS_STORED":"NATIVE_WRECK_EMPTY"})
+].join("\n");
+test("manual combat gate requires actual correlated named-NPC HP drop, wreck and native loot",()=>{
+ const report=summarize(combatFixture(),{now,requireCombat:true});
+ assert.equal(report.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(report.combat.status,"CORRELATED_DAMAGE_WRECK_AND_LOOT");
+ assert.equal(report.combat.matchingWreckID,900);
+ assert.ok(report.limits.some(x=>x.includes("do not identify the actual killer")));
+});
+test("native target without health loss does not pass combat gate",()=>{
+ const report=summarize(combatFixture({damage:false}),{now,requireCombat:true});
+ assert.equal(report.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(report.combat.status,"WRECK_ONLY");
+});
+test("wrong victim and empty actual wreck do not prove NPC kill plus loot",()=>{
+ const mismatch=summarize(combatFixture({victim:103}),{now,requireCombat:true});
+ assert.equal(mismatch.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(mismatch.combat.status,"UNMATCHED_DAMAGE_AND_WRECK");
+ const empty=summarize(combatFixture({loot:0}),{now,requireCombat:true});
+ assert.equal(empty.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(empty.combat.status,"CORRELATED_DAMAGE_WITH_EMPTY_WRECK");
+});
+
+test("strict weapon chain needs a genuine native launch/activation from same NPC attacker and victim",()=>{
+ const launch=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
+ });
+ const good=summarize(combatFixture()+"\n"+launch,{now,requireCombat:true,requireWeapon:true});
+ assert.equal(good.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(good.combat.nativeWeaponDamageWreckLootID,900);
+ assert.equal(good.combat.weaponCorrelatedDamageEvents,1);
+ const missing=summarize(combatFixture(),{now,requireCombat:true,requireWeapon:true});
+ assert.equal(missing.status,"AWAITING_NATIVE_WEAPON_CHAIN");
+});
+test("weapon activity of different NPC or victim does not claim a battle outcome",()=>{
+ for(const changes of [
+  {attackerPilotID:"coop-pilot-099"},
+  {victimEntityID:103},
+  {status:"IGNORED"},
+  {kind:"attack-order"}
+ ]){
+  const witness=event("living-native-weapon-event",{
+   status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"module-activation",
+   attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+   victimEntityID:102,victimPilotID:"coop-pilot-002",
+   moduleID:99,...changes
+  });
+  const r=summarize(combatFixture()+"\n"+witness,{now,requireWeapon:true});
+  assert.equal(r.status,"AWAITING_NATIVE_WEAPON_CHAIN");
+ }
+});
+
+test("real NPC battle evidence does not depend on a miner or hauler fleet",()=>{
+ const input=[
+  event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0}),
+  event("living-native-weapon-event",{status:"VERIFIED_NATIVE_WEAPON_EVENT",
+   kind:"missile-launch",attackerEntityID:401,attackerPilotID:"coop-pilot-001",
+   victimEntityID:402,victimPilotID:"coop-pilot-002"}),
+  event("living-native-combat-damage",{events:[{systemID:30000142,
+   victimEntityID:402,victimPilotID:"coop-pilot-002",healthLossHP:31,
+   attackerPilotIDs:["coop-pilot-001"]}]}),
+  event("living-native-wreck-evidence",{status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+   wreckID:500,systemID:30000142,victimEntityID:402,victimPilotID:"coop-pilot-002",
+   lootStatus:"ITEMS_STORED",storedItemCount:2})
+ ].join("\n");
+ const report=summarize(input,{now,requireCombat:true,requireWeapon:true});
+ assert.equal(report.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(report.combat.nativeWeaponDamageWreckLootID,500);
+ assert.equal(report.actualMiningFleets,0);
+ const economic=summarize(input,{now});
+ assert.equal(economic.status,"MISSING_NATIVE_WORLD_DATA");
+});
+
+test("native upstream destruction attacker is never inferred from target lock, module or wreck",()=>{
+ const launch=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
+ });
+ const noNative=summarize(combatFixture()+"\n"+launch,{now,requireFinalAttacker:true});
+ assert.equal(noNative.status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
+ assert.equal(noNative.combat.nativeAttackerChainWreckID,null);
+});
+test("explicit native destruction source must match exact attacker, wreck and source-side weapon",()=>{
+ const launch=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
+ });
+ const source=event("living-native-destruction-attacker",{
+  status:"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900
+ });
+ const base=combatFixture()+"\n"+launch;
+ const valid=summarize(base+"\n"+source,{now,requireCombat:true,requireWeapon:true,requireFinalAttacker:true});
+ assert.equal(valid.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(valid.combat.nativeAttackerChainWreckID,900);
+ assert.equal(valid.combat.nativeAttackerPilotID,"coop-pilot-001");
+ const forged=event("living-native-destruction-attacker",{
+  status:"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  attackerEntityID:999,attackerPilotID:"coop-pilot-099",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900
+ });
+ assert.equal(summarize(base+"\n"+forged,{now,requireFinalAttacker:true}).status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
+ const wrong=event("living-native-destruction-attacker",{
+  status:"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:901
+ });
+ assert.equal(summarize(base+"\n"+wrong,{now,requireFinalAttacker:true}).status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
+});
+
+
+test("combat must not correlate a reused entity ID with a different named NPC",()=>{
+ const original=event("living-native-combat-damage",{events:[{
+  systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+  healthLossHP:20,attackerPilotIDs:["coop-pilot-001"]
+ }]});
+ const changedVictim=event("living-native-wreck-evidence",{
+  status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-099",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ const topology=event("living-world-topology",{realWaypoints:4,realAsteroidBelts:0});
+ const bad=summarize([topology,original,changedVictim].join("\n"),{now,requireCombat:true});
+ assert.equal(bad.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(bad.combat.status,"UNMATCHED_DAMAGE_AND_WRECK");
+});
+test("native terminal HP observation precedes wreck evidence even for fast kills",()=>{
+ const time=secs=>new Date(now-secs*1000).toISOString();
+ const topology=event("living-world-topology",{realWaypoints:4,realAsteroidBelts:0});
+ const weapon=event("living-native-weapon-event",{
+  at:time(60),status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002"
+ });
+ const hp=event("living-native-combat-damage",{
+  at:time(50),terminalNativeWreckID:900,events:[{
+   systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+   healthLossHP:47,attackerPilotIDs:["coop-pilot-001"],attackerEntityIDs:[101]
+  }]
+ });
+ const wreck=event("living-native-wreck-evidence",{
+  at:time(40),status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ const good=summarize([topology,weapon,hp,wreck].join("\n"),{now,requireCombat:true,requireWeapon:true});
+ assert.equal(good.status,"READY_FOR_CLIENT_PLAYTEST");
+ const outOfOrder=event("living-native-wreck-evidence",{
+  at:time(55),status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ assert.equal(summarize([topology,weapon,hp,outOfOrder].join("\n"),
+  {now,requireCombat:true,requireWeapon:true}).status,"AWAITING_NATIVE_WEAPON_CHAIN");
+});
+test("native HP correlation checks actual attacker entity when it is provided",()=>{
+ const topology=event("living-world-topology",{realWaypoints:4,realAsteroidBelts:0});
+ const hit=event("living-native-combat-damage",{events:[{
+  systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+  healthLossHP:47,attackerPilotIDs:["coop-pilot-001"],attackerEntityIDs:[999]
+ }]});
+ const shot=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002"
+ });
+ const wreck=event("living-native-wreck-evidence",{
+  status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900,
+  lootStatus:"ITEMS_STORED",storedItemCount:2
+ });
+ const result=summarize([topology,shot,hit,wreck].join("\n"),
+  {now,requireCombat:true,requireWeapon:true});
+ assert.equal(result.status,"AWAITING_NATIVE_WEAPON_CHAIN");
+ assert.equal(result.combat.weaponCorrelatedDamageEvents,0);
+});
+
+test("strict Market gate requires native sale then purchase settled through actual EveJS seed RPC",()=>{
+ const topo=event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0});
+ const sale=event("living-native-market-trade",{at:new Date(now-120000).toISOString(),
+  status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,marketRPC:"FillOrder",
+  marketOrderID:"9100000000000000123",side:"sell",pilotID:"coop-pilot-005",
+  entityID:980000000001,stationID:60015169,typeID:34,quantity:5,price:100});
+ const buy=event("living-native-market-trade",{at:new Date(now-60000).toISOString(),
+  status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,marketRPC:"AdjustSeedStock",
+  marketOrderID:"9000000000000000444",side:"buy",pilotID:"coop-pilot-005",
+  entityID:980000000001,stationID:60015169,typeID:35,quantity:3,price:50});
+ const r=summarize([topo,sale,buy].join("\n"),{now,requireMarket:true});
+ assert.equal(r.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(r.market.status,"NATIVE_SEED_SALE_AND_PURCHASE_VERIFIED");
+ assert.equal(r.market.nativeSeedSales,1);assert.equal(r.market.nativeSeedPurchases,1);
+ assert.equal(r.market.sellThenBuyPilotID,"coop-pilot-005");
+ assert.ok(r.limits.some(x=>x.includes("seed-order trades only")));
+});
+test("Market gate rejects an unbacked virtual order, wrong pilot or wrong native RPC",()=>{
+ const topo=event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0});
+ const base={status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,
+  pilotID:"coop-pilot-005",entityID:980000000001,
+  stationID:60015169,typeID:34,quantity:5,price:100,
+  marketOrderID:"9100000000000000123"};
+ const sale=event("living-native-market-trade",{...base,side:"sell",marketRPC:"FillOrder",
+  at:new Date(now-120000).toISOString()});
+ const buy=event("living-native-market-trade",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock",at:new Date(now-60000).toISOString()});
+ assert.equal(summarize([topo,sale].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const otherPilot=event("living-native-market-trade",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock",pilotID:"coop-pilot-099"});
+ assert.equal(summarize([topo,sale,otherPilot].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const notNative=event("living-native-market-trade",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock",nativeCargoVerified:false});
+ assert.equal(summarize([topo,sale,notNative].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const virtual=event("virtual-market-transaction",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock"});
+ assert.equal(summarize([topo,sale,virtual].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ assert.equal(summarize([topo,sale,buy].join("\n"),{now,requireMarket:true}).status,
+  "READY_FOR_CLIENT_PLAYTEST");
+});
+test("Market gate cannot promote reversed or out-of-boot native trades",()=>{
+ const topo=event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0});
+ const native={status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,pilotID:"coop-pilot-005",
+  entityID:980000000001,stationID:60015169,typeID:34,quantity:5,price:100,
+  marketOrderID:"9100000000000000123"};
+ const sale=event("living-native-market-trade",{...native,side:"sell",
+  marketRPC:"FillOrder",at:new Date(now-15000).toISOString()});
+ const buy=event("living-native-market-trade",{...native,side:"buy",
+  marketRPC:"AdjustSeedStock",at:new Date(now-90000).toISOString()});
+ assert.equal(summarize([topo,sale,buy].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const restart=event("living-headless-boot-requested",{at:new Date(now-5000).toISOString()});
+ const result=summarize([topo,sale,buy,restart].join("\n"),{now,requireMarket:true});
+ assert.notEqual(result.status,"READY_FOR_CLIENT_PLAYTEST");
+});

@@ -6,7 +6,7 @@ const {createTactics}=require("../integration/coopNpcTactics.cjs");
 const npc=(itemID,x,y=0)=>({itemID,kind:"ship",position:{x,y,z:0},mode:"STOP"});
 const anchors=[{id:44,kind:"station",name:"Safety Station",position:{x:2000000,y:0,z:0}}];
 function setup({now=1000000,ships=[],assignments=[],controllers={},
- health=()=>({armor:1,structure:1}),scrambled=()=>false}={}){
+ health=()=>({armor:1,structure:1}),scrambled=()=>false,additionalResponders=()=>0}={}){
  let current=now;
  const entities=new Map(ships.map(s=>[s.itemID,s])),orders=[],events=[];
  const scene={getEntityByID:id=>entities.get(id)};
@@ -19,7 +19,7 @@ function setup({now=1000000,ships=[],assignments=[],controllers={},
   notify:event=>events.push(event)
  });
  const tick=()=>tactics.tick({systemID:30000142,scene,assignments,
-  controllers,health,isScrambled:scrambled,waypoints:anchors});
+  controllers,health,isScrambled:scrambled,waypoints:anchors,additionalResponders});
  return {tick,orders,events,tactics,entities,advance:ms=>{current+=ms}};
 }
 test("real damage and attacker trigger native warp retreat to existing safe station",()=>{
@@ -85,4 +85,20 @@ test("long-distance backup warps to attacker and actually engages after physical
  const result=a.tick();
  assert.ok(result.events.some(e=>e.kind==="reinforcement-attack"&&e.responderID===201));
  assert.deepEqual(a.orders.map(x=>x.type),["respond-warp","attack"]);
+});
+
+test("a known repeat aggressor can summon one more existing patrol, never a spawned ship",()=>{
+ const ships=[npc(101,0),npc(201,11000),npc(202,12000),npc(203,13000),npc(990,20000)];
+ const assignments=[
+  {pilotID:"coop-pilot-001",entityID:101,role:"miner",faction:"frontier"},
+  ...[201,202,203].map((id,i)=>({pilotID:"coop-pilot-"+String(i+2).padStart(3,"0"),
+   entityID:id,role:"patrol",faction:"frontier"}))
+ ];
+ const a=setup({ships,assignments,
+  controllers:{101:{lastAggressorID:990,lastAggressedAtMs:999900}},
+  additionalResponders:()=>1});
+ const out=a.tick();
+ assert.equal(out.events.filter(e=>e.kind==="reinforcement-attack").length,3);
+ assert.equal(a.orders.length,3);
+ assert.deepEqual(a.orders.map(e=>e.id).sort(),[201,202,203]);
 });
