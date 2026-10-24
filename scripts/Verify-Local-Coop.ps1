@@ -98,6 +98,7 @@ try {
       'tests/upstream-two-observers.test.mjs',
       'tests/upstream-two-observer-warp.test.mjs',
       'tests/upstream-two-pilot-lifecycle.test.mjs',
+      'tests/upstream-two-pilot-movement-and-reconnect.test.mjs',
       'tests/upstream-ship-prime-recipients.test.mjs'
     ) | ForEach-Object { Join-Path $projectRoot $_ }
     $null=RunExternal 'EveJS scene/session contract tests' $node (@('--test')+$testFiles) 'upstream-contracts.log'
