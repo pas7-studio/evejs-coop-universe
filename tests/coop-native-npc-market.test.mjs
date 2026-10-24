@@ -14,6 +14,8 @@ function fixture(){
  const ship={itemID:980000000001,kind:"ship",nativeNpc:true,position:{x:500,y:0,z:0}};
  const scene={systemID:30000142,staticEntities:[{kind:"station",itemID:station.stationID,position:station.position,radius:station.radius}],getEntityByID:id=>id===ship.itemID?ship:null};
  const pilotID="coop-pilot-005";
+ const controller={entityID:ship.itemID,systemID:scene.systemID,
+  currentTargetID:0,lastAggressorID:0,manualOrder:null};
  const registry={snapshot:()=>({links:{[pilotID]:{
   pilotID,entityID:ship.itemID,systemID:30000142}}})};
  let cargo=[{cargoID:980200000005,entityID:ship.itemID,ownerID:100,
@@ -64,13 +66,14 @@ function fixture(){
  };
  const trader=()=>createNpcMarketTrader({root,call,store,registry,
   sceneForSystem:system=>system===scene.systemID?scene:null,
+  getController:id=>id===ship.itemID?controller:null,
   getStation:id=>id===station.stationID?station:null,
   resolveType:id=>id===603?({typeID:603,capacity:cargoCapacity}):
    ({typeID:id,groupID:18,categoryID:8,name:"Test cargo",volume:0.1}),
   clock:()=>now,cooldownMs:30000,maxQuantity:10,maxPrice:1000});
  const params=(side,typeID)=>({scene,pilotID,entityID:ship.itemID,
   stationID:station.stationID,side,typeID,buyTypes:[35],sellTypes:[34]});
- return {root,scene,ship,registry,store,station,trader,params,
+ return {root,scene,ship,controller,registry,store,station,trader,params,
   getCargo:()=>cargo,getCalls:()=>calls,advance:()=>{now+=30001},
   setFailRPC:v=>{failRPC=v},setFailInventory:v=>{failInventory=v},
   setFailFill:v=>{failFillOnly=v},setFailGet:v=>{failGet=v},
@@ -129,6 +132,19 @@ test("invalid allowlist, nonexistent seed bid, and buyer without funds never mut
   assert.equal((await t.execute(x.params("buy",35))).status,"INSUFFICIENT_EARNED_ISK");
   assert.equal(x.getCargo()[0].quantity,8);
   assert.equal(x.getCalls().filter(c=>c.method==="FillOrder").length,0);
+ }finally{x.cleanup()}
+});
+test("native market guard excludes a real player-owned ship and active fighting NPC",async()=>{
+ const x=fixture();try{
+  const t=x.trader();
+  x.scene.sessions=new Map([[1,{characterID:88,_space:{shipID:x.ship.itemID}}]]);
+  assert.equal((await t.execute(x.params("sell",34))).status,"PLAYER_SHIP_EXCLUDED");
+  x.scene.sessions.clear();
+  x.controller.currentTargetID=999;
+  assert.equal((await t.execute(x.params("sell",34))).status,"NATIVE_NPC_BUSY");
+  x.controller.currentTargetID=0;x.ship.mode="WARP";
+  assert.equal((await t.execute(x.params("sell",34))).status,"NATIVE_NPC_BUSY");
+  assert.equal(x.getCalls().length,0);
  }finally{x.cleanup()}
 });
 test("ambiguous native market RPC failure halts pilot rather than duplicating a sale",async()=>{
