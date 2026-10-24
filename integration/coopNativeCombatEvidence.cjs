@@ -41,7 +41,7 @@ function createCombatEvidence({clock=()=>Date.now(),minLossHP=0.01,maxTracked=50
     const target=positive(getController(id)?.currentTargetID);
     if(!target||target===id||!live.has(target))continue;
     if(!attackers.has(target))attackers.set(target,[]);
-    attackers.get(target).push(pilotID);
+    attackers.get(target).push({pilotID,entityID:id});
    }catch(_error){}
   }
   const events=[];
@@ -59,14 +59,16 @@ function createCombatEvidence({clock=()=>Date.now(),minLossHP=0.01,maxTracked=50
     if(total>=minLossHP){
      events.push({systemID:system,victimEntityID:id,victimPilotID:pilotID,
       observedAt:now,healthLossHP:Math.round(total*1000)/1000,
-      layerLossHP:lost,attackerPilotIDs:[...new Set(attackers.get(id)||[])].sort(),
+      layerLossHP:lost,
+      attackerPilotIDs:[...new Set((attackers.get(id)||[]).map(a=>a.pilotID))].sort(),
+      attackerEntityIDs:[...new Set((attackers.get(id)||[]).map(a=>a.entityID))].sort((a,b)=>a-b),
       attribution:"CORRELATED_TARGET_ONLY_NOT_KILL_CREDIT"});
     }
    }
    // Bounded by number of live entities and previous samples; a ship whose
    // native entity ID is reused cannot inherit an unrelated pilot's HP.
    if(old||previous.size<maxTracked)
-    previous.set(key,{pilotID,at:now,health});
+    previous.set(key,{pilotID,at:now,health,attackers:attackers.get(id)||[]});
   }
   if(previous.size>=maxTracked){
    for(const [key,row] of previous)if(row.at<now-3600000)previous.delete(key);
@@ -75,7 +77,41 @@ function createCombatEvidence({clock=()=>Date.now(),minLossHP=0.01,maxTracked=50
    damageEvents:events.length,correlatedNpcDamage:events.filter(e=>e.attackerPilotIDs.length).length,
    events:events.slice(0,30)};
  }
- return {sample};
+ // The EveJS native wreck callback still owns the original shipEntity
+ // object, even after it leaves the authoritative scene. The last HP
+ // transition can be missed by the periodic sampler during a fast kill.
+ // Only a fresh, previous physical scene sample may establish this delta.
+ function terminalDamage({systemID,entityID,pilotID,ship,wreckID,getHealth}={}){
+  const system=positive(systemID),id=positive(entityID),wreck=positive(wreckID);
+  if(!system||!id||!wreck||!named(pilotID)||ship?.nativeNpc!==true||
+   ship?.kind!=="ship"||Number(ship.itemID)!==id||typeof getHealth!=="function")
+   return {status:"INVALID_NATIVE_TERMINAL"};
+  const key=system+":"+id,old=previous.get(key);
+  if(!old||old.pilotID!==pilotID)return {status:"NO_PREVIOUS_NATIVE_HP"};
+  const now=clock();
+  if(!Number.isFinite(now)||now<=old.at||now-old.at>30000)
+   return {status:"STALE_TERMINAL_HP"};
+  let final=null;
+  try{final=layers(getHealth(ship));}catch(_error){}
+  if(!final)return {status:"NO_TERMINAL_HP"};
+  const lost={shield:Math.max(0,old.health.shield-final.shield),
+   armor:Math.max(0,old.health.armor-final.armor),
+   structure:Math.max(0,old.health.structure-final.structure)};
+  const total=lost.shield+lost.armor+lost.structure;
+  // The native death hook proves destruction, but never invents lost HP.
+  if(total<minLossHP)return {status:"NO_OBSERVED_TERMINAL_LOSS"};
+  previous.delete(key);
+  const attackers=old.attackers||[];
+  return {status:"NATIVE_TERMINAL_HP_DROP",event:{
+   systemID:system,victimEntityID:id,victimPilotID:pilotID,
+   observedAt:now,nativeWreckID:wreck,
+   healthLossHP:Math.round(total*1000)/1000,layerLossHP:lost,
+   attackerPilotIDs:[...new Set(attackers.map(a=>a.pilotID))].sort(),
+   attackerEntityIDs:[...new Set(attackers.map(a=>a.entityID))].sort((a,b)=>a-b),
+   attribution:"NATIVE_TERMINAL_HP_DELTA_TARGET_CORRELATION_NOT_KILL_CREDIT"
+  }};
+ }
+ return {sample,terminalDamage};
 }
 function verifyWreck({systemID,npcID,wreckID,scene,links=[],getWreck,getWreckItems}={}){
  const system=positive(systemID),victim=positive(npcID),id=positive(wreckID);
