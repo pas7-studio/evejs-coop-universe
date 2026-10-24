@@ -143,13 +143,13 @@ switch ($Action) {
         $options=Get-ComposeArgs
         $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
         if ($LASTEXITCODE -ne 0) {
-            throw 'No living world evidence yet. Run -Action CoopStart, enter space with a game client, and retry.'
+            throw 'No headless/native world evidence yet. Run -Action CoopStart, inspect server startup logs, then retry. Client playtest is separate.'
         }
         $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs')
         if ($LASTEXITCODE -ne 0) {
             throw 'Living Universe is not yet confirmed from real scene evidence. Inspect the report above and -Action Logs.'
         }
-        Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed. This is not proof of client-side gameplay.'
+        Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed by the server. Client login, rendering, combat and loot remain unverified.'
     }
     'Logs' {
         Assert-BackendPrerequisites
