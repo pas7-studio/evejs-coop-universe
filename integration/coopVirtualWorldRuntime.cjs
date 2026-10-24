@@ -105,6 +105,13 @@ function nextHeadlessRetryMs(attempts){
  if(count<18)return 10*60000;
  return 15*60000;
 }
+function isHeadlessNativeReady({miningEnabled=true,physicalNpcCount=0,
+ beltCount=0,physicalMiningShips=0,waypointCount=0}={}){
+ // In non-mining configurations no stock mining fleet is expected.
+ // Require at least one real static anchor and a named native ship.
+ return physicalNpcCount>0&&waypointCount>0&&
+  (!miningEnabled||(beltCount>0&&physicalMiningShips>0));
+}
 // Initialize real EveJS scenes without waiting for a human to log in.
 // This is not a client/gameplay proof: only existing native entities count.
 function scheduleHeadlessWorldBoot(route){
@@ -131,7 +138,11 @@ function scheduleHeadlessWorldBoot(route){
       scene?.getEntityByID?.(Number(link.entityID)));
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
-    const verified=beltCount>0&&fleetShips.length>0&&links.length>0;
+    const verified=isHeadlessNativeReady({
+     miningEnabled:process.env.EVEJS_COOP_NATIVE_MINING==="1",
+     physicalNpcCount:links.length,waypointCount:topology.length,
+     beltCount,physicalMiningShips:fleetShips.length
+    });
     // A real named native NPC can operate even if stock mining or static
     // topology is incomplete. Readiness remains a stricter separate gate.
     if(links.length)visitedSystems.add(systemID);
@@ -688,4 +699,4 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID){
    });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs};
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady};
