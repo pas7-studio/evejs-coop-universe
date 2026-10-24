@@ -5,6 +5,9 @@
 const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const vector=p=>!!p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinite(p[k]));
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+// Pinned EveJS requires <=2500m SURFACE separation for player gate jumps.
+const surfaceGap=(ship,gate)=>Math.max(0,distance(ship.position,gate.position)-
+ Math.max(0,Number(ship.radius)||0)-Math.max(0,Number(gate.radius)||0));
 const named=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
 function connectedGates({sourceSystemID,targetSystemID,sourceScene,getGate}={}){
  const source=pos(sourceSystemID),target=pos(targetSystemID);
@@ -25,15 +28,15 @@ function connectedGates({sourceSystemID,targetSystemID,sourceScene,getGate}={}){
    Number(arrival.destinationID)!==id)continue;
   result.push({sourceGateID:id,destinationGateID:destID,
    sourceSystemID:source,destinationSystemID:target,
-   position:{...entry.position}});
+   position:{...entry.position},radius:Math.max(0,Number(entry.radius)||0)});
  }
  return result.sort((a,b)=>a.sourceGateID-b.sourceGateID);
 }
 function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
- approachMeters=30000,maxShipsPerTick=2,transfer=null}={}){
+ approachMeters=2500,maxShipsPerTick=2,transfer=null}={}){
  if(typeof warp!=="function"||typeof getGate!=="function"||typeof clock!=="function"||
   !Number.isSafeInteger(dwellMs)||dwellMs<30000||
-  !Number.isFinite(approachMeters)||approachMeters<1000||approachMeters>100000||
+  !Number.isFinite(approachMeters)||approachMeters<500||approachMeters>2500||
   !Number.isSafeInteger(maxShipsPerTick)||maxShipsPerTick<1||maxShipsPerTick>5||
   (transfer!==null&&typeof transfer!=="function"))throw Error("invalid native gate travel options");
  const pending=new Map();
@@ -75,7 +78,7 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
    const gate=gates.reduce((best,g)=>!best||distance(pilot.ship.position,g.position)<
     distance(pilot.ship.position,best.position)?g:best,null);
    if(!gate)continue;
-   const meters=distance(pilot.ship.position,gate.position);
+   const meters=surfaceGap(pilot.ship,gate);
    if(meters>approachMeters){
     const result=warp(pilot.id,gate.sourceGateID,{forceImmediateStart:true,
      broadcastWarpStartToVisibleSessions:true});
