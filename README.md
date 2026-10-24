@@ -66,3 +66,7 @@ Start with [FIRST_RUN.md](docs/FIRST_RUN.md). The repository now includes a [rea
 ## One-PC server + two-client test for agents
 
 See [TWO_CLIENTS_ONE_PC.md](docs/TWO_CLIENTS_ONE_PC.md) for copy-paste Windows commands to prepare one Docker server, start two client launchers, inspect health, collect logs and stop safely. Actual two-client gameplay is **not yet validated**.
+
+## Agent backend gate (no proprietary client required)
+
+Run `powershell -ExecutionPolicy Bypass -File .\\scripts\\Verify-Local-Coop.ps1 -StartBackend -IncludeUpstreamTests` to validate Docker safety/health, two simultaneous TCP sockets and real EveJS scene/session contracts, with one structured `test-results/verify-*/report.json` and diagnostics. See [VERIFY_BACKEND_ONE_COMMAND.md](docs/VERIFY_BACKEND_ONE_COMMAND.md) for prerequisites and the exact PASS/FAIL interpretation. **A PASS proves only the selected server-side checks, not a playable two-client game.**
