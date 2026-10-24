@@ -54,6 +54,9 @@ function Save-Diagnostics {
 
 try {
   if ($HealthTimeoutSeconds -lt 15 -or $HealthTimeoutSeconds -gt 900) { throw 'HealthTimeoutSeconds must be 15..900' }
+  # Validate requested checkout before checking for Docker on CI negative runs.
+  if (-not (Test-Path -LiteralPath (Join-Path $CodePath 'compose.yaml'))) { throw "Missing upstream compose.yaml at $CodePath" }
+  if (-not (Test-Path -LiteralPath (Join-Path $CodePath 'server/src/services/chat/sessionRegistry.js'))) { throw 'Missing EveJS session registry' }
   $node = Resolve-Executable 'node'
   $docker = Resolve-Executable 'docker'
   $git = Resolve-Executable 'git'
@@ -61,8 +64,6 @@ try {
   $nodeVersion = (& $node --version | Out-String).Trim()
   if ($nodeVersion -notmatch '^v([0-9]+)\.') { throw "Unexpected Node version $nodeVersion" }
   if ([int]$Matches[1] -lt 22) { throw "Node.js 22+ required; got $nodeVersion" }
-  if (-not (Test-Path -LiteralPath (Join-Path $CodePath 'compose.yaml'))) { throw "Missing upstream compose.yaml at $CodePath" }
-  if (-not (Test-Path -LiteralPath (Join-Path $CodePath 'server/src/services/chat/sessionRegistry.js'))) { throw 'Missing EveJS session registry' }
   $os = (& $docker info --format '{{.OSType}}' 2>&1 | Out-String).Trim()
   if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw "Docker Linux containers required; got $os" }
 
