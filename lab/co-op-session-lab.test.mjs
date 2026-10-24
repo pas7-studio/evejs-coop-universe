@@ -50,8 +50,9 @@ test('two accounts see same broadcast with independent identities and disconnect
       duplicate.send({ type: 'join', user: 'alice' });
       assert.equal((await duplicate.read()).code, 'duplicate_user');
     } finally { duplicate.socket.destroy(); }
+    const bobClosed = new Promise(resolve => bob.socket.once('close', resolve));
     bob.socket.destroy();
-    await new Promise(resolve => bob.socket.once('close', resolve));
+    await bobClosed;
     assert.equal(lab.count(), 1);
   } finally {
     alice.socket.destroy();
@@ -62,4 +63,25 @@ test('two accounts see same broadcast with independent identities and disconnect
 
 test('reject non-loopback binding', async () => {
   await assert.rejects(startLab({ host: '0.0.0.0' }), /Loopback-only/);
+});
+
+test('reject unauthenticated broadcast and malformed commands without affecting another session', async () => {
+  const lab = await startLab();
+  const guest = client(lab.port);
+  const pilot = client(lab.port);
+  try {
+    await Promise.all([guest.read(), pilot.read()]);
+    guest.send({ type: 'broadcast', text: 'must-not-pass' });
+    assert.equal((await guest.read()).code, 'bad_request');
+    guest.send({ type: 'join', user: 'invalid username!' });
+    assert.equal((await guest.read()).code, 'bad_request');
+    pilot.send({ type: 'join', user: 'pilot' });
+    assert.equal((await pilot.read()).user, 'pilot');
+    pilot.send({ type: 'broadcast', text: 'ok' });
+    assert.deepEqual(await pilot.read(), { type: 'message', from: 'pilot', text: 'ok' });
+  } finally {
+    guest.socket.destroy();
+    pilot.socket.destroy();
+    await lab.close();
+  }
 });
