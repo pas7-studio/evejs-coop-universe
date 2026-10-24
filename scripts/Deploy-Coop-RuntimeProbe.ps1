@@ -1,7 +1,9 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove)
+param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142)
 $ErrorActionPreference='Stop'
+if($NpcCount -lt 1 -or $NpcCount -gt 3){throw 'NpcCount must be 1..3'}
+if($EnableNativeNpcDemo -and $NpcSystemID -le 0){throw 'Valid NpcSystemID required'}
 $projectRoot=Split-Path -Parent $PSScriptRoot
 $installer=Join-Path $PSScriptRoot 'Install-Coop-RuntimeProbe.ps1'
 $override=Join-Path $CodePath 'compose.coop-probe.yaml'
@@ -15,6 +17,11 @@ services:
     environment:
       EVEJS_COOP_EVENTS_FILE: /var/lib/evejs/coop-events.jsonl
 '@
+  if($EnableNativeNpcDemo) {
+    $yaml += "      EVEJS_COOP_NATIVE_NPC_DEMO: '1'`n"
+    $yaml += "      EVEJS_COOP_NATIVE_NPC_COUNT: '$NpcCount'`n"
+    $yaml += "      EVEJS_COOP_NATIVE_NPC_SYSTEM_ID: '$NpcSystemID'`n"
+  }
   [System.IO.File]::WriteAllText($override,$yaml,[System.Text.UTF8Encoding]::new($false))
 }
 Push-Location $CodePath
