@@ -6,6 +6,12 @@ const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0;
 let intelAnnouncer=null;
+function syncNativeDeliveries(){
+ if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
+ const depot=require("./coopNativeDepot").getNativeDepot();
+ const result=economy.syncNativeDeliveries(depot.snapshot().totals);
+ if(result.quantity>0)console.info("[CoopLivingWorld] Real NPC ore delivered to virtual system supply",JSON.stringify(result));
+}
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
@@ -23,6 +29,7 @@ function start(){
      file:process.env.EVEJS_COOP_ECONOMY_FILE||"/var/lib/evejs/coop-economy.json"
    });
    economy.advance(world.snapshot().pilots);
+   syncNativeDeliveries();
    const {createFactionDirector}=require("./coopFactionDirector");
    factionDirector=createFactionDirector({
      file:process.env.EVEJS_COOP_FACTION_FILE||"/var/lib/evejs/coop-factions.json"
@@ -40,6 +47,7 @@ function start(){
      }
      world.advance(pins);
      if(economy)economy.advance(world.snapshot().pilots);
+   syncNativeDeliveries();
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
      advanceNativePatrolRoutes();
      // Raids own their NPC movement while pursuing real cargo ships.
@@ -152,6 +160,7 @@ function observeSession(session,ship){
     .sort((a,b)=>(ranks[a.role]??5)-(ranks[b.role]??5)||a.id.localeCompare(b.id));
   for(const p of residents)life?.recover(p.id);
   if(economy)economy.advance(world.snapshot().pilots);
+   syncNativeDeliveries();
   if(process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
     try{
       const runtime=require("./runtime");
