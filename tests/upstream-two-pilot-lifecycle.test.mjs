@@ -60,6 +60,24 @@ test('registry and scene independently retain pilot B after pilot A disconnect',
     assert.equal(second.deliveredCount, 1);
     assert.deepEqual(records.map(x => x.characterID), [1502]);
     assert.ok(scene.sessions.has(b.clientID));
+
+    // Reconnect the same character on a NEW socket/session: B must still be present.
+    const aReconnected = player(504, a.characterID, a._space.shipID);
+    registry.register(aReconnected);
+    scene.sessions.set(aReconnected.clientID, aReconnected);
+    try {
+      assert.equal(registry.findSessionByCharacterID(a.characterID), aReconnected);
+      assert.equal(registry.findSessionByCharacterID(b.characterID), b);
+      assert.equal(scene.sessions.has(a.clientID), false, 'stale session must not return');
+      records.length = 0;
+      const third = proto.sendSessionlessWarpStartToVisibleSessions.call(scene, entity, warp);
+      assert.equal(third.deliveredCount, 2);
+      assert.deepEqual(records.map(x => x.characterID).sort(), [1501, 1502]);
+      assert.equal(new Set(records.map(x => x.characterID)).size, 2);
+    } finally {
+      registry.unregister(aReconnected);
+      scene.sessions.delete(aReconnected.clientID);
+    }
   } finally {
     registry.unregister(a); registry.unregister(b); registry.unregister(hidden);
   }
