@@ -2,6 +2,13 @@
 
 Read `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/UPSTREAM.md`, and `docs/SETUP_WINDOWS.md` before any changes.
 
+## CI prohibition — repository owner decision (2026-10-24)
+Do not add, restore, enable or run GitHub Actions workflows or any
+other remote CI automation. The entire `.github/workflows` directory
+was deliberately removed from `main` and this branch. Testing is
+manual/local only, with explicit PASS/FAIL evidence. Never equate
+server contract tests with observed EVE client gameplay.
+
 ## Boundaries
 - This repository is initially a **documentation and orchestration repository**, not a working EveJS distribution.
 - Do not silently vendor/copy external emulator source or copyrighted game client files.
