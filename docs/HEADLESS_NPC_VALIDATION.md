@@ -83,6 +83,8 @@ this branch; do not reuse those counts as validation for this change.
 
 ## Native NPC-to-NPC damage, wreck and loot verification (new P1 slice)
 
+Read-only combat health sampling runs every 5 seconds by default (bounded to 2–15 seconds via `EVEJS_COOP_NATIVE_COMBAT_SAMPLE_MS`), independently of the 30-second virtual economy loop. This reduces missed short-lived fights without issuing gameplay orders.
+
 This version observes **actual EveJS health layers** through
 `getEntityMaxHealthLayers` and `getEntityCurrentHealthLayers`.
 The read-only `coopNativeCombatEvidence` monitor compares separate snapshots
