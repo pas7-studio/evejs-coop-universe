@@ -84,10 +84,10 @@ function scheduleHeadlessWorldBoot(route){
  const attempt=()=>{
   headlessBootTimer=null;
   attempts++;
-  const runtime=require("./runtime");
-  const mining=require("../services/mining/miningNpcOperations");
   for(const systemID of [...systems]){
    try{
+    const runtime=require("./runtime");
+    const mining=require("../services/mining/miningNpcOperations");
     observeSession(null,{itemID:0,spaceState:{systemID}});
     const scene=runtime.ensureScene(systemID,{refreshStargates:false});
     const fleetShips=(mining.getMiningFleetsForSystem(systemID)||[])
