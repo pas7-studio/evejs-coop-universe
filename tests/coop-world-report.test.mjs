@@ -322,3 +322,67 @@ test("native HP correlation checks actual attacker entity when it is provided",(
  assert.equal(result.status,"AWAITING_NATIVE_WEAPON_CHAIN");
  assert.equal(result.combat.weaponCorrelatedDamageEvents,0);
 });
+
+test("strict Market gate requires native sale then purchase settled through actual EveJS seed RPC",()=>{
+ const topo=event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0});
+ const sale=event("living-native-market-trade",{at:new Date(now-120000).toISOString(),
+  status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,marketRPC:"FillOrder",
+  marketOrderID:"9100000000000000123",side:"sell",pilotID:"coop-pilot-005",
+  entityID:980000000001,stationID:60015169,typeID:34,quantity:5,price:100});
+ const buy=event("living-native-market-trade",{at:new Date(now-60000).toISOString(),
+  status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,marketRPC:"AdjustSeedStock",
+  marketOrderID:"9000000000000000444",side:"buy",pilotID:"coop-pilot-005",
+  entityID:980000000001,stationID:60015169,typeID:35,quantity:3,price:50});
+ const r=summarize([topo,sale,buy].join("\n"),{now,requireMarket:true});
+ assert.equal(r.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(r.market.status,"NATIVE_SEED_SALE_AND_PURCHASE_VERIFIED");
+ assert.equal(r.market.nativeSeedSales,1);assert.equal(r.market.nativeSeedPurchases,1);
+ assert.equal(r.market.sellThenBuyPilotID,"coop-pilot-005");
+ assert.ok(r.limits.some(x=>x.includes("seed-order trades only")));
+});
+test("Market gate rejects an unbacked virtual order, wrong pilot or wrong native RPC",()=>{
+ const topo=event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0});
+ const base={status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,
+  pilotID:"coop-pilot-005",entityID:980000000001,
+  stationID:60015169,typeID:34,quantity:5,price:100,
+  marketOrderID:"9100000000000000123"};
+ const sale=event("living-native-market-trade",{...base,side:"sell",marketRPC:"FillOrder",
+  at:new Date(now-120000).toISOString()});
+ const buy=event("living-native-market-trade",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock",at:new Date(now-60000).toISOString()});
+ assert.equal(summarize([topo,sale].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const otherPilot=event("living-native-market-trade",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock",pilotID:"coop-pilot-099"});
+ assert.equal(summarize([topo,sale,otherPilot].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const notNative=event("living-native-market-trade",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock",nativeCargoVerified:false});
+ assert.equal(summarize([topo,sale,notNative].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const virtual=event("virtual-market-transaction",{...base,side:"buy",
+  marketRPC:"AdjustSeedStock"});
+ assert.equal(summarize([topo,sale,virtual].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ assert.equal(summarize([topo,sale,buy].join("\n"),{now,requireMarket:true}).status,
+  "READY_FOR_CLIENT_PLAYTEST");
+});
+test("Market gate cannot promote reversed or out-of-boot native trades",()=>{
+ const topo=event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0});
+ const native={status:"TRADE_SETTLED",marketOrderSource:"EVEJS_SEED",
+  marketRPCAcknowledged:true,nativeCargoVerified:true,pilotID:"coop-pilot-005",
+  entityID:980000000001,stationID:60015169,typeID:34,quantity:5,price:100,
+  marketOrderID:"9100000000000000123"};
+ const sale=event("living-native-market-trade",{...native,side:"sell",
+  marketRPC:"FillOrder",at:new Date(now-15000).toISOString()});
+ const buy=event("living-native-market-trade",{...native,side:"buy",
+  marketRPC:"AdjustSeedStock",at:new Date(now-90000).toISOString()});
+ assert.equal(summarize([topo,sale,buy].join("\n"),{now,requireMarket:true}).status,
+  "AWAITING_NATIVE_MARKET_TRADE");
+ const restart=event("living-headless-boot-requested",{at:new Date(now-5000).toISOString()});
+ const result=summarize([topo,sale,buy,restart].join("\n"),{now,requireMarket:true});
+ assert.notEqual(result.status,"READY_FOR_CLIENT_PLAYTEST");
+});
