@@ -26,6 +26,24 @@ server contract tests with observed EVE client gameplay.
 - Do not change task status to DONE on documentation alone.
 - Never commit credentials, client data, dynamic databases, certificates, binaries, screenshots of personal information, or session tokens.
 
+## Stock native mining fleet must not block co-op NPCs
+
+When EveJS native mining is enabled, the two real stock `miner` and
+`hauler` hulls are existing NPC identities, not co-op-spawned NPCs.
+They must not consume `EVEJS_COOP_MATERIALIZE_LIMIT`; otherwise pirates
+can never spawn with the default limit 2. In fallback/non-native-mining
+mode, bridge-spawned miners and haulers must still count. Keep both
+regression cases in `tests/coop-npc-materializer.test.mjs`.
+
+## Native destruction attacker attribution
+
+Use the native EveJS destruction caller's explicit
+`options.attackerEntity` only. If it is absent, never guess from the
+controller's last target, a faction assignment or a recent weapon event.
+The separate `FinalBlow` manual gate is more strict than `Combat` and
+requires actual native wreck, stored loot and matching native weapon/HP
+evidence. A passing unit test is not a verified live Docker kill.
+
 ## Native NPC faction combat invariant
 
 Pinned upstream `npcBehaviorLoop` defaults NPC-vs-NPC to friendly. The
