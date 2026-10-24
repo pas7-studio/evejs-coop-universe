@@ -24,7 +24,7 @@ function Assert-FailureReport([string]$Case, [string[]]$Arguments, [string]$Requ
 }
 
 try {
-  Assert-FailureReport 'invalid-timeout' @('-HealthTimeoutSeconds','10') 'HealthTimeoutSeconds must be 15..900'
+  Assert-FailureReport 'invalid-timeout' @('-CodePath',(Join-Path $root 'no-evejs-code'),'-HealthTimeoutSeconds','10') 'HealthTimeoutSeconds must be 15..900'
   Assert-FailureReport 'missing-checkout' @('-CodePath',(Join-Path $root 'no-evejs-code')) 'Missing upstream compose.yaml'
   Write-Host '[PASS] Verifier negative regression suite'
 } finally {
