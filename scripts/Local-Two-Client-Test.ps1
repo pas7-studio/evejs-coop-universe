@@ -8,12 +8,6 @@ param(
     [int]$LaunchGapSeconds = 20,
     [int]$HealthTimeoutSeconds = 240,
     [int]$NpcSystemID = 30000142,
-    [ValidateRange(1,3)]
-    [int]$EnemyCount = 1,
-    [ValidateRange(1,10080)]
-    [int]$EncounterCooldownMinutes = 12,
-    [ValidateRange(1,1000)]
-    [int]$MaxEncounterBatches = 20,
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -78,15 +72,17 @@ switch ($Action) {
         if ($NpcSystemID -le 0) { throw 'NpcSystemID must be a positive EveJS system ID.' }
         & (Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1') -CodePath $CodePath
         if ($LASTEXITCODE -ne 0) { throw 'Unsafe Compose configuration.' }
-        # Real native co-op encounter loop, not a disposable one-spawn demo.
-        # Persist the cooldown, prevent overlapping ships, and cap encounters.
-        # No market rebuild, database reset, public listeners, or virtual economy.
-        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -CoopCombat -EnablePersistentEncounters -EncounterCooldownMinutes $EncounterCooldownMinutes -EncounterMaxSpawns $MaxEncounterBatches -NpcCount $EnemyCount -NpcSystemID $NpcSystemID
-        if (-not $?) { throw 'Co-op runtime deployment failed.' }
+        # Real, persistent NPC society. No arena waves, encounter timer,
+        # fake kill targets, world reset or market rebuild.
+        $alternateSystem=if($NpcSystemID -eq 30000144){30000142}else{30000144}
+        $virtualRoute="$NpcSystemID,$alternateSystem"
+        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -LivingCoop -VirtualRouteSystems $virtualRoute -VirtualPopulation 20 -MaterializeLimit 6 -CloneRecoveryMinutes 30
+        if (-not $?) { throw 'Living Universe deployment failed.' }
         Wait-BackendHealthy
-        Write-Host ("[COOP] Ready: max $EnemyCount native NPC per encounter, $EncounterCooldownMinutes-minute cooldown, $MaxEncounterBatches encounter batches total; no overlapping live batches.")
-        Write-Host '[COOP] Use separate accounts. Fly both ships onto the same grid in the configured system.'
-        Write-Host '[COOP] Run -Action Party to inspect actual shared-scene evidence.'
+        Write-Host ("[COOP] Living Universe running. 20 named persistent pilots across route $virtualRoute; up to 6 materialized NPCs per visited system.")
+        Write-Host '[COOP] NPC pirates, civilians and faction patrols follow autonomous activity; engage their real ships in space.'
+        Write-Host '[COOP] No waves or player-triggered combat arenas. NPC ship losses persist with a recovery delay.'
+        Write-Host '[COOP] Use -Action Party to inspect actual shared-scene and NPC death evidence.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
     }
     'LaunchOne' {
