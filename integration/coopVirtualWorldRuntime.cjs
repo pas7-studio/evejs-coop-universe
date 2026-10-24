@@ -370,6 +370,7 @@ async function advanceNativeMarket(){
    const market=createNpcMarketTrader({
     call:(method,params)=>marketClient.call(method,params),
     store,registry:identityRegistry,getStation:id=>worldData.getStationByID(id),
+    sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
     resolveType:id=>inventory.resolveItemByTypeID(id),
     maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
     maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
