@@ -271,8 +271,20 @@ function advanceNativeRaids(){
    ...(f.minerEntityIDs||[]).map(id=>({id:Number(id),role:"miner"})),
    ...(f.haulerEntityIDs||[]).map(id=>({id:Number(id),role:"hauler"}))
   ]);
+  const activeLinks=Object.values(identityRegistry?.snapshot().links||{})
+   .filter(link=>Number(link.systemID)===Number(systemID)&&
+    scene.getEntityByID(Number(link.entityID)));
+  const linksByShip=new Map(activeLinks.map(link=>[Number(link.entityID),link]));
+  const factionByPilot=new Map(world.snapshot().pilots.map(p=>[p.id,p.faction]));
+  const canAttack=({pirateID,targetID})=>{
+   const aggressor=linksByShip.get(Number(pirateID));
+   const victim=linksByShip.get(Number(targetID));
+   const from=aggressor&&factionByPilot.get(aggressor.pilotID);
+   const to=victim&&factionByPilot.get(victim.pilotID);
+   return Boolean(from&&to&&from!==to);
+  };
   const result=raidDirector.tick({
-   systemID,scene,pirates,fleetShips,
+   systemID,scene,pirates,fleetShips,canAttack,
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
    getController:id=>controllers.getControllerByEntityID(id)
   });
