@@ -459,6 +459,7 @@ function observeSession(session,ship){
         });
       }
       safeNpcPhase("observed-native-mining",()=>ensureNativeMining(scene,systemID));
+      const nativeMining=process.env.EVEJS_COOP_NATIVE_MINING==="1";
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
         const {createRegistry}=require("./coopIdentityRegistry");
@@ -469,6 +470,7 @@ function observeSession(session,ship){
         bridge=createBridge({
           registry:identityRegistry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
+          exemptRoles:nativeMining?["miner","hauler"]:[],
           exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
           spawn:(system,pilot)=>{
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
@@ -487,7 +489,6 @@ function observeSession(session,ship){
           }
         });
       }
-      const nativeMining=process.env.EVEJS_COOP_NATIVE_MINING==="1";
       const present=require("./coopNpcPresentation").presentVirtualPilot;
       let industry={status:"DISABLED",fleets:[],assignments:[]};
       if(nativeMining){
