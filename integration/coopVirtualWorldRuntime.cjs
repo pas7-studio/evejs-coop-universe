@@ -92,4 +92,19 @@ function confirmedWreck(session,ship,npcID,wreckID){
   require("./coopRuntimeProbe").observe("virtual-economy-npc-loss",session,ship,{npcID,wreckID,status:result.status});
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
-module.exports={start,observeSession,confirmedWreck};
+function confirmedNativeNpcWreck(systemID,npcID,wreckID){
+ if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY!=="1"||process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
+ try{
+  start();
+  if(!economy)return;
+  const {createLossBridge}=require("./coopNpcLossBridge");
+  if(!lossBridge)lossBridge=createLossBridge({
+   file:process.env.EVEJS_COOP_LOSS_LEDGER_FILE||"/var/lib/evejs/coop-loss-ledger.json",
+   recordLoss:(system,amount)=>economy.recordLoss(system,amount)
+  });
+  const result=lossBridge.accept({systemID,npcID,wreckID});
+  require("./coopRuntimeProbe").observe("native-npc-kill-consequence",null,
+   {itemID:npcID,spaceState:{systemID}},{npcID,wreckID,status:result.status});
+ }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
+}
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck};
