@@ -15,6 +15,7 @@ function setup({now=1000000,ships=[],assignments=[],controllers={},
   warpToEntity:(id,target)=>{orders.push({type:"respond-warp",id,target});return {success:true}},
   attack:(id,target)=>{orders.push({type:"attack",id,target});return {success:true}},
   resumeBehavior:id=>{orders.push({type:"resume",id});return {success:true}},
+  stopOrder:id=>{orders.push({type:"stop",id});return {success:true}},
   notify:event=>events.push(event)
  });
  const tick=()=>tactics.tick({systemID:30000142,scene,assignments,
@@ -28,7 +29,13 @@ test("real damage and attacker trigger native warp retreat to existing safe stat
   health:entity=>entity===victim?{armor:0.15,structure:0.9}:{armor:1,structure:1}});
  const first=a.tick();
  assert.ok(first.events.some(e=>e.kind==="npc-retreat"&&e.destinationID===44));
- assert.deepEqual(a.orders.map(e=>e.type),["retreat","resume"]);
+ assert.deepEqual(a.orders.map(e=>e.type),["retreat"]);
+ a.advance(31000);
+ assert.ok(a.tick().events.some(e=>e.kind==="npc-tactical-standdown"));
+ assert.deepEqual(a.orders.map(e=>e.type),["retreat","stop"]);
+ a.advance(91000);
+ assert.ok(a.tick().events.some(e=>e.kind==="npc-tactical-recovered"));
+ assert.deepEqual(a.orders.map(e=>e.type),["retreat","stop","resume"]);
  assert.equal(victim.mode,"STOP"); // Native EveJS owns actual warp physics.
  assert.equal(a.tick().events.filter(e=>e.kind==="npc-retreat").length,0);
 });
