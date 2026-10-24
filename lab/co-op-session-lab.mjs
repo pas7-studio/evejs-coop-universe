@@ -2,6 +2,8 @@
 // Loopback-only by design; never bind this fixture to a VPN/public interface.
 import net from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
 
 export async function startLab({ port = 0, host = '127.0.0.1' } = {}) {
   if (host !== '127.0.0.1') throw new Error('Loopback-only test fixture');
