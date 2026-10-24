@@ -45,6 +45,12 @@ if ($route.Count -lt 2 -or $invalidRoute.Count -gt 0 -or
   throw 'VirtualRouteSystems must contain at least two distinct numeric EVE solar-system IDs'
 }
 $routeString = $route -join ','
+# Jita (30000142) has ZERO official SDE asteroid belts. Retain it as
+# an actual trade/patrol system, but do not spawn a stock mining fleet
+# that immediately goes "depleted" there. All other selected systems
+# remain subject to the upstream authoritative scene + SDE checks.
+$nativeMiningRoute = @($route | Where-Object { $_ -ne '30000142' })
+$nativeMiningRouteString = $nativeMiningRoute -join ','
 $useDemo = $EnableNativeNpcDemo -or $EnablePersistentEncounters -or $CoopCombat
 $useWorld = $EnableVirtualWorld -or $LivingCoop
 $useMaterialization = $MaterializeVirtualNpcs -or $LivingCoop
@@ -134,8 +140,14 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_MINING_NPC_NEUTRAL_RESPONSE_COUNT: '2'"
   $yamlLines += "      EVEJS_MINING_NPC_HOSTILE_RESPONSE_COUNT: '4'"
   $yamlLines += "      EVEJS_MINING_NPC_FRIENDLY_RESPONSE_COUNT: '0'"
-  $yamlLines += "      EVEJS_MINING_NPC_STARTUP_ENABLED: 'true'"
-  $yamlLines += "      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: '$routeString'"
+  # The co-op default route Jita <-> Perimeter mines only in Perimeter.
+  # If no eligible route system remains, don't allow blank IDs, because
+  # upstream interprets blank as *all* scenes (including beltless Jita).
+  $miningStartupEnabled = if ($nativeMiningRoute.Count -gt 0) { 'true' } else { 'false' }
+  $yamlLines += "      EVEJS_MINING_NPC_STARTUP_ENABLED: '$miningStartupEnabled'"
+  if ($nativeMiningRoute.Count -gt 0) {
+    $yamlLines += "      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: '$nativeMiningRouteString'"
+  }
   $yamlLines += "      EVEJS_MINING_NPC_STARTUP_FLEET_COUNT: '1'"
   $yamlLines += "      EVEJS_MINING_NPC_STARTUP_FLEET_MINER_COUNT: '2'"
   $yamlLines += "      EVEJS_MINING_NPC_STARTUP_FLEET_HAULER_COUNT: '1'"
