@@ -21,4 +21,4 @@ jobs:
           node --check integration/coopVirtualWorldRuntime.cjs
           node --check scripts/patch-evejs-coop.cjs
       - name: Unit-test real evidence and history contracts
-        run: node --test tests/coop-npc-memory.test.mjs tests/coop-npc-tactics.test.mjs tests/coop-faction-director.test.mjs
+        run: node --test tests/coop-npc-memory.test.mjs tests/coop-npc-tactics.test.mjs tests/coop-faction-director.test.mjs tests/coop-native-consequences.test.mjs
