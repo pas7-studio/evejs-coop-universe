@@ -27,11 +27,19 @@ function createWorld({file,route,population=16,clock=()=>Date.now(),travelMs=120
    persist(state);
  }
  if(state.version!==1||!Array.isArray(state.pilots)||state.pilots.length>100)throw Error("invalid saved world");
- function advance(){
+ function advance(physicalLocations={}){
    const now=clock();
    if(now<state.lastAdvancedAt)return {status:"CLOCK_REWIND",moves:0};
    let moves=0;
    for(const pilot of state.pilots){
+     // A physically materialized native ship is authoritative. Do not
+     // virtual-jump its pilot to a different system behind players' backs.
+     const live=Number(physicalLocations[pilot.id]);
+     if(Number.isSafeInteger(live)&&live>0){
+       if(pilot.systemID!==live){pilot.systemID=live;moves++;} 
+       pilot.nextMoveAt=now+travelMs;
+       continue;
+     }
      // Mathematical catch-up, not per-tick replay; bounded by elapsed time.
      if(now>=pilot.nextMoveAt){
        const steps=Math.floor((now-pilot.nextMoveAt)/travelMs)+1;
@@ -43,7 +51,7 @@ function createWorld({file,route,population=16,clock=()=>Date.now(),travelMs=120
      }
    }
    state.lastAdvancedAt=now;
-   if(moves)persist(state);
+   if(moves||Object.keys(physicalLocations).length)persist(state);
    return {status:"OK",moves};
  }
  function residents(systemID){return state.pilots.filter(p=>p.systemID===integer(systemID)).map(p=>({...p}));}
