@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','Combat','FinalBlow','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','Combat','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -174,6 +174,16 @@ switch ($Action) {
         $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-combat --require-weapon --require-final-attacker
         if ($LASTEXITCODE -ne 0) { throw 'EveJS did not prove an explicitly supplied native destruction attacker for the correlated weapon/HP/wreck/loot chain.' }
         Write-Host '[FINAL BLOW] EveJS explicitly provided a native destruction attacker linked to real weapon, HP loss, wreck and stored loot; verify client behavior separately.'
+    }
+    'Market' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native NPC market evidence.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No native market events. Enable the opt-in NPC market only on an isolated, backed-up test world.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-market --window-minutes 60
+        if ($LASTEXITCODE -ne 0) { throw 'No native NPC seeded sale followed by purchased stock backed by earned ISK and physical cargo. See report.' }
+        Write-Host '[MARKET] The same named native NPC settled a seeded sale and a stock purchase with real market daemon RPC and cargo. This does not certify independent NPC-owned player-market orders.'
     }
     'Logs' {
         Assert-BackendPrerequisites
