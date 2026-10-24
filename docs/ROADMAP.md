@@ -8,7 +8,9 @@ The following priority blocks are **deferred**, not cancelled:
 - P0: real server + 2 compatible clients, shared fleet warp/combat/loot,
   safe reconnect without losing ships.
 - P1: native NPC transit between systems and real NPC market buy/sell
-  orders (separate implementation block, not part of this branch).
+  orders. Native NPC stargate approach and an opt-in same-ship transfer
+  implementation are now in this branch but are **disabled and not
+  live-verified**; actual NPC market orders remain deferred.
 
 The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
@@ -20,6 +22,17 @@ a healthy server or existing NPC object is a moving/interactive NPC.
 Require real native coordinate changes plus cargo growth or a controller
 target. This branch adds the sampler and strict local World report, but
 no live Docker-native activity has been verified yet.
+
+**New physical NPC stargate transition implementation (P1, gated):**
+Named traders and patrols can use real reciprocal EveJS stargate pairs and
+native warp orders. A separately opt-in native transfer preserves the same
+entity ID, controller, HP, fitted modules and cargo in the target system
+with a per-pilot recovery journal, compensating rollback and durable
+identity relocation only after real arrival. Recovery precedes identity
+pruning on startup. 9/9 gate-navigation, 10/10 transfer and 4/4 identity
+isolated checks passed. **Both feature flags remain OFF; there is no
+real Docker or client proof of stargate travel.** See
+[NATIVE_NPC_GATE_TRAVEL](NATIVE_NPC_GATE_TRAVEL.md).
 
 **Headless reliability and fast-kill evidence:** incomplete native worlds
 continue boot attempts after the initial six, using bounded 5–15 minute
