@@ -285,3 +285,25 @@ materialization bridge, not the completed autonomous Living Universe.
 No physical NPC spawn happens just because time advances; a player in
 the target system triggers the bridge. The native combat and loot engine
 continues to own all physical interactions.
+
+## Durable identity links for physical NPCs
+
+The materializer now uses `coopIdentityRegistry.js` and stores virtual
+pilot -> native entity ID links in
+`/var/lib/evejs/coop-npc-links.json` on the existing EveJS data volume.
+A second materializer instance or server restart will **reuse an existing
+native ship only when the authoritative scene actually contains that entity**.
+Stale links are pruned instead of resurrecting phantom NPCs. If the
+authoritative scene cannot recover the original physical NPC after restart,
+a subsequent player visit may create a replacement native NPC.
+
+Each link records the virtual pilot's identifier, name and faction for
+auditing. The current native EveJS spawn API is still responsible for the
+physical NPC's displayed name, faction/standing metadata, loadout, AI and
+combat. These virtual identity attributes are **not** yet pushed into the
+stock NPC definition or client UI, and the registry is not an independent
+physical-NPC persistence engine.
+
+`node --test tests/coop-identity-registry.test.mjs` exercises restart reuse,
+duplicate suppression, and invalid link rejection. This remains unverified
+on the real two-client Docker server.
