@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null;
 const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -77,6 +77,24 @@ function observeSession(session,ship){
       });
     }catch(error){console.warn("[CoopMaterializer]",error.message);}
   }
+  if(process.env.EVEJS_COOP_FACTION_PATROLS==="1"&&factionDirector){
+    try{
+      const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
+      if(!patrolDirector){
+        const {createPatrolDirector}=require("./coopFactionPatrolRuntime");
+        patrolDirector=createPatrolDirector({
+          spawn:(id)=>npc.spawnBatchInSystem(id,{
+            amount:1,entityType:"npc",transient:true,broadcast:true,
+            defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile"
+          }),
+          exists:(id,entityID)=>Boolean(runtime.ensureScene(id,{refreshStargates:false})?.getEntityByID(entityID))
+        });
+      }
+      const factions=Object.values(factionDirector.snapshot().factions);
+      const deployment=patrolDirector.reconcile(systemID,factions);
+      require("./coopRuntimeProbe").observe("virtual-faction-patrol",session,ship,deployment);
+    }catch(error){console.warn("[CoopFactionPatrol]",error.message);}
+  }
   require("./coopRuntimeProbe").observe("virtual-world-presence",session,ship,{
     residentCount:residents.length,residents:residents.map(p=>({id:p.id,faction:p.faction,journeys:p.journeys})),
     virtualEconomy:economy?.snapshot().systems[String(systemID)]||null
@@ -98,7 +116,7 @@ function confirmedWreck(session,ship,npcID,wreckID){
   if(result.status==="COMMITTED"&&factionDirector){
     factionDirector.onLoss({
       eventID:"wreck:"+wreckID,
-      faction:link.faction||"independent",systemID
+      faction:"independent",systemID
     });
   }
   require("./coopRuntimeProbe").observe("virtual-economy-npc-loss",session,ship,{npcID,wreckID,status:result.status});
@@ -122,6 +140,7 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID){
    recordLoss:(system,amount)=>economy.recordLoss(system,amount)
   });
   const result=lossBridge.accept({systemID,npcID,wreckID});
+  if(result.status==="COMMITTED"&&factionDirector)factionDirector.onLoss({eventID:"wreck:"+wreckID,faction:link.faction||"independent",systemID});
   require("./coopRuntimeProbe").observe("native-npc-kill-consequence",null,
    {itemID:npcID,spaceState:{systemID}},{npcID,wreckID,status:result.status});
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
