@@ -35,3 +35,25 @@ test('no goods do not fulfil faction replacements',()=>{
   assert.equal(d.snapshot().factions['independent@30000142'].replacementDemand,1);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test('faction chronicle stores confirmed losses and real attack orders across restarts',()=>{
+ const dir=mkdtempSync(join(tmpdir(),'coop-chronicle-'));
+ try{
+  const file=join(dir,'s.json'),make=()=>createFactionDirector({file,clock:()=>123456});
+  const d=make();
+  const engagement=i=>({
+   eventID:'native-order:30000142:201:990:'+i,
+   aggressorFaction:'frontier',defenderFaction:'independent',systemID:30000142,
+   attackerPilotID:'coop-pilot-002',defenderPilotID:'coop-pilot-005'
+  });
+  for(let i=0;i<3;i++)assert.equal(d.onEngagement(engagement(i)).status,'RECORDED');
+  assert.equal(d.onEngagement(engagement(0)).status,'DUPLICATE');
+  assert.equal(d.snapshot().rivalries['frontier|independent@30000142'].phase,'ESCALATING');
+  d.onLoss({eventID:'wreck:171',faction:'independent',systemID:30000142});
+  const restored=make();
+  assert.equal(restored.recentForSystem(30000142).length,4);
+  assert.equal(restored.recentForSystem(30000142)[0].kind,'CONFIRMED_NPC_LOSS');
+  assert.equal(restored.snapshot().factions['independent@30000142'].replacementDemand,1);
+  assert.equal(restored.onEngagement({...engagement(4),defenderFaction:'frontier'}).status,'INVALID');
+ }finally{rmSync(dir,{recursive:true,force:true});}
+});
