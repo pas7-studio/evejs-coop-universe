@@ -59,9 +59,13 @@ git pull
 ~~~
 
 The first-time upstream database preparation is documented separately.
-Native ship movement/combat is implemented in the pinned EveJS overlay;
-background NPC market accounting is **not** yet authoritative EveJS
-mining, cargo or player-market trading.
+The live simulation now **reuses EveJS's actual NPC mining fleets**,
+mineable asteroid depletion, native ore cargo, mining haulers and
+aggression-response AI. Named pirates may attack existing ore-bearing
+NPC ships, creating unscripted fights that players can join. Hauler ore
+moves through the native NPC cargo store and becomes real EveJS wreck
+loot on destruction. **Only final depot unloading and trader market
+orders remain virtual**, not real station inventories or sell orders.
 
 [Two-PC authenticated loopback tunnel](docs/FRIEND_PC_PRIVATE_TUNNEL.md)
 is experimental. Neither real two-client game rendering nor friend-PC
