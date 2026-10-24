@@ -65,4 +65,4 @@ Do **not** wire `scripts/coop-reconnect-guard.mjs` into the live login path. Tha
 - `Code/server/src/network/tcp/index.js`: both socket `close` and `error` invoke disconnect and unregister.
 - `Code/server/src/services/_shared/sessionDisconnect.js`: `persistCharacterLogoffState()` records ship state (including emergency warp rules), `spaceRuntime.detachSession()` removes the observer, and chat/trade/presence are cleaned up.
 
-These assertions are in `tests/upstream-live-reconnect-contract.test.mjs`, run by CI and `Verify-Local-Coop.ps1 -IncludeUpstreamTests`. They are **static source-contract checks**, not execution of disconnect against a real database. Do not claim persistence PASS until the server E2E test demonstrates restored ship state for a reconnected account.
+These assertions are in `tests/upstream-live-reconnect-contract.test.mjs`, run manually by `Verify-Local-Coop.ps1 -IncludeUpstreamTests`. They are **static source-contract checks**, not execution of disconnect against a real database. Do not claim persistence PASS until the server E2E test demonstrates restored ship state for a reconnected account.
