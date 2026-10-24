@@ -127,19 +127,23 @@ function scheduleHeadlessWorldBoot(route){
   for(const systemID of [...systems]){
    try{
     const runtime=require("./runtime");
-    const mining=require("../services/mining/miningNpcOperations");
+    const miningEnabled=process.env.EVEJS_COOP_NATIVE_MINING==="1";
     observeSession(null,{itemID:0,spaceState:{systemID}});
     const scene=runtime.ensureScene(systemID,{refreshStargates:false});
-    const fleetShips=(mining.getMiningFleetsForSystem(systemID)||[])
-     .flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
-     .filter(id=>scene?.getEntityByID?.(Number(id)));
+    // Non-mining worlds must not depend on EveJS mining service being
+    // configured, available, or importable merely to finish boot.
+    const fleetShips=miningEnabled
+     ?(require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID)||[])
+       .flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
+       .filter(id=>scene?.getEntityByID?.(Number(id)))
+     :[];
     const links=Object.values(identityRegistry?.snapshot().links||{})
      .filter(link=>Number(link.systemID)===systemID&&
       scene?.getEntityByID?.(Number(link.entityID)));
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
     const verified=isHeadlessNativeReady({
-     miningEnabled:process.env.EVEJS_COOP_NATIVE_MINING==="1",
+     miningEnabled,
      physicalNpcCount:links.length,waypointCount:topology.length,
      beltCount,physicalMiningShips:fleetShips.length
     });
