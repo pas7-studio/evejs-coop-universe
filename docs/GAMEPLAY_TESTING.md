@@ -308,3 +308,17 @@ Read-only verification on **Perimeter 30000144** after explicit deployment:
 `StockRaid` returns `AWAITING_STOCK_FLEET_WEAPON_HP_CHAIN` until the **same physical victim** has both a verified weapon event and measured native HP loss. This is stronger than mere target acquisition but **does not prove** a kill, native wreck, persisted loot, a specific weapon's hit or either client's view. Keep `Combat` and `FinalBlow` strict for named-to-named battles; never claim those gates pass based on a stock-miner observation. Player-vs-pirate combat, shared wreck interaction and two-player warp/reconnect still require authenticated in-client validation.
 
 Isolated `tests/coop-stock-fleet-combat.test.mjs` covers attack-order requirement, physical HP deltas, verified native weapon events, player-ship rejection, named-victim separation and cross-target event rejection. These tests are included in `Verify-Local-Coop.ps1`. No Docker, CI, or real two-client execution is claimed in this change.
+
+### Optional stricter stock miner wreck and loot gate
+
+When the upstream EveJS **native** destruction path creates a wreck for a genuine stock mining-fleet ship, `coopStockFleetWreckEvidence` checks the active fleet's ship membership (before the native mining fleet has pruned it), the original destroyed ship object, native wreck store source and launcher IDs, the **physical** wreck entity in the same solar system, and persisted items with positive quantities. It then emits `living-native-stock-fleet-wreck-evidence`. An empty native wreck is recorded honestly as `NATIVE_WRECK_EMPTY` and never counts as nonempty loot.
+
+For an additional stricter read-only gate, run:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action StockRaidLoot -WorldSystemID 30000144
+```
+
+It requires one real victim across verified native weapon event, measured HP decrease, physical EveJS wreck, and a nonempty stored loot inventory. Missing or mismatched wrecks, other-system ships, fabricated items, empty wrecks, or wrecks preceding the observed damage cannot pass. If the upstream fleet record is already pruned before the wreck hook, this observer intentionally **fails closed** rather than claiming an unproven stock-fleet origin.
+
+`StockRaidLoot` proves server-side correlation only, **not** final-shot attribution or that either EVE client has successfully opened the wreck. Two authenticated pilots must still verify live shared loot, one-time item withdrawal, coordinated fleet warp and reconnection.
