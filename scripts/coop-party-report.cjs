@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,lastLivingShips=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0;
+ const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0;
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -33,6 +33,10 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   if(e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips)){
     lastLivingShips=e.livingShips;
   }
+  if(e.event==="living-native-industry"&&Array.isArray(e.fleets))lastNativeIndustry=e;
+  if(e.event==="living-pirate-raid")pirateRaids+=(e.actions||[]).length;
+  if(e.event==="living-hauler-loaded")haulerLoads++;
+  if(e.event==="living-hauler-delivered")haulerDeliveries++;
   if(e.event==="living-npc-destroyed"&&e.status==="RECOVERING")livingLosses++;
   if(e.event==="native-npc-spawn"&&e.success)encounters++;
   if(e.event==="coop-encounter-kill")coopWrecks++;
@@ -58,6 +62,14 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    livingNpcShipAssignmentsObserved:lastLivingShips?.length||0,
    livingNpcRolesObserved:lastLivingShips?.map(x=>({pilotID:x.pilotID,role:x.role}))||[],
    livingNpcShipLossesObserved:livingLosses,
+   realMiningFleetsLastSeen:lastNativeIndustry?.fleets?.map(f=>({
+    fleetID:f.fleetID,state:f.state,miners:f.minerIDs?.length||0,
+    haulers:f.haulerIDs?.length||0,defenders:f.responseIDs?.length||0,
+    oreQuantityInRealNpcCargo:f.oreQuantity||0
+   }))||[],
+   organicPirateRaidOrdersObserved:pirateRaids,
+   physicalHaulerLoadsObserved:haulerLoads,
+   physicalHaulerUnloadsObserved:haulerDeliveries,
    legacyArenaEncountersObserved:encounters,legacyArenaWreckKillsObserved:coopWrecks,
    partyRendezvousObserved:partyReady,npcEconomicLossesObserved:kills,
    evidenceEvents:events.length,invalidLines,lastSceneAt:lastScene?.at||null,
