@@ -730,12 +730,14 @@ function observeSession(session,ship){
             registry:identityRegistry,sceneForSystem:id=>
              runtime.ensureScene(id,{refreshStargates:false}),
             store:require("./npc/nativeNpcStore"),
-            service:require("./npc/nativeNpcService")
+            service:require("./npc/nativeNpcService"),
+            lostShips:Object.values(life?.snapshot()?.wrecks||{})
           });
           require("./coopRuntimeProbe").observe("living-native-durable-recovery",null,null,
            {status:recovered.status,recovered:recovered.recovered,
             alreadyPhysical:recovered.alreadyPhysical,
             legacyTransient:recovered.legacyTransient,
+            confirmedLosses:recovered.confirmedLosses,
             errors:recovered.errors});
           if(recovered.status!=="OK")
            throw Error("DURABLE_NPC_RECOVERY_REQUIRES_REPAIR: "+JSON.stringify(recovered.errors).slice(0,210));
