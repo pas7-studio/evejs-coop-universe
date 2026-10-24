@@ -24,7 +24,7 @@ if($IdentityFile -and -not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)
 $ssh=Get-Command 'ssh.exe' -ErrorAction Stop
 $ports=@(443,5222,26000,26001,26002)
 foreach($port in $ports){
-  $listener=@(Get-NetTCPConnection -State Listen -LocalAddress 127.0.0.1 -LocalPort $port -ErrorAction SilentlyContinue)
+  $listener=@(Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue)
   if($listener.Count -gt 0){
     throw "Local 127.0.0.1:$port is occupied. Stop conflicting software before launching the tunnel."
   }
@@ -39,7 +39,6 @@ $argsList=@('-N','-T','-4',
   '-o','BatchMode=yes',
   '-o','ServerAliveInterval=20',
   '-o','ServerAliveCountMax=3',
-  '-o','ClearAllForwardings=yes',
   '-o','GatewayPorts=no',
   '-p',"$SshPort"
 )
