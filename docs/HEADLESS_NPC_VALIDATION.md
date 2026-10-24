@@ -81,6 +81,17 @@ native damage, fleet cooperation, wreck loot, two-client rendering or remote
 multiplayer works. The original 67 local/27 upstream PASS report predates
 this branch; do not reuse those counts as validation for this change.
 
+## Recoverability of NPC simulation phases
+
+The 30-second LivingCoop scheduler now isolates native travel, economy,
+depot sync, patrol routing, piracy, tactics, local recognition, civilian
+orders, physical activity sampling and reconciliation. Optional subsystem
+errors are reported through `living-world-phase-failed` and do not stop
+the remaining phases. Native mining/depot errors during scene observation
+likewise cannot prevent named NPC materialization. A partially corrupt
+persistent state file is not silently reset; inspect logs and restore
+from an authorized backup instead of deleting volumes.
+
 ## Known limitations / next gate
 
 - A client-free native-controller target does not prove weapon hits. Add
