@@ -10,12 +10,13 @@ function fixture(){
  const miner={itemID:201,kind:"ship",nativeNpc:true,mode:"STOP",
   position:{x:300000,y:0,z:0}};
  const ships=new Map([[501,pirate],[201,miner]]);
+ const fleetShips=[{id:201,role:"miner"}];
  const controller={currentTargetID:0,manualOrder:null,lastAggressedAtMs:0};
  const nativeOrders=[];
  const scene={systemID:30000144,sessions:new Map(),getEntityByID:id=>ships.get(id)||null};
  const tick=()=>raids.tick({systemID:30000144,scene,pirates:[501],
-  fleetShips:[{id:201,role:"miner"}],
-  getCargo:id=>id===201?[{moduleID:0,typeID:34,quantity:40}]:[],
+  fleetShips,
+  getCargo:id=>[201,202].includes(id)?[{moduleID:0,typeID:34,quantity:40}]:[],
   getController:()=>controller,canAttack:()=>true});
  const raids=createRaids({clock:()=>now,
   warp:(id,targetID)=>{
@@ -28,7 +29,7 @@ function fixture(){
    controller.manualOrder={type:"attack",targetID};
    return {success:true};
   }});
- return {tick,ships,scene,pirate,miner,controller,nativeOrders,
+ return {tick,ships,fleetShips,scene,pirate,miner,controller,nativeOrders,
   advance:ms=>{now+=ms;}};
 }
 test("real pirate approaches loaded miner and issues a native attack after landing",()=>{
@@ -68,9 +69,8 @@ test("approach keeps same valid target without switching to a nearer competing m
  assert.equal(f.tick().actions[0].targetID,201);
  const near={itemID:202,kind:"ship",nativeNpc:true,mode:"STOP",position:{x:299999,y:0,z:0}};
  f.ships.set(202,near);
+ f.fleetShips.push({id:202,role:"miner"});
  f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=299998;
- const call=raids=>raids;
- // The director is initially only given the same authoritative stock fleet.
  assert.equal(f.tick().actions[0].targetID,201);
 });
 test("no ore, no live miner and rejected native command never produce fake raid",()=>{
