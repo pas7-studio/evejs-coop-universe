@@ -14,11 +14,14 @@ installing X-Eve or enabling the experimental full virtual economy.
 - Two **different accounts and characters**; do not share session credentials.
 - No networking ports opened publicly.
 
-**Friend on a different PC:** the pinned upstream is localhost-only.
-The commands below do not give a remote client access. A separate,
-authenticated VPN-only gateway and validation of every advertised
-game/HTTP/XMPP endpoint is still required. Do not expose Docker's
-market or administrative interfaces to make a remote login work.
+**Friend on a different PC:** pinned EveJS is localhost-only by
+default. An **experimental private SSH loopback tunnel** is now available
+for an independently authorized client: see
+[FRIEND_PC_PRIVATE_TUNNEL.md](FRIEND_PC_PRIVATE_TUNNEL.md).
+It forwards only game, image, proxy, CDN and XMPP ports over a
+Tailscale-restricted SSH connection; it does not expose Docker's
+market or admin interfaces. Actual remote client login and TLS
+compatibility remain unverified.
 
 ## First-time bootstrap only
 
