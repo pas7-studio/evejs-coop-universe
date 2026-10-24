@@ -138,6 +138,21 @@ reversible source patch checked. **Two real clients have not yet
 verified shared warp or arrival.** See
 [COOP_FLEET_WARP](COOP_FLEET_WARP.md).
 
+**Durable native NPC identity slice — IMPLEMENTED_UNVERIFIED.**
+The original co-op named spawn used transient EveJS store rows, so
+`coop-npc-links.json` survived restart but the native entity/controller
+did not. Added opt-in durable native named hulls on explicit LivingCoop
+deployment, mixed transient/durable ID collision protection and
+pre-prune same-ID materialization from persisted EveJS entity/controller.
+Incomplete or conflicting persistent records fail closed. A genuine
+same-pilot wreck from after ship linkage permits clone recovery;
+stale wrecks do not. Unit tests and pinned-source patch checks pass,
+**but the real Docker restart and in-client NPC continuity remain
+unverified**. See [NATIVE_NPC_DURABILITY](NATIVE_NPC_DURABILITY.md).
+Next operator gate: approved local overlay deployment, real World
+physical NPC evidence, controlled stop/restart retaining `evejs-data`,
+same-ID restoration, then visible NPC proof. No CI or remote deployment.
+
 ## P0 — establish trustworthy baseline
 
 ### COOP-001 — reproducible upstream inventory [TODO]
