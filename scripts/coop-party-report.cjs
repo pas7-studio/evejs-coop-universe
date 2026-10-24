@@ -36,7 +36,10 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
  const active=[...pilots.values()].filter(p=>p.active);
  const lastActiveIDs=new Set(active.map(x=>x.characterID));
  const scenePilots=Array.isArray(lastScene?.pilots)?lastScene.pilots:[];
- const sceneActive=scenePilots.filter(p=>lastActiveIDs.has(positive(p.characterID)));
+ const sceneActive=scenePilots.filter(p=>{
+  const id=positive(p.characterID),latest=pilots.get(id);
+  return lastActiveIDs.has(id)&&latest?.systemID===positive(lastScene?.systemID)&&Date.parse(latest.lastSeen)<=lastScene._at;
+ });
  const bothInScene=sceneActive.length>=2&&sceneActive.every(p=>p.shipExists===true);
  const mutualSeen=bothInScene&&lastScene?.mutualVisibility===true&&sceneActive.length===2;
  let status="NO_ACTIVE_PILOT_EVIDENCE";
