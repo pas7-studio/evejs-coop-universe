@@ -31,8 +31,13 @@ function fixture(){
   },
   removeNativeCargo:id=>{if(failInventory)return {success:false};
    cargo=cargo.filter(c=>c.cargoID!==id);return {success:true}},
+  buildNativeCargoItems:id=>cargo.filter(c=>c.entityID===id).map(c=>({
+   itemID:c.cargoID,locationID:id,typeID:c.typeID,quantity:c.quantity,
+   stacksize:c.quantity,ownerID:c.ownerID,moduleID:c.moduleID,flagID:c.flagID
+  })),
   allocateCargoID:()=>({success:true,data:nextCargoID++})
  };
+ ship.nativeCargoItems=store.buildNativeCargoItems(ship.itemID);
  const call=async(method,args)=>{
   calls.push({method,args});
   if(method==="GetOrders"){if(failGet)throw Error("MARKET_DAEMON_OFFLINE");
@@ -58,6 +63,7 @@ function fixture(){
   throw Error("Unexpected market RPC "+method);
  };
  const trader=()=>createNpcMarketTrader({root,call,store,registry,
+  sceneForSystem:system=>system===scene.systemID?scene:null,
   getStation:id=>id===station.stationID?station:null,
   resolveType:id=>id===603?({typeID:603,capacity:cargoCapacity}):
    ({typeID:id,groupID:18,categoryID:8,name:"Test cargo",volume:0.1}),
@@ -78,6 +84,7 @@ test("real NPC seeded BUY order consumes exact native cargo and credits earned I
   assert.equal(r.status,"TRADE_SETTLED");
   assert.equal(r.quantity,8);assert.equal(r.balance,800);
   assert.equal(x.getCargo().length,0);
+  assert.equal(x.ship.nativeCargoItems.length,0);
   assert.equal(x.getRemaining().buy,92);
   assert.equal(x.getCalls().filter(c=>c.method==="FillOrder").length,1);
   assert.equal(x.getCalls().find(c=>c.method==="FillOrder").args.order_id,
@@ -97,6 +104,8 @@ test("NPC spends only earned ISK buying real seeded station stock into native ca
   assert.equal(result.quantity,10);assert.equal(result.balance,300);
   assert.equal(x.getRemaining().sell,90);
   assert.equal(x.getCargo()[0].typeID,35);assert.equal(x.getCargo()[0].quantity,10);
+  assert.equal(x.ship.nativeCargoItems[0].typeID,35);
+  assert.equal(x.ship.nativeCargoItems[0].quantity,10);
   assert.equal(x.trader().snapshot().pilots["coop-pilot-005"].balance,300);
  }finally{x.cleanup()}
 });
