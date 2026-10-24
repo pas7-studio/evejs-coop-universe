@@ -54,7 +54,9 @@ jobs:
           if ($negativeExitCode -eq 0) { throw 'Expected incompatible hash to fail' }
 
       - name: Syntax-check real backend transport smoke
-        run: node --check ./scripts/smoke-two-tcp.mjs
+        run: |
+          node --check ./scripts/smoke-two-tcp.mjs
+          node --test ./tests/smoke-two-tcp.test.mjs
 
       - name: Two independent TCP sessions (standalone test fixture)
         shell: bash
