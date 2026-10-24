@@ -518,3 +518,19 @@ test("World distinguishes excluded Perimeter starter route from missing physical
  assert.ok(r.blockers[0].includes("NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM"));
  assert.equal(r.scenery.asteroidBelts,3);
 });
+
+
+test("World identifies native startup fleet-count zero from pinned EveJS default",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:33,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   status:"REAL_BELT_PRESENT",authoritativeSdeBelts:3,realAsteroidBelts:3,
+   trackingForReconcile:true,stockMiningStartup:{
+    status:"NATIVE_MINING_FLEET_COUNT_ZERO",
+    startupEnabled:true,startupSystemIncluded:true,startupFleetCount:0}})
+ ].join("\n");
+ const r=summarize(rows,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.status,"NO_NATIVE_MINING_FLEET");
+ assert.equal(r.systemSiteReadiness.stockMiningStartup.startupFleetCount,0);
+ assert.ok(r.blockers[0].includes("NATIVE_MINING_FLEET_COUNT_ZERO"));
+});
