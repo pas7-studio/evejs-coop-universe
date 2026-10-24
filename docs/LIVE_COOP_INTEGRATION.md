@@ -130,3 +130,23 @@ compare the actual server killmail/wreck evidence before claiming victory.
 
 The observational sampler also handles a missing NPC entity without crashing
 the game, uses unref'd timers, and stops after the configured window.
+
+## Native NPC destruction, wrecks and shared loot visibility
+
+The pinned EveJS wreck pipeline is `destroyNativeNpcEntityWithWreck()`
+in `space/npc/nativeNpcWreckService.js`. It writes native wreck and
+wreck-item records, removes the destroyed NPC from the authoritative scene,
+and spawns its wreck entity. The co-op adapter **does not invoke this function
+itself** and does not roll loot twice.
+
+The combat sampler now tracks native wrecks by their `launcherID` matching
+the spawned NPC entity ID. In `native-npc-combat-sample` records,
+`wrecks` lists the confirmed in-scene wreck entities and
+`observers[].visibleWreckIDs` reports which wrecks each player can see
+server-side. A destroyed or missing NPC is **not** considered a kill unless
+the expected wreck or separate canonical kill evidence appears.
+
+This still does not prove either player can open the wreck inventory, move
+items, salvage, or that both clients render the wreck. Those actions must be
+exercised against the real EveJS loot/inventory flow in the eventual manual
+game test, without using a synthetic item generator.
