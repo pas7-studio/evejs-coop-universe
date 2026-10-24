@@ -59,7 +59,12 @@ function maybeSpawn(session,ship) {
         const pilotShipIDs=recipients.map(x=>positive(x?._space?.shipID)).filter(Boolean);
         require("./coopCombatProbe").launch({
           scene,shipIDs:pilotShipIDs,npcIDs,probe,session,ship,
-          intervalMs:1000,maxSamples:60
+          intervalMs:1000,maxSamples:60,
+          onConfirmedWreck:wreck=>{
+            if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY==="1"){
+              require("./coopVirtualWorldRuntime").confirmedWreck(session,ship,wreck.sourceNpcID,wreck.wreckID);
+            }
+          }
         });
         // Give the normal EveJS visibility tick time to deliver entities.
         // Observe only; never force AddBalls or bypass watcher relevance.
