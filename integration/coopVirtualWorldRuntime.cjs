@@ -134,6 +134,10 @@ function scheduleHeadlessWorldBoot(route){
  const attempt=()=>{
   headlessBootTimer=null;
   attempts++;
+  // Distinguish a scheduled but never fired boot timer from a real scene
+  // initialization failure. This is emitted BEFORE any native scene work.
+  require("./coopRuntimeProbe").observe("living-headless-boot-attempt",null,null,{
+   attempt:attempts,pendingSystems:[...systems]});
   for(const systemID of [...systems]){
    try{
     const runtime=require("./runtime");
