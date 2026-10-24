@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -80,6 +80,12 @@ function start(){
   safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
   safeNpcPhase("native-civilians",advanceNativeCivilianOrders);
+  // Real NPC market RPC is async: explicitly handle rejection, never fire
+  // overlapping economy transactions from the 30-second timer.
+  if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET==="1")
+   safeNpcPhase("native-market-schedule",()=>{
+    void advanceNativeMarket().catch(error=>console.warn("[CoopNativeMarket] tick",error.message));
+   });
   safeNpcPhase("native-activity",observeNativeActivity);
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
    for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
@@ -341,6 +347,106 @@ function observeNativeActivity(){
    }
   }catch(error){console.warn("[CoopNativeActivity] sample",systemID,error.message);}
  }
+}
+function nativeMarketAllowlist(name){
+ return [...new Set(String(process.env[name]||"").split(",").map(Number)
+  .filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,20);
+}
+async function advanceNativeMarket(){
+ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
+  nativeMarketBlocked||nativeMarketTickRunning||
+  !identityRegistry||!world||!visitedSystems.size)return;
+ const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
+ const buyTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_BUY_TYPES");
+ if(!sellTypes.length&&!buyTypes.length)return;
+ nativeMarketTickRunning=true;
+ try{
+  const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+  const worldData=require("./worldData"),inventory=require("../services/inventory/itemTypeRegistry");
+  const controllers=require("./npc/npcRegistry");
+  const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+  if(!nativeMarketTrader){
+   const {createNpcMarketTrader}=require("./coopNativeNpcMarket");
+   const market=createNpcMarketTrader({
+    call:(method,params)=>marketClient.call(method,params),
+    store,registry:identityRegistry,getStation:id=>worldData.getStationByID(id),
+    resolveType:id=>inventory.resolveItemByTypeID(id),
+    maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
+    maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
+    cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000)))
+   });
+   // A pending RPC of unknown outcome can never be retried automatically.
+   const recovered=market.recover();
+   if(recovered.status==="NEEDS_OPERATOR_REPAIR"){
+    nativeMarketBlocked=true;
+    require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,null,recovered);
+    return;
+   }
+   if(recovered.recovered)
+    require("./coopRuntimeProbe").observe("living-native-market-recovered",null,null,recovered);
+   nativeMarketTrader=market;
+  }
+  const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+  const blocked=tacticsDirector?.activeIDs()||new Set();
+  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blocked.add(id);
+  if(raidDirector)for(const id of raidDirector.activePirateIDs(id=>
+   runtime.ensureScene(id,{refreshStargates:false})))blocked.add(id);
+  const links=Object.values(identityRegistry.snapshot().links||{})
+   .filter(l=>l?.pilotID&&l.entityID)
+   .sort((a,b)=>String(a.pilotID).localeCompare(String(b.pilotID)));
+  let completed=0;
+  for(const systemID of visitedSystems){
+   if(completed>=2)break;
+   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+   const stations=(scene.staticEntities||[]).filter(x=>x?.kind==="station"&&Number(x.itemID)>0);
+   if(!stations.length)continue;
+   for(const link of links.filter(x=>Number(x.systemID)===Number(systemID))){
+    if(completed>=2)break;
+    const role=roles.get(link.pilotID)||link.role;
+    if(!["trader","hauler"].includes(role)||blocked.has(Number(link.entityID)))continue;
+    const ship=scene.getEntityByID(Number(link.entityID));
+    const ctrl=controllers.getControllerByEntityID(Number(link.entityID));
+    if(!ship||ship.nativeNpc!==true||Number(ctrl?.currentTargetID)>0||
+     ctrl?.manualOrder?.type==="attack"||
+     String(ship.mode||"").toUpperCase().includes("WARP"))continue;
+    const station=stations.find(x=>{
+     const dx=ship.position?.x-x.position?.x,dy=ship.position?.y-x.position?.y,
+      dz=ship.position?.z-x.position?.z;
+     return [dx,dy,dz].every(Number.isFinite)&&Math.hypot(dx,dy,dz)<=10000+
+      Math.max(0,Number(x.radius)||0)+Math.max(0,Number(ship.radius)||0);
+    });
+    if(!station)continue;
+    const nativeCargo=store.listNativeCargoForEntity(Number(link.entityID))||[];
+    const ownedSellTypes=[...new Set(nativeCargo.filter(c=>Number(c.moduleID||0)===0&&
+     c.singleton!==true&&Number(c.quantity)>0&&sellTypes.includes(Number(c.typeID)))
+     .map(c=>Number(c.typeID)))];
+    const tradeCandidates=[
+     ...ownedSellTypes.map(typeID=>({side:"sell",typeID})),
+     ...buyTypes.map(typeID=>({side:"buy",typeID}))
+    ];
+    for(const trade of tradeCandidates){
+     const result=await nativeMarketTrader.execute({
+      scene,pilotID:link.pilotID,entityID:Number(link.entityID),
+      stationID:Number(station.itemID),
+      ...trade,buyTypes,sellTypes
+     });
+     if(result.status==="TRADE_SETTLED"){
+      completed++;
+      require("./coopRuntimeProbe").observe("living-native-market-trade",null,
+       {spaceState:{systemID}},result);
+      break;
+     }
+     if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
+      "UNRESOLVED_MARKET_JOURNAL"].includes(result.status)){
+      nativeMarketBlocked=true;
+      require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,
+       {spaceState:{systemID}},{pilotID:link.pilotID,status:result.status});
+      return;
+     }
+    }
+   }
+  }
+ }finally{nativeMarketTickRunning=false;}
 }
 function advanceNativeCivilianOrders(){
  if(!bridge||!civilianOrders||process.env.EVEJS_COOP_MATERIALIZE_NPCS!=="1")return [];
