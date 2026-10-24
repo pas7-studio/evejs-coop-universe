@@ -31,6 +31,23 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
   const e={pilotID:pilot.id,name:String(pilot.name||pilot.id).slice(0,96),faction:String(pilot.faction||"independent").slice(0,48),role:String(pilot.role||"").slice(0,24),systemID:Number(systemID),entityID:Number(entityID),linkedAt:clock()};
   state.links[pilot.id]=e;persist();return {...e};
  }
+ // Only update durable identity AFTER the same native ship physically
+ // exists in the destination and is absent from its former EveJS scene.
+ function relocate(pilotID,fromSystemID,entityID,toSystemID){
+  const source=positive(fromSystemID),id=positive(entityID),dest=positive(toSystemID);
+  if(!validID(pilotID)||!source||!id||!dest||source===dest)
+   return {status:"INVALID"};
+  const record=state.links[pilotID];
+  if(!record||Number(record.systemID)!==source||Number(record.entityID)!==id)
+   return {status:"STALE_SOURCE"};
+  if(exists(source,id))return {status:"SOURCE_STILL_PHYSICAL"};
+  if(!exists(dest,id))return {status:"DESTINATION_NOT_PHYSICAL"};
+  const old={...record};
+  state.links[pilotID]={...record,systemID:dest,relocatedAt:clock()};
+  try{persist();}
+  catch(error){state.links[pilotID]=old;throw error;}
+  return {status:"RELOCATED",...state.links[pilotID]};
+ }
  function prune(){
   let removed=0;
   for(const [id,e] of Object.entries(state.links)){
@@ -39,6 +56,6 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
   if(removed)persist();
   return removed;
  }
- return {get,link,prune,snapshot:()=>structuredClone(state)};
+ return {get,link,relocate,prune,snapshot:()=>structuredClone(state)};
 }
 module.exports={createRegistry};
