@@ -40,8 +40,32 @@ and pirates**. Their ship names show their occupation. Pirates retain
 native EveJS hostile AI. All native ship movement, targeting, damage,
 wreck and looting remains owned by the EveJS server.
 
-Their virtual economic activity and faction plans run as persistent
-background systems. Destroyed named ships are recorded; the pilot has
+**Native mining integration:** the pinned EveJS already implements
+real mining NPC fleets. LivingCoop now enables one stock mining fleet
+per configured system (two miners and a hauler), automated mining
+modules, real asteroid depletion, NPC ore cargo, hauling, and the
+native mining fleet's response to aggression. The co-op overlay binds
+available named virtual miners and haulers to those genuine stock
+ships instead of spawning a second set of fake miner NPCs.
+
+**Hauler gameplay:** on the stock hauling cycle, mined native ore items
+are reassigned from the miner's authoritative NPC cargo to the
+physical hauler's cargo. If you intercept and destroy it in transit,
+EveJS's own wreck code can drop that cargo. At the return point the
+hauler unloads it into a **virtual depot sink**: player-visible market
+sell orders and station inventory delivery are NOT implemented yet.
+
+**Organic conflict:** some of our named pirates independently discover
+ore-bearing native miners and haulers, warp toward them and issue native
+NPC attack orders. Their targets are actual existing ships, and the
+mining fleet's stock aggression response can react. There are no
+extra enemies created by this event; the fight can happen even if
+you and your friend do nothing. Pirate-vs-miner combat effectiveness
+must be checked with real EveJS NPC controllers and clients.
+
+The independent virtual economy/faction plans still run as background
+bookkeeping rather than real item ownership or market orders.
+Destroyed named ships are recorded; the pilot has
 a **30-minute clone/ship recovery period**, not instant respawn.
 Visited systems are reconciled again in the background after recovery.
 There is no co-op NPC arena, scripted round, wave timer or wave cap.
@@ -86,11 +110,12 @@ combat, that loot-sharing works, or that network credentials are valid.
 
 ## Important limitations
 
-**Native physics and combat are real EveJS functionality**, but virtual
-resource production, trade, transport cargo and faction rebuilding are
-not yet integrated with the native EVE market or cargo inventory. An
-NPC miner orbiting an asteroid belt is not yet extracting a real ore
-stack. Physical NPC ships remain in their actual solar system; only
+**Real mining and haul cargo are now integrated with stock EveJS**,
+including physical mineable-rock depletion and ore in native NPC cargo.
+However, unloading currently removes cargo into a virtual depot;
+it does not debit or credit real EveJS station inventories, contracts,
+player wallets or sell orders. Virtual NPC trading and faction
+shipbuilding are separate simulations, not stock market transactions. Physical NPC ships remain in their actual solar system; only
 non-materialized virtual pilots advance between systems asynchronously.
 Native cross-system NPC gate jumps remain unfinished.
 
