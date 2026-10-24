@@ -752,7 +752,7 @@ function observeSession(session,ship){
           },
           spawn:(system,pilot)=>{
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
-            const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
+            const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             const hostile=pilot.role==="pirate";
             return npc.spawnBatchInSystem(system,{
