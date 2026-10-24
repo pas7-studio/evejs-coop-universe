@@ -70,6 +70,10 @@ else
     grep -c '"event":"living-native-activity"' "$EVEJS_COOP_EVENTS_FILE" || true
     echo "Native mining startup outcomes:"
     grep -c '"event":"living-native-mining-startup-slot"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Stock mining fleet HP damage events:"
+    grep -c '"event":"living-native-stock-fleet-combat"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Observed native weapon events:"
+    grep -c '"event":"living-native-weapon-event"' "$EVEJS_COOP_EVENTS_FILE" || true
   fi
 fi
 '@
