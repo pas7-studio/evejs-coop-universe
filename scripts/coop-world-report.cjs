@@ -37,6 +37,9 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const spawnAttempt=[...rows].reverse().find(e=>e.event==="living-native-materialization-attempt"&&
   positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
+ const miningStartupEvents=rows.filter(e=>e.event==="living-native-mining-startup-slot"&&
+  positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
+ const latestMiningStartup=miningStartupEvents.at(-1)||null;
  const availableMiningSystems=[...new Map(rows.filter(e=>e.event==="living-world-topology"&&
   positive(e.systemID)&&(!latestBoot||e._time>=latestBoot._time))
   .map(e=>[positive(e.systemID),e])).values()]
@@ -197,7 +200,13 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
     " Stock mining startup policy: "+startup.status+
     " (enabled="+String(startup.startupEnabled)+
     ", includesSystem="+String(startup.startupSystemIncluded)+").":"";
-   blockers.push("No physical EveJS miner and hauler fleet observed in this solar system."+explanation);
+   const nativeFailure=latestMiningStartup?.status==="FAILED"?
+    " Last EveJS native fleet spawn failure (slot "+latestMiningStartup.fleetSlot+
+     "): "+String(latestMiningStartup.error||"UNKNOWN").slice(0,120)+".":"";
+   const lastSeeded=latestMiningStartup?.status==="SEEDED"?
+    " A startup slot was seeded earlier but no complete physical miner/hauler fleet is visible now.":"";
+   blockers.push("No physical EveJS miner and hauler fleet observed in this solar system."+
+    explanation+nativeFailure+lastSeeded);
    status="NO_NATIVE_MINING_FLEET";
   }else if(!materialization||!Object.values(roles).some(n=>n>0)){
    const details=spawnAttempt?.spawnErrors?.length?
@@ -273,6 +282,12 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    realAsteroidBelts:siteReadiness.realAsteroidBelts,
    trackingForReconcile:siteReadiness.trackingForReconcile===true,
    stockMiningStartup:siteReadiness.stockMiningStartup||null}:null,
+  nativeMiningStartupOutcome:latestMiningStartup?{
+   status:latestMiningStartup.status,fleetSlot:latestMiningStartup.fleetSlot,
+   ...(latestMiningStartup.error?{error:latestMiningStartup.error}:{}),
+   ...(latestMiningStartup.miners!==undefined?{miners:latestMiningStartup.miners}:{}),
+   ...(latestMiningStartup.haulers!==undefined?{haulers:latestMiningStartup.haulers}:{})
+  }:null,
   nativePresentationPending:presentationPending?.unresolved||[],
   nativeMaterializerAttempt:spawnAttempt?{
    residents:spawnAttempt.residents,eligibleResidents:spawnAttempt.eligibleResidents,
