@@ -93,9 +93,14 @@ if ($useDemo) {
   $yamlLines += "      EVEJS_COOP_NATIVE_NPC_COUNT: '$NpcCount'"
   $yamlLines += "      EVEJS_COOP_NATIVE_NPC_SYSTEM_ID: '$NpcSystemID'"
 }
-if ($CoopCombat) {
+if ($CoopCombat -or $LivingCoop) {
   $yamlLines += "      EVEJS_COOP_REQUIRE_TWO_PILOTS: '1'"
   $yamlLines += "      EVEJS_COOP_PARTY_RANGE_METERS: '250000'"
+}
+if ($LivingCoop) {
+  # Enable actual two-player presence and opt-in on-grid notice without
+  # scripted NPC encounters (LivingCoop still uses autonomous native NPCs).
+  $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
