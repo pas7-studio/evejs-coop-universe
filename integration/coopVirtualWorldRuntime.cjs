@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null;
 const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -16,11 +16,17 @@ function start(){
      file:process.env.EVEJS_COOP_ECONOMY_FILE||"/var/lib/evejs/coop-economy.json"
    });
    economy.advance(world.snapshot().pilots);
+   const {createFactionDirector}=require("./coopFactionDirector");
+   factionDirector=createFactionDirector({
+     file:process.env.EVEJS_COOP_FACTION_FILE||"/var/lib/evejs/coop-factions.json"
+   });
+   factionDirector.advance(economy.snapshot().systems);
  }
  timer=setInterval(()=>{
    try {
      world.advance();
      if(economy)economy.advance(world.snapshot().pilots);
+     if(factionDirector)factionDirector.advance(economy.snapshot().systems);
    }catch(e){console.warn("[CoopVirtualWorld] tick",e.message);}
  },30000);
  timer.unref?.();
@@ -89,6 +95,12 @@ function confirmedWreck(session,ship,npcID,wreckID){
   }
   const systemID=Number(ship?.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
   const result=lossBridge.accept({systemID,npcID,wreckID});
+  if(result.status==="COMMITTED"&&factionDirector){
+    factionDirector.onLoss({
+      eventID:"wreck:"+wreckID,
+      faction:link.faction||"independent",systemID
+    });
+  }
   require("./coopRuntimeProbe").observe("virtual-economy-npc-loss",session,ship,{npcID,wreckID,status:result.status});
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
