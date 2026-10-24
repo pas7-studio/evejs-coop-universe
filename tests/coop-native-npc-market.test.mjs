@@ -49,10 +49,10 @@ function fixture(){
   if(method==="FillOrder"){
    if(failRPC)throw Error("RPC_DISCONNECTED");
    if(failFillOnly)return {order_id:args.order_id,filled_quantity:0,
-    station_id:station.stationID,type_id:34,bid:true};
+    station_id:station.stationID,type_id:34,price:100,bid:true};
    remainingBuy-=args.fill_quantity;
    return {order_id:args.order_id,filled_quantity:args.fill_quantity,
-    station_id:station.stationID,type_id:34,bid:true};
+    station_id:station.stationID,type_id:34,price:100,bid:true};
   }
   if(method==="AdjustSeedStock"){
    if(failRPC)throw Error("RPC_DISCONNECTED");
@@ -196,6 +196,17 @@ test("native hull capacity strictly limits new cargo purchased from real seed st
   assert.equal(r.quantity,2);assert.equal(r.balance,700);
   assert.equal(x.getCargo()[0].quantity,2);
   assert.equal(x.getRemaining().sell,98);
+ }finally{x.cleanup()}
+});
+test("native market buyer price mismatch fails closed rather than crediting wrong ISK",async()=>{
+ const x=fixture();try{
+  const t=x.trader();
+  // A deliberately incomplete/outdated RPC acknowledgement must not
+  // credit ISK or consume cargo after seller-side market execution.
+  x.setFailFill(true);
+  assert.equal((await t.execute(x.params("sell",34))).status,"RPC_ACK_NOT_VERIFIABLE");
+  assert.equal(x.getCargo()[0].quantity,8);
+  assert.equal(t.recover().status,"NEEDS_OPERATOR_REPAIR");
  }finally{x.cleanup()}
 });
 test("unknown NPC cargo hull capacity stops purchases without altering seed stock",async()=>{
