@@ -14,7 +14,7 @@ function loadWithFakes(fakes){
   Module._load=function(request,parent,isMain){
     if(parent?.filename===sourcePath){
       if(request in fakes)return fakes[request];
-      const key=Object.keys(fakes).find(x=>request.endsWith(x));
+      const key=Object.keys(fakes).find(x=>request.endsWith(x.replace(/^(\\.\\.\\/)+/,'')));
       if(key)return fakes[key];
     }
     return original.apply(this,arguments);
