@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0;
+ const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[];
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -35,6 +35,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }
   if(e.event==="living-native-industry"&&Array.isArray(e.fleets))lastNativeIndustry=e;
   if(e.event==="living-pirate-raid")pirateRaids+=(e.actions||[]).length;
+  if(e.event==="living-player-consequence")standingEvents.push({characterID:e.characterID,kind:e.kind,ownerID:e.ownerID,rawChange:e.rawChange,at:e.at});
   if(e.event==="living-hauler-loaded")haulerLoads++;
   if(e.event==="living-hauler-delivered")haulerDeliveries++;
   if(e.event==="living-npc-destroyed"&&e.status==="RECOVERING")livingLosses++;
@@ -71,6 +72,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    organicPirateRaidOrdersObserved:pirateRaids,
    physicalHaulerLoadsObserved:haulerLoads,
    physicalHaulerUnloadsObserved:haulerDeliveries,
+   recentPlayerStandingChanges:standingEvents.slice(-20),
    legacyArenaEncountersObserved:encounters,legacyArenaWreckKillsObserved:coopWrecks,
    partyRendezvousObserved:partyReady,npcEconomicLossesObserved:kills,
    evidenceEvents:events.length,invalidLines,lastSceneAt:lastScene?.at||null,
