@@ -441,3 +441,35 @@ test("selecting system with no topology does not crash and does not steal anothe
  assert.equal(r.status,"AWAITING_INGAME_ARRIVAL");
  assert.equal(r.scenery.asteroidBelts,0);
 });
+
+test("World report exposes exact real spawn-cap and write failure causes",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:32,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  event("living-native-materialization-attempt",{systemID:30000144,
+   residents:8,eligibleResidents:8,requestedSpawns:5,successfulAssignments:0,
+   spawnErrors:[
+    {pilotID:"coop-pilot-004",error:"SPAWN_LIMIT_REACHED",occupied:2,limit:2},
+    {pilotID:"coop-pilot-005",error:"NATIVE_SPAWN_THROW",nativeReason:"POOL_NOT_READY"}
+   ]}),
+  event("virtual-world-materialization",{systemID:30000144,livingShips:[]})
+ ].join("\n");
+ const report=summarize(rows,{now,systemID:30000144});
+ assert.equal(report.status,"NO_LIVING_NPC_SHIPS");
+ assert.ok(report.blockers[0].includes("SPAWN_LIMIT_REACHED [2/2]"));
+ assert.ok(report.blockers[0].includes("POOL_NOT_READY"));
+ assert.equal(report.nativeMaterializerAttempt.spawnErrors.length,2);
+});
+test("failed client slim broadcast is reported separately from native NPC spawn",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:32,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{systemID:30000144,livingShips:[{
+   pilotID:"coop-pilot-005",entityID:501,role:"pirate"}]}),
+  event("living-native-presentation-pending",{systemID:30000144,
+   unresolved:[{pilotID:"coop-pilot-005",entityID:501,reason:"BROADCAST_FAILED"}]})
+ ].join("\n");
+ const result=summarize(rows,{now,systemID:30000144});
+ assert.equal(result.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(result.nativePresentationPending[0].reason,"BROADCAST_FAILED");
+});
