@@ -53,6 +53,10 @@ foreach($p in $patches) {
 # the server-side entity but does not notify the other clients about isEmpty.
 # Replace exactly one known call with the same refresh plus slim-item broadcast.
 # This does not grant items, bypass access, or change authoritative loot logic.
+# Native destruction callback: executed only after successful wreck spawn.
+# It records the confirmed loss, without changing EveJS damage/loot flow.
+$hookMarker='  try {'+[Environment]::NewLine+'    const dungeonUniverseSiteService = require(path.join('
+$hookLine='  try { require("../coopVirtualWorldRuntime").confirmedNativeNpcWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional integration */ }'
 $wreckFile=Join-Path $server 'space/npc/nativeNpcWreckService.js'
 $before='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID);'
 $after='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });'
@@ -67,6 +71,14 @@ if($wreckText.Contains($from)){
   Write-Host "[WRECK SYNC] $wreckFile"
 } elseif(-not $wreckText.Contains($to)){throw 'Unknown wreck refresh implementation; refuse to patch'}
 
+$wreckText=[System.IO.File]::ReadAllText($wreckFile)
+if(-not $wreckText.Contains($hookMarker)){throw 'Unknown native wreck destruction callback location'}
+if($Remove) {
+  $wreckText=$wreckText.Replace($hookLine+[Environment]::NewLine,'')
+} elseif(-not $wreckText.Contains($hookLine)) {
+  $wreckText=$wreckText.Replace($hookMarker,$hookLine+[Environment]::NewLine+$hookMarker)
+}
+[System.IO.File]::WriteAllText($wreckFile,$wreckText,[System.Text.UTF8Encoding]::new($false))
 if($Remove) {
   if(Test-Path -LiteralPath $probeTarget){Remove-Item -LiteralPath $probeTarget -Force}
   if(Test-Path -LiteralPath $npcTarget){Remove-Item -LiteralPath $npcTarget -Force}
