@@ -26,6 +26,13 @@ server contract tests with observed EVE client gameplay.
 - Do not change task status to DONE on documentation alone.
 - Never commit credentials, client data, dynamic databases, certificates, binaries, screenshots of personal information, or session tokens.
 
+## Manual headless native NPC evidence (owner-directed)
+Before any claim that autonomous NPCs work without players, consult
+`docs/HEADLESS_NPC_VALIDATION.md` and use the local World evidence gate.
+Physical ship presence is NOT proof of motion, mining, combat or loot.
+Do not invent runtime PASS based on tests alone. No GitHub Actions or
+remote CI workflows may be created or executed.
+
 ## Current owner-directed NPC feature block (2026-10-24)
 Review [NPC memory and faction chronicle](docs/NPC_MEMORY_AND_FACTION_CHRONICLE.md).
 Implement and test NPC-MEM-001/002/003 and NPC-FACTION-001 without
