@@ -335,3 +335,26 @@ corporation standings. Its loss-event API is not yet connected to native
 killmails, so battle outcomes do not automatically feed faction demand.
 The virtual runtime still first initializes on a player's in-space login.
 Native client/gameplay validation has not been performed.
+
+## Confirmed NPC losses affect the virtual economy
+
+When a demo NPC is actually destroyed and its matching native EveJS wreck
+appears, `coopCombatProbe` passes the authoritative `wreckID` and source
+`NPC ID` to `coopNpcLossBridge`. The bridge stores a durable processed
+wreck ledger in `/var/lib/evejs/coop-loss-ledger.json` and invokes
+`coopVirtualEconomy.recordLoss` once. A restart or repeated wreck
+observation cannot normally double-count the same wreck. The economic
+effect raises virtual demand and reduces system security.
+
+Enable both `-EnableNativeNpcDemo` and `-EnableVirtualWorld
+-EnableVirtualEconomy` on a disposable local instance to exercise
+this path. No direct EveJS market orders, wallets or ship inventories
+are changed.
+
+The ledger deliberately reserves a wreck before updating the economy:
+a crash between the reservation and the economy update can leave a
+`PENDING` record requiring manual reconciliation. It favors preventing
+duplicate loss accounting over promising exactly-once atomic commits
+across two separate JSON files. This is not a full transactional system.
+The materialized virtual-pilot NPC path is not yet wired to this
+callback; the integration currently observes demo NPC combat only.
