@@ -16,7 +16,7 @@ if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" 
 $patches=@(
   @{ path=(Join-Path $server 'services/_shared/sessionDisconnect.js'); marker='  persistCharacterLogoffState(session);'; injection='  require("../../space/coopRuntimeProbe").observe("disconnect-before-persist", session, null);' },
   @{ path=(Join-Path $server 'space/transitions.js'); marker='  const attachElapsedMs = Date.now() - attachStartedAtMs;'; injection='  require("./coopRuntimeProbe").observe("space-login-attach", session, activeShip, { attached: Boolean(shipEntity) });' },
-  @{ path=(Join-Path $server 'space/transitions.js'); marker='  if (!shipEntity) {'; injection='  if (shipEntity) require("./coopNativeNpcDemo").maybeSpawn(session, activeShip);' }
+  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const hydrationQueuedAtMs = Date.now();'; injection='  require("./coopNativeNpcDemo").maybeSpawn(session, activeShip);' }
 )
 foreach($p in $patches) {
   if(-not (Test-Path -LiteralPath $p.path)){throw "Missing upstream file: $($p.path)"}
