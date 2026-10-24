@@ -119,7 +119,8 @@ try {
         'upstream-coop-scene-audit.test.mjs',
         'upstream-two-ship-projection.test.mjs',
         'upstream-ship-prime-recipients.test.mjs',
-        'upstream-live-reconnect-contract.test.mjs'
+        'upstream-live-reconnect-contract.test.mjs',
+        'upstream-logoff-persistence.test.mjs'
       ) | ForEach-Object { Join-Path (Join-Path $projectRoot 'tests') $_ }
       $null = Invoke-Recorded 'EveJS scene contracts' $node (@('--test') + $testFiles) 'upstream-contracts.log' -RecordFailure
     }
