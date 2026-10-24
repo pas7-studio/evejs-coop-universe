@@ -49,3 +49,11 @@ The backend gate now includes `tests/coop-scene-audit.test.mjs` (deterministic r
 The reusable `scripts/coop-scene-audit.mjs` exports `auditCoopScene(scene, {minimumPilots, registryLookup})`. Supply the current scene and optionally the authoritative `registry.findSessionByCharacterID`. The JSON-safe output reports PASS/FAIL, live pilots and ship IDs, reciprocal visibility, stale sessions, duplicate identities or ships, missing ship entities, and registry mismatch. Visibility asymmetry is a warning rather than a hard failure because bubble visibility can transition asynchronously. The audit performs no scene mutations.
 
 **Acceptance boundary:** this is an in-process snapshot of server state; it is not a simulation tick, network login, movement physics or client compatibility proof. Upstream integration tests require the pinned EveJS checkout and its dependencies.
+
+## Fail-closed compatibility and dependency gates
+
+The verifier **requires the tested EveJS commit** `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` by default. An unexpected upstream revision is a hard failure, not an unlabelled PASS. For an intentional exploratory run only, supply `-AllowUnpinnedUpstream`, which emits a visible WARNING; never use its report to certify the pinned baseline.
+
+Node.js 22+ and `-HealthTimeoutSeconds` in the range 15–900 are mandatory. If the standalone regression tests fail, the backend test gate is BLOCKED instead of running a misleading real-port probe. If `-IncludeUpstreamTests` is requested and `Code/server/node_modules` is absent, the report marks that stage BLOCKED rather than silently skipping it.
+
+The upstream code revision and project revision are captured in `revisions.txt`; copy only redacted `report.json` and relevant failing logs back to the agent. The actual TCP check is strictly a transport smoke test and the synthetic in-process checks are not proof that two real EVE accounts can log in.
