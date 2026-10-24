@@ -26,9 +26,11 @@ test("no attack intent, stopped NPC, idle patrol or accidental aggro is allowed"
 });
 test("genuine native retaliation can recognize prior aggression",()=>{
  assert.equal(validPair({...options(),attackerController:{...ac,manualOrder:null,
-  lastAggressorID:20,lastAggressedAtMs:1000}}),true);
+  lastAggressorID:20,lastAggressedAtMs:Date.now()-1000}}),true);
  assert.equal(validPair({...options(),attackerController:{...ac,manualOrder:null,
   lastAggressorID:20,lastAggressedAtMs:0}}),false);
+ assert.equal(validPair({...options(),attackerController:{...ac,manualOrder:null,
+  lastAggressorID:20,lastAggressedAtMs:Date.now()-600000}}),false);
 });
 test("same faction, missing pilot and unlinked ship remain friendly",()=>{
  assert.equal(validPair({...options(),pilots:[...pilots.slice(0,1),{...pilots[1],faction:"frontier"}]}),false);
