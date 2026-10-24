@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -344,18 +344,35 @@ function observeNativeCombat(){
  for(const systemID of visitedSystems){
   try{
    const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+   const getHealth=entity=>{
+    const max=damage.getEntityMaxHealthLayers(entity);
+    if(!Object.values(max).some(n=>n>0))return null;
+    return damage.getEntityCurrentHealthLayers(entity,max);
+   };
+   const getController=id=>controllers.getControllerByEntityID(id);
    const result=combatEvidenceDirector.sample({
-    systemID,scene,links,
-    getHealth:entity=>{
-     const max=damage.getEntityMaxHealthLayers(entity);
-     if(!Object.values(max).some(n=>n>0))return null;
-     return damage.getEntityCurrentHealthLayers(entity,max);
-    },
-    getController:id=>controllers.getControllerByEntityID(id)
+    systemID,scene,links,getHealth,getController
    });
    if(result.status==="SAMPLED"&&result.damageEvents)
     require("./coopRuntimeProbe").observe("living-native-combat-damage",null,
      {spaceState:{systemID}},result);
+   // Named pirate -> unnamed genuine stock miner is a valid native PvE
+   // encounter, but cannot be reported as named-vs-named damage.
+   if(process.env.EVEJS_COOP_NPC_RAIDS==="1"){
+    if(!stockCombatEvidenceDirector)
+     stockCombatEvidenceDirector=require("./coopStockFleetCombatEvidence")
+      .createStockFleetCombatEvidence();
+    const mining=require("../services/mining/miningNpcOperations");
+    const fleetShips=require("./coopNativeRaidEligibility").liveFleetShips(
+     mining.getMiningFleetsForSystem(systemID),scene,systemID);
+    const stock=stockCombatEvidenceDirector.sample({
+     systemID,scene,links,pilots:world?.snapshot()?.pilots||[],
+     fleetShips,getHealth,getController
+    });
+    if(stock.status==="SAMPLED"&&stock.damageEvents)
+     require("./coopRuntimeProbe").observe("living-native-stock-fleet-combat",null,
+      {spaceState:{systemID}},stock);
+   }
   }catch(error){console.warn("[CoopNativeCombatEvidence] sample",systemID,error.message);}
  }
 }
