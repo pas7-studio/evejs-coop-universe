@@ -64,3 +64,17 @@ test("registry refuses destination without physical native same-ID ship",()=>{
   assert.equal(registry.snapshot().links["coop-pilot-005"].systemID,30000142);
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
+
+
+test("durable named NPC identity flag persists explicitly and legacy links remain transient",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"coop-durable-identity-"));
+ try{
+  const file=join(dir,"links.json"),registry=createRegistry({file,exists:()=>true});
+  registry.link({id:"coop-pilot-004",name:"Harrow",durable:true},30000144,90101);
+  registry.link({id:"coop-pilot-005",name:"Old Trader"},30000144,90102);
+  const restarted=createRegistry({file,exists:()=>true});
+  assert.equal(restarted.get("coop-pilot-004").durable,true);
+  assert.equal(restarted.get("coop-pilot-005").durable,false);
+  assert.equal(restarted.snapshot().links["coop-pilot-004"].entityID,90101);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
