@@ -194,3 +194,24 @@ test("weapon activity of different NPC or victim does not claim a battle outcome
   assert.equal(r.status,"AWAITING_NATIVE_WEAPON_CHAIN");
  }
 });
+
+test("real NPC battle evidence does not depend on a miner or hauler fleet",()=>{
+ const input=[
+  event("living-world-topology",{realWaypoints:3,realAsteroidBelts:0}),
+  event("living-native-weapon-event",{status:"VERIFIED_NATIVE_WEAPON_EVENT",
+   kind:"missile-launch",attackerEntityID:401,attackerPilotID:"coop-pilot-001",
+   victimEntityID:402,victimPilotID:"coop-pilot-002"}),
+  event("living-native-combat-damage",{events:[{systemID:30000142,
+   victimEntityID:402,victimPilotID:"coop-pilot-002",healthLossHP:31,
+   attackerPilotIDs:["coop-pilot-001"]}]}),
+  event("living-native-wreck-evidence",{status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+   wreckID:500,systemID:30000142,victimEntityID:402,victimPilotID:"coop-pilot-002",
+   lootStatus:"ITEMS_STORED",storedItemCount:2})
+ ].join("\n");
+ const report=summarize(input,{now,requireCombat:true,requireWeapon:true});
+ assert.equal(report.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(report.combat.nativeWeaponDamageWreckLootID,500);
+ assert.equal(report.actualMiningFleets,0);
+ const economic=summarize(input,{now});
+ assert.equal(economic.status,"MISSING_NATIVE_WORLD_DATA");
+});
