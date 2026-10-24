@@ -8,7 +8,7 @@ function createPatrolNavigator({sceneForSystem,warp,orbit,clock=()=>Date.now(),d
  if(typeof sceneForSystem!=="function"||typeof warp!=="function"||typeof orbit!=="function")throw Error("native patrol dependencies required");
  if(!Number.isSafeInteger(dwellMs)||dwellMs<30000)throw Error("dwellMs must be >= 30000");
  const progress=new Map();
- function tick(systemID,entityIDs){
+ function tick(systemID,entityIDs,{blockedIDs=new Set()}={}){
   const system=positive(systemID),scene=system&&sceneForSystem(system);
   if(!scene||typeof scene.getEntityByID!=="function")return {status:"SCENE_NOT_FOUND",orders:[]};
   const route=waypoints(scene).slice(0,8);
@@ -16,7 +16,7 @@ function createPatrolNavigator({sceneForSystem,warp,orbit,clock=()=>Date.now(),d
   const now=clock(),ordered=[],waiting=[];
   for(const entityID of new Set(entityIDs||[])){
    const id=positive(entityID),key=system+":"+id;
-   if(!id)continue;
+   if(!id||blockedIDs.has(id))continue;
    const ship=scene.getEntityByID(id);
    if(!ship){progress.delete(key);continue;}
    const p=progress.get(key)||{nextAt:0,nextIndex:0,lastWaypoint:null};
