@@ -66,6 +66,8 @@ const oldLines=[
 ];
 const lootOld='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID);';
 const lootNew='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });';
+const slimBroadcastOld='    scene.sendSlimItemChangesToAllSessions([entity]);';
+const slimBroadcastNew='    scene.broadcastSlimItemChanges([entity]);';
 function count(text,needle){return text.split(needle).length-1;}
 function strip(source){
  return source.split("\n").filter(row=>!oldLines.includes(row.replace(/\r$/,""))).join("\n");
@@ -75,6 +77,12 @@ function transform(source,spec,remove){
  if(spec.file.endsWith("nativeNpcWreckService.js")){
   if(count(text,lootOld)+count(text,lootNew)!==1)throw Error("Ambiguous native wreck refresh");
   text=remove?text.replace(lootNew,lootOld):text.replace(lootOld,lootNew);
+  // The old method does not exist on the pinned SolarSystemScene.
+  // A thrown exception here can happen after a loot item has been granted.
+  if(count(text,slimBroadcastOld)+count(text,slimBroadcastNew)!==1)
+   throw Error("Ambiguous native wreck client slim-item broadcast");
+  text=remove?text.replace(slimBroadcastNew,slimBroadcastOld):
+   text.replace(slimBroadcastOld,slimBroadcastNew);
  }
  if(spec.file.endsWith("miningNpcOperations.js")){
   // Replace the vanilla "miner ore disappears during hauling" path with
