@@ -9,7 +9,7 @@ function createBridge({spawn,exists,limit=3,registry=null,exemptRoles=[]}){
  if(!Array.isArray(exemptRoles)||exemptRoles.some(x=>!["miner","hauler"].includes(x)))throw Error("unsupported exempt native role");
  const exemptions=new Set(exemptRoles);
  const assignments=new Map();
- function reconcile(systemID,pilots){
+ function reconcile(systemID,pilots,{exemptEntityIDs=[]}={}){
   const current=new Set((pilots||[]).map(p=>p.id));
   // Do not delete native NPCs when virtual travel changes: they may be in
   // combat or observed. Merely release dead mappings.
@@ -19,13 +19,16 @@ function createBridge({spawn,exists,limit=3,registry=null,exemptRoles=[]}){
   }
   const results=[];
   const stored=registry?Object.values(registry.snapshot().links).filter(x=>x.systemID===systemID&&exists(x.systemID,x.entityID)):[];
-  // Stock EveJS mining ships are linked identities, NOT ships spawned
-  // by this bridge. They cannot consume the co-op materialization cap.
-  // Only exempt those roles when native mining is configured; in fallback
-  // mode the bridge itself is responsible for spawning miners/haulers.
+  // Roles in saved links are not proof of provenance: an old co-op-spawned
+  // miner can remain linked after a configuration change. An exemption
+  // needs BOTH a miner/hauler role and membership in an authoritative live
+  // EveJS mining fleet; fallback co-op ships must still consume capacity.
+  const nativeFleetIDs=new Set((Array.isArray(exemptEntityIDs)?exemptEntityIDs:[])
+   .map(Number).filter(id=>Number.isSafeInteger(id)&&id>0));
+  const isExempt=entry=>exemptions.has(entry.role)&&nativeFleetIDs.has(Number(entry.entityID));
   const occupiedEntities=new Set([
-   ...Array.from(assignments.values()).filter(x=>x.systemID===systemID).map(x=>x.entityID),
-   ...stored.filter(x=>!exemptions.has(x.role)).map(x=>x.entityID)
+   ...Array.from(assignments.values()).filter(x=>Number(x.systemID)===Number(systemID)).map(x=>x.entityID),
+   ...stored.filter(x=>!isExempt(x)).map(x=>Number(x.entityID))
   ]);
   let occupied=occupiedEntities.size;
   for(const pilot of pilots||[]){
