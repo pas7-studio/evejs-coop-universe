@@ -76,7 +76,17 @@ test('ship-prime broadcast stays scoped to independently identified scene sessio
   for (const record of observed) {
     assert.ok([a.session.clientID,b.session.clientID].includes(record.recipient), 'no unknown recipient');
   }
-  // The upstream ship prime API may legitimately select recipients based on visibility.
-  // Record actual recipient IDs; a second gate must prove both are eligible and delivered.
-  console.log('ship-prime recipients', [...new Set(observed.map(r => r.recipient))]);
+  const recipients = [...new Set(observed.map(r => r.recipient))];
+  assert.equal(recipients.length, observed.length, 'one ship-prime dispatch per recipient');
+  // Removing one observer must not cause the stale session to receive new events.
+  scene.sessions.delete(String(a.session.clientID));
+  const before = observed.length;
+  scene.broadcastShipPrimeUpdates(ship, { stampMode: 'currentVisible' });
+  const afterDisconnect = observed.slice(before);
+  assert.ok(afterDisconnect.every(r => r.recipient !== a.session.clientID),
+    'disconnected player received a scene update');
+  assert.equal(new Set(afterDisconnect.map(r => r.recipient)).size, afterDisconnect.length,
+    'duplicate dispatch after scene membership change');
+  console.log('ship-prime recipients before disconnect', recipients,
+    'after disconnect', afterDisconnect.map(r => r.recipient));
 });
