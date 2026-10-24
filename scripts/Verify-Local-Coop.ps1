@@ -73,7 +73,13 @@ try {
     $healthy=$false
     do {
       $healthy=RunExternal 'Backend health attempt' $ps @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'Check-Backend.ps1'),'-CodePath',$CodePath) 'backend-health.log'
-      if ($healthy) { break }
+      if ($healthy) {
+        # Transient health failures during startup are expected, not final failures.
+        for ($i=$results.Count-1; $i -ge 0; $i--) {
+          if ($results[$i].name -eq 'Backend health attempt' -and $results[$i].status -eq 'FAIL') { $results.RemoveAt($i) }
+        }
+        break
+      }
       if ((Get-Date).AddSeconds(10) -gt $deadline) { break }
       Start-Sleep -Seconds 10
     } while ((Get-Date) -lt $deadline)
