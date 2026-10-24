@@ -68,3 +68,19 @@ The `Start` action now polls `Check-Backend.ps1` up to `HealthTimeoutSeconds` (d
 The `LaunchTwo` action also uses the upstream `Play.bat` from an explicitly set working directory without fragile nested `cmd.exe /k cd /d` quotation. This fixes command-line quoting, **not** any upstream client concurrency restrictions.
 
 Agent rule: if `Start` fails after the timeout, capture `-Action Logs` and report the failing service and last errors. Do not re-run `Prepare` (market rebuild) just to resolve a slow startup.
+
+## Headless transport test while waiting for the EVE client
+
+When Docker is healthy, check that the actual EveJS TCP game listener accepts **two simultaneous connections** without involving any EVE client. This is not an EVE handshake or login test:
+
+```powershell
+cd C:\Games\EveCoopProject
+git pull
+.\scripts\Local-Two-Client-Test.ps1 -Action Start
+.\scripts\Local-Two-Client-Test.ps1 -Action Smoke
+.\scripts\Local-Two-Client-Test.ps1 -Action Logs
+```
+
+The `Smoke` action uses Node.js 22+ and connects only to `127.0.0.1:26000`. It creates two overlapping TCP sockets, holds them briefly, then closes both. Expected output: `TRANSPORT_ONLY_PASS`; if a socket cannot connect or gets closed before the hold check, the command exits nonzero. The probe never sends guessed EVE protocol bytes, never logs in, and cannot by itself verify the game.
+
+Agent acceptance: `Start` reports healthy Docker services; `Smoke` reports `TRANSPORT_ONLY_PASS`; `Logs` provides the evidence. If these pass, mark **TCP transport readiness only**, not the two-client milestone.
