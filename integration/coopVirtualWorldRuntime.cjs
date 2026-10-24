@@ -510,7 +510,14 @@ function observeSession(session,ship){
       // Never create a generic fake miner/hauler when EveJS already has
       // physical mining NPCs with actual mining lasers and ore cargo.
       const materialize=nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents;
-      const result=bridge.reconcile(systemID,materialize);
+      // Trust EveJS's active mining-fleet ship IDs, never a persisted
+      // "miner" label alone, when making stock NPC capacity exemptions.
+      const stockMiningIDs=industry.fleets.flatMap(f=>[
+       ...(f.minerIDs||[]),...(f.haulerIDs||[])
+      ]);
+      const result=bridge.reconcile(systemID,materialize,{
+       exemptEntityIDs:stockMiningIDs
+      });
       ensureCivilianOrders(runtime,npc);
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const presented=[];
