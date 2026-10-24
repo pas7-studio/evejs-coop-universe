@@ -36,18 +36,57 @@ function createBridge({spawn,exists,limit=3,registry=null,exemptRoles=[]}){
     const prior=assignments.get(pilot.id)||registry?.get(pilot.id);
     if(prior&&exists(prior.systemID,prior.entityID)){
       assignments.set(pilot.id,{systemID:prior.systemID,entityID:prior.entityID});
+      // A physical spawn can succeed before a durable registry write
+      // fails. Retrying the link is safer than spawning another ship.
+      if(registry&&!registry.get(pilot.id)){
+        try{
+          const linked=registry.link(pilot,prior.systemID,prior.entityID);
+          if(Number(linked?.entityID)!==Number(prior.entityID))
+           throw Error("DURABLE_IDENTITY_MISMATCH");
+        }catch(error){
+          results.push({pilotID:pilot.id,error:"IDENTITY_LINK_FAILED",
+           nativeReason:String(error.message).slice(0,100),
+           provisionalEntityID:prior.entityID});
+          continue;
+        }
+      }
       if(Number(prior.systemID)!==Number(systemID)){
         results.push({pilotID:pilot.id,pendingTransit:true,existingSystemID:prior.systemID});
       }else results.push({pilotID:pilot.id,entityID:prior.entityID,reused:true});
       continue;
     }
-    if(occupied>=limit)continue;
-    const result=spawn(systemID,pilot);
+    if(occupied>=limit){
+      results.push({pilotID:pilot.id,error:"SPAWN_LIMIT_REACHED",
+       occupied,limit});
+      continue;
+    }
+    let result;
+    try{result=spawn(systemID,pilot);}
+    catch(error){
+      results.push({pilotID:pilot.id,error:"NATIVE_SPAWN_THROW",
+       nativeReason:String(error?.message||error).slice(0,100)});
+      continue;
+    }
     const entityID=ids(result?.data?.spawned)[0];
-    if(result?.success!==true||!entityID){results.push({pilotID:pilot.id,error:String(result?.errorMsg||"SPAWN_FAILED")});continue;}
+    if(result?.success!==true||!entityID){
+      results.push({pilotID:pilot.id,error:String(result?.errorMsg||"SPAWN_FAILED").slice(0,120)});
+      continue;
+    }
+    // Track the real ship immediately; never generate a second physical
+    // spawn when the following identity registry persistence fails.
     assignments.set(pilot.id,{systemID,entityID});
-    registry?.link(pilot,systemID,entityID);
     occupied++;
+    if(registry){
+      try{
+        const linked=registry.link(pilot,systemID,entityID);
+        if(Number(linked?.entityID)!==entityID)throw Error("DURABLE_IDENTITY_MISMATCH");
+      }catch(error){
+        results.push({pilotID:pilot.id,error:"IDENTITY_LINK_FAILED",
+         nativeReason:String(error.message).slice(0,100),
+         provisionalEntityID:entityID});
+        continue;
+      }
+    }
     results.push({pilotID:pilot.id,entityID,reused:false});
   }
   return results;
