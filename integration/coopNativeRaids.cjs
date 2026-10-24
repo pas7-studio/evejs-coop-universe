@@ -22,7 +22,7 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
    const id=pos(rawID),ship=id&&scene.getEntityByID(id);
    if(!ship||!valid(ship.position)||String(ship.mode||"").includes("WARP"))continue;
    const key=systemID+":"+id,old=leases.get(key);
-   if(old&&clock()<old.nextAt)continue;
+   if(old&&clock()<old.nextAt&&scene.getEntityByID(old.targetID))continue;
    const activeTarget=pos(getController(id)?.currentTargetID);
    if(activeTarget&&scene.getEntityByID(activeTarget))continue;
    const target=candidates.filter(x=>x.id!==id)
@@ -41,11 +41,22 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
    // Warping to the convoy is only the approach, not the raid itself:
    // reevaluate soon after landing and issue a genuine weapon attack.
    const retryMs=result?.success===true?(action==="attack"?cooldownMs:15000):60000;
-   leases.set(key,{nextAt:clock()+retryMs,targetID:target.id});
+   leases.set(key,{nextAt:clock()+retryMs,targetID:target.id,phase:action});
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,targetRole:target.role,action});
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
  }
- return {tick,snapshot:()=>Array.from(leases,([id,value])=>({id,...value}))};
+ function activePirateIDs(sceneForSystem){
+  const active=new Set();
+  const now=clock();
+  for(const [key,lease] of leases){
+   if(lease.nextAt<=now)continue;
+   const [system,id]=key.split(":").map(Number);
+   const scene=sceneForSystem(system);
+   if(scene?.getEntityByID?.(id)&&scene.getEntityByID(lease.targetID))active.add(id);
+  }
+  return active;
+ }
+ return {tick,activePirateIDs,snapshot:()=>Array.from(leases,([id,value])=>({id,...value}))};
 }
 module.exports={createRaids};
