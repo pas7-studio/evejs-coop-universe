@@ -81,6 +81,55 @@ native damage, fleet cooperation, wreck loot, two-client rendering or remote
 multiplayer works. The original 67 local/27 upstream PASS report predates
 this branch; do not reuse those counts as validation for this change.
 
+## P1 combat enablement: native friend/foe guard and weapon witnesses
+
+Pinned EveJS `npcBehaviorLoop.isFriendlyCombatTarget` treats almost all NPC
+ships as allies, even when an NPC has an explicit attack order against
+another NPC. This prevented real NPC↔NPC engagements from progressing
+past target validation.
+
+The reversible overlay now introduces `coopNpcHostility` in that exact
+native target-validity branch, **only when**
+`EVEJS_COOP_RIVAL_NPC_COMBAT=1`. A valid exception requires:
+- two actual `nativeNpc` ship entities, both with current EveJS controllers;
+- two distinct named `coop-pilot-NNN` identities physically linked to those
+  ship entity IDs in the **same system**;
+- different factions from the persisted current virtual-world roster;
+- a native `manualOrder.type=attack` against that exact target, **or** an
+  actual recorded native `lastAggressorID` with timestamp.
+
+Without every condition, EveJS keeps its standard friendly-NPC behavior.
+Named pirate raids skip same-faction or unlinked mining targets before
+issuing attack orders, preventing accidental intra-faction friendly fire.
+No unrestricted NPC auto-aggro or synthetic target may be introduced.
+
+The same reversible upstream patch now records two **genuine source-side**
+events when `EVEJS_COOP_NATIVE_WEAPON_EVIDENCE=1`:
+- **`missile-launch`** only after EveJS `scene.launchMissile()` returns
+  `success=true` for a named NPC and target;
+- **`module-activation`** only after EveJS
+  `scene.activateGenericModule()` succeeds for the named NPC's real
+  weapon module and target.
+
+Both are emitted as `living-native-weapon-event` with the matched named
+attacker, victim, native entity IDs, and module/charge type. Neither
+an activated module nor a launched missile is evidence of a **hit**.
+
+The manual `-Action Combat` check now requires `--require-weapon`
+in addition to physical HP loss, same-victim native wreck and stored
+nonempty loot. It demands an exact attacker/victim identity match
+between the weapon witness and the observed HP drop, then correlates
+that victim's wreck. Failure reports
+`AWAITING_NATIVE_WEAPON_CHAIN`. The fully verified state remains
+**server-side evidence**, not proof of exact final-hit attribution,
+client rendering, or physically looting the wreck.
+
+The upstream patch was checked for syntax, idempotent installation and
+byte-exact reversal against EveJS pin
+`c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`.
+The isolated permission, witness and reporting tests passed in a
+JavaScript test harness. A real EveJS Docker simulation remains unverified.
+
 ## Native NPC-to-NPC damage, wreck and loot verification (new P1 slice)
 
 Read-only combat health sampling runs every 5 seconds by default (bounded to 2–15 seconds via `EVEJS_COOP_NATIVE_COMBAT_SAMPLE_MS`), independently of the 30-second virtual economy loop. This reduces missed short-lived fights without issuing gameplay orders.
