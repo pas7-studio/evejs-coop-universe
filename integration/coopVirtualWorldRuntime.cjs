@@ -674,9 +674,11 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    getWreck:id=>store.getNativeWreck(id),
    getWreckItems:id=>store.listNativeWreckItemsForWreck(id)
   });
-  require("./coopRuntimeProbe").observe("living-native-wreck-evidence",null,
-   {spaceState:{systemID}},proof);
-  if(proof.status!=="PHYSICAL_NATIVE_WRECK_VERIFIED")return;
+  if(proof.status!=="PHYSICAL_NATIVE_WRECK_VERIFIED"){
+   require("./coopRuntimeProbe").observe("living-native-wreck-evidence",null,
+    {spaceState:{systemID}},proof);
+   return;
+  }
   // The ship is already removed from the EveJS scene at this point,
   // but its authoritative source object is still held by the wreck
   // service. Capture a missed final HP delta only against a fresh
@@ -700,6 +702,11 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
        terminalNativeWreckID:wreckID,events:[terminal.event]});
    }catch(error){console.warn("[CoopNativeCombatEvidence] terminal HP",error.message);}
   }
+  // Emit the authoritative physical wreck *after* its terminal HP
+  // observation. The strict report requires damage before wreck, not
+  // the reverse order imposed by the callback's bookkeeping.
+  require("./coopRuntimeProbe").observe("living-native-wreck-evidence",null,
+   {spaceState:{systemID}},proof);
   start();
   const killed=life.markLoss({pilotID:link.pilotID,systemID,shipID:npcID,wreckID});
   require("./coopRuntimeProbe").observe("living-npc-destroyed",null,
