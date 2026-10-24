@@ -88,3 +88,25 @@ jobs:
           node scripts/verifyTargetKillModuleTeardown.js
           node scripts/verifyDestinyAuthorityDropAndFx.js
           node scripts/verifyMovementWarpParity.js
+
+      - name: Persist verification manifest
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p evidence
+          {
+            echo "Repository: $GITHUB_REPOSITORY"
+            echo "Project commit: $GITHUB_SHA"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Upstream pinned commit: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f"
+            echo "Node: $(node --version)"
+            echo "Result: see individual preceding CI steps (this manifest is not a PASS signal)"
+          } | tee evidence/manifest.txt
+          cat evidence/manifest.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-verification-manifest
+          path: evidence/manifest.txt
+          if-no-files-found: error
