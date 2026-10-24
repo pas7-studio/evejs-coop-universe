@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142,[switch]$EnablePersistentEncounters,[int]$EncounterCooldownMinutes=60,[int]$EncounterMaxSpawns=24,[switch]$EnableVirtualWorld,[int]$VirtualPopulation=16,[int]$VirtualTravelSeconds=120,[switch]$MaterializeVirtualNpcs,[int]$MaterializeLimit=2,[switch]$EnableVirtualEconomy,[switch]$EnableFactionPatrols)
+param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142,[switch]$EnablePersistentEncounters,[int]$EncounterCooldownMinutes=60,[int]$EncounterMaxSpawns=24,[switch]$EnableVirtualWorld,[int]$VirtualPopulation=16,[int]$VirtualTravelSeconds=120,[switch]$MaterializeVirtualNpcs,[int]$MaterializeLimit=2,[switch]$EnableVirtualEconomy,[switch]$EnableFactionPatrols,[switch]$CoopCombat)
 $ErrorActionPreference='Stop'
 if($MaterializeLimit -lt 1 -or $MaterializeLimit -gt 10){throw 'MaterializeLimit must be 1..10'}
 if($EnableFactionPatrols -and -not $EnableVirtualEconomy){throw 'EnableFactionPatrols requires EnableVirtualEconomy'}
@@ -26,10 +26,14 @@ services:
       EVEJS_COOP_EVENTS_FILE: /var/lib/evejs/coop-events.jsonl
 '@
   $yaml += "`n"
-  if($EnableNativeNpcDemo -or $EnablePersistentEncounters) {
+  if($EnableNativeNpcDemo -or $EnablePersistentEncounters -or $CoopCombat) {
     $yaml += "      EVEJS_COOP_NATIVE_NPC_DEMO: '1'`n"
     $yaml += "      EVEJS_COOP_NATIVE_NPC_COUNT: '$NpcCount'`n"
     $yaml += "      EVEJS_COOP_NATIVE_NPC_SYSTEM_ID: '$NpcSystemID'`n"
+  }
+  if($CoopCombat) {
+    $yaml += "      EVEJS_COOP_REQUIRE_TWO_PILOTS: '1'`n"
+    $yaml += "      EVEJS_COOP_PARTY_RANGE_METERS: '250000'`n"
   }
   if($EnablePersistentEncounters) {
     $yaml += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'`n"
