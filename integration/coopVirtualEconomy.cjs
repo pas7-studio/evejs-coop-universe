@@ -24,8 +24,8 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
    const sys=ensure(p.systemID),agent=state.pilots[p.id];
    if(!agent)continue;
    if(agent.role==="miner"){const produced=Math.min(3,1000000-sys.ore);sys.ore+=produced;agent.completed+=produced;}
-   if(agent.role==="hauler"){const qty=Math.min(2,sys.ore,1000000-agent.cargo);sys.ore-=qty;agent.cargo+=qty;agent.completed+=qty;}
-   if(agent.role==="trader"){const qty=Math.min(2,agent.cargo);agent.cargo-=qty;sys.goods=cap(sys.goods+qty);agent.credits=cap(agent.credits+qty*3);agent.completed+=qty;}
+   if(agent.role==="hauler"){const qty=Math.min(2,sys.ore,1000000-sys.goods);sys.ore-=qty;sys.goods+=qty;agent.credits=cap(agent.credits+qty);agent.completed+=qty;}
+   if(agent.role==="trader"){const qty=Math.min(2,sys.goods);sys.goods-=qty;sys.demand=cap(sys.demand+qty);agent.credits=cap(agent.credits+qty*3);agent.completed+=qty;}
    if(agent.role==="patrol"){sys.security=Math.min(100,sys.security+1);agent.completed++;}
    sys.demand=cap(Math.max(0,sys.demand-1)+(sys.goods<25?1:0));
   }
