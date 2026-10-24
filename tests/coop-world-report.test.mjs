@@ -215,3 +215,43 @@ test("real NPC battle evidence does not depend on a miner or hauler fleet",()=>{
  const economic=summarize(input,{now});
  assert.equal(economic.status,"MISSING_NATIVE_WORLD_DATA");
 });
+
+test("native upstream destruction attacker is never inferred from target lock, module or wreck",()=>{
+ const launch=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
+ });
+ const noNative=summarize(combatFixture()+"\n"+launch,{now,requireFinalAttacker:true});
+ assert.equal(noNative.status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
+ assert.equal(noNative.combat.nativeAttackerChainWreckID,null);
+});
+test("explicit native destruction source must match exact attacker, wreck and source-side weapon",()=>{
+ const launch=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
+ });
+ const source=event("living-native-destruction-attacker",{
+  status:"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900
+ });
+ const base=combatFixture()+"\n"+launch;
+ const valid=summarize(base+"\n"+source,{now,requireCombat:true,requireWeapon:true,requireFinalAttacker:true});
+ assert.equal(valid.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(valid.combat.nativeAttackerChainWreckID,900);
+ assert.equal(valid.combat.nativeAttackerPilotID,"coop-pilot-001");
+ const forged=event("living-native-destruction-attacker",{
+  status:"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  attackerEntityID:999,attackerPilotID:"coop-pilot-099",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:900
+ });
+ assert.equal(summarize(base+"\n"+forged,{now,requireFinalAttacker:true}).status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
+ const wrong=event("living-native-destruction-attacker",{
+  status:"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",wreckID:901
+ });
+ assert.equal(summarize(base+"\n"+wrong,{now,requireFinalAttacker:true}).status,"AWAITING_UPSTREAM_DESTRUCTION_ATTACKER");
+});
