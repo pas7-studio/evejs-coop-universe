@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -80,12 +80,19 @@ function start(){
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
   safeNpcPhase("native-civilians",advanceNativeCivilianOrders);
   safeNpcPhase("native-activity",observeNativeActivity);
-  safeNpcPhase("native-combat-evidence",observeNativeCombat);
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
    for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
     ()=>observeSession(null,{itemID:0,spaceState:{systemID}}));
  },30000);
  timer.unref?.();
+ // NPC fights can end before the ordinary 30s economy tick. A read-only
+ // 5s sampling loop captures HP changes without altering EveJS combat.
+ if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT==="1"&&!combatTimer){
+  const configured=Number(process.env.EVEJS_COOP_NATIVE_COMBAT_SAMPLE_MS||5000);
+  const every=Number.isFinite(configured)?Math.max(2000,Math.min(15000,configured)):5000;
+  combatTimer=setInterval(()=>safeNpcPhase("native-combat-evidence",observeNativeCombat),every);
+  combatTimer.unref?.();
+ }
  scheduleHeadlessWorldBoot(route);
 }
 // Initialize real EveJS scenes without waiting for a human to log in.
