@@ -1,6 +1,7 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
 let world=null,timer=null,bridge=null,economy=null,lossBridge=null;
+const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
@@ -54,6 +55,17 @@ function observeSession(session,ship){
         });
       }
       const result=bridge.reconcile(systemID,residents);
+      for(const entry of result){
+        if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
+        observedNpcIDs.add(entry.entityID);
+        const npcID=entry.entityID;
+        const probe=require("./coopRuntimeProbe");
+        require("./coopCombatProbe").launch({
+          scene,shipIDs:[Number(ship.itemID)],npcIDs:[npcID],
+          session,ship,probe,intervalMs:1000,maxSamples:180,
+          onConfirmedWreck:wreck=>confirmedWreck(session,ship,wreck.sourceNpcID,wreck.wreckID)
+        });
+      }
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
         assignments:result,sceneReady:Boolean(scene)
       });
