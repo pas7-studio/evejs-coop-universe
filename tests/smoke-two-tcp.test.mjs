@@ -22,13 +22,21 @@ function runProbe(port) {
   });
 }
 async function withServer(callback, onConnection = () => {}) {
-  const server = net.createServer(onConnection);
+  const connections = new Set();
+  const server = net.createServer(socket => {
+    connections.add(socket);
+    socket.on('close', () => connections.delete(socket));
+    onConnection(socket);
+  });
   await new Promise((ok, fail) => {
     server.once('error', fail);
     server.listen(0, '127.0.0.1', ok);
   });
   try { return await callback(server.address().port); }
-  finally { server.closeAllConnections(); await new Promise(ok => server.close(ok)); }
+  finally {
+    for (const socket of connections) socket.destroy();
+    await new Promise(ok => server.close(ok));
+  }
 }
 test('transport probe accepts A+B and reconnects A while B survives', async () => {
   let count = 0;
