@@ -56,6 +56,11 @@ $useWorld = $EnableVirtualWorld -or $LivingCoop
 $useMaterialization = $MaterializeVirtualNpcs -or $LivingCoop
 $useEconomy = $EnableVirtualEconomy -or $LivingCoop
 $usePatrols = $EnableFactionPatrols -or $LivingCoop
+# Existing manual materialization limits still win. The LivingCoop default
+# admits a real pirate/patrol mixture without manufacturing any new ships.
+if ($LivingCoop -and -not $PSBoundParameters.ContainsKey('MaterializeLimit')) {
+  $MaterializeLimit = 3
+}
 if ($LivingCoop -and $useDemo) {
   throw 'LivingCoop runs autonomous NPCs; scripted PvE encounters cannot be combined with it'
 }
