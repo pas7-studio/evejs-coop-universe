@@ -137,12 +137,16 @@ function advanceNativePatrolRoutes(){
   if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
  }
 }
-function ensureNativeMining(scene){
+function ensureNativeMining(scene,systemID){
  if(process.env.EVEJS_COOP_NATIVE_MINING!=="1"||!scene||initializedNativeMiningScenes.has(scene))return;
- // The stock mining scene lifecycle is designed to be idempotent:
- // its mining NPC startup registry prevents duplicate fleet seeding.
+ // Stock EveJS mining operations prevent duplicate fleet seeding.
+ // If the scene was only partially initialized, retry on the next pass.
  require("../services/mining/miningRuntime").handleSceneCreated(scene);
- initializedNativeMiningScenes.add(scene);
+ const mining=require("../services/mining/miningNpcOperations");
+ if((mining.getMiningFleetsForSystem(systemID)||[]).some(f=>
+    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
+      .some(id=>scene.getEntityByID?.(Number(id)))))
+   initializedNativeMiningScenes.add(scene);
 }
 function ensureCivilianOrders(runtime,npc){
  if(civilianOrders)return;
@@ -341,7 +345,7 @@ function observeSession(session,ship){
           sceneReady:Boolean(scene)
         });
       }
-      ensureNativeMining(scene);
+      ensureNativeMining(scene,systemID);
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
         const {createRegistry}=require("./coopIdentityRegistry");
@@ -405,10 +409,10 @@ function observeSession(session,ship){
       for(const entry of result){
         if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
         const npcID=entry.entityID;
-        observedNpcIDs.add(npcID);
         // Headless boot has no authenticated player ship. Do not open
         // a bogus 0-ship combat probe; native wreck hooks still record losses.
         if(!session||!Number.isSafeInteger(Number(ship?.itemID))||Number(ship.itemID)<=0)continue;
+        observedNpcIDs.add(npcID);
         const probe=require("./coopRuntimeProbe");
         require("./coopCombatProbe").launch({
           scene,shipIDs:[Number(ship.itemID)],npcIDs:[npcID],
