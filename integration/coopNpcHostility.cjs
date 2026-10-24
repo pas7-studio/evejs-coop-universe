@@ -63,8 +63,35 @@ function allowsNativeEngagement(attacker,target){
    cache={file,worldFile,loadedAt:now,
     links:Object.values(saved.links),pilots:world.pilots};
   }
-  return validPair({attacker,target,attackerController,targetController,
+  const namedAllowed=validPair({attacker,target,attackerController,targetController,
    links:cache.links,pilots:cache.pilots});
+  if(namedAllowed)return true;
+  // The standard native EveJS combat policy treats NPC->NPC as friendly.
+  // The stock mining-fleet hull may not have a co-op named identity.
+  // Permit ONLY a linked pirate with an actual native attack order against
+  // an authoritative mining fleet member; never globally allow NPC duels.
+  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||
+   positive(attackerController.systemID)!==positive(targetController.systemID)||
+   Number(attackerController.entityID)!==a||
+   Number(targetController.entityID)!==b)return false;
+  if(attackerController.manualOrder?.type!=="attack"||
+   Number(attackerController.manualOrder.targetID)!==b)return false;
+  if(!cache.links.some(x=>Number(x.systemID)===Number(attackerController.systemID)&&
+   Number(x.entityID)===a&&x.role==="pirate"))return false;
+  const fleetRecords=require("../services/mining/miningNpcOperations")
+   .getMiningFleetsForSystem(Number(attackerController.systemID))||[];
+  const fleetShips=[];
+  for(const fleet of fleetRecords){
+   if(Number(fleet?.systemID)!==Number(attackerController.systemID))continue;
+   for(const [role,key] of [["miner","minerEntityIDs"],["hauler","haulerEntityIDs"]]){
+    if((fleet[key]||[]).some(id=>Number(id)===b))
+     fleetShips.push({id:b,role});
+   }
+  }
+  return require("./coopNativeRaidEligibility").isAuthorizedStockMiningRaid({
+   systemID:attackerController.systemID,attacker,target,
+   links:cache.links,pilots:cache.pilots,fleetShips
+  });
  }catch(error){
   cache=null;
   if(error?.code!=="ENOENT")console.warn("[CoopNpcHostility] unavailable",error.message);
