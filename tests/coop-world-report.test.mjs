@@ -534,3 +534,36 @@ test("World identifies native startup fleet-count zero from pinned EveJS default
  assert.equal(r.systemSiteReadiness.stockMiningStartup.startupFleetCount,0);
  assert.ok(r.blockers[0].includes("NATIVE_MINING_FLEET_COUNT_ZERO"));
 });
+
+
+test("corrupt persisted NPC identity blocks World even when a native scene and miners exist",()=>{
+ const data=[
+  event("living-headless-boot-requested",{systems:[30000144]}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{minerIDs:[100],haulerIDs:[200]}]}),
+  event("virtual-world-materialization",{systemID:30000144,
+   livingShips:[{pilotID:"coop-pilot-005",entityID:901,role:"patrol"}]}),
+  event("living-native-durable-recovery",{
+   status:"NEEDS_OPERATOR_REPAIR",recovered:0,
+   errors:[{pilotID:"coop-pilot-005",entityID:901,
+    reason:"DURABLE_NATIVE_RECORD_MISSING"}]})
+ ].join("\n");
+ const r=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.status,"BLOCKED_DURABLE_NPC_RECOVERY");
+ assert.equal(r.nativeDurableRecovery.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
+ assert.ok(r.blockers[0].includes("coop-pilot-005"));
+});
+test("native durable restart evidence is reported without pretending client gameplay",()=>{
+ const data=[
+  event("living-headless-boot-requested",{systems:[30000144]}),
+  event("living-native-durable-recovery",{status:"OK",recovered:1,
+   alreadyPhysical:0,legacyTransient:2,confirmedLosses:1,errors:[]}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3})
+ ].join("\n");
+ const r=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.nativeDurableRecovery.status,"OK");
+ assert.equal(r.nativeDurableRecovery.recovered,1);
+ assert.equal(r.nativeDurableRecovery.legacyTransient,2);
+ assert.equal(r.nativeDurableRecovery.confirmedLosses,1);
+ assert.notEqual(r.status,"READY_FOR_CLIENT_PLAYTEST");
+});
