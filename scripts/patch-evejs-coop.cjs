@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety"];
 const specs=[
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
   {anchor:"  persistCharacterLogoffState(session);",line:'  require("../../space/coopRuntimeProbe").observe("disconnect-after-persist", session, null);',after:true}
@@ -18,6 +18,10 @@ const specs=[
   {anchor:"  const hydrationQueuedAtMs = Date.now();",line:'  require("./coopSessionPresence").schedule(session, activeShip, "login");',after:true},
   {anchor:"    queuePostSpaceAttachFittingHydration(session, moveResult.data.itemID, {",line:'    require("./coopSessionPresence").schedule(session, moveResult.data, "undock");'},
   {anchor:"  queuePostSpaceAttachFittingHydration(session, moveResult.data && moveResult.data.itemID, {",line:'  require("./coopSessionPresence").schedule(session, moveResult.data, "stargate");'}
+ ]},
+ {file:"server/src/services/ship/beyonceService.js",patches:[
+  {anchor:"      return !(\\n        commanderSystemID > 0 &&",line:'      if (process.env.EVEJS_COOP_FLEET_WARP_SAFETY === "1" && !require("../../space/coopFleetWarpSafety").eligible({commanderSession,followerSession,spaceRuntime})) return false;'},
+  {anchor:"      if (followerResult && followerResult.success) {",line:'      if (process.env.EVEJS_COOP_FLEET_WARP_SAFETY === "1") require("../../space/coopFleetWarpSafety").recordFollowerWarp({commanderSession,followerSession,spaceRuntime,result:followerResult,targetEntityID,minimumRange});'}
  ]},
  {file:"server/src/network/tcp/index.js",patches:[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
@@ -39,6 +43,8 @@ const specs=[
  ]}
 ];
 const oldLines=[
+  '      if (process.env.EVEJS_COOP_FLEET_WARP_SAFETY === "1" && !require("../../space/coopFleetWarpSafety").eligible({commanderSession,followerSession,spaceRuntime})) return false;',
+  '      if (process.env.EVEJS_COOP_FLEET_WARP_SAFETY === "1") require("../../space/coopFleetWarpSafety").recordFollowerWarp({commanderSession,followerSession,spaceRuntime,result:followerResult,targetEntityID,minimumRange});',
  "  try { require(\"../coopVirtualWorldRuntime\").confirmedNativeNpcWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity); } catch (_coopError) { /* optional integration */ }",
  "  try { require(\"../coopNpcDestructionAttacker\").note(scene, shipEntity, options, wreckRecord); } catch (_coopError) { console.warn(\"[CoopNpcDestructionAttacker]\", _coopError.message); }",
  "    if (process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",
