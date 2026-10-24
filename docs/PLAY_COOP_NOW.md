@@ -1,3 +1,38 @@
+## Autonomous NPC battles, retreats and rescue
+
+The default LivingCoop now enables native tactical decisions for
+**already existing named NPC ships** alongside stock EveJS mining-fleet
+AI. There are no arena waves or scripted fatalities.
+
+When a native EveJS NPC controller records recent aggression, other
+physical NPCs of the same faction can respond. Civilian pilots ask
+patrols for assistance; attacked pirates can call allied pirates.
+At most **two existing allies** are redirected per request. They use
+real EveJS warp and attack orders, so a rescuer from a distant grid
+must actually arrive before firing.
+
+An injured NPC (armor below 28% or structure below 72%) may initiate
+a real warp to an existing station or stargate sufficiently far from
+its attacker. Warp scramble prevents the escape. On arrival the NPC
+holds out of combat briefly, then returns to normal native EveJS
+behavior. Failed warps never count as escapes.
+
+You may notice an NPC call for help or try to retreat in local chat.
+These messages describe actual server orders, not guaranteed outcomes:
+the ship can still be destroyed while escaping, or the help can
+arrive too late. `-Action Party` displays observed calls, retreats,
+and genuine reinforcement orders.
+
+The tactical logic is independently unit-verified; the actual EVE
+client visuals, damage simulation, warp arrival and shared combat
+still need a live client playtest.
+
+**Work order:** finish this NPC combat block first. Treat real
+two-client/fleet/loot/reconnect as a later *single P0 block*. After
+that, integrate physical NPC gate travel and authentic player-visible
+market trading as another block. Finally build individual NPC memories
+and long-running faction stories.
+
 
 ## October 24: verified backend is not yet verified Living Universe
 
