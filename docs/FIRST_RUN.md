@@ -76,3 +76,12 @@ To discover upstream network dependencies:
 ```
 
 Treat this generated report as local investigation, not as permission to expose game ports.
+
+## Docker security verification before deployment
+
+From this orchestration repository, after fetching upstream:
+```powershell
+.\scripts\Test-ComposeSafety.ps1
+```
+
+The script runs `docker compose config --format json` against the upstream `Code/compose.yaml` and fails if a required service is missing or a published port is not explicitly bound to the host loopback interface. This is an intentionally strict *local-only* gate: it must **not** be weakened to enable VPN access. Future permitted remote access requires a separate, reviewed gateway design.
