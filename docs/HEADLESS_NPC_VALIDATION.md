@@ -64,6 +64,33 @@ headless boot-request event.
 To diagnose failures, inspect the ordinary `-Action Logs` output and the
 event log inside the server container; never infer success from flags alone.
 
+## P0 recovery for empty but real headless EveJS scenes
+
+`coopHeadlessScenePolicy.cjs` now marks a **genuinely loaded native
+EveJS scene with authoritative static waypoints** for periodic
+reconciliation even when it has **zero linked named NPCs**. Previously
+the regular two-minute reconcile only visited systems with an already
+successful native identity link, so a failed initial spawn could leave
+the scene relying exclusively on slow headless boot retries.
+This change NEVER invents an asteroid belt, ship or successful NPC
+assignment. Its `trackingForReconcile` field is an internal scheduling
+witness, not a gameplay PASS.
+
+Per-system native mining startup diagnostics now include
+`systemSiteReadiness.stockMiningStartup.status`: 
+`MINING_STARTUP_ELIGIBLE`, `NATIVE_MINING_STARTUP_DISABLED`,
+`NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM`,
+`SYSTEM_HAS_NO_SDE_BELTS` or `SYSTEM_SDE_BELTS_NOT_IN_SCENE`.
+An eligible config does not imply a physical fleet actually exists.
+No changes to native EveJS mining seeding or the owner's saved
+`evejs-data` are authorized by this diagnostic. `World` reports
+a startup exclusion/disablement alongside `NO_NATIVE_MINING_FLEET`
+instead of treating all such cases as missing SDE.
+
+New isolated regression: 6 native-scene policy tests,
+2 startup-explanation report tests; 61/61 relevant tests PASS.
+No local Docker/player proof for this new code yet.
+
 ## 2026-10-25 SDE / native spawn diagnostics
 
 `World` now defaults to **Perimeter**, where genuine asteroid belts exist.
