@@ -91,10 +91,12 @@ named pirates and patrols from spawning. This explains why valid native raid
 logic could be impossible to exercise even in a scene containing a real
 mining fleet.
 
-With native mining enabled, stock `miner`/`hauler` links are exempt
-from the bridge's *additional* spawn cap; co-op-spawned pirates, traders
-and patrols still count. Without native mining, the fallback retains the
-original cap across all roles. The bridge remains bounded by a maximum
+With native mining enabled, an exemption requires **both** a matching
+persisted `miner`/`hauler` role **and an entity ID appearing in the actual
+live EveJS mining fleet** returned by `coopNativeIndustry`. An old or
+spoofed role alone cannot free co-op capacity. Co-op-spawned pirates,
+traders and patrols still count. Without native mining, the fallback
+retains the original cap across all roles. The bridge remains bounded by a maximum
 of 10 additional co-op ships per solar system. Regression tests cover
 restart/existing stock links, fallback behavior and no duplicate spawns.
 
@@ -138,6 +140,44 @@ This is stronger native-source attribution than temporal correlation,
 but still requires a **real Docker run** before claiming verified
 NPC gameplay, and the native caller's semantics must be validated
 before calling it the exact fatal weapon hit.
+
+## Native fast-kill HP proof and resilient headless boot (current)
+
+A physical named NPC can die between periodic 5-second HP observations,
+so a valid EveJS wreck may appear without a previously reported lethal
+damage sample. The native wreck hook now forwards the **original doomed
+ship object** (not a simulated replacement) into the existing
+`coopNativeCombatEvidence` monitor. After verifying the physical
+wreck and its stored contents, the monitor may report
+`NATIVE_TERMINAL_HP_DROP` only when it has a previous **same-system,
+same-entity, same-named-pilot HP baseline no older than 30 seconds**.
+It compares genuine final shield/armor/structure values and emits no
+hit when HP did not decrease, the baseline is stale/missing or identity
+differs. The native controller's previous target remains a *correlation*,
+not proof of who delivered the final hit.
+
+In this fast-kill case the runtime emits `living-native-combat-damage`
+**before** `living-native-wreck-evidence`, so the existing strict
+Combat/FinalBlow time-ordered report can use it without reversing events.
+Strict report matching now also checks exact persistent victim identity
+and, when collected, attacker **entity ID**, to avoid reusing evidence
+from a different NPC after an EveJS entity ID is recycled.
+
+Headless startup no longer gives up permanently after six unsuccessful
+checks. It retries every 30 seconds at first, then continues at a
+bounded **5–15 minute** cadence for unresolved systems, with quiet
+periodic diagnostics. It terminates retrying for a system only after
+actual scene evidence is available. With `EVEJS_COOP_NATIVE_MINING=1`,
+this includes real NPC ships, belts, and live mining hulls. Without
+native mining, a named physical NPC and a real static scene waypoint
+are sufficient; startup no longer imports the mining service in that
+mode. No GitHub-hosted CI is used.
+
+Manual tests added to `Verify-Local-Coop.ps1` include
+`tests/coop-headless-retry.test.mjs`; the native combat evidence suite
+also covers mid-sample deaths, missing/stale baselines and unchanged HP.
+The 41 relevant isolated JavaScript checks passed, but no live Docker
+world, native weapon hit or game-client rendering has been verified.
 
 ## P1 combat enablement: native friend/foe guard and weapon witnesses
 
