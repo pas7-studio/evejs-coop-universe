@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','StockRaidLoot','FinalBlow','Market','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','StockRaidLoot','LootPickup','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -195,6 +195,16 @@ switch ($Action) {
             throw 'Unproven stock PvE chain: require actual native weapon, same-victim HP loss, physical EveJS wreck and nonempty stored loot. Real clients and final-hit attribution remain separate.'
         }
         Write-Host '[STOCK RAID LOOT] Native weapon, measured stock miner HP loss, physical wreck and saved loot are correlated. Two-client gameplay and killer identity are NOT proven.'
+    }
+    'LootPickup' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native loot pickup proof.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'Missing native loot telemetry. Use DiagnoseWorld; do not reset the world.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-stock-raid --require-stock-wreck-loot --require-native-loot-pickup --system-id $WorldSystemID
+        if ($LASTEXITCODE -ne 0) { throw 'No correlated real stock miner weapon, HP, physical wreck, stored loot and authenticated successful item withdrawal yet.' }
+        Write-Host '[LOOT PICKUP] Native EveJS item grant and matching source debit verified for an authenticated character. Second-client rendering, duplicate withdrawal and final killer still require gameplay QA.'
     }
     'FinalBlow' {
         Assert-BackendPrerequisites
