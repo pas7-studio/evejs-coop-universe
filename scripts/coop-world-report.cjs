@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,requireStockWreckLoot=false,systemID:requestedSystemID=null}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,requireStockWreckLoot=false,requireNativeLootPickup=false,systemID:requestedSystemID=null}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -186,6 +186,14 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   w._time>=pairedStock._time&&w._time-pairedStock._time<=10*60000);
  const stockLootWreck=matchedStockWreck?.lootStatus==="ITEMS_STORED"&&
   Number(matchedStockWreck.storedItemCount)>0?matchedStockWreck:null;
+ const nativeLootPickups=rows.filter(e=>e.event==="living-native-loot-pickup"&&
+  e.status==="VERIFIED_NATIVE_LOOT_PICKUP"&&
+  positive(e.systemID)===systemID&&positive(e.characterID)&&
+  positive(e.wreckID)&&positive(e.wreckItemID)&&
+  positive(e.quantity)&&(!latestBoot||e._time>=latestBoot._time));
+ const matchedNativePickup=nativeLootPickups.find(e=>stockLootWreck&&
+  Number(e.wreckID)===Number(stockLootWreck.wreckID)&&
+  e._time>=stockLootWreck._time);
  const stockRaid={
   verifiedNativeWeaponEvents:stockWeapons.length,
   measuredStockFleetHpLossEvents:stockDamage.length,
@@ -193,6 +201,9 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   actualPhysicalWrecks:stockWrecks.length,
   correlatedPhysicalWreckID:matchedStockWreck?.wreckID||null,
   correlatedWreckWithStoredLootID:stockLootWreck?.wreckID||null,
+  verifiedNativePickupEvents:nativeLootPickups.length,
+  correlatedVerifiedPickupItemID:matchedNativePickup?.wreckItemID||null,
+  correlatedVerifiedLooterID:matchedNativePickup?.characterID||null,
   status:stockLootWreck?"CORRELATED_STOCK_WEAPON_HP_WRECK_AND_STORED_LOOT":
    pairedStock?"CORRELATED_STOCK_FLEET_WEAPON_AND_HP_LOSS":
    stockDamage.length?"STOCK_FLEET_HP_LOSS_ONLY":
@@ -267,7 +278,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  // readiness is not a prerequisite for combat between two other named NPCs.
  // It still requires actual authoritative scene topology and the strict
  // source-weapon -> HP -> physical wreck -> stored loot evidence below.
- if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket||requireStockRaid||requireStockWreckLoot){
+ if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket||requireStockRaid||requireStockWreckLoot||requireNativeLootPickup){
   if(topology&&scenery.waypoints>0){
    status="READY_FOR_CLIENT_PLAYTEST";
    blockers.length=0;
@@ -280,6 +291,11 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  if(requireStockWreckLoot&&status==="READY_FOR_CLIENT_PLAYTEST"&&!stockLootWreck){
   status="AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN";
   blockers.push("No physical EveJS stock miner wreck with nonempty persisted loot correlated to native pirate weapon activation and measured HP loss on the same real victim. An attack order, empty wreck or fabricated inventory is insufficient.");
+ }
+ if(requireNativeLootPickup&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    !matchedNativePickup){
+  status="AWAITING_AUTHENTICATED_NATIVE_LOOT_PICKUP";
+  blockers.push("No authenticated EveJS player transferred an item from this correlated stock-miner wreck with verified source-store decrement. Having loot in the wreck alone is insufficient.");
  }
  if(requireFinalAttacker&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeAttackerChain){
   status="AWAITING_UPSTREAM_DESTRUCTION_ATTACKER";
@@ -372,7 +388,8 @@ if(require.main===module){
    requireFinalAttacker:args.includes("--require-final-attacker"),
    requireMarket:args.includes("--require-market"),
    requireStockRaid:args.includes("--require-stock-raid"),
-   requireStockWreckLoot:args.includes("--require-stock-wreck-loot")
+   requireStockWreckLoot:args.includes("--require-stock-wreck-loot"),
+   requireNativeLootPickup:args.includes("--require-native-loot-pickup")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
