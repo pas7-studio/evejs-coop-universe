@@ -486,3 +486,35 @@ test("headless boot timer witness differentiates a fired timer from a missing sy
  assert.equal(r.headlessBootStatus,null);
  assert.notEqual(r.status,"READY_FOR_CLIENT_PLAYTEST");
 });
+
+
+test("World exposes missing native miner fleet caused by disabled startup flags",()=>{
+ const data=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   status:"REAL_BELT_PRESENT",authoritativeSdeBelts:3,realAsteroidBelts:3,
+   trackingForReconcile:true,stockMiningStartup:{
+    status:"NATIVE_MINING_STARTUP_DISABLED",startupEnabled:false,
+    startupSystemIncluded:true,configuredForSystem:false}})
+ ].join("\n");
+ const report=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(report.status,"NO_NATIVE_MINING_FLEET");
+ assert.equal(report.systemSiteReadiness.trackingForReconcile,true);
+ assert.equal(report.systemSiteReadiness.stockMiningStartup.status,
+  "NATIVE_MINING_STARTUP_DISABLED");
+ assert.ok(report.blockers[0].includes("NATIVE_MINING_STARTUP_DISABLED"));
+});
+test("World distinguishes excluded Perimeter starter route from missing physical asteroids",()=>{
+ const data=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   status:"REAL_BELT_PRESENT",authoritativeSdeBelts:3,realAsteroidBelts:3,
+   trackingForReconcile:true,stockMiningStartup:{
+    status:"NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM",startupEnabled:true,
+    startupSystemIncluded:false,configuredForSystem:false}})
+ ].join("\n");
+ const r=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.status,"NO_NATIVE_MINING_FLEET");
+ assert.ok(r.blockers[0].includes("NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM"));
+ assert.equal(r.scenery.asteroidBelts,3);
+});
