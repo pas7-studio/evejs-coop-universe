@@ -1,6 +1,6 @@
 # EveJS Co-op Universe
 
-**Status: planning / reproducible localhost baseline, not a working multiplayer fork.**
+**Status: substantial pinned EveJS integration code exists, but two-client gameplay and friend-PC access remain unverified.**
 
 A community-oriented **two-player cooperative world** concept built *around* [EveJS](https://github.com/gameboys84/EveJS), with an optional future integration of [X-Eve Living Universe](https://github.com/kaiwren986/evejs-living-universe). Our goal is one authoritative game world for two friends, populated by persistent NPC pilots, corporations and an evolving economy.
 
@@ -8,7 +8,7 @@ A community-oriented **two-player cooperative world** concept built *around* [Ev
 
 ## What this repository contains
 
-**Documentation and development tasks only, for now.** No server, patches or VPN-enabled EVE build have been implemented or tested here. Do not mistake this repository for a ready-to-play download.
+**Executable, optional server-side integration overlay and Windows runbooks.** This repo contains NPC/world modules, reversible source hooks, deployment scripts, and read-only live two-pilot evidence tools. It does **not** include a proprietary EVE client, a standalone complete game server, or a verified VPN gateway. Do not mistake a committed integration for proven end-to-end gameplay.
 
 - [Setup on Windows 11](docs/SETUP_WINDOWS.md) – verified upstream commands, prerequisites, smoke tests, blockers.
 - [Architecture and private co-op design](docs/ARCHITECTURE.md) – host/client topology, VPN, networking discovery, security, failure cases.
@@ -40,6 +40,34 @@ Expected v0.12.3.1 archive hash per X-Eve authors:
 ```
 
 **Important:** `gameboys84/EveJS` main is *not* automatically the v0.12.3.1 archive accepted by the X-Eve installer. Never force a patch into a mismatched tree.
+
+## Play co-op on one host (experimental)
+
+For two *separate* authorized accounts and client instances, use
+[PLAY_COOP_NOW](docs/PLAY_COOP_NOW.md). The recommended first game night
+runs one native EveJS server and a single NPC encounter **only when two
+distinct pilots are in the same grid**. It keeps the experimental virtual
+economy and NPC faction simulations disabled until the base two-pilot
+client gameplay works.
+
+```powershell
+cd C:\Games\EveCoopProject
+git pull
+.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -NpcSystemID 30000142
+.\scripts\Local-Two-Client-Test.ps1 -Action LaunchTwo -ConfirmClientPermission
+.\scripts\Local-Two-Client-Test.ps1 -Action Party
+```
+
+`CoopStart` is intended for an **already bootstrapped** EveJS database.
+For a brand-new world run `-Action Prepare` once as documented.
+
+The new installer performs a pinned-source preflight and syntax-check
+before applying changes, and supports `-DryRun` and `-Remove`.
+
+**Important:** The upstream server remains bound to localhost; this is
+not yet a solution for a friend connecting from a different PC. That
+requires a separate, secured private-network deployment and actual
+client-endpoint compatibility work.
 
 ## First milestone
 
