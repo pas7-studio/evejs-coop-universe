@@ -26,6 +26,19 @@ server contract tests with observed EVE client gameplay.
 - Do not change task status to DONE on documentation alone.
 - Never commit credentials, client data, dynamic databases, certificates, binaries, screenshots of personal information, or session tokens.
 
+## NPC market: never post unbacked player-style orders
+
+See `docs/NATIVE_NPC_MARKET.md`. The opt-in seed market slice consumes
+and purchases **real EveJS seeded-market stock**, updates exact native
+cargo, and uses only the NPC's durable earned ISK ledger. Empty
+allowlists mean no trades. Do not use `marketDaemonClient.PlaceOrder`
+alone to invent independent NPC-owned orders: native EveJS player
+settlement requires escrowed inventory, wallet, taxes and owner handling
+in both Node and Rust. Ambiguous market RPC results always halt
+the NPC's trading, never repeat a potentially completed fill. Keep this
+feature OFF until the owner verifies it on a disposable live server.
+No GitHub CI.
+
 ## NPC system transitions: identity and cargo must survive
 
 See `docs/NATIVE_NPC_GATE_TRAVEL.md`. Do not confuse native warp to a
