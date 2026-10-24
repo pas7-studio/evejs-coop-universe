@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,systemID:requestedSystemID=null}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,requireStockWreckLoot=false,systemID:requestedSystemID=null}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -177,11 +177,24 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   (!Array.isArray(d.attackerEntityIDs)||
    d.attackerEntityIDs.includes(Number(w.attackerEntityID)))&&
   w._time<=d._time&&d._time-w._time<=10*60000));
+ const stockWrecks=rows.filter(e=>e.event==="living-native-stock-fleet-wreck-evidence"&&
+  e.status==="PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED"&&
+  positive(e.systemID)===systemID&&positive(e.victimEntityID)&&
+  positive(e.wreckID)&&(!latestBoot||e._time>=latestBoot._time));
+ const matchedStockWreck=stockWrecks.find(w=>pairedStock&&
+  Number(w.victimEntityID)===Number(pairedStock.victimEntityID)&&
+  w._time>=pairedStock._time&&w._time-pairedStock._time<=10*60000);
+ const stockLootWreck=matchedStockWreck?.lootStatus==="ITEMS_STORED"&&
+  Number(matchedStockWreck.storedItemCount)>0?matchedStockWreck:null;
  const stockRaid={
   verifiedNativeWeaponEvents:stockWeapons.length,
   measuredStockFleetHpLossEvents:stockDamage.length,
   correlatedVictimEntityID:pairedStock?.victimEntityID||null,
-  status:pairedStock?"CORRELATED_STOCK_FLEET_WEAPON_AND_HP_LOSS":
+  actualPhysicalWrecks:stockWrecks.length,
+  correlatedPhysicalWreckID:matchedStockWreck?.wreckID||null,
+  correlatedWreckWithStoredLootID:stockLootWreck?.wreckID||null,
+  status:stockLootWreck?"CORRELATED_STOCK_WEAPON_HP_WRECK_AND_STORED_LOOT":
+   pairedStock?"CORRELATED_STOCK_FLEET_WEAPON_AND_HP_LOSS":
    stockDamage.length?"STOCK_FLEET_HP_LOSS_ONLY":
    stockWeapons.length?"STOCK_FLEET_WEAPON_ONLY":"NO_STOCK_FLEET_PVE_EVIDENCE",
   limits:"Real native weapon launch/activation and measured hull HP loss. No wreck, killer, loot or client evidence inferred"
@@ -254,7 +267,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  // readiness is not a prerequisite for combat between two other named NPCs.
  // It still requires actual authoritative scene topology and the strict
  // source-weapon -> HP -> physical wreck -> stored loot evidence below.
- if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket||requireStockRaid){
+ if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket||requireStockRaid||requireStockWreckLoot){
   if(topology&&scenery.waypoints>0){
    status="READY_FOR_CLIENT_PLAYTEST";
    blockers.length=0;
@@ -263,6 +276,10 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  if(requireStockRaid&&status==="READY_FOR_CLIENT_PLAYTEST"&&!pairedStock){
   status="AWAITING_STOCK_FLEET_WEAPON_HP_CHAIN";
   blockers.push("No native pirate missile launch or weapon activation matched a measured HP drop on the same real stock mining fleet ship. Attack orders and target locks alone do not prove damage.");
+ }
+ if(requireStockWreckLoot&&status==="READY_FOR_CLIENT_PLAYTEST"&&!stockLootWreck){
+  status="AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN";
+  blockers.push("No physical EveJS stock miner wreck with nonempty persisted loot correlated to native pirate weapon activation and measured HP loss on the same real victim. An attack order, empty wreck or fabricated inventory is insufficient.");
  }
  if(requireFinalAttacker&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeAttackerChain){
   status="AWAITING_UPSTREAM_DESTRUCTION_ATTACKER";
@@ -354,7 +371,8 @@ if(require.main===module){
    requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
    requireFinalAttacker:args.includes("--require-final-attacker"),
    requireMarket:args.includes("--require-market"),
-   requireStockRaid:args.includes("--require-stock-raid")
+   requireStockRaid:args.includes("--require-stock-raid"),
+   requireStockWreckLoot:args.includes("--require-stock-wreck-loot")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
