@@ -149,6 +149,15 @@ function scheduleHeadlessWorldBoot(route){
       scene?.getEntityByID?.(Number(link.entityID)));
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
+    const sdeBelts=require("./worldData").getAsteroidBeltsForSystem(systemID).length;
+    // Zero belts in Jita are expected SDE geography; a global SDE belt
+    // counter cannot prove a mineable belt in the physical system scene.
+    require("./coopRuntimeProbe").observe("living-native-system-site-readiness",null,
+     {spaceState:{systemID}},{systemID,realAsteroidBelts:beltCount,
+      authoritativeSdeBelts:sdeBelts,realWaypoints:topology.length,
+      source:"PINNED_EVEJS_SYSTEM_STATIC_SCENE",
+      status:sdeBelts===0?"SDE_SYSTEM_HAS_NO_BELTS":
+       beltCount===0?"SDE_BELTS_MISSING_FROM_SCENE":"REAL_BELT_PRESENT"});
     const verified=isHeadlessNativeReady({
      miningEnabled,
      physicalNpcCount:links.length,waypointCount:topology.length,
@@ -738,6 +747,22 @@ function observeSession(session,ship){
       const result=bridge.reconcile(systemID,materialize,{
        exemptEntityIDs:stockMiningIDs
       });
+      // Explicit actionable failures. Previously the World report only saw
+      // "0 assignments" and hid whether the pilot had no residents,
+      // no native spawn anchor, an invalid pool, or a failed native service.
+      require("./coopRuntimeProbe").observe("living-native-materialization-attempt",session,
+       {spaceState:{systemID}},{systemID,
+        residents:allResidents.length,eligibleResidents:residents.length,
+        requestedSpawns:materialize.length,
+        realAnchors:require("./coopNpcTopology").waypoints(scene).length,
+        nativeMiningEnabled:nativeMining,
+        miningFleetShips:stockMiningIDs.length,
+        linkedIndustryPilots:industry.assignments.length,
+        successfulAssignments:result.filter(x=>Number(x.entityID)>0).length,
+        spawnErrors:result.filter(x=>x.error).slice(0,10).map(x=>({
+         pilotID:x.pilotID,error:String(x.error).slice(0,120)})),
+        pendingTransit:result.filter(x=>x.pendingTransit).length
+       });
       ensureCivilianOrders(runtime,npc);
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const presented=[];
