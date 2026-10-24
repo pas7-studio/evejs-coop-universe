@@ -114,6 +114,16 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    status="NO_LIVING_NPC_SHIPS";
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
+ // Combat is an independent native-world gate: miner+hauler economic
+ // readiness is not a prerequisite for combat between two other named NPCs.
+ // It still requires actual authoritative scene topology and the strict
+ // source-weapon -> HP -> physical wreck -> stored loot evidence below.
+ if(requireCombat||requireWeapon){
+  if(topology&&scenery.waypoints>0){
+   status="READY_FOR_CLIENT_PLAYTEST";
+   blockers.length=0;
+  }
+ }
  if(requireWeapon&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeWeaponChain){
   status="AWAITING_NATIVE_WEAPON_CHAIN";
   blockers.push("No verified native NPC weapon activation or missile launch linked to same-victim HP loss, physical wreck and persisted loot. This does not certify final-hit attribution.");
