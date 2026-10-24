@@ -49,3 +49,18 @@ jobs:
 
       - name: Two independent TCP sessions (standalone test fixture)
         run: node --test ./lab/co-op-session-lab.test.mjs
+
+      - name: Fetch pinned upstream registry for integration contract tests
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/evejs-upstream"
+          git -C "$RUNNER_TEMP/evejs-upstream" init
+          git -C "$RUNNER_TEMP/evejs-upstream" remote add origin https://github.com/gameboys84/EveJS.git
+          git -C "$RUNNER_TEMP/evejs-upstream" fetch --depth 1 origin c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+          git -C "$RUNNER_TEMP/evejs-upstream" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/evejs-upstream" rev-parse HEAD)" = c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+      - name: Test real EveJS session registry with two synthetic players
+        env:
+          EVEJS_CODE_PATH: ${{ runner.temp }}/evejs-upstream/Code
+        run: node --test ./tests/upstream-session-registry.test.mjs
