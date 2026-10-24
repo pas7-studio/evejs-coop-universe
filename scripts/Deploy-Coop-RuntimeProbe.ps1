@@ -137,7 +137,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_MINING_NPC_RESPONSE_DEFAULT_COUNT: '2'"
 }
 
-$utf8 = New-Object System.Text.UTF8Encoding($false)
+$utf8 = [System.Text.UTF8Encoding]::new($false)
 Push-Location $code
 try {
   if (-not $Remove) {
@@ -154,10 +154,14 @@ try {
   if ($LASTEXITCODE -ne 0) { throw 'Effective Docker Compose configuration is invalid' }
   $config = ($effective -join [Environment]::NewLine) | ConvertFrom-Json
   foreach ($service in $config.services.PSObject.Properties) {
-    foreach ($port in @($service.Value.ports)) {
+    $portsField = $service.Value.PSObject.Properties['ports']
+    if ($null -eq $portsField) { continue }
+    foreach ($port in @($portsField.Value)) {
       if ($null -eq $port) { continue }
-      if (([string]$port.host_ip) -notin @('127.0.0.1','::1')) {
-        throw "Refusing public game service port on $($service.Name): $($port.published)"
+      $bindField = $port.PSObject.Properties['host_ip']
+      $bindAddress = if ($null -ne $bindField) { [string]$bindField.Value } else { '' }
+      if ($bindAddress -notin @('127.0.0.1','::1')) {
+        throw "Refusing publicly bound game service port on $($service.Name)"
       }
     }
   }
