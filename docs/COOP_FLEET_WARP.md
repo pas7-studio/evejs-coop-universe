@@ -31,7 +31,7 @@ Only after both characters can authenticate and see NPCs in the game:
 
 1. **Join the same native fleet.** A invites B, B accepts, verify both clients show fleet membership. The commander (not a normal fleet member) requests native *Warp Fleet* to an existing valid destination.
 2. **Same system positive case.** The native server must record one accepted follower warp order for B with the correct character and ship IDs; B must visually enter warp and land at the same real destination/grid as A. A and B must visually see one another after arrival. Check `-Action Party`: `nativeFleetWarpOrdersAccepted>=1`; `fleetWarpArrivalVerified=false` remains conservative until the operator observes landing.
-3. **New objective.** Each player targets a real physically observed NPC in that grid. In a safe encounter, confirm B can join A's combat, apply native damage and see the same wreck. The loot must actually appear in EveJS inventory on pickup, not only in server-generated wreck data. Do not fabricate an NPC kill to manufacture a PASS.
+3. **New objective.** Each player targets a real physically observed NPC in that grid. In a safe encounter, confirm B can join A's combat, apply native damage and see the same wreck. The loot must actually appear in EveJS inventory on pickup, not only in server-generated wreck data. The native wreck refresh API bug is fixed in the reversible overlay: both observers should see the empty-wreck slim item after the final item is removed. See the shared-loot steps below. Do not fabricate an NPC kill to manufacture a PASS.
 4. **Member preference.** Turn off B's native *Accept Fleet Warp*. A repeats the command; B must not be pulled. This restriction is enforced by upstream `fleetRuntime` and must not be bypassed.
 5. **Different-system negative case.** Move B legitimately into another solar system; A's fleet warp in A's system must not move B or change B's system/ship identity.
 6. **Reconnect.** B disconnects while A remains; no ghost fleet warp. B reconnects, undocks, verifies original character and persisted ship, rejoins/restores fleet state as appropriate, and again accepts a real native fleet warp.
@@ -40,12 +40,36 @@ Only after both characters can authenticate and see NPCs in the game:
 
 For failed results, compare `nativeFleetWarpOrdersAccepted`, `nativeFleetWarpOrdersFailed`, `nativeFleetWarpFollowersSkipped` and the last native errors in `-Action Party`. Correlate the same real ship IDs and system with user-visible evidence. Server order accepted does **not** imply arrival; the tester must attach screenshots/observations of both clients separately.
 
+## Same-wreck, two-player loot pickup acceptance
+
+The pinned upstream `nativeNpcWreckService.js` had two separate client refresh defects:
+(1) native loot transfer did not ask to broadcast updated wreck state;
+(2) the broadcast path invoked a nonexistent
+`scene.sendSlimItemChangesToAllSessions`. The overlay now uses
+`refreshNativeWreckRuntimeEntity(..., { broadcast: true })` and the
+real EveJS scene API `scene.broadcastSlimItemChanges([entity])`.
+
+After a naturally occurring NPC kill, both authorized players should
+observe the **same physical wreck ID** on-grid. A opens it and moves an
+actual item into A's own cargo. A verifies the item appears once in
+inventory. B checks that the same item disappears from the source or
+its quantity decreases, then tries to take a *different, remaining*
+item if available. The final successful pickup must update the wreck's
+`isEmpty` slim-item state on **both** client overviews. A second
+attempt to pick up the already-removed item must not duplicate
+inventory or grant free ISK. Record source item IDs/quantities before
+and after from the server and visually check both clients.
+
+Important: **a server-side wreck and saved loot are insufficient** to
+prove client loot pickup, shared inventory visibility or permission
+handling. No real two-client pickup test has been completed here.
+
 ## Manual local code tests (only if that code changed)
 
 ```powershell
 node --test tests/coop-fleet-warp-safety.test.mjs tests/coop-party-fleet-warp-report.test.mjs
 ```
 
-Ten deterministic eligibility/identity tests and three read-only party report tests were run in isolation. The pinned EveJS source patch was also parse-checked, reapplication idempotent, and removal restored the exact source. **No live Docker/client warp test or hosted CI was run here.**
+Ten deterministic eligibility/identity tests, three read-only party report tests and four reversible wreck refresh tests were run in isolation. The pinned EveJS source patch was also parse-checked, reapplication idempotent, and removal restored the exact source. **No live Docker/client warp test or hosted CI was run here.**
 
 Owner policy: no GitHub Actions / remote CI, no merge without explicit permission.
