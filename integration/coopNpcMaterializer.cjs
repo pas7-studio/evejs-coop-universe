@@ -38,7 +38,14 @@ function createBridge({spawn,exists,limit=3,registry=null,exemptRoles=[]}){
       assignments.set(pilot.id,{systemID:prior.systemID,entityID:prior.entityID});
       // A physical spawn can succeed before a durable registry write
       // fails. Retrying the link is safer than spawning another ship.
-      if(registry&&!registry.get(pilot.id)){
+      const durable=registry?.get(pilot.id);
+      if(durable&&(Number(durable.entityID)!==Number(prior.entityID)||
+         Number(durable.systemID)!==Number(prior.systemID))){
+        results.push({pilotID:pilot.id,error:"IDENTITY_CONFLICT",
+         provisionalEntityID:prior.entityID});
+        continue;
+      }
+      if(registry&&!durable){
         try{
           const linked=registry.link(pilot,prior.systemID,prior.entityID);
           if(Number(linked?.entityID)!==Number(prior.entityID))
