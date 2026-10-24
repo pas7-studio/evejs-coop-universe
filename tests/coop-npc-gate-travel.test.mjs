@@ -60,6 +60,16 @@ test("active combat controller, player ship and fake NPC are not sent to a starg
  x.ship.session=null;x.ship.nativeNpc=false;
  assert.equal(x.tick().orders.length,0);
 });
+test("a ship 5km beyond the physical stargate surface cannot be declared arrived",()=>{
+ const x=fixture();x.ship.position.x=505000;
+ const r=x.tick();assert.equal(r.observations.length,0);
+ assert.equal(r.orders[0].action,"NATIVE_WARP_TO_REAL_GATE");
+});
+test("a ship within native 2.5km stargate surface range may arrive without changing systems",()=>{
+ const x=fixture();x.gate.radius=9000;x.ship.position.x=510000;
+ const r=x.tick();assert.equal(r.observations[0].status,"AT_REAL_GATE");
+ assert.equal(x.links[0].systemID,A);
+});
 test("a wrong gate destination or unlinked target blocks physical travel",()=>{
  const x=fixture();x.sourceGate.destinationID=123;
  const result=x.tick();
