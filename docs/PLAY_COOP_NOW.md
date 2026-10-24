@@ -325,3 +325,18 @@ The lower-level `Deploy-Coop-RuntimeProbe.ps1 -LivingCoop` default now allows **
 This affects **newly materialized** named NPC ships only: already persistent physical hulls are not relocated or respawned just to follow a new anchor policy. Actual attack, damage, native wreck, two-client loot and NPC movement still require live evidence.
 
 After an owner-approved overlay refresh preserving the `evejs-data` volume and local upstream fixes, first run `-Action DiagnoseWorld`, then `-Action World -WorldSystemID 30000144`. Only after real native NPC activity is confirmed, manually bring two authorized clients to the same physical Perimeter belt. Verify both can see and attack an existing pirate, see actual damage/wreck, and cannot duplicate loot. No CI, unattended deployment, market rebuild or merge is needed for this code change.
+
+## P0 gameplay update — finish real pirate attacks and recognize your wingmate
+
+The default `CoopStart` (`-LivingCoop`) now enables the real two-pilot native scene coordinator and low-noise in-game rendezvous notices. When **two separately authenticated player ships** are physically within 250 km, Ballpark-ready in the same authoritative EveJS scene, both players receive a single ordinary **EveJS system chat** message. This is rate-limited per duo (five-minute cooldown), creates no pseudo-player, no fleet, and no combat entity. Actual native fleet membership and reciprocal client rendering still require a live game check. A one-player or headless server cannot trigger the two-pilot notice.
+
+**Pirate convoy gameplay fix:** An autonomous named pirate now transitions from a genuine EveJS warp toward an ore-bearing stock miner/hauler to an actual EveJS `issueAttackOrder` after landing. The raid keeps the same legitimate convoy target rather than switching to a closer unrelated NPC. It does NOT override active player engagements, other genuine native NPC targets, recent retaliation, explicit external manual orders, or ships already in warp. It never applies synthetic HP loss or creates loot. If there are no real ore-carrying stock hulls, there is no invented pirate raid.
+
+To try one actual cooperative activity **after the approved version has been deployed**:
+
+1. Both players log in with their own authorized EVE accounts and meet within 250 km in one system. Check that the two real ships appear; the chat rendezvous notice is only additional feedback.
+2. Fly to **Perimeter (`30000144`)** and locate a stock mining convoy near a genuine asteroid belt. **Jita (`30000142`) has no asteroid belts**, so a belt-focused convoy encounter should not be expected there.
+3. Watch real miners collect ore, decide together whether to escort a loaded hauler or investigate a roaming pirate, and engage using the ordinary EVE controls. A real native pirate may warp in and attack the ore-bearing ship; it is not a timed scripted spawn.
+4. Use `-Action StockRaid`, `-Action StockRaidLoot`, and `-Action LootPickup` to inspect server evidence. In both clients, check actual shared combat, wreck contents, single withdrawal, normal fleet warp, and reconnect without a ship clone.
+
+All gameplay changes are reversible in the pinned source overlay and tested on isolated native scene fixtures. **This is not yet a live two-EVE-client PASS**; the server deployment and actual in-game acceptance still need a conscious owner-approved test.
