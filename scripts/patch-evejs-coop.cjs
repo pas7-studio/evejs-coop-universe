@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence"];
 const specs=[
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
   {anchor:"  persistCharacterLogoffState(session);",line:'  require("../../space/coopRuntimeProbe").observe("disconnect-after-persist", session, null);',after:true}
@@ -30,9 +30,15 @@ const specs=[
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopVirtualWorldRuntime").confirmedNativeNpcWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional integration */ }'},
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopNativeNpcDemo").confirmedWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional co-op kill tracking */ }'},
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopNativeConsequences").noteNativeWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity, options, controller); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); }'}
+ ]},
+ {file:"server/src/space/npc/npcBehaviorLoop.js",patches:[
+  {anchor:"      if (launchResult && launchResult.success) {",line:"        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",after:true},
+  {anchor:"    logNpcCombatDebug(\"npc.weapons.module-activate\", () => ({",line:"    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }"}
  ]}
 ];
 const oldLines=[
+ "        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",
+ "    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }",
  '  require("../../space/coopRuntimeProbe").observe("disconnect-before-persist", session, null);',
  '  require("../../space/coopRuntimeProbe").observe("disconnect-after-persist", session, null);',
  '  require("./coopRuntimeProbe").observe("space-login-attach", session, activeShip, { attached: Boolean(shipEntity) });',
