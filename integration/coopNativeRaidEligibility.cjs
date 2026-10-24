@@ -33,10 +33,11 @@ function isAuthorizedStockMiningRaid({
  const from=factions.get(sourceLinks[0].pilotID),to=factions.get(victim.pilotID);
  return Boolean(from&&to&&from!==to);
 }
-function liveFleetShips(fleets,scene){
- const seen=new Set(),ships=[];
- if(typeof scene?.getEntityByID!=="function"||!Array.isArray(fleets))return ships;
+function liveFleetShips(fleets,scene,systemID=scene?.systemID){
+ const seen=new Set(),ships=[],system=positive(systemID);
+ if(!system||typeof scene?.getEntityByID!=="function"||!Array.isArray(fleets))return ships;
  for(const fleet of fleets){
+  if(positive(fleet?.systemID)!==system)continue;
   for(const [role,key] of [["miner","minerEntityIDs"],["hauler","haulerEntityIDs"]]){
    for(const raw of fleet?.[key]||[]){
     const id=positive(raw),entity=id&&scene.getEntityByID(id);
