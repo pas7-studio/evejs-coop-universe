@@ -3,6 +3,7 @@
 // Runs at low frequency while at least one registered player stays in space.
 const registered=new Map();
 let timer=null;
+const lastSceneObservation=new Map();
 function pos(x){const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:null;}
 function readyPilots(scene,systemID){
  if(!scene?.sessions||typeof scene.sessions.values!=="function")return [];
@@ -47,12 +48,20 @@ function tick(){
    if(!scene)continue;
    const party=findParty(scene,systemID,Number(process.env.EVEJS_COOP_PARTY_RANGE_METERS||250000));
    const signature=party?.pilots.map(p=>p.characterID).sort((a,b)=>a-b).join(":")||"waiting";
-   if(owner.lastParty!==signature){
+   const changed=owner.lastParty!==signature;
+   const time=Date.now();
+   if(changed){
     for(const item of registered.values())if(item.systemID===systemID)item.lastParty=signature;
-    require("./coopDuoPresence").observe(owner.session,owner.ship,signature==="waiting"?"party-waiting":"party-ready");
     require("./coopRuntimeProbe").observe("coop-party-proximity",owner.session,owner.ship,{
      ready:Boolean(party),characterIDs:party?.pilots.map(p=>p.characterID)||[],separationMeters:party?.separation||null
     });
+   }
+   // Ballpark may initially attach before both ships have reciprocal
+   // visibility. Re-sample while the party remains on grid, not only on
+   // first rendezvous, so operator evidence can converge to real state.
+   if(changed||(party&&time-(lastSceneObservation.get(systemID)||0)>=15000)){
+    lastSceneObservation.set(systemID,time);
+    require("./coopDuoPresence").observe(owner.session,owner.ship,signature==="waiting"?"party-waiting":"party-grid-refresh");
    }
    if(party){
     const chosen=party.pilots[0];
