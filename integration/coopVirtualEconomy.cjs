@@ -11,11 +11,14 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
  const persist=()=>{fs.mkdirSync(path.dirname(file),{recursive:true});const tmp=file+".tmp-"+process.pid;fs.writeFileSync(tmp,JSON.stringify(state));fs.renameSync(tmp,file);};
  function ensure(systemID){const id=String(systemID);return state.systems[id]??={ore:200,goods:100,demand:100,security:50,losses:0};}
  function register(pilots){
+   const upgradeRoles=state.rolesVersion!==2;
    for(const [i,p] of pilots.entries()){
      if(!p?.id||!Number.isSafeInteger(Number(p.systemID)))continue;
      ensure(p.systemID);
      state.pilots[p.id]??={role:ROLES[i%ROLES.length],cargo:0,credits:100,completed:0};
+     if(upgradeRoles)state.pilots[p.id].role=ROLES[i%ROLES.length];
    }
+   state.rolesVersion=2;
  }
  function step(pilots){
   // Accumulate decisions first, then commit. No negative or infinite balances.
