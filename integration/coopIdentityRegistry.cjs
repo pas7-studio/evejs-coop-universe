@@ -18,8 +18,17 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
  }
  function link(pilot,systemID,entityID){
   if(!validID(pilot?.id)||!positive(systemID)||!positive(entityID))throw Error("invalid materialization link");
-  const existing=get(pilot.id);if(existing)return existing;
-  const e={pilotID:pilot.id,name:String(pilot.name||pilot.id).slice(0,96),faction:String(pilot.faction||"independent").slice(0,48),systemID:Number(systemID),entityID:Number(entityID),linkedAt:clock()};
+  const existing=get(pilot.id);
+  if(existing){
+   // Older worlds were created before occupation tracking existed.
+   // Migrate metadata without replacing a still-living physical ship.
+   if(!existing.role&&pilot.role){
+    state.links[pilot.id].role=String(pilot.role).slice(0,24);
+    persist();return {...state.links[pilot.id]};
+   }
+   return existing;
+  }
+  const e={pilotID:pilot.id,name:String(pilot.name||pilot.id).slice(0,96),faction:String(pilot.faction||"independent").slice(0,48),role:String(pilot.role||"").slice(0,24),systemID:Number(systemID),entityID:Number(entityID),linkedAt:clock()};
   state.links[pilot.id]=e;persist();return {...e};
  }
  function prune(){
