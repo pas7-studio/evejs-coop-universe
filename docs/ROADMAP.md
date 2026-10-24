@@ -2,7 +2,7 @@
 
 Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **IMPLEMENTED_UNVERIFIED** code exists but live evidence is missing; **DONE** actual acceptance evidence recorded. The gameplay test order is in GAMEPLAY_TESTING.md.
 
-## Owner-defined current execution order (2026-10-24)
+## Owner-defined execution order and current gameplay blocker (2026-10-25)
 
 The following priority blocks are **deferred**, not cancelled:
 - P0: real server + 2 compatible clients, shared fleet warp/combat/loot,
@@ -16,8 +16,14 @@ The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
 available; do not reintroduce automatic remote runs.
 
-**Current manual verification gate: physical headless NPC activity.** See
-[HEADLESS_NPC_VALIDATION](HEADLESS_NPC_VALIDATION.md). Do not claim that
+**Current manual verification gate: first recover missing headless
+telemetry, then verify physical NPC activity.** Start with
+[GAMEPLAY_TESTING](GAMEPLAY_TESTING.md), **not** backend regressions,
+network source audits or npm scans. The owner's 2026-10-25 report on
+`cc5ce83` established 72 local / 27 upstream backend checks and healthy
+containers, but `/var/lib/evejs/coop-events.jsonl` is missing.
+Run `-Action DiagnoseWorld` **read-only** before `-Action World`.
+See [HEADLESS_NPC_VALIDATION](HEADLESS_NPC_VALIDATION.md). Do not claim that
 a healthy server or existing NPC object is a moving/interactive NPC.
 Require real native coordinate changes plus cargo growth or a controller
 target. This branch adds the sampler and strict local World report, but
@@ -92,7 +98,7 @@ claimed done by these code changes.
 ### COOP-001 — reproducible upstream inventory [TODO]
 Inspect a **pinned** EveJS SHA. Produce `docs/evidence/UPSTREAM_INVENTORY.md` with setup script paths, services, dependency versions, ports, license attribution, and source links. Verify every command in `SETUP_WINDOWS.md` against selected revision. **DoD:** commands verified, unknowns clearly marked, no copied proprietary artifacts.
 
-### COOP-002 — local-only backend bootstrap [BLOCKED: lawful compatible build for gameplay]
+### COOP-002 — local-only backend bootstrap [BACKEND VERIFIED on cc5ce83; client gameplay separate]
 Reproduce Docker game and market health on Windows/Linux containers; capture `compose ps` and sanitized logs. Optional gameplay validation only where client permissions permit. **DoD:** init 0, services healthy, restart persistence verified, detailed failure troubleshooting.
 
 ### COOP-003 — X-Eve compatibility gate [BLOCKED: exact approved baseline]
@@ -123,7 +129,7 @@ Enforce trusted peer/device policies and explicit game-service allowlist, safe T
 ### COOP-020 — two-player gameplay matrix [BLOCKED: COOP-013]
 Tests: join, Local/Overview, undock, warp, dock, fleet, chat, PvE, trade, disconnect/reconnect, restart. **DoD:** per-feature PASS/FAIL supported by logs/replays, blockers converted into focused tasks.
 
-### COOP-021 — Living Universe behavioral audit [BLOCKED: COOP-003]
+### COOP-021 — Living Universe behavioral audit [BLOCKED_TELEMETRY; not blocked by X-Eve compatibility]
 Verify pilots, persistence, observed NPC ships, combat, mining, freight, real inventory/market stock, faction effects. **DoD:** assertions based on actual persistent world effects, not UI-only counts.
 
 ### COOP-022 — NPC fleet/corp co-op design [BLOCKED: COOP-020, COOP-021]
@@ -131,8 +137,8 @@ Design long-term NPC goals, player hires/contracts, fleet roles and tactical par
 
 ## Execution rules for coding agents
 
-- Read README, ARCHITECTURE, SETUP_WINDOWS and UPSTREAM first.
-- Work in smallest independent PRs with a hypothesis and reversible change.
+- For **testing gameplay**, read `GAMEPLAY_TESTING.md` first. Use README/ARCHITECTURE/SETUP_WINDOWS/UPSTREAM only if a concrete step requires them; do not substitute one-time setup, networking audits, npm audit or security scans for live NPC verification.
+- Work in small reversible code changes only when a documented gameplay blocker requires one. Do not create unnecessary PRs/CI or modify the local upstream test fixtures to make routine gameplay testing pass.
 - No claims of feature readiness without test results. Do not mark tasks DONE on documentation alone.
 - Do not replace locally restricted bind addresses without the explicit legal/security gates.
 - Avoid leaking credentials, user data, copyrighted binaries, server DB or client copies.
