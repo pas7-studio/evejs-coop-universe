@@ -19,10 +19,10 @@ function createBridge({spawn,exists,limit=3,registry=null}){
   const stored=registry?Object.values(registry.snapshot().links).filter(x=>x.systemID===systemID&&exists(x.systemID,x.entityID)):[];
   let occupied=new Set([...Array.from(assignments.values()).filter(x=>x.systemID===systemID).map(x=>x.entityID),...stored.map(x=>x.entityID)]).size;
   for(const pilot of pilots||[]){
-    if(occupied>=limit)break;
     if(!pilot?.id||!current.has(pilot.id))continue;
     const prior=assignments.get(pilot.id)||registry?.get(pilot.id);
     if(prior&&exists(prior.systemID,prior.entityID)){results.push({pilotID:pilot.id,entityID:prior.entityID,reused:true});continue;}
+    if(occupied>=limit)continue;
     const result=spawn(systemID,pilot);
     const entityID=ids(result?.data?.spawned)[0];
     if(result?.success!==true||!entityID){results.push({pilotID:pilot.id,error:String(result?.errorMsg||"SPAWN_FAILED")});continue;}
