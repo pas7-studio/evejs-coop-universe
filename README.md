@@ -64,10 +64,12 @@ For a brand-new world run `-Action Prepare` once as documented.
 The new installer performs a pinned-source preflight and syntax-check
 before applying changes, and supports `-DryRun` and `-Remove`.
 
-**Important:** The upstream server remains bound to localhost; this is
-not yet a solution for a friend connecting from a different PC. That
-requires a separate, secured private-network deployment and actual
-client-endpoint compatibility work.
+**Second PC:** An experimental [VPN-only SSH loopback tunneling
+helper](docs/FRIEND_PC_PRIVATE_TUNNEL.md) now forwards only the five
+client-facing ports from an authenticated Tailscale peer. Docker
+remains bound to localhost. The helper is not yet verified with a
+working friend-side EVE client, and never forwards the market or admin
+ports.
 
 ## First milestone
 
