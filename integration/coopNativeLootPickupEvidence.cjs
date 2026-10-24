@@ -15,6 +15,18 @@ function verify({scene,wreck,characterID,wreckItemID,destinationLocationID,sourc
   typeof scene?.getEntityByID!=="function")
   return {status:"INVALID_LOOT_WITNESS"};
  if(grantResult?.success!==true)return {status:"NATIVE_GRANT_NOT_CONFIRMED"};
+ // Check source inventory immediately after a successful native grant,
+ // BEFORE requiring a client session or visible wreck. A missing player
+ // session must never suppress quarantine of a failed source debit.
+ const expected=available-taken;
+ if(expected===0&&sourceAfter!=null)
+  return {status:"NATIVE_LOOT_SOURCE_NOT_REMOVED"};
+ if(expected>0&&(!sourceAfter||
+  Number(sourceAfter.wreckItemID)!==item||
+  Number(sourceAfter.wreckID)!==wreckID||
+  Number(sourceAfter.typeID)!==Number(sourceBefore.typeID)||
+  Number(sourceAfter.quantity)!==expected))
+  return {status:"NATIVE_LOOT_SOURCE_NOT_DECREMENTED"};
  // Pinned EveJS itemStore returns success only after writeItems() and
  // includes native inventory changes. Verify destination ownership and
  // item type; a successful RPC flag alone is not transfer proof.
@@ -36,15 +48,6 @@ function verify({scene,wreck,characterID,wreckItemID,destinationLocationID,sourc
   Number(s?._space?.systemID)===systemID&&
   scene.getEntityByID(Number(s._space.shipID))?.kind==="ship");
  if(matching.length!==1)return {status:"NO_UNIQUE_AUTHENTICATED_SPACE_LOOTER"};
- const expected=available-taken;
- if(expected===0&&sourceAfter!=null)
-  return {status:"NATIVE_LOOT_SOURCE_NOT_REMOVED"};
- if(expected>0&&(!sourceAfter||
-  Number(sourceAfter.wreckItemID)!==item||
-  Number(sourceAfter.wreckID)!==wreckID||
-  Number(sourceAfter.typeID)!==Number(sourceBefore.typeID)||
-  Number(sourceAfter.quantity)!==expected))
-  return {status:"NATIVE_LOOT_SOURCE_NOT_DECREMENTED"};
  return {
   status:"VERIFIED_NATIVE_LOOT_PICKUP",systemID,wreckID,
   sourceEntityID:positive(wreck.sourceEntityID),
