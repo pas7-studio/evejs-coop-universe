@@ -793,7 +793,8 @@ function observeSession(session,ship){
       }
       // Never create a generic fake miner/hauler when EveJS already has
       // physical mining NPCs with actual mining lasers and ore cargo.
-      const materialize=nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents;
+      const materialize=(nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents)
+       .map(p=>({...p,durable:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"}));
       // Trust EveJS's active mining-fleet ship IDs, never a persisted
       // "miner" label alone, when making stock NPC capacity exemptions.
       const stockMiningIDs=industry.fleets.flatMap(f=>[
