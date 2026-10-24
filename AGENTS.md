@@ -115,6 +115,26 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
+## Current code changes — real visible and stable named NPCs
+
+Use the current `coopNpcPresentation`, `coopNpcMaterializer` and
+`coopNativeIndustry` tests. Native NPC naming must call
+`scene.broadcastSlimItemChanges`, not
+`sendSlimItemChangesToAllSessions`. Failed client notifications must
+be retried without double-spawning native ships.
+
+A successful native spawn followed by a failed identity-registry write
+must reuse its original physical ship on retry. Reject real player
+ships/static entities when counting named NPCs. `World` now reports
+`SPAWN_LIMIT_REACHED`, `NATIVE_SPAWN_THROW`,
+`IDENTITY_LINK_FAILED` with nativeReason, and
+`nativePresentationPending` if names could not be pushed to clients.
+If `headlessBootStatus` is null, compare `headlessAttemptCount`
+to determine whether the boot timer fired at all.
+
+Do not claim this is live gameplay PASS until the human tester shows
+the same named NPC in the actual client. No CI or network scan.
+
 ## Immediate World gameplay blocker — real system mining, not generic SDE
 
 2026-10-25 owner test at `a087167` confirmed healthy live overlay and
