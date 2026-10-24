@@ -73,3 +73,56 @@ test("headless boot flags alone cannot count as real NPC materialization",()=>{
  ].join("\n");
  assert.notEqual(summarize(input,{now}).status,"READY_FOR_CLIENT_PLAYTEST");
 });
+
+test("strict World gate rejects physical ships without sampled motion and interaction",()=>{
+ const input=[
+  event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+  event("living-native-industry",{fleets:[{fleetID:7,minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10,role:"miner"}]})
+ ].join("\n");
+ const loose=summarize(input,{now});
+ const strict=summarize(input,{now,requireActivity:true});
+ assert.equal(loose.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(strict.status,"AWAITING_NATIVE_ACTIVITY");
+ assert.equal(strict.activity.status,"NO_PHYSICAL_ACTIVITY_EVIDENCE");
+});
+test("strict World gate accepts only movement AND native ore or targeting evidence",()=>{
+ const input=[
+  event("living-headless-boot-requested",{status:"SCHEDULED_NOT_VERIFIED"}),
+  event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2,evidenceSource:"HEADLESS_NATIVE_SCENE"}),
+  event("living-native-industry",{fleets:[{fleetID:7,minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10,role:"miner"}]}),
+  event("living-native-activity",{status:"SAMPLED",physicalNpcShips:2,observedMovement:1,
+   oreGrowth:0,engagedNativeNpcs:1})
+ ].join("\n");
+ const result=summarize(input,{now,requireActivity:true});
+ assert.equal(result.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(result.activity.status,"MOVEMENT_AND_INTERACTION_OBSERVED");
+ assert.equal(result.activity.movedShips,1);
+ assert.equal(result.activity.targetingSamples,1);
+});
+test("strict World refuses moving ships without any real interaction",()=>{
+ const input=[
+  event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+  event("living-native-industry",{fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10}]}),
+  event("living-native-activity",{status:"SAMPLED",observedMovement:2,oreGrowth:0,engagedNativeNpcs:0})
+ ].join("\n");
+ assert.equal(summarize(input,{now,requireActivity:true}).status,"AWAITING_NATIVE_ACTIVITY");
+});
+test("strict World does not accept previous-boot native evidence",()=>{
+ const earlier=(name,extra={})=>JSON.stringify({at:new Date(now-90000).toISOString(),
+  event:name,systemID:30000142,...extra});
+ const newer=(name,extra={})=>JSON.stringify({at:new Date(now-10000).toISOString(),
+  event:name,systemID:30000142,...extra});
+ const input=[
+  earlier("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+  earlier("living-native-industry",{fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  earlier("virtual-world-materialization",{livingShips:[{pilotID:"coop-pilot-001",entityID:10}]}),
+  earlier("living-native-activity",{status:"SAMPLED",observedMovement:1,oreGrowth:1}),
+  newer("living-headless-boot-requested",{status:"SCHEDULED_NOT_VERIFIED"})
+ ].join("\n");
+ const result=summarize(input,{now,requireActivity:true});
+ assert.equal(result.status,"AWAITING_INGAME_ARRIVAL");
+ assert.equal(result.activity.movedShips,0);
+});
