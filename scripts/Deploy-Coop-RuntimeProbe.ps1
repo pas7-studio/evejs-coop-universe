@@ -71,7 +71,12 @@ services:
     $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_COUNT: '1'`n"
     $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_MINER_COUNT: '2'`n"
     $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_HAULER_COUNT: '1'`n"
-    $yaml += "      EVEJS_MINING_NPC_FLEET_AUTO_MINE_ENABLED: 'true'`n"
+    $yaml += "      EVEJS_MINING_NPC_FLEET_AUTO_MINE_ENABLED: 'true'`n"    # Short game-night cadence; stock defaults are 90min first hauler
+    # and 30min between trips, far beyond a casual two-player session.
+    $yaml += "      EVEJS_MINING_NPC_HAULER_INITIAL_DELAY_MS: '180000'`n"
+    $yaml += "      EVEJS_MINING_NPC_HAULER_REPEAT_DELAY_MS: '600000'`n"
+    $yaml += "      EVEJS_MINING_NPC_HAUL_THRESHOLD_RATIO: '0.2'`n"
+    $yaml += "      EVEJS_MINING_NPC_RESPONSE_DEFAULT_COUNT: '2'`n"
   }
   if($EnableFactionPatrols -or $LivingCoop){
     $yaml += "      EVEJS_COOP_FACTION_PATROLS: '1'`n"
