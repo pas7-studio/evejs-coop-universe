@@ -116,6 +116,7 @@ if ($LivingCoop) {
   # Use existing, real EveJS mining, cargo, defenders and standing policy.
   $yamlLines += "      EVEJS_COOP_NATIVE_MINING: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
+  $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
   $yamlLines += "      EVEJS_COOP_HAULER_HOLD_MS: '120000'"
   $yamlLines += "      EVEJS_COOP_NPC_RAIDS: '1'"
   $yamlLines += "      EVEJS_COOP_LOCAL_INTEL: '1'"
