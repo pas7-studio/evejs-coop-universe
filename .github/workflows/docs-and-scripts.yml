@@ -60,6 +60,12 @@ jobs:
           git -C "$RUNNER_TEMP/evejs-upstream" fetch --depth 1 origin c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
           git -C "$RUNNER_TEMP/evejs-upstream" checkout --detach FETCH_HEAD
           test "$(git -C "$RUNNER_TEMP/evejs-upstream" rev-parse HEAD)" = c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+      - name: Install pinned upstream server dependencies
+        shell: bash
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/evejs-upstream/Code/server"
+          npm ci --no-audit --no-fund
       - name: Test real EveJS session registry with two synthetic players
         env:
           EVEJS_CODE_PATH: ${{ runner.temp }}/evejs-upstream/Code
@@ -75,3 +81,5 @@ jobs:
           cd "$RUNNER_TEMP/evejs-upstream/Code/server"
           node scripts/verifyMovementRemovalParity.js
           node scripts/verifyJoltsObserverParity.js
+          node scripts/verifyOwnerDamageMovementParity.js
+          node scripts/verifyTargetKillModuleTeardown.js
