@@ -190,6 +190,50 @@ function transform(source,spec,remove){
     }
   }
  }
+ // The pinned mining startup marks 'seeded' before spawn succeeds.
+ // Retry missing slots in opt-in LivingCoop, never recreate completed ones.
+ if(spec.file.endsWith("miningNpcOperations.js")){
+  const start=text.indexOf("function handleSceneCreated(scene) {");
+  const finish=text.indexOf("function deactivateMiningModulesForEntity(",start);
+  if(start<0||finish<=start)throw Error("Unknown EveJS mining startup function");
+  const eol=text.includes("\r\n")?"\r\n":"\n";
+  let section=text.slice(start,finish);
+  const oldGuard="  startupSceneSeedSet.add(startupKey);";
+  const newGuard=[
+   '  if (process.env.EVEJS_COOP_MINING_STARTUP_RETRY !== "1")',
+   '    startupSceneSeedSet.add(startupKey);'
+  ].join(eol);
+  const oldLoop="  for (let index = 0; index < fleetCount; index += 1) {";
+  const newLoop=[
+   oldLoop,
+   '    if (process.env.EVEJS_COOP_MINING_STARTUP_RETRY === "1" &&',
+   '      getMiningFleetsForSystem(scene.systemID).some(f => f.source === "startup" &&',
+   '        f.startupKey === String(scene.systemID) + ":" + String(index + 1))) continue;'
+  ].join(eol);
+  const oldTail=['    });','  }','}',''].join(eol);
+  const newTail=[
+   '    });',
+   '  }',
+   '  if (process.env.EVEJS_COOP_MINING_STARTUP_RETRY === "1" &&',
+   '    Array.from({length:fleetCount},(_,i)=>String(scene.systemID)+":"+String(i+1)).every(key=>',
+   '      getMiningFleetsForSystem(scene.systemID).some(f=>f.source==="startup" && f.startupKey===key)))',
+   '    startupSceneSeedSet.add(startupKey);',
+   '}',
+   ''
+  ].join(eol);
+  if(count(section,oldGuard)+count(section,newGuard)!==1||
+   count(section,oldLoop)+count(section,newLoop)!==1||
+   count(section,oldTail)+count(section,newTail)!==1)
+   throw Error("Unexpected native mining startup source");
+  if(remove){
+   section=section.replace(newGuard,oldGuard).replace(newLoop,oldLoop)
+    .replace(newTail,oldTail);
+  }else{
+   section=section.replace(oldGuard,newGuard).replace(oldLoop,newLoop)
+    .replace(oldTail,newTail);
+  }
+  text=text.slice(0,start)+section+text.slice(finish);
+ }
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
