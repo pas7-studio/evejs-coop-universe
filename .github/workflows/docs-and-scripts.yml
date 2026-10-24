@@ -62,7 +62,7 @@ jobs:
       - name: Syntax-check real backend transport smoke
         run: |
           node --check ./scripts/smoke-two-tcp.mjs
-          node --test ./tests/smoke-two-tcp.test.mjs
+          node --test ./tests/smoke-two-tcp.test.mjs ./tests/coop-scene-audit.test.mjs
 
       - name: Two independent TCP sessions (standalone test fixture)
         shell: bash
