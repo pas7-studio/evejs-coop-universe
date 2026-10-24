@@ -57,8 +57,8 @@ function observeSession(session,ship){
       const result=bridge.reconcile(systemID,residents);
       for(const entry of result){
         if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
-        observedNpcIDs.add(entry.entityID);
         const npcID=entry.entityID;
+        observedNpcIDs.add(npcID);
         const probe=require("./coopRuntimeProbe");
         require("./coopCombatProbe").launch({
           scene,shipIDs:[Number(ship.itemID)],npcIDs:[npcID],
