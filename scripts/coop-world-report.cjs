@@ -24,6 +24,8 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const systemID=targetID||positive(topology?.systemID);
  const related=rows.filter(e=>systemID&&topology&&positive(e.systemID)===systemID&&e._time>=topology._time-1000);
  const headless=[...rows].reverse().find(e=>e.event==="living-headless-boot-system"&&positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
+ const headlessAttempt=[...rows].reverse().find(e=>e.event==="living-headless-boot-attempt"&&
+  (!latestBoot||e._time>=latestBoot._time));
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
  const siteReadiness=[...rows].reverse().find(e=>e.event==="living-native-system-site-readiness"&&
@@ -239,6 +241,8 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  return {status,systemID,topologyAt:topology?.at||null,
   evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
   headlessBootStatus:headless?.status||null,
+  headlessAttemptCount:Math.max(0,Number(headlessAttempt?.attempt)||0),
+  headlessPendingSystems:headlessAttempt?.pendingSystems||[],
   evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
   systemSiteReadiness:siteReadiness?{
    status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
