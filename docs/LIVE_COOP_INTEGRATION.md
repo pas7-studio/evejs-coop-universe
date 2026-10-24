@@ -396,3 +396,24 @@ The hook is optional/fail-open and removed by the same installer with
 The older combat observer remains useful for diagnostic state samples;
 it is no longer required to capture a later native wreck in the
 materialized NPC path. Actual runtime execution is not yet verified.
+
+## Durable faction response to native NPC losses
+
+The `coopFactionDirector.js` runs as part of the optional virtual economy.
+A confirmed native wreck from a registered virtual NPC drives one
+deduplicated faction incident: system-level threat and patrol priority rise,
+and faction replacement-ship demand increases. These values survive restarts
+in `/var/lib/evejs/coop-factions.json` on the existing EveJS data volume.
+
+The director periodically advances virtual replacement plans. A system must
+report sufficient **virtual goods** to fulfil demand. Completed plans increase
+virtual faction readiness; they do **not** yet create physical replacement
+ships or debit actual EveJS inventory. The virtual goods snapshot currently
+acts as a *supply gate*, not a stock debit, so treat readiness as a planning
+metric rather than completed resource-conserving production.
+
+Enable using both `-EnableVirtualWorld` and `-EnableVirtualEconomy`.
+Materialized native NPC casualties are linked by the existing identity
+registry and loss ledger; unrelated stock EveJS NPC kills are not attributed
+to our virtual factions. The real EveJS reputation, crimewatch, and market
+remain unchanged. The module must still be validated on the running server.
