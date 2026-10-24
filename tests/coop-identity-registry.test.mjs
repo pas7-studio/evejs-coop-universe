@@ -36,3 +36,31 @@ test('registry refuses unknown pilot ID and invalid entity ID',()=>{
   assert.throws(()=>registry.link({id:'coop-pilot-001'},30000142,0),/invalid materialization link/);
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test("native gate identity relocation preserves same ship and is durable after restart",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"coop-identity-jump-"));
+ try{
+  let actual=30000142;
+  const exists=(system,id)=>system===actual&&id===9001;
+  const file=join(dir,"links.json"),pilot={id:"coop-pilot-005",name:"Rook",faction:"frontier",role:"trader"};
+  const registry=createRegistry({file,exists});
+  registry.link(pilot,30000142,9001);
+  assert.equal(registry.relocate(pilot.id,30000142,9001,30000144).status,"SOURCE_STILL_PHYSICAL");
+  actual=30000144;
+  assert.equal(registry.relocate(pilot.id,30000142,9001,30000144).status,"RELOCATED");
+  assert.equal(registry.get(pilot.id).entityID,9001);
+  assert.equal(registry.get(pilot.id).systemID,30000144);
+  assert.equal(createRegistry({file,exists}).get(pilot.id).systemID,30000144);
+  assert.equal(registry.relocate(pilot.id,30000142,9001,30000144).status,"STALE_SOURCE");
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+test("registry refuses destination without physical native same-ID ship",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"coop-identity-jump-"));
+ try{
+  const file=join(dir,"links.json"),registry=createRegistry({file,exists:()=>false});
+  registry.link({id:"coop-pilot-005"},30000142,9001);
+  assert.equal(registry.relocate("coop-pilot-005",30000142,9001,30000144).status,
+   "DESTINATION_NOT_PHYSICAL");
+  assert.equal(registry.snapshot().links["coop-pilot-005"].systemID,30000142);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
