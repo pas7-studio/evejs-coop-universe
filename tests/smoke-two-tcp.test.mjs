@@ -11,7 +11,7 @@ function runProbe(port) {
   return new Promise((resolveResult, reject) => {
     const child = spawn(process.execPath, [script], {
       env: { ...process.env, EVEJS_TEST_HOST: '127.0.0.1',
-        EVEJS_TEST_PORT: String(port), EVEJS_TEST_TIMEOUT_MS: '1000' },
+        EVEJS_TEST_PORT: String(port), EVEJS_TEST_TIMEOUT_MS: '1000', EVEJS_TEST_HOLD_MS: '150' },
       stdio: ['ignore','pipe','pipe']
     });
     let stdout = '', stderr = '';
@@ -30,14 +30,14 @@ async function withServer(callback, onConnection = () => {}) {
   try { return await callback(server.address().port); }
   finally { server.closeAllConnections(); await new Promise(ok => server.close(ok)); }
 }
-test('transport probe detects two overlapping sockets', async () => {
+test('transport probe accepts A+B and reconnects A while B survives', async () => {
   let count = 0;
   const sockets = new Set();
   await withServer(async port => {
     const result = await runProbe(port);
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /TRANSPORT_ONLY_PASS/);
-    assert.ok(count >= 2, 'expected two accepted connections');
+    assert.match(result.stdout, /TRANSPORT_RECONNECT_PASS/);
+    assert.equal(count, 3, 'expected A, B, then A reconnect');
     for (const s of sockets) s.destroy();
   }, socket => { count++; sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
 });
