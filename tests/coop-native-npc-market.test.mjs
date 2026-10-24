@@ -9,10 +9,10 @@ const {createNpcMarketTrader}=require("../integration/coopNativeNpcMarket.cjs");
 function fixture(){
  const root=mkdtempSync(join(tmpdir(),"evejs-native-npc-market-"));
  let now=1000000,failRPC=false,failInventory=false;
- const station={itemID:60015169,solarSystemID:30000142,regionID:10000002,
+ const station={stationID:60015169,solarSystemID:30000142,regionID:10000002,
   position:{x:0,y:0,z:0},radius:1000};
  const ship={itemID:980000000001,kind:"ship",nativeNpc:true,position:{x:500,y:0,z:0}};
- const scene={systemID:30000142,getEntityByID:id=>id===ship.itemID?ship:null};
+ const scene={systemID:30000142,staticEntities:[{kind:"station",itemID:station.stationID,position:station.position,radius:station.radius}],getEntityByID:id=>id===ship.itemID?ship:null};
  const pilotID="coop-pilot-005";
  const registry={snapshot:()=>({links:{[pilotID]:{
   pilotID,entityID:ship.itemID,systemID:30000142}}})};
@@ -36,31 +36,31 @@ function fixture(){
  const call=async(method,args)=>{
   calls.push({method,args});
   if(method==="GetOrders")return {sells:[{source:"seed",order_id:sellID,
-   station_id:station.itemID,type_id:35,price:50,vol_remaining:remainingSell}],
-   buys:[{source:"seed",order_id:buyID,station_id:station.itemID,type_id:34,
+   station_id:station.stationID,type_id:35,price:50,vol_remaining:remainingSell}],
+   buys:[{source:"seed",order_id:buyID,station_id:station.stationID,type_id:34,
     price:100,vol_remaining:remainingBuy}]};
   if(method==="FillOrder"){
    if(failRPC)throw Error("RPC_DISCONNECTED");
    if(failFillOnly)return {order_id:args.order_id,filled_quantity:0,
-    station_id:station.itemID,type_id:34,bid:true};
+    station_id:station.stationID,type_id:34,bid:true};
    remainingBuy-=args.fill_quantity;
    return {order_id:args.order_id,filled_quantity:args.fill_quantity,
-    station_id:station.itemID,type_id:34,bid:true};
+    station_id:station.stationID,type_id:34,bid:true};
   }
   if(method==="AdjustSeedStock"){
    if(failRPC)throw Error("RPC_DISCONNECTED");
    remainingSell+=args.delta_quantity;
-   return {station_id:station.itemID,type_id:35,quantity:remainingSell,price:50};
+   return {station_id:station.stationID,type_id:35,quantity:remainingSell,price:50};
   }
   if(method==="RecordTrade")return {success:true};
   throw Error("Unexpected market RPC "+method);
  };
  const trader=()=>createNpcMarketTrader({root,call,store,registry,
-  getStation:id=>id===station.itemID?station:null,
+  getStation:id=>id===station.stationID?station:null,
   resolveType:id=>({typeID:id,groupID:18,categoryID:8,name:"Test cargo",volume:0.1}),
   clock:()=>now,cooldownMs:30000,maxQuantity:10,maxPrice:1000});
  const params=(side,typeID)=>({scene,pilotID,entityID:ship.itemID,
-  stationID:station.itemID,side,typeID,buyTypes:[35],sellTypes:[34]});
+  stationID:station.stationID,side,typeID,buyTypes:[35],sellTypes:[34]});
  return {root,scene,ship,registry,store,station,trader,params,
   getCargo:()=>cargo,getCalls:()=>calls,advance:()=>{now+=30001},
   setFailRPC:v=>{failRPC=v},setFailInventory:v=>{failInventory=v},
