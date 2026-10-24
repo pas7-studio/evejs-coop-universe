@@ -17,8 +17,15 @@ $compose = Join-Path $CodePath 'compose.yaml'
 $play = Join-Path $CodePath 'Play.bat'
 if ($LaunchGapSeconds -lt 0 -or $LaunchGapSeconds -gt 300) { throw 'LaunchGapSeconds must be 0..300' }
 if ($HealthTimeoutSeconds -lt 15 -or $HealthTimeoutSeconds -gt 900) { throw 'HealthTimeoutSeconds must be 15..900' }
+function Get-ComposeArgs {
+    $options=@('--project-directory',$CodePath,'-f',$compose)
+    $overlay=Join-Path $CodePath 'compose.coop-probe.yaml'
+    if(Test-Path -LiteralPath $overlay -PathType Leaf){$options+=@('-f',$overlay)}
+    return ,$options
+}
 function Invoke-Compose([string[]]$Arguments) {
-    & docker compose --project-directory $CodePath -f $compose @Arguments
+    $options=Get-ComposeArgs
+    & docker compose @options @Arguments
     if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
 }
 function Assert-BackendPrerequisites {
@@ -120,7 +127,8 @@ switch ($Action) {
         Assert-BackendPrerequisites
         $report=Join-Path $PSScriptRoot 'coop-party-report.cjs'
         if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for the party report.' }
-        $events=@(& docker compose --project-directory $CodePath -f $compose exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
         if ($LASTEXITCODE -ne 0) {
             throw 'No live co-op event log yet. Run -Action CoopStart, enter space with both characters, and retry.'
         }
@@ -131,8 +139,9 @@ switch ($Action) {
         Assert-BackendPrerequisites
         $folder = Join-Path $OutputRoot (Get-Timestamp)
         New-Item -ItemType Directory -Force -Path $folder | Out-Null
-        & docker compose --project-directory $CodePath -f $compose ps --all *> (Join-Path $folder 'compose-ps.txt')
-        & docker compose --project-directory $CodePath -f $compose logs --no-color --tail 1000 init market server *> (Join-Path $folder 'compose.log')
+        $options=Get-ComposeArgs
+        & docker compose @options ps --all *> (Join-Path $folder 'compose-ps.txt')
+        & docker compose @options logs --no-color --tail 1000 init market server *> (Join-Path $folder 'compose.log')
         & git -C (Split-Path -Parent $CodePath) rev-parse HEAD *> (Join-Path $folder 'upstream-sha.txt')
         Write-Host "Local evidence: $folder"
         Write-Warning 'Review logs for account names, tokens, IPs, emails, and credentials before sharing. These files remain local and must not be committed.'
