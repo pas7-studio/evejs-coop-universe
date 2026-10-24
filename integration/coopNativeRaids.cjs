@@ -35,6 +35,9 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
    const ownedApproach=old?.phase==="warp-to-hauler"&&
     old.targetID===activeTarget&&Boolean(scene.getEntityByID(activeTarget));
    if(activeTarget&&scene.getEntityByID(activeTarget)){
+    // Never steal a naturally acquired native target. Only the target
+    // of OUR unfinished warp lease may be promoted to a weapon attack.
+    if(!ownedApproach)continue;
     if(playerShipIDs.has(activeTarget))continue;
     if(manual?.type==="attack"&&manualTarget===activeTarget)continue;
     if(manual&&manual.type!=="resumeBehavior"&&
