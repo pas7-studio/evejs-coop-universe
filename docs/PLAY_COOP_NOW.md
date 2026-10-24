@@ -189,3 +189,47 @@ kills receive no invented reward.
 
 Actual client standings display and combat kill attribution still
 need live Docker verification with both players.
+
+### More playable Living Universe: repairs and useful in-game intel
+
+The deployment script has been completely rebuilt after discovering a
+corrupted duplicate of its PowerShell body and an invalid parameter
+validation expression. It now preflights the pinned EveJS source, validates
+the **effective** Docker Compose configuration including loopback-only
+published ports, installs the reversible patch, rebuilds the existing server
+and preserves all named persistent data volumes. There is still no
+confirmed two-client Docker playthrough.
+
+On a player's first in-space arrival, the server can now send a short
+**local intelligence brief through regular EveJS chat** using only
+actual server scene data: current miner/hauler activity, a loaded ore
+transport and visible pirates. When a real matching POI exists within
+300 km of an NPC ship, it names that asteroid belt, station or gate.
+It will not fabricate a location, and the same character will not receive
+the briefing more than once per 90 seconds in a given system.
+
+When pirates pursue a real ore-bearing NPC, they keep their live combat
+or pursuit orders instead of being redirected by the civilian travel
+scheduler. Local piracy alerts likewise name a real nearby POI, when
+available. You can decide to defend the shipment, intercept it, or
+ignore the situation and continue exploring.
+
+Ore transferred to an EveJS hauler now carries a fleet-specific
+manifest. Its unloading operation removes **only that fleet's own
+loaded ore**; unrelated items already present in the hauler's cargo
+are preserved. A destroyed hauler still uses EveJS's real wreck
+contents.
+
+Actual delivered ore is recorded once per native cargo ID in
+`/var/lib/evejs/coop-native-depot.json`. The existing virtual
+system-economy module now imports the **newly delivered** quantity as
+goods in that solar system and reduces virtual demand. It persists
+how much has already been credited, so a server restart cannot
+duplicate the same delivery. This creates measurable world consequences
+from real NPC logistics, but it is **not** a real EVE station inventory
+deposit, market sell order or player wallet payout.
+
+Use `-Action Party` to inspect recent mined ore, transport loads,
+pirate raids, deliveries and the supply changes from those deliveries.
+Full in-game client behavior must still be validated before treating
+these mechanics as proven.
