@@ -82,7 +82,7 @@ switch ($Action) {
         Write-Host ("[COOP] Living Universe running. 20 named persistent pilots across route $virtualRoute; up to 6 materialized NPCs per visited system.")
         Write-Host '[COOP] NPC pirates, civilians and faction patrols follow autonomous activity; engage their real ships in space.'
         Write-Host '[COOP] No waves or player-triggered combat arenas. NPC ship losses persist with a recovery delay.'
-        Write-Host '[COOP] Use -Action Party to inspect actual shared-scene and NPC death evidence.'
+        Write-Host '[COOP] First inspect headless NPC with DiagnoseWorld and World; Party is for two authenticated players.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
     }
     'LaunchOne' {
