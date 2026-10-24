@@ -202,6 +202,7 @@ function advanceNativeGateApproach(){
   const scrambled=require("./modules/hostileModuleRuntime");
   const prepared=require("./coopNativeGateTransfer").createNativeGateTransfer({
    sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+   getGate:id=>worldData.getStargateByID(id),
    store,service,getController:id=>controllers.getControllerByEntityID(id),
    registry:identityRegistry,
    isScrambled:ship=>scrambled.isEntityWarpScrambled(ship)
