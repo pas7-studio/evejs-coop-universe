@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-  [ValidateSet('Start','Check')]
+  [ValidateSet('Start','Check','Verify')]
   [string]$Action='Check',
   [Parameter(Mandatory=$true)]
   [string]$HostVpnIPv4,
@@ -21,6 +21,29 @@ if($octets.Length -ne 4 -or $octets[0] -ne 100 -or $octets[1] -lt 64 -or $octets
   throw 'HostVpnIPv4 must be a verified Tailscale-range 100.64.0.0/10 address. No public-IP forwarding.'
 }
 if($IdentityFile -and -not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)){throw "Missing SSH identity key: $IdentityFile"}
+if($Action -eq 'Verify'){
+  $ports=@(443,5222,26000,26001,26002)
+  $failed=$false
+  foreach($port in $ports){
+    $client=New-Object Net.Sockets.TcpClient
+    try{
+      $pending=$client.BeginConnect('127.0.0.1',$port,$null,$null)
+      $ok=$pending.AsyncWaitHandle.WaitOne(1000,$false)
+      if($ok){$client.EndConnect($pending)}
+      $ok=$ok -and $client.Connected
+    }catch{$ok=$false}finally{$client.Close()}
+    Write-Host ("[{0}] 127.0.0.1:{1}" -f $(if($ok){'PASS'}else{'FAIL'}),$port)
+    if(-not $ok){$failed=$true}
+  }
+  try{
+    $r=Invoke-WebRequest -UseBasicParsing -TimeoutSec 5 -Uri 'http://127.0.0.1:26002/health'
+    $proxyOK=($r.StatusCode -ge 200 -and $r.StatusCode -lt 400)
+  }catch{$proxyOK=$false}
+  Write-Host ("[{0}] Local EveJS proxy health over tunnel" -f $(if($proxyOK){'PASS'}else{'FAIL'}))
+  if($failed -or -not $proxyOK){throw 'Tunnel reachability incomplete. This is not a successful remote game login.'}
+  Write-Host '[CHECK] Forwarded ports reachable. Separate EVE client authentication and rendering still unverified.'
+  return
+}
 $ssh=Get-Command 'ssh.exe' -ErrorAction Stop
 $ports=@(443,5222,26000,26001,26002)
 foreach($port in $ports){
