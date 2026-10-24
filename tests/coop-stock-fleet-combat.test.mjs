@@ -159,3 +159,49 @@ test("StockRaidLoot requires the same native victim weapon -> HP -> physical loo
  assert.equal(summarize([topology,weapon,damage,early].join("\n"),opts).status,
   "AWAITING_STOCK_FLEET_WRECK_LOOT_CHAIN");
 });
+
+test("native stock miner death between samples records only actual fresh terminal HP loss",()=>{
+ let now=1000000;
+ const director=createStockFleetCombatEvidence({clock:()=>now});
+ const baseline={shield:100,armor:50,structure:20};
+ const old=director.sample(sampleInputs(baseline));
+ assert.equal(old.damageEvents,0);
+ now+=3000;
+ const terminal=director.terminalDamage({
+  systemID,entityID:20,ship:miner,wreckID:901,
+  getHealth:()=>({shield:70,armor:40,structure:10})
+ });
+ assert.equal(terminal.status,"NATIVE_STOCK_TERMINAL_HP_DROP");
+ assert.equal(terminal.event.healthLossHP,50);
+ assert.equal(terminal.event.nativeWreckID,901);
+ assert.deepEqual(terminal.event.attackerPilotIDs,["coop-pilot-010"]);
+ assert.match(terminal.event.attribution,/NOT_KILL_CREDIT/);
+ assert.equal(director.terminalDamage({
+  systemID,entityID:20,ship:miner,wreckID:901,getHealth:()=>({shield:0,armor:0,structure:0})
+ }).status,"NO_PRIOR_PHYSICAL_STOCK_SAMPLE");
+});
+test("native terminal HP refuses stale, copied ships, missing orders and unobserved loss",()=>{
+ let now=1000000;
+ const stale=createStockFleetCombatEvidence({clock:()=>now});
+ stale.sample(sampleInputs({shield:100,armor:50,structure:20}));
+ now+=30001;
+ assert.equal(stale.terminalDamage({systemID,entityID:20,ship:miner,wreckID:901,
+  getHealth:()=>({shield:0,armor:0,structure:0})}).status,"STALE_STOCK_TERMINAL_HP");
+ let now2=1000000;
+ const fresh=createStockFleetCombatEvidence({clock:()=>now2});
+ fresh.sample(sampleInputs({shield:100,armor:50,structure:20}));
+ now2+=1000;
+ assert.equal(fresh.terminalDamage({systemID,entityID:20,ship:{...miner},wreckID:901,
+  getHealth:()=>({shield:0,armor:0,structure:0})}).status,
+  "NO_PRIOR_PHYSICAL_STOCK_SAMPLE");
+ assert.equal(fresh.terminalDamage({systemID,entityID:20,ship:miner,wreckID:901,
+  getHealth:()=>({shield:100,armor:50,structure:20})}).status,
+  "NO_OBSERVED_STOCK_TERMINAL_LOSS");
+ const unordered=createStockFleetCombatEvidence({clock:()=>now2});
+ unordered.sample(sampleInputs({shield:100,armor:50,structure:20},[pirateLink],
+  {manualOrder:null}));
+ now2+=1000;
+ assert.equal(unordered.terminalDamage({systemID,entityID:20,ship:miner,wreckID:901,
+  getHealth:()=>({shield:0,armor:0,structure:0})}).status,
+  "NO_PRIOR_VERIFIED_PIRATE_ATTACK_ORDER");
+});
