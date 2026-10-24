@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolOrders=null;
 const observedNpcIDs=new Set();
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
@@ -92,6 +92,20 @@ function observeSession(session,ship){
       }
       const factions=Object.values(factionDirector.snapshot().factions);
       const deployment=patrolDirector.reconcile(systemID,factions);
+      if(deployment.active?.length){
+        const anchorID=Number(ship?.itemID);
+        if(!patrolOrders){
+          const {createPatrolOrders}=require("./coopPatrolOrders");
+          patrolOrders=createPatrolOrders({
+            orbit:(npcID,targetID,distance)=>npc.orbit(npcID,targetID,distance),
+            exists:(id,entityID)=>Boolean(runtime.ensureScene(id,{refreshStargates:false})?.getEntityByID(entityID))
+          });
+        }
+        // A player's ship is a temporary demonstration anchor, not a
+        // permanent route waypoint or an automatic hostile attack target.
+        const orders=patrolOrders.assign(systemID,deployment.active,anchorID);
+        require("./coopRuntimeProbe").observe("virtual-faction-patrol-orders",session,ship,orders);
+      }
       require("./coopRuntimeProbe").observe("virtual-faction-patrol",session,ship,deployment);
     }catch(error){console.warn("[CoopFactionPatrol]",error.message);}
   }
