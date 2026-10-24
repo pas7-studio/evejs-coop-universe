@@ -317,3 +317,11 @@ Use `-Action Party` to inspect recent mined ore, transport loads,
 pirate raids, deliveries and the supply changes from those deliveries.
 Full in-game client behavior must still be validated before treating
 these mechanics as proven.
+
+## Physical encounter placement: Perimeter duo PvE
+
+The explicitly deployed `-LivingCoop` default now allows **3 named native NPC hulls per visited system**, unless an operator explicitly sets `-MaterializeLimit`. Named pirate and patrol hulls start near a **real EveJS asteroid belt** in Perimeter when one exists. Traders prefer real stations. Beltless Jita keeps real stargate/station anchors, with no synthetic belts. Upstream EveJS mining fleets are separate genuine native ships, not dummy co-op miners.
+
+This affects **newly materialized** named NPC ships only: already persistent physical hulls are not relocated or respawned just to follow a new anchor policy. Actual attack, damage, native wreck, two-client loot and NPC movement still require live evidence.
+
+After an owner-approved overlay refresh preserving the `evejs-data` volume and local upstream fixes, first run `-Action DiagnoseWorld`, then `-Action World -WorldSystemID 30000144`. Only after real native NPC activity is confirmed, manually bring two authorized clients to the same physical Perimeter belt. Verify both can see and attack an existing pirate, see actual damage/wreck, and cannot duplicate loot. No CI, unattended deployment, market rebuild or merge is needed for this code change.
