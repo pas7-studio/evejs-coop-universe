@@ -3,6 +3,7 @@
 // Uses the authoritative existing npcRuntime and never creates fake players.
 const seenSystems = new Set();
 const retryAfter=new Map();
+const liveEncounterIDs=new Map();
 let persistentDirector=null;
 function positive(v) { const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:null; }
 function maybeSpawn(session,ship) {
@@ -21,6 +22,10 @@ function maybeSpawn(session,ship) {
       const amount=Number(process.env.EVEJS_COOP_NATIVE_NPC_COUNT||1);
       if(!Number.isInteger(amount)||amount<1||amount>3)throw Error("NPC_COUNT must be 1..3");
       const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
+      // Never stack a new encounter on top of an existing live co-op target.
+      const priorIDs=liveEncounterIDs.get(systemID)||[];
+      if(priorIDs.some(id=>Boolean(scene.getEntityByID(id))))return;
+      if(priorIDs.length)liveEncounterIDs.delete(systemID);
       let anchor=require("./coopNpcTopology").anchorOptions(scene);
       const partyMode=process.env.EVEJS_COOP_REQUIRE_TWO_PILOTS==="1";
       if(partyMode){
@@ -78,7 +83,11 @@ function maybeSpawn(session,ship) {
         result=outcome.result;
       } else { result=spawnNative(systemID); }
       const spawned=Array.isArray(result?.data?.spawned)?result.data.spawned:[];
-      if(!persistent&&result?.success===true&&spawned.length)seenSystems.add(systemID);
+      if(result?.success===true&&spawned.length){
+        const liveIDs=spawned.map(x=>positive(x?.entity?.itemID)).filter(Boolean);
+        if(liveIDs.length)liveEncounterIDs.set(systemID,liveIDs);
+        if(!persistent)seenSystems.add(systemID);
+      }
       const recipients=Array.from(scene?.sessions?.values?.()||[]).filter(x=>x?.socket?.destroyed!==true&&x?._space?.initialStateSent===true);
       const probe=require("./coopRuntimeProbe");
       probe.observe("native-npc-spawn",session,ship,{
