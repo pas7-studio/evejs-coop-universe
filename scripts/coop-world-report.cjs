@@ -189,7 +189,12 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
     "The target scene has no real asteroid belts; compare system-specific SDE belt count with physical scene count.");
    status=siteReadiness?.status==="SDE_SYSTEM_HAS_NO_BELTS"?"SYSTEM_HAS_NO_NATIVE_MINING_BELTS":"MISSING_NATIVE_WORLD_DATA";
   }else if(!industry||minerShips<1||haulerShips<1){
-   blockers.push("No physical EveJS miner and hauler fleet observed in this solar system.");
+   const startup=siteReadiness?.stockMiningStartup;
+   const explanation=startup&&startup.status!=="MINING_STARTUP_ELIGIBLE"?
+    " Stock mining startup policy: "+startup.status+
+    " (enabled="+String(startup.startupEnabled)+
+    ", includesSystem="+String(startup.startupSystemIncluded)+").":"";
+   blockers.push("No physical EveJS miner and hauler fleet observed in this solar system."+explanation);
    status="NO_NATIVE_MINING_FLEET";
   }else if(!materialization||!Object.values(roles).some(n=>n>0)){
    const details=spawnAttempt?.spawnErrors?.length?
@@ -246,7 +251,9 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
   systemSiteReadiness:siteReadiness?{
    status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
-   realAsteroidBelts:siteReadiness.realAsteroidBelts}:null,
+   realAsteroidBelts:siteReadiness.realAsteroidBelts,
+   trackingForReconcile:siteReadiness.trackingForReconcile===true,
+   stockMiningStartup:siteReadiness.stockMiningStartup||null}:null,
   nativePresentationPending:presentationPending?.unresolved||[],
   nativeMaterializerAttempt:spawnAttempt?{
    residents:spawnAttempt.residents,eligibleResidents:spawnAttempt.eligibleResidents,
