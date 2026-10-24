@@ -18,8 +18,11 @@ Instead of programming a second mining engine, LivingCoop now enables the
   transferred from the miner's native NPC cargo record to the
   hauler's native NPC cargo record. A destroyed loaded hauler therefore
   carries lootable ore through EveJS's unchanged wreck service.
-  Once the hauler reaches its origin, cargo unloads into a
-  **virtual depot sink**. Stock EVE station inventory, wallet and market
+  The loaded hauler now waits **two minutes** at the mining site
+  (real ore already aboard) before executing its return warp. This
+  creates a viable player escort/ambush window instead of a 2.5-second
+  interception opportunity. Once it reaches its origin, cargo unloads
+  into a **virtual depot sink**. Stock EVE station inventory, wallet and market
   transactions are not yet credited.
 - \`coopNativeRaids.js\` periodically notices miners/haulers already
   carrying ore and commands **existing named pirates** to warp to the
@@ -631,3 +634,17 @@ Docker operations in the game-night script now consistently include
 `compose.coop-probe.yaml` whenever it exists. Loopback-only port checks
 also apply to the merged Compose configuration. Real client gameplay
 is still not certified until the authorized EVE clients are run.
+
+### Validation status of the cargo/raid vertical slice
+
+The new adapter and route modules have been JavaScript-syntax-checked.
+The reversible pinned EveJS mining-patch transformation has been checked
+against the real upstream `miningNpcOperations.js`: install,
+re-install and remove preserve syntax and restore the original source.
+Mocked native cargo records verified reparenting an existing ore stack
+from miner to hauler and removing it after unloading. Mocked NPC warp
+and attack APIs verified raid cooldown and local notifications.
+
+This does **not** establish end-to-end live gameplay: Docker startup,
+mining module execution, NPC-vs-NPC weapons, native wreck cargo, and
+two real EVE client views must still be verified on the host.
