@@ -199,6 +199,29 @@ function advanceNativeRaids(){
    getController:id=>controllers.getControllerByEntityID(id)
   });
   if(result.actions.length){
+   // Only a successful native ATTACK order against another named NPC
+   // is faction tension evidence. Warp approaches aren't battles.
+   if(factionDirector&&identityRegistry){
+    const actualLinks=Object.values(identityRegistry.snapshot().links||{})
+     .filter(link=>Number(link.systemID)===Number(systemID)&&
+      scene.getEntityByID(Number(link.entityID)));
+    const byEntity=new Map(actualLinks.map(link=>[Number(link.entityID),link]));
+    const factions=new Map(world.snapshot().pilots.map(p=>[p.id,p.faction]));
+    for(const action of result.actions){
+     if(action.action!=="attack")continue;
+     const attacker=byEntity.get(Number(action.pirateID));
+     const defender=byEntity.get(Number(action.targetID));
+     if(!attacker||!defender)continue;
+     const aggressorFaction=factions.get(attacker.pilotID);
+     const defenderFaction=factions.get(defender.pilotID);
+     if(!aggressorFaction||!defenderFaction||aggressorFaction===defenderFaction)continue;
+     factionDirector.onEngagement({
+      eventID:"native-raid:"+systemID+":"+action.pirateID+":"+action.targetID+":"+Math.floor(Date.now()/600000),
+      systemID,aggressorFaction,defenderFaction,
+      attackerPilotID:attacker.pilotID,defenderPilotID:defender.pilotID
+     });
+    }
+   }
    console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:result.actions}));
    require("./coopWorldSignals").notifyRaid(scene,result.actions);
    require("./coopRuntimeProbe").observe("living-pirate-raid",null,
