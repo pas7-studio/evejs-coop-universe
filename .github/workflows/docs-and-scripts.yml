@@ -63,7 +63,7 @@ jobs:
       - name: Test real EveJS session registry with two synthetic players
         env:
           EVEJS_CODE_PATH: ${{ runner.temp }}/evejs-upstream/Code
-        run: node --test ./tests/upstream-session-registry.test.mjs
+        run: node --test ./tests/upstream-session-registry.test.mjs ./tests/upstream-two-observers.test.mjs
 
       - name: Run upstream scene observer and movement parity checks
         env:
