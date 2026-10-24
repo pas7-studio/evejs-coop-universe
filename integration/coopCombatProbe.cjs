@@ -27,7 +27,7 @@ function wreckSamples(scene,npcIDs){
      ? {x:num(entity.position.x),y:num(entity.position.y),z:num(entity.position.z)}:null
  }));
 }
-function launch({scene,shipIDs,npcIDs,probe,session,ship,intervalMs=1000,maxSamples=60}){
+function launch({scene,shipIDs,npcIDs,probe,session,ship,intervalMs=1000,maxSamples=60,onConfirmedWreck=null}){
  const allIDs=[...new Set([...shipIDs,...npcIDs].map(num).filter(x=>x>0))];
  if(!scene||typeof scene.getEntityByID!=="function"||typeof probe?.observe!=="function")return;
  let count=0;
@@ -36,6 +36,9 @@ function launch({scene,shipIDs,npcIDs,probe,session,ship,intervalMs=1000,maxSamp
      count++;
      const entities=allIDs.map(id=>({id,sample:entitySample(scene.getEntityByID(id))}));
      const wrecks=wreckSamples(scene,npcIDs);
+     if(typeof onConfirmedWreck==="function")for(const wreck of wrecks){
+       try{onConfirmedWreck(wreck);}catch(err){console.warn("[CoopCombatProbe] wreck callback",err.message);}
+     }
      const observers=Array.from(scene.sessions?.values?.()||[])
        .filter(x=>x?.socket?.destroyed!==true)
        .map(x=>({characterID:num(x.characterID),shipID:num(x?._space?.shipID),
