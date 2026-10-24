@@ -59,6 +59,7 @@ function createNativeGateTransfer({sceneForSystem,store,service,getController,
   let names=[];
   try{names=fs.readdirSync(journalDir).filter(x=>/^coop-pilot-[0-9]{3,}\.json$/.test(x));}
   catch(e){if(e.code==="ENOENT")return {status:"CLEAN",recovered:0};throw e;}
+  if(!names.length)return {status:"CLEAN",recovered:0};
   const pending=[],recovered=[];
   for(const filename of names){
    let entry;
