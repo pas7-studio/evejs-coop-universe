@@ -45,8 +45,10 @@ Expected v0.12.3.1 archive hash per X-Eve authors:
 
 For two *separate* authorized accounts and client instances, use
 [PLAY_COOP_NOW](docs/PLAY_COOP_NOW.md). The recommended first game night
-runs one native EveJS server and a single NPC encounter **only when two
-distinct pilots are in the same grid**. It keeps the experimental virtual
+runs one native EveJS server with a bounded, repeatable NPC encounter
+loop **only when two distinct pilots are on the same grid**. The
+server continues checking proximity after warp so meeting up does not
+require either player to relog. It keeps the experimental virtual
 economy and NPC faction simulations disabled until the base two-pilot
 client gameplay works.
 
