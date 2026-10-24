@@ -6,7 +6,10 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Docker is 
 if (-not (Test-Path (Join-Path $CodePath 'compose.yaml'))) { throw "Missing compose.yaml in $CodePath" }
 Push-Location $CodePath
 try {
-    $config = @(& docker compose config --format json)
+    $argsList=@('-f','compose.yaml')
+    $overlay=Join-Path $CodePath 'compose.coop-probe.yaml'
+    if(Test-Path -LiteralPath $overlay -PathType Leaf){$argsList+=@('-f','compose.coop-probe.yaml')}
+    $config = @(& docker compose @argsList config --format json)
     if ($LASTEXITCODE -ne 0) { throw 'docker compose config failed' }
     $obj = ($config -join "`n") | ConvertFrom-Json
     foreach ($name in @('init','server','market')) {
@@ -24,6 +27,6 @@ try {
             }
         }
     }
-    Write-Host '[PASS] Required services present and all published ports are loopback-only.'
+    Write-Host '[PASS] Effective Compose configuration (including co-op overlay, if installed) contains required services and loopback-only published ports.'
     Write-Host 'This does not validate client compatibility or permit multiplayer exposure.'
 } finally { Pop-Location }
