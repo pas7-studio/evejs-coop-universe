@@ -115,6 +115,7 @@ function advanceNativeRaids(){
   });
   if(result.actions.length){
    console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:result.actions}));
+   require("./coopWorldSignals").notifyRaid(scene,result.actions);
    require("./coopRuntimeProbe").observe("living-pirate-raid",null,
     {spaceState:{systemID}},{actions:result.actions});
   }
