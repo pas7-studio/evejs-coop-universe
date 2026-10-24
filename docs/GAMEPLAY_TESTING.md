@@ -282,3 +282,13 @@ The same permit is enforced at (1) raid target selection and (2) EveJS native co
 5. Reconnect each pilot without losing their ship; test fleet warp orders and separately verify both ships' arrivals before claiming the complete two-player PvE gate.
 
 If any step fails, keep PR #2 Draft and attach `DiagnoseWorld`, `World`, `Party`, a sanitized event excerpt and exact deployed commit SHA. Do not reset Docker volumes, rebuild market data, or merge solely to investigate.
+
+## P0 — recover real EveJS mining startup after a transient spawn failure
+
+Pinned upstream EveJS used to call `startupSceneSeedSet.add(startupKey)` **before** attempting to create any native fleet. One failed initial spawn therefore permanently suppressed another attempt in that process. In explicitly deployed `-LivingCoop` the reversible source patch now enables `EVEJS_COOP_MINING_STARTUP_RETRY=1`; it marks a startup seed complete only after **all configured startup slots** have real EveJS fleet records. An incomplete attempt retries just the missing slot, never re-spawning an existing seeded slot. The patch is OFF outside this opt-in and is exactly removable from the pinned upstream source.
+
+For Perimeter 30000144, `DiagnoseWorld` now prints the effective retry and native fleet startup settings plus the number of genuine `living-native-mining-startup-slot` events. `World` displays the most recent outcome for this system as `nativeMiningStartupOutcome`. `FAILED` includes the actual upstream `errorMsg`; `SEEDED` includes the number of real miner and hauler ships returned by EveJS. Neither an emitted event nor a complete fleet record alone is sufficient for World PASS: the physical ships must exist in the scene and exhibit actual movement and mining/targeting evidence.
+
+**New P0 regression suite:** `coop-mining-startup-retry.test.mjs` covers failed first spawn, partial multi-fleet recovery, exact rollback, repeated apply, disabled opt-in, and partial-patch rejection. `coop-mining-startup-world-report.test.mjs` covers failure reason, recovery signal, and strict per-system filtering. `coop-npc-role-priority.test.mjs` ensures low NPC caps still prioritize pirates and patrols; normal `-Action CoopStart` continues to explicitly request 6 named hull slots per system.
+
+If `World` still reports `NO_NATIVE_MINING_FLEET`, use `nativeMiningStartupOutcome.error` and the current `systemSiteReadiness.stockMiningStartup`. If named NPCs still equal zero while stock mining succeeds, focus exclusively on `nativeMaterializerAttempt.spawnErrors`, not on mining startup. Preserve `evejs-data`, retain the exact deployed overlay SHA, and do not run CI or market rebuild to overcome a gameplay blocker.
