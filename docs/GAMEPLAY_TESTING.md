@@ -124,6 +124,41 @@ Optional more demanding server-only gates, after the relevant organic action act
 
 `Combat` needs verified native NPC weapon event + real HP loss + physical wreck + persisted loot. `FinalBlow` additionally requires EveJS to have **explicitly passed** a native attacker to the wreck path. Their absence is not an excuse to manufacture a battle, spawn a scripted wave or fabricate kill attribution. Keep market / native gate transfer experiments OFF during baseline gameplay acceptance.
 
+## Physical named NPC reliability — native-client broadcast and durable links
+
+The current P0 overlay now changes `coopNpcPresentation` to call pinned
+EveJS's **actual** `scene.broadcastSlimItemChanges([ship])`. The prior
+`sendSlimItemChangesToAllSessions` was not implemented by SolarSystemScene,
+so persistent names could be set in server memory without notifying an
+already-present player client. A failed slim notification is retried on
+the next NPC reconcile without respawning a ship. **Name broadcast
+success is not the same as visible in-client proof**: the tester must
+observe the NPC in the actual overview.
+
+`coopNpcMaterializer` no longer silently ignores occupied native spawn
+slots and thrown EveJS spawn errors. It logs `SPAWN_LIMIT_REACHED`
+with occupied/limit, `NATIVE_SPAWN_THROW` with nativeReason and
+`IDENTITY_LINK_FAILED` with the provisionally spawned ship ID. If a
+durable registry write failed, reconciliation retries attaching the
+*same physical ship* before ever asking native EveJS to spawn again.
+An identity conflict with another existing native hull fails closed.
+
+The headless runtime now requires `nativeNpc===true` and
+`kind==="ship"` for both saved named identity links and stock
+miner/hauler assignments. A player-controlled ship or static
+scene entity cannot substitute for real NPC evidence. The report
+exposes `nativePresentationPending`, `nativeMaterializerAttempt`,
+`headlessAttemptCount` and `headlessPendingSystems`. These
+distinguish no timer execution, no candidate resident, native
+spawn failure, identity write failure and unavailable client
+broadcast. None of them can be declared a gameplay PASS based on a
+virtual pilot or a background timer alone.
+
+The next tester should use `World -WorldSystemID 30000144` and
+attach those report fields **without replaying backend or npm audit**.
+Keep volume `evejs-data`, persistent NPC links and local upstream
+test fixes intact.
+
 ## Phase 3 — prove a real compatible EVE client (HUMAN OPERATOR)
 
 Only use a lawfully usable and explicitly authorized compatible client. The upstream-targeted build and setup expectations are documented in `docs/SETUP_WINDOWS.md`; this project provides **no client binaries, compatibility bypass or DRM workaround**.
