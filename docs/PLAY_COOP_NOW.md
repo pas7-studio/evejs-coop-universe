@@ -50,7 +50,9 @@ ships instead of spawning a second set of fake miner NPCs.
 
 **Hauler gameplay:** on the stock hauling cycle, mined native ore items
 are reassigned from the miner's authoritative NPC cargo to the
-physical hauler's cargo. If you intercept and destroy it in transit,
+physical hauler's cargo. The loaded ship remains at the
+mining site for **two minutes** before beginning its return warp, giving
+you time to defend, chase or intercept it. If destroyed while loaded,
 EveJS's own wreck code can drop that cargo. At the return point the
 hauler unloads it into a **virtual depot sink**: player-visible market
 sell orders and station inventory delivery are NOT implemented yet.
@@ -132,3 +134,30 @@ Do not run Docker down -v during normal play. The persistent EveJS
 named volume and co-op state files are retained. Legacy one-off NPC
 demo and scripted wave modes are opt-in development tools, not the
 recommended way to play.
+
+### Emergent things to do together
+
+**Protect the miners:** find a native mining fleet at an asteroid belt,
+observe ore extraction and assist when pirates approach. EveJS's stock
+mining defense AI can react to aggression independently of your party.
+
+**Intercept ore transport:** wait for a hauler to become loaded. The
+two-minute loaded staging phase keeps the real ore aboard a physical
+ship long enough for a meaningful PvE attack or escort. Its wreck uses
+the stock NPC cargo-to-wreck path; there is no fabricated reward chest.
+
+**Follow an actual pirate raid:** when one of our named pirates pursues
+an ore-bearing miner or hauler, the server sends a short system message
+using EveJS's ordinary local chat delivery. The fight uses native NPC
+warp and attack orders, and you may join or ignore it. Signals are
+issued only for actual raid orders, not for a scheduled arena event.
+
+The native mining fleet initially waits roughly three minutes before
+its first haul, with a 20% fill threshold and at least ten minutes
+between hauler runs. These values are intentionally accelerated for
+a short two-player session compared with stock EveJS's 90-minute
+initial timer. All fleets remain bound by actual mined ore supply.
+
+`-Action Party` now includes ore quantities still on miners and ore
+loaded onto physical NPC haulers. These measurements are sampled server
+evidence, not a guaranteed live tactical UI.
