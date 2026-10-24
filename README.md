@@ -79,13 +79,7 @@ pirates**. Explore and fight ships that already belong to the world:
 persistent identities, physical movement, real native combat and wrecks,
 and a recorded recovery delay after their ship is destroyed.
 
-~~~powershell
-cd C:\Games\EveCoopProject
-.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
-.\scripts\Local-Two-Client-Test.ps1 -Action World
-# Only after real server World PASS, verify one compatible client manually.
-# Two-client LaunchTwo and Party are separate later acceptance gates.
-~~~
+For an **existing deployed universe**, follow the single [gameplay acceptance sequence](docs/GAMEPLAY_TESTING.md) above. Do not redeploy as the first test. After World PASS, confirm one authorized client manually, then two clients.
 
 The first-time upstream database preparation is documented separately.
 The live simulation now **reuses EveJS's actual NPC mining fleets**,
