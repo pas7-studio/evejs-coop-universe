@@ -26,6 +26,16 @@ server contract tests with observed EVE client gameplay.
 - Do not change task status to DONE on documentation alone.
 - Never commit credentials, client data, dynamic databases, certificates, binaries, screenshots of personal information, or session tokens.
 
+## Native NPC faction combat invariant
+
+Pinned upstream `npcBehaviorLoop` defaults NPC-vs-NPC to friendly. The
+opt-in `coopNpcHostility` hook allows only named physically linked opposing
+factions with a current real native attack order or fresh retaliation. Never
+weaken this to unconditional NPC friendly-fire. Require real native weapon
+success, measured HP reduction, and actual stored loot on the same victim
+before reporting a client-free NPC battle as evidenced. Do not claim
+authoritative final killer identity from correlation alone. No GitHub CI.
+
 ## Manual headless native NPC evidence (owner-directed)
 Before any claim that autonomous NPCs work without players, consult
 `docs/HEADLESS_NPC_VALIDATION.md` and use the local World evidence gate.
