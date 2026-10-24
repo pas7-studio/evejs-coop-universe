@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -80,6 +80,7 @@ function start(){
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
   safeNpcPhase("native-civilians",advanceNativeCivilianOrders);
   safeNpcPhase("native-activity",observeNativeActivity);
+  safeNpcPhase("native-combat-evidence",observeNativeCombat);
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
    for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
     ()=>observeSession(null,{itemID:0,spaceState:{systemID}}));
@@ -175,6 +176,32 @@ function ensureCivilianOrders(runtime,npc){
   warp:(id,point,options)=>npc.warpToPoint(id,point,options),
   orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
  });
+}
+function observeNativeCombat(){
+ if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||!identityRegistry||!visitedSystems.size)return;
+ if(!combatEvidenceDirector)
+  combatEvidenceDirector=require("./coopNativeCombatEvidence").createCombatEvidence();
+ const runtime=require("./runtime");
+ const damage=require("./combat/damage");
+ const controllers=require("./npc/npcRegistry");
+ const links=Object.values(identityRegistry.snapshot().links||{});
+ for(const systemID of visitedSystems){
+  try{
+   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+   const result=combatEvidenceDirector.sample({
+    systemID,scene,links,
+    getHealth:entity=>{
+     const max=damage.getEntityMaxHealthLayers(entity);
+     if(!Object.values(max).some(n=>n>0))return null;
+     return damage.getEntityCurrentHealthLayers(entity,max);
+    },
+    getController:id=>controllers.getControllerByEntityID(id)
+   });
+   if(result.status==="SAMPLED"&&result.damageEvents)
+    require("./coopRuntimeProbe").observe("living-native-combat-damage",null,
+     {spaceState:{systemID}},result);
+  }catch(error){console.warn("[CoopNativeCombatEvidence] sample",systemID,error.message);}
+ }
 }
 function observeNativeActivity(){
  if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||!identityRegistry||!visitedSystems.size)return;
@@ -584,6 +611,21 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID){
   const link=Object.values(registry?.links||{}).find(x=>
    Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
   if(!link)return;
+  // This callback is invoked only after EveJS successfully spawned the
+  // wreck. Verify that its physical entity and stored loot really exist.
+  // Never invent a loss from a missing or failed native wreck.
+  const runtime=require("./runtime");
+  const store=require("./npc/nativeNpcStore");
+  const proof=require("./coopNativeCombatEvidence").verifyWreck({
+   systemID,npcID,wreckID,
+   scene:runtime.ensureScene(Number(systemID),{refreshStargates:false}),
+   links:Object.values(registry.links||{}),
+   getWreck:id=>store.getNativeWreck(id),
+   getWreckItems:id=>store.listNativeWreckItemsForWreck(id)
+  });
+  require("./coopRuntimeProbe").observe("living-native-wreck-evidence",null,
+   {spaceState:{systemID}},proof);
+  if(proof.status!=="PHYSICAL_NATIVE_WRECK_VERIFIED")return;
   start();
   const killed=life.markLoss({pilotID:link.pilotID,systemID,shipID:npcID,wreckID});
   require("./coopRuntimeProbe").observe("living-npc-destroyed",null,
