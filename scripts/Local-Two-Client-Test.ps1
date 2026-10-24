@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','FinalBlow','Market','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -171,6 +171,18 @@ switch ($Action) {
             throw 'NPC battle gate not proven: require real NPC weapon activation or missile launch, linked HP loss, native physical wreck and stored loot. See report.'
         }
         Write-Host '[COMBAT] Correlated named-NPC HP reduction, physical wreck and saved loot observed on server. Shooter attribution and real EVE client gameplay remain unproven.'
+    }
+    'StockRaid' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for stock-fleet combat evidence.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No server combat evidence. Run -Action DiagnoseWorld to find the native boot blocker.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-stock-raid --system-id $WorldSystemID
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No correlated native weapon and measured stock miner HP loss yet. An attack order or a target lock is insufficient.'
+        }
+        Write-Host '[STOCK RAID] Native weapon activation and real stock miner/hauler HP drop correlated. Wreck, loot and two-client rendering are NOT proven.'
     }
     'FinalBlow' {
         Assert-BackendPrerequisites
