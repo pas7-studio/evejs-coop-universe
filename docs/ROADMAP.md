@@ -21,6 +21,19 @@ Require real native coordinate changes plus cargo growth or a controller
 target. This branch adds the sampler and strict local World report, but
 no live Docker-native activity has been verified yet.
 
+**Headless reliability and fast-kill evidence:** incomplete native worlds
+continue boot attempts after the initial six, using bounded 5–15 minute
+backoff. Worlds without native mining no longer import that service
+at bootstrap. The physical NPC capacity exemption is now tied to
+live EveJS fleet entity IDs, not a potentially stale role string.
+A real native death between HP sample intervals can contribute an
+observed terminal shield/armor/hull decrease from EveJS's original
+ship entity, but only against a fresh prior physical sample.
+The strict combat report rejects mismatched named pilot/entity IDs
+and requires time-ordered HP and wreck evidence. These changes have
+41/41 isolated JS checks and pinned overlay round-trip validation,
+**not** a live Docker game-client test.
+
 **Stock NPC materialization blocker addressed:** native EveJS miners and
 haulers previously exhausted the co-op NPC limit (default two), leaving
 zero free slots for pirates. Corrected capacity accounting and tested
