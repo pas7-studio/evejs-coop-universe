@@ -681,14 +681,14 @@ function observeSession(session,ship){
   if(session)visitedSystems.add(systemID);
   const allResidents=world.residents(systemID);
   const roles=economy?.snapshot().pilots||{};
-  // Reserve scarce named hull slots for playable PvE: pirates and patrols
-  // before non-combat traders. Native miners/haulers are linked separately.
-  const ranks={pirate:0,patrol:1,trader:2,miner:3,hauler:4};
-  const residents=allResidents.map(p=>({
+  // Reserve scarce named hull slots for pirates and genuine patrol NPCs;
+  // role sorting is shared with isolated regression tests.
+  const residents=require("./coopNpcRolePriority").orderForMaterialization(
+   allResidents.map(p=>({
     ...p,role:roles[p.id]?.role||
       ["miner","hauler","patrol","trader","pirate"][(Number(p.id.slice(-3))-1)%5]
-  })).filter(p=>life?.canFly(p.id)!==false)
-    .sort((a,b)=>(ranks[a.role]??5)-(ranks[b.role]??5)||a.id.localeCompare(b.id));
+   })).filter(p=>life?.canFly(p.id)!==false)
+  );
   for(const p of residents)life?.recover(p.id);
   if(economy)economy.advance(world.snapshot().pilots);
    safeNpcPhase("observed-native-depot",syncNativeDeliveries);
