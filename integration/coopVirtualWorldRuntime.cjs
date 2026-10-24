@@ -2,6 +2,8 @@
 // Optional background driver of virtual world; no NPC ships materialized.
 let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null;
 const observedNpcIDs=new Set();
+const visitedSystems=new Set();
+let backgroundTicks=0;
 function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
@@ -35,6 +37,12 @@ function start(){
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
      advanceNativePatrolRoutes();
      advanceNativeCivilianOrders();
+     // A recovered NPC returns to a living system without player re-login.
+     if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
+       for(const systemID of visitedSystems){
+         observeSession(null,{itemID:0,spaceState:{systemID}});
+       }
+     }
    }catch(e){console.warn("[CoopVirtualWorld] tick",e.message);}
  },30000);
  timer.unref?.();
@@ -77,6 +85,8 @@ function observeSession(session,ship){
  try{
   start();
   const systemID=Number(ship?.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
+  if(!Number.isSafeInteger(systemID)||systemID<=0)return;
+  if(session)visitedSystems.add(systemID);
   const allResidents=world.residents(systemID);
   const roles=economy?.snapshot().pilots||{};
   const ranks={pirate:0,miner:1,hauler:2,trader:3,patrol:4};
@@ -145,7 +155,8 @@ function observeSession(session,ship){
       const civilianActions=advanceNativeCivilianOrders();
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
         civilianActions,
-        assignments:result,sceneReady:Boolean(scene)
+        assignments:result,sceneReady:Boolean(scene),
+        livingShips:result.filter(x=>x.entityID).map(x=>({pilotID:x.pilotID,entityID:x.entityID,role:pilotsByID.get(x.pilotID)?.role}))
       });
     }catch(error){console.warn("[CoopMaterializer]",error.message);}
   }
@@ -180,7 +191,7 @@ function observeSession(session,ship){
     }catch(error){console.warn("[CoopFactionPatrol]",error.message);}
   }
   require("./coopRuntimeProbe").observe("virtual-world-presence",session,ship,{
-    residentCount:residents.length,residents:residents.map(p=>({id:p.id,faction:p.faction,journeys:p.journeys})),
+    residentCount:residents.length,residents:residents.map(p=>({id:p.id,name:p.name,role:p.role,faction:p.faction,journeys:p.journeys})),
     virtualEconomy:economy?.snapshot().systems[String(systemID)]||null
   });
  }catch(error){console.warn("[CoopVirtualWorld] observe",error.message);}
