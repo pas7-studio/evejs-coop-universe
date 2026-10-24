@@ -17,8 +17,11 @@ function validPair({attacker,target,attackerController,targetController,links=[]
   Number(targetController.entityID)!==targetID)return false;
  const explicitAttack=attackerController.manualOrder?.type==="attack"&&
   Number(attackerController.manualOrder.targetID)===targetID;
+ const hitAt=Number(attackerController.lastAggressedAtMs);
+ const elapsed=Date.now()-hitAt;
+ // Do not preserve a stale revenge permission indefinitely.
  const nativeRetaliation=Number(attackerController.lastAggressorID)===targetID&&
-  Number(attackerController.lastAggressedAtMs)>0;
+  Number.isFinite(hitAt)&&hitAt>0&&elapsed>=0&&elapsed<=5*60000;
  if(!explicitAttack&&!nativeRetaliation)return false;
  const pair=links.filter(x=>named(x?.pilotID)&&Number(x.systemID)===sourceSystem&&
   (Number(x.entityID)===attackerID||Number(x.entityID)===targetID));
@@ -42,10 +45,11 @@ function allowsNativeEngagement(attacker,target){
   const attackerController=registry.getControllerByEntityID(a);
   const targetController=registry.getControllerByEntityID(b);
   if(!attackerController||!targetController)return false;
+  const aggressionAge=Date.now()-Number(attackerController.lastAggressedAtMs);
   if(!(attackerController.manualOrder?.type==="attack"&&
    Number(attackerController.manualOrder.targetID)===b)&&
    !(Number(attackerController.lastAggressorID)===b&&
-     Number(attackerController.lastAggressedAtMs)>0))return false;
+     Number.isFinite(aggressionAge)&&aggressionAge>=0&&aggressionAge<=5*60000))return false;
   const now=Date.now(),file=process.env.EVEJS_COOP_IDENTITY_FILE||
    "/var/lib/evejs/coop-npc-links.json",worldFile=process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||
    "/var/lib/evejs/coop-virtual-world.json";
