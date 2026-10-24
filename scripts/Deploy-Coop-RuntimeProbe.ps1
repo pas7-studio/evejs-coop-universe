@@ -122,6 +122,8 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_NATIVE_TACTICS: '1'"
   $yamlLines += "      EVEJS_COOP_LOCAL_INTEL: '1'"
   $yamlLines += "      EVEJS_COOP_PLAYER_CONSEQUENCES: '1'"
+  $yamlLines += "      EVEJS_COOP_NPC_MEMORY: '1'"
+  $yamlLines += "      EVEJS_COOP_NPC_MEMORY_FILE: '/var/lib/evejs/coop-npc-memory.json'"
   $yamlLines += "      EVEJS_COOP_STANDINGS_FILE: '/var/lib/evejs/coop-player-consequences.json'"
   $yamlLines += "      EVEJS_MINING_NPC_STANDINGS_ENABLED: 'true'"
   $yamlLines += "      EVEJS_MINING_NPC_NEUTRAL_RESPONSE_COUNT: '2'"
