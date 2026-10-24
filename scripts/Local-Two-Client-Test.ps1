@@ -6,6 +6,7 @@ param(
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
     [int]$LaunchGapSeconds = 20,
+    [int]$HealthTimeoutSeconds = 240,
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -14,6 +15,7 @@ if (-not $OutputRoot) { $OutputRoot = Join-Path $projectRoot 'test-results' }
 $compose = Join-Path $CodePath 'compose.yaml'
 $play = Join-Path $CodePath 'Play.bat'
 if ($LaunchGapSeconds -lt 0 -or $LaunchGapSeconds -gt 300) { throw 'LaunchGapSeconds must be 0..300' }
+if ($HealthTimeoutSeconds -lt 15 -or $HealthTimeoutSeconds -gt 900) { throw 'HealthTimeoutSeconds must be 15..900' }
 function Invoke-Compose([string[]]$Arguments) {
     & docker compose --project-directory $CodePath -f $compose @Arguments
     if ($LASTEXITCODE -ne 0) { throw "docker compose failed: $($Arguments -join ' ')" }
@@ -23,6 +25,16 @@ function Assert-BackendPrerequisites {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Docker Desktop CLI unavailable.' }
     $os = (& docker info --format '{{.OSType}}' 2>&1 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw "Docker must be running Linux containers: $os" }
+}
+function Wait-BackendHealthy {
+    $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
+    do {
+        & (Join-Path $PSScriptRoot 'Check-Backend.ps1') -CodePath $CodePath
+        if ($LASTEXITCODE -eq 0 -and $?) { return }
+        Write-Host 'Backend still initializing; retrying health check...'
+        Start-Sleep -Seconds 10
+    } while ((Get-Date) -lt $deadline)
+    throw "Backend did not become healthy within $HealthTimeoutSeconds seconds. Run -Action Logs for diagnostics."
 }
 function Get-Timestamp { Get-Date -Format 'yyyyMMdd-HHmmss' }
 switch ($Action) {
@@ -40,8 +52,7 @@ switch ($Action) {
         & (Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1') -CodePath $CodePath
         if ($LASTEXITCODE -ne 0) { throw 'Compose safety check failed.' }
         Invoke-Compose @('up','--detach')
-        & (Join-Path $PSScriptRoot 'Check-Backend.ps1') -CodePath $CodePath
-        if ($LASTEXITCODE -ne 0) { throw 'Backend not healthy yet. Use -Action Status/Logs and retry.' }
+        Wait-BackendHealthy
         Write-Host 'Server running. Next: -Action LaunchTwo'
     }
     'LaunchTwo' {
@@ -55,8 +66,8 @@ switch ($Action) {
         for ($n = 1; $n -le 2; $n++) {
             # Start each upstream launcher in its own visible command window.
             # Never copy/patch proprietary client binaries, install CA trust, or alter client config here.
-            $args = '/k "cd /d "' + $CodePath + '" && call Play.bat"'
-            Start-Process -FilePath 'cmd.exe' -ArgumentList $args -WorkingDirectory $CodePath | Out-Null
+            # PowerShell sets WorkingDirectory, so avoid nested cd /d quoting.
+            Start-Process -FilePath 'cmd.exe' -ArgumentList '/k call Play.bat' -WorkingDirectory $CodePath | Out-Null
             Write-Host "Started Play.bat launcher #$n. Sign in with separate test account $n."
             if ($n -eq 1 -and $LaunchGapSeconds -gt 0) { Start-Sleep -Seconds $LaunchGapSeconds }
         }
