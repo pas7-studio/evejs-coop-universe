@@ -46,3 +46,6 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Expected a valid hash to pass' }
           & ./scripts/Test-XEveBaseline.ps1 -ArchivePath $sample
           if ($LASTEXITCODE -eq 0) { throw 'Expected incompatible hash to fail' }
+
+      - name: Two independent TCP sessions (standalone test fixture)
+        run: node --test ./lab/co-op-session-lab.test.mjs
