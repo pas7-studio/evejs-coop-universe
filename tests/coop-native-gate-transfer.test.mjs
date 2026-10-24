@@ -27,9 +27,10 @@ function fixture(){
   listNativeModulesForEntity:()=>structuredClone(modules),
   listNativeCargoForEntity:()=>structuredClone(cargo),
   upsertNativeEntity:row=>{entity=structuredClone(row);return {success:true}},
-  upsertNativeController:row=>{control=structuredClone(row);return {success:true}}
+  upsertNativeController:row=>{if(row.systemID===B&&failControllerWrite)return {success:false,errorMsg:"DB_FAILED"};
+   control=structuredClone(row);return {success:true}}
  };
- let failDestination=false;
+ let failDestination=false,failControllerWrite=false,denyIdentityRelocation=false;
  const service={
   dematerializeNativeController:c=>{
    const sourceScene=scenes.get(c.systemID);
@@ -51,7 +52,7 @@ function fixture(){
  const registry={
   snapshot:()=>({links:{"coop-pilot-005":structuredClone(link)}}),
   relocate:(pilotID,from,id,to)=>{
-   if(pilotID!==link.pilotID||link.systemID!==from||link.entityID!==id||
+   if(denyIdentityRelocation||pilotID!==link.pilotID||link.systemID!==from||link.entityID!==id||
     scenes.get(from).ships.has(id)||!scenes.get(to).ships.has(id))
     return {status:"DENIED"};
    link={...link,systemID:to};return {status:"RELOCATED"};
@@ -69,7 +70,10 @@ function fixture(){
   sourceScene:source,ship,controller:runtimeControl});
  return {temp,source,destination,gate,store,service,registry,deps,call,
   getEntity:()=>entity,getController:()=>control,getLink:()=>link,
-  setDestinationFailure:x=>{failDestination=x},cleanup:()=>fs.rmSync(temp,{recursive:true,force:true})};
+  setDestinationFailure:x=>{failDestination=x},
+  setControllerWriteFailure:x=>{failControllerWrite=x},
+  denyIdentityRelocation:x=>{denyIdentityRelocation=x},
+  cleanup:()=>fs.rmSync(temp,{recursive:true,force:true})};
 }
 test("same native EveJS entity ID crosses systems with unmodified HP, modules and cargo",()=>{
  const x=fixture();
@@ -119,6 +123,45 @@ test("a non-native player ship, combat active module or warp scramble prevents s
   args.ship.activeModuleEffects.clear();
   const scrambled=createNativeGateTransfer({...x.deps,isScrambled:()=>true});
   assert.equal(scrambled.transfer(args).success,false);
+  assert.equal(x.source.getEntityByID(100).itemID,100);
+ }finally{x.cleanup()}
+});
+test("native controller-store write failure restores original scene and identity",()=>{
+ const x=fixture();
+ try{
+  x.setControllerWriteFailure(true);
+  const result=x.call(createNativeGateTransfer(x.deps).transfer);
+  assert.equal(result.success,false);
+  assert.equal(result.rolledBack,true);
+  assert.equal(x.getEntity().systemID,A);
+  assert.equal(x.getController().systemID,A);
+  assert.equal(x.getLink().systemID,A);
+  assert.equal(x.source.getEntityByID(100).itemID,100);
+  assert.equal(x.destination.getEntityByID(100),null);
+ }finally{x.cleanup()}
+});
+test("refused durable identity relocation rolls native ship and inventory back",()=>{
+ const x=fixture();
+ try{
+  x.denyIdentityRelocation(true);
+  const result=x.call(createNativeGateTransfer(x.deps).transfer);
+  assert.equal(result.success,false);
+  assert.equal(result.rolledBack,true);
+  assert.equal(x.getLink().systemID,A);
+  assert.equal(x.getEntity().systemID,A);
+  assert.equal(x.source.getEntityByID(100).itemID,100);
+  assert.equal(x.destination.getEntityByID(100),null);
+  assert.equal(x.store.listNativeCargoForEntity(100)[0].quantity,23);
+ }finally{x.cleanup()}
+});
+test("native gate migration rejects mismatched reciprocal stargate metadata before removing ship",()=>{
+ const x=fixture();
+ try{
+  x.deps.getGate=id=>id===901?{itemID:901,solarSystemID:B,destinationID:999}:
+   {itemID:900,solarSystemID:A,destinationID:901};
+  const result=x.call(createNativeGateTransfer(x.deps).transfer);
+  assert.equal(result.success,false);
+  assert.equal(result.errorMsg,"RECIPROCAL_STARGATE_NOT_VERIFIED");
   assert.equal(x.source.getEntityByID(100).itemID,100);
  }finally{x.cleanup()}
 });
