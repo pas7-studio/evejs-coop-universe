@@ -53,3 +53,26 @@ Do not run the X-Eve installer against the repository cloned in step 2. Find a l
 ## 7. Report back
 
 Use `docs/TEST_REPORT_TEMPLATE.md`. Include anonymized output of `docker compose ps --all`, selected log lines, SHA of upstream checkouts, actual client-build availability, and any failures.
+
+## Extra: compatibility guard and backend diagnostic
+
+To validate **only** the X-Eve documented archive identity (not a server checkout):
+```powershell
+.\scripts\Test-XEveBaseline.ps1 -ArchivePath 'C:\Downloads\EveJS-v0.12.3.1.zip'
+```
+
+It exits nonzero on a mismatch, and does not modify the archive or install anything. Never substitute a different hash merely to bypass this check.
+
+When Docker is started, run the backend state check **from the orchestration repository**:
+```powershell
+.\scripts\Check-Backend.ps1
+```
+
+Failure means the prerequisite services are absent or unhealthy. It is not proof of an EVE client login or of co-op play.
+
+To discover upstream network dependencies:
+```powershell
+.\scripts\Audit-Network.ps1 -OutputPath '.\network-audit.csv'
+```
+
+Treat this generated report as local investigation, not as permission to expose game ports.
