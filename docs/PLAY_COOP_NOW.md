@@ -320,7 +320,7 @@ these mechanics as proven.
 
 ## Physical encounter placement: Perimeter duo PvE
 
-The explicitly deployed `-LivingCoop` default now allows **3 named native NPC hulls per visited system**, unless an operator explicitly sets `-MaterializeLimit`. Named pirate and patrol hulls start near a **real EveJS asteroid belt** in Perimeter when one exists. Traders prefer real stations. Beltless Jita keeps real stargate/station anchors, with no synthetic belts. Upstream EveJS mining fleets are separate genuine native ships, not dummy co-op miners.
+The lower-level `Deploy-Coop-RuntimeProbe.ps1 -LivingCoop` default now allows **3 named native NPC hulls per visited system**, unless an operator explicitly sets `-MaterializeLimit`. The normal `Local-Two-Client-Test.ps1 -Action CoopStart` workflow **explicitly uses 6** per visited system; this override is retained, so an existing 20-pilot co-op world is not silently reduced to three. Named pirate and patrol hulls start near a **real EveJS asteroid belt** in Perimeter when one exists. Traders prefer real stations. Beltless Jita keeps real stargate/station anchors, with no synthetic belts. Upstream EveJS mining fleets are separate genuine native ships, not dummy co-op miners.
 
 This affects **newly materialized** named NPC ships only: already persistent physical hulls are not relocated or respawned just to follow a new anchor policy. Actual attack, damage, native wreck, two-client loot and NPC movement still require live evidence.
 
