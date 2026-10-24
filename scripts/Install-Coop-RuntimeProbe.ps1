@@ -8,12 +8,15 @@ $ErrorActionPreference='Stop'
 $server=Join-Path $CodePath 'server/src'
 $probeTarget=Join-Path $server 'space/coopRuntimeProbe.js'
 $probeSource=Join-Path $PSScriptRoot '../integration/coopRuntimeProbe.cjs'
+$npcSource=Join-Path $PSScriptRoot '../integration/coopNativeNpcDemo.cjs'
+$npcTarget=Join-Path $server 'space/coopNativeNpcDemo.js'
 $expected='c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
 $rev=(& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
 if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" }
 $patches=@(
   @{ path=(Join-Path $server 'services/_shared/sessionDisconnect.js'); marker='  persistCharacterLogoffState(session);'; injection='  require("../../space/coopRuntimeProbe").observe("disconnect-before-persist", session, null);' },
-  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const attachElapsedMs = Date.now() - attachStartedAtMs;'; injection='  require("./coopRuntimeProbe").observe("space-login-attach", session, activeShip, { attached: Boolean(shipEntity) });' }
+  @{ path=(Join-Path $server 'space/transitions.js'); marker='  const attachElapsedMs = Date.now() - attachStartedAtMs;'; injection='  require("./coopRuntimeProbe").observe("space-login-attach", session, activeShip, { attached: Boolean(shipEntity) });' },
+  @{ path=(Join-Path $server 'space/transitions.js'); marker='  if (!shipEntity) {'; injection='  if (shipEntity) require("./coopNativeNpcDemo").maybeSpawn(session, activeShip);' }
 )
 foreach($p in $patches) {
   if(-not (Test-Path -LiteralPath $p.path)){throw "Missing upstream file: $($p.path)"}
@@ -31,7 +34,9 @@ foreach($p in $patches) {
 }
 if($Remove) {
   if(Test-Path -LiteralPath $probeTarget){Remove-Item -LiteralPath $probeTarget -Force}
+  if(Test-Path -LiteralPath $npcTarget){Remove-Item -LiteralPath $npcTarget -Force}
 } else {
   Copy-Item -LiteralPath $probeSource -Destination $probeTarget -Force
+  Copy-Item -LiteralPath $npcSource -Destination $npcTarget -Force
 }
 Write-Host 'Co-op probe installation complete. Set EVEJS_COOP_EVENTS_FILE within the server container to enable JSONL event output.'
