@@ -121,6 +121,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_NPC_RAIDS: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_TACTICS: '1'"
   $yamlLines += "      EVEJS_COOP_HEADLESS_WORLD_BOOT: '1'"
+  $yamlLines += "      EVEJS_COOP_FACTION_LAYOUT_V2: '1'"
   $yamlLines += "      EVEJS_COOP_LOCAL_INTEL: '1'"
   $yamlLines += "      EVEJS_COOP_PLAYER_CONSEQUENCES: '1'"
   $yamlLines += "      EVEJS_COOP_NPC_MEMORY: '1'"
