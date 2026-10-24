@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','LaunchTwo','Status','Logs','Stop')]
+    [ValidateSet('Prepare','Start','LaunchTwo','Status','Smoke','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -78,6 +78,14 @@ switch ($Action) {
         Invoke-Compose @('ps','--all')
         & (Join-Path $PSScriptRoot 'Check-Backend.ps1') -CodePath $CodePath
         if ($LASTEXITCODE -ne 0) { throw 'Backend health check failed.' }
+    }
+    'Smoke' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for transport smoke.' }
+        $probe = Join-Path $PSScriptRoot 'smoke-two-tcp.mjs'
+        & node $probe
+        if ($LASTEXITCODE -ne 0) { throw 'Two concurrent TCP connections to EveJS game port failed.' }
+        Write-Host 'Transport only: this is NOT a two-player login or gameplay PASS.'
     }
     'Logs' {
         Assert-BackendPrerequisites
