@@ -152,7 +152,7 @@ function observeSession(session,ship){
     .sort((a,b)=>(ranks[a.role]??5)-(ranks[b.role]??5)||a.id.localeCompare(b.id));
   for(const p of residents)life?.recover(p.id);
   if(economy)economy.advance(world.snapshot().pilots);
-  if(process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"&&residents.length){
+  if(process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
     try{
       const runtime=require("./runtime");
       const npc=require("./npc/npcRuntime");
