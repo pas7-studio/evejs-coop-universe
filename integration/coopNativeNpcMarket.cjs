@@ -120,11 +120,18 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
   const link=registry.snapshot().links?.[pilotID];
   const ship=scene?.getEntityByID?.(id);
   const st=getStation(station);
+  // Static station rows use stationID, not necessarily itemID or a
+  // physical position. Require the matching actual EveJS scene station.
+  const physicalStation=scene?.staticEntities?.find(x=>
+   x?.kind==="station"&&Number(x.itemID)===station);
   if(!ship||ship.nativeNpc!==true||ship.kind!=="ship"||
    Number(link?.entityID)!==id||Number(link?.systemID)!==Number(scene.systemID)||
-   !st||Number(st.itemID)!==station||Number(st.solarSystemID)!==Number(scene.systemID)||
-   !vec(ship.position)||!vec(st.position)||ship.session?.characterID||
-   dist(ship.position,st.position)-Math.max(0,Number(st.radius)||0)-
+   !st||Number(st.stationID||st.itemID)!==station||
+   Number(st.solarSystemID)!==Number(scene.systemID)||
+   !physicalStation||!vec(physicalStation.position)||
+   !vec(ship.position)||ship.session?.characterID||
+   dist(ship.position,physicalStation.position)-
+    Math.max(0,Number(physicalStation.radius)||0)-
     Math.max(0,Number(ship.radius)||0)>10000)
    return status("NOT_AT_NATIVE_STATION");
   if(side==="buy"&&!buyTypes.includes(type)||side==="sell"&&!sellTypes.includes(type))
