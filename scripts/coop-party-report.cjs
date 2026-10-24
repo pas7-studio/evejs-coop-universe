@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[],oreDelivered=0,tacticalRetreats=0,helpCalls=0,reinforcements=0;
+ const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[],oreDelivered=0,tacticalRetreats=0,helpCalls=0,reinforcements=0,fleetWarpAccepted=[],fleetWarpFailed=[],fleetWarpSkipped=[];
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -40,6 +40,21 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
     if(e.kind==="npc-help-request")helpCalls++;
     if(e.kind==="reinforcement-attack"||e.kind==="reinforcement-warp")reinforcements++;
   }
+  if(e.event==="coop-fleet-warp-native-order"){
+   const record={commanderCharacterID:positive(e.commanderCharacterID),
+    followerCharacterID:positive(e.followerCharacterID),
+    followerShipID:positive(e.followerShipID),systemID:positive(e.systemID),
+    targetEntityID:positive(e.targetEntityID),at:e.at,
+    // The native warp function accepted the command. Arrival, client
+    // rendering and fleet formation are different unproven gates.
+    arrivalVerified:false};
+   if(e.status==="NATIVE_WARP_ORDER_ACCEPTED")fleetWarpAccepted.push(record);
+   else if(e.status==="NATIVE_WARP_ORDER_FAILED")fleetWarpFailed.push({...record,error:e.error||"UNKNOWN"});
+  }
+  if(e.event==="coop-fleet-warp-skip")fleetWarpSkipped.push({
+   commanderCharacterID:positive(e.characterID),
+   followerCharacterID:positive(e.followerCharacterID),
+   reason:String(e.reason||"UNKNOWN").slice(0,80),at:e.at});
   if(e.event==="living-pirate-raid")pirateRaids+=(e.actions||[]).length;
   if(e.event==="living-player-consequence")standingEvents.push({characterID:e.characterID,kind:e.kind,ownerID:e.ownerID,rawChange:e.rawChange,at:e.at});
   if(e.event==="living-hauler-loaded")haulerLoads++;
@@ -79,6 +94,13 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    npcTacticalRetreatsObserved:tacticalRetreats,
    npcHelpCallsObserved:helpCalls,
    npcReinforcementOrdersObserved:reinforcements,
+   nativeFleetWarpOrdersAccepted:fleetWarpAccepted.length,
+   nativeFleetWarpOrdersFailed:fleetWarpFailed.length,
+   nativeFleetWarpFollowersSkipped:fleetWarpSkipped.length,
+   lastNativeFleetWarpOrders:fleetWarpAccepted.slice(-10),
+   lastNativeFleetWarpFailures:fleetWarpFailed.slice(-10),
+   lastNativeFleetWarpSkips:fleetWarpSkipped.slice(-10),
+   fleetWarpArrivalVerified:false,
    physicalHaulerLoadsObserved:haulerLoads,
    physicalHaulerUnloadsObserved:haulerDeliveries,
    actualOreSuppliedToWorldDuringWindow:oreDelivered,
