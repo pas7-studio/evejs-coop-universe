@@ -376,3 +376,23 @@ links. A kill after the 180-second observation window is not captured
 by this instrumentation. The next engineering step should replace
 time-limited sampling with a lifecycle event hook in the native NPC
 destruction service, plus durable per-pilot death/recovery state.
+
+## Direct native destruction hook (replaces time-limited loss dependency)
+
+The reversible installer additionally patches the pinned
+`nativeNpcWreckService.js` immediately after successful native wreck
+creation, before the dungeon encounter callback. This invokes
+`coopVirtualWorldRuntime.confirmedNativeNpcWreck(systemID,npcID,wreckID)`.
+The handler reads the durable identity registry and **only** accepts a wreck
+whose ship ID and system match a materialized virtual NPC identity. It then
+uses the existing durable wreck loss ledger and virtual economy.
+
+Unlike the temporary 180-second combat observer, this direct hook can
+capture deaths that occur later while the server is running. Damage,
+loot, wreck generation and client notifications remain owned by EveJS.
+The hook is optional/fail-open and removed by the same installer with
+`-Remove`.
+
+The older combat observer remains useful for diagnostic state samples;
+it is no longer required to capture a later native wreck in the
+materialized NPC path. Actual runtime execution is not yet verified.
