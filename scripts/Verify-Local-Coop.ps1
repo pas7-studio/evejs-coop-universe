@@ -62,7 +62,7 @@ try {
   $projectRev = (& git -C $projectRoot rev-parse HEAD 2>$null | Out-String).Trim()
   Set-Content -LiteralPath (Join-Path $runDir 'revisions.txt') -Value @("Project=$projectRev","EveJS=$rev") -Encoding UTF8
   $safe = RunExternal 'Loopback Compose safety' $ps @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1'),'-CodePath',$CodePath) 'compose-safety.log'
-  $selftest = RunExternal 'Client-free TCP regression suite' $node @('--test',(Join-Path $projectRoot 'tests/smoke-two-tcp.test.mjs')) 'tcp-regression.log'
+  $selftest = RunExternal 'Client-free TCP and scene diagnostics suite' $node @('--test',(Join-Path $projectRoot 'tests/smoke-two-tcp.test.mjs'),(Join-Path $projectRoot 'tests/coop-scene-audit.test.mjs')) 'backend-regressions.log'
   if ($StartBackend -and $safe) {
     $started = RunExternal 'Docker Compose up' $docker @('compose','--project-directory',$CodePath,'-f',(Join-Path $CodePath 'compose.yaml'),'up','--detach') 'compose-up.log'
   } else { $started = $true }
