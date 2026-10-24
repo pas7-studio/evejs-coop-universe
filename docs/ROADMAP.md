@@ -18,6 +18,19 @@ The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
 available; do not reintroduce automatic remote runs.
 
+**P0 implementation follow-up (awaiting local client test):** repaired
+real NPC name broadcasts in `coopNpcPresentation` to the existing
+EveJS slim-item API, with retry on failure and no repeat on success.
+Materializer now reports saturated native spawn capacity, caught
+upstream spawn exceptions, identity registry write failures and
+same-ship recovery without duplicates. Headless scene count and
+stock fleet bindings reject player/static objects; new boot-attempt
+witness distinguishes a scheduled timer from completed native scene
+attempts. **53/53 isolated presentation/materialization/report/headless
+tests PASS; this is not an in-game NPC appearance proof.**
+The next gate remains a fresh `World -WorldSystemID 30000144`
+and then visual NPC confirmation in a real authorized client.
+
 **2026-10-25 tested blocker update:** Headless event stream and boot
 request are confirmed live at tester revision `a087167`. The reported
 `World` failure selected Jita 30000142, which legitimately has no
