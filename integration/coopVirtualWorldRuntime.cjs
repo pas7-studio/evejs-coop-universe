@@ -85,6 +85,15 @@ function observeSession(session,ship){
         });
       }
       const result=bridge.reconcile(systemID,residents);
+      const pilotsByID=new Map(residents.map(p=>[p.id,p]));
+      const present=require("./coopNpcPresentation").presentVirtualPilot;
+      const presented=[];
+      for(const link of result){
+        if(!link.entityID||!pilotsByID.has(link.pilotID))continue;
+        const change=present(scene,link.entityID,pilotsByID.get(link.pilotID));
+        if(change.status==="UPDATED"||change.status==="BROADCAST_FAILED")presented.push({pilotID:link.pilotID,...change});
+      }
+      if(presented.length)require("./coopRuntimeProbe").observe("virtual-world-identity-projected",session,ship,{presented});
       for(const entry of result){
         if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
         const npcID=entry.entityID;
