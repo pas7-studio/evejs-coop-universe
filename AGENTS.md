@@ -115,6 +115,27 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
+## Durable named NPC restart safety (P0)
+
+Read [docs/NATIVE_NPC_DURABILITY.md](docs/NATIVE_NPC_DURABILITY.md)
+for the *only* approved persistence/restart QA sequence. A durable named
+NPC uses persistent native EveJS entity/controller records, not just
+`coop-npc-links.json`. The original `transient:true` records
+were never on disk and must not be described as persistent.
+`EVEJS_COOP_DURABLE_NPC_SHIPS=1` is enabled only when an authorized
+manual `-LivingCoop` overlay deployment is performed.
+
+The pinned `nativeNpcStore` allocator patch prevents collisions between
+stock transient miners and newly durable NPC IDs. On startup,
+`coopNativeRestore` restores the same physical ID **before**
+identity pruning; any corrupt durable records halt this operation
+with `NEEDS_OPERATOR_REPAIR`. Only a matching native wreck in the
+persistent life ledger **after that exact ship was linked** permits
+natural clone recovery. Never wipe the registry, volume or data to
+force World PASS. The manual World report now includes
+`nativeDurableRecovery`; accepted restoration is **not** proof
+that a real client sees the NPC.
+
 ## Current headless recovery rule
 
 A real EveJS scene with confirmed static topology is now tracked in
