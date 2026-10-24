@@ -62,3 +62,7 @@ See [UPSTREAM](docs/UPSTREAM.md) for references and caveats.
 ## Deployment entrypoint (Windows 11)
 
 Start with [FIRST_RUN.md](docs/FIRST_RUN.md). The repository now includes a [read-only prerequisite check](scripts/Preflight.ps1), a [non-destructive upstream clone helper](scripts/Fetch-Upstream.ps1), [agent instructions](AGENTS.md), and a [verification template](docs/TEST_REPORT_TEMPLATE.md). Scripts are newly authored and **have not been executed on your machine**; upstream Docker and client compatibility remain to be confirmed.
+
+## One-PC server + two-client test for agents
+
+See [TWO_CLIENTS_ONE_PC.md](docs/TWO_CLIENTS_ONE_PC.md) for copy-paste Windows commands to prepare one Docker server, start two client launchers, inspect health, collect logs and stop safely. Actual two-client gameplay is **not yet validated**.
