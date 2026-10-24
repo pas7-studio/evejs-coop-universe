@@ -60,6 +60,16 @@ function note(args){
  if(process.env.EVEJS_COOP_NATIVE_LOOT_EVIDENCE!=="1")
   return {status:"DISABLED"};
  const result=verify(args);
+ if(result.status==="NATIVE_LOOT_SOURCE_NOT_REMOVED"||
+  result.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED"){
+  const guard=require("./coopNativeLootQuarantine").quarantine({
+   wreckID:args?.wreck?.wreckID,wreckItemID:args?.wreckItemID,
+   reason:result.status
+  });
+  result.quarantineStatus=guard.status;
+  if(guard.status==="QUARANTINE_STORAGE_UNSAFE")
+   console.warn("[CoopNativeLoot] quarantine cannot persist; fail-closed item transfers",guard.reason||"");
+ }
  if(result.status==="VERIFIED_NATIVE_LOOT_PICKUP"||
   result.status==="NATIVE_LOOT_SOURCE_NOT_REMOVED"||
   result.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED")
