@@ -41,9 +41,14 @@ function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present})
     typeID:positive(x.typeID),quantity:Math.max(0,Number(x.quantity)||0)
    })).filter(x=>x.typeID&&x.quantity>0)
   }));
+  const haulerCargo=haulers.map(id=>({
+   entityID:id,oreQuantity:(getCargo(id)||[]).filter(x=>Number(x?.moduleID||0)===0)
+    .reduce((n,x)=>n+Math.max(0,Number(x.quantity)||0),0)
+  }));
   return {fleetID:positive(f.fleetID),state:String(f.state||"unknown"),
    minerIDs:miners,haulerIDs:haulers,responseIDs:response,
-   cargo,oreStacks:cargo.reduce((n,x)=>n+x.items.length,0),
+   cargo,haulerCargo,loadedHaulerOreQuantity:haulerCargo.reduce((n,x)=>n+x.oreQuantity,0),
+   oreStacks:cargo.reduce((n,x)=>n+x.items.length,0),
    oreQuantity:cargo.reduce((n,x)=>n+x.items.reduce((sum,y)=>sum+y.quantity,0),0),
    lastHauledVolumeM3:Number(f.lastHauledVolumeM3)||0,lastHauledAtMs:Number(f.lastHauledAtMs)||0
   };
