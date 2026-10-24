@@ -95,6 +95,13 @@ function confirmedWreck(session,ship,npcID,wreckID){
 function confirmedNativeNpcWreck(systemID,npcID,wreckID){
  if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY!=="1"||process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
+  // Account only NPCs explicitly linked to our virtual population.
+  const fs=require("node:fs");
+  const linksFile=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
+  let registry;
+  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}catch(e){if(e.code==="ENOENT")return;throw e;}
+  const link=Object.values(registry?.links||{}).find(x=>Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
+  if(!link)return;
   start();
   if(!economy)return;
   const {createLossBridge}=require("./coopNpcLossBridge");
