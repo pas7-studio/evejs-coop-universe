@@ -1,3 +1,62 @@
+## Living Universe NPC tactics: autonomous battles, retreat and help (current block)
+
+This is the active **NPC combat behavior** workstream. The separate
+two-client P0 validation block and the NPC gate-travel/real-market
+workstream are intentionally deferred.
+
+Rather than adding another damage/warp engine, the overlay uses
+**existing EveJS** APIs:
+
+- Native NPC controller `lastAggressorID` and `lastAggressedAtMs`
+  identify recent real attacks. No scripted confrontation is created.
+- EveJS `getEntityMaxHealthLayers` and
+  `getEntityCurrentHealthLayers` determine actual armor/structure
+  condition. An attacked named NPC retreats if structure is below 72%
+  or armor is below 28%.
+- `isEntityWarpScrambled` prevents impossible escape attempts.
+  A retreat chooses an existing *station or stargate* in the same
+  native scene, at least 500 km from the aggressor. No fake coordinates.
+  The escape uses `npcRuntime.warpToPoint`. Only after real warp
+  arrival does EveJS receive `issueOrder(type=stop)`; after a short
+  safety hold, `resumeBehavior` releases the NPC to its own AI.
+  Failed warps do not fake a successful escape.
+- Real allied NPCs are asked to help. Non-pirate civilians call
+  nearby patrols of their faction; pirates call allied pirates.
+  At most two idle **already existing** NPC ships per request receive
+  `warpToEntity` or `issueAttackOrder`. After physical warp-in,
+  reinforcements issue their actual attack command. There is no
+  new spawn or automatic kill.
+- Same-faction attackers do not trigger friendly-fire reinforcements.
+  Native mining-fleet panic/retreat/response remain owned by the
+  original EveJS mining implementation.
+- The tactical director runs at the existing 30-second world tick,
+  only for physical named ships in visited scenes. It yields to
+  existing targets and rate-limits aid/retreat decisions.
+  Tactical commitments block noncombat role waypoints.
+- The game's existing local chat delivers a message when a real NPC
+  requests help or retreats. `-Action Party` reports observed
+  tactical retreats, calls for help and issued reinforcement orders.
+
+Files: `integration/coopNpcTactics.cjs`,
+`integration/coopVirtualWorldRuntime.cjs`, existing
+`coopCivilianOrders.cjs`, the reversible overlay installer, and
+`tests/coop-npc-tactics.test.mjs`.
+
+### Backlog order agreed
+
+1. **Now:** existing-space autonomous NPC fights, physical retreat,
+   and requests for allied assistance.
+2. **Later as one P0 block:** real server and two authorized clients;
+   stable fleet warp, shared combat/loot; reconnect without losing ship.
+3. **Next P1 block:** real physical NPC jumps between solar systems
+   and player-visible NPC traders using native market orders.
+4. **Following P1/P2 block:** persistent NPC memory of individual
+   players and long-term faction rivalries / emergent histories.
+
+The current tactical unit scenarios validate command decisions with
+mocked authoritative EveJS interfaces. Live NPC-vs-NPC battles,
+scramble modules and client messages still need end-to-end validation.
+
 ## First-play hardening — actual local player experience
 
 The default LivingCoop setup now includes a server-derived activity brief
