@@ -20,8 +20,14 @@ function nativeMiningStartupPolicy({systemID,sdeBelts=0,sceneBelts=0,
  const raw=String(environment.EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS||"").trim();
  const systems=raw?raw.split(",").map(x=>id(x.trim())).filter(Boolean):[];
  const included=systems.length===0||systems.includes(system);
- const cfg={configuredForSystem:configured&&included,
-  startupEnabled:configured,
+ const configuredFleets=Number(environment.EVEJS_MINING_NPC_STARTUP_FLEET_COUNT||0);
+ const fleetCount=Number.isSafeInteger(configuredFleets)&&configuredFleets>=0?
+  configuredFleets:0;
+ const autoMine=environment.EVEJS_MINING_NPC_FLEET_AUTO_MINE_ENABLED!=="false"&&
+  environment.EVEJS_MINING_NPC_FLEET_AUTO_MINE_ENABLED!=="0";
+ const cfg={configuredForSystem:configured&&included&&fleetCount>0,
+  startupEnabled:configured,startupFleetCount:fleetCount,
+  autoMineConfigured:autoMine,
   startupSystemIncluded:included,
   startupSystemSelection:raw?"EXPLICIT":"DEFAULT"};
  if(!configured)return {...cfg,status:"NATIVE_MINING_STARTUP_DISABLED"};
@@ -31,6 +37,8 @@ function nativeMiningStartupPolicy({systemID,sdeBelts=0,sceneBelts=0,
  if(sdeBelts===0)return {...cfg,status:"SYSTEM_HAS_NO_SDE_BELTS"};
  if(!Number.isInteger(sceneBelts)||sceneBelts<1)
   return {...cfg,status:"SYSTEM_SDE_BELTS_NOT_IN_SCENE"};
+ if(fleetCount===0)return {...cfg,status:"NATIVE_MINING_FLEET_COUNT_ZERO"};
+ if(!autoMine)return {...cfg,status:"NATIVE_MINING_AUTO_MINE_DISABLED"};
  return {...cfg,status:"MINING_STARTUP_ELIGIBLE"};
 }
 module.exports={shouldTrackNativeScene,nativeMiningStartupPolicy};
