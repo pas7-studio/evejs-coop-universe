@@ -64,7 +64,8 @@ services:
   if($LivingCoop){
     # Reuse stock EveJS miners, mining modules, real asteroid depletion,
     # actual native NPC cargo and the existing miner distress/response AI.
-    $yaml += "      EVEJS_COOP_NATIVE_MINING: '1'`n"
+    $yaml += "      EVEJS_COOP_NATIVE_MINING: '1'`n"    $yaml += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'`n"
+    $yaml += "      EVEJS_COOP_NPC_RAIDS: '1'`n"
     $yaml += "      EVEJS_MINING_NPC_STARTUP_ENABLED: 'true'`n"
     $yaml += "      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: '$VirtualRouteSystems'`n"
     $yaml += "      EVEJS_MINING_NPC_STARTUP_FLEET_COUNT: '1'`n"
