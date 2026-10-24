@@ -189,8 +189,8 @@ The director persists a per-system record in
 `evejs-data` volume. Each eligible in-space login can request one
 native NPC batch only when a cooldown has elapsed. The scheduler writes
 the next allowed time **before** invoking the native spawn, to prevent
-rapid retries if a spawn fails. A per-system lifetime spawn cap avoids
-unbounded accumulation. Restarting the server reloads this schedule.
+rapid retries if a spawn fails. A persisted per-system 24-hour spawn cap avoids unbounded accumulation
+without permanently exhausting encounters for players returning on later days. Restarting the server reloads this schedule.
 
 To enable it on a disposable test universe:
 
@@ -517,3 +517,25 @@ There is no need to run a new test suite after every feature to author
 more functionality. The new modules' JavaScript syntax and a mocked
 native-API route/anchor smoke run were checked; **Windows PowerShell,
 Docker startup and two real EVE clients have not yet been validated**.
+
+## October 24 co-op gameplay corrections
+
+The first-play `CoopStart` mode uses **two-player live grid matchmaking**
+(`coopDuoCoordinator.js`), rechecking server-owned ship positions every
+four seconds after login/undock/jump. Both clients may warp to the same grid
+later without relogging. The native NPC only spawns for two distinct,
+Ballpark-ready pilots within 250 km, and no new batch is created while a
+previously tracked enemy NPC remains in-scene.
+
+Repeatable encounters have a durable cooldown (12 minutes by default)
+and a renewable 24-hour spawn budget (20 batches by default). A failed
+native spawn retries no more often than once per minute. The native EveJS
+wreck creation hook releases the tracked NPC and logs
+`coop-encounter-kill`, so kills remain observable even when the temporary
+combat sampler has ended. The `Party` action reports co-op wreck kills
+alongside scene presence and reciprocal visibility.
+
+Docker operations in the game-night script now consistently include
+`compose.coop-probe.yaml` whenever it exists. Loopback-only port checks
+also apply to the merged Compose configuration. Real client gameplay
+is still not certified until the authorized EVE clients are run.
