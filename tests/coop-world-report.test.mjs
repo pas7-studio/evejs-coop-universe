@@ -126,3 +126,40 @@ test("strict World does not accept previous-boot native evidence",()=>{
  assert.equal(result.status,"AWAITING_INGAME_ARRIVAL");
  assert.equal(result.activity.movedShips,0);
 });
+
+const combatFixture=({victim=102,loot=2,damage=true}={})=>[
+ event("living-world-topology",{realWaypoints:7,realAsteroidBelts:2}),
+ event("living-native-industry",{fleets:[{minerIDs:[101],haulerIDs:[102]}]}),
+ event("virtual-world-materialization",{livingShips:[
+  {pilotID:"coop-pilot-001",entityID:101,role:"miner"},
+  {pilotID:"coop-pilot-002",entityID:102,role:"hauler"}
+ ]}),
+ ...(damage?[event("living-native-combat-damage",{events:[{
+  systemID:30000142,victimEntityID:102,victimPilotID:"coop-pilot-002",
+  healthLossHP:17,attackerPilotIDs:["coop-pilot-001"],
+  attribution:"CORRELATED_TARGET_ONLY_NOT_KILL_CREDIT"
+ }]})]:[]),
+ event("living-native-wreck-evidence",{status:"PHYSICAL_NATIVE_WRECK_VERIFIED",
+  victimEntityID:victim,victimPilotID:"coop-pilot-002",
+  wreckID:900,storedItemCount:loot,lootStatus:loot?"ITEMS_STORED":"NATIVE_WRECK_EMPTY"})
+].join("\n");
+test("manual combat gate requires actual correlated named-NPC HP drop, wreck and native loot",()=>{
+ const report=summarize(combatFixture(),{now,requireCombat:true});
+ assert.equal(report.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(report.combat.status,"CORRELATED_DAMAGE_WRECK_AND_LOOT");
+ assert.equal(report.combat.matchingWreckID,900);
+ assert.ok(report.limits.some(x=>x.includes("do not identify the actual killer")));
+});
+test("native target without health loss does not pass combat gate",()=>{
+ const report=summarize(combatFixture({damage:false}),{now,requireCombat:true});
+ assert.equal(report.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(report.combat.status,"WRECK_ONLY");
+});
+test("wrong victim and empty actual wreck do not prove NPC kill plus loot",()=>{
+ const mismatch=summarize(combatFixture({victim:103}),{now,requireCombat:true});
+ assert.equal(mismatch.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(mismatch.combat.status,"UNMATCHED_DAMAGE_AND_WRECK");
+ const empty=summarize(combatFixture({loot:0}),{now,requireCombat:true});
+ assert.equal(empty.status,"AWAITING_NPC_COMBAT_LOOT");
+ assert.equal(empty.combat.status,"CORRELATED_DAMAGE_WITH_EMPTY_WRECK");
+});
