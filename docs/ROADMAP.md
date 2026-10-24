@@ -95,6 +95,16 @@ for exact code scope, independent tests, proof requirements and remaining
 work. Neither the P0 gate nor complete persistent faction warfare is
 claimed done by these code changes.
 
+**Co-op P0 native fleet warp hardening (code now in feature branch):**
+Added an opt-in guard to pinned EveJS `BeyonceService._warpFleetFollowers`
+that accepts only actual scene-ready physical peer ships in the same
+solar system and retains upstream commander hierarchy and opt-out.
+The party report distinguishes real native follower warp orders from
+verified arrivals. 10/10 guard + 3/3 report isolated tests passed,
+reversible source patch checked. **Two real clients have not yet
+verified shared warp or arrival.** See
+[COOP_FLEET_WARP](COOP_FLEET_WARP.md).
+
 ## P0 — establish trustworthy baseline
 
 ### COOP-001 — reproducible upstream inventory [TODO]
