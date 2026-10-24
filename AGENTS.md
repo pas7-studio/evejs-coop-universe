@@ -2,6 +2,37 @@
 
 Read `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/UPSTREAM.md`, and `docs/SETUP_WINDOWS.md` before any changes.
 
+## Primary goal for game-test agents (2026-10-25): prove gameplay, NOT scan dependencies
+
+**MANDATORY FIRST:** Read [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md)
+and use [docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md).
+When the owner requests to **verify the game, actual NPCs, client login, World
+or Party**, stop treating backend tests as gameplay acceptance.
+The owner's 2026-10-25 report already covered 72 local regression checks,
+27 upstream contracts, backend health, two raw TCP sockets and localhost
+ports at project commit `cc5ce83`. Its **first unresolved issue** is
+`BLOCKED_TELEMETRY`: no `/var/lib/evejs/coop-events.jsonl` in the running
+server. With headless boot enabled, the startup event should appear
+**before a client connects**. Run **read-only `-Action DiagnoseWorld`**
+and investigate the effective running overlay, startup hook and writable
+event file before any client inference.
+
+**DO NOT run npm audit, vulnerability scans, dependency upgrades, CI,
+market rebuild, repeated backend regressions or upstream fixture fixes**
+as substitutes for observing real game activity. The seven npm
+advisories are already recorded for a separate security task; maintain
+loopback-only bindings. A separately requested security review may
+revisit them, but no automatic workflow is authorized.
+
+Progress in order: running telemetry -> actual native NPC scene and
+movement (`World`) -> authorized EVE client login and visual NPC
+interaction -> two independent authenticated clients and shared world
+(`Party`). If the client cannot be used, report
+`BLOCKED_CLIENT_UNAVAILABLE` with the required human action; never
+manufacture evidence or repeat the audit. Preserve local uncommitted
+upstream test fixes and volumes. Earlier backend PASS is valid **only
+for the tested revision**, not later commits.
+
 ## CI prohibition — repository owner decision (2026-10-24)
 Do not add, restore, enable or run GitHub Actions workflows or any
 other remote CI automation. The entire `.github/workflows` directory
