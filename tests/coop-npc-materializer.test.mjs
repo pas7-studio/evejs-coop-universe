@@ -66,7 +66,7 @@ test("saved miner role alone never exempts a ship absent from a real EveJS fleet
   spawn:()=>{spawned++;return {success:true,data:{spawned:[{entity:{itemID:200}}]}}}});
  const noFleet=bridge.reconcile(30000142,[{id:"pirate",role:"pirate"}]);
  assert.equal(spawned,0);
- assert.deepEqual(noFleet,[]);
+ assert.equal(noFleet[0].error,"SPAWN_LIMIT_REACHED");
  const oneStockShip=bridge.reconcile(30000142,[{id:"pirate",role:"pirate"}],
   {exemptEntityIDs:[101]});
  assert.equal(spawned,1);
@@ -83,7 +83,7 @@ test("a co-op-spawned legacy miner with the same role is not exempt even with na
   spawn:()=>{throw Error("stale role must not grant extra spawn")}});
  const result=bridge.reconcile(30000142,[{id:"pirate",role:"pirate"}],
   {exemptEntityIDs:[999,888]});
- assert.deepEqual(result,[]);
+ assert.equal(result[0].error,"SPAWN_LIMIT_REACHED");
 });
 test("fallback co-op miner/hauler links still count toward spawn cap",()=>{
  const live=new Set([101,102]);
@@ -93,7 +93,8 @@ test("fallback co-op miner/hauler links still count toward spawn cap",()=>{
   get:()=>null};
  const bridge=createBridge({limit:2,registry,exists:(_s,id)=>live.has(id),
   spawn:()=>{throw Error("would wrongly exceed fallback limit")}});
- assert.deepEqual(bridge.reconcile(30000142,[{id:"pirate"}]),[]);
+ assert.equal(bridge.reconcile(30000142,[{id:"pirate"}])[0].error,
+  "SPAWN_LIMIT_REACHED");
 });
 
 
