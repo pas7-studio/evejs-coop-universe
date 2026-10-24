@@ -6,6 +6,15 @@ const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
+function safeNpcPhase(phase,run){
+ try{return run();}
+ catch(error){
+  console.warn("[CoopLivingWorld] "+phase,error.message);
+  try{require("./coopRuntimeProbe").observe("living-world-phase-failed",null,null,
+   {phase,reason:String(error.message).slice(0,160)});}catch(_ignored){}
+  return null;
+ }
+}
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
  const depot=require("./coopNativeDepot").getNativeDepot();
@@ -21,58 +30,59 @@ function start(){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
  const {createWorld}=require("./coopVirtualWorld");
- world=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
+ const nextWorld=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
    route,population:Number(process.env.EVEJS_COOP_VIRTUAL_POPULATION||16),
    travelMs:Number(process.env.EVEJS_COOP_VIRTUAL_TRAVEL_MS||120000),
    migrateFactions:process.env.EVEJS_COOP_FACTION_LAYOUT_V2==="1"});
  const {createLife}=require("./coopNpcLife");
- life=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
+ const nextLife=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
   recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
+ world=nextWorld;life=nextLife;
  // Headless bootstrap must resolve persisted native pilot links before
  // advancing virtual travel; otherwise a real parked ship can be
  // virtually transported to another system during process startup.
  if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1")world.advance();
  if(process.env.EVEJS_COOP_VIRTUAL_ECONOMY==="1"){
+  safeNpcPhase("economy-init",()=>{
    const {createEconomy}=require("./coopVirtualEconomy");
    economy=createEconomy({
-     file:process.env.EVEJS_COOP_ECONOMY_FILE||"/var/lib/evejs/coop-economy.json"
+    file:process.env.EVEJS_COOP_ECONOMY_FILE||"/var/lib/evejs/coop-economy.json"
    });
    economy.advance(world.snapshot().pilots);
-   syncNativeDeliveries();
+  });
+  safeNpcPhase("native-depot-init",syncNativeDeliveries);
+  if(economy)safeNpcPhase("faction-init",()=>{
    const {createFactionDirector}=require("./coopFactionDirector");
    factionDirector=createFactionDirector({
-     file:process.env.EVEJS_COOP_FACTION_FILE||"/var/lib/evejs/coop-factions.json"
+    file:process.env.EVEJS_COOP_FACTION_FILE||"/var/lib/evejs/coop-factions.json"
    });
    factionDirector.advance(economy.snapshot().systems);
+  });
  }
  timer=setInterval(()=>{
-   try {
-     // Physical NPC ships stay in their actual EveJS solar system.
-     const pins={};
-     if(bridge)for(const entry of bridge.snapshot())pins[entry.pilotID]=entry.systemID;
-     // Stock EveJS mining fleet hulls also have durable pilot identities.
-     if(identityRegistry)for(const [pilotID,entry] of Object.entries(identityRegistry.snapshot().links)){
-       if(!pins[pilotID]&&identityRegistry.get(pilotID))pins[pilotID]=entry.systemID;
-     }
-     if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||identityRegistry)
-       world.advance(pins);
-     if(economy)economy.advance(world.snapshot().pilots);
-   syncNativeDeliveries();
-     if(factionDirector)factionDirector.advance(economy.snapshot().systems);
-     advanceNativePatrolRoutes();
-     // Raids own their NPC movement while pursuing real cargo ships.
-     advanceNativeRaids();
-     advanceNativeTactics();
-     advanceNpcRecognition();
-     advanceNativeCivilianOrders();
-     observeNativeActivity();
-     // A recovered NPC returns to a living system without player re-login.
-     if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
-       for(const systemID of visitedSystems){
-         observeSession(null,{itemID:0,spaceState:{systemID}});
-       }
-     }
-   }catch(e){console.warn("[CoopVirtualWorld] tick",e.message);}
+  backgroundTicks++;
+  safeNpcPhase("virtual-travel",()=>{
+   // A real physical EveJS ship is pinned to its actual system.
+   const pins={};
+   if(bridge)for(const entry of bridge.snapshot())pins[entry.pilotID]=entry.systemID;
+   if(identityRegistry)for(const [pilotID,entry] of Object.entries(identityRegistry.snapshot().links)){
+    if(!pins[pilotID]&&identityRegistry.get(pilotID))pins[pilotID]=entry.systemID;
+   }
+   if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||identityRegistry)
+    world.advance(pins);
+  });
+  if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
+  safeNpcPhase("native-depot",syncNativeDeliveries);
+  if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
+  safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
+  safeNpcPhase("native-raids",advanceNativeRaids);
+  safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("npc-recognition",advanceNpcRecognition);
+  safeNpcPhase("native-civilians",advanceNativeCivilianOrders);
+  safeNpcPhase("native-activity",observeNativeActivity);
+  if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
+   for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
+    ()=>observeSession(null,{itemID:0,spaceState:{systemID}}));
  },30000);
  timer.unref?.();
  scheduleHeadlessWorldBoot(route);
