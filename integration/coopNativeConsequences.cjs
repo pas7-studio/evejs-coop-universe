@@ -88,18 +88,21 @@ function getNative(){
  }
  return singleton;
 }
+function resolveAuthenticatedPlayerID(scene,aggressor){
+ const shooterID=positive(aggressor?.itemID);
+ const session=Array.from(scene?.sessions?.values?.()||[]).find(session=>
+  positive(session?.characterID)&&
+  (positive(session?._space?.shipID)===shooterID||
+   (String(aggressor?.kind)==="drone"&&positive(aggressor?.ownerID)===positive(session.characterID))));
+ return positive(session?.characterID);
+}
 function noteMiningAggression(scene,fleet,aggressor,occurredAt){
  if(process.env.EVEJS_COOP_PLAYER_CONSEQUENCES!=="1")return {status:"DISABLED"};
  try{
   const resolved=require("../services/mining/miningNpcStandings");
   // NPCs may carry synthetic pilotCharacterIDs. Only a verifiable player
   // session (or their owned drone) may receive a real standing penalty.
-  const shooterID=positive(aggressor?.itemID);
-  const session=Array.from(scene?.sessions?.values?.()||[]).find(session=>
-   positive(session?.characterID)&&
-   (positive(session?._space?.shipID)===shooterID||
-    (String(aggressor?.kind)==="drone"&&positive(aggressor?.ownerID)===positive(session.characterID))));
-  const characterID=positive(session?.characterID);
+  const characterID=resolveAuthenticatedPlayerID(scene,aggressor);
   if(!characterID)return {status:"IGNORED_NONPLAYER"};
   const victim=(fleet.minerEntityIDs||[]).concat(fleet.haulerEntityIDs||[])
    .map(id=>scene?.getEntityByID(id)).find(Boolean);
@@ -153,4 +156,4 @@ function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null)
   return outcome;
  }catch(error){console.warn("[CoopConsequences] Native NPC wreck",error.message);return {status:"ERROR"};}
 }
-module.exports={createConsequences,noteMiningAggression,noteNativeWreck};
+module.exports={createConsequences,resolveAuthenticatedPlayerID,noteMiningAggression,noteNativeWreck};
