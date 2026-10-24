@@ -958,7 +958,8 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
   const fs=require("node:fs");
   const linksFile=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   let registry;
-  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}catch(error){if(error.code==="ENOENT")return;throw error;}
+  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}
+  catch(error){if(error.code==="ENOENT")registry={links:{}};else throw error;}
   const link=Object.values(registry?.links||{}).find(x=>
    Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
   // Stock miners have no co-op pilot link. Verify an actual upstream
