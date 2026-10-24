@@ -3,18 +3,28 @@
 // Never grants items or changes source inventory. A successful grant is NOT
 // enough: verify the physical wreck, authenticated looter, and source debit.
 const positive=n=>Number.isSafeInteger(Number(n))&&Number(n)>0?Number(n):null;
-function verify({scene,wreck,characterID,wreckItemID,sourceBefore,sourceAfter,
+function verify({scene,wreck,characterID,wreckItemID,destinationLocationID,sourceBefore,sourceAfter,
  availableQuantity,requestedQuantity,grantResult}={}){
  const systemID=positive(scene?.systemID),wreckID=positive(wreck?.wreckID);
- const character=positive(characterID),item=positive(wreckItemID);
+ const character=positive(characterID),item=positive(wreckItemID),destination=positive(destinationLocationID);
  const available=positive(availableQuantity),taken=positive(requestedQuantity);
- if(!systemID||!wreckID||!character||!item||!available||!taken||
+ if(!systemID||!wreckID||!character||!item||!destination||!available||!taken||
   taken>available||Number(wreck?.systemID)!==systemID||
   !sourceBefore||Number(sourceBefore.wreckItemID)!==item||
-  Number(sourceBefore.wreckID)!==wreckID||
+  Number(sourceBefore.wreckID)!==wreckID||!positive(sourceBefore.typeID)||
   typeof scene?.getEntityByID!=="function")
   return {status:"INVALID_LOOT_WITNESS"};
  if(grantResult?.success!==true)return {status:"NATIVE_GRANT_NOT_CONFIRMED"};
+ // Pinned EveJS itemStore returns success only after writeItems() and
+ // includes native inventory changes. Verify destination ownership and
+ // item type; a successful RPC flag alone is not transfer proof.
+ if(Number(grantResult?.data?.quantity)!==taken||
+  !Array.isArray(grantResult?.data?.changes)||
+  !grantResult.data.changes.some(change=>
+   Number(change?.item?.ownerID)===character&&
+   Number(change?.item?.locationID)===destination&&
+   Number(change?.item?.typeID)===Number(sourceBefore.typeID)))
+  return {status:"NATIVE_GRANT_DESTINATION_UNVERIFIED"};
  const nativeWreck=scene.getEntityByID(wreckID);
  if(nativeWreck?.nativeNpcWreck!==true||
   Number(nativeWreck.itemID)!==wreckID||
@@ -39,6 +49,7 @@ function verify({scene,wreck,characterID,wreckItemID,sourceBefore,sourceAfter,
   status:"VERIFIED_NATIVE_LOOT_PICKUP",systemID,wreckID,
   sourceEntityID:positive(wreck.sourceEntityID),
   characterID:character,shipID:Number(matching[0]._space.shipID),
+  destinationLocationID:destination,
   clientID:positive(matching[0].clientID),
   wreckItemID:item,typeID:positive(sourceBefore.typeID),
   quantity:taken,remainingQuantity:expected,
