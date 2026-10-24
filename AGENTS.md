@@ -115,6 +115,22 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
+## Current headless recovery rule
+
+A real EveJS scene with confirmed static topology is now tracked in
+`visitedSystems` even when `actualNamedNpcShips=0`. The periodic
+materialization/reconciliation phase must be allowed to retry native
+spawn without a logged-in human. **Never** call a tracked scene
+"successful gameplay" or create synthetic activity events.
+`coopHeadlessScenePolicy.cjs` reports if the startup fleet config
+really includes the chosen system and if actual belts exist.
+If Perimeter remains without a fleet, use
+`systemSiteReadiness.stockMiningStartup.status` and the precise
+`nativeMaterializerAttempt.spawnErrors` to fix the real first
+blocker. Do not run npm audit, reset Docker volumes or claim a
+backend-only pass proves NPC gameplay. Six policy unit tests plus
+World regression scenarios are included in the manual suite.
+
 ## Current code changes — real visible and stable named NPCs
 
 Use the current `coopNpcPresentation`, `coopNpcMaterializer` and
