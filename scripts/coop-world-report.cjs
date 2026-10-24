@@ -28,6 +28,8 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
  const siteReadiness=[...rows].reverse().find(e=>e.event==="living-native-system-site-readiness"&&
   positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
+ const presentationPending=[...rows].reverse().find(e=>e.event==="living-native-presentation-pending"&&
+  positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const spawnAttempt=[...rows].reverse().find(e=>e.event==="living-native-materialization-attempt"&&
   positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
  const availableMiningSystems=[...new Map(rows.filter(e=>e.event==="living-world-topology"&&
@@ -189,7 +191,10 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    status="NO_NATIVE_MINING_FLEET";
   }else if(!materialization||!Object.values(roles).some(n=>n>0)){
    const details=spawnAttempt?.spawnErrors?.length?
-    " Native spawn failures: "+spawnAttempt.spawnErrors.map(x=>x.pilotID+":"+x.error).join("; "):
+    " Native spawn failures: "+spawnAttempt.spawnErrors.map(x=>
+     x.pilotID+":"+x.error+(x.nativeReason?" ("+x.nativeReason+")":"")+
+     (x.error==="SPAWN_LIMIT_REACHED"?" ["+x.occupied+"/"+x.limit+"]":"")
+    ).join("; "):
     spawnAttempt?" Native pilot attempts: residents="+spawnAttempt.residents+
      " eligible="+spawnAttempt.eligibleResidents+
      " candidateSpawns="+spawnAttempt.requestedSpawns+
@@ -238,6 +243,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   systemSiteReadiness:siteReadiness?{
    status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
    realAsteroidBelts:siteReadiness.realAsteroidBelts}:null,
+  nativePresentationPending:presentationPending?.unresolved||[],
   nativeMaterializerAttempt:spawnAttempt?{
    residents:spawnAttempt.residents,eligibleResidents:spawnAttempt.eligibleResidents,
    requestedSpawns:spawnAttempt.requestedSpawns,
