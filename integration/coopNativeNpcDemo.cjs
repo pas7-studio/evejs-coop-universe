@@ -11,7 +11,7 @@ function maybeSpawn(session,ship) {
   const allowedSystem=positive(process.env.EVEJS_COOP_NATIVE_NPC_SYSTEM_ID);
   if(!systemID||!allowedSystem||systemID!==allowedSystem)return;
   if(!ship||!positive(ship.itemID))return;
-  if(!persistent){if(seenSystems.has(systemID))return;seenSystems.add(systemID);}
+  if(!persistent&&seenSystems.has(systemID))return;
   setImmediate(()=>{
     try {
       // Defer until after the ship's login transition. A failed spawn remains
@@ -20,8 +20,37 @@ function maybeSpawn(session,ship) {
       const amount=Number(process.env.EVEJS_COOP_NATIVE_NPC_COUNT||1);
       if(!Number.isInteger(amount)||amount<1||amount>3)throw Error("NPC_COUNT must be 1..3");
       const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
-      const anchor=require("./coopNpcTopology").anchorOptions(scene);
+      let anchor=require("./coopNpcTopology").anchorOptions(scene);
+      const partyMode=process.env.EVEJS_COOP_REQUIRE_TWO_PILOTS==="1";
+      if(partyMode){
+        const pilots=Array.from(scene?.sessions?.values?.()||[])
+          .filter(x=>x?.characterID&&x?._space?.shipID)
+          .map(x=>({characterID:positive(x.characterID),entity:scene.getEntityByID(positive(x._space.shipID))}))
+          .filter(x=>x.characterID&&x.entity?.position);
+        const unique=[...new Map(pilots.map(x=>[x.characterID,x])).values()];
+        const maxDistance=Number(process.env.EVEJS_COOP_PARTY_RANGE_METERS||250000);
+        let pair=null;
+        for(let i=0;i<unique.length&&!pair;i++){
+          for(let j=i+1;j<unique.length;j++){
+            const a=unique[i].entity.position,b=unique[j].entity.position;
+            const distance=Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+            if(Number.isFinite(distance)&&distance<=maxDistance){pair=[unique[i],unique[j]];break;}
+          }
+        }
+        if(!pair){
+          require("./coopRuntimeProbe").observe("coop-encounter-waiting",session,ship,{
+            reason:"NEED_TWO_PILOTS_SAME_GRID",observerCount:unique.length
+          });
+          return;
+        }
+        // A real ship entity anchors the NPC in the same local combat area.
+        anchor={anchorEntity:pair[0].entity};
+      }
       if(!anchor){console.warn("[CoopNpcDemo] no native scene anchor in",systemID);return;}
+      if(!persistent){
+        if(seenSystems.has(systemID))return;
+        seenSystems.add(systemID);
+      }
       const spawnNative=id=>npcRuntime.spawnBatchInSystem(id,{
         ...anchor,
         amount,entityType:"npc",transient:true,broadcast:true,
