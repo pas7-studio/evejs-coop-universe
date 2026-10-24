@@ -3,7 +3,7 @@
 // scene. A mapping is process-local: native EveJS remains authoritative.
 
 function ids(entries){return (Array.isArray(entries)?entries:[]).map(x=>Number(x?.entity?.itemID)).filter(x=>Number.isSafeInteger(x)&&x>0);}
-function createBridge({spawn,exists,limit=3}){
+function createBridge({spawn,exists,limit=3,registry=null}){
  if(typeof spawn!=="function"||typeof exists!=="function")throw Error("native spawn and exists required");
  if(!Number.isInteger(limit)||limit<1||limit>10)throw Error("materialization limit 1..10");
  const assignments=new Map();
@@ -11,20 +11,23 @@ function createBridge({spawn,exists,limit=3}){
   const current=new Set((pilots||[]).map(p=>p.id));
   // Do not delete native NPCs when virtual travel changes: they may be in
   // combat or observed. Merely release dead mappings.
+  registry?.prune();
   for(const [id,entry] of assignments){
     if(!exists(entry.systemID,entry.entityID))assignments.delete(id);
   }
   const results=[];
-  let occupied=Array.from(assignments.values()).filter(x=>x.systemID===systemID).length;
+  const stored=registry?Object.values(registry.snapshot().links).filter(x=>x.systemID===systemID&&exists(x.systemID,x.entityID)):[];
+  let occupied=new Set([...Array.from(assignments.values()).filter(x=>x.systemID===systemID).map(x=>x.entityID),...stored.map(x=>x.entityID)]).size;
   for(const pilot of pilots||[]){
     if(occupied>=limit)break;
     if(!pilot?.id||!current.has(pilot.id))continue;
-    const prior=assignments.get(pilot.id);
+    const prior=assignments.get(pilot.id)||registry?.get(pilot.id);
     if(prior&&exists(prior.systemID,prior.entityID)){results.push({pilotID:pilot.id,entityID:prior.entityID,reused:true});continue;}
     const result=spawn(systemID,pilot);
     const entityID=ids(result?.data?.spawned)[0];
     if(result?.success!==true||!entityID){results.push({pilotID:pilot.id,error:String(result?.errorMsg||"SPAWN_FAILED")});continue;}
     assignments.set(pilot.id,{systemID,entityID});
+    registry?.link(pilot,systemID,entityID);
     occupied++;
     results.push({pilotID:pilot.id,entityID,reused:false});
   }
