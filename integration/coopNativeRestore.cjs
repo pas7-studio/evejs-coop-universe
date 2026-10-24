@@ -29,7 +29,12 @@ function restoreNamedShips({registry,store,service,sceneForSystem,maxLinks=100}=
   const entity=store.getNativeEntity(id),controller=store.getNativeController(id);
   // A link created before durable-mode activation references a transient
   // EveJS ship that was never saved. Leave normal stale-link recovery alone.
-  if(!entity&&!controller){stats.legacyTransient++;continue}
+  if(!entity&&!controller){
+   if(link.durable===true)stats.errors.push({pilotID,entityID:id,
+    reason:"DURABLE_NATIVE_RECORD_MISSING"});
+   else stats.legacyTransient++;
+   continue;
+  }
   if(!entity||!controller){
    stats.errors.push({pilotID,entityID:id,reason:"PARTIAL_NATIVE_RECORD"});
    continue;
