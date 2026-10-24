@@ -95,3 +95,59 @@ test("fallback co-op miner/hauler links still count toward spawn cap",()=>{
   spawn:()=>{throw Error("would wrongly exceed fallback limit")}});
  assert.deepEqual(bridge.reconcile(30000142,[{id:"pirate"}]),[]);
 });
+
+
+test("native NPC capacity explicitly explains which pilots are awaiting an actual spawn",()=>{
+ const live=new Set([101,102]);
+ const b=createBridge({limit:2,registry:{
+  prune:()=>0,
+  snapshot:()=>({links:{
+   a:{pilotID:"a",entityID:101,systemID:30000142,role:"pirate"},
+   b:{pilotID:"b",entityID:102,systemID:30000142,role:"patrol"}
+  }}),
+  get:()=>null
+ },exists:(_s,id)=>live.has(id),spawn:()=>{throw Error("must not spawn beyond cap")}});
+ const r=b.reconcile(30000142,[{id:"coop-pilot-010",role:"trader"}]);
+ assert.equal(r[0].error,"SPAWN_LIMIT_REACHED");
+ assert.equal(r[0].occupied,2);
+ assert.equal(r[0].limit,2);
+});
+test("native EveJS spawn throwing cannot abort all subsequent NPC attempts",()=>{
+ let attempts=0;const live=new Set();
+ const b=createBridge({limit:2,exists:(_s,id)=>live.has(id),spawn:()=>{
+  attempts++;
+  if(attempts===1)throw Error("NATIVE_UNAVAILABLE");
+  live.add(200);return {success:true,data:{spawned:[{entity:{itemID:200}}]}};
+ }});
+ const r=b.reconcile(30000144,[
+  {id:"coop-pilot-003"},{id:"coop-pilot-004"}]);
+ assert.equal(r[0].error,"NATIVE_SPAWN_THROW");
+ assert.equal(r[0].nativeReason,"NATIVE_UNAVAILABLE");
+ assert.equal(r[1].entityID,200);
+ assert.equal(b.snapshot().length,1);
+});
+test("failed durable NPC identity write never triggers a duplicate physical spawn",()=>{
+ const live=new Set(),links={},pilot={id:"coop-pilot-005",role:"pirate"};
+ let fail=true,spawns=0;
+ const registry={prune:()=>0,snapshot:()=>({links}),
+  get:id=>links[id]||null,
+  link:(p,systemID,id)=>{
+   if(fail)throw Error("READ_ONLY_VOLUME");
+   return links[p.id]={pilotID:p.id,systemID,entityID:id,role:p.role};
+  }};
+ const b=createBridge({limit:2,registry,exists:(_s,id)=>live.has(id),
+  spawn:()=>{spawns++;live.add(5001);return {success:true,data:{spawned:[{entity:{itemID:5001}}]}}}
+ });
+ const first=b.reconcile(30000144,[pilot]);
+ assert.equal(first[0].error,"IDENTITY_LINK_FAILED");
+ assert.equal(first[0].provisionalEntityID,5001);
+ assert.equal(spawns,1);
+ assert.equal(b.reconcile(30000144,[pilot])[0].error,"IDENTITY_LINK_FAILED");
+ assert.equal(spawns,1);
+ fail=false;
+ const recovery=b.reconcile(30000144,[pilot]);
+ assert.equal(recovery[0].entityID,5001);
+ assert.equal(recovery[0].reused,true);
+ assert.equal(links[pilot.id].entityID,5001);
+ assert.equal(spawns,1);
+});
