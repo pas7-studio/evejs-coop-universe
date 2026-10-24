@@ -9,7 +9,7 @@
 - After the real ship physically arrives within **2,500 m of the stargate surface** (using actual scene radii; missing radii default to zero conservatively), the state is `AT_REAL_GATE`. This **is not a jump**.
 - `coopNativeGateTransfer.cjs` is a separate optional native transfer, preserving **the exact same entityID**. It uses native `dematerializeNativeController` (which saves the existing ship and controller state) and native `materializeStoredNativeController` in the destination scene. It changes only native entity/controller system, movement and gate anchor; modules and cargo remain attached to the same entity ID.
 - The original shield/armor/structure condition data are preserved. Native store module/cargo signatures, source absence, destination presence, exact ID and matching persisted records are checked before the named pilot's durable registry is relocated. No clone, fake warp, invented cargo or session spoofing.
-- A synchronous per-pilot JSON journal is written before the move, with checkpoints and a compensating rollback on failure. On startup, incomplete journals can be recovered to the original system if possible. A corrupt/inconsistent journal fails closed as `NEEDS_OPERATOR_REPAIR`.
+- A synchronous per-pilot JSON journal is written before the move, including the original entity, controller, **fitted module records, cargo item IDs and quantities**. Rollback restores those exact records even if transient native-store rows vanish. On startup, recovery runs **before** identity pruning and can restore the ship to its source system. A corrupt/inconsistent journal fails closed as `NEEDS_OPERATOR_REPAIR`.
 
 **Crash safety limit:** the upstream native store is not a transactional cross-system migration API; this module uses compensating writes. There may be uncommon power-loss windows or runtime state unsupported by the upstream persistence mechanism that require operator repair. Keep the transfer flag off until QA demonstrates a real round trip with cargo, modules, damage state, observers and a forced crash mid-transaction.
 
@@ -24,7 +24,7 @@ To try **approach only**, enable `EVEJS_COOP_NATIVE_GATE_APPROACH=1` while leavi
 
 The persistent journal directory defaults to `/var/lib/evejs/coop-native-transfers`. If recovery returns `NEEDS_OPERATOR_REPAIR`, the runtime does not attempt more transfers. Back up this directory and the native EveJS persistence store together before any manual repair. Do **not** simply remove a journal when a ship is missing.
 
-Native evidence event: `living-native-gate-approach`. `NATIVE_WARP_TO_REAL_GATE` proves an accepted native warp request, not arrival; `AT_REAL_GATE` proves same-scene gate proximity; `VERIFIED_NATIVE_GATE_TRANSFER` requires actual destination scene and original ship identity verification. Manual inspection of two clients is still needed to prove rendering and player visibility.
+Native evidence events: `living-native-gate-approach` for a real warp request or physical proximity, and `living-native-gate-transfer` only after verified same-ID destination materialization. A successful transfer immediately adds the destination to the active native NPC simulation.\n\nNative evidence event: `living-native-gate-approach`. `NATIVE_WARP_TO_REAL_GATE` proves an accepted native warp request, not arrival; `AT_REAL_GATE` proves same-scene gate proximity; `VERIFIED_NATIVE_GATE_TRANSFER` requires actual destination scene and original ship identity verification. Manual inspection of two clients is still needed to prove rendering and player visibility.
 
 ## Local, manual verification
 
@@ -43,7 +43,7 @@ Acceptance on a real server:
 
 ### Tests completed in isolation
 
-- Seven gate-route/unit scenarios and five native transfer/rollback unit scenarios passed in the local JavaScript harness (not a real EveJS container).
+- **Nine** real-gate route/unit scenarios and **ten** native transfer/rollback/recovery scenarios passed in an isolated JavaScript harness; **four** native identity-registry tests passed separately. This does not verify a real EveJS container.
 - Existing physical NPC and economy tests are separate; neither these tests nor an accepted warp request certify live-client stargate behavior.
 
 Owner policy: **no GitHub Actions/CI; no merge to main without owner authorization**.
