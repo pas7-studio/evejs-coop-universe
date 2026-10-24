@@ -94,7 +94,7 @@ jobs:
         run: |
           mkdir -p evidence
           set -o pipefail
-          node --test ./tests/upstream-session-registry.test.mjs ./tests/upstream-two-observers.test.mjs ./tests/upstream-ship-prime-recipients.test.mjs ./tests/upstream-two-observer-warp.test.mjs ./tests/upstream-two-pilot-lifecycle.test.mjs ./tests/upstream-two-pilot-movement-and-reconnect.test.mjs 2>&1 | tee evidence/upstream-session-and-scene.log
+          node --test ./tests/upstream-session-registry.test.mjs ./tests/upstream-two-observers.test.mjs ./tests/upstream-ship-prime-recipients.test.mjs ./tests/upstream-two-observer-warp.test.mjs ./tests/upstream-two-pilot-lifecycle.test.mjs ./tests/upstream-two-pilot-movement-and-reconnect.test.mjs ./tests/upstream-coop-scene-audit.test.mjs 2>&1 | tee evidence/upstream-session-and-scene.log
 
       - name: Run upstream scene observer and movement parity checks
         env:
