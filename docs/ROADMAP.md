@@ -29,8 +29,8 @@ mining ore growth, moving fleet or client gameplay has yet passed.**
 Use `World -WorldSystemID 30000144` on the updated overlay. Do not
 repeat npm audit or previous backend checks to replace this result.
 
-**Current manual verification gate: first recover missing headless
-telemetry, then verify physical NPC activity.** Start with
+**Current manual verification gate: headless telemetry is confirmed;
+verify Perimeter physical NPC mining/activity and named entity links.** Start with
 [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md), **not** backend regressions,
 network source audits or npm scans. The owner's 2026-10-25 report on
 `cc5ce83` established 72 local / 27 upstream backend checks and healthy
@@ -152,7 +152,7 @@ Enforce trusted peer/device policies and explicit game-service allowlist, safe T
 ### COOP-020 — two-player gameplay matrix [BLOCKED: COOP-013]
 Tests: join, Local/Overview, undock, warp, dock, fleet, chat, PvE, trade, disconnect/reconnect, restart. **DoD:** per-feature PASS/FAIL supported by logs/replays, blockers converted into focused tasks.
 
-### COOP-021 — Living Universe behavioral audit [BLOCKED_TELEMETRY; not blocked by X-Eve compatibility]
+### COOP-021 — Living Universe behavioral audit [BLOCKED_PHYSICAL_WORLD; headless telemetry PASS on a087167]
 Verify pilots, persistence, observed NPC ships, combat, mining, freight, real inventory/market stock, faction effects. **DoD:** assertions based on actual persistent world effects, not UI-only counts.
 
 ### COOP-022 — NPC fleet/corp co-op design [BLOCKED: COOP-020, COOP-021]
