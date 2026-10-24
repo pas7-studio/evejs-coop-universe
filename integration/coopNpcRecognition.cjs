@@ -35,7 +35,9 @@ function createRecognition({lookup,send,clock=()=>Date.now(),
    const npc=scene.getEntityByID(Number(link.entityID));
    if(!npc||npc.kind!=="ship"||!position(npc.position)||
       distance(npc.position,playerShip.position)>radiusMeters)continue;
-   const remembered=lookup({pilotID:link.pilotID,characterID});
+   let remembered;
+   try{remembered=lookup({pilotID:link.pilotID,characterID});}
+   catch(error){console.warn("[CoopNpcRecognition] memory unavailable",error.message);continue;}
    if(remembered?.status!=="KNOWN"||!Number.isFinite(remembered.score))continue;
    const key=systemID+":"+link.pilotID+":"+characterID;
    if(notices.has(key)&&now-notices.get(key)<cooldownMs)continue;
