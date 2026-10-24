@@ -5,6 +5,7 @@ param(
   [string]$EvidenceRoot = '',
   [switch]$StartBackend,
   [switch]$IncludeUpstreamTests,
+  [switch]$RequireLivingUniverse,
   [int]$HealthTimeoutSeconds = 360,
   [switch]$AllowUnpinnedUpstream
 )
@@ -42,11 +43,20 @@ function Invoke-Recorded([string]$Name, [string]$Exe, [string[]]$Arguments, [str
     return $false
   }
 }
+function Compose-Args {
+  $result=@('--project-directory',$CodePath,'-f',(Join-Path $CodePath 'compose.yaml'))
+  $overlay=Join-Path $CodePath 'compose.coop-probe.yaml'
+  if (Test-Path -LiteralPath $overlay -PathType Leaf) {
+    $result+=@('-f',$overlay)
+  }
+  return ,$result
+}
 function Save-Diagnostics {
   if (-not (Test-Path -LiteralPath (Join-Path $CodePath 'compose.yaml'))) { return }
   try {
-    & docker compose --project-directory $CodePath -f (Join-Path $CodePath 'compose.yaml') ps --all *> (Join-Path $runDir 'compose-ps.txt')
-    & docker compose --project-directory $CodePath -f (Join-Path $CodePath 'compose.yaml') logs --no-color --tail 400 init market server *> (Join-Path $runDir 'compose.log')
+    $composeArgs=Compose-Args
+    & docker compose @composeArgs ps --all *> (Join-Path $runDir 'compose-ps.txt')
+    & docker compose @composeArgs logs --no-color --tail 400 init market server *> (Join-Path $runDir 'compose.log')
   } catch {
     Record 'Docker diagnostics' 'WARNING' $_.Exception.Message
   }
@@ -79,8 +89,14 @@ try {
   $safe = Invoke-Recorded 'Compose safety' $powershell @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'Test-ComposeSafety.ps1'),'-CodePath',$CodePath) 'compose-safety.log' -RecordFailure
   $regressions = Invoke-Recorded 'Client-free regression tests' $node @('--test',(Join-Path $projectRoot 'tests/smoke-two-tcp.test.mjs'),(Join-Path $projectRoot 'tests/coop-scene-audit.test.mjs'),(Join-Path $projectRoot 'tests/coop-reconnect-guard.test.mjs'),(Join-Path $projectRoot 'tests/coop-lifecycle-audit.test.mjs'),(Join-Path $projectRoot 'tests/coop-encounter-director.test.mjs'),(Join-Path $projectRoot 'tests/coop-combat-probe.test.mjs'),(Join-Path $projectRoot 'tests/coop-virtual-world.test.mjs'),(Join-Path $projectRoot 'tests/coop-npc-materializer.test.mjs'),(Join-Path $projectRoot 'tests/coop-identity-registry.test.mjs'),(Join-Path $projectRoot 'tests/coop-virtual-economy.test.mjs'),(Join-Path $projectRoot 'tests/coop-faction-director.test.mjs'),(Join-Path $projectRoot 'tests/coop-faction-patrol.test.mjs'),(Join-Path $projectRoot 'tests/coop-patrol-orders.test.mjs'),(Join-Path $projectRoot 'tests/coop-npc-life.test.mjs'),(Join-Path $projectRoot 'tests/coop-native-industry.test.mjs'),(Join-Path $projectRoot 'tests/coop-native-consequences.test.mjs'),(Join-Path $projectRoot 'tests/coop-living-session.test.mjs'),(Join-Path $projectRoot 'tests/coop-native-depot.test.mjs')) 'backend-regressions.log' -RecordFailure
   $started = $true
-  if ($StartBackend -and $safe -and $regressions) {
-    $started = Invoke-Recorded 'Docker Compose up' $docker @('compose','--project-directory',$CodePath,'-f',(Join-Path $CodePath 'compose.yaml'),'up','--detach') 'compose-up.log' -RecordFailure
+  $overlayPath=Join-Path $CodePath 'compose.coop-probe.yaml'
+  if ($RequireLivingUniverse -and -not (Test-Path -LiteralPath $overlayPath -PathType Leaf)) {
+    Record 'Living Universe configuration' 'FAIL' "Missing $overlayPath. Run -Action CoopStart first."
+    $started = $false
+  }
+  if ($StartBackend -and $safe -and $regressions -and $started) {
+    $composeArgs=Compose-Args
+    $started = Invoke-Recorded 'Docker Compose up' $docker (@('compose') + $composeArgs + @('up','--detach')) 'compose-up.log' -RecordFailure
   }
   if (-not $safe -or -not $regressions -or -not $started) {
     Record 'Backend health and transport' 'BLOCKED' 'Safety, regression, or startup gate failed'
@@ -97,6 +113,15 @@ try {
     } while ((Get-Date) -lt $deadline)
     if ($healthy) {
       Record 'Backend health' 'PASS' "healthy after $attempt attempt(s)"
+      if ($RequireLivingUniverse) {
+        # Inspect the effective running server, not just a local overlay file.
+        # This verifies active flags, NOT that in-game NPCs actually move.
+        $check='test "$EVEJS_COOP_VIRTUAL_WORLD" = "1" && test "$EVEJS_COOP_NATIVE_MINING" = "1" && test "$EVEJS_COOP_NPC_RAIDS" = "1" && test "$EVEJS_COOP_LOCAL_INTEL" = "1"'
+        $composeArgs=Compose-Args
+        $null=Invoke-Recorded 'Living Universe runtime flags' $docker (@('compose') + $composeArgs + @('exec','-T','server','sh','-c',$check)) 'living-runtime-flags.log' -RecordFailure
+      } else {
+        Record 'Living Universe runtime flags' 'WARNING' 'Not requested; healthy base EveJS and TCP reconnect do not prove native NPC gameplay'
+      }
       $null = Invoke-Recorded 'Real EveJS dual TCP sockets' $node @((Join-Path $PSScriptRoot 'smoke-two-tcp.mjs')) 'real-transport.log' -RecordFailure
     } else {
       Record 'Backend health' 'FAIL' "Timed out after $attempt attempts; see health-attempt-*.log"
@@ -108,9 +133,8 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $CodePath 'server/node_modules'))) {
       Record 'EveJS scene contracts' 'BLOCKED' 'Run npm ci in the EveJS Code/server folder'
     } else {
-      $env:EVEJS_CODE_PATH = $CodePath
-      $env:EVEJS_SKIP_NPC_STARTUP = '1'
-      $env:EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE = '1'
+      # Each suite must have its own attested temporary gameStore.
+      # Shared node --test execution can fail or touch protected live data.
       $testFiles = @(
         'upstream-session-registry.test.mjs',
         'upstream-two-observers.test.mjs',
@@ -124,7 +148,8 @@ try {
         'upstream-logoff-persistence.test.mjs',
         'upstream-restore-space-contract.test.mjs'
       ) | ForEach-Object { Join-Path (Join-Path $projectRoot 'tests') $_ }
-      $null = Invoke-Recorded 'EveJS scene contracts' $node (@('--test') + $testFiles) 'upstream-contracts.log' -RecordFailure
+      $runner=Join-Path $PSScriptRoot 'Run-Isolated-Upstream-Tests.cjs'
+      $null = Invoke-Recorded 'EveJS scene contracts (isolated)' $node (@($runner,'--code-path',$CodePath,'--') + $testFiles) 'upstream-contracts.log' -RecordFailure
     }
   }
 } catch {
@@ -134,7 +159,7 @@ try {
   $failureCount = @($results | Where-Object { $_.status -in @('FAIL','BLOCKED') }).Count
   $report = [ordered]@{
     createdAt = (Get-Date).ToString('o')
-    scope = 'Client-free backend checks; not proof of real player login or NPC gameplay'
+    scope = 'Client-free backend checks, optional isolated upstream contracts and optional Living Universe flags; not proof of actual game-client login or NPC gameplay'
     status = $(if ($failureCount -gt 0) { 'FAIL' } else { 'PASS' })
     evidenceDirectory = $runDir
     results = @($results.ToArray())
