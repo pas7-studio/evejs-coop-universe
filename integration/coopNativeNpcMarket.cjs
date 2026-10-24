@@ -155,7 +155,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
     x.source==="seed"&&Number(x.station_id)===pre.stationID&&
     Number(x.type_id)===pre.typeID&&
     Number(x.vol_remaining)>=1&&Number(x.price)>0&&
-    Number(x.price)<=maxPrice&&/^\\d+$/.test(String(x.order_id||"")));
+    Number(x.price)<=maxPrice&&/^[0-9]+$/.test(String(x.order_id||"")));
    if(!row)return status("NO_SEEDED_COUNTERPARTY");
    const price=amount(row.price),maxOrder=Math.min(maxQuantity,Number(row.vol_remaining));
    if(price===null||price<=0||maxOrder<1)return status("INVALID_SEEDED_ORDER");
