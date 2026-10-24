@@ -15,7 +15,7 @@ function fakeCargo(){
  };
 }
 test("native mining ship and actual cargo are reused for a named durable pilot",()=>{
- const scene={getEntityByID:id=>id===101?{itemID:id,kind:"ship"}:id===201?{itemID:id,kind:"ship"}:null};
+ const scene={getEntityByID:id=>id===101?{itemID:id,kind:"ship",nativeNpc:true}:id===201?{itemID:id,kind:"ship",nativeNpc:true}:null};
  const linked=[];
  const state=observe({
   systemID:30000142,scene,pilots:[{id:"coop-pilot-001",role:"miner"},{id:"coop-pilot-002",role:"hauler"}],
@@ -87,4 +87,24 @@ test("real NPC raid informs only local ready pilots using existing server chat",
  assert.equal(result.sent,1);
  assert.equal(seen[0][0],1);
  assert.match(seen[0][1],/ore transport/);
+});
+
+test("native mining identity never binds to static entity or another player ship",()=>{
+ const actual={itemID:101,kind:"ship",nativeNpc:true};
+ const scene={getEntityByID:id=>id===101?actual:
+  id===102?{itemID:102,kind:"ship",nativeNpc:false}:
+  id===103?{itemID:103,kind:"asteroidBelt",nativeNpc:true}:null};
+ const links=[];
+ const outcome=observe({systemID:30000144,scene,pilots:[
+  {id:"coop-pilot-001",role:"miner"},
+  {id:"coop-pilot-002",role:"hauler"}
+ ],registry:{get:()=>null,link:(p,systemID,id)=>{
+  links.push(id);return {entityID:id};
+ }},getFleets:()=>[{systemID:30000144,fleetID:99,
+  minerEntityIDs:[101,102],haulerEntityIDs:[103]}],
+ getCargo:()=>[],present:()=>({status:"UPDATED"})});
+ assert.deepEqual(links,[101]);
+ assert.deepEqual(outcome.fleets[0].minerIDs,[101]);
+ assert.deepEqual(outcome.fleets[0].haulerIDs,[]);
+ assert.equal(outcome.assignments.length,1);
 });
