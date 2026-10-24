@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -74,9 +74,10 @@ function start(){
   if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
   safeNpcPhase("native-depot",syncNativeDeliveries);
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
-  safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
+  safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
   safeNpcPhase("native-civilians",advanceNativeCivilianOrders);
   safeNpcPhase("native-activity",observeNativeActivity);
@@ -185,10 +186,46 @@ function ensurePatrolNavigator(runtime,npc){
   orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
  });
 }
+function advanceNativeGateApproach(){
+ if(process.env.EVEJS_COOP_NATIVE_GATE_APPROACH!=="1"||
+  !bridge||!identityRegistry||!world||!visitedSystems.size)return;
+ const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"")
+  .split(",").map(Number).filter(id=>Number.isSafeInteger(id)&&id>0);
+ if(route.length<2)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
+ const worldData=require("./worldData"),controllers=require("./npc/npcRegistry");
+ if(!gateTravelDirector){
+  gateTravelDirector=require("./coopNpcGateTravel").createGateTravel({
+   warp:(entityID,gateID,options)=>npc.warpToEntity(entityID,gateID,options),
+   getGate:id=>worldData.getStargateByID(id)
+   // No transfer adapter: native ship movement between systems is not
+   // authorized until safe persistent ship+inventory migration exists.
+  });
+ }
+ const roles=economy?.snapshot().pilots||{};
+ const links=bridge.snapshot().filter(a=>a?.pilotID&&a.entityID);
+ const blockedIDs=tacticsDirector?.activeIDs()||new Set();
+ if(raidDirector)for(const id of raidDirector.activePirateIDs(system=>
+  runtime.ensureScene(system,{refreshStargates:false})))blockedIDs.add(id);
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const assignments=links.filter(a=>Number(a.systemID)===Number(systemID));
+  const evidence=gateTravelDirector.tick({systemID,scene,assignments,route,roles,
+   getController:id=>controllers.getControllerByEntityID(id),blockedIDs});
+  if(evidence.orders.length||evidence.observations.length)
+   require("./coopRuntimeProbe").observe("living-native-gate-approach",null,
+    {spaceState:{systemID}},{
+     status:evidence.status,gateCount:evidence.gateCount,
+     orders:evidence.orders,observations:evidence.observations,
+     nativeTransferVerified:false
+    });
+ }
+}
 function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
-  const result=patrolNavigator.tick(Number(systemID),entityIDs);
+  const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
+  const result=patrolNavigator.tick(Number(systemID),entityIDs,{blockedIDs});
   if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
  }
 }
@@ -272,6 +309,7 @@ function advanceNativeCivilianOrders(){
   return runtime.ensureScene(systemID,{refreshStargates:false});
  })||new Set();
  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+ if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
  const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{},{blockedIDs});
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
