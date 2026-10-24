@@ -8,6 +8,12 @@ param(
     [int]$LaunchGapSeconds = 20,
     [int]$HealthTimeoutSeconds = 240,
     [int]$NpcSystemID = 30000142,
+    [ValidateRange(1,3)]
+    [int]$EnemyCount = 1,
+    [ValidateRange(1,10080)]
+    [int]$EncounterCooldownMinutes = 12,
+    [ValidateRange(1,1000)]
+    [int]$MaxEncounterBatches = 20,
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -75,10 +81,10 @@ switch ($Action) {
         # Real native co-op encounter loop, not a disposable one-spawn demo.
         # Persist the cooldown, prevent overlapping ships, and cap encounters.
         # No market rebuild, database reset, public listeners, or virtual economy.
-        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -CoopCombat -EnablePersistentEncounters -EncounterCooldownMinutes 12 -EncounterMaxSpawns 20 -NpcCount 1 -NpcSystemID $NpcSystemID
+        & (Join-Path $PSScriptRoot 'Deploy-Coop-RuntimeProbe.ps1') -CodePath $CodePath -CoopCombat -EnablePersistentEncounters -EncounterCooldownMinutes $EncounterCooldownMinutes -EncounterMaxSpawns $MaxEncounterBatches -NpcCount $EnemyCount -NpcSystemID $NpcSystemID
         if (-not $?) { throw 'Co-op runtime deployment failed.' }
         Wait-BackendHealthy
-        Write-Host '[COOP] Backend ready for two private LOCAL clients: one active NPC encounter at a time, 12-minute cooldown, persistent cap of 20 spawns.'
+        Write-Host ("[COOP] Ready: max $EnemyCount native NPC per encounter, $EncounterCooldownMinutes-minute cooldown, $MaxEncounterBatches encounter batches total; no overlapping live batches.")
         Write-Host '[COOP] Use separate accounts. Fly both ships onto the same grid in the configured system.'
         Write-Host '[COOP] Run -Action Party to inspect actual shared-scene evidence.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
