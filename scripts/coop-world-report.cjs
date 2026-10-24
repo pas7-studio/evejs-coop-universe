@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -41,6 +41,32 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}
  activity.status=activity.movedShips>0&&(activity.oreGrowth>0||activity.targetingSamples>0)
   ?"MOVEMENT_AND_INTERACTION_OBSERVED":activity.movedShips||activity.oreGrowth||activity.targetingSamples
   ?"PARTIAL_NATIVE_ACTIVITY":"NO_PHYSICAL_ACTIVITY_EVIDENCE";
+ const combatRows=rows.filter(e=>systemID&&positive(e.systemID)===systemID&&
+  (!latestBoot||e._time>=latestBoot._time));
+ const damage= combatRows.filter(e=>e.event==="living-native-combat-damage")
+  .flatMap(row=>(Array.isArray(row.events)?row.events:[])
+   .filter(e=>positive(e.victimEntityID)&&positive(e.systemID)===systemID&&
+    Number(e.healthLossHP)>0&&Array.isArray(e.attackerPilotIDs)&&
+    e.attackerPilotIDs.some(x=>/^coop-pilot-[0-9]{3,}$/.test(String(x))))
+   .map(e=>({...e,_observedAt:row._time})));
+ const wrecks=combatRows.filter(e=>e.event==="living-native-wreck-evidence"&&
+  e.status==="PHYSICAL_NATIVE_WRECK_VERIFIED"&&positive(e.wreckID)&&
+  positive(e.victimEntityID));
+ const matched=wrecks.find(w=>damage.some(d=>
+  Number(d.victimEntityID)===Number(w.victimEntityID)&&
+  d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
+ const combat={
+  observedNpcOnNpcDamage:damage.length,physicalWrecks:wrecks.length,
+  storedLootWrecks:wrecks.filter(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0).length,
+  matchingWreckID:matched?.wreckID||null,
+  // A target lock is not authoritative killer attribution; real hits and
+  // physical wreck plus stored loot are facts, not proof of the specific shooter.
+  status:matched?.lootStatus==="ITEMS_STORED"&&Number(matched.storedItemCount)>0
+   ?"CORRELATED_DAMAGE_WRECK_AND_LOOT":
+   matched?"CORRELATED_DAMAGE_WITH_EMPTY_WRECK":
+   damage.length&&wrecks.length?"UNMATCHED_DAMAGE_AND_WRECK":
+   damage.length?"DAMAGE_ONLY":wrecks.length?"WRECK_ONLY":"NO_NPC_COMBAT_EVIDENCE"
+ };
  const realFleets=industry?.fleets||[];
  const minerShips=realFleets.reduce((sum,f)=>sum+(f.minerIDs?.length||0),0);
  const haulerShips=realFleets.reduce((sum,f)=>sum+(f.haulerIDs?.length||0),0);
@@ -70,6 +96,11 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}
    status="NO_LIVING_NPC_SHIPS";
   }else status="READY_FOR_CLIENT_PLAYTEST";
  }
+ if(requireCombat&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    combat.status!=="CORRELATED_DAMAGE_WRECK_AND_LOOT"){
+  status="AWAITING_NPC_COMBAT_LOOT";
+  blockers.push("No matching same-victim native NPC-on-NPC HP drop, physical wreck and persisted loot items observed. A target lock alone is insufficient.");
+ }
  if(requireActivity&&status==="READY_FOR_CLIENT_PLAYTEST"&&
     activity.status!=="MOVEMENT_AND_INTERACTION_OBSERVED"){
   status="AWAITING_NATIVE_ACTIVITY";
@@ -78,7 +109,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}
  return {status,systemID,topologyAt:topology?.at||null,
   evidenceSource:topology?.evidenceSource||"UNSPECIFIED_NATIVE_SCENE",
   headlessBootStatus:headless?.status||null,
-  evidenceWindowMinutes:windowMinutes,scenery,activity,
+  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,
   actualMiningFleets:realFleets.length,actualMinerShips:minerShips,
   actualHaulerShips:haulerShips,
   physicalNpcShipAssignments:Object.values(roles).reduce((a,b)=>a+b,0),
@@ -86,6 +117,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false}
   invalidLogLines:invalid,blockers,
   limits:[
    "Server-side actual EveJS scene observations only; headless evidence does not imply a game client has logged in.",
+   "Correlated NPC controller target and HP loss do not identify the actual killer without native damage attribution.",
    "Native active targeting is not proof of weapon damage, destroyed ships or real player/NPC combat.",
    "Does not prove client rendering, real mining laser behavior, damage/loot, second-client login or friend-PC networking."
   ]};
@@ -96,7 +128,8 @@ if(require.main===module){
   const minutes=p>=0?Number(args[p+1]):20;
   if(!Number.isInteger(minutes)||minutes<1||minutes>240)throw Error("--window-minutes must be 1..240");
   const report=summarize(fs.readFileSync(0,"utf8"),{
-   windowMinutes:minutes,requireActivity:args.includes("--require-activity")
+   windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
+   requireCombat:args.includes("--require-combat")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
