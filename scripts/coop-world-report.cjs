@@ -46,6 +46,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const damage= combatRows.filter(e=>e.event==="living-native-combat-damage")
   .flatMap(row=>(Array.isArray(row.events)?row.events:[])
    .filter(e=>positive(e.victimEntityID)&&positive(e.systemID)===systemID&&
+    /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||""))&&
     Number(e.healthLossHP)>0&&Array.isArray(e.attackerPilotIDs)&&
     e.attackerPilotIDs.some(x=>/^coop-pilot-[0-9]{3,}$/.test(String(x))))
    .map(e=>({...e,_observedAt:row._time})));
@@ -59,16 +60,21 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   Number(w.victimEntityID)===Number(d.victimEntityID)&&
   w.victimPilotID===d.victimPilotID&&
   d.attackerPilotIDs.includes(w.attackerPilotID)&&
+  (!Array.isArray(d.attackerEntityIDs)||
+   d.attackerEntityIDs.includes(Number(w.attackerEntityID)))&&
   w._time<=d._observedAt&&
   d._observedAt-w._time<=10*60000));
  const wrecks=combatRows.filter(e=>e.event==="living-native-wreck-evidence"&&
   e.status==="PHYSICAL_NATIVE_WRECK_VERIFIED"&&positive(e.wreckID)&&
-  positive(e.victimEntityID));
+  positive(e.victimEntityID)&&
+  /^coop-pilot-[0-9]{3,}$/.test(String(e.victimPilotID||"")));
  const matched=wrecks.find(w=>damage.some(d=>
   Number(d.victimEntityID)===Number(w.victimEntityID)&&
+  d.victimPilotID===w.victimPilotID&&
   d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
  const nativeWeaponChain=wrecks.find(w=>w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0&&
   linkedWeaponDamage.some(d=>Number(d.victimEntityID)===Number(w.victimEntityID)&&
+   d.victimPilotID===w.victimPilotID&&
    d._observedAt<=w._time&&w._time-d._observedAt<=10*60000));
  // Only the native destruction call's explicit attackerEntity parameter
  // may qualify as upstream attribution. A recent lock or weapon event is
@@ -82,11 +88,14 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const nativeAttackerChain=upstreamAttackers.find(e=>wrecks.some(w=>
   Number(w.wreckID)===Number(e.wreckID)&&
   Number(w.victimEntityID)===Number(e.victimEntityID)&&
+  w.victimPilotID===e.victimPilotID&&
   w.lootStatus==="ITEMS_STORED"&&Number(w.storedItemCount)>0)&&
   linkedWeaponDamage.some(d=>
    Number(d.victimEntityID)===Number(e.victimEntityID)&&
    d.victimPilotID===e.victimPilotID&&
    d.attackerPilotIDs.includes(e.attackerPilotID)&&
+   (!Array.isArray(d.attackerEntityIDs)||
+    d.attackerEntityIDs.includes(Number(e.attackerEntityID)))&&
    d._observedAt<=e._time&&e._time-d._observedAt<=10*60000)&&
   weapons.some(w=>
    w.attackerPilotID===e.attackerPilotID&&
