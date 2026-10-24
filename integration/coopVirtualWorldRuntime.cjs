@@ -163,11 +163,21 @@ function scheduleHeadlessWorldBoot(route){
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
     const sdeBelts=require("./worldData").getAsteroidBeltsForSystem(systemID).length;
+    const policy=require("./coopHeadlessScenePolicy");
+    const tracked=policy.shouldTrackNativeScene({
+     systemID,scene,realWaypointCount:topology.length});
+    // An actual initialized scene is worth rechecking even when the first
+    // native spawn attempt failed. Previously only a successful pilot link
+    // made a system eligible for the 2-minute reconcile loop.
+    if(tracked)visitedSystems.add(systemID);
+    const miningStartup=policy.nativeMiningStartupPolicy({
+     systemID,sdeBelts,sceneBelts:beltCount});
     // Zero belts in Jita are expected SDE geography; a global SDE belt
     // counter cannot prove a mineable belt in the physical system scene.
     require("./coopRuntimeProbe").observe("living-native-system-site-readiness",null,
      {spaceState:{systemID}},{systemID,realAsteroidBelts:beltCount,
       authoritativeSdeBelts:sdeBelts,realWaypoints:topology.length,
+      trackingForReconcile:tracked,stockMiningStartup:miningStartup,
       source:"PINNED_EVEJS_SYSTEM_STATIC_SCENE",
       status:sdeBelts===0?"SDE_SYSTEM_HAS_NO_BELTS":
        beltCount===0?"SDE_BELTS_MISSING_FROM_SCENE":"REAL_BELT_PRESENT"});
@@ -179,13 +189,14 @@ function scheduleHeadlessWorldBoot(route){
     });
     // A real named native NPC can operate even if stock mining or static
     // topology is incomplete. Readiness remains a stricter separate gate.
-    if(links.length)visitedSystems.add(systemID);
     if(verified)systems.delete(systemID);
     require("./coopRuntimeProbe").observe("living-headless-boot-system",null,
      {spaceState:{systemID}},
      {attempt:attempts,status:verified?"NATIVE_SCENE_READY":"PENDING_NATIVE_SCENE",
       realAsteroidBelts:beltCount,authoritativeSdeBelts:sdeBelts,
       miningApplicable:miningEnabled&&sdeBelts>0,
+      trackedForReconcile:tracked,
+      miningStartupStatus:miningStartup.status,
       physicalMiningShips:fleetShips.length,
       actualNamedNpcShips:links.length,sceneReady:Boolean(scene)});
    }catch(error){
