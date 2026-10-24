@@ -53,6 +53,10 @@ test("reject fake wrecks, fabricated sessions and wrong source records",()=>{
   "NO_PHYSICAL_NATIVE_WRECK");
  assert.equal(verify({...b,scene:{...scene,sessions:new Map()}}).status,
   "NO_UNIQUE_AUTHENTICATED_SPACE_LOOTER");
+ // An upstream source-debit failure must be quarantined even if the
+ // character disconnected between item grant and evidence observation.
+ assert.equal(verify({...b,scene:{...scene,sessions:new Map()},
+  sourceAfter:sourceBefore}).status,"NATIVE_LOOT_SOURCE_NOT_REMOVED");
  assert.equal(verify({...b,scene:{...scene,sessions:new Map([[1,session],[2,{...session}]])}}).status,
   "NO_UNIQUE_AUTHENTICATED_SPACE_LOOTER");
  assert.equal(verify({...b,sourceBefore:{...sourceBefore,wreckItemID:555}}).status,
