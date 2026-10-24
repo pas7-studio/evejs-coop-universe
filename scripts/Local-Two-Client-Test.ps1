@@ -29,8 +29,11 @@ function Assert-BackendPrerequisites {
 function Wait-BackendHealthy {
     $deadline = (Get-Date).AddSeconds($HealthTimeoutSeconds)
     do {
-        & (Join-Path $PSScriptRoot 'Check-Backend.ps1') -CodePath $CodePath
-        if ($LASTEXITCODE -eq 0 -and $?) { return }
+        # Run the health checker in a separate process: its 'exit 1' must
+        # not terminate this orchestrator before the retry loop finishes.
+        $pwsh = (Get-Process -Id $PID).Path
+        & $pwsh -NoProfile -NonInteractive -File (Join-Path $PSScriptRoot 'Check-Backend.ps1') -CodePath $CodePath
+        if ($LASTEXITCODE -eq 0) { return }
         Write-Host 'Backend still initializing; retrying health check...'
         Start-Sleep -Seconds 10
     } while ((Get-Date) -lt $deadline)
