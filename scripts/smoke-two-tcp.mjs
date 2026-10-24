@@ -19,6 +19,7 @@ function connectOne(label) {
     const socket = net.createConnection({ host, port });
     clients.push(socket);
     socket.on('close', () => socketClosed.add(socket));
+    socket.on('end', () => socketClosed.add(socket));
     let settled = false;
     const timer = setTimeout(() => fail(new Error(label + ': connect timeout')), timeoutMs);
     function cleanup() { clearTimeout(timer); }
@@ -27,7 +28,6 @@ function connectOne(label) {
       settled = true; cleanup(); socket.destroy(); reject(err);
     }
     socket.on('error', fail);
-    socket.on('end', () => socketClosed.add(socket));
     socket.once('connect', () => {
       if (settled) return;
       settled = true; cleanup(); resolve(socket);
@@ -36,8 +36,7 @@ function connectOne(label) {
 }
 try {
   // Open both connections before either is closed: tests simultaneous accepts.
-  const a = await connectOne('client A');
-  const b = await connectOne('client B');
+  const [a, b] = await Promise.all([connectOne('client A'), connectOne('client B')]);
   if (a.destroyed || b.destroyed || socketClosed.has(a) || socketClosed.has(b)) throw new Error('Server closed one TCP session immediately');
   await delay(250);
   if (a.destroyed || b.destroyed || socketClosed.has(a) || socketClosed.has(b)) throw new Error('Server closed a TCP session during idle smoke');
