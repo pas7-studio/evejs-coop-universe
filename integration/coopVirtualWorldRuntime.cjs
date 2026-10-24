@@ -961,6 +961,28 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
   try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}catch(error){if(error.code==="ENOENT")return;throw error;}
   const link=Object.values(registry?.links||{}).find(x=>
    Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
+  // Stock miners have no co-op pilot link. Verify an actual upstream
+  // mining-fleet membership and physical wreck without granting the
+  // unnamed victim a synthetic pilot or fabricated ship loss.
+  if(!link&&destroyedShip&&process.env.EVEJS_COOP_NPC_RAIDS==="1"){
+   const mining=require("../services/mining/miningNpcOperations");
+   const fleets=mining.getMiningFleetsForSystem(Number(systemID));
+   const belonged=fleets.some(f=>Number(f?.systemID)===Number(systemID)&&
+    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
+     .some(id=>Number(id)===Number(npcID)));
+   if(belonged){
+    const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+    const proof=require("./coopStockFleetWreckEvidence").verifyStockFleetWreck({
+     systemID,ship:destroyedShip,wreckID,fleets,
+     scene:runtime.ensureScene(Number(systemID),{refreshStargates:false}),
+     getWreck:id=>store.getNativeWreck(id),
+     getWreckItems:id=>store.listNativeWreckItemsForWreck(id)
+    });
+    require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
+     null,{spaceState:{systemID}},proof);
+   }
+   return;
+  }
   if(!link)return;
   // This callback is invoked only after EveJS successfully spawned the
   // wreck. Verify that its physical entity and stored loot really exist.
