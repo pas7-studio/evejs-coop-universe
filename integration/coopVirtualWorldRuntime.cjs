@@ -171,6 +171,18 @@ function observeSession(session,ship){
       const runtime=require("./runtime");
       const npc=require("./npc/npcRuntime");
       const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+      // A passing TCP test can still run against an empty virtual space.
+      // Record real topology of the authoritative EveJS scene on arrival.
+      if(session){
+        const points=require("./coopNpcTopology").waypoints(scene);
+        require("./coopRuntimeProbe").observe("living-world-topology",session,ship,{
+          systemID,realWaypoints:points.length,
+          realAsteroidBelts:points.filter(p=>p.kind==="asteroidBelt").length,
+          realStations:points.filter(p=>p.kind==="station").length,
+          realStargates:points.filter(p=>p.kind==="stargate").length,
+          sceneReady:Boolean(scene)
+        });
+      }
       ensureNativeMining(scene);
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
