@@ -132,7 +132,7 @@ switch ($Action) {
         $options=Get-ComposeArgs
         $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
         if ($LASTEXITCODE -ne 0) {
-            throw 'No live co-op event log yet. Run -Action CoopStart, enter space with both characters, and retry.'
+            throw 'BLOCKED_TELEMETRY_OR_CLIENT: use DiagnoseWorld first, then check that both real characters reached space. Do not repeat deployment just for this failure.'
         }
         $events | & node $report
         if ($LASTEXITCODE -ne 0) { throw 'Could not generate co-op scene report.' }
