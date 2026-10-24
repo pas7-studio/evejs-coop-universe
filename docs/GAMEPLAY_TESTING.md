@@ -133,6 +133,37 @@ Only after one-client proof, and with two independently permitted accounts/chara
 
 `Party` correlates **server-side** sessions/scene events; the human's visible proof is still separately required. Two connected TCP sockets, two open launcher windows or a `Party` parser result alone do not prove full two-player gameplay.
 
+## Exact gameplay mechanic acceptance matrix (only after its prerequisite phase)
+
+This table defines **what to test, what counts as PASS and what is insufficient**.
+Do not force a random encounter or reset world state solely to fill this
+matrix. Record `NOT_TESTED` when the appropriate scene or event did not
+occur, `BLOCKED` when a named prerequisite prevents an attempt.
+
+| Mechanic | Server evidence | Real player-visible evidence needed for in-game PASS |
+| --- | --- | --- |
+| Headless NPC spawn | `living-headless-boot-requested`, per-system `living-headless-boot-system`, native scene/identity link | **None for server boot gate**; a healthy container or projected virtual pilot is insufficient |
+| Persistent named NPC | Actual linked native `entityID` in scene, `living-native-activity` | In-client overview shows the **same** ship/identity; after safe restart identity is consistent |
+| Mining and ore | `living-native-industry`, inventory change and `oreGrowth`; source asteroid content decreases | Player sees actual miner at belt and native mining activity; cargo growth alone is **not** proof of mining lasers |
+| NPC hauling and delivery | `living-hauler-loaded` / `living-hauler-delivered`; same fleet, correct native ore quantities | Hauler visibly warps with real cargo; no duplicate/vanished cargo; depot is **virtual**, not native station stock |
+| NPC pirate raid | `living-pirate-raid` and actual linked controllers / real target and HP samples | A player observes pirate movement/engagement; an issued attack order alone is insufficient |
+| Retreat from damage | `living-npc-tactical-event` with `npc-retreat` plus actual native warp/arrival | NPC visibly leaves danger. Warp scramble/no valid destination must **not** count as escape |
+| Distress and reinforcement | `living-npc-tactical-event` with `reinforcement-warp` and later `reinforcement-attack` | **Existing same-faction NPC** travels to attacker and acts only after arrival; no fabricated rescue wave or allied friendly-fire |
+| Actual NPC weapon and destruction | `-Action Combat`: native launch/activation witness, measured damage to same victim, real native wreck with nonempty stored loot | Player observes actual damage/wreck and can interact with loot; an HP-only sampler does **not** prove which weapon delivered a final blow |
+| Native destruction attribution | Optional stricter `-Action FinalBlow`, requiring upstream explicit attacker | Do not infer a killer from targeting, telemetry or faction; record `NOT_PROVEN` if EveJS does not identify an attacker |
+| NPC memory and standings | Persisted named-NPC relation and actual `living-player-consequence` where relevant | Same NPC recognizes actual returning player only if conditions met; a saved memory record alone is not a conversation |
+| Two-player encounter | Two real authenticated characters on same grid; server `Party` events | Both clients see and can interact with the same NPC and each other, then reconnect without ship duplication |
+| Stargate NPC travel (experimental) | When separately enabled, `living-native-gate-approach` then `living-native-gate-transfer` with same native entity and cargo | Arrival across real gate and same ship state after recovery. **Default OFF; not part of baseline World PASS** |
+| Native seed-market NPC trade (experimental) | When separately enabled, `-Action Market` requires sale followed by purchase with exact seed RPC / inventory / wallet | Real daemon order/stock changes and same NPC cargo. **Default OFF; this does not prove personal player-compatible NPC orders** |
+
+**How long to observe:** The ordinary world simulation has periodic
+ticks and headless retries; don't demand that a natural pirate fight,
+distress call, retreat or market trade appear on command. Take one
+actual observation window, run the relevant gate, then report the
+exact unproven condition. Do not inflate readiness by simulating or
+editing event logs. Use `-Action Logs` only for focused diagnostics,
+redact before sharing. Do not repeat the one-time installation commands.
+
 ## Phase 5 — report and stop
 
 Use `docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md`. Include actual project commit, pinned upstream commit, overlay module presence, actual client build/provenance (without distributing files), event names/counters, short redacted log excerpts or screenshots, and **one concrete next blocker**.
