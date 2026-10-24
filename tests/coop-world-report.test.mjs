@@ -163,3 +163,34 @@ test("wrong victim and empty actual wreck do not prove NPC kill plus loot",()=>{
  assert.equal(empty.status,"AWAITING_NPC_COMBAT_LOOT");
  assert.equal(empty.combat.status,"CORRELATED_DAMAGE_WITH_EMPTY_WRECK");
 });
+
+test("strict weapon chain needs a genuine native launch/activation from same NPC attacker and victim",()=>{
+ const launch=event("living-native-weapon-event",{
+  status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"missile-launch",
+  attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+  victimEntityID:102,victimPilotID:"coop-pilot-002",chargeTypeID:34
+ });
+ const good=summarize(combatFixture()+"\\n"+launch,{now,requireCombat:true,requireWeapon:true});
+ assert.equal(good.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(good.combat.nativeWeaponDamageWreckLootID,900);
+ assert.equal(good.combat.weaponCorrelatedDamageEvents,1);
+ const missing=summarize(combatFixture(),{now,requireCombat:true,requireWeapon:true});
+ assert.equal(missing.status,"AWAITING_NATIVE_WEAPON_CHAIN");
+});
+test("weapon activity of different NPC or victim does not claim a battle outcome",()=>{
+ for(const changes of [
+  {attackerPilotID:"coop-pilot-099"},
+  {victimEntityID:103},
+  {status:"IGNORED"},
+  {kind:"attack-order"}
+ ]){
+  const witness=event("living-native-weapon-event",{
+   status:"VERIFIED_NATIVE_WEAPON_EVENT",kind:"module-activation",
+   attackerEntityID:101,attackerPilotID:"coop-pilot-001",
+   victimEntityID:102,victimPilotID:"coop-pilot-002",
+   moduleID:99,...changes
+  });
+  const r=summarize(combatFixture()+"\\n"+witness,{now,requireWeapon:true});
+  assert.equal(r.status,"AWAITING_NATIVE_WEAPON_CHAIN");
+ }
+});
