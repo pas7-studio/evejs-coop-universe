@@ -62,6 +62,21 @@ services:
 }
 Push-Location $CodePath
 try {
+  $configs=@('compose.yaml')
+  if(-not $Remove){$configs+=('compose.coop-probe.yaml')}
+  $configArgs=@()
+  foreach($c in $configs){$configArgs+=@('-f',$c)}
+  $resolved=@(& docker compose @configArgs config --format json)
+  if($LASTEXITCODE -ne 0){throw 'Compose override validation failed'}
+  $model=($resolved -join "`n") | ConvertFrom-Json
+  foreach($service in $model.services.PSObject.Properties){
+    foreach($port in @($service.Value.ports)){
+      if($null -eq $port){continue}
+      if(([string]$port.host_ip) -notin @('127.0.0.1','::1')){
+        throw "Unsafe public Compose port on $($service.Name): $($port.published)"
+      }
+    }
+  }
   & docker compose -f compose.yaml build
   if($LASTEXITCODE -ne 0){throw 'Docker build failed'}
   if($Remove) {
