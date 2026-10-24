@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker"];
 const specs=[
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
   {anchor:"  persistCharacterLogoffState(session);",line:'  require("../../space/coopRuntimeProbe").observe("disconnect-after-persist", session, null);',after:true}
@@ -29,7 +29,8 @@ const specs=[
  {file:"server/src/space/npc/nativeNpcWreckService.js",patches:[
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopVirtualWorldRuntime").confirmedNativeNpcWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional integration */ }'},
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopNativeNpcDemo").confirmedWreck(normalizedSystemID, entityID, wreckRecord.wreckID); } catch (_coopError) { /* optional co-op kill tracking */ }'},
-  {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopNativeConsequences").noteNativeWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity, options, controller); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); }'}
+  {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopNativeConsequences").noteNativeWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity, options, controller); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); }'},
+  {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:"  try { require(\"../coopNpcDestructionAttacker\").note(scene, shipEntity, options, wreckRecord); } catch (_coopError) { console.warn(\"[CoopNpcDestructionAttacker]\", _coopError.message); }"}
  ]},
  {file:"server/src/space/npc/npcBehaviorLoop.js",patches:[
   {anchor:"  if (sourceClass === \"npc\" && targetClass === \"npc\") {",line:"    if (process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",after:true},
@@ -38,6 +39,7 @@ const specs=[
  ]}
 ];
 const oldLines=[
+ "  try { require(\"../coopNpcDestructionAttacker\").note(scene, shipEntity, options, wreckRecord); } catch (_coopError) { console.warn(\"[CoopNpcDestructionAttacker]\", _coopError.message); }",
  "    if (process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",
  "        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",
  "    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }",
