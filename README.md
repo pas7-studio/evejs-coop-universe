@@ -81,8 +81,8 @@ and a recorded recovery delay after their ship is destroyed.
 
 ~~~powershell
 cd C:\Games\EveCoopProject
-git pull
-.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
+.\scripts\Local-Two-Client-Test.ps1 -Action World
 .\scripts\Local-Two-Client-Test.ps1 -Action LaunchTwo -ConfirmClientPermission
 .\scripts\Local-Two-Client-Test.ps1 -Action Party
 ~~~
