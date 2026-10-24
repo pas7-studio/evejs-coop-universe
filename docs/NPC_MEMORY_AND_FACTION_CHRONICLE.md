@@ -101,6 +101,21 @@ their losses and economy. Never conflate our narrative faction tags
 - The code remains unverified in the actual Docker container and game
   client. No remote CI automation is permitted by the repository owner.
 
+### Existing-world faction migration
+
+The original `coopVirtualWorld` initialization used the same index parity
+for both the system route and the faction, so the default two-system layout
+had only one faction per system. New worlds distribute named NPC factions
+independently of the route. For an old world, this is a **one-time opt-in**
+migration (`EVEJS_COOP_FACTION_LAYOUT_V2=1` in LivingCoop) and saves an
+unaltered `.pre-faction-layout-v2.bak` adjacent to the world JSON first.
+It preserves all pilot IDs, names, travel history and ship link identities;
+only recognized legacy faction assignments are remapped. Existing native
+EveJS owner/standing values are not rewritten. A conflicting prior backup
+causes the migration to refuse to proceed rather than overwrite evidence.
+Existing virtual faction history remains in its existing file and should
+be reviewed after a migration.
+
 ## 3. Review and verification checklist
 
 1. Run `node --test tests/coop-npc-memory.test.mjs tests/coop-npc-tactics.test.mjs tests/coop-faction-director.test.mjs`.
