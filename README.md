@@ -64,8 +64,11 @@ mineable asteroid depletion, native ore cargo, mining haulers and
 aggression-response AI. Named pirates may attack existing ore-bearing
 NPC ships, creating unscripted fights that players can join. Hauler ore
 moves through the native NPC cargo store and becomes real EveJS wreck
-loot on destruction. **Only final depot unloading and trader market
-orders remain virtual**, not real station inventories or sell orders.
+loot on destruction. The game-night overlay now also records player
+attacks and verified pirate-defense kills in **EveJS's actual standings
+system**, changing the size of mining-fleet security responses.
+**Final depot unloading and trader market orders remain virtual**,
+not real station inventories or sell orders.
 
 [Two-PC authenticated loopback tunnel](docs/FRIEND_PC_PRIVATE_TUNNEL.md)
 is experimental. Neither real two-client game rendering nor friend-PC
