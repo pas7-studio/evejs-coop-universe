@@ -19,7 +19,11 @@ function maybeSpawn(session,ship) {
       const npcRuntime=require("./npc/npcRuntime");
       const amount=Number(process.env.EVEJS_COOP_NATIVE_NPC_COUNT||1);
       if(!Number.isInteger(amount)||amount<1||amount>3)throw Error("NPC_COUNT must be 1..3");
+      const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
+      const anchor=require("./coopNpcTopology").anchorOptions(scene);
+      if(!anchor){console.warn("[CoopNpcDemo] no native scene anchor in",systemID);return;}
       const spawnNative=id=>npcRuntime.spawnBatchInSystem(id,{
+        ...anchor,
         amount,entityType:"npc",transient:true,broadcast:true,
         defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile"
       });
@@ -43,7 +47,6 @@ function maybeSpawn(session,ship) {
         result=outcome.result;
       } else { result=spawnNative(systemID); }
       const spawned=Array.isArray(result?.data?.spawned)?result.data.spawned:[];
-      const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
       const recipients=Array.from(scene?.sessions?.values?.()||[]).filter(x=>x?.socket?.destroyed!==true&&x?._space?.initialStateSent===true);
       const probe=require("./coopRuntimeProbe");
       probe.observe("native-npc-spawn",session,ship,{
