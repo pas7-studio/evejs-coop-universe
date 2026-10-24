@@ -394,7 +394,7 @@ function observeSession(session,ship){
     .sort((a,b)=>(ranks[a.role]??5)-(ranks[b.role]??5)||a.id.localeCompare(b.id));
   for(const p of residents)life?.recover(p.id);
   if(economy)economy.advance(world.snapshot().pilots);
-   syncNativeDeliveries();
+   safeNpcPhase("observed-native-depot",syncNativeDeliveries);
   if(process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
     try{
       const runtime=require("./runtime");
@@ -412,7 +412,7 @@ function observeSession(session,ship){
           sceneReady:Boolean(scene),evidenceSource:session?"CLIENT_SESSION":"HEADLESS_NATIVE_SCENE"
         });
       }
-      ensureNativeMining(scene,systemID);
+      safeNpcPhase("observed-native-mining",()=>ensureNativeMining(scene,systemID));
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
         const {createRegistry}=require("./coopIdentityRegistry");
