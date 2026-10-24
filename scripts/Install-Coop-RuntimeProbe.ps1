@@ -28,6 +28,8 @@ $lossSource=Join-Path $PSScriptRoot '../integration/coopNpcLossBridge.cjs'
 $lossTarget=Join-Path $server 'space/coopNpcLossBridge.js'
 $factionSource=Join-Path $PSScriptRoot '../integration/coopFactionDirector.cjs'
 $factionTarget=Join-Path $server 'space/coopFactionDirector.js'
+$patrolSource=Join-Path $PSScriptRoot '../integration/coopFactionPatrolRuntime.cjs'
+$patrolTarget=Join-Path $server 'space/coopFactionPatrolRuntime.js'
 $expected='c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
 $rev=(& git -C (Split-Path -Parent $CodePath) rev-parse HEAD 2>$null | Out-String).Trim()
 if ($rev -ne $expected) { throw "Refusing to patch unknown EveJS revision $rev" }
@@ -93,6 +95,7 @@ if($Remove) {
   if(Test-Path -LiteralPath $economyTarget){Remove-Item -LiteralPath $economyTarget -Force}
   if(Test-Path -LiteralPath $lossTarget){Remove-Item -LiteralPath $lossTarget -Force}
   if(Test-Path -LiteralPath $factionTarget){Remove-Item -LiteralPath $factionTarget -Force}
+  if(Test-Path -LiteralPath $patrolTarget){Remove-Item -LiteralPath $patrolTarget -Force}
 } else {
   Copy-Item -LiteralPath $probeSource -Destination $probeTarget -Force
   Copy-Item -LiteralPath $npcSource -Destination $npcTarget -Force
@@ -105,5 +108,6 @@ if($Remove) {
   Copy-Item -LiteralPath $economySource -Destination $economyTarget -Force
   Copy-Item -LiteralPath $lossSource -Destination $lossTarget -Force
   Copy-Item -LiteralPath $factionSource -Destination $factionTarget -Force
+  Copy-Item -LiteralPath $patrolSource -Destination $patrolTarget -Force
 }
 Write-Host 'Co-op probe installation complete. Set EVEJS_COOP_EVENTS_FILE within the server container to enable JSONL event output.'
