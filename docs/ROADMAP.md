@@ -18,6 +18,15 @@ The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
 available; do not reintroduce automatic remote runs.
 
+**P0 no-NPC recovery addition:** A real SDE-backed scene is scheduled
+for later materialization retries even if its initial native spawn
+produced zero identity links. Added system-specific native mining
+startup policy witness to headless event and World report so disabled
+or excluded Perimeter fleet seeding is distinguished from absent SDE
+belts. This does not force a fleet, alter world data or reset named
+pilot identity. 61/61 relevant isolated regression tests PASS.
+**Physical named NPCs and client gameplay remain unverified.**
+
 **P0 implementation follow-up (awaiting local client test):** repaired
 real NPC name broadcasts in `coopNpcPresentation` to the existing
 EveJS slim-item API, with retry on failure and no repeat on success.
