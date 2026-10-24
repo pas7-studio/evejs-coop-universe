@@ -2,6 +2,7 @@
 // Optional native EveJS NPC encounter. This is NOT X-Eve Living Universe.
 // Uses the authoritative existing npcRuntime and never creates fake players.
 const seenSystems = new Set();
+const retryAfter=new Map();
 let persistentDirector=null;
 function positive(v) { const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:null; }
 function maybeSpawn(session,ship) {
@@ -11,7 +12,7 @@ function maybeSpawn(session,ship) {
   const allowedSystem=positive(process.env.EVEJS_COOP_NATIVE_NPC_SYSTEM_ID);
   if(!systemID||!allowedSystem||systemID!==allowedSystem)return;
   if(!ship||!positive(ship.itemID))return;
-  if(!persistent&&seenSystems.has(systemID))return;
+  if(!persistent&&(seenSystems.has(systemID)||Date.now()<(retryAfter.get(systemID)||0)))return;
   setImmediate(()=>{
     try {
       // Defer until after the ship's login transition. A failed spawn remains
@@ -24,7 +25,7 @@ function maybeSpawn(session,ship) {
       const partyMode=process.env.EVEJS_COOP_REQUIRE_TWO_PILOTS==="1";
       if(partyMode){
         const pilots=Array.from(scene?.sessions?.values?.()||[])
-          .filter(x=>x?.characterID&&x?._space?.shipID)
+          .filter(x=>x?.characterID&&x?._space?.shipID&&x._space.initialStateSent===true)
           .map(x=>({characterID:positive(x.characterID),entity:scene.getEntityByID(positive(x._space.shipID))}))
           .filter(x=>x.characterID&&x.entity?.position);
         const unique=[...new Map(pilots.map(x=>[x.characterID,x])).values()];
@@ -48,8 +49,9 @@ function maybeSpawn(session,ship) {
       }
       if(!anchor){console.warn("[CoopNpcDemo] no native scene anchor in",systemID);return;}
       if(!persistent){
-        if(seenSystems.has(systemID))return;
-        seenSystems.add(systemID);
+        if(seenSystems.has(systemID)||Date.now()<(retryAfter.get(systemID)||0))return;
+        // Failed attempts can retry after one minute; never flood the scene.
+        retryAfter.set(systemID,Date.now()+60000);
       }
       const spawnNative=id=>npcRuntime.spawnBatchInSystem(id,{
         ...anchor,
@@ -76,6 +78,7 @@ function maybeSpawn(session,ship) {
         result=outcome.result;
       } else { result=spawnNative(systemID); }
       const spawned=Array.isArray(result?.data?.spawned)?result.data.spawned:[];
+      if(!persistent&&result?.success===true&&spawned.length)seenSystems.add(systemID);
       const recipients=Array.from(scene?.sessions?.values?.()||[]).filter(x=>x?.socket?.destroyed!==true&&x?._space?.initialStateSent===true);
       const probe=require("./coopRuntimeProbe");
       probe.observe("native-npc-spawn",session,ship,{
