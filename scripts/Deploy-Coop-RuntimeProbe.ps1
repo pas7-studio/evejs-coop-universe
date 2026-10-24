@@ -1,7 +1,9 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142,[switch]$EnablePersistentEncounters,[int]$EncounterCooldownMinutes=60,[int]$EncounterMaxSpawns=24,[switch]$EnableVirtualWorld,[int]$VirtualPopulation=16,[int]$VirtualTravelSeconds=120)
+param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142,[switch]$EnablePersistentEncounters,[int]$EncounterCooldownMinutes=60,[int]$EncounterMaxSpawns=24,[switch]$EnableVirtualWorld,[int]$VirtualPopulation=16,[int]$VirtualTravelSeconds=120,[switch]$MaterializeVirtualNpcs,[int]$MaterializeLimit=2)
 $ErrorActionPreference='Stop'
+if($MaterializeLimit -lt 1 -or $MaterializeLimit -gt 10){throw 'MaterializeLimit must be 1..10'}
+if($MaterializeVirtualNpcs -and -not $EnableVirtualWorld){throw 'MaterializeVirtualNpcs requires EnableVirtualWorld'}
 if($VirtualPopulation -lt 1 -or $VirtualPopulation -gt 100){throw 'VirtualPopulation must be 1..100'}
 if($VirtualTravelSeconds -lt 10){throw 'VirtualTravelSeconds must be >= 10'}
 if($EncounterCooldownMinutes -lt 1 -or $EncounterCooldownMinutes -gt 10080){throw 'EncounterCooldownMinutes must be 1..10080'}
@@ -38,6 +40,10 @@ services:
     $yaml += "      EVEJS_COOP_VIRTUAL_POPULATION: '$VirtualPopulation'`n"
     $yaml += "      EVEJS_COOP_VIRTUAL_TRAVEL_MS: '$($VirtualTravelSeconds * 1000)'`n"
     $yaml += "      EVEJS_COOP_VIRTUAL_STATE_FILE: '/var/lib/evejs/coop-virtual-world.json'`n"
+  }
+  if($MaterializeVirtualNpcs){
+    $yaml += "      EVEJS_COOP_MATERIALIZE_NPCS: '1'`n"
+    $yaml += "      EVEJS_COOP_MATERIALIZE_LIMIT: '$MaterializeLimit'`n"
   }
   [System.IO.File]::WriteAllText($override,$yaml,[System.Text.UTF8Encoding]::new($false))
 }
