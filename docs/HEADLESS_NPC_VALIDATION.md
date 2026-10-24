@@ -115,6 +115,11 @@ Both are emitted as `living-native-weapon-event` with the matched named
 attacker, victim, native entity IDs, and module/charge type. Neither
 an activated module nor a launched missile is evidence of a **hit**.
 
+Combat validation is deliberately **independent of mining/hauling
+readiness**: two authentic native NPC ships can fight even when no miners,
+haulers or asteroid belts are present. The `World` action retains the
+separate mining-economy gate.
+
 The manual `-Action Combat` check now requires `--require-weapon`
 in addition to physical HP loss, same-victim native wreck and stored
 nonempty loot. It demands an exact attacker/victim identity match
