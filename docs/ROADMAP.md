@@ -4,7 +4,9 @@ Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **
 
 ## Owner-defined execution order and current gameplay blocker (2026-10-25)
 
-The following priority blocks are **deferred**, not cancelled:
+The owner has prioritized **actual local gameplay acceptance now**. Headless
+native NPCs must be evidenced before client-dependent tests. The later
+P0 two-client stage still requires compatible authorized clients:
 - P0: real server + 2 compatible clients, shared fleet warp/combat/loot,
   safe reconnect without losing ships.
 - P1: native NPC transit between systems and real NPC market buy/sell
@@ -98,7 +100,7 @@ claimed done by these code changes.
 ### COOP-001 — reproducible upstream inventory [TODO]
 Inspect a **pinned** EveJS SHA. Produce `docs/evidence/UPSTREAM_INVENTORY.md` with setup script paths, services, dependency versions, ports, license attribution, and source links. Verify every command in `SETUP_WINDOWS.md` against selected revision. **DoD:** commands verified, unknowns clearly marked, no copied proprietary artifacts.
 
-### COOP-002 — local-only backend bootstrap [BACKEND VERIFIED on cc5ce83; client gameplay separate]
+### COOP-002 — local-only backend bootstrap [PARTIAL: healthy services verified on cc5ce83; restart persistence not yet evidenced]
 Reproduce Docker game and market health on Windows/Linux containers; capture `compose ps` and sanitized logs. Optional gameplay validation only where client permissions permit. **DoD:** init 0, services healthy, restart persistence verified, detailed failure troubleshooting.
 
 ### COOP-003 — X-Eve compatibility gate [BLOCKED: exact approved baseline]
