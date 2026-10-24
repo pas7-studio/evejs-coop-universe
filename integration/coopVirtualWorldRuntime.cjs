@@ -239,6 +239,21 @@ function advanceNativeGateApproach(){
   const assignments=links.filter(a=>Number(a.systemID)===Number(systemID));
   const evidence=gateTravelDirector.tick({systemID,scene,assignments,route,roles,
    getController:id=>controllers.getControllerByEntityID(id),blockedIDs});
+  for(const move of evidence.orders){
+   if(move.action!=="VERIFIED_NATIVE_GATE_TRANSFER")continue;
+   // The destination must join real NPC simulation immediately after
+   // confirmed physical arrival; never wait for a future headless boot.
+   visitedSystems.add(Number(move.targetSystemID));
+   require("./coopRuntimeProbe").observe("living-native-gate-transfer",null,
+    {spaceState:{systemID:Number(move.targetSystemID)}},{
+     pilotID:move.pilotID,entityID:move.entityID,
+     sourceSystemID:Number(systemID),
+     destinationSystemID:Number(move.targetSystemID),
+     sourceGateID:move.sourceGateID,
+     status:"SAME_NATIVE_SHIP_ARRIVED",
+     evidenceSource:"NATIVE_DEMATERIALIZE_REMATERIALIZE"
+    });
+  }
   if(evidence.orders.length||evidence.observations.length)
    require("./coopRuntimeProbe").observe("living-native-gate-approach",null,
     {spaceState:{systemID}},{
