@@ -1,63 +1,83 @@
 "use strict";
-// Move real mined EveJS NPC ore stacks onto an actual native hauler entity.
-// Wreck service then drops the hauler's native cargo if players destroy it.
+// Native EveJS cargo custody: transfer the SAME ore item IDs to a real
+// hauling ship. Unload only items this fleet actually picked up.
+// Avoid writing fake inventory, fake wrecks or mining yields.
 const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
-function transferCargo(scene,fleet,miner,dependencies={}){
+const mineable=x=>positive(x?.cargoID)&&positive(x?.typeID)&&Number(x.quantity)>0&&Number(x.moduleID||0)===0;
+const haulFlag="coopHaulFleetID";
+function dependenciesOf(options={}){
+ return {store:options.store||require("./npc/nativeNpcStore"),
+ probe:options.probe||require("./coopRuntimeProbe"),
+ depot:options.depot||null};
+}
+function transferCargo(scene,fleet,miner,options={}){
  try{
-  if(!scene||!miner?.itemID)return 0;
-  const store=dependencies.store||require("./npc/nativeNpcStore");
-  const hauler=(fleet?.haulerEntityIDs||[]).map(id=>scene.getEntityByID(Number(id)))
-   .find(e=>e?.kind==="ship"&&e.itemID!==miner.itemID);
-  if(!hauler)return 0; // Without a real hauler cargo stays on the miner.
-  const source=(store.listNativeCargoForEntity(miner.itemID)||[])
-   .filter(x=>positive(x.cargoID)&&positive(x.typeID)&&Number(x.quantity)>0&&Number(x.moduleID||0)===0);
-  let volume=0,moved=0;
-  for(const item of source){
-   // Reparent the SAME native cargo item: no new items or made-up resource.
-   const result=store.upsertNativeCargo({...item,
-     entityID:Number(hauler.itemID),
-     ownerID:Number(hauler.ownerID||item.ownerID||0)
-   },{transient:hauler.transient===true});
-   if(result?.success!==true){console.warn("[CoopHaul] cargo transfer failed",item.cargoID,result?.errorMsg);continue;}
+  if(!scene||!positive(miner?.itemID)||!positive(fleet?.fleetID))return 0;
+  const {store,probe}=dependenciesOf(options);
+  const hauler=(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID(Number(id)))
+    .find(x=>x?.kind==="ship"&&positive(x.itemID)&&x.itemID!==miner.itemID);
+  if(!hauler)return 0; // Never erase an ore stack if the ship cannot receive it.
+  const items=(store.listNativeCargoForEntity(miner.itemID)||[]).filter(mineable);
+  let moved=0,quantity=0,volume=0;
+  for(const item of items){
    const cached=(miner.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
-   volume+=Math.max(0,Number(item.quantity)||0)*Math.max(0,Number(cached?.volume)||0);
+   const amount=Math.max(0,Number(item.quantity)||0);
+   const result=store.upsertNativeCargo({
+    ...item,entityID:Number(hauler.itemID),
+    ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
+    [haulFlag]:Number(fleet.fleetID),
+    coopHaulFromMinerID:Number(miner.itemID),
+    coopHaulLoadedAt:Date.now()
+   },{transient:hauler.transient===true});
+   if(!result?.success)continue;
+   // Re-read the authoritative cargo before removing the in-memory mirror.
+   if(!(store.listNativeCargoForEntity(hauler.itemID)||[]).some(x=>Number(x.cargoID)===Number(item.cargoID)))continue;
    miner.nativeCargoItems=(miner.nativeCargoItems||[]).filter(x=>Number(x.itemID)!==Number(item.cargoID));
+   quantity+=amount;
+   volume+=amount*Math.max(0,Number(cached?.volume)||0);
    moved++;
   }
   if(moved){
    hauler.nativeCargoItems=store.buildNativeCargoItems(hauler.itemID);
-   (dependencies.probe||require("./coopRuntimeProbe")).observe("living-hauler-loaded",null,
+   probe.observe("living-hauler-loaded",null,
     {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
-    {fleetID:fleet.fleetID,minerID:miner.itemID,stacks:moved,cargoQuantity:source.reduce((n,x)=>n+Number(x.quantity||0),0)});
+    {fleetID:fleet.fleetID,minerID:miner.itemID,haulerID:hauler.itemID,
+     stacks:moved,cargoQuantity:quantity,volumeM3:volume});
   }
   return volume;
  }catch(error){console.warn("[CoopHaul] transfer",error.message);return 0;}
 }
-function unloadCargo(scene,fleet,dependencies={}){
+function unloadCargo(scene,fleet,options={}){
  try{
-  if(!scene||!fleet)return;
-  const store=require("./npc/nativeNpcStore");
+  if(!scene||!positive(fleet?.fleetID))return {status:"INVALID",stacks:0};
+  const {store,probe,depot}=dependenciesOf(options);
   let stacks=0,quantity=0,volumeM3=0;
+  const deliveries=[];
   for(const rawID of fleet.haulerEntityIDs||[]){
    const hauler=scene.getEntityByID(Number(rawID));
-   if(!hauler)continue;
-   for(const item of store.listNativeCargoForEntity(hauler.itemID)||[]){
-    if(!positive(item.cargoID)||Number(item.moduleID||0)>0)continue;
+   if(hauler?.kind!=="ship")continue;
+   const manifest=(store.listNativeCargoForEntity(hauler.itemID)||[])
+    .filter(x=>mineable(x)&&Number(x[haulFlag])===Number(fleet.fleetID));
+   for(const item of manifest){
     const cached=(hauler.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
-    const result=store.removeNativeCargo(item.cargoID);
-    if(result?.success!==true)continue;
-    stacks++;
-    quantity+=Number(item.quantity)||0;
-    volumeM3+=Math.max(0,Number(item.quantity)||0)*Math.max(0,Number(cached?.volume)||0);
+    const removed=store.removeNativeCargo(item.cargoID);
+    if(!removed?.success)continue;
+    const amount=Number(item.quantity);
+    stacks++;quantity+=amount;
+    volumeM3+=amount*Math.max(0,Number(cached?.volume)||0);
+    deliveries.push({cargoID:Number(item.cargoID),typeID:Number(item.typeID),
+     quantity:amount,fromMinerID:positive(item.coopHaulFromMinerID),haulerID:Number(hauler.itemID)});
    }
    hauler.nativeCargoItems=store.buildNativeCargoItems(hauler.itemID);
   }
-  if(stacks)(dependencies.probe||require("./coopRuntimeProbe")).observe("living-hauler-delivered",null,
-   {spaceState:{systemID:fleet.systemID}},{
-    fleetID:fleet.fleetID,stacks,quantity,volumeM3,
-    // Delivery is currently a virtual depot, NOT a real market order.
-    destination:"virtual-depot"
-   });
- }catch(error){console.warn("[CoopHaul] unload",error.message);}
+  if(stacks){
+   // A virtual depot RECEIPT is not an EveJS station inventory deposit.
+   if(depot)try{depot.record({systemID:fleet.systemID,fleetID:fleet.fleetID,deliveries});}
+    catch(error){console.warn("[CoopHaul] depot receipt",error.message);}
+   probe.observe("living-hauler-delivered",null,{spaceState:{systemID:fleet.systemID}},
+    {fleetID:fleet.fleetID,stacks,quantity,volumeM3,destination:"virtual-depot"});
+  }
+  return {status:stacks?"DELIVERED":"NO_CARGO",stacks,quantity,volumeM3};
+ }catch(error){console.warn("[CoopHaul] unload",error.message);return {status:"ERROR",stacks:0};}
 }
-module.exports={transferCargo,unloadCargo};
+module.exports={transferCargo,unloadCargo,haulFlag};
