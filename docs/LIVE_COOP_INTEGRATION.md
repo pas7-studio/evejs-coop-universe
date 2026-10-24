@@ -1,3 +1,45 @@
+
+
+## Current preferred mode: free-roaming Living Universe (supersedes arena mode)
+
+**The game-night CoopStart mode intentionally does not create NPC waves.**
+The two human pilots join one shared native EveJS server and encounter a
+pre-existing population of durable named NPC pilots. The NPC population
+includes miners, haulers, traders, patrols and **native hostile pirates**.
+These entities live under their own virtual economy, faction policy and
+occupation; their physically materialized ships are created only through
+the authoritative EveJS NPC runtime.
+
+On an already visited solar system, the server maintains up to six
+materialized pilots under the current default configuration. NPC ships
+execute native movement toward real belts, stations and gates; when a
+pirate is engaging a combat target, scheduled work-route orders defer to
+its authoritative NPC controller. Names shown in space include role
+labels such as [Pirate] or [Miner].
+
+After a confirmed native NPC wreck, the named pilot receives a
+persisted 30-minute clone/ship recovery cooldown in the coop-npc-life.json
+state file. This applies even without the optional virtual economy
+enabled. Every native wreck is deduplicated. Background reconciliation
+revisits previously observed systems every two minutes, making
+recovered NPCs eligible to return without a player relog.
+
+An active physical NPC ship stays pinned to its actual EveJS system:
+the virtual clock can no longer teleport that pilot to another system
+while the physical ship is alive. Off-screen virtual pilots still plan
+inter-system travel; a full physical stargate transition for NPCs
+remains unfinished.
+
+The *old* developer-only native NPC demo, proximity-gated co-op arena
+and encounter wave director are **not enabled by CoopStart**. Their code
+remains for explicit internal testing only. Follow
+[PLAY_COOP_NOW](PLAY_COOP_NOW.md) instead.
+
+**Honest simulation boundary:** autonomous worker routing, native combat,
+wreck creation and loss recovery are integrated in code; real mining
+resource transfers, physical item-bearing hauler cargo and market orders
+are still not hooked to EveJS authoritative inventory/market systems.
+Real two-client gameplay has not yet been confirmed on the host.
 # Live co-op event integration
 
 This integration modifies **only your local pinned EveJS checkout**. It adds
