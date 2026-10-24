@@ -37,7 +37,8 @@ test("stale unrelated session is excluded, preventing a ghost-ship fleet warp",(
  assert.equal(inspect(x.inputs).reason,"NOT_SAME_NATIVE_SCENE");
 });
 test("native ship entity must be physical, same identity and have finite position",()=>{
- const x=fixture();x.ships.set(10002,{...x.wingman});
+ const x=fixture();x.scene.getShipEntityForSession=s=>s===x.follower?x.wingman:x.leader;
+ x.ships.set(10002,{...x.wingman});
  assert.equal(inspect(x.inputs).reason,"PHYSICAL_SHIP_NOT_READY");
  x.ships.set(10002,x.wingman);x.wingman.position.x=Infinity;
  assert.equal(inspect(x.inputs).reason,"PHYSICAL_SHIP_NOT_READY");
