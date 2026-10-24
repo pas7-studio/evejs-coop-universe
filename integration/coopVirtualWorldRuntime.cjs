@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 let backgroundTicks=0;
@@ -41,6 +41,7 @@ function start(){
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
      advanceNativePatrolRoutes();
      advanceNativeCivilianOrders();
+     advanceNativeRaids();
      // A recovered NPC returns to a living system without player re-login.
      if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
        for(const systemID of visitedSystems){
@@ -83,6 +84,41 @@ function advanceNativeCivilianOrders(){
  const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{});
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
+}
+function advanceNativeRaids(){
+ if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
+ const mining=require("../services/mining/miningNpcOperations");
+ const nativeStore=require("./npc/nativeNpcStore");
+ const controllers=require("./npc/npcRegistry");
+ if(!raidDirector){
+  raidDirector=require("./coopNativeRaids").createRaids({
+   warp:(pirateID,targetID,options)=>npc.warpToEntity(pirateID,targetID,options),
+   attack:(pirateID,targetID,options)=>npc.issueAttackOrder(pirateID,targetID,options)
+  });
+ }
+ const roles=economy?.snapshot().pilots||{};
+ for(const systemID of visitedSystems){
+  const pirates=bridge.snapshot().filter(p=>p.systemID===systemID&&roles[p.pilotID]?.role==="pirate")
+   .map(x=>x.entityID);
+  if(!pirates.length)continue;
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const fleets=mining.getMiningFleetsForSystem(systemID);
+  const fleetShips=fleets.flatMap(f=>[
+   ...(f.minerEntityIDs||[]).map(id=>({id:Number(id),role:"miner"})),
+   ...(f.haulerEntityIDs||[]).map(id=>({id:Number(id),role:"hauler"}))
+  ]);
+  const result=raidDirector.tick({
+   systemID,scene,pirates,fleetShips,
+   getCargo:id=>nativeStore.listNativeCargoForEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id)
+  });
+  if(result.actions.length){
+   console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:result.actions}));
+   require("./coopRuntimeProbe").observe("living-pirate-raid",null,
+    {spaceState:{systemID}},{actions:result.actions});
+  }
+ }
 }
 function observeSession(session,ship){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
