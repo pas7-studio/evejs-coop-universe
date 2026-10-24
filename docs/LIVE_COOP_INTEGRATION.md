@@ -56,3 +56,37 @@ docker compose up -d
 **Acceptance still requires a real run:** the probes demonstrate the code paths
 were reached, not that the client successfully rendered a ship or that
 persisted state survived a full database restart.
+
+## Optional first native NPC encounter (no X-Eve patch)
+
+The pinned main EveJS already contains `space/npc/npcRuntime.js`, including
+`spawnBatchInSystem`. The integration now includes
+`integration/coopNativeNpcDemo.cjs`, installed into
+`Code/server/src/space/coopNativeNpcDemo.js` and invoked after a successful
+ship attach. It uses the **real** EveJS native NPC spawn API, once per selected
+system per server process, with at most three NPC. It does not create fake
+player sessions. The NPC are from upstream's default hostile pool and may
+attack; use only on a dedicated demo world.
+
+Run on Windows from the project root:
+
+```powershell
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnableNativeNpcDemo -NpcCount 1 -NpcSystemID 30000142
+```
+
+Without `-EnableNativeNpcDemo`, no NPCs are added by this integration.
+The demo setting is regenerated per deployment by
+`compose.coop-probe.yaml`; removing the flag disables new encounters.
+`-Remove` reverses the source hooks, removes the demo adapter and override,
+then rebuilds the image.
+
+**This is not X-Eve Living Universe.** X-Eve v0.2.2 requires an exact
+v0.12.3.1 baseline archive with SHA-256
+`1DEB61A51F808D9F2B330214DA64EC297D9EE5F96EE4B8265692A65F35EEFC1E`.
+Our current pinned `gameboys84/EveJS` commit is not a verified copy of that
+archive, so blindly applying the X-Eve patch would be unsafe. This demo
+integrates directly with the pinned upstream's native NPC features instead;
+persistent 5,000-pilot X-Eve economics and population are **not** installed.
+
+Live verification still required: Docker rebuild, NPC spawn, two ship
+observers and combat/visibility correctness.
