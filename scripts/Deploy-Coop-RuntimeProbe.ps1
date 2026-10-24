@@ -1,8 +1,9 @@
 #Requires -Version 5.1
 [CmdletBinding()]
-param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142,[switch]$EnablePersistentEncounters,[int]$EncounterCooldownMinutes=60,[int]$EncounterMaxSpawns=24,[switch]$EnableVirtualWorld,[int]$VirtualPopulation=16,[int]$VirtualTravelSeconds=120,[switch]$MaterializeVirtualNpcs,[int]$MaterializeLimit=2)
+param([string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',[switch]$Remove,[switch]$EnableNativeNpcDemo,[int]$NpcCount=1,[int]$NpcSystemID=30000142,[switch]$EnablePersistentEncounters,[int]$EncounterCooldownMinutes=60,[int]$EncounterMaxSpawns=24,[switch]$EnableVirtualWorld,[int]$VirtualPopulation=16,[int]$VirtualTravelSeconds=120,[switch]$MaterializeVirtualNpcs,[int]$MaterializeLimit=2,[switch]$EnableVirtualEconomy)
 $ErrorActionPreference='Stop'
 if($MaterializeLimit -lt 1 -or $MaterializeLimit -gt 10){throw 'MaterializeLimit must be 1..10'}
+if($EnableVirtualEconomy -and -not $EnableVirtualWorld){throw 'EnableVirtualEconomy requires EnableVirtualWorld'}
 if($MaterializeVirtualNpcs -and -not $EnableVirtualWorld){throw 'MaterializeVirtualNpcs requires EnableVirtualWorld'}
 if($VirtualPopulation -lt 1 -or $VirtualPopulation -gt 100){throw 'VirtualPopulation must be 1..100'}
 if($VirtualTravelSeconds -lt 10){throw 'VirtualTravelSeconds must be >= 10'}
@@ -44,6 +45,10 @@ services:
   if($MaterializeVirtualNpcs){
     $yaml += "      EVEJS_COOP_MATERIALIZE_NPCS: '1'`n"
     $yaml += "      EVEJS_COOP_MATERIALIZE_LIMIT: '$MaterializeLimit'`n"
+  }
+  if($EnableVirtualEconomy){
+    $yaml += "      EVEJS_COOP_VIRTUAL_ECONOMY: '1'`n"
+    $yaml += "      EVEJS_COOP_ECONOMY_FILE: '/var/lib/evejs/coop-economy.json'`n"
   }
   [System.IO.File]::WriteAllText($override,$yaml,[System.Text.UTF8Encoding]::new($false))
 }
