@@ -150,3 +150,30 @@ This still does not prove either player can open the wreck inventory, move
 items, salvage, or that both clients render the wreck. Those actions must be
 exercised against the real EveJS loot/inventory flow in the eventual manual
 game test, without using a synthetic item generator.
+
+## Shared wreck loot-state synchronization
+
+The pinned EveJS transfer routine already performs the authoritative operation
+`transferNativeWreckItemToCharacterLocation()`: it validates wreck/item IDs,
+available quantity and inventory grant, then removes or decrements the source
+item. We do **not** duplicate that workflow.
+
+One specific upstream defect affects two observers: after a successful
+transfer, `nativeNpcWreckService.js` calls
+`refreshNativeWreckRuntimeEntity(...)` without `{ broadcast: true }`.
+That updates `isEmpty` on the server, but does not explicitly publish the
+slim-item change to the other connected clients. The pinned integration
+installer now changes this single call to
+`refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });`.
+The native service then uses its existing
+`scene.sendSlimItemChangesToAllSessions([entity])` mechanism.
+
+This affects **state propagation only**. Item transfer authorization,
+inventory location validation, server-side item grants, quantity adjustment
+and salvage continue to be handled by upstream. If the native service rejects
+the transfer, this broadcast path is not reached. The installer checks that
+the old call occurs exactly once and supports `-Remove` to restore it.
+
+For acceptance: after both pilots see the same wreck, loot the final item as
+pilot A; verify that the wreck's emptied state updates for B without
+reloading the system. This is not yet proven with a client and live database.
