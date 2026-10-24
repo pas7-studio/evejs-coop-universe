@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -194,12 +194,30 @@ function advanceNativeGateApproach(){
  if(route.length<2)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
  const worldData=require("./worldData"),controllers=require("./npc/npcRegistry");
+ // Both flags are independently opt-in. The current deploy preset
+ // intentionally enables neither, so existing owner playtests are untouched.
+ if(process.env.EVEJS_COOP_NATIVE_GATE_TRANSFER==="1"&&!nativeGateTransfer){
+  const store=require("./npc/nativeNpcStore");
+  const service=require("./npc/nativeNpcService");
+  const scrambled=require("./modules/hostileModuleRuntime");
+  const prepared=require("./coopNativeGateTransfer").createNativeGateTransfer({
+   sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+   store,service,getController:id=>controllers.getControllerByEntityID(id),
+   registry:identityRegistry,
+   isScrambled:ship=>scrambled.isEntityWarpScrambled(ship)
+  });
+  const recovered=prepared.recoverPending();
+  if(recovered.status==="NEEDS_OPERATOR_REPAIR")
+   throw Error("NATIVE_GATE_TRANSFER_REPAIR_REQUIRED: "+JSON.stringify(recovered.pending).slice(0,240));
+  if(recovered.recovered)
+   require("./coopRuntimeProbe").observe("living-native-gate-recovery",null,null,recovered);
+  nativeGateTransfer=prepared;
+ }
  if(!gateTravelDirector){
   gateTravelDirector=require("./coopNpcGateTravel").createGateTravel({
    warp:(entityID,gateID,options)=>npc.warpToEntity(entityID,gateID,options),
-   getGate:id=>worldData.getStargateByID(id)
-   // No transfer adapter: native ship movement between systems is not
-   // authorized until safe persistent ship+inventory migration exists.
+   getGate:id=>worldData.getStargateByID(id),
+   transfer:nativeGateTransfer?nativeGateTransfer.transfer:null
   });
  }
  const roles=economy?.snapshot().pilots||{};
@@ -217,7 +235,7 @@ function advanceNativeGateApproach(){
     {spaceState:{systemID}},{
      status:evidence.status,gateCount:evidence.gateCount,
      orders:evidence.orders,observations:evidence.observations,
-     nativeTransferVerified:false
+     nativeTransferVerified:evidence.orders.some(o=>o.action==="VERIFIED_NATIVE_GATE_TRANSFER")
     });
  }
 }
