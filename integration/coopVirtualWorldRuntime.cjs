@@ -740,6 +740,12 @@ function observeSession(session,ship){
             status:industry.status,fleets:industry.fleets,
             linkedPilots:industry.assignments
           });
+          const unsynced=industry.assignments.filter(x=>
+           x.presented==="BROADCAST_FAILED"||x.presented==="BROADCAST_UNAVAILABLE");
+          if(unsynced.length)require("./coopRuntimeProbe").observe(
+           "living-native-presentation-pending",session,ship,{systemID,
+            unresolved:unsynced.map(x=>({pilotID:x.pilotID,entityID:x.entityID,
+             reason:x.presented}))});
         }catch(error){console.warn("[CoopNativeIndustry]",error.message);}
       }
       // Never create a generic fake miner/hauler when EveJS already has
@@ -766,7 +772,10 @@ function observeSession(session,ship){
         linkedIndustryPilots:industry.assignments.length,
         successfulAssignments:result.filter(x=>Number(x.entityID)>0).length,
         spawnErrors:result.filter(x=>x.error).slice(0,10).map(x=>({
-         pilotID:x.pilotID,error:String(x.error).slice(0,120)})),
+         pilotID:x.pilotID,error:String(x.error).slice(0,120),
+         ...(x.nativeReason?{nativeReason:String(x.nativeReason).slice(0,100)}:{}),
+         ...(x.occupied!==undefined?{occupied:x.occupied,limit:x.limit}:{})
+        })),
         pendingTransit:result.filter(x=>x.pendingTransit).length
        });
       ensureCivilianOrders(runtime,npc);
@@ -775,7 +784,9 @@ function observeSession(session,ship){
       for(const link of result){
         if(!link.entityID||!pilotsByID.has(link.pilotID))continue;
         const change=present(scene,link.entityID,pilotsByID.get(link.pilotID));
-        if(change.status==="UPDATED"||change.status==="BROADCAST_FAILED")presented.push({pilotID:link.pilotID,...change});
+        if(change.status==="UPDATED"||change.status==="BROADCAST_FAILED"||
+           change.status==="BROADCAST_UNAVAILABLE")
+          presented.push({pilotID:link.pilotID,...change});
       }
       if(presented.length)require("./coopRuntimeProbe").observe("virtual-world-identity-projected",session,ship,{presented});
       for(const entry of result){
