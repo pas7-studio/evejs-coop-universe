@@ -13,7 +13,7 @@ function createRecognition({lookup,send,clock=()=>Date.now(),
     radiusMeters<1000||radiusMeters>250000||
     !Number.isSafeInteger(cooldownMs)||cooldownMs<60000||
     !Number.isSafeInteger(maxTracked)||maxTracked<1)throw Error("invalid NPC recognition options");
- const notices=new Map();
+ const notices=new Map(),lastPlayerNotice=new Map();
  function tick({session,scene,links=[]}={}){
   const characterID=validID(session?.characterID)&&Number(session.characterID);
   const systemID=validID(session?._space?.systemID)&&Number(session._space.systemID);
@@ -24,6 +24,9 @@ function createRecognition({lookup,send,clock=()=>Date.now(),
   if(!playerShip||!position(playerShip.position)||playerShip.kind!=="ship")
    return {status:"NO_PHYSICAL_SHIP"};
   const now=clock();
+  const playerKey=systemID+":"+characterID;
+  if(lastPlayerNotice.has(playerKey)&&now-lastPlayerNotice.get(playerKey)<180000)
+   return {status:"PLAYER_COOLDOWN"};
   const candidates=[];
   for(const link of links){
    if(!link||Number(link.systemID)!==systemID||
@@ -50,6 +53,11 @@ function createRecognition({lookup,send,clock=()=>Date.now(),
   try{send(session,"[Living Universe] "+name+" recognizes you nearby and "+qualifier+".");}
   catch(error){return {status:"DELIVERY_FAILED",error:String(error.message).slice(0,120)};}
   notices.set(key,now);
+  lastPlayerNotice.set(playerKey,now);
+  if(lastPlayerNotice.size>maxTracked){
+   for(const [id,at] of lastPlayerNotice)if(now-at>=180000)lastPlayerNotice.delete(id);
+   while(lastPlayerNotice.size>maxTracked)lastPlayerNotice.delete(lastPlayerNotice.keys().next().value);
+  }
   if(notices.size>maxTracked){
    for(const [id,at] of notices)if(now-at>=cooldownMs)notices.delete(id);
    while(notices.size>maxTracked)notices.delete(notices.keys().next().value);
