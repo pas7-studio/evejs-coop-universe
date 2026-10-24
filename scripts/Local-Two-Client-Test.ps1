@@ -145,9 +145,9 @@ switch ($Action) {
         if ($LASTEXITCODE -ne 0) {
             throw 'No headless/native world evidence yet. Run -Action CoopStart, inspect server startup logs, then retry. Client playtest is separate.'
         }
-        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs')
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity
         if ($LASTEXITCODE -ne 0) {
-            throw 'Living Universe is not yet confirmed from real scene evidence. Inspect the report above and -Action Logs.'
+            throw 'Physical NPC activity is not yet confirmed. Inspect movement, ore and native target evidence in the report, then -Action Logs.'
         }
         Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed by the server. Client login, rendering, combat and loot remain unverified.'
     }
