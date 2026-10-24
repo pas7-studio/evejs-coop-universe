@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,systemID:requestedSystemID=null}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,systemID:requestedSystemID=null}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -159,6 +159,33 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  const chain=nativeBuy.find(b=>nativeSell.some(s=>
   s.pilotID===b.pilotID&&Number(s.entityID)===Number(b.entityID)&&
   s._time<=b._time&&b._time-s._time<=60*60000));
+ // Native weapon + measured native HP loss for named pirate versus
+ // genuine but unnamed stock miner/hauler, NOT a claim of a kill.
+ const stockWeapons=rows.filter(e=>e.event==="living-native-weapon-event"&&
+  e.status==="VERIFIED_NATIVE_STOCK_FLEET_WEAPON_EVENT"&&
+  positive(e.systemID)===systemID&&positive(e.attackerEntityID)&&
+  positive(e.victimEntityID)&&/^coop-pilot-[0-9]{3,}$/.test(String(e.attackerPilotID||""))&&
+  (!latestBoot||e._time>=latestBoot._time));
+ const stockDamage=rows.filter(e=>e.event==="living-native-stock-fleet-combat"&&
+  positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time))
+  .flatMap(e=>(e.events||[]).filter(d=>positive(d.victimEntityID)&&
+    Number(d.healthLossHP)>0&&Array.isArray(d.attackerPilotIDs)&&
+    d.attackerPilotIDs.length>0).map(d=>({...d,_time:e._time})));
+ const pairedStock=stockDamage.find(d=>stockWeapons.some(w=>
+  Number(w.victimEntityID)===Number(d.victimEntityID)&&
+  d.attackerPilotIDs.includes(w.attackerPilotID)&&
+  (!Array.isArray(d.attackerEntityIDs)||
+   d.attackerEntityIDs.includes(Number(w.attackerEntityID)))&&
+  w._time<=d._time&&d._time-w._time<=10*60000));
+ const stockRaid={
+  verifiedNativeWeaponEvents:stockWeapons.length,
+  measuredStockFleetHpLossEvents:stockDamage.length,
+  correlatedVictimEntityID:pairedStock?.victimEntityID||null,
+  status:pairedStock?"CORRELATED_STOCK_FLEET_WEAPON_AND_HP_LOSS":
+   stockDamage.length?"STOCK_FLEET_HP_LOSS_ONLY":
+   stockWeapons.length?"STOCK_FLEET_WEAPON_ONLY":"NO_STOCK_FLEET_PVE_EVIDENCE",
+  limits:"Real native weapon launch/activation and measured hull HP loss. No wreck, killer, loot or client evidence inferred"
+ };
  const market={
   settledTrades:nativeSystemTrades.length,
   nativeSeedSales:nativeSell.length,
@@ -227,11 +254,15 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
  // readiness is not a prerequisite for combat between two other named NPCs.
  // It still requires actual authoritative scene topology and the strict
  // source-weapon -> HP -> physical wreck -> stored loot evidence below.
- if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket){
+ if(requireCombat||requireWeapon||requireFinalAttacker||requireMarket||requireStockRaid){
   if(topology&&scenery.waypoints>0){
    status="READY_FOR_CLIENT_PLAYTEST";
    blockers.length=0;
   }
+ }
+ if(requireStockRaid&&status==="READY_FOR_CLIENT_PLAYTEST"&&!pairedStock){
+  status="AWAITING_STOCK_FLEET_WEAPON_HP_CHAIN";
+  blockers.push("No native pirate missile launch or weapon activation matched a measured HP drop on the same real stock mining fleet ship. Attack orders and target locks alone do not prove damage.");
  }
  if(requireFinalAttacker&&status==="READY_FOR_CLIENT_PLAYTEST"&&!nativeAttackerChain){
   status="AWAITING_UPSTREAM_DESTRUCTION_ATTACKER";
@@ -276,7 +307,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    legacyTransient:Number(durableRecovery.legacyTransient)||0,
    confirmedLosses:Number(durableRecovery.confirmedLosses)||0,
    errors:durableRecovery.errors||[]}:null,
-  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,
+  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,stockRaid,
   systemSiteReadiness:siteReadiness?{
    status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
    realAsteroidBelts:siteReadiness.realAsteroidBelts,
@@ -322,7 +353,8 @@ if(require.main===module){
    systemID:selected,windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
    requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
    requireFinalAttacker:args.includes("--require-final-attacker"),
-   requireMarket:args.includes("--require-market")
+   requireMarket:args.includes("--require-market"),
+   requireStockRaid:args.includes("--require-stock-raid")
   });
   console.log(JSON.stringify(report,null,2));
   if(report.status!=="READY_FOR_CLIENT_PLAYTEST")process.exitCode=2;
