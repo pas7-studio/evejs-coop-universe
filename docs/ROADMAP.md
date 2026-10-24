@@ -2,6 +2,22 @@
 
 Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **DONE** evidence in commit and automated/manual test linked. Nothing below is claimed implemented.
 
+## Owner-defined current execution order (2026-10-24)
+
+The following priority blocks are **deferred**, not cancelled:
+- P0: real server + 2 compatible clients, shared fleet warp/combat/loot,
+  safe reconnect without losing ships.
+- P1: native NPC transit between systems and real NPC market buy/sell
+  orders (separate implementation block, not part of this branch).
+
+The native NPC fight/retreat/reinforcement slice has code and tests, but
+still requires live server/client verification. The active reviewable
+work is **P1 personal NPC memory** and the **P2 factual faction chronicle**.
+See [NPC memory and faction chronicle](NPC_MEMORY_AND_FACTION_CHRONICLE.md)
+for exact code scope, independent tests, proof requirements and remaining
+work. Neither the P0 gate nor complete persistent faction warfare is
+claimed done by these code changes.
+
 ## P0 — establish trustworthy baseline
 
 ### COOP-001 — reproducible upstream inventory [TODO]
