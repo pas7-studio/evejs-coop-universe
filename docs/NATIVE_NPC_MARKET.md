@@ -18,7 +18,7 @@ A trade is eligible only when a persisted `coop-pilot-NNN` identity matches the 
 
 - Separate allowlists of exact **type IDs** for buying and selling. Empty allowlists mean **no trades**. Only unpackaged native cargo (`moduleID=0`, non-singleton) can be sold, never charges fitted into modules.
 - Bounded order quantity (default 5, maximum configured 20 per runtime tick), max unit price (default 10,000 ISK, capped at 1,000,000), two NPC trades per world tick maximum, 5-minute per-pilot cooldown by default.
-- Read the actual market `GetOrders` book from the station's region. Accept only explicit `source="seed"`, matching station and type, finite price, positive available stock. Preserve Rust's 64-bit market order IDs as decimal **strings** rather than passing them through unsafe JavaScript numeric conversion.
+- Native market preflight also excludes authenticated player-controlled hulls, live native combat targeting/manual attack orders and ships in native warp.\n- Read the actual market `GetOrders` book from the station's region. Accept only explicit `source="seed"`, matching station and type, finite price, positive available stock. Preserve Rust's 64-bit market order IDs as decimal **strings** rather than passing them through unsafe JavaScript numeric conversion.
 - Revalidate the physical NPC, its station proximity, cargo and ledger balance after awaiting the market book and before any mutating RPC.
 - Native ship hull type data must provide a **finite cargo capacity**; all current native cargo types must have known finite volumes. A purchase is capped by actual spare hull volume and earned wallet balance. Unknown capacity/volume fails closed.
 - After `FillOrder` or `AdjustSeedStock`, verify the exact returned station, type, order/filled quantity where available, and matching price. A changed or ambiguous remote acknowledgement is **not silently settled**.
@@ -52,7 +52,7 @@ The manual Market report requires **a real settled native seed buy-order sale fo
 
 For acceptance on a real EveJS server, verify original cargo decreases, a real seed buy order decrements, earned ISK increases once, then a second real seed sell stock row decrements, a new cargo ID appears in the exact same native ship, wallet decreases appropriately, and the player-visible market matches the daemon. Repeat with a disconnected market daemon and a forced crash after RPC acknowledgement; there must be **no duplicate cargo or ISK**.
 
-**Current isolated evidence:** 12/12 native market transaction assertions, 24/24 strict world/report assertions PASS in a JavaScript test harness. Not a live game test or end-to-end multiplayer verification.
+**Current isolated evidence:** 13/13 native market transaction assertions, 24/24 strict world/report assertions PASS in a JavaScript test harness. Not a live game test or end-to-end multiplayer verification.
 
 ## Next slice — independent NPC orders
 
