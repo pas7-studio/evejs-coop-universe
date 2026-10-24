@@ -32,7 +32,7 @@ real ship cargo capacity, exact price and remote acknowledgements. The
 same native ship's cargo cache and durable store are synchronized before
 ledger settlement. Per-pilot transaction journals prevent automatic
 double-fills after uncertain RPC responses. Both the market flag and
-buy/sell type allowlists are empty/OFF by default. 12/12 transaction
+buy/sell type allowlists are empty/OFF by default. 13/13 transaction
 and 24/24 report assertions passed in isolation. **This is NOT a
 personal NPC-owned market order/escrow implementation, and no real
 Docker/client market trade has been confirmed.**
