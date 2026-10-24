@@ -156,7 +156,17 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
   active.add(pre.pilotID);
   try{
    const station=getStation(pre.stationID);
-   const book=await call("GetOrders",{region_id:Number(station.regionID),type_id:pre.typeID});
+   const regionID=pos(station?.regionID);
+   if(!regionID)return status("STATION_REGION_UNAVAILABLE");
+   let book;
+   try{book=await call("GetOrders",{region_id:regionID,type_id:pre.typeID});}
+   catch(error){return {status:"MARKET_UNAVAILABLE",
+    reason:String(error?.message||error).slice(0,90)};}
+   // Physical ship and cargo may change while awaiting market book.
+   const current=offer(params);
+   if(current.status!=="ELIGIBLE"||current.balance!==pre.balance)
+    return status("MARKET_PREFLIGHT_STALE");
+   pre.stock=current.stock;pre.native=current.native;
    const rows=pre.side==="sell"?book?.buys:book?.sells;
    const row=(Array.isArray(rows)?rows:[]).find(x=>
     x.source==="seed"&&Number(x.station_id)===pre.stationID&&
@@ -174,9 +184,26 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
    }else{
     const type=resolveType(pre.typeID);
     if(!type||Number(type.typeID)!==pre.typeID||!pos(type.groupID)||!pos(type.categoryID)||
-     !Number.isFinite(Number(type.volume))||Number(type.volume)<0)return status("UNKNOWN_NATIVE_ITEM_TYPE");
-    quantity=Math.min(maxOrder,Math.floor(pre.balance/price));
-    if(quantity<1)return status("INSUFFICIENT_EARNED_ISK");
+     type.volume===null||type.volume===undefined||!Number.isFinite(Number(type.volume))||Number(type.volume)<0)return status("UNKNOWN_NATIVE_ITEM_TYPE");
+    const hull=resolveType(pre.native.typeID);
+    const capacity=Number(hull?.capacity);
+    if(!Number.isFinite(capacity)||capacity<=0)
+     return status("NATIVE_CARGO_CAPACITY_UNKNOWN");
+    let occupied=0;
+    for(const cargoRow of store.listNativeCargoForEntity(pre.entityID)||[]){
+     if(Number(cargoRow.moduleID||0)!==0)continue;
+     const item=resolveType(cargoRow.typeID);
+     if(item?.volume===null||item?.volume===undefined||
+      !Number.isFinite(Number(item.volume))||Number(item.volume)<0||
+      !Number.isSafeInteger(Number(cargoRow.quantity))||Number(cargoRow.quantity)<0)
+      return status("NATIVE_CARGO_VOLUME_UNVERIFIED");
+     occupied+=Number(cargoRow.quantity)*Number(item.volume);
+    }
+    const itemVolume=Number(type.volume);
+    const free=Math.max(0,capacity-occupied);
+    const allowedByVolume=itemVolume>0?Math.max(0,Math.floor((free+1e-8)/itemVolume)):maxOrder;
+    quantity=Math.min(maxOrder,Math.floor(pre.balance/price),allowedByVolume);
+    if(quantity<1)return status(free<itemVolume?"NATIVE_CARGO_FULL":"INSUFFICIENT_EARNED_ISK");
     allocated=store.allocateCargoID({transient:false});
     if(allocated?.success!==true||!pos(allocated.data))return status("CARGO_ID_ALLOCATION_FAILED");
     newCargo={cargoID:Number(allocated.data),entityID:pre.entityID,
