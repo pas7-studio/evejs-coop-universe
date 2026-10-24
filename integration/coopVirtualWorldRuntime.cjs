@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 let backgroundTicks=0;
@@ -32,6 +32,10 @@ function start(){
      // Physical NPC ships stay in their actual EveJS solar system.
      const pins={};
      if(bridge)for(const entry of bridge.snapshot())pins[entry.pilotID]=entry.systemID;
+     // Stock EveJS mining fleet hulls also have durable pilot identities.
+     if(identityRegistry)for(const [pilotID,entry] of Object.entries(identityRegistry.snapshot().links)){
+       if(!pins[pilotID]&&identityRegistry.get(pilotID))pins[pilotID]=entry.systemID;
+     }
      world.advance(pins);
      if(economy)economy.advance(world.snapshot().pilots);
      if(factionDirector)factionDirector.advance(economy.snapshot().systems);
@@ -105,12 +109,12 @@ function observeSession(session,ship){
       if(!bridge){
         const {createBridge}=require("./coopNpcMaterializer");
         const {createRegistry}=require("./coopIdentityRegistry");
-        const registry=createRegistry({
+        identityRegistry=createRegistry({
           file:process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json",
           exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id))
         });
         bridge=createBridge({
-          registry,
+          registry:identityRegistry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
           exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
           spawn:(system,pilot)=>{
@@ -130,10 +134,31 @@ function observeSession(session,ship){
           }
         });
       }
-      const result=bridge.reconcile(systemID,residents);
+      const nativeMining=process.env.EVEJS_COOP_NATIVE_MINING==="1";
+      const present=require("./coopNpcPresentation").presentVirtualPilot;
+      let industry={status:"DISABLED",fleets:[],assignments:[]};
+      if(nativeMining){
+        try{
+          const mining=require("../services/mining/miningNpcOperations");
+          const cargo=require("./npc/nativeNpcStore");
+          industry=require("./coopNativeIndustry").observe({
+            systemID,scene,pilots:residents,registry:identityRegistry,
+            getFleets:id=>mining.getMiningFleetsForSystem(id),
+            getCargo:id=>cargo.listNativeCargoForEntity(id),
+            present
+          });
+          require("./coopRuntimeProbe").observe("living-native-industry",session,ship,{
+            status:industry.status,fleets:industry.fleets,
+            linkedPilots:industry.assignments
+          });
+        }catch(error){console.warn("[CoopNativeIndustry]",error.message);}
+      }
+      // Never create a generic fake miner/hauler when EveJS already has
+      // physical mining NPCs with actual mining lasers and ore cargo.
+      const materialize=nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents;
+      const result=bridge.reconcile(systemID,materialize);
       ensureCivilianOrders(runtime,npc);
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
-      const present=require("./coopNpcPresentation").presentVirtualPilot;
       const presented=[];
       for(const link of result){
         if(!link.entityID||!pilotsByID.has(link.pilotID))continue;
@@ -156,7 +181,11 @@ function observeSession(session,ship){
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
         civilianActions,
         assignments:result,sceneReady:Boolean(scene),
-        livingShips:result.filter(x=>x.entityID).map(x=>({pilotID:x.pilotID,entityID:x.entityID,role:pilotsByID.get(x.pilotID)?.role}))
+        livingShips:[
+          ...result.filter(x=>x.entityID).map(x=>({pilotID:x.pilotID,entityID:x.entityID,role:pilotsByID.get(x.pilotID)?.role})),
+          ...industry.assignments.map(x=>({pilotID:x.pilotID,entityID:x.entityID,role:x.role}))
+        ],
+        realMiningFleets:industry.fleets.length
       });
     }catch(error){console.warn("[CoopMaterializer]",error.message);}
   }
