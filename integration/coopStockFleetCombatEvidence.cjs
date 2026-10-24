@@ -73,13 +73,49 @@ function createStockFleetCombatEvidence({clock=()=>Date.now(),maxTracked=100,min
     }
    }
    if(previous.has(key)||previous.size<maxTracked)
-    previous.set(key,{entity:victim,layers:current,at:now});
+    previous.set(key,{entity:victim,layers:current,at:now,
+     victimRole:targetRow.role,attackers});
   }
   if(previous.size>=maxTracked)
    for(const [key,row] of previous)if(now-row.at>60000)previous.delete(key);
   return {status:"SAMPLED",systemID:system,physicalStockShips:observedTargets.size,
    damageEvents:events.length,events:events.slice(0,30)};
  }
- return {sample};
+ // Final native wreck callback runs after EveJS removed the entity
+ // and controller, possibly before the next 5s sampler. The original
+ // physical ship object still exists in the callback. Compare ONLY that
+ // same object's fresh pre-destruction HP to its actual terminal HP.
+ // Earlier native attack orders remain correlation, NOT final-shot credit.
+ function terminalDamage({systemID,entityID,ship,wreckID,getHealth}={}){
+  const system=positive(systemID),id=positive(entityID),wreck=positive(wreckID);
+  if(!system||!id||!wreck||ship?.kind!=="ship"||
+   ship.nativeNpc!==true||Number(ship.itemID)!==id||
+   typeof getHealth!=="function")return {status:"INVALID_STOCK_TERMINAL"};
+  const key=system+":"+id,prior=previous.get(key);
+  if(!prior||prior.entity!==ship)return {status:"NO_PRIOR_PHYSICAL_STOCK_SAMPLE"};
+  const now=clock();
+  if(!Number.isFinite(now)||now<=prior.at||now-prior.at>30000)
+   return {status:"STALE_STOCK_TERMINAL_HP"};
+  const attackers=prior.attackers||[];
+  if(!attackers.length)return {status:"NO_PRIOR_VERIFIED_PIRATE_ATTACK_ORDER"};
+  let current;
+  try{current=healthLayers(getHealth(ship));}catch(_error){}
+  if(!current)return {status:"NO_STOCK_TERMINAL_HP"};
+  const lost={shield:Math.max(0,prior.layers.shield-current.shield),
+   armor:Math.max(0,prior.layers.armor-current.armor),
+   structure:Math.max(0,prior.layers.structure-current.structure)};
+  const total=lost.shield+lost.armor+lost.structure;
+  if(total<minLossHP)return {status:"NO_OBSERVED_STOCK_TERMINAL_LOSS"};
+  previous.delete(key);
+  return {status:"NATIVE_STOCK_TERMINAL_HP_DROP",event:{
+   systemID:system,victimEntityID:id,victimRole:prior.victimRole,
+   nativeWreckID:wreck,healthLossHP:Math.round(total*1000)/1000,
+   layerLossHP:lost,
+   attackerPilotIDs:[...new Set(attackers.map(a=>a.pilotID))].sort(),
+   attackerEntityIDs:[...new Set(attackers.map(a=>a.entityID))].sort((a,b)=>a-b),
+   attribution:"NATIVE_STOCK_TERMINAL_HP_CORRELATED_PRIOR_ORDER_NOT_KILL_CREDIT"
+  }};
+ }
+ return {sample,terminalDamage};
 }
 module.exports={createStockFleetCombatEvidence};
