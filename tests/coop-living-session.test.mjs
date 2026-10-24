@@ -79,3 +79,21 @@ test("physical raid movement owns pirate, so civilian roaming does not issue a c
   {"coop-pilot-005":{role:"pirate"}},{blockedIDs}),[]);
  assert.equal(moves.length,1);
 });
+
+test("rival raids skip same-faction loaded miners and only order authorized native targets",()=>{
+ const ships=new Map([
+  [901,{itemID:901,kind:"ship",position:{x:0,y:0,z:0},mode:"STOP"}],
+  [101,{itemID:101,kind:"ship",position:{x:3000,y:0,z:0},mode:"STOP"}],
+  [202,{itemID:202,kind:"ship",position:{x:4000,y:0,z:0},mode:"STOP"}]
+ ]);
+ const local={getEntityByID:id=>ships.get(id)};
+ const issued=[];
+ const raids=createRaids({attack:(id,target)=>{issued.push([id,target]);return {success:true}},
+  warp:()=>({success:true}),clock:()=>10_000});
+ const result=raids.tick({systemID:30000142,scene:local,pirates:[901],
+  fleetShips:[{id:101,role:"miner"},{id:202,role:"miner"}],
+  getCargo:()=>[{moduleID:0,quantity:25}],
+  canAttack:({targetID})=>targetID===202});
+ assert.equal(result.actions.length,1);
+ assert.deepEqual(issued,[[901,202]]);
+});
