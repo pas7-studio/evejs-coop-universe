@@ -19,5 +19,11 @@ Read `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/UPSTREAM.md`,
 - Do not change task status to DONE on documentation alone.
 - Never commit credentials, client data, dynamic databases, certificates, binaries, screenshots of personal information, or session tokens.
 
-## Current highest priority
-COOP-001 upstream source audit; COOP-002 backend-only Docker verification; COOP-004 permissions; COOP-010 listener/session audit. `COOP-011` may use only a disposable TCP test server, not EveJS exposed endpoints.
+## Current owner-directed NPC feature block (2026-10-24)
+Review [NPC memory and faction chronicle](docs/NPC_MEMORY_AND_FACTION_CHRONICLE.md).
+Implement and test NPC-MEM-001/002/003 and NPC-FACTION-001 without
+substituting fabricated ship events or virtual market orders for native
+EveJS outcomes. This is not permission to bypass the P0 network/client
+legal and security gates, which are postponed as a separate block.
+The real two-client gameplay and NPC inter-system/market-order acceptance
+tests remain unverified. Do not mark these systems DONE on unit tests alone.
