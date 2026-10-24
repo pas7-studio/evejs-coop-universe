@@ -64,3 +64,14 @@ jobs:
         env:
           EVEJS_CODE_PATH: ${{ runner.temp }}/evejs-upstream/Code
         run: node --test ./tests/upstream-session-registry.test.mjs
+
+      - name: Run upstream scene observer and movement parity checks
+        env:
+          EVEJS_SKIP_NPC_STARTUP: "1"
+          EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE: "1"
+        shell: bash
+        run: |
+          set -eu
+          cd "$RUNNER_TEMP/evejs-upstream/Code/server"
+          node scripts/verifyMovementRemovalParity.js
+          node scripts/verifyJoltsObserverParity.js
