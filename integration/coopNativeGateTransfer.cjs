@@ -11,9 +11,9 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const clone=x=>JSON.parse(JSON.stringify(x));
 const itemsSignature=x=>JSON.stringify(x.map(v=>clone(v))
  .sort((a,b)=>Number(a.cargoID||a.moduleID)-Number(b.cargoID||b.moduleID)));
-function createNativeGateTransfer({sceneForSystem,store,service,getController,
+function createNativeGateTransfer({sceneForSystem,getGate,store,service,getController,
  registry,journalDir="/var/lib/evejs/coop-native-transfers",clock=()=>Date.now(),isScrambled=()=>false}={}){
- if(typeof sceneForSystem!=="function"||!store||!service||
+ if(typeof sceneForSystem!=="function"||typeof getGate!=="function"||!store||!service||
   typeof getController!=="function"||typeof isScrambled!=="function"||
   typeof registry?.relocate!=="function"||
   typeof service.dematerializeNativeController!=="function"||
@@ -99,6 +99,15 @@ function createNativeGateTransfer({sceneForSystem,store,service,getController,
    controller.manualOrder?.type==="attack"||isScrambled(ship)||
    ship.activeModuleEffects?.size>0||String(ship.mode||"").toUpperCase().includes("WARP"))
    return {success:false,errorMsg:"NATIVE_GATE_PREFLIGHT_REJECTED"};
+  const gateFrom=getGate(gate.sourceGateID),gateTo=getGate(gate.destinationGateID);
+  if(!gateFrom||!gateTo||
+   Number(gateFrom.itemID)!==Number(gate.sourceGateID)||
+   Number(gateTo.itemID)!==Number(gate.destinationGateID)||
+   Number(gateFrom.solarSystemID)!==source||
+   Number(gateTo.solarSystemID)!==dest||
+   Number(gateFrom.destinationID)!==Number(gate.destinationGateID)||
+   Number(gateTo.destinationID)!==Number(gate.sourceGateID))
+   return {success:false,errorMsg:"RECIPROCAL_STARGATE_NOT_VERIFIED"};
   const sourceGate=sourceScene.staticEntities?.find(x=>Number(x.itemID)===Number(gate.sourceGateID)&&x.kind==="stargate");
   if(!sourceGate||!vector(sourceGate.position)||dist(ship.position,sourceGate.position)>30000)
    return {success:false,errorMsg:"NPC_NOT_AT_PHYSICAL_GATE"};
