@@ -96,6 +96,13 @@ function resolveAuthenticatedPlayerID(scene,aggressor){
    (String(aggressor?.kind)==="drone"&&positive(aggressor?.ownerID)===positive(session.characterID))));
  return positive(session?.characterID);
 }
+function informPlayer(scene,characterID,message){
+ try{
+  const session=Array.from(scene?.sessions?.values?.()||[])
+    .find(s=>positive(s?.characterID)===positive(characterID));
+  if(session)require("../services/chat/chatHub").sendSystemMessage(session,message);
+ }catch(error){console.warn("[CoopConsequences] player notice",error.message);}
+}
 function noteMiningAggression(scene,fleet,aggressor,occurredAt){
  if(process.env.EVEJS_COOP_PLAYER_CONSEQUENCES!=="1")return {status:"DISABLED"};
  try{
@@ -113,6 +120,8 @@ function noteMiningAggression(scene,fleet,aggressor,occurredAt){
    characterID,ownerID,systemID:fleet.systemID,
    fleetID:fleet.fleetID,occurredAt
   });
+  if(result.status==="APPLIED")informPlayer(scene,characterID,
+   "[Living Universe] Mining fleet trust decreased after your attack. Future response strength depends on your EveJS standings.");
   if(result.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
    {spaceState:{systemID:fleet.systemID}},
    {characterID,ownerID,kind:"assault",rawChange:-0.25});
@@ -132,6 +141,10 @@ function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null)
   if(link?.role!=="pirate")return {status:"NO_PIRATE_IDENTITY"};
   const ownerID=positive(ship?.factionID)||positive(ship?.corporationID)||positive(ship?.ownerID);
   const outcome=getNative().onPirateKill({characterID,ownerID,systemID,wreckID});
+  if(outcome.status==="APPLIED"){
+   const scene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
+   informPlayer(scene,characterID,"[Living Universe] Pirate destroyed. Your standing with its owner declined.");
+  }
   if(outcome.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
    {spaceState:{systemID}},
    {characterID,ownerID,kind:"pirateKill",rawChange:-0.12,pilotID:link.pilotID});
@@ -148,6 +161,8 @@ function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null)
    if(fleet&&miner){
     const minerOwnerID=positive(miner.factionID)||positive(miner.corporationID)||positive(miner.ownerID);
     const defended=getNative().onMinerDefense({characterID,ownerID:minerOwnerID,systemID,wreckID});
+    if(defended.status==="APPLIED")informPlayer(scene,characterID,
+     "[Living Universe] Mining convoy protected. Its faction now trusts you more.");
     if(defended.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
      {spaceState:{systemID}},
      {characterID,ownerID:minerOwnerID,kind:"defense",rawChange:0.18,pilotID:link.pilotID});
