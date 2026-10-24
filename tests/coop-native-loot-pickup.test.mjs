@@ -12,9 +12,12 @@ const session={characterID,clientID:44001,_space:{shipID:77001,systemID}};
 const scene={systemID,sessions:new Map([[1,session]]),
  getEntityByID:id=>id===wreck.wreckID?nativeWreck:id===77001?pilotShip:null};
 const sourceBefore={wreckID:wreck.wreckID,wreckItemID,typeID:34,quantity:6};
-const base=()=>({scene,wreck,characterID,wreckItemID,sourceBefore,
+const base=()=>({scene,wreck,characterID,wreckItemID,
+ destinationLocationID:77001,sourceBefore,
  sourceAfter:null,availableQuantity:6,requestedQuantity:6,
- grantResult:{success:true,data:{changes:[{itemID:99001}]}}});
+ grantResult:{success:true,data:{quantity:6,
+  changes:[{item:{itemID:99001,ownerID:characterID,locationID:77001,
+   typeID:34,quantity:6}}]}}});
 test("native complete pickup requires authenticated physical player and depleted source",()=>{
  const r=verify(base());
  assert.equal(r.status,"VERIFIED_NATIVE_LOOT_PICKUP");
@@ -25,7 +28,8 @@ test("native complete pickup requires authenticated physical player and depleted
 });
 test("partial native pickup requires exact remaining source quantity",()=>{
  const b={...base(),requestedQuantity:2,
-  sourceAfter:{...sourceBefore,quantity:4}};
+  sourceAfter:{...sourceBefore,quantity:4},
+  grantResult:{...base().grantResult,data:{...base().grantResult.data,quantity:2}}};
  const v=verify(b);
  assert.equal(v.status,"VERIFIED_NATIVE_LOOT_PICKUP");
  assert.equal(v.remainingQuantity,4);
@@ -38,6 +42,10 @@ test("no false pickup proof when upstream granted but wreck source still exists"
   "NATIVE_LOOT_SOURCE_NOT_REMOVED");
  assert.equal(verify({...b,grantResult:{success:false,errorMsg:"OUT_OF_SPACE"}}).status,
   "NATIVE_GRANT_NOT_CONFIRMED");
+ assert.equal(verify({...b,grantResult:{success:true,data:{quantity:6,changes:[]}}}).status,
+  "NATIVE_GRANT_DESTINATION_UNVERIFIED");
+ assert.equal(verify({...b,destinationLocationID:77002}).status,
+  "NATIVE_GRANT_DESTINATION_UNVERIFIED");
 });
 test("reject fake wrecks, fabricated sessions and wrong source records",()=>{
  const b=base();
