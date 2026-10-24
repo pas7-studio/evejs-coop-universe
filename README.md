@@ -36,6 +36,12 @@ independently authorized EVE client and human confirmation.
 reported dependency advisories are a separate security-remediation
 track; the game remains loopback-only. No GitHub Actions/remote CI.
 
+Named NPC restart safety is documented in
+[NATIVE_NPC_DURABILITY.md](docs/NATIVE_NPC_DURABILITY.md).
+The new durable-hull implementation is still **unverified in a live
+restart**; do not substitute saved identity files for real native
+ship continuity.
+
 ## What this repository contains
 
 **Executable, optional server-side integration overlay and Windows runbooks.** This repo contains NPC/world modules, reversible source hooks, deployment scripts, and read-only live two-pilot evidence tools. It does **not** include a proprietary EVE client, a standalone complete game server, or a verified VPN gateway. Do not mistake a committed integration for proven end-to-end gameplay.
