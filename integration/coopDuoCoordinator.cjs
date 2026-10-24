@@ -4,6 +4,7 @@
 const registered=new Map();
 let timer=null;
 const lastSceneObservation=new Map();
+let notices=null;
 function pos(x){const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:null;}
 function readyPilots(scene,systemID){
  if(!scene?.sessions||typeof scene.sessions.values!=="function")return [];
@@ -55,6 +56,12 @@ function tick(){
     require("./coopRuntimeProbe").observe("coop-party-proximity",owner.session,owner.ship,{
      ready:Boolean(party),characterIDs:party?.pilots.map(p=>p.characterID)||[],separationMeters:party?.separation||null
     });
+    if(party&&process.env.EVEJS_COOP_PARTY_NOTICES==="1"){
+     try{
+      if(!notices)notices=require("./coopPartyNotices").createNotices();
+      notices.rendezvous({scene,party,systemID});
+     }catch(error){console.warn("[CoopDuoCoordinator] party notice",error.message);}
+    }
    }
    // Ballpark may initially attach before both ships have reciprocal
    // visibility. Re-sample while the party remains on grid, not only on
