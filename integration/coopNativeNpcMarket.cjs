@@ -11,13 +11,13 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const total=(price,qty)=>Math.round(price*qty*100)/100;
 const status=e=>({status:e});
-function createNpcMarketTrader({call,store,registry,getStation,resolveType,
+function createNpcMarketTrader({call,store,registry,getStation,resolveType,sceneForSystem,
  root="/var/lib/evejs/coop-native-market",clock=()=>Date.now(),
  maxQuantity=10,maxPrice=1000000,cooldownMs=300000}={}){
- if(typeof call!=="function"||!store||typeof registry?.snapshot!=="function"||
+ if(typeof call!=="function"||typeof sceneForSystem!=="function"||!store||typeof registry?.snapshot!=="function"||
   typeof getStation!=="function"||typeof resolveType!=="function"||
   !["getNativeEntity","listNativeCargoForEntity","upsertNativeCargo",
-   "removeNativeCargo","allocateCargoID"].every(k=>typeof store[k]==="function")||
+   "removeNativeCargo","allocateCargoID","buildNativeCargoItems"].every(k=>typeof store[k]==="function")||
   !Number.isSafeInteger(maxQuantity)||maxQuantity<1||maxQuantity>100||
   !Number.isFinite(maxPrice)||maxPrice<=0||
   !Number.isSafeInteger(cooldownMs)||cooldownMs<30000)
@@ -49,7 +49,8 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
  }
  function applyAck(tx){
   const entry=store.getNativeEntity(tx.entityID);
-  if(!entry||!pilotName(tx.pilotID)||!pos(tx.entityID)||
+  if(!entry||Number(entry.systemID)!==Number(tx.systemID)||
+   !pilotName(tx.pilotID)||!pos(tx.entityID)||
    !Number.isSafeInteger(tx.quantity)||tx.quantity<1||
    amount(tx.beforeBalance)===null||amount(tx.afterBalance)===null||
    !tx.ack||Number(tx.ack.station_id||tx.ack.stationID)!==tx.stationID)
@@ -82,6 +83,20 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
     if(r?.success!==true)throw Error("NPC_MARKET_PURCHASE_CARGO_WRITE_FAILED");
    }
   }else throw Error("NPC_MARKET_SIDE_INVALID");
+  // Source-of-truth cargo is the native store; active EveJS ships also
+  // cache nativeCargoItems and mining code reads that cache directly.
+  // Refresh it from authoritative store before declaring the sale settled.
+  const scene=sceneForSystem(tx.systemID);
+  const live=scene?.getEntityByID?.(tx.entityID);
+  if(!live||live.kind!=="ship"||live.nativeNpc!==true)
+   throw Error("NPC_MARKET_PHYSICAL_SHIP_MISSING");
+  const items=store.buildNativeCargoItems(tx.entityID);
+  if(!Array.isArray(items))throw Error("NPC_MARKET_NATIVE_CARGO_SNAPSHOT_INVALID");
+  live.nativeCargoItems=items.map(item=>{
+   const type=resolveType(item.typeID);
+   return {...item,volume:type?.volume===null||type?.volume===undefined?
+    0:Math.max(0,Number(type.volume)||0)};
+  });
   // Persist verified inventory before wallet update; recovery recognizes
   // either old or final wallet balance and never applies both twice.
   if(acc.balance===tx.beforeBalance){
@@ -213,7 +228,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,
      moduleState:null,transient:false};
    }
    const tx={version:1,phase:"PREPARED",at:now,pilotID:pre.pilotID,
-    entityID:pre.entityID,stationID:pre.stationID,typeID:pre.typeID,
+    entityID:pre.entityID,systemID:pre.systemID,stationID:pre.stationID,typeID:pre.typeID,
     side:pre.side,quantity,price,cargoID:pre.side==="sell"?Number(cargo.cargoID):Number(allocated.data),
     beforeQuantity:pre.side==="sell"?Number(cargo.quantity):0,
     afterQuantity:pre.side==="sell"?Number(cargo.quantity)-quantity:quantity,
