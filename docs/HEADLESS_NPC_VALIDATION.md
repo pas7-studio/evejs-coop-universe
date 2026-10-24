@@ -81,6 +81,55 @@ native damage, fleet cooperation, wreck loot, two-client rendering or remote
 multiplayer works. The original 67 local/27 upstream PASS report predates
 this branch; do not reuse those counts as validation for this change.
 
+## Native NPC-to-NPC damage, wreck and loot verification (new P1 slice)
+
+This version observes **actual EveJS health layers** through
+`getEntityMaxHealthLayers` and `getEntityCurrentHealthLayers`.
+The read-only `coopNativeCombatEvidence` monitor compares separate snapshots
+of a **named native NPC ship** and records a positive HP reduction. It notes
+which other named NPCs currently have that victim as their native controller
+target, but **a target lock does not establish the killer's identity**.
+
+The native EveJS wreck callback is also checked against both:
+- the native NPC wreck record (same `wreckID`, source native ship and system)
+  and a real `nativeNpcWreck` entity in the EveJS scene;
+- `nativeNpcStore.listNativeWreckItemsForWreck`, with genuine item IDs,
+  type IDs, positive quantities and matching wreck owner references.
+
+A verified wreck may be **empty**. This is a genuine native wreck but is
+not called a loot drop. If the store or physical wreck disagrees, the NPC
+loss/economy callback now fails closed and reports the discrepancy.
+
+Events:
+- `living-native-combat-damage` — a measured HP loss of a named NPC,
+  with *possible* native NPC target correlation and no fabricated damage;
+- `living-native-wreck-evidence` — physical wreck and stored loot validation,
+  or an explicit failing status.
+
+Run manually only:
+
+```powershell
+node --test tests/coop-native-combat-evidence.test.mjs tests/coop-world-report.test.mjs
+node --check integration/coopNativeCombatEvidence.cjs
+.\scripts\Local-Two-Client-Test.ps1 -Action Combat -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+```
+
+The `Combat` command uses `--require-combat`. It requires an NPC victim
+with a real HP drop, another named NPC's native target correlation, a
+matching source ship in a **physical verified native wreck**, and
+**nonempty native persisted items** in the same observation window.
+Possible statuses include `AWAITING_NPC_COMBAT_LOOT`,
+`DAMAGE_ONLY`, `WRECK_ONLY`, `CORRELATED_DAMAGE_WITH_EMPTY_WRECK`,
+and `CORRELATED_DAMAGE_WRECK_AND_LOOT`. A fully correlated result is
+strong server-side evidence, but it still does **not** identify the specific
+weapon or ship that delivered the fatal hit. Authoritative attacker-ID
+instrumentation would be necessary to prove exact killer attribution.
+
+**Not verified in live Docker.** The new isolated combat-evidence module
+tests pass locally. End-to-end pinned EveJS runtime, player client rendering,
+loot pickup, NPC tactical weapon operation and real multiplayer remain
+unverified. No GitHub Actions / CI were installed or used.
+
 ## Recoverability of NPC simulation phases
 
 The 30-second LivingCoop scheduler now isolates native travel, economy,
