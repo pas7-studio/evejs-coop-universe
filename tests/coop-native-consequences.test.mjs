@@ -48,3 +48,14 @@ test("failed authoritative standing update remains journaled and does not double
  assert.equal(make().onMiningAggression(event).status,"DUPLICATE");
  assert.equal(attempts,1);
 }));
+
+test("real player ship and owned drone can be attributed, but ambient NPCs cannot",()=>{
+ const {resolveAuthenticatedPlayerID}=require("../integration/coopNativeConsequences.cjs");
+ const sessions=new Map([[1,{characterID:70001,_space:{shipID:90001}}],
+  [2,{characterID:70002,_space:{shipID:90002}}]]);
+ const scene={sessions};
+ assert.equal(resolveAuthenticatedPlayerID(scene,{itemID:90001,kind:"ship"}),70001);
+ assert.equal(resolveAuthenticatedPlayerID(scene,{itemID:99999,kind:"drone",ownerID:70002}),70002);
+ assert.equal(resolveAuthenticatedPlayerID(scene,{itemID:91001,kind:"ship",pilotCharacterID:900001}),null);
+ assert.equal(resolveAuthenticatedPlayerID(scene,{itemID:91002,kind:"npc",characterID:70001}),null);
+});
