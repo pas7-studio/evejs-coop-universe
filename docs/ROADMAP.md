@@ -14,6 +14,13 @@ The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
 available; do not reintroduce automatic remote runs.
 
+**Current manual verification gate: physical headless NPC activity.** See
+[HEADLESS_NPC_VALIDATION](HEADLESS_NPC_VALIDATION.md). Do not claim that
+a healthy server or existing NPC object is a moving/interactive NPC.
+Require real native coordinate changes plus cargo growth or a controller
+target. This branch adds the sampler and strict local World report, but
+no live Docker-native activity has been verified yet.
+
 The native NPC fight/retreat/reinforcement slice has code and tests, but
 still requires live server/client verification. The active reviewable
 work is **P1 personal NPC memory** and the **P2 factual faction chronicle**.
