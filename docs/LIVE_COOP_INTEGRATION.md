@@ -90,3 +90,24 @@ persistent 5,000-pilot X-Eve economics and population are **not** installed.
 
 Live verification still required: Docker rebuild, NPC spawn, two ship
 observers and combat/visibility correctness.
+
+## Two-pilot NPC visibility evidence
+
+After the first eligible ship attaches, the native NPC demo logs
+`native-npc-spawn` with NPC entity IDs and the number of initialized
+observers in the authoritative scene. Approximately 2.5 seconds later it logs
+`native-npc-visibility` with the NPC IDs each still-connected pilot has in
+their server-side `visibleDynamicEntityIDs` set. This is observational only:
+it does not forge Destiny updates, overwrite visibility, or force an NPC into
+either player's client.
+
+For the first manual multiplayer acceptance, connect two distinct characters
+in system `30000142` before triggering the first encounter, then inspect
+`coop-events.jsonl`. A useful result is one `native-npc-spawn` with two
+observers, followed by `native-npc-visibility` where **both** character IDs
+show at least one matching NPC entity ID. This verifies server-side observer
+state; it does not prove client rendering or the outcome of combat.
+
+The native NPC demo currently spawns once per server process. Restarting
+the server allows a fresh demo encounter, so use only a disposable test
+universe. The integration is not a substitute for X-Eve Living Universe.
