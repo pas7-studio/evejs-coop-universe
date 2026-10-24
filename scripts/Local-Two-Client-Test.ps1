@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','FinalBlow','Market','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','StockRaidLoot','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -183,6 +183,18 @@ switch ($Action) {
             throw 'No correlated native weapon and measured stock miner HP loss yet. An attack order or a target lock is insufficient.'
         }
         Write-Host '[STOCK RAID] Native weapon activation and real stock miner/hauler HP drop correlated. Wreck, loot and two-client rendering are NOT proven.'
+    }
+    'StockRaidLoot' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native stock PvE proof.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No native combat telemetry. DiagnoseWorld is read-only and identifies missing runtime evidence.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-stock-raid --require-stock-wreck-loot --system-id $WorldSystemID
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Unproven stock PvE chain: require actual native weapon, same-victim HP loss, physical EveJS wreck and nonempty stored loot. Real clients and final-hit attribution remain separate.'
+        }
+        Write-Host '[STOCK RAID LOOT] Native weapon, measured stock miner HP loss, physical wreck and saved loot are correlated. Two-client gameplay and killer identity are NOT proven.'
     }
     'FinalBlow' {
         Assert-BackendPrerequisites
