@@ -973,6 +973,26 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
      .some(id=>Number(id)===Number(npcID)));
    if(belonged){
     const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+    // The actual ship has already been removed by upstream EveJS, but
+    // the destruction callback still owns its source object. Capture
+    // real last-moment HP loss before recording the verified wreck.
+    if(stockCombatEvidenceDirector){
+     try{
+      const damage=require("./combat/damage");
+      const terminal=stockCombatEvidenceDirector.terminalDamage({
+       systemID,entityID:npcID,ship:destroyedShip,wreckID,
+       getHealth:entity=>{
+        const max=damage.getEntityMaxHealthLayers(entity);
+        if(!Object.values(max).some(n=>n>0))return null;
+        return damage.getEntityCurrentHealthLayers(entity,max);
+       }
+      });
+      if(terminal.status==="NATIVE_STOCK_TERMINAL_HP_DROP")
+       require("./coopRuntimeProbe").observe("living-native-stock-fleet-combat",null,
+        {spaceState:{systemID}},{status:"SAMPLED",systemID,
+         damageEvents:1,terminalNativeWreckID:wreckID,events:[terminal.event]});
+     }catch(error){console.warn("[CoopStockCombatEvidence] terminal",error.message);}
+    }
     const proof=require("./coopStockFleetWreckEvidence").verifyStockFleetWreck({
      systemID,ship:destroyedShip,wreckID,fleets,
      scene:runtime.ensureScene(Number(systemID),{refreshStargates:false}),
