@@ -8,8 +8,9 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore"];
 const specs=[
+ {file:"server/src/space/npc/nativeNpcStore.js",patches:[]},
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
   {anchor:"  persistCharacterLogoffState(session);",line:'  require("../../space/coopRuntimeProbe").observe("disconnect-after-persist", session, null);',after:true}
  ]},
@@ -74,6 +75,41 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file.endsWith("nativeNpcStore.js")){
+  // Persistent IDs must never reuse an ID handed out earlier in the
+  // current process for a transient NPC fleet. Both allocation paths
+  // must advance the common in-memory high-water mark.
+  const eol=text.includes("\r\n")?"\r\n":"\n";
+  const before=[
+   '  const nextID = Math.max(',
+   '    toPositiveInt(root && root[counterKey], 0),',
+   '    toPositiveInt(ROOT[tableName] && ROOT[tableName][counterKey], 0),',
+   '  );'
+  ].join(eol);
+  const after=[
+   '  const nextID = Math.max(',
+   '    toPositiveInt(root && root[counterKey], 0),',
+   '    toPositiveInt(ROOT[tableName] && ROOT[tableName][counterKey], 0),',
+   '    Number.isSafeInteger(transientCounters[tableName]) ? transientCounters[tableName] : 0,',
+   '  );'
+  ].join(eol);
+  const originalReturn=[
+   '  return {',
+   '    success: true,',
+   '    data: nextID,',
+   '  };'
+  ].join(eol);
+  const fixedReturn=[
+   '  if (Number.isSafeInteger(transientCounters[tableName]))',
+   '    transientCounters[tableName] = Math.max(transientCounters[tableName], nextID + 1);',
+   ...originalReturn.split(eol)
+  ].join(eol);
+  if(count(text,before)+count(text,after)!==1||
+     count(text,originalReturn)+count(text,fixedReturn)!==1)
+   throw Error("Unrecognized native NPC mixed persistent/transient ID allocator");
+  text=remove?text.replace(after,before):text.replace(before,after);
+  text=remove?text.replace(fixedReturn,originalReturn):text.replace(originalReturn,fixedReturn);
+ }
  if(spec.file.endsWith("nativeNpcWreckService.js")){
   if(count(text,lootOld)+count(text,lootNew)!==1)throw Error("Ambiguous native wreck refresh");
   text=remove?text.replace(lootNew,lootOld):text.replace(lootOld,lootNew);
