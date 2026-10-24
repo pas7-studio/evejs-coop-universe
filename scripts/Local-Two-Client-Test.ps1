@@ -159,9 +159,9 @@ switch ($Action) {
         if ($LASTEXITCODE -ne 0) {
             throw 'No native NPC battle log. Start LivingCoop locally; do not infer combat from healthy Docker or TCP.'
         }
-        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-combat
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-combat --require-weapon
         if ($LASTEXITCODE -ne 0) {
-            throw 'NPC battle gate not proven: require same-victim HP loss, physical wreck and stored native loot. See report.'
+            throw 'NPC battle gate not proven: require real NPC weapon activation or missile launch, linked HP loss, native physical wreck and stored loot. See report.'
         }
         Write-Host '[COMBAT] Correlated named-NPC HP reduction, physical wreck and saved loot observed on server. Shooter attribution and real EVE client gameplay remain unproven.'
     }
