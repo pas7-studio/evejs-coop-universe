@@ -105,8 +105,13 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    atomic(ledgerFile,ledger);
   }
   return {status:"TRADE_SETTLED",side:tx.side,pilotID:tx.pilotID,
-   entityID:tx.entityID,stationID:tx.stationID,typeID:tx.typeID,
-   quantity:tx.quantity,price:tx.price,balance:tx.afterBalance};
+   entityID:tx.entityID,systemID:tx.systemID,
+   stationID:tx.stationID,typeID:tx.typeID,
+   quantity:tx.quantity,price:tx.price,balance:tx.afterBalance,
+   marketOrderID:tx.marketOrderID,
+   marketOrderSource:"EVEJS_SEED",
+   nativeCargoVerified:true,marketRPCAcknowledged:true,
+   marketRPC:tx.side==="sell"?"FillOrder":"AdjustSeedStock"};
  }
  function recover(){
   let files;
@@ -229,6 +234,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    }
    const tx={version:1,phase:"PREPARED",at:now,pilotID:pre.pilotID,
     entityID:pre.entityID,systemID:pre.systemID,stationID:pre.stationID,typeID:pre.typeID,
+    marketOrderID:String(row.order_id),
     side:pre.side,quantity,price,cargoID:pre.side==="sell"?Number(cargo.cargoID):Number(allocated.data),
     beforeQuantity:pre.side==="sell"?Number(cargo.quantity):0,
     afterQuantity:pre.side==="sell"?Number(cargo.quantity)-quantity:quantity,
