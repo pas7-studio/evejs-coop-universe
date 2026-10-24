@@ -21,6 +21,15 @@ Require real native coordinate changes plus cargo growth or a controller
 target. This branch adds the sampler and strict local World report, but
 no live Docker-native activity has been verified yet.
 
+**Stock NPC materialization blocker addressed:** native EveJS miners and
+haulers previously exhausted the co-op NPC limit (default two), leaving
+zero free slots for pirates. Corrected capacity accounting and tested
+native-mining versus fallback cases. Implemented optional native
+destruction-source attribution: the distinct `FinalBlow` local
+gate cannot pass without an explicitly provided EveJS destruction
+attacker matched to real weapon/HP/wreck/loot evidence. Whether EveJS
+supplies that parameter on real kills is **not yet tested in Docker**.
+
 **Native NPC combat blocker addressed in code:** the pinned engine's generic
 NPC-vs-NPC friendly-target check is now bypassed **only** for actual linked
 opposing-faction native ships with valid attack or fresh retaliation intent.
