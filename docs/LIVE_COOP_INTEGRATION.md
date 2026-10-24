@@ -460,3 +460,62 @@ the player. The default pool is still `npc_hostiles`, meaning the native
 AI can engage according to its own settings. Do not enable this opt-in
 mode on a shared production game server before live gameplay validation.
 A later revision should anchor patrols to native stargates/POIs instead.
+
+## Native routes and working NPCs — October 24 integration
+
+This milestone replaces the earlier **player-centered orbit** demonstration.
+The pinned EveJS `npcService.spawnNpcBatchInSystem()` requires a valid
+`anchorDescriptor` or `anchorEntity`; previously some co-op spawns supplied
+neither, yielding `ANCHOR_REQUIRED` instead of real NPC ships. All three
+co-op spawn paths (demo encounters, virtual pilots, and faction patrols)
+now resolve actual stargate, station or celestial anchors from EveJS's
+authoritative `scene.staticEntities` via `coopNpcTopology.js`.
+If a system lacks a valid anchor, the module refuses to spawn there;
+it never falls back to fictional zero coordinates.
+
+### Gameplay behavior
+- Native faction patrols now rotate between real stargates/stations/belts
+  using `npcRuntime.warpToPoint` where the next POI is at least 250 km
+  away, or orbit an actual in-scene POI when nearby. Their route is advanced
+  on the **server's 30-second world tick**, after the initial scene encounter,
+  even with no players connected.
+- Materialized virtual NPC workers receive real movement orders: miners
+  approach asteroid belts; haulers alternate between belts, stations and
+  gates; traders follow station/gate circuits; ordinary patrol-role pilots
+  visit gates and stations. EveJS executes the physical warp and orbit.
+- Newly initialized virtual populations have reproducible, unique
+  callsign/surname pairs (100 unique names for the supported 100-pilot cap).
+  Existing saved world files retain their established identities and names.
+- `coopNpcPresentation.js` writes the saved name onto the native EveJS
+  ship entity and uses the same slim-item notification channel as the
+  upstream wreck service to update connected observers.
+- Virtual miners/traders/patrols have native auto-aggression disabled in
+  their spawn behavior overrides, so merely entering their system does not
+  intentionally issue a hostile player attack.
+- The reversible patch adds delayed presence handling for actual **undock**
+  and **stargate arrival**, not only login-in-space. The world simulation
+  itself now starts in the TCP server's startup path (after the existing
+  TiDi initialization) and continues ticking without player logins.
+
+### What these changes do not simulate
+A physical hauler moving to a station **does not automatically transfer
+items**, and a miner orbiting a belt **does not mine actual ore yet**.
+Virtual economy production remains a separate bookkeeping model.
+Physical NPC gate jumps between star systems, sustained NPC memory,
+true security/crimewatch responses, faction-specific loadouts, escort
+contracts and real EveJS market orders still need native integrations.
+Old NPCs spawned before this patch will not automatically gain their
+missing native anchors. Full client behavior remains unverified.
+
+To use the broader local demo on the pinned EveJS revision:
+
+```powershell
+cd C:\Games\EveCoopProject
+git pull
+.\scripts\Deploy-Coop-RuntimeProbe.ps1 -EnableVirtualWorld -EnableVirtualEconomy -MaterializeVirtualNpcs -EnableFactionPatrols -VirtualPopulation 16 -MaterializeLimit 2
+```
+
+There is no need to run a new test suite after every feature to author
+more functionality. The new modules' JavaScript syntax and a mocked
+native-API route/anchor smoke run were checked; **Windows PowerShell,
+Docker startup and two real EVE clients have not yet been validated**.
