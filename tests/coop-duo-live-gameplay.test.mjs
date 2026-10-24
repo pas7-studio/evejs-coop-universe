@@ -64,7 +64,7 @@ test("one ship in warp must not count as the physically assembled duo",()=>{
 test("normal CoopStart enables live duo coordination, never scripted combat waves",()=>{
  const deploy=fs.readFileSync(new URL("../scripts/Deploy-Coop-RuntimeProbe.ps1",import.meta.url),"utf8");
  const start=fs.readFileSync(new URL("../scripts/Local-Two-Client-Test.ps1",import.meta.url),"utf8");
- assert.match(start,/-Action CoopStart/);
+ assert.match(start,/'CoopStart' \{/);
  assert.match(start,/-LivingCoop -VirtualRouteSystems/);
  assert.match(start,/-MaterializeLimit 6/);
  assert.match(deploy,/if \(\$CoopCombat -or \$LivingCoop\)/);
