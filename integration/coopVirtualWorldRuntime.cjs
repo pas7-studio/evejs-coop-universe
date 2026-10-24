@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null;
+let world=null,timer=null,bridge=null,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -57,6 +57,7 @@ function start(){
      advanceNativePatrolRoutes();
      // Raids own their NPC movement while pursuing real cargo ships.
      advanceNativeRaids();
+     advanceNativeTactics();
      advanceNativeCivilianOrders();
      // A recovered NPC returns to a living system without player re-login.
      if(++backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1"){
@@ -108,6 +109,7 @@ function advanceNativeCivilianOrders(){
   const runtime=require("./runtime");
   return runtime.ensureScene(systemID,{refreshStargates:false});
  })||new Set();
+ if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
  const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{},{blockedIDs});
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
@@ -148,6 +150,62 @@ function advanceNativeRaids(){
   }
  }
 }
+function advanceNativeTactics(){
+ if(process.env.EVEJS_COOP_NATIVE_TACTICS!=="1"||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
+ const controllers=require("./npc/npcRegistry");
+ const damage=require("./combat/damage"),scramble=require("./modules/hostileModuleRuntime");
+ if(!tacticsDirector){
+  tacticsDirector=require("./coopNpcTactics").createTactics({
+   warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options),
+   warpToEntity:(id,targetID,options)=>npc.warpToEntity(id,targetID,options),
+   attack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
+   resumeBehavior:id=>npc.resumeBehavior(id),
+   notify:event=>{
+    require("./coopRuntimeProbe").observe("living-npc-tactical-event",null,
+     {spaceState:{systemID:event.systemID}},{...event});
+    if(!["npc-help-request","npc-retreat"].includes(event.kind))return;
+    const scene=runtime.ensureScene(event.systemID,{refreshStargates:false});
+    const ship=scene?.getEntityByID(event.entityID);
+    const name=String(ship?.itemName||ship?.name||"An NPC").slice(0,70);
+    const message=event.kind==="npc-help-request"
+     ?"[Living Universe] "+name+" called "+event.responders+" allied NPCs for help after coming under fire."
+     :"[Living Universe] "+name+" is badly damaged and trying to warp away.";
+    const chat=require("../services/chat/chatHub");
+    for(const session of scene?.sessions?.values?.()||[]){
+     if(session?._space?.initialStateSent!==true||!session.characterID)continue;
+     try{chat.sendSystemMessage(session,message);}catch(error){console.warn("[CoopNpcTactics] chat",error.message);}
+    }
+   }
+  });
+ }
+ const ships=bridge.snapshot(),pilotData=new Map(world.snapshot().pilots.map(p=>[p.id,p]));
+ const roles=economy?.snapshot().pilots||{};
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const assignments=ships.filter(p=>Number(p.systemID)===Number(systemID))
+    .map(a=>({...a,role:roles[a.pilotID]?.role||"patrol",
+      faction:pilotData.get(a.pilotID)?.faction||"independent"}));
+  if(!assignments.length)continue;
+  const activeControllers={};
+  for(const a of assignments)activeControllers[a.entityID]=controllers.getControllerByEntityID(a.entityID);
+  const output=tacticsDirector.tick({
+   systemID,scene,assignments,controllers:activeControllers,
+   waypoints:require("./coopNpcTopology").waypoints(scene),
+   isScrambled:entity=>scramble.isEntityWarpScrambled(entity),
+   health:entity=>{
+    const max=damage.getEntityMaxHealthLayers(entity),
+      now=damage.getEntityCurrentHealthLayers(entity,max);
+    return {
+     armor:max.armor>0?now.armor/max.armor:1,
+     structure:max.structure>0?now.structure/max.structure:1
+    };
+   }
+  });
+  if(output.events.length)console.info("[CoopLivingWorld] Native tactics",JSON.stringify({systemID,events:output.events}));
+ }
+}
+
 function observeSession(session,ship){
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
