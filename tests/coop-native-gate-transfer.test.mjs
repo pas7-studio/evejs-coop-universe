@@ -28,7 +28,13 @@ function fixture(){
   listNativeCargoForEntity:()=>structuredClone(cargo),
   upsertNativeEntity:row=>{entity=structuredClone(row);return {success:true}},
   upsertNativeController:row=>{if(row.systemID===B&&failControllerWrite)return {success:false,errorMsg:"DB_FAILED"};
-   control=structuredClone(row);return {success:true}}
+   control=structuredClone(row);return {success:true}},
+  upsertNativeModule:row=>{const i=modules.findIndex(x=>x.moduleID===row.moduleID);
+   if(i>=0)modules[i]=structuredClone(row);else modules.push(structuredClone(row));
+   return {success:true}},
+  upsertNativeCargo:row=>{const i=cargo.findIndex(x=>x.cargoID===row.cargoID);
+   if(i>=0)cargo[i]=structuredClone(row);else cargo.push(structuredClone(row));
+   return {success:true}}
  };
  let failDestination=false,failControllerWrite=false,denyIdentityRelocation=false;
  const service={
@@ -73,6 +79,7 @@ function fixture(){
   setDestinationFailure:x=>{failDestination=x},
   setControllerWriteFailure:x=>{failControllerWrite=x},
   denyIdentityRelocation:x=>{denyIdentityRelocation=x},
+  eraseFittedItems:()=>{modules.length=0;cargo.length=0},
   cleanup:()=>fs.rmSync(temp,{recursive:true,force:true})};
 }
 test("same native EveJS entity ID crosses systems with unmodified HP, modules and cargo",()=>{
@@ -184,7 +191,9 @@ test("crash journal reverts half-applied native store relocation to original sou
   fs.writeFileSync(path.join(x.deps.journalDir,"coop-pilot-005.json"),JSON.stringify({
    version:1,pilotID:"coop-pilot-005",entityID:100,
    sourceSystemID:A,destinationSystemID:B,phase:"DESTINATION_RECORDS_WRITTEN",
-   restoreEntity:x.store.getNativeEntity(100),restoreController:x.store.getNativeController(100)
+   restoreEntity:x.store.getNativeEntity(100),restoreController:x.store.getNativeController(100),
+   restoreModules:x.store.listNativeModulesForEntity(100),
+   restoreCargo:x.store.listNativeCargoForEntity(100)
   }));
   x.source.ships.delete(100);
   x.store.upsertNativeEntity({...x.getEntity(),systemID:B});
@@ -195,6 +204,28 @@ test("crash journal reverts half-applied native store relocation to original sou
   assert.equal(x.source.getEntityByID(100).itemID,100);
   assert.equal(x.getEntity().systemID,A);
   assert.equal(x.getLink().systemID,A);
+ }finally{x.cleanup()}
+});
+test("power-loss recovery restores original module and cargo rows even if transient store lost them",()=>{
+ const x=fixture();
+ try{
+  fs.mkdirSync(x.deps.journalDir,{recursive:true});
+  fs.writeFileSync(path.join(x.deps.journalDir,"coop-pilot-005.json"),JSON.stringify({
+   version:1,pilotID:"coop-pilot-005",entityID:100,
+   sourceSystemID:A,destinationSystemID:B,phase:"SOURCE_REMOVED",
+   restoreEntity:x.store.getNativeEntity(100),
+   restoreController:x.store.getNativeController(100),
+   restoreModules:x.store.listNativeModulesForEntity(100),
+   restoreCargo:x.store.listNativeCargoForEntity(100)
+  }));
+  x.source.ships.delete(100);
+  x.eraseFittedItems();
+  const recovered=createNativeGateTransfer(x.deps).recoverPending();
+  assert.equal(recovered.status,"RECOVERED");
+  assert.equal(x.source.getEntityByID(100).itemID,100);
+  assert.equal(x.store.listNativeModulesForEntity(100)[0].moduleID,300);
+  assert.equal(x.store.listNativeCargoForEntity(100)[0].cargoID,400);
+  assert.equal(x.store.listNativeCargoForEntity(100)[0].quantity,23);
  }finally{x.cleanup()}
 });
 test("malformed journal fails closed instead of deleting an unknown ship",()=>{
