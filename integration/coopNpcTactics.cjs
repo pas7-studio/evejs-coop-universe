@@ -5,14 +5,14 @@ const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const pos=x=>x&&["x","y","z"].every(k=>Number.isFinite(Number(x[k])));
 const meters=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function createTactics({
- clock=()=>Date.now(),warpToPoint,warpToEntity,attack,resumeBehavior,
+ clock=()=>Date.now(),warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder,
  maxResponders=2,callCooldownMs=120000,retreatCooldownMs=300000,
  notify=()=>{}
 }){
- if([warpToPoint,warpToEntity,attack,resumeBehavior].some(x=>typeof x!=="function")||
+ if([warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder].some(x=>typeof x!=="function")||
   !Number.isInteger(maxResponders)||maxResponders<1||maxResponders>3||
   callCooldownMs<30000||retreatCooldownMs<60000)throw Error("invalid native NPC tactics");
- const calls=new Map(),retreats=new Map(),responses=new Map();
+ const calls=new Map(),retreats=new Map(),retreatCooldowns=new Map(),responses=new Map();
  const fresh=(id,map,ms)=>!map.has(id)||clock()-map.get(id)>=ms;
  function tick({systemID,scene,assignments=[],controllers={},health,waypoints=[],isScrambled=()=>false}={}){
   const system=positive(systemID);
@@ -24,6 +24,30 @@ function createTactics({
    present.set(id,{...a,entityID:id,ship});
   }
   const engaged=new Set();
+  // The true EveJS warp must finish before the NPC can stand down.
+  // Holding after arrival avoids immediate suicidal re-engagement.
+  for(const [id,state] of retreats){
+   if(state.systemID!==system)continue;
+   const ship=present.get(id)?.ship;
+   if(!ship){retreats.delete(id);continue;}
+   const warping=String(ship.mode||"").toUpperCase().includes("WARP")||
+    Boolean(ship.pendingWarp||ship.warpState);
+   if(state.phase==="warping"&&!warping&&now>=state.at+10000){
+    const stopped=stopOrder(id);
+    if(stopped?.success){
+     state.phase="holding";state.holdUntil=now+90000;
+     events.push({kind:"npc-tactical-standdown",systemID:system,entityID:id});
+    }
+   }
+   if(state.phase==="holding"&&now>=state.holdUntil){
+    const resumed=resumeBehavior(id);
+    if(resumed?.success){
+     retreats.delete(id);
+     events.push({kind:"npc-tactical-recovered",systemID:system,entityID:id});
+    }
+   }
+   if(retreats.has(id))engaged.add(id);
+  }
   // Continue a previous rescue after physical warp-in. Do not duplicate
   // a warp or assign another target to the same rescue ship.
   for(const [id,aid] of responses){
@@ -55,7 +79,7 @@ function createTactics({
   let rescueCalls=0;
   for(const victim of present.values()){
    const c=controllers[victim.entityID];
-   if(!c)continue;
+   if(!c||retreats.has(victim.entityID))continue;
    const attackerID=positive(c.lastAggressorID),attacker=attackerID&&scene.getEntityByID(attackerID);
    const aggroAt=Number(c.lastAggressedAtMs)||0;
    if(!attacker||!attackerID||aggroAt<=0||now-aggroAt>120000||aggroAt>now+30000)continue;
@@ -67,7 +91,7 @@ function createTactics({
    // Retreat to a REAL station or stargate that is far from the attacker.
    // On scramble or no suitable anchor, keep native combat running.
    if(danger&&!isScrambled(victim.ship)&&!engaged.has(victim.entityID)&&
-     fresh(victim.entityID,retreats,retreatCooldownMs)&&pos(attacker.position)){
+     fresh(victim.entityID,retreatCooldowns,retreatCooldownMs)&&pos(attacker.position)){
     const safe=waypoints.filter(p=>["station","stargate"].includes(p.kind)&&
       pos(p.position)&&meters(p.position,attacker.position)>500000)
       .sort((a,b)=>meters(b.position,attacker.position)-meters(a.position,attacker.position))[0];
@@ -75,8 +99,8 @@ function createTactics({
      const result=warpToPoint(victim.entityID,safe.position,{
       forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true});
      if(result?.success){
-      retreats.set(victim.entityID,now);
-      resumeBehavior(victim.entityID);
+      retreatCooldowns.set(victim.entityID,now);
+      retreats.set(victim.entityID,{at:now,systemID:system,phase:"warping",holdUntil:0});
       engaged.add(victim.entityID);
       events.push({kind:"npc-retreat",systemID:system,entityID:victim.entityID,
        pilotID:victim.pilotID,attackerID,destinationID:safe.id});
@@ -121,16 +145,17 @@ function createTactics({
   }
   // Bound process-local incident memory on busy long-running worlds.
   if(calls.size>1000)for(const [key,time] of calls)if(now-time>callCooldownMs)calls.delete(key);
-  if(retreats.size>1000)for(const [key,time] of retreats)if(now-time>retreatCooldownMs)retreats.delete(key);
+  if(retreatCooldowns.size>1000)for(const [key,time] of retreatCooldowns)if(now-time>retreatCooldownMs)retreatCooldowns.delete(key);
   for(const e of events)try{notify(e);}catch(error){console.warn("[CoopNpcTactics] notify",error.message);}
   return {status:"OK",events,engagedIDs:[...engaged]};
  }
- function activeIDs(){return new Set([...responses.keys()].filter(id=>responses.get(id).expiresAt>clock()).concat(
-  [...retreats].filter(([,when])=>clock()-when<45000).map(([id])=>id)
- ));}
+ function activeIDs(){return new Set(
+  [...responses.keys()].filter(id=>responses.get(id).expiresAt>clock())
+   .concat([...retreats.keys()])
+ );}
  return {tick,activeIDs,snapshot:()=>({
   rescuers:[...responses].map(([id,s])=>({entityID:id,...s})),
-  retreats:[...retreats].map(([id,at])=>({entityID:id,at}))
+  retreats:[...retreats].map(([id,state])=>({entityID:id,...state}))
  })};
 }
 module.exports={createTactics};
