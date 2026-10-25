@@ -163,3 +163,17 @@ test("oversized quantity does not overflow an existing committed native cargo",(
  assert.equal(f.append(f.ship,34,1),false);
  assert.equal(f.rows.get(511).quantity,limit);
 });
+
+test("Windows CRLF checkout is patched and restored byte-for-byte",()=>{
+ const originalCRLF=original.replace(/\n/g,"\r\n");
+ const p=patchMiningCargo(originalCRLF);
+ assert.notEqual(p,originalCRLF);
+ assert.equal(patchMiningCargo(p),p);
+ assert.equal(patchMiningCargo(p,true),originalCRLF);
+});
+test("incomplete patch with missing native return is refused, never repaired by guess",()=>{
+ const full=patchMiningCargo(original);
+ const broken=full.replace("  return nativeNpcStore.upsertNativeCargo({",
+  "  nativeNpcStore.upsertNativeCargo({");
+ assert.throws(()=>patchMiningCargo(broken),/Unexpected native mining cargo integrity source/);
+});
