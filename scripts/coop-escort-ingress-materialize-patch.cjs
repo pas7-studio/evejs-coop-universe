@@ -5,7 +5,11 @@ const ANCHOR=`  const entity = applyNativeRuntimeNpcPresentation(
     spawnResult.data.entity,
     entityRecord,
     definition,
-  );`;
+  );
+  const controller = registerNativeRuntimeController(entityRecord, controllerRecord, definition);
+  if (runtimeKind === "nativeAmbient") {
+    syncNativeAmbientIdleState(scene, entity, controller, definition);
+  }`;
 const HOOK=`  if (process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT === "1" && entity.nativeNpc === true) {
     try { require("../coopNativeStationArrival").restoreNativeIngress(entity, entityRecord); } catch (_) { /* skip recovery; never alter spawn */ }
   }`;
