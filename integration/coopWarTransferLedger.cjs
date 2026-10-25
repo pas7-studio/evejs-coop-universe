@@ -385,6 +385,24 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
    return {status:"RECORDED",auditID};
   });
  }
+ // Cheap idle-tick discovery. Only source-confirmed TERMINAL records
+ // are eligible for archive; every actual retirement rechecks physical
+ // ship, native controller, unique pilot and module/cargo in SQLite tx.
+ function terminalCandidates(){
+  if(!enabled())return [];
+  let state;
+  try{
+   if(typeof gameStore.read==="function"){
+    const r=gameStore.read(fleet.TABLE,"/"+fleet.KEY);
+    if(r?.success!==true)throw Error("NATIVE_FLEET_CACHE_UNAVAILABLE");
+    state=fleet.validate(r.data);
+   }else state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
+  }catch{return []}
+  return Object.values(state.transfers||{}).filter(t=>
+   t&&["COMPLETE","ABORTED"].includes(t.phase)&&pos(t.entityID)&&
+   key(t.transferID)).sort((a,b)=>a.entityID-b.entityID).slice(0,32)
+   .map(t=>({entityID:t.entityID,transferID:t.transferID}));
+ }
  function pending(){
   if(!enabled())return {status:"DISABLED",pending:[]};
   const state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
@@ -405,6 +423,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   witness,
   recordRecoveryAttempt,
   retire,
+  terminalCandidates,
   pending
  });
 }
