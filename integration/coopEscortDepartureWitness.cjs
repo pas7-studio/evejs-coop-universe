@@ -58,8 +58,19 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
   // In all cases, a previously committed witness is immutable. We do not
   // create new evidence on retry after the hauler or its pilots have moved.
   const prior=read(booking.manifestKey,booking);
-  if(prior.status==="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+  if(prior.status==="VERIFIED_NATIVE_ESCORT_DEPARTURE"){
+   // The source file may have survived a lost write or directory fsync ACK.
+   // A read-only replay is not sufficient to claim durability. Re-sync the
+   // immutable ORIGINAL file and parent directory before authorizing warp.
+   let fd,dirfd;try{
+    fd=io.openSync(filename(booking.manifestKey),"r");io.fsyncSync(fd);
+    io.closeSync(fd);fd=undefined;
+    dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
+   }catch{return deny("DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR")}
+   finally{if(fd!==undefined)try{io.closeSync(fd)}catch{};
+    if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}}
    return {status:"DURABLE_ESCORT_DEPARTURE_REPLAY",manifestKey:booking.manifestKey};
+  }
   if(prior.status!=="DEPARTURE_NOT_RECORDED")return prior;
   if(scene?.systemID!==booking.systemID||
    typeof scene.getEntityByID!=="function"||
