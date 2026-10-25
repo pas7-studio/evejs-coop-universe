@@ -9,7 +9,7 @@ const specs=[
  ["coopAlifeNativeBuyerRuntime",["coopAlifeNativeBuyerDispatch"]],
  ["coopNpcBuyerNativeBindings",["coopNpcCorporateBuyerAtomic","coopNpcBuyerCoordinator"]],
  ["coopNpcBuyerCoordinator",["coopNpcMarketPolicy"]],
- ["coopNpcBuyerNativeBindings",["coopNpcRustOrderAuthority","coopNpcSellerTaxAuthority","coopNpcBuyerRecoveryAudit"]],
+ ["coopNpcBuyerNativeBindings",["coopNpcRustOrderAuthority","coopNpcSellerTaxAuthority","coopNpcBuyerRecoveryAudit","coopNpcMarketCompletionNotify"]],
  ["coopNpcNativeEconomyDirector",["coopNpcDemandAuthority"]]
 ];
 for(const [file,needs] of specs){
@@ -38,4 +38,24 @@ test("overlay copies each native buyer dependency into EveJS .js filenames",()=>
   for(const need of needs)assert.ok(src.includes('"'+need+'"'),need);
  }
  assert.match(src,/name\+"\.js"/);
+});
+
+test("COOP-056 seller login hook is reversible and bound only to native session index",()=>{
+ const src=fs.readFileSync(path.join(root,"scripts/patch-evejs-coop.cjs"),"utf8");
+ assert.match(src,/server\/src\/services\/chat\/sessionRegistry\.js/);
+ assert.match(src,/addToIndex\(session, characterID\)/);
+ assert.ok(src.split("notifyPendingSellerOnLogin(characterID)").length>=3,
+  "login hook must be in both install and rollback strip list");
+ assert.match(src,/EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP/);
+ assert.doesNotMatch(src,/slash.*notifyPendingSellerOnLogin/);
+});
+test("COOP-056 login catch-up stays bounded with separate explicit opt-in",()=>{
+ const src=fs.readFileSync(path.join(root,"integration/coopNpcMarketCompletionNotify.cjs"),"utf8");
+ assert.match(src,/maxNotifications=4/);
+ assert.match(src,/maxNotifications>8/);
+ assert.match(src,/rows\.length>20000/);
+ assert.match(src,/hits\.length>128/);
+ assert.match(src,/loginBusy=new Set\(\)/);
+ assert.match(src,/EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP/);
+ assert.doesNotMatch(src,/setInterval\(/);
 });
