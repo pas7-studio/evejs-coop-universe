@@ -101,3 +101,10 @@ test("foreign region or corporation source cannot influence local production",()
  const r=chooseNativeRegionalProduct({...rbase,quotes:[quote(215,100,{regionID:10000003})]});
  assert.equal(r.reason,"NPC_REGION_PRODUCT_AUTHORITY_CONFLICT");
 });
+
+test("zero maxChangeBps freezes the ask price exactly",()=>{
+ const r=suggestNativeAskPrice({...priceBase,maxChangeBps:0,
+  trades:[fill(1,300)]});
+ assert.equal(r.status,"NATIVE_ASK_PRICE_INTENT_ONLY");
+ assert.equal(r.priceCents,200);
+});
