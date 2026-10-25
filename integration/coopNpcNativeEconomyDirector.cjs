@@ -288,7 +288,11 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
 
    const p=planner.plan({ownerID,stationID,productTypeIDs:available,targetStock:target,
     marketStock:stock,maxJobs:Math.min(maxActive,2)});
-   if(p?.status!=="PLAN_READY"||!Array.isArray(p.jobs)||!p.jobs.length)return {status:"NO_NATIVE_FACTORY_JOB",blocked:p?.blocked||[]};
+   // A verified Rust sale poll is meaningful gameplay even if the station
+   // has no new job to install. Don't erase PARTIALLY_SOLD / waiting-for-buyer
+   // with a separate planner NO_JOB result; no extra financial action occurs.
+   if(p?.status!=="PLAN_READY"||!Array.isArray(p.jobs)||!p.jobs.length)
+    return listingResult||{status:"NO_NATIVE_FACTORY_JOB",blocked:p?.blocked||[]};
    const j=p.jobs[0];if(!safeInt(j.blueprintItemID)||!safeInt(j.productTypeID)||j.ownerID!==ownerID||
      j.stationID!==stationID||!available.includes(j.productTypeID)||j.outputQuantity>maxStock)
      return halt("PLANNER_JOB_CONTEXT_INVALID");
