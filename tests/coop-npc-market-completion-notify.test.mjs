@@ -266,3 +266,11 @@ test("partially filled or stale old order volume cannot report full original fil
  assert.equal(f.events.length,0);
  assert.equal(f.read().sellerNotifyClaimedAt,undefined);
 }));
+
+test("previous partial player order sales do not suppress correct final NPC fill",()=>run(async f=>{
+ f.ownerOrder.row.vol_entered=200;
+ const result=await f.notify();
+ assert.equal(result.status,"NOTIFIED");
+ assert.equal(f.events.filter(x=>x.name==="OnOwnOrdersChanged").length,1);
+ assert.equal(f.events.filter(x=>x.name==="OnAccountChange").length,1);
+}));

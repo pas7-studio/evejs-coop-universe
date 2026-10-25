@@ -52,7 +52,8 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
    number(row.station_id)===r.stationID&&
    number(row.type_id)===r.typeID&&
    number(row.vol_remaining)===0&&
-   number(row.vol_entered)===r.quantity&&
+   pos(number(row.vol_entered))&&
+   number(row.vol_entered)>=r.quantity&&
    money(row.price)===r.priceCents;
  }
  function orderEntry(o,r){
