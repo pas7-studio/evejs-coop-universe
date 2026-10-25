@@ -192,13 +192,46 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
    return updated;
   });
  }
+ function assertExisting(ownerOrders,buyerID){
+  if(!enabled())throw Error("P2P_BUY_RESERVE_FLAGS_DISABLED");
+  if(!positive(buyerID)||!Array.isArray(ownerOrders))
+   throw Error("P2P_BUY_RESERVE_EXISTING_ORDERS_UNAVAILABLE");
+  const rows=ownerOrders.filter(order=>order?.state==="open"&&order?.row?.bid===true);
+  if(rows.some(order=>order.owner_id!==buyerID||order.is_corp!==false||
+      order.source!=="player"||!orderID(String(order.order_id))))
+   throw Error("P2P_BUY_RESERVE_UNVERIFIED_EXISTING_RUST_ORDER");
+  return gameStore.transact(["playerMarketFills","marketEscrow"],tx=>{
+   for(const order of rows){
+    const id=String(order.order_id),escrow=tx.get("marketEscrow",id);
+    const receipt=escrow?.coopReserveReceiptKey?
+     tx.get("playerMarketFills",escrow.coopReserveReceiptKey):null;
+    if(!escrow||escrow.orderId!==id||escrow.ownerId!==buyerID||
+       escrow.isCorp!==false||escrow.escrowType!=="buy"||
+       escrow.stationId!==order.row.station_id||
+       escrow.typeId!==order.row.type_id||
+       !receipt||receipt.kind!=="P2P_BUY_RESERVE"||
+       receipt.phase!=="BOUND"||receipt.orderID!==id||
+       receipt.buyerID!==buyerID||
+       receipt.operationID!==escrow.coopReserveOperationID||
+       toCents(escrow.price)!==receipt.priceCents||
+       toCents(order.row.price)!==receipt.priceCents||
+       escrow.remainingQuantity!==order.row.vol_remaining||
+       !positive(escrow.remainingQuantity)||
+       escrow.remainingQuantity>receipt.quantity||
+       toCents(escrow.escrowAmount)!==
+        receipt.priceCents*escrow.remainingQuantity)
+     throw Error("P2P_BUY_RESERVE_LEGACY_OR_UNFUNDED_BUY_ORDER");
+   }
+   return true;
+  });
+ }
  function inspect(operationID){
   if(typeof operationID!=="string"||!operationID)
    throw Error("P2P_BUY_RESERVE_OPERATION_ID_REQUIRED");
   return gameStore.transact(["playerMarketFills"],tx=>
     tx.get("playerMarketFills",keyFor(operationID)));
  }
- return Object.freeze({begin,bind,inspect});
+ return Object.freeze({begin,bind,inspect,assertExisting});
 }
 let runtime=null;
 function active(){
@@ -208,4 +241,5 @@ function active(){
 }
 module.exports={createBuyReserve,requireQuote,
  begin:q=>active().begin(q),bind:(receipt,order)=>active().bind(receipt,order),
- inspect:id=>active().inspect(id)};
+ inspect:id=>active().inspect(id),
+ assertExisting:(orders,id)=>active().assertExisting(orders,id)};
