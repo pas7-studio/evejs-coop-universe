@@ -26,8 +26,9 @@ test("bounded demand cannot grow forever from a flood of spent ammo",()=>{
   receipts:[event("NATIVE_WEAPON_CONSUMPTION","ammo:1",5000)]}).target,300);
 });
 test("stale physical consumption is not current demand",()=>{
- assert.equal(calculateNativeDemand({...context,receipts:[
-  event("NATIVE_WEAPON_CONSUMPTION","old",50,{at:200000-86400001})
+ const now=90000000;
+ assert.equal(calculateNativeDemand({...context,now,receipts:[
+  event("NATIVE_WEAPON_CONSUMPTION","old",50,{at:now-86400001})
  ]}).target,100);
 });
 test("duplicate receipt and duplicate canonical debit both fail closed",()=>{
