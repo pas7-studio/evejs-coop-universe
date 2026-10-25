@@ -70,3 +70,18 @@ test('feature OFF performs no SQLite calls and unknown/corrupt state blocks',()=
  assert.throws(()=>db.snapshot(),/FW_FLEET_REGISTRY_INVALID/);
  assert.equal(db.claim(base()),'UNKNOWN');
 });
+
+test('hot warship claim uses cached GameStore reads, not SQLite writer per NPC',()=>{
+ let count=0,reads=0;
+ const row={version:1,ships:{'501':{entityID:501,systemID:101,
+  pilotID:'coop-pilot-001',corporationID:31,factionID:11,
+  fleetID:'fleet-a',warID:'w1',campaignID:'c1'}},processed:{},history:[]};
+ const nativeStore={read:()=>{reads++;return {success:true,data:row}},
+  coopAtomicNativeRows:{transact:()=>{count++;throw Error('no SQLite for read')}}};
+ const fleet=createWarFleetRegistry({gameStore:nativeStore,...native,env});
+ for(let i=0;i<25;i++)assert.equal(fleet.claim({entityID:501,systemID:101,
+  pilotID:'coop-pilot-001'}),'ASSIGNED');
+ assert.equal(count,0);assert.equal(reads,25);
+ row.version=999;
+ assert.equal(fleet.claim({entityID:501,systemID:101,pilotID:'coop-pilot-001'}),'UNKNOWN');
+});
