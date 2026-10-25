@@ -20,7 +20,7 @@ const ledger={source:'native-authoritative-export',projectSha:meta.projectSha,up
  {entryId:'a',txId:'move1',account:'101',delta:'-200',kind:'transfer'},
  {entryId:'b',txId:'move1',account:'102',delta:'200',kind:'transfer'},
  {entryId:'c',txId:'mission7',account:'101',delta:'1000',kind:'mint',rewardKey:'mission:7:character:101'}]};
-const client={projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,imageId:meta.imageId,authorizedClient:true,recordedAt:new Date(now).toISOString(),characterIds:[101,102],observations:{loginA:true,loginB:true,undockA:true,undockB:true,npcVisible:true,mutualVisibility:true,fleetWarp:true,combatOrLoot:true,reconnect:true}};
+const client={projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,imageId:meta.imageId,authorizedClient:true,recordedAt:new Date(now).toISOString(),characterIds:[101,102],observations:{loginA:true,loginB:true,undockA:true,undockB:true,npcVisible:true,mutualVisibility:true,fleetInviteAccepted:true,fleetWarp:true,sharedCombat:true,sharedLoot:true,itemGift:true,shipGift:true,sharedQuestCredit:true,reconnectRetainsShip:true,secondPilotSurvivesDisconnect:true}};
 test('metadata is mandatory: no old PASS can be applied to unanchored deployment',()=>assert.equal(audit({events:worldLog,now}).overall,'BLOCKED_REVISION'));
 test('missing event file is telemetry blocker, not client blocker',()=>assert.match(checkWorld('',meta,now,30).reason,/MISSING_TELEMETRY/));
 test('malformed JSONL is fail closed',()=>assert.equal(checkWorld(worldLog+'\n{broken',meta,now,30).status,'FAIL'));
@@ -49,3 +49,5 @@ test('valid event rows are bounded by window and rejects malformed timestamps',(
 test('duplicate reward key inside one transaction also fails',()=>{const x=structuredClone(ledger);x.entries.push({entryId:'new',txId:'mission7',account:'102',delta:'1000',kind:'mint',rewardKey:'mission:7:character:101'});assert.equal(checkEconomy(x,meta).status,'FAIL');});
 test('a mint transaction can contain distinct issuance keys',()=>{const x=structuredClone(ledger);x.entries.push({entryId:'new',txId:'mission7',account:'102',delta:'1000',kind:'mint',rewardKey:'mission:7:character:102'});assert.equal(checkEconomy(x,meta).status,'PASS_LEDGER');});
 test('noncanonical duplicate item identifiers are rejected',()=>{const x=structuredClone(after);x.characters[1].items[0].id='01001';assert.equal(checkPersistence(before,x,meta).status,'FAIL');});
+test('scene from before new server boot cannot pass party gate',()=>{const input=partyLog+'\n'+event('living-headless-boot-requested',{},now-5000);assert.equal(checkParty(input,now,30).status,'BLOCKED');});
+test('missing shared loot or ship gift never qualifies full coop',()=>{const x=structuredClone(client);x.observations.sharedLoot=false;assert.equal(checkClient(x,meta,now).status,'BLOCKED');const y=structuredClone(client);y.observations.shipGift=false;assert.equal(checkClient(y,meta,now).status,'BLOCKED');});
