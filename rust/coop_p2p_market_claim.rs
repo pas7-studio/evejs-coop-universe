@@ -98,7 +98,9 @@ fn coop_p2p_claim_db(
         "SELECT MAX(cycle) FROM coop_p2p_fill_claims WHERE order_id=?1",
         params![order_id],|r|r.get(0)
     )?;
-    if cycle!=prior.unwrap_or(0)+1 {bail!("P2P_CLAIM_CYCLE_NOT_NEXT");}
+    let expected_cycle=prior.unwrap_or(0).checked_add(1)
+        .ok_or_else(||anyhow!("P2P_CLAIM_CYCLE_OVERFLOW"))?;
+    if cycle!=expected_cycle {bail!("P2P_CLAIM_CYCLE_NOT_NEXT");}
     let claim_count=tx.execute(
         "UPDATE market_orders SET state='settling',updated_at=?2
          WHERE order_id=?1 AND state='open' AND source='player'
