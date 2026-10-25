@@ -112,8 +112,12 @@ function createBuyRefund({gameStore,clock=()=>Date.now()}={}){
     const reserved=tx.get("playerMarketFills",past.reserveReceiptKey);
     if(!reserved||reserved.phase!=="REFUNDED"||
        reserved.orderID!==p.orderID||
+       reserved.key!==past.reserveReceiptKey||
+       reserved.operationID!==past.reserveOperationID||
        reserved.refundedCents!==past.refundCents||
-       reserved.remainingReserveCents!==0)
+       reserved.remainingReserveCents!==0||
+       reserved.spentCents!==past.spentCents||
+       reserved.reservedCents!==reserved.spentCents+reserved.refundedCents)
      throw Error("P2P_BUY_REFUND_COMMITTED_RESERVE_EVIDENCE_MISSING");
     if(tx.get("marketEscrow",p.orderID)!==null)
      throw Error("P2P_BUY_REFUND_REPLAY_ESCROW_STILL_EXISTS");
