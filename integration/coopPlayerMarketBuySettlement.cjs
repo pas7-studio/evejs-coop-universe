@@ -93,8 +93,16 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
  function preflight({proof,sourceItemID}={}){
   if(!enabled())throw Error("P2P_BUY_PAY_FLAGS_DISABLED");
   const amounts=validate(proof,sourceItemID);
-  return gameStore.transact(["marketEscrow","playerMarketFills"],tx=>{
+  return gameStore.transact(["marketEscrow","playerMarketFills","items"],tx=>{
    assertBound(tx,proof,amounts);
+   const item=tx.get("items",String(sourceItemID));
+   if(!item||item.itemID!==sourceItemID||
+      item.ownerID!==proof.counterpartyID||
+      item.locationID!==proof.stationID||item.flagID!==4||
+      item.typeID!==proof.typeID||item.singleton!==0||
+      item.quantity!==proof.filledQuantity||
+      item.stacksize!==proof.filledQuantity)
+    throw Error("P2P_BUY_PAY_EXACT_ORIGINAL_SELLER_STACK_REQUIRED");
    return true;
   });
  }
