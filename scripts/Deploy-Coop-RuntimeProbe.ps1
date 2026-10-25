@@ -18,6 +18,8 @@ param(
   [switch]$EnableFactionPatrols,
   [switch]$CoopCombat,
   [switch]$LivingCoop,
+  [ValidateSet(6,12,24,48)][int]$CoopSkillTrainingSpeed = 48,
+  [switch]$ConfirmActiveTrainingRebased,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
   [switch]$EnableMarketCatalog,
@@ -90,6 +92,19 @@ if ($usePatrols -and -not $useEconomy) {
 $code = (Resolve-Path -LiteralPath $CodePath -ErrorAction Stop).Path
 $installer = Join-Path $PSScriptRoot 'Install-Coop-RuntimeProbe.ps1'
 $override = Join-Path $code 'compose.coop-probe.yaml'
+# Native active queues derive SP from persisted activeStartTime and CURRENT speed.
+# A faster rate on an old timestamp can retroactively credit unearned SP.
+# Never change an existing world silently; require an operator-verified rebase.
+if ($LivingCoop -and -not $Remove -and (Test-Path -LiteralPath $override -PathType Leaf)) {
+  $previous = [System.IO.File]::ReadAllText($override)
+  $priorMatch = [regex]::Match($previous, '(?m)^\s*EVEJS_SKILL_TRAINING_SPEED:\s*[\x27\x22]?(\d+)')
+  if ($priorMatch.Success) {
+    $priorSpeed = [int]$priorMatch.Groups[1].Value
+    if ($priorSpeed -ne $CoopSkillTrainingSpeed -and -not $ConfirmActiveTrainingRebased) {
+      throw "Training rate ${priorSpeed}x -> $($CoopSkillTrainingSpeed)x BLOCKED: native active queues need old-rate SP settlement and a timestamp rebase. Read docs/COOP_LOCAL_PROGRESSION_V2.md. Only after verifying the rebase may you specify -ConfirmActiveTrainingRebased. Or retain the old rate with -CoopSkillTrainingSpeed $priorSpeed."
+    }
+  }
+}
 if (-not (Test-Path -LiteralPath (Join-Path $code 'compose.yaml') -PathType Leaf)) {
   throw "Missing pinned EveJS compose.yaml at $code"
 }
@@ -201,7 +216,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '0'"
   # Closed-server progression uses the original EveJS account/skill authority.
   # This affects the actual skill queue and client estimates, not fake SP grants.
-  $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '6'"
+  $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '$CoopSkillTrainingSpeed'"
   # Faster T1 blueprint job time; actual minerals, ISK, taxes and skill gates unchanged.
   $yamlLines += "      EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: '0.35'"
   # Native EveJS Omega license (both friends get identical free closed-server access).

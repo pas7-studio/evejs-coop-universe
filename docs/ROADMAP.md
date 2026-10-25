@@ -1,4 +1,6 @@
 # Delivery roadmap — agent-ready tasks
+
+> **P0 local co-op pacing:** [Local progression V2 (48× new-world default, existing-queue migration fence, live speed diagnostics)](COOP_LOCAL_PROGRESSION_V2.md). Source-level only; do not retro-credit SP or claim the one-year client ETA is fixed until real client QA.
 > [NPC capsuleers: autonomous goals, opportunistic raids and hunting](NPC_CAPSULEER_AGENCY_HUNTING_V1.md) — design proposal, not implemented gameplay.
 > [NPC manufacturing, real warehouses and demand-driven industrial economy](NPC_NATIVE_INDUSTRIAL_ECONOMY_V1.md) — architecture and implementation plan; native full-loop acceptance pending.
 
