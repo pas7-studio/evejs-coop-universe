@@ -69,7 +69,9 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    Number(row.typeID)===tx.typeID&&
    Number(row.quantity)===tx.quantity&&
    row.singleton===tx.newCargo.singleton&&
-   Number(row.moduleID||0)===0;
+   Number(row.groupID)===tx.newCargo.groupID&&
+   Number(row.categoryID)===tx.newCargo.categoryID&&
+   Number(row.flagID)===5&&Number(row.moduleID||0)===0;
  }
  function cargoFor(tx){
   const rows=store.listNativeCargoForEntity(tx.entityID);
@@ -127,17 +129,24 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   catch(_){return {status:"CUSTODY_REPAIR_REQUIRED"};}
  }
  function transfer({claim,scene,entityID,wreckItemID,assignments=[],
-  getController=()=>null,canLoot=()=>false}={}){
+  getController=()=>null,canLoot=()=>false,verifyClaim=()=>false}={}){
   const itemID=validID(wreckItemID),shipID=validID(entityID),
    systemID=validID(scene?.systemID),wreckID=validID(claim?.wreckID);
   if(!itemID||!shipID||!systemID||!wreckID||
    typeof scene?.getEntityByID!=="function"||
    !Array.isArray(assignments)||typeof getController!=="function"||
-   typeof canLoot!=="function"||!named(claim?.attackerPilotID)||
+   typeof canLoot!=="function"||typeof verifyClaim!=="function"||
+   !named(claim?.attackerPilotID)||
    claim.attackerEntityID!==shipID||claim.systemID!==systemID||
    !Number.isSafeInteger(claim.at)||!Number.isSafeInteger(claim.expiresAt)||
    clock()<claim.at||clock()>claim.expiresAt)
    return {status:"INVALID_NATIVE_CUSTODY_PROOF"};
+  // Re-check against the *durable* native kill journal, not only a caller-
+  // supplied object. Without proof, do not even consult an old tx for credit.
+  let attested=false;
+  try{attested=verifyClaim({claim,scene,entityID:shipID})===true;}
+  catch(_){attested=false;}
+  if(!attested)return {status:"NATIVE_KILL_RECEIPT_NOT_VERIFIED"};
   if(busy.has(itemID))return {status:"ITEM_TRANSFER_BUSY"};
   busy.add(itemID);
   try{
