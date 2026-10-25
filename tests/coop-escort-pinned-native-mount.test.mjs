@@ -22,7 +22,7 @@ function fixture(fn){
   wallet:{divisions:{"1000":{key:1000,balance:50000,journal:[],transactions:[]}}}}},
   characters:{"701":{characterID:701,balance:500,balanceChange:0,walletJournal:[]},
    "702":{characterID:702,balance:500,balanceChange:0,walletJournal:[]}}};
- let verifiedConsent=false,verifiedParty=true,spoofPrice=false,online=true;
+ let verifiedConsent=false,verifiedParty=true,spoofPrice=false,online=true,now=1000000;
  let txs=0;
  const atomic={mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,
   transact:(_,callback)=>{txs++;const before=clone(db);
@@ -71,11 +71,11 @@ function fixture(fn){
   verifyNativeParty:()=>verifiedParty?{
    ok:true,fleetID:33,systemID:30000144,leaderShipID:1701,
    peerShipID:1702}:{ok:false,reason:"NOT_SAME_NATIVE_FLEET"},
-  clock:()=>1000000});
+  clock:()=>now});
  try{fn({root,mount,db:()=>db,txs:()=>txs,consent:()=>verifiedConsent=true,
   denyParty:()=>verifiedParty=false,
   disconnect:()=>{pilots[1].socket.destroyed=true},
-  price:()=>spoofPrice=true})}
+  price:()=>spoofPrice=true,setTime:t=>now=t})}
  finally{fs.rmSync(root,{recursive:true,force:true})}
 }
 test("native binding never reserves ISK without BOTH pilots' durable consent",()=>fixture(f=>{
@@ -100,6 +100,11 @@ test("disconnected duplicate or ghost character session cannot approve native fu
  f.consent();f.disconnect();
  assert.equal(f.mount().runtime.fundBeforeWarp(route).status,"FLIGHT_BOOKING_NOT_AUTHORIZED");
  assert.equal(f.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,50000);
+}));
+test("expired native NPC quote cannot debit a corporation even with two pilots",()=>fixture(f=>{
+ f.consent();f.setTime(8000001);
+ assert.equal(f.mount().runtime.fundBeforeWarp(route).status,"FLIGHT_BOOKING_NOT_AUTHORIZED");
+ assert.equal(f.db().corporationRuntime["corporations\\u001f10001"].wallet.divisions["1000"].balance,50000);
 }));
 test("native escrow adapter requires the genuine server-internal atomic ownership mode",()=>fixture(f=>{
  assert.throws(()=>createNativeMount({root:f.root}),/ESCORT_PINNED_NATIVE_PROVIDER_AUTHORITIES_REQUIRED/);
