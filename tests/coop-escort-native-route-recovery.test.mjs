@@ -2,16 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createStationArrival}=require("../integration/coopNativeStationArrival.cjs");
+const {createStationArrival,checkReturn}=require("../integration/coopNativeStationArrival.cjs");
 const FLAGS=["EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_ESCORT_WARP_FENCE","EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT",
  "EVEJS_COOP_ESCORT_ROUTE_WITNESS","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS",
  "EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER",
  "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY",
- "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT"];
+ "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT",
+ "EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY","EVEJS_COOP_NPC_STATION_DELIVERY"];
 const saved=Object.fromEntries(FLAGS.map(k=>[k,process.env[k]]));
 for(const key of FLAGS)process.env[key]="1";
 process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY="0";
+process.env.EVEJS_COOP_NPC_STATION_DELIVERY="1";
 const KEY="30000144-77-1000000",CONTRACT="escort-30000144-77-5501";
 function fixture(){
  const station={stationID:60001,corporationID:10001,solarSystemID:30000144};
@@ -33,6 +36,8 @@ function fixture(){
  const cargo=[{cargoID:5501,entityID:901,coopHaulFleetID:77,
   coopHaulFromMinerID:503,moduleID:0,quantity:7,typeID:34,transient:false}];
  const state={station,physicalStation,ingress,npc,scene,booking,entry,cargo,
+  fleet:{fleetID:77,systemID:30000144,haulerEntityIDs:[901],
+   coopEscortPredepartureEventID:"original-native-agent-contract"},
   native:{entityID:901,systemID:30000144,transient:false},
   source:{status:"WARP_SOURCE_ALREADY_DISPATCHED",manifestKey:KEY,
    phase:"WARP_ACK_CONFIRMED"},
