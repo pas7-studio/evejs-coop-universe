@@ -36,7 +36,9 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
   return JSON.parse(JSON.stringify(entry));
  };
  function originalWallet(r,proof){
-  if(proof?.verifiedNative!==true||proof.transactionID!==r.fillID||
+  if(proof?.verifiedNative!==true||
+     proof.source!=="ORIGINAL_CHARACTER_AND_CORPORATION_WALLET_JOURNALS"||
+     proof.transactionID!==r.fillID||
      proof.ownerID!==r.ownerID||proof.buyerID!==r.buyerID||
      proof.orderID!==r.orderID||proof.buyerDebitCents!==r.grossCents||
      proof.corporateCreditCents!==r.grossCents)
