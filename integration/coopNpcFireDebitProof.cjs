@@ -2,7 +2,9 @@
 // Fail-closed authoritative preflight for the existing pinned EveJS fire-cycle
 // debit. No invented shot, no shadow inventory and no write side effects.
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function createFireDebitProof({store,env=process.env}={}){
+function createFireDebitProof({store,compatible,env=process.env}={}){
+ if(typeof compatible!=="function")
+  compatible=require("./npc/npcCapabilityResolver").isNpcChargeCompatibleWithModule;
  if(!store||["getNativeEntity","listNativeModulesForEntity",
   "listNativeCargoForEntity"].some(k=>typeof store[k]!=="function"))
   throw Error("INVALID_NATIVE_FIRE_PROOF_DEPENDENCIES");
@@ -40,6 +42,7 @@ function createFireDebitProof({store,env=process.env}={}){
     Number(row.moduleID)!==moduleID||
     Number(row.typeID)!==Number(chargeItem.typeID)||
     Number(row.flagID)!==Number(moduleItem.flagID)||
+    compatible(fitted[0],Number(row.typeID))!==true||
     !Number.isSafeInteger(Number(row.quantity))||
     Number(row.quantity)<requested||
     Number(row.quantity)!==Number(chargeItem.quantity??chargeItem.stacksize))
