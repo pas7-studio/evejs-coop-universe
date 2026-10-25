@@ -5,7 +5,7 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
-let intelAnnouncer=null,recognitionAnnouncer=null;
+let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -148,6 +148,9 @@ function start(){
   });
   if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
   safeNpcPhase("native-depot",syncNativeDeliveries);
+  // COOP-042: one A-Life 30-second tick; READ ONLY, no extra scheduler.
+  if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_ALIFE_ECONOMY==="1")
+   safeNpcPhase("alife-native-economy-observe",observeAlifeEconomy);
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
   safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
@@ -724,6 +727,37 @@ function observeNativeActivity(){
       {spaceState:{systemID}},sample);
    }
   }catch(error){console.warn("[CoopNativeActivity] sample",systemID,error.message);}
+ }
+}
+function observeAlifeEconomy(){
+ if(!world||!identityRegistry||!visitedSystems.size){
+  if(backgroundTicks%10===0)require("./coopRuntimeProbe").observe(
+   "alife-economy-blocker",null,null,{reason:"NATIVE_ALIFE_WORLD_NOT_READY",
+    status:"BLOCKED",source:"NATIVE_ECONOMY_SENSOR"});
+  return;
+ }
+ const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore");
+ const controllers=require("./npc/npcRegistry");
+ const worldData=require("./worldData"),probe=require("./coopRuntimeProbe");
+ if(!alifeEconomyObserver)alifeEconomyObserver=require("./coopAlifeEconomy")
+  .createAlifeEconomyObserver({emit:event=>probe.observe(event.event,null,
+    {spaceState:{systemID:event.systemID}},event)});
+ const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+ const links=Object.values(identityRegistry.snapshot().links||{});
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4)){
+  const scene=native.ensureScene(systemID,{refreshStargates:false});
+  const snap=require("./coopAlifeEconomySensor").readEconomySnapshot({
+   systemID,scene,links,roles,
+   getController:id=>controllers.getControllerByEntityID(id),
+   getStation:id=>worldData.getStationByID(id),
+   getNativeEntity:id=>npcStore.getNativeEntity(id),
+   listNativeCargo:id=>npcStore.listNativeCargoForEntity(id),
+   inspectNativeAmmo:(entityID,pilotID)=>nativeAmmoSupply?.inspect({
+    scene,entityID,pilotID,assignments:links})||null,
+   // Factory/market snapshots must later be supplied by audited source readers.
+   readStationEconomy:()=>null
+  });
+  alifeEconomyObserver.tick(snap);
  }
 }
 function nativeMarketAllowlist(name){

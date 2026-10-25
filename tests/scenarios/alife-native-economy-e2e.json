@@ -1,0 +1,475 @@
+{
+  "schema": "coop-alife-economy-acceptance/v1",
+  "pinnedUpstream": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "mergeGates": [
+    "cargo check --locked and cargo test --locked for COOP-034/035",
+    "native better-sqlite3 worker/restart verified",
+    "2-client NPC market buy verified",
+    "ledger conservation with unique physical itemID"
+  ],
+  "scenarios": [
+    {
+      "id": "ALIFE-001",
+      "title": "A-Life observation OFF by default",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Set both ALIFE flags OFF",
+        "Run existing world tick"
+      ],
+      "expected": [
+        "No new NPC orders, timer, item or wallet mutation",
+        "No economic intent events"
+      ],
+      "requiredEvidence": [
+        "env snapshot",
+        "native ship order count"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-002",
+      "title": "Native named miner perception",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Link real miner hull to one pilot ID",
+        "Expose actual belt and native controller",
+        "Run 30 second A-Life tick"
+      ],
+      "expected": [
+        "An intent is logged, no created ore",
+        "Native mining laser controls the real yield"
+      ],
+      "requiredEvidence": [
+        "native hull",
+        "mining controller",
+        "A-Life evidence"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-003",
+      "title": "Physical ore pickup and travel",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Mine ore to real item/cargo",
+        "Assign hauler",
+        "Place station far from ship (include 1.27 AU case)",
+        "Observe HAUL then native warp and arrival"
+      ],
+      "expected": [
+        "No premature station receipt before physical arrival",
+        "Same cargo identity across transport"
+      ],
+      "requiredEvidence": [
+        "ore cargo ID",
+        "ship position before and after",
+        "station receipt"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-004",
+      "title": "Hauler delivery settles exactly once",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Arrive at native SDE station",
+        "Commit existing warehouse/depot receipt",
+        "Replay delivery event"
+      ],
+      "expected": [
+        "One credited native ore quantity; replay no-op",
+        "No extra ore in virtual ledger"
+      ],
+      "requiredEvidence": [
+        "cargo ID",
+        "warehouse itemID",
+        "debit/credit receipt"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-005",
+      "title": "Native refinery consumes actual ore",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Reserve real station ore",
+        "Refine with pinned recipe",
+        "Observe mineral inventory"
+      ],
+      "expected": [
+        "Ore decreases once; real mineral items increase per recipe",
+        "No minerals without ore debit"
+      ],
+      "requiredEvidence": [
+        "ore source itemID",
+        "mineral output itemIDs",
+        "refinery receipt"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-006",
+      "title": "Factory starts with real minerals/ISK/BPO",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Verify native original BPO, available materials and wallet",
+        "Install an industry job",
+        "Compare native before/after"
+      ],
+      "expected": [
+        "Exact ingredient and ISK debit",
+        "One persisted jobID; duplicate request does not charge again"
+      ],
+      "requiredEvidence": [
+        "BPO itemID",
+        "jobID",
+        "corporation wallet transactions"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-007",
+      "title": "Elapsed job produces native manufactured cargo",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Wait for actual READY time or deterministic test clock",
+        "Deliver completed job once",
+        "Restart and replay"
+      ],
+      "expected": [
+        "One real output itemID",
+        "No free item or double completion"
+      ],
+      "requiredEvidence": [
+        "native READY job",
+        "output itemID",
+        "delivery provenance"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-008",
+      "title": "Rust PENDING order has real physical escrow",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Reserve NPC sell order with operationID",
+        "Transfer manufactured item and escrow row atomically",
+        "Activate Rust order only with verified escrow"
+      ],
+      "expected": [
+        "Order invisible until escrow verified",
+        "Buyer sees only physically backed item"
+      ],
+      "requiredEvidence": [
+        "Rust pending/open rows",
+        "GameStore item location",
+        "marketEscrow row"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-009",
+      "title": "Player purchase conserves money and items",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Log in real player and dock at station",
+        "Buy exactly one full native stack",
+        "Inspect wallet, hangar and NPC corporation"
+      ],
+      "expected": [
+        "Player wallet decreases by quantity*price",
+        "NPC corporation wallet increases by same gross ISK",
+        "Original itemID changes owner, no duplicates"
+      ],
+      "requiredEvidence": [
+        "buyer wallet journal",
+        "corporation wallet journal",
+        "hangar itemID",
+        "Rust fill receipt"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-010",
+      "title": "Concurrent buyers cannot double-buy",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Two clients request same NPC sell order simultaneously",
+        "Allow only one Rust SETTLING buyer claim",
+        "Inspect final GameStore and Rust state"
+      ],
+      "expected": [
+        "Exactly one buyer receives item",
+        "Exactly one debit and corporation credit",
+        "Losing buyer gets blocked or refreshed order"
+      ],
+      "requiredEvidence": [
+        "both client wallets",
+        "item owner",
+        "unique native market fill"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-011",
+      "title": "Lost Rust reserve or activation acknowledgment",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Inject timeout after Rust commit",
+        "Restart NPC market adapter",
+        "Inspect order reservation and escrow"
+      ],
+      "expected": [
+        "No second order and no duplicate item",
+        "Unknown outcome requires reconciliation rather than auto-retry"
+      ],
+      "requiredEvidence": [
+        "Rust reservation operationID",
+        "escrow sourceItemID",
+        "director LIST_UNKNOWN"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-012",
+      "title": "Crash between player native COMMIT and Rust finalize",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Inject crash immediately after five-table SQLite commit",
+        "Restart GameStore and market daemon",
+        "Retry same buyer and fill identity"
+      ],
+      "expected": [
+        "Native item and both wallets unchanged by replay",
+        "Rust transitions to FILLED exactly once"
+      ],
+      "requiredEvidence": [
+        "npcMarketFills receipt",
+        "buyer/corp journal IDs",
+        "Rust state"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-013",
+      "title": "Native wallet debit and receipt roll back on fault",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Inject late SQLite write failure before commit",
+        "Check all native tables after failure"
+      ],
+      "expected": [
+        "No partial debit, credit, escrow removal or item transfer",
+        "No Rust FILLED finalization"
+      ],
+      "requiredEvidence": [
+        "five SQLite row snapshots",
+        "Rust claim state"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-014",
+      "title": "Real material shortage and insufficient cash",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Remove mineral inventory or make corp funds insufficient",
+        "Tick factory director"
+      ],
+      "expected": [
+        "Named NEEDS_MINERALS or insufficient-wallet blocker",
+        "No industry job, items or ISK created"
+      ],
+      "requiredEvidence": [
+        "material inventory",
+        "wallet balance",
+        "A-Life blocker"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-015",
+      "title": "Risk preempts income opportunities",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Set live NPC controller target, ship damage or pending warp",
+        "Expose profitable industry/hauling opportunity",
+        "Run same A-Life tick"
+      ],
+      "expected": [
+        "SURVIVAL or COMMITTED wins",
+        "No native economy order overrides combat or warp"
+      ],
+      "requiredEvidence": [
+        "ship HP",
+        "controller state",
+        "arbiter lease",
+        "intent evidence"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-016",
+      "title": "Combat NPC runs out of genuine ammunition",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Consume real ammunition in native combat",
+        "Use existing authoritative ammo inspector",
+        "Observe A-Life RESUPPLY"
+      ],
+      "expected": [
+        "NPC seeks stock through real restock flow",
+        "No synthetic charges or shots without native ammo debit"
+      ],
+      "requiredEvidence": [
+        "ammo inventory before/after",
+        "ammo inspector status",
+        "A-Life intent"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-017",
+      "title": "Market demand triggers finite restock",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Buy NPC-made item and consume real ammo",
+        "Generate real unique native demand receipts",
+        "Advance bounded factory director"
+      ],
+      "expected": [
+        "Stock plus escrow plus active jobs determine shortage",
+        "One new production cycle within target/cooldown caps"
+      ],
+      "requiredEvidence": [
+        "market trade receipts",
+        "ammo consumption receipt IDs",
+        "job IDs"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-018",
+      "title": "Two traders cannot reserve one factory action",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Link two physical trader pilots at same station",
+        "Provide verified production shortage",
+        "Run single A-Life decision tick"
+      ],
+      "expected": [
+        "Only one MANUFACTURE intent per station",
+        "Second actor has ALIFE_ECONOMY_RESOURCE_RESERVED blocker"
+      ],
+      "requiredEvidence": [
+        "unique pilot/entity IDs",
+        "resource lease",
+        "events"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-019",
+      "title": "Two clients see the same event",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Bring two player clients into one solar system",
+        "Trigger verified native ore delivery or sale",
+        "Observe A-Life news digest"
+      ],
+      "expected": [
+        "Both receive event from same authoritative proof",
+        "Intent announcements clearly state not yet executed"
+      ],
+      "requiredEvidence": [
+        "A-Life event log",
+        "both chat views",
+        "native receipt"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-020",
+      "title": "Stale/missing scene evidence fails closed",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Delete sensor health/owner/station proof in disposable fixture",
+        "Run A-Life tick"
+      ],
+      "expected": [
+        "No manufacturing, hauling or market mutation",
+        "Explicit reason rather than silent skip"
+      ],
+      "requiredEvidence": [
+        "sensor refusal",
+        "native order count",
+        "wallet/item snapshots"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-021",
+      "title": "Legacy market safety with NPC corporate seller",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Attempt stock Rust FillOrder, ModifyOrder and CancelOrder against coop-npc",
+        "Attempt character-seller fallback"
+      ],
+      "expected": [
+        "All bypasses refused",
+        "Only separately audited corporate buyer path may execute"
+      ],
+      "requiredEvidence": [
+        "Rust rejection responses",
+        "GameStore escrow remains"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-022",
+      "title": "Full economy restart and conservation audit",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Complete native mine, haul, refine, manufacture, list and buy",
+        "Restart both persistence worker and Rust daemon",
+        "Reconcile all source ledgers"
+      ],
+      "expected": [
+        "No item/ISK duplication, loss or phantom stock",
+        "Same unique source IDs and unambiguous audit trail"
+      ],
+      "requiredEvidence": [
+        "native items",
+        "industry jobs",
+        "wallet journal",
+        "escrow/fills",
+        "market orders"
+      ],
+      "destructive": false
+    }
+  ]
+}
