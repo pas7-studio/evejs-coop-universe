@@ -583,6 +583,7 @@ function advanceNativePatrolRoutes(){
   if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
    for(const id of wreckRecoveryDirector.activeIDs(Number(systemID)))blockedIDs.add(id);
   if(lootCommerce)for(const id of lootCommerce.activeIDs(Number(systemID)))blockedIDs.add(id);
+  if(nativeAmmoSupply)for(const id of nativeAmmoSupply.activeIDs(Number(systemID)))blockedIDs.add(id);
   // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
   if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1"){
    if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
@@ -908,6 +909,8 @@ function advanceNativeCivilianOrders(){
    for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
  if(lootCommerce)for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
   for(const id of lootCommerce.activeIDs(sys))blockedIDs.add(id);
+ if(nativeAmmoSupply)for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+  for(const id of nativeAmmoSupply.activeIDs(sys))blockedIDs.add(id);
  // A physically observing squad scout must stay on-grid for the 15s relay:
  // don't let generic civilian waypoints warp that SAME native ship away.
  if(process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&squadDirector)
@@ -958,8 +961,7 @@ function advanceNativeAmmoSupply(){
  if(!nativeAmmoSupply)nativeAmmoSupply=
   require("./coopNpcAmmoSupply").createAmmoSupply({
    store,getWeaponModules:equipment.getNpcWeaponModules,
-   resolveFamily:weapon=>dogma.resolveWeaponFamily(weapon,
-    equipment.getNpcLoadedChargeForModule?.(null,weapon)||null),
+   resolveFamily:weapon=>dogma.resolveWeaponFamily(weapon),
    isOptional:weapon=>dogma.isChargeOptionalTurretWeapon(weapon),
    compatible:types.isNpcChargeCompatibleWithModule,
    getController:id=>controllers.getControllerByEntityID(id),
