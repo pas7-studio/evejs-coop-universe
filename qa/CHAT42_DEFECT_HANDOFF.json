@@ -1,0 +1,184 @@
+{
+  "schema": "coop-qa42-defects/v1",
+  "snapshotRev": "81b6469b463afd7d6add891bc0458d73c732a222",
+  "scope": "QA handoff only; no other owners code changed",
+  "defects": [
+    {
+      "key": "Q42-001",
+      "severity": "P0",
+      "kind": "EVIDENCE_INTEGRITY",
+      "owners": [
+        1,
+        40
+      ],
+      "title": "Published evidence is stale and newest digest is not tracked",
+      "evidence": [
+        "state/status.json has projectRev da549fd29841676e6f0c96d347ee93acbfe2d08a",
+        "main at audit snapshot 530415ee4bc99be04f8b39c6fde985d7141ddc7f",
+        "state/manifest.json references state/digests/20261025-142742.md, not found in main tree"
+      ],
+      "requiredFix": "Publish a new redacted, revision-bound evidence bundle from actual host and include its manifest-linked digest. Run read-only state verifier on the exact deployed revision; do not rewrite old events.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/172"
+    },
+    {
+      "key": "Q42-002",
+      "severity": "P0",
+      "kind": "MISSING_GAMEPLAY_PROOF",
+      "owners": [
+        3,
+        4,
+        5,
+        41
+      ],
+      "title": "No current authenticated two-client co-op proof",
+      "evidence": [
+        "state/status.json reports 3 client log files but does not establish independent A and B authenticated simultaneously",
+        "historical one-client undock/autopilot lines are not a fleet or shared-grid witness",
+        "no current Party native two-client gameplay report"
+      ],
+      "requiredFix": "On authorized private connection, prove two distinct accounts/characters/sessions/ships, shared grid bidirectional visibility, native fleet invite/warp and disconnect/rejoin with correlated server + client A/B redacted event hashes.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/174"
+    },
+    {
+      "key": "Q42-003",
+      "severity": "P0",
+      "kind": "PROCESS_VIOLATION",
+      "owners": [
+        1,
+        40,
+        41
+      ],
+      "title": "Two workflow YAMLs present despite explicit project-wide no-CI rule",
+      "evidence": [
+        "AGENTS.md explicitly forbids adding/restoring/enabling GitHub Actions workflows",
+        ".github/workflows/alife11-native-cargo.yml has push/pull_request triggers",
+        ".github/workflows/alife12-native-station-restart.yml has push/pull_request triggers"
+      ],
+      "requiredFix": "Owner confirms policy, removes or disables workflows through their own approved change, checks protected branch history and ensures tests remain manual. QA42 did not run CI or modify workflow files.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/173"
+    },
+    {
+      "key": "Q42-004",
+      "severity": "P0",
+      "kind": "INTEGRATION_GAP",
+      "owners": [
+        1,
+        21,
+        28,
+        35
+      ],
+      "title": "Pinned native corrections published but installer/deploy acceptance missing",
+      "evidence": [
+        "docs/COOP_21_NATIVE_PVE_AUDIT.md: installer integration pending",
+        "docs/COOP_28_MOON_NATIVE_INDUSTRY.md: Chat 01 installer pending",
+        "docs/COOP_35_NATIVE_FACTION_WARFARE.md: Chat 01 installer pending"
+      ],
+      "requiredFix": "Chat 01 merges compatible one-statement source hooks with owner-approved flags OFF, runs isolated pinned dry-run and roundtrip, then operator verifies actual deployed overlay/client. Do not count file presence as installation.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/175"
+    },
+    {
+      "key": "Q42-005",
+      "severity": "P0",
+      "kind": "NATIVE_FUNCTIONAL_GAP",
+      "owners": [
+        28,
+        27,
+        40
+      ],
+      "title": "Moon fracture has no proven physical chunks and Metenox fuel lacks atomic output",
+      "evidence": [
+        "docs/COOP_28_MOON_NATIVE_INDUSTRY.md: BLOCKED_NATIVE_CHUNKS",
+        "docs/COOP_28_MOON_NATIVE_INDUSTRY.md: BLOCKED_ATOMIC_OUTPUT"
+      ],
+      "requiredFix": "Source-backed native chunk mining/depletion and durable fuel+material settlement or explicitly block productive state until supported; verify both player inventories on disposable data.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/175"
+    },
+    {
+      "key": "Q42-006",
+      "severity": "P0",
+      "kind": "NATIVE_FUNCTIONAL_GAP",
+      "owners": [
+        35,
+        32,
+        29
+      ],
+      "title": "Faction Warfare VP/occupation and Military Campaign reward loops not implemented end-to-end",
+      "evidence": [
+        "pinned fwWarzoneSolarsystemService returns empty occupation states",
+        "pinned insurgencySolarsystemService returns static campaign snapshots",
+        "pinned campaignGatewayService returns empty success payloads",
+        "docs/COOP_35_NATIVE_FACTION_WARFARE.md does not claim capture or reward engine"
+      ],
+      "requiredFix": "Do not display static fake campaign state as dynamic. Integrate only compatible, native battle objective, VP/LP/standing and persistent territory receipts; test two ships. Unsupported 2026 client RPC remains explicitly unavailable.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/175"
+    },
+    {
+      "key": "Q42-007",
+      "severity": "P1",
+      "kind": "NATIVE_FUNCTIONAL_GAP",
+      "owners": [
+        21,
+        2
+      ],
+      "title": "Extended PvE modes cannot be claimed as implemented",
+      "evidence": [
+        "docs/COOP_21_NATIVE_PVE_AUDIT.md: escalation path empty rowset",
+        "docs/COOP_21_NATIVE_PVE_AUDIT.md: Abyssal entrance rejects absent content generation",
+        "docs/COOP_21_NATIVE_PVE_AUDIT.md: Incursions and Homefront path incomplete"
+      ],
+      "requiredFix": "Keep unsupported content off, verify genuine authored native instances and client assets before promoting each mode. No synthetic awards.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/175"
+    },
+    {
+      "key": "Q42-008",
+      "severity": "P0",
+      "kind": "MISSING_ECONOMY_PROOF",
+      "owners": [
+        17,
+        25,
+        27,
+        29,
+        30,
+        40
+      ],
+      "title": "Full item/ISK/LP conservation across market, contracts and industry lacks current crash/restart evidence",
+      "evidence": [
+        "docs/COOP_055_TWO_CLIENT_ACCEPTANCE.md explicitly states NOT RUN",
+        "state/ledger.json has no complete gameplay acceptance"
+      ],
+      "requiredFix": "Use only isolated copies of native GameStore and Rust market; test lost ACK/duplicate settlement/partial writes/restart/restore and two genuine clients. Verify source/debit/output exactly once."
+    },
+    {
+      "key": "Q42-009",
+      "severity": "P1",
+      "kind": "QA_SOURCE_DRIFT",
+      "owners": [
+        21,
+        1
+      ],
+      "title": "Local PvE unit-test snapshot differs from current main blob",
+      "evidence": [
+        "local tests/coop-pve-native-objective.test.mjs git blob 658e3461efa64cca9b8e5083e40233dabf1b1576",
+        "main tests/coop-pve-native-objective.test.mjs git blob d161f92a8a374595efef9bfd02271c8c46081b22"
+      ],
+      "requiredFix": "Re-run current main PvE test on pinned checkout and record exact SHA. Historical 13 local PASS must not be reused for the changed file.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/175"
+    },
+    {
+      "key": "Q42-010",
+      "severity": "P0",
+      "kind": "ENVIRONMENT_BLOCK",
+      "owners": [
+        41,
+        1
+      ],
+      "title": "Live native host/container and two game clients not accessible to independent QA",
+      "evidence": [
+        "Cloud QA42 environment has no authorized Windows game host, Docker volumes, client binaries or active logs",
+        "only GitHub repository snapshots and local isolated test copies available"
+      ],
+      "requiredFix": "Operator performs approved manual read-only DiagnoseWorld, native World, one-client and Party checks, exports redacted correlated evidence; keep listener private and never grant the auditor raw credentials.",
+      "trackingIssue": "https://github.com/pas7-studio/evejs-coop-universe/issues/174"
+    }
+  ]
+}
