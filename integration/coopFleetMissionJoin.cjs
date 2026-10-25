@@ -87,7 +87,25 @@ function offer({characterID,agentRecord,fleetRuntime,sessions,
    text(created.missionTemplateID)!==text(leaderMission.missionTemplateID)||
    !id(created.missionSequence))
    return {status:"JOIN_OFFER_MISMATCH_REQUIRES_MANUAL_REVIEW"};
-  return {status:"PEER_NATIVE_MATCHING_MISSION_OFFERED",
+  // Native Request creates a separate peer offer; durable correspondence to the
+ // captain's exact accepted instance must precede any cooperative objective.
+ if(process.env.EVEJS_COOP_MISSION_INSTANCE_LINK==="1"){
+  const persisted=getMissionRecord(peer,agent);
+  if(!persisted||id(persisted.agentID)!==agent||
+   id(persisted.missionSequence)!==id(created.missionSequence)||
+   persisted.runtimeStatus!=="offered"||
+   text(persisted.contentID)!==text(created.contentID)||
+   text(persisted.missionTemplateID)!==text(created.missionTemplateID))
+   return {status:"NATIVE_INSTANCE_OFFER_NOT_DURABLE"};
+  const link=require("./coopMissionInstanceProvenance").record({
+   ownerID:leader,peerID:peer,agentID:agent,
+   leaderMission,peerMission:persisted
+  });
+  if(!["NATIVE_INSTANCE_LINK_RECORDED",
+   "NATIVE_INSTANCE_LINK_ALREADY_RECORDED"].includes(link.status))
+   return {status:link.status};
+ }
+ return {status:"PEER_NATIVE_MATCHING_MISSION_OFFERED",
    fleetID:id(fleet.fleetID),leaderID:leader,peerID:peer,
    agentID:agent,leaderMissionSequence:id(leaderMission.missionSequence),
    peerMissionSequence:id(created.missionSequence)};
