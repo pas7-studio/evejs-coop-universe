@@ -4,6 +4,7 @@ import fs from "node:fs";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createPhaseCoordinator}=require("../integration/coopLivingWorldPhaseCoordinator.cjs");
+const {classifyPhase,catalog,phaseNames}=require("../integration/coopLivingWorldPhaseRegistry.cjs");
 
 function fixture(options={}){
  const invoked=[],errors=[],cycles=[];
@@ -154,4 +155,74 @@ test("promise-returning WHOLE world tick is forbidden and releases the guard",()
  assert.equal(f.coordinator.snapshot().active,false);
  assert.equal(f.coordinator.snapshot().last.status,"THREW");
  assert.equal(f.coordinator.tick(run=>run("virtual-travel",()=>null)).status,"COMPLETED");
+});
+
+test("LW-03B static catalog defines all 27 original phases exactly once",()=>{
+ const c=catalog();
+ assert.equal(c.phases.length,27);
+ assert.deepEqual(c.phases.map(x=>x.name),[...phaseNames]);
+ assert.equal(new Set(c.phases.map(x=>x.name)).size,27);
+ assert.deepEqual(c.groupOrder,["opportunities","world-state","alife-perception",
+  "combat","salvage","movement","market-observation","activity","reconciliation"]);
+ assert.equal(c.phases.every(x=>x.mode==="EXISTING_NATIVE_OWNER_ONLY"),true);
+});
+test("only real original systemIDs classify as dynamic reconciliation",()=>{
+ assert.deepEqual(classifyPhase("npc-reconcile:30000142"),{
+  status:"KNOWN",group:"reconciliation",canonical:"npc-reconcile:"});
+ for(const input of ["npc-reconcile:0","npc-reconcile:01","npc-reconcile:-1",
+  "npc-reconcile:NaN","npc-reconcile:","npc-reconcile:99999999999999999999"])
+  assert.equal(classifyPhase(input).status,"UNCLASSIFIED");
+ assert.equal(classifyPhase("npc-reconcile:3 4").status,"INVALID");
+});
+test("each existing domain is observable without a parallel native executor",()=>{
+ const f=fixture();
+ const names=["courier-observe","virtual-travel","alife-native-economy-observe",
+  "native-raids","native-wreck-custody","native-civilians",
+  "native-market-schedule","native-activity","npc-reconcile:30000142"];
+ const outcome=f.coordinator.tick(run=>names.forEach(name=>run(name,()=>{})));
+ assert.equal(outcome.phaseCount,9);
+ const snap=f.coordinator.snapshot().last;
+ assert.deepEqual(snap.groups,Object.fromEntries([
+  "opportunities","world-state","alife-perception","combat","salvage",
+  "movement","market-observation","activity","reconciliation"
+ ].map(x=>[x,1])));
+ assert.equal(snap.unknownNames.length,0);
+ assert.equal(snap.source,"DISPATCH_ATTEMPTS_NOT_NATIVE_SETTLEMENT");
+ assert.deepEqual(f.invoked,names);
+});
+test("unknown phase is measured without suppressing native execution",()=>{
+ const f=fixture(),actions=[];
+ f.coordinator.tick(run=>{
+  run("new-native-activity",()=>actions.push("original"));
+  run("native-depot",()=>actions.push("depot"));
+ });
+ assert.deepEqual(actions,["original","depot"]);
+ assert.deepEqual(f.coordinator.snapshot().last.unknownNames,["new-native-activity"]);
+ assert.equal(f.coordinator.snapshot().last.groups.unclassified,1);
+ assert.equal(f.coordinator.snapshot().last.groups["world-state"],1);
+});
+test("operator cannot mutate returned source classification or native phase totals",()=>{
+ const f=fixture();
+ f.coordinator.tick(run=>run("native-raids",()=>{}));
+ const result=f.coordinator.snapshot();
+ result.last.groups.combat=500;
+ result.last.unknownNames.push("forged");
+ assert.equal(f.coordinator.snapshot().last.groups.combat,1);
+ assert.deepEqual(f.coordinator.snapshot().last.unknownNames,[]);
+ const c=f.coordinator.phaseCatalog();
+ c.phases[0].name="forged";
+ c.groupOrder.push("hacker");
+ assert.equal(f.coordinator.phaseCatalog().phases[0].name,"courier-observe");
+ assert.equal(f.coordinator.phaseCatalog().groupOrder.length,9);
+});
+test("registry remains pure and has no second timer or native game writers",()=>{
+ const source=fs.readFileSync(new URL("../integration/coopLivingWorldPhaseRegistry.cjs",import.meta.url),"utf8");
+ const coordinator=fs.readFileSync(new URL("../integration/coopLivingWorldPhaseCoordinator.cjs",import.meta.url),"utf8");
+ const installer=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
+ for(const s of [source,coordinator]){
+  assert.doesNotMatch(s,/setInterval\s*\(/);
+  assert.doesNotMatch(s,/setTimeout\s*\(/);
+  assert.doesNotMatch(s,/coopAtomicNativeRows|grantItem|marketDaemonClient|\.transact\(/);
+ }
+ assert.match(installer,/coopLivingWorldPhaseRegistry/);
 });
