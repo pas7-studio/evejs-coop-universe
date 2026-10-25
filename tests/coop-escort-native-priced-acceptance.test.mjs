@@ -90,6 +90,15 @@ test("already accepted priced contract survives process restart and cannot doubl
  assert.equal(f.api().readAccepted(eventID).status,"DURABLE_TWO_PILOT_PAID_ACCEPTANCE");
  assert.equal(f.api().accept(f.sessions[0],eventID).status,"DURABLE_TWO_PILOT_PAID_ACCEPTANCE");
 }));
+test("a previously accepted quote remains read-only auditable after its deadline",()=>fixture(f=>{
+ const a=f.api();a.quoteFromNative({eventID,route:quoteRoute});
+ a.accept(f.sessions[0],eventID);a.accept(f.sessions[1],eventID);
+ f.now(8000001);
+ const evidence=f.api().acceptedForManifest(acceptedRoute);
+ assert.equal(evidence.status,"AUTHORIZED_NATIVE_ESCORT_BOOKING");
+ assert.equal(evidence.quoteExpiresAt,8000000);
+ // Separate native runtime MUST reject FIRST reserve at or after this time.
+}));
 test("native manifest with different cargo is NOT authorized by real player acceptance",()=>fixture(f=>{
  const a=f.api();a.quoteFromNative({eventID,route:quoteRoute});
  a.accept(f.sessions[0],eventID);a.accept(f.sessions[1],eventID);
