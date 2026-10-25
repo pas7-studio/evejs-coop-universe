@@ -12,7 +12,7 @@ const flags=()=>({EVEJS_COOP_FACTION_WAR:"1",
  EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1"});
 function fixture(){
  const env=flags();
- const physical=new Map([[101,new Set([501])],[202,new Set()]]);
+ const physical=new Map([[101,new Set([501])],[202,new Set()],[303,new Set()]]);
  const ship={itemID:501,kind:"ship",nativeNpc:true,corporationID:31};
  const native={entityID:501,systemID:101,corporationID:31,ownerID:31};
  const controller={entityID:501,systemID:101,manualOrder:null};
@@ -54,11 +54,12 @@ function fixture(){
   listNativeCargoForEntity:()=>cargo};
  const ledger=createWarTransferLedger({
   gameStore,identityRegistry,env,clock:()=>1234567,
+  verifyJournalClosed:()=>true,
   sceneForSystem:systemID=>({systemID,
    getEntityByID:id=>physical.get(systemID)?.has(id)?ship:null}),
   nativeStore:store,getController:()=>controller
  });
- const cmd={transferID:"fw:501:101:202",entityID:501,
+ const cmd={transferID:"fw:501:101:202:1",entityID:501,
   sourceSystemID:101,destinationSystemID:202};
  function move(to){
   physical.get(to===202?101:202).delete(501);physical.get(to).add(501);
@@ -169,4 +170,64 @@ test("missing operator identity and malformed witness never write an audit",()=>
   witnessHash:"not-a-sha",principalID:"",reason:"Reviewed physical custody"});
  assert.equal(x.status,"INVALID_ADMIN_AUDIT");
  assert.equal(f.fleet().recoveryAudit,undefined);
+});
+
+
+test("terminal native transfer is retired only with physical/pilot/cargo proof",()=>{
+ const f=fixture(),id=f.cmd.transferID;
+ assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
+ f.move(202);
+ assert.equal(f.ledger.nativeCommit(f.cmd).status,"NATIVE_COMMITTED");
+ assert.equal(f.identityRegistry.relocate("coop-pilot-001",101,501,202).status,"RELOCATED");
+ assert.equal(f.ledger.finish(f.cmd).status,"COMPLETE");
+ assert.equal(f.ledger.retire({entityID:501,transferID:id}).status,"RETIRED");
+ assert.equal(f.fleet().transfers["501"],undefined);
+ assert.equal(f.fleet().transferHistory.length,1);
+ assert.equal(f.fleet().transferHistory[0].transferID,id);
+ assert.equal(f.fleet().ships["501"].systemID,202);
+ assert.equal(f.ledger.retire({entityID:501,transferID:id}).status,"BLOCKED");
+});
+test("the SAME physical hull may jump again under the next adjacent native campaign",()=>{
+ const f=fixture();
+ const first=f.ledger.begin(f.cmd);
+ assert.equal(first.transferID,"fw:501:101:202:1");
+ f.move(202);
+ f.ledger.nativeCommit({entityID:501,transferID:first.transferID});
+ f.identityRegistry.relocate("coop-pilot-001",101,501,202);
+ f.ledger.finish({entityID:501,transferID:first.transferID});
+ assert.equal(f.ledger.retire({entityID:501,transferID:first.transferID}).status,"RETIRED");
+ const fleet=f.rows.get(FLEET_KEY),war=f.rows.get(WAR_KEY);
+ fleet.ships["501"].campaignID="c2";
+ war.campaigns.c2={campaignID:"c2",warID:"w1",state:"PREPARING",
+  sourceSystemID:202,targetSystemID:303,supplyReservationID:"r2"};
+ f.rows.get(TREASURY_KEY).reservations.r2={status:"HELD",warID:"w1",
+  campaignID:"c2",factionID:11,cents:10000};
+ const second=f.ledger.begin({entityID:501,sourceSystemID:202,
+  destinationSystemID:303});
+ assert.equal(second.status,"PREPARED");
+ assert.equal(second.transferID,"fw:501:202:303:2");
+ assert.notEqual(first.transferID,second.transferID);
+ f.move(303);
+ assert.equal(f.ledger.nativeCommit({entityID:501,transferID:second.transferID}).status,"NATIVE_COMMITTED");
+ assert.equal(f.identityRegistry.relocate("coop-pilot-001",202,501,303).status,"RELOCATED");
+ assert.equal(f.ledger.finish({entityID:501,transferID:second.transferID}).status,"COMPLETE");
+ assert.equal(f.fleet().ships["501"].systemID,303);
+ assert.equal(f.fleet().transferHistory.length,1);
+ assert.equal(f.fleet().nextTransferSerial,3);
+ assert.equal(f.fleet().ships["501"].entityID,501);
+});
+test("active or uncertain transit cannot be retired or silently reused",()=>{
+ const f=fixture();
+ const start=f.ledger.begin(f.cmd);
+ assert.equal(start.status,"PREPARED");
+ assert.equal(f.ledger.retire({entityID:501,transferID:start.transferID}).status,"BLOCKED");
+ assert.equal(f.ledger.begin({entityID:501,sourceSystemID:101,
+  destinationSystemID:202}).reason,"WAR_HANDOFF_ALREADY_RECORDED");
+ assert.equal(f.fleet().transferHistory,undefined);
+});
+test("wrong sequence cannot become a valid repeat-transfer receipt",()=>{
+ const f=fixture();
+ assert.equal(f.ledger.begin({...f.cmd,transferID:"fw:501:101:202:42"}).reason,
+  "WAR_HANDOFF_SEQUENCE_CONFLICT");
+ assert.equal(f.fleet().nextTransferSerial,undefined);
 });
