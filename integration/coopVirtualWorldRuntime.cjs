@@ -1595,6 +1595,7 @@ function observeSession(session,ship){
            require("./coopRescueNpcRivalry").createRescueRivalry({
             getWrecks:nativeStore.listNativeWrecks,
             getWreckItems:nativeStore.listNativeWreckItemsForWreck,
+            readVerifiedLoss:()=>require("./coopConvoyOutcomeProof").createOutcomes().snapshot(),
             atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows(tables,fn),
             warpToEntity:(entityID,wreckID)=>npcNativeOrder("CIVILIAN",
              entityID,"rescue-rival-warp",
