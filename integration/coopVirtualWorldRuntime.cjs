@@ -329,7 +329,16 @@ function advanceNativePatrolRoutes(){
  }
 }
 function ensureNativeMining(scene,systemID){
- if(process.env.EVEJS_COOP_NATIVE_MINING!=="1"||!scene||initializedNativeMiningScenes.has(scene))return;
+ if(process.env.EVEJS_COOP_NATIVE_MINING!=="1"||!scene)return;
+ if(initializedNativeMiningScenes.has(scene)){
+  // Reconsider real convoy losses at the normal bounded world reconcile
+  // interval; do not re-run general mining scene init after startup.
+  // The pinned upstream startup hook + native renewal policy enforce
+  // loss cooldown and spawn caps before any replacement is permitted.
+  if(process.env.EVEJS_COOP_CONVOY_RENEWAL==="1")
+   require("../services/mining/miningNpcOperations").handleSceneCreated(scene);
+  return;
+ }
  // Stock EveJS mining operations prevent duplicate fleet seeding.
  // If the scene was only partially initialized, retry on the next pass.
  require("../services/mining/miningRuntime").handleSceneCreated(scene);
