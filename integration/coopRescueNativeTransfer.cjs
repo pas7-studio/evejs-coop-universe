@@ -117,7 +117,7 @@ function transfer(options){
    const nativeService=require("./npc/nativeNpcWreckService");
    const items=require("../services/inventory/itemStore");
    singleton=createNativeRescueTransfer({
-    atomicRows:(tables,fn)=>store.coopAtomicNativeRows(tables,fn),
+    atomicRows:(tables,fn)=>store.coopAtomicNativeRows.transact(tables,fn),
     readWreck:npc.getNativeWreck,
     getMetadata:items.getItemMetadata,
     refreshWreck:nativeService.refreshNativeWreckRuntimeEntity
