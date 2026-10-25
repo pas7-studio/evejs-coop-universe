@@ -92,8 +92,13 @@ function createOriginalNpcIndustryBuyerSettlement({
    const native=await (mode==="whole"?whole:partial)
     .purchaseOnce({buyerID,identity,maxPriceCents});
    if(native?.status!==(mode==="whole"?"PURCHASED":"PURCHASED_PARTIAL")||
-      !POS(native.fillID))
+      !POS(native.fillID)){
+    // COOP-035/047 may already have a durable Rust CLAIM or SQLite COMMIT
+    // when a transport layer reports a non-success result. The wrapper
+    // cannot prove no native write occurred: hold until operator audit.
+    repair.add(lock);
     return reject("LW04C3B_ORIGINAL_SETTLEMENT_NOT_CONFIRMED",operationID);
+   }
    // Original payment may have COMMITTED. If the audit fails, never send a
    // second claim to repair it. Retain an operator hold until real sources
    // are reconciled. This is NOT another GameStore writer.
