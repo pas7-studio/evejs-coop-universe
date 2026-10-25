@@ -14,7 +14,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }catch{invalidLines++;}
  }
  events.sort((a,b)=>a._at-b._at);
- const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[],oreDelivered=0,tacticalRetreats=0,helpCalls=0,reinforcements=0,fleetWarpAccepted=[],fleetWarpFailed=[],fleetWarpSkipped=[];
+ const pilots=new Map();let lastScene=null,lastLivingShips=null,lastNativeIndustry=null,encounters=0,kills=0,coopWrecks=0,partyReady=0,livingLosses=0,pirateRaids=0,haulerLoads=0,haulerDeliveries=0,standingEvents=[],oreDelivered=0,tacticalRetreats=0,helpCalls=0,reinforcements=0,fleetWarpAccepted=[],fleetWarpFailed=[],fleetWarpSkipped=[],physicalFleetArrivals=[];
  for(const e of events){
   const id=positive(e.characterID);
   if(e.event==="coop-shared-scene"&&Array.isArray(e.pilots)){
@@ -51,6 +51,21 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    if(e.status==="NATIVE_WARP_ORDER_ACCEPTED")fleetWarpAccepted.push(record);
    else if(e.status==="NATIVE_WARP_ORDER_FAILED")fleetWarpFailed.push({...record,error:e.error||"UNKNOWN"});
   }
+  if(e.event==="coop-fleet-warp-physical-arrival"&&
+   (e.status==="NATIVE_FLEET_FOLLOWER_ARRIVAL_VERIFIED"||
+    e.status==="NATIVE_FLEET_FOLLOWER_ARRIVAL_UNVERIFIED"))
+   physicalFleetArrivals.push({
+    commanderCharacterID:positive(e.commanderCharacterID),
+    followerCharacterID:positive(e.followerCharacterID),
+    commanderShipID:positive(e.commanderShipID),
+    followerShipID:positive(e.followerShipID),systemID:positive(e.systemID),
+    targetEntityID:positive(e.targetEntityID),at:e.at,_at:e._at,
+    arrivalVerified:e.status==="NATIVE_FLEET_FOLLOWER_ARRIVAL_VERIFIED"&&
+      e.arrivalVerified===true&&e.actualFollowerWarpObserved===true,
+    reason:String(e.reason||"").slice(0,100),
+    teammateDistanceMeters:Number.isFinite(Number(e.teammateDistanceMeters))?
+     Number(e.teammateDistanceMeters):null
+   });
   if(e.event==="coop-fleet-warp-skip")fleetWarpSkipped.push({
    commanderCharacterID:positive(e.characterID),
    followerCharacterID:positive(e.followerCharacterID),
@@ -64,6 +79,30 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   if(e.event==="coop-encounter-kill")coopWrecks++;
   if(e.event==="coop-party-proximity"&&e.ready)partyReady++;
   if(e.event==="native-npc-kill-consequence"&&e.status==="COMMITTED")kills++;
+ }
+ // Only count an observed physical arrival attached to the most recent
+ // matching *accepted* native command. Neither command acceptance nor
+ // arbitrary unpaired arrival JSONL can claim a successful fleet warp.
+ const verifiedFleetArrivals=physicalFleetArrivals.filter(e=>{
+  if(!e.arrivalVerified||!e.commanderCharacterID||!e.followerCharacterID||
+   !e.commanderShipID||!e.followerShipID||!e.systemID)return false;
+  const earlier=fleetWarpAccepted.filter(o=>
+   o.commanderCharacterID===e.commanderCharacterID&&
+   o.followerCharacterID===e.followerCharacterID&&
+   o.followerShipID===e.followerShipID&&o.systemID===e.systemID&&
+   o.targetEntityID===e.targetEntityID&&
+   Date.parse(o.at)<=e._at);
+  if(!earlier.length)return false;
+  const mostRecent=earlier[earlier.length-1];
+  return e._at-Date.parse(mostRecent.at)<=180000;
+ });
+ const verifiedKeys=new Set(verifiedFleetArrivals.map(e=>
+  [e.commanderCharacterID,e.followerCharacterID,e.followerShipID,
+   e.systemID,e.targetEntityID].join(":")));
+ for(const order of fleetWarpAccepted){
+  order.arrivalVerified=verifiedKeys.has([
+   order.commanderCharacterID,order.followerCharacterID,
+   order.followerShipID,order.systemID,order.targetEntityID].join(":"));
  }
  const active=[...pilots.values()].filter(p=>p.active);
  const lastActiveIDs=new Set(active.map(x=>x.characterID));
@@ -100,7 +139,11 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
    lastNativeFleetWarpOrders:fleetWarpAccepted.slice(-10),
    lastNativeFleetWarpFailures:fleetWarpFailed.slice(-10),
    lastNativeFleetWarpSkips:fleetWarpSkipped.slice(-10),
-   fleetWarpArrivalVerified:false,
+   fleetWarpArrivalVerified:verifiedFleetArrivals.length>0,
+   nativeFleetWarpPhysicalArrivalsVerified:verifiedFleetArrivals.length,
+   nativeFleetWarpArrivalsUnverified:physicalFleetArrivals.filter(x=>!x.arrivalVerified).length,
+   lastPhysicalFleetArrivals:verifiedFleetArrivals.slice(-10),
+   lastUnverifiedFleetArrivals:physicalFleetArrivals.filter(x=>!x.arrivalVerified).slice(-10),
    physicalHaulerLoadsObserved:haulerLoads,
    physicalHaulerUnloadsObserved:haulerDeliveries,
    actualOreSuppliedToWorldDuringWindow:oreDelivered,
