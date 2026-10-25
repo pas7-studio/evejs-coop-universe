@@ -5,7 +5,7 @@ Status: source defect fix and read-only diagnostics, **not deployed**. In-game p
 ## Findings from native source
 
 1. `marketProxyService.Handle_GetMarketGroups` returns an empty rowset unconditionally. The co-op opt-in restores **flat, real marketGroupIDs** from `itemTypes.types` and labels them from the persisted SDE `groupName` (best available, not the full native EVE hierarchical market-group authority). This allows the client to receive a nonempty group listing; it does not create fake market orders or make items appear in the wrong station.
-2. A market daemon can be healthy while the selected solar system has no sell liquidity. `Code/docker/market-seed.toml` builds deterministic stock into the existing `market.sqlite`; its default geography preset is `jita_new_caldari`. Our co-op's Perimeter `30000144` is a *different* system from New Caldari. Thus an empty Perimeter station is possible even with Jita sell orders. Diagnose current DB rather than assuming either absence or presence.
+2. A market daemon can be healthy while the selected solar system has no sell liquidity. `Code/docker/market-seed.toml` builds deterministic stock into the existing `market.sqlite`; its default geography preset is `jita_new_caldari`. The latest recorded authorized client undocked at **Manifest V — AIR Laboratories Trade Center** in **Manifest `30100032`**, which is NOT in the default Jita/New Caldari seed preset; co-op Perimeter `30000144` is also different from New Caldari. Thus an empty Perimeter station is possible even with Jita sell orders. Diagnose current DB rather than assuming either absence or presence.
 3. The real native player purchase path is already present in `marketProxyService`: native market daemon `GetOrders`, seed sell stock debit, ISK debit and `grantItemToCharacterLocation`. Do not replace that with a second economy or item-mint API. A client-visible category doesn't prove any specific station has stock or a purchase/ISK debit persisted correctly.
 
 ## Safe read-only check before any rebuild
@@ -13,7 +13,7 @@ Status: source defect fix and read-only diagnostics, **not deployed**. In-game p
 From `C:\Games\EveCoopProject` after updating the project checkout (but **not** rebuilding or redeploying automatically):
 
 ```powershell
-.\scripts\Inspect-Coop-Market.ps1 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -SolarSystems '30000142,30000144'
+.\scripts\Inspect-Coop-Market.ps1 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -SolarSystems '30100032,30000142,30000144'
 ```
 
 The tool opens the **existing** `/var/lib/evejs/market/market.sqlite` with `better-sqlite3` in `readonly` + `PRAGMA query_only` mode. It reports seeded quantities, station coverage, open sell orders, the systems with the most stock, and up to twelve **real cheapest seeded types** with station IDs and current prices (no fabricated offers). It never executes `rebuild`, `AdjustSeedStock`, `PlaceOrder`, `docker down`, any restart, or market inventory mutation.
@@ -43,3 +43,5 @@ When the owner explicitly approves a controlled overlay refresh, operator can op
 - The pinned SDE gameStore does not expose the complete market-group parent/name authority; the adapter uses actual IDs but currently presents a *flat* grouping with source-derived labels. Full native client hierarchy needs a dedicated official static market group dataset.
 - Insufficient market liquidity or an unseeded system is not corrected by this PR. **Never** re-seed or restore existing `evejs-data` without an explicit market preservation/rollback plan. A follow-up could add an additive, audited station-restock command using authoritative market service APIs if approved.
 - Native market player buy/ISK/inventory atomicity is not certified by the isolated catalog tests.
+
+**No fake local restock:** pinned Rust market `adjust_seed_stock_in_db` checks an exact existing `(station_id,type_id)` row in `seed_stock` and errors if absent; it cannot create a Manifest station offer. Filling the starter hub safely requires a new explicitly permissioned market seeding/insert API with proper durable scope-cache invalidation and preservation of player orders, or an owner-approved offline backup-and-rebuild plan. Do not use a guessed station ID or quietly redirect player purchases to Jita.
