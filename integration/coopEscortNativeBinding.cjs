@@ -50,6 +50,17 @@ function makeBinding({runtime,readNativeIncident}={}){
    try{return runtime.recordEscortDeparture(route,scene)}
    catch{return deny("DEPARTURE_WITNESS_UNCERTAIN_REPAIR_REQUIRED")}
   },
+  recordEscortRouteSample(manifestKey,scene,station){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+    process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey)||
+    typeof runtime.recordEscortRouteSample!=="function")
+    return deny("ROUTE_SAMPLE_AUTHORITY_NOT_WIRED");
+   try{return runtime.recordEscortRouteSample(manifestKey,scene,station)}
+   catch{return deny("ROUTE_SAMPLE_UNCERTAIN_REPAIR_REQUIRED")}
+  },
   settlePeacefulDelivery(manifestKey,scene){
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
     return deny("DISABLED");
@@ -161,6 +172,9 @@ const forwarding=Object.freeze({
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordEscortDeparture:(route,scene)=>enabled()?(installed?installed.recordEscortDeparture(route,scene):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ recordEscortRouteSample:(key,scene,station)=>enabled()?
+  (installed?installed.recordEscortRouteSample(key,scene,station):
+   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settlePeacefulDelivery:(key,scene)=>enabled()?(installed?installed.settlePeacefulDelivery(key,scene):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
