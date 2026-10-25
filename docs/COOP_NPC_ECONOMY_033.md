@@ -41,3 +41,20 @@ Those tests do NOT execute the actual pinned EveJS driver, Rust daemon or EVE cl
 4. **Acceptance test:** mine native ore → native warehouse → native refinery → native mineral debit + corp ISK debit → BPO job → READY → exactly-one native output item → Rust market sell order → client buys → item in player hangar → NPC replenishes when native stock depletes. Check all native ledger balances before/after and restart.
 
 Current scope is the first integrated control-plane slice, not a completed playable economy.
+
+
+## Addendum: automatic coordinator and real native job/accounting bindings
+
+`integration/coopNpcIndustryNativeBindings.cjs` now provides actual read-side GameStore and native itemStore connections over the merged COOP-032D/E/F kernels. It checks the unique persisted native job ID + operation ID, finds the matching NPC corporation wallet division 1000 journal debit by native job ID, verifies `entryTypeID=10`, owner/reference/account, exact cents and nonnegative account balance. A missing or duplicated debit blocks the director. Canonical quote/SDE facility and BPO verifiers must still be independently provided.
+
+`integration/coopNpcEconomyScheduler.cjs` now implements an explicitly started, double-opt-in scheduler with no automatic startup side effects. Each station's inventory/industry/market cycle may run at most once per configured interval (minimum 30 s), with a bounded fixed station allowlist, no overlapping operations, no accumulated catch-up ticks and station quarantine after any unresolved native transaction or RPC exception.
+
+The scheduler requires **both** `EVEJS_COOP_NATIVE_NPC_ECONOMY=1` and `EVEJS_COOP_NATIVE_NPC_ECONOMY_SCHEDULER=1`. The scheduler cannot be started by the game until the real production adapters and runtime gates are explicitly supplied and verified. The operator-only resume method is not published as a client endpoint.
+
+The journaled native market listing now explicitly accepts a Promise-returning Rust RPC while holding the station lock through its settlement; an RPC timeout leaves `LIST_UNKNOWN` and does not reissue the listing. **35/35 isolated Node tests PASS locally**: 18 economy director including 2 async Rust RPC scenarios, 9 native job/ISK read validations and 8 scheduler tests. Actual native `better-sqlite3`, Rust market daemon and client purchases are still NOT tested.
+
+### P0 physical Rust sell-order custody requirement
+
+The pinned `marketProxyService.js` issues Rust `PlaceOrder` and then moves item to escrow location `9200000000 + order_id`. Thus its ordinary client flow is **not atomic across SQLite databases** and is unsafe to reuse with automatic NPC production without a recoverable two-phase protocol. Before binding `market.listOnce`, introduce an idempotent Rust order identity and a non-visible PENDING state, escrow real item first, activate after verified native item custody, and make recovery exact across process crashes. The Rust `PlaceOrder` endpoint currently creates an immediately-open order in `market_orders`, so no fake compliance claim. Player purchases must be verified on real client inventory and corporate ISK ledger.
+
+**Nothing here triggers the scheduler or market mutations in a running game**; the user must not enable feature flags yet.
