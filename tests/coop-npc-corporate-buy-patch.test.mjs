@@ -144,3 +144,65 @@ test("buyer cannot borrow a different authenticated user name or use an unbound 
  assert.equal(f.runtime.makeForSession({...session,userName:undefined}).verify(701,60001),false);
  assert.equal(f.runtime.makeForSession({...session,userid:0}).verify(701,60001),false);
 });
+
+
+async function nativeSellPriceBoundary(price){
+ let claims=0,priceCents=null;
+ const runtime={exports:{}};
+ const deps={
+  "./coopNpcCorporateSettlement":{
+   createNpcCorporateSettlement:()=>({purchaseOnce:async args=>{
+    claims++;priceCents=args.maxPriceCents;
+    return {status:"BLOCKED",error:"SOURCE_PROOF_STUB_ONLY"};
+   }})
+  },
+  "../services/market/marketDaemonClient":{marketDaemonClient:{}},
+  "../services/market/marketEscrowState":{getEscrowRecord:()=>({
+   escrowType:"sell",isCorp:true,stationId:600001,typeId:215,
+   remainingQuantity:20,coopOperationID:"npc-manufacture:"+"a".repeat(32),
+   ownerId:10001,sourceItemID:199001
+  })},
+  "../services/corporation/corporationState":{},
+  "../services/corporation/corporationRuntimeState":{},
+  "../services/structure/structureLocation":{getDockedLocationID:()=>600001},
+  "../services/inventory/itemStore":{},
+  "../services/character/characterState":{},
+  "../services/login/accountStore":{},
+  "../services/raffles/raffleInventory":{},
+  "../gameStore":{}
+ };
+ new Function("module","require","process",runtimeSource)(
+  runtime,id=>{
+   if(!Object.hasOwn(deps,id))throw Error("UNEXPECTED_IMPORT:"+id);
+   return deps[id];
+  },{env:{EVEJS_COOP_NATIVE_NPC_CORP_SETTLEMENT:"1",
+    EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",
+    EVEJS_COOP_NATIVE_NPC_CORP_SETTLEMENT_PROOF:"1"}});
+ const result=await runtime.exports.buyFromOrder({
+  session:{characterID:701,userid:9001},
+  sellOrder:{source:"coop-npc",order_id:"456",station_id:600001,
+   type_id:215,vol_remaining:20,price},
+  quantity:20
+ });
+ return {claims,priceCents,result};
+}
+test("NPC buyer never rounds original sub-cent Rust SELL price into a paid purchase",async()=>{
+ for(const price of [1.254,1.256,0.004]){
+  const r=await nativeSellPriceBoundary(price);
+  assert.equal(r.claims,0,String(price));
+  assert.equal(r.result.error,"NPC_BUY_REQUIRES_FULL_STACK_DOCKED");
+ }
+});
+test("native exact cent prices remain eligible for verified original settlement",async()=>{
+ for(const [price,cents] of [[1.25,125],[1.2,120]]){
+  const r=await nativeSellPriceBoundary(price);
+  assert.equal(r.claims,1);
+  assert.equal(r.priceCents,cents);
+  assert.equal(r.result.error,"SOURCE_PROOF_STUB_ONLY");
+ }
+});
+test("coercible string market price does not impersonate a canonical original Rust price",async()=>{
+ const r=await nativeSellPriceBoundary("1.25");
+ assert.equal(r.claims,0);
+ assert.equal(r.result.error,"NPC_BUY_REQUIRES_FULL_STACK_DOCKED");
+});
