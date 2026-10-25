@@ -14,6 +14,7 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
+names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
 const specs=[
  {file:"server/src/services/mining/miningRuntime.js",patches:[]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
@@ -299,8 +300,15 @@ function transform(source,spec,remove){
  }
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
- if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js")
-  text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js"){
+  if(remove){
+   text=require("./coop-native-mining-atomic-source-patch.cjs").patch(text,spec.file,true);
+   text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,true);
+  }else{
+   text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,false);
+   text=require("./coop-native-mining-atomic-source-patch.cjs").patch(text,spec.file,false);
+  }
+ }
  // ALIFE-05: existing native stock mining writer; store-before-hull commit when opt-in.
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-native-mining-cargo-integrity-patch.cjs").patchMiningCargo(text,remove);

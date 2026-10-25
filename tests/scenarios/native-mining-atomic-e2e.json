@@ -1,0 +1,205 @@
+{
+  "schema": "evejs-coop/alife07-atomic-mining-e2e/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "featureFlags": [
+    "EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC",
+    "EVEJS_COOP_NATIVE_ATOMIC_ROWS",
+    "EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION",
+    "EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY"
+  ],
+  "scenarios": [
+    {
+      "id": "ALIFE07-001",
+      "title": "Native source/cargo/receipt one SQLite COMMIT",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Use persistent original native miner and rock in disposable Perimeter",
+        "Enable atomic flags and mine one exact cycle",
+        "Inspect same sqlite COMMIT and entity/rock/cargo IDs"
+      ],
+      "expected": [
+        "Rock decreases by normal+wasted; cargo rises by exact rewarded quantity",
+        "Immutable cycle receipt exists only once"
+      ],
+      "requiredEvidence": [
+        "native source row",
+        "native cargo row",
+        "SQLite receipt",
+        "actual module cycle"
+      ]
+    },
+    {
+      "id": "ALIFE07-002",
+      "title": "Crash before BEGIN IMMEDIATE",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Inject process exit immediately before SQLite BEGIN",
+        "Restart disposable world"
+      ],
+      "expected": [
+        "No source decrease and no cargo increase"
+      ],
+      "requiredEvidence": [
+        "sqlite source before after",
+        "cargo ID snapshot",
+        "logs"
+      ]
+    },
+    {
+      "id": "ALIFE07-003",
+      "title": "Crash during source mutation before cargo row",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Kill disposable game process in transaction before cargo write",
+        "Restart sqlite and read both tables"
+      ],
+      "expected": [
+        "Whole transaction rolled back; no partial source or cargo"
+      ],
+      "requiredEvidence": [
+        "SQLite WAL/integrity_check",
+        "rock and cargo rows",
+        "cycle receipt absent"
+      ]
+    },
+    {
+      "id": "ALIFE07-004",
+      "title": "Kill during COMMIT or WAL fsync",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Inject kill during SQLite WAL commit with synchronous FULL",
+        "Restart sqlite on disposable copy",
+        "Check receipt source and cargo together"
+      ],
+      "expected": [
+        "Either all 3 persisted or none; no partial committed source/cargo"
+      ],
+      "requiredEvidence": [
+        "SQLite integrity_check and journal",
+        "cargo snapshot",
+        "source snapshot"
+      ]
+    },
+    {
+      "id": "ALIFE07-005",
+      "title": "Committed DB but lost scene update",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Commit native SQLite and abort prior to applyMiningDelta visual reconciliation",
+        "Resume exact original operation after restart"
+      ],
+      "expected": [
+        "Same committed receipt; no additional cargo or source debit",
+        "Original operationID",
+        "source/cargo identical IDs",
+        "scene recovery log"
+      ]
+    },
+    {
+      "id": "ALIFE07-006",
+      "title": "Same cycle duplicate callback",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Replay exact target/miner/module/cycle boundary in native runtime"
+      ],
+      "expected": [
+        "Exactly one unique receipt, one rock debit, one cargo credit"
+      ],
+      "requiredEvidence": [
+        "operationID and fingerprint",
+        "before/after snapshots"
+      ]
+    },
+    {
+      "id": "ALIFE07-007",
+      "title": "Two miners compete for same rock",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Mine same original asteroid with two independent native persistent ships",
+        "Race cycles with the same source preimage"
+      ],
+      "expected": [
+        "One wins CAS; other fails closed without cargo credit or overdraw"
+      ],
+      "requiredEvidence": [
+        "two distinct ship IDs",
+        "rock remaining",
+        "two operation outcomes"
+      ]
+    },
+    {
+      "id": "ALIFE07-008",
+      "title": "Native cargo owner/quantity conflict",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Inject native cargo row owner mismatch on disposable source",
+        "Execute original mining module"
+      ],
+      "expected": [
+        "No alteration of foreign owner, rock, or quantity"
+      ],
+      "requiredEvidence": [
+        "cargo owner",
+        "source before after",
+        "blocked reason"
+      ]
+    },
+    {
+      "id": "ALIFE07-009",
+      "title": "Physical NPC identity restart",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Restart persistent miner and source asteroid with original IDs",
+        "Recover native entity/controller and live cargo"
+      ],
+      "expected": [
+        "Same original miner shipID and cargoID; no duplicate spawn"
+      ],
+      "requiredEvidence": [
+        "native entity/controller records",
+        "scene getEntityByID",
+        "startup fleet logs"
+      ]
+    },
+    {
+      "id": "ALIFE07-010",
+      "title": "Native miner to hauler to warehouse and two clients",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Mine verifiable ore with atomic transaction and two original clients",
+        "Transfer cargo to original native hauler once",
+        "Dock and reconcile #110 warehouse receipt"
+      ],
+      "expected": [
+        "One source debit, one cargo ID custody transfer, one warehouse itemStore credit",
+        "Two authorized clients see same ship and world"
+      ],
+      "requiredEvidence": [
+        "rock/cargo/hauler/warehouse provenance",
+        "COMMITTED receipts",
+        "two-client physical timestamps"
+      ]
+    }
+  ]
+}
