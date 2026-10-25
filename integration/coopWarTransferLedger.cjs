@@ -356,7 +356,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   if(!enabled())return {status:"DISABLED"};
   if(!pos(entityID)||!key(transferID)||
    !["ABORT","NATIVE_COMMIT","RELOCATE_PILOT","FINISH",
-    "RESTORE","CLEANUP_JOURNAL"].includes(action)||
+    "RESTORE","CLEANUP_JOURNAL","RETIRE_TRANSFER"].includes(action)||
    typeof principalID!=="string"||
    !/^[A-Za-z0-9_.:@-]{3,100}$/.test(principalID)||
    typeof reason!=="string"||reason.trim().length<12||
