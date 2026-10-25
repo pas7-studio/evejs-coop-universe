@@ -3,7 +3,7 @@
 // a healthy Docker server, transport-only sockets or isolated upstream tests.
 const fs=require("node:fs");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,requireStockWreckLoot=false,requireNativeLootPickup=false,systemID:requestedSystemID=null}={}){
+function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,requireMiningYield=false,requireCombat=false,requireWeapon=false,requireFinalAttacker=false,requireMarket=false,requireStockRaid=false,requireStockWreckLoot=false,requireNativeLootPickup=false,systemID:requestedSystemID=null}={}){
  const after=now-windowMinutes*60000;
  const rows=[];
  let invalid=0;
@@ -30,6 +30,26 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   e.event==="living-native-durable-recovery"&&
   (!latestBoot||e._time>=latestBoot._time));
  const industry=[...related].reverse().find(e=>e.event==="living-native-industry"&&Array.isArray(e.fleets));
+ // Native mining locks and active effects are separate from NPC combat targets.
+ // No existing positive cargo or virtual ore alone counts as fresh extraction.
+ const nativeMiningProofs=related.filter(e=>e.event==="alife-native-mining-proof"&&
+  positive(e.entityID)&&positive(e.fleetID));
+ const confirmedNativeMining=nativeMiningProofs.filter(e=>
+  e.status==="NATIVE_ORE_GROWTH_CONFIRMED"&&
+  e.proof==="TWO_SAMPLES_NATIVE_LOCK_EFFECT_CARGOID_DELTA"&&
+  positive(e.targetID)&&Array.isArray(e.moduleIDs)&&e.moduleIDs.length>0&&
+  e.moduleIDs.every(positive)&&Array.isArray(e.cargoIDs)&&
+  e.cargoIDs.length>0&&e.cargoIDs.every(positive)&&
+  Number.isSafeInteger(e.quantityDelta)&&e.quantityDelta>0);
+ const latestNativeMining=nativeMiningProofs.at(-1)||null;
+ const nativeMiningYield={
+  status:confirmedNativeMining.length?"NATIVE_PHYSICAL_ORE_GROWTH_OBSERVED":
+   nativeMiningProofs.length?"NO_CONFIRMED_NATIVE_ORE_GROWTH":"NO_NATIVE_MINING_PROOF_SAMPLES",
+  samples:nativeMiningProofs.length,confirmed:confirmedNativeMining.length,
+  quantityDelta:confirmedNativeMining.reduce((sum,e)=>sum+e.quantityDelta,0),
+  lastStatus:latestNativeMining?.status||null,
+  lastMinerID:positive(latestNativeMining?.entityID)
+ };
  const materialization=[...related].reverse().find(e=>e.event==="virtual-world-materialization"&&Array.isArray(e.livingShips));
  const siteReadiness=[...rows].reverse().find(e=>e.event==="living-native-system-site-readiness"&&
   positive(e.systemID)===systemID&&(!latestBoot||e._time>=latestBoot._time));
@@ -331,6 +351,12 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
   status="AWAITING_NATIVE_ACTIVITY";
   blockers.push("Physical NPC ships are present, but genuine movement AND cargo growth or active native targeting have not both been observed across native snapshots.");
  }
+ if(requireMiningYield&&status==="READY_FOR_CLIENT_PLAYTEST"&&
+    !confirmedNativeMining.length){
+  status="AWAITING_NATIVE_MINING_YIELD";
+  blockers.push("Stock EveJS miner/hauler presence, mining state, combat controller target and pre-existing cargo do not prove extraction. Require same-miner real asteroid lock, active module effect and positive native cargoID delta across two snapshots."+
+   (latestNativeMining?" Last native miner status: "+latestNativeMining.status+".":""));
+ }
  // A corrupt durable NPC record is a safety-critical blocker even if
  // mining activity or a separate combat/market gate otherwise passed.
  if(durableRecovery?.status==="NEEDS_OPERATOR_REPAIR"){
@@ -352,7 +378,7 @@ function summarize(input,{now=Date.now(),windowMinutes=20,requireActivity=false,
    legacyTransient:Number(durableRecovery.legacyTransient)||0,
    confirmedLosses:Number(durableRecovery.confirmedLosses)||0,
    errors:durableRecovery.errors||[]}:null,
-  evidenceWindowMinutes:windowMinutes,scenery,activity,combat,market,stockRaid,
+  evidenceWindowMinutes:windowMinutes,scenery,activity,nativeMiningYield,combat,market,stockRaid,
   systemSiteReadiness:siteReadiness?{
    status:siteReadiness.status,authoritativeSdeBelts:siteReadiness.authoritativeSdeBelts,
    realAsteroidBelts:siteReadiness.realAsteroidBelts,
@@ -396,6 +422,7 @@ if(require.main===module){
   if(sysParam>=0&&!(positive(selected)))throw Error("--system-id must be positive integer");
   const report=summarize(fs.readFileSync(0,"utf8"),{
    systemID:selected,windowMinutes:minutes,requireActivity:args.includes("--require-activity"),
+   requireMiningYield:args.includes("--require-mining-yield"),
    requireCombat:args.includes("--require-combat"),requireWeapon:args.includes("--require-weapon"),
    requireFinalAttacker:args.includes("--require-final-attacker"),
    requireMarket:args.includes("--require-market"),
