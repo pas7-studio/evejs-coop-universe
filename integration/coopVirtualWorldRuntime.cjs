@@ -694,6 +694,9 @@ function advanceNativeRaids(){
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
   const actualPilots=world.snapshot().pilots;
+  const factionByPilot=new Map(actualPilots.map(p=>[p.id,p.faction]));
+  const squadContacts=activeLinks.map(p=>({...p,
+   faction:factionByPilot.get(p.pilotID)}));
   // Squad coordination is optional, NPC-on-NPC only, and never a second
   // attack loop. Existing native stock mining raid legality still runs first.
   const squadEnabled=process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&
@@ -708,7 +711,7 @@ function advanceNativeRaids(){
    (nativeStore.listNativeCargoForEntity(candidate.id)||[]).some(c=>
     Number(c?.moduleID||0)===0&&Number(c?.quantity)>0)):fleetShips;
   const squadState=squads?.observe({systemID,scene,
-   pirates:activeLinks.filter(p=>p.role==="pirate"),
+   pirates:squadContacts.filter(p=>p.role==="pirate"),
    pilots:actualPilots,fleetShips:raidCandidates,
    canAttack:({pirateID,targetID})=>raidPolicy.isAuthorizedStockMiningRaid({
     systemID,attacker:scene.getEntityByID(pirateID),
@@ -736,7 +739,7 @@ function advanceNativeRaids(){
    const damage=require("./combat/damage");
    const scramble=require("./modules/hostileModuleRuntime");
    const decision=huntPolicy.assess({systemID,scene,pirateID,targetID,
-    targetRole,piratePilotID:pirateLink.pilotID,contacts:activeLinks,
+    targetRole,piratePilotID:pirateLink.pilotID,contacts:squadContacts,
     sharedIntel:report?.report||null,
     getHealth:entity=>{
      const maximum=damage.getEntityMaxHealthLayers(entity);
