@@ -61,6 +61,7 @@ function createNativeMount({root,gameStore,corporations,npcStore,items,
    !Array.isArray(a.characters)||a.characters.length!==2||
    !a.characters.every(pos)||a.characters[0]>=a.characters[1]||
    !pos(a.playerFleetID)||!pos(a.amountISK)||
+   !pos(a.quoteExpiresAt)||a.quoteExpiresAt<=clock()||
    a.amountISK>1000000000||a.amountISK%2!==0||
    typeof a.contractID!=="string"||
    !/^escort-[a-zA-Z0-9-]{1,48}$/.test(a.contractID)||

@@ -89,6 +89,14 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   // Consent is a prerequisite, not permission to create funds or warp:
   // the independent native Stage E binding still authorizes both.
   let preparingEventID=null;
+  // Paid escort NEVER departs without discoverable source and an explicit
+  // independently priced, two-character contract acceptance. Optional native
+  // NPC routes remain unchanged with the paid escort flag OFF.
+  if(escortEnabled&&(
+   process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1"||
+   process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_PAID_ACCEPT!=="1"))
+   return pause("ESCORT_DISCOVERY_AND_PAID_CONSENT_REQUIRED");
   if(escortEnabled&&process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
    if(process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1")
     return pause("ESCORT_VOLUNTEER_GATE_DISABLED");
@@ -101,6 +109,17 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     return pause("ESCORT_"+(event?.status||"PREPARING_EVENT_FAILED"));
    preparingEventID=event.id;
    fleet.coopEscortPredepartureEventID=preparingEventID;
+   // Native corporation quote must be durably prepared while the original
+   // source cargo and source NPC still exist; never accept client pricing.
+   let quoted;try{quoted=require("./coopEscortPricedOffers")
+    .offerFromNative({eventID:preparingEventID,route:{
+     systemID,fleetID,stationID:destination.stationID,
+     corporationID:destination.corporationID,haulerID:ships[0],
+     cargoIDs:cargo.map(x=>Number(x.cargoID)).sort((a,b)=>a-b)
+    }})}
+   catch{return pause("ESCORT_NATIVE_CORPORATE_QUOTE_UNAVAILABLE")}
+   if(!["NATIVE_QUOTE_DURABLY_PREPARED","NATIVE_QUOTE_READY"].includes(quoted?.status))
+    return pause("ESCORT_"+(quoted?.status||"PAID_QUOTE_NOT_VERIFIED"));
    let duo;try{duo=require("./coopEscortVolunteers")
     .readVerifiedNativePair(preparingEventID)}
    catch{return pause("ESCORT_VOLUNTEER_RECEIPT_UNAVAILABLE")}
@@ -110,6 +129,21 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     !Array.isArray(duo.pilots)||duo.pilots.length!==2||
     duo.pilots.some(x=>!pos(x.characterID)||!pos(x.shipID)))
     return pause("ESCORT_AWAITING_TWO_NATIVE_VOLUNTEERS");
+   let paid;try{paid=require("./coopEscortPricedOffers")
+    .readNativeAccepted(preparingEventID)}
+   catch{return pause("ESCORT_PAID_ACCEPTANCE_READER_UNAVAILABLE")}
+   if(paid?.status!=="DURABLE_TWO_PILOT_PAID_ACCEPTANCE"||
+    paid.eventID!==preparingEventID||
+    paid.quote?.systemID!==systemID||
+    paid.quote?.fleetID!==fleetID||
+    paid.quote?.stationID!==destination.stationID||
+    paid.quote?.corporationID!==destination.corporationID||
+    paid.quote?.haulerID!==ships[0]||
+    paid.characters?.length!==2||
+    paid.characters[0]!==duo.pilots[0].characterID||
+    paid.characters[1]!==duo.pilots[1].characterID||
+    paid.fleetID!==duo.fleetID)
+    return pause("ESCORT_AWAITING_TWO_PAID_ACCEPTANCES");
   }
   let manifestProof=null;
   if(manifestDirector){
@@ -193,7 +227,24 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   let stackCount=0,oreQuantity=0;
   for(const rawID of Object.keys(trip.haulers)){
    const id=Number(rawID),ship=findShip(scene,id,trip.systemID);
-   if(!ship)return pause("HAULER_LOST_OR_NOT_DURABLE");
+   if(!ship){
+    // Missing in-scene ship is NOT loss evidence. Only the authoritative
+    // native wreck/outcome journal can release existing corporate escrow.
+    if(escortEnabled&&trip.manifestID&&
+     process.env.EVEJS_COOP_ESCORT_REFUNDS==="1"&&
+     typeof escortGate?.refundNativeWreck==="function"){
+     let refund;try{refund=escortGate.refundNativeWreck(trip.manifestID)}
+     catch{refund={status:"NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED"}}
+     if(refund?.status==="REFUNDED"){
+      for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
+      delete fleet.coopStationArrival;
+      return {status:"ESCORT_NATIVE_HAULER_LOSS_REFUNDED",terminal:true,
+       contractID:refund.contractID,
+       amountISK:refund.amountISK,earnedPlayerISK:0};
+     }
+    }
+    return pause("HAULER_LOST_OR_NOT_DURABLE");
+   }
    const arrival=trip.haulers[id];
    if(!stableAt(ship,point)){arrival.arrivedAt=0;
     arrivals.set(id,{fleetID:trip.fleetID,stationID:trip.stationID,arrivedAt:0});
@@ -244,20 +295,17 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      written.manifestKey!==trip.manifestID)
     return pause("ESCORT_"+(written?.status||"TERMINAL_WRITE_BLOCKED"));
   }
-  // Physical delivery already has an authoritative warehouse and fsync.
-  // Payout is optional, but never presumed: an absent pirate wreck or
-  // uncertain native funds leaves a visible pending settlement, not fake ISK.
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
+   try{require("./coopWorldOpportunityBoard").noteNativeConvoyOutcome(
+    scene,trip,{status:"DELIVERED",terminal:true})}
+   catch(error){console.warn("[CoopOpportunityBoard] arrival",String(error?.message||error).slice(0,120))}
+  }
   let escortSettlement=null;
   if(escortEnabled){
    try{escortSettlement=typeof escortGate?.settleVerifiedNativeRaid==="function"?
     escortGate.settleVerifiedNativeRaid(trip.manifestID):
     {status:"ESCORT_SETTLEMENT_NOT_WIRED"}}
    catch{escortSettlement={status:"ESCORT_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED"}}
-  }
-  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
-   try{require("./coopWorldOpportunityBoard").noteNativeConvoyOutcome(
-    scene,trip,{status:"DELIVERED",terminal:true})}
-   catch(error){console.warn("[CoopOpportunityBoard] arrival",String(error?.message||error).slice(0,120))}
   }
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
@@ -275,6 +323,12 @@ function getRuntimeDirector(){
  const repo=require("../gameStore");
  const corporations=require("../services/corporation/corporationState");
  const runtime=require("./runtime");
+ if(process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"&&
+    process.env.EVEJS_COOP_ESCORT_RUNTIME_MOUNT==="1"){
+   const binding=require("./coopEscortNativeBootstrap").installNativeEscorts();
+   if(binding?.status!=="ESCORT_NATIVE_RUNTIME_BOUND")
+    console.warn("[CoopEscort] native paid runtime not installed:",binding?.status||"UNAVAILABLE");
+ }
  runtimeDirector=createStationArrival({
   getStations:worldData.getStationsForSystem,getStation:worldData.getStationByID,
   getCorporation:corporations.getCorporationRecord,isNpcCorporation:corporations.isNpcCorporationID,
@@ -283,8 +337,6 @@ function getRuntimeDirector(){
   warpToPoint:(id,p,opts)=>runtime.warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
-  // Stable server-only forwarding object: a late binding works, while no
-  // real native authority means NO warp (never silently unpaid).
   escortGate:process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"?
    require("./coopEscortNativeBinding").routeGate():null});
  return runtimeDirector;

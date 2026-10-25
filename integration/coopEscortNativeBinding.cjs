@@ -11,7 +11,7 @@ const enabled=()=>flags.every(k=>process.env[k]==="1");
 function makeBinding({runtime,readNativeIncident}={}){
  if(!runtime||typeof readNativeIncident!=="function"||
   ["fundBeforeWarp","recordDelivery","finishAfterRaid","refundProvenLoss",
-   "readFlight","inspectRefundRecovery"].some(k=>typeof runtime[k]!=="function")||
+   "readFlight","inspectRefundRecovery","refundWreckedFlight"].some(k=>typeof runtime[k]!=="function")||
   runtime.nativeFunds?.capabilities?.().nativeDurable!==true||
   runtime.nativeFunds?.capabilities?.().atomicDualCredit!==true)
   throw Error("ESCORT_NATIVE_BINDING_AUTHORITIES_REQUIRED");
@@ -66,6 +66,14 @@ function makeBinding({runtime,readNativeIncident}={}){
    try{return runtime.finishAfterRaid(contract)}
    catch{return deny("NATIVE_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
   },
+  refundNativeWreck:manifestKey=>{
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^d+-d+-d+$/.test(manifestKey))
+    return deny("NATIVE_REFUND_MANIFEST_KEY_INVALID");
+   try{return runtime.refundWreckedFlight(manifestKey)}
+   catch{return deny("NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED")}
+  },
   readFlight:key=>runtime.readFlight(key),
   inspectRefundRecovery:id=>runtime.inspectRefundRecovery(id)
  });
@@ -76,6 +84,8 @@ const forwarding=Object.freeze({
  recordDelivered:args=>enabled()?(installed?installed.recordDelivered(args):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ refundNativeWreck:key=>enabled()?(installed?installed.refundNativeWreck(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED")
 });
 function routeGate(){return forwarding}

@@ -10,7 +10,7 @@ const old=Object.fromEntries(["EVEJS_COOP_ESCORT_CONTRACTS",
  "EVEJS_COOP_ESCORT_ROUTE_GATE","EVEJS_COOP_NATIVE_ATOMIC_ROWS",
  "EVEJS_COOP_NATIVE_ESCORT_WALLET","EVEJS_COOP_ESCORT_REFUNDS"].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(old))process.env[k]="1";
-function fixture(fn,{duo=true}={}){
+function fixture(fn,{duo=true,loss=false,ambiguousLoss=false}={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-escort-e2e-"));
  const record={key:"30000144-77-1000000",systemID:30000144,fleetID:77,
   stationID:60001,corporationID:10001,haulerIDs:[901],
@@ -48,10 +48,22 @@ function fixture(fn,{duo=true}={}){
    key:c.incidentKey,systemID:30000144,targetID:901,pirateID:202,
    targetRole:"hauler",duoFleetID:33,characters:[701,702],
    status:"PIRATE_WRECK_CONFIRMED",closed:true,nativeWreckID:999}]}),
-  readOutcomes:()=>({status:"READY",outcomes:[{
-   key:c.incidentKey,haulerNativeWreckID:0,verifiedWarehouseStacks:[{
-    cargoID:5501,itemID:9911,typeID:34,quantity:8,stationID:60001,ownerID:10001}]}]}),
-  readNativeFailure:()=>null});
+  readOutcomes:()=>({status:"READY",outcomes:loss?[
+   {key:c.incidentKey,systemID:30000144,pirateID:202,targetID:901,
+    status:"HAULER_NATIVE_LOSS_VERIFIED",haulerNativeWreckID:9002,
+    verifiedWarehouseStacks:[]},
+   ...(ambiguousLoss?[{key:"30000144:203:901",systemID:30000144,
+    pirateID:203,targetID:901,status:"HAULER_NATIVE_LOSS_VERIFIED",
+    haulerNativeWreckID:9003,verifiedWarehouseStacks:[]}]:[])
+  ]:[{key:c.incidentKey,haulerNativeWreckID:0,
+   verifiedWarehouseStacks:[{cargoID:5501,itemID:9911,typeID:34,
+    quantity:8,stationID:60001,ownerID:10001}]}]}),
+  readNativeFailure:contract=>loss?{
+   status:"DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE",
+   contractID:contract.contractID,manifestKey:contract.manifestKey,
+   corporationID:contract.corporationID,
+   reason:"NATIVE_HAULER_WRECK",failureWitnessID:9002,
+   nativeDurable:true,deliveryImpossible:true,noPriorPayout:true}:null});
  const route={manifestKey:record.key,systemID:30000144,fleetID:77,
   stationID:60001,corporationID:10001,haulerIDs:[901]};
  const terminal={manifestKey:record.key,
@@ -88,6 +100,34 @@ test("no terminal delivery means no payout, no buyer wallet mutation",()=>fixtur
  assert.notEqual(x.runtime.finishAfterRaid(x.c).status,"SETTLED");
  assert.equal(x.db().characters["701"].balance,500);
 }));
+test("destroyed paid NPC hauler can refund ORIGINAL escrow before any delivery",()=>fixture(x=>{
+ assert.equal(x.runtime.fundBeforeWarp(x.route).status,"FUNDED_BEFORE_WARP");
+ assert.equal(x.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,30000);
+ const refunded=x.runtime.refundWreckedFlight(x.c.manifestKey);
+ assert.equal(refunded.status,"REFUNDED");
+ assert.equal(x.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,50000);
+ assert.equal(x.db().characters["701"].balance,500);
+ assert.equal(x.db().characters["702"].balance,500);
+ assert.equal(x.runtime.readContract(x.c.contractID).phase,"REFUNDED");
+},{loss:true}));
+test("genuine loss cannot refund a second time after a confirmed native corporate credit",()=>fixture(x=>{
+ x.runtime.fundBeforeWarp(x.route);
+ assert.equal(x.runtime.refundWreckedFlight(x.c.manifestKey).status,"REFUNDED");
+ assert.notEqual(x.runtime.refundWreckedFlight(x.c.manifestKey).status,"REFUNDED");
+ assert.equal(x.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,50000);
+},{loss:true}));
+test("missing actual native hauler wreck cannot recover corporation escrow",()=>fixture(x=>{
+ x.runtime.fundBeforeWarp(x.route);
+ assert.equal(x.runtime.refundWreckedFlight(x.c.manifestKey).status,
+  "NATIVE_REFUND_HAULER_LOSS_NOT_PROVEN");
+ assert.equal(x.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,30000);
+}));
+test("two competing native pirate loss witnesses cannot be used to pick a payout",()=>fixture(x=>{
+ x.runtime.fundBeforeWarp(x.route);
+ assert.equal(x.runtime.refundWreckedFlight(x.c.manifestKey).status,
+  "NATIVE_REFUND_AMBIGUOUS_HAULER_LOSS");
+ assert.equal(x.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,30000);
+},{loss:true,ambiguousLoss:true}));
 test("feature OFF prevents native ISK mutation",()=>fixture(x=>{
  process.env.EVEJS_COOP_ESCORT_ROUTE_GATE="0";
  try{assert.equal(x.runtime.fundBeforeWarp(x.route).status,"DISABLED");

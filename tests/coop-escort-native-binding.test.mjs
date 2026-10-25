@@ -5,7 +5,7 @@ const require=createRequire(import.meta.url);
 const {makeBinding,routeGate,installServerAuthority,inspect}=require("../integration/coopEscortNativeBinding.cjs");
 const old=Object.fromEntries(["EVEJS_COOP_ESCORT_CONTRACTS","EVEJS_COOP_ESCORT_ROUTE_GATE",
 "EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_ESCORT_WALLET",
-"EVEJS_COOP_NATIVE_HAUL_MANIFEST"].map(k=>[k,process.env[k]]));
+"EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_REFUNDS"].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(old))process.env[k]="1";
 const key="30000144-77-1000000";
 const booking={contractID:"escort-native-01",manifestKey:key,
@@ -26,6 +26,7 @@ function fixture(options={}){
   recordDelivery:x=>{deliveryCalls++;return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey:x.manifestKey}},
   finishAfterRaid:c=>{payments++;return {status:"SETTLED",contractID:c.contractID}},
   refundProvenLoss:()=>({status:"REFUNDED"}),
+  refundWreckedFlight:()=>({status:"REFUNDED",contractID:booking.contractID,amountISK:20000}),
   readFlight:k=>({status:"READY",phase:options.notDelivered?"FUNDED":"DELIVERED",booking}),
   inspectRefundRecovery:()=>({status:"NO_REFUND_RECOVERY_PENDING"})};
  return {runtime,readNativeIncident:()=>({status:"READY",incidents}),
@@ -75,6 +76,14 @@ test("two different matching pirates are an ambiguous payout source and blocked"
 test("unrecorded terminal station delivery blocks payout",()=>{
  const f=fixture({notDelivered:true}),b=makeBinding(f);
  assert.equal(b.settleVerifiedNativeRaid(key).status,"NATIVE_FLIGHT_DELIVERY_NOT_RECORDED");
+});
+test("actual native binding requires real-loss proof gate for corporate refund",()=>{
+ const f=fixture(),b=makeBinding(f);
+ assert.equal(b.refundNativeWreck(key).status,"REFUNDED");
+ assert.equal(b.refundNativeWreck("bad").status,"NATIVE_REFUND_MANIFEST_KEY_INVALID");
+ process.env.EVEJS_COOP_ESCORT_REFUNDS="0";
+ try{assert.equal(b.refundNativeWreck(key).status,"DISABLED")}
+ finally{process.env.EVEJS_COOP_ESCORT_REFUNDS="1"}
 });
 test("native bank feature OFF blocks route and money",()=>{
  const f=fixture(),b=makeBinding(f);
