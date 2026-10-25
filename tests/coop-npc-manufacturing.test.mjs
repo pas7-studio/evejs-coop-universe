@@ -44,8 +44,46 @@ test('offline facility blocks',()=>assert.equal(fixture({facility:false}).plan(a
 test('only native ammo category is supported',()=>assert.equal(fixture({category:6}).plan(args()).blocked[0].reason,'NOT_AMMUNITION'));
 test('finished stock covers target',()=>assert.equal(fixture({stock:510}).plan(args()).blocked[0].reason,'SUFFICIENT_STOCK'));
 test('native work-in-progress reduces shortage',()=>{
- const jobs=[{ownerID:OWNER,productTypeID:AMMO,productQuantity:500,status:1}];
+ const jobs=[{jobID:970000000000001,ownerID:OWNER,stationID:STATION,activityID:1,productTypeID:AMMO,productQuantity:500,status:1}];
  const p=fixture({jobs}).plan(args());assert.equal(p.blocked[0].reason,'SUFFICIENT_STOCK');
+});
+test('delivered job status 4 is NOT unfilled supply; NPC starts next batch after sale',()=>{
+ const jobs=[{jobID:970000000000002,ownerID:OWNER,stationID:STATION,activityID:1,
+  productTypeID:AMMO,productQuantity:500,status:4}];
+ const p=fixture({jobs,stock:0}).plan(args());
+ assert.equal(p.status,'PLAN_READY');
+ assert.equal(p.jobs[0].shortage,500);
+});
+test('native READY status 3 still reserves output until actual delivery',()=>{
+ const jobs=[{jobID:970000000000003,ownerID:OWNER,stationID:STATION,activityID:1,
+  productTypeID:AMMO,productQuantity:500,status:3}];
+ const p=fixture({jobs}).plan(args());
+ assert.equal(p.jobs.length,0);
+ assert.equal(p.blocked[0].reason,'SUFFICIENT_STOCK');
+});
+test('cancelled and unrelated-station jobs do not fabricate local inventory',()=>{
+ const jobs=[
+  {jobID:970000000000004,ownerID:OWNER,stationID:STATION,activityID:1,productTypeID:AMMO,productQuantity:500,status:5},
+  {jobID:970000000000005,ownerID:OWNER,stationID:STATION+1,activityID:1,productTypeID:AMMO,productQuantity:500,status:1},
+  {jobID:970000000000006,ownerID:OWNER,stationID:STATION,activityID:5,productTypeID:AMMO,productQuantity:500,status:1}
+ ];
+ const p=fixture({jobs}).plan(args());
+ assert.equal(p.status,'PLAN_READY');
+ assert.equal(p.jobs[0].shortage,500);
+});
+test('ambiguous active job with malformed output cannot trigger an extra paid install',()=>{
+ const jobs=[{jobID:970000000000007,ownerID:OWNER,stationID:STATION,activityID:1,
+  productTypeID:AMMO,productQuantity:-2,status:1}];
+ const p=fixture({jobs}).plan(args());
+ assert.equal(p.status,'NO_ELIGIBLE_JOB');
+ assert.equal(p.blocked[0].reason,'NATIVE_ACTIVE_JOB_PROOF_INVALID');
+});
+test('duplicate native active job IDs fail closed, instead of counting same output twice',()=>{
+ const row={jobID:970000000000008,ownerID:OWNER,stationID:STATION,activityID:1,
+  productTypeID:AMMO,productQuantity:50,status:1};
+ const p=fixture({jobs:[row,{...row}]}).plan(args());
+ assert.equal(p.status,'NO_ELIGIBLE_JOB');
+ assert.equal(p.blocked[0].reason,'NATIVE_ACTIVE_JOB_PROOF_INVALID');
 });
 test('reserved minerals cannot be double consumed',()=>{
  const p=fixture().plan(args({reservedMaterials:{35:90}}));assert.equal(p.blocked[0].reason,'NEEDS_MINERALS');
