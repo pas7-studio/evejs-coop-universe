@@ -146,3 +146,16 @@ test("native offered contract mismatch never claims duo-ready",()=>{
   runtimeStatus:"offered",objectiveMode:"dungeon"}}});
  assert.equal(offer(f.params).status,"JOIN_OFFER_MISMATCH_REQUIRES_MANUAL_REVIEW");
 });
+
+test("career, important and storyline native missions cannot be synchronized via co-op offer",()=>{
+ for(const patch of [
+  f=>{f.leaderMission.importantMission=true},
+  f=>{f.leaderMission.storylineOfferProjection=true},
+  f=>{f.params.agentRecord.importantMission=true},
+  f=>{f.params.agentRecord.isCareerAgent=true}
+ ]){
+  const f=fixture();patch(f);
+  assert.equal(offer(f.params).status,"LEADER_NATIVE_DUNGEON_NOT_READY");
+  assert.equal(f.calls(),0);
+ }
+});
