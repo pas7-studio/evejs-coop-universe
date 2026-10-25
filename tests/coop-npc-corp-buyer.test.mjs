@@ -218,3 +218,14 @@ test("Rust completed without durable history witness refuses paid success until 
  assert.deepEqual(f.data,ledger);
  assert.equal(f.data.characters[SELLER].walletJournal.length,2);
 }));
+
+test("replayed receipt with negative net and excess tax fails closed without wallet writes",()=>run(async f=>{
+ await buy(f);
+ const row=f.data.npcMarketFills[RECEIPT];
+ row.taxCents=row.grossCents+1;
+ row.netCents=-1;
+ const before=structuredClone(f.data);
+ await assert.rejects(f.create().purchaseOnce(f.request),
+  /NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT/);
+ assert.deepEqual(f.data,before);
+}));
