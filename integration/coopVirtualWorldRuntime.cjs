@@ -1160,6 +1160,14 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     });
     require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
      null,{spaceState:{systemID}},proof);
+    // Source of truth is the existing physical stock-fleet native wreck proof.
+    // No lost cargo is fabricated by an NPC memory or virtual death counter.
+    if(process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"&&
+       proof.status==="PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED"&&
+       proof.victimRole==="hauler"){
+     try{require("./coopConvoyOutcomeProof").noteLoss(proof)}
+     catch(error){console.warn("[CoopConvoyOutcomeProof] hauler loss",String(error?.message||error))}
+    }
    }
    return;
   }
