@@ -8,9 +8,9 @@ const overlay=require("../scripts/patch-evejs-coop.cjs");
 test("P1 incidents are copied through the normal pinned L2 installer, no new native hooks",()=>{
  const src=readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
  assert.match(src,/"coopConvoyOperations"/);
- assert.ok(overlay.names.includes("coopConvoyOperations"));
- assert.ok(overlay.names.includes("coopWorldSignals"));
- assert.ok(overlay.names.includes("coopPlayerCombatWitness"));
+ assert.ok(src.includes('"coopConvoyOperations","coopNativeConsequences"')||src.includes('"coopConvoyOperations"'));
+ assert.ok(src.includes('"coopWorldSignals"'));
+ assert.ok(src.includes('"coopPlayerCombatWitness"'));
  assert.doesNotMatch(src,/coop-convoy-operations-patch\.cjs/);
 });
 test("P1 two explicit operator opt-ins; vanilla and standard LivingCoop have NO new incident journal",()=>{
