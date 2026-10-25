@@ -410,3 +410,20 @@ test("with reconcile on, a stale runtime fleet is re-pointed at the verified shi
  assert.deepEqual(f.getFleets()[0].haulerEntityIDs,[71012]);
  assert.ok(f.log.some(x=>x.includes("re-pointed")));
 });
+
+test("a runtime fleet that lost a role to the native prune is widened back to the verified witness",t=>{
+ const f=fixture(t);
+ const old=process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+ process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE="1";
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+  else process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=old;});
+ assert.equal(f.start().status,"OK");
+ // The native mining tick dropped the hauler for one tick (no controller yet).
+ f.getFleets()[0].haulerEntityIDs=[];
+ f.getFleets()[0].minerEntityIDs=[71001];
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.deepEqual(f.getFleets()[0].minerEntityIDs,[71001]);
+ assert.deepEqual(f.getFleets()[0].haulerEntityIDs,[71002],"the verified hauler is back in the roster");
+ assert.equal(f.getFleets().length,1,"no duplicate fleet record");
+});

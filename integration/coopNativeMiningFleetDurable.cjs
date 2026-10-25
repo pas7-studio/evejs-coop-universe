@@ -123,7 +123,14 @@ function adoptStaleRuntimeFleet({scene,store,fleet,key,minerIDs,haulerIDs}){
   .map(pos).filter(Boolean);
  const target=new Set([...minerIDs,...haulerIDs]);
  const foreign=listed.filter(id=>!target.has(id));
- if(!foreign.length)return {adopted:false,detached:[]};
+ // No foreign ship at all: the record is merely incomplete (the native tick
+ // prunes a ship it has no controller for). Widen it to the verified witness.
+ if(!foreign.length){
+  fleet.startupKey=key;
+  fleet.minerEntityIDs=[...minerIDs];
+  fleet.haulerEntityIDs=[...haulerIDs];
+  return {adopted:true,detached:[]};
+ }
  if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1"){
   // Without the reconcile flag a foreign ship is still treated as a real owner.
   if(foreign.some(id=>scene.getEntityByID(id)))return {adopted:false,detached:[]};
