@@ -142,7 +142,7 @@ function createRuntimeAlifeManufacturing({
     const {createAlifeNativeAct}=require("./coopAlifeNativeEconomyAct"+
      (typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
     dispatch=createAlifeNativeAct({env,resolveActor:id=>actor(id),
-     resolveProductTypes:products,resolveDirector:resolveNativeDirector});
+     resolveProductTypes:products,resolveDirector:resolveNativeDirector}).dispatch;
    }
    for(const intent of decision.intents){
     if(!SAFE_STAGES.has(intent?.stage))continue;
