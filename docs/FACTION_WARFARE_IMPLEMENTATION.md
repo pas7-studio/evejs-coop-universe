@@ -90,6 +90,71 @@ reversible overlay and installed `.js` module load; 30s tick performance,
 especially repeated GameStore reads on large fleets; physical NPC
 combat evidence and restart with an already leased fleet.
 
+## FW-003B native faction battle pass (opt-in, source code)
+
+This phase **connects actual native attack orders to the original 30s A-Life
+scheduler**. It does not create ships, damage, kills, fake loot, earned money,
+automatic war declarations, stargate travel or territory conquest.
+
+Code:
+- `coopWarCombatPolicy.cjs`: both entities MUST be current physically real
+  native NPC ships, with exact real SDE corporation-to-faction mapping,
+  native controllers and durable war-fleet assignment. Both must be on
+  opposite sides of ONE active war, in ONE `ASSAULT` campaign, inside its
+  physical target system. Friendly/allied/unregistered/player ship attacks
+  are forbidden. Native damage permission also requires an exact
+  explicit `manualOrder.type=attack` against the same enemy.
+- `coopWarCombatAuthority.cjs`: reads existing native GameStore cache
+  **without creating an SQLite write transaction per weapon hit**, verifies
+  native NPC records and active war/fleet states, and fails closed if
+  a ceasefire, corruption, mismatched SDE, missing hostile order or missing
+  strict-ammo flags invalidates the pair.
+- `coopWarBattleDirector.cjs`: bounded to two orders per 30-second pass,
+  same already-loaded scene, <=250km real physical separation, ordered
+  deterministically and cooldown per ship; no attack when either NPC is
+  warping, the controller is already engaged in unrelated PvE/player
+  combat, or ammo-survival/tactical retreat is active. The existing
+  `coopNpcOrderBridge.issue({owner:"WAR",action:"attack"})` serializes
+  true `npcRuntime.issueAttackOrder`. **ACK is not evidence of a hit.**
+- `coopNpcHostility.cjs` native NPC-vs-NPC gate now prioritizes
+  active Faction Warfare over previous virtual faction rivalry;
+  even if `EVEJS_COOP_RIVAL_NPC_COMBAT=1`, the registered warship cannot
+  bypass an ended war, neutral target, mismatched faction or missing
+  attack proof through a legacy virtual tag. The original pinned
+  `npcBehaviorLoop` overlay hook now accepts independent war-combat opt-in.
+- `coopNpcWeaponAmmoGate.cjs` disables **synthetic hull weapon** free-fire
+  fallback for registered warships. Existing native fitted weapon ammo
+  bank/debit/outcome mechanisms still own all actual damage/charge cycles.
+- Hot-path warship claims in `coopWarFleetRegistry.cjs` now read the
+  GameStore cache, not a fresh `BEGIN IMMEDIATE` on every NPC order.
+  Corrupt/unavailable cache does not automatically free its ships.
+- `coopWarFleetNativeProofs.cjs` can now register physical defenders in
+  their actual target system, not only the attacker fleet.
+
+All of the following must be **explicitly enabled**:
+`EVEJS_COOP_FACTION_WAR=1`,
+`EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_FACTION_WAR_COMBAT=1`,
+`EVEJS_COOP_ALIFE=1` (or `EVEJS_COOP_NPC_ORDER_ARBITER=1`),
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`,
+`EVEJS_COOP_NPC_STRICT_AMMO=1`,
+`EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE=1`,
+`EVEJS_COOP_NPC_BANK_ATOMIC=1`,
+`EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=1`.
+
+**No installed native campaign source exists yet:** live combat requires
+an already-existing, valid war/assault plus two truly physical,
+explicitly assigned opposing fleets. There is NO fallback to virtual
+reinforcements or phantom supply. Next prerequisite is a trusted
+native mobilization/supply producer and safe fleet route handoff.
+
+**Not certified:** live SQLite data migration, pinned overlay roundtrip,
+native client 2-player PvE coexistence, physical weapon/ammo firing under
+the new hostility gate, crash recovery while war order lease is issuing,
+and real stargate transport. Run all in local test environment before
+enabling any combat flag. A war battle accepted order remains
+`NATIVE_ATTACK_ORDER_ACCEPTED`, never a kill/capture result.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
