@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -301,6 +301,68 @@ function advanceNativeWarCombat(){
    evidence:"ACK_ONLY_NOT_DAMAGE_OR_KILL"
   });
 }
+// FW-009B: original stocked native structures, real killmail combat
+// proof, fully enumerated physical ships. No independent scheduler and
+// no virtual capture. A missing source, unknown scene or absent explicit
+// objective-type allowlist keeps military control unchanged.
+function advanceNativeWarObjectives(){
+ const {enabled,createWarObjectiveDirector}=require("./coopWarObjectiveDirector");
+ if(!enabled(process.env)||!visitedSystems.size)return;
+ if(!require("./coopWarObjectiveDirector").typesFromEnv(process.env).size)return;
+ if(!warObjectiveDirector){
+  const gameStore=require("../gameStore"),
+   worldData=require("./worldData"),
+   runtime=require("./runtime"),
+   controllers=require("./npc/npcRegistry"),
+   npcStore=require("./npc/nativeNpcStore"),
+   factions=require("../services/faction/factionState"),
+   structure=require("./coopWarNativeStructureControl"),
+   proofApi=require("./coopWarNativeStructureCombatProof"),
+   adjudicatorApi=require("./coopWarObjectiveAdjudicator");
+  const getNativeStructure=id=>worldData.getStructureByID(id),
+   getFactionForCorporation=id=>factions.getFactionIDForCorporation(id);
+  const proof=proofApi.createWarStructureCombatProof({
+   gameStore,getNativeStructure,getFactionForCorporation,
+   getNativeKillmail:id=>
+    require("../services/killmail/killmailState").getKillmailRecord(id)
+  });
+  const occupancy=structure.createNativeStructureControlWitness({
+   sceneForSystem:id=>runtime.scenes instanceof Map?
+    runtime.scenes.get(id):null,
+   listAllPhysicalShips:structure.listPinnedSceneShips,
+   getNativeEntity:id=>npcStore.getNativeEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id),
+   getFactionForCorporation
+  });
+  const adjudicator=adjudicatorApi.createWarObjectiveAdjudicator({
+   gameStore,getNativeStructure,getFactionForCorporation,
+   verifyNativeCombatDestruction:d=>
+    proof.verifyNativeCombatDestruction(d),
+   observeNativeControl:d=>occupancy.observe(d)
+  });
+  warObjectiveDirector=createWarObjectiveDirector({
+   adjudicator,combatProof:proof,
+   getFactionForCorporation,
+   listNativeStructures:systemID=>worldData.getStructuresForSystem(systemID),
+   readWarState:()=>{
+    const row=gameStore.read("corporationRuntime",
+     "/coop-faction-war\u001fstate-v1");
+    if(row?.success!==true)return null;
+    require("./coopFactionWarCore").validateState(row.data);
+    return row.data;
+   }
+  });
+ }
+ const result=warObjectiveDirector.tick({
+  systemIDs:[...visitedSystems].slice(0,12)
+ });
+ if(result.events?.length)
+  require("./coopRuntimeProbe").observe(
+   "living-native-war-objectives",null,null,{
+    status:result.status,events:result.events,
+    evidence:"PHYSICAL_STRUCTURE_COMBAT_KILLMAIL_AND_UNCONTESTED_NATIVE_OCCUPANCY"
+   });
+}
 // One existing A-Life 30-second scheduler, no faction-war timer.
 function npcOrderBridge(){
  if(!alifeOrderArbitrationEnabled(process.env))return null;
@@ -522,6 +584,7 @@ function start(){
   safeNpcPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   safeNpcPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
   safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);
+  safeNpcPhase("native-faction-war-objectives",advanceNativeWarObjectives);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
