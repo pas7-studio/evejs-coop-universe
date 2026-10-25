@@ -49,6 +49,19 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
     !Array.isArray(leases)||leases.length>10000)
     return {status:"INVALID_MOBILIZATION_STATE",mobilized:[]};
    const reachable=new Set(systemIDs);
+   // One pass per tick instead of scanning the full identity registry
+   // for every NPC candidate of every active campaign.
+   const pilotCounts=new Map(),entityCounts=new Map();
+   for(const l of links){
+    if(named(l?.pilotID))
+     pilotCounts.set(l.pilotID,(pilotCounts.get(l.pilotID)||0)+1);
+    if(pos(l?.entityID))
+     entityCounts.set(l.entityID,(entityCounts.get(l.entityID)||0)+1);
+   }
+   const candidateLinks=links.filter(l=>named(l?.pilotID)&&
+    pilotCounts.get(l.pilotID)===1&&pos(l.entityID)&&
+    entityCounts.get(l.entityID)===1&&l.role==="patrol")
+    .sort((a,b)=>a.entityID-b.entityID).slice(0,512);
    const existing=new Set(Object.keys(assigned.ships).map(Number));
    const usedPilots=new Set(Object.values(assigned.ships).map(x=>x?.pilotID));
    const mobilized=[];
@@ -85,17 +98,14 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
       typeof scene.getEntityByID!=="function")continue;
      const playerIDs=new Set([...(scene.sessions?.values?.()||[])]
       .map(x=>Number(x?._space?.shipID)).filter(pos));
-     for(const link of [...links].sort((a,b)=>
-      Number(a?.entityID||0)-Number(b?.entityID||0))){
+     for(const link of candidateLinks){
       if(existingSide>=maxPerSide||mobilized.length>=maxPerTick)break;
       const id=link?.entityID;
       if(!pos(id)||!named(link.pilotID)||link.role!=="patrol"||
        link.systemID!==side.systemID||existing.has(id)||
        usedPilots.has(link.pilotID)||playerIDs.has(id)||isTactical(id))
        continue;
-      // Must be a UNIQUE persisted native pilot->ship association.
-      if(links.filter(x=>x.pilotID===link.pilotID||x.entityID===id).length!==1)
-       continue;
+      // Uniqueness already proven using the bounded registry index above.
       if(leases.some(x=>x.entityID===id&&x.systemID===side.systemID&&
        (["ISSUING","OUTCOME_UNKNOWN"].includes(x.phase)||
         (x.phase==="ACTIVE"&&Number(x.expiresAt)>now))))continue;
