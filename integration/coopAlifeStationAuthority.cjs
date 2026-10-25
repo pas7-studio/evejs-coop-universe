@@ -84,9 +84,10 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
      item.flagID!==4||!/^coop-industry:v1:[0-9]+$/.test(String(item.customInfo||"")))
     throw Error("NATIVE_STATION_ESCROW_CUSTODY_INVALID");
   }
+  const version=getItemVersion();
+  if(!count(version))throw Error("NATIVE_STATION_MUTATION_VERSION_UNAVAILABLE");
   return {ownerID,stationID,systemID,regionID:nativeStation.regionID,walletCents,
-   online,items,stock,jobsForStation,ownedEscrow,
-   version:getItemVersion()};
+   online,items,stock,jobsForStation,ownedEscrow,version};
  }
  async function read({ownerID,stationID,systemID}={}){
   if(![ownerID,stationID,systemID].every(pos))
