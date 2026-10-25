@@ -128,7 +128,7 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    const at=clock();if(!pos(at))throw Error("NPC_CORP_BUY_CLOCK_INVALID");
    const filetime=String(BigInt(at)*10000n+116444736000000000n);
    const base={transactionID:fillID,transactionDate:filetime,
-    referenceID:request.orderID,entryTypeID:10,accountKey:1000,currency:1,
+    referenceID:request.orderID,entryTypeID:2,accountKey:1000,currency:1,
     sortValue:1,ownerID1:request.buyerCorpID,ownerID2:sellerID,
     description:"Native NPC corporation purchase "+orderKey};
    const debit={...base,amount:isk(-grossCents),balance:isk(buyerAfter)};
