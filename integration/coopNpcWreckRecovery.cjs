@@ -28,8 +28,10 @@ function createWreckRecovery({warp,orbit,clock=()=>Date.now(),
   for(const a of assignments){
    if(typeof a?.pilotID!=="string"||!/^coop-pilot-[0-9]{3,}$/.test(a.pilotID)||
     !id(a.entityID)||Number(a.systemID)!==system)continue;
-   byPilot.set(a.pilotID,(byPilot.get(a.pilotID)||0)+1);
-   byEntity.set(Number(a.entityID),(byEntity.get(Number(a.entityID))||0)+1);
+   if(!byPilot.has(a.pilotID))byPilot.set(a.pilotID,new Set());
+   if(!byEntity.has(Number(a.entityID)))byEntity.set(Number(a.entityID),new Set());
+   byPilot.get(a.pilotID).add(String(a.entityID)+":"+String(a.systemID));
+   byEntity.get(Number(a.entityID)).add(a.pilotID+":"+String(a.systemID));
   }
   const sorted=claims.slice(0,500).sort((a,b)=>Number(a.wreckID)-Number(b.wreckID));
   for(const claim of sorted){
@@ -39,7 +41,7 @@ function createWreckRecovery({warp,orbit,clock=()=>Date.now(),
     !/^coop-pilot-[0-9]{3,}$/.test(String(claim.attackerPilotID))||
     !Number.isSafeInteger(claim.at)||!Number.isSafeInteger(claim.expiresAt)||
     now<claim.at||now>claim.expiresAt||blockedIDs.has(shipID)||
-    byPilot.get(claim.attackerPilotID)!==1||byEntity.get(shipID)!==1)
+    byPilot.get(claim.attackerPilotID)?.size!==1||byEntity.get(shipID)?.size!==1)
     continue;
    const assignment=assignments.find(a=>a.pilotID===claim.attackerPilotID&&
     Number(a.entityID)===shipID&&Number(a.systemID)===system);
@@ -54,7 +56,9 @@ function createWreckRecovery({warp,orbit,clock=()=>Date.now(),
     Number(wreck.systemID)!==system||
     Number(wreck.sourceEntityID)!==Number(claim.sourceEntityID)||
     Number(wreck.launcherID)!==Number(claim.sourceEntityID)||
-    (Number(wreck.expiresAtMs)>0&&now>=Number(wreck.expiresAtMs)))
+    (typeof scene.getCurrentSimTimeMs==="function"&&
+     Number(wreck.expiresAtMs)>0&&
+     Number(scene.getCurrentSimTimeMs())>=Number(wreck.expiresAtMs)))
     continue;
    const contents=store.listNativeWreckItemsForWreck(wreckID);
    if(!Array.isArray(contents)||!contents.some(x=>
