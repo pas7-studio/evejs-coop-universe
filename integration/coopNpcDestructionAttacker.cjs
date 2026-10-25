@@ -46,7 +46,16 @@ function note(scene,victim,options,wreck){
  try{
   const file=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   const saved=JSON.parse(fs.readFileSync(file,"utf8"));
-  const proof=verify({scene,victim,options,wreck,links:Object.values(saved?.links||{})});
+  const links=Object.values(saved?.links||{});
+  let proof=verify({scene,victim,options,wreck,links});
+  if(proof.status==="VICTIM_NOT_NAMED"&&
+   process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"){
+   const fleets=require("../services/mining/miningNpcOperations")
+    .getMiningFleetsForSystem(Number(scene?.systemID));
+   proof=require("./coopNpcStockWreckProof").verifyStockKill({
+    scene,victim,options,wreck,links,fleets
+   });
+  }
   if(proof.status!=="VICTIM_NOT_NAMED"&&proof.status!=="INVALID_NATIVE_DESTRUCTION")
    require("./coopRuntimeProbe").observe("living-native-destruction-attacker",null,
     {spaceState:{systemID:proof.systemID}},proof);
