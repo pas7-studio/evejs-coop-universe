@@ -232,9 +232,9 @@ test("three physical SELL stacks: exact 8-unit partial fill across 3+4+1 and 4-u
   assert.equal(first.quantity,8);
   assert.equal(first.deliveries.length,3);
   assert.deepEqual(first.deliveries,[
-   {sourceItemID:800,itemID:800,quantity:3},
-   {sourceItemID:801,itemID:801,quantity:4},
-   {sourceItemID:802,itemID:1990000900,quantity:1}
+   {sourceItemID:800,itemID:800,quantity:3,sourceBefore:3,sourceAfter:0},
+   {sourceItemID:801,itemID:801,quantity:4,sourceBefore:4,sourceAfter:0},
+   {sourceItemID:802,itemID:1990000900,quantity:1,sourceBefore:5,sourceAfter:4}
   ]);
   assert.equal(x.db.items["800"].ownerID,301);
   assert.equal(x.db.items["801"].ownerID,301);
@@ -278,7 +278,7 @@ test("partial SELL can move an entire source stack without minting a split item"
   const s=createAtomicSell({gameStore:x.gameStore});
   const p=Object.freeze({...proof(),volumeBefore:7,filledQuantity:3,volumeAfter:4});
   const v=s.settle({ticket:ticket(),proof:p,tax:1,sourceItemIDs:[800,801]});
-  assert.deepEqual(v.deliveries,[{sourceItemID:800,itemID:800,quantity:3}]);
+  assert.deepEqual(v.deliveries,[{sourceItemID:800,itemID:800,quantity:3,sourceBefore:3,sourceAfter:0}]);
   assert.equal(x.db.identityState.nextItemID,undefined);
   assert.equal(x.db.items["801"].ownerID,201);
   assert.equal(x.db.items["801"].quantity,4);
