@@ -1596,7 +1596,7 @@ function observeSession(session,ship){
             getWrecks:nativeStore.listNativeWrecks,
             getWreckItems:nativeStore.listNativeWreckItemsForWreck,
             readVerifiedLoss:()=>require("./coopConvoyOutcomeProof").createOutcomes().snapshot(),
-            atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows(tables,fn),
+            atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows.transact(tables,fn),
             warpToEntity:(entityID,wreckID)=>npcNativeOrder("CIVILIAN",
              entityID,"rescue-rival-warp",
              ()=>npcRuntime.warpToEntity(entityID,wreckID)),
@@ -1622,7 +1622,7 @@ function observeSession(session,ship){
            require("./coopRescueNpcDepot").createRescueNpcDepot({
             getCargo:nativeStore.listNativeCargoForEntity,
             getStations:require("./worldData").getStationsForSystem,
-            atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows(tables,fn),
+            atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows.transact(tables,fn),
             warpToPoint:(entityID,target)=>npcNativeOrder("CIVILIAN",
              entityID,"rescue-rival-delivery-warp",
              ()=>npcRuntime.warpToPoint(entityID,target)),
