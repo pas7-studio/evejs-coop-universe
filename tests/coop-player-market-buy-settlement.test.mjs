@@ -172,3 +172,30 @@ test("strict flags default OFF blocks direct payout",()=>{
  assert.equal(x.commits,0);
  }finally{flags.forEach((k,i)=>original[i]===undefined?delete process.env[k]:process.env[k]=original[i])}
 });
+
+
+test("keyed-only original EveJS buyer and seller wallets settle without embedded character IDs",()=>{
+ const reset=enabled();try{
+ const x=fixture();
+ delete x.db.characters["201"].characterID;
+ delete x.db.characters["301"].characterID;
+ const s=createBuySettlement({gameStore:x.store});
+ const paid=s.settle({ticket:ticket(),proof:proof(),sourceItemID:800,tax:1});
+ assert.equal(paid.phase,"GAMESTORE_COMMITTED");
+ assert.equal(x.db.characters["201"].balance,911.94);
+ assert.equal(x.db.characters["301"].balance,536.02);
+ assert.equal(x.db.items["800"].ownerID,201);
+ }finally{reset()}
+});
+test("contradictory embedded native wallet ID blocks payment without moving items or ISK",()=>{
+ const reset=enabled();try{
+ for(const who of ["201","301"]){
+  const x=fixture();x.db.characters[who].characterID=999;
+  const before=structuredClone(x.db);
+  const s=createBuySettlement({gameStore:x.store});
+  assert.throws(()=>s.settle({ticket:ticket(),proof:proof(),sourceItemID:800,tax:1}),
+    /P2P_BUY_PAY_NATIVE_CHARACTER_ACCOUNTS_MISSING/);
+  assert.equal(x.commits,0);assert.deepEqual(x.db,before);
+ }
+ }finally{reset()}
+});
