@@ -147,6 +147,14 @@ if ($LivingCoop) {
   # Native fleet-only item/inactive-hull gifts and verified two-person agent turn-ins.
   $yamlLines += "      EVEJS_COOP_FLEET_TRADE_SAFETY: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '1'"
+  # Closed-server progression uses the original EveJS account/skill authority.
+  # This affects the actual skill queue and client estimates, not fake SP grants.
+  $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '6'"
+  # Native EveJS Omega license (both friends get identical free closed-server access).
+  # The stock client, skill queue and Alpha/Omega restrictions derive it from storeState.
+  $yamlLines += "      EVEJS_OMEGA_LICENSE: 'true'"
+  # Share only verified combat dungeon objectives witnessed by both real fleet ships.
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_SHARE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_WEAPON_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_QUARANTINE: '1'"
