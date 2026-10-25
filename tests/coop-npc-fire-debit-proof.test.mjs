@@ -15,9 +15,12 @@ function f(){
   listNativeModulesForEntity:()=>modules.map(x=>({...x})),
   listNativeCargoForEntity:()=>cargo.map(x=>({...x}))};
  const env={EVEJS_COOP_NPC_STRICT_AMMO:"1"};
- const instance=()=>createFireDebitProof({store,env});
+ let typeCompatible=true;
+ const instance=()=>createFireDebitProof({store,env,
+  compatible:()=>typeCompatible});
  const check=()=>instance().verify({entity,moduleItem,chargeItem,quantity:1});
- return {entity,moduleItem,chargeItem,native,modules,cargo,store,env,instance,check};
+ return {entity,moduleItem,chargeItem,native,modules,cargo,store,env,instance,check,
+  setCompatible:x=>{typeCompatible=x}};
 }
 test("real authoritative native transient magazine is valid source, no virtual stock",()=>{
  const x=f();assert.equal(x.check().allowed,true);
@@ -91,5 +94,12 @@ test("legacy mode and real player ships bypass new native-only guard",()=>{
  const x=f();x.env.EVEJS_COOP_NPC_STRICT_AMMO="0";
  x.cargo.splice(0);assert.equal(x.check().allowed,true);
  x.env.EVEJS_COOP_NPC_STRICT_AMMO="1";x.entity.nativeNpc=false;
+ assert.equal(x.check().allowed,true);
+});
+
+test("incompatible SDE ammo cannot be spent even with matching authoritative IDs",()=>{
+ const x=f();x.setCompatible(false);
+ assert.equal(x.check().status,"NATIVE_FIRE_STALE_OR_FORGED_CHARGE");
+ x.setCompatible(true);
  assert.equal(x.check().allowed,true);
 });
