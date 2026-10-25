@@ -93,7 +93,7 @@ test("forge item owner, unbounded arrays and economic mutation claim fail closed
  const f=fixture(),e={event:"alife-native-delivery-settled",
   ...verifyFullNativeDelivery(f.trip,f.proof)};
  for(const change of [{nativeMutation:true},{iskCredited:true},{paidReward:true},
-  {stationID:123},{eventID:"fake"},{cargoIDs:[501,501]},{stacks:999}]){
+  {stationID:0},{eventID:"fake"},{cargoIDs:[501,501]},{stacks:999}]){
   const r=auditNativeDeliveryEvents([{...e,...change}]);
   assert.equal(r.status,"NATIVE_DELIVERY_EVENT_REPAIR_REQUIRED");
   assert.equal(r.uniqueTrips,0);
