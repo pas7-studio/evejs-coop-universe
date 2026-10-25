@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopFleetMissionTurnin"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopFleetMissionTurnin","coopFleetDungeonCredit"];
 const specs=[
  {file:"server/src/space/npc/nativeNpcStore.js",patches:[]},
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
@@ -20,6 +20,8 @@ const specs=[
   {anchor:"    queuePostSpaceAttachFittingHydration(session, moveResult.data.itemID, {",line:'    require("./coopSessionPresence").schedule(session, moveResult.data, "undock");'},
   {anchor:"  queuePostSpaceAttachFittingHydration(session, moveResult.data && moveResult.data.itemID, {",line:'  require("./coopSessionPresence").schedule(session, moveResult.data, "stargate");'}
  ]},
+ {file:"server/src/services/agent/agentMissionRuntime.js",patches:[]},
+ {file:"server/src/services/dungeon/dungeonUniverseSiteService.js",patches:[]},
  {file:"server/src/services/agent/agentMgrService.js",patches:[
   {anchor:'    const result = agentMissionRuntime.doAgentAction(\n      normalizePositiveInteger(session && session.characterID, 0),\n      agentID,\n      actionID,\n    );',line:"    const coopTicket = process.env.EVEJS_COOP_FLEET_MISSION_TURNIN === \"1\" ? require(\"../../space/coopFleetMissionTurnin\").prepare({session,agentID,actionID,fleetRuntime:require(\"../fleets/fleetRuntime\"),missionRuntime:agentMissionRuntime,sessions:require(\"../chat/sessionRegistry\").getSessions(),getDockedLocationID:require(\"../structure/structureLocation\").getDockedLocationID}) : null;"},
   {anchor:'    return buildDoActionResponsePayload(result);',line:"    if (coopTicket && coopTicket.ok) { try { const shared = require(\"../../space/coopFleetMissionTurnin\").finish({ticket:coopTicket,missionRuntime:agentMissionRuntime,fleetRuntime:require(\"../fleets/fleetRuntime\"),getDockedLocationID:require(\"../structure/structureLocation\").getDockedLocationID}); require(\"../../space/coopRuntimeProbe\").observe(\"coop-fleet-native-mission-turnin\",session,null,shared); } catch (error) { console.warn(\"[CoopFleetMission]\",error.message); } }"}
@@ -209,6 +211,8 @@ function transform(source,spec,remove){
  }
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
+ if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
+  text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
