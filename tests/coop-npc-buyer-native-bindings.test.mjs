@@ -91,9 +91,11 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   required:80,available:10,shortage:70,observedAt:1000000,
   authoritativeNative:true});
  const env={EVEJS_COOP_ALIFE_ECONOMY_ACT:"1",
-  EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_NPC_BUY_PLAYER_ASK:"1"};
+  EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_NPC_BUY_PLAYER_ASK:"1",
+  EVEJS_COOP_NPC_BUY_RECOVERY_OPERATOR:"1"};
  const bridge=createNativeNpcBuyerBindings({file,gameStore,itemStore,
   marketClient:{call},clock:()=>1000000,env,
+  authorizeRecoveryOperator:async data=>data.approvalID==="operator-approval-0001",
   marketRules:{getMarketContext:({characterID,stationID})=>({
    characterID,stationID,limits:{acc:0.08}}),
    computeSalesTaxAmount:(ctx,gross)=>Math.round(gross*ctx.limits.acc*100)/100},
@@ -156,11 +158,19 @@ test("lost Rust finalize ACK recovers from same durable GameStore receipt",()=>r
  f.failNext();await assert.rejects(f.tick(),/LOST_RUST_FINAL_ACK/);
  const original=f.load().entries[OWNER+":"+ORDER];
  assert.equal(original.phase,"PREPARED");
- const r=await f.tick();
- assert.equal(r.status,"NPC_PLAYER_PURCHASE_SETTLED");
+ const normal=await f.tick();
+ assert.equal(normal.reason,"NPC_BUY_PENDING_OPERATOR_RECOVERY");
+ assert.equal(f.claims,1);
+ const r=await f.bridge.recoverApproved({actorID:100,approval:{
+  claimKey:original.claimKey,action:"ACK_JOURNAL_SAME_CLAIM",
+  approvalID:"operator-approval-0001",reason:"Reconcile lost Rust finalize acknowledgement"
+ }});
+ assert.equal(r.status,"NPC_BUY_OPERATOR_RECOVERED");
+ assert.equal(r.action,"ACK_JOURNAL_SAME_CLAIM");
  assert.equal(f.load().entries[OWNER+":"+ORDER].claimKey,original.claimKey);
+ assert.equal(f.load().entries[OWNER+":"+ORDER].phase,"SETTLED");
  assert.equal(f.tables.characters[SELLER].walletJournal.length,2);
- assert.equal(f.claims,2);
+ assert.equal(f.claims,1);
 }));
 test("crash audit reads settled journal, Rust claim and GameStore receipt without mutation",()=>run(async f=>{
  await f.tick();
@@ -180,5 +190,28 @@ test("lost finalize ACK audits as ACK_JOURNAL, never a new market claim",()=>run
  assert.equal(r.entries[0].status,"ACK_JOURNAL_SAME_CLAIM");
  assert.equal(r.entries[0].requiresOperator,true);
  assert.deepEqual(f.tables,before);
+ assert.equal(f.claims,1);
+}));
+
+test("unauthorized recovery cannot turn a persisted PREPARED claim into a paid sale",()=>run(async f=>{
+ f.failNext();await assert.rejects(f.tick(),/LOST_RUST_FINAL_ACK/);
+ const key=f.load().entries[OWNER+":"+ORDER].claimKey;
+ const r=await f.bridge.recoverApproved({actorID:100,approval:{
+  claimKey:key,action:"ACK_JOURNAL_SAME_CLAIM",
+  approvalID:"untrusted-player",reason:"Attempt an unapproved market recovery"
+ }});
+ assert.equal(r.reason,"NPC_BUY_RECOVERY_OPERATOR_DENIED");
+ assert.equal(f.load().entries[OWNER+":"+ORDER].phase,"PREPARED");
+ assert.equal(f.claims,1);
+}));
+test("wrong operator-selected action cannot bypass the cross-DB audit",()=>run(async f=>{
+ f.failNext();await assert.rejects(f.tick(),/LOST_RUST_FINAL_ACK/);
+ const key=f.load().entries[OWNER+":"+ORDER].claimKey;
+ const r=await f.bridge.recoverApproved({actorID:100,approval:{
+  claimKey:key,action:"RESUME_GAMESTORE_SAME_CLAIM",
+  approvalID:"operator-approval-0001",reason:"Reconcile wrongly classified crash"
+ }});
+ assert.equal(r.reason,"NPC_BUY_RECOVERY_AUDIT_DIVERGED");
+ assert.equal(f.load().entries[OWNER+":"+ORDER].phase,"PREPARED");
  assert.equal(f.claims,1);
 }));
