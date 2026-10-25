@@ -86,7 +86,7 @@ function decideNativeEconomy(snapshot,{maxIntents=12,now=Date.now(),maxAgeMs=120
      !natural(e.nativeActiveJobs)||typeof e.factoryOnline!=="boolean"||
      typeof e.marketOnline!=="boolean")
    return {stage:"IDLE",reason:"NATIVE_FACTORY_MARKET_PROOF_REQUIRED"};
-  if(positive(p.ownerID)&&(!count(e.walletCents)||e.walletCents===0))
+  if(positive(p.ownerID)&&(!natural(e.walletCents)||e.walletCents===0))
    return{stage:"IDLE",reason:"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY"};
   if(e.nativeOutputQty>0&&e.marketOnline)
    return{stage:"LIST_OUTPUT",reason:"NATIVE_MANUFACTURED_OUTPUT_UNLISTED",
