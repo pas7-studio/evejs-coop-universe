@@ -12,6 +12,35 @@ const cents=n=>{
 };
 const key=t=>"p2p:"+t.orderID+":"+t.cycle;
 const money=n=>n/100;
+const reserveID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+// A committed BUY payout proves that one original, actually funded BUY
+// reserve paid this seller. The witness is required both for Rust release
+// and idempotent crash replay (which must never re-credit seller ISK).
+function validPaidReceipt(r,proof,ticket,amounts){
+ if(!r||r.kind!=="P2P_BUY_PAID"||r.phase!=="GAMESTORE_COMMITTED"||
+    r.key!==key(ticket)||r.orderID!==ticket.orderID||
+    r.cycle!==ticket.cycle||r.buyerID!==proof.ownerID||
+    r.sellerID!==proof.counterpartyID||
+    r.stationID!==proof.stationID||r.typeID!==proof.typeID||
+    r.quantity!==proof.filledQuantity||
+    r.volumeBefore!==proof.volumeBefore||
+    r.volumeAfter!==proof.volumeAfter||
+    r.priceCents!==proof.priceCents||
+    r.grossCents!==amounts.gross||
+    !pos(r.sourceItemID)||r.itemID!==r.sourceItemID||
+    !reserveID.test(r.reserveOperationID)||
+    r.reserveReceiptKey!=="buy-reserve:"+r.reserveOperationID||
+    r.reserveBeforeCents!==amounts.reserveBefore||
+    r.reserveAfterCents!==amounts.reserveAfter||
+    !safe(r.buyerBeforeCents)||!safe(r.buyerAfterCents)||
+    r.buyerBeforeCents!==r.buyerAfterCents||
+    !safe(r.taxCents)||r.taxCents>amounts.gross||
+    !safe(r.sellerBeforeCents)||!safe(r.sellerAfterCents)||
+    !safe(r.sellerBeforeCents+amounts.gross)||
+    r.sellerAfterCents!==r.sellerBeforeCents+amounts.gross-r.taxCents||
+    !pos(r.committedAt))return false;
+ return true;
+}
 function validate(proof,sourceItemID){
  if(!proof||!Object.isFrozen(proof)||proof.bid!==true||
     typeof proof.orderID!=="string"||!/^[1-9][0-9]*$/.test(proof.orderID)||
@@ -118,19 +147,8 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
   return gameStore.transact(TABLES,tx=>{
    const previous=tx.get("playerMarketFills",receiptKey);
    if(previous){
-    if(previous.phase!=="GAMESTORE_COMMITTED"||
-       previous.kind!=="P2P_BUY_PAID"||previous.key!==receiptKey||
-       previous.orderID!==ticket.orderID||previous.cycle!==ticket.cycle||
-       previous.buyerID!==proof.ownerID||
-       previous.sellerID!==proof.counterpartyID||
-       previous.stationID!==proof.stationID||
-       previous.typeID!==proof.typeID||
+    if(!validPaidReceipt(previous,proof,ticket,amounts)||
        previous.sourceItemID!==sourceItemID||
-       previous.quantity!==proof.filledQuantity||
-       previous.volumeBefore!==proof.volumeBefore||
-       previous.volumeAfter!==proof.volumeAfter||
-       previous.priceCents!==proof.priceCents||
-       previous.grossCents!==amounts.gross||
        previous.taxCents!==taxCents)
      throw Error("P2P_BUY_PAY_REPLAY_IDENTITY_CONFLICT");
     return {...previous,replayed:true};
@@ -254,23 +272,7 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
   const receiptKey=key(ticket);
   return gameStore.transact(["playerMarketFills"],tx=>{
    const r=tx.get("playerMarketFills",receiptKey);
-   if(!r||r.kind!=="P2P_BUY_PAID"||
-      r.phase!=="GAMESTORE_COMMITTED"||
-      r.orderID!==ticket.orderID||r.cycle!==ticket.cycle||
-      r.buyerID!==proof.ownerID||r.sellerID!==proof.counterpartyID||
-      r.quantity!==proof.filledQuantity||r.volumeBefore!==proof.volumeBefore||
-      r.volumeAfter!==proof.volumeAfter||
-      r.stationID!==proof.stationID||r.typeID!==proof.typeID||
-      r.priceCents!==proof.priceCents||r.grossCents!==amounts.gross||
-      r.reserveBeforeCents!==amounts.reserveBefore||
-      r.reserveAfterCents!==amounts.reserveAfter||
-      !pos(r.sourceItemID)||r.itemID!==r.sourceItemID||
-      !safe(r.buyerBeforeCents)||
-      r.buyerBeforeCents!==r.buyerAfterCents||
-      !safe(r.taxCents)||r.taxCents>amounts.gross||
-      !safe(r.sellerBeforeCents)||!safe(r.sellerAfterCents)||
-      r.sellerAfterCents!==r.sellerBeforeCents+amounts.gross-r.taxCents||
-      !pos(r.committedAt))
+   if(!validPaidReceipt(r,proof,ticket,amounts))
     throw Error("P2P_BUY_PAY_DURABLE_COMMITTED_RECEIPT_REQUIRED");
    return r;
   });
