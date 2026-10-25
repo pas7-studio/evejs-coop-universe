@@ -299,6 +299,21 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(now-trip.startedAt>DEADLINE_MS)return pause("ARRIVAL_TIMED_OUT_REPAIR_REQUIRED");
   const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
   if(!point||point.corporationID!==trip.corporationID)return pause("STATION_IDENTITY_CHANGED");
+  // Trusted native server tick only: observe the physical NPC + both real
+  // members at two distinct mid-route checkpoints. Observer cannot grant ISK,
+  // create cargo or warp; missing evidence will deny only opt-in payout.
+  if(escortEnabled&&trip.manifestID&&
+   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"){
+   let routeNote;try{routeNote=escortGate?.recordEscortRouteSample?.(
+    trip.manifestID,scene,point)}
+   catch{routeNote={status:"ROUTE_SAMPLE_UNAVAILABLE"}}
+   if(routeNote?.status==="NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED")
+    probe.observe("living-npc-escort-route-checkpoint",null,
+     {spaceState:{systemID:trip.systemID}},
+     {fleetID:trip.fleetID,manifestKey:trip.manifestID,
+      checkpoint:routeNote.stage});
+  }
   let stackCount=0,oreQuantity=0;
   for(const rawID of Object.keys(trip.haulers)){
    const id=Number(rawID),ship=findShip(scene,id,trip.systemID);
