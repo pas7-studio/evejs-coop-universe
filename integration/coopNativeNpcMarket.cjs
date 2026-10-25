@@ -30,6 +30,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
  if(ledger?.version!==1||!ledger.pilots||typeof ledger.pilots!=="object")
   throw Error("NPC_MARKET_LEDGER_INVALID");
  const txPath=id=>path.join(root,"tx",id+".json");
+ const purchasePath=id=>path.join(root,"purchases",String(id)+".json");
  function atomic(file,obj){
   fs.mkdirSync(path.dirname(file),{recursive:true});
   const temp=file+".tmp-"+process.pid;
@@ -105,12 +106,35 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     tradeCount:acc.tradeCount+1};
    atomic(ledgerFile,ledger);
   }
+  if(tx.side==="buy"){
+   // Durable source witness for the exact cargo ID, not a new asset grant.
+   // Kept after the market RPC journal is removed. If writing it fails,
+   // leave RPC_ACK for recovery and do not claim resupply complete.
+   const receipt={version:1,phase:"SETTLED",source:"EVEJS_SEED_MARKET",
+    pilotID:tx.pilotID,entityID:tx.entityID,systemID:tx.systemID,
+    cargoID:tx.cargoID,typeID:tx.typeID,quantity:tx.quantity,
+    stationID:tx.stationID,marketOrderID:tx.marketOrderID,
+    price:tx.price,at:tx.at};
+   let earlier=null;
+   try{earlier=JSON.parse(fs.readFileSync(purchasePath(tx.cargoID),"utf8"));}
+   catch(e){if(e.code!=="ENOENT")throw e;}
+   if(earlier&&JSON.stringify(earlier)!==JSON.stringify(receipt))
+    throw Error("NPC_MARKET_PURCHASE_RECEIPT_CONFLICT");
+   if(!earlier)atomic(purchasePath(tx.cargoID),receipt);
+  }
   return {status:"TRADE_SETTLED",side:tx.side,pilotID:tx.pilotID,
    entityID:tx.entityID,systemID:tx.systemID,
    stationID:tx.stationID,typeID:tx.typeID,
    quantity:tx.quantity,price:tx.price,balance:tx.afterBalance,
    marketOrderID:tx.marketOrderID,
    marketOrderSource:"EVEJS_SEED",
+   cargoID:tx.cargoID,
+   buyReceipt:tx.side==="buy"?{
+    cargoID:tx.cargoID,stationID:tx.stationID,typeID:tx.typeID,
+    quantity:tx.quantity,marketOrderID:tx.marketOrderID
+   }:null,
+   lootSource:tx.lootSource||null,
+   npcLedgerOnly:true,
    nativeCargoVerified:true,marketRPCAcknowledged:true,
    marketRPC:tx.side==="sell"?"FillOrder":"AdjustSeedStock"};
  }
@@ -134,7 +158,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
   return {status:pending.length?"NEEDS_OPERATOR_REPAIR":files.length?"RECOVERED":"CLEAN",recovered,pending};
  }
  function offer({scene,entityID,pilotID,stationID,side,typeID,
-  buyTypes=[],sellTypes=[]}={}){
+  buyTypes=[],sellTypes=[],cargoID=null,verifyCargo=null}={}){
   const id=pos(entityID),station=pos(stationID),type=pos(typeID);
   if(!id||!pilotName(pilotID)||!station||!type||
    !["buy","sell"].includes(side))return status("INVALID_TRADE");
@@ -174,10 +198,24 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
   const stock=(store.listNativeCargoForEntity(id)||[]).filter(c=>
    Number(c.typeID)===type&&Number(c.entityID)===id&&
    Number(c.moduleID||0)===0&&c.singleton!==true&&Number(c.quantity)>0);
+  // An exact cargo ID prevents a pirate from accidentally selling a different
+  // native stack of the same type. Its separate durable provenance proof must
+  // survive both quote and pre-RPC revalidation.
+  let chosen=stock;
+  if(cargoID!==null){
+   const focus=pos(cargoID);
+   if(side!=="sell"||!focus||typeof verifyCargo!=="function")
+    return status("NATIVE_LOOT_CARGO_NOT_VERIFIED");
+   chosen=stock.filter(c=>Number(c.cargoID)===focus);
+   if(chosen.length!==1)return status("NATIVE_LOOT_CARGO_NOT_VERIFIED");
+   let verified=false;
+   try{verified=verifyCargo(chosen[0])===true;}catch(_){}
+   if(!verified)return status("NATIVE_LOOT_CARGO_NOT_VERIFIED");
+  }
   const balance=account(pilotID).balance;
   return {status:"ELIGIBLE",pilotID,entityID:id,stationID:station,
    systemID:Number(scene.systemID),side,typeID:type,
-   native,stock,balance};
+   native,stock:chosen,balance};
  }
  async function execute(params={}){
   const pre=offer(params);
@@ -252,6 +290,11 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     beforeQuantity:pre.side==="sell"?Number(cargo.quantity):0,
     afterQuantity:pre.side==="sell"?Number(cargo.quantity)-quantity:quantity,
     newCargo,beforeBalance:pre.balance,
+    lootSource:params.cargoID!==null&&params.cargoID!==undefined&&
+     pre.side==="sell"?{
+      sourceWreckItemID:Number(cargo.sourceWreckItemID),
+      sourceWreckID:Number(cargo.sourceWreckID)
+     }:null,
     afterBalance:amount(pre.balance+(pre.side==="sell"?1:-1)*total(price,quantity))};
    if(tx.afterBalance===null||tx.afterBalance<0)return status("BALANCE_OVERFLOW");
    atomic(txPath(pre.pilotID),tx);
