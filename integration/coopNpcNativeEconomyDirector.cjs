@@ -6,6 +6,20 @@ const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypt
 const STATES=new Set(["PREPARED","INSTALL_UNKNOWN","INSTALLED","READY","DELIVERY_UNKNOWN","DELIVERED","LIST_UNKNOWN","LISTED","SOLD","REPAIR_REQUIRED"]);
 const safeInt=x=>Number.isSafeInteger(x)&&x>0;
 const cents=x=>Number.isFinite(x)&&x>=0&&x<=1e12&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+// A sale price must be at least one whole cent; rounding a sub-cent quote
+// to zero would let a physical native item be considered sold for free.
+const saleCents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<=0||x>1e12)return null;
+ const exact=x*100,n=Math.round(exact);
+ return Number.isSafeInteger(n)&&n>0&&Math.abs(exact-n)<=1e-7?n:null;
+};
+const warehouseItem=(item,e,ownerID,stationID)=>Boolean(item&&
+ item.itemID===e.itemID&&item.typeID===e.typeID&&
+ item.ownerID===ownerID&&item.locationID===stationID&&
+ item.flagID===4&&item.singleton===0&&
+ Number.isSafeInteger(e.quantity)&&e.quantity>0&&
+ item.quantity===e.quantity&&item.stacksize===e.quantity&&
+ item.customInfo==="coop-industry:v1:"+e.jobID);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const {calculateNativeDemand}=require("./coopNpcDemandAuthority.cjs");
 const {reconcileUnknown}=require("./coopNpcEconomyUnknownRecovery.cjs");
@@ -137,16 +151,15 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    const r=native.deliverOnce(id),j=job();
    if(!receipt(j,{...r,operationID:id,jobID:e.jobID}))return halt("DELIVERY_OUTCOME_UNKNOWN",id);
    const item=native.getItem(r.itemID);
-   if(!item||item.itemID!==r.itemID||item.typeID!==e.typeID||item.ownerID!==ownerID||
-      item.locationID!==stationID||item.quantity!==r.quantity||
-      item.customInfo!=="coop-industry:v1:"+e.jobID)return halt("DELIVERY_ITEM_IDENTITY_UNKNOWN",id);
+   if(!warehouseItem(item,{...e,itemID:r.itemID,quantity:r.quantity},
+      ownerID,stationID))
+    return halt("DELIVERY_ITEM_IDENTITY_UNKNOWN",id);
    e.phase="DELIVERED";e.itemID=item.itemID;e.quantity=item.quantity;save(state);
    return {status:"DELIVERED",operationID:id,itemID:e.itemID,quantity:e.quantity};
   }
   if(e.phase==="DELIVERED"){
    const item=native.getItem(e.itemID);
-   if(!item||item.ownerID!==ownerID||item.locationID!==stationID||item.typeID!==e.typeID||
-      item.quantity!==e.quantity||item.customInfo!=="coop-industry:v1:"+e.jobID)
+   if(!warehouseItem(item,e,ownerID,stationID))
       return halt("NATIVE_OUTPUT_NO_LONGER_AVAILABLE",id);
    e.phase="LIST_UNKNOWN";save(state);
    const rpc=market.listOnce({operationID:id,ownerID,stationID,itemID:e.itemID,typeID:e.typeID,quantity:e.quantity});
@@ -156,7 +169,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
       order.ownerID!==ownerID||order.stationID!==stationID||order.typeID!==e.typeID||
       order.sourceItemID!==e.itemID||order.originalQuantity!==e.quantity||
       order.nativeEscrowVerified!==true)return halt("NATIVE_MARKET_LIST_OUTCOME_UNKNOWN",id);
-   e.phase="LISTED";e.orderID=r.orderID;e.priceCents=cents(order.price);
+   e.phase="LISTED";e.orderID=r.orderID;e.priceCents=saleCents(order.price);
    if(e.priceCents===null)return halt("NATIVE_MARKET_PRICE_INVALID",id);
    save(state);return {status:"LISTED",operationID:id,orderID:e.orderID};
    };
@@ -170,9 +183,9 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
       order.remainingQuantity>e.quantity)return halt("NATIVE_SALE_REMAINING_INVALID",id);
    const filled=sales.reduce((sum,x)=>{
     if(!x||x.orderID!==e.orderID||x.ownerID!==ownerID||x.typeID!==e.typeID||
-       !safeInt(x.quantity)||!safeInt(x.transactionID)||cents(x.price)===null||x.nativeWalletSettled!==true)
+       !safeInt(x.quantity)||!safeInt(x.transactionID)||saleCents(x.price)===null||x.nativeWalletSettled!==true)
        throw Error("NATIVE_SALE_LEDGER_INVALID");
-    const wallet=market.getWalletEntry(x.transactionID),expected=cents(x.price)*x.quantity;
+    const wallet=market.getWalletEntry(x.transactionID),expected=saleCents(x.price)*x.quantity;
     if(!wallet||wallet.verifiedNative!==true||wallet.transactionID!==x.transactionID||
        wallet.ownerID!==ownerID||wallet.orderID!==e.orderID||wallet.amountCents!==expected)
        throw Error("NATIVE_SALE_WALLET_NOT_SETTLED");
@@ -182,7 +195,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
     return halt("NATIVE_MARKET_QUANTITY_NOT_CONSERVED",id);
    if(filled===0)return {status:"LISTED_AWAITING_BUYER",operationID:id};
    if(order.remainingQuantity>0)return {status:"PARTIALLY_SOLD",operationID:id,filled,remaining:order.remainingQuantity};
-   const revenue=sales.reduce((sum,x)=>sum+cents(x.price)*x.quantity,0);
+   const revenue=sales.reduce((sum,x)=>sum+saleCents(x.price)*x.quantity,0);
    if(!Number.isSafeInteger(revenue)||revenue<0)return halt("NATIVE_SALE_REVENUE_INVALID",id);
    e.phase="SOLD";e.revenueCents=revenue;e.soldQuantity=filled;save(state);
    return {status:"SOLD",operationID:id,revenueCents:revenue,productionCostCents:e.installCostCents};
