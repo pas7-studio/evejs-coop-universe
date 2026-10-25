@@ -427,3 +427,31 @@ test("completed NPC manufacturing cannot become SOLD for a different original na
  assert.equal(completed.revenueCents,120000);
  assert.equal(Object.values(d.inspect().entries)[0].phase,"SOLD");
 }));
+
+
+test("NPC factory cannot count a paid Rust sell fill below the original durable ASK",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ f.sell(100,11.99);
+ assert.throws(()=>d.tick(ctx),/NATIVE_SALE_LEDGER_INVALID/);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+}));
+test("paid NPC partial sell fill must have safe integer cent gross before wallet evidence",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ // A 99-unit fill at 1e12 ISK yields 9.9e15 cents (outside JS safe
+ // integer); even a matching rounded wallet receipt cannot certify it.
+ f.sell(99,1000000000000);
+ assert.throws(()=>d.tick(ctx),/NATIVE_SALE_LEDGER_INVALID/);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+}));
+test("genuine higher Rust buyer match price and original ASK minimum both remain valid",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ f.sell(100,12.05);
+ assert.equal(d.tick(ctx).status,"SOLD");
+ assert.equal(Object.values(d.inspect().entries)[0].revenueCents,120500);
+}));
