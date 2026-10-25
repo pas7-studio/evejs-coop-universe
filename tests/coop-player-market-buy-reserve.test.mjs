@@ -155,3 +155,28 @@ test("new reserve has no effect when any strict feature flag is OFF",()=>{
  }finally{keys.forEach((k,i)=>original[i]===undefined?
   delete process.env[k]:process.env[k]=original[i])}
 });
+
+
+test("legacy unfunded original Rust BUY order blocks newly enabled reserved BUY creation",()=>{
+ const reset=flags();try{
+ const x=fixture(),s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id});
+ const before=structuredClone(x.db);
+ assert.throws(()=>s.assertExisting([order()],201),/LEGACY_OR_UNFUNDED_BUY_ORDER/);
+ assert.equal(x.commits,0);assert.deepEqual(x.db,before);
+ assert.equal(s.assertExisting([],201),true);
+ }finally{reset()}
+});
+test("all existing open BUY orders must bind exact original native reserve receipts",()=>{
+ const reset=flags();try{
+ const x=fixture(),s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id});
+ const pending=s.begin(quote());
+ s.bind(pending,order());
+ assert.equal(s.assertExisting([order()],201),true);
+ const before=structuredClone(x.db);
+ x.db.marketEscrow["23"].escrowAmount=1;
+ assert.throws(()=>s.assertExisting([order()],201),/LEGACY_OR_UNFUNDED_BUY_ORDER/);
+ x.db.marketEscrow["23"]=before.marketEscrow["23"];
+ assert.throws(()=>s.assertExisting([{...order(),owner_id:999}],201),
+  /UNVERIFIED_EXISTING_RUST_ORDER/);
+ }finally{reset()}
+});
