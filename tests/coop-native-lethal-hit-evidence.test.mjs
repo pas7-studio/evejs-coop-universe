@@ -75,3 +75,26 @@ test('one-shot proof cannot pretend telemetry succeeded if append throws',()=>{
  const f=nativeScene();f.args.emit=()=>{throw Error('probe failed');};
  assert.equal(status(f),'TELEMETRY_NOT_RECORDED');
 });
+test('pinned EveJS native source confirms death and physical wreck precede damage witness',t=>{
+ const code=process.env.EVEJS_COOP_CODE_PATH;
+ if(!code)return t.skip('Needs authorized pinned EveJS Code checkout');
+ const fs=require('node:fs'),path=require('node:path');
+ const runtime=fs.readFileSync(path.join(code,'server/src/space/runtime.js'),'utf8');
+ const wreck=fs.readFileSync(path.join(code,'server/src/space/npc/nativeNpcWreckService.js'),'utf8');
+ const deathStart=runtime.indexOf('function applyWeaponDamageToTarget(');
+ assert.ok(deathStart>0,'native damage function missing');
+ const deathEnd=runtime.indexOf('\nfunction ',deathStart+1);
+ const method=runtime.slice(deathStart,deathEnd>deathStart?deathEnd:undefined);
+ assert.ok(method.indexOf('destroyCombatEntity(')>0,'native destruction missing');
+ assert.ok(method.indexOf('destroyCombatEntity(')<method.indexOf('return {\n    damageResult,'),'destruction must be synchronous');
+ const turretStart=runtime.indexOf('const shotResult = resolveTurretShot({');
+ assert.ok(turretStart>0);
+ const turret=runtime.slice(turretStart,turretStart+2300);
+ assert.ok(turret.indexOf('applyWeaponDamageToTarget(')>0);
+ assert.ok(turret.indexOf('noteKillmailDamage(')>turret.indexOf('applyWeaponDamageToTarget('));
+ const missiles=runtime.slice(runtime.indexOf('const impactResult = resolveMissileAppliedDamage('));
+ assert.ok(missiles.indexOf('noteKillmailDamage(')>missiles.indexOf('applyWeaponDamageToTarget('));
+ const remove=wreck.indexOf('const removeResult = spaceRuntime.removeDynamicEntity(');
+ const spawn=wreck.indexOf('const wreckSpawnResult = spawnNativeWreck(');
+ assert.ok(remove>0&&spawn>remove,'native NPC wreck must exist after ship removal');
+});
