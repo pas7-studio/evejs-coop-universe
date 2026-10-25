@@ -166,3 +166,71 @@ declare multi-device support verified.
 
 This tunnel is an interim test approach, not a production remote
 network architecture or permission to redistribute proprietary clients.
+
+## Exact runbook: ProtonVPN forwarded port (current path to try)
+
+Model B from the table above. Only SSH is published; the game stays on
+`127.0.0.1`. Substitute the real addresses before running anything.
+
+### Friend, before anything (VPN off, plain home internet)
+
+```powershell
+# his own public IP - send it to the host
+(Invoke-WebRequest https://ifconfig.me/ip -UseBasicParsing).Content.Trim()
+
+# one-time key (press Enter twice for an empty passphrase)
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\coop_ed25519"
+
+# send the single line of this file to the host
+Get-Content "$env:USERPROFILE\.ssh\coop_ed25519.pub"
+```
+
+The friend must **not** be connected to any VPN: the host firewall rule is
+scoped to his real home address, and a VPN exit address will not match.
+
+### Host, once, elevated
+
+```powershell
+.\scripts\Setup-Friend-Host.ps1 -Apply -ListenPort 36933 `
+  -AllowedSourceIp <friend home ip> `
+  -FriendPublicKeyFile C:\path\coop_ed25519.pub
+```
+
+Prerequisites: ProtonVPN connected to a P2P server with port forwarding
+enabled (the client shows one port, `36933` here). sshd must listen on that
+same number because the forward maps the public port to the same local port.
+If the VPN reconnects and the port changes, re-run with the new `-ListenPort`.
+
+### Friend, connect
+
+```powershell
+# accept the host key once (verify the fingerprint with the host out of band)
+ssh -p 36933 -o StrictHostKeyChecking=accept-new <hostuser>@<vpn public ip> exit
+
+# keep this window open while playing
+.\scripts\Start-Friend-Tunnel.ps1 -Action Start -HostVpnIPv4 <vpn public ip> `
+  -SshPort 36933 -SshUser <hostuser> `
+  -IdentityFile "$env:USERPROFILE\.ssh\coop_ed25519" -AllowPublicPeer
+
+# second window: five ports + proxy health
+.\scripts\Start-Friend-Tunnel.ps1 -Action Verify
+```
+
+### Then
+
+1. Host: `.\scripts\Local-Two-Client-Test.ps1 -Action CoopStart -NpcSystemID 30000142`
+2. Friend: launch his own `Play.bat` and log in with a **different** account.
+   His own EveJS server/Docker must be stopped.
+3. If the client reports a certificate error, import the host CA (public file,
+   no key) and retry:
+   `Import-Certificate -FilePath .\xmpp-ca-cert.pem -CertStoreLocation Cert:\CurrentUser\Root`
+4. Host: `.\scripts\Local-Two-Client-Test.ps1 -Action Publish -Note "friend login result" -Next "..."`
+
+### Honest limits
+
+- Verified so far: script behaviour and refusals (public peers, open ports),
+  not a real remote login through this tunnel.
+- Only SSH is exposed, restricted to one source address, key-only.
+- `26000`, `26001`, `26002`, `26003`, `443`, `5222` stay on `127.0.0.1`.
+- If Proton cannot forward the port, this path is dead and the alternatives
+  are a mesh VPN with endpoint advertisement (blocked by COOP-012) or nothing.

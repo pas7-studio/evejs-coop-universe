@@ -1,16 +1,16 @@
 {
-  "updatedAt": "2026-10-25T13:06:39.405Z",
-  "runId": "20261025-130639",
+  "updatedAt": "2026-10-25T13:36:25.592Z",
+  "runId": "20261025-133625",
   "files": [
     {
       "path": "state/NOW.md",
-      "bytes": 674,
-      "sha256": "e2e11b7985fdaf9ca92261fbb03131b2e084215fc098a763beff4142fe568022"
+      "bytes": 723,
+      "sha256": "cea6901509a1d97f48a03151be6a2463d60d485cfad896a99c8b087ea6f1be13"
     },
     {
       "path": "state/status.json",
-      "bytes": 3073,
-      "sha256": "cf1887a246464d5a1d0c8c448552de8b2cbb4b7b1861ca9b5a344d9c456ab8b9"
+      "bytes": 3137,
+      "sha256": "4c787679bf43867440489f86614bce8984e531e062c95012bc310b631396a654"
     },
     {
       "path": "state/ledger.json",
@@ -18,9 +18,9 @@
       "sha256": "f6e7ab954b34c0f6da7317441c420ad1653f1e516bdccd82e46d5cb152df6377"
     },
     {
-      "path": "state/digests/20261025-130639.md",
-      "bytes": 1959,
-      "sha256": "4e1b393e6946f67be8e104245a30355fa3efaf75919d6b9f03bbe9d24e3ca136"
+      "path": "state/digests/20261025-133625.md",
+      "bytes": 2022,
+      "sha256": "60bf229576839774ace2352939c43e30817ff8d0e51b8dff3249f12fee5382a7"
     }
   ]
 }

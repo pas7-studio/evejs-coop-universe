@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-10-25T13:06:39.405Z",
-  "runId": "20261025-130639",
-  "projectRev": "9a217602784e140ff3bbb35f75f1f9521685a164",
+  "updatedAt": "2026-10-25T13:36:25.592Z",
+  "runId": "20261025-133625",
+  "projectRev": "27c246934585c75404b1d96d60f79eb338038322",
   "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
-  "note": "real client gamelogs captured; client undocked 12:59:15",
-  "next": "one-client visual NPC confirmation, then two clients",
+  "note": "friend-PC runbook committed (Proton forwarded port + SSH tunnel)",
+  "next": "host runs Setup-Friend-Host -Apply with the friend public IP and key, then friend connects",
   "tests": {
     "status": "BASELINE_MATCH",
     "totals": {
@@ -31,25 +31,25 @@
     "problems": []
   },
   "server": {
-    "rows": 498,
+    "rows": 1027,
     "firstAt": "2026-10-25T12:31:47.927Z",
-    "lastAt": "2026-10-25T13:06:13.749Z",
+    "lastAt": "2026-10-25T13:35:59.063Z",
     "types": {
-      "living-native-activity": 130,
-      "living-world-topology": 42,
-      "living-native-industry": 42,
-      "living-native-materialization-attempt": 42,
-      "virtual-world-materialization": 42,
-      "virtual-faction-patrol": 42,
-      "virtual-world-presence": 42,
+      "living-native-activity": 272,
+      "living-world-topology": 92,
+      "living-native-industry": 92,
+      "living-native-materialization-attempt": 92,
+      "virtual-world-materialization": 92,
+      "virtual-faction-patrol": 92,
+      "virtual-world-presence": 92,
       "living-native-combat-damage": 42,
-      "living-npc-tactical-event": 13,
-      "virtual-world-identity-projected": 8,
-      "living-native-system-site-readiness": 8,
-      "living-headless-boot-system": 8,
-      "living-pirate-raid": 6,
-      "living-startup-entered": 4,
-      "living-headless-boot-requested": 4
+      "virtual-world-identity-projected": 23,
+      "living-native-system-site-readiness": 21,
+      "living-headless-boot-system": 21,
+      "virtual-faction-patrol-route": 17,
+      "living-npc-tactical-event": 15,
+      "living-pirate-raid": 12,
+      "living-native-mining-startup-slot": 10
     },
     "truncatedTypes": 13,
     "error": null
@@ -85,7 +85,7 @@
     }
   ],
   "gates": {
-    "telemetry": "events 498",
+    "telemetry": "events 1027",
     "client": "logs 3 file(s)"
   },
   "ledgerSummary": {
