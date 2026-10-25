@@ -16,7 +16,7 @@ function createLootCommerce({root,store,sceneForSystem,getController,getStation,
   !Number.isInteger(maxShips)||maxShips<1||maxShips>20||
   !Number.isInteger(commandCooldownMs)||commandCooldownMs<30000)
   throw Error("INVALID_LOOT_COMMERCE_CONFIG");
- const leases=new Map();
+ const leases=new Map(),stationReady=new Map();
  function verifiedCargo({pilotID,entityID,cargo}={}){
   const entity=id(entityID),cargoID=id(cargo?.cargoID);
   const sourceID=id(cargo?.sourceWreckItemID),wreckID=id(cargo?.sourceWreckID);
@@ -99,10 +99,13 @@ function createLootCommerce({root,store,sceneForSystem,getController,getStation,
     expiresAt:now+commandCooldownMs+30000});
    processed++;
    if(d<=5000){
-    ready.push({pilotID,entityID,systemID,stationID:Number(station.itemID),
-     cargoIDs:cargo.map(x=>Number(x.cargoID)),status:"PHYSICALLY_AT_NATIVE_STATION"});
+    const evidence={pilotID,entityID,systemID,stationID:Number(station.itemID),
+     cargoIDs:cargo.map(x=>Number(x.cargoID)),status:"PHYSICALLY_AT_NATIVE_STATION"};
+    stationReady.set(key,{...evidence,expiresAt:now+45000});
+    ready.push(evidence);
     continue;
    }
+   stationReady.delete(key);
    if(last.nextOrderAt>now)continue;
    const warpRequired=d>250000;
    let result;
@@ -117,6 +120,7 @@ function createLootCommerce({root,store,sceneForSystem,getController,getStation,
      cargoIDs:cargo.map(x=>Number(x.cargoID)),iskCredited:false});
   }
   for(const [key,l] of leases)if(l.expiresAt<now)leases.delete(key);
+  for(const [key,l] of stationReady)if(l.expiresAt<now)stationReady.delete(key);
   return {status:"OK",orders,ready};
  }
  function activeIDs(systemID){
@@ -126,6 +130,20 @@ function createLootCommerce({root,store,sceneForSystem,getController,getStation,
    lease.expiresAt>=now)result.add(lease.entityID);
   return result;
  }
- return {stock,verifiedCargo,tick,activeIDs};
+ function readyFor({pilotID,entityID,systemID,stationID,cargoID}={}){
+  const ship=id(entityID),sys=id(systemID),station=id(stationID),cargo=id(cargoID);
+  if(!ship||!sys||!station||!cargo||!named(pilotID))return false;
+  const entry=stationReady.get(sys+":"+ship);
+  if(!entry||entry.expiresAt<clock()||entry.pilotID!==pilotID||
+   entry.stationID!==station||!entry.cargoIDs.includes(cargo))return false;
+  const live=sceneForSystem(sys)?.getEntityByID?.(ship);
+  const scene=sceneForSystem(sys);
+  const target=scene?.staticEntities?.find(p=>p.kind==="station"&&
+   Number(p.itemID)===station&&vec(p.position));
+  if(!live||live.nativeNpc!==true||!vec(live.position)||!target||
+   dist(live.position,target.position)>5000)return false;
+  return stock({pilotID,entityID:ship}).some(c=>Number(c.cargoID)===cargo);
+ }
+ return {stock,verifiedCargo,tick,activeIDs,readyFor};
 }
 module.exports={createLootCommerce};
