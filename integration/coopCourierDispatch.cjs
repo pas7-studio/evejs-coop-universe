@@ -90,6 +90,11 @@ function evaluateContract(contract, policy, context) {
   }
   const startSystemID = Number(contract.startSolarSystemID) || 0;
   const endSystemID = Number(contract.endSolarSystemID) || 0;
+  // Two unknown systems (0 and 0) are equal, which would silently look like a
+  // same-system contract. Refuse instead of guessing.
+  if (!positive(startSystemID) || !positive(endSystemID)) {
+    return status("REFUSED_UNKNOWN_SYSTEM", { contractID, startSystemID, endSystemID });
+  }
   if (rules.sameSystemOnly && startSystemID !== endSystemID) {
     return status("NEEDS_GATE_TRAVEL", { contractID, startSystemID, endSystemID });
   }

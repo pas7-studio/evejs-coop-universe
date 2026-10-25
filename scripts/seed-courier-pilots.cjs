@@ -18,7 +18,9 @@ const DB = process.env.EVEJS_DB || "/var/lib/evejs/gameStore/gamestore.sqlite";
 const APPLY = process.argv.includes("--apply");
 const FIRST_CHARACTER_ID = 140000100;
 const FIRST_ACCOUNT_ID = 900;
-const FIRST_ITEM_ID = 9988400100000;
+// Item IDs are allocated above the highest one that already exists, so a
+// seeded ship can never collide with an item the server creates later.
+const ITEM_ID_HEADROOM = 1000;
 
 // systemID -> hull. Freighter in Jita first, because that is where the owner's
 // 29 500 m3 contract waits.
@@ -64,10 +66,23 @@ const db = new DatabaseSync(DB, { readOnly: !APPLY });
 const template = db.prepare("SELECT json FROM characters ORDER BY key LIMIT 1").get();
 if (!template) fail("no template character to clone");
 const base = JSON.parse(template.json);
-const existing = new Set(db.prepare("SELECT key FROM characters").all().map((row) => row.key));
+const existingRows = db.prepare("SELECT key, json FROM characters").all();
+const existing = new Set(existingRows.map((row) => row.key));
+// Idempotent by pilot name: re-running must never duplicate a courier.
+const existingNames = new Set(existingRows.map((row) => { try { return String(JSON.parse(row.json).characterName || ""); } catch (_error) { return ""; } }));
+const pending = PLAN.filter((entry) => !existingNames.has(entry.name));
+if (pending.length !== PLAN.length) {
+  console.log(`skipping ${PLAN.length - pending.length} pilot(s) that already exist`);
+}
+if (!pending.length) {
+  console.log("nothing to seed; every planned courier already exists");
+  process.exit(0);
+}
 const accounts = db.prepare("SELECT * FROM accounts").all();
 const nextAccount = Math.max(FIRST_ACCOUNT_ID, ...accounts.map((row) => Number(JSON.parse(row.json).id) || 0)) + 1;
 const stationRows = Object.values(loadSeedTable("stations"));
+const highestItemID = Number(db.prepare("SELECT MAX(CAST(key AS INTEGER)) m FROM items").get().m) || 0;
+const FIRST_ITEM_ID = highestItemID + ITEM_ID_HEADROOM;
 const types = loadSeedTable("itemTypes");
 
 function stationFor(systemID) {
@@ -86,7 +101,7 @@ const work = [];
 let characterID = FIRST_CHARACTER_ID;
 let itemID = FIRST_ITEM_ID;
 let accountID = nextAccount;
-for (const entry of PLAN) {
+for (const entry of pending) {
   while (existing.has(String(characterID))) characterID += 1;
   const station = stationFor(entry.systemID);
   const hull = typeInfo(types, entry.hullName);

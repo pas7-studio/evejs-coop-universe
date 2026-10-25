@@ -179,3 +179,9 @@ test('a ship owned by somebody else is never flown',()=>{
  assert.equal(result.status,'REFUSED_SHIP_NOT_OWNED');
  assert.equal(result.shipOwnerID,140000005);
 });
+
+test('a contract without real solar systems is refused, never treated as same-system',()=>{
+ const unknown=evaluateContract(courier({startSolarSystemID:0,endSolarSystemID:0}),{},{hullCapacityM3:4800});
+ assert.equal(unknown.status,'REFUSED_UNKNOWN_SYSTEM');
+ assert.equal(evaluateContract(courier({startSolarSystemID:30000144,endSolarSystemID:0}),{},{hullCapacityM3:4800}).status,'REFUSED_UNKNOWN_SYSTEM');
+});

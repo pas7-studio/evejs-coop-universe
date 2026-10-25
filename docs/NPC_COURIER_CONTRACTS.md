@@ -265,8 +265,10 @@ character has no history, and the journal is empty on purpose rather than
 invented. If the owner wants couriers funded only from real work, the grant
 must be replaced by a real transfer from the co-op economy ledger.
 
-`scripts/seed-courier-pilots.cjs` is idempotent per run (new IDs each time,
-existing IDs skipped) and dry-run by default. It must be applied with the
+`scripts/seed-courier-pilots.cjs` is idempotent **by pilot name** - a re-run
+skips every courier that already exists instead of duplicating it - allocates
+item IDs above the highest existing ID so a seeded ship can never collide with
+an item the server creates later, and is dry-run by default. It must be applied with the
 server stopped, in a one-off container that mounts `evejs-data`, because the
 live server keeps gameStore tables in a write cache.
 
