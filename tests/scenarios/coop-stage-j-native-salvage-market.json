@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "feature": "Stage J original NPC salvage native Rust market",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Authorized disposable copy of persistent evejs-data and pinned EveJS upstream",
+    "Actual Rust daemon patched with verified pending NPC order endpoints",
+    "Original NPC wreck, legally collected native NPC cargo, verified corporation warehouse item and durable receipt",
+    "Trusted native price source, original real NPC corporation and station",
+    "No GitHub Actions"
+  ],
+  "scenarios": [
+    {
+      "id": "SJ-MARKET-01",
+      "name": "Original salvage to real pending corporate sell order",
+      "expected": "One original station item moved to native escrow; Rust order transitions pending to open, same itemID and corp owner; no ISK minted"
+    },
+    {
+      "id": "SJ-MARKET-02",
+      "name": "Buyer fills listed salvage order",
+      "expected": "Real Rust matching, item conservation and verified actual NPC corporation wallet sale receipt, no synthetic credit"
+    },
+    {
+      "id": "SJ-MARKET-03",
+      "name": "Replay same wreck listing",
+      "expected": "No second Reserve RPC, no duplicate escrow order or item; original durable one-shot intent inspected"
+    },
+    {
+      "id": "SJ-MARKET-04",
+      "name": "Source item mutated between quote and escrow",
+      "expected": "Rust pending order may remain pending but no item transfer, activation or duplicate retry; reconciliation required"
+    },
+    {
+      "id": "SJ-MARKET-05",
+      "name": "Original NPC pickup/corporation proof missing",
+      "expected": "No reserve RPC, GameStore stock remains unchanged"
+    },
+    {
+      "id": "SJ-MARKET-06",
+      "name": "Forged duplicate native item with same provenance marker",
+      "expected": "No pending sale, ambiguous originals fail closed"
+    },
+    {
+      "id": "SJ-MARKET-07",
+      "name": "Original cargo duplicated in NPC hold and station inventory",
+      "expected": "No pending sale, original source custody violation"
+    },
+    {
+      "id": "SJ-MARKET-08",
+      "name": "Reserve RPC ACK lost after Rust commit",
+      "expected": "One durable PREPARED record; no blind second reserve; reconcile by deterministic operationID"
+    },
+    {
+      "id": "SJ-MARKET-09",
+      "name": "Native SQLite transaction fails after Rust pending ACK",
+      "expected": "No sale activation, no duplicated item; operator reconciles pending Rust order with native rows"
+    },
+    {
+      "id": "SJ-MARKET-10",
+      "name": "Activate RPC ACK lost after native escrow commit",
+      "expected": "One item in native escrow, no second reserve/activation until read-only Rust reconciliation"
+    },
+    {
+      "id": "SJ-MARKET-11",
+      "name": "Partial buyer fill before post-activation readback",
+      "expected": "No false LISTED/SOLD or wallet credit; match original order, actual native wallet and remaining escrow"
+    },
+    {
+      "id": "SJ-MARKET-12",
+      "name": "Two NPC salvagers race to sell same original wreck stock",
+      "expected": "Native GameStore durable operation and exact stock prevent two listings"
+    },
+    {
+      "id": "SJ-MARKET-13",
+      "name": "Feature flags default OFF",
+      "expected": "No native Rust market RPC or wallet/inventory mutation"
+    },
+    {
+      "id": "SJ-MARKET-14",
+      "name": "Restart and native order recovery",
+      "expected": "Reconcile original stored operation, Rust pending/open order, marketEscrow, item custody, actual fills and wallet before new trade"
+    },
+    {
+      "id": "SJ-MARKET-15",
+      "name": "Pinned overlay roundtrip",
+      "expected": "All registered source modules copied once; original pinned server restored exactly on rollback"
+    }
+  ]
+}

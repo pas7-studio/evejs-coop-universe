@@ -13,6 +13,10 @@ names.splice(names.indexOf("coopNpcFireOutcomeWitness")+1,0,"coopEconomyDestinat
 names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
+// Stage J: ship the already-used physical rival warehouse module and the
+// existing native pending-order dependency together with opt-in salvage seller.
+names.splice(names.indexOf("coopSalvageNpcRivals")+1,0,
+ "coopSalvageNpcStationDelivery","coopNpcPendingMarketEscrow","coopSalvageNpcPendingMarket");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
 // ALIFE-08 durable native miner/hauler identity (opt-in).
