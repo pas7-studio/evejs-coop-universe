@@ -4,8 +4,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {createRequire} from "node:module";
-import {auditBanks} from "../scripts/audit-npc-ammo-banks.cjs";
 const require=createRequire(import.meta.url);
+const {auditBanks}=require("../scripts/audit-npc-ammo-banks.cjs");
 const {createAtomicAmmoBank,inspectShip,gate}=require("../integration/coopNpcAmmoBankAtomic.cjs");
 
 const SEP="\u001f";
