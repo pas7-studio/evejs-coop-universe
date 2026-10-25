@@ -182,3 +182,60 @@ test("forged incomplete outcome cannot unblock a bank even when kind and boundar
   }
  },{outcome:{kind:"TURRET_RESOLVED",boundaryMs:1000}});
 });
+
+function checkPriorBankFence({dropJournal=false,dropFence=false,staleBoundary=false}={}){
+ fixture(f=>{
+  assert.equal(f.record({entity,whenMs:1000,kind:"TURRET_RESOLVED",hit:false}).ok,true);
+  if(dropJournal)fs.unlinkSync(f.file); // disposable fixture ONLY
+  const previous=process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS="1";
+  try{
+   const sep="\u001f";
+   const state={
+    npcEntities:{["entities"+sep+"101"]:{entityID:101,ownerID:900,systemID:30000144}},
+    npcModules:{["modules"+sep+"401"]:{moduleID:401,entityID:101,ownerID:900,
+      typeID:123,categoryID:7,flagID:27}},
+    npcCargo:{cargo:{"501":{cargoID:501,entityID:101,ownerID:900,
+      moduleID:401,typeID:35,categoryID:8,quantity:4}}}
+   };
+   if(!dropFence)state.npcCargo.coopAmmoCycles_101={
+    version:1,entityID:101,modules:{"401":staleBoundary?999:1000}};
+   let transactions=0,writes=0;
+   const bank=createAtomicAmmoBank({
+    root:f.root,
+    atomicRows:{transact(_tables,callback){
+     transactions++;
+     return callback({get:(table,key)=>state[table][key]??null,
+      put(){writes++;throw Error("WRITES_FORBIDDEN_WHEN_PRIOR_PROOF_MISMATCH");}});
+    }},
+    store:{listNativeCargoForEntity:()=>Object.values(state.npcCargo.cargo)},
+    compatible:()=>true,clock:()=>3000
+   });
+   const fired=bank.consume({
+    entity:{...entity,nativeCargoItems:[{itemID:501,quantity:4,stacksize:4}]},
+    entries:[{moduleItem:{itemID:401,flagID:27,typeID:123},
+      chargeItem:{itemID:501,typeID:35,quantity:4}}],
+    whenMs:1100
+   });
+   assert.equal(fired.success,false);
+   assert.equal(fired.errorMsg,"BANK_ATOMIC_TRANSACTION_UNCERTAIN");
+   assert.equal(transactions,1,"test must reach authoritative SQLite proof");
+   assert.equal(writes,0,"no native cargo may change");
+   assert.equal(state.npcCargo.cargo["501"].quantity,4);
+   assert.equal(fs.existsSync(f.file+".lock"),true,
+     "unresolved state must retain the writer lock");
+  }finally{
+   if(previous===undefined)delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+   else process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=previous;
+  }
+ });
+}
+test("new empty POSIX root cannot bypass an existing authoritative SQLite prior debit",()=>{
+ checkPriorBankFence({dropJournal:true});
+});
+test("forged attested POSIX receipt without corresponding SQLite fence cannot debit",()=>{
+ checkPriorBankFence({dropFence:true});
+});
+test("stale SQLite boundary cannot validate a later attested POSIX bank receipt",()=>{
+ checkPriorBankFence({staleBoundary:true});
+});
