@@ -129,7 +129,27 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
   if(!enabled())return blocked("DISABLED");
   const current=read(manifestKey);
   if(current.status!=="READY")return current;
-  if(current.phase==="DELIVERED")return blocked("FLIGHT_DELIVERY_ALREADY_RECORDED");
+  if(current.phase==="DELIVERED"){
+   // Crash after fsynced terminal commit but before native station ACK:
+   // re-reading the SAME physical trip/proof is idempotent and cannot
+   // generate cargo, corporate debits or a second delivery event.
+   const b=current.booking,p=current.delivery?.nativeFullManifestProof;
+   if(trip?.manifestID!==manifestKey||trip.systemID!==b.systemID||
+    trip.fleetID!==b.fleetID||trip.stationID!==b.stationID||
+    trip.corporationID!==b.corporationID||
+    !equal(Object.keys(trip.haulers||{}).map(Number),[b.haulerID])||
+    terminalProof?.status!=="DELIVERED"||terminalProof.terminal!==true||
+    terminalProof.nativeFullManifestProof?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED"||
+    terminalProof.nativeFullManifestProof?.key!==manifestKey||
+    terminalProof.nativeFullManifestProof?.stationID!==p?.stationID||
+    !equal(terminalProof.nativeFullManifestProof?.haulerIDs,[b.haulerID])||
+    !equal(terminalProof.nativeFullManifestProof?.cargoIDs,p?.cargoIDs)||
+    terminalProof.nativeFullManifestProof?.stacks!==p?.stacks||
+    terminalProof.nativeFullManifestProof?.quantity!==p?.quantity)
+    return blocked("FLIGHT_DELIVERY_REPLAY_IDENTITY_CONFLICT");
+   return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey,
+    replayed:true};
+  }
   if(current.phase!=="FUNDED")return blocked("FLIGHT_NOT_FUNDED");
   const b=current.booking;
   if(trip?.manifestID!==manifestKey||trip.systemID!==b.systemID||
@@ -223,6 +243,43 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
    return blocked("FLIGHT_AUDIT_WAREHOUSE_MISMATCH");
   return JSON.parse(JSON.stringify(state.delivery));
  }
- return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery,readNativeDeliveryForAudit};
+
+ // Disk-backed recovery enumeration. NEVER treats directory presence as proof
+ // of payment or of delivery: each candidate is fully replay-verified by read.
+ // An unreadable/ambiguous journal poisons the WHOLE pass (no partial payout).
+ function listDelivered({systemID=null,maxTrips=64}={}){
+  if(systemID!==null&&!pos(systemID))return blocked("FLIGHT_SCAN_SYSTEM_INVALID");
+  if(!Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>64)
+   return blocked("FLIGHT_SCAN_LIMIT_INVALID");
+  let files;
+  try{files=io.readdirSync(dir)}
+  catch(e){return e?.code==="ENOENT"?{status:"READY",manifestKeys:[]}:
+   blocked("FLIGHT_SCAN_READ_UNAVAILABLE")}
+  if(!Array.isArray(files)||files.length>512)
+   return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
+  const names=files.filter(x=>typeof x==="string"&&
+   /^\d+-\d+-\d+\.jsonl$/.test(x)).sort();
+  if(names.length>512)return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
+  const found=[];
+  for(const name of names){
+   const full=path.join(dir,name);
+   // No following an operator-created symlink into another live file.
+   let fileInfo;
+   try{fileInfo=io.lstatSync(full)}
+   catch{return blocked("FLIGHT_SCAN_METADATA_UNAVAILABLE")}
+   if(!fileInfo||fileInfo.isSymbolicLink()||!fileInfo.isFile())
+    return blocked("FLIGHT_SCAN_NONREGULAR_JOURNAL");
+   const key=name.slice(0,-6);
+   const state=read(key);
+   if(state.status!=="READY")
+    return blocked("FLIGHT_SCAN_UNVERIFIED_JOURNAL");
+   if(state.phase!=="DELIVERED")continue;
+   if(systemID!==null&&state.booking.systemID!==systemID)continue;
+   if(found.length>=maxTrips)return blocked("FLIGHT_SCAN_RESULT_CAP_EXCEEDED");
+   found.push(key);
+  }
+  return {status:"READY",manifestKeys:found};
+ }
+ return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery,readNativeDeliveryForAudit,listDelivered};
 }
 module.exports={createEscortFlightGate};
