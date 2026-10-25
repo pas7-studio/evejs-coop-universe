@@ -47,6 +47,30 @@ test("unknown and invalid standing rules fail closed, never grant items",()=>{
   standingRuntime:{getCharacterEffectiveStanding:()=>null}}).ok,false);
 });
 
+test("native LP Store bounds batch quantity without fake grants or wallet writes",()=>{
+ const fixture=[
+  '  INVALID_STORE: "That LP store is not available.",',
+  '  OFFER_NOT_FOUND: "That offer is no longer available.",',
+  '  const normalizedNumberOfOffers = normalizeStaticOfferQuantity(numberOfOffers, 1);',
+  '  if (normalizePositiveInteger(offer.akCost, 0) > 0) {'
+ ].join("\n");
+ const patched=patch(fixture,"server/src/services/evermarks/lpStoreMgrService.js");
+ const start=patched.indexOf("  const normalizedNumberOfOffers = ");
+ const end=patched.indexOf("  if (normalizePositiveInteger(offer.akCost",start);
+ assert.ok(start>=0&&end>start);
+ const execute=new Function("numberOfOffers","normalizeStaticOfferQuantity","process",
+  "offer","characterID","normalizedCorpID","require",
+  patched.slice(start,end)+"return { success: true };");
+ const invoke=value=>execute(value,x=>Number.isInteger(Number(x))&&Number(x)>0?Number(x):1,
+  {env:{EVEJS_COOP_LP_STANDING_REQUIREMENTS:"0"}},null,777,100,
+  ()=>{throw Error("Standing gate must stay off in quantity-only check");});
+ assert.equal(invoke(1).success,true);
+ assert.equal(invoke(100).success,true);
+ assert.deepEqual(invoke(101),{success:false,errorMsg:"INVALID_STATIC_OFFER_QUANTITY"});
+ assert.deepEqual(invoke(Number.MAX_SAFE_INTEGER+1),
+  {success:false,errorMsg:"INVALID_STATIC_OFFER_QUANTITY"});
+});
+
 test("native LP Store adapter only guards pre-debit section, preserves stock refund",t=>{
  if(!native){t.skip("Set EVEJS_COOP_CODE_PATH for pinned source");return;}
  const file="server/src/services/evermarks/lpStoreMgrService.js";
