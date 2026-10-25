@@ -364,3 +364,29 @@ package item actually follows the ship. That is a live experiment, not a unit
 test, and it must be done in a fresh session with the owner watching - a blind
 change here touches ship ownership and could strand the owner's contract with
 collateral escrowed.
+
+## Native driver (landed, not yet run live)
+
+`integration/coopCourierFlightDriver.cjs` performs one native call per step and
+refuses to act on a half-wired server:
+
+- `preflight(ctx)` returns the exact missing capabilities
+  (`transitions.undockSession`, `transitions.dockSession`,
+  `space.warpToPoint`, `space.getShipEntityForCharacter`) and nothing runs
+  without all four;
+- `buildCourierSession(character, stationID)` is an **identity object only** -
+  `characterID`, `locationid`, `_transitionState`, and deliberately no
+  `sendNotification`. It is never registered in the session registry, which is
+  the leak we wanted to avoid; `undockSession`/`dockSession` only read it, and
+  `beginTransition` merely stores `session._transitionState`;
+- `warp` requires a real station position and a ship that is actually in space
+  (`getShipEntityForCharacter`), so it cannot fly an item that is still in a
+  hangar;
+- every failure path is explicit: `FAILED` for a refused native call,
+  `AMBIGUOUS` for a thrown one, and never a retry.
+
+7 tests pass against a fake runtime. What is still unproven is the geometry and
+the ordering on a live scene: that a courier ship created from a hangar item is
+reachable by `getShipEntityForCharacter`, that the warp lands close enough for
+`dockSession`, and that the sealed package item follows the ship into the
+destination hangar.
