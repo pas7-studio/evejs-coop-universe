@@ -6,19 +6,43 @@ param(
   [string]$HostVpnIPv4,
   [string]$SshUser,
   [int]$SshPort=22,
-  [string]$IdentityFile=''
+  [string]$IdentityFile='',
+  # VPN meshes other than Tailscale use their own private addressing
+  # (Radmin 26/8, Hamachi 25/8, ...). Public peer addresses are never allowed.
+  [string[]]$ExtraPeerRanges=@()
 )
 $ErrorActionPreference='Stop'
+$privateRanges=@('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16','100.64.0.0/10')+$ExtraPeerRanges
+function Test-CidrMatch([byte[]]$Bytes,[string]$Cidr){
+  $parts=$Cidr.Split('/')
+  if($parts.Count -ne 2){throw "Invalid CIDR: $Cidr"}
+  $net=$null
+  if(-not [System.Net.IPAddress]::TryParse($parts[0],[ref]$net)){throw "Invalid CIDR address: $Cidr"}
+  $prefix=[int]$parts[1]
+  if($prefix -lt 0 -or $prefix -gt 32){throw "Invalid CIDR prefix: $Cidr"}
+  $nb=$net.GetAddressBytes()
+  if($nb.Length -ne 4){throw "IPv4 only: $Cidr"}
+  for($i=0;$i -lt 4;$i++){
+    $bits=[Math]::Max(0,[Math]::Min(8,$prefix-$i*8))
+    if($bits -eq 0){break}
+    $mask=[byte]((0xFF -shl (8-$bits)) -band 0xFF)
+    if(($Bytes[$i] -band $mask) -ne ($nb[$i] -band $mask)){return $false}
+  }
+  return $true
+}
 if($Action -ne 'Verify'){
 if(-not $SshUser -or -not $HostVpnIPv4){throw 'Provide -SshUser and -HostVpnIPv4 for Check or Start.'}
 if($SshUser -notmatch '^[A-Za-z0-9._-]{1,64}$'){throw 'SshUser must be an unambiguous SSH username.'}
 if($SshPort -lt 1 -or $SshPort -gt 65535){throw 'Invalid SSH port.'}
-# Opt-in overlay is intentionally restricted to Tailscale's IPv4 CGNAT range.
+# The tunnel peer must be reachable only over a private VPN address.
 $addr=$null
 if(-not [System.Net.IPAddress]::TryParse($HostVpnIPv4,[ref]$addr)){throw 'Invalid host VPN IPv4 address.'}
 $octets=$addr.GetAddressBytes()
-if($octets.Length -ne 4 -or $octets[0] -ne 100 -or $octets[1] -lt 64 -or $octets[1] -gt 127){
-  throw 'HostVpnIPv4 must be a verified Tailscale-range 100.64.0.0/10 address. No public-IP forwarding.'
+if($octets.Length -ne 4){throw 'HostVpnIPv4 must be IPv4.'}
+$allowed=$false
+foreach($range in $privateRanges){ if(Test-CidrMatch $octets $range){$allowed=$true;break} }
+if(-not $allowed){
+  throw ("HostVpnIPv4 $HostVpnIPv4 is not a private/VPN address. Allowed: " + ($privateRanges -join ', ') + ". For another mesh pass -ExtraPeerRanges <cidr>. No public-IP forwarding.")
 }
 if($IdentityFile -and -not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)){throw "Missing SSH identity key: $IdentityFile"}
 }
@@ -54,7 +78,7 @@ foreach($port in $ports){
   }
 }
 Write-Host '[CHECK] Required client-side localhost ports are available.'
-Write-Host '[CHECK] VPN address syntax is Tailscale-range; independently verify the peer identity and SSH host key.'
+Write-Host ('[CHECK] Peer ' + $HostVpnIPv4 + ' is inside an allowed private/VPN range; independently verify the peer identity and SSH host key.')
 Write-Host '[CHECK] This does not prove an EVE client can connect or that the host is authorized.'
 if($Action -eq 'Check'){return}
 $argsList=@('-N','-T','-4',

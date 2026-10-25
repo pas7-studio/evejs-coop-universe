@@ -70,6 +70,35 @@ cd C:\Games\EveCoopProject
 .\scripts\Start-Friend-Tunnel.ps1 -Action Start -HostVpnIPv4 100.101.102.103 -SshUser coopguest -IdentityFile "$env:USERPROFILE\.ssh\id_ed25519"
 ```
 
+### Any P2P VPN, not only Tailscale
+
+The tunnel only needs a private IP route between the two PCs; it does not care
+which VPN product provides it. Allowed peer addresses are `10.0.0.0/8`,
+`172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` (Tailscale CGNAT). A mesh
+with its own range (for example Radmin `26.0.0.0/8`) must be declared
+explicitly, and public addresses are always refused:
+
+```powershell
+.\scripts\Start-Friend-Tunnel.ps1 -Action Check -HostVpnIPv4 26.14.7.9 -SshUser coopguest -ExtraPeerRanges '26.0.0.0/8'
+```
+
+Host side, once (read-only by default):
+
+```powershell
+.\scripts\Prepare-Friend-Access.ps1                                  # report only
+.\scripts\Prepare-Friend-Access.ps1 -Apply -FriendAddress <friend vpn ip> -FriendPublicKeyFile <his key.pub>
+```
+
+That enables OpenSSH Server, starts it, and creates one inbound firewall rule
+scoped to the friend's VPN address. It never publishes an EveJS port: `26000`,
+`26001`, `26002`, `26003`, `443`, `5222` stay bound to `127.0.0.1`, and the
+script warns if any of them is not.
+
+Order of operations: host `CoopStart` → friend `Start-Friend-Tunnel -Action
+Start` → friend `-Action Verify` → friend launches his own authorized client and
+logs in with a **different** account. The friend must not run his own EveJS
+server while tunnelling (the ports would collide).
+
 **The IPv4 address and username above are examples; do not use them
 unchanged.** Leave the terminal open while playing. In **another** PowerShell
 window on the friend's PC, check the five tunnel ports and HTTP service:
