@@ -16,7 +16,7 @@ function fixture(fn){
   sourceKind:"cargo",sourceCargoID:5501,typeID:34,quantity:5,
   singleton:false,itemName:"Ore"}}},
   npcWrecks:{wrecks:{"8001":{wreckID:8001,systemID:30000144,sourceEntityID:901}}},
-  identityState:{nextItemID:100000},items:{}};
+  identityState:{nextItemID:100000},items:{},corporationRuntime:{}};
  const atomic={transact(names,fn){
   const copy=structuredClone(db);
   const tx={
@@ -36,6 +36,7 @@ function fixture(fn){
    stationID:60001,corporationID:10001,
    cargo:[{cargoID:5501,typeID:34,quantity:5}]}}),
   readOriginalWreckItem:()=>db.npcWreckItems.items["9001"]||null,
+  readMoveJournal:()=>db.corporationRuntime.coopSalvageMoves||null,
   listNativeItems:()=>Object.values(db.items),
   buildInventoryItem:spec=>spec,
   verifyPickupPresence:()=>({status:"LIVE_NATIVE_WRECK_PICKUP_VERIFIED",
