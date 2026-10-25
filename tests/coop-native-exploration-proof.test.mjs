@@ -57,6 +57,18 @@ test("incomplete, fake, duplicate or mismatched probe scan results cannot grant 
  assert.equal(authorize({session:a,locationID:systemID,resultID:"ABC-001",sites:ambiguous,nowMs:now}).ok,false);
 });
 
+test("native scanner ship ID fallbacks work only with an in-space session",()=>{
+ const legacy={characterID:101,activeShipID:91001,_space:{systemID}};
+ const complete=record({session:legacy,scanResult:scan(keyVal("ABC-001",1)),
+  origin:origin(),sites,nowMs:now});
+ assert.equal(complete.count,1);
+ assert.equal(authorize({session:legacy,locationID:systemID,resultID:"ABC-001",
+  sites,nowMs:now+1}).ok,true);
+ const docked={...legacy,_space:null};
+ assert.equal(authorize({session:docked,locationID:systemID,resultID:"ABC-001",
+  sites,nowMs:now+1}).ok,false);
+});
+
 test("receipt expires, requires same catalog target and ends on reconnect/system switch",()=>{
  const a=pilot();
  record({session:a,scanResult:scan(keyVal("ABC-001",1)),origin:origin(),sites,nowMs:now});
