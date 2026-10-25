@@ -115,6 +115,89 @@ Physical ship presence is NOT proof of motion, mining, combat or loot.
 Do not invent runtime PASS based on tests alone. No GitHub Actions or
 remote CI workflows may be created or executed.
 
+## Durable named NPC restart safety (P0)
+
+Read [docs/NATIVE_NPC_DURABILITY.md](docs/NATIVE_NPC_DURABILITY.md)
+for the *only* approved persistence/restart QA sequence. A durable named
+NPC uses persistent native EveJS entity/controller records, not just
+`coop-npc-links.json`. The original `transient:true` records
+were never on disk and must not be described as persistent.
+`EVEJS_COOP_DURABLE_NPC_SHIPS=1` is enabled only when an authorized
+manual `-LivingCoop` overlay deployment is performed.
+
+The pinned `nativeNpcStore` allocator patch prevents collisions between
+stock transient miners and newly durable NPC IDs. On startup,
+`coopNativeRestore` restores the same physical ID **before**
+identity pruning; any corrupt durable records halt this operation
+with `NEEDS_OPERATOR_REPAIR`. Only a matching native wreck in the
+persistent life ledger **after that exact ship was linked** permits
+natural clone recovery. Never wipe the registry, volume or data to
+force World PASS. The manual World report now includes
+`nativeDurableRecovery`; accepted restoration is **not** proof
+that a real client sees the NPC.
+
+## Current headless recovery rule
+
+A real EveJS scene with confirmed static topology is now tracked in
+`visitedSystems` even when `actualNamedNpcShips=0`. The periodic
+materialization/reconciliation phase must be allowed to retry native
+spawn without a logged-in human. **Never** call a tracked scene
+"successful gameplay" or create synthetic activity events.
+`coopHeadlessScenePolicy.cjs` reports if the startup fleet config
+really includes the chosen system and if actual belts exist.
+If Perimeter remains without a fleet, use
+`systemSiteReadiness.stockMiningStartup.status` and the precise
+`nativeMaterializerAttempt.spawnErrors` to fix the real first
+blocker. Do not run npm audit, reset Docker volumes or claim a
+backend-only pass proves NPC gameplay. Six policy unit tests plus
+World regression scenarios are included in the manual suite.
+
+## Current code changes — real visible and stable named NPCs
+
+Use the current `coopNpcPresentation`, `coopNpcMaterializer` and
+`coopNativeIndustry` tests. Native NPC naming must call
+`scene.broadcastSlimItemChanges`, not
+`sendSlimItemChangesToAllSessions`. Failed client notifications must
+be retried without double-spawning native ships.
+
+A successful native spawn followed by a failed identity-registry write
+must reuse its original physical ship on retry. Reject real player
+ships/static entities when counting named NPCs. `World` now reports
+`SPAWN_LIMIT_REACHED`, `NATIVE_SPAWN_THROW`,
+`IDENTITY_LINK_FAILED` with nativeReason, and
+`nativePresentationPending` if names could not be pushed to clients.
+If `headlessBootStatus` is null, compare `headlessAttemptCount`
+to determine whether the boot timer fired at all.
+
+Do not claim this is live gameplay PASS until the human tester shows
+the same named NPC in the actual client. No CI or network scan.
+
+## Immediate World gameplay blocker — real system mining, not generic SDE
+
+2026-10-25 owner test at `a087167` confirmed healthy live overlay and
+headless boot events. The first `World` run selected **Jita
+(30000142)** which has legitimately zero asteroid belts. **Use
+Perimeter (30000144) with real SDE belts for the mining World gate.**
+Do not fabricate scene belts or claim Jita must have a belt. A report
+with `physicalNpcShipAssignments=0` remains unverified independently.
+
+The new `World -WorldSystemID 30000144` report includes
+`systemSiteReadiness` and `nativeMaterializerAttempt.spawnErrors`,
+so test agents fix the *actual* next source failure, not random
+dependency issues. `DiagnoseWorld` now pipes the full multiline
+read-only shell script over stdin; it must not print only a header.
+Do not run npm audit, reinitialize market, delete volumes or run CI.
+
+## Current co-op code milestone: shared native fleet warp
+
+See `docs/COOP_FLEET_WARP.md`. The owner wants TWO playable clients,
+not extra virtual fleet mechanics. The new opt-in native EveJS follower
+guard checks actual same-scene live ships; it never invents session,
+warp, landing or in-client success. `-Action Party` now reports native
+follower warp command acceptance, failure and skips. Never treat a
+server-side accepted order as in-client warp/landing proof. Run only
+manual tests and never GitHub Actions.
+
 ## Current acceptance goal — 2026-10-25
 
 The owner has already validated the backend at commit `cc5ce83` but not

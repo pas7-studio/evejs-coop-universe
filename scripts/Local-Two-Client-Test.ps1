@@ -1,13 +1,15 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','FinalBlow','Market','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','StockRaidLoot','LootPickup','FinalBlow','Market','Logs','Stop')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
     [int]$LaunchGapSeconds = 20,
     [int]$HealthTimeoutSeconds = 240,
     [int]$NpcSystemID = 30000142,
+    # Dedicated physical-mining World gate: Jita legitimately has zero belts.
+    [int]$WorldSystemID = 30000144,
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -150,11 +152,11 @@ switch ($Action) {
         if ($LASTEXITCODE -ne 0) {
             throw 'BLOCKED_TELEMETRY: missing /var/lib/evejs/coop-events.jsonl. Run -Action DiagnoseWorld to inspect the running overlay, startup hook and log path WITHOUT restarting. Headless boot should emit a boot-requested event before any game client logs in; do not substitute npm audit or TCP tests.'
         }
-        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-activity --system-id $WorldSystemID
         if ($LASTEXITCODE -ne 0) {
             throw 'Physical NPC activity is not yet confirmed. Inspect movement, ore and native target evidence in the report, then -Action Logs.'
         }
-        Write-Host '[WORLD] Real native topology, mining fleet and physical NPC ships observed by the server. Client login, rendering, combat and loot remain unverified.'
+        Write-Host "[WORLD] Native mining+physical NPC evidence verified for $WorldSystemID. Client rendering, combat and loot remain unverified."
     }
     'Combat' {
         Assert-BackendPrerequisites
@@ -169,6 +171,40 @@ switch ($Action) {
             throw 'NPC battle gate not proven: require real NPC weapon activation or missile launch, linked HP loss, native physical wreck and stored loot. See report.'
         }
         Write-Host '[COMBAT] Correlated named-NPC HP reduction, physical wreck and saved loot observed on server. Shooter attribution and real EVE client gameplay remain unproven.'
+    }
+    'StockRaid' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for stock-fleet combat evidence.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No server combat evidence. Run -Action DiagnoseWorld to find the native boot blocker.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-stock-raid --system-id $WorldSystemID
+        if ($LASTEXITCODE -ne 0) {
+            throw 'No correlated native weapon and measured stock miner HP loss yet. An attack order or a target lock is insufficient.'
+        }
+        Write-Host '[STOCK RAID] Native weapon activation and real stock miner/hauler HP drop correlated. Wreck, loot and two-client rendering are NOT proven.'
+    }
+    'StockRaidLoot' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native stock PvE proof.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'No native combat telemetry. DiagnoseWorld is read-only and identifies missing runtime evidence.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-stock-raid --require-stock-wreck-loot --system-id $WorldSystemID
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Unproven stock PvE chain: require actual native weapon, same-victim HP loss, physical EveJS wreck and nonempty stored loot. Real clients and final-hit attribution remain separate.'
+        }
+        Write-Host '[STOCK RAID LOOT] Native weapon, measured stock miner HP loss, physical wreck and saved loot are correlated. Two-client gameplay and killer identity are NOT proven.'
+    }
+    'LootPickup' {
+        Assert-BackendPrerequisites
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required for native loot pickup proof.' }
+        $options=Get-ComposeArgs
+        $events=@(& docker compose @options exec -T server cat /var/lib/evejs/coop-events.jsonl 2>$null)
+        if ($LASTEXITCODE -ne 0) { throw 'Missing native loot telemetry. Use DiagnoseWorld; do not reset the world.' }
+        $events | & node (Join-Path $PSScriptRoot 'coop-world-report.cjs') --require-stock-raid --require-stock-wreck-loot --require-native-loot-pickup --system-id $WorldSystemID
+        if ($LASTEXITCODE -ne 0) { throw 'No correlated real stock miner weapon, HP, physical wreck, stored loot and authenticated successful item withdrawal yet.' }
+        Write-Host '[LOOT PICKUP] Native EveJS item grant and matching source debit verified for an authenticated character. Second-client rendering, duplicate withdrawal and final killer still require gameplay QA.'
     }
     'FinalBlow' {
         Assert-BackendPrerequisites

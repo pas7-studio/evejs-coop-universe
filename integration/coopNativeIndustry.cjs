@@ -12,7 +12,9 @@ function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present})
   for(const [role,key] of [["miner","minerEntityIDs"],["hauler","haulerEntityIDs"]]){
    for(const rawID of fleet[key]||[]){
     const id=positive(rawID);
-    if(id&&scene.getEntityByID?.(id)&&!targets[role].includes(id))targets[role].push(id);
+    const ship=id?scene.getEntityByID?.(id):null;
+    if(id&&ship?.kind==="ship"&&ship.nativeNpc===true&&
+     !targets[role].includes(id))targets[role].push(id);
    }
   }
  }
@@ -33,7 +35,10 @@ function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present})
   assigned.push({pilotID:pilot.id,entityID:id,role:pilot.role,presented:outcome?.status||"NO_DISPLAY"});
  }
  const details=fleets.map(f=>{
-  const live=(ids)=>[...(ids||[])].filter(id=>scene.getEntityByID?.(Number(id))).map(Number);
+  const live=(ids)=>[...(ids||[])].filter(id=>{
+   const ship=scene.getEntityByID?.(Number(id));
+   return ship?.kind==="ship"&&ship.nativeNpc===true;
+  }).map(Number);
   const miners=live(f.minerEntityIDs),haulers=live(f.haulerEntityIDs),response=live(f.responseEntityIDs);
   const cargo=miners.map(id=>({
    entityID:id,

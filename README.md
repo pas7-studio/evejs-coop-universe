@@ -12,16 +12,17 @@ A community-oriented **two-player cooperative world** concept built *around* [Ev
 The companion [gameplay report template](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md)
 separates genuine NPC and client observations from unit tests and TCP sockets.
 
-The reported 2026-10-25 run at project revision `cc5ce83` passed
-**72 local checks / 27 upstream contract checks**, plus Docker and raw
-TCP checks, but **did not prove NPCs or real players in-game**.
-Its first unresolved gate is a **missing headless event file**:
-`/var/lib/evejs/coop-events.jsonl`. This is a telemetry/startup blocker,
-**not by itself a missing-client blocker**. For a running deployed overlay:
+The first 2026-10-25 backend run at `cc5ce83` passed **72 local / 27 upstream
+contracts**. A later live run at `a087167` verified **headless event logging**
+and healthy server/market but still found **0 named NPCs and no proved
+physical activity**. The `World` gate mistakenly selected **Jita 30000142**,
+which legitimately has zero asteroid belts. Mineable scenes are now
+checked explicitly in **Perimeter 30000144**, which has real belts.
+This still does **not** prove NPC or two-player gameplay. For a running deployed overlay:
 
 ```powershell
 .\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
-.\scripts\Local-Two-Client-Test.ps1 -Action World -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+.\scripts\Local-Two-Client-Test.ps1 -Action World -WorldSystemID 30000144 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
 ```
 
 `DiagnoseWorld` is read-only and checks the running container's flags,
@@ -34,6 +35,12 @@ independently authorized EVE client and human confirmation.
 **Do not rerun npm audit for gameplay validation**. Seven previously
 reported dependency advisories are a separate security-remediation
 track; the game remains loopback-only. No GitHub Actions/remote CI.
+
+Named NPC restart safety is documented in
+[NATIVE_NPC_DURABILITY.md](docs/NATIVE_NPC_DURABILITY.md).
+The new durable-hull implementation is still **unverified in a live
+restart**; do not substitute saved identity files for real native
+ship continuity.
 
 ## What this repository contains
 

@@ -77,6 +77,31 @@ A healthy `server` container + `EVEJS_COOP_* = 1` does **not** imply that the he
 
 If necessary collect only the **relevant redacted** diagnostic evidence and a small recent server log excerpt. Never publish all environment variables, tokens, character IDs, private IPs, keys, or the full production logs.
 
+## Per-system diagnosis from 2026-10-25: Jita is NOT a mining test
+
+The tester measured **Jita (30000142)** with 66 waypoints, 18 stations,
+7 gates and **zero asteroid belts**; this is legitimate per-system SDE,
+not evidence that global SDE generation is broken. The route also
+includes **Perimeter (30000144)**, which has three genuine SDE belts.
+Use `-WorldSystemID 30000144` for the physical mining World gate,
+while separately validating Jita NPC patrols/traders. Never manufacture
+asteroid entities in Jita.
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action World -WorldSystemID 30000144
+```
+
+If Perimeter lacks physical fleet or named NPC assignments, read the
+new `systemSiteReadiness` and `nativeMaterializerAttempt` sections of
+the World report. `living-native-materialization-attempt` exposes
+candidate counts and exact native spawn errors. The first report from
+the tester (revision `a087167`) does **not** validate these fixes or
+prove that Perimeter will have sufficient ore/active NPCs.
+
+**Jita may become headless-ready with real named non-mining NPCs**, but
+its imaginary miners cannot make mining pass. No client is required to
+obtain the real server-side bootstrap/scene evidence.
+
 ## Phase 2 — prove actual physical NPC scene activity on server (NO CLIENT REQUIRED)
 
 After Phase 1 produces real events, run:
@@ -98,6 +123,73 @@ Optional more demanding server-only gates, after the relevant organic action act
 ```
 
 `Combat` needs verified native NPC weapon event + real HP loss + physical wreck + persisted loot. `FinalBlow` additionally requires EveJS to have **explicitly passed** a native attacker to the wreck path. Their absence is not an excuse to manufacture a battle, spawn a scripted wave or fabricate kill attribution. Keep market / native gate transfer experiments OFF during baseline gameplay acceptance.
+
+## P0 no-NPC scene recovery (new code, not yet live tested)
+
+When a real scene is loaded but its first native NPC spawn fails,
+the new `coopHeadlessScenePolicy` keeps it in the periodic
+reconciliation set rather than waiting only for the escalating
+headless retry timer. The scene must contain actual authoritative
+static waypoints; an arbitrary system ID or virtual population is
+not sufficient.
+
+After the owner-approved overlay refresh, use read-only
+`-Action World -WorldSystemID 30000144` and inspect:
+`headlessAttemptCount`, `systemSiteReadiness.trackingForReconcile`,
+`systemSiteReadiness.stockMiningStartup.status`,
+`nativeMaterializerAttempt.spawnErrors` and the actual native
+fleet/cargo/activity. If the startup configuration has excluded
+Perimeter, report that exact configuration issue **without**
+fabricating a mining fleet or resetting persistent data.
+
+## Physical named NPC reliability — native-client broadcast and durable links
+
+The current P0 overlay now changes `coopNpcPresentation` to call pinned
+EveJS's **actual** `scene.broadcastSlimItemChanges([ship])`. The prior
+`sendSlimItemChangesToAllSessions` was not implemented by SolarSystemScene,
+so persistent names could be set in server memory without notifying an
+already-present player client. A failed slim notification is retried on
+the next NPC reconcile without respawning a ship. **Name broadcast
+success is not the same as visible in-client proof**: the tester must
+observe the NPC in the actual overview.
+
+`coopNpcMaterializer` no longer silently ignores occupied native spawn
+slots and thrown EveJS spawn errors. It logs `SPAWN_LIMIT_REACHED`
+with occupied/limit, `NATIVE_SPAWN_THROW` with nativeReason and
+`IDENTITY_LINK_FAILED` with the provisionally spawned ship ID. If a
+durable registry write failed, reconciliation retries attaching the
+*same physical ship* before ever asking native EveJS to spawn again.
+An identity conflict with another existing native hull fails closed.
+
+The headless runtime now requires `nativeNpc===true` and
+`kind==="ship"` for both saved named identity links and stock
+miner/hauler assignments. A player-controlled ship or static
+scene entity cannot substitute for real NPC evidence. The report
+exposes `nativePresentationPending`, `nativeMaterializerAttempt`,
+`headlessAttemptCount` and `headlessPendingSystems`. These
+distinguish no timer execution, no candidate resident, native
+spawn failure, identity write failure and unavailable client
+broadcast. None of them can be declared a gameplay PASS based on a
+virtual pilot or a background timer alone.
+
+The next tester should use `World -WorldSystemID 30000144` and
+attach those report fields **without replaying backend or npm audit**.
+Keep volume `evejs-data`, persistent NPC links and local upstream
+test fixes intact.
+
+## Durable named NPC restart (separate controlled gate)
+
+A new [durable native NPC runbook](NATIVE_NPC_DURABILITY.md)
+explains how to verify same-ID persistence across an authorized
+server restart. Do not restart as part of the ordinary read-only
+`DiagnoseWorld`/`World` check. When the owner approves a
+controlled restart, preserve `evejs-data` and look for
+`nativeDurableRecovery.status=OK`, nonzero
+`recovered`/`alreadyPhysical`, and the same real NPC entity ID
+in the physical scene. A failure
+`BLOCKED_DURABLE_NPC_RECOVERY` is **not** a reason to delete
+the registry. The new source-side check does not yet prove
+in-client position, damage or inventory continuity.
 
 ## Phase 3 — prove a real compatible EVE client (HUMAN OPERATOR)
 
@@ -153,6 +245,7 @@ occur, `BLOCKED` when a named prerequisite prevents an attempt.
 | Native destruction attribution | Optional stricter `-Action FinalBlow`, requiring upstream explicit attacker | Do not infer a killer from targeting, telemetry or faction; record `NOT_PROVEN` if EveJS does not identify an attacker |
 | NPC memory and standings | Persisted named-NPC relation and actual `living-player-consequence` where relevant | Same NPC recognizes actual returning player only if conditions met; a saved memory record alone is not a conversation |
 | Two-player encounter | Two real authenticated characters on same grid; server `Party` events | Both clients see and can interact with the same NPC and each other, then reconnect without ship duplication |
+| Two-player native fleet warp | `coop-fleet-warp-native-order` proves native follower warp accepted/failed; `coop-fleet-warp-skip` explains why same-scene safety blocked a follower. See [COOP_FLEET_WARP](COOP_FLEET_WARP.md) | Commander A and member B must BOTH visibly warp and land in the same actual grid, then join authentic combat; a successful warp RPC is **not** arrival proof |
 | Stargate NPC travel (experimental) | When separately enabled, `living-native-gate-approach` then `living-native-gate-transfer` with same native entity and cargo | Arrival across real gate and same ship state after recovery. **Default OFF; not part of baseline World PASS** |
 | Native seed-market NPC trade (experimental) | When separately enabled, `living-native-market-trade` events and `-Action Market` require sale followed by purchase with exact seed RPC / inventory / wallet | Real daemon order/stock changes and same NPC cargo. **Default OFF; this does not prove personal player-compatible NPC orders** |
 
@@ -173,3 +266,132 @@ Do not report a global `PASS` for World/gameplay until each requested stage pass
 The already-discovered seven npm advisories remain important but **out-of-scope for this gameplay run**; keep loopback binding and record them separately for authorized remediation. Do not pretend an npm audit is a real player experience test.
 
 Related: [HEADLESS_NPC_VALIDATION.md](HEADLESS_NPC_VALIDATION.md), [TWO_CLIENTS_ONE_PC.md](TWO_CLIENTS_ONE_PC.md), [VERIFY_BACKEND_ONE_COMMAND.md](VERIFY_BACKEND_ONE_COMMAND.md), [NATIVE_NPC_GATE_TRAVEL.md](NATIVE_NPC_GATE_TRAVEL.md), [NATIVE_NPC_MARKET.md](NATIVE_NPC_MARKET.md).
+
+## P0 — stock-fleet pirate PvE permission and proof
+
+The previous raid selector required *both* the pirate and target to have named co-op identities with opposite factions. Upstream native EveJS independently marks NPC-to-NPC actors friendly in its combat targeting loop. Consequently, a real stock miner with ore but no co-op name could never become a valid pirate damage target. The new opt-in LivingCoop policy is intentionally narrow: a **currently linked named pirate** may be issued an attack order against a **genuine physical member of the active EveJS mining fleet**, even when that miner does not have a named identity. A named miner/hauler must still belong to the opposing faction; attacks against arbitrary NPCs or player ships remain disallowed.
+
+The same permit is enforced at (1) raid target selection and (2) EveJS native combat friendliness. The patch does not create enemies, loot, damage, belts, scripted combat waves, or a fake victory event. `coopNativeRaidEligibility.cjs` is installed through the pinned reversible overlay; isolated permission and native-hook tests are listed in the manual verifier. No Docker/client proof is claimed.
+
+**Operator acceptance on Perimeter 30000144** (after explicitly approved overlay update, preserving `evejs-data` and local upstream test fixes):
+
+1. `DiagnoseWorld` then `World -WorldSystemID 30000144` must show real belts, real fleet members and at least one physical named NPC. Record any materialization failures rather than retrying generic backend checks.
+2. Confirm real mining fleet cargo grows. A pirate raid should acquire an **actual** ore-bearing miner or hauler. Record the successful `living-pirate-raid` native attack order, not just a warp.
+3. Confirm native damage/HP changes or a real wreck attributable to actual weapons. A successful native order alone is **not** proof of combat damage.
+4. Both authorized EVE clients must independently see the same physical targets/wreck. Let player A loot an item; player B must see its updated state and cannot take the same item again.
+5. Reconnect each pilot without losing their ship; test fleet warp orders and separately verify both ships' arrivals before claiming the complete two-player PvE gate.
+
+If any step fails, keep PR #2 Draft and attach `DiagnoseWorld`, `World`, `Party`, a sanitized event excerpt and exact deployed commit SHA. Do not reset Docker volumes, rebuild market data, or merge solely to investigate.
+
+## P0 — recover real EveJS mining startup after a transient spawn failure
+
+Pinned upstream EveJS used to call `startupSceneSeedSet.add(startupKey)` **before** attempting to create any native fleet. One failed initial spawn therefore permanently suppressed another attempt in that process. In explicitly deployed `-LivingCoop` the reversible source patch now enables `EVEJS_COOP_MINING_STARTUP_RETRY=1`; it marks a startup seed complete only after **all configured startup slots** have real EveJS fleet records. An incomplete attempt retries just the missing slot, never re-spawning an existing seeded slot. The patch is OFF outside this opt-in and is exactly removable from the pinned upstream source.
+
+For Perimeter 30000144, `DiagnoseWorld` now prints the effective retry and native fleet startup settings plus the number of genuine `living-native-mining-startup-slot` events. `World` displays the most recent outcome for this system as `nativeMiningStartupOutcome`. `FAILED` includes the actual upstream `errorMsg`; `SEEDED` includes the number of real miner and hauler ships returned by EveJS. Neither an emitted event nor a complete fleet record alone is sufficient for World PASS: the physical ships must exist in the scene and exhibit actual movement and mining/targeting evidence.
+
+**New P0 regression suite:** `coop-mining-startup-retry.test.mjs` covers failed first spawn, partial multi-fleet recovery, exact rollback, repeated apply, disabled opt-in, and partial-patch rejection. `coop-mining-startup-world-report.test.mjs` covers failure reason, recovery signal, and strict per-system filtering. `coop-npc-role-priority.test.mjs` ensures low NPC caps still prioritize pirates and patrols; normal `-Action CoopStart` continues to explicitly request 6 named hull slots per system.
+
+If `World` still reports `NO_NATIVE_MINING_FLEET`, use `nativeMiningStartupOutcome.error` and the current `systemSiteReadiness.stockMiningStartup`. If named NPCs still equal zero while stock mining succeeds, focus exclusively on `nativeMaterializerAttempt.spawnErrors`, not on mining startup. Preserve `evejs-data`, retain the exact deployed overlay SHA, and do not run CI or market rebuild to overcome a gameplay blocker.
+
+## P0 — prove real pirate fire against stock EveJS miners
+
+The native EveJS pirate-raids policy legitimately targets *unnamed* stock mining NPCs. The existing strict `Combat` and `FinalBlow` evidence gates require **both victim and attacker to have durable co-op pilot names**, so they cannot recognize a named pirate damaging a stock miner, even when the damage is real.
+
+The opt-in `StockRaid` gate now measures the hull's **actual EveJS shield/armor/structure HP drop** between two native scene samples (`living-native-stock-fleet-combat`) and pairs that evidence with a **successful native NPC missile launch or weapon activation** (`living-native-weapon-event` status `VERIFIED_NATIVE_STOCK_FLEET_WEAPON_EVENT`). The attacker must have an active linked named pirate identity and actual EveJS attack order; the victim must be an actual native ship in the authoritative stock EveJS mining fleet, not a player ship, arbitrary NPC or nonexistent fleet entry. A named miner remains under the separate named combat witness. Correlate attacker ID, pilot ID, target physical entity ID, and event timing; the observer never writes HP, issues orders, creates wrecks or grants kill credit.
+
+Read-only verification on **Perimeter 30000144** after explicit deployment:
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
+.\scripts\Local-Two-Client-Test.ps1 -Action StockRaid -WorldSystemID 30000144
+```
+
+`StockRaid` returns `AWAITING_STOCK_FLEET_WEAPON_HP_CHAIN` until the **same physical victim** has both a verified weapon event and measured native HP loss. This is stronger than mere target acquisition but **does not prove** a kill, native wreck, persisted loot, a specific weapon's hit or either client's view. Keep `Combat` and `FinalBlow` strict for named-to-named battles; never claim those gates pass based on a stock-miner observation. Player-vs-pirate combat, shared wreck interaction and two-player warp/reconnect still require authenticated in-client validation.
+
+Isolated `tests/coop-stock-fleet-combat.test.mjs` covers attack-order requirement, physical HP deltas, verified native weapon events, player-ship rejection, named-victim separation and cross-target event rejection. These tests are included in `Verify-Local-Coop.ps1`. No Docker, CI, or real two-client execution is claimed in this change.
+
+### Optional stricter stock miner wreck and loot gate
+
+When the upstream EveJS **native** destruction path creates a wreck for a genuine stock mining-fleet ship, `coopStockFleetWreckEvidence` checks the active fleet's ship membership (before the native mining fleet has pruned it), the original destroyed ship object, native wreck store source and launcher IDs, the **physical** wreck entity in the same solar system, and persisted items with positive quantities. It then emits `living-native-stock-fleet-wreck-evidence`. An empty native wreck is recorded honestly as `NATIVE_WRECK_EMPTY` and never counts as nonempty loot.
+
+For an additional stricter read-only gate, run:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action StockRaidLoot -WorldSystemID 30000144
+```
+
+It requires one real victim across verified native weapon event, measured HP decrease, physical EveJS wreck, and a nonempty stored loot inventory. Missing or mismatched wrecks, other-system ships, fabricated items, empty wrecks, or wrecks preceding the observed damage cannot pass. If the upstream fleet record is already pruned before the wreck hook, this observer intentionally **fails closed** rather than claiming an unproven stock-fleet origin.
+
+`StockRaidLoot` proves server-side correlation only, **not** final-shot attribution or that either EVE client has successfully opened the wreck. Two authenticated pilots must still verify live shared loot, one-time item withdrawal, coordinated fleet warp and reconnection.
+
+## P0 — native loot withdrawal proof (not just items in a wreck)
+
+A real wreck with persisted items is not yet proof that a real authorized EVE character can withdraw them. The reversible LivingCoop overlay enables **read-only** `EVEJS_COOP_NATIVE_LOOT_EVIDENCE=1`. On a successful upstream EveJS `transferNativeWreckItemToCharacterLocation`, the observer verifies:
+
+- a real physical native wreck in the same solar system, its source entity and unchanged native identity;
+- exactly one authenticated in-space character session, with an actual ship physically registered in that EveJS scene;
+- upstream's successful native item grant **with a persisted matching inventory change for the intended character, type and destination** and the authoritative wreck-item store changed correctly: a full withdrawal removed the item; a partial withdrawal reduced its quantity by the exact amount.
+
+Only this combination emits `living-native-loot-pickup` with `VERIFIED_NATIVE_LOOT_PICKUP`. If EveJS granted an item but **did not remove/decrement it from the wreck**, it instead emits a source inconsistency status and never certifies the pickup. No new item, synthetic character, fallback wreck or manual loot grant is created.
+
+A separate **read-only** local command requires the full native stock-miner PvE chain (weapon event → physical HP loss → native wreck → nonempty native loot) **plus** a subsequent actual successful pickup by an authenticated character from that **same wreck**:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action LootPickup -WorldSystemID 30000144
+```
+
+**Known upstream issue to treat as a test blocker, not a gameplay PASS:** The pinned EveJS native wreck transfer currently grants inventory before decrementing the source wreck item and does not check the result of the full-item deletion. A failed source mutation could leave duplicated inventory. The optional observer flags that state and the **LootPickup acceptance gate hard-blocks with `BLOCKED_NATIVE_LOOT_SOURCE_MUTATION`**, even if another pickup from the same wreck succeeds. It does not change transaction ordering, rollback or native inventory code in an untested shared world. Until real two-client QA demonstrates correct one-time removal and both clients see the updated wreck, shared loot remains **UNVERIFIED**.
+
+Regression coverage: `tests/coop-native-loot-pickup.test.mjs` (authenticated full/partial pickup, exact source debit, missing/duplicate session, incorrect or unphysical wreck, unsuccessful grant, wrong-wreck log, and independent report gate). A green `LootPickup` means **one physical server-side item transfer**, not proof of two real clients, another player's refresh, player-vs-pirate combat, or killer attribution.
+
+### Persistent native wreck-item quarantine
+
+When LivingCoop is explicitly enabled, `EVEJS_COOP_NATIVE_LOOT_QUARANTINE=1` activates an additional **pre-grant** safety gate. If EveJS reports a successful native item grant but fails to remove/decrement the source wreck item, the optional post-transfer witness immediately quarantines exactly `wreckID:wreckItemID` and persists it to `/var/lib/evejs/coop-native-loot-quarantine.json`. Further attempts to claim that specific item return `COOP_LOOT_QUARANTINED` **before** another inventory grant. Other unaffected wreck items remain available.
+
+- The quarantine file is part of the preserved `evejs-data` volume. Do not delete it as a workaround; preserve it with backups and investigate affected inventory/character/source records before manual repair.
+- Corrupt quarantine JSON or a failed/uncertain quarantine persistence operation causes a **fail-closed** response, blocking future native loot grants within the running process rather than silently ignoring possible duplication. The quarantined item will remain blocked across restarts when the quarantine record was successfully persisted.
+- This guard **limits repeat grants after a detected failure**; it is **not** a full atomic multi-store transaction. The first inventory grant could already have succeeded before the source mutation failed. A process crash between native item grant and writing the quarantine remains a risk, so do not claim that duplicate inventory is impossible.
+- The source check runs before the authenticated-session check in the witness; a character disconnecting immediately after a bad native grant cannot suppress the source-debit failure report.
+- The pinned upstream `nativeNpcWreckService.js` overlay has been checked with a real source-level simulation: an intentionally failed source remove permits the first upstream grant but marks the item quarantined, the second claim is rejected *before* the grant, and a distinct normal wreck item can still be granted and removed. The source transform is repeatable and exactly reversible.
+- Regression: `tests/coop-native-loot-quarantine.test.mjs` covers durable replay, narrow item scoping, corrupt storage and failed writes. The quarantine is disabled outside opt-in LivingCoop.
+
+The next official local proof still requires real authenticated **two-client** EVE gameplay: inspect shared wreck contents, withdraw an item once, refresh the other client, verify the second client cannot withdraw the same item, check both character inventories, then test fleet warp/reconnect without ship loss. No automated acceptance gate can substitute for the missing client evidence.
+
+## P0 — physical fleet-warp arrival, clean reconnect and complete mining startup
+
+LivingCoop now has a **read-only post-order native fleet-warp observer** (`EVEJS_COOP_FLEET_WARP_ARRIVAL=1`). It starts only after the existing pinned EveJS `beyonceService` accepts an actual follower warp; the native server still owns every movement and ship. During a bounded 180-second window the observer requires the exact same authenticated commander/follower sessions and original physical hulls in the same real scene, observed follower warp state, a physical displacement of at least 150 km, completed warp, proximity to the recorded real native destination and proximity to the commander. A disappeared or replaced hull, a disconnect, another warp request, a wrong target, or timeout is **not** counted as arrival.
+
+`-Action Party` now separates `nativeFleetWarpOrdersAccepted` from `nativeFleetWarpPhysicalArrivalsVerified`, `nativeFleetWarpArrivalsUnverified` and `fleetWarpArrivalVerified`. The report ties a landing to the **latest matching accepted order** for those physical ships so repeat commands to the same place do not retroactively get marked successful. This is **server-side evidence**, not proof of two real clients rendering the landing or actually being in a fleet. A server command accepted without a physical movement still cannot PASS. Actual client fleet formation, Warp Fleet UI and destination arrival still require manual testing.
+
+Reconnecting players no longer create ghost two-pilot evidence: `coopDuoPresence` excludes disconnected sessions, clients whose Ballpark initialization is not complete, and stale cross-system session entries, and it fails closed on duplicate active character sessions. Reciprocal server visibility requires two **real physical player ship entities**.
+
+**Mining startup correction:** The pinned EveJS startup recovery overlay already supports retrying missing native fleet slots. Our own `ensureNativeMining` previously latched a whole scene as initialized after *any one* native mining hull appeared, even a GM-created fleet, and `isHeadlessNativeReady` could report READY for a system with missing startup fleet slots. Now only real EveJS `source:"startup"` fleet records with the correct `startupKey` (`systemID:slot`) and live native hulls satisfy each configured slot. Until all slots exist, the headless boot stays PENDING and its bounded retry loop continues. Jita remains legitimately beltless and does not require synthetic mining ships.
+
+New isolated tests: `tests/coop-fleet-warp-arrival.test.mjs`, expanded `tests/coop-party-fleet-warp-report.test.mjs`, `tests/coop-duo-reconnect-presence.test.mjs` and `tests/coop-native-mining-readiness.test.mjs`. These are included in `Verify-Local-Coop.ps1`. Verified source-level behavior does **not** mean the Windows Docker server or real EVE clients have been run; this branch remains draft and is not automatically deployed or merged.
+
+After an explicitly approved deployment, use `Local-Two-Client-Test.ps1 -Action DiagnoseWorld`, `-Action World`, and `-Action Party` **without resetting containers**, then log both authorized clients in, execute a normal fleet warp to a real waypoint in Perimeter, inspect that both actual ships arrived and reconnect one client without losing or duplicating the ship. Preserve `evejs-data` throughout.
+
+## P0/P1 — replayable natural convoy replacement and ghost-safe rendezvous
+
+**Real co-op bug fix:** `coopDuoCoordinator.readyPilots` now uses only live, real, physical EveJS ship entities with matching IDs and a matching authoritative scene, and excludes any character that has two concurrently active sessions during reconnect. A disconnected session is never allowed to impersonate your second player, and an asteroid or other non-ship entity cannot trigger the real-player rendezvous chat. Both the separate `coopDuoPresence` proof and the runtime game coordinator now fail closed on duplicate login identities. Two new integration regression cases cover this.
+
+**Native convoy continuation after losses:** The explicit LivingCoop opt-in `EVEJS_COOP_CONVOY_RENEWAL=1` reuses the **pinned EveJS `handleSceneCreated` stock mining fleet spawn** only when all actual ships for a configured startup convoy slot are gone. It preserves surviving actual miners/haulers rather than respawning a full healthy fleet around players. The replacement slot must wait **30 minutes** after the first observed total loss, with **10 minutes** between unsuccessful replacement attempts and at most **4 renewal attempts per system/UTC day in a single process**. No default NPC arena or instant loot respawn is enabled. The authoritative source and actual scene asteroid belts remain mandatory.
+
+The native startup patch has been applied in memory to upstream EveJS at `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`, checked for parse, idempotence and full rollback, and the original upstream `handleSceneCreated` body was run in a deterministic source-level harness: one native initial spawn, one full real-fleet loss, *zero* respawns before 30 minutes and one authorized follow-up fleet using the original upstream spawn path. This is **not** Docker/game-client confirmation.
+
+`tests/coop-native-convoy-evejs-contract.test.mjs` repeats this against the operator's actual pinned checkout during `Verify-Local-Coop.ps1`. Its `EVEJS_COOP_CODE_PATH` setting is supplied by that verifier; outside it, the source contract explicitly skips if the pinned code path is unavailable. The test reads the checkout only and does not deploy, edit files or launch Docker. The full set of native scene, two-client and real combat gates remains open until client testing.
+
+**Caveat:** stock EveJS mining fleets are transient; deliberate process restarts reset the renewal clock and in-memory daily cap. Treat the cap as an in-process anti-flood guard, not persistent economic state or guaranteed post-restart cooldown.
+
+## P0 native mission progress / industry / premium skill QA gate
+
+The living-coop overlay includes new **nondeployed** pinned-source patches for native agent mission state, native dungeon objective sync and native industry time. It also requests `EVEJS_OMEGA_LICENSE=true`, `EVEJS_SKILL_TRAINING_SPEED=6`, and `EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER=0.35`. All remain **NOT TESTED WITH LIVE CLIENTS**.
+
+1. `Verify-Local-Coop.ps1` sets `EVEJS_COOP_CODE_PATH` for source-level tests. Require exact pinned source parse, idempotent apply, byte-for-byte rollback for `agentMissionRuntime.js`, `missionRuntimeState.js`, `dungeonUniverseSiteService.js` and `industryParityHelpers.js`. Do not run any nonreversible patch on the operator's local uncommitted upstream files.
+2. Authenticate pilot A and B separately and join the **same native fleet**, confirm UI and native fleet state. Each accepts the same real dungeon mission (different character missions, no fake GM completion). Enter A's physical mission dungeon. When the **real EveJS dungeon objective** completes, A's journal becomes complete and B's journal becomes complete only if B has the matching accepted mission and is physically present with a valid hull. Confirm B's credit remains after reconnect and stored mission normalization.
+3. Negative dungeon cases: B in another system, B docked, stale/duplicate session, false mission content, wrong source dungeon, not in the fleet, fake hull, or unaccepted mission. B must **not** get progress. A's authentic rewards must not be duplicated. `EVEJS_COOP_FLEET_MISSION_TURNIN=0` is intentionally the default until the native per-character wallet/items reward transaction is crash-safe; have the two pilots use native individual agent turn-ins for this playtest.
+4. Same-station trade uses the existing EveJS `tradeMgrService` between separate authenticated pilots. Verify ownership of a real module/item, split stack and an **inactive** ship before/after and on relog. A currently piloted hull must not transfer. Keep mixed ISK+items disabled under the cooperative manifest safety guard until upstream payout/item commit is atomic.
+5. For both accounts, verify in the real client: actual Omega clone grade, true queue SP/min and remaining duration at 6x, skill prerequisites, new skill levels after 60–120 minutes and offline accumulation after restart. No unearned raw SP grants. These are native options, not a new fake premium service. The initial server setting grants all allowed players global Omega without an expiry; individual 30-day paid/ISK subscriptions are NOT yet implemented.
+6. In one real owned station hangar: put naturally obtained ore into reprocessing, verify minerals, install blueprint manufacturing for T1 ammo/modules/ship through the original EveJS UI, verify exact mineral debit and ISK cost and job finish approximately 35% of original duration with skill/facility modifiers. Deliver real inventory once; check after reconnect. Confirm research/copying job durations are unchanged. A wrong multiplier (0, negative, nonnumeric, >1) must fail closed.
+7. Native NPC ore unloading still writes only to a virtual durable receipt ledger. It must **not** count as player-owned station minerals, manufacturing materials, or market order stock. Do not pass the full economy P0 gate until a native depot transfer is transactionally implemented and source-item debit/recovery are tested.
+
+**Current isolated proof:** pinned `missionRuntimeState.normalizeMissionRecord` accepts and preserves a valid shared dungeon receipt across repeated reads and rejects mismatched content/owner; source overlay parse, idempotent apply and exact rollback passed for mission/industry changes. Automated contract tests registered in `Verify-Local-Coop.ps1`. None of this replaces two authenticated EVE clients observing real gameplay.

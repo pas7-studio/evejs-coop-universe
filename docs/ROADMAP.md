@@ -1,4 +1,22 @@
 # Delivery roadmap — agent-ready tasks
+> **2026-10-25 native-mechanics discovery / parallel-agent checkpoint:**
+> [24-mechanic upstream-to-co-op gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md)
+> [First implementation: native item/courier contracts + LP Store standing gates](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md), source-tested and pending real two-client/escrow replay acceptance.
+> [Native exploration + shared bookmarks / wormhole two-player acceptance](COOP_EXPLORATION_NATIVE_GAP_20261025.md) — source audit, live unverified; coordinate any beyonce changes with fleet-warp owner.
+> and [current P0 progress, blockers and agent ownership handoff](COOP_PARALLEL_AGENT_HANDOFF_20261025.md).
+> These are source-level findings and acceptance requirements, **not** claims
+> of completed two-client gameplay. The duplicate mission-helper call was tested as idempotent against pinned source; consolidate it and still run full overlay preflight before deployment.
+
+
+> **2026-10-25: Coop Economy + Progression V1 proposal** — the authoritative
+> step-by-step implementation specification for native fleet, item/ship gifts,
+> per-player shared mission credit, actual ore-to-blueprint industry, market
+> liquidity, NPC mining/crafting, faction reputation, native Alpha/Omega
+> subscriptions and 6x skill training is in
+> [COOP_ECONOMY_PROGRESSION_V1.md](COOP_ECONOMY_PROGRESSION_V1.md).
+> Proposal only: full multiplayer/industry/economy gates remain UNVERIFIED.
+> Do not enable in-progress shared dungeon hooks or deploy to real worlds.
+
 
 Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **IMPLEMENTED_UNVERIFIED** code exists but live evidence is missing; **DONE** actual acceptance evidence recorded. The gameplay test order is in GAMEPLAY_TESTING.md.
 
@@ -18,8 +36,41 @@ The owner has explicitly prohibited **GitHub Actions and remote CI**.
 All GitHub workflow files have been removed. Keep local test scripts
 available; do not reintroduce automatic remote runs.
 
-**Current manual verification gate: first recover missing headless
-telemetry, then verify physical NPC activity.** Start with
+**P0 no-NPC recovery addition:** A real SDE-backed scene is scheduled
+for later materialization retries even if its initial native spawn
+produced zero identity links. Added system-specific native mining
+startup policy witness to headless event and World report so disabled
+or excluded Perimeter fleet seeding is distinguished from absent SDE
+belts. This does not force a fleet, alter world data or reset named
+pilot identity. 64/64 relevant isolated regression tests PASS.
+**Physical named NPCs and client gameplay remain unverified.**
+
+**P0 implementation follow-up (awaiting local client test):** repaired
+real NPC name broadcasts in `coopNpcPresentation` to the existing
+EveJS slim-item API, with retry on failure and no repeat on success.
+Materializer now reports saturated native spawn capacity, caught
+upstream spawn exceptions, identity registry write failures and
+same-ship recovery without duplicates. Headless scene count and
+stock fleet bindings reject player/static objects; new boot-attempt
+witness distinguishes a scheduled timer from completed native scene
+attempts. **53/53 isolated presentation/materialization/report/headless
+tests PASS; this is not an in-game NPC appearance proof.**
+The next gate remains a fresh `World -WorldSystemID 30000144`
+and then visual NPC confirmation in a real authorized client.
+
+**2026-10-25 tested blocker update:** Headless event stream and boot
+request are confirmed live at tester revision `a087167`. The reported
+`World` failure selected Jita 30000142, which legitimately has no
+asteroid belts. Mining must be tested on Perimeter 30000144 (three SDE
+belts). This feature branch now distinguishes system-specific real SDE
+zero-belt status, accepts real named non-miners in beltless systems,
+and emits precise materializer spawn failures. **No real named NPC,
+mining ore growth, moving fleet or client gameplay has yet passed.**
+Use `World -WorldSystemID 30000144` on the updated overlay. Do not
+repeat npm audit or previous backend checks to replace this result.
+
+**Current manual verification gate: headless telemetry is confirmed;
+verify Perimeter physical NPC mining/activity and named entity links.** Start with
 [GAMEPLAY_TESTING](GAMEPLAY_TESTING.md), **not** backend regressions,
 network source audits or npm scans. The owner's 2026-10-25 report on
 `cc5ce83` established 72 local / 27 upstream backend checks and healthy
@@ -95,6 +146,31 @@ for exact code scope, independent tests, proof requirements and remaining
 work. Neither the P0 gate nor complete persistent faction warfare is
 claimed done by these code changes.
 
+**Co-op P0 native fleet warp hardening (code now in feature branch):**
+Added an opt-in guard to pinned EveJS `BeyonceService._warpFleetFollowers`
+that accepts only actual scene-ready physical peer ships in the same
+solar system and retains upstream commander hierarchy and opt-out.
+The party report distinguishes real native follower warp orders from
+verified arrivals. 10/10 guard + 3/3 report isolated tests passed,
+reversible source patch checked. **Two real clients have not yet
+verified shared warp or arrival.** See
+[COOP_FLEET_WARP](COOP_FLEET_WARP.md).
+
+**Durable native NPC identity slice — IMPLEMENTED_UNVERIFIED.**
+The original co-op named spawn used transient EveJS store rows, so
+`coop-npc-links.json` survived restart but the native entity/controller
+did not. Added opt-in durable native named hulls on explicit LivingCoop
+deployment, mixed transient/durable ID collision protection and
+pre-prune same-ID materialization from persisted EveJS entity/controller.
+Incomplete or conflicting persistent records fail closed. A genuine
+same-pilot wreck from after ship linkage permits clone recovery;
+stale wrecks do not. Unit tests and pinned-source patch checks pass,
+**but the real Docker restart and in-client NPC continuity remain
+unverified**. See [NATIVE_NPC_DURABILITY](NATIVE_NPC_DURABILITY.md).
+Next operator gate: approved local overlay deployment, real World
+physical NPC evidence, controlled stop/restart retaining `evejs-data`,
+same-ID restoration, then visible NPC proof. No CI or remote deployment.
+
 ## P0 — establish trustworthy baseline
 
 ### COOP-001 — reproducible upstream inventory [TODO]
@@ -131,7 +207,7 @@ Enforce trusted peer/device policies and explicit game-service allowlist, safe T
 ### COOP-020 — two-player gameplay matrix [BLOCKED: COOP-013]
 Tests: join, Local/Overview, undock, warp, dock, fleet, chat, PvE, trade, disconnect/reconnect, restart. **DoD:** per-feature PASS/FAIL supported by logs/replays, blockers converted into focused tasks.
 
-### COOP-021 — Living Universe behavioral audit [BLOCKED_TELEMETRY; not blocked by X-Eve compatibility]
+### COOP-021 — Living Universe behavioral audit [BLOCKED_PHYSICAL_WORLD; headless telemetry PASS on a087167]
 Verify pilots, persistence, observed NPC ships, combat, mining, freight, real inventory/market stock, faction effects. **DoD:** assertions based on actual persistent world effects, not UI-only counts.
 
 ### COOP-022 — NPC fleet/corp co-op design [BLOCKED: COOP-020, COOP-021]

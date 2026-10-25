@@ -28,7 +28,7 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
    }
    return existing;
   }
-  const e={pilotID:pilot.id,name:String(pilot.name||pilot.id).slice(0,96),faction:String(pilot.faction||"independent").slice(0,48),role:String(pilot.role||"").slice(0,24),systemID:Number(systemID),entityID:Number(entityID),linkedAt:clock()};
+  const e={pilotID:pilot.id,name:String(pilot.name||pilot.id).slice(0,96),faction:String(pilot.faction||"independent").slice(0,48),role:String(pilot.role||"").slice(0,24),durable:pilot.durable===true,systemID:Number(systemID),entityID:Number(entityID),linkedAt:clock()};
   state.links[pilot.id]=e;persist();return {...e};
  }
  // Only update durable identity AFTER the same native ship physically

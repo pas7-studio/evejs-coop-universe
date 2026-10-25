@@ -4,13 +4,32 @@
 function positive(v){const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:null;}
 function snapshot(scene){
  if(!scene?.sessions||typeof scene.sessions.values!=="function")return {status:"NO_SCENE",pilots:[]};
- const pilots=[...scene.sessions.values()].filter(s=>s?.characterID&&s?._space?.shipID).map(s=>({
-  characterID:positive(s.characterID),
-  shipID:positive(s._space.shipID),
-  shipExists:Boolean(scene.getEntityByID?.(positive(s._space.shipID))),
-  visibleEntityIDs:s._space.visibleDynamicEntityIDs instanceof Set?s._space.visibleDynamicEntityIDs:null
- })).filter(p=>p.characterID&&p.shipID);
- const byIdentity=new Map(pilots.map(p=>[p.characterID,p]));
+ const systemID=positive(scene.systemID);
+ if(!systemID)return {status:"NO_SCENE",pilots:[],mutualVisibility:false};
+ // A reconnect can briefly leave a stale old session in EveJS scene.
+ // Never count disconnected/not-yet-Ballpark-ready ghost sessions as
+ // a second actual co-op pilot or use their stale visibility cache.
+ const pilots=[...scene.sessions.values()].filter(s=>
+  positive(s?.characterID)&&positive(s?._space?.shipID)&&
+  positive(s?._space?.systemID)===systemID&&
+  s?._space?.initialStateSent===true&&
+  s?.socket?.destroyed!==true).map(s=>{
+   const shipID=positive(s._space.shipID);
+   const ship=scene.getEntityByID?.(shipID);
+   return {
+    characterID:positive(s.characterID),shipID,
+    shipExists:ship?.kind==="ship"&&Number(ship.itemID)===shipID,
+    visibleEntityIDs:s._space.visibleDynamicEntityIDs instanceof Set?
+     s._space.visibleDynamicEntityIDs:null
+   };
+  });
+ const byIdentity=new Map();
+ for(const p of pilots){
+  if(byIdentity.has(p.characterID))
+   return {status:"DUPLICATE_ACTIVE_CHARACTER_SESSION",
+    pilots:[],mutualVisibility:false};
+  byIdentity.set(p.characterID,p);
+ }
  const rows=[...byIdentity.values()].map(p=>({
   characterID:p.characterID,shipID:p.shipID,shipExists:p.shipExists,
   // null means no authoritative visibility set; do not fabricate a PASS.
@@ -18,7 +37,7 @@ function snapshot(scene){
   visibilityKnown:p.visibleEntityIDs instanceof Set
  }));
  const shared=rows.length>=2&&rows.every(p=>p.shipExists);
- const mutual=rows.length===2&&rows.every(p=>p.visiblePeerIDs.length===1);
+ const mutual=shared&&rows.length===2&&rows.every(p=>p.visiblePeerIDs.length===1);
  return {status:shared?"TWO_PILOTS_IN_SCENE":rows.length===1?"ONE_PILOT":"NOT_READY",pilots:rows,mutualVisibility:mutual};
 }
 function observe(session,ship,reason="presence"){

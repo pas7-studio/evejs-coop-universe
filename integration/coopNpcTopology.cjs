@@ -19,4 +19,15 @@ function anchorOptions(scene){
  if(!entry)return null;
  return {anchorDescriptor:{kind:entry.kind,itemID:entry.id},anchorName:entry.name};
 }
-module.exports={waypoints,anchorOptions,validPosition};
+// Use only actual EveJS scene POIs: pirates and patrols can encounter
+// real Perimeter miners, while beltless Jita falls back to genuine gates.
+function anchorOptionsForRole(scene,role){
+ const points=waypoints(scene);
+ const order=role==="trader"?["station","stargate","asteroidBelt"]:
+  ["pirate","patrol","miner","hauler"].includes(role)?
+   ["asteroidBelt","stargate","station"]:["stargate","station","asteroidBelt"];
+ const entry=order.map(kind=>points.find(p=>p.kind===kind)).find(Boolean)||points[0];
+ if(!entry)return null;
+ return {anchorDescriptor:{kind:entry.kind,itemID:entry.id},anchorName:entry.name};
+}
+module.exports={waypoints,anchorOptions,anchorOptionsForRole,validPosition};

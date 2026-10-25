@@ -16,7 +16,7 @@ Existing security advisories (separate scope): 2026-10-25 npm audit, 7 advisorie
 | --- | --- | --- | --- |
 | A. Backend (existing evidence, do not rerun without need) | | | |
 | B. Effective running overlay, event file path and startup hook | | | |
-| C. `living-headless-boot-requested` actual log event | | | |
+| C. `living-headless-boot-requested` actual log event (observed at `a087167`) | | | |
 | D. Native topology/real fleet/named NPC `World` | | | |
 | E. Real native NPC movement & cargo/target change | | | |
 | F. Actual compatible client login/character selection | | | |
@@ -32,7 +32,7 @@ Existing security advisories (separate scope): 2026-10-25 npm audit, 7 advisorie
 
 The 2026-10-25 `cc5ce83` run reported **72/72 local tests, 27/27 upstream contracts, healthy init/server/market, localhost-only published ports, flags PASS, two TCP sockets/reconnect PASS**. Those are **only backend/test results**. Do not copy them to a different SHA as fresh PASS.
 
-The event file `/var/lib/evejs/coop-events.jsonl` was **missing**. That is `BLOCKED_TELEMETRY` until diagnosed with read-only `-Action DiagnoseWorld`. The associated actual gameplay is **NOT VERIFIED**. For native headless boot the initial event should be recorded even with **zero clients**.
+A later 2026-10-25 run at project commit `a087167` confirmed **live headless event writing and boot request**, but `World` chose Jita (30000142), which legitimately contains **0 asteroid belts**. The report showed **0 named physical NPC assignments, 0 real activity samples**. That means `World` remains **BLOCKED**. The next test on the updated overlay is `-Action World -WorldSystemID 30000144` (real Perimeter belts) and inspection of `nativeMaterializerAttempt.spawnErrors` if physical NPC assignments remain zero. Do not confuse previous test revisions with fresh gameplay PASS.
 
 ## Evidence collected
 

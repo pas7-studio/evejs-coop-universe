@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -27,16 +27,33 @@ function syncNativeDeliveries(){
  }
 }
 function start(){
- if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
+ if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"){
+  if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT==="1")
+   console.warn("[CoopLivingWorld] BLOCKED_RUNTIME_CONFIG: headless boot is enabled but virtual world is disabled");
+  return;
+ }
+ if(world)return;
+ // Diagnostic invocation only; no claim of booted native ships or world.
+ require("./coopRuntimeProbe").observe("living-startup-entered",null,null,
+  {status:"START_REQUESTED_NOT_READY",headlessConfigured:process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT==="1"});
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
- const {createWorld}=require("./coopVirtualWorld");
- const nextWorld=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
-   route,population:Number(process.env.EVEJS_COOP_VIRTUAL_POPULATION||16),
-   travelMs:Number(process.env.EVEJS_COOP_VIRTUAL_TRAVEL_MS||120000),
-   migrateFactions:process.env.EVEJS_COOP_FACTION_LAYOUT_V2==="1"});
- const {createLife}=require("./coopNpcLife");
- const nextLife=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
-  recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
+ let nextWorld,nextLife;
+ try{
+  const {createWorld}=require("./coopVirtualWorld");
+  nextWorld=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
+    route,population:Number(process.env.EVEJS_COOP_VIRTUAL_POPULATION||16),
+    travelMs:Number(process.env.EVEJS_COOP_VIRTUAL_TRAVEL_MS||120000),
+    migrateFactions:process.env.EVEJS_COOP_FACTION_LAYOUT_V2==="1"});
+  const {createLife}=require("./coopNpcLife");
+  nextLife=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
+   recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
+ }catch(error){
+  // Never delete or reinitialize real persisted state to fake a ready world.
+  require("./coopRuntimeProbe").observe("living-startup-failed",null,null,
+   {status:"BLOCKED_PERSISTED_WORLD_INIT",phase:"persistent-state-load",
+    errorCode:String(error?.code||error?.name||"UNKNOWN").replace(/[^A-Za-z0-9_]/g,"_").slice(0,48)});
+  throw error;
+ }
  world=nextWorld;life=nextLife;
  // Headless bootstrap must resolve persisted native pilot links before
  // advancing virtual travel; otherwise a real parked ship can be
@@ -113,11 +130,15 @@ function nextHeadlessRetryMs(attempts){
  return 15*60000;
 }
 function isHeadlessNativeReady({miningEnabled=true,physicalNpcCount=0,
- beltCount=0,physicalMiningShips=0,waypointCount=0}={}){
- // In non-mining configurations no stock mining fleet is expected.
- // Require at least one real static anchor and a named native ship.
+ beltCount=0,physicalMiningShips=0,waypointCount=0,sdeBeltCount=null,
+ startupSlotsReady=true}={}){
+ // A beltless solar system is legitimately not mineable. Require mining
+ // fleet/physical belts only when the authoritative SDE says the *system*
+ // has mining belts. Never invent a Jita belt or treat it as corrupt data.
+ const hasSdeEvidence=Number.isSafeInteger(sdeBeltCount)&&sdeBeltCount>=0;
+ const miningRequired=miningEnabled&&(!hasSdeEvidence||sdeBeltCount>0);
  return physicalNpcCount>0&&waypointCount>0&&
-  (!miningEnabled||(beltCount>0&&physicalMiningShips>0));
+  (!miningRequired||(beltCount>0&&physicalMiningShips>0&&startupSlotsReady===true));
 }
 // Initialize real EveJS scenes without waiting for a human to log in.
 // This is not a client/gameplay proof: only existing native entities count.
@@ -131,6 +152,10 @@ function scheduleHeadlessWorldBoot(route){
  const attempt=()=>{
   headlessBootTimer=null;
   attempts++;
+  // Distinguish a scheduled but never fired boot timer from a real scene
+  // initialization failure. This is emitted BEFORE any native scene work.
+  require("./coopRuntimeProbe").observe("living-headless-boot-attempt",null,null,{
+   attempt:attempts,pendingSystems:[...systems]});
   for(const systemID of [...systems]){
    try{
     const runtime=require("./runtime");
@@ -139,29 +164,72 @@ function scheduleHeadlessWorldBoot(route){
     const scene=runtime.ensureScene(systemID,{refreshStargates:false});
     // Non-mining worlds must not depend on EveJS mining service being
     // configured, available, or importable merely to finish boot.
+    const fleetRecords=miningEnabled
+     ?require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID)||[]:[];
     const fleetShips=miningEnabled
-     ?(require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID)||[])
-       .flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
-       .filter(id=>scene?.getEntityByID?.(Number(id)))
+     ?fleetRecords.flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
+       .filter(id=>{
+        const entity=scene?.getEntityByID?.(Number(id));
+        return entity?.nativeNpc===true&&entity?.kind==="ship";
+       })
      :[];
     const links=Object.values(identityRegistry?.snapshot().links||{})
-     .filter(link=>Number(link.systemID)===systemID&&
-      scene?.getEntityByID?.(Number(link.entityID)));
+     .filter(link=>{
+      if(Number(link.systemID)!==systemID)return false;
+      const ship=scene?.getEntityByID?.(Number(link.entityID));
+      return ship?.kind==="ship"&&ship.nativeNpc===true;
+     });
     const topology=require("./coopNpcTopology").waypoints(scene);
     const beltCount=topology.filter(p=>p.kind==="asteroidBelt").length;
+    const sdeBelts=require("./worldData").getAsteroidBeltsForSystem(systemID).length;
+    const policy=require("./coopHeadlessScenePolicy");
+    const tracked=policy.shouldTrackNativeScene({
+     systemID,scene,realWaypointCount:topology.length});
+    // An actual initialized scene is worth rechecking even when the first
+    // native spawn attempt failed. Previously only a successful pilot link
+    // made a system eligible for the 2-minute reconcile loop.
+    if(tracked)visitedSystems.add(systemID);
+    const miningStartup=policy.nativeMiningStartupPolicy({
+     systemID,sdeBelts,sceneBelts:beltCount});
+    const startupSystems=String(process.env.EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS||"")
+     .split(",").map(x=>Number(x.trim())).filter(id=>Number.isSafeInteger(id)&&id>0);
+    const requireSlots=miningEnabled&&sdeBelts>0&&beltCount>0&&
+     process.env.EVEJS_COOP_MINING_STARTUP_RETRY==="1"&&
+     process.env.EVEJS_MINING_NPC_STARTUP_ENABLED==="true"&&
+     (!startupSystems.length||startupSystems.includes(Number(systemID)));
+    const startupSlots=requireSlots
+     ?require("./coopNativeMiningReadiness").inspect({
+       scene,systemID,fleets:fleetRecords,
+       expectedCount:Number(process.env.EVEJS_MINING_NPC_STARTUP_FLEET_COUNT||1)
+      })
+     :{status:"NOT_REQUIRED",ready:true,missingSlots:[]};
+    // Zero belts in Jita are expected SDE geography; a global SDE belt
+    // counter cannot prove a mineable belt in the physical system scene.
+    require("./coopRuntimeProbe").observe("living-native-system-site-readiness",null,
+     {spaceState:{systemID}},{systemID,realAsteroidBelts:beltCount,
+      authoritativeSdeBelts:sdeBelts,realWaypoints:topology.length,
+      trackingForReconcile:tracked,stockMiningStartup:miningStartup,
+      source:"PINNED_EVEJS_SYSTEM_STATIC_SCENE",
+      status:sdeBelts===0?"SDE_SYSTEM_HAS_NO_BELTS":
+       beltCount===0?"SDE_BELTS_MISSING_FROM_SCENE":"REAL_BELT_PRESENT"});
     const verified=isHeadlessNativeReady({
      miningEnabled,
      physicalNpcCount:links.length,waypointCount:topology.length,
-     beltCount,physicalMiningShips:fleetShips.length
+     beltCount,physicalMiningShips:fleetShips.length,
+     sdeBeltCount:sdeBelts,startupSlotsReady:startupSlots.ready
     });
     // A real named native NPC can operate even if stock mining or static
     // topology is incomplete. Readiness remains a stricter separate gate.
-    if(links.length)visitedSystems.add(systemID);
     if(verified)systems.delete(systemID);
     require("./coopRuntimeProbe").observe("living-headless-boot-system",null,
      {spaceState:{systemID}},
      {attempt:attempts,status:verified?"NATIVE_SCENE_READY":"PENDING_NATIVE_SCENE",
-      realAsteroidBelts:beltCount,physicalMiningShips:fleetShips.length,
+      realAsteroidBelts:beltCount,authoritativeSdeBelts:sdeBelts,
+      miningApplicable:miningEnabled&&sdeBelts>0,
+      trackedForReconcile:tracked,
+      miningStartupStatus:miningStartup.status,
+      nativeStartupSlots:startupSlots,
+      physicalMiningShips:fleetShips.length,
       actualNamedNpcShips:links.length,sceneReady:Boolean(scene)});
    }catch(error){
     console.warn("[CoopHeadlessWorld] system "+systemID,error.message);
@@ -278,15 +346,37 @@ function advanceNativePatrolRoutes(){
  }
 }
 function ensureNativeMining(scene,systemID){
- if(process.env.EVEJS_COOP_NATIVE_MINING!=="1"||!scene||initializedNativeMiningScenes.has(scene))return;
+ if(process.env.EVEJS_COOP_NATIVE_MINING!=="1"||!scene)return;
+ if(initializedNativeMiningScenes.has(scene)){
+  // Reconsider real convoy losses at the normal bounded world reconcile
+  // interval; do not re-run general mining scene init after startup.
+  // The pinned upstream startup hook + native renewal policy enforce
+  // loss cooldown and spawn caps before any replacement is permitted.
+  if(process.env.EVEJS_COOP_CONVOY_RENEWAL==="1")
+   require("../services/mining/miningNpcOperations").handleSceneCreated(scene);
+  return;
+ }
  // Stock EveJS mining operations prevent duplicate fleet seeding.
  // If the scene was only partially initialized, retry on the next pass.
  require("../services/mining/miningRuntime").handleSceneCreated(scene);
  const mining=require("../services/mining/miningNpcOperations");
- if((mining.getMiningFleetsForSystem(systemID)||[]).some(f=>
-    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
-      .some(id=>scene.getEntityByID?.(Number(id)))))
-   initializedNativeMiningScenes.add(scene);
+ const expected=Number(process.env.EVEJS_MINING_NPC_STARTUP_FLEET_COUNT||1);
+ const configured=String(process.env.EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS||"")
+  .split(",").map(x=>Number(x.trim())).filter(x=>Number.isSafeInteger(x)&&x>0);
+ // A lone ship, a GM fleet or just the first of multiple startup
+ // slots is not enough: keep retrying missing native fleet slots.
+ if(process.env.EVEJS_COOP_MINING_STARTUP_RETRY==="1"&&
+  process.env.EVEJS_MINING_NPC_STARTUP_ENABLED==="true"&&
+  (!configured.length||configured.includes(Number(systemID)))){
+  const outcome=require("./coopNativeMiningReadiness").inspect({
+   scene,systemID,expectedCount:expected,
+   fleets:mining.getMiningFleetsForSystem(systemID)
+  });
+  if(outcome.ready)initializedNativeMiningScenes.add(scene);
+ }else if((mining.getMiningFleetsForSystem(systemID)||[]).some(f=>
+   [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
+    .some(id=>scene.getEntityByID?.(Number(id)))))
+  initializedNativeMiningScenes.add(scene);
 }
 function ensureCivilianOrders(runtime,npc){
  if(civilianOrders)return;
@@ -308,18 +398,35 @@ function observeNativeCombat(){
  for(const systemID of visitedSystems){
   try{
    const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+   const getHealth=entity=>{
+    const max=damage.getEntityMaxHealthLayers(entity);
+    if(!Object.values(max).some(n=>n>0))return null;
+    return damage.getEntityCurrentHealthLayers(entity,max);
+   };
+   const getController=id=>controllers.getControllerByEntityID(id);
    const result=combatEvidenceDirector.sample({
-    systemID,scene,links,
-    getHealth:entity=>{
-     const max=damage.getEntityMaxHealthLayers(entity);
-     if(!Object.values(max).some(n=>n>0))return null;
-     return damage.getEntityCurrentHealthLayers(entity,max);
-    },
-    getController:id=>controllers.getControllerByEntityID(id)
+    systemID,scene,links,getHealth,getController
    });
    if(result.status==="SAMPLED"&&result.damageEvents)
     require("./coopRuntimeProbe").observe("living-native-combat-damage",null,
      {spaceState:{systemID}},result);
+   // Named pirate -> unnamed genuine stock miner is a valid native PvE
+   // encounter, but cannot be reported as named-vs-named damage.
+   if(process.env.EVEJS_COOP_NPC_RAIDS==="1"){
+    if(!stockCombatEvidenceDirector)
+     stockCombatEvidenceDirector=require("./coopStockFleetCombatEvidence")
+      .createStockFleetCombatEvidence();
+    const mining=require("../services/mining/miningNpcOperations");
+    const fleetShips=require("./coopNativeRaidEligibility").liveFleetShips(
+     mining.getMiningFleetsForSystem(systemID),scene,systemID);
+    const stock=stockCombatEvidenceDirector.sample({
+     systemID,scene,links,pilots:world?.snapshot()?.pilots||[],
+     fleetShips,getHealth,getController
+    });
+    if(stock.status==="SAMPLED"&&stock.damageEvents)
+     require("./coopRuntimeProbe").observe("living-native-stock-fleet-combat",null,
+      {spaceState:{systemID}},stock);
+   }
   }catch(error){console.warn("[CoopNativeCombatEvidence] sample",systemID,error.message);}
  }
 }
@@ -483,22 +590,19 @@ function advanceNativeRaids(){
   if(!pirates.length)continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const fleets=mining.getMiningFleetsForSystem(systemID);
-  const fleetShips=fleets.flatMap(f=>[
-   ...(f.minerEntityIDs||[]).map(id=>({id:Number(id),role:"miner"})),
-   ...(f.haulerEntityIDs||[]).map(id=>({id:Number(id),role:"hauler"}))
-  ]);
+  const raidPolicy=require("./coopNativeRaidEligibility");
+  // Authoritative live EveJS mining fleet membership is the only source
+  // of valid targets. Unnamed stock miners are not invisible to pirates.
+  const fleetShips=raidPolicy.liveFleetShips(fleets,scene);
   const activeLinks=Object.values(identityRegistry?.snapshot().links||{})
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
-  const linksByShip=new Map(activeLinks.map(link=>[Number(link.entityID),link]));
-  const factionByPilot=new Map(world.snapshot().pilots.map(p=>[p.id,p.faction]));
-  const canAttack=({pirateID,targetID})=>{
-   const aggressor=linksByShip.get(Number(pirateID));
-   const victim=linksByShip.get(Number(targetID));
-   const from=aggressor&&factionByPilot.get(aggressor.pilotID);
-   const to=victim&&factionByPilot.get(victim.pilotID);
-   return Boolean(from&&to&&from!==to);
-  };
+  const actualPilots=world.snapshot().pilots;
+  const canAttack=({pirateID,targetID})=>raidPolicy.isAuthorizedStockMiningRaid({
+   systemID,attacker:scene.getEntityByID(pirateID),
+   target:scene.getEntityByID(targetID),links:activeLinks,
+   pilots:actualPilots,fleetShips
+  });
   const result=raidDirector.tick({
    systemID,scene,pirates,fleetShips,canAttack,
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
@@ -648,12 +752,14 @@ function observeSession(session,ship){
   if(session)visitedSystems.add(systemID);
   const allResidents=world.residents(systemID);
   const roles=economy?.snapshot().pilots||{};
-  const ranks={pirate:0,miner:1,hauler:2,trader:3,patrol:4};
-  const residents=allResidents.map(p=>({
+  // Reserve scarce named hull slots for pirates and genuine patrol NPCs;
+  // role sorting is shared with isolated regression tests.
+  const residents=require("./coopNpcRolePriority").orderForMaterialization(
+   allResidents.map(p=>({
     ...p,role:roles[p.id]?.role||
       ["miner","hauler","patrol","trader","pirate"][(Number(p.id.slice(-3))-1)%5]
-  })).filter(p=>life?.canFly(p.id)!==false)
-    .sort((a,b)=>(ranks[a.role]??5)-(ranks[b.role]??5)||a.id.localeCompare(b.id));
+   })).filter(p=>life?.canFly(p.id)!==false)
+  );
   for(const p of residents)life?.recover(p.id);
   if(economy)economy.advance(world.snapshot().pilots);
    safeNpcPhase("observed-native-depot",syncNativeDeliveries);
@@ -681,24 +787,48 @@ function observeSession(session,ship){
         const {createRegistry}=require("./coopIdentityRegistry");
         identityRegistry=createRegistry({
           file:process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json",
-          exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id))
+          exists:(system,id)=>{
+           const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
+           return ship?.kind==="ship"&&ship.nativeNpc===true;
+          }
         });
-        // Repair any interrupted native gate transfer before the next
-        // materializer.prune() can treat its temporarily missing source ship
-        // as a dead NPC and erase the identity required for rollback.
+        // Recover an interrupted native gate movement first; then restore
+        // saved real NPC hulls before the materializer may prune stale links.
         ensureNativeGateTransfer(runtime);
+        if(process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"){
+          const recovered=require("./coopNativeRestore").restoreNamedShips({
+            registry:identityRegistry,sceneForSystem:id=>
+             runtime.ensureScene(id,{refreshStargates:false}),
+            store:require("./npc/nativeNpcStore"),
+            service:require("./npc/nativeNpcService"),
+            lostShips:Object.values(life?.snapshot()?.wrecks||{})
+          });
+          require("./coopRuntimeProbe").observe("living-native-durable-recovery",null,null,
+           {status:recovered.status,recovered:recovered.recovered,
+            alreadyPhysical:recovered.alreadyPhysical,
+            legacyTransient:recovered.legacyTransient,
+            confirmedLosses:recovered.confirmedLosses,
+            errors:recovered.errors});
+          if(recovered.status!=="OK")
+           throw Error("DURABLE_NPC_RECOVERY_REQUIRES_REPAIR: "+JSON.stringify(recovered.errors).slice(0,210));
+        }
         bridge=createBridge({
           registry:identityRegistry,
           limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
           exemptRoles:nativeMining?["miner","hauler"]:[],
-          exists:(system,id)=>Boolean(runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id)),
+          exists:(system,id)=>{
+           const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
+           return ship?.kind==="ship"&&ship.nativeNpc===true;
+          },
           spawn:(system,pilot)=>{
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
-            const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
+            const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             const hostile=pilot.role==="pirate";
             return npc.spawnBatchInSystem(system,{
-              ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
+              ...anchor,amount:1,entityType:"npc",
+              transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
+              broadcast:true,
               defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
               // Pirates retain native EveJS aggression. Civilians and ordinary
               // guards move and work without automatically attacking players.
@@ -725,11 +855,18 @@ function observeSession(session,ship){
             status:industry.status,fleets:industry.fleets,
             linkedPilots:industry.assignments
           });
+          const unsynced=industry.assignments.filter(x=>
+           x.presented==="BROADCAST_FAILED"||x.presented==="BROADCAST_UNAVAILABLE");
+          if(unsynced.length)require("./coopRuntimeProbe").observe(
+           "living-native-presentation-pending",session,ship,{systemID,
+            unresolved:unsynced.map(x=>({pilotID:x.pilotID,entityID:x.entityID,
+             reason:x.presented}))});
         }catch(error){console.warn("[CoopNativeIndustry]",error.message);}
       }
       // Never create a generic fake miner/hauler when EveJS already has
       // physical mining NPCs with actual mining lasers and ore cargo.
-      const materialize=nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents;
+      const materialize=(nativeMining?residents.filter(p=>p.role!=="miner"&&p.role!=="hauler"):residents)
+       .map(p=>({...p,durable:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"}));
       // Trust EveJS's active mining-fleet ship IDs, never a persisted
       // "miner" label alone, when making stock NPC capacity exemptions.
       const stockMiningIDs=industry.fleets.flatMap(f=>[
@@ -738,13 +875,34 @@ function observeSession(session,ship){
       const result=bridge.reconcile(systemID,materialize,{
        exemptEntityIDs:stockMiningIDs
       });
+      // Explicit actionable failures. Previously the World report only saw
+      // "0 assignments" and hid whether the pilot had no residents,
+      // no native spawn anchor, an invalid pool, or a failed native service.
+      require("./coopRuntimeProbe").observe("living-native-materialization-attempt",session,
+       {spaceState:{systemID}},{systemID,
+        residents:allResidents.length,eligibleResidents:residents.length,
+        requestedSpawns:materialize.length,
+        realAnchors:require("./coopNpcTopology").waypoints(scene).length,
+        nativeMiningEnabled:nativeMining,
+        miningFleetShips:stockMiningIDs.length,
+        linkedIndustryPilots:industry.assignments.length,
+        successfulAssignments:result.filter(x=>Number(x.entityID)>0).length,
+        spawnErrors:result.filter(x=>x.error).slice(0,10).map(x=>({
+         pilotID:x.pilotID,error:String(x.error).slice(0,120),
+         ...(x.nativeReason?{nativeReason:String(x.nativeReason).slice(0,100)}:{}),
+         ...(x.occupied!==undefined?{occupied:x.occupied,limit:x.limit}:{})
+        })),
+        pendingTransit:result.filter(x=>x.pendingTransit).length
+       });
       ensureCivilianOrders(runtime,npc);
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const presented=[];
       for(const link of result){
         if(!link.entityID||!pilotsByID.has(link.pilotID))continue;
         const change=present(scene,link.entityID,pilotsByID.get(link.pilotID));
-        if(change.status==="UPDATED"||change.status==="BROADCAST_FAILED")presented.push({pilotID:link.pilotID,...change});
+        if(change.status==="UPDATED"||change.status==="BROADCAST_FAILED"||
+           change.status==="BROADCAST_UNAVAILABLE")
+          presented.push({pilotID:link.pilotID,...change});
       }
       if(presented.length)require("./coopRuntimeProbe").observe("virtual-world-identity-projected",session,ship,{presented});
       for(const entry of result){
@@ -854,9 +1012,52 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
   const fs=require("node:fs");
   const linksFile=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   let registry;
-  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}catch(error){if(error.code==="ENOENT")return;throw error;}
+  try{registry=JSON.parse(fs.readFileSync(linksFile,"utf8"));}
+  catch(error){if(error.code==="ENOENT")registry={links:{}};else throw error;}
   const link=Object.values(registry?.links||{}).find(x=>
    Number(x.entityID)===Number(npcID)&&Number(x.systemID)===Number(systemID));
+  // Stock miners have no co-op pilot link. Verify an actual upstream
+  // mining-fleet membership and physical wreck without granting the
+  // unnamed victim a synthetic pilot or fabricated ship loss.
+  if(!link&&destroyedShip&&process.env.EVEJS_COOP_NPC_RAIDS==="1"){
+   const mining=require("../services/mining/miningNpcOperations");
+   const fleets=mining.getMiningFleetsForSystem(Number(systemID));
+   const belonged=fleets.some(f=>Number(f?.systemID)===Number(systemID)&&
+    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
+     .some(id=>Number(id)===Number(npcID)));
+   if(belonged){
+    const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+    // The actual ship has already been removed by upstream EveJS, but
+    // the destruction callback still owns its source object. Capture
+    // real last-moment HP loss before recording the verified wreck.
+    if(stockCombatEvidenceDirector){
+     try{
+      const damage=require("./combat/damage");
+      const terminal=stockCombatEvidenceDirector.terminalDamage({
+       systemID,entityID:npcID,ship:destroyedShip,wreckID,
+       getHealth:entity=>{
+        const max=damage.getEntityMaxHealthLayers(entity);
+        if(!Object.values(max).some(n=>n>0))return null;
+        return damage.getEntityCurrentHealthLayers(entity,max);
+       }
+      });
+      if(terminal.status==="NATIVE_STOCK_TERMINAL_HP_DROP")
+       require("./coopRuntimeProbe").observe("living-native-stock-fleet-combat",null,
+        {spaceState:{systemID}},{status:"SAMPLED",systemID,
+         damageEvents:1,terminalNativeWreckID:wreckID,events:[terminal.event]});
+     }catch(error){console.warn("[CoopStockCombatEvidence] terminal",error.message);}
+    }
+    const proof=require("./coopStockFleetWreckEvidence").verifyStockFleetWreck({
+     systemID,ship:destroyedShip,wreckID,fleets,
+     scene:runtime.ensureScene(Number(systemID),{refreshStargates:false}),
+     getWreck:id=>store.getNativeWreck(id),
+     getWreckItems:id=>store.listNativeWreckItemsForWreck(id)
+    });
+    require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
+     null,{spaceState:{systemID}},proof);
+   }
+   return;
+  }
   if(!link)return;
   // This callback is invoked only after EveJS successfully spawned the
   // wreck. Verify that its physical entity and stored loot really exist.

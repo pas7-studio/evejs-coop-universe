@@ -18,6 +18,8 @@ param(
   [switch]$EnableFactionPatrols,
   [switch]$CoopCombat,
   [switch]$LivingCoop,
+  [switch]$EnableNativeCoopContracts,
+  [switch]$EnableNativeLpStandings,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -45,11 +47,22 @@ if ($route.Count -lt 2 -or $invalidRoute.Count -gt 0 -or
   throw 'VirtualRouteSystems must contain at least two distinct numeric EVE solar-system IDs'
 }
 $routeString = $route -join ','
+# Jita (30000142) has ZERO official SDE asteroid belts. Retain it as
+# an actual trade/patrol system, but do not spawn a stock mining fleet
+# that immediately goes "depleted" there. All other selected systems
+# remain subject to the upstream authoritative scene + SDE checks.
+$nativeMiningRoute = @($route | Where-Object { $_ -ne '30000142' })
+$nativeMiningRouteString = $nativeMiningRoute -join ','
 $useDemo = $EnableNativeNpcDemo -or $EnablePersistentEncounters -or $CoopCombat
 $useWorld = $EnableVirtualWorld -or $LivingCoop
 $useMaterialization = $MaterializeVirtualNpcs -or $LivingCoop
 $useEconomy = $EnableVirtualEconomy -or $LivingCoop
 $usePatrols = $EnableFactionPatrols -or $LivingCoop
+# Existing manual materialization limits still win. The LivingCoop default
+# admits a real pirate/patrol mixture without manufacturing any new ships.
+if ($LivingCoop -and -not $PSBoundParameters.ContainsKey('MaterializeLimit')) {
+  $MaterializeLimit = 3
+}
 if ($LivingCoop -and $useDemo) {
   throw 'LivingCoop runs autonomous NPCs; scripted PvE encounters cannot be combined with it'
 }
@@ -82,9 +95,26 @@ if ($useDemo) {
   $yamlLines += "      EVEJS_COOP_NATIVE_NPC_COUNT: '$NpcCount'"
   $yamlLines += "      EVEJS_COOP_NATIVE_NPC_SYSTEM_ID: '$NpcSystemID'"
 }
-if ($CoopCombat) {
+if ($CoopCombat -or $LivingCoop) {
   $yamlLines += "      EVEJS_COOP_REQUIRE_TWO_PILOTS: '1'"
   $yamlLines += "      EVEJS_COOP_PARTY_RANGE_METERS: '250000'"
+}
+if ($LivingCoop) {
+  # Enable actual two-player presence and opt-in on-grid notice without
+  # scripted NPC encounters (LivingCoop still uses autonomous native NPCs).
+  $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+# ContractMgr is a stub in pinned EveJS; this opt-in routes it to the real
+# contractProxy with courier acceptor authorization. Keep OFF by default
+# until two-client escrow and crash-replay settlement validation.
+if ($EnableNativeCoopContracts) {
+  $yamlLines += "      EVEJS_COOP_NATIVE_CONTRACTS: '1'"
+}
+# Static LP Store standing prerequisites: read native effective standing before debit.
+# Opt in only after confirming offers/standing data on the two real characters.
+if ($EnableNativeLpStandings) {
+  $yamlLines += "      EVEJS_COOP_LP_STANDING_REQUIREMENTS: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
@@ -115,14 +145,40 @@ if ($usePatrols) {
 if ($LivingCoop) {
   # Use existing, real EveJS mining, cargo, defenders and standing policy.
   $yamlLines += "      EVEJS_COOP_NATIVE_MINING: '1'"
+  # A failed first native mining spawn must be retryable; never duplicate an already seeded fleet.
+  $yamlLines += "      EVEJS_COOP_MINING_STARTUP_RETRY: '1'"
+  # Destroyed complete native convoys may reappear only after 30min, max 4 attempts/day.
+  # Ordinary NPC combat still uses physical EveJS hulls and real mining startup.
+  $yamlLines += "      EVEJS_COOP_CONVOY_RENEWAL: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
   $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
   $yamlLines += "      EVEJS_COOP_HAULER_HOLD_MS: '120000'"
   $yamlLines += "      EVEJS_COOP_NPC_RAIDS: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_TACTICS: '1'"
   $yamlLines += "      EVEJS_COOP_RIVAL_NPC_COMBAT: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_WARP_SAFETY: '1'"
+  # Native fleet-only item/inactive-hull gifts and verified two-person agent turn-ins.
+  $yamlLines += "      EVEJS_COOP_FLEET_TRADE_SAFETY: '1'"
+  # Objective sharing is safe; automatic second reward is not yet crash-atomic.
+  # Keep native player-by-player turn-ins until durable multi-recipient settlement.
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '0'"
+  # Closed-server progression uses the original EveJS account/skill authority.
+  # This affects the actual skill queue and client estimates, not fake SP grants.
+  $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '6'"
+  # Faster T1 blueprint job time; actual minerals, ISK, taxes and skill gates unchanged.
+  $yamlLines += "      EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: '0.35'"
+  # Native EveJS Omega license (both friends get identical free closed-server access).
+  # The stock client, skill queue and Alpha/Omega restrictions derive it from storeState.
+  $yamlLines += "      EVEJS_OMEGA_LICENSE: 'true'"
+  # Share only verified combat dungeon objectives witnessed by both real fleet ships.
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_SHARE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_WEAPON_EVIDENCE: '1'"
+  $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_EVIDENCE: '1'"
+  $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_QUARANTINE: '1'"
+  $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_QUARANTINE_FILE: '/var/lib/evejs/coop-native-loot-quarantine.json'"
   $yamlLines += "      EVEJS_COOP_HEADLESS_WORLD_BOOT: '1'"
+  # Enable durable named hulls only as part of an explicitly approved LivingCoop deployment.
+  $yamlLines += "      EVEJS_COOP_DURABLE_NPC_SHIPS: '1'"
   $yamlLines += "      EVEJS_COOP_FACTION_LAYOUT_V2: '1'"
   $yamlLines += "      EVEJS_COOP_LOCAL_INTEL: '1'"
   $yamlLines += "      EVEJS_COOP_PLAYER_CONSEQUENCES: '1'"
@@ -133,8 +189,14 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_MINING_NPC_NEUTRAL_RESPONSE_COUNT: '2'"
   $yamlLines += "      EVEJS_MINING_NPC_HOSTILE_RESPONSE_COUNT: '4'"
   $yamlLines += "      EVEJS_MINING_NPC_FRIENDLY_RESPONSE_COUNT: '0'"
-  $yamlLines += "      EVEJS_MINING_NPC_STARTUP_ENABLED: 'true'"
-  $yamlLines += "      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: '$routeString'"
+  # The co-op default route Jita <-> Perimeter mines only in Perimeter.
+  # If no eligible route system remains, don't allow blank IDs, because
+  # upstream interprets blank as *all* scenes (including beltless Jita).
+  $miningStartupEnabled = if ($nativeMiningRoute.Count -gt 0) { 'true' } else { 'false' }
+  $yamlLines += "      EVEJS_MINING_NPC_STARTUP_ENABLED: '$miningStartupEnabled'"
+  if ($nativeMiningRoute.Count -gt 0) {
+    $yamlLines += "      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: '$nativeMiningRouteString'"
+  }
   $yamlLines += "      EVEJS_MINING_NPC_STARTUP_FLEET_COUNT: '1'"
   $yamlLines += "      EVEJS_MINING_NPC_STARTUP_FLEET_MINER_COUNT: '2'"
   $yamlLines += "      EVEJS_MINING_NPC_STARTUP_FLEET_HAULER_COUNT: '1'"

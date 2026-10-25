@@ -386,3 +386,184 @@ test("Market gate cannot promote reversed or out-of-boot native trades",()=>{
  const result=summarize([topo,sale,buy,restart].join("\n"),{now,requireMarket:true});
  assert.notEqual(result.status,"READY_FOR_CLIENT_PLAYTEST");
 });
+
+test("Jita has genuinely zero native belts; World reports correct non-mineable system, not broken global SDE",()=>{
+ const rows=[
+  event("living-headless-boot-requested",{systems:[30000142,30000144]}),
+  event("living-world-topology",{systemID:30000142,realWaypoints:66,
+   realAsteroidBelts:0,realStations:18,realStargates:7}),
+  event("living-native-system-site-readiness",{systemID:30000142,
+   authoritativeSdeBelts:0,realAsteroidBelts:0,status:"SDE_SYSTEM_HAS_NO_BELTS"}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:31,realAsteroidBelts:3})
+ ].join("\n");
+ const r=summarize(rows,{now,systemID:30000142,requireActivity:true});
+ assert.equal(r.systemID,30000142);
+ assert.equal(r.status,"SYSTEM_HAS_NO_NATIVE_MINING_BELTS");
+ assert.equal(r.systemSiteReadiness.authoritativeSdeBelts,0);
+ assert.deepEqual(r.availableMiningSystems,[30000144]);
+ assert.ok(r.blockers[0].includes("30000144"));
+});
+test("Perimeter with real belts requires native miners and haulers, not Jita depleted fleet",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000142,realWaypoints:66,realAsteroidBelts:0}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   authoritativeSdeBelts:3,realAsteroidBelts:3,status:"REAL_BELT_PRESENT"}),
+  event("living-native-industry",{systemID:30000142,fleets:[{
+   state:"depleted",minerIDs:[11,12],haulerIDs:[13]}]})
+ ].join("\n");
+ const r=summarize(rows,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.systemID,30000144);
+ assert.equal(r.status,"NO_NATIVE_MINING_FLEET");
+ assert.equal(r.actualMiningFleets,0);
+ assert.equal(r.systemSiteReadiness.status,"REAL_BELT_PRESENT");
+});
+test("native spawn failures are surfaced as precise World blocker instead of guessing",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{
+   minerIDs:[10],haulerIDs:[20],state:"mining"}]}),
+  event("living-native-materialization-attempt",{systemID:30000144,
+   residents:8,eligibleResidents:8,requestedSpawns:3,successfulAssignments:0,
+   miningFleetShips:3,spawnErrors:[{pilotID:"coop-pilot-003",error:"SPAWN_FAILED"}]}),
+  event("virtual-world-materialization",{systemID:30000144,livingShips:[]})
+ ].join("\n");
+ const r=summarize(rows,{now,systemID:30000144});
+ assert.equal(r.status,"NO_LIVING_NPC_SHIPS");
+ assert.equal(r.nativeMaterializerAttempt.requestedSpawns,3);
+ assert.ok(r.blockers.some(x=>x.includes("SPAWN_FAILED")));
+});
+test("selecting system with no topology does not crash and does not steal another system evidence",()=>{
+ const r=summarize(event("living-world-topology",{
+  systemID:30000142,realWaypoints:66,realAsteroidBelts:0}),{
+   now,systemID:30000144,requireActivity:true});
+ assert.equal(r.systemID,30000144);
+ assert.equal(r.status,"AWAITING_INGAME_ARRIVAL");
+ assert.equal(r.scenery.asteroidBelts,0);
+});
+
+test("World report exposes exact real spawn-cap and write failure causes",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:32,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  event("living-native-materialization-attempt",{systemID:30000144,
+   residents:8,eligibleResidents:8,requestedSpawns:5,successfulAssignments:0,
+   spawnErrors:[
+    {pilotID:"coop-pilot-004",error:"SPAWN_LIMIT_REACHED",occupied:2,limit:2},
+    {pilotID:"coop-pilot-005",error:"NATIVE_SPAWN_THROW",nativeReason:"POOL_NOT_READY"}
+   ]}),
+  event("virtual-world-materialization",{systemID:30000144,livingShips:[]})
+ ].join("\n");
+ const report=summarize(rows,{now,systemID:30000144});
+ assert.equal(report.status,"NO_LIVING_NPC_SHIPS");
+ assert.ok(report.blockers[0].includes("SPAWN_LIMIT_REACHED [2/2]"));
+ assert.ok(report.blockers[0].includes("POOL_NOT_READY"));
+ assert.equal(report.nativeMaterializerAttempt.spawnErrors.length,2);
+});
+test("failed client slim broadcast is reported separately from native NPC spawn",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:32,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{minerIDs:[10],haulerIDs:[20]}]}),
+  event("virtual-world-materialization",{systemID:30000144,livingShips:[{
+   pilotID:"coop-pilot-005",entityID:501,role:"pirate"}]}),
+  event("living-native-presentation-pending",{systemID:30000144,
+   unresolved:[{pilotID:"coop-pilot-005",entityID:501,reason:"BROADCAST_FAILED"}]})
+ ].join("\n");
+ const result=summarize(rows,{now,systemID:30000144});
+ assert.equal(result.status,"READY_FOR_CLIENT_PLAYTEST");
+ assert.equal(result.nativePresentationPending[0].reason,"BROADCAST_FAILED");
+});
+
+test("headless boot timer witness differentiates a fired timer from a missing system result",()=>{
+ const logs=[
+  event("living-headless-boot-requested",{systems:[30000142,30000144]}),
+  event("living-headless-boot-attempt",{attempt:2,pendingSystems:[30000142,30000144]}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:33,realAsteroidBelts:3})
+ ].join("\n");
+ const r=summarize(logs,{now,systemID:30000144});
+ assert.equal(r.headlessAttemptCount,2);
+ assert.deepEqual(r.headlessPendingSystems,[30000142,30000144]);
+ assert.equal(r.headlessBootStatus,null);
+ assert.notEqual(r.status,"READY_FOR_CLIENT_PLAYTEST");
+});
+
+
+test("World exposes missing native miner fleet caused by disabled startup flags",()=>{
+ const data=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   status:"REAL_BELT_PRESENT",authoritativeSdeBelts:3,realAsteroidBelts:3,
+   trackingForReconcile:true,stockMiningStartup:{
+    status:"NATIVE_MINING_STARTUP_DISABLED",startupEnabled:false,
+    startupSystemIncluded:true,configuredForSystem:false}})
+ ].join("\n");
+ const report=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(report.status,"NO_NATIVE_MINING_FLEET");
+ assert.equal(report.systemSiteReadiness.trackingForReconcile,true);
+ assert.equal(report.systemSiteReadiness.stockMiningStartup.status,
+  "NATIVE_MINING_STARTUP_DISABLED");
+ assert.ok(report.blockers[0].includes("NATIVE_MINING_STARTUP_DISABLED"));
+});
+test("World distinguishes excluded Perimeter starter route from missing physical asteroids",()=>{
+ const data=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   status:"REAL_BELT_PRESENT",authoritativeSdeBelts:3,realAsteroidBelts:3,
+   trackingForReconcile:true,stockMiningStartup:{
+    status:"NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM",startupEnabled:true,
+    startupSystemIncluded:false,configuredForSystem:false}})
+ ].join("\n");
+ const r=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.status,"NO_NATIVE_MINING_FLEET");
+ assert.ok(r.blockers[0].includes("NATIVE_MINING_STARTUP_EXCLUDES_SYSTEM"));
+ assert.equal(r.scenery.asteroidBelts,3);
+});
+
+
+test("World identifies native startup fleet-count zero from pinned EveJS default",()=>{
+ const rows=[
+  event("living-world-topology",{systemID:30000144,realWaypoints:33,realAsteroidBelts:3}),
+  event("living-native-system-site-readiness",{systemID:30000144,
+   status:"REAL_BELT_PRESENT",authoritativeSdeBelts:3,realAsteroidBelts:3,
+   trackingForReconcile:true,stockMiningStartup:{
+    status:"NATIVE_MINING_FLEET_COUNT_ZERO",
+    startupEnabled:true,startupSystemIncluded:true,startupFleetCount:0}})
+ ].join("\n");
+ const r=summarize(rows,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.status,"NO_NATIVE_MINING_FLEET");
+ assert.equal(r.systemSiteReadiness.stockMiningStartup.startupFleetCount,0);
+ assert.ok(r.blockers[0].includes("NATIVE_MINING_FLEET_COUNT_ZERO"));
+});
+
+
+test("corrupt persisted NPC identity blocks World even when a native scene and miners exist",()=>{
+ const data=[
+  event("living-headless-boot-requested",{systems:[30000144]}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3}),
+  event("living-native-industry",{systemID:30000144,fleets:[{minerIDs:[100],haulerIDs:[200]}]}),
+  event("virtual-world-materialization",{systemID:30000144,
+   livingShips:[{pilotID:"coop-pilot-005",entityID:901,role:"patrol"}]}),
+  event("living-native-durable-recovery",{
+   status:"NEEDS_OPERATOR_REPAIR",recovered:0,
+   errors:[{pilotID:"coop-pilot-005",entityID:901,
+    reason:"DURABLE_NATIVE_RECORD_MISSING"}]})
+ ].join("\n");
+ const r=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.status,"BLOCKED_DURABLE_NPC_RECOVERY");
+ assert.equal(r.nativeDurableRecovery.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
+ assert.ok(r.blockers[0].includes("coop-pilot-005"));
+});
+test("native durable restart evidence is reported without pretending client gameplay",()=>{
+ const data=[
+  event("living-headless-boot-requested",{systems:[30000144]}),
+  event("living-native-durable-recovery",{status:"OK",recovered:1,
+   alreadyPhysical:0,legacyTransient:2,confirmedLosses:1,errors:[]}),
+  event("living-world-topology",{systemID:30000144,realWaypoints:30,realAsteroidBelts:3})
+ ].join("\n");
+ const r=summarize(data,{now,systemID:30000144,requireActivity:true});
+ assert.equal(r.nativeDurableRecovery.status,"OK");
+ assert.equal(r.nativeDurableRecovery.recovered,1);
+ assert.equal(r.nativeDurableRecovery.legacyTransient,2);
+ assert.equal(r.nativeDurableRecovery.confirmedLosses,1);
+ assert.notEqual(r.status,"READY_FOR_CLIENT_PLAYTEST");
+});

@@ -31,6 +31,10 @@ echo "Virtual world flag: ${EVEJS_COOP_VIRTUAL_WORLD:-UNSET}"
 echo "Headless boot flag: ${EVEJS_COOP_HEADLESS_WORLD_BOOT:-UNSET}"
 echo "Materialization flag: ${EVEJS_COOP_MATERIALIZE_NPCS:-UNSET}"
 echo "Native mining flag: ${EVEJS_COOP_NATIVE_MINING:-UNSET}"
+echo "Native mining retry flag: ${EVEJS_COOP_MINING_STARTUP_RETRY:-UNSET}"
+echo "Native loot quarantine enabled: ${EVEJS_COOP_NATIVE_LOOT_QUARANTINE:-UNSET}"
+echo "Native loot quarantine file: ${EVEJS_COOP_NATIVE_LOOT_QUARANTINE_FILE:-UNSET}"
+echo "Native mining configured startup fleets: ${EVEJS_MINING_NPC_STARTUP_FLEET_COUNT:-UNSET}"
 echo "Telemetry file setting: ${EVEJS_COOP_EVENTS_FILE:-UNSET}"
 if [ -f /app/server/src/space/coopVirtualWorldRuntime.js ]; then
   echo "World overlay module: INSTALLED"
@@ -66,12 +70,20 @@ else
     grep -c '"event":"living-world-topology"' "$EVEJS_COOP_EVENTS_FILE" || true
     echo "Real activity events:"
     grep -c '"event":"living-native-activity"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Native mining startup outcomes:"
+    grep -c '"event":"living-native-mining-startup-slot"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Stock mining fleet HP damage events:"
+    grep -c '"event":"living-native-stock-fleet-combat"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Observed native weapon events:"
+    grep -c '"event":"living-native-weapon-event"' "$EVEJS_COOP_EVENTS_FILE" || true
+    echo "Observed native loot pickup events:"
+    grep -c '"event":"living-native-loot-pickup"' "$EVEJS_COOP_EVENTS_FILE" || true
   fi
 fi
 '@
 
 Write-Host '[DIAGNOSE] Inspecting effective running server; no container or game-data changes will be made.'
-& docker compose @argsList exec -T server sh -c $readOnlyCheck
+$readOnlyCheck -split '\r?\n' | & docker compose @argsList exec -T server sh -s
 if ($LASTEXITCODE -ne 0) {
     throw 'Cannot inspect the running EveJS server container; check its state with -Action Status'
 }
@@ -81,12 +93,18 @@ $lines = @(& docker compose @argsList logs --no-color --tail 250 server 2>&1)
 if ($LASTEXITCODE -ne 0) {
     Write-Warning 'Could not read recent server logs'
 } else {
-    $matchesFound = @($lines | Select-String -Pattern '\[CoopVirtualWorld\]|\[CoopProbe\]|\[CoopLivingWorld\]|living-headless-boot|NATIVE_SCENE|CoopNpc' | Select-Object -Last 35)
+    $matchesFound = @($lines | Select-String -Pattern '\[CoopVirtualWorld\]|\[CoopProbe\]|\[CoopLivingWorld\]|living-headless-boot|NATIVE_SCENE|CoopNpc|CoopMiningRetry' | Select-Object -Last 35)
     if ($matchesFound.Count -eq 0) {
         Write-Host 'No matching recent messages. This does not establish that the startup hook executed.'
     } else {
         $matchesFound | ForEach-Object { Write-Host $_.Line }
     }
+}
+# This deeper native audit is read-only; it compares installed module hashes
+# and the effective running startup flags without any rebuild or data writes.
+$telemetryAudit = Join-Path $PSScriptRoot 'Diagnose-Coop-Telemetry.ps1'
+if (Test-Path -LiteralPath $telemetryAudit -PathType Leaf) {
+    & $telemetryAudit -CodePath $CodePath
 }
 Write-Host '[DIAGNOSE] Next: consult docs/GAMEPLAY_TESTING.md Phase 1. Missing event file = BLOCKED_TELEMETRY, not missing-client proof.'
 Write-Warning 'Do not share unredacted logs or run npm audit in place of gameplay verification.'
