@@ -35,6 +35,7 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
   return b&&contractOK(b.contractID)&&keyOK(b.manifestKey)&&
    [b.systemID,b.fleetID,b.haulerID,b.stationID,b.corporationID,
     b.amountISK].every(pos)&&b.amountISK<=1000000000&&b.amountISK%2===0&&
+   (!("playerFleetID" in b)||pos(b.playerFleetID))&&
    Array.isArray(b.characters)&&b.characters.length===2&&
    b.characters.every(pos)&&b.characters[0]<b.characters[1]&&
    typeof b.manifestDigest==="string"&&/^[a-f0-9]{64}$/.test(b.manifestDigest);
@@ -102,6 +103,7 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
   const b={contractID:offer?.contractID,manifestKey:key,systemID:m.systemID,
    fleetID:m.fleetID,haulerID:m.haulerIDs[0],stationID:m.stationID,
    corporationID:m.corporationID,characters:offer?.characters,
+   ...(offer?.playerFleetID!==undefined?{playerFleetID:offer.playerFleetID}:{}),
    amountISK:offer?.amountISK,manifestDigest:sha(m)};
   if(offer?.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING"||!bookingOK(b)||
    offer?.manifestKey!==key||offer?.systemID!==m.systemID||
