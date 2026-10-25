@@ -45,17 +45,14 @@ function patch(src,{remove=false}={}){
  const sellAck=lineIn(bs,ss,"if (coopPlayerSellProof) require(");
  const buyAck=lineIn(ss,be,"if (coopPlayerBuyProof) require(");
  edit(bs,ss,sellProof,
+  '        if ('+gate+' && !chargeBuyerWallet) throw Error("P2P_SETTLEMENT_RESERVED_BUY_ORDER_CROSSING_UNSUPPORTED");'+nl+
   '        const coopPlayerSellTicket = coopPlayerSellProof && '+gate+
   ' ? '+svc+'.begin(coopPlayerSellProof,{chargeBuyerWallet}) : null;', {after:true});
- edit(bs,ss,sellProof,
-  '        if ('+gate+' && !chargeBuyerWallet) throw Error("P2P_SETTLEMENT_RESERVED_BUY_ORDER_CROSSING_UNSUPPORTED");',{after:true});
  edit(ss,be,
   '    const sellerInventoryChanges = [];',
+  '    if ('+gate+' && !isSeedBuyOrder && sourceOrderId && normalizeOrderId(sourceOrderId)!=="0") throw Error("P2P_SETTLEMENT_DOUBLE_ORDER_CROSSING_UNSUPPORTED");'+nl+
   '    const coopPlayerBuyTicket = coopPlayerBuyProof && '+gate+
   ' ? '+svc+'.begin(coopPlayerBuyProof,{chargeBuyerWallet:false}) : null;', {after:true});
- edit(ss,be,
-  '    const sellerInventoryChanges = [];',
-  '    if ('+gate+' && !isSeedBuyOrder && sourceOrderId && normalizeOrderId(sourceOrderId)!=="0") throw Error("P2P_SETTLEMENT_DOUBLE_ORDER_CROSSING_UNSUPPORTED");',{after:true});
  edit(bs,ss,
   '        const grossAmount = roundIsk(orderPrice * tradedQuantity);',
   '        if (coopPlayerSellTicket) '+svc+'.confirmRust(coopPlayerSellTicket,fillResponse);',{after:true});
