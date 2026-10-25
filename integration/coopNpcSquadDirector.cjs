@@ -86,7 +86,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
     .slice(0,maxAttackers).map(p=>p.entityID);
    if(!attackerIDs.length)continue;
    const prior=priorTeams.get(key);
-   const continuing=prior?.scoutID===scout.entityID&&
+   const continuing=prior?.witnessLost!==true&&prior?.scoutID===scout.entityID&&
     prior.targetID===target.targetID&&prior.firstSeenAt<=now&&
     prior.expiresAt>=now&&meters(prior.position,target.ship.position)<=100000;
    const team={systemID:sys,faction,scoutID:scout.entityID,
@@ -94,7 +94,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
     targetRole:target.targetRole,
     firstSeenAt:continuing?prior.firstSeenAt:now,
     lastSeenAt:now,expiresAt:now+reportTtlMs,
-    position:{...target.ship.position}};
+    position:{...target.ship.position},witnessLost:false};
    next.set(key,team);
    summary.push({systemID:sys,scoutID:team.scoutID,
     attackerIDs:[...team.attackerIDs],targetID:team.targetID,
@@ -106,7 +106,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
   for(const [key,old] of priorTeams)if(old.systemID===sys&&
    !next.has(key)&&old.expiresAt>=now&&
    validShip(scene,old.targetID)&&teams.size+next.size<maxTeams)
-    next.set(key,old);
+    next.set(key,{...old,witnessLost:true});
   for(const [key,value] of next)teams.set(key,value);
   return {status:"OK",teams:summary};
  }
@@ -121,6 +121,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
   const team=all[0];
   if(attacker===team.scoutID)return {allowed:false,reason:"SCOUT_WITNESS_ONLY"};
   if(team.targetID!==target)return {allowed:false,reason:"SQUAD_TARGET_RESERVED"};
+  if(team.witnessLost)return {allowed:false,reason:"NO_CURRENT_WITNESS"};
   if(now<team.firstSeenAt+relayDelayMs)
    return {allowed:false,reason:"RELAY_IN_FLIGHT"};
   if(now<team.lastSeenAt||now>team.expiresAt)
