@@ -56,3 +56,7 @@ PR #2's newer `4ca22f9546c49216b4026c93f982236b3f60e9df` adds an explicit `-Enab
 ## P0 co-op LP standing sync
 
 Latest PR #2 `f6646c31dfd3b2500b49ef47b5612d07b9165f6f` adds authoritative static LP standing requirements and native contracts/LP documentation. The integration installer now includes its reversible standing patch and module. Native LP standing gate is **OFF by default**; explicitly selected `-EnableNativeLpStandings` only. Manual Node verifier registers its tests; no real authorized client LP purchase was verified. Keep original PR #2 active and this integration branch Draft.
+
+## Verified cross-stream evidence defect fixed
+
+The combined `coop-duo-contribution-report.cjs` previously counted genuine A/B native damage **and** a separate valid C/D mission objective as a single two-player completion. A deterministic real-module reproduction demonstrated the false PASS. The integration branch now requires mission credit for the **same exact two character IDs** that provided two distinct authenticated hits on a single physical native NPC victim. It preserves independent mission and damage reporting, but marks unrelated mission credit `MISSION_CREDIT_NOT_LINKED_TO_DAMAGING_CREW`, never overall success. Added positive/reordered-crew and adversarial negative tests. This is a server JSONL correlation fix, NOT proof that two clients completed their mission or received rewards.

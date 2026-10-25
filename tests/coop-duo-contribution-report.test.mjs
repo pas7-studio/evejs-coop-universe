@@ -66,3 +66,29 @@ test('verified damage can be real even without wreck, but no final blow claimed'
  assert.equal(r.damage.distinctDamagers,2);assert.equal(r.damage.matchedPhysicalWreck,false);
  assert.equal(r.actualGameplayVerified,false);
 });
+
+test('P0: unrelated pilot pair mission cannot certify another pair combat',()=>{
+ const a=rows();
+ // A+B genuinely damaged the same NPC. C+D join the world afterward and
+ // independently credit a genuine native dungeon; they are NOT A+B.
+ a.splice(5,0,e(8,'coop-shared-scene',{mutualVisibility:true,pilots:[
+  {characterID:21,shipID:301,shipExists:true},
+  {characterID:22,shipID:302,shipExists:true}
+ ]}));
+ a.at(-1).characterIDs=[21,22];
+ const r=run(a);
+ assert.equal(r.damage.distinctDamagers,2);
+ assert.equal(r.mission.status,'MISSION_CREDIT_NOT_LINKED_TO_DAMAGING_CREW');
+ assert.equal(r.status,'INCOMPLETE_NATIVE_COOP_EVIDENCE');
+ assert.equal(r.bothPlayerDamageVerified,true);
+ assert.equal(r.actualGameplayVerified,false);
+});
+
+test('same two pilots may earn genuine mission credit after a refreshed native scene',()=>{
+ const a=rows();
+ a.splice(5,0,e(8,'coop-shared-scene',{mutualVisibility:true,pilots:[
+  {characterID:12,shipID:202,shipExists:true},
+  {characterID:11,shipID:201,shipExists:true}
+ ]}));
+ assert.equal(run(a).status,'SERVER_TWO_PLAYER_DAMAGE_AND_MISSION_CREDIT');
+});
