@@ -32,7 +32,7 @@ Use an existing persistent POSIX root specified by EVEJS_COOP_NPC_AMMO_DEBIT_ROO
 - integration/coopNpcAmmoBankAtomic.cjs — require a successful previous outcome witness before writing the next PREPARED when the new flag is enabled.
 - scripts/coop-native-npc-fire-debit-patch.cjs — reversible pinned source hooks after turret resolution/damage and after missile launch success/failure. The existing ammo transaction remains authoritative.
 - scripts/audit-npc-atomic-sqlite.cjs — optional read-only --require-outcome mode classifies missing/failed outcomes, validates metadata; legacy audit behavior unchanged.
-- tests/coop-npc-fire-outcome-witness.test.mjs — 9 dedicated journal and next-cycle tests; tests/coop-npc-fire-debit-source.test.mjs — 2 ordering tests; tests/coop-npc-atomic-sqlite-audit.test.mjs — 4 audit cases.
+- tests/coop-npc-fire-outcome-witness.test.mjs — 10 dedicated journal and next-cycle tests; tests/coop-npc-fire-debit-source.test.mjs — 2 ordering tests; tests/coop-npc-atomic-sqlite-audit.test.mjs — 4 audit cases.
 
 ## Verified now
 
