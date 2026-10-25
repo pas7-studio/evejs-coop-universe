@@ -53,7 +53,7 @@ function addNpcOrderBlocks(blockedIDs,systemID,owner){
 function npcPersonalGoals(){
  if(process.env.EVEJS_COOP_NPC_PERSONAL_GOALS!=="1"||
     process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1"||
-    process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
+    !alifeOrderArbitrationEnabled(process.env))return null;
  if(!personalGoals)personalGoals=require("./coopNpcPersonalGoals").createPersonalGoals({
   file:process.env.EVEJS_COOP_NPC_GOALS_FILE||"/var/lib/evejs/coop-npc-goals.json"
  });
@@ -155,7 +155,15 @@ function start(){
     void observeAlifeEconomy().catch(error=>console.warn("[CoopAlifeEconomy] observation",error.message));
    });
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
-  safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
+  // Opt-in normal ammo orders flow from native A-Life decisions; survival
+  // still receives an immediate authoritative native retreat attempt.
+  if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled()){
+   safeNpcPhase("native-ammo-readiness",()=>
+    advanceNativeAmmoSupply({mode:"MONITOR_ONLY"}));
+   safeNpcPhase("native-ammo-survival",()=>
+    advanceNativeAmmoSupply({mode:"SURVIVAL"}));
+  }
+  else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
@@ -440,7 +448,7 @@ function observeNativeAmmoConsumption(){
 function advanceNativeWreckRecovery(){
  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !identityRegistry||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry");
@@ -480,7 +488,7 @@ function advanceNativeWreckCustody(){
  if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   nativeMarketTickRunning||!identityRegistry||!bridge)return;
  const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
   controllers=require("./npc/npcRegistry");
@@ -564,7 +572,7 @@ function advanceNativeWreckCustody(){
 function advanceNativeLootStationDelivery(){
  if(process.env.EVEJS_COOP_NPC_LOOT_COMMERCE!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !identityRegistry||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   controllers=require("./npc/npcRegistry"),
@@ -798,7 +806,10 @@ async function observeAlifeEconomy(){
      cache.set(key,observed);
     }
    }
-   alifeEconomyObserver.tick(snap);
+   const decision=alifeEconomyObserver.tick(snap);
+   if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
+    safeNpcPhase("alife-native-resupply-act",()=>
+     advanceNativeAmmoSupply({mode:"PLANNED",systemIDFilter:systemID,decision}));
   }
  }finally{alifeEconomyAuthorityBusy=false}
 }
@@ -971,7 +982,7 @@ async function advanceNativeMarket(){
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
   const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
    process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
-   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+   alifeOrderArbitrationEnabled(process.env);
   if(rearmEnabled&&!nativeRearm)
    nativeRearm=require("./coopNpcNativeRearm").createNativeRearm({
     store,registry:identityRegistry,
@@ -1165,10 +1176,10 @@ function advanceNativeCivilianOrders(){
 }
 // Physically stranded NPCs cannot invent ammo. Warping away from battle
 // uses a real unscrumbled native hull, with safe real station destination.
-function advanceNativeAmmoSupply(){
+function advanceNativeAmmoSupply({mode="LEGACY",systemIDFilter=null,decision=null}={}){
  if(process.env.EVEJS_COOP_NPC_AMMO_SUPPLY!=="1"||
   process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !bridge||!identityRegistry||!world||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry"),
@@ -1193,16 +1204,38 @@ function advanceNativeAmmoSupply(){
  const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
  const assignments=bridge.snapshot().filter(x=>roles.get(x.pilotID)==="pirate");
  for(const systemID of visitedSystems){
+  if(systemIDFilter!==null&&Number(systemIDFilter)!==Number(systemID))continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const blockedIDs=new Set();
   if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
   if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
-  const result=nativeAmmoSupply.tick({scene,assignments,blockedIDs});
+  let chosen=assignments,selected=null;
+  if(mode==="SURVIVAL"||mode==="PLANNED"){
+   selected=require("./coopAlifeNativeResupplyBridge").selectAmmoResupply({
+    mode,systemID,assignments,decision,scene,
+    getController:id=>controllers.getControllerByEntityID(id),
+    inspectAmmo:args=>nativeAmmoSupply.inspect(args)});
+   if(selected.status!=="SELECTED"||selected.selected.length===0)continue;
+   chosen=selected.selected;
+  }
+  const result=nativeAmmoSupply.tick({scene,assignments:chosen,blockedIDs,
+   observeOnly:mode==="MONITOR_ONLY"});
   if(result.orders.length||result.events.length)
    require("./coopRuntimeProbe").observe("living-native-ammo-supply",null,
     {spaceState:{systemID}},{orders:result.orders,events:result.events,
-     nativeCargoSupplyOnly:true,cargoCredited:false});
+     nativeCargoSupplyOnly:true,cargoCredited:false,alifeMode:mode});
+  if(mode==="PLANNED"&&result.orders.length)
+   for(const order of result.orders){
+    const intent=selected.intents.get(order.pilotID);
+    if(!intent||Number(intent.entityID)!==Number(order.entityID))continue;
+    require("./coopRuntimeProbe").observe("alife-native-act-order",null,
+     {spaceState:{systemID}},{pilotID:order.pilotID,entityID:order.entityID,
+      stage:"RESUPPLY",intentID:intent.intentID,stationID:order.stationID,
+      nativeAction:order.action,proof:"NATIVE_ORDER_ACCEPTED",
+      nativeMutation:true,cargoCredited:false,iskCredited:false});
+   }
  }
+
 }
 function advanceNativeRaids(){
  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
@@ -1256,7 +1289,7 @@ function advanceNativeRaids(){
   // attack loop. Existing native stock mining raid legality still runs first.
   const squadEnabled=process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&
    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&
-   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+   alifeOrderArbitrationEnabled(process.env);
   if(squadEnabled&&!squadDirector)
    squadDirector=require("./coopNpcSquadDirector").createSquadDirector();
   const squads=squadEnabled?squadDirector:null;

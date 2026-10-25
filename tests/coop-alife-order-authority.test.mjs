@@ -28,3 +28,40 @@ test("the runtime guard is the only place that decides order authority", () => {
   const raw = text.match(/process\.env\.EVEJS_COOP_NPC_ORDER_ARBITER/g) || [];
   assert.equal(raw.length, 0, "the legacy flag must be read only through the helper");
 });
+
+test("every native NPC order-dependent director is gated by the same master helper",()=>{
+ const source=readFileSync(join(root,"integration","coopVirtualWorldRuntime.cjs"),"utf8");
+ const guardPositions=[
+  "function npcPersonalGoals(){",
+  "function advanceNativeWreckRecovery(){",
+  "function advanceNativeWreckCustody(){",
+  "function advanceNativeLootStationDelivery(){",
+  "function advanceNativeAmmoSupply(){"
+ ];
+ for(const guard of guardPositions){
+  const at=source.indexOf(guard);
+  assert.ok(at>=0,guard);
+  const end=source.indexOf(" const runtime=require(",at);
+  const body=source.slice(at,end>at?end:at+1100);
+  assert.ok(body.includes("!alifeOrderArbitrationEnabled(process.env)"),
+   "missing shared authority gate in "+guard);
+ }
+ for(const scope of ["const rearmEnabled=","const squadEnabled="]){
+  const at=source.indexOf(scope);
+  assert.ok(at>=0,scope);
+  const body=source.slice(at,at+260);
+  assert.ok(body.includes("alifeOrderArbitrationEnabled(process.env)"),
+   "legacy gate still blocks ALIFE master switch for "+scope);
+ }
+ const direct=source.match(/process\.env\.EVEJS_COOP_NPC_ORDER_ARBITER/g)||[];
+ assert.equal(direct.length,0,"no shadow legacy-only flags should survive");
+});
+test("unified authority cannot silently enable unrelated NPC features",()=>{
+ assert.equal(alifeOrderArbitrationEnabled({EVEJS_COOP_ALIFE:"1"}),true);
+ const source=readFileSync(join(root,"integration","coopVirtualWorldRuntime.cjs"),"utf8");
+ for(const flag of ["EVEJS_COOP_NPC_PERSONAL_GOALS","EVEJS_COOP_NPC_WRECK_RECOVERY",
+   "EVEJS_COOP_NPC_WRECK_TRANSFER","EVEJS_COOP_NPC_AMMO_SUPPLY",
+   "EVEJS_COOP_NPC_EARN_SPEND_REARM","EVEJS_COOP_NPC_SQUAD_RAIDS"]){
+  assert.ok(source.includes("process.env."+flag),"independent opt-in must survive "+flag);
+ }
+});

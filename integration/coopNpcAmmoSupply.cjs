@@ -70,10 +70,11 @@ function createAmmoSupply({store,getWeaponModules,resolveFamily,isOptional,compa
    {mandatory,loaded,loose});
   return out("AMMO_EXHAUSTED",{mandatory,loaded,loose});
  }
- function tick({scene,assignments=[],blockedIDs=new Set()}={}){
+ function tick({scene,assignments=[],blockedIDs=new Set(),observeOnly=false}={}){
   const system=id(scene?.systemID),orders=[],events=[],now=clock();
   if(!system||!Array.isArray(assignments)||
-   !Number.isSafeInteger(now)||now<0||!(blockedIDs instanceof Set))
+   !Number.isSafeInteger(now)||now<0||!(blockedIDs instanceof Set)||
+   typeof observeOnly!=="boolean")
    return {status:"INVALID",orders,events};
   const seen=new Set();let used=0;
   for(const a of assignments){
@@ -98,6 +99,9 @@ function createAmmoSupply({store,getWeaponModules,resolveFamily,isOptional,compa
     pilotID:a.pilotID,source:"REAL_NATIVE_CARGO"});
    leases.set(key,{systemID:system,entityID,pilotID:a.pilotID,
     expiresAt:now+180000});
+   // ALIFE-02: no order, route, item, ISK or wallet mutation here.
+   // Keep the physical depletion fence live so raids cannot ignore ammo.
+   if(observeOnly)continue;
    const ship=scene.getEntityByID(entityID);
    if(!vec(ship?.position)||ship.pendingWarp||ship.warpState||
     String(ship.mode||"").toUpperCase().includes("WARP")||
