@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {
- evaluateContract,selectHull,planRoute,piracyOpportunity,quoteCourier,
+ evaluateContract,evaluateCourierIdentity,selectHull,planRoute,piracyOpportunity,quoteCourier,
 }=require('../integration/coopCourierDispatch.cjs');
 
 function courier(overrides={}){
@@ -138,4 +138,18 @@ test('a quote is deterministic, rounded and class-aware',()=>{
 test('a quote refuses unknown hull classes and empty volume',()=>{
  assert.equal(quoteCourier({volumeM3:0}).status,'NO_QUOTE');
  assert.equal(quoteCourier({volumeM3:100,hullClass:'shuttle'}).status,'NO_QUOTE');
+});
+
+test('an NPC courier is only ready when it is a real character with funds and a real ship at the origin',()=>{
+ const contract=courier({volume:29500,collateral:300000});
+ const character={characterID:140000010,accountId:9,stationID:60003760,balance:500000};
+ const ship={itemID:9988400000999,typeID:20185,stationID:60003760,capacityM3:435000};
+ assert.equal(evaluateCourierIdentity({character,ship},contract).status,'READY');
+ assert.equal(evaluateCourierIdentity({ship},contract).status,'REFUSED_NO_CHARACTER');
+ assert.equal(evaluateCourierIdentity({character:{...character,accountId:0},ship},contract).status,'REFUSED_NO_CHARACTER');
+ assert.equal(evaluateCourierIdentity({character:{...character,stationID:60003761},ship},contract).status,'REFUSED_CHARACTER_NOT_AT_ORIGIN');
+ assert.equal(evaluateCourierIdentity({character:{...character,balance:1000},ship},contract).status,'REFUSED_NO_FUNDS');
+ assert.equal(evaluateCourierIdentity({character},contract).status,'REFUSED_NO_SHIP');
+ assert.equal(evaluateCourierIdentity({character,ship:{...ship,stationID:60003762}},contract).status,'REFUSED_SHIP_NOT_AT_ORIGIN');
+ assert.equal(evaluateCourierIdentity({character,ship:{...ship,capacityM3:4800}},contract).status,'REFUSED_SHIP_TOO_SMALL');
 });

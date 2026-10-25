@@ -259,12 +259,64 @@ function quoteCourier(request, policy) {
   });
 }
 
+// An NPC courier is only real if it is a real character: the wallet lives in
+// the character record (`balance` + `walletJournal`), the ship is a real item
+// owned by that character, and both must be at the contract origin station.
+// identity: { character:{characterID,accountId,stationID,balance},
+//             ship:{itemID,typeID,stationID,capacityM3} }
+function evaluateCourierIdentity(identity, contract) {
+  const who = identity || {};
+  const character = who.character;
+  const ship = who.ship;
+  const contractID = Number(contract && contract.contractID) || 0;
+  if (!character || !(Number(character.characterID) > 0) || !(Number(character.accountId) > 0)) {
+    return status("REFUSED_NO_CHARACTER", { contractID });
+  }
+  const originStationID = Number(contract && contract.startStationID) || 0;
+  if (Number(character.stationID) !== originStationID) {
+    return status("REFUSED_CHARACTER_NOT_AT_ORIGIN", {
+      contractID,
+      characterStationID: Number(character.stationID) || 0,
+      originStationID,
+    });
+  }
+  const balance = money(character.balance);
+  const collateral = money(contract && contract.collateral);
+  if (balance < collateral) {
+    return status("REFUSED_NO_FUNDS", { contractID, balance, collateral });
+  }
+  if (!ship || !(Number(ship.itemID) > 0) || !(Number(ship.typeID) > 0)) {
+    return status("REFUSED_NO_SHIP", { contractID });
+  }
+  if (Number(ship.stationID) !== originStationID) {
+    return status("REFUSED_SHIP_NOT_AT_ORIGIN", {
+      contractID,
+      shipStationID: Number(ship.stationID) || 0,
+      originStationID,
+    });
+  }
+  const capacityM3 = Number(ship.capacityM3) || 0;
+  const volumeM3 = Number(contract && contract.volume) || 0;
+  if (capacityM3 < volumeM3) {
+    return status("REFUSED_SHIP_TOO_SMALL", { contractID, capacityM3, volumeM3 });
+  }
+  return status("READY", {
+    contractID,
+    characterID: Number(character.characterID),
+    balance,
+    shipItemID: Number(ship.itemID),
+    capacityM3,
+    volumeM3,
+  });
+}
+
 module.exports = {
   COURIER_CONTRACT_TYPE,
   DEFAULT_POLICY,
   DEFAULT_PIRACY_POLICY,
   DEFAULT_QUOTE_POLICY,
   evaluateContract,
+  evaluateCourierIdentity,
   selectHull,
   planRoute,
   piracyOpportunity,

@@ -216,3 +216,30 @@ Events the verification depends on (real values only, no synthetic activity):
 
 Each step is recorded with revision, env flags and evidence; a passing unit
 test is never reported as gameplay.
+
+## Decision: an NPC courier is a full player-equivalent actor
+
+Owner decision (2026-10-26): we do not want a second human character. NPCs are
+the second characters, and they must be real players in every respect. That
+removes the synthetic-session shortcut entirely and sets the bar:
+
+| Piece | Where it really lives (verified) |
+| --- | --- |
+| Wallet | `characters.<id>.json.balance` + `walletJournal` entries; there is no `wallets` table |
+| Ship | a real item owned by that character, sitting at the origin station |
+| Identity | `characters` row with `accountId`, `characterName`, `stationID` |
+| Contract | `contractRuntime` row keyed by character ID |
+
+The owner's own character proves the shape: `140000005` has `accountId 3`,
+`balance 981397.39`, and a journal entry `-30000 "Contract 980000000 reward
+escrow"`. That is exactly what an NPC courier must have for real, funded from
+its own earned ISK - never a grant invented for the test.
+
+`evaluateCourierIdentity` (pure, tested) is the fail-closed gate: no character
+record, character not at the origin, balance below collateral, no ship, ship
+elsewhere, or ship too small each produce a distinct refusal instead of a
+half-done delivery.
+
+Still missing before a real run: seeding one courier character (account,
+character, balance from its earned ledger) and a real hauler item at the origin
+station, then the session-less accept/complete adapter and the flight itself.
