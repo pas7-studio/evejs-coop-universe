@@ -172,6 +172,34 @@ function createCustody({file=process.env.EVEJS_COOP_TRADE_CUSTODY_FILE||DEFAULT_
   }
   return true;
  }
+ function beforeComplete(service,trade){
+  assertReady(service);
+  const ledger=read();
+  if(!ledger.ok){halt(ledger.reason);throw Error(ledger.reason)}
+  if(!trade||trade.status!=="open"||
+   typeof service?._listTradeItems!=="function"){
+   halt("NATIVE_TRADE_MANIFEST_UNAVAILABLE");
+   throw Error("NATIVE_TRADE_MANIFEST_UNAVAILABLE");
+  }
+  const entries=pendingForTrade(trade,ledger);
+  let roots,items;
+  try{roots=service._listTradeItems(trade);items=inventory?.getAllItems()}
+  catch{halt("NATIVE_TRADE_MANIFEST_UNAVAILABLE");throw Error("NATIVE_TRADE_MANIFEST_UNAVAILABLE")}
+  if(!Array.isArray(roots)||!items||roots.length!==entries.length||
+   entries.some(e=>e.state!=="STAGED")||
+   new Set(roots.map(x=>id(x?.itemID))).size!==roots.length||
+   roots.some(item=>{
+    const key=String(trade.tradeContainerID)+":"+String(item?.itemID);
+    const e=ledger.entries.get(key);
+    return !e||e.state!=="STAGED"||
+     !coherent(item,e,"staged")||
+     !coherent(items[String(e.itemID)],e,"staged");
+   })){
+   halt("NATIVE_TRADE_PRECOMMIT_CUSTODY_CHANGED");
+   throw Error("NATIVE_TRADE_PRECOMMIT_CUSTODY_CHANGED");
+  }
+  return {ok:true,roots:roots.length};
+ }
  function finishAbort(service,trade){
   assertReady(service);
   const l=read();if(!l.ok){halt(l.reason);throw Error(l.reason)}
@@ -210,7 +238,7 @@ function createCustody({file=process.env.EVEJS_COOP_TRADE_CUSTODY_FILE||DEFAULT_
   }
   return true;
  }
- return {start,read,beforeStage,afterStage,finishAbort,finishComplete,assertReady,
+ return {start,read,beforeStage,afterStage,beforeComplete,finishAbort,finishComplete,assertReady,
   status:()=>blocked};
 }
 let current=null;
@@ -232,6 +260,7 @@ function beforeStage(service,trade,session,item,origin,quantity){
 function afterStage(service,trade,item,roots){
  if(active())runtime().afterStage(service,trade,item,roots);
 }
+function beforeComplete(service,trade){if(active())runtime().beforeComplete(service,trade)}
 function finishAbort(service,trade){if(active())runtime().finishAbort(service,trade)}
 function finishComplete(service,trade){if(active())runtime().finishComplete(service,trade)}
 // Only called by the native itemStore on an explicitly opted-in server.
@@ -272,4 +301,4 @@ function applyRecovery({changes,readItems,writeItems,buildInventoryItem,
  return {success:true,restored:updated.length};
 }
 module.exports={createCustody,applyRecovery,startup,assertReady,
- beforeStage,afterStage,finishAbort,finishComplete,BASE,MAX};
+ beforeStage,afterStage,beforeComplete,finishAbort,finishComplete,BASE,MAX};
