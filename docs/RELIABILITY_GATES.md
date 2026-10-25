@@ -175,3 +175,56 @@ passwords, credentials, chat, wallet journals or whole databases. This
 privacy boundary means it cannot by itself certify idempotent mission
 payouts or full market ledger conservation. A later audited native
 transaction adapter is required for `economy = PASS_LEDGER`.
+
+## Independent-account and native peer-gift verification
+
+The native snapshot exporter now requires **two different EveJS account IDs**
+read from the actual `characters` SQLite records (`accountId`). A pair of
+characters on the same account is explicitly rejected. For each owned item,
+the exporter records the authoritative `categoryID` when available, without
+using names, account usernames, passwords, or client data. Active ships must
+be native owned category-6 item instances.
+
+To demonstrate a real *item gift* and a real *inactive ship gift*, perform a
+single controlled exchange window on an **already running** local server:
+
+1. Dock both independently authenticated pilots and keep the server running.
+   Do not mine, trade on the market, change wallet balances, move unrelated
+   inventory, swap active ships or start manufacturing in this window.
+2. Capture the same two native character IDs before any gift:
+
+   ```powershell
+   .\scripts\Capture-Coop-NativeSnapshot.ps1 -CharacterIds 101,102 -OutputPath .\test-results\gifts-before.json
+   ```
+
+3. In the permitted EVE client, use the native game mechanisms to gift **one
+   entire, uniquely identifiable ordinary item instance** and **one inactive
+   ship instance** to the other pilot. Use a whole item rather than splitting
+   or merging stacks: native EveJS may assign new IDs on stack operations,
+   which this initial strict instance-custody gate cannot certify.
+4. While both are still docked and the same server process is running, capture:
+
+   ```powershell
+   .\scripts\Capture-Coop-NativeSnapshot.ps1 -CharacterIds 101,102 -OutputPath .\test-results\gifts-after.json
+   .\scripts\Verify-Coop-Reliability.ps1 -GiftBefore .\test-results\gifts-before.json -GiftAfter .\test-results\gifts-after.json
+   ```
+
+This is a **read-only proof**, not a gift automation or a game feature:
+`gifts = PASS_CUSTODY` requires exactly one ordinary item ID and one inactive
+category-6 ship ID to change from one of the two real owners to the other,
+while retaining type/category/quantity and global identity. It rejects
+unexplained items appearing/disappearing, changes to wallets, active ships,
+account ownership, systems or unrelated item locations, and snapshots taken
+across different Docker process starts. An unsupported native stack merge,
+additional unrelated action or inaccessible category is `BLOCKED`/`FAIL`,
+never a synthetic proof.
+
+The independent **restart** gate still needs a *different* pair of before/after
+captures surrounding a separate operator-approved idle restart. Peer-gift
+snapshots taken in one process are not restart evidence. The `client` gate
+also needs actual operator observations; SQLite alone is not GUI proof.
+
+The tests cover the native snapshot structure and read-only gift custody
+invariants. Those tests are deterministic; they do **not** prove a real
+EVEJS client can yet execute both gifts. No deployment, restart, or source
+changes to the parallel gameplay implementation are performed here.
