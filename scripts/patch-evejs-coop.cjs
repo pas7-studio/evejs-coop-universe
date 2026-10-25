@@ -11,6 +11,8 @@ names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
 // COOP-048 native /jobs uses the existing authenticated Opportunity Board.
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
+// Stock in-game agent dialogue for jobs, no /jobs text needed.
+names.splice(names.indexOf("coopNpcJobBoard")+1,0,"coopNativeJobAgent");
 // Peaceful delivery uses the same native corporate escrow (feature OFF by default).
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 const specs=[
@@ -297,8 +299,16 @@ function transform(source,spec,remove){
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("/space/combat/killmailTracker.js"))
   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
- if(spec.file==="server/src/services/agent/agentMgrService.js")
-  text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/services/agent/agentMgrService.js"){
+  // Remove job hooks first, then existing dialogue patch. Install in reverse.
+  if(remove){
+   text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
+   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
+  }else{
+   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
+  }
+ }
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
