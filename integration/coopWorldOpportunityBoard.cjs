@@ -374,17 +374,19 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   if(op==="salvage"){
    const action=String(tokens[0]||"").toUpperCase();
    const eventID=tokens[1],cargoID=Number(tokens[2]);
-   if(!["PICKUP","DELIVER"].includes(action)||
+   if(!["OFFER","ACCEPT","PICKUP","DELIVER"].includes(action)||
     !/^convoy-\d+-\d+-\d+$/.test(String(eventID))||
     !Number.isSafeInteger(cargoID)||cargoID<=0)
     return {status:"SALVAGE_HELP",
-     message:"[Co-op Salvage] /events salvage pickup <event-id> <cargo-id> | /events salvage deliver <event-id> <cargo-id>"};
+     message:"[Co-op Salvage] /events salvage offer|accept|pickup|deliver <event-id> <cargo-id>"};
    const result=require("./coopSalvageGameMount")
     .commandInGame(session,eventID,cargoID,action);
    return {status:result.status,message:
     "[Co-op Salvage] "+result.status+
-    " | original cargo "+cargoID+
-    " | native inventory only; no money or reputation granted by this command."};
+    " | cargo "+cargoID+
+    (result.amountISK?" | native NPC quote/escrow "+result.amountISK+" ISK":"")+
+    (result.payoutStatus?" | wallet payout: "+result.payoutStatus:"")+
+    " | stock and ISK are server-authoritative."};
   }
   if(op==="rescue"){
    const result=require("./coopEscortRescueNavigation")
@@ -434,7 +436,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      ", find the actual NPC via overview, join a real fleet manually. No automatic warp or ISK award.":
      "[Co-op Events] "+r.status};
   }
-  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events tactic <id> hold|continue|retreat | /events rescue <id> | /events salvage pickup|deliver <id> <cargo-id> | /events history | /events watch local|all|off"};
+  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events tactic <id> hold|continue|retreat | /events rescue <id> | /events salvage offer|accept|pickup|deliver <id> <cargo-id> | /events history | /events watch local|all|off"};
  }
  return {publish,nativeRaid,nativeConvoy,nativeConvoyPreparing,nativePreparingDeparted,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
