@@ -279,6 +279,83 @@ test("feature OFF prevents loading or inspecting stored warp state",()=>{
   "ESCORT_INGRESS_RESTORE_DISABLED");
  assert.equal(f.snapshotCount(),0);
 });
+function withDelivery(fn){
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY="1";
+ try{fn(fixture())}
+ finally{
+  process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+  process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY="0";
+ }
+}
+test("crash-recovered NPC trip uses only original escrow, cargo and signed source",()=>withDelivery(f=>{
+ const x=f.director.resumeNativeDelivery(f.scene,f.fleet,1002000);
+ assert.equal(x.status,"ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED");
+ assert.equal(f.fleet.coopStationArrival.manifestID,KEY);
+ assert.equal(f.fleet.coopStationArrival.startedAt,1000000);
+ assert.deepEqual(f.fleet.coopStationArrival.expectedCargoIDs,[5501]);
+ assert.equal(f.fleet.coopStationArrival.recoveredFromOriginalNativeIngress,true);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
+test("trusted checkReturn recovers transit before any predeparture retry",()=>withDelivery(f=>{
+ const x=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(x.status,"AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.fleet.coopStationArrival.manifestID,KEY);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
+test("subsequent terminal tick uses identical recovered route, never new funding",()=>withDelivery(f=>{
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ const reads=f.counters.read,trip=f.fleet.coopStationArrival;
+ assert.equal(checkReturn(f.scene,f.fleet,1003000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.counters.read,reads);
+ assert.equal(f.fleet.coopStationArrival,trip);
+ assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("original NPC mining fleet ID must match recovered contract",()=>withDelivery(f=>{
+ f.fleet.fleetID=88;
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ORIGINAL_BOOKING_MISMATCH");
+ assert.equal(f.fleet.coopStationArrival,undefined);
+}));
+test("unsynced or absent original snapshot forbids resumed delivery",()=>withDelivery(f=>{
+ f.setSnapshot({status:"INGRESS_SNAPSHOT_FSYNC_UNCERTAIN"});
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ORIGINAL_SNAPSHOT_NOT_DURABLE");
+ assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("foreign native ingress destination cannot redirect convoy terminal",()=>withDelivery(f=>{
+ f.ingress.targetPoint.x=250000;
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_PHYSICAL_WARP_MISMATCH");
+ assert.equal(f.fleet.coopStationArrival,undefined);
+}));
+test("prepared-only ACK and already delivered original flight never resume",()=>withDelivery(f=>{
+ f.source.phase="WARP_PREPARED";
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+ const x=fixture();x.flight.phase="DELIVERED";
+ assert.equal(x.director.resumeNativeDelivery(x.scene,x.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_PROVENANCE_MISMATCH");
+ assert.equal(x.fleet.coopStationArrival,undefined);
+}));
+test("expired real native warp cannot create time-rewound delivery",()=>withDelivery(f=>{
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1009000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_NOT_ACTIVE_INGRESS");
+ assert.equal(f.counters.warp,0);
+}));
+test("default OFF preserves old NO_ACTIVE_TRIP and never reads wallet",()=>{
+ const f=fixture();delete f.fleet.coopEscortPredepartureEventID;
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,"NO_ACTIVE_TRIP");
+ assert.equal(f.counters.read,0);assert.equal(f.counters.warp,0);
+});
+test("unverified in-progress ingress blocks duplicate predeparture instead of calling start",()=>withDelivery(f=>{
+ f.source.phase="WARP_PREPARED";
+ const r=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(r.status,"ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+ assert.equal(r.terminal,false);assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
 process.on("exit",()=>{for(const [k,v] of Object.entries(saved)){
  if(v===undefined)delete process.env[k];else process.env[k]=v;
 }});
