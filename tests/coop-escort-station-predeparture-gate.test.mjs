@@ -12,6 +12,7 @@ for(const k of Object.keys(prior))process.env[k]="1";
 const previousPeace=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
 const previousWitness=process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
 const previousRoute=process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS;
+const previousNativeMotion=process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
 process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
 process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
 process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
@@ -265,6 +266,54 @@ test("Stage I observer uses real native station tick and never player commands",
   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
  }
 });
+test("native warp physics callback only samples fully ACK-confirmed original NPC flight",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER="1";
+ try{run(f=>{
+  const real=f.scene.getEntityByID(901);
+  real.sessionlessWarpIngress={startTimeMs:1000000};
+  assert.equal(f.director.noteNativeMotion(real,1000200).status,
+   "ESCORT_NATIVE_MOTION_NOT_REGISTERED");
+  assert.equal(f.counters.routeSamples,0);
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"EN_ROUTE");
+  assert.equal(f.director.noteNativeMotion({...real},1000300).status,
+   "ESCORT_NATIVE_MOTION_ENTITY_NOT_CURRENT");
+  assert.equal(f.counters.routeSamples,0);
+  assert.equal(f.director.noteNativeMotion(real,1000400).status,
+   "ROUTE_NOT_AT_CHECKPOINT");
+  assert.equal(f.counters.routeSamples,1);
+  assert.equal(f.counters.funding,1);
+  assert.equal(f.counters.warp,1);
+ })}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+  delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+ }
+});
+test("native warp observer does not enroll unconfirmed or failed original NPC warp",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER="1";
+ try{run(f=>{
+  const entity=f.scene.getEntityByID(901);
+  entity.sessionlessWarpIngress={startTimeMs:1000000};
+  f.approve();f.blockWarp();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"WARP_COMMAND_FAILED");
+  assert.equal(f.director.noteNativeMotion(entity,1000100).status,
+   "ESCORT_NATIVE_MOTION_NOT_REGISTERED");
+  assert.equal(f.counters.routeSamples,0);
+ },{})}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+  delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+ }
+});
 test("paid escort cannot start unless durable warp fence is explicitly enabled",()=>{
  process.env.EVEJS_COOP_ESCORT_WARP_FENCE="0";
  try{run(f=>{
@@ -295,4 +344,6 @@ process.on("exit",()=>{for(const [k,v] of Object.entries(prior))
  else process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=previousWitness;
  if(previousRoute===undefined)delete process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS;
  else process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS=previousRoute;
+ if(previousNativeMotion===undefined)delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+ else process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=previousNativeMotion;
 });
