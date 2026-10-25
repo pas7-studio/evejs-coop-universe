@@ -46,7 +46,8 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
   return {ok:false,reason:"NATIVE_MISSIONS_NOT_BOTH_COMPLETED"};
  return {ok:true,reason:"NATIVE_SHARED_TURNIN_READY",
   fleetID:member.fleetID,leader,peerID,agentID:agent,
-  actionID:action,station,leaderMission,peerMission,session,peer};
+  actionID:action,station,leaderMission:{...leaderMission},
+  peerMission:{...peerMission},session,peer};
 }
 function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID}={}){
  if(!ticket?.ok||!missionRuntime||!fleetRuntime)
