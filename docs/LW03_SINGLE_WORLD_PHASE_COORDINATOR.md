@@ -1,8 +1,7 @@
 # LW-03A — One ordered Living World phase coordinator
 
-Status: **SOURCE IMPLEMENTED, original EveJS gameplay NOT_RUN**. This is the
-first low-risk extraction from the monolithic Living World runtime; not the
-full LW-03 orchestration or LW-04 native factory ACT integration.
+Status: **SOURCE IMPLEMENTED, original EveJS gameplay NOT_RUN**. This now includes LW-03A/B source-level extraction and phase classification;
+it is not full native LW-04 factory ACT integration.
 
 ## Integration
 
@@ -27,6 +26,31 @@ call-sites in the same order and behind the same feature flags**.
   phase still executes, including more than 128 per-system reconcile calls.
 - The optional `livingWorldPhases()` export returns only status, sequence,
   phase names and timing. It cannot command a ship or settle ISK.
+
+## LW-03B: source-domain phase registry and telemetry
+
+The pure `coopLivingWorldPhaseRegistry.cjs` now defines the stable ordering
+and names of the 27 current phase call-sites in 9 contiguous domains:
+opportunities, world-state, alife-perception, combat, salvage, movement,
+market-observation, activity and reconciliation. Dynamic physical system
+reconciles are named `npc-reconcile:<systemID>` only for positive safe integers.
+
+The **same legacy callback bodies** still execute in their original sequence;
+the registry only classifies dispatched phases and cannot authorize or skip
+them. Unknown but syntactically valid future names continue executing and
+appear in bounded `unknownNames` diagnostics. Snapshot group counts are
+dispatch attempts, **NOT proven native operations or settlements**.
+
+`livingWorldPhases()` now exposes grouped runtime diagnostics. An existing
+`coopRuntimeProbe` event `living-world-phase-cycle` is emitted at most once
+per 10 cycles under normal load, and immediately when an unclassified phase
+is observed. The onCycle handler is diagnostic only and cannot change a
+native result.
+
+Existing source-only A-Life economy, buyer, and ammo-resupply wiring tests
+were migrated from the old textual `safeNpcPhase` and timer signatures to
+`worldPhaseCoordinator.tick(runPhase=>...)`. Their original proof and
+no-second-scheduler expectations remain intact.
 
 ## Acceptance
 
