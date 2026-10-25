@@ -21,8 +21,21 @@ const warehouseItem=(item,e,ownerID,stationID)=>Boolean(item&&
  item.quantity===e.quantity&&item.stacksize===e.quantity&&
  item.customInfo==="coop-industry:v1:"+e.jobID);
 const copy=x=>JSON.parse(JSON.stringify(x));
-const {calculateNativeDemand}=require("./coopNpcDemandAuthority.cjs");
-const {reconcileUnknown}=require("./coopNpcEconomyUnknownRecovery.cjs");
+// The orchestration checkout stores modules as .cjs, but the pinned EveJS
+// installer deploys the SAME sources as server/src/space/*.js. Resolve the
+// deployed native sibling first, and only fall back on an absent sibling in
+// local tests. Never swallow a missing transitive dependency as a fallback.
+function loadEconomySibling(name){
+ try{return require("./"+name)}
+ catch(error){
+  if(error?.code!=="MODULE_NOT_FOUND"||
+     !String(error.message).includes("Cannot find module './"+name+"'"))
+   throw error;
+  return require("./"+name+".cjs");
+ }
+}
+const {calculateNativeDemand}=loadEconomySibling("coopNpcDemandAuthority");
+const {reconcileUnknown}=loadEconomySibling("coopNpcEconomyUnknownRecovery");
 const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
 const closed=x=>x==="SOLD";
 function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
