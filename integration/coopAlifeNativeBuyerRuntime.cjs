@@ -79,7 +79,9 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
      observed.systemID!==ctx.snapshot.systemID||
      !Array.isArray(observed.materialNeeds)||rows.some(p=>
        p.economy?.ownerID!==ownerID||
-       p.economy?.observedAt!==observed.observedAt))return null;
+       p.economy?.observedAt!==observed.observedAt||
+       JSON.stringify(p.economy.materialNeeds)!==
+         JSON.stringify(observed.materialNeeds)))return null;
   const found=observed.materialNeeds.filter(m=>m.typeID===typeID);
   if(found.length!==1)return null;
   return {...found[0],ownerID,stationID,authoritativeNative:true,
