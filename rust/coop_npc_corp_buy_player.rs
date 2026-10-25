@@ -303,3 +303,89 @@ impl MarketRuntime{
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod coop_npc_corp_buy_history_tests{
+    use super::*;
+    fn db()->Connection{
+        let db=Connection::open_in_memory().expect("SQLite test open");
+        db.execute_batch("CREATE TABLE price_history(
+          type_id INTEGER NOT NULL,day TEXT NOT NULL,
+          low_price REAL NOT NULL,high_price REAL NOT NULL,
+          avg_price REAL NOT NULL,volume INTEGER NOT NULL,
+          order_count INTEGER NOT NULL,
+          PRIMARY KEY(type_id,day));
+          CREATE TABLE coop_npc_corp_buy_history(
+          claim_key TEXT PRIMARY KEY,fill_id INTEGER UNIQUE NOT NULL,
+          order_id INTEGER UNIQUE NOT NULL,type_id INTEGER NOT NULL,
+          price_cents INTEGER NOT NULL,quantity INTEGER NOT NULL,
+          history_day TEXT NOT NULL,recorded_at TEXT NOT NULL);")
+          .expect("SQLite history schema");
+        db
+    }
+    fn totals(db:&Connection)->(i64,i64){
+        db.query_row("SELECT volume,order_count FROM price_history WHERE type_id=34",
+          [],|r|Ok((r.get(0)?,r.get(1)?))).expect("price history totals")
+    }
+    #[test]
+    fn first_buy_produces_real_history_and_one_durable_witness(){
+        let mut db=db();
+        let tx=db.transaction().expect("tx");
+        coop_npc_corp_buy_record_history(&tx,"npc-corpbuy:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          COOP_NPC_CORP_BUY_FILL_BASE+1,456,34,125,20).expect("record");
+        tx.commit().expect("commit");
+        assert_eq!(totals(&db),(20,1));
+        let (price,day):(f64,String)=db.query_row(
+          "SELECT avg_price,day FROM price_history WHERE type_id=34",[],
+          |r|Ok((r.get(0)?,r.get(1)?))).unwrap();
+        assert!((price-1.25).abs()<0.000001);
+        assert_eq!(day,current_trade_day());
+        assert_eq!(db.query_row("SELECT COUNT(*) FROM coop_npc_corp_buy_history",
+          [],|r|r.get::<_,i64>(0)).unwrap(),1);
+    }
+    #[test]
+    fn different_claims_aggregate_price_volume_and_weighted_average(){
+        let mut db=db();
+        let tx=db.transaction().unwrap();
+        coop_npc_corp_buy_record_history(&tx,"npc-corpbuy:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          COOP_NPC_CORP_BUY_FILL_BASE+1,456,34,125,20).unwrap();
+        coop_npc_corp_buy_record_history(&tx,"npc-corpbuy:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          COOP_NPC_CORP_BUY_FILL_BASE+2,457,34,200,10).unwrap();
+        tx.commit().unwrap();
+        assert_eq!(totals(&db),(30,2));
+        let (low,high,avg):(f64,f64,f64)=db.query_row(
+          "SELECT low_price,high_price,avg_price FROM price_history WHERE type_id=34",
+          [],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).unwrap();
+        assert!((low-1.25).abs()<0.000001);
+        assert!((high-2.00).abs()<0.000001);
+        assert!((avg-1.5).abs()<0.000001);
+    }
+    #[test]
+    fn retry_cannot_increment_price_history_twice(){
+        let mut db=db();
+        let key="npc-corpbuy:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let tx=db.transaction().unwrap();
+        coop_npc_corp_buy_record_history(&tx,key,
+          COOP_NPC_CORP_BUY_FILL_BASE+1,456,34,125,20).unwrap();
+        tx.commit().unwrap();
+        let retry=db.transaction().unwrap();
+        assert!(coop_npc_corp_buy_record_history(&retry,key,
+          COOP_NPC_CORP_BUY_FILL_BASE+1,456,34,125,20).is_err());
+        retry.rollback().unwrap();
+        assert_eq!(totals(&db),(20,1));
+    }
+    #[test]
+    fn rolled_back_finalize_cannot_leave_partial_history(){
+        let mut db=db();
+        let tx=db.transaction().unwrap();
+        coop_npc_corp_buy_record_history(&tx,
+          "npc-corpbuy:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          COOP_NPC_CORP_BUY_FILL_BASE+1,456,34,125,20).unwrap();
+        tx.rollback().unwrap();
+        let rows=db.query_row("SELECT COUNT(*) FROM price_history",[],
+          |r|r.get::<_,i64>(0)).unwrap();
+        let witnesses=db.query_row("SELECT COUNT(*) FROM coop_npc_corp_buy_history",[],
+          |r|r.get::<_,i64>(0)).unwrap();
+        assert_eq!((rows,witnesses),(0,0));
+    }
+}
