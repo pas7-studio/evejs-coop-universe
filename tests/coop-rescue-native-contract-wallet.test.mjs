@@ -21,8 +21,10 @@ function fixture(fn){
   reserveAtomic:()=>{if(escrow)throw Error("DUPLICATE_RESERVE");
    escrow=1;corp-=20000;return {status:"RESERVED"}},
   verifyReservation:()=>({status:escrow===1?"RESERVED":escrow?"NOT_RESERVED":"NOT_FOUND"}),
-  verifySettlement:()=>({status:escrow===2?"SETTLED":escrow?"NOT_SETTLED":"NOT_FOUND",
-   nativeDurable:escrow===2}),
+  verifySettlement:c=>({status:escrow===2?"SETTLED":escrow?"NOT_SETTLED":"NOT_FOUND",
+   nativeDurable:escrow===2,contractID:c.contractID,corporationID:c.corporationID,
+   amountISK:c.amountISK,credits:escrow===2?c.characters.map(
+    characterID=>({characterID,amountISK:c.amountISK/2})):[]}),
   settleAtomic:()=>{if(escrow!==1)throw Error("ESCROW_NOT_RESERVED");
    escrow=2;paid+=20000;return {status:"SETTLED"}},
   verifyRefund:contract=>({status:escrow===3?"REFUNDED":escrow?"NOT_REFUNDED":"NOT_FOUND",
@@ -99,6 +101,16 @@ test("after true salvage transfer emptied wreck, the quote survives restart",()=
  assert.equal(f.get().claim({session:f.pilot(702),eventID:id}).status,
   "RESCUE_ALREADY_PAID");
  assert.equal(f.state().paid,20000);
+}));
+test("rescue personal history reads native paid wallet; no chat-reward score",()=>fixture(f=>{
+ f.a();f.b();f.deliver(8);
+ f.get().claim({session:f.pilot(701),eventID:id});
+ const h=f.get().history({characterID:701});
+ assert.equal(h.status,"READY");
+ assert.equal(h.history[0]?.outcome,"PAID");
+ assert.equal(h.reputation.earnedISK,10000);
+ assert.equal(h.reputation.score,5);
+ assert.equal(f.get().history({characterID:999}).history.length,0);
 }));
 test("third character cannot claim the two-person native escrow",()=>fixture(f=>{
  f.a();f.b();f.deliver(8);
