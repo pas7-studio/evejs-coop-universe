@@ -140,3 +140,11 @@ test("feature defaults off without native state mutations",()=>{
  assert.equal(f.casualty.assess({campaignID:"c1"}).status,"DISABLED");
  assert.equal(f.state(),undefined);
 });
+
+
+test("one physical victim cannot count twice if native emits a second wreck ID",()=>{
+ const f=fixture();assert.equal(f.casualty.record(command()).status,"RECORDED");
+ const second=f.casualty.record(command({wreckID:9003}));
+ assert.equal(second.reason,"WAR_CASUALTY_VICTIM_ALREADY_RECORDED");
+ assert.equal(f.state().count,1);
+});
