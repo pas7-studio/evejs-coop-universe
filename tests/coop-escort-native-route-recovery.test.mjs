@@ -50,8 +50,9 @@ function fixture(){
   snapshot:{status:"VERIFIED_NATIVE_INGRESS_SNAPSHOT",
    row:{manifestKey:KEY,origin:{x:0,y:0,z:0},targetPoint:{x:100750,y:0,z:0},
     startTimeMs:1000000,travelCompleteAtMs:1007000,completeAtMs:1007250}},
-  snapshotReads:0,
-  counters:{sample:0,warp:0,fund:0,inspect:0,source:0,departure:0,read:0}};
+  snapshotReads:0,manifestValid:true,
+  counters:{sample:0,warp:0,fund:0,inspect:0,source:0,departure:0,read:0,
+   deposits:0,delivered:0,settled:0}};
  const gate={
   inspectSource:()=>{state.counters.source++;return state.source},
   inspect:()=>{state.counters.inspect++;return state.fence},
@@ -64,13 +65,25 @@ function fixture(){
   recordEscortRouteSample:()=>{state.counters.sample++;
    return {status:state.sampleResult}},
   fundBeforeWarp:()=>{state.counters.fund++;throw Error("REPLAY MUST NEVER FUND")},
-  recordDelivered:()=>({status:"NOT_ALLOWED"})
+  recordDelivered:args=>{state.counters.delivered++;
+   return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey:args.manifestKey}},
+  settlePeacefulDelivery:()=>{state.counters.settled++;return {status:"SETTLED"}}
  };
  const director=createStationArrival({
   getStations:()=>[station],getStation:()=>station,getCorporation:()=>({corporationID:10001}),
   isNpcCorporation:()=>true,getNativeEntity:()=>state.native,getScene:()=>scene,
-  store:{listNativeCargoForEntity:()=>state.cargo},items:{},warehouse:{deposit:()=>({status:"DISABLED"})},
-  manifest:{prepare:()=>{throw Error("REPLAY MUST NEVER CREATE MANIFEST")}},
+  store:{listNativeCargoForEntity:()=>state.cargo},items:{},
+  warehouse:{deposit:({cargoID})=>{state.counters.deposits++;
+   const i=state.cargo.findIndex(row=>row.cargoID===cargoID);
+   if(i<0)return {status:"NOT_FOUND"};
+   state.cargo.splice(i,1);
+   return {status:"COMMITTED"}}},
+  manifest:{prepare:()=>{throw Error("REPLAY MUST NEVER CREATE MANIFEST")},
+   verify:()=>state.manifestValid?
+    {status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED"}:
+    {status:"MANIFEST_FULL_CARGO_UNVERIFIED"}},
+  deliveryEvidence:{verifyFullNativeDelivery:()=>({
+   status:"NATIVE_FULL_MANIFEST_WITNESSED",stacks:1,quantity:7})},
   flush:()=>{throw Error("REPLAY MUST NEVER FLUSH")},
   warpToPoint:()=>{state.counters.warp++;throw Error("REPLAY MUST NEVER WARP")},
   root:"/tmp/native-recovery-guard",clock:()=>1002000,
@@ -79,7 +92,9 @@ function fixture(){
   probe:{observe:()=>{}}
  });
  return {...state,director,escort,setSampleResult:value=>{state.sampleResult=value},
-  setSnapshot:value=>{state.snapshot=value},snapshotCount:()=>state.snapshotReads};
+  setSnapshot:value=>{state.snapshot=value},
+  setManifestValid:value=>{state.manifestValid=value},
+  snapshotCount:()=>state.snapshotReads};
 }
 function recover(f,now=1002000){return f.director.noteNativeMotion(f.npc,now).status}
 test("genuine current native NPC warp reattaches observer using confirmed durable originals",()=>{
@@ -355,6 +370,38 @@ test("unverified in-progress ingress blocks duplicate predeparture instead of ca
  const r=checkReturn(f.scene,f.fleet,1002000,f.director);
  assert.equal(r.status,"ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
  assert.equal(r.terminal,false);assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("post-crash original physical arrival uses native warehouse then one terminal settlement",()=>withDelivery(f=>{
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ f.npc.sessionlessWarpIngress=null;f.npc.mode="STOP";
+ f.npc.position={x:100750,y:0,z:0};
+ assert.equal(checkReturn(f.scene,f.fleet,1010500,f.director).status,
+  "ARRIVAL_DWELL_PENDING");
+ const delivered=checkReturn(f.scene,f.fleet,1013500,f.director);
+ assert.equal(delivered.status,"DELIVERED");
+ assert.equal(delivered.escortSettlementStatus,"SETTLED");
+ assert.equal(delivered.nativeFullManifestProof.status,
+  "FULL_NATIVE_CARGO_DELIVERY_VERIFIED");
+ assert.equal(f.counters.deposits,1);
+ assert.equal(f.counters.delivered,1);
+ assert.equal(f.counters.settled,1);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+ assert.equal(f.fleet.coopStationArrival,undefined);
+}));
+test("invalid full native cargo proof blocks terminal money after recovered arrival",()=>withDelivery(f=>{
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ f.npc.sessionlessWarpIngress=null;f.npc.mode="STOP";
+ f.npc.position={x:100750,y:0,z:0};f.setManifestValid(false);
+ assert.equal(checkReturn(f.scene,f.fleet,1010500,f.director).status,
+  "ARRIVAL_DWELL_PENDING");
+ assert.equal(checkReturn(f.scene,f.fleet,1013500,f.director).status,
+  "MANIFEST_FULL_CARGO_UNVERIFIED");
+ assert.equal(f.counters.delivered,0);
+ assert.equal(f.counters.settled,0);
+ assert.equal(f.counters.fund,0);
+ assert.equal(f.counters.warp,0);
 }));
 process.on("exit",()=>{for(const [k,v] of Object.entries(saved)){
  if(v===undefined)delete process.env[k];else process.env[k]=v;
