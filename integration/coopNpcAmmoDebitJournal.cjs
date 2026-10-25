@@ -208,6 +208,12 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
   if(!entityID||!ownerID||!validBoundary(boundaryMs)||
    !Array.isArray(entries)||!entries.length||entries.length>16)
    return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_INVALID"};
+  // A prior atomic multi-barrel debit may have reached SQLite while its
+  // ship journal remains PREPARED. Never switch back to module-wise fire
+  // to bypass that unresolved transaction.
+  const bankShip=require("./coopNpcAmmoBankAtomic").inspectShip({root,entityID});
+  if(!bankShip.ok)return {ok:false,status:"NATIVE_AMMO_BANK_SHIP_QUARANTINED",
+   reason:bankShip.status};
   const activeModules=new Set();
   for(const entry of entries){
    const moduleID=positive(entry?.moduleItem?.itemID);
