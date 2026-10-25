@@ -53,8 +53,9 @@ function createLocalNpcBuyerRecoveryControl({getBinding,secretFile,
   if(!st)fs.mkdirSync(logPath.dirname(auditLogFile),{recursive:true});
   // Even when an operator log is created for the first time, its containing
   // directory cannot be writable by another user. Never follow log symlinks.
-  const parent=fs.statSync(logPath.dirname(auditLogFile));
-  if(!parent.isDirectory()||(typeof process.getuid==="function"&&
+  const parent=fs.lstatSync(logPath.dirname(auditLogFile));
+  if(!parent.isDirectory()||parent.isSymbolicLink()||
+     (typeof process.getuid==="function"&&
     ((parent.mode&0o022)!==0||parent.uid!==process.getuid())))
    throw Error("NPC_ADMIN_AUDIT_DIR_UNSAFE");
   const fd=fs.openSync(auditLogFile,fs.constants.O_WRONLY|
