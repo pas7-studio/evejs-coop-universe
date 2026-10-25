@@ -60,6 +60,24 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
    characters:r.characters.slice(),shipIDs:r.shipIDs.slice(),
    origin:{x:r.origin.x,y:r.origin.y,z:r.origin.z}};
  }
+ function readDurable(manifestKey,booking){
+  // A read after a crash is not proof that file+directory fsync succeeded.
+  // Re-sync the *original* immutable receipt; never replace it or infer
+  // a new departure from the current NPC/pilot positions.
+  const prior=read(manifestKey,booking);
+  if(prior.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")return prior;
+  let fd,dirfd;
+  try{
+   fd=io.openSync(filename(manifestKey),"r");io.fsyncSync(fd);
+   io.closeSync(fd);fd=undefined;
+   dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
+  }catch{return deny("DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR")}
+  finally{if(fd!==undefined)try{io.closeSync(fd)}catch{}
+   if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}}
+  // Check again after resync in case the immutable receipt was modified
+  // concurrently by a local repair operation.
+  return read(manifestKey,booking);
+ }
  function record(booking,scene,verifyNativeDuo){
   if(process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
    return deny("DISABLED");
@@ -69,17 +87,10 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
   // create new evidence on retry after the hauler or its pilots have moved.
   const prior=read(booking.manifestKey,booking);
   if(prior.status==="VERIFIED_NATIVE_ESCORT_DEPARTURE"){
-   // The source file may have survived a lost write or directory fsync ACK.
-   // A read-only replay is not sufficient to claim durability. Re-sync the
-   // immutable ORIGINAL file and parent directory before authorizing warp.
-   let fd,dirfd;try{
-    fd=io.openSync(filename(booking.manifestKey),"r");io.fsyncSync(fd);
-    io.closeSync(fd);fd=undefined;
-    dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
-   }catch{return deny("DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR")}
-   finally{if(fd!==undefined)try{io.closeSync(fd)}catch{};
-    if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}}
-   return {status:"DURABLE_ESCORT_DEPARTURE_REPLAY",manifestKey:booking.manifestKey};
+   const durable=readDurable(booking.manifestKey,booking);
+   return durable.status==="VERIFIED_NATIVE_ESCORT_DEPARTURE"?
+    {status:"DURABLE_ESCORT_DEPARTURE_REPLAY",manifestKey:booking.manifestKey}:
+    durable;
   }
   if(prior.status!=="DEPARTURE_NOT_RECORDED")return prior;
   if(scene?.systemID!==booking.systemID||
@@ -145,6 +156,6 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
    {status:"DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS",
     manifestKey:booking.manifestKey}:deny("DEPARTURE_RECHECK_UNCERTAIN");
  }
- return Object.freeze({record,read});
+ return Object.freeze({record,read,readDurable});
 }
 module.exports={createDepartureWitness};
