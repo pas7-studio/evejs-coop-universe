@@ -6,7 +6,7 @@ const {createNpcPendingMarketEscrow,ESCROW_BASE}=require("../integration/coopNpc
 const OP="npc-manufacture:abcdef1234567890abcdef1234567890";
 const X={operationID:OP,ownerID:1000010,stationID:60000001,itemID:1990000200,typeID:215,quantity:100};
 function fixture({reserveFail=false,activationFails=false,escrowFault=false,
-  unitPrice=12,stacksize=X.quantity}={}){
+  unitPrice=12,stacksize=X.quantity,afterReserve=null}={}){
  const items=new Map([[String(X.itemID),{itemID:X.itemID,ownerID:X.ownerID,locationID:X.stationID,
    flagID:4,typeID:X.typeID,quantity:X.quantity,stacksize,singleton:0,
    customInfo:"coop-industry:v1:970000000000000"}]]);
@@ -17,6 +17,7 @@ function fixture({reserveFail=false,activationFails=false,escrowFault=false,
   bid:false,is_corp:true,state});
  const call=async(type,p)=>{
   if(type==="ReserveNpcSellOrder"){callCounts.reserve++;if(reserveFail)return{state:"open"};
+   if(afterReserve)afterReserve(items);
    return order("pending");}
   if(type==="ActivateNpcSellOrder"){callCounts.activate++;if(activationFails)throw Error("RUST_ACTIVATION_ACK_LOST");
    return order("open");}
@@ -114,10 +115,12 @@ test("quantity with mismatching native stacksize is not eligible for Rust reserv
  assert.equal(f.escrow.size,0);
 }, {stacksize:0}));
 test("stacksize tampering after Rust reserve but before GameStore commit rolls back",()=>withFixture(async f=>{
- const original=f.items.get(String(X.itemID));
- const item=structuredClone(original);
- f.items.set(String(X.itemID),{...item,stacksize:X.quantity+1});
- const result=await f.adapter.listOnce(X);
- assert.equal(result.error,"NPC_MARKET_UNBACKED_SOURCE");
- assert.equal(f.callCounts.reserve,0);
-}, {stacksize:X.quantity}));
+ await assert.rejects(f.adapter.listOnce(X),/NPC_NATIVE_SOURCE_CHANGED/);
+ assert.equal(f.callCounts.reserve,1);
+ assert.equal(f.callCounts.activate,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+}, {afterReserve:items=>{
+ const old=items.get(String(X.itemID));
+ items.set(String(X.itemID),{...old,stacksize:old.stacksize+1});
+}}));
