@@ -51,7 +51,9 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
    number(row.order_id)===r.orderID&&
    number(row.station_id)===r.stationID&&
    number(row.type_id)===r.typeID&&
-   number(row.vol_remaining)===0&&money(row.price)===r.priceCents;
+   number(row.vol_remaining)===0&&
+   number(row.vol_entered)===r.quantity&&
+   money(row.price)===r.priceCents;
  }
  function orderEntry(o,r){
   const row=o.row;
@@ -100,6 +102,9 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
      rust.fill_phase!=="finalized"||rust.history_recorded!==true||
      number(rust.fill_id)!==fillID||number(rust.order_id)!==first.orderID||
      number(rust.owner_id)!==first.sellerID||
+     number(rust.buyer_corp_id)!==first.buyerCorpID||
+     number(rust.station_id)!==first.stationID||
+     number(rust.type_id)!==first.typeID||
      number(rust.quantity)!==first.quantity||
      number(rust.price_cents)!==first.priceCents||
      !/^\d{4}-\d{2}-\d{2}$/.test(String(rust.history_day??""))||
