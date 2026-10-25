@@ -160,14 +160,13 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   return {status:"READY",departure:d,route:r};
  }
  function verifyPeacefulService(b,scene){
-  // Original real scene at terminal is the first-choice authority. If the
-  // clients disconnected after real delivery, only an immutable original
-  // station attendance receipt may stand in for that now-absent scene.
-  const live=verifyLiveService(b,scene);
-  if(live.status==="VERIFIED_NATIVE_ESCORT_SERVICE")return live;
-  if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1"||
-   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
-   return live;
+  // When immutable replay is enabled, EVEN the initial payout must use
+  // the same fsynced terminal attendance receipt. Otherwise a lost write
+  // ACK could be paid using a live scene and later be impossible to audit.
+  if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1")
+   return verifyLiveService(b,scene);
+  if(process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+   return blocked("PEACEFUL_REPLAY_STRICT_ROUTE_REQUIRED");
   const proof=originalAttendanceProof(b);
   if(proof.status!=="READY")return blocked("PEACEFUL_REPLAY_ORIGINAL_SERVICE_NOT_DURABLE");
   const f=flight.read(b.manifestKey);
