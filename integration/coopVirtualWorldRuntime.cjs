@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -136,6 +136,7 @@ function start(){
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
   safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
@@ -355,6 +356,8 @@ function advanceNativeGateApproach(){
  const blockedIDs=tacticsDirector?.activeIDs()||new Set();
  if(raidDirector)for(const id of raidDirector.activePirateIDs(system=>
   runtime.ensureScene(system,{refreshStargates:false})))blockedIDs.add(id);
+ if(wreckRecoveryDirector)for(const sys of visitedSystems)
+  for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
  for(const systemID of visitedSystems){
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const assignments=links.filter(a=>Number(a.systemID)===Number(systemID));
@@ -385,10 +388,48 @@ function advanceNativeGateApproach(){
     });
  }
 }
+// Source-verified native kill -> real surviving wreck -> same killer ship.
+function advanceNativeWreckRecovery(){
+ if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
+  process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !identityRegistry||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
+  store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry");
+ const journal=require("./coopNpcWreckClaims").getWreckClaims();
+ if(!wreckRecoveryDirector)
+  wreckRecoveryDirector=require("./coopNpcWreckRecovery").createWreckRecovery({
+   warp:(entityID,wreckID,options)=>npcNativeOrder("CIVILIAN",entityID,"wreck-warp",
+    ()=>npc.warpToEntity(entityID,wreckID,options)),
+   orbit:(entityID,wreckID,meters)=>npcNativeOrder("CIVILIAN",entityID,"wreck-orbit",
+    ()=>npc.orbit(entityID,wreckID,meters))
+  });
+ const assignments=bridge.snapshot().concat(
+  Object.values(identityRegistry.snapshot().links||{}));
+ for(const systemID of visitedSystems){
+  const claims=journal.active(systemID);
+  if(!claims.length)continue;
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const blockedIDs=new Set();
+  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+  if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
+    runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
+  addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
+  const result=wreckRecoveryDirector.tick({systemID,scene,claims,assignments,store,
+   getController:id=>controllers.getControllerByEntityID(id),blockedIDs});
+  if(result.orders.length||result.inspections.length)
+   require("./coopRuntimeProbe").observe("living-npc-postraid-wreck-recovery",null,
+    {spaceState:{systemID}},{orders:result.orders,inspections:result.inspections,
+     transferStatus:"NOT_IMPLEMENTED_NO_NATIVE_ATOMIC_CUSTODY"});
+ }
+}
 function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
   const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
+  if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
+   for(const id of wreckRecoveryDirector.activeIDs(Number(systemID)))blockedIDs.add(id);
   // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
   if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1"){
    if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
@@ -626,6 +667,9 @@ function advanceNativeCivilianOrders(){
  })||new Set();
  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+ if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
+  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+   for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
  // A physically observing squad scout must stay on-grid for the 15s relay:
  // don't let generic civilian waypoints warp that SAME native ship away.
  if(process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&squadDirector)
