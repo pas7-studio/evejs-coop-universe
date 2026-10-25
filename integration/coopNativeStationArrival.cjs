@@ -11,7 +11,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -45,6 +45,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  };
  const arrivals=new Map();
  const manifestEnabled=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST==="1";
+ const escortEnabled=process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1";
  const manifestDirector=manifestEnabled?
   (manifest||require("./coopNativeHaulManifest").createManifest({root,store,items,getNativeEntity,clock})):null;
  const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,
@@ -61,6 +62,10 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
       Number(cargo.coopHaulFromMinerID)>0});
  function start(scene,fleet,now=clock(),options={}){
   const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID);
+  if(escortEnabled&&(!manifestEnabled||
+    typeof escortGate?.fundBeforeWarp!=="function"||
+    typeof escortGate?.recordDelivered!=="function"))
+   return pause("ESCORT_ROUTE_GATE_UNAVAILABLE");
   if(!systemID||systemID!==pos(fleet?.systemID)||!fleetID||!Array.isArray(fleet.haulerEntityIDs)||
      !fleet.haulerEntityIDs.length)return pause("INVALID_FLEET");
   if(fleet.coopStationArrival)return pause("ROUTE_ALREADY_ACTIVE");
@@ -84,6 +89,16 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     corporationID:destination.corporationID,startedAt:now,haulerIDs:ships});
    if(manifestProof?.status!=="MANIFEST_DURABLY_PREPARED")
     return pause(manifestProof?.status||"MANIFEST_PREPARE_UNAVAILABLE");
+  }
+  if(escortEnabled){
+   if(!manifestProof?.key)return pause("ESCORT_PREWARP_MANIFEST_REQUIRED");
+   let funded;try{funded=escortGate.fundBeforeWarp({
+    manifestKey:manifestProof.key,systemID,fleetID,stationID:destination.stationID,
+    corporationID:destination.corporationID,haulerIDs:ships.slice()
+   })}catch{return pause("ESCORT_PREWARP_FUNDING_UNAVAILABLE")}
+   if(funded?.status!=="FUNDED_BEFORE_WARP"||
+      funded.manifestKey!==manifestProof.key||typeof funded.contractID!=="string")
+    return pause("ESCORT_"+(funded?.status||"FUNDING_UNVERIFIED"));
   }
   const result={stationID:destination.stationID,corporationID:destination.corporationID,
    systemID,fleetID,startedAt:now,haulers:Object.fromEntries(ships.map(id=>[id,{arrivedAt:0}]))};
@@ -159,6 +174,15 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   if(stackCount)probe.observe("living-npc-station-delivered",null,{spaceState:{systemID:trip.systemID}},
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
+  if(escortEnabled){
+   const terminal={status:"DELIVERED",terminal:true,nativeFullManifestProof:manifestVerified};
+   let written;try{written=escortGate.recordDelivered({
+    manifestKey:trip.manifestID,trip,terminalProof:terminal
+   })}catch{return pause("ESCORT_TERMINAL_JOURNAL_UNAVAILABLE")}
+   if(written?.status!=="DURABLE_NATIVE_DELIVERY_RECORDED"||
+     written.manifestKey!==trip.manifestID)
+    return pause("ESCORT_"+(written?.status||"TERMINAL_WRITE_BLOCKED"));
+  }
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
