@@ -72,7 +72,7 @@ function patch(source,{remove=false}={}){
   '  if (normalizeBoolean(orderRow && orderRow.bid)) {',
   '  if ('+FLAG+' && normalizeBoolean(orderRow && orderRow.bid)) throw Error("P2P_BUY_RESERVE_STATION_CANCEL_REQUIRES_AUDITED_SETTLEMENT");');
  inject(handleCancel,handleBuy,
-  '      const cancelResponse = await marketDaemonClient.call("CancelOrder", {',
+  '      const stationID = normalizePositiveInteger(orderRow && orderRow.station_id, 0);',
   '      if ('+FLAG+' && normalizeBoolean(orderRow && orderRow.bid)) throw Error("P2P_BUY_RESERVE_CANCEL_REQUIRES_AUDITED_SETTLEMENT");');
  const start=s.indexOf(handleModify);
  if(start<0)throw Error("P2P_BUY_RESERVE_MODIFY_HANDLER_MISSING");
