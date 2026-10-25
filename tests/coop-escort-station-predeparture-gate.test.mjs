@@ -8,8 +8,8 @@ const prior=Object.fromEntries([
  "EVEJS_COOP_OPPORTUNITY_BOARD","EVEJS_COOP_EVENT_VOLUNTEERS"
 ].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(prior))process.env[k]="1";
-function fixture({volunteer=false,warpOK=true,gate=true}={}){
- const counters={funding:0,warp:0,manifest:0};
+function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false}={}){
+ const counters={funding:0,warp:0,manifest:0,closures:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
   position:{x:0,y:0,z:0},radius:100,mode:"STOP"};
@@ -27,7 +27,11 @@ function fixture({volunteer=false,warpOK=true,gate=true}={}){
  const oldReceipt=duo.readVerifiedNativePair;
  board.noteNativeConvoyPreparing=()=>({status:"NATIVE_PREPARING_EVENT_READY",
   id:"convoy-30000144-77-5501"});
- board.noteNativePreparingDeparted=()=>({status:"NATIVE_PREPARING_EVENT_CLOSED"});
+ board.noteNativePreparingDeparted=()=>{
+  counters.closures++;
+  return {status:noticeClosureUnknown&&counters.closures===1?
+   "PREPARING_DEPARTURE_WRITE_UNCERTAIN":"NATIVE_PREPARING_EVENT_CLOSED"};
+ };
  duo.readVerifiedNativePair=()=>pairApproved?{
   status:"VERIFIED_NATIVE_DUO_VOLUNTEER",eventID:"convoy-30000144-77-5501",
   systemID:30000144,entityID:901,pilots:[{characterID:701,shipID:1701},
@@ -73,6 +77,19 @@ test("only after explicit duo approval can native escrow and physical warp proce
  assert.equal(f.counters.warp,1);
  assert.equal(f.fleet.coopEscortPredepartureEventID,undefined);
 }));
+test("missing notice fsync ACK retries informational closure, not ISK or warp",()=>run(f=>{
+ f.approve();
+ const started=f.director.start(f.scene,f.fleet,1000000);
+ assert.equal(started.status,"EN_ROUTE");
+ assert.equal(started.predepartureNoticeStatus,"PREPARING_DEPARTURE_WRITE_UNCERTAIN");
+ assert.equal(f.fleet.coopEscortPredepartureEventID,"convoy-30000144-77-5501");
+ assert.equal(f.director.tick(f.scene,f.fleet,1001000).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.fleet.coopEscortPredepartureEventID,undefined);
+ assert.equal(f.counters.closures,2);
+ assert.equal(f.counters.funding,1);
+ assert.equal(f.counters.warp,1);
+},{noticeClosureUnknown:true}));
 test("unconfirmed native warp ACK fences funding retries and operator repair",()=>run(f=>{
  f.approve();f.blockWarp();
  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"WARP_COMMAND_FAILED");
