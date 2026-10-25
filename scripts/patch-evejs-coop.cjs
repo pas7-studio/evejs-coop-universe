@@ -248,6 +248,11 @@ function transform(source,spec,remove){
  if(spec.file.endsWith("miningNpcOperations.js")&&
     text.includes('require("../../space/coopNativeStationArrival")'))
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,true);
+ // Detach ALIFE-09 stable-ID shim before ALIFE-08 validates its exact pinned
+ // startup bootCall. Needed for reinstall as well as uninstall.
+ if(spec.file.endsWith("miningNpcOperations.js")&&
+    text.includes('coopDurableFleetID:Number(scene.systemID)*32+Number(slot),'))
+  text=require("./coop-native-mining-stable-fleet-id-patch.cjs").patch(text,true);
  if(spec.file.endsWith("miningNpcOperations.js")){
   // Replace the vanilla "miner ore disappears during hauling" path with
   // a real native cargo reparent to a live hauler ship. Keep fallback.
@@ -318,8 +323,10 @@ function transform(source,spec,remove){
   text=require("./coop-native-mining-durable-patch.cjs").patch(text,true);
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
- if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove){
   text=require("./coop-native-mining-durable-patch.cjs").patch(text,false);
+  text=require("./coop-native-mining-stable-fleet-id-patch.cjs").patch(text,false);
+ }
  if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js"){
   if(remove){
    text=require("./coop-native-mining-atomic-source-patch.cjs").patch(text,spec.file,true);
