@@ -52,7 +52,12 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
    let verified,priced;try{verified=readEvent(event.id);priced=readQuote(event.id)}
    catch{continue}
    if(verified?.status!=="READY"||verified.event?.id!==event.id||
+    verified.event.source!=="NATIVE_VERIFIED"||
+    verified.event.type!=="CONVOY"||verified.event.stage!=="PREPARING"||
     verified.event.phase!=="ACTIVE"||
+    verified.event.systemID!==event.systemID||
+    verified.event.entityID!==event.entityID||
+    verified.event.stationID!==event.stationID||
     priced?.status!=="READY"||!quoteOK(priced.quote,event,agent,now))
     continue;
    jobs.push({event,quote:priced.quote});
@@ -81,7 +86,7 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
    " to station "+j.event.stationID+".\n"+
    safeText(j.event.summary)+"\n"+
    "Offer: "+total+" ISK TOTAL, "+(j.quote.amountISK/2).toLocaleString("en-US")+
-   " ISK each for TWO real fleet pilots. This is a QUOTE, NOT RESERVED funds."+
+   " ISK each for TWO real fleet pilots. Quoted amount does not prove escrow reservation or payment."+
    (notes?"\n"+safeText(notes):"");
  }
  function intro(session,agentID){
@@ -99,7 +104,14 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
  function doAction({session,agentID,actionID}={}){
   if(process.env.EVEJS_COOP_NATIVE_JOB_AGENT!=="1")return null;
   const j=actionID==null?intro(session,agentID):readSelected(session,agentID);
-  if(!j)return null; // stock agent mission unaffected
+  if(!j){
+   // A selected job that expires during the dialog must NEVER fall through
+   // to a different stock mission action. Require a fresh initial contact.
+   const key=cacheKey(session?.characterID,agentID);
+   if(actionID!=null&&selected.has(key)&&validated(session,agentID))
+    return reply("This corporate job expired or changed. Close and reopen this agent contact; no native mission was accepted.");
+   return null; // stock agent mission unaffected
+  }
   const id=j.event.id;
   if(actionID===null||actionID===undefined||Number(actionID)===1||Number(actionID)===2){
    let receipt;try{receipt=readAccepted(id)}catch{}
