@@ -28,7 +28,7 @@ const env={EVEJS_COOP_NPC_BUY_NOTIFY:"1",
  EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_NPC_BUY_PLAYER_ASK:"1"};
 function fixture({offline=false,badRust=false,badOrder=false,
  badReceipt=false,throws=false,invalidWallet=false,disabled=false,
- sendFails=false}={}){
+ sendFails=false,catchup=false}={}){
  const db=new DatabaseSync(":memory:");
  db.exec('CREATE TABLE "npcMarketFills" ("key" TEXT PRIMARY KEY, "json" TEXT NOT NULL)');
  const r=receipt();
@@ -65,7 +65,8 @@ function fixture({offline=false,badRust=false,badOrder=false,
    emitAccountChangeToSession:(s,opts)=>{accountChanges++;
     s.sendNotification("OnAccountChange","clientID",
      ["cash",opts.ownerID,opts.balance]);}},
-  env:{...env,...(disabled?{EVEJS_COOP_NPC_BUY_NOTIFY:"0"}:{})},
+  env:{...env,...(disabled?{EVEJS_COOP_NPC_BUY_NOTIFY:"0"}:{}),
+   ...(catchup?{EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP:"1"}:{})},
   clock:()=>1000002
  };
  const notifier=createNpcMarketCompletionNotifier(dependencies);
@@ -73,7 +74,7 @@ function fixture({offline=false,badRust=false,badOrder=false,
   'SELECT json FROM "npcMarketFills" WHERE key=?')
   .get("corp-buy\u001f"+FILL).json);
  const notify=()=>notifier.notifyCommitted({claimKey:KEY,fillID:FILL});
- return {notify,read,events,observerEvents,calls,session,dependencies,
+ return {notify,read,events,observerEvents,calls,session,notifier,dependencies,
   get accountChanges(){return accountChanges},
   close:()=>db.close()};
 }
@@ -201,3 +202,45 @@ test("two co-op clients: only actual market seller receives Filled/wallet notifi
  assert.deepEqual(f.events.map(e=>e.name),["OnOwnOrdersChanged","OnAccountChange"]);
  assert.deepEqual(f.observerEvents,[]);
 }));
+
+test("offline seller catch-up leaves durable receipt unclaimed until actual login",()=>run(async f=>{
+ const offline=await f.notifier.notifyPendingForSeller({sellerID:SELLER});
+ assert.equal(offline.status,"CATCHUP_CHECKED");
+ assert.equal(offline.attempted,1);
+ assert.equal(offline.results[0].status,"SELLER_OFFLINE");
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+ f.dependencies.sessions.getSessions=()=>[f.session];
+ const login=await f.notifier.notifyPendingForSeller({sellerID:SELLER});
+ assert.equal(login.attempted,1);
+ assert.equal(login.results[0].status,"NOTIFIED");
+ assert.equal(f.events.length,2);
+ assert.equal(f.read().sellerNotifyClaimedAt,1000002);
+},{offline:true,catchup:true}));
+test("catch-up is a one-time bounded sweep: already claimed receipt never re-sends",()=>run(async f=>{
+ assert.equal((await f.notifier.notifyPendingForSeller({sellerID:SELLER})).attempted,1);
+ assert.equal((await f.notifier.notifyPendingForSeller({sellerID:SELLER})).attempted,0);
+ assert.equal(f.events.length,2);
+},{catchup:true}));
+test("second co-op client cannot catch up a different player's sale",()=>run(async f=>{
+ const result=await f.notifier.notifyPendingForSeller({sellerID:SELLER+1});
+ assert.equal(result.status,"CATCHUP_CHECKED");
+ assert.equal(result.attempted,0);
+ assert.equal(f.events.length,0);
+ assert.equal(f.observerEvents.length,0);
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+},{catchup:true}));
+test("catch-up is disabled independently of regular native market notices",()=>run(async f=>{
+ const result=await f.notifier.notifyPendingForSeller({sellerID:SELLER});
+ assert.equal(result.status,"DISABLED");
+ assert.equal(f.events.length,0);
+ assert.equal(f.calls.length,0);
+}));
+test("unbounded or invalid login notification request is rejected without a write",()=>run(async f=>{
+ for(const args of [{sellerID:0},{sellerID:SELLER,maxNotifications:0},
+  {sellerID:SELLER,maxNotifications:9}]){
+  const result=await f.notifier.notifyPendingForSeller(args);
+  assert.equal(result.reason,"SELLER_CATCHUP_SCOPE_INVALID");
+ }
+ assert.equal(f.events.length,0);
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+},{catchup:true}));
