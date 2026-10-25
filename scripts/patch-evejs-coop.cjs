@@ -52,7 +52,12 @@ names.splice(names.indexOf("coopEscortRouteWitness")+1,0,"coopEscortNativeIngres
 names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopPochvenConduit");
 // CH23: native two-pilot wormhole mass/transition fence; default OFF.
 names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
+// Player industry: original native writer + durable custody; default OFF.
+names.splice(names.indexOf("coopIndustryPacing")+1,0,
+ "coopPlayerIndustryGuard","coopPlayerIndustryReceipts",
+ "coopPlayerIndustryFence","coopPlayerIndustryRuntime");
 const specs=[
+ {file:"server/src/services/industry/industryManagerService.js",patches:[]},
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
  {file:"server/src/services/npe/nesIntroService.js",patches:[]},
@@ -212,6 +217,8 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file==="server/src/services/industry/industryManagerService.js")
+  text=require("./coop-player-industry-native-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/exploration/wormholes/wormholeMgrService.js")
   text=require("./coop-wormhole-jump-fence-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/space/transitions.js")
