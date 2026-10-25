@@ -21,6 +21,36 @@ function transferCargo(scene,fleet,miner,options={}){
     .find(x=>x?.kind==="ship"&&positive(x.itemID)&&x.itemID!==miner.itemID);
   if(!hauler)return 0;
   const items=(store.listNativeCargoForEntity(miner.itemID)||[]).filter(mineable);
+  // ALIFE-10 strict persistent fleet: NO write to the GameStore cache before
+  // source->hauler and its immutable receipt commit in the same SQLite txn.
+  // Leave transient/legacy hauler routes untouched when ALIFE-08 is off.
+  const strict=process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1" &&
+    miner.transient!==true && hauler.transient!==true &&
+    typeof fleet.startupKey==="string" && fleet.startupKey.length>0;
+  if(strict){
+   if(process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC!=="1"){
+    miner.coopHaulCargoNeedsOperatorRepair="ALIFE10_ATOMIC_TRANSFER_FLAG_REQUIRED";
+    fleet.coopHaulCargoNeedsOperatorRepair="ALIFE10_ATOMIC_TRANSFER_FLAG_REQUIRED";
+    return 0;
+   }
+   const atomic=options.atomicMover||require("./coopNativeHaulTransferAtomic");
+   let moved=0,quantity=0,volume=0;
+   for(const item of items){
+    const outcome=atomic.transfer({scene,fleet,miner,hauler,cargoID:Number(item.cargoID)});
+    if(outcome?.status!=="COMMITTED"){
+     probe.observe("living-hauler-atomic-cargo-blocked",null,
+      {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
+      {fleetID:fleet.fleetID,cargoID:item.cargoID,reason:String(outcome?.reason||outcome?.status||"UNKNOWN")});
+     break;
+    }
+    moved++;quantity+=outcome.quantity;volume+=outcome.volumeM3;
+   }
+   if(moved)probe.observe("living-hauler-loaded",null,
+    {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
+    {fleetID:fleet.fleetID,minerID:miner.itemID,haulerID:hauler.itemID,
+     stacks:moved,cargoQuantity:quantity,volumeM3:volume,atomic:true});
+   return volume;
+  }
   let moved=0,quantity=0,volume=0;
   for(const item of items){
    const cached=(miner.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
