@@ -1,0 +1,52 @@
+name: LW04C Source Recovery Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04b-manufacturing-admission-clean-main-20261026
+    paths:
+      - 'integration/coopNpcIndustryRecoveryFence.cjs'
+      - 'integration/coopNpcLiveFactoryReadiness.cjs'
+      - 'integration/coopAlifeNativeEconomyAct.cjs'
+      - 'integration/coopAlifeNativeManufacturingRuntime.cjs'
+      - 'scripts/patch-evejs-coop.cjs'
+      - 'tests/coop-npc-industry-recovery-fence.test.mjs'
+      - 'tests/coop-npc-live-factory-readiness.test.mjs'
+      - 'tests/coop-alife-native-act.test.mjs'
+      - 'tests/coop-alife-native-manufacturing-runtime.test.mjs'
+      - 'tests/coop-native-industry-overlay-graph.test.mjs'
+      - '.github/workflows/lw04c-source-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source-recovery:
+    name: Original industry read-fence (no live writers)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax of production read-only modules
+        run: |
+          node --check integration/coopNpcIndustryRecoveryFence.cjs
+          node --check integration/coopNpcLiveFactoryReadiness.cjs
+          node --check integration/coopAlifeNativeEconomyAct.cjs
+          node --check integration/coopAlifeNativeManufacturingRuntime.cjs
+      - name: Node industry recovery, ACT, installed overlay tests
+        run: |
+          node --test \
+            tests/coop-npc-industry-recovery-fence.test.mjs \
+            tests/coop-npc-live-factory-readiness.test.mjs \
+            tests/coop-alife-native-act.test.mjs \
+            tests/coop-alife-native-manufacturing-runtime.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs \
+            tests/coop-npc-native-economy-director.test.mjs
+      - name: Never label unexecuted real SQLite/Rust scenarios as PASS
+        run: |
+          node -e 'const m=require("./tests/scenarios/lw04c-industry-recovery-e2e.json");if(m.scenarios.length<10||m.scenarios.some(s=>s.status!=="NOT_RUN"))process.exit(1);'
