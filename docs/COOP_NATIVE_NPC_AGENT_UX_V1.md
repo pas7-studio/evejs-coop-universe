@@ -1,0 +1,40 @@
+# COOP-049 — Native in-game NPC jobs: agent contacts + A-Life opportunities
+
+Date: 2026-10-25. **SOURCE IMPLEMENTED, REAL EVE CLIENT UNVERIFIED.** This is the in-client experience slice following COOP-048, not a fictional or automatically paid mission system. Native NPC mining guard shifts and native journal-backed escort quests remain incomplete.
+
+## Product decision: real Agents + native EVEmail (no slash command required)
+
+A custom Agency window is not available as a supported overlay API in the pinned EVE 24.01 build 3396210. We therefore reuse the actual supported **agentMgr** bound-service dialogue and **native EVEmail**. The game still has its real stock Agent list, agent conversation and standard Accept/View buttons; new behavior is feature-gated and only appears for an eligible native station agent of the **same corporation and solar system** as a genuine, paid-capable preparing NPC convoy.
+
+**Player journey:** (1) a real NPC hauler with real cargo starts preparing a native station route; (2) A-Life's existing Opportunity Board records source-verified CONVOY; (3) server-approved `coopEscortPricedOffers` quotes the corporate fee **only after actual native corporation balance and cargo provenance checks**; (4) subscribed, connected pilots see a genuine EVE Mail giving a **real SDE agent ID, station and NPC corporate price**; (5) the pilot contacts that agent through the client Agent list, sees the job in the agent conversation and clicks **Accept**; (6) the second pilot must consent separately in the same real EveJS fleet; (7) only the existing prewarp native GameStore reserve can fund the offer, and only verified native physical delivery can pay.
+
+The two pilots may need to reconfirm after the peer opts in, because the existing volunteer and priced-signature APIs are intentionally two-step. **The agent button never pays by itself**, and its quote is not a promise of escrow. A pilot who is docked/off-grid may receive an explicit native-fleet verification rejection; the stock in-space duo guard is still authoritative. No imaginary NPC is spawned and no corporate wallet is created.
+
+### Native integration added
+
+- `integration/coopNativeJobAgent.cjs`: validates real authenticated session, unique live character, actual SDE agent ID/corporation/system/station, no existing normal mission; lists only live original `PREPARING` events with independently verified quote, preserves legacy native agent missions, renders native agent dialogue actions `[3,3]` (Accept) and `[1,1]` (View). It reuses existing `/events` internal server handlers for interest/volunteer/paid acceptance, **without requiring a player to type any chat command**. No new wallet or client-supplied job ID. It does NOT fabricate agent missions, LP, mission journal rows, standing or successful contract outcomes.
+- `integration/coopNativeJobAgentSelection.cjs`: durable fsync file/dir actor+agent-to-immutable-event selection, fail-closed corrupt/uncertain writes, explicit re-selection only after expiry. Native stock client sends an action ID, not the event ID; the server must not silently accept another job after new A-Life signals or restart.
+- `scripts/coop-native-job-agent-patch.cjs`: pinned reversible insertion in stock `agentMgrService.js` `Handle_DoAction` and `Handle_GetMissionBriefingInfo`, no new client assets, no unsupported custom RPC.
+- `integration/coopNativeJobNotifications.cjs`: verifies native quote and exact Board event; resolves an actual same-system SDE corporate station agent; dispatches native EVEmail using existing mailState only to opted-in connected characters. Claims are durably created **before** send to prevent duplicates or blind replay after lost ACK. Local/all/off preferences respected. Quote mail itself cannot reserve funds, pay, move a ship or invent a job.
+- Existing Opportunity Board keeps a generic **in-game EVEmail fallback** for real preparing convoys when no paid quote or real SDE agent exists, without requiring slash commands; when a real quote exists, a second, distinct corporate-agent offer mail may follow.
+- `integration/coopEscortPricedOffers.cjs` invokes the quote mail path only on an original verified **NATIVE_QUOTE_DURABLY_PREPARED** result. All installed modules and helper hooks are registered in the existing reversible `scripts/patch-evejs-coop.cjs`.
+- `scripts/Deploy-Coop-RuntimeProbe.ps1 -LivingCoop -EnableNativeJobAgents` is an **explicit, display-only opt-in** for `EVEJS_COOP_OPPORTUNITY_BOARD=1`, `EVEJS_COOP_OPPORTUNITY_MAIL=1`, `EVEJS_COOP_NATIVE_JOB_AGENT=1`, `EVEJS_COOP_NPC_JOBS=1`. It does **NOT** enable wallet, paid escrow, peaceful payout, or any new economic authority. Do not deploy to a populated world until the pinned overlay and two-client gate pass.
+
+### Non-goals and blockers
+
+- Stock agent dialog button support is present in pinned EveJS server source, but the **real EVE client has not yet shown these injected texts/actions**. In particular, the client may request mission briefing/objective protocol fields that need additional pinned adapter work. Do not claim this is a native mission-journal quest or a working new EVE Agency panel.
+- No fake player quest rows or static client mission content. Native journal, mission objectives, bookmark tracking, quest progress panel and dedicated EVE notification deep links are follow-up UX tasks after real client evidence.
+- Matching real SDE agent may not exist for every NPC corporation/system. In that case there is **no paid-agent contact**, not a fabricated substitute. Generic EVEmail remains available; a future compatible agent-contact provider or dedicated native contract mechanism must close this coverage gap.
+- Native duo volunteer/paid acceptance currently requires two connected real pilots/ships in the actual system, and stock NPC agent window visibility while undocked must be checked. Inability to open the same agent in space is a gameplay blocker, not an excuse to weaken acceptance.
+- Real paid mining-guard shift, solo escrow, full contribution proofs, financial crash recovery, Stage H #96 integration and native gameplay remain not done. The safe peaceful Escort code from #102 remains default OFF until independent native SQLite/2-client validation. No populated `evejs-data` writes, upstream fork, client files or GitHub Actions were touched.
+
+## Verification performed, and pending
+
+- **21/21** source-executed V8 native agent dialogue/authority/Accept/safety scenarios PASS (after adding durable selection).
+- Exact pinned upstream `agentMgrService.js` at `c3ea396b...` transformed with existing + new dialogue hooks: parse PASS, repeat install no-op, remove returns **byte-for-byte original**, classify PATCHED.
+- Durable selection source-executed simulated FS proof: first pin, duplicate pin, wrong actor, conflicting job, expired explicit replacement, corrupt JSON fail-closed; source test file contains 11 runnable Node cases.
+- Genuine quote->EVEmail source-executed simulated FS proof: two eligible recipients, no duplicate sends on replay, altered station rejected. Source test file contains 15 runnable Node cases; all Node/test cases are pending actual local execution.
+- Existing COOP-048 source-executed V8 ledger/job-board tests passed previously. **DO NOT report the two-client native protocol, actual Docker, Node runner, real better-sqlite3 or final wallet payout PASS.**
+- Dedicated native-client cases: `tests/scenarios/coop-049-native-agent-opportunities.json` (15 `NOT_RUN` scenarios), in addition to original `tests/scenarios/coop-048-native-paid-jobs.json`.
+
+**Next release gate:** merge/reconcile Stages H (#96) and Job Market (#102) in a throwaway worktree, run pinned `--dry-run`/reversible overlay, `node --test tests/coop-native-job-agent.test.mjs tests/coop-native-job-agent-selection.test.mjs tests/coop-native-job-notifications.test.mjs`, the existing full local baseline, and two actual EVE clients. Verify agent dialog, native mail, server-owned duo acceptance, corporate reserve, real cargo delivery and exactly-once wallet mutation. All live flags default OFF until the user-approved local sandbox gate passes.
