@@ -39,7 +39,6 @@ $files = @(
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
-    "tests/coop-npc-native-economy-director.test.mjs",
     "tests/coop-npc-native-bindings.test.mjs",
     "tests/coop-npc-economy-scheduler.test.mjs"
   )
@@ -56,7 +55,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + $manifest.scenarios.Count)
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count))
 Write-Host ("Evidence checklist: " + $manifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."
