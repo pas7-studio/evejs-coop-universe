@@ -28,13 +28,17 @@ test("no other corporation can borrow station market inventory",()=>{
  assert.match(authority,/corp\.isNPC!==true/);
 });
 test("read-proof authority uses actual real game services and source-specific Rust GetOrders",()=>{
- for(const x of ["industryRuntimeState","industryStaticData","industryParityHelpers",
- "marketDaemonClient","itemStore","corporationRuntimeState","gameStore"])
+ for(const x of ["industryStaticData","industryParityHelpers",
+ "marketDaemonClient","itemStore","gameStore"])
   assert.match(runtime,new RegExp(x));
  assert.match(reader,/marketClient\.call\("GetOrders"/);
  assert.match(reader,/getItemMutationVersion/);
  assert.match(reader,/\/jobs/);
  assert.match(reader,/marketEscrow/);
+ assert.match(reader,/read\("industryBlueprintState"/);
+ assert.match(reader,/read\("corporations"/);
+ assert.match(reader,/read\("corporationRuntime"/);
+ assert.doesNotMatch(reader,/getBlueprintState\(id,item\)|getCorporationRuntime\(id\)/);
 });
 test("trust validation fences drifted wallet, item version, BPO, Rust and escrow",()=>{
  for(const key of ["NATIVE_STATION_AUTHORITY_CHANGED_DURING_READ",
