@@ -108,3 +108,17 @@ test("native store commit must be verified before changing live cargo cache",()=
  assert.ok(writeProof>preflight);
  assert.ok(cacheWrite>writeProof);
 });
+
+test("durable ammo cycle creates PREPARED before native debit and commits before live cargo cache",()=>{
+ const transformed=patch(source);
+ const segment=transformed.slice(
+  transformed.indexOf("function consumeTurretAmmoCharge("),
+  transformed.indexOf("\nfunction executeTurretCycle("));
+ const pre=segment.indexOf('coopNpcAmmoDebitJournal").begin(');
+ const debit=segment.indexOf("const nextQuantity = Math.max");
+ const settle=segment.indexOf('coopNpcAmmoDebitJournal").commit(');
+ const cache=segment.indexOf("if (Array.isArray(attackerEntity.nativeCargoItems))");
+ assert.ok(pre>=0 && debit>pre);
+ assert.ok(settle>debit && cache>settle);
+ assert.ok(segment.includes('process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
+});
