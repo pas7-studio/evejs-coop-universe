@@ -126,7 +126,8 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
         !pos(m.quantity)))throw Error("NATIVE_SDE_MATERIAL_QUOTE_INVALID");
      quote=materials;break;
     }
-    if(!quote)throw Error("NATIVE_ORIGINAL_BLUEPRINT_QUOTE_UNAVAILABLE");
+    // No free station BPO is normal while the real BPO is installed at 2003.
+    // READY delivery and listing produced goods must remain observable.
     const book=books.get(p.typeID);
     if(!book||!Array.isArray(book.sells))
      throw Error("NATIVE_RUST_MARKET_BOOK_UNAVAILABLE");
@@ -152,17 +153,31 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
       /^coop-industry:v1:[0-9]+$/.test(String(i.customInfo||"")))
       .reduce((sum,i)=>sum+Number(i.quantity??i.stacksize),0);
     const active=before.jobsForStation.filter(j=>j.productTypeID===p.typeID);
+    // A real industry job reserves its original blueprint in installed
+    // location 2003 (stock INDUSTRY_INSTALLED_LOCATION_ID). Never accept a
+    // fabricated READY job without that exact corporate item custody.
+    for(const j of active){
+     const bp=before.items.find(i=>i.itemID===j.blueprintID);
+     if(!bp||bp.ownerID!==ownerID||bp.locationID!==2003||
+       bp.typeID!==def.blueprintTypeID||bp.categoryID!==9||
+       bp.singleton!==1)
+      throw Error("NATIVE_ACTIVE_JOB_BLUEPRINT_CUSTODY_MISSING");
+    }
+    // Only new installs need a free BPO. Already-paid output may still be
+    // delivered/listed when the only blueprint is installed or unavailable.
+    if(!quote&&active.length===0&&unlisted===0)
+     throw Error("NATIVE_ORIGINAL_BLUEPRINT_QUOTE_UNAVAILABLE");
     const pending=active.reduce((s,j)=>s+j.productQuantity,0);
-    const materialShortage=quote.reduce((sum,m)=>
+    const materialShortage=(quote||[]).reduce((sum,m)=>
       sum+Math.max(0,m.quantity-(before.stock.get(m.typeID)||0)),0);
-    const mineralStock=quote.reduce((sum,m)=>sum+(before.stock.get(m.typeID)||0),0);
+    const mineralStock=(quote||[]).reduce((sum,m)=>sum+(before.stock.get(m.typeID)||0),0);
     if(![pending,materialShortage,mineralStock,unlisted].every(count))
      throw Error("NATIVE_AUTHORITY_QUANTITY_OVERFLOW");
     rows.push({typeID:p.typeID,targetStock:p.targetStock,listed,inHangar,pending,
      productShortage:Math.max(0,p.targetStock-inHangar-listed-pending),
      materialShortage,mineralStock,nativeOutputQty:unlisted,
      nativeReadyJobs:active.filter(j=>j.status===3).length,
-     nativeActiveJobs:active.length,requirements:quote});
+     nativeActiveJobs:active.length,manufacturingEligible:!!quote,requirements:quote});
    }
    const after=sample(ownerID,stationID,systemID),end=clock();
    if(!count(end)||end<start||end-start>10000||
@@ -187,7 +202,7 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
     oreAtStation,mineralStock:selected.mineralStock,materialShortage:selected.materialShortage,
     nativeOreToRefine:oreAtStation,nativeOutputQty:selected.nativeOutputQty,
     nativeReadyJobs:selected.nativeReadyJobs,nativeActiveJobs:selected.nativeActiveJobs,
-    factoryOnline:before.online,marketOnline:true,
+    factoryOnline:before.online&&selected.manufacturingEligible,marketOnline:true,
     products:rows.map(({requirements,...x})=>x)};
   }catch(e){return reason(String(e?.message||"NATIVE_AUTHORITY_UNKNOWN_FAILURE").slice(0,110));}
   finally{inFlight.delete(key);}
