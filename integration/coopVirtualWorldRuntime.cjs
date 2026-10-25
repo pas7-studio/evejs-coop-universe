@@ -205,6 +205,7 @@ function start(){
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
+  safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
   safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
@@ -482,6 +483,122 @@ function observeNativeAmmoConsumption(){
  }
 }
 // Source-verified native kill -> real surviving wreck -> same killer ship.
+// Stage J: one opt-in native competing salvage step on the EXISTING 30s
+// A-Life tick. Uses existing named NPC hulls, actual native movements and
+// one atomic original cargo debit; never spawns a rival or mints a stack.
+let salvageRivalDirector=null,salvageRivalStationDelivery=null;
+function advanceNativeSalvageRivals(){
+ if(process.env.EVEJS_COOP_ALIFE_SALVAGE_RIVALS!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
+  !identityRegistry||!bridge||!visitedSystems.size)return;
+ const fs=require("node:fs"),path=require("node:path");
+ const root=process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||
+  "/var/lib/evejs/coop-native-warehouse";
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  npc=require("./npc/npcRuntime"),controllers=require("./npc/npcRegistry"),
+  gameStore=require("../gameStore"),
+  items=require("../services/inventory/itemStore");
+ const atomic=gameStore.coopAtomicNativeRows;
+ if(typeof atomic?.transact!=="function")return;
+ if(!salvageRivalDirector)
+  salvageRivalDirector=require("./coopSalvageNpcRivals").createSalvageRivals({
+   atomic,
+   readCases:systemID=>{
+    const dir=path.join(root,"salvage-provenance");
+    let names;
+    try{names=fs.readdirSync(dir)}catch(e){
+     if(e?.code==="ENOENT")return [];
+     throw e;
+    }
+    if(names.length>256||names.some(n=>!/^[0-9]+-[0-9]+-[0-9]+[.]json$/.test(n)))
+     throw Error("SALVAGE_RIVAL_MANIFEST_DIRECTORY_UNTRUSTED");
+    const found=[];
+    for(const name of names){
+     const raw=fs.readFileSync(path.join(dir,name),"utf8");
+     if(raw.length>131072)throw Error("SALVAGE_RIVAL_WITNESS_TOO_LARGE");
+     const rec=JSON.parse(raw);
+     if(rec?.v!==1||rec.manifestKey!==name.slice(0,-5)||
+      !Array.isArray(rec.rows))throw Error("SALVAGE_RIVAL_WITNESS_INVALID");
+     if(rec.systemID===systemID)found.push(rec);
+    }
+    return found;
+   },
+   readEscrow:key=>{
+    const result=gameStore.read("corporationRuntime","/coopSalvageEscrows");
+    if(!result?.success)return {status:result?.errorMsg==="ENTRY_NOT_FOUND"?"NOT_FOUND":"UNKNOWN"};
+    const saved=result.data?.byContract?.["salvage-"+key];
+    return saved?{status:saved.status}:{status:"NOT_FOUND"};
+   },
+   getController:id=>controllers.getControllerByEntityID(id),
+   getNativeEntity:store.getNativeEntity,
+   getNativeWreck:store.getNativeWreck,
+   getNativeWreckItems:store.listNativeWreckItemsForWreck,
+   readCargo:store.listNativeCargoForEntity,
+   getUnitVolume:typeID=>Number(items.getItemMetadata(typeID)?.volume),
+   warp:(id,wreckID)=>npcNativeOrder("CIVILIAN",id,"salvage-warp",
+    ()=>npc.warpToEntity(id,wreckID),runtime.ensureScene(
+     store.getNativeEntity(id)?.systemID,{refreshStargates:false})?.systemID),
+   orbit:(id,wreckID,meters)=>npcNativeOrder("CIVILIAN",id,"salvage-orbit",
+    ()=>npc.orbit(id,wreckID,meters),runtime.ensureScene(
+     store.getNativeEntity(id)?.systemID,{refreshStargates:false})?.systemID)
+  });
+ if(!salvageRivalStationDelivery)
+  salvageRivalStationDelivery=require("./coopSalvageNpcStationDelivery")
+   .createNpcSalvageDelivery({
+    atomic,readNativeCargo:store.listNativeCargoForEntity,
+    readRivalJournal:()=>{
+     const r=gameStore.read("corporationRuntime","/coopSalvageRivalMoves");
+     if(r?.errorMsg==="ENTRY_NOT_FOUND")
+      return {version:1,moves:{}};
+     if(!r?.success)throw Error("SALVAGE_RIVAL_JOURNAL_UNAVAILABLE");
+     return r.data;
+    },
+    readNativeEntity:store.getNativeEntity,
+    getController:id=>controllers.getControllerByEntityID(id),
+    getStation:id=>require("./worldData").getStationByID(id),
+    buildInventoryItem:items.buildInventoryItem,
+    warp:(id,stationID)=>npcNativeOrder("CIVILIAN",id,"rival-station-warp",
+     ()=>npc.warpToEntity(id,stationID)),
+    orbit:(id,stationID,meters)=>npcNativeOrder("CIVILIAN",id,"rival-station-orbit",
+     ()=>npc.orbit(id,stationID,meters))
+   });
+ const roles=world?.snapshot()?.pilots||[];
+ const links=[...bridge.snapshot(),...Object.values(
+  identityRegistry.snapshot()?.links||{})];
+ for(const systemID of visitedSystems){
+  const scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;
+  if(!scene)continue;
+  const blockedIDs=new Set();
+  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+  if(raidDirector)for(const id of raidDirector.activePirateIDs(sid=>
+   runtime.ensureScene(sid,{refreshStargates:false})))blockedIDs.add(id);
+  if(wreckRecoveryDirector)for(const id of wreckRecoveryDirector.activeIDs(systemID))
+   blockedIDs.add(id);
+  addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
+  const delivery=salvageRivalStationDelivery.tick({scene,
+   assignments:links,blockedIDs});
+  if(delivery.orders.length||delivery.deliveries.length)
+   require("./coopRuntimeProbe").observe("alife-salvage-rival-station",
+    null,{spaceState:{systemID}},{
+     status:delivery.status,orders:delivery.orders,
+     nativeStockDeliveries:delivery.deliveries,
+     nativeInventoryAtomic:true,iskGranted:false
+    });
+  // A cargo-occupied NPC returning to a station must not also receive
+  // a new wreck warp order from another A-Life director in this tick.
+  if(delivery.orders.length||delivery.deliveries.length)continue;
+  const result=salvageRivalDirector.tick({scene,assignments:links,roles,
+   blockedIDs});
+  if(result.orders.length||result.pickups.length)
+   require("./coopRuntimeProbe").observe("alife-salvage-competition",
+    null,{spaceState:{systemID}},{
+     status:result.status,nativeOrders:result.orders,
+     nativeCargoReceipts:result.pickups,
+     npcSpawned:false,iskGranted:false
+    });
+ }
+}
 function advanceNativeWreckRecovery(){
  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||

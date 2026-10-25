@@ -371,6 +371,23 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      " for real hauler "+result.entityID+". Movement is now controlled by stock EveJS. No ISK changes.":
     "[Co-op Escort] "+result.status+". No tactic was confirmed."};
   }
+  if(op==="salvage"){
+   const action=String(tokens[0]||"").toUpperCase();
+   const eventID=tokens[1],cargoID=Number(tokens[2]);
+   if(!["OFFER","ACCEPT","PICKUP","DELIVER","REFUND"].includes(action)||
+    !/^convoy-\d+-\d+-\d+$/.test(String(eventID))||
+    !Number.isSafeInteger(cargoID)||cargoID<=0)
+    return {status:"SALVAGE_HELP",
+     message:"[Co-op Salvage] /events salvage offer|accept|pickup|deliver|refund <event-id> <cargo-id>"};
+   const result=require("./coopSalvageGameMount")
+    .commandInGame(session,eventID,cargoID,action);
+   return {status:result.status,message:
+    "[Co-op Salvage] "+result.status+
+    " | cargo "+cargoID+
+    (result.amountISK?" | native NPC quote/escrow "+result.amountISK+" ISK":"")+
+    (result.payoutStatus?" | wallet payout: "+result.payoutStatus:"")+
+    " | stock and ISK are server-authoritative."};
+  }
   if(op==="rescue"){
    const result=require("./coopEscortRescueNavigation")
     .rescueInGame(session,tokens[0]);
@@ -381,7 +398,20 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     "[Co-op Rescue] "+result.status+". No cargo or money granted."};
   }
   if(op==="history"||op==="reputation"){
-   return require("./coopEscortReputation").listNativeHistory(session);
+   const escorts=require("./coopEscortReputation").listNativeHistory(session);
+   const salvages=require("./coopSalvageGameMount").historyInGame(session);
+   if(salvages?.status!=="READY")return escorts;
+   const h=salvages.history||[];
+   const rep=salvages.reputation;
+   const lines=h.map(x=>x.contractID+" / "+x.outcome+
+    " / "+x.earnedISK+" ISK / +"+x.reputationPoints+" RESCUE rep");
+   const extra="[Co-op Salvage] Authenticated native RESCUE history: paid "+
+    rep.paidRescues+" | refunded "+rep.refundedRescues+
+    " | earned "+rep.earnedISK+" ISK | score "+rep.score+
+    (lines.length?"\\n"+lines.join("\\n"):"\\nNo verified rescue payments yet.");
+   if(escorts?.status==="READY")
+    return {...escorts,message:escorts.message+"\\n"+extra};
+   return {status:"READY",message:extra};
   }
   if(op==="accept"){
    if(process.env.EVEJS_COOP_ESCORT_PAID_ACCEPT!=="1")
@@ -419,7 +449,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      ", find the actual NPC via overview, join a real fleet manually. No automatic warp or ISK award.":
      "[Co-op Events] "+r.status};
   }
-  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events tactic <id> hold|continue|retreat | /events rescue <id> | /events history | /events watch local|all|off"};
+  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events tactic <id> hold|continue|retreat | /events rescue <id> | /events salvage offer|accept|pickup|deliver <id> <cargo-id> | /events history | /events watch local|all|off"};
  }
  return {publish,nativeRaid,nativeConvoy,nativeConvoyPreparing,nativePreparingDeparted,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
