@@ -12,7 +12,7 @@ const validAt = value => Number.isFinite(Date.parse(value));
 const decimal = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
 const signed = value => typeof value === 'string' && /^-?(0|[1-9][0-9]*)$/.test(value) && value !== '-0';
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const requiredMeta = meta => meta && /^[a-f0-9]{40}$/.test(meta.projectSha || '') && /^[a-f0-9]{40}$/.test(meta.upstreamSha || '') && typeof meta.imageId === 'string' && meta.imageId.startsWith('sha256:') && meta.imageId.length > 12;
+const requiredMeta = meta => meta && /^[a-f0-9]{40}$/.test(meta.projectSha || '') && /^[a-f0-9]{40}$/.test(meta.upstreamSha || '') && typeof meta.imageId === 'string' && /^sha256:[a-f0-9]{64}$/.test(meta.imageId);
 
 function parseEvents(raw, now, minutes) {
   let invalid = 0;
@@ -51,10 +51,12 @@ function checkParty(raw, now, minutes) {
   const party = summarizeParty(raw, {now, windowMinutes:minutes});
   if (party.invalidLines) return pass('FAIL', 'Malformed party telemetry', {invalidLines:party.invalidLines});
   const sceneAge = validAt(party.lastSceneAt) ? now - Date.parse(party.lastSceneAt) : Infinity;
-  if (party.serverMutualVisibility !== true || party.sharedScenePilotCount !== 2 || party.activePilotCount < 2 || sceneAge < 0 || sceneAge > 5*60000)
+  const currentBoot = [...parseEvents(raw, now, minutes).rows].reverse().find(e => e.event === 'living-headless-boot-requested');
+  const afterBoot = !currentBoot || (validAt(party.lastSceneAt) && Date.parse(party.lastSceneAt) >= currentBoot._t);
+  if (party.serverMutualVisibility !== true || party.sharedScenePilotCount !== 2 || party.activePilotCount < 2 || !afterBoot || sceneAge < 0 || sceneAge > 5*60000)
     return pass('BLOCKED', 'Two fresh, independently identified pilots with mutual scene visibility not evidenced', {
       partyStatus:party.status, activePilots:party.activePilotCount,
-      sharedScenePilots:party.sharedScenePilotCount, sceneFresh:sceneAge >= 0 && sceneAge <= 5*60000
+      sharedScenePilots:party.sharedScenePilotCount, sceneFresh:sceneAge >= 0 && sceneAge <= 5*60000 && afterBoot
     });
   return pass('PASS_SERVER', 'Two distinct sessions, ships and reciprocal server-side scene visibility observed', {
     activePilots:party.activePilotCount, sharedScenePilots:party.sharedScenePilotCount
@@ -129,7 +131,7 @@ function checkEconomy(ledger, meta) {
 }
 function checkClient(observations, meta, now) {
   if (!observations) return pass('BLOCKED','Two-client authenticated gameplay needs actual operator-confirmed observations; no TCP/JSONL substitute');
-  const fields = ['loginA','loginB','undockA','undockB','npcVisible','mutualVisibility','fleetWarp','combatOrLoot','reconnect'];
+  const fields = ['loginA','loginB','undockA','undockB','npcVisible','mutualVisibility','fleetInviteAccepted','fleetWarp','sharedCombat','sharedLoot','itemGift','shipGift','sharedQuestCredit','reconnectRetainsShip','secondPilotSurvivesDisconnect'];
   if (observations.projectSha !== meta.projectSha || observations.upstreamSha !== meta.upstreamSha || observations.imageId !== meta.imageId ||
     observations.authorizedClient !== true || !validAt(observations.recordedAt) ||
     Math.abs(now-Date.parse(observations.recordedAt))>30*60000 ||
@@ -137,7 +139,7 @@ function checkClient(observations, meta, now) {
     !observations.characterIds.every(positive) || String(observations.characterIds[0]) === String(observations.characterIds[1]) ||
     !observations.observations || !fields.every(x => observations.observations[x] === true))
     return pass('BLOCKED','Incomplete, stale or revision-mismatched human two-client gameplay attestation');
-  return pass('PASS_OPERATOR_ATTESTED','Authorized operator attested actual two-client interaction, fleet warp, NPC interaction and reconnect');
+  return pass('PASS_OPERATOR_ATTESTED','Authorized operator attested actual two-client fleet, item/ship transfers, shared missions/combat/loot and safe reconnect');
 }
 function audit({events='',meta={},before=null,after=null,ledger=null,client=null,now=Date.now(),windowMinutes=30}={}) {
   if (!Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 1440) throw Error('Window must be 1..1440 minutes');
