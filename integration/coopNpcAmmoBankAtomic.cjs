@@ -37,7 +37,8 @@ function readReceipt(file,io=fs){
    !pos(v.entityID)||!boundary(v.boundaryMs)||
    !Array.isArray(v.modules)||!v.modules.length||v.modules.length>16||
    v.modules.some(m=>!pos(m))||new Set(v.modules).size!==v.modules.length||
-   typeof v.nonce!=="string"||!v.nonce.length)
+   typeof v.nonce!=="string"||!v.nonce.length||
+   (v.outcomeRequired!==undefined&&typeof v.outcomeRequired!=="boolean"))
    throw Error("BANK_RECEIPT_INVALID");
  return v;
 }
@@ -81,12 +82,16 @@ function writeAtomic(io,file,receipt){
 function prepare(io,root,entityID,modules,whenMs,clock){
  const status=inspectShip({root,entityID,io});
  if(!status.ok)throw Error(status.status);
+ if(status.receipt?.outcomeRequired===true&&
+    process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS!=="1")
+  throw Error("BANK_OUTCOME_DOWNGRADE_FORBIDDEN");
  if(status.receipt&&whenMs<=status.receipt.boundaryMs&&
     status.receipt.modules.some(m=>modules.has(m)))
   throw Error("BANK_CYCLE_REPLAY");
  // COOP-046: when outcome attestation is requested, never overwrite a
  // successful cargo debit whose native fire result is still unknown.
- if(process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"&&status.receipt){
+ if((process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"||
+     status.receipt?.outcomeRequired===true)&&status.receipt){
   const o=status.receipt.outcome;
   if(!o||o.version!==1||o.boundaryMs!==status.receipt.boundaryMs||
      !Number.isFinite(o.observedAtMs)||o.observedAtMs<=0||
@@ -114,7 +119,8 @@ function prepare(io,root,entityID,modules,whenMs,clock){
  if((state?.nonce||null)!==(status.receipt?.nonce||null))
   throw Error("BANK_JOURNAL_RACE");
  const receipt={version:1,phase:"PREPARED",entityID,boundaryMs:whenMs,
-  modules:[...modules].sort((a,b)=>a-b),nonce};
+  modules:[...modules].sort((a,b)=>a-b),nonce,
+  outcomeRequired:process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"};
  writeAtomic(io,file,receipt);
  return {file,lock,receipt,previousReceipt:status.receipt||null};
 }
@@ -175,8 +181,14 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
     if(previousFence!==null&&(previousFence?.version!==1||
        previousFence.entityID!==entityID||
        !previousFence.modules||typeof previousFence.modules!=="object"||
-       Array.isArray(previousFence.modules)))
+       Array.isArray(previousFence.modules)||
+       (previousFence.outcomeRequired!==undefined&&
+        typeof previousFence.outcomeRequired!=="boolean")))
      throw Error("BANK_NATIVE_FENCE_CORRUPT");
+    // SQLite retains a per-ship mode latch even if the POSIX root is lost.
+    if(previousFence?.outcomeRequired===true&&
+       process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS!=="1")
+     throw Error("BANK_NATIVE_OUTCOME_DOWNGRADE_FORBIDDEN");
     // COOP-046: the operator can rotate/misplace a POSIX root, but native
     // SQLite keeps prior debits. A new empty root must NEVER silently
     // bootstrap a new accepted outcome history for an already-spent ship.
@@ -231,7 +243,9 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
     if(Object.keys(fences).length>2048)
      throw Error("BANK_NATIVE_FENCE_LIMIT");
     tx.put("npcCargo","cargo",next);
-    tx.put("npcCargo",fenceKey,{version:1,entityID,modules:fences});
+    tx.put("npcCargo",fenceKey,{version:1,entityID,modules:fences,
+     outcomeRequired:previousFence?.outcomeRequired===true||
+      process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"});
     return result;
    });
   }catch(_){return fail("BANK_ATOMIC_TRANSACTION_UNCERTAIN");}
