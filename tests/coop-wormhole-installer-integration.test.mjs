@@ -39,6 +39,7 @@ test("central installer is parseable JavaScript (guards accidental literal escap
 });
 
 test("single central installer owns the registered native wormhole hook and deployed module", () => {
+  assert.equal(names.filter(name => name === "coopPochvenConduit").length, 1, "keep concurrently introduced Pochven native guard");
   assert.equal(names.filter(name => name === "coopWormholeJumpFence").length, 1);
   assert.equal(specs.filter(spec => spec.file === fileName).length, 1);
   assert.ok(target);
