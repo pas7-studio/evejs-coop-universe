@@ -11,7 +11,8 @@ const key="coopSalvageMarketOps";
 const clone=x=>JSON.parse(JSON.stringify(x));
 function createSalvagePendingMarket({atomic,call,getItem,getEscrow,
  readJournal,readWitness,isNpcCorporation,verifyStation,
- resolvePriceCents,clock=()=>Date.now(),maxQuantity=50000}={}){
+ resolvePriceCents,readOps=null,readFill=null,readCorp=null,
+ clock=()=>Date.now(),maxQuantity=50000}={}){
  if(typeof atomic?.transact!=="function"||
   [call,getItem,getEscrow,readJournal,readWitness,isNpcCorporation,
    verifyStation,resolvePriceCents,clock].some(x=>typeof x!=="function")||
@@ -102,6 +103,9 @@ function createSalvagePendingMarket({atomic,call,getItem,getEscrow,
    Number(row.type_id)===p.typeID&&
    Number(row.quantity)===p.quantity&&
    Number(row.price)===price&&row.bid===false&&row.is_corp===true&&
+   row.source==="coop-npc"&&
+   (state!=="pending"&&state!=="open"||
+    Number(row.vol_remaining)===p.quantity)&&
    row.state===state&&good(Number(row.order_id)));
  }
  function escrowed(p,orderID){
@@ -233,8 +237,192 @@ function createSalvagePendingMarket({atomic,call,getItem,getEscrow,
     nativeEscrowVerified:true,walletCredited:false};
   }finally{inFlight.delete(wreckID)}
  }
- return Object.freeze({inspect,listOnce,
-  mode:"MANUAL_SOURCE_BACKED_SALVAGE_PENDING_MARKET",
-  supportsAutoListing:false,supportsVerifiedSales:false});
+
+ // Durable restart reconciliation. This does NOT reissue Reserve on an
+ // unknown acknowledgement. Rust is first queried by the original operation
+ // ID. A confirmed, still pending Rust reservation may be completed using
+ // the same GameStore source transaction. The same rule applies to Activate:
+ // re-read native Rust before an idempotent activation for a proven escrow.
+ async function reconcile(wreckID){
+  if(!enabled())return blocked("SALVAGE_MARKET_DISABLED");
+  if(!good(wreckID)||typeof readOps!=="function")
+   return blocked("SALVAGE_MARKET_RECONCILIATION_AUTHORITY_UNAVAILABLE");
+  if(inFlight.has(wreckID))return blocked("SALVAGE_MARKET_BUSY");
+  inFlight.add(wreckID);
+  try{
+   let ops,entry,p;
+   try{
+    ops=readOps();
+    entry=ops?.bySource?.[String(wreckID)];
+    p=proof(wreckID);
+   }catch{return blocked("SALVAGE_MARKET_RECONCILIATION_SOURCE_UNAVAILABLE")}
+   if(ops?.version!==1||!entry||!p||
+    entry.operationID!==operationID(p)||entry.nativeItemID!==p.nativeItemID||
+    entry.corporationID!==p.corporationID||entry.stationID!==p.stationID||
+    entry.typeID!==p.typeID||entry.quantity!==p.quantity||
+    !good(entry.priceCents)||entry.priceCents>100000000)
+    return blocked("SALVAGE_MARKET_RECONCILIATION_IDENTITY_CONFLICT");
+   const op=entry.operationID,price=entry.priceCents/100;
+   if(entry.phase==="SOLD")return {status:"NATIVE_SALVAGE_ALREADY_SOLD",operationID:op};
+   if(entry.phase==="NATIVE_SALE_COMMITTED"){
+    if(typeof readFill!=="function"||typeof readCorp!=="function")
+     return blocked("SALVAGE_MARKET_FINANCE_RECONCILIATION_AUTHORITY_UNAVAILABLE");
+    let filled,receipt,item,corp;
+    try{
+     filled=await call("GetNpcSellClaim",{operation_id:op});
+     receipt=readFill(entry.orderID);item=getItem(p.nativeItemID);
+     corp=readCorp(p.corporationID);
+    }catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",phase:"RUST_FILL_READ_UNKNOWN",operationID:op}}
+    const journal=corp?.wallet?.divisions?.["1000"]?.journal;
+    const txlog=corp?.wallet?.divisions?.["1000"]?.transactions;
+    const at=(rows)=>Array.isArray(rows)&&rows.some(x=>x.transactionID===entry.fillID&&
+     x.salvageContractID===undefined&&x.amount===receipt?.grossCents/100);
+    if(!["settling","filled"].includes(filled?.state)||
+     Number(filled.order_id)!==entry.orderID||
+     Number(filled.fill_id)!==entry.fillID||
+     Number(filled.buyer_id)!==entry.buyerID||
+     receipt?.phase!=="NATIVE_COMMITTED"||
+     receipt.coopSource!=="NATIVE_SALVAGE"||
+     receipt.operationID!==op||receipt.fillID!==entry.fillID||
+     receipt.buyerID!==entry.buyerID||receipt.itemID!==p.nativeItemID||
+     receipt.ownerID!==p.corporationID||receipt.orderID!==entry.orderID||
+     receipt.grossCents!==entry.grossCents||
+     item?.ownerID!==entry.buyerID||item.locationID!==p.stationID||
+     getEscrow(entry.orderID)!==null||
+     corp?.corporationID!==p.corporationID||!at(journal)||!at(txlog))
+     return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+      phase:"NATIVE_RUST_WALLET_FILL_MISMATCH",operationID:op};
+    // SQLite already paid the buyer and corporation. If the process died
+    // before Rust Finalize, retry ONLY the idempotent Rust finalization with
+    // the original signed claim and durable native fill receipt. Never
+    // replay the actual item or wallet mutation.
+    if(filled.state==="settling"){
+     try{
+      const finalized=await call("FinalizeNpcSellOrder",{
+       operation_id:op,order_id:String(entry.orderID),
+       buyer_id:String(entry.buyerID),fill_id:String(entry.fillID)});
+      if(finalized?.state!=="filled"||
+       Number(finalized.order_id)!==entry.orderID||
+       Number(finalized.fill_id)!==entry.fillID||
+       Number(finalized.buyer_id)!==entry.buyerID)
+       throw Error("RUST_RECOVERY_FINALIZE_ACK_CONFLICT");
+      filled=await call("GetNpcSellClaim",{operation_id:op});
+     }catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+      phase:"RUST_PAID_FINALIZE_UNKNOWN",operationID:op}}
+     if(filled?.state!=="filled"||
+      Number(filled.order_id)!==entry.orderID||
+      Number(filled.fill_id)!==entry.fillID||
+      Number(filled.buyer_id)!==entry.buyerID)
+      return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+       phase:"RUST_PAID_FINALIZE_READBACK_UNKNOWN",operationID:op};
+    }
+    try{
+     atomic.transact(["corporationRuntime","npcMarketFills"],tx=>{
+      const state=ledger(tx),e=state.bySource[String(wreckID)];
+      const same=tx.get("npcMarketFills","order"+String.fromCharCode(31)+entry.orderID);
+      if(e?.phase!=="NATIVE_SALE_COMMITTED"||e.operationID!==op||
+       e.fillID!==entry.fillID||same?.fillID!==entry.fillID||
+       same.buyerID!==entry.buyerID||same.grossCents!==entry.grossCents)
+       throw Error("SALVAGE_MARKET_FINAL_RECEIPT_CHANGED");
+      e.phase="SOLD";e.rustFinalizedAt=clock();
+      tx.put("corporationRuntime",key,state);
+     });
+    }catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",phase:"SOLD_SEAL_UNKNOWN",operationID:op}}
+    return {status:"NATIVE_SALVAGE_SOLD_RECOVERED",operationID:op};
+   }
+   if(!["PREPARED","ESCROWED","LISTED"].includes(entry.phase))
+    return blocked("SALVAGE_MARKET_UNSUPPORTED_RECOVERY_STATE");
+   let rust;
+   try{rust=await call("GetNpcSellOrder",{operation_id:op})}
+   catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+    phase:"RUST_ORDER_READ_UNKNOWN",operationID:op}}
+   if(!["pending","open","settling","filled"].some(state=>sameOrder(rust,p,price,state)))
+    return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"RUST_ORIGINAL_ORDER_CONFLICT",operationID:op};
+   const orderID=Number(rust.order_id);
+   if(!good(orderID)||!good(ESCROW_BASE+orderID))
+    return blocked("SALVAGE_MARKET_RECOVERY_ORDER_ID_UNSAFE");
+   if(entry.phase==="LISTED"){
+    if(orderID!==entry.orderID||!["open","settling","filled"].includes(rust.state))
+     return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+      phase:"RUST_LISTED_ORDER_CHANGED",operationID:op};
+    if(rust.state!=="open")return {status:"NATIVE_SALVAGE_BUYER_SETTLEMENT_IN_PROGRESS",
+     orderID,operationID:op};
+    return escrowed(p,orderID)?{status:"NATIVE_SALVAGE_ALREADY_LISTED",orderID,operationID:op}:
+     {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+      phase:"LISTED_ESCROW_READBACK_MISMATCH",operationID:op};
+   }
+   if(entry.phase==="PREPARED"){
+    if(rust.state!=="pending")return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"RUST_RESERVED_STATE_CONFLICT",operationID:op};
+    try{
+     atomic.transact(["items","marketEscrow","corporationRuntime","npcCargo"],tx=>{
+      const state=ledger(tx),e=state.bySource[String(wreckID)];
+      if(e?.phase!=="PREPARED"||e.operationID!==op||
+       e.priceCents!==entry.priceCents||e.nativeItemID!==p.nativeItemID)
+       throw Error("SALVAGE_MARKET_RECOVERY_INTENT_CHANGED");
+      const item=sourceInTx(tx,p);
+      if(tx.get("marketEscrow",String(orderID)))
+       throw Error("SALVAGE_MARKET_RECOVERY_ESCROW_EXISTS");
+      const loc=ESCROW_BASE+orderID,now=new Date(clock()).toISOString();
+      tx.put("items",String(p.nativeItemID),{...item,locationID:loc});
+      tx.put("marketEscrow",String(orderID),{
+       orderId:String(orderID),escrowType:"sell",
+       ownerId:p.corporationID,isCorp:true,typeId:p.typeID,
+       stationId:p.stationID,escrowLocationID:loc,
+       remainingQuantity:p.quantity,sourceItemID:p.nativeItemID,
+       coopOperationID:op,coopSource:"NATIVE_SALVAGE",
+       createdAt:now,updatedAt:now
+      });
+      e.phase="ESCROWED";e.orderID=orderID;
+      tx.put("corporationRuntime",key,state);
+     });
+    }catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"ESCROW_RECOVERY_COMMIT_UNKNOWN",operationID:op}}
+   }else if(entry.orderID!==orderID){
+    return blocked("SALVAGE_MARKET_RECOVERY_ESCROW_IDENTITY_CONFLICT");
+   }
+   if(!escrowed(p,orderID))
+    return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"ESCROW_RECOVERY_READBACK_UNKNOWN",operationID:op};
+   if(rust.state==="pending"){
+    // The same Rust operation/order pair is idempotent; re-observe next tick
+    // if the ACK disappears rather than guessing an activation succeeded.
+    try{const activated=await call("ActivateNpcSellOrder",{
+     operation_id:op,order_id:String(orderID),
+     source_item_id:String(p.nativeItemID)});
+     if(!sameOrder(activated,p,price,"open"))
+      return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+       phase:"RUST_RECOVERY_ACTIVATION_UNKNOWN",operationID:op};
+    }catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"RUST_RECOVERY_ACTIVATION_UNKNOWN",operationID:op}}
+   }else if(rust.state!=="open"){
+    return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"RUST_EARLY_SETTLEMENT_CONFLICT",operationID:op};
+   }
+   try{rust=await call("GetNpcSellOrder",{operation_id:op})}
+   catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+    phase:"RUST_RECOVERY_OPEN_READ_UNKNOWN",operationID:op}}
+   if(!sameOrder(rust,p,price,"open")||Number(rust.order_id)!==orderID||
+    !escrowed(p,orderID))
+    return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+     phase:"NATIVE_RUST_REOPEN_CONFLICT",operationID:op};
+   try{
+    atomic.transact(["corporationRuntime"],tx=>{
+     const state=ledger(tx),e=state.bySource[String(wreckID)];
+     if(e?.phase!=="ESCROWED"||e.orderID!==orderID||
+      e.operationID!==op||e.nativeItemID!==p.nativeItemID)
+      throw Error("SALVAGE_MARKET_LISTED_SEAL_CONFLICT");
+     e.phase="LISTED";tx.put("corporationRuntime",key,state);
+    });
+   }catch{return {status:"SALVAGE_MARKET_RECONCILIATION_REQUIRED",
+    phase:"LISTED_RECOVERY_SEAL_UNKNOWN",operationID:op}}
+   return {status:"NATIVE_SALVAGE_LISTED_RECOVERED",orderID,operationID:op};
+  }finally{inFlight.delete(wreckID)}
+ }
+
+ return Object.freeze({inspect,listOnce,reconcile,
+  mode:"SOURCE_BACKED_SALVAGE_PENDING_MARKET",
+  supportsAutoListing:true,supportsVerifiedSales:false});
 }
 module.exports={createSalvagePendingMarket};

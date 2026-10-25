@@ -20,6 +20,9 @@ names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","c
 // existing native pending-order dependency together with opt-in salvage seller.
 names.splice(names.indexOf("coopSalvageNpcRivals")+1,0,
  "coopSalvageNpcStationDelivery","coopNpcPendingMarketEscrow","coopSalvageNpcPendingMarket");
+// Auto-listing is source-only and uses the existing living-world 30s tick.
+names.splice(names.indexOf("coopSalvageNpcPendingMarket")+1,0,
+ "coopAlifeSalvageMarket","coopAlifeSalvageMarketRuntime");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
 // ALIFE-08 durable native miner/hauler identity (opt-in).
