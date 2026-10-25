@@ -157,9 +157,12 @@ function start(){
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
   // Opt-in normal ammo orders flow from native A-Life decisions; survival
   // still receives an immediate authoritative native retreat attempt.
-  if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
+  if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled()){
+   safeNpcPhase("native-ammo-readiness",()=>
+    advanceNativeAmmoSupply({mode:"MONITOR_ONLY"}));
    safeNpcPhase("native-ammo-survival",()=>
     advanceNativeAmmoSupply({mode:"SURVIVAL"}));
+  }
   else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
@@ -1088,7 +1091,8 @@ function advanceNativeAmmoSupply({mode="LEGACY",systemIDFilter=null,decision=nul
    if(selected.status!=="SELECTED"||selected.selected.length===0)continue;
    chosen=selected.selected;
   }
-  const result=nativeAmmoSupply.tick({scene,assignments:chosen,blockedIDs});
+  const result=nativeAmmoSupply.tick({scene,assignments:chosen,blockedIDs,
+   observeOnly:mode==="MONITOR_ONLY"});
   if(result.orders.length||result.events.length)
    require("./coopRuntimeProbe").observe("living-native-ammo-supply",null,
     {spaceState:{systemID}},{orders:result.orders,events:result.events,
