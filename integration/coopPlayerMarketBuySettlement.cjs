@@ -2,6 +2,8 @@
 // P0 native player BUY escrow payee: original wallet reserve is the ONLY
 // source of seller ISK. No buyer debit, no synthetic balance or item mint.
 // First supported native SELLER source: one full hangar stack, one BUY fill.
+const {validDebitReceipt}=require("./coopPlayerMarketBuyReserve"+
+ (__filename.endsWith(".cjs")?".cjs":""));
 const TABLES=Object.freeze(["characters","items","marketEscrow","identityState","playerMarketFills"]);
 const pos=n=>typeof n==="number"&&Number.isSafeInteger(n)&&n>0;
 const safe=n=>typeof n==="number"&&Number.isSafeInteger(n)&&n>=0;
@@ -71,7 +73,7 @@ function assertBound(tx,proof,amounts){
     typeof escrow.coopReserveOperationID!=="string")
   throw Error("P2P_BUY_PAY_FUNDED_ESCROW_UNVERIFIED");
  const reserve=tx.get("playerMarketFills",escrow.coopReserveReceiptKey);
- if(!reserve||reserve.kind!=="P2P_BUY_RESERVE"||
+ if(!validDebitReceipt(reserve)||
     reserve.phase!=="BOUND"||reserve.orderID!==proof.orderID||
     reserve.operationID!==escrow.coopReserveOperationID||
     reserve.key!==escrow.coopReserveReceiptKey||
