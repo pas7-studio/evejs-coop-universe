@@ -944,6 +944,9 @@ function checkReturn(scene,fleet,now,director=null){
    catch{return pause("ESCORT_DELIVERY_RESUME_UNCERTAIN_NEEDS_REPAIR")}
    if(recovered?.status!=="ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED")
     return pause(recovered?.status||"ESCORT_DELIVERY_RESUME_UNVERIFIED");
+   // A stale A-Life no-cargo hint cannot terminate a separately proven
+   // original, still-loaded native haul with signed cargo custody.
+   delete fleet.coopStationNoCargo;
   }
  }
  if(fleet?.coopStationNoCargo){delete fleet.coopStationNoCargo;return {status:"NO_CARGO",terminal:true};}
