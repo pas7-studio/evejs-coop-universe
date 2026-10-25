@@ -192,8 +192,15 @@ function createPricedOffers({root,io=fs,clock=()=>Date.now(),readEvent,
    return fail("MANIFEST_KEY_INVALID");
   let m;try{m=readManifest(manifestKey)}catch{return fail("MANIFEST_SOURCE_UNAVAILABLE")}
   const x=m?.record;
-  if(m?.status!=="READY"||x?.key!==manifestKey||
-   x.systemID!==systemID||x.fleetID!==fleetID||
+  // Missing optional route fields are sourced ONLY from the native persisted
+  // manifest. Explicit supplied fields must still match exactly.
+  if(m?.status!=="READY"||x?.key!==manifestKey)return fail("ACCEPTED_MANIFEST_MISMATCH");
+  systemID=systemID===undefined?x.systemID:systemID;
+  fleetID=fleetID===undefined?x.fleetID:fleetID;
+  stationID=stationID===undefined?x.stationID:stationID;
+  corporationID=corporationID===undefined?x.corporationID:corporationID;
+  haulerID=haulerID===undefined?x.haulerIDs?.[0]:haulerID;
+  if(x.systemID!==systemID||x.fleetID!==fleetID||
    x.stationID!==stationID||x.corporationID!==corporationID||
    !same(x.haulerIDs,[haulerID])||
    !Array.isArray(x.cargo)||x.cargo.length===0)
