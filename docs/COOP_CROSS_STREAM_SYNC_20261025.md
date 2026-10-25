@@ -48,3 +48,7 @@ This is intentionally based on PR #2 rather than merging PRs #3-#6 to main while
 ## Snapshot refresh
 
 After the first integration merge, PR #2 advanced to `e06c7b3e23d7722bcc6eb3f681aa28f3eca021b9` (new optional native contracts / LP contract-level tests); PR #3 advanced to `a6ac72cf5b10e09a0cf2f247af06949c5a67c4f8` (read-only snapshot hardening). This snapshot includes their new changed files; no operator backend test was run. Later workstream changes require an explicit follow-up comparison, not blind overwrites.
+
+## Opt-in native contracts deployment flag
+
+PR #2's newer `4ca22f9546c49216b4026c93f982236b3f60e9df` adds an explicit `-EnableNativeCoopContracts` switch. It is now included **without enabling** contracts in default LivingCoop. No real courier, escrow, crash-replay or UI acceptance was executed. Local verifier already includes `coop-native-contracts-lp-integration.test.mjs`.
