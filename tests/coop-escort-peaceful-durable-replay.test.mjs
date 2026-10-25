@@ -121,6 +121,13 @@ test("missing original source or intermediate route blocks terminal replay",()=>
  assert.equal(y.runtime.reconcilePeacefulDeliveries().pending,1);
  assert.equal(x.debits(),0);assert.equal(y.debits(),0);
 });
+test("a live terminal scene cannot bypass missing durable terminal witness when replay is enabled",()=>{
+ const f=fixture({terminal:false});
+ const online={systemID:30000144,sessions:new Map(),getEntityByID:()=>null};
+ assert.equal(f.runtime.settlePeacefulFlight(key,online).status,
+  "NATIVE_ESCORT_SERVICE_NOT_VERIFIED");
+ assert.equal(f.debits(),0);
+});
 test("refunded or spent corporate escrow can never trigger peaceful credit",()=>{
  const f=fixture({reserved:false});
  assert.equal(f.runtime.reconcilePeacefulDeliveries().blocked,1);
