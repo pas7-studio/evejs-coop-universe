@@ -22,6 +22,7 @@ function fixture(){
   clock:()=>now,authority:{snapshots:()=>state,
    evaluatePair:(a,b)=>a.itemID!==b.itemID&&!blocked?
     {status:'AUTHORIZED',warID:'w1',campaignID:'c1'}:{status:'BLOCKED'}},
+  getController:id=>({entityID:id,systemID:202,manualOrder:null,currentTargetID:0}),
   bridge:{issue:x=>{accepted.push({owner:x.owner,action:x.action,
     target:x.execute().data?.targetID});return {success:true}}},
   sceneForSystem:id=>{sceneLookups++;return id===202?scene:null},
