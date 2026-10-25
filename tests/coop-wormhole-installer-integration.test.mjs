@@ -5,9 +5,11 @@ import path from "node:path";
 import vm from "node:vm";
 import { execFileSync } from "node:child_process";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
-const installerPath = path.resolve("scripts/patch-evejs-coop.cjs");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const installerPath = path.join(repoRoot, "scripts/patch-evejs-coop.cjs");
 const { names, specs, PIN, transform } = require("../scripts/patch-evejs-coop.cjs");
 const { fileName, hookBegin, hookComplete } = require("../scripts/coop-wormhole-jump-fence-patch.cjs");
 const target = specs.find(spec => spec.file === fileName);
@@ -32,8 +34,8 @@ function fixture(eol = "\n") {
 test("central installer is parseable JavaScript (guards accidental literal escaped newlines)", () => {
   const source = fs.readFileSync(installerPath, "utf8");
   assert.doesNotThrow(() => new vm.Script(source, { filename: installerPath }));
-  assert.doesNotMatch(source, /let text=strip\(source\);\\\\n/);
-  assert.doesNotMatch(source, /coopPochvenConduit"\);\\\\nconst specs/);
+  assert.equal(source.includes(String.raw`let text=strip(source);\n`), false);
+  assert.equal(source.includes(String.raw`coopPochvenConduit");\nconst specs`), false);
 });
 
 test("single central installer owns the registered native wormhole hook and deployed module", () => {
@@ -42,8 +44,8 @@ test("single central installer owns the registered native wormhole hook and depl
   assert.ok(target);
   assert.equal(target.patches.length, 0);
   assert.equal(PIN, "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f");
-  assert.ok(fs.existsSync(path.resolve("integration/coopWormholeJumpFence.cjs")));
-  assert.ok(fs.existsSync(path.resolve("scripts/coop-wormhole-jump-fence-patch.cjs")));
+  assert.ok(fs.existsSync(path.join(repoRoot, "integration/coopWormholeJumpFence.cjs")));
+  assert.ok(fs.existsSync(path.join(repoRoot, "scripts/coop-wormhole-jump-fence-patch.cjs")));
 });
 
 for (const eol of ["\n", "\r\n"]) {
