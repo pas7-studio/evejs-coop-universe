@@ -214,3 +214,45 @@ test("dungeon asteroid without native persistent source is denied before cargo o
  assert.deepEqual(f.sequence,[]);
  assert.equal(fs.existsSync(f.filename),false);
 });
+
+test("a second miner on the same asteroid is rejected while the first debit is in-flight",t=>{
+ const f=harness(t);
+ let inner,innerDebits=0,innerCredits=0;
+ f.input.debit=()=>{
+  f.sequence.push("debit");
+  inner=settle({...f.input,entity:{itemID:980000000002},
+   debit:()=>{innerDebits++;return {success:true}},
+   credit:()=>{innerCredits++;return true}});
+  f.setSource({remainingQuantity:92});
+  return {success:true};
+ };
+ assert.equal(settle(f.input).success,true);
+ assert.equal(inner.success,false);
+ assert.equal(inner.reason,"ALIFE06_CYCLE_REENTRANT");
+ assert.equal(innerDebits,0);assert.equal(innerCredits,0);
+ assert.deepEqual(f.sequence,["debit","credit"]);
+ assert.equal(fs.readdirSync(f.dir).filter(x=>x.endsWith(".json")).length,1);
+});
+test("same miner cannot reenter a different asteroid while its cargo is in-flight",t=>{
+ const f=harness(t);
+ let inner,innerDebits=0;
+ f.input.debit=()=>{
+  inner=settle({...f.input,targetEntity:{itemID:400002},
+   debit:()=>{innerDebits++;return {success:true}}});
+  f.setSource({remainingQuantity:92});
+  return {success:true};
+ };
+ assert.equal(settle(f.input).success,true);
+ assert.equal(inner.success,false);
+ assert.equal(inner.reason,"ALIFE06_CYCLE_REENTRANT");
+ assert.equal(innerDebits,0);
+ assert.equal(fs.readdirSync(f.dir).filter(x=>x.endsWith(".json")).length,1);
+});
+test("resource in-flight guards are released after a completed cycle",t=>{
+ const f=harness(t);
+ assert.equal(settle(f.input).success,true);
+ f.input.mineableState.remainingQuantity=92;
+ f.setSource({remainingQuantity:92});
+ f.input.debit=()=>{f.setSource({remainingQuantity:84});return {success:true}};
+ assert.equal(settle(f.input).success,true);
+});
