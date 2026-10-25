@@ -227,7 +227,24 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   let stackCount=0,oreQuantity=0;
   for(const rawID of Object.keys(trip.haulers)){
    const id=Number(rawID),ship=findShip(scene,id,trip.systemID);
-   if(!ship)return pause("HAULER_LOST_OR_NOT_DURABLE");
+   if(!ship){
+    // Missing in-scene ship is NOT loss evidence. Only the authoritative
+    // native wreck/outcome journal can release existing corporate escrow.
+    if(escortEnabled&&trip.manifestID&&
+     process.env.EVEJS_COOP_ESCORT_REFUNDS==="1"&&
+     typeof escortGate?.refundNativeWreck==="function"){
+     let refund;try{refund=escortGate.refundNativeWreck(trip.manifestID)}
+     catch{refund={status:"NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED"}}
+     if(refund?.status==="REFUNDED"){
+      for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
+      delete fleet.coopStationArrival;
+      return {status:"ESCORT_NATIVE_HAULER_LOSS_REFUNDED",terminal:true,
+       contractID:refund.contractID,
+       amountISK:refund.amountISK,earnedPlayerISK:0};
+     }
+    }
+    return pause("HAULER_LOST_OR_NOT_DURABLE");
+   }
    const arrival=trip.haulers[id];
    if(!stableAt(ship,point)){arrival.arrivedAt=0;
     arrivals.set(id,{fleetID:trip.fleetID,stationID:trip.stationID,arrivedAt:0});
