@@ -142,3 +142,17 @@ test("malformed nonnative price or corrupted order book cannot become a listing"
   stationID:60001,typeID:34,ownerID:10001});
  assert.notEqual(r.status,"NATIVE_MARKET_PRICE_QUOTED");
 });
+
+test("bounded salvage stock scan rotates beyond the first 128 real sources",()=>withFlags(async()=>{
+ const f=fixture(),moves={};
+ for(let id=9001;id<=9129;id++){
+  moves[String(id)]={state:"NPC_STOCK_DELIVERED",
+   wreckItemID:id,stationID:60001};
+ }
+ f.setJournal({version:1,moves});
+ assert.equal((await f.driver.tick()).status,"ALIFE_SALVAGE_MARKET_ATTEMPT");
+ assert.deepEqual(f.state.list,[9001]);
+ assert.equal((await f.driver.tick()).status,"ALIFE_SALVAGE_MARKET_ATTEMPT");
+ assert.deepEqual(f.state.list,[9001,9129]);
+ assert.deepEqual(f.state.inspect,[9001,9129]);
+}));
