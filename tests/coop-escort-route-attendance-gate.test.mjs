@@ -8,10 +8,11 @@ const src=fs.readFileSync(new URL("../integration/coopEscortRuntime.cjs",import.
 const FLAGS=["EVEJS_COOP_ESCORT_CONTRACTS","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_ESCORT_WALLET",
  "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS",
- "EVEJS_COOP_ESCORT_ROUTE_WITNESS"];
+ "EVEJS_COOP_ESCORT_ROUTE_WITNESS","EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY"];
 const old=Object.fromEntries(FLAGS.map(k=>[k,process.env[k]]));
 for(const k of FLAGS)process.env[k]="1";
 process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
 const route={manifestKey:"30000144-77-123",systemID:30000144,
  fleetID:77,stationID:60000001,corporationID:1000152,haulerIDs:[901],
  cargoIDs:[123]};
@@ -20,14 +21,14 @@ const offer={status:"AUTHORIZED_NATIVE_ESCORT_BOOKING",manifestKey:route.manifes
  stationID:60000001,corporationID:1000152,haulerID:901,
  playerFleetID:44,characters:[701,702],amountISK:600000};
 function fixture({authorized=true,validDuo=true}={}){
- const state={recorded:false,reserves:0,preflight:0,delivery:0,routeSamples:0,routeValid:false};
+ const state={recorded:false,reserves:0,preflight:0,delivery:0,routeSamples:0,routeValid:false,flightPhase:"FUNDED",readStatus:null};
  let verifyService=()=>({status:"NOT_WIRED"});
  const requires={
   "./coopEscortNativeFunds":{createEscortNativeFunds:()=>({})},
   "./coopEscortFlightGate":{createEscortFlightGate:()=>({
    fundBeforeWarp:()=>{state.reserves++;return {status:"FUNDED_BEFORE_WARP"}},
    recordDelivered:()=>({status:"DURABLE_NATIVE_DELIVERY_RECORDED"}),
-   read:()=>({status:"READY",phase:"FUNDED",booking:offer}),
+   read:()=>({status:"READY",phase:state.flightPhase,booking:offer}),
    readFunded:()=>({status:"NATIVE_PREFUNDED_BOOKING_VERIFIED"}),
    readNativeDelivery:()=>({status:"NOT_DELIVERED"}),
    readNativeDeliveryForAudit:()=>({status:"NOT_DELIVERED"}),
@@ -46,7 +47,12 @@ function fixture({authorized=true,validDuo=true}={}){
    read:()=>state.recorded?{status:"VERIFIED_NATIVE_ESCORT_DEPARTURE",
     manifestKey:route.manifestKey,contractID:offer.contractID,
     at:10000,characters:[701,702],shipIDs:[7001,7002],origin:{x:0,y:0,z:0}}:
-    {status:"DEPARTURE_NOT_RECORDED"}})},
+    {status:"DEPARTURE_NOT_RECORDED"},
+   readDurable:()=>state.readStatus?{status:state.readStatus}:
+    state.recorded?{status:"VERIFIED_NATIVE_ESCORT_DEPARTURE",
+     manifestKey:route.manifestKey,contractID:offer.contractID,
+     at:10000,characters:[701,702],shipIDs:[7001,7002],origin:{x:0,y:0,z:0}}:
+     {status:"DEPARTURE_NOT_RECORDED"}})},
   "./coopEscortRouteWitness":{createRouteWitness:()=>({
    sample:()=>{state.routeSamples++;return {status:"NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED",stage:1}},
    verify:()=>({status:state.routeValid?"VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE":
@@ -163,6 +169,50 @@ test("direct route sampling with Stage I disabled cannot write fake participatio
  assert.equal(f.runtime.recordEscortRouteSample(route.manifestKey,f.scene,
   {stationID:route.stationID}).status,"DISABLED");
  assert.equal(f.state.routeSamples,0);
+});
+test("read-only restart authority rejects absent source evidence without changing wallet",()=>{
+ const f=fixture();
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{
+  assert.equal(f.runtime.readDurableEscortDeparture(route.manifestKey).status,
+   "ESCORT_RECOVERY_DEPARTURE_NOT_RECORDED");
+  assert.equal(f.state.reserves,0);
+ }finally{
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+ }
+});
+test("original proven source can be reread for recovery without a second corporate debit",()=>{
+ const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{
+  assert.equal(f.runtime.readDurableEscortDeparture(route.manifestKey).status,
+   "VERIFIED_NATIVE_ESCORT_DEPARTURE");
+  assert.equal(f.state.reserves,0);
+  f.state.readStatus="DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR";
+  assert.equal(f.runtime.readDurableEscortDeparture(route.manifestKey).status,
+   "ESCORT_RECOVERY_DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR");
+  assert.equal(f.state.reserves,0);
+ }finally{
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+ }
+});
+test("delivered or expired financial flight cannot be resumed for transit samples",()=>{
+ const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{
+  f.state.flightPhase="DELIVERED";
+  assert.equal(f.runtime.readDurableEscortDeparture(route.manifestKey).status,
+   "ESCORT_RECOVERY_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  assert.equal(f.state.reserves,0);
+ }finally{
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+ }
 });
 process.on("exit",()=>{for(const [k,v] of Object.entries(old))
  if(v===undefined)delete process.env[k];else process.env[k]=v});
