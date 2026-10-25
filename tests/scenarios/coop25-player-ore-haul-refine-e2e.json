@@ -1,0 +1,135 @@
+{
+  "scenarioID": "coop25-player-ore-haul-refine",
+  "version": 1,
+  "pinnedUpstream": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Two independent authenticated EVE characters A/B in same real solar system",
+    "Disposable world and intact SQLite/GameStore storage; never touch evejs-data",
+    "Current player mining Chat24 integration verified",
+    "Chat01 integration of three default-OFF source hooks and coopPlayerOreReprocessing module",
+    "Native reprocessing facility with at least one true zero-ISK-cost SDE ore quote",
+    "Persistent absolute EVEJS_COOP_PLAYER_ORE_RECEIPTS_DIR"
+  ],
+  "steps": [
+    {
+      "key": "resource-site",
+      "action": "A locates real asteroid and completes mining cycle",
+      "verify": [
+        "Native resource source decreases by exact material amount",
+        "Source ore itemID appears only in A physical ship hold",
+        "No second player receives free ore"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "jetcan",
+      "action": "A jettisons original mined ore from stock ship hold to physical jetcan",
+      "verify": [
+        "One native space container ID/position",
+        "Original ore itemIDs move from ship into can; any split has original stackOriginID",
+        "Only original amounts and owner; no phantom can counted as delivery"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "coop-pickup",
+      "action": "B opens same physical jetcan and legally takes ore into native permitted hold",
+      "verify": [
+        "Original can contents decrease exactly by B pickup",
+        "Native fleet membership alone does not authorize illegal transfer",
+        "B hold capacity and specialized hold flags enforced",
+        "Owner, location and quantities match native itemStore; A cannot retain duplicates"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "station-arrival",
+      "action": "B physically docks at native station",
+      "verify": [
+        "B server session dockedLocationID matches station",
+        "No ore changes location from ship merely because warp finished"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "station-unload",
+      "action": "B transfers ore to personal station HANGAR through native invBroker",
+      "verify": [
+        "Real itemIDs or valid native split origins",
+        "B owns items, station location and HANGAR flag",
+        "No cargo remains duplicated in B ship"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "compression-optional",
+      "action": "B optionally compresses selected stack via native facility UI",
+      "verify": [
+        "Compressed typeID is authentic native SDE mapping",
+        "Same native itemID and exact input/output quantity per native compression receipt",
+        "No bypass of capacity or owner restrictions"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "quote",
+      "action": "B requests true native SDE reprocessing quote for ONE available personal-hangar ore stack",
+      "verify": [
+        "Actual native quote identifies type, portions, consumed quantity, remainder and material outputs",
+        "If positive ISK wallet debit required, transaction must refuse before mutation",
+        "No randomized or multiple input stacks accepted by opt-in path"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "prepared-receipt",
+      "action": "B starts opt-in native reprocessing; inject crash after fsynced PREPARED receipt and before item mutation",
+      "verify": [
+        "Persistent PREPARED exists",
+        "No ore consumed or minerals credited",
+        "Retry fails closed and does not create second mutation"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "native-items-commit",
+      "action": "Restore disposable fixture and inject crash after native items-table flush before COMMITTED receipt",
+      "verify": [
+        "Ore source changed exactly once",
+        "New material itemIDs and amounts match original native SDE quote",
+        "Operator authorizes read-only reconciliation and sees original itemIDs",
+        "No second debit or extra minerals"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "completed-reprocess",
+      "action": "Complete one native zero-fee reprocessing transaction and reconnect both clients",
+      "verify": [
+        "COMMITTED receipt and independent GameStore inventory agree",
+        "Player B owns all output material itemIDs at actual station",
+        "Original ore leftover exact; no phantom ISK charge",
+        "Same request cannot grant twice"
+      ],
+      "crashAfter": true
+    },
+    {
+      "key": "cross-owner-material",
+      "action": "B optionally transfers materials to A only using permitted native owner/location transaction",
+      "verify": [
+        "No unauthorized owner reassignment",
+        "Source/destination real itemIDs and net quantities reconcile after restart"
+      ],
+      "crashAfter": true
+    }
+  ],
+  "restartGate": {
+    "afterEveryStep": "Cold restart EveJS and reconnect BOTH independent EVE clients; verify GameStore SQLite, character wallets and original itemIDs, not UI-only caches",
+    "unknownOutcome": "NEEDS_OPERATOR_RECONCILIATION; never replay native mutations without exact proof"
+  },
+  "result": {
+    "status": "NOT_RUN",
+    "fullCoopLogistics": "LIVE_UNVERIFIED"
+  }
+}
