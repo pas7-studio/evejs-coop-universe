@@ -121,6 +121,15 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
   if(token.file!==file||token.lock!==lock)
    return err("NATIVE_AMMO_COMMIT_TOKEN_INVALID");
   try{
+   // The claimant must still own the same exclusive writer lock. A
+   // missing/replaced lock is never permission to finish a debit.
+   const lockOwner=JSON.parse(fs.readFileSync(lock,"utf8"));
+   if(lockOwner?.entityID!==token.entityID||
+    lockOwner.moduleID!==token.moduleID||
+    lockOwner.cargoID!==token.cargoID||
+    lockOwner.boundaryMs!==token.boundaryMs||
+    lockOwner.pid!==process.pid)
+    return err("NATIVE_AMMO_COMMIT_LOCK_LOST");
    const record=load(file);
    if(!record||record.phase!=="PREPARED"||
     record.nonce!==token.nonce||
