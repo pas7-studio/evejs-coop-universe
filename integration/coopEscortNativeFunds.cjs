@@ -76,7 +76,7 @@ function appendCorpLedger(division,record){
 function appendCharLedger(row,record){
  row.walletJournal=[record,...row.walletJournal].slice(0,100);
 }
-function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now(),verifyNativeFailure=null}={}){
+function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now(),verifyNativeFailure=null,verifyRescueFailure=null}={}){
  if(typeof atomicRows?.transact!=="function"||
   typeof atomicRows?.isPoisoned!=="function"||
   typeof isNpcCorporation!=="function"||typeof clock!=="function")
@@ -237,7 +237,55 @@ function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now
     corporationID:c.corporationID,amountISK:c.amountISK};
   });
  }
+ // A competing real NPC may irreversibly remove original salvage from
+ // the rescue prize pool. Corporate RESCUE escrow is returned with a real
+ // native custody witness, NOT a timeout or player-supplied cancellation.
+ function refundRescueAtomic(c){
+  if(process.env.EVEJS_COOP_RESCUE_CONTRACTS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
+   fail("RESCUE_REFUND_DISABLED");
+  checkContract(c,isNpcCorporation);
+  if(!c.contractID.startsWith("escort-rescue-")||
+   typeof verifyRescueFailure!=="function")
+   fail("RESCUE_REFUND_AUTHORITY_NOT_WIRED");
+  let witness;try{witness=verifyRescueFailure(clone(c))}
+  catch{fail("RESCUE_RIVAL_CUSTODY_SOURCE_UNAVAILABLE")}
+  if(!isObject(witness)||
+   witness.status!=="DURABLE_NATIVE_RESCUE_RIVAL_FAILURE"||
+   witness.contractID!==c.contractID||
+   witness.manifestKey!==c.manifestKey||
+   witness.corporationID!==c.corporationID||
+   witness.reason!=="NATIVE_RIVAL_CARGO_CAPTURED"||
+   !pos(witness.failureWitnessID)||
+   witness.nativeDurable!==true||
+   witness.deliveryImpossible!==true||
+   witness.noPriorPayout!==true)
+   fail("RESCUE_RIVAL_CUSTODY_NOT_PROVEN");
+  return apply(tx=>{
+   const ledger=readEscrows(tx),record=ledger.byContract[c.contractID];
+   if(!record)fail("RESCUE_RESERVATION_NOT_FOUND");
+   if(!exact(record,c)||record.status!=="RESERVED")
+    fail("RESCUE_REFUND_NOT_ALLOWED");
+   const corp=readCorp(tx,c),add=cents(c.amountISK);
+   const next=corp.balanceCents+add;
+   if(!Number.isSafeInteger(next))fail("RESCUE_CORPORATION_BALANCE_OVERFLOW");
+   const now=clock();if(!pos(now))fail("RESCUE_CLOCK_INVALID");
+   corp.division.balance=money(next);
+   appendCorpLedger(corp.division,entry(c,"rescue-rival-refund",
+    add,next,now,c.corporationID,0));
+   tx.put("corporationRuntime",keyOf(c),corp.row);
+   record.status="REFUNDED";
+   record.refundedAt=now;
+   record.refundReason="NATIVE_RIVAL_CARGO_CAPTURED";
+   record.failureWitnessID=witness.failureWitnessID;
+   ledger.byContract[c.contractID]=record;
+   tx.put("corporationRuntime",ESCROW_KEY,ledger);
+   return {status:"REFUNDED",contractID:c.contractID,
+    corporationID:c.corporationID,amountISK:c.amountISK,
+    failureWitnessID:witness.failureWitnessID};
+  });
+ }
  return Object.freeze({capabilities,verifyReservation,verifySettlement,verifyRefund,
-  reserveAtomic,settleAtomic,refundAtomic});
+  reserveAtomic,settleAtomic,refundAtomic,refundRescueAtomic});
 }
 module.exports={createEscortNativeFunds,ESCROW_KEY,TABLES};

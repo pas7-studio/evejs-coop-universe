@@ -2017,6 +2017,67 @@ function observeSession(session,ship){
             });
         }catch(error){console.warn("[CoopSystemIntel]",error.message);}
       }
+      // Stage J: use an already materialized REAL A-Life trader hull, never
+       // manufacture a rival, an ISK reward or a virtual wreck item.
+       if(process.env.EVEJS_COOP_RESCUE_NPC_RIVALS==="1"&&
+          process.env.EVEJS_COOP_ALIFE_SALVAGE_RIVALS!=="1"&&
+          alifeOrderArbitrationEnabled(process.env)){
+        try{
+         const nativeStore=require("./npc/nativeNpcStore");
+         const npcRuntime=require("./npc/npcRuntime");
+         const controllers=require("./npc/npcRegistry");
+         if(!runtime.__coopRescueNpcRivals){
+          runtime.__coopRescueNpcRivals=
+           require("./coopRescueNpcRivalry").createRescueRivalry({
+            getWrecks:nativeStore.listNativeWrecks,
+            getWreckItems:nativeStore.listNativeWreckItemsForWreck,
+            readVerifiedLoss:()=>require("./coopConvoyOutcomeProof").createOutcomes().snapshot(),
+            atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows.transact(tables,fn),
+            warpToEntity:(entityID,wreckID)=>npcNativeOrder("CIVILIAN",
+             entityID,"rescue-rival-warp",
+             ()=>npcRuntime.warpToEntity(entityID,wreckID)),
+            orbit:(entityID,wreckID,meters)=>npcNativeOrder("CIVILIAN",
+             entityID,"rescue-rival-orbit",
+             ()=>npcRuntime.orbit(entityID,wreckID,meters)),
+            readController:controllers.getControllerByEntityID});
+         }
+         const blockedIDs=new Set();
+         if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+         if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+         if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
+         addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
+         const candidates=result.filter(x=>x.entityID&&
+          pilotsByID.get(x.pilotID)?.role==="trader").map(x=>{
+          const row=nativeStore.getNativeEntity(x.entityID);
+          return {role:"trader",entityID:Number(x.entityID),systemID:Number(systemID),
+           corporationID:Number(row?.corporationID)||0};
+         });
+         const claimed=runtime.__coopRescueNpcRivals.tick({scene,candidates,blockedIDs});
+         if(!runtime.__coopRescueNpcDepot)
+          runtime.__coopRescueNpcDepot=
+           require("./coopRescueNpcDepot").createRescueNpcDepot({
+            getCargo:nativeStore.listNativeCargoForEntity,
+            getStations:require("./worldData").getStationsForSystem,
+            atomicRows:(tables,fn)=>require("../gameStore").coopAtomicNativeRows.transact(tables,fn),
+            warpToPoint:(entityID,target)=>npcNativeOrder("CIVILIAN",
+             entityID,"rescue-rival-delivery-warp",
+             ()=>npcRuntime.warpToPoint(entityID,target)),
+            orbit:(entityID,stationID,meters)=>npcNativeOrder("CIVILIAN",
+             entityID,"rescue-rival-delivery-orbit",
+             ()=>npcRuntime.orbit(entityID,stationID,meters)),
+            getMetadata:require("../services/inventory/itemStore").getItemMetadata
+           });
+         const delivered=runtime.__coopRescueNpcDepot.tick({
+          scene,candidates,blockedIDs});
+         if(delivered.events?.length)
+          require("./coopRuntimeProbe").observe("living-alife-native-rescue-depot",
+           session,ship,{systemID,events:delivered.events});
+         if(claimed.orders?.length)
+          require("./coopRuntimeProbe").observe("living-alife-native-rescue-rivals",
+           session,ship,{systemID,orders:claimed.orders});
+        }catch(error){console.warn("[CoopRescueRivals]",
+         String(error?.message||error).slice(0,120))}
+       }
       const civilianActions=advanceNativeCivilianOrders();
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
         civilianActions,
