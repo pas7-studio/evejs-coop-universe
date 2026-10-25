@@ -17,7 +17,7 @@ The goal engine **does not invent ISK, corporate membership, standing, ship fitt
 
 ## Native integration
 
-- `coopVirtualWorldRuntime.cjs` enables personal intentions only with `EVEJS_COOP_NPC_PERSONAL_GOALS=1` **AND** `EVEJS_COOP_NPC_CAPSULEER_AGENCY=1`; both are OFF by default. Existing `EVEJS_COOP_NPC_RAIDS`, materialization, physical scene and stock mining fleet prerequisites still apply.
+- `coopVirtualWorldRuntime.cjs` enables personal intentions only with `EVEJS_COOP_NPC_PERSONAL_GOALS=1` **AND** `EVEJS_COOP_NPC_CAPSULEER_AGENCY=1` **AND** `EVEJS_COOP_NPC_ORDER_ARBITER=1`; both are OFF by default. Existing `EVEJS_COOP_NPC_RAIDS`, materialization, physical scene and stock mining fleet prerequisites still apply.
 - In `advanceNativeRaids`, existing `isAuthorizedStockMiningRaid` + source-bounded `coopNpcHuntPolicy` determine eligible opportunities. The world collects per-pirate outcomes; after the real native raid result, it updates `HUNT`, `WATCH_BELT`, `SCOUT_GATE` or `LAY_LOW`. Invalid persisted goals fail **before** native raid issuing.
 - In `advanceNativeCivilianOrders`, only correctly linked physical `nativeNpc === true` pirates receive the `routeOverrides` for noncombat intentions. The pirate's actual *economy role remains pirate*; neither target legitimacy nor market/wallet behavior is overwritten.
 - `coopCivilianOrders.cjs` takes a small optional `options.routeOverrides[pilotID]`. Its waypoints are from `coopNpcTopology.waypoints(scene)`, which reads the real native scene static entities. Explicit type ordering fixes the old sorting trap: watching an asteroid belt actually prioritizes a belt rather than a stargate.
