@@ -13,7 +13,7 @@ function fixture({target=100}={}) {
  const snapshot=()=>({authoritativeNative:true,ownerID:OWNER,stationID:STATION,
   items:produced&&!order?[{typeID:TYPE,quantity:produced.quantity,ownerID:OWNER,stationID:STATION}]:[],
   orders:order?[{typeID:TYPE,quantity:order.remainingQuantity,ownerID:OWNER,stationID:STATION}]:[],
-  jobs:job&&job.status!==4?[{typeID:TYPE,quantity:100,ownerID:OWNER,stationID:STATION}]:[],
+  jobs:job&&job.status!==4?[{jobID:job.jobID,status:job.status,activityID:1,typeID:TYPE,quantity:100,ownerID:OWNER,stationID:STATION}]:[],
   targets:{[TYPE]:target},demandReceipts:demands});
  const plan={ownerID:OWNER,stationID:STATION,facilityID:STATION,blueprintItemID:BPO,productTypeID:TYPE,outputQuantity:100};
  const planner={plan:()=>({status:"PLAN_READY",jobs:[plan]})};
@@ -79,8 +79,54 @@ test("physically owned station stock prevents unnecessary factory jobs",()=>run(
 }));
 test("in-progress native industry quantity reduces shortage",()=>run(f=>{
  const d=f.create(),snap=f.observe.snapshot;
- f.observe.snapshot=()=>({...snap(),jobs:[{ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ f.observe.snapshot=()=>({...snap(),jobs:[{jobID:970000000000077,status:1,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
  assert.equal(d.tick(ctx).status,"SUFFICIENT_NATIVE_STOCK");
+}));
+test("PAUSED native industry work counts toward supply instead of a second paid factory batch",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:2,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.equal(d.tick(ctx).status,"SUFFICIENT_NATIVE_STOCK");
+ assert.equal(f.installs,0);
+}));
+test("EveJS status 100 COMPLETED without physical output proof requires reconciliation",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:100,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.throws(()=>d.tick(ctx),/NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED/);
+ assert.equal(f.installs,0);
+}));
+test("EveJS historical DELIVERED 101 or CANCELLED 102 cannot fabricate WIP stock",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:101,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.equal(d.tick(ctx).status,"PREPARED");
+}));
+test("native already-delivered job status 4 never permanently blocks replenishment",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:4,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ const r=d.tick(ctx);
+ assert.equal(r.status,"PREPARED");
+ assert.equal(r.shortage,100);
+}));
+test("native READY job still counts as outstanding supply before first delivery",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:3,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.equal(d.tick(ctx).status,"SUFFICIENT_NATIVE_STOCK");
+}));
+test("missing or invalid native job status/owner/location cannot authorize a job",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ for(const bad of [
+  {jobID:970000000000099,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100},
+  {jobID:970000000000099,status:7,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100},
+  {jobID:970000000000099,status:1,activityID:1,ownerID:OWNER+1,stationID:STATION,typeID:TYPE,quantity:100}
+ ]){
+  f.observe.snapshot=()=>({...old(),jobs:[bad]});
+  assert.throws(()=>d.tick(ctx),/JOB_PROVENANCE_UNVERIFIED/);
+ }
+ assert.equal(f.installs,0);
 }));
 test("unverified stock snapshot refuses phantom demand",()=>run(f=>{
  const d=f.create(),snap=f.observe.snapshot;f.observe.snapshot=()=>({...snap(),authoritativeNative:false});

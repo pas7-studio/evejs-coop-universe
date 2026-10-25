@@ -46,6 +46,18 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
     !s.targets||typeof s.targets!=="object"||!Array.isArray(s.demandReceipts))throw Error("NATIVE_ECONOMY_SNAPSHOT_UNVERIFIED");
   for(const v of [...s.items,...s.orders,...s.jobs])if(!v||!safeInt(v.typeID)||!Number.isSafeInteger(v.quantity)||v.quantity<0)
     throw Error("NATIVE_ECONOMY_NEGATIVE_QUANTITY");
+  // The journal observes native production output. Status 4 is already
+  // DELIVERED and MUST NOT remain in the WIP stock accounting forever.
+  // Treat missing/ambiguous statuses as unverified, never as free future stock.
+  for(const j of s.jobs){
+   // Stock status 100 COMPLETED is not proof of delivery. It cannot
+   // silently trigger a new paid job until native custody is reconciled.
+   if(j.status===100)throw Error("NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED");
+   if(!Number.isSafeInteger(j.status)||![1,2,3,4,101,102,103].includes(j.status)||
+      j.ownerID!==ownerID||j.stationID!==stationID||
+      [1,2,3].includes(j.status)&&(!safeInt(j.jobID)||j.activityID!==1))
+    throw Error("NATIVE_ECONOMY_JOB_PROVENANCE_UNVERIFIED");
+  }
   for(const v of s.demandReceipts)if(!v||!safeInt(v.typeID)||!Number.isSafeInteger(v.quantity)||v.quantity<1||
     !v.authoritativeNative||!v.receiptID||!Number.isSafeInteger(v.at)||
     !["NATIVE_MARKET_FILL","NATIVE_WEAPON_CONSUMPTION","NATIVE_NPC_PURCHASE"].includes(v.source)||
@@ -64,7 +76,8 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   // Only count actual corporate station items, owned escrow and unfinished jobs.
   const sum=(rows,field)=>rows.filter(x=>x.typeID===typeID&&x.ownerID===s.ownerID&&x.stationID===s.stationID)
     .reduce((a,x)=>a+x[field],0);
-  const stored=sum(s.items,"quantity"),listed=sum(s.orders,"quantity"),inFlight=sum(s.jobs,"quantity");
+  const stored=sum(s.items,"quantity"),listed=sum(s.orders,"quantity"),
+    inFlight=sum(s.jobs.filter(j=>[1,2,3].includes(j.status)),"quantity");
   const total=stored+listed+inFlight;
   if(!Number.isSafeInteger(total)||total<0||total>Number.MAX_SAFE_INTEGER)throw Error("NATIVE_ECONOMY_STOCK_INVALID");
   return {target,stored,listed,inFlight,shortage:Math.max(0,target-total)};
