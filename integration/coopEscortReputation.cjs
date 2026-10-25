@@ -112,4 +112,28 @@ function createReputation({root,io=fs,clock=()=>Date.now(),readContract,
  }
  return {recordVerified:add,read:load,list};
 }
-module.exports={createReputation};
+function listNativeHistory(session){
+ if(process.env.EVEJS_COOP_ESCORT_REPUTATION!=="1")
+  return {status:"DISABLED",message:"[Co-op Escort] Audited history is disabled."};
+ const id=session?.characterID;
+ if(!pos(id)||session?.socket?.destroyed===true)
+  return {status:"UNAUTHENTICATED",message:"Select an active EVE character."};
+ try{
+  const unavailable=()=>{throw Error("NATIVE_REPUTATION_WRITER_NOT_WIRED")};
+  const reader=createReputation({root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs",
+   readContract:unavailable,verifySettlement:unavailable,
+   verifyRefund:unavailable,readProof:unavailable});
+  const result=reader.list({characterID:id,limit:8});
+  if(result.status!=="READY")return {status:result.status,
+   message:"[Co-op Escort] "+result.status};
+  const rep=result.reputation;
+  const details=result.history.map(x=>x.contractID+" / "+x.outcome+" / "+
+   (x.outcome==="PAID"?(x.amountISK/2)+" ISK":"0 ISK (corporate refund)")).join("\n");
+  return {status:"READY",message:"[Co-op Escort] Audited history: "+rep.tier+
+   " | paid "+rep.paidContracts+" | refunded "+rep.refundedContracts+
+   " | earned "+rep.earnedISK+" ISK | score "+rep.score+
+   (details?"\n"+details:"\nNo independently verified payouts recorded.")};
+ }catch{return {status:"NATIVE_HISTORY_UNAVAILABLE",
+  message:"[Co-op Escort] Native history authority unavailable."}}
+}
+module.exports={createReputation,listNativeHistory};
