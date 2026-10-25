@@ -18,7 +18,10 @@
       "EVEJS_COOP_NPC_JOBS"
     ],
     "finance": [
-      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT (DO NOT ENABLE UNTIL FULL FINANCE E2E)"
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (ONLY ON DISPOSABLE FINANCIAL E2E)",
+      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (mandatory when peaceful payout is ON)",
+      "EVEJS_COOP_ESCORT_WARP_FENCE=1 (Stage H native prewarp authority)",
+      "EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY=1 (only after reconciled wallet E2E)"
     ]
   },
   "scenarios": [
@@ -168,6 +171,37 @@
         "Check long text, line breaks, actions, no missing localization keys"
       ],
       "expected": "Native UI actually renders; if client rejects custom strings fallback to truthful EVEmail and agent-native static dialogue only"
+    },
+    {
+      "id": "JOB-UI-16",
+      "name": "Paid peaceful escort requires real duo on-grid BEFORE escrow",
+      "actions": [
+        "Two authentic players accept the quoted job with stock agent buttons",
+        "Move one player's real ship farther than 150 km from original NPC hauler",
+        "Trigger actual native prewarp departure"
+      ],
+      "expected": "No funded native contract and no NPC warp: on-grid departure witness denied, no escrow debit"
+    },
+    {
+      "id": "JOB-UI-17",
+      "name": "Exactly one durable on-grid witness survives restart",
+      "actions": [
+        "Both ships position within 150 km of original NPC and join genuine fleet",
+        "Native source record is fsynced before corporate escrow and warp",
+        "Restart server after genuine warp",
+        "Verify native full cargo delivery with both original pilots at terminal"
+      ],
+      "expected": "No new source witness or second warp; settlement requires preserved original manifest-linked source witness AND original terminal attendance"
+    },
+    {
+      "id": "JOB-UI-18",
+      "name": "Source attendance witness corrupt/symlink/lost ACK",
+      "actions": [
+        "On operator-approved disposable data clone, corrupt witness journal",
+        "Replace witness with symlink/hardlink",
+        "Inject lost fsync ACK and repeat request"
+      ],
+      "expected": "No authorization to reserve, launch or pay from corrupt/linked/uncertain witness; human operator repair required"
     }
   ]
 }
