@@ -1,0 +1,221 @@
+{
+  "schema": "coop-044-native-industry-replenishment-integrity/v1",
+  "upstream": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "runner": "scripts/Run-Alife-Economy-Tests.ps1",
+  "doNotModifyVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "COOP044-001",
+      "title": "Delivered job no longer prevents restocking",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "On isolated server provide real NPC corp BPO, minerals and ISK",
+        "Install one native manufacturing job, wait READY, deliver one full stack",
+        "Sell that physical item on native Rust market, purchase from player and record ledger IDs",
+        "Run next A-Life/native factory decision after cooldown"
+      ],
+      "expected": [
+        "Historical job status 4 is not counted as WIP",
+        "One new native manufacturing operation is prepared when actual station+escrow inventory is below the target",
+        "Only one additional material and ISK debit occurs when native install is confirmed"
+      ],
+      "requiredEvidence": [
+        "historical jobID and status 4",
+        "fresh operationID and jobID",
+        "original sale order, filled receipt, wallet transfer"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-002",
+      "title": "Paused native job cannot duplicate production",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Start one real industry job for an NPC corporation",
+        "Pause it through native industry mechanism, retaining materials/job reservation",
+        "Run planner and economic director repeatedly"
+      ],
+      "expected": [
+        "Status 2 remains WIP and no second job starts",
+        "No additional materials or ISK debit while paused"
+      ],
+      "requiredEvidence": [
+        "paused jobID/status",
+        "corporate ISK journal before and after",
+        "native materials inventory"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-003",
+      "title": "READY job counts until delivery",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Install real manufacturing job and advance isolated test clock to READY",
+        "Inspect same native job before delivery",
+        "Run planner and director"
+      ],
+      "expected": [
+        "Status 3 is counted as in-progress supply",
+        "A second factory install does not occur"
+      ],
+      "requiredEvidence": [
+        "READY jobID",
+        "material/cost debit receipt",
+        "job count before/after"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-004",
+      "title": "Wrong-station and cancelled jobs do not conceal local scarcity",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Create one cancelled or delivered historical job",
+        "Create active manufacturing job at another station for same corporation and type",
+        "Read target station demand"
+      ],
+      "expected": [
+        "Jobs at different stations do not satisfy local stock",
+        "Delivered or cancelled historical jobs are excluded from in-progress supply",
+        "Only real local physical stock and open escrow orders count"
+      ],
+      "requiredEvidence": [
+        "job stationID/status",
+        "GameStore item location IDs",
+        "scoped shortages"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-005",
+      "title": "Missing active job station/activity fails closed",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Supply an active industry record without stationID/facilityID or activityID in disposable GameStore",
+        "Enable A-Life or manual manufacturing preparation"
+      ],
+      "expected": [
+        "Planner returns NATIVE_ACTIVE_JOB_SCOPE_UNVERIFIED",
+        "No new job, wallet debit or minerals debit"
+      ],
+      "requiredEvidence": [
+        "invalid job record",
+        "planner failure reason",
+        "wallet and inventory before/after"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-006",
+      "title": "Duplicate and corrupted native item rows block manufacturing",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Duplicate one native itemID in a disposable read fixture",
+        "Repeat with negative or fractional mineral quantity",
+        "Attempt NPC manufacturing preparation"
+      ],
+      "expected": [
+        "Planner reports NATIVE_ITEM_PROVENANCE_UNVERIFIED",
+        "No speculative job or free minerals are created"
+      ],
+      "requiredEvidence": [
+        "item IDs and stacksize/quantity",
+        "native GameStore integrity report",
+        "corporate wallet receipts"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-007",
+      "title": "Lost install ACK does not create a second job",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Let the native transaction install and debit once",
+        "Suppress install RPC success acknowledgement after durable commit",
+        "Restart director and tick same operation"
+      ],
+      "expected": [
+        "Journal stays INSTALL_UNKNOWN with explicit operator reconciliation",
+        "No second install, material withdrawal or ISK debit"
+      ],
+      "requiredEvidence": [
+        "journal phase and operationID",
+        "industryJobs rows",
+        "corporation wallet transactions"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-008",
+      "title": "Repeated delivery/restart retains single physical output",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Produce and deliver real industry batch to station",
+        "Restart persistence worker after native output commit",
+        "Replay delivery callback or director tick"
+      ],
+      "expected": [
+        "Output itemID is unique and quantity does not increase",
+        "Journal and native owner/custody remain consistent"
+      ],
+      "requiredEvidence": [
+        "native output itemID",
+        "industryJob delivery record",
+        "GameStore items before/after"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-009",
+      "title": "Five sequential complete sale cycles maintain conservation",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "On isolated station enable one allowed NPC ammo product and cap stock",
+        "Run five manufacture→deliver→escrow→full-stack market sale→restock iterations",
+        "Restart GameStore and Rust between cycles 2 and 3"
+      ],
+      "expected": [
+        "Every manufactured item has exactly one source job and one sale receipt",
+        "Total material and corporate ISK debits equal installs and credited buyer payments",
+        "Zero duplicated goods, negative wallet balances or ghost WIP"
+      ],
+      "requiredEvidence": [
+        "all jobID/itemID/orderID/fillID pairs",
+        "material inventory audit",
+        "both wallet journals"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP044-010",
+      "title": "Two NPC corporations cannot reuse another factory's WIP",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Place two NPC corporation factories at one station with same product type",
+        "Create an active native job for only corporation A",
+        "Run B's manufacturing planner with identical target"
+      ],
+      "expected": [
+        "A's pending output does not satisfy B's demand",
+        "Both corporations' BPO and ISK remain isolated"
+      ],
+      "requiredEvidence": [
+        "ownerID on each item/job",
+        "station inventory by corporation",
+        "per-tenant wallet ledger"
+      ],
+      "requiresDisposableData": true
+    }
+  ]
+}

@@ -2,6 +2,12 @@
 // Source-of-truth physical station arrival gate for NPC mining haulers.
 // A warp order or elapsed timer is NEVER proof of an arrival or a delivery.
 const {createWarehouse} = require("./coopNativeWarehouse");
+// The resolver deploys as .js next to this file, but is stored as .cjs in the
+// orchestration repo, so resolve either spelling instead of keeping a stale copy.
+function loadEconomyDestination(){
+ try{return require("./coopEconomyDestination");}
+ catch(error){return require("./coopEconomyDestination.cjs");}
+}
 const pos = value => Number.isSafeInteger(Number(value)) && Number(value)>0 ? Number(value) : 0;
 const vector = value => value && ["x","y","z"].every(k => typeof value[k]==="number" && Number.isFinite(value[k]));
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -11,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -78,11 +84,39 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     .map(s=>isValidStation(scene,s,systemID)).filter(Boolean)
     .sort((a,b)=>a.stationID-b.stationID);
   if(!candidates.length)return pause("NO_NATIVE_NPC_STATION");
-  const destination=candidates[0];
   const cargo=ships.flatMap(id=>(store.listNativeCargoForEntity(id)||[]).filter(row=>
    pos(row.cargoID)&&pos(row.typeID)&&pos(row.quantity)&&Number(row.coopHaulFleetID)===fleetID));
   if(cargo.some(row=>row.transient===true))return pause("CARGO_NOT_DURABLE");
   if(!cargo.length)return {status:"NO_ORE_TO_DELIVER",terminal:true};
+  // The fleet picks the station that really pays for the ore it carries. The
+  // buyer list is the live seed book of the fleet's own region, capped by the
+  // remaining volume, so no station is ever preferred by ID. Without a known
+  // book we keep the plain physical route and say so in telemetry.
+  let destination=candidates[0],economy=null;
+  if(destinationOracle){
+   try{
+    const ship=findShip(scene,ships[0],systemID);
+    const measured=candidates.map(candidate=>({...candidate,distanceMeters:
+     ship&&vector(ship.position)&&vector(candidate.position)?
+      Math.round(distance(ship.position,candidate.position)):null}));
+    economy=destinationOracle.decide({cargo,candidates:measured,systemID});
+    if(economy?.status==="CHOSEN"){
+     const picked=candidates.find(candidate=>candidate.stationID===economy.stationID);
+     if(picked)destination=picked;
+     else economy={...economy,status:"CHOSEN_STATION_NOT_PHYSICAL"};
+    }
+   }catch(error){economy={status:"ORACLE_FAILED",reason:String(error?.message||error).slice(0,80)};}
+   if(typeof probe?.observe==="function")
+    probe.observe("living-economy-destination",null,{spaceState:{systemID}},{
+     fleetID,status:economy?.status||"UNKNOWN",regionID:economy?.regionID||0,
+     stationID:destination.stationID,
+     chosenRevenue:economy?.revenue||0,filled:economy?.filled||0,
+     unfilled:economy?.unfilled||0,totalQuantity:economy?.totalQuantity||0,
+     cargoTypes:economy?.cargoTypes||[],
+     top:(economy?.ranked||[]).slice(0,3).map(entry=>({stationID:entry.stationID,
+      revenue:entry.revenue,filled:entry.filled,unfilled:entry.unfilled}))
+    });
+  }
   // Flush existing physical NPC entities and native cargo before moving.
   for(const name of ["npcEntities","npcCargo"]){if(!flush(name)?.success)return pause("PERSISTENCE_UNCERTAIN");}
   // Real NPC cargo + native hauler must be observed BEFORE an escort offer.
@@ -313,7 +347,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,verify:stableAt,warehouse:factory,manifest:manifestDirector};
+ return {start,tick,verify:stableAt,warehouse:factory,manifest:manifestDirector,
+  oracle:destinationOracle};
 }
 let runtimeDirector;
 function getRuntimeDirector(){
@@ -337,15 +372,45 @@ function getRuntimeDirector(){
   warpToPoint:(id,p,opts)=>runtime.warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
+  destinationOracle:process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1"?
+   loadEconomyDestination().createDestinationOracle({
+    call:(method,params)=>require("../services/market/marketDaemonClient")
+     .marketDaemonClient.call(method,params),
+    getOreTypes:systemID=>require("../services/mining/miningVisuals")
+     .getSolarSystemOreTypeRecords(systemID),
+    getSystemRegion:systemID=>worldData.getSolarSystemByID(systemID),
+    probe:require("./coopRuntimeProbe")}):null,
   escortGate:process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"?
    require("./coopEscortNativeBinding").routeGate():null});
  return runtimeDirector;
+}
+// Which ore this system should prefer, from real belt ore crossed with real
+// buyers. Read-only: it advises the next haul, it never spawns or moves a ship.
+function observePreferredOre({systemID,reason="periodic"}={}){
+ if(process.env.EVEJS_COOP_ECONOMY_DESTINATION!=="1")return null;
+ const director=getRuntimeDirector();
+ return director.oracle?.observePreferredOre?.({systemID,reason})||null;
 }
 function routeFromHaul(scene,fleet,runtime,now,ingressDurationMs){
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
  const result=getRuntimeDirector().start(scene,fleet,now,{ingressDurationMs});
  if(result.status==="NO_ORE_TO_DELIVER")fleet.coopStationNoCargo=true;
+ if(result.status!=="EN_ROUTE"&&result.status!=="NO_ORE_TO_DELIVER")
+  noteRouteStatus(fleet,result.status);
  return result;
+}
+// A stalled haul used to be completely silent. One event per fleet and status
+// per two minutes makes the physical blocker visible without log spam.
+const routeStatusAt=new Map();
+function noteRouteStatus(fleet,status){
+ const fleetID=pos(fleet?.fleetID),now=Date.now(),key=fleetID+":"+status;
+ if(!fleetID||now-(routeStatusAt.get(key)||0)<120000)return;
+ routeStatusAt.set(key,now);
+ try{
+  require("./coopRuntimeProbe").observe("living-npc-station-route",null,
+   {spaceState:{systemID:pos(fleet?.systemID)}},{fleetID,status,
+    fleetState:String(fleet?.state||""),haulers:(fleet?.haulerEntityIDs||[]).length});
+ }catch(_error){/* diagnostics must never break the native route */}
 }
 function checkReturn(scene,fleet,now){
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
@@ -354,6 +419,10 @@ function checkReturn(scene,fleet,now){
     fleet?.coopEscortPredepartureEventID&&!fleet?.coopStationArrival){
    return getRuntimeDirector().start(scene,fleet,now);
  }
- return getRuntimeDirector().tick(scene,fleet,now);
+ // Dwell and physical-arrival waits are progress, not blockers.
+ const arrival=getRuntimeDirector().tick(scene,fleet,now);
+ if(arrival?.terminal!==true&&arrival?.status!=="AWAITING_PHYSICAL_ARRIVAL"&&
+  arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
+ return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn};
+module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre};

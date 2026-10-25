@@ -1,5 +1,7 @@
 # Delivery roadmap — agent-ready tasks
 
+> **P0 COOP-047 — NPC ammo outcome downgrade/root-rotation safety:** [Persistent SQLite + fsynced journal outcome-mode latch](NPC_FIRE_OUTCOME_WITNESS_STAGE12.md). Implements fail-closed cross-attestation, enforces prior receipt history even if journal root moves, and includes real SQLite/FS disposable performance runner. **Manual Linux Node 22 tests and two-client NPC battle still REQUIRED; default OFF.**
+
 > **P0 COOP-046 — native NPC fire-outcome witness:** [Durable ammo debit -> turret/missile outcome, unresolved-cycle quarantine](NPC_FIRE_OUTCOME_WITNESS_STAGE12.md). Opt-in, source-level implemented, pinned overlay verified; full Linux Node + two-client gameplay acceptance PENDING. OFF by default.
 
 > **P0 COOP-045 — NPC SQLite atomic weapon-bank debit:** [Native ammo cargo and per-module replay fences committed in a single transaction](NPC_ATOMIC_WEAPON_BANK_STAGE11.md). **IMPLEMENTED_UNVERIFIED:** pinned source roundtrip + isolated JS smoke checked; real Node/SQLite crash tests and two-client combat still required. Stacked after COOP-044; default OFF.

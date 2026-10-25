@@ -1,0 +1,136 @@
+{
+  "schema": "coop-046-native-market-policy/v1",
+  "doNotModifyVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "COOP046-001",
+      "title": "NPC corporate buy must pay and settle in native GameStore",
+      "steps": [
+        "Give verified NPC corporation wallet, shortage, and docked Rust ask",
+        "Authorize buy through eventual native corporate buyer authority",
+        "Restart buyer after lost RPC ACK"
+      ],
+      "expected": [
+        "Debited ISK equals credited ISK and market fees, exact amount",
+        "One physical stack changes owner once",
+        "No phantom shipment or repeated purchase"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "authoritative GameStore item/wallet rows",
+        "native Rust order/fill IDs",
+        "actor and station identities"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP046-002",
+      "title": "Partial buy remains disabled without atomic splitter",
+      "steps": [
+        "Place native Rust sell stack 100 while buyer needs 10",
+        "Issue buy request without native splitter"
+      ],
+      "expected": [
+        "No partial transaction, no phantom items or ISK",
+        "Explicit PARTIAL_STACK_REQUIRES_ATOMIC_SPLITTER blocker"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "authoritative GameStore item/wallet rows",
+        "native Rust order/fill IDs",
+        "actor and station identities"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP046-003",
+      "title": "Real fill-backed repricing respects bounded spread",
+      "steps": [
+        "Create genuine native trade fills at station",
+        "Change verified stock and observed demand",
+        "Evaluate price quote and place native order with same source custody"
+      ],
+      "expected": [
+        "Price changes only within strict safety limit",
+        "Price stays above verified material+fee floor",
+        "No speculative price pump without native fill provenance"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "authoritative GameStore item/wallet rows",
+        "native Rust order/fill IDs",
+        "actor and station identities"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP046-004",
+      "title": "Zero-ISK NPC self-recovery sells existing output",
+      "steps": [
+        "Set corporate wallet to verified zero and preserve already-paid physical stock",
+        "Run A-Life solvency decision",
+        "Complete native sale to a real player and verify corporate credit"
+      ],
+      "expected": [
+        "Listing and READY delivery remain allowed at zero cash",
+        "No new paid manufacture or buy without verified cash",
+        "No free bootstrap ISK"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "authoritative GameStore item/wallet rows",
+        "native Rust order/fill IDs",
+        "actor and station identities"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP046-005",
+      "title": "Regional production profit uses actual supply and buyers",
+      "steps": [
+        "Provide two region-specific SDE recipes, real BPO and verified order/fill volumes",
+        "Measure material, production, freight and market costs",
+        "Choose profitable product and observe physical transport"
+      ],
+      "expected": [
+        "Only profitable, source-backed production chosen",
+        "No simulated buyer or artificial turnover",
+        "Transport and material costs paid in native accounting"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "authoritative GameStore item/wallet rows",
+        "native Rust order/fill IDs",
+        "actor and station identities"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP046-006",
+      "title": "Cross-corp and wrong-station asks cannot feed buyer",
+      "steps": [
+        "Create two corporations with their own station wallets",
+        "Include foreign-owned or duplicate Rust order in buyer snapshot",
+        "Attempt intent planning and native authorization"
+      ],
+      "expected": [
+        "Foreign/duplicate evidence fails closed",
+        "No wallet charge or incorrect stock transfer",
+        "Player orders and corp custody remain isolated"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "authoritative GameStore item/wallet rows",
+        "native Rust order/fill IDs",
+        "actor and station identities"
+      ],
+      "requiresDisposableData": true
+    }
+  ]
+}
