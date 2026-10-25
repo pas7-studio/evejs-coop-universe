@@ -125,6 +125,11 @@ const oldLines=[
   "  \"events\",",
   "  \"alerts\",",
   "  if (command === \"events\" || command === \"alerts\") { const result=require(\"../../space/coopWorldOpportunityBoard\").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }",
+ "      sourceCargoID: process.env.EVEJS_COOP_RESCUE_PROVENANCE === \"1\" ? toPositiveInt(options.sourceCargoID, 0) : 0,",
+ "      sourceOriginalQuantity: process.env.EVEJS_COOP_RESCUE_PROVENANCE === \"1\" ? toPositiveInt(options.sourceOriginalQuantity, 0) : 0,",
+ "      sourceCargoID: process.env.EVEJS_COOP_RESCUE_PROVENANCE === \"1\" ? cargoEntry.itemID : 0,",
+ "      sourceOriginalQuantity: process.env.EVEJS_COOP_RESCUE_PROVENANCE === \"1\" ? cargoEntry.quantity : 0,",
+ "  if (process.env.EVEJS_COOP_RESCUE_ATOMIC === \"1\" && nativeNpcStore.getNativeWreckItem(options.wreckItemID)?.sourceCargoID) return require(\"../coopRescueNativeTransfer\").transfer(options);",
 ];
 const lootOld='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID);';
 const lootNew='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });';
