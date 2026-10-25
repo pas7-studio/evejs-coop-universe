@@ -336,10 +336,38 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    const local=Number(session?._space?.systemID||session?.solarsystemid||session?.solarSystemID);
    const r=list({systemID:local,all:op==="all",limit:8});
    if(r.status!=="READY")return {status:r.status,message:"[Co-op Events] "+r.status};
-   if(!r.events.length)return {status:"READY",message:"[Co-op Events] No verified active events. /events all for whole universe; /events watch local|all|off."};
-   return {status:"READY",message:"[Co-op Events] Verified active events:\n"+
-    r.events.map(e=>e.id+" | "+(e.stage==="PREPARING"?"[PREPARING] ":"")+e.title+" | system "+e.systemID+
-     " | /events info "+e.id).join("\n")};
+   // RESCUE is a new paid opportunity only if the original PREPARING
+   // convoy actually DEPARTED and native source wreck + cargo still pass the
+   // independently verified rescue contract authority. No fake postings.
+   let rescueOffers=[];
+   if(process.env.EVEJS_COOP_RESCUE_CONTRACTS==="1"){
+    try{
+     const saved=io.readdirSync(eventDir);
+     if(saved.length<=2000){
+      for(const file of saved.sort().slice(-100)){
+       if(!file.endsWith(".json"))continue;
+       const raw=readEvent(file.slice(0,-5));
+       const e=raw?.event;
+       if(raw?.status!=="READY"||e?.type!=="CONVOY"||
+        e.stage!=="PREPARING"||e.phase!=="RESOLVED"||
+        e.outcome!=="DEPARTED"||!all&&POS(local)&&e.systemID!==local)
+        continue;
+       const quote=require("./coopRescueNativeGame")
+        .runGame(session,"offer",e.id);
+       if(quote?.status!=="READY")continue;
+       rescueOffers.push(e.id+" | [RESCUE] NPC corp "+
+        quote.contract.corporationID+" pays "+quote.contract.amountISK+
+        " ISK for "+quote.expected.reduce((n,x)=>n+x.quantity,0)+
+        " real wreck cargo units | /events rescue offer "+e.id);
+       if(rescueOffers.length>=5)break;
+      }
+     }
+    }catch{/* no unauthorized event is listed on an uncertain source */}
+   }
+   if(!r.events.length&&!rescueOffers.length)return {status:"READY",message:"[Co-op Events] No verified active events or rescue jobs. /events all for whole universe; /events watch local|all|off."};
+   return {status:"READY",message:"[Co-op Events] Verified opportunities:\n"+
+    [...r.events.map(e=>e.id+" | "+(e.stage==="PREPARING"?"[PREPARING] ":"")+e.title+" | system "+e.systemID+
+     " | /events info "+e.id),...rescueOffers].join("\n")};
   }
   if(op==="info"){
    const r=readEvent(tokens[0]);const n=nowOK();
