@@ -21,19 +21,21 @@ Run exclusively on a disposable local server until the pinned native Rust, GameS
 
 | Evidence | Read source |
 |---|---|
-| NPC corporation identity, `isNPC` | `corporationState.getCorporationRecord` |
-| Corporate wallet division 1000, exact ISK | `corporationRuntimeState.getCorporationRuntime` |
+| NPC corporation identity, `isNPC` | **Existing** `gameStore.read("corporations", "/records/<ownerID>")` |
+| Corporate wallet division 1000, exact ISK | **Existing** `gameStore.read("corporationRuntime", "/corporations/<ownerID>")` |
 | Station ID, solar system and market region | `worldData.getStationByID` |
 | Real facility and manufacturing activity | `industryStaticData.getFacilityPayloadByID` |
 | Owned native minerals, ore, blueprint and manufactured item IDs | `itemStore.listOwnedItems` |
 | Owner-scoped active and ready jobs | `gameStore.read("industryJobs", "/jobs")` |
 | Corporate escrow rows | `gameStore.read("marketEscrow", "/")` |
 | Physical escrowed output item | `itemStore.findItemById` |
-| Original BPO custody and ME | `industryRuntimeState.getBlueprintState` |
+| Original BPO custody and ME | **Existing** `gameStore.read("industryBlueprintState", "/records/<itemID>")` |
 | Manufacturing material quantities | `industryStaticData.getBlueprintDefinitionByProductTypeID` + `industryParityHelpers.buildIndustryActivityMaterials` |
 | Actual public native market asks | Rust `marketDaemonClient.call("GetOrders", {region_id,type_id})` |
 | Inventory mutation concurrency fence | `itemStore.getItemMutationVersion` |
 
+
+**Read-only correctness fix:** the pinned stock `getBlueprintState()` can persist a default BPO record on a read, and `getCorporationRuntime()` may initialize/persist corporation runtime data. COOP-043 intentionally **never calls those getters**: it reads only existing GameStore BPO, corporate and wallet rows and blocks if they are absent. The normal native ItemStore API may still perform its standard first-use migration during game bootstrap; the isolated acceptance run must initialize the server before enabling this observer and verify that the observer itself performs no new wallet, blueprint, job, or escrow writes.
 For one authenticated native trader ship, the observer reads the **actual ownerID** from the native NPC entity store. Corporate wallet and stock values are attached to that **single pilot**, not to a shared station-level snapshot that another NPC could reuse. The A-Life decision gate verifies matching `ownerID`, `stationID`, `systemID` and valid positive corporation wallet before deriving a manufacturing intent.
 
 Any missing, duplicated, negative, mismatched or stale ledger entry returns an explicit `NATIVE_...` blocker. Rust asks with `source=coop-npc` must match a corporate escrow record **and** the exact physical item ID, owner, type, quantity and order-specific escrow location. An invisible pending Rust order or orphaned escrow **cannot be counted** as sellable stock. During async Rust reads, the authority rechecks inventory mutation version, wallet balance, active jobs and escrow; a changed snapshot is rejected.
