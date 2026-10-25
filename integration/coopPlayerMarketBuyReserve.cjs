@@ -82,9 +82,9 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
    if(!positive(at))throw Error("P2P_BUY_RESERVE_CLOCK_INVALID");
    const time=String(BigInt(at)*10000n+116444736000000000n);
    const amounts=[
-    {id:next,amount:q.reservedCents,entryTypeID:21,description:"P2P original BUY reserve"},
+    {id:next,amount:q.reservedCents,entryTypeID:42,description:"P2P original BUY reserve"},
     {id:next+1,amount:q.brokerCents,entryTypeID:46,description:"P2P original BUY broker fee"},
-    {id:next+2,amount:q.sccCents,entryTypeID:0,description:"P2P original BUY SCC surcharge"}
+    {id:next+2,amount:q.sccCents,entryTypeID:149,description:"P2P original BUY SCC surcharge"}
    ];
    const used=new Set(wallet.walletJournal.map(e=>e?.transactionID));
    if(amounts.some(e=>used.has(e.id)))
@@ -126,8 +126,8 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
  function bind(receipt,order){
   if(!enabled())throw Error("P2P_BUY_RESERVE_FLAGS_DISABLED");
   if(!receipt||receipt.kind!=="P2P_BUY_RESERVE"||
-     !orderID(receipt.operationID?.replaceAll("-",""))&&
-      typeof receipt.operationID!=="string")
+     typeof receipt.operationID!=="string"||
+     !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(receipt.operationID))
    throw Error("P2P_BUY_RESERVE_RECEIPT_INVALID");
   const id=String(order?.order_id??"");
   const row=order?.row;
@@ -151,6 +151,11 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
       original.typeID!==receipt.typeID||
       original.quantity!==receipt.quantity||
       original.priceCents!==receipt.priceCents||
+      original.minVolume!==receipt.minVolume||
+      original.durationDays!==receipt.durationDays||
+      original.orderRange!==receipt.orderRange||
+      original.brokerCents!==receipt.brokerCents||
+      original.sccCents!==receipt.sccCents||
       original.reservedCents!==receipt.reservedCents||
       original.totalCents!==receipt.totalCents)
     throw Error("P2P_BUY_RESERVE_COMMITTED_DEBIT_NOT_FOUND");
