@@ -60,6 +60,33 @@ function createAlifeNativeAct({resolveActor,resolveDirector,resolveProductTypes,
       current.underAttack===true||current.inWarp===true||
       current.activeNativeOrder===true||current.playerControlled===true)
     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_ACTOR_CHANGED_AFTER_DIRECTOR"};
+   // Live financial execution requires a fresh, read-only audit of the
+   // original GameStore job/debit, ItemStore output and Rust escrow/sales
+   // against the director's durable journal. A mode string alone is not
+   // evidence that the original operation is safe to advance.
+   if(director.supportsLiveRuntime===true){
+    if(typeof director.auditBeforeTick!=="function")
+     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_MISSING"};
+    const proof=await director.auditBeforeTick({
+     ownerID:actor.ownerID,stationID:actor.stationID});
+    if(proof?.status!=="READY"||proof.ownerID!==actor.ownerID||
+       proof.stationID!==actor.stationID||
+       proof.readOnly!==true||proof.nativeMutation!==false||
+       proof.proof!=="ORIGINAL_DIRECTOR_JOURNAL_AND_NATIVE_RECEIPTS_READ_ONLY")
+     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_NOT_READY"};
+    // The audit itself can await an IO-bound original Rust read. Reobserve
+    // a third time before ANY financial call, not merely before the audit.
+    const afterAudit=await resolveActor(intent.entityID);
+    if(!afterAudit||afterAudit.nativeVerified!==true||afterAudit.isNpc!==true||
+       afterAudit.role!=="trader"||afterAudit.ownerID!==actor.ownerID||
+       afterAudit.stationID!==actor.stationID||
+       afterAudit.systemID!==actor.systemID||
+       afterAudit.entityID!==intent.entityID||
+       afterAudit.pilotID!==actor.pilotID||
+       afterAudit.underAttack===true||afterAudit.inWarp===true||
+       afterAudit.activeNativeOrder===true||afterAudit.playerControlled===true)
+     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_ACTOR_CHANGED_AFTER_AUDIT"};
+   }
    // The director (not this intent) decides the next durable step under its
    // native station lock, with verified receipts before any settlement.
    // Record before the native call: lost ACK must not replay the same intent.
