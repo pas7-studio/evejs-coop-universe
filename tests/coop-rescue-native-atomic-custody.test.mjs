@@ -77,6 +77,19 @@ test("one real itemID ownership moves to NPC corporation on actual docking",()=>
  assert.equal(f.db().items["9000"].locationID,60001);
  assert.equal(Object.keys(f.db().items).length,2);
 });
+test("two partial pickups both physically deliver to NPC without duplicated ore",()=>{
+ const f=fixture();
+ assert.equal(f.pick.transfer({...f.args,quantity:3}).success,true);
+ assert.equal(f.pick.transfer({...f.args,quantity:5}).success,true);
+ assert.equal(f.station.deliver({...f.dock,itemID:9000}).status,
+  "NATIVE_RESCUE_WAREHOUSE_COMMITTED");
+ assert.equal(f.station.deliver({...f.dock,itemID:9001}).status,
+  "NATIVE_RESCUE_WAREHOUSE_COMMITTED");
+ const all=[f.db().items["9000"],f.db().items["9001"]];
+ assert.equal(all.reduce((n,x)=>n+x.quantity,0),8);
+ assert.ok(all.every(x=>x.ownerID===10001&&x.locationID===60001));
+ assert.equal(Object.keys(f.db().items).length,3);
+});
 test("replaying docked delivery cannot mint stock",()=>{
  const f=fixture();f.pick.transfer(f.args);
  f.station.deliver({...f.dock,itemID:9000});
