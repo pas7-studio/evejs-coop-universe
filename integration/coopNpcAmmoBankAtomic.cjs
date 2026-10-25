@@ -116,7 +116,7 @@ function prepare(io,root,entityID,modules,whenMs,clock){
  const receipt={version:1,phase:"PREPARED",entityID,boundaryMs:whenMs,
   modules:[...modules].sort((a,b)=>a-b),nonce};
  writeAtomic(io,file,receipt);
- return {file,lock,receipt};
+ return {file,lock,receipt,previousReceipt:status.receipt||null};
 }
 function settle(io,token){
  const owner=JSON.parse(io.readFileSync(token.lock,"utf8"));
@@ -177,6 +177,23 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
        !previousFence.modules||typeof previousFence.modules!=="object"||
        Array.isArray(previousFence.modules)))
      throw Error("BANK_NATIVE_FENCE_CORRUPT");
+    // COOP-046: the operator can rotate/misplace a POSIX root, but native
+    // SQLite keeps prior debits. A new empty root must NEVER silently
+    // bootstrap a new accepted outcome history for an already-spent ship.
+    if(process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"){
+     const previousReceipt=token.previousReceipt;
+     const exists=previousFence!==null;
+     if(exists!==Boolean(previousReceipt))
+      throw Error("BANK_NATIVE_JOURNAL_FENCE_DIVERGED");
+     if(exists){
+      if(previousReceipt.phase!=="COMMITTED"||
+         !Array.isArray(previousReceipt.modules)||
+         !previousReceipt.modules.length||
+         previousReceipt.modules.some(mid=>
+          Number(previousFence.modules[String(mid)])!==previousReceipt.boundaryMs))
+       throw Error("BANK_NATIVE_JOURNAL_FENCE_MISMATCH");
+     }
+    }
     const fences={...(previousFence?.modules||{})};
     const next={...cargo};
     const result=[];
