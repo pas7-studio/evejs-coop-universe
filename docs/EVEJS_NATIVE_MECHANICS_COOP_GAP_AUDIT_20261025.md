@@ -93,7 +93,7 @@ Every link below targets the pinned upstream version. Native EVE RPC functionali
 
 ## 4. Research blockers and explicit implementation warnings
 
-**B01 / P0 source overlay conflict:** `scripts/patch-evejs-coop.cjs` at audit head contains *two* independent calls to `coop-fleet-mission-native-patch.cjs` for `agentMissionRuntime.js` and `dungeonUniverseSiteService.js` (the earlier call also includes `missionRuntimeState.js`). Verify whether the helper is idempotent; remove the duplicate if unsafe; run pinned upstream apply / no-change reapply / rollback to original. **Do not deploy with a failing preflight.** Assign to mission/overlay owner, not two agents concurrently.
+**B01 / P0 overlay maintenance (source-tested):** `scripts/patch-evejs-coop.cjs` calls `coop-fleet-mission-native-patch.cjs` twice for `agentMissionRuntime.js` and `dungeonUniverseSiteService.js` (the earlier call also covers `missionRuntimeState.js`). **I ran a read-only test against all THREE pinned upstream files:** first apply changes content, second apply is an exact NO-OP, removal once restores original bytes, removal twice is another NO-OP for all three. Therefore duplicate application is currently **redundant but idempotent on this pinned source**, not by itself an observed runtime failure. Still consolidate duplicate calls with the mission/overlay owner for clarity and run the complete overlay `--dry-run`, no-op reapply, `--remove` and tests in actual Node; do not infer real deployment safety from isolated helper testing.
 
 **B02 / P0 native economy:** NPC hauler virtual depot is not native itemStore station inventory. Claiming "ore delivered", "manufacturing playable" or "dynamic market" needs real owner-tagged persisted items and receipts.
 
