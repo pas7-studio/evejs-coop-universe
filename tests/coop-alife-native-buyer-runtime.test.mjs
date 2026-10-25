@@ -21,9 +21,10 @@ const intent=()=>({pilotID:"coop-pilot-100",entityID:ENTITY,
  resource:"station:"+STATION+":supplies",provenance:"NATIVE_READ_ONLY",
  nativeMutation:false,intentID:SYS+":"+AT+":"+ENTITY+":BUY_SUPPLIES"});
 const decision=()=>({status:"OBSERVED",systemID:SYS,observedAt:AT,intents:[intent()]});
-function fixture(){
+function fixture({admin=false}={}){
  let physical=true,owner=OWNER,warp=false,danger=false,sessionOccupied=false,
   distant=false,calls=0,release=null,resolver=null;
+ let time=AT,adminStarts=0,adminOptions=null;
  const scene={
   getEntityByID:id=>physical?({kind:"ship",nativeNpc:true,itemID:id,
    position:{x:distant?50000:500,y:0,z:0},radius:50,
@@ -52,15 +53,24 @@ function fixture(){
     return {status:"NPC_PLAYER_PURCHASE_SETTLED",fillID:930000000000001,itemID:1990000200};
    }};
  };
+ const createAdminControl=admin?opts=>{
+  adminOptions=opts;
+  return {start:async()=>{adminStarts++},
+   authorizeRecoveryOperator:async()=>true};
+ }:null;
  const r=createRuntimeAlifeBuyer({file:"/tmp/coop049-buyer-journal.json",
-  env:{...env},deps,createBinding,clock:()=>AT});
+  env:{...env,...(admin?{EVEJS_COOP_NPC_BUY_ADMIN_LOCAL:"1",
+   EVEJS_COOP_NPC_BUY_RECOVERY_OPERATOR:"1"}:{})},
+  deps,createBinding,createAdminControl,clock:()=>time});
  const registry={snapshot:()=>({links:{"coop-pilot-100":{
   pilotID:"coop-pilot-100",entityID:ENTITY,systemID:SYS}}})};
  const world={snapshot:()=>({pilots:[{id:"coop-pilot-100",role:"trader"}]})};
  const tick=(snap=snapshot(),dec=decision())=>r.tick({snapshot:snap,
   decision:dec,registry,world});
  return {tick,r,deps,registry,world,get calls(){return calls},
-  get binding(){return resolver},setOwner:v=>owner=v,
+  get binding(){return resolver},get adminStarts(){return adminStarts},
+  get adminOptions(){return adminOptions},advanceTime:delta=>time+=delta,
+  setOwner:v=>owner=v,
   setDistant:v=>distant=v,setWarp:v=>warp=v,
   setDanger:v=>danger=v,setOccupied:v=>sessionOccupied=v,
   setPhysical:v=>physical=v,
@@ -119,4 +129,28 @@ test("buyer remains dormant when dedicated opt-in flag is absent",async()=>{
   env:{...env,EVEJS_COOP_ALIFE_NATIVE_BUYER:"0"}});
  assert.equal((await absent.tick()).status,"DISABLED");
  assert.equal(f.calls,0);
+});
+test("server-host admin controller is wired into real native buyer, not a player RPC",async()=>{
+ const f=fixture({admin:true});
+ const result=await f.tick();
+ assert.equal(result.status,"ALIFE_BUY_DISPATCHED");
+ await Promise.resolve();await Promise.resolve();
+ assert.equal(f.adminStarts,1);
+ assert.equal(typeof f.binding.authorizeRecoveryOperator,"function");
+ assert.equal(typeof f.adminOptions.getBinding,"function");
+ assert.equal(f.adminOptions.getBinding()?.mode,"ALIFE_NATIVE_RUST_GAMESTORE_BUYER");
+ assert.ok(f.binding.resolveActor(ENTITY)?.nativeVerified);
+});
+test("operator cannot reuse an old A-Life NPC snapshot after 30 seconds",async()=>{
+ const f=fixture({admin:true});
+ await f.tick();
+ assert.ok(f.binding.resolveActor(ENTITY)?.nativeVerified);
+ f.advanceTime(30001);
+ assert.equal(f.binding.resolveActor(ENTITY),null);
+});
+test("operator's physical NPC is rechecked at recovery time after movement",async()=>{
+ const f=fixture({admin:true});
+ await f.tick();
+ f.setDistant(true);
+ assert.equal(f.binding.resolveActor(ENTITY),null);
 });

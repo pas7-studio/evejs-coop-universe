@@ -4,11 +4,12 @@
 const {dispatchAlifeNativeBuyer}=require("./coopAlifeNativeBuyerDispatch"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
- env=process.env,clock=()=>Date.now()}={}){
+ createAdminControl=null,env=process.env,clock=()=>Date.now()}={}){
  if(typeof file!=="string"||!file.startsWith("/")&&
     !/^[A-Za-z]:[\\/]/.test(file)||typeof clock!=="function")
   throw Error("ALIFE_NATIVE_BUYER_RUNTIME_CONFIG_INVALID");
- let current=null,instance=null,busy=false;
+ let current=null,recent=null,instance=null,busy=false;
+ let nativeBinding=null,adminControl=null;
  const loadDeps=()=>deps||{
   sceneForSystem:id=>require("./runtime").ensureScene(id,{refreshStargates:false}),
   npcStore:require("./npc/nativeNpcStore"),
@@ -19,7 +20,14 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
   marketClient:require("../services/market/marketDaemonClient").marketDaemonClient
  };
  function actor(entityID){
-  const ctx=current;if(!ctx||!pos(entityID))return null;
+  // Operator recovery runs between A-Life ticks. Re-check EVERY native
+  // ship/controller/station against a bounded recent A-Life witness; never
+  // accept an arbitrarily old snapshot or player-supplied actor identity.
+  const ctx=current||(recent&&clock()>=recent.at&&
+   clock()-recent.at<=30000?recent:null);
+  if(!ctx||!pos(entityID)||!Number.isSafeInteger(ctx.snapshot?.observedAt)||
+     clock()<ctx.snapshot.observedAt||
+     clock()-ctx.snapshot.observedAt>30000)return null;
   const links=Object.values(ctx.registry?.snapshot()?.links||{}).filter(l=>
    Number(l?.entityID)===entityID&&
    /^coop-pilot-[0-9]{3,}$/.test(String(l.pilotID||"")));
@@ -96,13 +104,35 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
   const d=loadDeps();
   const factory=createBinding||require("./coopNpcBuyerNativeBindings.cjs")
    .createNativeNpcBuyerBindings;
+  // This is a separate loopback-only operator capability, never a player
+  // chat command or public game protocol. All gates are OFF by default.
+  if(env.EVEJS_COOP_NPC_BUY_ADMIN_LOCAL==="1"){
+   const factory=createAdminControl||require("./coopNpcBuyerAdminControl"+
+     (typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"))
+     .createLocalNpcBuyerRecoveryControl;
+   const port=Number(env.EVEJS_COOP_NPC_BUY_ADMIN_PORT||17171);
+   adminControl=factory({getBinding:()=>nativeBinding,
+    secretFile:env.EVEJS_COOP_NPC_BUY_ADMIN_SECRET_FILE,
+    auditLogFile:env.EVEJS_COOP_NPC_BUY_ADMIN_AUDIT_FILE,
+    port,env,clock});
+  }
   const binding=factory({file,clock,env,
    gameStore:d.gameStore,itemStore:d.itemStore,marketClient:d.marketClient,
    getStation:id=>d.worldData.getStationByID(id),
-   resolveActor:id=>actor(id),readNeeds:(owner,station,type)=>needs(owner,station,type)});
+   resolveActor:id=>actor(id),readNeeds:(owner,station,type)=>needs(owner,station,type),
+   authorizeRecoveryOperator:adminControl?
+    adminControl.authorizeRecoveryOperator:null});
+  nativeBinding=binding;
   if(binding?.mode!=="ALIFE_NATIVE_RUST_GAMESTORE_BUYER"||
      typeof binding.tick!=="function")
    throw Error("ALIFE_NATIVE_BUYER_BINDING_NOT_NATIVE");
+  if(adminControl){
+   // Listener failures do not make the admin endpoint available by accident.
+   // The trusted authenticator has no grants without a successfully signed
+   // HTTP request, so any recovery attempt remains denied.
+   void Promise.resolve().then(()=>adminControl.start()).catch(error=>
+    console.warn("[CoopNpcBuyerAdmin] local operator endpoint unavailable:",error.message));
+  }
   instance=Object.freeze({mode:binding.mode,tick:binding.tick,
    maxUnitPriceCents:cap("EVEJS_COOP_ALIFE_BUY_MAX_PRICE_CENTS",10000,100000000),
    maxSpendCents:cap("EVEJS_COOP_ALIFE_BUY_MAX_SPEND_CENTS",100000,100000000),
@@ -116,8 +146,14 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
   if(!registry?.snapshot||!world?.snapshot||!snapshot||!decision)
    return {status:"BLOCKED",reason:"ALIFE_NATIVE_BUYER_NO_WORLD",purchases:[]};
   busy=true;current={snapshot,registry,world};
-  try{return await dispatchAlifeNativeBuyer({snapshot,decision,now:clock(),env,
-    resolveBuyer:()=>ensureBinding()});}
+  recent={snapshot,registry,world,at:clock()};
+  try{
+   // Initialize the operator-only endpoint even when no new order is placed.
+   // A PREPARED journal must be auditable after a crash.
+   if(env.EVEJS_COOP_NPC_BUY_ADMIN_LOCAL==="1")ensureBinding();
+   return await dispatchAlifeNativeBuyer({snapshot,decision,now:clock(),env,
+    resolveBuyer:()=>ensureBinding()});
+  }
   finally{current=null;busy=false}
  }
  return Object.freeze({tick,mode:"ONE_ALIFE_TICK_NATIVE_CORP_BUYER",

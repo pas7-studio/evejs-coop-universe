@@ -59,3 +59,19 @@ test("COOP-056 login catch-up stays bounded with separate explicit opt-in",()=>{
  assert.match(src,/EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP/);
  assert.doesNotMatch(src,/setInterval\(/);
 });
+
+test("COOP-059 host-only operator control is deployed as a portable .js overlay",()=>{
+ const source=fs.readFileSync(path.join(root,"scripts/patch-evejs-coop.cjs"),"utf8");
+ assert.ok(source.includes('"coopNpcBuyerAdminControl"'),
+  "operator module absent from reversible overlay registry");
+ const runtime=fs.readFileSync(path.join(root,
+  "integration/coopAlifeNativeBuyerRuntime.cjs"),"utf8");
+ assert.ok(runtime.includes('EVEJS_COOP_NPC_BUY_ADMIN_LOCAL'));
+ assert.match(runtime,/coopNpcBuyerAdminControl/);
+ assert.ok(runtime.includes('authorizeRecoveryOperator:adminControl?'));
+ const admin=fs.readFileSync(path.join(root,
+  "integration/coopNpcBuyerAdminControl.cjs"),"utf8");
+ assert.match(admin,/127\.0\.0\.1/);
+ assert.match(admin,/timingSafeEqual/);
+ assert.doesNotMatch(admin,/0\.0\.0\.0/);
+});

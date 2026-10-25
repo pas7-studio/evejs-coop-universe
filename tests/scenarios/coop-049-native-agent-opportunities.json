@@ -39,6 +39,12 @@
       "EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY=1 (DEFAULT OFF; only with confirmed original active warp and actual native ingress snapshot)",
       "Requires existing EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 and strict Stage I and atomic corporate escrow flags",
       "No live usage before genuine two-client warehouse + atomic real wallet E2E passes"
+    ],
+    "peacefulDurableReplay": [
+      "EVEJS_COOP_ESCORT_PEACEFUL_REPLAY=1 (DEFAULT OFF; requires authentic source, two midroute points and terminal original two-pilot fsync)",
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 plus EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 and all existing native escrow and two-player attendance flags required",
+      "Startup scans up to 32 original DELIVERED native journals; no client API or synthetic attendance",
+      "Run ONLY after original disposable GameStore dual-wallet E2E passes"
     ]
   },
   "scenarios": [
@@ -432,6 +438,52 @@
         "Inspect true original warehouse, GameStore credits and original corporate escrow"
       ],
       "expected": "Full manifest mismatch blocks native recordDelivered and atomic player settlement; no fabricated cargo, no second ISK reserve, repair required",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-38",
+      "name": "Post-delivery peaceful payout after both real players disconnect",
+      "actions": [
+        "Use disposable pinned EveJS server with 2 independently authenticated original player ships and strict peaceful-replay flag",
+        "Accept original native NPC Agent contract, follow original NPC through actual two route checkpoints",
+        "Reach original stock station with both players and verify genuine warehouse full-manifest receipt",
+        "Observe original fsynced terminal two-player attendance written before durable flight DELIVERED journal",
+        "Disconnect both clients and crash/restart server before wallet ACK; run trusted reconciliation scan"
+      ],
+      "expected": "Server reads only original fsynced source+route+terminal evidence and original delivery, verifies escrow RESERVED, atomically credits both original characters once. No reconnect/client claim, duplicate cargo or second NPC warp required.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-39",
+      "name": "Unknown atomic wallet ACK must never double-credit players",
+      "actions": [
+        "In a disposable GameStore clone inject lost ACK after real atomic dual-player credit but before game application response",
+        "Restart native server with same original delivery and terminal attendance receipts",
+        "Run native peaceful reconciliation twice and inspect real GameStore transaction IDs and wallet deltas"
+      ],
+      "expected": "Native verifySettlement resolves ALREADY_NATIVE_PAID both times. Exactly one original corporate reserve consumed and each original player credited exactly once, no additional 2 credits.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-40",
+      "name": "No source, no original midpoint, wrong pilot, or missing terminal cannot mint peaceful ISK",
+      "actions": [
+        "Inject on a disposable snapshot each absent/corrupt original source, first or second route receipt, wrong source ship, absent second terminal pilot, fsync-uncertain terminal receipt",
+        "Confirm genuine terminal warehouse delivery is still accounted once",
+        "Trigger offline reconciliation and compare native corporation escrow and both character wallets"
+      ],
+      "expected": "Every missing or inconsistent original proof denies automatic payout. No synthetic attendance after delivery, no fabricated route proof, no unverified refund or wallet double spend; operator repair needed.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-41",
+      "name": "Reconciliation scan cannot use untrusted player job IDs or pay undelivered flight",
+      "actions": [
+        "Supply a client-provided random manifest and an original FUNDED-but-not-DELIVERED escrow on cloned native server",
+        "Attempt ordinary in-game calls and then actual trusted server-side peaceful reconciliation",
+        "Observe secure flight journal enumeration, original wallet and real warehouse"
+      ],
+      "expected": "Only fully fsynced original DELIVERED flight journals are candidates; an untrusted manifest or incomplete original cargo never enters native settleAtomic; scan limits and incorrect flags fail closed.",
       "status": "NOT_RUN"
     }
   ]

@@ -11,7 +11,9 @@ function validEntry(id,e){
  return id===k&&["PREPARED","SETTLED"].includes(e?.phase)&&
   keyOk(e.claimKey)&&pos(e.buyerCorpID)&&pos(e.orderID)&&
   pos(e.sellerID)&&pos(e.stationID)&&pos(e.typeID)&&
-  pos(e.quantity)&&pos(e.unitPriceCents)&&
+  pos(e.quantity)&&e.quantity<=50000&&
+  pos(e.unitPriceCents)&&e.unitPriceCents<=100000000&&
+  e.quantity*e.unitPriceCents<=100000000000&&
   nn(e.minReserveCents)&&e.sellerID!==e.buyerCorpID;
 }
 function verifyRust(r,e){
@@ -44,7 +46,8 @@ function verifyReceipt(r,e,fillID){
     r.typeID!==e.typeID||r.quantity!==e.quantity||
     r.priceCents!==e.unitPriceCents||
     r.grossCents!==e.quantity*e.unitPriceCents||
-    !nn(r.taxCents)||r.netCents!==r.grossCents-r.taxCents||
+    !nn(r.taxCents)||r.taxCents>r.grossCents||
+    !nn(r.netCents)||r.netCents!==r.grossCents-r.taxCents||
     r.taxPolicy!=="EVEJS_NATIVE_MARKET_RULES"||
     !pos(r.itemID)||!nn(r.committedAt))return false;
  return true;
@@ -59,13 +62,18 @@ async function auditNativeNpcBuyerRecovery({journal,inspectRustClaim,
   throw Error("NPC_BUY_RECOVERY_AUTHORITIES_REQUIRED");
  const entries=Object.entries(journal.entries);
  if(entries.length>5000)throw Error("NPC_BUY_RECOVERY_JOURNAL_CAP");
- const seen=new Set(),out=[];
+ // Preclassify ALL duplicate keys before consulting any native authority:
+ // otherwise the first occurrence could advertise a recovery action.
+ const countByClaim=new Map(),out=[];
+ for(const [,e] of entries){
+  if(keyOk(e?.claimKey))
+   countByClaim.set(e.claimKey,(countByClaim.get(e.claimKey)||0)+1);
+ }
  for(const [id,e] of entries){
-  if(!validEntry(id,e)||seen.has(e.claimKey)){
+  if(!validEntry(id,e)||countByClaim.get(e.claimKey)>1){
    out.push({id,...hold("JOURNAL_IDENTITY_CONFLICT",e?.claimKey)});
    continue;
   }
-  seen.add(e.claimKey);
   let rust,receipts;
   try{
    [rust,receipts]=await Promise.all([
