@@ -1,4 +1,4 @@
-# COOP-059 — Native economy CI and authenticated operator recovery
+# COOP-059 — Manual native economy validation and authenticated operator recovery
 
 ## Security model
 
@@ -41,13 +41,35 @@ Before any recovery write the server fsyncs an APPROVED operator audit record. I
 
 The server does not delete a preexisting lock, grant a player session operator privileges, directly manipulate market/history, or move ISK/items outside the existing native settlement writer.
 
-## CI
+## Local/manual verification (no GitHub Actions)
 
-.github/workflows/coop-native-economy-gate.yml runs on PRs to main, pushes to main and the COOP-059 branch, plus manual workflow_dispatch.
-Node 22 gate verifies real node:sqlite, then executes Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests including real loopback HMAC/nonce/recovery tests.
-Rust gate checks out pinned gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f in a disposable directory, applies native Rust overlays, executes cargo test --locked --all-targets and verifies reverse-patch diffs.
+The repository's binding `AGENTS.md` policy prohibits GitHub Actions and
+remote CI. The originally proposed workflow was deliberately removed before
+merge. **No CI runs or green checks are claimed.**
 
-Acceptance for closing CI: BOTH Node/SQLite and Rust jobs green on the exact final merged main SHA (not an ancestor).
-Real two-client gameplay, physical market settlement and process crash/restart remain separate disposable-world E2E gates and must not be claimed from code tests.
+1. On Node.js 22+ / PowerShell 7, in a disposable checkout:
+   `./scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests`.
+   This includes the localhost HMAC/replay/recovery tests and real node:sqlite
+   source-based tests. Record the exact project SHA and PASS/FAIL output.
+2. On a separate clean pinned checkout of
+   `gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`,
+   apply native Rust overlays using the existing repo scripts in order:
+   `coop-rust-npc-pending-patch.cjs`,
+   `coop-rust-npc-settlement-patch.cjs`,
+   `coop-rust-npc-partial-patch.cjs`,
+   `coop-rust-npc-corp-buy-patch.cjs`.
+   Run `cargo test --locked --all-targets` from
+   `Code/externalservices/market-server`. Remove overlays in reverse order
+   and confirm the pinned source returns byte-identically. Never run these
+   patch commands against the live upstream checkout.
+3. Verify the reversible Node overlay with a pinned disposable CodePath and
+   run a separate two-client physical/financial E2E on an **isolated copy**
+   before enabling any finance or operator feature flag.
 
-All flags remain OFF in permanent gameplay and the protected evejs-data volume is untouched.
+The Node/SQLite and Rust commands are **NOT_RUN** for the exact integrated
+main revision unless a local operator supplies results. Actual two-client
+gameplay, wallet settlement and process crash/restart remain distinct acceptance
+gates; do not infer PASS from code review or from prior SHAs.
+
+All flags remain OFF by default. Do not modify the protected `evejs-data`
+volume or expose the localhost recovery interface through Docker/VPN ports.
