@@ -196,10 +196,15 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    const final=await market.finalizeOnce({claimKey:request.claimKey,
     orderID:request.orderID,buyerCorpID:request.buyerCorpID,fillID:result.fillID});
    if(final?.state!=="filled"||final.fill_phase!=="finalized"||
+      final.history_recorded!==true||
+      typeof final.history_day!=="string"||
+      !/^\\d{4}-\\d{2}-\\d{2}$/.test(final.history_day)||
       Number(final.fill_id)!==result.fillID||Number(final.vol_remaining)!==0)
     throw Error("NPC_CORP_BUY_RUST_FINALIZE_UNCERTAIN");
    const observed=await market.inspectClaim({claimKey:request.claimKey});
    if(observed?.state!=="filled"||observed.fill_phase!=="finalized"||
+      observed.history_recorded!==true||
+      observed.history_day!==final.history_day||
       Number(observed.fill_id)!==result.fillID||Number(observed.vol_remaining)!==0)
     throw Error("NPC_CORP_BUY_RUST_INSPECT_UNCERTAIN");
    return {...result,status:"NPC_PURCHASED_PLAYER_GOODS"};
