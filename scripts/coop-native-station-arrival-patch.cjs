@@ -28,6 +28,19 @@ function patch(source,file,remove=false){
  const loadedOld='    if (fleetRecord.originAnchor && fleetRecord.originAnchor.position) {';
  const loadedNew='    if (process.env.EVEJS_COOP_NPC_STATION_DELIVERY === "1") {'+eol+
  '      require("../../space/coopNativeStationArrival").routeFromHaul(scene, fleetRecord, npcService.runtime, now, ingressMs);'+eol+
+ '      // A station trip is a PHYSICAL trip. Falling straight through to the'+eol+
+ '      // native return-home transition made the fleet enter "haulereturn" with'+eol+
+ '      // no active trip, where checkReturn could only report ROUTE_NOT_STARTED'+eol+
+ '      // forever: the ore was never delivered and the fleet never mined again.'+eol+
+ '      const settled = require("../../space/coopNativeStationArrival").checkReturn(scene, fleetRecord, now);'+eol+
+ '      const delivered = settled.terminal === true && (settled.status === "DELIVERED" || settled.status === "NO_CARGO");'+eol+
+ '      if (!delivered) { fleetRecord.nextThinkAtMs = now + 1000; return; }'+eol+
+ '      require("../../space/coopRuntimeProbe").observe("living-native-haul-delivered", null, { spaceState: { systemID: scene.systemID } }, { fleetID: toInt(fleetRecord.fleetID, 0), status: String((delivered && delivered.status) || ""), stationID: toInt(delivered && delivered.stationID, 0) });'+eol+
+ '      fleetRecord.haulerNextArrivalAtMs = now + getHaulerRepeatDelayMs();'+eol+
+ '      fleetRecord.state = "mining";'+eol+
+ '      fleetRecord.haulerReturnAtMs = 0;'+eol+
+ '      fleetRecord.nextThinkAtMs = now + 1000;'+eol+
+ '      return;'+eol+
  '    } else if (fleetRecord.originAnchor && fleetRecord.originAnchor.position) {';
  text=text.slice(0,loadedA)+once(text.slice(loadedA,loadedB),loadedOld,loadedNew)+text.slice(loadedB);
  const returnA=text.indexOf('  if (fleetRecord.state === "haulereturn") {');

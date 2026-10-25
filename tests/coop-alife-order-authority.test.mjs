@@ -36,7 +36,7 @@ test("every native NPC order-dependent director is gated by the same master help
   "function advanceNativeWreckRecovery(){",
   "function advanceNativeWreckCustody(){",
   "function advanceNativeLootStationDelivery(){",
-  "function advanceNativeAmmoSupply(){"
+  "function advanceNativeAmmoSupply({"
  ];
  for(const guard of guardPositions){
   const at=source.indexOf(guard);

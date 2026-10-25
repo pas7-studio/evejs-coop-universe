@@ -57,5 +57,10 @@ test("accepted physical warp order is never reported as an ISK or item settlemen
 });
 test("upstream reversible overlay installs the bridge exactly once",()=>{
  assert.equal((overlay.match(/"coopAlifeNativeResupplyBridge"/g)||[]).length,1);
- assert.match(overlay,/"coopAlifeNews","coopAlifeNativeResupplyBridge","coopCivilianOrders"/);
+ // Position is asserted against the real module list, not a neighbour pair:
+ // ALIFE-043 legitimately inserted station authority between News and Civilian.
+ const list=JSON.parse("["+(overlay.match(/const names=\[([\s\S]*?)\];/)||[,""])[1]+"]");
+ const alife=list.filter(name=>name.startsWith("coopAlife"));
+ assert.ok(alife.includes("coopAlifeNativeResupplyBridge"),"bridge must deploy with the ALIFE block");
+ assert.deepEqual(alife,[...alife].sort(),"the ALIFE block stays alphabetical");
 });
