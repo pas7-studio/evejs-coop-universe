@@ -11,6 +11,8 @@ $node=(Get-Command node -ErrorAction Stop).Source
 $tests=@(
  "tests/coop-native-haul-transfer-atomic.test.mjs",
  "tests/coop-native-haul-transfer-sqlite.test.mjs",
+ "tests/coop-gamestore-atomic.test.mjs",
+ "tests/coop-gamestore-atomic-patch.test.mjs",
  "tests/coop-native-haul-atomic-routing.test.mjs",
  "tests/coop-native-hauler-persistence.test.mjs",
  "tests/coop-native-mining-fleet-durable.test.mjs",
