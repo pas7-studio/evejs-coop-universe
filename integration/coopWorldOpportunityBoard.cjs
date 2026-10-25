@@ -401,7 +401,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   }
   if(op==="rescue"){
    const action=String(tokens[0]||"").toLowerCase();
-   if(["offer","accept","claim"].includes(action)){
+   if(["offer","accept","claim","cancel"].includes(action)){
     const result=require("./coopRescueNativeGame")
      .runGame(session,action,tokens[1]);
     const message=result.status==="READY"?
@@ -415,6 +415,8 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      result.status==="RESCUE_NATIVE_PAID"?
       "[Co-op Rescue] Native escrow PAID: "+result.perPilotISK+
       " ISK for each verified pilot.":
+     ["RESCUE_NATIVE_RIVAL_REFUNDED","RESCUE_ALREADY_REFUNDED"].includes(result.status)?
+      "[Co-op Rescue] Rival NPC took verified original cargo. Original NPC corporation recovered its reserved "+result.amountISK+" ISK; no pilot reward.":
      "[Co-op Rescue] "+result.status;
     return {status:result.status,message};
    }
@@ -480,7 +482,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      ", find the actual NPC via overview, join a real fleet manually. No automatic warp or ISK award.":
      "[Co-op Events] "+r.status};
   }
-  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events tactic <id> hold|continue|retreat | /events rescue <id> | /events rescue offer|accept|claim <id> | /events rescue deliver <manifest-key> <itemID> | /events history | /events watch local|all|off"};
+  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events tactic <id> hold|continue|retreat | /events rescue <id> | /events rescue offer|accept|claim|cancel <id> | /events rescue deliver <manifest-key> <itemID> | /events history | /events watch local|all|off"};
  }
  return {publish,nativeRaid,nativeConvoy,nativeConvoyPreparing,nativePreparingDeparted,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
