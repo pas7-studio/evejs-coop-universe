@@ -9,7 +9,23 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
  let state={version:1,links:{}};
  try{const raw=JSON.parse(fs.readFileSync(file,"utf8"));if(raw?.version!==1||!raw.links||typeof raw.links!=="object")throw Error("invalid registry");state=raw;}
  catch(err){if(err.code!=="ENOENT")throw err;}
- const persist=()=>{fs.mkdirSync(path.dirname(file),{recursive:true});const tmp=file+".tmp-"+process.pid;fs.writeFileSync(tmp,JSON.stringify(state));fs.renameSync(tmp,file);};
+ // Native transfers depend on this JSON identity surviving a process crash.
+ // This is still a separate durable owner from SQLite, hence transfer fences.
+ let nonce=0;
+ const persist=()=>{
+  const dir=path.dirname(file);
+  fs.mkdirSync(dir,{recursive:true});
+  const tmp=file+".tmp-"+process.pid+"-"+(++nonce);
+  let fd=null;
+  try{
+   fd=fs.openSync(tmp,"wx",0o600);
+   fs.writeFileSync(fd,JSON.stringify(state));fs.fsyncSync(fd);
+   fs.closeSync(fd);fd=null;
+   fs.renameSync(tmp,file);
+   const dirfd=fs.openSync(dir,"r");
+   try{fs.fsyncSync(dirfd);}finally{fs.closeSync(dirfd);}
+  }finally{if(fd!==null)fs.closeSync(fd);}
+ };
  function get(id){
   const e=state.links[id];
   if(!e)return null;
