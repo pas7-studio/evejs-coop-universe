@@ -148,14 +148,17 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED");}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
   }
+  let preparingNoticeStatus="NOT_REQUIRED";
   if(escortEnabled){
    delete fleet.coopEscortWarpOutcomeUncertain;
    if(preparingEventID){
-    try{require("./coopWorldOpportunityBoard").noteNativePreparingDeparted(
-     scene,fleet,preparingEventID,result)}
-    catch(error){console.warn("[CoopPreDeparture] close",String(error?.message||error).slice(0,120))}
+    let close;try{close=require("./coopWorldOpportunityBoard")
+     .noteNativePreparingDeparted(scene,fleet,preparingEventID,result)}
+    catch{close={status:"PREPARING_DEPARTURE_WRITE_UNCERTAIN"}}
+    preparingNoticeStatus=close?.status||"PREPARING_DEPARTURE_WRITE_UNCERTAIN";
+    if(preparingNoticeStatus==="NATIVE_PREPARING_EVENT_CLOSED")
+     delete fleet.coopEscortPredepartureEventID;
    }
-   delete fleet.coopEscortPredepartureEventID;
   }
   probe.observe("living-npc-station-warp-requested",null,{spaceState:{systemID}},
    {fleetID,stationID:destination.stationID,haulers:ships.length});
@@ -165,13 +168,25 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     scene,fleet,{status:"EN_ROUTE",stationID:destination.stationID})}
    catch(error){console.warn("[CoopOpportunityBoard] convoy",String(error?.message||error).slice(0,120))}
   }
-  return {status:"EN_ROUTE",terminal:false,stationID:destination.stationID};
+  return {status:"EN_ROUTE",terminal:false,stationID:destination.stationID,
+   ...(escortEnabled?{predepartureNoticeStatus:preparingNoticeStatus}:{})};
  }
  function tick(scene,fleet,now=clock()){
   const trip=fleet?.coopStationArrival;
   if(!trip)return pause("ROUTE_NOT_STARTED");
   if(Number(scene?.systemID)!==trip.systemID||Number(fleet?.fleetID)!==trip.fleetID)
    return pause("FLEET_MISMATCH");
+  // A warp may have succeeded while the informational notice fsync ACK
+  // failed. Retry ONLY closing the notice; never warp or debit again.
+  if(fleet?.coopEscortPredepartureEventID&&
+    process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
+   try{const closed=require("./coopWorldOpportunityBoard")
+    .noteNativePreparingDeparted(scene,fleet,
+     fleet.coopEscortPredepartureEventID,trip);
+    if(closed?.status==="NATIVE_PREPARING_EVENT_CLOSED")
+     delete fleet.coopEscortPredepartureEventID;
+   }catch{/* informational repair remains pending, cargo route unaffected */}
+  }
   if(now-trip.startedAt>DEADLINE_MS)return pause("ARRIVAL_TIMED_OUT_REPAIR_REQUIRED");
   const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
   if(!point||point.corporationID!==trip.corporationID)return pause("STATION_IDENTITY_CHANGED");
