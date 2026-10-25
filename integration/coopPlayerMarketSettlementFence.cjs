@@ -14,7 +14,8 @@ const STATES=["PREPARED","RUST_ACK","SETTLED"];
 const safeFile=file=>typeof file==="string"&&path.isAbsolute(file)&&
  file!==path.parse(file).root&&
  !/(?:^|[\\/])(?:tmp|temp)(?:[\\/]|$)/i.test(file);
-function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={}){
+function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now(),
+ platform=process.platform}={}){
  if(!safeFile(file)||!storage||!readNative||
   ["mkdirSync","openSync","writeSync","fsyncSync","closeSync","unlinkSync",
    "readFileSync"].some(x=>typeof storage[x]!=="function")||
@@ -22,6 +23,17 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
   throw Error("P2P_PERSISTENT_NATIVE_SETTLEMENT_BINDINGS_REQUIRED");
  let poisoned=false;
  const lock=file+".lock";
+ const reject=msg=>{const e=Error(msg);e.coopExpectedRefusal=true;throw e};
+ // Windows does not reliably support fsync() on directories. Require an
+ // independently pre-created persistent journal so its directory entry is
+ // not first allocated by a settlement that could be interrupted.
+ if(platform==="win32"){
+  try{
+   const existing=storage.readFileSync(file,"utf8");
+   if(typeof existing!=="string"||(existing&&!existing.endsWith("\n")))
+    throw Error("P2P_WIN32_JOURNAL_NOT_VALID");
+  }catch(e){throw Error("P2P_WIN32_PRECREATED_JOURNAL_REQUIRED")}
+ }
  function records(){
   let body;
   try{body=storage.readFileSync(file,"utf8")}
@@ -70,8 +82,10 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
     throw Error("P2P_SETTLEMENT_SHORT_JOURNAL_WRITE");
    storage.fsyncSync(fd);
   }finally{storage.closeSync(fd)}
-  const directory=storage.openSync(dir,"r");
-  try{storage.fsyncSync(directory)}finally{storage.closeSync(directory)}
+  if(platform!=="win32"){
+   const directory=storage.openSync(dir,"r");
+   try{storage.fsyncSync(directory)}finally{storage.closeSync(directory)}
+  }
  }
  function withLock(fn){
   if(poisoned)throw Error("P2P_SETTLEMENT_PROCESS_POISONED");
@@ -87,7 +101,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    poisoned=true;throw Error("P2P_SETTLEMENT_LOCK_UNAVAILABLE");
   }
   try{return fn()}
-  catch(e){poisoned=true;throw e}
+  catch(e){if(!e?.coopExpectedRefusal)poisoned=true;throw e}
   finally{try{storage.unlinkSync(lock)}catch{poisoned=true}}
  }
  function snapshot(proof){
@@ -113,7 +127,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    if(!positiveID(String(orderID)))throw Error("P2P_SETTLEMENT_ORDER_ID_INVALID");
    const row=records().get(String(orderID));
    if(row&&row.phase!=="SETTLED")
-    throw Error("P2P_SETTLEMENT_MANUAL_RECONCILIATION_REQUIRED");
+    reject("P2P_SETTLEMENT_MANUAL_RECONCILIATION_REQUIRED");
    return true;
   });
  }
@@ -122,7 +136,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    if(!natural(stationID))throw Error("P2P_SETTLEMENT_STATION_INVALID");
    for(const row of records().values())
     if(row.phase!=="SETTLED"&&row.proof.stationID===stationID)
-     throw Error("P2P_SETTLEMENT_STATION_HAS_UNRECONCILED_FILLS");
+     reject("P2P_SETTLEMENT_STATION_HAS_UNRECONCILED_FILLS");
    return true;
   });
  }
@@ -136,7 +150,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    const existing=records(),prev=existing.get(proof.orderID);
    if(prev&&(prev.phase!=="SETTLED"||
       prev.proof.volumeAfter!==proof.volumeBefore))
-    throw Error("P2P_SETTLEMENT_EXISTING_FILL_UNRECONCILED");
+    reject("P2P_SETTLEMENT_EXISTING_FILL_UNRECONCILED");
    const before=snapshot(proof);
    // Prevent overlapping wallet/inventory deltas for either participating
    // character. This is conservative but avoids false reconciliation.
@@ -144,7 +158,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
     if(row.phase==="SETTLED")continue;
     if([row.before.buyerID,row.before.sellerID].includes(before.buyerID)||
        [row.before.buyerID,row.before.sellerID].includes(before.sellerID))
-     throw Error("P2P_SETTLEMENT_PARTICIPANT_IN_FLIGHT");
+     reject("P2P_SETTLEMENT_PARTICIPANT_IN_FLIGHT");
    }
    const cycle=prev?prev.cycle+1:1;
    const ev={version:1,orderID:proof.orderID,cycle,phase:"PREPARED",time:clock(),
