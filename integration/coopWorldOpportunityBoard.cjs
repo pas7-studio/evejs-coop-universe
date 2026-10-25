@@ -242,6 +242,16 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   return {status:"INTEREST_RECORDED",eventID,systemID:r.event.systemID,
    note:"Interest only. Travel and join an actual EVE fleet manually."};
  }
+ function readInterest(characterID,eventID){
+  if(!POS(characterID)||!KEY(eventID))return {status:"INVALID_INTEREST_IDENTITY"};
+  const d=load(interestFile(eventID,characterID));
+  if(d.status!=="READY")return {status:d.status};
+  const i=d.value;
+  if(i?.v!==1||i.characterID!==characterID||i.eventID!==eventID||
+   i.phase!=="INTERESTED"||!POS(i.at))
+   return {status:"INTEREST_CORRUPT"};
+  return {status:"INTEREST_RECORDED",eventID,characterID};
+ }
  function handleChat({session,command,argumentText=""}={}){
   if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1")
    return {status:"DISABLED",message:"[Co-op Events] Board is disabled on this server."};
@@ -275,6 +285,23 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     "\nTo participate voluntarily: /events interest "+e.id+
     " then fly to the actual location and use native EVE fleet/warp."};
   }
+  if(op==="history"||op==="reputation"){
+   return require("./coopEscortReputation").listNativeHistory(session);
+  }
+  if(op==="volunteer"){
+   if(process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1")
+    return {status:"DISABLED",message:"[Co-op Events] Verified two-pilot volunteer mode is disabled."};
+   const r=require("./coopEscortVolunteers").nativeVoluntaryOptIn(session,tokens[0],{
+    readEvent,readInterest
+   });
+   const message=r.status==="VERIFIED_NATIVE_DUO_VOLUNTEER"?
+    "[Co-op Events] Both real EVE fleet pilots volunteered for "+r.eventID+
+    ". This is not a funded contract, warp command or reward.":
+    r.status==="WAITING_FOR_OTHER_VOLUNTEER"?
+    "[Co-op Events] Voluntary interest confirmed. The second pilot must run /events interest and /events volunteer for the same event.":
+    "[Co-op Events] "+r.status;
+   return {status:r.status,message};
+  }
   if(op==="interest"){
    const r=interest(id,tokens[0]);return {status:r.status,
     message:r.status==="INTEREST_RECORDED"?
@@ -282,9 +309,9 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      ", find the actual NPC via overview, join a real fleet manually. No automatic warp or ISK award.":
      "[Co-op Events] "+r.status};
   }
-  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events watch local|all|off"};
+  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events history | /events watch local|all|off"};
  }
- return {publish,nativeRaid,nativeConvoy,nativeConvoyOutcome,readEvent,list,watch,setWatch,interest,alert,handleChat};
+ return {publish,nativeRaid,nativeConvoy,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
 let singleton;
 function instance(){
