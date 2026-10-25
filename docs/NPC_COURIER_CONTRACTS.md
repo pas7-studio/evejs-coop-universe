@@ -390,3 +390,26 @@ the ordering on a live scene: that a courier ship created from a hangar item is
 reachable by `getShipEntityForCharacter`, that the warp lands close enough for
 `dockSession`, and that the sealed package item follows the ship into the
 destination hangar.
+
+### Static preflight result on the live image (2026-10-26)
+
+`scripts/probe-courier-capabilities.cjs` loads the real upstream modules inside
+the running container (read-only) and reports what the driver requires:
+
+```
+PRESENT  transitions.undockSession
+PRESENT  transitions.dockSession
+PRESENT  runtime.warpToPoint
+PREFLIGHT_STATIC_READY
+```
+
+This corrected the driver design: there is **no** `getShipEntityForCharacter`
+in `runtime` (it was my invention), so the entity ID now comes from the native
+undock result itself (`undockSession` returns `{success:true,data:{ship}}`), and
+the warp requires that `flight.entityID` was recorded by the undock step. The
+preflight is now satisfiable with stock capabilities only.
+
+Still unproven (dynamic, needs a live run with the owner watching): that the
+undocked ship is where the warp expects it, that `dockSession` accepts it at the
+destination, and that the sealed package item follows it into the destination
+hangar.

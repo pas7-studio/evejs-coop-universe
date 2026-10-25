@@ -14,12 +14,11 @@ function ctx(overrides={}){
   calls,
   character:{characterID:140000100,accountId:901,corporationID:98000001},
   transitions:{
-   undockSession:(session,options)=>{calls.push(['undock',session.characterID,session.locationid]);return {success:true,shipID:9988400100000};},
+   undockSession:(session,options)=>{calls.push(['undock',session.characterID,session.locationid]);return {success:true,data:{ship:{entityID:980000000999}}};},
    dockSession:(session,stationID)=>{calls.push(['dock',session.characterID,stationID]);return {success:true};},
   },
   space:{
    warpToPoint:(entityID,pos,options)=>{calls.push(['warp',entityID,pos.x,options.ingressDurationMs]);return true;},
-   getShipEntityForCharacter:(characterID)=>{calls.push(['lookup',characterID]);return 980000000999;},
   },
  },overrides);
 }
@@ -37,7 +36,7 @@ test('preflight lists exactly what a half-wired server is missing',()=>{
  assert.equal(preflight(ctx()).status,'READY');
  const missing=preflight({transitions:{},space:{}});
  assert.equal(missing.status,'NOT_READY');
- assert.deepEqual(missing.missing.sort(),['space.getShipEntityForCharacter','space.warpToPoint','transitions.dockSession','transitions.undockSession']);
+ assert.deepEqual(missing.missing.sort(),['space.warpToPoint','transitions.dockSession','transitions.undockSession']);
 });
 
 test('undock calls the native transition with the courier station and never retries',()=>{
@@ -58,10 +57,10 @@ test('a refused undock is reported as FAILED, not retried',()=>{
 test('warp needs a real station position and a ship actually in space',()=>{
  const runtime=ctx();
  assert.equal(warp(runtime,flight,null).status,'REFUSED');
- assert.equal(warp(runtime,flight,position).status,'OK');
+ assert.equal(warp(runtime,flight,position).status,'FAILED');
+ assert.equal(warp(runtime,{...flight,entityID:980000000999},position).status,'OK');
  assert.deepEqual(runtime.calls.at(-1).slice(0,3),['warp',980000000999,1]);
- const noShip=ctx({space:{warpToPoint:()=>true,getShipEntityForCharacter:()=>0}});
- assert.equal(warp(noShip,flight,position).status,'FAILED');
+
 });
 
 test('dock uses the destination station and reports failure honestly',()=>{
@@ -75,7 +74,7 @@ test('dock uses the destination station and reports failure honestly',()=>{
 test('runStep executes exactly one step of the flight',()=>{
  const runtime=ctx();
  assert.equal(runStep(runtime,flight,position).status,'OK');
- assert.equal(runStep(runtime,{...flight,step:'warp'},position).status,'OK');
+ assert.equal(runStep(runtime,{...flight,step:'warp',entityID:980000000999},position).status,'OK');
  assert.equal(runStep(runtime,{...flight,step:'dock'},position).status,'OK');
  assert.equal(runStep(runtime,{...flight,step:'done'},position).status,'DONE');
  assert.equal(runStep(runtime,{...flight,step:'nope'},position).status,'REFUSED');

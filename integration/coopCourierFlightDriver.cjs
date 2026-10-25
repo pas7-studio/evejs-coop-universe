@@ -41,7 +41,6 @@ function preflight(ctx) {
   if (!ctx.transitions || typeof ctx.transitions.undockSession !== "function") missing.push("transitions.undockSession");
   if (!ctx.transitions || typeof ctx.transitions.dockSession !== "function") missing.push("transitions.dockSession");
   if (!ctx.space || typeof ctx.space.warpToPoint !== "function") missing.push("space.warpToPoint");
-  if (!ctx.space || typeof ctx.space.getShipEntityForCharacter !== "function") missing.push("space.getShipEntityForCharacter");
   return missing.length ? { status: "NOT_READY", missing } : { status: "READY" };
 }
 
@@ -61,7 +60,11 @@ function undock(ctx, flight) {
     return result(AMBIGUOUS, { reason: String(error && error.message || error) });
   }
   if (outcome && outcome.success === true) {
-    return result(OK, { shipID: Number(outcome.shipID) || 0 });
+    // The native undock returns the created ship record; its entity ID is what
+    // the warp needs. Verified against transitions.js (data.ship).
+    const ship = outcome.data && outcome.data.ship || {};
+    const entityID = Number(ship.entityID || ship.itemID || ship.shipID) || 0;
+    return result(OK, { shipID: entityID, entityID });
   }
   return result(FAILED, { reason: String(outcome && outcome.errorMsg || "undock failed") });
 }
@@ -74,8 +77,8 @@ function warp(ctx, flight, stationPosition) {
   if (!stationPosition || !Number.isFinite(Number(stationPosition.x))) {
     return result("REFUSED", { reason: "destination station position is required" });
   }
-  const entityID = ctx.space.getShipEntityForCharacter(flight.characterID);
-  if (!(Number(entityID) > 0)) return result(FAILED, { reason: "courier ship is not in space" });
+  const entityID = Number(flight.entityID) || 0;
+  if (!(entityID > 0)) return result(FAILED, { reason: "courier ship is not in space (no entity from undock)" });
   try {
     const warped = ctx.space.warpToPoint(entityID, stationPosition, {
       forceImmediateStart: true,
