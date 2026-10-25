@@ -47,7 +47,8 @@ function persist(file, state) {
   }
 }
 function createStationOreSettlement({file, depot, inventory, getStation,
-  isWarehouseOwner, isOreType, clock = () => Date.now()} = {}) {
+  isWarehouseOwner, isOreType, flushNativeItems = null,
+  clock = () => Date.now()} = {}) {
   if (typeof file !== "string" || !file || !depot ||
       typeof depot.snapshot !== "function" || typeof depot.audit !== "function" ||
       !inventory || typeof inventory.grantItemToOwnerLocation !== "function" ||
@@ -129,14 +130,18 @@ function createStationOreSettlement({file, depot, inventory, getStation,
       }
       const strict = process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF === "1";
       const marker = "coop-warehouse:v1:cargo:" + ticket.cargoID;
+      // COOP-030 already patches the genuine ItemStore to create exactly
+      // one isolated cargo-marked stack; unlike the stock grant it never merges.
+      if (strict && (typeof inventory.grantUniqueNpcDepotItem !== "function" ||
+          typeof inventory.findWarehouseItem !== "function" ||
+          typeof flushNativeItems !== "function"))
+        return {status: "WAREHOUSE_ORIGINAL_DURABLE_HOOKS_REQUIRED"};
       let before;
       try {
         before = stock(ticket);
         if (strict) {
-          const originals = inventory.listContainerItems(ticket.ownerID,
-            ticket.stationID, inventory.ITEM_FLAGS.HANGAR);
-          if (!Array.isArray(originals) || originals.some(x => x?.customInfo === marker))
-            return {status: "WAREHOUSE_ORIGINAL_SOURCE_ALREADY_PRESENT"};
+          const found = inventory.findWarehouseItem({cargoID: ticket.cargoID});
+          if (found) return {status: "WAREHOUSE_ORIGINAL_SOURCE_ALREADY_PRESENT"};
         }
       } catch (_error) { return {status: "STATION_STOCK_UNAVAILABLE"}; }
       if (!Number.isSafeInteger(before + ticket.quantity))
