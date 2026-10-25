@@ -9,26 +9,36 @@ function snapshot(scene){
  // A reconnect can briefly leave a stale old session in EveJS scene.
  // Never count disconnected/not-yet-Ballpark-ready ghost sessions as
  // a second actual co-op pilot or use their stale visibility cache.
- const pilots=[...scene.sessions.values()].filter(s=>
+ const activeSessions=[...scene.sessions.values()].filter(s=>
   positive(s?.characterID)&&positive(s?._space?.shipID)&&
-  positive(s?._space?.systemID)===systemID&&
-  s?._space?.initialStateSent===true&&
-  s?.socket?.destroyed!==true).map(s=>{
+  s?._space?.initialStateSent===true&&s?.socket?.destroyed!==true);
+ const pilots=activeSessions.filter(s=>
+  positive(s?._space?.systemID)===systemID).map(s=>{
    const shipID=positive(s._space.shipID);
    const ship=scene.getEntityByID?.(shipID);
+   const physicalOwner=positive(ship?.pilotCharacterID??ship?.characterID);
    return {
     characterID:positive(s.characterID),shipID,
-    shipExists:ship?.kind==="ship"&&Number(ship.itemID)===shipID,
+    shipExists:ship?.kind==="ship"&&Number(ship.itemID)===shipID&&
+     (!physicalOwner||physicalOwner===positive(s.characterID)),
     visibleEntityIDs:s._space.visibleDynamicEntityIDs instanceof Set?
      s._space.visibleDynamicEntityIDs:null
    };
   });
- const byIdentity=new Map();
+ const byIdentity=new Map(),byShip=new Map();
  for(const p of pilots){
-  if(byIdentity.has(p.characterID))
+  if(byIdentity.has(p.characterID)||activeSessions.filter(s=>
+   positive(s.characterID)===p.characterID).length!==1)
    return {status:"DUPLICATE_ACTIVE_CHARACTER_SESSION",
     pilots:[],mutualVisibility:false};
   byIdentity.set(p.characterID,p);
+  // Two characters cannot establish co-op by claiming one physical hull.
+  // Even an active wrong-system session in this scene makes custody ambiguous.
+  if(byShip.has(p.shipID)||activeSessions.filter(s=>
+   positive(s._space?.shipID)===p.shipID).length!==1)
+   return {status:"DUPLICATE_ACTIVE_SHIP_OWNER",
+    pilots:[],mutualVisibility:false};
+  byShip.set(p.shipID,p.characterID);
  }
  const rows=[...byIdentity.values()].map(p=>({
   characterID:p.characterID,shipID:p.shipID,shipExists:p.shipExists,
