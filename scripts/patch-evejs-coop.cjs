@@ -160,7 +160,12 @@ function transform(source,spec,remove){
   text=remove?text.replace(slimBroadcastNew,slimBroadcastOld):
    text.replace(slimBroadcastOld,slimBroadcastNew);
  }
- if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+ // The station-arrival layer rewrites the haulereturn block below, so it is
+ // stripped first whenever it is present. Without this, re-running install on
+ // an already patched checkout fails with "Unexpected EveJS NPC haul arrival
+ // location" instead of being a no-op (it is re-applied further down).
+ if(spec.file.endsWith("miningNpcOperations.js")&&
+    text.includes('require("../../space/coopNativeStationArrival")'))
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,true);
  if(spec.file.endsWith("miningNpcOperations.js")){
   // Replace the vanilla "miner ore disappears during hauling" path with
