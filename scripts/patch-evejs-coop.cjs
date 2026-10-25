@@ -55,7 +55,29 @@ names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 names.push(
  "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
 );
+// Chats 25/32/39: original native source hooks; all feature flags stay OFF.
+const ORE_PATCH_PATHS=new Set([
+ "server/src/services/inventory/itemStore.js",
+ "server/src/services/reprocessing/reprocessingRuntime.js",
+ "server/src/services/station/reprocessingService.js"
+]);
+const STRUCTURE_PATCH_PATHS=new Set([
+ "server/src/services/corporation/allianceRegistryRuntime.js",
+ "server/src/services/sovereignty/sovPlayerDeployment.js"
+]);
+const SOCIAL_PATCH_PATHS=new Set([
+ "server/src/_secondary/chat/chatRuntime.js",
+ "server/src/_secondary/chat/chatStore.js",
+ "server/src/services/mail/mailState.js"
+]);
 const specs=[
+ {file:"server/src/services/reprocessing/reprocessingRuntime.js",patches:[]},
+ {file:"server/src/services/station/reprocessingService.js",patches:[]},
+ {file:"server/src/services/corporation/allianceRegistryRuntime.js",patches:[]},
+ {file:"server/src/services/sovereignty/sovPlayerDeployment.js",patches:[]},
+ {file:"server/src/_secondary/chat/chatRuntime.js",patches:[]},
+ {file:"server/src/_secondary/chat/chatStore.js",patches:[]},
+ {file:"server/src/services/mail/mailState.js",patches:[]},
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
  {file:"server/src/services/npe/nesIntroService.js",patches:[]},
@@ -216,6 +238,15 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ // Undo late Chat 25/32/39 hooks BEFORE the existing itemStore and
+ // other native transforms so ownership/export adjacency remains unchanged.
+ if(remove){
+  for(const [helper,targets] of [
+   ["./coop-social-native-guards-patch.cjs",SOCIAL_PATCH_PATHS],
+   ["./coop-structure-alliance-guard-patch.cjs",STRUCTURE_PATCH_PATHS],
+   ["./coop-player-ore-atomic-patch.cjs",ORE_PATCH_PATHS]
+  ])if(targets.has(spec.file))text=require(helper).patch(text,spec.file,true);
+ }
  if(spec.file==="server/src/services/exploration/wormholes/wormholeMgrService.js")
   text=require("./coop-wormhole-jump-fence-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/space/transitions.js")
@@ -456,6 +487,14 @@ function transform(source,spec,remove){
   text=require("./coop-npc-market-fills-table-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/character/characterState.js"||spec.file==="server/src/services/corporation/corporationRuntimeState.js")
   text=require("./coop-npc-account-cache-patch.cjs").patch(text,spec.file,remove);
+ // Apply opt-in hooks LAST, inside the single transactional installer.
+ if(!remove){
+  for(const [helper,targets] of [
+   ["./coop-player-ore-atomic-patch.cjs",ORE_PATCH_PATHS],
+   ["./coop-structure-alliance-guard-patch.cjs",STRUCTURE_PATCH_PATHS],
+   ["./coop-social-native-guards-patch.cjs",SOCIAL_PATCH_PATHS]
+  ])if(targets.has(spec.file))text=require(helper).patch(text,spec.file,false);
+ }
  new vm.Script(text,{filename:spec.file});
  return text;
 }
