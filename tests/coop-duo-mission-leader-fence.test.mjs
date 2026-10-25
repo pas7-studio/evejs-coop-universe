@@ -97,8 +97,10 @@ test("P0 leader's native completion alone never awards peer if followup is inter
  const fresh=readLeaderFence(leader,leaderFenceKey(ticket));
  assert.equal(fresh.previous.state,"PREPARED");
  assert.equal(fs.existsSync(peer),false);
- assert.throws(()=>prepare({...f.opts,leaderFencePath:leader}),
-  /LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION/);
+ // The native leader mission is already absent, so prepare cannot mint a
+ // second ticket; the untouched PREPARED journal still signals ambiguity.
+ assert.equal(prepare({...f.opts,leaderFencePath:leader}).ok,false);
+ assert.equal(readLeaderFence(leader,leaderFenceKey(ticket)).previous.state,"PREPARED");
  assert.deepEqual(f.paid,[101]);
 })));
 test("P0 leader native action failed without removing mission: peer payout remains blocked",()=>flags(()=>withFiles(({leader,peer})=>{
