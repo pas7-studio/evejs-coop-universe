@@ -210,6 +210,66 @@ Then pinned overlay --check/roundtrip, SQLite FULL synchronous restart,
 combat ammo/Rust and 2-client physical battle verification. Keep OFF until
 all these pass; no main merge or production enablement is implied.
 
+## FW-005A — native corporation military treasury (source-only)
+
+This stage introduces `coopWarTreasury.cjs` and
+`coopWarTreasuryNative.cjs`, a real NPC-corporation ISK reservation
+and refund ledger. It is a **budget funding primitive**, NOT yet the
+complete military supply flow.
+
+### Native transactions
+
+- Uses the **existing** `gameStore.coopAtomicNativeRows.transact(["corporationRuntime"])`,
+  which enforces SQLite `BEGIN IMMEDIATE`, `synchronous=FULL` and
+  subsequent native GameStore cache reconciliation.
+- Looks up the exact native corporation row
+  `corporations\\u001f<corporationID>`, its real wallet division `1000`
+  (not a virtual corporation balance), and the authoritative war state
+  in the same SQLite transaction.
+- Requires a real NPC corporation (`corporationState.getCorporationRecord`
+  with `isNPC === true`) mapped by the canonical native SDE faction table
+  to the active war's attacker faction. A player corporation cannot be used.
+- `RESERVE` subtracts an exact positive amount in integer **cents** from
+  the spendable NPC-corporation wallet, enforces a caller-defined minimum
+  remaining wallet reserve, creates an escrow claim under the
+  `coop-faction-war\\u001ftreasury-v1` row and appends a matching internal
+  debit journal/transaction record. Both changes commit atomically.
+- `REFUND` can only restore the exact originally held cents when the
+  native war is ended or the campaign is cancelled, **AND** a trusted
+  injected server-side `authorizeRefund` returns true. The default native
+  adapter denies refunds. Both ledger and native wallet are updated once.
+- Stable event IDs and complete command signatures reject conflicting
+  replays. An uncertain SQLite commit throws; callers must **re-read the
+  committed receipt**, never retry with a new event ID as if no charge
+  happened.
+- Hard caps: 500 reservations, 2,000 processed event IDs and a bounded
+  native-wallet journal, with no automatic expiration or arbitrary refund.
+
+### Flags and constraints
+
+The new gate `EVEJS_COOP_WAR_TREASURY=1` requires both
+`EVEJS_COOP_FACTION_WAR=1` and
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`; **all default OFF**.
+There is no public client/UI endpoint, automatic spending loop or API
+that creates these reservations without a trusted server caller.
+
+**This is not native military supply yet.** The escrow claim represents
+real withheld ISK but does not prove any ammunition, fitted ship, fuel,
+mineral, manufacturing job, market settlement or physical delivery.
+It must NOT be accepted as the sole `START_CAMPAIGN.supply` proof. For
+the latter, additionally implement a native item/cargo custody proof and
+atomic, one-time allocation to the actual war fleet. Campaign logistics
+and real stargate military transfers remain separate.
+
+**Acceptance before any enablement:** run
+`node --test tests/coop-war-treasury.test.mjs
+tests/coop-war-treasury-native.test.mjs`, then original pinned
+GameStore/SQLite FULL durability, native corp-wallet UI/journal entry
+compatibility, crash/commit-unknown replay, and restart reconciliation.
+The internal wallet journal currently uses `entryTypeID: 0`; validate
+the pinned client's display behavior before enabling in-game. The
+existing `evejs-data` volume must remain untouched.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
