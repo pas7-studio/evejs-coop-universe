@@ -1,0 +1,167 @@
+{
+  "schema": "evejs-coop/native-mining-cycle-conservation-e2e/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "featureFlags": [
+    "EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY",
+    "EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION"
+  ],
+  "scenarios": [
+    {
+      "id": "ALIFE06-001",
+      "title": "Real native module depletes exact rock before verified positive cargo ID",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Run strict physical miner on disposable Perimeter belt",
+        "Capture rock before/after, module/cycle ID, native cargo ID and amount"
+      ],
+      "expected": [
+        "Source delta equals normal + wasted; cargo delta equals transferred; both IDs remain original"
+      ],
+      "requiredEvidence": [
+        "native rock states",
+        "module target and cycle",
+        "nativeNpcStore and hull cargo"
+      ]
+    },
+    {
+      "id": "ALIFE06-002",
+      "title": "Asteroid state repo.write returns failure",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Inject gameStore source writer acknowledgement failure",
+        "Allow authentic native mining cycle"
+      ],
+      "expected": [
+        "No native cargo credited; UNCERTAIN journal and operator quarantine"
+      ],
+      "requiredEvidence": [
+        "repo.write result",
+        "journal PREPARED/UNCERTAIN",
+        "native cargo IDs"
+      ]
+    },
+    {
+      "id": "ALIFE06-003",
+      "title": "Crash after source cache mutation before durable disk flush",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Kill disposable server after source write acknowledgement, before flush",
+        "Restart from isolated unchanged disk",
+        "Inspect journal, source and cargo"
+      ],
+      "expected": [
+        "No automatic duplicate; any disagreement quarantined for repair"
+      ],
+      "requiredEvidence": [
+        "disk source before/after",
+        "fsync log",
+        "journal and cargo"
+      ]
+    },
+    {
+      "id": "ALIFE06-004",
+      "title": "Cargo write rejected after valid depletion",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Inject native cargo writer success=false",
+        "Attempt same miner/asteroid cycle twice"
+      ],
+      "expected": [
+        "No second source depletion; source remains quarantined for operator"
+      ],
+      "requiredEvidence": [
+        "ore source before/after",
+        "cargo rows",
+        "journal UNCERTAIN"
+      ]
+    },
+    {
+      "id": "ALIFE06-005",
+      "title": "Cargo commits then throws",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Inject write-then-throw on native cargo",
+        "Restart disposable EveJS and retry miner"
+      ],
+      "expected": [
+        "No replayed cargoID nor second depletion without source-specific review"
+      ],
+      "requiredEvidence": [
+        "cargoID and quantities",
+        "journal state",
+        "source state and restart logs"
+      ]
+    },
+    {
+      "id": "ALIFE06-006",
+      "title": "Two miners competing for same rock",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Run two physical miners with separate modules/cycles",
+        "Inject uncertain debit in one while other attempts mining"
+      ],
+      "expected": [
+        "Unresolved rock is blocked regardless of miner; no overdraw"
+      ],
+      "requiredEvidence": [
+        "per-miner native IDs",
+        "source state",
+        "journal source quarantine"
+      ]
+    },
+    {
+      "id": "ALIFE06-007",
+      "title": "Depleted rock/restart and missing persistent actor",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Mine to last resource unit",
+        "Crash at debit/credit boundaries",
+        "Restart and check rock destruction and NPC identity"
+      ],
+      "expected": [
+        "No rock restoration granting repeat cargo; unresolved identities quarantined"
+      ],
+      "requiredEvidence": [
+        "rock source and removal",
+        "native owner/cargoID",
+        "journal and actor identity"
+      ]
+    },
+    {
+      "id": "ALIFE06-008",
+      "title": "Mine to hauler to real warehouse plus two authorized clients",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Mine real ore under strict flags",
+        "Transfer same native cargoID to actual NPC hauler",
+        "Dock station and settle original warehouse itemStore receipt",
+        "Observe same world with two authorized clients"
+      ],
+      "expected": [
+        "One source debit, one cargoID custody chain, one committed warehouse receipt, no invented ISK"
+      ],
+      "requiredEvidence": [
+        "source and native cargoID",
+        "hauler debit and warehouse receipt",
+        "two client observations"
+      ]
+    }
+  ]
+}

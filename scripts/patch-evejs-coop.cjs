@@ -11,7 +11,10 @@ names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
 names.splice(names.indexOf("coopNpcFireOutcomeWitness")+1,0,"coopEconomyDestination");
 names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
 const specs=[
+ {file:"server/src/services/mining/miningRuntime.js",patches:[]},
+ {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
    {anchor:'  "commandlist",',line:'  "alerts",',after:true},
@@ -294,6 +297,8 @@ function transform(source,spec,remove){
  }
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
+ if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js")
+  text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,remove);
  // ALIFE-05: existing native stock mining writer; store-before-hull commit when opt-in.
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-native-mining-cargo-integrity-patch.cjs").patchMiningCargo(text,remove);
