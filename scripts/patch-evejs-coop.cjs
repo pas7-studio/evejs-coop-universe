@@ -8,10 +8,11 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings","coopAgentDialogue"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings","coopAgentDialogue","coopMarketCatalog"];
 const specs=[
  {file:"server/index.js",patches:[]},
  {file:"server/src/services/machoNet/machoNetService.js",patches:[]},
+ {file:"server/src/services/market/marketProxyService.js",patches:[]},
  {file:"server/src/services/contracts/contractRuntimeState.js",patches:[]},
  {file:"server/src/space/combat/killmailTracker.js",patches:[]},
  {file:"server/src/services/evermarks/lpStoreMgrService.js",patches:[]},
@@ -101,6 +102,8 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file==="server/src/services/market/marketProxyService.js")
+  text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("nativeNpcStore.js")){
   // Persistent IDs must never reuse an ID handed out earlier in the
   // current process for a transient NPC fleet. Both allocation paths
