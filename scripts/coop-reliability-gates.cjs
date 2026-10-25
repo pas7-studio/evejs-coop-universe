@@ -7,6 +7,7 @@ const {summarize: summarizeParty} = require('./coop-party-report.cjs');
 
 const pass = (status, reason, detail = {}) => ({status, reason, ...detail});
 const positive = value => Number.isSafeInteger(Number(value)) && Number(value) > 0;
+const canonicalId = value => /^[1-9][0-9]*$/.test(String(value)) && positive(value);
 const validAt = value => Number.isFinite(Date.parse(value));
 const decimal = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
 const signed = value => typeof value === 'string' && /^-?(0|[1-9][0-9]*)$/.test(value) && value !== '-0';
@@ -67,12 +68,12 @@ function validateSnapshot(snapshot, meta) {
   const normalized = [];
   for (const c of snapshot.characters) {
     const id = String(c.id || ''), ship = String(c.shipId || '');
-    if (!positive(id) || !positive(ship) || !positive(c.systemId) || chars.has(id) || ships.has(ship) || !decimal(c.isk) || !Array.isArray(c.items)) throw Error('Invalid character, ship, wallet or duplicated ownership');
+    if (!canonicalId(id) || !canonicalId(ship) || !canonicalId(c.systemId) || chars.has(id) || ships.has(ship) || !decimal(c.isk) || !Array.isArray(c.items)) throw Error('Invalid character, ship, wallet or duplicated ownership');
     chars.add(id); ships.add(ship);
     const assets = [];
     for (const item of c.items) {
       const itemId = String(item.id || '');
-      if (!positive(itemId) || items.has(itemId) || !positive(item.typeId) || !positive(item.quantity) || !positive(item.locationId)) throw Error('Duplicated, malformed or nonpositive item state');
+      if (!canonicalId(itemId) || items.has(itemId) || !canonicalId(item.typeId) || !positive(item.quantity) || !canonicalId(item.locationId)) throw Error('Duplicated, malformed or nonpositive item state');
       items.add(itemId);
       assets.push({id:itemId, typeId:String(item.typeId), quantity:String(item.quantity), locationId:String(item.locationId)});
     }
@@ -107,14 +108,14 @@ function checkEconomy(ledger, meta) {
     if (!e || typeof e.entryId !== 'string' || !e.entryId || entries.has(e.entryId) || typeof e.txId !== 'string' || !e.txId || typeof e.account !== 'string' || !e.account || !signed(e.delta) || !['transfer','mint','burn'].includes(e.kind))
       return pass('FAIL','Duplicate entry identity, invalid transaction or non-exact monetary delta');
     entries.add(e.entryId);
-    const tx = txs.get(e.txId) || {sum:0n, kind:e.kind, count:0, rewardKey:null};
+    const tx = txs.get(e.txId) || {sum:0n, kind:e.kind, count:0};
     if (tx.kind !== e.kind) return pass('FAIL','Mixed transaction kinds with same transaction ID');
+    if (e.kind === 'mint' && BigInt(e.delta) <= 0n) return pass('FAIL','Mint contains nonpositive ledger entry');
+    if (e.kind === 'burn' && BigInt(e.delta) >= 0n) return pass('FAIL','Burn contains nonnegative ledger entry');
     tx.sum += BigInt(e.delta); tx.count++;
     if (e.kind === 'mint') {
       if (typeof e.rewardKey !== 'string' || !e.rewardKey) return pass('FAIL','Mint has no unique reward/issuance key');
-      if (tx.rewardKey && tx.rewardKey !== e.rewardKey) return pass('FAIL','Transaction reuses ID for different rewards');
-      tx.rewardKey = e.rewardKey;
-      if (rewards.has(e.rewardKey) && rewards.get(e.rewardKey) !== e.txId) return pass('FAIL','Double reward issuance for same key');
+      if (rewards.has(e.rewardKey)) return pass('FAIL','Double reward issuance for same key');
       rewards.set(e.rewardKey,e.txId);
     }
     txs.set(e.txId, tx);
