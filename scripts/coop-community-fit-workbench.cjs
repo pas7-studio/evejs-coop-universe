@@ -6,7 +6,17 @@ const path=require('node:path');
 const {loadSde,buildCatalog,fitHash}=require('./coop-community-fittings.cjs');
 const {parseEft}=require('./coop-community-fit-eft.cjs');
 const API='https://api.eveworkbench.com';
+const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function mapPool(items,limit,fn){
+  const out=new Array(items.length);
+  let cursor=0;
+  const workers=Array.from({length:Math.min(limit,items.length||1)},async()=>{
+    for(;;){const index=cursor++;if(index>=items.length)return;out[index]=await fn(items[index],index);}
+  });
+  await Promise.all(workers);
+  return out;
+}
 function args(argv){
   const opts={};
   for(let i=0;i<argv.length;i++){
@@ -15,9 +25,9 @@ function args(argv){
     if(match[2]===undefined&&(i+1>=argv.length||argv[i+1].startsWith('--')))throw Error(`MISSING_VALUE --${match[1]}`);
     opts[match[1]]=match[2]===undefined?argv[++i]:match[2];
   }
-  for(const k of Object.keys(opts))if(!['sde','out','cache','pages','per-hull','ships','max-fits'].includes(k))throw Error(`BAD_OPTION ${k}`);
+  for(const k of Object.keys(opts))if(!['sde','out','cache','pages','per-hull','ships','max-fits','concurrency','spacing'].includes(k))throw Error(`BAD_OPTION ${k}`);
   for(const k of ['sde','out','cache'])if(!opts[k])throw Error(`REQUIRED --${k}`);
-  for(const [k,def,min,max] of [['pages',50,1,500],['per-hull',5,3,5],['max-fits',2000,1,10000]]){
+  for(const [k,def,min,max] of [['pages',50,1,500],['per-hull',5,3,5],['max-fits',2000,1,10000],['concurrency',3,1,8],['spacing',150,100,3000]]){
     const n=opts[k]===undefined?def:Number(opts[k]);
     if(!Number.isInteger(n)||n<min||n>max)throw Error(`BAD_INTEGER --${k}`);opts[k]=n;
   }
@@ -31,6 +41,7 @@ function selectHulls(sde,names){
   return selected;
 }
 let last=0;
+let spacing=550;
 async function loadJson(url,cacheFile){
   const u=new URL(url);
   if(u.origin!==API||!(/^\/v1\/fits\/public$/.test(u.pathname)||/^\/v1\/fits\/[a-f0-9-]{36}\/eft$/i.test(u.pathname)))throw Error('UNTRUSTED_ENDPOINT');
@@ -39,7 +50,7 @@ async function loadJson(url,cacheFile){
   }
   let data;
   for(let attempt=0;attempt<3;attempt++){
-    await sleep(Math.max(0,550-(Date.now()-last)));last=Date.now();
+    await sleep(Math.max(0,spacing-(Date.now()-last)));last=Date.now();
     const res=await fetch(u,{headers:{'Accept':'application/json','User-Agent':'EveJS-Coop-Community-Fit-Library/1.0 (public research; attribution)'},redirect:'error',signal:AbortSignal.timeout(20000)});
     if(res.status===429||res.status>=500){if(attempt===2)throw Error(`HTTP_${res.status}`);await sleep(1600*(attempt+1));continue;}
     if(!res.ok)throw Error(`HTTP_${res.status}`);
@@ -60,6 +71,7 @@ function validatePublicPage(data){
 async function collect(opts){
   const sde=loadSde(path.resolve(opts.sde));
   const hulls=selectHulls(sde,opts.ships);
+  spacing=opts.spacing;
   const selected=new Set(hulls.map(h=>h.shipTypeID));
   const successes=new Map(), seenSignatures=new Map(), failures=[];
   // Collect several candidates per hull so buildCatalog can pick genuinely different
@@ -70,25 +82,36 @@ async function collect(opts){
     const raw=await loadJson(`${API}/v1/fits/public?page=${page}`,path.join(opts.cache,'pages',`${page}.json`));
     const response=validatePublicPage(raw);pagesRead++;
     if(!response.fits.length)break;
+    const batch=[];
     for(const info of response.fits){
       if(seen>=opts['max-fits'])break;
       const shipID=Number(info?.shipId??info?.ShipId),id=String(info?.id??info?.Id??'');
-      if(!selected.has(shipID)||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))continue;
-      const existing=successes.get(shipID)||[];
-      if(existing.length>=candidateCap)continue;
-      seen++;
+      if(!selected.has(shipID)||!UUID.test(id))continue;
+      if((successes.get(shipID)||[]).length+batch.filter(task=>task.shipID===shipID).length>=candidateCap)continue;
+      seen++;batch.push({shipID,id,info});
+    }
+    // Bounded politeness: a few overlapping requests spaced by opts.spacing, never a flood.
+    const fetched=await mapPool(batch,opts.concurrency,async task=>{
       try{
-        const data=await loadJson(`${API}/v1/fits/${id}/eft`,path.join(opts.cache,'eft',`${id}.json`));
+        const data=await loadJson(`${API}/v1/fits/${task.id}/eft`,path.join(opts.cache,'eft',`${task.id}.json`));
         const eft=data?.eft??data?.Eft;
         if(data?.error===true||data?.Error===true||typeof eft!=='string')throw Error('WORKBENCH_EFT_SCHEMA_CHANGED');
-        const fit=parseEft(eft,sde,{kind:'public-workbench',sourceURL:`https://eveworkbench.com/fit/${id}`,author:String(info.characterName??info.CharacterName??'Anonymous author')});
-        if(fit.shipTypeID!==shipID)throw Error('WORKBENCH_HULL_MISMATCH');
-        const signature=fitHash(shipID,fit.fitData);
-        const signatures=seenSignatures.get(shipID)||new Set();
-        if(signatures.has(signature))continue;
-        signatures.add(signature);seenSignatures.set(shipID,signatures);
-        existing.push(fit);successes.set(shipID,existing);
-      }catch(e){failures.push({fitID:id,shipTypeID:shipID,reason:e.message});}
+        const fit=parseEft(eft,sde,{kind:'public-workbench',sourceURL:`https://eveworkbench.com/fit/${task.id}`,author:String(task.info.characterName??task.info.CharacterName??'Anonymous author')});
+        if(fit.shipTypeID!==task.shipID)throw Error('WORKBENCH_HULL_MISMATCH');
+        return {...task,fit};
+      }catch(e){return {...task,failure:e.message};}
+    });
+    for(const item of fetched){
+      if(!item)continue;
+      if(item.failure){failures.push({fitID:item.id,shipTypeID:item.shipID,reason:item.failure});continue;}
+      const fit=item.fit;
+      const signature=fitHash(item.shipID,fit.fitData);
+      const signatures=seenSignatures.get(item.shipID)||new Set();
+      if(signatures.has(signature))continue;
+      const existing=successes.get(item.shipID)||[];
+      if(existing.length>=candidateCap)continue;
+      signatures.add(signature);seenSignatures.set(item.shipID,signatures);
+      existing.push(fit);successes.set(item.shipID,existing);
     }
     process.stdout.write(`WORKBENCH_PAGE ${page}/${response.pages} selected=${seen} valid=${[...successes.values()].reduce((n,a)=>n+a.length,0)}\n`);
     if(page>=response.pages||seen>=opts['max-fits']||hulls.every(h=>(successes.get(h.shipTypeID)||[]).length>=candidateCap))break;

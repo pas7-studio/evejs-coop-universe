@@ -26,14 +26,18 @@ function merge(sde, catalogs, perHull=5) {
   for(const ship of sde.ships){
     const all=[...(byHull.get(ship.shipTypeID)?.values()||[])].sort((a,b)=>sourcePriority(b.provenance.kind)-sourcePriority(a.provenance.kind) || a.name.localeCompare(b.name));
     const fits=selectDiverse(all,perHull);
+    const fittable=ship.fittable!==false;
     coverage.push({shipTypeID:ship.shipTypeID,shipName:ship.shipName,variants:fits.length,target:perHull,available:all.length,
+      fittable, slots:ship.slots??null,
       roles:fits.map(f=>f.role&&f.tier?`${f.role}:${f.tier}`:null),
-      reason:all.length===0?(rejected.filter(x=>Number(x.shipTypeID)===ship.shipTypeID).map(x=>x.reason)[0]||'NO_PUBLIC_FIT_FOUND'):(all.length<3?`TARGET_NOT_MET_ONLY_${all.length}_VALID`:undefined)});
+      reason:!fittable?'NO_FITTING_SLOTS':(all.length===0?(rejected.filter(x=>Number(x.shipTypeID)===ship.shipTypeID).map(x=>x.reason)[0]||'NO_PUBLIC_FIT_FOUND'):(all.length<3?`TARGET_NOT_MET_ONLY_${all.length}_VALID`:undefined))});
     records.push(...fits);
   }
+  const fittableHulls=coverage.filter(x=>x.fittable);
   return {schema:1,sdePin:PIN,source:'mixed-permissioned-eft-and-killmail',records,coverage,rejected,
-    summary:{hulls:sde.ships.length,fits:records.length,withAtLeast3:coverage.filter(x=>x.variants>=3).length,
-      withFive:coverage.filter(x=>x.variants>=5).length,zero:coverage.filter(x=>x.variants===0).length,
+    summary:{hulls:sde.ships.length,fittableHulls:fittableHulls.length,notFittableHulls:coverage.length-fittableHulls.length,
+      fits:records.length,withAtLeast3:fittableHulls.filter(x=>x.variants>=3).length,
+      withFive:fittableHulls.filter(x=>x.variants>=5).length,zero:fittableHulls.filter(x=>x.variants===0).length,
       dogmaValidated:Boolean(sde.dogma)}};
 }
 function run(argv){

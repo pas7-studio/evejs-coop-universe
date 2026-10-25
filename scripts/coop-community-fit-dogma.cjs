@@ -291,8 +291,19 @@ function profileFit(fitData, sde) {
   return { role, tier, rigCount, bucket: `${role}:${tier}` };
 }
 
+// How many module slots a hull actually has. Shuttles, capsules and freighters with zero
+// slots cannot be fitted at all and must not pollute the coverage denominator.
+function fittingSlotCount(dogma, typeID) {
+  if (!dogma) return null;
+  const attrs = attrMap(dogma, typeID);
+  if (!attrs.size) return 0;
+  const sum = key => Number(attrs.get(key)) || 0;
+  return sum(ATTR.lowSlots) + sum(ATTR.medSlots) + sum(ATTR.hiSlots) + sum(ATTR.rigSlots) +
+    sum(ATTR.subsystemSlots) + sum(ATTR.serviceSlots);
+}
+
 module.exports = {
   ATTR, EFFECT, READ_LIMIT: 400000, MAX_SKILL_CPU_PG_BONUS,
-  readJsonl, loadDogma, validateDogma, profileFit, attrMap, effectSet, flagSlotKind, slotCapacity,
+  readJsonl, loadDogma, validateDogma, profileFit, attrMap, effectSet, flagSlotKind, slotCapacity, fittingSlotCount,
   MODULE_CATEGORY_ID, DRONE_CATEGORY_ID, SKILL_CATEGORY_ID, SLOT_FLAG_RANGES,
 };

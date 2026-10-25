@@ -113,3 +113,10 @@ test('seed arguments accept hash and boundary flags containing digits',()=>{
  assert.equal(apply['approve-sha256'],'a'.repeat(64));
  assert.equal(apply['allow-over-600'],'yes');
 });
+test('workbench politeness and fetch limits are explicit and bounded',()=>{
+ const {args}=require('../scripts/coop-community-fit-workbench.cjs');
+ const parsed=args(['--sde','s','--out','o','--cache','c','--concurrency','3','--spacing','150']);
+ assert.equal(parsed['max-fits'],2000);assert.equal(parsed.concurrency,3);assert.equal(parsed.spacing,150);
+ assert.throws(()=>args(['--sde','s','--out','o','--cache','c','--concurrency','99']),/BAD_INTEGER/);
+ assert.throws(()=>args(['--sde','s','--out','o','--cache','c','--spacing','5']),/BAD_INTEGER/);
+});

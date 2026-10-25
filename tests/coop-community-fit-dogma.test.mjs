@@ -26,6 +26,7 @@ function sdeFixture({ hullOverrides = {}, modules = {} } = {}) {
   ]);
   jsonl('types.jsonl', [
     { ...id(600), groupID: 1, published: true, name: { en: 'Merlin' } },
+    { ...id(601), groupID: 1, published: true, name: { en: 'Shuttle' } },
     { ...id(201), groupID: 60, published: true, name: { en: 'Damage Control I' } },
     { ...id(202), groupID: 60, published: true, name: { en: 'Damage Control II' } },
     { ...id(203), groupID: 509, published: true, name: { en: 'Light Missile Launcher I' } },
@@ -55,7 +56,8 @@ function sdeFixture({ hullOverrides = {}, modules = {} } = {}) {
     { ...id(207), dogmaAttributes: [attr(ATTR.cpu, 60), attr(ATTR.power, 8), attr(ATTR.meta, 0)], dogmaEffects: effect(11) },
     ...Object.entries(modules).map(([key, row]) => ({ ...id(Number(key)), ...row })),
   ];
-  jsonl('typeDogma.jsonl', [{ ...id(600), dogmaAttributes: hullAttributes }, ...moduleRows]);
+  jsonl('typeDogma.jsonl', [{ ...id(600), dogmaAttributes: hullAttributes },
+    { ...id(601), dogmaAttributes: [attr(11, 0), attr(12, 0), attr(13, 0), attr(14, 0)] }, ...moduleRows]);
   return dir;
 }
 
@@ -181,12 +183,18 @@ test('catalog reports which hulls stayed uncovered and why', () => {
     const sde = loadSde(dir);
     const record = { shipTypeID: 600, shipName: 'Merlin', fitData: [[201, 11, 1], [204, 92, 1]], source: { kind: 'public-workbench', url: 'https://eveworkbench.com/fit/x', author: 'Pilot' } };
     const broken = { ...record, fitData: [[204, 11, 1]] };
-    const catalog = buildCatalog([{ shipTypeID: 600, shipName: 'Merlin' }], [record, broken], sde, 5);
+    const catalog = buildCatalog([{ shipTypeID: 600, shipName: 'Merlin', fittable: true }, { shipTypeID: 601, shipName: 'Shuttle', fittable: false }], [record, broken], sde, 5);
     assert.equal(catalog.records.length, 1);
     assert.equal(catalog.summary.dogmaValidated, true);
     assert.equal(catalog.invalid[0].reason, 'SLOT_KIND_MISMATCH');
     assert.equal(catalog.coverage[0].available, 1);
     assert.equal(catalog.coverage[0].reason, 'TARGET_NOT_MET_ONLY_1_VALID');
     assert.match(catalog.records[0].name, /^\[EWB\] Combat budget: /);
+    // A hull without any module slot cannot be fitted and must not distort coverage.
+    assert.equal(catalog.coverage[1].fittable, false);
+    assert.equal(catalog.coverage[1].reason, 'NO_FITTING_SLOTS');
+    assert.equal(catalog.summary.fittableHulls, 1);
+    assert.equal(catalog.summary.notFittableHulls, 1);
+    assert.equal(catalog.summary.zero, 0);
   } finally { clean(dir); }
 });

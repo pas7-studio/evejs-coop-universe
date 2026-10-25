@@ -103,6 +103,9 @@ async function run(opts) {
       upsert.run('_meta',JSON.stringify({...fresh._meta,nextFittingID:replan.next}));
     });
     txn.immediate();
+    // A stopped live world is copied out of the volume and copied back as one file: fold any
+    // WAL frames into the main database so the copy is complete on its own.
+    try { db.pragma('wal_checkpoint(TRUNCATE)'); } catch (e) { throw Error(`WAL_CHECKPOINT_FAILED ${e.message}`); }
     console.log(JSON.stringify({...result,backupPath,applied:true},null,2));
     return {...result,backupPath,applied:true};
   }finally{db.close();}

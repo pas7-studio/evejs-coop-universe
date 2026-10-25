@@ -22,6 +22,8 @@ param(
   [int]$WorkbenchPages = 120,
   [int]$FieldPages = 3,
   [int]$MaxFits = 2000,
+  [int]$Concurrency = 3,
+  [int]$Spacing = 150,
   [string]$CodePath = '',
   [string]$DbPath = '',
   [string]$Container = 'evejs-local',
@@ -52,7 +54,7 @@ if ($Action -eq 'Collect') {
   $wb = Join-Path $OutputRoot 'workbench.json'
   $wbArgs = @((Join-Path $Tools 'coop-community-fit-workbench.cjs'), '--sde', $SdePath, '--out', $wb,
     '--cache',(Join-Path $OutputRoot 'cache-workbench'),'--pages',[string]$WorkbenchPages,'--per-hull',[string]$PerHull,
-    '--max-fits',[string]$MaxFits)
+    '--max-fits',[string]$MaxFits,'--concurrency',[string]$Concurrency,'--spacing',[string]$Spacing)
   if ($Ships) { $wbArgs += @('--ships', $Ships) }
   $inputs = @()
   $need = @()
@@ -60,7 +62,7 @@ if ($Action -eq 'Collect') {
   try {
     Invoke-Node -Arguments $wbArgs
     $first = Get-Content -Raw -LiteralPath $wb | ConvertFrom-Json
-    $need = @($first.coverage | Where-Object { $_.variants -lt 3 } | ForEach-Object { $_.shipName })
+    $need = @($first.coverage | Where-Object { $_.variants -lt 3 -and $_.fittable -ne $false } | ForEach-Object { $_.shipName })
     $inputs += $wb
     $workbenchSucceeded = $true
   } catch {
@@ -87,8 +89,8 @@ if ($Action -eq 'Collect') {
       '--per-hull',[string]$PerHull) + $inputs)
   $result = Get-Content -Raw -LiteralPath $Catalog | ConvertFrom-Json
   if ([int]$result.summary.fits -eq 0) { throw 'NO_FITS_COLLECTED: both sources returned nothing. Do not seed an empty catalog; inspect API failures and caches.' }
-  $covered = @($result.coverage | Where-Object { $_.variants -ge 3 }).Count
-  $withFive = @($result.coverage | Where-Object { $_.variants -ge 5 }).Count
+  $covered = @($result.coverage | Where-Object { $_.variants -ge 3 -and $_.fittable -ne $false }).Count
+  $withFive = @($result.coverage | Where-Object { $_.variants -ge 5 -and $_.fittable -ne $false }).Count
   $sourceCounts = @{}
   foreach ($fit in $result.records) {
     $key = [string]$fit.provenance.kind
@@ -118,7 +120,8 @@ if ($Action -eq 'Collect') {
   if ($result.summary.PSObject.Properties.Name -contains 'dogmaValidated') { $dogmaValidated = [bool]$result.summary.dogmaValidated }
   $dogmaChecked = 0
   if ($result.summary.PSObject.Properties.Name -contains 'dogmaChecked') { $dogmaChecked = [int]$result.summary.dogmaChecked }
-  $missing = @($result.coverage | Where-Object { $_.variants -lt 3 } | Select-Object shipTypeID,shipName,variants,target,available,reason,roles)
+  $missing = @($result.coverage | Where-Object { $_.variants -lt 3 -and $_.fittable -ne $false } | Select-Object shipTypeID,shipName,variants,target,available,reason,roles,slots)
+  $notFittable = @($result.coverage | Where-Object { $_.fittable -eq $false } | Select-Object shipTypeID,shipName,slots)
   $hullsWithAny = @($result.coverage | Where-Object { $_.variants -ge 1 }).Count
   $report = [ordered]@{
     generatedAt = (Get-Date).ToUniversalTime().ToString('o')
@@ -126,8 +129,10 @@ if ($Action -eq 'Collect') {
     sdePin = $result.sdePin
     catalog = $Catalog
     shipsTotal = $result.summary.hulls
+    shipsFittable = $result.summary.fittableHulls
+    shipsNotFittable = $result.summary.notFittableHulls
     shipsWithAtLeastOneFit = $hullsWithAny
-    shipsWithoutFit = $result.summary.hulls - $hullsWithAny
+    shipsWithoutFit = $result.summary.fittableHulls - $hullsWithAny
     fittingsTotal = $result.summary.fits
     atLeastThree = $covered
     atLeastFive = $withFive
@@ -137,6 +142,7 @@ if ($Action -eq 'Collect') {
     rejectedTotal = $rejectedTotal
     rejectedReasons = $reasonCounts
     missing = $missing
+    notFittableHulls = $notFittable
     dogmaValidated = $dogmaValidated
     dogmaCheckedRecords = $dogmaChecked
     nativeClientValidated = $false

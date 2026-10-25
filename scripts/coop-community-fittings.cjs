@@ -3,7 +3,7 @@
 // Deliberately contains no client modifications, market mutations or default-on hooks.
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { readJsonl, loadDogma, validateDogma, profileFit } = require('./coop-community-fit-dogma.cjs');
+const { readJsonl, loadDogma, validateDogma, profileFit, fittingSlotCount } = require('./coop-community-fit-dogma.cjs');
 
 const OWNER = 1000282;
 const PREFIX = 'COOP043#';
@@ -25,7 +25,10 @@ function loadSde(dir) {
   const ships = [...types.entries()].filter(([id, t]) => {
     const g = groups.get(Number(t.groupID));
     return t.published === true && Number(g?.categoryID) === 6 && typeName(t);
-  }).map(([shipTypeID, t]) => ({shipTypeID, shipName:typeName(t), groupID:Number(t.groupID)}));
+  }).map(([shipTypeID, t]) => {
+    const slots = fittingSlotCount(dogma, shipTypeID);
+    return {shipTypeID, shipName:typeName(t), groupID:Number(t.groupID), slots, fittable:slots===null?true:slots>0};
+  });
   ships.sort((a,b)=>a.shipTypeID-b.shipTypeID);
   return {types, groups, dogma, ships};
 }
@@ -142,11 +145,14 @@ function buildCatalog(hulls, candidates, sde, perHull = 5) {
   for (const hull of hulls) {
     const all=[...(byHull.get(hull.shipTypeID)?.values()||[])].sort((a,b)=>sourcePriority(b.source.kind)-sourcePriority(a.source.kind) || b.slots-a.slots || a.signature.localeCompare(b.signature));
     const variants=selectDiverse(all,perHull);
-    const missReason=all.length===0
+    const fittable=hull.fittable!==false;
+    const missReason=!fittable?'NO_FITTING_SLOTS'
+      :all.length===0
       ? (invalid.filter(x=>Number(x.shipTypeID)===hull.shipTypeID).map(x=>x.reason)[0]||'NO_PUBLIC_FIT_FOUND')
       : (all.length<3?'TARGET_NOT_MET_ONLY_'+all.length+'_VALID':undefined);
     coverage.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,variants:variants.length,target:perHull,
-      available:all.length, roles:variants.map(f=>f.profile?`${f.profile.role}:${f.profile.tier}`:null), reason:missReason});
+      available:all.length, fittable, slots:hull.slots??null,
+      roles:variants.map(f=>f.profile?`${f.profile.role}:${f.profile.tier}`:null), reason:missReason});
     for (const [i,fit] of variants.entries()) {
       const sourceURL=text(fit.source.url);
       const id=fit.signature.slice(0,16);
@@ -166,9 +172,11 @@ function buildCatalog(hulls, candidates, sde, perHull = 5) {
   }
   const byRole={};
   for (const record of records) byRole[record.role]=(byRole[record.role]||0)+1;
+  const fittableHulls=coverage.filter(x=>x.fittable);
   return {schema:1,source:'public-killmail-esi',sdePin:PIN,records,coverage,invalid,
-    summary:{hulls:hulls.length,fits:records.length,withAtLeast3:coverage.filter(x=>x.variants>=3).length,
-      withFive:coverage.filter(x=>x.variants>=5).length,zero:coverage.filter(x=>!x.variants).length,
+    summary:{hulls:hulls.length,fittableHulls:fittableHulls.length,notFittableHulls:coverage.length-fittableHulls.length,
+      fits:records.length,withAtLeast3:fittableHulls.filter(x=>x.variants>=3).length,
+      withFive:fittableHulls.filter(x=>x.variants>=5).length,zero:fittableHulls.filter(x=>!x.variants).length,
       dogmaValidated,dogmaChecked,byRole}};
 }
 function propose(current, input, maxCatalog = 5000) {
