@@ -189,6 +189,11 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      written.manifestKey!==trip.manifestID)
     return pause("ESCORT_"+(written?.status||"TERMINAL_WRITE_BLOCKED"));
   }
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
+   try{require("./coopWorldOpportunityBoard").noteNativeConvoyOutcome(
+    scene,trip,{status:"DELIVERED",terminal:true})}
+   catch(error){console.warn("[CoopOpportunityBoard] arrival",String(error?.message||error).slice(0,120))}
+  }
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
