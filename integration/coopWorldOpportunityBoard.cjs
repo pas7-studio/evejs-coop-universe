@@ -140,7 +140,9 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    let receipt;try{receipt=sendNativeMail(characterID,{
     title:"New Eden: "+e.title,
     body:e.summary+" | System "+e.systemID+" | /events info "+e.id+
-     " | /events interest "+e.id+" | /events watch off",
+     " | /events interest "+e.id+
+     (e.stage==="PREPARING"?" | /events volunteer "+e.id:"")+
+     " | /events watch off",
     eventID:e.id})}catch{blocked++;continue}
    if(receipt?.success!==true||!POS(Number(receipt.messageID))){blocked++;continue}
    sent++;
@@ -332,7 +334,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    if(r.status!=="READY")return {status:r.status,message:"[Co-op Events] "+r.status};
    if(!r.events.length)return {status:"READY",message:"[Co-op Events] No verified active events. /events all for whole universe; /events watch local|all|off."};
    return {status:"READY",message:"[Co-op Events] Verified active events:\n"+
-    r.events.map(e=>e.id+" | "+e.title+" | system "+e.systemID+
+    r.events.map(e=>e.id+" | "+(e.stage==="PREPARING"?"[PREPARING] ":"")+e.title+" | system "+e.systemID+
      " | /events info "+e.id).join("\n")};
   }
   if(op==="info"){
@@ -342,8 +344,11 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    return {status:"READY",message:"[Co-op Events] "+e.title+" | "+e.id+
     "\n"+e.summary+"\nSystem: "+e.systemID+
     (e.stationID?" | station: "+e.stationID:"")+
-    "\nTo participate voluntarily: /events interest "+e.id+
-    " then fly to the actual location and use native EVE fleet/warp."};
+    (e.stage==="PREPARING"?
+      "\nTo volunteer before departure: /events interest "+e.id+
+      " then both real fleet pilots in the same system use /events volunteer "+e.id:
+      "\nTo participate voluntarily: /events interest "+e.id+
+      " then fly to the actual location and use native EVE fleet/warp.")};
   }
   if(op==="history"||op==="reputation"){
    return require("./coopEscortReputation").listNativeHistory(session);
