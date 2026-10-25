@@ -75,3 +75,30 @@ test("previously committed replay requires operator reconciliation",async()=>{
   /REPLAY_REQUIRES_RECONCILIATION/);
  assert.equal(x.calls.includes("rust_release"),false);
 });
+
+
+test("runtime forwards original multi-stack IDs to the single native SQLite commit",async()=>{
+ const observed=[];
+ const x=harness({atomicStore:{
+  ...harness().atomicStore,
+  settle:args=>{
+   observed.push(args);
+   return {...receipt,deliveries:[
+    {sourceItemID:800,itemID:800,quantity:3},
+    {sourceItemID:801,itemID:801,quantity:4}
+   ]};
+  }
+ }});
+ const result=await x.run.settleSell({
+  ticket,proof,tax:1.23,sourceItemIDs:[801,800],client:{call(){}}
+ });
+ assert.equal(result.release.phase,"released");
+ assert.equal(observed.length,1);
+ assert.deepEqual(observed[0].sourceItemIDs,[801,800]);
+ assert.equal(observed[0].ticket.orderID,"23");
+ assert.equal(observed[0].sourceItemID,undefined);
+ assert.deepEqual(x.calls,[
+  "rust_claim_inspect","rust_finalize_locked","journal_rust_ack",
+  "journal_settled","journal_durable_read","rust_release"
+ ]);
+});
