@@ -5,6 +5,70 @@
 // objectiveCompleted=true. Never call GM completion or clone rewards.
 const id=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 const str=v=>String(v===null||v===undefined?"":v).trim();
+
+// Native per-character agent rewards are not a single atomic fleet operation.
+// Never retry an ambiguous second-player payout after an interrupted write.
+const fs=require("node:fs"),path=require("node:path");
+const DEFAULT_JOURNAL="/var/lib/evejs/coop-mission-turnin.jsonl";
+function journalKey(ticket){
+ const p=ticket?.peerMission||{},l=ticket?.leaderMission||{};
+ const n=id(p.missionSequence),leaderSeq=id(l.missionSequence);
+ if(!ticket?.ok||!id(ticket.fleetID)||!id(ticket.leader)||
+  !id(ticket.peerID)||!id(ticket.agentID)||!n||!leaderSeq||
+  !str(p.contentID)||str(p.contentID)!==str(l.contentID)||
+  ![6,7].includes(Number(ticket.actionID)))return null;
+ return [ticket.fleetID,ticket.leader,ticket.peerID,ticket.agentID,
+  leaderSeq,n,str(p.contentID),str(p.missionTemplateID)].join(":");
+}
+function readSettlement(file,key){
+ try{
+  const data=fs.readFileSync(file,"utf8");
+  if(Buffer.byteLength(data,"utf8")>8*1024*1024||data&&!data.endsWith("\n"))
+   return {status:"JOURNAL_CORRUPTED"};
+  let latest=null;
+  for(const line of data.split("\n")){
+   if(!line)continue;
+   let record;try{record=JSON.parse(line)}catch{return {status:"JOURNAL_CORRUPTED"};}
+   if(typeof record?.key!=="string"||
+    !["PREPARED","AWARDED","UNKNOWN"].includes(record?.state)||
+    !Number.isFinite(record?.at))
+    return {status:"JOURNAL_CORRUPTED"};
+   if(record.key===key)latest=record;
+  }
+  return {status:"READY",previous:latest};
+ }catch(err){
+  if(err?.code==="ENOENT")return {status:"READY",previous:null};
+  return {status:"JOURNAL_UNAVAILABLE"};
+ }
+}
+function durableWrite(file,key,state){
+ let fd;
+ try{
+  if(typeof file!=="string"||!path.isAbsolute(file)||!key)return false;
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  fd=fs.openSync(file,"a",0o600);
+  const data=Buffer.from(JSON.stringify({key,state,at:Date.now()})+"\n");
+  // Single bounded append followed by fsync. Partial IO remains an
+  // intentionally corrupt/fail-closed journal, never a retry permission.
+  if(fs.writeSync(fd,data,0,data.length,null)!==data.length)return false;
+  fs.fsyncSync(fd);
+  return true;
+ }catch{return false}
+ finally{if(fd!==undefined)try{fs.closeSync(fd)}catch{}}
+}
+function beginPeerSettlement(ticket,file){
+ const key=journalKey(ticket);
+ if(!key)return {status:"INVALID_NATIVE_SETTLEMENT_KEY"};
+ const current=readSettlement(file,key);
+ if(current.status!=="READY")return current;
+ if(current.previous){
+  if(current.previous.state==="AWARDED")return {status:"PEER_SETTLEMENT_ALREADY_RECORDED"};
+  return {status:"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
+ }
+ if(!durableWrite(file,key,"PREPARED"))return {status:"SETTLEMENT_JOURNAL_WRITE_FAILED"};
+ return {status:"READY",key};
+}
+
 const equivalent=(a,b)=>Boolean(a&&b&&
  id(a.agentID)===id(b.agentID)&&
  str(a.contentID)!==""&&str(a.contentID)===str(b.contentID)&&
@@ -49,7 +113,7 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
   actionID:action,station,leaderMission:{...leaderMission},
   peerMission:{...peerMission},session,peer};
 }
-function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID}={}){
+function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalPath}={}){
  if(!ticket?.ok||!missionRuntime||!fleetRuntime)
   return {status:"NO_AUTHORIZED_SHARED_TURNIN"};
  // This is called ONLY after the real captain's original DoAction,
@@ -69,15 +133,33 @@ function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID}={}){
  if(!equivalent(ticket.peerMission,second)||
   str(second.missionSequence)!==str(ticket.peerMission.missionSequence))
   return {status:"PEER_NATIVE_OBJECTIVE_NOT_READY"};
- // Normal EveJS per-character completion applies its own journal,
- // standing, rewards and mission cleanup exactly once. Never copy
- // the leader's items or wallets directly to the other player.
- const result=missionRuntime.doAgentAction(ticket.peerID,ticket.agentID,
-  ticket.actionID);
- if(result?.success!==true||
-  missionRuntime.getMissionRecord(ticket.peerID,ticket.agentID))
-  return {status:"PEER_NATIVE_TURNIN_NOT_COMPLETED"};
+ // The old native DoAction remains the ONLY reward/standing authority.
+ // This durable intent is required only for explicitly opted-in automated
+ // two-recipient turn-in; by default this gameplay feature stays OFF.
+ const safeMode=process.env.EVEJS_COOP_FLEET_MISSION_TURNIN==="1";
+ const file=journalPath||process.env.EVEJS_COOP_MISSION_TURNIN_JOURNAL_FILE||
+  DEFAULT_JOURNAL;
+ const intent=safeMode?beginPeerSettlement(ticket,file):null;
+ if(safeMode&&intent.status!=="READY")return intent;
+ let result;
+ try{
+  result=missionRuntime.doAgentAction(ticket.peerID,ticket.agentID,
+   ticket.actionID);
+ }catch(error){
+  if(safeMode)durableWrite(file,intent.key,"UNKNOWN");
+  return {status:"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
+ }
+ let remaining;
+ try{remaining=missionRuntime.getMissionRecord(ticket.peerID,ticket.agentID);}
+ catch(_){remaining={unknown:true};}
+ if(result?.success!==true||remaining){
+  if(safeMode)durableWrite(file,intent.key,"UNKNOWN");
+  return {status:safeMode?"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION":
+   "PEER_NATIVE_TURNIN_NOT_COMPLETED"};
+ }
+ if(safeMode&&!durableWrite(file,intent.key,"AWARDED"))
+  return {status:"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
  return {status:"TWO_NATIVE_MISSIONS_COMPLETED",fleetID:ticket.fleetID,
   characterIDs:[ticket.leader,ticket.peerID],agentID:ticket.agentID};
 }
-module.exports={prepare,finish,equivalent};
+module.exports={prepare,finish,equivalent,journalKey,readSettlement,beginPeerSettlement};
