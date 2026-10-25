@@ -5,6 +5,34 @@
 const POS=x=>Number.isSafeInteger(x)&&x>0;
 const VEC=x=>x&&["x","y","z"].every(k=>Number.isFinite(x[k]));
 const RANGE=20000;
+// Confirmed against the pinned SolarSystemScene: dynamicEntities is Map,
+// staticEntities is Array. A scene missing either collection is NOT
+// complete, and any active player ship missing from that map is unsafe.
+function listPinnedSceneShips(scene){
+ if(!(scene?.dynamicEntities instanceof Map)||
+  !Array.isArray(scene.staticEntities)||
+  typeof scene.getEntityByID!=="function")
+  return {complete:false,ships:[]};
+ const ships=[...scene.dynamicEntities.values(),...scene.staticEntities]
+  .filter(e=>e?.kind==="ship");
+ const ids=new Set();
+ for(const ship of ships){
+  if(!POS(ship?.itemID)||ids.has(ship.itemID)||
+   scene.getEntityByID(ship.itemID)!==ship)
+   return {complete:false,ships:[]};
+  ids.add(ship.itemID);
+ }
+ const sessions=scene.sessions;
+ if(sessions&&typeof sessions.values==="function"){
+  for(const session of sessions.values()){
+   const shipID=Number(session?._space?.shipID);
+   if(POS(shipID)&&!ids.has(shipID))
+    return {complete:false,ships:[]};
+  }
+ }
+ return {complete:true,ships};
+}
+
 function createNativeStructureControlWitness({sceneForSystem,
  listAllPhysicalShips,getNativeEntity,getController,
  getFactionForCorporation,rangeM=RANGE}={}){
@@ -72,4 +100,4 @@ function createNativeStructureControlWitness({sceneForSystem,
  }
  return Object.freeze({observe});
 }
-module.exports={createNativeStructureControlWitness};
+module.exports={createNativeStructureControlWitness,listPinnedSceneShips};
