@@ -86,12 +86,23 @@ function note(args){
  }
  if(result.status==="VERIFIED_NATIVE_LOOT_PICKUP"||
   result.status==="NATIVE_LOOT_SOURCE_NOT_REMOVED"||
-  result.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED")
-  require("./coopRuntimeProbe").observe("living-native-loot-pickup",null,
-   {spaceState:{systemID:args?.scene?.systemID}},{...result,
-    ...(result.status!=="VERIFIED_NATIVE_LOOT_PICKUP"?{
-     wreckID:positive(args?.wreck?.wreckID),
-     wreckItemID:positive(args?.wreckItemID)}:{})});
+  result.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED"){
+  let recorded=false;
+  try{
+   recorded=require("./coopRuntimeProbe").observe("living-native-loot-pickup",null,
+    {spaceState:{systemID:args?.scene?.systemID}},{...result,
+     ...(result.status!=="VERIFIED_NATIVE_LOOT_PICKUP"?{
+      wreckID:positive(args?.wreck?.wreckID),
+      wreckItemID:positive(args?.wreckItemID)}:{})})===true;
+  }catch(error){
+   // Reporting must never turn an already-committed native transfer into
+   // an exception that could make the client retry and double-loot.
+   console.warn("[CoopNativeLoot] telemetry",String(error?.code||"UNAVAILABLE"));
+  }
+  if(!recorded&&result.status==="VERIFIED_NATIVE_LOOT_PICKUP")
+   return {...result,status:"TELEMETRY_NOT_RECORDED",
+    nativeTransferVerified:true};
+ }
  return result;
 }
 module.exports={verify,note};
