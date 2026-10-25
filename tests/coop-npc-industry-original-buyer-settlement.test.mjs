@@ -11,7 +11,7 @@ const FLAGS={EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",
  EVEJS_COOP_NATIVE_NPC_MANUAL_FACTORY_PROOF:"1",
  EVEJS_COOP_NATIVE_NPC_ECONOMY:"1",
  EVEJS_COOP_NATIVE_NPC_PARTIAL_FILL:"1"};
-function fixture({env=FLAGS,settleThrows=false,auditBroken=false}={}){
+function fixture({env=FLAGS,settleThrows=false,settleBlocked=false,auditBroken=false}={}){
  const e={operationID:OP,ownerID:OWNER,stationID:STATION,
   typeID:TYPE,itemID:ITEM,quantity:100,phase:"LISTED",orderID:ORDER};
  const journal={version:1,entries:{[OP]:e},history:{}};
@@ -26,6 +26,7 @@ function fixture({env=FLAGS,settleThrows=false,auditBroken=false}={}){
  let wholeCalls=0,partialCalls=0,session=true,claimAuthorized=true,fillID=70001;
  const native=async ({identity})=>{
   if(settleThrows)throw Error("RUST_FINALIZE_ACK_LOST");
+  if(settleBlocked)return {status:"BLOCKED",reason:"RUST_CLAIM_OUTCOME_UNKNOWN"};
   order.vol_remaining-=identity.quantity;
   order.state=order.vol_remaining?"open":"filled";
   escrow.remainingQuantity=order.vol_remaining;
@@ -113,6 +114,14 @@ test("unknown Rust finalized ACK requires operator, never another debit",async()
   "LW04C3B_OPERATOR_RECOVERY_REQUIRED");
  assert.equal(f.wholeCalls,1);
  assert.equal(f.bridge.repairRequired().length,1);
+});
+test("non-success native settlement result after CALL is held for operator recovery",async()=>{
+ const f=fixture({settleBlocked:true});
+ assert.equal((await f.bridge.purchase({...f.args,mode:"whole"})).reason,
+  "LW04C3B_ORIGINAL_SETTLEMENT_NOT_CONFIRMED");
+ assert.equal((await f.bridge.purchase({...f.args,mode:"whole"})).reason,
+  "LW04C3B_OPERATOR_RECOVERY_REQUIRED");
+ assert.equal(f.wholeCalls,1);
 });
 test("committed payment without matching read-only Rust/GameStore audit never retries",async()=>{
  const f=fixture({auditBroken:true});
