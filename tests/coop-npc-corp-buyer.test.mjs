@@ -35,9 +35,12 @@ function fixture({buyerISK=1000,failAt=null}={}){
   })}catch(e){for(const t of TABLES)data[t]=backup[t];throw e}
  }};
  let quoteMode="valid",taxRate=0.08;
+ let allowHistoryWitness=true;
  let state="settling",phase="claimed",claims=0,finalizations=0,
   loseFinal=false,buyerValid=true,sellerValid=true,releaseClaim=null;
- const claim=()=>({source:"player",state,fill_phase:phase,is_corp:false,bid:false,
+ const claim=()=>({history_recorded:phase==="finalized"&&allowHistoryWitness,
+  history_day:phase==="finalized"&&allowHistoryWitness?"2026-10-25":null,
+  source:"player",state,fill_phase:phase,is_corp:false,bid:false,
   claim_key:KEY,fill_id:String(FILL),order_id:String(ORDER),
   owner_id:String(SELLER),buyer_corp_id:String(BUYER),
   station_id:STATION,type_id:TYPE,quantity:20,price_cents:125,vol_remaining:state==="filled"?0:20});
@@ -62,6 +65,7 @@ function fixture({buyerISK=1000,failAt=null}={}){
   fault:t=>{failAt=t},loseAck:()=>{loseFinal=true},
   setBuyer:v=>{buyerValid=v},setSeller:v=>{sellerValid=v},
   setTaxMode:v=>{quoteMode=v},setTaxRate:v=>{taxRate=v},
+  setHistoryWitness:v=>{allowHistoryWitness=v},
   setMarketDone:()=>{state="filled";phase="finalized"},
   async stallClaim(){let unlock;releaseClaim=new Promise(r=>{unlock=r});return unlock}
  };
@@ -202,4 +206,15 @@ test("lost native finalize ACK never charges seller tax twice",()=>run(async f=>
  assert.equal(f.data.characters[SELLER].balance,123);
  assert.equal(f.data.characters[SELLER].walletJournal.length,2);
  assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+}));
+test("Rust completed without durable history witness refuses paid success until retry",()=>run(async f=>{
+ f.setHistoryWitness(false);
+ await assert.rejects(buy(f),/NPC_CORP_BUY_RUST_FINALIZE_UNCERTAIN/);
+ assert.equal(f.data.items[ITEM].ownerID,BUYER);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+ const ledger=structuredClone(f.data);
+ f.setHistoryWitness(true);
+ assert.equal((await f.create().purchaseOnce(f.request)).status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.deepEqual(f.data,ledger);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
 }));
