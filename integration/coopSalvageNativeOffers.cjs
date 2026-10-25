@@ -29,14 +29,20 @@ function createSalvageOffers({readManifest,readWitness,readEvent,
    return deny("SALVAGE_OFFER_WRECK_UNVERIFIED");
   // An NPC rival or an already-completed player pickup makes the original
   // wreck source no longer available. Never reserve corporate ISK for it.
-  let nativeWreckItems;try{nativeWreckItems=getWreckItems(r.wreckID)}
-  catch{return deny("SALVAGE_OFFER_NATIVE_WRECK_UNAVAILABLE")}
-  if(!Array.isArray(nativeWreckItems)||
-   !allowStarted&&r.rows.some(x=>nativeWreckItems.filter(w=>
-    w.wreckItemID===x.wreckItemID&&w.wreckID===r.wreckID&&
-    w.sourceCargoID===x.cargoID&&w.sourceKind==="cargo"&&
-    w.typeID===x.typeID&&w.quantity===x.quantity).length!==1))
-   return deny("SALVAGE_OFFER_SOURCE_ALREADY_RECOVERED");
+  if(!allowStarted){
+   // A NEW offer must prove the original stock is actually still available.
+   let nativeWreckItems;try{nativeWreckItems=getWreckItems(r.wreckID)}
+   catch{return deny("SALVAGE_OFFER_NATIVE_WRECK_UNAVAILABLE")}
+   if(!Array.isArray(nativeWreckItems)||
+    r.rows.some(x=>nativeWreckItems.filter(w=>
+     w.wreckItemID===x.wreckItemID&&w.wreckID===r.wreckID&&
+     w.sourceCargoID===x.cargoID&&w.sourceKind==="cargo"&&
+     w.typeID===x.typeID&&w.quantity===x.quantity).length!==1))
+    return deny("SALVAGE_OFFER_SOURCE_ALREADY_RECOVERED");
+  }
+  // A signed STARTED contract no longer depends on the physical wreck
+  // being present or queryable: the authoritative transfer and final
+  // payout must validate the immutable receipt and real destination items.
   const eventID="convoy-"+m.systemID+"-"+m.fleetID+"-"+
    Math.min(...m.cargo.map(x=>x.cargoID));
   let e,v,o;try{e=readEvent(eventID);v=readVolunteers(eventID);
