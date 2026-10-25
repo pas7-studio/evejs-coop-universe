@@ -19,6 +19,7 @@ if ($manifest.schema -ne "evejs-coop/alife-native-delivery-e2e/v1" -or
 $files=@(
  "tests/coop-alife-native-delivery-proof.test.mjs",
  "tests/coop-alife-native-delivery-wiring.test.mjs",
+ "tests/coop-alife-news.test.mjs",
  "tests/coop-native-haul-manifest-station.test.mjs",
  "tests/coop-native-haul-manifest.test.mjs",
  "tests/coop-native-haul-manifest-overlay.test.mjs",
