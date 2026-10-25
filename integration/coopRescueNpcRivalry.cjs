@@ -74,8 +74,7 @@ function createRescueRivalry({getWrecks,getWreckItems,readVerifiedLoss,atomicRow
     }
     let taken;
     try{taken=atomicRows(["npcWreckItems","npcCargo","npcEntities"],tx=>{
-     const entities=tx.get("npcEntities","entities");
-     const entity=entities?.[String(a.entityID)];
+     const entity=tx.get("npcEntities","entities\u001f"+a.entityID);
      if(entity?.entityID!==a.entityID||
       entity.systemID!==scene.systemID||
       entity.corporationID!==a.corporationID||
