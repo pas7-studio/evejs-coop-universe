@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {createRequire} from "node:module";
+import {auditBanks} from "../scripts/audit-npc-ammo-banks.cjs";
 const require=createRequire(import.meta.url);
 const {createAtomicAmmoBank,inspectShip,gate}=require("../integration/coopNpcAmmoBankAtomic.cjs");
 
@@ -113,13 +114,20 @@ test("repeating a completed bank boundary does not quarantine an otherwise healt
   assert.equal(f.state().npcCargo.cargo["501"].quantity,3);
  }finally{f.cleanup();}
 });
-test("fence is checked in the native SQLite transaction even after bank membership changes",()=>{
+test("SQLite replay fence rejects old modules no longer listed by latest bank journal",()=>{
  const f=fixture();try{
   assert.equal(fire(f).success,true);
   f.entries[0].chargeItem.quantity=4;
-  const alternate=fire(f,{entries:[f.entries[0]],whenMs:1000});
+  assert.equal(fire(f,{entries:[f.entries[0]],whenMs:1100}).success,true);
+  // Latest ship journal now mentions only module 401. Module 402 is
+  // still protected by its SQLite replay fence at boundary 1000.
+  f.entries[1].chargeItem.quantity=4;
+  const before=f.calls();
+  const alternate=fire(f,{entries:[f.entries[1]],whenMs:1000});
   assert.equal(alternate.success,false);
-  assert.equal(f.state().npcCargo.cargo["501"].quantity,4);
+  assert.equal(f.calls(),before+1,"must reach SQLite to check old module fence");
+  assert.equal(f.state().npcCargo.cargo["502"].quantity,4);
+  assert.equal(inspectShip({root:f.root,entityID:101}).ok,false);
  }finally{f.cleanup();}
 });
 test("native readback failure leaves DB debit but quarantines journal and never updates live cache",()=>{
@@ -149,4 +157,24 @@ test("missing or partial flags cannot enable the native atomic bank path",()=>{
  assert.equal(gate({EVEJS_COOP_NPC_STRICT_AMMO:"1",
   EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE:"1",EVEJS_COOP_NPC_BANK_ATOMIC:"1",
   EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1"}),true);
+});
+
+test("operator audit is read-only for a committed bank receipt",()=>{
+ const f=fixture();try{
+  assert.equal(fire(f).success,true);
+  const file=path.join(f.root,"bank-ships","101.json");
+  const before=fs.readFileSync(file,"utf8");
+  const audited=auditBanks({root:f.root});
+  assert.equal(audited.status,"CLEAN");
+  assert.equal(audited.counts.COMMITTED,1);
+  assert.equal(fs.readFileSync(file,"utf8"),before);
+ }finally{f.cleanup();}
+});
+test("operator audit reports a stranded bank PREPARED/lock and never repairs it",()=>{
+ const f=fixture();try{
+  f.fault("rollback");assert.equal(fire(f).success,false);
+  const file=path.join(f.root,"bank-ships","101.json.lock");
+  assert.equal(auditBanks({root:f.root}).counts.BANK_LOCKED_RECONCILE,1);
+  assert.equal(fs.existsSync(file),true);
+ }finally{f.cleanup();}
 });
