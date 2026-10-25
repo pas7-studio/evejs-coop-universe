@@ -28,8 +28,14 @@ function fixture(){
    rowSystemID:sql,physicalSystemID:physical,pilotSystemID:pilot}:
    {status:"UNSAFE",reason:"PHYSICAL_OR_PILOT_MISMATCH"};
  };
+ const audit=[];
  const ledger={
   witness,
+  recordRecoveryAttempt:x=>{
+   const id=x.transferID+":"+x.action+":"+x.witnessHash;
+   if(!audit.some(v=>v.id===id))audit.push({...x,id});
+   return {status:"RECORDED",auditID:id};
+  },
   nativeCommit:()=>{writes++;phase="NATIVE_COMMITTED";sql=202;return {status:phase}},
   finish:()=>{writes++;phase="COMPLETE";return {status:phase}},
   abort:()=>{writes++;phase="ABORTED";return {status:phase}},
@@ -54,7 +60,7 @@ function fixture(){
  const journal=()=>fs.writeFileSync(path.join(dir,"coop-pilot-001.json"),
   JSON.stringify({version:1,pilotID:data.pilotID,entityID:501,
    sourceSystemID:101,destinationSystemID:202,phase:"COMMITTED"}));
- return {dir,env,consoleApi,operator,entityID,review,apply,journal,
+ return {dir,env,consoleApi,operator,entityID,review,apply,journal,audit,
   setPhase:x=>phase=x,setPhysical:x=>physical=x,setPilot:x=>pilot=x,
   deny:()=>allow=false,get writes(){return writes}};
 }
@@ -75,6 +81,8 @@ test("operator cannot replay stale evidence after a native SQL state change",()=
   assert.equal(result.nextAction,"RELOCATE_PILOT");
   assert.equal(f.apply(w).status,"STALE_OR_UNSAFE_REPAIR_WITNESS");
   assert.equal(f.writes,1);
+  assert.equal(f.audit.length,1);
+  assert.equal(f.audit[0].principalID,"root-administrator");
  }finally{fs.rmSync(f.dir,{recursive:true,force:true})}
 });
 test("operator must independently confirm each of the three durable steps",()=>{
