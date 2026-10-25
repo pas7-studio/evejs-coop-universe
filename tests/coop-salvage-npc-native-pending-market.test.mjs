@@ -37,7 +37,7 @@ function fixture(fn,options={}){
  const order=state=>({operation_id:currentOp,
   source_item_id:"100000",order_id:"456",owner_id:10001,
   station_id:60001,type_id:34,quantity:5,price:12,
-  bid:false,is_corp:true,state});
+  bid:false,is_corp:true,source:"coop-npc",vol_remaining:5,state});
  let currentOp=null;
  const call=async(method,p)=>{
   if(method==="ReserveNpcSellOrder"){

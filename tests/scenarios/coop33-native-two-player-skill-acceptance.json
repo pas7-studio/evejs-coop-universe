@@ -1,0 +1,154 @@
+{
+  "name": "Chat33 native skills two-client acceptance",
+  "pinnedUpstream": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "status": "NOT_RUN",
+  "requires": [
+    "operator-approved cloned world",
+    "native GameStore backup/restore test",
+    "two authorized client UIs",
+    "exclusive skill maintenance window",
+    "actual 48x opt-in on existing world only after durable old-rate cutover"
+  ],
+  "cases": [
+    {
+      "id": "SKILL-33-01",
+      "actor": "A",
+      "area": "start_native_training",
+      "expectation": "A trains injected skillbook with all prerequisites, no free SP",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-02",
+      "actor": "B",
+      "area": "start_native_training",
+      "expectation": "B trains a different skill with independent queue and own skillbooks",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-03",
+      "actor": "A",
+      "area": "skillbook_custody",
+      "expectation": "cannot inject a foreign owned skillbook",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-04",
+      "actor": "B",
+      "area": "skillbook_custody",
+      "expectation": "cannot inject one item twice after reconnect",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-05",
+      "actor": "A",
+      "area": "prerequisites",
+      "expectation": "cannot train a skill when required prerequisite level absent",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-06",
+      "actor": "B",
+      "area": "alpha_caps",
+      "expectation": "Alpha skill level and 5m SP cap enforced on own account",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-07",
+      "actor": "A",
+      "area": "omega_entitlement",
+      "expectation": "Omega flag and actual license agree in both character sheet and native runtime",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-08",
+      "actor": "B",
+      "area": "omega_entitlement",
+      "expectation": "expiring per-account Omega cannot borrow A entitlement",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-09",
+      "actor": "A",
+      "area": "rate_100_to_48",
+      "expectation": "old rate is settled before lowering to 48x, no retrospective SP credit",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-10",
+      "actor": "B",
+      "area": "rate_100_to_48",
+      "expectation": "B activeStartTime rebased independently; exact SP preserved",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-11",
+      "actor": "A",
+      "area": "48x_native_client_eta",
+      "expectation": "real EVE client ETA matches authoritative active queue end after rate switch",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-12",
+      "actor": "B",
+      "area": "48x_native_client_eta",
+      "expectation": "real EVE client ETA matches independent Alpha/Omega rate",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-13",
+      "actor": "A",
+      "area": "offline_training",
+      "expectation": "disconnect/reconnect preserves earned SP and next queue entry",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-14",
+      "actor": "B",
+      "area": "server_restart",
+      "expectation": "restart preserves skill SP, active queue, order, Omega license and native skill points",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-15",
+      "actor": "A",
+      "area": "crash_during_migration",
+      "expectation": "fault between native skill and queue writes stops with repair, no blind retry",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-16",
+      "actor": "B",
+      "area": "crash_after_rebase",
+      "expectation": "fault after native rebase before journal receipt never adds SP twice",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-17",
+      "actor": "A",
+      "area": "active_queue_edit",
+      "expectation": "queue changes blocked during quiesced migration window",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-18",
+      "actor": "B",
+      "area": "account_slots",
+      "expectation": "shared and separate account queue-slot limits enforced",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-19",
+      "actor": "A",
+      "area": "speed_runtime_proof",
+      "expectation": "running environment rate, native SP/min and ETA all agree",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "SKILL-33-20",
+      "actor": "B",
+      "area": "speed_runtime_proof",
+      "expectation": "running environment rate, native SP/min and ETA all agree",
+      "status": "NOT_RUN"
+    }
+  ]
+}
