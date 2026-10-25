@@ -145,4 +145,17 @@ function nativeVoluntaryOptIn(session,eventID,board){
   return singleton.volunteer(session,eventID);
  }catch{return {status:"NATIVE_VOLUNTEER_GATE_UNAVAILABLE"}}
 }
-module.exports={createVolunteers,nativeVoluntaryOptIn};
+// Read-only persisted voluntary receipt. Native route still must have its own
+// separate server-owned contract/wallet authority before debiting corporate ISK.
+function readVerifiedNativePair(eventID){
+ try{
+  const verifier=createVolunteers({
+   root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs",
+   readEvent:()=>({status:"UNAVAILABLE"}),
+   readInterest:()=>({status:"UNAVAILABLE"}),
+   getSessions:()=>[],getScene:()=>null,
+   fleetRuntime:{getFleetForCharacter:()=>null,getMemberRecord:()=>null}});
+  return verifier.status(eventID);
+ }catch{return {status:"NATIVE_DUO_RECEIPT_UNAVAILABLE"}}
+}
+module.exports={createVolunteers,nativeVoluntaryOptIn,readVerifiedNativePair};
