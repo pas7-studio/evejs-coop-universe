@@ -10,9 +10,11 @@ const pos=value=>Number.isSafeInteger(Number(value))&&Number(value)>0;
 function createIndustryRuntime({guard,receipts,fence}={}){
  if(!guard||typeof guard.checkInstall!=="function"||
     typeof guard.checkDeliver!=="function"||
+    typeof guard.checkCancel!=="function"||
     !receipts||typeof receipts.capture!=="function"||
     typeof receipts.verifyInstall!=="function"||
     typeof receipts.verifyDeliver!=="function"||
+    typeof receipts.verifyCancel!=="function"||
     !fence||typeof fence.execute!=="function")
   throw Error("COOP_INDUSTRY_NATIVE_AUTHORITIES_REQUIRED");
 
@@ -20,7 +22,8 @@ function createIndustryRuntime({guard,receipts,fence}={}){
   if(typeof nativeExecute!=="function")
    throw Error("COOP_INDUSTRY_NATIVE_CALLBACK_REQUIRED");
   const proof=kind==="INSTALL"?guard.checkInstall(session,request):
-   kind==="DELIVER"?guard.checkDeliver(session,jobID):null;
+   kind==="DELIVER"?guard.checkDeliver(session,jobID):
+   kind==="CANCEL"?guard.checkCancel(session,jobID):null;
   if(!proof||proof.ok!==true)
    throw Error(DENIED+":"+String(proof?.reason||"INVALID_OPERATION"));
   if(proof.kind!==kind||!pos(proof.characterID)||!pos(proof.ownerID))
@@ -34,7 +37,8 @@ function createIndustryRuntime({guard,receipts,fence}={}){
     return confirmedResult;
    },
    verifyNative:args=>kind==="INSTALL"?
-    receipts.verifyInstall(args):receipts.verifyDeliver(args),
+    receipts.verifyInstall(args):kind==="DELIVER"?
+    receipts.verifyDeliver(args):receipts.verifyCancel(args),
    readPreviousJob
   });
   if(outcome?.status!==SETTLED||
@@ -45,9 +49,9 @@ function createIndustryRuntime({guard,receipts,fence}={}){
   if(kind==="INSTALL"&&(!pos(outcome.nativeJobID)||
     Number(confirmedResult?.data?.jobID)!==Number(outcome.nativeJobID)))
    throw Error(DENIED+":NATIVE_JOB_RECEIPT_MISMATCH");
-  if(kind==="DELIVER"&&
+  if(["DELIVER","CANCEL"].includes(kind)&&
     Number(outcome.nativeJobID)!==Number(jobID))
-   throw Error(DENIED+":NATIVE_DELIVERY_RECEIPT_MISMATCH");
+   throw Error(DENIED+":NATIVE_JOB_ACTION_RECEIPT_MISMATCH");
   return confirmedResult;
  }
  return Object.freeze({
@@ -59,7 +63,10 @@ function createIndustryRuntime({guard,receipts,fence}={}){
    kind:"DELIVER",session,jobID,
    nativeExecute:()=>nativeDeliver(session,jobID)
   }),
-  cancel:()=>{throw Error(DENIED+":CANCEL_REQUIRES_NATIVE_RECOVERY_BOUNDARY");}
+  cancel:(session,jobID,nativeCancel)=>run({
+   kind:"CANCEL",session,jobID,
+   nativeExecute:()=>nativeCancel(session,jobID)
+  })
  });
 }
 
@@ -135,5 +142,7 @@ function install({session,request,nativeInstall,readPreviousJob}={}){
 function deliver({session,jobID,nativeDeliver}={}){
  return native().deliver(session,jobID,nativeDeliver);
 }
-function cancel(){return native().cancel();}
+function cancel({session,jobID,nativeCancel}={}){
+ return native().cancel(session,jobID,nativeCancel);
+}
 module.exports={createIndustryRuntime,install,deliver,cancel};
