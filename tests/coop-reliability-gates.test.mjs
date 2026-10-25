@@ -4,10 +4,10 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {audit, checkPersistence, checkEconomy, checkWorld, checkParty, checkClient, parseEvents} = require('../scripts/coop-reliability-gates.cjs');
 const now=Date.parse('2026-10-25T11:00:00Z');
-const meta={projectSha:'a'.repeat(40),upstreamSha:'b'.repeat(40),imageId:'sha256:'+'c'.repeat(64)};
+const meta={projectSha:'a'.repeat(40),upstreamSha:'b'.repeat(40),imageId:'sha256:'+'c'.repeat(64),containerStartedAt:'2026-10-25T09:00:00Z'};
 const event=(event,props={},time=now-10000)=>JSON.stringify({event,at:new Date(time).toISOString(),systemID:30000142,...props});
 const worldLog=[event('living-headless-boot-requested'),event('living-world-topology',{realWaypoints:8,realAsteroidBelts:2}),event('living-native-industry',{fleets:[{minerIDs:[101],haulerIDs:[102]}]}),event('virtual-world-materialization',{livingShips:[{entityID:103,pilotID:'coop-pilot-003',role:'pirate'}]}),event('living-native-activity',{status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
-const partyLog=[event('space-login-attach',{characterID:1,shipID:101}),event('space-login-attach',{characterID:2,shipID:102}),event('coop-shared-scene',{mutualVisibility:true,pilots:[{characterID:1,shipID:101,shipExists:true},{characterID:2,shipID:102,shipExists:true}]})].join('\n');
+const partyLog=[event('space-login-attach',{characterID:101,shipID:1001}),event('space-login-attach',{characterID:102,shipID:1002}),event('coop-shared-scene',{mutualVisibility:true,pilots:[{characterID:101,shipID:1001,shipExists:true},{characterID:102,shipID:1002,shipExists:true}]})].join('\n');
 function snapshot(at, startedAt,changes={}) {return {
   source:'native-authoritative-export',projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,
   capturedAt:at, runtime:{volumeName:'evejs-data',containerId:'f'.repeat(64),imageId:meta.imageId,containerStartedAt:startedAt},
@@ -27,9 +27,9 @@ test('malformed JSONL is fail closed',()=>assert.equal(checkWorld(worldLog+'\n{b
 test('stale telemetry is blocked',()=>assert.equal(checkWorld(event('living-headless-boot-requested',{},now-4000000),meta,now,30).status,'BLOCKED'));
 test('unbooted fake topology cannot qualify',()=>assert.equal(checkWorld(worldLog.split('\n').slice(1).join('\n'),meta,now,30).status,'BLOCKED'));
 test('only observed physical world activity is server pass',()=>assert.equal(checkWorld(worldLog,meta,now,30).status,'PASS_SERVER'));
-test('two authenticated-looking TCP sockets do not qualify as shared scene',()=>assert.equal(checkParty(event('tcp-reconnected'),now,30).status,'BLOCKED'));
-test('recent mutual scene qualifies only server-side, not a real client',()=>assert.equal(checkParty(partyLog,now,30).status,'PASS_SERVER'));
-test('stale shared scene is blocked even with two previous pilots',()=>assert.equal(checkParty(partyLog.replaceAll('2026-10-25T10:59:50.000Z','2026-10-25T10:50:00.000Z'),now,30).status,'BLOCKED'));
+test('two authenticated-looking TCP sockets do not qualify as shared scene',()=>assert.equal(checkParty(event('tcp-reconnected'),meta,now,30).status,'BLOCKED'));
+test('recent mutual scene qualifies only server-side, not a real client',()=>assert.equal(checkParty(partyLog,meta,now,30).status,'PASS_SERVER'));
+test('stale shared scene is blocked even with two previous pilots',()=>assert.equal(checkParty(partyLog.replaceAll('2026-10-25T10:59:50.000Z','2026-10-25T10:50:00.000Z'),meta,now,30).status,'BLOCKED'));
 test('unaltered authoritative state across evidenced restart qualifies snapshot only',()=>assert.equal(checkPersistence(before,after,meta).status,'PASS_SNAPSHOT'));
 test('a later snapshot without restart evidence is blocked',()=>assert.equal(checkPersistence(before,snapshot('2026-10-25T10:15:00Z','2026-10-25T09:00:00Z'),meta).status,'BLOCKED'));
 test('identical ID in two cargo owners fails',()=>{const s=structuredClone(after);s.characters[1].items[0].id=1001; assert.equal(checkPersistence(before,s,meta).status,'FAIL');});
@@ -49,5 +49,44 @@ test('valid event rows are bounded by window and rejects malformed timestamps',(
 test('duplicate reward key inside one transaction also fails',()=>{const x=structuredClone(ledger);x.entries.push({entryId:'new',txId:'mission7',account:'102',delta:'1000',kind:'mint',rewardKey:'mission:7:character:101'});assert.equal(checkEconomy(x,meta).status,'FAIL');});
 test('a mint transaction can contain distinct issuance keys',()=>{const x=structuredClone(ledger);x.entries.push({entryId:'new',txId:'mission7',account:'102',delta:'1000',kind:'mint',rewardKey:'mission:7:character:102'});assert.equal(checkEconomy(x,meta).status,'PASS_LEDGER');});
 test('noncanonical duplicate item identifiers are rejected',()=>{const x=structuredClone(after);x.characters[1].items[0].id='01001';assert.equal(checkPersistence(before,x,meta).status,'FAIL');});
-test('scene from before new server boot cannot pass party gate',()=>{const input=partyLog+'\n'+event('living-headless-boot-requested',{},now-5000);assert.equal(checkParty(input,now,30).status,'BLOCKED');});
+test('scene from before new server boot cannot pass party gate',()=>{const input=partyLog+'\n'+event('living-headless-boot-requested',{},now-5000);assert.equal(checkParty(input,meta,now,30).status,'BLOCKED');});
 test('missing shared loot or ship gift never qualifies full coop',()=>{const x=structuredClone(client);x.observations.sharedLoot=false;assert.equal(checkClient(x,meta,now).status,'BLOCKED');const y=structuredClone(client);y.observations.shipGift=false;assert.equal(checkClient(y,meta,now).status,'BLOCKED');});
+
+// Runtime-epoch and observed-identity security regressions.
+test('world boot may be older than the short activity window if still same process',()=>{
+ const input=worldLog.replace('living-headless-boot-requested', 'living-headless-boot-requested');
+ const lines=input.split('\n');lines[0]=event('living-headless-boot-requested',{},now-3600000);
+ assert.equal(checkWorld(lines.join('\n'),meta,now,30).status,'PASS_SERVER');
+});
+test('events emitted before current Docker process cannot pass World',()=>{
+ const x={...meta,containerStartedAt:'2026-10-25T11:01:00Z'};
+ assert.equal(checkWorld(worldLog,x,now,30).status,'BLOCKED');
+});
+test('party must show two distinct native ship IDs',()=>{
+ const x=partyLog.replaceAll('shipID":1002','shipID":1001');
+ assert.equal(checkParty(x,meta,now,30).status,'BLOCKED');
+});
+test('party previous-process scene must be ignored',()=>{
+ const x={...meta,containerStartedAt:'2026-10-25T11:01:00Z'};
+ assert.equal(checkParty(partyLog,x,now,30).status,'BLOCKED');
+});
+test('client identity must match the actual pair seen in native scene',()=>{
+ const x=structuredClone(client);x.characterIds=[101,999];
+ assert.equal(audit({events:worldLog+'\n'+partyLog,meta,before,after,ledger,client:x,now}).gates.client.status,'BLOCKED');
+});
+test('persistence export must include the actual two observed pilots',()=>{
+ const x=structuredClone(before);x.characters[1].id=999;
+ assert.equal(audit({events:worldLog+'\n'+partyLog,meta,before:x,after,ledger,client,now}).gates.persistence.status,'FAIL');
+});
+test('same account transfer cannot masquerade as balanced payment',()=>{
+ const x=structuredClone(ledger);x.entries[1].account='101';
+ assert.equal(checkEconomy(x,meta).status,'FAIL');
+});
+test('zero monetary delta cannot count as settled transaction',()=>{
+ const x=structuredClone(ledger);x.entries[0].delta='0';
+ assert.equal(checkEconomy(x,meta).status,'FAIL');
+});
+test('runtime metadata must have a real container start timestamp',()=>{
+ const x={...meta};delete x.containerStartedAt;
+ assert.equal(audit({events:worldLog,meta:x,now}).overall,'BLOCKED_REVISION');
+});
