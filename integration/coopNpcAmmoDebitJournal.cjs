@@ -208,12 +208,36 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
   if(!entityID||!ownerID||!validBoundary(boundaryMs)||
    !Array.isArray(entries)||!entries.length||entries.length>16)
    return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_INVALID"};
-  const seen=new Set();
+  const activeModules=new Set();
   for(const entry of entries){
    const moduleID=positive(entry?.moduleItem?.itemID);
-   if(!moduleID||seen.has(moduleID))
+   if(!moduleID||activeModules.has(moduleID))
     return {ok:false,status:"NATIVE_AMMO_BANK_DUPLICATE_MODULE"};
-   seen.add(moduleID);
+   activeModules.add(moduleID);
+  }
+  // Even if a gun was unloaded after an uncertain debit, its journal
+  // must still quarantine the *ship*. Otherwise changing bank membership
+  // lets previously healthy guns debit repeatedly before failing again.
+  const toInspect=new Set(activeModules);
+  const dir=path.join(root,"ships",String(entityID));
+  try{
+   if(fs.existsSync(dir)){
+    const stat=fs.lstatSync(dir);
+    if(!stat.isDirectory()||stat.isSymbolicLink())
+     return {ok:false,status:"NATIVE_AMMO_BANK_UNSAFE_DIRECTORY"};
+    const names=fs.readdirSync(dir);
+    if(names.length>256)
+     return {ok:false,status:"NATIVE_AMMO_BANK_SCAN_LIMIT"};
+    for(const name of names){
+     const found=/^([1-9][0-9]*)\.json(?:\.lock|\.tmp-[0-9]+-[0-9]+)?$/.exec(name);
+     const moduleID=found?positive(found[1]):null;
+     if(!moduleID||String(moduleID)!==found[1])
+      return {ok:false,status:"NATIVE_AMMO_BANK_UNKNOWN_FILE"};
+     toInspect.add(moduleID);
+    }
+   }
+  }catch(_){return {ok:false,status:"NATIVE_AMMO_BANK_SCAN_UNSAFE"};}
+  for(const moduleID of toInspect){
    const result=inspect({entityID,moduleID});
    if(result.status!=="EMPTY"&&result.status!=="COMMITTED")
     return {ok:false,status:"NATIVE_AMMO_BANK_NEEDS_RECONCILIATION",
@@ -222,11 +246,13 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
    if(prev&&(prev.entityID!==entityID||prev.moduleID!==moduleID||
     prev.ownerID!==ownerID))
     return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_MISMATCH",moduleID};
-   if(prev&&boundaryMs<=prev.boundaryMs)
+   if(activeModules.has(moduleID)&&prev&&boundaryMs<=prev.boundaryMs)
     return {ok:false,status:"NATIVE_AMMO_BANK_REPLAY",moduleID};
   }
-  return {ok:true,status:"NATIVE_AMMO_BANK_READY",checked:seen.size};
+  return {ok:true,status:"NATIVE_AMMO_BANK_READY",
+   checked:activeModules.size,receiptsScanned:toInspect.size};
  }
+
  return {begin,commit,inspect,preflightBank};
 }
 let defaultJournal=null,defaultRoot=null;
