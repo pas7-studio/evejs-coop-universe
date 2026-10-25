@@ -202,8 +202,17 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   }
   if(e.phase==="LISTED"){
    const order=market.getOrder(e.orderID),sales=market.getSaleEvidence(e.orderID);
+   // A paid receipt for an order ID is NOT proof of this factory stack.
+   // Re-attest the original listing identity on every read before SOLD.
+   // The order's asking price is immutable for this director: repricing
+   // requires a separate original Rust/escrow operation and new evidence.
    if(!order||order.orderID!==e.orderID||order.ownerID!==ownerID||
-      order.nativeEscrowVerified!==true||!Array.isArray(sales))return halt("NATIVE_SALE_EVIDENCE_MISSING",id);
+      order.stationID!==stationID||order.typeID!==e.typeID||
+      order.sourceItemID!==e.itemID||
+      order.originalQuantity!==e.quantity||
+      !safeInt(e.priceCents)||saleCents(order.price)!==e.priceCents||
+      order.nativeEscrowVerified!==true||!Array.isArray(sales))
+    return halt("NATIVE_SALE_ORIGINAL_ORDER_CUSTODY_DRIFT",id);
    if(!Number.isSafeInteger(order.remainingQuantity)||order.remainingQuantity<0||
       order.remainingQuantity>e.quantity)return halt("NATIVE_SALE_REMAINING_INVALID",id);
    const filled=sales.reduce((sum,x)=>{
