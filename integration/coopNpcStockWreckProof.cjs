@@ -42,7 +42,8 @@ function verifyStockKill({scene,victim,wreck,options={},links=[],fleets=[]}={}){
    stock.push({id:victimID,role:"hauler"});
  }
  if(stock.length!==1)return {status:"STOCK_FLEET_MEMBERSHIP_MISSING"};
- const {isAuthorizedStockMiningRaid}=require("./coopNativeRaidEligibility");
+ const ext=__filename.endsWith(".cjs")?".cjs":"";
+ const {isAuthorizedStockMiningRaid}=require("./coopNativeRaidEligibility"+ext);
  if(!isAuthorizedStockMiningRaid({systemID,attacker,target:victim,
   links,pilots:[],fleetShips:stock}))
   return {status:"NATIVE_STOCK_RAID_NOT_AUTHORIZED"};
