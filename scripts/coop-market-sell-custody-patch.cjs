@@ -33,13 +33,17 @@ function patch(source,{remove=false}={}){
   service="async function cancelStructureMarketOrdersForServiceLoss(",
   cancel="  async Handle_CancelCharOrder(args, session) {",
   modify="  async Handle_ModifyCharOrder(args, session) {";
+ // Verify even when escrow is MISSING, before the event can be checkpointed.
+ wrap(exp,structure,[
+  '    if (escrowRecord && getEscrowType(escrowRecord) === "sell") {'
+ ],'    const coopSellProof = '+flag+' ? '+proof("order","escrowRecord","listEscrowItemsForOrder(orderID,ownerID)")+' : null;',"");
  wrap(exp,structure,[
   "      moveEscrowItemsBackToSeller(",
   "        orderID,",
   "        ownerID,",
   "        normalizePositiveInteger(orderRow && orderRow.station_id, 0),",
   "      );"
- ],'      const coopSellProof = '+flag+' ? '+proof("order","escrowRecord","listEscrowItemsForOrder(orderID,ownerID)")+' : null;',
+ ],'',
  '      if (coopSellProof) '+restored("orderID","ownerID")+';');
  wrap(structure,service,[
   "    moveEscrowItemsBackToSeller(orderID, ownerID, stationID);"
