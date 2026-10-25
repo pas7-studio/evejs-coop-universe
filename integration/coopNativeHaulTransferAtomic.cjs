@@ -47,6 +47,26 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
      miner.transient===true||hauler.transient===true||
      scene.getEntityByID(minerID)!==miner||scene.getEntityByID(haulerID)!==hauler)
    return failed(miner,hauler,fleet,"ALIFE10_PHYSICAL_FLEET_IDENTITY_INVALID");
+  // This exported atomic writer can be called independently of the high-level
+  // hauler selector. A valid fleet and source cargo are not proof that two
+  // ships are physically close enough to transfer the original item.
+  const vec=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinite(p[k]));
+  const inWarp=ship=>Boolean(ship.isWarping||ship.pendingWarp||ship.warpState||
+    String(ship.mode||"").toUpperCase().includes("WARP"));
+  const radius=ship=>ship.radius===undefined||ship.radius===null?0:
+    typeof ship.radius==="number"&&Number.isFinite(ship.radius)&&ship.radius>=0?
+      ship.radius:NaN;
+  const separation=vec(miner.position)&&vec(hauler.position)?
+   Math.hypot(miner.position.x-hauler.position.x,
+    miner.position.y-hauler.position.y,
+    miner.position.z-hauler.position.z)-
+    radius(miner)-radius(hauler):NaN;
+  if(inWarp(miner)||inWarp(hauler)||!Number.isFinite(separation)||
+     Math.max(0,separation)>2500)
+   // Normal NPC motion is transient. Never quarantine a healthy hull just
+   // because it was out of range during a legitimate world tick.
+   return {status:"BLOCKED_PHYSICAL_RANGE",reason:"ALIFE10_SHIPS_NOT_COLOCATED",
+    quantity:0,volumeM3:0};
   const minerRow=nativeStore.getNativeEntity(minerID),
     haulerRow=nativeStore.getNativeEntity(haulerID),
     minerController=nativeStore.getNativeController(minerID),

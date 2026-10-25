@@ -29,9 +29,10 @@ function setup(t){
  t.after(()=>{if(db)db.close();fs.rmSync(dir,{recursive:true,force:true});
   for(const [k,v] of Object.entries(prev)){if(v===undefined)delete process.env[k];else process.env[k]=v;}});
  const miner={kind:"ship",itemID:minerID,ownerID:1000035,nativeNpc:true,
-  transient:false,nativeCargoItems:[{itemID:cargoID,typeID:34,volume:0.1,quantity:13}]};
+  transient:false,position:{x:0,y:0,z:0},
+  nativeCargoItems:[{itemID:cargoID,typeID:34,volume:0.1,quantity:13}]};
  const hauler={kind:"ship",itemID:haulerID,ownerID:1000035,nativeNpc:true,
-  transient:false,nativeCargoItems:[]};
+  transient:false,position:{x:2000,y:0,z:0},nativeCargoItems:[]};
  const scene={systemID,getEntityByID:id=>id===minerID?miner:id===haulerID?hauler:null};
  const fleet={systemID,fleetID,startupKey:systemID+":"+slot,
   minerEntityIDs:[minerID],haulerEntityIDs:[haulerID]};
@@ -88,4 +89,36 @@ test("reopened committed transfer cannot debit a missing miner cargo a second ti
  assert.equal(f.read("cargo")[String(cargoID)].entityID,haulerID);
  assert.equal(Object.keys(f.read("cargo")).length,1);
  assert.equal(f.read(receiptKey(cargoID)).status,"COMMITTED");
+});
+
+
+test("a distant original miner and hauler cannot teleport the same durable cargoID",t=>{
+ const f=setup(t);f.hauler.position.x=10000000;
+ const before=f.read("cargo");
+ const result=f.move();
+ assert.equal(result.status,"BLOCKED_PHYSICAL_RANGE");
+ assert.equal(f.read(receiptKey(cargoID)),null);
+ assert.deepEqual(f.read("cargo"),before);
+ assert.equal(f.miner.coopMiningCargoNeedsOperatorRepair,undefined);
+ f.hauler.position.x=2000;
+ assert.equal(f.move().status,"COMMITTED");
+});
+test("native hauler in warp cannot receive an atomic ore transfer",t=>{
+ const f=setup(t);f.hauler.pendingWarp=true;
+ assert.equal(f.move().status,"BLOCKED_PHYSICAL_RANGE");
+ assert.equal(f.read("cargo")[String(cargoID)].entityID,minerID);
+ assert.equal(f.read(receiptKey(cargoID)),null);
+ delete f.hauler.pendingWarp;
+ assert.equal(f.move().status,"COMMITTED");
+});
+test("invalid native coordinates cannot authorize original cargo custody transfer",t=>{
+ const f=setup(t);f.hauler.position.x=Infinity;
+ assert.equal(f.move().status,"BLOCKED_PHYSICAL_RANGE");
+ assert.equal(f.read("cargo")[String(cargoID)].entityID,minerID);
+ assert.equal(f.read(receiptKey(cargoID)),null);
+});
+test("native hull surface distance is respected without rejecting in-range haulers",t=>{
+ const f=setup(t);f.hauler.position.x=2600;
+ f.miner.radius=50;f.hauler.radius=100;
+ assert.equal(f.move().status,"COMMITTED");
 });
