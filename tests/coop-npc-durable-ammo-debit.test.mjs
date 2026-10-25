@@ -181,3 +181,102 @@ test("lost or replaced exclusive writer lock cannot commit ambiguous native debi
   assert.equal(f.state().phase,"PREPARED");
  }finally{f.cleanup();}
 });
+
+test("entire bank is blocked before first new debit if another barrel has uncertain PREPARED",()=>{
+ const f=fixture();try{
+  const j=f.make(),first=j.begin(f.args());
+  assert.equal(first.ok,true);f.debit(4);
+  assert.equal(j.commit(first.token).ok,true);
+  f.rows.push({cargoID:502,entityID:101,moduleID:402,ownerID:900,
+   typeID:35,flagID:27,categoryID:8,quantity:5});
+  const pending=j.begin(f.args({
+   moduleItem:{itemID:402,flagID:27},
+   chargeItem:{itemID:502,typeID:35,quantity:5},
+   whenMs:1000
+  }));
+  assert.equal(pending.status,"PREPARED");
+  const bank=j.preflightBank({
+   entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}},{moduleItem:{itemID:402}}],
+   whenMs:1100
+  });
+  assert.equal(bank.ok,false);
+  assert.equal(bank.status,"NATIVE_AMMO_BANK_NEEDS_RECONCILIATION");
+  assert.equal(bank.moduleID,402);
+  assert.equal(f.rows[0].quantity,4,"first barrel must not be charged again");
+ }finally{f.cleanup();}
+});
+
+test("whole-bank preflight rejects replay of any committed barrel before spending",()=>{
+ const f=fixture();try{
+  const j=f.make(),first=j.begin(f.args());
+  f.debit(4);assert.equal(j.commit(first.token).ok,true);
+  const entry={entity:f.args().entity,
+   entries:[{moduleItem:{itemID:402}},{moduleItem:{itemID:401}}]};
+  assert.equal(j.preflightBank({...entry,whenMs:1000}).status,
+   "NATIVE_AMMO_BANK_REPLAY");
+  assert.equal(j.preflightBank({...entry,whenMs:1100}).status,
+   "NATIVE_AMMO_BANK_READY");
+  assert.equal(f.rows[0].quantity,4);
+ }finally{f.cleanup();}
+});
+
+test("orphaned receipt temp marks a committed bank unsafe until operator review",()=>{
+ const f=fixture();try{
+  const j=f.make(),one=j.begin(f.args());
+  f.debit(4);assert.equal(j.commit(one.token).ok,true);
+  const dir=path.join(f.root,"ships","101");
+  fs.writeFileSync(path.join(dir,"401.json.tmp-333-2"),"uncertain");
+  assert.equal(j.inspect({entityID:101,moduleID:401}).status,
+   "ORPHAN_TEMP_RECONCILE");
+  const bank=j.preflightBank({entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}}],whenMs:1200});
+  assert.equal(bank.status,"NATIVE_AMMO_BANK_NEEDS_RECONCILIATION");
+  assert.equal(bank.reason,"ORPHAN_TEMP_RECONCILE");
+  assert.equal(f.rows[0].quantity,4);
+ }finally{f.cleanup();}
+});
+
+test("bank identity and repeated module IDs fail closed",()=>{
+ const f=fixture();try{
+  const j=f.make();
+  assert.equal(j.preflightBank({entity:f.args().entity,entries:[],whenMs:1200}).ok,false);
+  assert.equal(j.preflightBank({entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}},{moduleItem:{itemID:401}}],
+   whenMs:1200}).status,"NATIVE_AMMO_BANK_DUPLICATE_MODULE");
+  const one=j.begin(f.args());f.debit(4);
+  assert.equal(j.commit(one.token).ok,true);
+  assert.equal(j.preflightBank({
+   entity:{itemID:101,ownerID:901},
+   entries:[{moduleItem:{itemID:401}}],whenMs:1200
+  }).status,"NATIVE_AMMO_BANK_IDENTITY_MISMATCH");
+ }finally{f.cleanup();}
+});
+
+test("unloaded pending weapon still quarantines entire ship before a new bank debit",()=>{
+ const f=fixture();try{
+  const j=f.make(),first=j.begin(f.args());
+  f.debit(4);assert.equal(j.commit(first.token).ok,true);
+  const pending=j.begin(f.args({moduleItem:{itemID:402,flagID:27},
+   chargeItem:{itemID:502,typeID:35,quantity:5}}));
+  assert.equal(pending.status,"PREPARED");
+  // Simulate gun 402 no longer listed among active weapon-bank members.
+  const result=j.preflightBank({entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}}],whenMs:1200});
+  assert.equal(result.status,"NATIVE_AMMO_BANK_NEEDS_RECONCILIATION");
+  assert.equal(result.moduleID,402);
+  assert.equal(f.rows[0].quantity,4);
+ }finally{f.cleanup();}
+});
+
+test("unexpected journal filename fails the ship-wide preflight closed",()=>{
+ const f=fixture();try{
+  const j=f.make(),one=j.begin(f.args());f.debit(4);
+  assert.equal(j.commit(one.token).ok,true);
+  fs.writeFileSync(path.join(f.root,"ships","101","401.json.tmp-UNKNOWN"),"bad");
+  const result=j.preflightBank({entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}}],whenMs:1100});
+  assert.equal(result.status,"NATIVE_AMMO_BANK_UNKNOWN_FILE");
+  assert.equal(f.rows[0].quantity,4);
+ }finally{f.cleanup();}
+});

@@ -57,6 +57,28 @@ const journalSettle=[
  '      if (!settled.ok) return { success: false, errorMsg: settled.status, stopReason: "ammo" };',
  '    }',
 ].join("\n");
+const turretBankSafety=[
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" &&',
+ '      process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1" &&',
+ '      resolvedWeaponSnapshot.chargeMode === "stack" &&',
+ '      !chargeOptionalTurretWeapon) {',
+ '    const bank = require("./coopNpcAmmoDebitJournal").preflightBank({',
+ '      entity: attackerEntity, entries: activeTurretEntries, whenMs: cycleBoundaryMs,',
+ '    });',
+ '    if (!bank.ok) return { success: false, errorMsg: bank.status, stopReason: "ammo" };',
+ '  }',
+].join("\n");
+const missileBankSafety=[
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" &&',
+ '      process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1") {',
+ '    const bank = require("./coopNpcAmmoDebitJournal").preflightBank({',
+ '      entity: attackerEntity, entries: armedEntries, whenMs: cycleBoundaryMs,',
+ '    });',
+ '    if (!bank.ok) return { success: false, errorMsg: bank.status, stopReason: "ammo" };',
+ '  }',
+].join("\n");
 const turretPreDebit=[
  '  // P0: before actual native fire or turret damage, verify the real',
  '  // fitted cargo. Stack ammo is debited before shot resolution; crystals',
@@ -145,7 +167,8 @@ function patch(source,{remove=false}={}){
  // insertion is checked per section. This supports repeated apply + remove.
  const modify=(name,changes)=>{
   text=segment(text,name,body=>{
-   for(const [base,added,where] of changes){
+   // Reverse nested insertions on uninstall to preserve pristine bytes.
+   for(const [base,added,where] of (remove?[...changes].reverse():changes)){
     const old=e(base),fresh=e(added);
     if(remove){
      if(body.includes(fresh))body=once(body,fresh,old,where);
@@ -167,13 +190,19 @@ function patch(source,{remove=false}={}){
  const fire='  const shotResult = resolveTurretShot({';
  modify("executeTurretCycle",[
   [fire,turretPreDebit+"\n\n"+fire,"pre-damage debit"],
-  [turretOld,turretNew,"single native debit"]
+  [turretOld,turretNew,"single native debit"],
+  ['  // P0: before actual native fire or turret damage, verify the real',
+   turretBankSafety+"\n"+'  // P0: before actual native fire or turret damage, verify the real',
+   "whole-bank durable preflight"]
  ]);
  const start='  const chargeResults = [];';
  const check='  if (groupedAmmoFailure && chargeResults.every((entry) => !entry.result || !entry.result.success)) {';
  modify("executeMissileCycle",[
   [start,missilePreflight+"\n"+start,"missile bank preflight"],
-  [check,missileFail+"\n"+check,"block partial bank launch"]
+  [check,missileFail+"\n"+check,"block partial bank launch"],
+  ['  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+   missileBankSafety+"\n"+'  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+   "whole-bank missile journal preflight"]
  ]);
  // Syntax validation is performed by the caller's existing vm.Script.
  return text;

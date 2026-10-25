@@ -192,13 +192,68 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
   const file=fileFor(e,m);
   try{
    const state=load(file),lockExists=fs.existsSync(file+".lock");
+   const dir=path.dirname(file);
+   const orphanTemps=fs.existsSync(dir)&&fs.readdirSync(dir).some(name=>
+    name.startsWith(String(m)+".json.tmp-"));
    return {status:lockExists?"LOCKED_RECONCILE":
+    orphanTemps?"ORPHAN_TEMP_RECONCILE":
     state?.phase==="PREPARED"?"PREPARED_RECONCILE":
     state?.phase==="COMMITTED"?"COMMITTED":"EMPTY",
     state,lockExists};
   }catch(_){return {status:"CORRUPT_RECONCILE"};}
  }
- return {begin,commit,inspect};
+ function preflightBank({entity,entries,whenMs}={}){
+  const entityID=positive(entity?.itemID),ownerID=positive(entity?.ownerID),
+   boundaryMs=Number(whenMs);
+  if(!entityID||!ownerID||!validBoundary(boundaryMs)||
+   !Array.isArray(entries)||!entries.length||entries.length>16)
+   return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_INVALID"};
+  const activeModules=new Set();
+  for(const entry of entries){
+   const moduleID=positive(entry?.moduleItem?.itemID);
+   if(!moduleID||activeModules.has(moduleID))
+    return {ok:false,status:"NATIVE_AMMO_BANK_DUPLICATE_MODULE"};
+   activeModules.add(moduleID);
+  }
+  // Even if a gun was unloaded after an uncertain debit, its journal
+  // must still quarantine the *ship*. Otherwise changing bank membership
+  // lets previously healthy guns debit repeatedly before failing again.
+  const toInspect=new Set(activeModules);
+  const dir=path.join(root,"ships",String(entityID));
+  try{
+   if(fs.existsSync(dir)){
+    const stat=fs.lstatSync(dir);
+    if(!stat.isDirectory()||stat.isSymbolicLink())
+     return {ok:false,status:"NATIVE_AMMO_BANK_UNSAFE_DIRECTORY"};
+    const names=fs.readdirSync(dir);
+    if(names.length>256)
+     return {ok:false,status:"NATIVE_AMMO_BANK_SCAN_LIMIT"};
+    for(const name of names){
+     const found=/^([1-9][0-9]*)\.json(?:\.lock|\.tmp-[0-9]+-[0-9]+)?$/.exec(name);
+     const moduleID=found?positive(found[1]):null;
+     if(!moduleID||String(moduleID)!==found[1])
+      return {ok:false,status:"NATIVE_AMMO_BANK_UNKNOWN_FILE"};
+     toInspect.add(moduleID);
+    }
+   }
+  }catch(_){return {ok:false,status:"NATIVE_AMMO_BANK_SCAN_UNSAFE"};}
+  for(const moduleID of toInspect){
+   const result=inspect({entityID,moduleID});
+   if(result.status!=="EMPTY"&&result.status!=="COMMITTED")
+    return {ok:false,status:"NATIVE_AMMO_BANK_NEEDS_RECONCILIATION",
+     moduleID,reason:result.status};
+   const prev=result.state;
+   if(prev&&(prev.entityID!==entityID||prev.moduleID!==moduleID||
+    prev.ownerID!==ownerID))
+    return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_MISMATCH",moduleID};
+   if(activeModules.has(moduleID)&&prev&&boundaryMs<=prev.boundaryMs)
+    return {ok:false,status:"NATIVE_AMMO_BANK_REPLAY",moduleID};
+  }
+  return {ok:true,status:"NATIVE_AMMO_BANK_READY",
+   checked:activeModules.size,receiptsScanned:toInspect.size};
+ }
+
+ return {begin,commit,inspect,preflightBank};
 }
 let defaultJournal=null,defaultRoot=null;
 function active(){
@@ -223,4 +278,11 @@ function commit(token){
  try{return active().commit(token);}
  catch(_){return {ok:false,status:"NATIVE_AMMO_COMMIT_UNSAFE"};}
 }
-module.exports={createAmmoDebitJournal,begin,commit};
+function preflightBank(args){
+ if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE!=="1")
+  return {ok:true,status:"OFF"};
+ try{return active().preflightBank(args);}
+ catch(_){return {ok:false,status:"NATIVE_AMMO_BANK_UNSAFE"};}
+}
+module.exports={createAmmoDebitJournal,begin,commit,preflightBank};
