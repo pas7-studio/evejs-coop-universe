@@ -35,7 +35,9 @@ function atomicSave(file, record) {
 function settle(input) {
   const {scene,entity,targetEntity,mineableState,miningResult,transferredQuantity,
     cycleBoundaryMs,debit,credit,readState} = input || {};
-  if (!entity || entity.coopMiningCargoNeedsOperatorRepair) return fail(entity,"ALIFE06_REPAIR_REQUIRED");
+  if (!entity) return fail(entity,"ALIFE06_REPAIR_REQUIRED");
+  if (entity.coopMiningCargoNeedsOperatorRepair)
+    return {success:false,stopReason:"cargo",reason:entity.coopMiningCargoNeedsOperatorRepair};
   if (process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY !== "1")
     return fail(entity,"ALIFE06_CARGO_STRICT_REQUIRED");
   const dir = process.env.EVEJS_COOP_MINING_CYCLE_JOURNAL_DIR;
@@ -69,11 +71,21 @@ function settle(input) {
   inflight.add(key);
   let prior, record;
   try {
+    // A failed miner/rock pair must quarantine either participant, including
+    // after restart when the miner switches target or another miner arrives.
+    for (const entry of fs.readdirSync(root)) {
+      const match=/^alife06-(\\d+)-(\\d+)-(\\d+)\\.json$/.exec(entry);
+      if (!match || Number(match[1])!==systemID ||
+          (Number(match[2])!==rockID && Number(match[3])!==shipID)) continue;
+      const witness=JSON.parse(fs.readFileSync(path.join(root,entry),"utf8"));
+      if (witness.status!=="COMMITTED")
+        return fail(entity,"ALIFE06_UNRESOLVED_SOURCE_OR_SHIP");
+    }
     try { prior=JSON.parse(fs.readFileSync(file,"utf8")); }
     catch (error) { if (error.code!=="ENOENT") throw error; }
     if (prior && (prior.status!=="COMMITTED" ||
         prior.systemID!==systemID || prior.rockID!==rockID ||
-        prior.shipID!==shipID || prior.afterRock!==before))
+        prior.shipID!==shipID || before>prior.afterRock))
       return fail(entity,"ALIFE06_JOURNAL_CONFLICT");
     record={version:1,status:"PREPARED",systemID,shipID,rockID,oreTypeID,
       beforeRock:before,afterRock:before-consumed,normal,wasted,qty,
