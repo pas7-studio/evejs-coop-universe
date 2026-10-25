@@ -1,17 +1,17 @@
 {
-  "updatedAt": "2026-10-25T13:36:25.592Z",
-  "runId": "20261025-133625",
-  "projectRev": "27c246934585c75404b1d96d60f79eb338038322",
+  "updatedAt": "2026-10-25T13:37:22.544Z",
+  "runId": "20261025-133722",
+  "projectRev": "4872174a57094f07c10b231c6d24c12b285956a8",
   "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
-  "note": "friend-PC runbook committed (Proton forwarded port + SSH tunnel)",
+  "note": "state refreshed with a real full test run (82 files)",
   "next": "host runs Setup-Friend-Host -Apply with the friend public IP and key, then friend connects",
   "tests": {
     "status": "BASELINE_MATCH",
     "totals": {
-      "files": 79,
-      "pass": 525,
+      "files": 83,
+      "pass": 542,
       "fail": 0,
-      "skipped": 16,
+      "skipped": 18,
       "crashed": 0
     },
     "newFailures": []
@@ -31,11 +31,11 @@
     "problems": []
   },
   "server": {
-    "rows": 1027,
+    "rows": 1035,
     "firstAt": "2026-10-25T12:31:47.927Z",
-    "lastAt": "2026-10-25T13:35:59.063Z",
+    "lastAt": "2026-10-25T13:36:54.443Z",
     "types": {
-      "living-native-activity": 272,
+      "living-native-activity": 280,
       "living-world-topology": 92,
       "living-native-industry": 92,
       "living-native-materialization-attempt": 92,
@@ -85,7 +85,7 @@
     }
   ],
   "gates": {
-    "telemetry": "events 1027",
+    "telemetry": "events 1035",
     "client": "logs 3 file(s)"
   },
   "ledgerSummary": {

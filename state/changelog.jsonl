@@ -14,3 +14,4 @@
 {"at":"2026-10-25T13:22:07.653Z","runId":"20261025-132207","rev":"5fec4f67","note":"deploy LivingCoop","next":"run -Action World -WorldSystemID 30000144","tests":"525p/0f","overlay":"OVERLAY_OK"}
 {"at":"2026-10-25T13:26:39.163Z","runId":"20261025-132639","rev":"967c9d58","note":"deploy LivingCoop","next":"run -Action World -WorldSystemID 30000144","tests":"525p/0f","overlay":"OVERLAY_OK"}
 {"at":"2026-10-25T13:36:25.592Z","runId":"20261025-133625","rev":"27c24693","note":"friend-PC runbook committed (Proton forwarded port + SSH tunnel)","next":"host runs Setup-Friend-Host -Apply with the friend public IP and key, then friend connects","tests":"525p/0f","overlay":"OVERLAY_OK"}
+{"at":"2026-10-25T13:37:22.544Z","runId":"20261025-133722","rev":"4872174a","note":"state refreshed with a real full test run (82 files)","next":"host runs Setup-Friend-Host -Apply with the friend public IP and key, then friend connects","tests":"542p/0f","overlay":"OVERLAY_OK"}
