@@ -168,3 +168,16 @@ test("invalid time, cargo amount or module cannot create a journal",()=>{
   assert.equal(f.make().inspect({entityID:101,moduleID:401}).status,"EMPTY");
  }finally{f.cleanup();}
 });
+
+test("lost or replaced exclusive writer lock cannot commit ambiguous native debit",()=>{
+ const f=fixture();try{
+  const j=f.make(),first=j.begin(f.args());f.debit(4);
+  const lock=path.join(f.root,"ships","101","401.json.lock");
+  fs.unlinkSync(lock);
+  assert.equal(j.commit(first.token).status,"NATIVE_AMMO_COMMIT_UNSAFE");
+  fs.writeFileSync(lock,JSON.stringify({entityID:101,moduleID:401,
+   cargoID:501,boundaryMs:1000,pid:999999}));
+  assert.equal(j.commit(first.token).status,"NATIVE_AMMO_COMMIT_LOCK_LOST");
+  assert.equal(f.state().phase,"PREPARED");
+ }finally{f.cleanup();}
+});
