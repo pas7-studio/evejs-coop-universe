@@ -314,3 +314,27 @@ test("a bid below the merchant's own asking price is refused, cargo stays",async
    "no market mutation below the floor");
  }finally{x.cleanup()}
 });
+
+test("a rich buyer above the spending cap is still a valid counterparty for a sale",async()=>{
+ const x=fixture();try{
+  // maxPrice is what the NPC may SPEND. A high bid must never be skipped when
+  // the NPC is the seller, otherwise 100000 reads as "no buyer".
+  x.setExtraBuys([{source:"seed",order_id:"9100000000000000777",
+   station_id:x.station.stationID,type_id:34,price:5000,vol_remaining:2}]);
+  const t=x.trader({maxPrice:1000});
+  const r=await t.execute(x.params("sell",34));
+  assert.equal(r.status,"TRADE_SETTLED");
+  assert.equal(r.price,5000);
+  assert.equal(r.quantity,2);
+ }finally{x.cleanup()}
+});
+
+test("the spending cap still refuses an overpriced purchase",async()=>{
+ const x=fixture();try{
+  // The seeded sell order for type 35 costs 50 per unit, above the cap of 10.
+  const t=x.trader({maxPrice:10});
+  const r=await t.execute(x.params("buy",35));
+  assert.notEqual(r.status,"TRADE_SETTLED");
+  assert.equal(x.getCargo().some(c=>c.typeID===35),false,"no cargo may arrive above the cap");
+ }finally{x.cleanup()}
+});
