@@ -1,0 +1,177 @@
+{
+  "schema": "coop-047-native-partial-market/v1",
+  "upstream": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "doNotModifyVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "COOP047-001",
+      "title": "Player buys 10 of NPC 100-unit native Rust ask",
+      "steps": [
+        "Deploy reversed-testable COOP-034, 035, 047 Rust overlays in disposable checkout",
+        "Prepare real NPC native produced item, Rust open ask with 100 units and corporation wallet",
+        "Buy 10 via authenticated player order flow with durable claimKey"
+      ],
+      "expected": [
+        "One new globally allocated native itemID owned by buyer with 10 units",
+        "Original native escrowed itemID retains exactly 90 units",
+        "Player ISK debit equals NPC corporation wallet credit",
+        "Rust vol_remaining=90 and state open"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    },
+    {
+      "id": "COOP047-002",
+      "title": "Two buyers race for the same remaining stack",
+      "steps": [
+        "Create one verified native corporate ask",
+        "Start two concurrent Rust claim attempts from different authenticated buyers",
+        "Finalize winner with native GameStore receipt and retry losing request"
+      ],
+      "expected": [
+        "Exactly one claim enters SETTLING",
+        "Second buyer cannot debit or obtain phantom items",
+        "Physical item and ISK conservation proven by durable receipts"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    },
+    {
+      "id": "COOP047-003",
+      "title": "Last partial buyer takes remaining original item",
+      "steps": [
+        "Sell 20 units from 100-unit original stack",
+        "Buy remaining 80 with new unique claimKey and native fillID",
+        "Restart Rust and GameStore before rereading order"
+      ],
+      "expected": [
+        "Original itemID transfers to final buyer with quantity=80",
+        "Earlier 20-unit buyer item remains unchanged",
+        "Escrow row removed and Rust order FILLED",
+        "No quantity-zero original stack"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    },
+    {
+      "id": "COOP047-004",
+      "title": "Lost claim ACK after Rust commits",
+      "steps": [
+        "Persist request claimKey before sending Rust claim RPC",
+        "Commit Rust SETTLING then drop successful network acknowledgement",
+        "Restart client/server and retry exact claimKey"
+      ],
+      "expected": [
+        "Rust returns identical fill ID and remaining_before",
+        "No second claim or extra debit",
+        "Unresolved claim remains isolated from other buyers"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    },
+    {
+      "id": "COOP047-005",
+      "title": "Lost finalization ACK after native SQLite commit",
+      "steps": [
+        "Commit all six GameStore tables and native receipt",
+        "Finalize Rust then drop final ACK",
+        "Restart both services and resume same durable claimKey"
+      ],
+      "expected": [
+        "GameStore no duplicate buyer itemID or wallet journal",
+        "Rust finalization is idempotent",
+        "All quantities and ISK match initial conservation"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    },
+    {
+      "id": "COOP047-006",
+      "title": "Fault during native item/ISK atomic transaction",
+      "steps": [
+        "Reserve genuine Rust partial claim",
+        "Inject SQLite failure at final npcMarketFills write",
+        "Restart and inspect both databases"
+      ],
+      "expected": [
+        "All six GameStore tables roll back with original money and item stack",
+        "Rust remains SETTLING and invisible until reconciliation",
+        "No speculative automatic release"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    },
+    {
+      "id": "COOP047-007",
+      "title": "Missing identityState or forged source custody",
+      "steps": [
+        "Corrupt copied disposable native itemID allocator or escrow owner/type/location",
+        "Attempt partial buy through verified claim",
+        "Inspect claims, GameStore and Rust"
+      ],
+      "expected": [
+        "Native GameStore rejects operation before any committed wallet move",
+        "No new buyer item or duplicate item ID",
+        "Rust claim remains quarantined for operator review"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true,
+      "requiredEvidence": [
+        "original itemID",
+        "new itemID or terminal reuse",
+        "Rust claimKey/orderID/fillID",
+        "GameStore buyer and corporation ISK ledgers",
+        "escrow and wallet before/after snapshots"
+      ]
+    }
+  ]
+}
