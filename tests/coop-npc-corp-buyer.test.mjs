@@ -290,3 +290,18 @@ test("legitimate zero-tax original native receipt replays with null tax transact
   "NPC_PURCHASED_PLAYER_GOODS");
  assert.deepEqual(f.data,before);
 }));
+
+
+test("native seller row keyed by original player ID can settle without optional characterID",()=>run(async f=>{
+ delete f.data.characters[SELLER].characterID;
+ assert.equal((await buy(f)).status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(f.data.items[ITEM].ownerID,BUYER);
+ assert.equal(f.data.characters[SELLER].balance,123);
+}));
+test("forged embedded seller identity still blocks original escrow and wallet mutation",()=>run(async f=>{
+ f.data.characters[SELLER].characterID=SELLER+9;
+ const before=structuredClone(f.data);
+ await assert.rejects(buy(f),/NPC_CORP_BUY_NATIVE_WALLET_INVALID/);
+ assert.deepEqual(f.data,before);
+ assert.equal(f.finalizes,0);
+}));

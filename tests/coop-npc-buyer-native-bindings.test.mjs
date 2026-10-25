@@ -242,3 +242,20 @@ test("valid decimal-cent NPC corporate wallet remains authorized for native purc
  assert.equal((await f.tick()).status,"NPC_PLAYER_PURCHASE_SETTLED");
  assert.equal(f.tables.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975.05);
 },{buyerISK:1000.05}));
+
+
+test("native A-Life NPC buyer settles an original keyed seller character without redundant ID",()=>run(async f=>{
+ delete f.tables.characters[SELLER].characterID;
+ const result=await f.tick();
+ assert.equal(result.status,"NPC_PLAYER_PURCHASE_SETTLED");
+ assert.equal(f.tables.characters[SELLER].balance,123);
+ assert.equal(f.claims,1);
+}));
+test("A-Life buyer never accepts a seller row with contradictory embedded character ID",()=>run(async f=>{
+ f.tables.characters[SELLER].characterID=SELLER+99;
+ const before=structuredClone(f.tables);
+ const result=await f.tick();
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(f.claims,0);
+ assert.deepEqual(f.tables,before);
+}));

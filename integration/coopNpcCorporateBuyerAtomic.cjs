@@ -117,10 +117,16 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
       !pos(item.itemID)||!pos(item.categoryID)||item.categoryID===9)
     throw Error("NPC_CORP_BUY_PHYSICAL_STACK_UNVERIFIED");
    const division=corporation?.wallet?.divisions?.["1000"];
+   // Pinned native EveJS stores character rows by key. No embedded
+   // characterID is guaranteed, so bind identity to the original keyed
+   // GameStore read plus the Rust claim and verified physical escrow.
+   // If the row DOES contain an embedded ID, it must agree exactly.
+   const sellerEmbedded=seller?.characterID??seller?.charID;
    if(corporation?.corporationID!==request.buyerCorpID||!division||
      !Array.isArray(division.journal)||!Array.isArray(division.transactions)||
      cents(division.balance)===null||!seller||
-     Number(seller.characterID??seller.charID)!==sellerID||
+     (sellerEmbedded!==undefined&&sellerEmbedded!==null&&
+      Number(sellerEmbedded)!==sellerID)||
      cents(seller.balance)===null||
      !Array.isArray(seller.walletJournal)||!Array.isArray(seller.marketTransactions))
     throw Error("NPC_CORP_BUY_NATIVE_WALLET_INVALID");
