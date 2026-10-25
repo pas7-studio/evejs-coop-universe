@@ -149,3 +149,16 @@ test("real cargo moves under same ID even if its metadata has unusual extra fiel
  const result=f.transfer();assert.equal(result.status,"COMMITTED");
  assert.equal(f.getOre().sourceTag,"original-mining");
 });
+
+test("postcommit in-memory cargo builder fails closed without another debit or phantom scene mutation",t=>{
+ const f=fixture(t);
+ f.store.buildNativeCargoItems=()=>{throw Error("SIMULATED_AFTER_COMMIT_RECONCILE_FAILURE")};
+ const result=f.transfer();
+ assert.equal(result.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(f.getOre().entityID,haulerID);
+ assert.equal(f.receipt().status,"COMMITTED");
+ assert.equal(f.miner.nativeCargoItems.length,1);
+ assert.equal(f.hauler.nativeCargoItems.length,0);
+ assert.equal(f.transfer().status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(f.txCalls(),1);
+});
