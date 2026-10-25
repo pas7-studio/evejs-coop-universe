@@ -27,9 +27,21 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
    pos(r.buyerCorpID)&&pos(r.stationID)&&pos(r.typeID)&&pos(r.itemID)&&
    pos(r.quantity)&&pos(r.priceCents)&&
    r.grossCents===r.quantity*r.priceCents&&
-   nonneg(r.taxCents)&&r.netCents===r.grossCents-r.taxCents&&
+   nonneg(r.taxCents)&&r.taxCents<=r.grossCents&&
+   nonneg(r.netCents)&&r.netCents===r.grossCents-r.taxCents&&
+   Number.isSafeInteger(r.grossCents)&&
    r.taxPolicy==="EVEJS_NATIVE_MARKET_RULES"&&
    nonneg(r.sellerAfterCents)&&nonneg(r.buyerAfterCents);
+ }
+ // If the paid receipt changed while Rust and session were verified,
+ // abort inside the same GameStore transaction that claims UI delivery.
+ function samePaidReceipt(a,b){
+  const fields=["phase","claimKey","fillID","orderID","sellerID",
+   "buyerCorpID","stationID","typeID","itemID","quantity",
+   "priceCents","grossCents","taxCents","netCents","taxPolicy",
+   "taxTransactionID","buyerBeforeCents","buyerAfterCents",
+   "sellerBeforeCents","sellerAfterCents","committedAt"];
+  return fields.every(k=>Object.is(a?.[k],b?.[k]));
  }
  function orderProof(o,r){
   const row=o?.row;
@@ -116,7 +128,8 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
   // but clients can refresh the authoritative market order/wallet.
   const result=gameStore.transact(["npcMarketFills"],tx=>{
    const fresh=tx.get("npcMarketFills",key);
-   if(!receiptProof(fresh,claimKey,fillID))
+   if(!receiptProof(fresh,claimKey,fillID)||
+      !samePaidReceipt(first,fresh))
     return {status:"RECEIPT_CHANGED"};
    if(fresh.sellerNotifyClaimedAt!==undefined)
     return {status:"ALREADY_CLAIMED",at:fresh.sellerNotifyClaimedAt};
