@@ -25,6 +25,17 @@ function fixture(opts={}){
  let quotes=opts.quote===undefined?quote():opts.quote;
  let nativeMission=opts.mission||null;
  const called=[];
+ const pins=opts.pins||new Map();
+ const selection={
+  read:(char,agentID)=>pins.has(char+":"+agentID)?
+   {status:"READY",eventID:pins.get(char+":"+agentID)}:{status:"NOT_FOUND"},
+  pin:(char,agentID,eventID)=>{
+   const key=char+":"+agentID;
+   if(pins.has(key)&&pins.get(key)!==eventID)
+    return {status:"SELECTION_ALREADY_BOUND"};
+   pins.set(key,eventID);return {status:"SELECTED",eventID};
+  }
+ };
  const service=createNativeJobAgent({
   listEvents:()=>({status:"READY",events:jobs}),
   readEvent:id=>({status:"READY",event:jobs.find(x=>x.id===id)}),
@@ -35,6 +46,7 @@ function fixture(opts={}){
   getAgent:id=>id===agent.agentID?agent:null,
   getMission:()=>nativeMission,
   getSessions:()=>[session,peer],
+  selection,
   dispatch:x=>{called.push(x.argumentText);return opts.dispatch?
     opts.dispatch(x):{status:x.argumentText.startsWith("interest")?"INTEREST_RECORDED":
       x.argumentText.startsWith("volunteer")?"WAITING_FOR_OTHER_VOLUNTEER":
@@ -43,7 +55,7 @@ function fixture(opts={}){
  });
  const action=(a,who=session)=>service.doAction({session:who,agentID:agent.agentID,actionID:a});
  const start=()=>action(null);
- return {session,peer,agent,jobs,service,called,action,start,
+ return {session,peer,agent,jobs,service,called,action,start,pins,
   changeMission:v=>nativeMission=v,changeQuote:v=>quotes=v};
 }
 test("opening a native SDE corporate agent shows live NPC hauling work with stock Accept button",()=>{
@@ -145,6 +157,21 @@ test("disabled native agent gate leaves stock EveJS dialogue untouched",()=>{
  const f=fixture();process.env.EVEJS_COOP_NATIVE_JOB_AGENT="0";
  try{assert.equal(f.start(),null);assert.equal(f.called.length,0)}
  finally{process.env.EVEJS_COOP_NATIVE_JOB_AGENT="1"}
+});
+test("post-restart Accept with no durable selection never silently selects another job",()=>{
+ const f=fixture();
+ const r=f.action(3);
+ assert.match(r.data.agentSays[0],/Reopen this native agent/);
+ assert.equal(f.called.length,0);
+});
+test("selection persists with actor and agent and cannot switch to newer offer",()=>{
+ const shared=new Map();
+ const a=fixture({pins:shared});a.start();
+ assert.equal(shared.get("701:500003"),ID);
+ const b=fixture({pins:shared,events:[{...event(),id:"convoy-30000144-77-999"},event()]});
+ const v=b.action(3);
+ assert.deepEqual(b.called,["interest "+ID,"volunteer "+ID]);
+ assert.match(v.data.agentSays[0],/fleetmate/);
 });
 test("source and original pinned hook patch are reversible and idempotent",()=>{
  const original=[
