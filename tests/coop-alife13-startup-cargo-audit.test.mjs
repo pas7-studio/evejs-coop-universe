@@ -172,3 +172,49 @@ test("historical native ACK identity changed after COMMIT still quarantines",t=>
  fs.writeFileSync(file,JSON.stringify(ack));
  assert.equal(f.run().reason,"ALIFE13_ORIGINAL_WARP_ACK_CHANGED");
 });
+
+
+test("two fleets in the same system have independent original transfer receipts",t=>{
+ const f=fixture(t);
+ const other=980299901;
+ f.transfers["coopNativeHaulTransfer:"+other]={
+  version:1,status:"COMMITTED",cargoID:other,systemID:SYSTEM,
+  fleetID:FLEET+1,minerID:MINER+100,haulerID:HAULER+100,
+  sourceOwnerID:CORP,haulerOwnerID:CORP,typeID:35,quantity:50,
+  beforeHash:"0".repeat(64),afterHash:"1".repeat(64)
+ };
+ assert.equal(f.run().status,"OK","another fleet transfer must not quarantine this one");
+});
+test("unrelated warehouse receipts for another fleet in same system are ignored",t=>{
+ const f=fixture(t);
+ const other=980299902;
+ fs.writeFileSync(path.join(f.root,"receipts",other+".json"),JSON.stringify({
+  version:1,phase:"COMMITTED",cargoID:other,haulerID:HAULER+100,
+  fleetID:FLEET+1,systemID:SYSTEM,stationID:STATION,
+  corporationID:CORP,typeID:35,quantity:50,itemID:1200234
+ }));
+ assert.equal(f.run().status,"OK","another fleet warehouse receipt is independent");
+});
+test("foreign manifest history in same system cannot contaminate own route recovery",t=>{
+ const f=fixture(t);const otherKey=SYSTEM+"-"+(FLEET+1)+"-"+START;
+ fs.writeFileSync(path.join(f.root,"trip-manifests",otherKey+".json"),
+  JSON.stringify({v:1,key:otherKey,systemID:SYSTEM,fleetID:FLEET+1,
+   startedAt:START,stationID:STATION,corporationID:CORP,
+   haulerIDs:[HAULER+100],cargo:[{cargoID:980299903,
+    haulerID:HAULER+100,fromMinerID:MINER+100,typeID:35,quantity:50}]}));
+ assert.equal(f.run().status,"OK");
+});
+test("relabeling our original transfer with a foreign fleetID is quarantined",t=>{
+ const f=fixture(t);
+ f.transfers["coopNativeHaulTransfer:"+f.ids[0]].fleetID=FLEET+1;
+ assert.equal(f.run().reason,"ALIFE13_TRANSFER_RECEIPT_INVALID");
+});
+test("relabeling our own orphan warehouse receipt with another fleetID is still quarantined",t=>{
+ const f=fixture(t),id=980299904;
+ fs.writeFileSync(path.join(f.root,"receipts",id+".json"),JSON.stringify({
+  version:1,phase:"COMMITTED",cargoID:id,haulerID:HAULER,
+  fleetID:FLEET+1,systemID:SYSTEM,stationID:STATION,
+  corporationID:CORP,typeID:35,quantity:50,itemID:1200234
+ }));
+ assert.equal(f.run().reason,"ALIFE13_ORPHAN_WAREHOUSE_RECEIPT");
+});
