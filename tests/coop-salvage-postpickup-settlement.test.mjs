@@ -25,11 +25,12 @@ const losses={status:"READY",outcomes:[{systemID:30000144,targetID:901,
 const session=id=>({characterID:id,socket:{destroyed:false},
  _space:{initialStateSent:true,shipID:1701,systemID:30000144}});
 function fixture(fn){
- let intact=true,offerEvent=event,offerDuo=volunteers,payments=0,deliveries=0;
+ let intact=true,wreckUnavailable=false,offerEvent=event,offerDuo=volunteers,payments=0,deliveries=0;
  let escrow="RESERVED";
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-salvage-quote-"));
- const getWreckItems=()=>intact?[{...original,sourceCargoID:5501,
-  sourceKind:"cargo",wreckID:8001}]:[];
+ const getWreckItems=()=>{if(wreckUnavailable)throw Error("expired wreck");
+  return intact?[{...original,sourceCargoID:5501,
+  sourceKind:"cargo",wreckID:8001}]:[];};
  const offers=createSalvageOffers({
   readManifest:()=>({status:"READY",record:row}),
   readWitness:()=>({status:"READY",record:proof}),
@@ -62,6 +63,7 @@ function fixture(fn){
   refundSalvage:()=>({status:"SALVAGE_ESCROW_NOT_REFUNDABLE"})
  });
  try{fn({offers,consent,authority,removeWreck:()=>intact=false,
+  expireWreck:()=>{wreckUnavailable=true;intact=false},
   tamperEvent:()=>offerEvent={status:"NOT_FOUND"},
   tamperDuo:()=>offerDuo={status:"NOT_FOUND"},
   counts:()=>({payments,deliveries}),paid:()=>escrow="SETTLED"})}
@@ -90,6 +92,17 @@ test("both fsynced authenticated consent receipts survive native stock pickup",(
  const existing=f.consent.readDuo(manifestKey);
  assert.equal(existing.status,"VERIFIED_DUO_SALVAGE_ACCEPT");
  assert.deepEqual(existing.characters,characterIds);
+}));
+test("an expired/disappeared native wreck cannot block an already signed payout",()=>fixture(f=>{
+ accepted(f);f.expireWreck();
+ assert.equal(f.offers.readOffer(manifestKey).status,
+  "SALVAGE_OFFER_NATIVE_WRECK_UNAVAILABLE");
+ assert.equal(f.consent.readDuo(manifestKey).status,
+  "VERIFIED_DUO_SALVAGE_ACCEPT");
+ const result=f.authority.command({session:session(701),eventID,cargoID:5501,
+  action:"DELIVER"});
+ assert.equal(result.payoutStatus,"SALVAGE_NATIVE_DUO_PAID");
+ assert.deepEqual(f.counts(),{payments:1,deliveries:1});
 }));
 test("new acceptance fails closed after wreck content has been removed",()=>fixture(f=>{
  f.removeWreck();
