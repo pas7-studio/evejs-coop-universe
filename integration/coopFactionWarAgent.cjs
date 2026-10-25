@@ -110,6 +110,13 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
   if(env.EVEJS_COOP_FACTION_WAR_PLAYER_CAPTURE!=="1")
    return "";
   try{
+   // Revalidate native actor-bound enlistment before rendering ANY
+   // military intel, including the stock mission briefing route.
+   const original=storeFor(ctx).snapshot()?.enlistments?.[String(ctx.characterID)];
+   if(original?.status!=="ACTIVE"||
+    original.characterID!==ctx.characterID||
+    original.factionID!==ctx.factionID||
+    !pos(original.enlistedAt))return "";
    const result=getFrontlineStatus({
     characterID:ctx.characterID,factionID:ctx.factionID});
    return result?.status==="OBSERVED"&&
