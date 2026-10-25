@@ -128,7 +128,7 @@ function createWarObjectiveAdjudicator({gameStore,getNativeStructure,
       structureID:obj.structureID,systemID:obj.systemID,
       campaignID,warID:campaign.warID,combatProofID:request.combatProofID,
       ownerCorporationID:obj.ownerCorporationID,
-      typeID:obj.typeID,boundAt:obj.boundAt
+      typeID:obj.typeID,boundAt:obj.boundAt,proofTx:tx
      });
     }catch{return {status:"BLOCKED",reason:"NATIVE_STRUCTURE_COMBAT_PROOF_UNAVAILABLE"}}
     if(n?.structureID!==obj.structureID||
