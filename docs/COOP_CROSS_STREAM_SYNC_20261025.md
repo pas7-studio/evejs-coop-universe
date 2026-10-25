@@ -4,7 +4,7 @@ This branch is a reviewable **integration snapshot**, not a game-night deploymen
 
 ## Provenance and ownership
 
-Base = Draft PR #2 `c76b0663a5877573a81072a96cf64c36c9ff198a` updated with its newer `9057acd5d154084d331a88bb29c950e88d5a8409` (native contracts opt-in), pinned upstream EveJS `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. Import from Draft PR #3 `191a991` (latest reliability hardening), #4 `3f2223f`, #5 `8033810`, #6 `7d3adc1`. Only the **changed paths** of #3-#6 were copied (their older main snapshots must not replace newer PR #2 work). No upstream checkout, container, data volume, client or network configuration was touched.
+Base = Draft PR #2 `c76b0663a5877573a81072a96cf64c36c9ff198a` updated with its newer `e06c7b3e23d7722bcc6eb3f681aa28f3eca021b9` (native contracts opt-in), pinned upstream EveJS `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. Import from Draft PR #3 `a6ac72c` (snapshot durability hardening), #4 `3f2223f`, #5 `8033810`, #6 `7d3adc1`. Only the **changed paths** of #3-#6 were copied (their older main snapshots must not replace newer PR #2 work). No upstream checkout, container, data volume, client or network configuration was touched.
 
 ## Actual integration changes
 
@@ -30,7 +30,7 @@ The native `contractMgr` -> `contractProxy` opt-in routing patch from PR #2 was 
 Run locally from the integrated project checkout (Node 22+):
 
 ```powershell
-node --test tests/coop-crossstream-wiring.test.mjs tests/coop-runtime-probe-ack.test.mjs tests/coop-native-snapshot.test.mjs tests/coop-reliability-gates.test.mjs tests/coop-actionable-intel.test.mjs tests/coop-raid-beacon.test.mjs tests/coop-pve-chain.test.mjs tests/coop-player-combat-witness.test.mjs tests/coop-duo-contribution-report.test.mjs tests/coop-native-contract-routing.test.mjs
+node --test tests/coop-crossstream-wiring.test.mjs tests/coop-runtime-probe-ack.test.mjs tests/coop-native-snapshot.test.mjs tests/coop-reliability-gates.test.mjs tests/coop-actionable-intel.test.mjs tests/coop-raid-beacon.test.mjs tests/coop-pve-chain.test.mjs tests/coop-player-combat-witness.test.mjs tests/coop-duo-contribution-report.test.mjs tests/coop-native-contract-routing.test.mjs tests/coop-native-contracts-lp-integration.test.mjs
 ```
 
 When the exact pinned `Code` checkout is available: run the installer's `--dry-run` and reversible source/overlay tests **without deployment**. First live diagnostic remains:
@@ -44,3 +44,7 @@ Only after the operator separately approves a real deployment and genuine client
 ## Conflict and review policy
 
 This is intentionally based on PR #2 rather than merging PRs #3-#6 to main while other agents are editing. Review and compare **current** heads again before eventual merge; never blindly force-update other workstreams. A green isolated test does not substitute for the running overlay/world/client gate.
+
+## Snapshot refresh
+
+After the first integration merge, PR #2 advanced to `e06c7b3e23d7722bcc6eb3f681aa28f3eca021b9` (new optional native contracts / LP contract-level tests); PR #3 advanced to `a6ac72cf5b10e09a0cf2f247af06949c5a67c4f8` (read-only snapshot hardening). This snapshot includes their new changed files; no operator backend test was run. Later workstream changes require an explicit follow-up comparison, not blind overwrites.

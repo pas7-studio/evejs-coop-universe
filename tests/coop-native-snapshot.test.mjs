@@ -5,7 +5,7 @@ const require=createRequire(import.meta.url);
 const {buildSnapshot,moneyToCents,quantity,parseArgs}=require('../scripts/coop-native-snapshot.cjs');
 const meta={projectSha:'a'.repeat(40),upstreamSha:'b'.repeat(40),runtime:{volumeName:'evejs-data',containerId:'f'.repeat(64),imageId:'sha256:'+'c'.repeat(64),containerStartedAt:'2026-10-25T09:00:00Z'}};
 const chars={'101':{accountId:201,shipID:3001,solarSystemID:30000142,balance:1000.25},'102':{accountId:202,shipID:3002,solarSystemID:30000142,balance:200}};
-const rows=[{key:'3001',json:JSON.stringify({itemID:3001,ownerID:101,typeID:603,categoryID:6,locationID:30000142,quantity:1})},{key:'3002',json:JSON.stringify({itemID:3002,ownerID:102,typeID:604,categoryID:6,locationID:30000142,quantity:1})},{key:'4101',json:JSON.stringify({itemID:4101,ownerID:101,typeID:34,categoryID:18,locationID:3001,quantity:500,stacksize:500})},{key:'9999',json:JSON.stringify({itemID:9999,ownerID:999,typeID:34,categoryID:18,locationID:1,quantity:999})}];
+const rows=[{key:'3001',json:JSON.stringify({itemID:3001,ownerID:101,typeID:603,categoryID:6,locationID:30000142,quantity:-1,stacksize:1,singleton:1})},{key:'3002',json:JSON.stringify({itemID:3002,ownerID:102,typeID:604,categoryID:6,locationID:30000142,quantity:-1,stacksize:1,singleton:1})},{key:'4101',json:JSON.stringify({itemID:4101,ownerID:101,typeID:34,categoryID:18,locationID:3001,quantity:500,stacksize:500})},{key:'9999',json:JSON.stringify({itemID:9999,ownerID:999,typeID:34,categoryID:18,locationID:1,quantity:999})}];
 function snap({items=rows,records=chars,metadata=meta,ids=['101','102']}={}){return buildSnapshot({meta:metadata,characterIds:ids,readCharacter:id=>records[id],iterateItems:()=>items,now:()=> '2026-10-25T10:00:00Z'});}
 test('native SQLite export reflects exact two real pilots and only their assets',()=>{const s=snap();assert.equal(s.source,'native-authoritative-export');assert.equal(s.characters.length,2);assert.equal(s.characters[0].isk,'100025');assert.equal(s.characters[1].isk,'20000');assert.equal(s.characters[0].items.length,2);assert.equal(s.characters[1].items.length,1);assert.equal(s.characters.some(c=>c.items.some(i=>i.id==='9999')),false);});
 test('wallet uses integer ISK cents, not whole-ISK rounded figures',()=>{assert.equal(moneyToCents('0.01'),'1');assert.equal(moneyToCents(4.75),'475');assert.equal(moneyToCents(0),'0');});
@@ -32,7 +32,7 @@ test('exported native snapshots feed the independent restart QA gate unchanged',
 });
 test('zero-quantity stack cannot become a fake extra item',()=>{
   assert.throws(()=>quantity({quantity:0,stacksize:0}),/zero quantity/);
-  assert.equal(quantity({quantity:0,stacksize:0,singleton:1}),'1');
+  assert.throws(()=>quantity({quantity:0,stacksize:0,singleton:1}),/singleton quantity/);
 });
 
 test('real node - stdin execution invokes exporter instead of silently exiting',()=>{
@@ -54,4 +54,16 @@ test('native exporter binds actual account and item category for custody tests',
  const report=snap();
  assert.equal(report.characters[0].accountId,'201');
  assert.equal(report.characters[0].items.find(item=>item.id==='3001').categoryId,'6');
+});
+
+test('pinned upstream EveJS native ship singleton quantity -1 and stacksize 1 is accepted',()=>{
+  assert.equal(quantity({singleton:1,quantity:-1,stacksize:1}),'1');
+  assert.equal(quantity({singleton:2,quantity:-2,stacksize:1}),'1');
+  assert.equal(snap().characters[0].items.find(i=>i.id==='3001').quantity,'1');
+});
+test('negative native non-singleton quantities and malformed singleton sentinels are rejected',()=>{
+  for(const item of [{singleton:0,quantity:-1,stacksize:1},{singleton:1,quantity:-2,stacksize:1},
+    {singleton:1,quantity:-1,stacksize:2},{singleton:2,quantity:-1,stacksize:1}]) {
+    assert.throws(()=>quantity(item));
+  }
 });
