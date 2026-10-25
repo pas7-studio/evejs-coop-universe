@@ -20,6 +20,7 @@ param(
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
+  [switch]$EnableAtomicCoopTrade,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -31,6 +32,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
     throw "$Name must be between $Min and $Max"
   }
 }
+if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -106,6 +108,10 @@ if ($LivingCoop) {
 $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
 $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+# Co-op atomic trade remains OFF unless explicitly requested on an approved LivingCoop deploy.
+if ($EnableAtomicCoopTrade) {
+  $yamlLines += "      EVEJS_COOP_ATOMIC_TRADE: '1'"
 }
 # ContractMgr is a stub in pinned EveJS; this opt-in routes it to the real
 # contractProxy with courier acceptor authorization. Keep OFF by default
