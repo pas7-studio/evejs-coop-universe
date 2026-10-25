@@ -55,10 +55,10 @@ Returns `CLEAN`, `NOT_INSTALLED`, `NEEDS_OPERATOR_RECONCILIATION` or `INCOMPLETE
 
 ## Tests actually performed
 
-- **13/13** new WAL tests PASS (durable PREPARED/COMMITTED, genuine store re-read, same/older replay after simulated re-instantiation, crash before/after native debit, corrupted record, stale lock, concurrent writer refusal, forged token, complete depletion).
+- **14/14** new WAL tests PASS (durable PREPARED/COMMITTED, genuine store re-read, same/older replay after simulated re-instantiation, crash before/after native debit, corrupted record, stale lock, concurrent writer refusal, lost/stolen exclusive writer lock, forged token, complete depletion).
 - **7/7** new read-only audit tests PASS (clean/empty, prepared, stale lock, orphan temp, corrupt data, bounded scan), all in isolated JavaScript with a POSIX filesystem shim.
 - **20/20** existing committed native fire-source/proof tests PASS after integration, including new source ordering assertion.
-- **40/40 committed isolated cases PASS**. The actual complete pinned 1.2 MB `space/runtime.js` was patched with the existing reversible installer and parsed; idempotent and byte-for-byte rollback. Tests are **not** real SQLite/native store crash injection or full `node --test` from a running pinned EveJS checkout.
+- **41/41 committed isolated cases PASS**. The actual complete pinned 1.2 MB `space/runtime.js` was patched with the existing reversible installer and parsed; idempotent and byte-for-byte rollback. Tests are **not** real SQLite/native store crash injection or full `node --test` from a running pinned EveJS checkout.
 
 ## Remaining engineering gates — still P0
 
