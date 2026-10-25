@@ -105,6 +105,20 @@ test("the minimal variant adds one tab and never touches the owner's own tabs", 
   assert.match(built, /NPC \/ Пірати/);
 });
 
+test("the added NPC preset lists hulls only: no stations, gates or billboards", () => {
+  const { buildMinimal, parsePresets } = require("../scripts/gen-alife-overview.cjs");
+  const shipGroups = require("../scripts/overview-ship-groups.json").groups;
+  const built = buildMinimal(BASE);
+  const presets = parsePresets(built.split("\n"));
+  const npc = presets.blocks.find((block) => block.name === "NPC (all ships)");
+  assert.ok(npc, "the NPC preset exists");
+  assert.deepEqual(npc.groups.slice().sort((a, b) => a - b), shipGroups.slice().sort((a, b) => a - b));
+  for (const nonShip of [6, 7, 8, 9, 10, 15, 18]) {
+    assert.ok(!npc.groups.includes(nonShip), `non-ship group ${nonShip} must not be in the NPC preset`);
+  }
+  assert.ok(npc.groups.length >= 25, "all hull sizes are covered");
+});
+
 test("a degenerate export is refused instead of producing an empty sky", () => {
   const noShips = BASE.replace(preset("Common", [6, 10, 15, ...SHIP_GROUPS]), preset("Common", [6, 10, 15]));
   assert.throws(() => buildProfile(noShips), /lacks ship groups/);

@@ -99,6 +99,21 @@ function clonePreset(block, name, extraGroups = []) {
   return { name, lines: appendGroups(lines, extraGroups), groups: groupsOf(appendGroups(lines, extraGroups)) };
 }
 
+// Replace a preset's group list outright. Appending cannot express "ships only",
+// because the source externalises gates/belts/stations/billboards as groups too.
+function presetWithGroups(block, name, groups) {
+  const lines = block.lines.slice();
+  lines[0] = "- - " + name;
+  const at = lines.indexOf("    - - groups");
+  if (at < 0) throw new Error("preset has no groups list");
+  let end = at + 1;
+  while (end < lines.length && !/^    - - /.test(lines[end]) && !lines[end].startsWith("- - ")) end += 1;
+  const unique = [...new Set(groups.map(Number))];
+  const body = [`      - - ${unique[0]}`, ...unique.slice(1).map((id) => `        - ${id}`)];
+  const out = [...lines.slice(0, at + 1), ...body, ...lines.slice(end)];
+  return { name, lines: out, groups: unique };
+}
+
 function tabBlock(tab) {
   const quoted = /[:#]/.test(tab.preset) ? `'${tab.preset}'` : tab.preset;
   return [
@@ -144,17 +159,27 @@ function buildProfile(baseText) {
 // Minimal variant: keep the owner's presets and tabs exactly as exported and
 // only ADD one preset plus one tab bound to it. Renaming or reordering tabs is
 // what made the first attempt appear empty in the client.
-function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати " } = {}) {
+//
+// The added preset lists SHIP GROUPS ONLY (SDE category 6), because a preset
+// cloned from "Common" also carried stargates, billboards, belts and stations:
+// an "NPC / Pirates" tab must show hulls, not the whole system.
+function shipGroupIds() {
+  const data = require("./overview-ship-groups.json");
+  if (!data || !Array.isArray(data.groups) || !data.groups.length) throw new Error("overview-ship-groups.json is empty");
+  return data.groups.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
+}
+
+function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати ", groups = null } = {}) {
   const lines = splitLines(baseText);
   const presets = parsePresets(lines);
   const byName = new Map(presets.blocks.map((block) => [block.name, block]));
   const source = byName.get("Common") || byName.get("Everything");
   if (!source) throw new Error("base export has neither Common nor Everything preset");
-  const missing = SHIP_GROUPS.filter((id) => !source.groups.includes(id));
-  if (missing.length) throw new Error(`source preset ${source.name} lacks ship groups ${missing.join(",")}`);
+  const wanted = Array.isArray(groups) && groups.length ? groups.map(Number) : shipGroupIds();
+  const hullGroups = wanted.filter((id) => Number.isSafeInteger(id) && id > 0);
 
   const blocks = presets.blocks.map((block) => block.lines);
-  if (!byName.has(presetName)) blocks.push(clonePreset(source, presetName).lines);
+  if (!byName.has(presetName)) blocks.push(presetWithGroups(source, presetName, hullGroups).lines);
 
   const tabRange = sectionRange(lines, "tabSetup");
   const existingTabs = [];
@@ -184,8 +209,9 @@ function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC 
   ].join("\n");
 }
 
-function verifyMinimal(text, baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати " } = {}) {
+function verifyMinimal(text, baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати ", groups = null } = {}) {
   const problems = [];
+  const expected = Array.isArray(groups) && groups.length ? groups.map(Number) : shipGroupIds();
   const base = parsePresets(splitLines(baseText));
   const out = parsePresets(splitLines(text));
   // Every original preset must survive byte-identical in name and group list.
@@ -197,8 +223,15 @@ function verifyMinimal(text, baseText, { presetName = "NPC (all ships)", label =
   const added = out.blocks.filter((block) => !base.blocks.some((entry) => entry.name === block.name));
   if (added.length !== 1) problems.push(`expected exactly one new preset, got ${added.length}`);
   else {
-    const missing = SHIP_GROUPS.filter((id) => !added[0].groups.includes(id));
-    if (missing.length) problems.push(`new preset misses ship groups ${missing.join(",")}`);
+    const got = added[0].groups.slice().sort((a, b) => a - b);
+    const want = [...new Set(expected)].sort((a, b) => a - b);
+    if (got.join(",") !== want.join(",")) {
+      const extra = got.filter((id) => !want.includes(id));
+      const missing = want.filter((id) => !got.includes(id));
+      problems.push(
+        `new preset group mismatch (extra: ${extra.slice(0, 8).join(",") || "none"}; missing: ${missing.slice(0, 8).join(",") || "none"})`,
+      );
+    }
     if (added[0].name !== presetName) problems.push(`new preset is named ${added[0].name}`);
   }
   // Tabs: all original index<->overview pairs must be untouched.
