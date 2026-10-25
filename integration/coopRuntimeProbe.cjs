@@ -14,7 +14,7 @@ function describe(session,ship){
   };
 }
 function observe(event,session,ship,extra={}){
-  if(!destination)return;
+  if(!destination)return false;
   try {
     const record={
       at:new Date().toISOString(),
@@ -24,9 +24,11 @@ function observe(event,session,ship,extra={}){
     };
     fs.mkdirSync(path.dirname(destination),{recursive:true});
     fs.appendFileSync(destination,JSON.stringify(record)+"\n",{encoding:"utf8",flag:"a"});
+    return true;
   } catch(err) {
     // Optional telemetry must NEVER affect a real login, disconnect, or ship.
     try { console.warn("[CoopProbe] telemetry write failed:",err.message); } catch {}
+    return false;
   }
 }
 module.exports={observe};
