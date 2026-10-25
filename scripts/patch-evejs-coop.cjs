@@ -133,6 +133,7 @@ const specs=[
  ]}
 ];
 const oldLines=[
+ "    if (process.env.EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP === \"1\") setImmediate(() => { if (isLiveSession(session) && resolveSessionCharacterID(session) === characterID) Promise.resolve().then(() => require(\"../../space/coopNpcMarketCompletionNotify\").notifyPendingSellerOnLogin(characterID)).catch(error => console.warn(\"[CoopMarketSellerCatchup]\", error.message)); });",
  "    if (!require(\"../coopNpcWeaponAmmoGate\").check({entity,moduleItem,bankModuleIDs}).allowed) { if (activeEffect) scene.deactivateGenericModule(pseudoSession, activeEffect.moduleID || moduleItem.itemID, { reason: \"npc-ammo-empty\", deferUntilCycle: false }); continue; }",
  "  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;",
  "  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;",
