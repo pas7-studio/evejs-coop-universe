@@ -227,9 +227,11 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
  }
  return ticket;
 }
-function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalPath}={}){
+function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDockedLocationID,journalPath}={}){
  if(!ticket?.ok||!missionRuntime||!fleetRuntime)
   return {status:"NO_AUTHORIZED_SHARED_TURNIN"};
+ if(ticket._leaderFence && leaderActionResult?.success!==true)
+  return {status:"LEADER_NATIVE_RESULT_NOT_ACKNOWLEDGED"};
  // This is called ONLY after the real captain's original DoAction,
  // and only if native EveJS deleted that accepted mission. A failed
  // attempt or a conversation does not close a peer's mission.
