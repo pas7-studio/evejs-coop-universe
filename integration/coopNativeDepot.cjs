@@ -77,7 +77,33 @@ function createDepot({file,clock=()=>Date.now()}){
   }
   return {status:accepted?"RECORDED":"ALREADY_RECORDED",accepted,quantity};
  }
- return {record,prepare,commit,snapshot:()=>structuredClone(state)};
+ function audit(){
+  // Derive physical input quantities from immutable committed cargo receipts.
+  // Never use synthetic system totals as the source of item/type provenance.
+  const bySystemType={},derived={};
+  let invalid=0,committed=0;
+  for(const [key,entry] of Object.entries(state.receipts)){
+   if(!positive(key)||Number(key)!==Number(entry?.cargoID)||!positive(entry?.systemID)||
+      !positive(entry?.typeID)||!Number.isSafeInteger(Number(entry?.quantity))||
+      Number(entry.quantity)<=0||state.pending[key]){invalid++;continue;}
+   const system=String(entry.systemID),type=String(entry.typeID),amount=Number(entry.quantity);
+   bySystemType[system]??={};
+   const previous=Number(bySystemType[system][type]||0);
+   const total=Number(derived[system]||0);
+   if(!Number.isSafeInteger(previous+amount)||!Number.isSafeInteger(total+amount)){invalid++;continue;}
+   bySystemType[system][type]=previous+amount;
+   derived[system]=total+amount;
+   committed++;
+  }
+  const keys=new Set([...Object.keys(derived),...Object.keys(state.totals)]);
+  for(const key of keys){
+   if(!positive(key)||Number(derived[key]||0)!==Number(state.totals[key]||0))invalid++;
+  }
+  const unresolved=Object.keys(state.pending).length;
+  return {status:invalid?'NEEDS_OPERATOR_REPAIR':unresolved?'PENDING_CUSTODY_RECONCILIATION':'OK',
+   committed,unresolved,invalid,bySystemType,totals:derived};
+ }
+ return {record,prepare,commit,audit,snapshot:()=>structuredClone(state)};
 }
 let nativeDepot=null;
 function getNativeDepot(){
