@@ -198,7 +198,7 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    if(final?.state!=="filled"||final.fill_phase!=="finalized"||
       final.history_recorded!==true||
       typeof final.history_day!=="string"||
-      !/^\\d{4}-\\d{2}-\\d{2}$/.test(final.history_day)||
+      !/^\d{4}-\d{2}-\d{2}$/.test(final.history_day)||
       Number(final.fill_id)!==result.fillID||Number(final.vol_remaining)!==0)
     throw Error("NPC_CORP_BUY_RUST_FINALIZE_UNCERTAIN");
    const observed=await market.inspectClaim({claimKey:request.claimKey});
