@@ -98,6 +98,8 @@ test("scope refuses SQL injection, extra tables, and broad industry LIKE scans",
  assert.throws(()=>db.prepare("DROP TABLE items"),/REJECTED/);
  assert.throws(()=>db.prepare('SELECT json FROM "marketEscrow" WHERE key=?'),/REJECTED/);
  assert.throws(()=>db.prepare('SELECT key,json FROM "industryJobs" WHERE key LIKE ?').all("%"),/REJECTED/);
+ const numeric=db.prepare('SELECT json FROM "items" WHERE key=?').get(91);assert.equal(numeric.json,'{"itemID":91}');
+ assert.equal(db.prepare('SELECT json FROM "industryJobs" WHERE key LIKE ?').all("jobs"+SEP+"%").length,1);
  db.exec("COMMIT");assert.equal(db.phase(),"COMMIT_REQUESTED");
  assert.throws(()=>db.exec("COMMIT"),/REJECTED/);
 });
