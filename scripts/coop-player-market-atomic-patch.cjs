@@ -40,6 +40,12 @@ function patch(source,{remove=false}={}){
   '          const nativeTax=computeSalesTaxAmount(buildCharacterMarketContext(null,sellerCharacterID,destinationStationID),grossCost);\n'+
   '          const physical=listEscrowItemsForOrder(sellOrder && sellOrder.order_id,sellerCharacterID);\n'+
   '          const result=await '+helper+'.settleSell({ticket:coopPlayerSellTicket,proof:coopPlayerSellProof,tax:nativeTax,sourceItemID:physical[0]?.itemID,client:marketDaemonClient});\n'+
+  '          const delivered=findItemById(result.receipt.itemID);\n'+
+  '          if (!delivered||delivered.ownerID!==buyerCharacterID||delivered.locationID!==destinationStationID) throw Error("P2P_ATOMIC_POST_COMMIT_INVENTORY_VIEW_UNSAFE");\n'+
+  '          notifyBuyerDelivery(buyerCharacterID,[{item:delivered}]);\n'+
+  '          const nativeWallet=require("../account/walletState");\n'+
+  '          nativeWallet.notifyCharacterWalletChange(buyerCharacterID,nativeWallet.getCharacterWallet(buyerCharacterID));\n'+
+  '          nativeWallet.notifyCharacterWalletChange(sellerCharacterID,nativeWallet.getCharacterWallet(sellerCharacterID));\n'+
   '          notifyOwnOrdersChanged(sellerCharacterID,[{...playerSellOrder,row:{...getOwnerOrderResponseOrder(playerSellOrder),vol_remaining:0,price:orderPrice},state:"filled"}],ORDER_REASON_FILLED);\n'+
   '          totalSpent=roundIsk(totalSpent+grossCost);\n'+
   '          totalBought+=tradedQuantity;\n'+
