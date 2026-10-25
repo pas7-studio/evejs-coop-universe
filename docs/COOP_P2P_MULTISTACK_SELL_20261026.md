@@ -29,6 +29,6 @@ Example: an escrow with stacks of 3, 4 and 5 units sells 8 units: the 3 and 4 st
 
 ## Verification boundary
 
-Source-executed JS test callbacks: 12/12 atomic settlement, 11/11 original native patch and coordinator. Full pinned `marketProxyService.js` with existing NPC, market-catalog, buy/sell escrow, P2P Rust and settlement overlays: V8 syntax, repeated apply and byte-exact rollback **PASS** for LF and CRLF.
+Source-executed JS test callbacks: 13/13 atomic settlement, 11/11 original native patch and coordinator. Full pinned `marketProxyService.js` with existing NPC, market-catalog, buy/sell escrow, P2P Rust and settlement overlays: V8 syntax, repeated apply and byte-exact rollback **PASS** for LF and CRLF.
 
 **NOT RUN:** full Node test runner, real native GameStore SQLite, Rust cargo compilation, two game clients, crash-injection and real persisted marketplace. None of the live `evejs-data`, wallets, items, Rust market.sqlite, Docker or game processes have been modified. Do not enable without separate isolated end-to-end verification. Full agent-testing runbook intentionally deferred by user request.
