@@ -24,6 +24,7 @@ param(
   [switch]$EnableMissionJoin,
   [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
+  [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
@@ -38,6 +39,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
   }
 }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
+if ($EnableDuoMissionSettlement -and -not $LivingCoop) { throw 'Duo mission settlement requires -LivingCoop' }
 if ($EnableMissionJoin -and -not $LivingCoop) { throw 'Native mission join requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
 Assert-Range 'NpcCount' $NpcCount 1 3
@@ -119,6 +121,11 @@ $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
 # Native wingman mission join independently OFF until two-client acceptance.
 if ($EnableMissionJoin) {
   $yamlLines += "      EVEJS_COOP_MISSION_JOIN: '1'"
+}
+# Two-native-recipient reward path requires BOTH leader and peer journal guards. Default OFF.
+if ($EnableDuoMissionSettlement) {
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_LEADER_FENCE: '1'"
 }
 # Co-op atomic trade remains OFF unless explicitly requested on an approved LivingCoop deploy.
 if ($EnableAtomicCoopTrade) {
