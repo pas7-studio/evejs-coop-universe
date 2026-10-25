@@ -23,6 +23,8 @@ names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarGateStaging");
 names.splice(names.indexOf("coopWarGateStaging")+1,0,"coopWarTransferLedger","coopWarGateHandoff");
 // FW-007C: local-only verified repair console and protected Unix socket.
 names.splice(names.indexOf("coopWarGateHandoff")+1,0,"coopWarRecoveryConsole","coopWarRecoverySocket");
+// FW-008: terminal war-campaign demobilization and reuse via existing A-Life.
+names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
 names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 // P0 staged modules registered separately to avoid conflicts in the shared list.
