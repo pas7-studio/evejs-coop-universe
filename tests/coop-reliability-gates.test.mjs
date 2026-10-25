@@ -161,26 +161,31 @@ const oldAnchors=[
  eventAt('living-native-industry',89,{fleets:[{minerIDs:[101],haulerIDs:[102]}]}),
  eventAt('virtual-world-materialization',89,{livingShips:[{entityID:103,pilotID:'coop-pilot-003',role:'pirate'}]})
 ];
+// The real native reconciler re-observes the scene roughly every two minutes.
+const currentAnchors=[
+ eventAt('living-native-industry',3,{fleets:[{minerIDs:[101],haulerIDs:[102]}]}),
+ eventAt('virtual-world-materialization',3,{livingShips:[{entityID:103,pilotID:'coop-pilot-003',role:'pirate'}]})
+];
 test('long-running world retains real pre-window boot/topology while fresh native NPCs pass',()=>{
- const input=[...oldAnchors,eventAt('living-native-activity',2,{status:'SAMPLED',observedMovement:2,oreGrowth:1,physicalNpcShips:3})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-activity',2,{status:'SAMPLED',observedMovement:2,oreGrowth:1,physicalNpcShips:3})].join('\n');
  const result=checkWorld(input,meta,now,30);
  assert.equal(result.status,'PASS_SERVER');
  assert.equal(result.freshSamples,1);
 });
 test('old physical movement and ore cannot pass with unrelated fresh logs',()=>{
- const input=[...oldAnchors,eventAt('living-native-activity',70,{status:'SAMPLED',observedMovement:2,oreGrowth:1,physicalNpcShips:3}),eventAt('living-world-phase-failed',2,{phase:'unrelated'})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-activity',70,{status:'SAMPLED',observedMovement:2,oreGrowth:1,physicalNpcShips:3}),eventAt('living-world-phase-failed',2,{phase:'unrelated'})].join('\n');
  assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
 });
 test('fresh activity from a different solar system is not physical proof for selected topology',()=>{
- const input=[...oldAnchors,eventAt('living-native-activity',70,{status:'SAMPLED',observedMovement:1,oreGrowth:2,physicalNpcShips:3}),eventAt('living-native-activity',2,{systemID:30000144,status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-activity',70,{status:'SAMPLED',observedMovement:1,oreGrowth:2,physicalNpcShips:3}),eventAt('living-native-activity',2,{systemID:30000144,status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
  assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
 });
 test('missing newly observed movement blocks even with current ore and stock NPC count',()=>{
- const input=[...oldAnchors,eventAt('living-native-activity',70,{status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3}),eventAt('living-native-activity',2,{status:'SAMPLED',observedMovement:0,oreGrowth:2,physicalNpcShips:3})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-activity',70,{status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3}),eventAt('living-native-activity',2,{status:'SAMPLED',observedMovement:0,oreGrowth:2,physicalNpcShips:3})].join('\n');
  assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
 });
 test('latest boot invalidates movement sampled before a same-process headless reinitialization',()=>{
- const input=[...oldAnchors,eventAt('living-native-activity',10,{status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3}),eventAt('living-headless-boot-requested',5),eventAt('living-world-phase-failed',1,{phase:'unrelated'})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-activity',10,{status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3}),eventAt('living-headless-boot-requested',5),eventAt('living-world-phase-failed',1,{phase:'unrelated'})].join('\n');
  assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
 });
 test('PowerShell evidence reader retains real topology, native industry and materialization anchors',()=>{
@@ -193,12 +198,40 @@ test('PowerShell evidence reader retains real topology, native industry and mate
 });
 test('two-system world checks native activity against its own system, not newest other-system topology',()=>{
  const anotherSystem=eventAt('living-world-topology',1,{systemID:30000144,realWaypoints:8,realAsteroidBelts:2});
- const input=[...oldAnchors,anotherSystem,eventAt('living-native-activity',2,{status:'SAMPLED',observedMovement:1,oreGrowth:1,physicalNpcShips:3})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,anotherSystem,eventAt('living-native-activity',2,{status:'SAMPLED',observedMovement:1,oreGrowth:1,physicalNpcShips:3})].join('\n');
  const result=checkWorld(input,meta,now,30);
  assert.equal(result.status,'PASS_SERVER');
  assert.equal(result.systemID,30000142);
 });
 test('native activity without a matching historical topology remains blocked',()=>{
- const input=[...oldAnchors,eventAt('living-native-activity',1,{systemID:30000144,status:'SAMPLED',observedMovement:1,oreGrowth:1,physicalNpcShips:3})].join('\n');
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-activity',1,{systemID:30000144,status:'SAMPLED',observedMovement:1,oreGrowth:1,physicalNpcShips:3})].join('\n');
+ assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
+});
+
+test('expired native fleet/materialization cannot borrow historical boot evidence',()=>{
+ const input=[...oldAnchors,eventAt('living-native-activity',1,
+   {status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
+ assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
+});
+test('newer empty native fleet revokes earlier positive readiness',()=>{
+ const input=[...oldAnchors,...currentAnchors,eventAt('living-native-industry',1,
+   {fleets:[]}),eventAt('living-native-activity',1,
+   {status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
+ const result=checkWorld(input,meta,now,30);
+ assert.equal(result.status,'BLOCKED');
+ assert.equal(result.freshNativeFleet,false);
+});
+test('newer empty physical named-NPC materialization revokes previous proof',()=>{
+ const input=[...oldAnchors,...currentAnchors,eventAt('virtual-world-materialization',1,
+   {livingShips:[]}),eventAt('living-native-activity',1,
+   {status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
+ const result=checkWorld(input,meta,now,30);
+ assert.equal(result.status,'BLOCKED');
+ assert.equal(result.freshNamedShips,false);
+});
+test('named-NPC refresh with fabricated pilot identity cannot pass',()=>{
+ const input=[...oldAnchors,currentAnchors[0],eventAt('virtual-world-materialization',1,
+   {livingShips:[{entityID:103,pilotID:'fake',role:'pirate'}]}),eventAt('living-native-activity',1,
+   {status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
  assert.equal(checkWorld(input,meta,now,30).status,'BLOCKED');
 });
