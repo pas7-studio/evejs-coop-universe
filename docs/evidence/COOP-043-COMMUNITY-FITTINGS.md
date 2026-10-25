@@ -66,6 +66,12 @@ Command: `Run-CommunityFittings.ps1 -Action Collect -WorkbenchPages 387 -FieldPa
 (`NO_PUBLIC_FIT_FOUND`, `TARGET_NOT_MET_ONLY_N_VALID`, `NO_FITTING_SLOTS`, or the first dogma
 rejection code). Shortfalls are visible, never filled with invented fits.
 
+A deeper follow-up run (`-FieldPages 6`, i.e. zKillboard pages 3-6 for every hull below target)
+produced the **same 1600 records with zero new API failures**: those hulls have no further
+distinct public losses, and inventing fittings is forbidden. Breakdown of the 90 hulls still below
+three: 46 have no public fit at all, 28 have exactly one, 16 have two. The 13 hulls without any
+module slot (shuttles, capsules, freighters) are excluded from the denominator.
+
 ## 5. Staging on a copy of the real world (before touching live)
 
 - Consistent source snapshot through the native SQLite backup API inside the container: `quick_check ok`, `savedFittings` 5 rows, community owner 0 fittings, `nextFittingID` 1, `_persistence_outbox` empty.
@@ -118,8 +124,21 @@ Player data was not modified: the seeder writes only `owners\u001f1000282` (comm
 ## 8. Client (in-game) status
 
 Client `W:\EVE Online - 3396210` was launched locally; character `Sasunok1488` (140000005) logged
-in to the live server after the install. **In-client browsing/copying/fitting evidence: recorded
-in the session report.** No client binary was modified; no claim is made from server-side data.
+in to the live server after the install. Owner-observed in the real client:
+
+- the **Community Fittings window opens** and lists the installed fittings;
+- **scrolling and search work** across the full 1600-record catalog (no freeze, no truncation
+  reported at this size, i.e. the 690 KB marshalled payload is handled and the 600 number is not a
+  read limit);
+- not yet observed by the tester: copy-to-my-fittings, then fitting a real ship with owned
+  modules, then a second independent pilot. Those are the remaining client gates and are **NOT
+  CLAIMED**.
+
+The client login was broken immediately after the install restart ("transport has not yet been
+connected, or authentication was not successful"); an EVE client relaunch (new one-time login
+ticket) resolved it. This is a normal consequence of restarting the server, not a catalog defect.
+
+No client binary was modified; no claim is made from server-side data.
 
 ## 9. Rollback procedure actually rehearsed
 
@@ -131,8 +150,10 @@ in the session report.** No client binary was modified; no claim is made from se
 
 ## 10. Verdict
 
-Server side: **PASS** (pinned-SDE dogma validation, 1600 real fits, staging apply/rollback,
-live install with verified backup, restart persistence, no duplicates, native payload OK).
-Client side: see the session report's in-client result; the remaining gap is a human-observed
-browse/copy/fit in the Community Fittings window with a real ship, and a second independent
-pilot when one exists.
+- Server side: **PASS** — pinned-SDE dogma validation, 1600 real fits, staging apply/rollback,
+  live install with a verified external backup, restart persistence, no duplicates, native
+  payload `NATIVE_PAYLOAD_OK`.
+- Client side: **PARTIAL PASS** — the Community Fittings window opens, shows the catalog and
+  scroll/search works at 1600 records (owner-observed). Copy-to-my-fittings and actually fitting
+  a real ship with owned modules, plus a second independent pilot, remain **NOT VERIFIED**.
+- No gameplay PvP/PvE, wallet, market or inventory behaviour was changed by this task.
