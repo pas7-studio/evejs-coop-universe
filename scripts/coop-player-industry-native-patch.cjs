@@ -16,7 +16,7 @@ const pairs=[
  ],
  [
   "    const result = cancelIndustryJob(session, jobID);",
-  "    const result = process.env.EVEJS_COOP_PLAYER_INDUSTRY_GUARD === \"1\" ? require(\"../../space/coopPlayerIndustryRuntime\").cancel() : cancelIndustryJob(session, jobID);"
+  "    const result = process.env.EVEJS_COOP_PLAYER_INDUSTRY_GUARD === \"1\" ? require(\"../../space/coopPlayerIndustryRuntime\").cancel({session,jobID,nativeCancel:cancelIndustryJob}) : cancelIndustryJob(session, jobID);"
  ]
 ];
 
