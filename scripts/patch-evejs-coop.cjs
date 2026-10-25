@@ -54,7 +54,7 @@ names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 // Copy only; native hooks remain explicitly default-OFF until their own pinned
 // source contracts and two-client acceptance are independently verified.
 names.push(
- "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopCourierRuntime", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
+ "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
 );
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
@@ -84,6 +84,7 @@ const specs=[
  {file:"server/src/gameStore/sqliteStore.js",patches:[]},
  {file:"server/src/services/machoNet/machoNetService.js",patches:[]},
  {file:"server/src/services/contracts/contractRuntimeState.js",patches:[]},
+ {file:"server/src/services/_other/contractProxyService.js",patches:[]},
  {file:"server/src/space/combat/killmailTracker.js",patches:[]},
  {file:"server/src/services/evermarks/lpStoreMgrService.js",patches:[]},
  {file:"server/src/space/npc/nativeNpcStore.js",patches:[]},
@@ -416,6 +417,10 @@ function transform(source,spec,remove){
  if(spec.file==="server/index.js" || spec.file==="server/src/services/machoNet/machoNetService.js" ||
     spec.file==="server/src/services/contracts/contractRuntimeState.js")
   text=require("./coop-native-contract-routing-patch.cjs").patch(text,spec.file,remove);
+  // CH23/30/37 reconciliation: original contractProxy remains the sole owner of
+  // native item/ISK mutations; optional file-journal guard is default OFF.
+  if(spec.file==="server/src/services/_other/contractProxyService.js")
+   text=require("./coop-native-contract-mutation-fence-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/evermarks/lpStoreMgrService.js")
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("/space/combat/killmailTracker.js"))
