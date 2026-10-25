@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -48,6 +48,53 @@ function nativeWarFleetRegistry(){
   });
  }
  return warFleetRegistry;
+}
+// FW-003C: real patrol mobilization on the SAME existing A-Life tick. Any
+// failed source proof results in zero military assignments, never free ships.
+function advanceNativeWarMobilization(){
+ const {enabled,createWarMobilizer}=require("./coopWarMobilizer");
+ if(!enabled(process.env)||!visitedSystems.size||!identityRegistry)return;
+ const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
+ if(!registry||!guard)return;
+ if(!warMobilizer){
+  const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
+   controllers=require("./npc/npcRegistry"),
+   factions=require("../services/faction/factionState"),
+   gameStore=require("../gameStore"),
+   {KEY,TABLE}=require("./coopFactionWarStore"),
+   core=require("./coopFactionWarCore"),
+   dogma=require("./combat/weaponDogma"),
+   capability=require("./npc/npcCapabilityResolver");
+  const readiness=require("./coopWarMusterReadiness").createWarMusterReadiness({
+   store:npcStore,resolveFamily:dogma.resolveWeaponFamily,
+   isOptional:dogma.isChargeOptionalTurretWeapon,
+   compatible:capability.isNpcChargeCompatibleWithModule
+  });
+  warMobilizer=createWarMobilizer({
+   registry,
+   readWarState:()=>{
+    const r=gameStore.read(TABLE,"/"+KEY);
+    if(r?.success!==true)return null;
+    core.validateState(r.data);
+    return r.data;
+   },
+   readLinks:()=>Object.values(identityRegistry.snapshot().links||{}),
+   // Existing scenes only: a military director must never manufacture an
+   // enemy or force NPC materialization by observing an unvisited system.
+   sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+   getNativeEntity:id=>npcStore.getNativeEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id),
+   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
+   inspectReadiness:context=>readiness.inspect(context),
+   getOrderLeases:()=>guard.snapshot().leases,
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
+  });
+ }
+ const result=warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ if(result.mobilized.length)require("./coopRuntimeProbe").observe(
+  "living-native-war-mobilization",null,null,
+  {status:result.status,ships:result.mobilized,
+   evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
 }
 function advanceNativeWarCombat(){
  const api=require("./coopWarCombatAuthority");
@@ -297,6 +344,7 @@ function start(){
   else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
