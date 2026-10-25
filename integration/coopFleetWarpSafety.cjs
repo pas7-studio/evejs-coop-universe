@@ -23,11 +23,11 @@ function uniqueOwners(scene,commanderSession,followerSession,systemID){
   let matches=0;
   for(const session of scene.sessions.values()){
    if(session?.socket?.destroyed===true||
-      session?._space?.initialStateSent!==true||
-      positive(session?._space?.systemID)!==systemID)continue;
+      session?._space?.initialStateSent!==true)continue;
    if(positive(session?.characterID)!==characterID&&
       positive(session?._space?.shipID)!==shipID)continue;
-   if(session!==member)return false;
+   // A different-system session retained in this scene is ambiguous, too.
+   if(session!==member||positive(session?._space?.systemID)!==systemID)return false;
    matches++;
   }
   if(matches!==1)return false;
