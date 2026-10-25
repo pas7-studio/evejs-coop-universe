@@ -9,6 +9,20 @@ const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","co
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
 // COOP-046: opt-in post-commit combat outcome witness for atomic ammo banks.
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
+
+const nativeEconomyModules=[
+ "coopAlifeNativeBuyerDispatch","coopAlifeNativeBuyerRuntime",
+ "coopAlifeNativeEconomyAct","coopAlifeStationAuthority",
+ "coopAlifeStationAuthorityRuntime","coopNpcBuyerNativeBindings",
+ "coopNpcBuyerCoordinator","coopNpcCorporateBuyerAtomic",
+ "coopNpcMarketPolicy","coopNpcDemandAuthority",
+ "coopNpcNativeEconomyDirector","coopNpcPartialFillAtomic"
+];
+for(const name of nativeEconomyModules){
+ if(names.includes(name))throw Error("COOP049_DUPLICATE_NATIVE_MODULE:"+name);
+ names.push(name);
+}
+
 const specs=[
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
