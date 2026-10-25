@@ -254,6 +254,69 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
     contractID:c.contractID,amountISK:c.amountISK,nativeDurable:true};
   })}catch{return deny("SALVAGE_NATIVE_REFUND_UNCERTAIN")}
  }
- return {quote,reserve,verify,settle,refundUnstarted};
+ // Read-only per-character, native terminal-verified RESCUE history.
+ // There is no public caller-supplied balance, score or credit command.
+ function history(characterID,limit=8){
+  if(!ready())return {status:"DISABLED",history:[]};
+  if(!pos(characterID)||!Number.isSafeInteger(limit)||limit<1||limit>50)
+   return {status:"SALVAGE_HISTORY_INVALID_QUERY",history:[]};
+  try{return atomic.transact(["corporationRuntime","items","npcWreckItems"],tx=>{
+   const l=ledger(tx);
+   const moves=tx.get("corporationRuntime","coopSalvageMoves");
+   const all=tx.scan("items"),wrecks=tx.get("npcWreckItems","items");
+   const records=[];
+   for(const x of Object.values(l.byContract)){
+    if(!x.characters?.includes(characterID)||
+     !["SETTLED","REFUNDED"].includes(x.status))continue;
+    if(!pos(x.amountISK)||!Array.isArray(x.characters)||
+     x.characters.length!==2||!x.characters.every(pos)||
+     x.characters[0]>=x.characters[1]||
+     !Array.isArray(x.rows)||!x.rows.length||
+     typeof x.manifestKey!=="string"||
+     x.contractID!=="salvage-"+x.manifestKey)
+     return {status:"SALVAGE_HISTORY_WALLET_CORRUPT",history:[]};
+    if(x.status==="SETTLED"){
+     if(!pos(x.settledAt)||!Array.isArray(x.credits)||
+      x.credits.length!==2||x.credits.some((z,i)=>
+       z.characterID!==x.characters[i]||
+       z.amountISK!==x.amountISK/2))
+      return {status:"SALVAGE_HISTORY_NATIVE_CREDITS_UNVERIFIED",history:[]};
+     for(const r of x.rows){
+      const m=moves?.moves?.[x.manifestKey+":"+r.cargoID];
+      if(m?.v!==1||m.state!=="DELIVERED"||
+       m.cargoID!==r.cargoID||m.wreckItemID!==r.wreckItemID||
+       m.corporationID!==x.corporationID||
+       m.stationID!==x.stationID||m.quantity!==r.quantity||
+       !x.characters.includes(m.characterID)||
+       wrecks?.[String(r.wreckItemID)])
+       return {status:"SALVAGE_HISTORY_NATIVE_CUSTODY_UNVERIFIED",history:[]};
+      const stock=all.filter(z=>z.value?.itemID===m.nativeItemID&&
+       z.value.customInfo===marker(x.manifestKey,r.cargoID,r.wreckItemID)&&
+       z.value.ownerID===x.corporationID&&
+       z.value.locationID===x.stationID&&
+       z.value.flagID===4&&z.value.quantity===r.quantity&&
+       z.value.typeID===r.typeID);
+      if(stock.length!==1)
+       return {status:"SALVAGE_HISTORY_STOCK_NOT_VERIFIED",history:[]};
+     }
+    }else if(!pos(x.refundedAt)||x.credits)
+     return {status:"SALVAGE_HISTORY_REFUND_CORRUPT",history:[]};
+    records.push({contractID:x.contractID,manifestKey:x.manifestKey,
+     corporationID:x.corporationID,outcome:x.status,
+     amountISK:x.amountISK,
+     earnedISK:x.status==="SETTLED"?x.amountISK/2:0,
+     reputationPoints:x.status==="SETTLED"?12:0,
+     recordedAt:x.status==="SETTLED"?x.settledAt:x.refundedAt});
+   }
+   records.sort((a,b)=>b.recordedAt-a.recordedAt||
+    a.contractID.localeCompare(b.contractID));
+   return {status:"READY",history:records.slice(0,limit),
+    reputation:{paidRescues:records.filter(x=>x.outcome==="SETTLED").length,
+     refundedRescues:records.filter(x=>x.outcome==="REFUNDED").length,
+     score:records.reduce((n,x)=>n+x.reputationPoints,0),
+     earnedISK:records.reduce((n,x)=>n+x.earnedISK,0)}};
+  })}catch{return {status:"SALVAGE_HISTORY_NATIVE_SOURCE_UNAVAILABLE",history:[]}}
+ }
+ return {quote,reserve,verify,settle,refundUnstarted,history};
 }
 module.exports={createSalvageNativeRewards};
