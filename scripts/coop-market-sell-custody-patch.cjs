@@ -60,7 +60,7 @@ function patch(source,{remove=false}={}){
   "          normalizePositiveInteger(order && order.owner_id, 0),",
   "          normalizePositiveInteger(orderRow && orderRow.station_id, 0),",
   "        );"
- ],"",
+ ],'        if (coopSellProof) require("../../space/coopMarketCancelCustody").assertCancelledAck({ack:cancelResponse,orderID});',
  '        if (coopSellProof) '+restored("orderID","normalizePositiveInteger(order && order.owner_id,0)")+';');
  return text;
 }
