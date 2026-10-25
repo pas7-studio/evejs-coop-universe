@@ -20,11 +20,13 @@ param(
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
+  [switch]$EnableMarketCatalog,
   [switch]$EnableAtomicCoopTrade,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
 $ErrorActionPreference = 'Stop'
+if ($EnableMarketCatalog -and -not $LivingCoop) { throw 'Market catalog requires -LivingCoop' }
 Set-StrictMode -Version Latest
 
 function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
@@ -123,6 +125,9 @@ if ($EnableNativeCoopContracts) {
 # Opt in only after confirming offers/standing data on the two real characters.
 if ($EnableNativeLpStandings) {
   $yamlLines += "      EVEJS_COOP_LP_STANDING_REQUIREMENTS: '1'"
+}
+if ($EnableMarketCatalog) {
+  $yamlLines += "      EVEJS_COOP_MARKET_CATALOG: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
