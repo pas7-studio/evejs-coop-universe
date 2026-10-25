@@ -51,6 +51,7 @@ function patch(source,{remove=false}={}){
  inject(buy,sell,
   '  const matchResult = await matchSellOrdersForBuyer({',
   '  if ('+FLAG+' && normalizedDuration>0) {\n'+
+  '    require("../../space/coopPlayerMarketBuyReserve").assertExisting(openOrders,characterID);\n'+
   '    if(getStructureMarketLocation(stationID)) throw Error("P2P_BUY_RESERVE_STRUCTURE_OWNER_CREDIT_UNSUPPORTED");\n'+
   '    const placement=await require("../../space/coopPlayerMarketBuyReserveRuntime").place({\n'+
   '      client:marketDaemonClient,\n'+
