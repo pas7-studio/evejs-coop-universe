@@ -63,7 +63,8 @@ names.splice(names.indexOf("coopAlifeNativeBuyerRuntime")+1,0,
 // recovery witness; does NOT turn manual industry bindings into live writers.
 names.splice(names.indexOf("coopNpcIndustryNativeBindings")+1,0,
  "coopNpcIndustryRecoveryFence","coopNpcLiveFactoryReadiness",
- "coopNpcIndustryOriginalGameStorePreflight","coopNpcIndustryOriginalStageExecutor");
+ "coopNpcIndustryOriginalGameStorePreflight","coopNpcIndustryOriginalStageExecutor",
+ "coopNpcIndustryOriginalRustSell");
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
