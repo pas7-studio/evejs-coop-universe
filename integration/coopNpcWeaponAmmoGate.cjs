@@ -44,7 +44,9 @@ function createAmmoGate({store,dogma,capability,env=process.env}={}){
    const charges=cargo.filter(row=>Number(row.moduleID)===memberID);
    const valid=charges.filter(row=>Number(row.entityID)===entityID&&
     Number(row.ownerID)===ownerID&&Number(row.categoryID)===8&&
-    row.transient!==true&&positive(row.cargoID)&&positive(row.typeID)&&
+    // Native transient-scene cargo is still a REAL authoritative stack;
+    // unlike EveJS virtual reload reserve it has a source ID and quantity.
+    positive(row.cargoID)&&positive(row.typeID)&&
     Number.isSafeInteger(Number(row.quantity))&&Number(row.quantity)>0&&
     capability.isNpcChargeCompatibleWithModule(fitted[0],Number(row.typeID))===true);
    if(valid.length!==1||charges.length!==1)
