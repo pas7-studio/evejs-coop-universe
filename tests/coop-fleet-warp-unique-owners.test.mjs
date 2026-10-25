@@ -50,7 +50,7 @@ test("another character claiming the follower's exact native ship fails closed",
  assert.equal(inspect(f.input).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
 });
 
-test("disconnected, not-yet-ready and other-system historical sessions are not active owners",()=>{
+test("disconnected and not-yet-ready historical sessions are not active owners",()=>{
  const f=fixture();
  const ghost={...f.a,_space:{...f.a._space},socket:{destroyed:true}};
  f.scene.sessions.set(9999,ghost);
@@ -58,9 +58,13 @@ test("disconnected, not-yet-ready and other-system historical sessions are not a
  ghost.socket.destroyed=false;
  ghost._space.initialStateSent=false;
  assert.equal(inspect(f.input).ok,true);
- ghost._space.initialStateSent=true;
- ghost._space.systemID=30000142;
- assert.equal(inspect(f.input).ok,true);
+});
+
+test("a live wrong-system session retained in the scene cannot share a character or hull",()=>{
+ const f=fixture();
+ f.scene.sessions.set(9999,{...f.a,
+  _space:{...f.a._space,systemID:30000142}});
+ assert.equal(inspect(f.input).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
 });
 
 test("arrival evidence refuses to begin with duplicate active native ownership",()=>{
