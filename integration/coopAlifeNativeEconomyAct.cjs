@@ -67,8 +67,14 @@ function createAlifeNativeAct({resolveActor,resolveDirector,resolveProductTypes,
    if(director.supportsLiveRuntime===true){
     if(typeof director.auditBeforeTick!=="function")
      return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_MISSING"};
-    const proof=await director.auditBeforeTick({
-     ownerID:actor.ownerID,stationID:actor.stationID});
+    let proof;
+    try{proof=await director.auditBeforeTick({
+     ownerID:actor.ownerID,stationID:actor.stationID});}
+    catch(_error){
+     // An unavailable original journal/Rust witness is never permission
+     // to charge a wallet or create another BPO industry job.
+     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_UNAVAILABLE"};
+    }
     if(proof?.status!=="READY"||proof.ownerID!==actor.ownerID||
        proof.stationID!==actor.stationID||
        proof.readOnly!==true||proof.nativeMutation!==false||
