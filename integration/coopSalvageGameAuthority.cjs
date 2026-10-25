@@ -9,18 +9,18 @@ const vector=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 function createSalvageGameAuthority({readEvent,readFlight,readManifest,
  readVolunteers,readOutcomes,ledger,createTransfer,readScene,
  readPlayerShip,readDockedStation,getSessions,readSalvageOffer,
- acceptSalvage,reserveSalvage,verifyEscrow,settleSalvage}={}){
+ acceptSalvage,reserveSalvage,verifyEscrow,settleSalvage,refundSalvage}={}){
  if([readEvent,readFlight,readManifest,readVolunteers,readOutcomes,
   createTransfer,readScene,readPlayerShip,readDockedStation,
   getSessions,readSalvageOffer,acceptSalvage,reserveSalvage,
-  verifyEscrow,settleSalvage].some(x=>typeof x!=="function")||
+  verifyEscrow,settleSalvage,refundSalvage].some(x=>typeof x!=="function")||
   !ledger||typeof ledger.witness!=="function"||
   typeof ledger.read!=="function")
   throw Error("SALVAGE_GAME_NATIVE_AUTHORITIES_REQUIRED");
  function command({session,eventID,cargoID,action}={}){
   if(process.env.EVEJS_COOP_SALVAGE_GAME!=="1")
    return deny("DISABLED");
-  if(!["OFFER","ACCEPT","PICKUP","DELIVER"].includes(action)||
+  if(!["OFFER","ACCEPT","PICKUP","DELIVER","REFUND"].includes(action)||
    !/^convoy-\d+-\d+-\d+$/.test(String(eventID))||
    !pos(cargoID)||!pos(session?.characterID)||session.socket?.destroyed===true)
    return deny("SALVAGE_GAME_INVALID_REQUEST");
@@ -78,6 +78,7 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
    !offer.characters.includes(session.characterID))
    return deny("SALVAGE_NATIVE_OFFER_NOT_VERIFIED");
   if(action==="OFFER")return offer;
+  if(action==="REFUND")return refundSalvage(m.key);
   if(action==="ACCEPT"){
    const accepted=acceptSalvage(session,m.key);
    if(accepted?.status!=="VERIFIED_DUO_SALVAGE_ACCEPT")
