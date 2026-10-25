@@ -97,3 +97,27 @@ test('depot commit cannot accept wrong quantity, fleet or system',()=>{
   assert.equal(f.depot.snapshot().totals['30000144'],undefined);
  }finally{fs.rmSync(f.dir,{recursive:true,force:true})}
 });
+
+test('conservation audit derives exact committed ore by native type and flags pending',()=>{
+ const f=fixture();
+ try{
+  assert.equal(f.depot.audit().status,'OK');
+  f.depot.prepare({systemID:30000144,fleetID:44,item:f.delivery});
+  assert.equal(f.depot.audit().status,'PENDING_CUSTODY_RECONCILIATION');
+  f.depot.commit({systemID:30000144,fleetID:44,item:f.delivery});
+  const audit=createDepot({file:f.file}).audit();
+  assert.equal(audit.status,'OK');
+  assert.equal(audit.bySystemType['30000144']['34'],50);
+  assert.equal(audit.totals['30000144'],50);
+ }finally{fs.rmSync(f.dir,{recursive:true,force:true})}
+});
+test('corrupt virtual depot total cannot pass native conservation audit',()=>{
+ const f=fixture();
+ try{
+  f.depot.prepare({systemID:30000144,fleetID:44,item:f.delivery});
+  f.depot.commit({systemID:30000144,fleetID:44,item:f.delivery});
+  const s=JSON.parse(fs.readFileSync(f.file,'utf8'));s.totals['30000144']=999;
+  fs.writeFileSync(f.file,JSON.stringify(s));
+  assert.equal(createDepot({file:f.file}).audit().status,'NEEDS_OPERATOR_REPAIR');
+ }finally{fs.rmSync(f.dir,{recursive:true,force:true})}
+});
