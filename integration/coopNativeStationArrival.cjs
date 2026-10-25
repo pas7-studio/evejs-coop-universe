@@ -17,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -52,6 +52,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  const arrivals=new Map();
  const manifestEnabled=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST==="1";
  const escortEnabled=process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1";
+ const durableWarpFence=escortEnabled&&process.env.EVEJS_COOP_ESCORT_WARP_FENCE==="1"?
+  (warpFence||require("./coopEscortWarpFence").createWarpFence({root,clock})):null;
  const manifestDirector=manifestEnabled?
   (manifest||require("./coopNativeHaulManifest").createManifest({root,store,items,getNativeEntity,clock})):null;
  const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,
@@ -68,6 +70,9 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
       Number(cargo.coopHaulFromMinerID)>0});
  function start(scene,fleet,now=clock(),options={}){
   const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID);
+  if(escortEnabled&&(!durableWarpFence||
+   ["inspectSource","prepare","confirm"].some(k=>typeof durableWarpFence[k]!=="function")))
+   return pause("ESCORT_DURABLE_WARP_FENCE_REQUIRED");
   if(escortEnabled&&(!manifestEnabled||
     typeof escortGate?.fundBeforeWarp!=="function"||
     typeof escortGate?.recordDelivered!=="function"))
@@ -116,6 +121,12 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      top:(economy?.ranked||[]).slice(0,3).map(entry=>({stationID:entry.stationID,
       revenue:entry.revenue,filled:entry.filled,unfilled:entry.unfilled}))
     });
+  }
+  if(escortEnabled){
+   if(ships.length!==1)return pause("ESCORT_REQUIRES_ONE_NATIVE_HAULER");
+   let source;try{source=durableWarpFence.inspectSource({systemID,fleetID,haulerID:ships[0],cargoIDs:cargo.map(x=>Number(x.cargoID))})}
+   catch{return pause("ESCORT_WARP_FENCE_SOURCE_UNAVAILABLE")}
+   if(source?.status!=="WARP_SOURCE_CLEAR")return pause("ESCORT_"+(source?.status||"WARP_FENCE_UNVERIFIED"));
   }
   // Flush existing physical NPC entities and native cargo before moving.
   for(const name of ["npcEntities","npcCargo"]){if(!flush(name)?.success)return pause("PERSISTENCE_UNCERTAIN");}
@@ -197,6 +208,13 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     return pause("ESCORT_"+(funded?.status||"FUNDING_UNVERIFIED"));
    // A native warp ACK can be lost after the ship physically moved.
    // Until ALL warp results are explicitly accepted, forbid an in-process retry.
+   let intent;try{intent=durableWarpFence.prepare({
+    manifestKey:manifestProof.key,contractID:funded.contractID,
+    systemID,fleetID,haulerID:ships[0],stationID:destination.stationID,
+    corporationID:destination.corporationID,cargoIDs:manifestProof.cargoIDs.slice()})}
+   catch{return pause("ESCORT_WARP_INTENT_UNAVAILABLE")}
+   if(intent?.status!=="DURABLE_WARP_PREPARED")
+    return pause("ESCORT_"+(intent?.status||"WARP_INTENT_UNVERIFIED"));
    fleet.coopEscortWarpOutcomeUncertain=true;
   }
   const result={stationID:destination.stationID,corporationID:destination.corporationID,
@@ -225,6 +243,12 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     return pause("WARP_COMMAND_FAILED");}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
   }
+  if(escortEnabled){
+   let committed;try{committed=durableWarpFence.confirm(manifestProof.key)}
+   catch{return pause("ESCORT_WARP_ACK_JOURNAL_UNAVAILABLE")}
+   if(committed?.status!=="DURABLE_WARP_ACK_CONFIRMED")
+    return pause("ESCORT_"+(committed?.status||"WARP_ACK_UNVERIFIED"));
+  }
   let preparingNoticeStatus="NOT_REQUIRED";
   if(escortEnabled){
    delete fleet.coopEscortWarpOutcomeUncertain;
@@ -250,6 +274,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  }
  function tick(scene,fleet,now=clock()){
   const trip=fleet?.coopStationArrival;
+  if(escortEnabled&&fleet?.coopEscortWarpOutcomeUncertain)
+   return pause("ESCORT_WARP_OUTCOME_NEEDS_OPERATOR_REPAIR");
   if(!trip)return pause("ROUTE_NOT_STARTED");
   if(Number(scene?.systemID)!==trip.systemID||Number(fleet?.fleetID)!==trip.fleetID)
    return pause("FLEET_MISMATCH");

@@ -225,7 +225,24 @@ function noteRaid(scene,action){
 }
 function noteDamage(scene,receipt,fleetRuntime){
  if(process.env.EVEJS_COOP_CONVOY_OPERATIONS!=="1")return {status:"DISABLED"};
- try{return instance().damage({scene,receipt,fleetRuntime})}
+ let result;
+ try{result=instance().damage({scene,receipt,fleetRuntime})}
  catch{return {status:"NATIVE_CONVOY_OPERATION_UNAVAILABLE"}}
+ // A real PIRATE_WRECK_CONFIRMED may arrive AFTER native warehouse delivery
+ // and the original NPC fleet might already have completed its route.
+ // Reconcile only after an independently recorded native duo + wreck event;
+ // never let arbitrary combat RPCs or chat messages choose a paid contract.
+ if(result?.status==="NATIVE_CONVOY_INTERVENTION_RECORDED"&&
+    result.duoConfirmed===true&&result.pirateWreckConfirmed===true&&
+    (result.newlyConfirmedWreck===true||result.newlyConfirmedDuo===true)&&
+    process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY==="1"){
+   let resultOfReplay;
+   try{resultOfReplay=require("./coopEscortNativeBinding")
+    .reconcilePendingDeliveries({systemID:Number(scene?.systemID),maxTrips:32})}
+   catch{resultOfReplay={status:"NATIVE_RECONCILE_EVENT_HOOK_UNAVAILABLE"}}
+   return {...result,escortSettlementReconciliation:resultOfReplay?.status||
+    "NATIVE_RECONCILE_UNKNOWN"};
+ }
+ return result;
 }
 module.exports={createOperations,noteRaid,noteDamage};

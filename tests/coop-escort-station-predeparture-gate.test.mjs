@@ -6,10 +6,11 @@ const {createStationArrival}=require("../integration/coopNativeStationArrival.cj
 const prior=Object.fromEntries([
  "EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_OPPORTUNITY_BOARD","EVEJS_COOP_EVENT_VOLUNTEERS",
- "EVEJS_COOP_ESCORT_PAID_ACCEPT","EVEJS_COOP_ESCORT_REFUNDS"
+ "EVEJS_COOP_ESCORT_PAID_ACCEPT","EVEJS_COOP_ESCORT_REFUNDS","EVEJS_COOP_ESCORT_WARP_FENCE"
 ].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(prior))process.env[k]="1";
-function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false}={}){
+function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false,
+ sourceDispatched=false,ackDurable=true}={}){
  const counters={funding:0,warp:0,manifest:0,closures:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
@@ -57,6 +58,12 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   flush:()=>({success:true}),
   warpToPoint:()=>{counters.warp++;return {success:warpAccepted}},
   root:"/tmp/eve",clock:()=>1000000,
+  warpFence:{
+   inspectSource:()=>({status:sourceDispatched?"WARP_SOURCE_ALREADY_DISPATCHED":"WARP_SOURCE_CLEAR"}),
+   prepare:()=>({status:"DURABLE_WARP_PREPARED"}),
+   confirm:()=>({status:ackDurable?"DURABLE_WARP_ACK_CONFIRMED":
+    "WARP_ACK_JOURNAL_UNCERTAIN_REPAIR_REQUIRED"})
+  },
   warehouse:{deposit:()=>({status:"COMMITTED"})},
   manifest:{prepare:()=>{counters.manifest++;return {status:"MANIFEST_DURABLY_PREPARED",
    key:"30000144-77-1000000",cargoIDs:[5501]}}},
@@ -144,6 +151,32 @@ test("genuine durable hauler-loss refund terminates route with ZERO player ISK e
  assert.equal(f.fleet.coopStationArrival,undefined);
  assert.equal(f.counters.funding,1);assert.equal(f.counters.warp,1);
 }));
+test("a prior persisted physical warp fence forbids a second paid flight",()=>run(f=>{
+ f.approve();
+ assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+  "ESCORT_WARP_SOURCE_ALREADY_DISPATCHED");
+ assert.equal(f.counters.funding,0);
+ assert.equal(f.counters.warp,0);
+},{sourceDispatched:true}));
+test("unknown durable ACK does not declare successful paid NPC departure",()=>run(f=>{
+ f.approve();
+ assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+  "ESCORT_WARP_ACK_JOURNAL_UNCERTAIN_REPAIR_REQUIRED");
+ assert.equal(f.fleet.coopEscortWarpOutcomeUncertain,true);
+ assert.equal(f.director.tick(f.scene,f.fleet,1001000).status,
+  "ESCORT_WARP_OUTCOME_NEEDS_OPERATOR_REPAIR");
+ assert.equal(f.counters.funding,1);
+ assert.equal(f.counters.warp,1);
+},{ackDurable:false}));
+test("paid escort cannot start unless durable warp fence is explicitly enabled",()=>{
+ process.env.EVEJS_COOP_ESCORT_WARP_FENCE="0";
+ try{run(f=>{
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_DURABLE_WARP_FENCE_REQUIRED");
+  assert.equal(f.counters.funding,0);assert.equal(f.counters.warp,0)
+ },{volunteer:true})}
+ finally{process.env.EVEJS_COOP_ESCORT_WARP_FENCE="1"}
+});
 test("no native wallet gate blocks route independent of voluntary consent",()=>run(f=>{
  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
   "ESCORT_ROUTE_GATE_UNAVAILABLE");
