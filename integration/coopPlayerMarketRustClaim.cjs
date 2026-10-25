@@ -52,13 +52,43 @@ async function release({ticket,proof,client,receipt}={}){
   throw Error("P2P_RUST_MARKET_DAEMON_REQUIRED");
  const d=details(ticket,proof);
  const key="p2p:"+ticket.orderID+":"+ticket.cycle;
+ const gross=d.price_cents*d.filled_quantity,
+  nonneg=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>=0;
+ // The exported native Rust release adapter is a final safety boundary,
+ // even for callers outside the normal double-witness runtime. It must
+ // never turn a paid receipt from another item, station or fill cycle
+ // into authority to unlock this original Rust order.
  if(!receipt||receipt.key!==key||
     receipt.phase!=="GAMESTORE_COMMITTED"||
     receipt.orderID!==d.order_id||receipt.cycle!==d.cycle||
     receipt.buyerID!==d.buyer_id||receipt.sellerID!==d.seller_id||
+    receipt.stationID!==proof.stationID||receipt.typeID!==proof.typeID||
+    !positive(receipt.itemID)||!positive(receipt.sourceItemID)||
     receipt.quantity!==d.filled_quantity||
+    receipt.volumeBefore!==proof.volumeBefore||
+    receipt.volumeAfter!==proof.volumeAfter||
+    (proof.bid===false&&receipt.partial!==(proof.volumeAfter>0))||
     receipt.priceCents!==d.price_cents||
-    receipt.grossCents!==d.price_cents*d.filled_quantity)
+    !positive(gross)||receipt.grossCents!==gross||
+    !nonneg(receipt.taxCents)||receipt.taxCents>gross||
+    !nonneg(receipt.buyerBeforeCents)||
+    !nonneg(receipt.buyerAfterCents)||
+    !nonneg(receipt.sellerBeforeCents)||
+    !nonneg(receipt.sellerAfterCents)||
+    !nonneg(receipt.sellerBeforeCents+gross)||
+    receipt.sellerAfterCents!==receipt.sellerBeforeCents+gross-receipt.taxCents||
+    (proof.bid===false&&
+      (receipt.buyerBeforeCents<gross||
+       receipt.buyerAfterCents!==receipt.buyerBeforeCents-gross))||
+    (proof.bid===true&&
+      (receipt.kind!=="P2P_BUY_PAID"||
+       receipt.buyerBeforeCents!==receipt.buyerAfterCents||
+       !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(receipt.reserveOperationID)||
+       receipt.reserveReceiptKey!=="buy-reserve:"+receipt.reserveOperationID||
+       !nonneg(receipt.reserveBeforeCents)||
+       !nonneg(receipt.reserveAfterCents)||
+       receipt.reserveBeforeCents-receipt.reserveAfterCents!==gross))||
+    !positive(receipt.committedAt))
   throw Error("P2P_RUST_RELEASE_DURABLE_NATIVE_RECEIPT_REQUIRED");
  const response=await client.call("ReleasePlayerFill",{
   order_id:d.order_id,cycle:d.cycle,buyer_id:d.buyer_id,
