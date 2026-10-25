@@ -73,6 +73,12 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   if(current?.status!=="READY"||current.phase!=="FUNDED"||
    current.booking?.manifestKey!==manifestKey)
    return blocked("ESCORT_RECOVERY_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  // A file journal can still say FUNDED after another terminal wallet
+  // process committed a refund or payout. Re-read original native escrow.
+  let reserve;try{reserve=flight.readFunded(current.booking)}
+  catch{return blocked("ESCORT_RECOVERY_NATIVE_RESERVATION_UNAVAILABLE")}
+  if(reserve?.status!=="NATIVE_PREFUNDED_BOOKING_VERIFIED")
+   return blocked("ESCORT_RECOVERY_NATIVE_RESERVATION_NOT_VERIFIED");
   const proof=departure.readDurable(manifestKey,current.booking);
   if(proof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
    return blocked("ESCORT_RECOVERY_"+proof.status);
@@ -88,6 +94,10 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   if(f?.status!=="READY"||f.phase!=="FUNDED"||!f.booking||
    f.booking.manifestKey!==manifestKey)
    return blocked("ROUTE_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  let reserve;try{reserve=flight.readFunded(f.booking)}
+  catch{return blocked("ROUTE_NATIVE_RESERVATION_UNAVAILABLE")}
+  if(reserve?.status!=="NATIVE_PREFUNDED_BOOKING_VERIFIED")
+   return blocked("ROUTE_NATIVE_RESERVATION_NOT_VERIFIED");
   const p=departure.read(manifestKey,f.booking);
   if(p.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
    return blocked("ROUTE_DEPARTURE_NOT_VERIFIED");
