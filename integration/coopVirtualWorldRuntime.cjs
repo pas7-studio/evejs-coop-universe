@@ -626,6 +626,11 @@ function advanceNativeCivilianOrders(){
  })||new Set();
  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+ // A physically observing squad scout must stay on-grid for the 15s relay:
+ // don't let generic civilian waypoints warp that SAME native ship away.
+ if(process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&squadDirector)
+  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+   for(const scoutID of squadDirector.activeScoutIDs(sys))blockedIDs.add(scoutID);
  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
   addNpcOrderBlocks(blockedIDs,sys,"CIVILIAN");
  const roles=economy?.snapshot().pilots||{};
