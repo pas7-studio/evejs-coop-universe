@@ -129,7 +129,7 @@ function patch(source,file,remove=false){
   if(countAnchor!==1||count(text,extra)>1)
    throw Error("UNKNOWN_OR_PARTIAL_NATIVE_MISSION_STATE_SOURCE");
   if(remove&&hasExtra)text=text.replace(extra,"");
-  if(!remove&&!hasExtra)text=text.replace(anchor,anchor+eol+extra);
+  if(!remove&&!hasExtra)text=text.replace(anchor,anchor+eol+extra.slice(0,-eol.length));
  }else if(file.endsWith("/dungeon/dungeonUniverseSiteService.js")){
   const old=lines([
    '      return agentMissionRuntime.syncMissionRecordForDungeonInstance(instance, {',
