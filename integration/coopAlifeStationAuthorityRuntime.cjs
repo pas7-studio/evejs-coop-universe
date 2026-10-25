@@ -1,7 +1,7 @@
 "use strict";
 // COOP-043 pinned EveJS production read adapter. Explicit opt-in, never writes.
 // Rust GetOrders is authoritative; never substitute seed, virtual market or cash.
-const {createStationAuthority}=require("./coopAlifeStationAuthority");
+const {createStationAuthority}=require("./coopAlifeStationAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 function parseTargets(json){
  if(typeof json!=="string"||json.length>1500)throw Error("ALIFE_ECONOMY_PRODUCTS_INVALID");
  let values;try{values=JSON.parse(json)}catch{throw Error("ALIFE_ECONOMY_PRODUCTS_INVALID")}
