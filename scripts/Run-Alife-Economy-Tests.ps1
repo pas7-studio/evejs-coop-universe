@@ -24,7 +24,9 @@ if ($nonPending.Count -gt 0) {
 $files = @(
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
-  "tests/coop-alife-economy-wiring.test.mjs"
+  "tests/coop-alife-economy-wiring.test.mjs",
+  "tests/coop-alife-order-authority.test.mjs",
+  "tests/coop-alife-native-intent-reconciliation.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
