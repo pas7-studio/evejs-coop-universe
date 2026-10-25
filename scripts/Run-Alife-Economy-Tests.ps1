@@ -48,7 +48,19 @@ if ($policy.schema -ne "coop-046-native-market-policy/v1" -or $policy.scenarios.
 if (@($policy.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Do not mark market policy E2E PASS without native settlement evidence"
 }
+$partialManifest = Join-Path $root "tests/scenarios/coop-047-native-partial-market-e2e.json"
+if (-not (Test-Path $partialManifest)) { throw "Missing native partial-fill acceptance scenarios" }
+$partial = Get-Content -Raw -Path $partialManifest | ConvertFrom-Json
+if ($partial.schema -ne "coop-047-native-partial-market/v1" -or $partial.scenarios.Count -lt 7) {
+  throw "Invalid native partial-fill acceptance manifest"
+}
+if (@($partial.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not mark native Rust/GameStore E2E PASS without physical evidence"
+}
 $files = @(
+  "tests/coop-npc-partial-fill-atomic.test.mjs",
+  "tests/coop-npc-partial-real-sqlite.test.mjs",
+  "tests/coop-rust-npc-partial-patch.test.mjs",
   "tests/coop-npc-market-policy.test.mjs",
   "tests/coop-npc-demand-authority.test.mjs",
   "tests/coop-alife-native-act.test.mjs",
@@ -81,7 +93,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count))
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count))
 Write-Host ("Evidence checklist: " + $manifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."
