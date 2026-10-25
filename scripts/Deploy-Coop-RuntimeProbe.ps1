@@ -19,6 +19,7 @@ param(
   [switch]$CoopCombat,
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
+  [switch]$EnableNativeLpStandings,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -109,6 +110,11 @@ if ($LivingCoop) {
 # until two-client escrow and crash-replay settlement validation.
 if ($EnableNativeCoopContracts) {
   $yamlLines += "      EVEJS_COOP_NATIVE_CONTRACTS: '1'"
+}
+# Static LP Store standing prerequisites: read native effective standing before debit.
+# Opt in only after confirming offers/standing data on the two real characters.
+if ($EnableNativeLpStandings) {
+  $yamlLines += "      EVEJS_COOP_LP_STANDING_REQUIREMENTS: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
