@@ -208,12 +208,21 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   fleet.coopStationArrival=result; // In-memory intent is never proof of inventory.
   for(const [index,id] of ships.entries()){
    const target={...destination.position,x:destination.position.x+750+index*100};
-   let ack;
+   let ack,warpError=null;
    try{ack=warpToPoint(id,target,{forceImmediateStart:true,
     broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
-    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250)});}catch(_){ack=null;}
+    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250)});}catch(error){ack=null;warpError=String(error?.message||error).slice(0,120);}
    if(!truthy(ack)){delete fleet.coopStationArrival;
-    for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED");}
+    for(const raw of ships)arrivals.delete(raw);
+    // A rejected warp is the difference between "the fleet is working" and
+    // "the fleet is silently stuck", so it must never be swallowed.
+    const rejection={fleetID,haulerID:id,stationID:destination.stationID,
+     systemID,errorMsg:String(ack?.errorMsg||ack?.error||warpError||"").slice(0,120),
+     ackKeys:ack&&typeof ack==="object"?Object.keys(ack).slice(0,8):[]};
+    noteRouteStatus(fleet,"WARP_COMMAND_FAILED");
+    if(typeof probe?.observe==="function")
+     probe.observe("living-npc-station-warp-rejected",null,{spaceState:{systemID}},rejection);
+    return pause("WARP_COMMAND_FAILED");}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
   }
   let preparingNoticeStatus="NOT_REQUIRED";
@@ -389,7 +398,11 @@ function getRuntimeDirector(){
   getCorporation:corporations.getCorporationRecord,isNpcCorporation:corporations.isNpcCorporationID,
   getNativeEntity:store.getNativeEntity,getScene:id=>runtime.getScene?.(id)||runtime.ensureScene(id),
   store,items:nativeItems,flush:table=>repo.flushTableSync(table),
-  warpToPoint:(id,p,opts)=>runtime.warpToPoint(id,p,opts),
+  // A durable native hauler has no session, so the session-bound
+  // space/runtime.warpToPoint() silently rejects it. Use the same sessionless
+  // NPC warp the stock mining code uses, otherwise every station trip failed
+  // with WARP_COMMAND_FAILED and the ore never left the belt.
+  warpToPoint:(id,p,opts)=>require("./npc/npcRuntime").warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
   destinationOracle:process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1"?
@@ -432,15 +445,22 @@ function noteRouteStatus(fleet,status){
     fleetState:String(fleet?.state||""),haulers:(fleet?.haulerEntityIDs||[]).length});
  }catch(_error){/* diagnostics must never break the native route */}
 }
-function checkReturn(scene,fleet,now){
+function checkReturn(scene,fleet,now,director=null){
+ const run=director||getRuntimeDirector();
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
  if(fleet?.coopStationNoCargo){delete fleet.coopStationNoCargo;return {status:"NO_CARGO",terminal:true};}
  if(process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"&&
     fleet?.coopEscortPredepartureEventID&&!fleet?.coopStationArrival){
-   return getRuntimeDirector().start(scene,fleet,now);
+   return run.start(scene,fleet,now);
+ }
+ // Nothing is physically in flight, so there is nothing left to wait for. This
+ // is also the self-healing exit for a fleet that stalled without any trip.
+ if(!fleet?.coopStationArrival){
+  noteRouteStatus(fleet,"NO_ACTIVE_TRIP");
+  return {status:"NO_ACTIVE_TRIP",terminal:true};
  }
  // Dwell and physical-arrival waits are progress, not blockers.
- const arrival=getRuntimeDirector().tick(scene,fleet,now);
+ const arrival=run.tick(scene,fleet,now);
  if(arrival?.terminal!==true&&arrival?.status!=="AWAITING_PHYSICAL_ARRIVAL"&&
   arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
  return arrival;

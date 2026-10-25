@@ -14,7 +14,7 @@ function note(reason, payload = {}) {
   try {
     require("./coopRuntimeProbe").observe("living-mining-blocker", null,
       { spaceState: { systemID: Number(payload.systemID) || 0 } },
-      { reason, ...payload, at: now });
+      { reason, ...payload, atMs: now });
   } catch (_error) { /* tracing must never break the native tick */ }
 }
 module.exports = { note };
