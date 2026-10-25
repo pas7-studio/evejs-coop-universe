@@ -169,3 +169,15 @@ test("losing and reacquiring physical scout contact restarts relay delay",()=>{
  f.advance(16000);f.observe();
  assert.equal(f.permit(102).allowed,true);
 });
+
+test("native active scout is protected from civilian routing; warping ship cannot witness",()=>{
+ const f=fixture();f.observe();
+ assert.deepEqual([...f.squads.activeScoutIDs(SID)],[101]);
+ f.ships.get(101).mode="WARP";f.advance(16000);f.observe();
+ assert.deepEqual([...f.squads.activeScoutIDs(SID)],[]);
+ assert.equal(f.permit(102).reason,"NO_CURRENT_WITNESS");
+ f.ships.get(101).mode="IDLE";f.observe();
+ assert.equal(f.permit(102).reason,"RELAY_IN_FLIGHT");
+ const runtime=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
+ assert.ok(runtime.includes("squadDirector.activeScoutIDs(sys))blockedIDs.add(scoutID)"));
+});
