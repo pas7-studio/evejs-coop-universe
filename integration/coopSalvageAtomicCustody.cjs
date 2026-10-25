@@ -26,7 +26,8 @@ function createSalvageCustody({readSalvageProof,readManifest,inspectAtomicReceip
    manifest?.status!=="READY"||manifest.record?.key!==manifestKey||
    manifest.record.stationID!==stationID||
    manifest.record.corporationID!==corporationID||
-   witness.wreckID!==receipt?.wreckID||
+   (!pos(witness.wreckID)||receipt?.status==="ATOMIC_NATIVE_ITEM_MOVED"&&
+    witness.wreckID!==receipt.wreckID)||
    !Array.isArray(witness.rows)||
    !witness.rows.some(x=>x.cargoID===cargoID&&
     x.wreckItemID===wreckItemID&&x.quantity===quantity))
