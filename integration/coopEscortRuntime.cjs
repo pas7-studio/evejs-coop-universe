@@ -92,13 +92,76 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   // real participant fleet and native escrow in one atomic dual-credit commit.
   return contracts.settle(candidate.contractID);
  }
+
+ // A destroyed hauler may NEVER reach Stage A's successful-delivery path.
+ // Reconstruct that contract exclusively from the original immutable
+ // prewarp booking plus the independently journalled native hauler wreck.
+ // No trusted wreck -> no Stage A creation, and absolutely no refund.
+ function refundWreckedFlight(manifestKey){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
+   return blocked("DISABLED");
+  if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+   return blocked("NATIVE_REFUND_MANIFEST_KEY_INVALID");
+  let state;try{state=flight.read(manifestKey)}
+  catch{return blocked("NATIVE_REFUND_FLIGHT_JOURNAL_UNAVAILABLE")}
+  if(state?.status!=="READY"||state.phase!=="FUNDED")
+   return blocked("NATIVE_REFUND_FLIGHT_NOT_FUNDED_OR_ALREADY_DELIVERED");
+  const b=state.booking;
+  if(!pos(b?.playerFleetID)||!pos(b?.haulerID)||
+   !Array.isArray(b.characters)||b.characters.length!==2)
+   return blocked("NATIVE_REFUND_ORIGINAL_DUO_NOT_RECORDED");
+  let outcomes;try{outcomes=readOutcomes()}
+  catch{return blocked("NATIVE_REFUND_OUTCOME_SOURCE_UNAVAILABLE")}
+  if(outcomes?.status!=="READY"||!Array.isArray(outcomes.outcomes))
+   return blocked("NATIVE_REFUND_OUTCOME_JOURNAL_UNVERIFIED");
+  const eligible=outcomes.outcomes.filter(x=>
+   x.systemID===b.systemID&&x.targetID===b.haulerID&&
+   pos(x.pirateID)&&x.status==="HAULER_NATIVE_LOSS_VERIFIED"&&
+   pos(x.haulerNativeWreckID)&&
+   Array.isArray(x.verifiedWarehouseStacks)&&
+   x.verifiedWarehouseStacks.length===0&&
+   x.key===String(b.systemID)+":"+x.pirateID+":"+b.haulerID);
+  if(eligible.length!==1)return blocked(eligible.length?
+   "NATIVE_REFUND_AMBIGUOUS_HAULER_LOSS":"NATIVE_REFUND_HAULER_LOSS_NOT_PROVEN");
+  const o=eligible[0];
+  const c={contractID:b.contractID,manifestKey:b.manifestKey,
+   systemID:b.systemID,fleetID:b.fleetID,haulerID:b.haulerID,
+   stationID:b.stationID,corporationID:b.corporationID,
+   pirateID:o.pirateID,incidentKey:o.key,fleetDuoID:b.playerFleetID,
+   characters:b.characters.slice(),amountISK:b.amountISK};
+  let loss;try{loss=readNativeFailure(c)}
+  catch{return blocked("NATIVE_REFUND_IRREVERSIBLE_LOSS_UNAVAILABLE")}
+  if(loss?.status!=="DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE"||
+   loss.contractID!==c.contractID||loss.manifestKey!==c.manifestKey||
+   loss.corporationID!==c.corporationID||
+   loss.failureWitnessID!==o.haulerNativeWreckID||
+   loss.reason!=="NATIVE_HAULER_WRECK"||
+   loss.nativeDurable!==true||
+   loss.deliveryImpossible!==true||loss.noPriorPayout!==true)
+   return blocked("NATIVE_REFUND_IRREVERSIBLE_LOSS_NOT_VERIFIED");
+  let contract=contracts.read(c.contractID);
+  if(contract.status==="CONTRACT_NOT_FOUND"){
+   const created=contracts.create(c);
+   if(created.status!=="OFFERED")return created;
+   contract=contracts.read(c.contractID);
+  }
+  if(contract.status!=="READY")return contract;
+  if(contract.phase==="OFFERED"){
+   const ack=contracts.attachPrefunded(c.contractID);
+   if(ack.status!=="FUNDED")return ack;
+   contract=contracts.read(c.contractID);
+  }
+  if(contract.phase!=="FUNDED")
+   return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
+  return contracts.refund(c.contractID);
+ }
  function refundProvenLoss(contractID){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
  return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,
-  refundProvenLoss,readFlight:flight.read,readContract:contracts.read,
+  refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
 }
