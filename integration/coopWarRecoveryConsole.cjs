@@ -8,7 +8,7 @@ const hash=x=>crypto.createHash("sha256").update(x).digest("hex");
 function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
  journalDir="/var/lib/evejs/coop-war-native-transfers",
  env=process.env,io=fs,clock=()=>Date.now()}={}){
- if(!ledger||["witness","nativeCommit","finish","abort","restore","recordRecoveryAttempt"]
+ if(!ledger||["witness","nativeCommit","finish","abort","restore","recordRecoveryAttempt","retire"]
   .some(k=>typeof ledger[k]!=="function")||
   typeof identityRegistry?.relocate!=="function"||
   typeof authorizeOperator!=="function"||
@@ -61,13 +61,16 @@ function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
   let w;
   try{w=ledger.witness(id)}
   catch{return {status:"UNSAFE",reason:"WITNESS_EVALUATION_FAILED"}}
+  if(w?.status==="NO_ACTIVE_TRANSFER")return {status:"CLEAN",entityID:id};
   if(w?.status!=="VERIFIED")return {status:"UNSAFE",
    reason:w?.reason||w?.status||"WITNESS_UNAVAILABLE"};
   const j=journal(w);
   if(j.status==="UNSAFE")return {status:"UNSAFE",reason:j.reason};
-  if(w.action==="CLEANUP_JOURNAL"&&j.status==="ABSENT")
-   return {status:"CLEAN",entityID:id,transferID:w.transferID};
-  const action=w.action;
+  // A closed native journal is NOT permission to erase transfer
+  // evidence. Retire the terminal SQL record into permanent bounded
+  // history as a separate explicit, audited action.
+  const action=w.action==="CLEANUP_JOURNAL"&&j.status==="ABSENT"?
+   "RETIRE_TRANSFER":w.action;
   const normalized={entityID:w.entityID,transferID:w.transferID,pilotID:w.pilotID,
    phase:w.phase,rowSystemID:w.rowSystemID,physicalSystemID:w.physicalSystemID,
    pilotSystemID:w.pilotSystemID,sourceSystemID:w.sourceSystemID,
@@ -137,6 +140,7 @@ function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
     else if(action==="NATIVE_COMMIT")result=ledger.nativeCommit(req);
     else if(action==="FINISH")result=ledger.finish(req);
     else if(action==="RESTORE")result=ledger.restore(req);
+    else if(action==="RETIRE_TRANSFER")result=ledger.retire(req);
     else if(action==="RELOCATE_PILOT")
      result=identityRegistry.relocate(
       // Pilot identity must come from a re-read native witness, not request.
@@ -151,7 +155,8 @@ function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
     return result||{status:"OUTCOME_UNKNOWN_RECHECK_REQUIRED"};
    const expected={ABORT:"ABORTED",RESTORE:"ABORTED",
     NATIVE_COMMIT:"NATIVE_COMMITTED",FINISH:"COMPLETE",
-    RELOCATE_PILOT:"RELOCATED",CLEANUP_JOURNAL:"ARCHIVED"}[action];
+    RELOCATE_PILOT:"RELOCATED",CLEANUP_JOURNAL:"ARCHIVED",
+    RETIRE_TRANSFER:"RETIRED"}[action];
    if(result?.status!==expected)
     return {status:"BLOCKED",reason:result?.reason||result?.status||"REPAIR_REJECTED"};
    const after=inspectInternal(entityID);
