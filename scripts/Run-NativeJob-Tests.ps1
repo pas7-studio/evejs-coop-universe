@@ -14,6 +14,7 @@ try {
   $files = @(
     'tests/coop-npc-job-board.test.mjs',
     'tests/coop-native-job-agent.test.mjs',
+    'tests/coop-native-job-agent-interest-replay.test.mjs',
     'tests/coop-native-job-agent-selection.test.mjs',
     'tests/coop-native-job-notifications.test.mjs',
     'tests/coop-escort-priced-mail-replay.test.mjs',
