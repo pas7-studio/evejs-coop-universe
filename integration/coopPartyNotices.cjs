@@ -9,7 +9,7 @@ function createNotices({clock=()=>Date.now(),cooldownMs=300000,
   !Number.isSafeInteger(cooldownMs)||cooldownMs<30000)
   throw Error("invalid duo notice options");
  const last=new Map();
- function rendezvous({scene,party,systemID}={}){
+ function rendezvous({scene,party,systemID,fleetID=null}={}){
   const pilots=party?.pilots;
   if(!Array.isArray(pilots)||pilots.length!==2||
    !scene||Number(scene.systemID)!==Number(systemID)||
@@ -23,14 +23,20 @@ function createNotices({clock=()=>Date.now(),cooldownMs=300000,
    scene.getEntityByID?.(p.shipID)!==p.ship||
    ![...scene.sessions?.values?.()||[]].includes(p.session)))
    return {status:"NOT_NATIVE_SCENE_MEMBERS",sent:0};
-  const key=systemID+":"+ids.sort((a,b)=>a-b).join(":");
+  const actualFleetID=pos(fleetID);
+  const key=systemID+":"+ids.sort((a,b)=>a-b).join(":")+
+   (actualFleetID?":fleet-"+actualFleetID:":rendezvous");
   const now=clock();
   if(!Number.isFinite(now))return {status:"CLOCK_INVALID",sent:0};
   if(last.has(key)&&now-last.get(key)<cooldownMs)
    return {status:"COOLDOWN",sent:0};
   const distance=Math.round(party.separation/1000);
-  const msg="[Co-op] Rendezvous: both ships are nearby ("+distance+
-   " km apart). Form an EVE fleet to warp together; check Perimeter belts for real mining convoys and pirate activity.";
+  const msg=actualFleetID
+   ?"[Co-op] Native EVE fleet #"+actualFleetID+
+    " confirmed: both physical ships are nearby ("+distance+
+    " km). Your fleet commander can use Warp Fleet. Try escorting a real mining convoy together."
+   :"[Co-op] Rendezvous: both ships are nearby ("+distance+
+    " km apart). Form an EVE fleet to warp together; check Perimeter belts for real mining convoys and pirate activity.";
   let sent=0;
   for(const p of pilots){
    if(p.session?.socket?.destroyed===true)continue;
@@ -41,7 +47,8 @@ function createNotices({clock=()=>Date.now(),cooldownMs=300000,
   if(sent)last.set(key,now);
   if(last.size>500)for(const [id,time] of last)if(now-time>cooldownMs)last.delete(id);
   return {status:sent===2?"SENT":"PARTIAL",sent,systemID,
-   characterIDs:ids,separationMeters:party.separation};
+   characterIDs:ids,separationMeters:party.separation,
+   nativeFleetID:actualFleetID};
  }
  return {rendezvous};
 }
