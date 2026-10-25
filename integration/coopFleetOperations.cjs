@@ -28,6 +28,12 @@ function defaultDeps(){
    require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID),
   getCargo:entityID=>require("./npc/nativeNpcStore").listNativeCargoForEntity(entityID),
   getWreck:wreckID=>require("./npc/nativeNpcStore").getNativeWreck(wreckID),
+  getItem:itemID=>require("../services/inventory/itemStore").findItemById(itemID),
+  getContracts:session=>{
+   const native=require("../services/contracts/contractRuntimeState");
+   return [...native.filterMyCurrentContracts(session,false,false),
+    ...native.filterMyCurrentContracts(session,true,false)];
+  },
   send:(session,message,chatHub)=>{
    if(chatHub&&typeof chatHub.sendSystemMessage==="function")
     return chatHub.sendSystemMessage(session,message);
@@ -41,9 +47,10 @@ function createOperations(options={}){
   getScene=defaultDeps().getScene,getFleets=defaultDeps().getFleets,
   getMiningFleets=defaultDeps().getMiningFleets,
   getCargo=defaultDeps().getCargo,getWreck=defaultDeps().getWreck,
+  getContracts=defaultDeps().getContracts,getItem=defaultDeps().getItem,
   send=defaultDeps().send
  }=options;
- if([clock,getScene,getFleets,getMiningFleets,getCargo,getWreck,send]
+ if([clock,getScene,getFleets,getMiningFleets,getCargo,getWreck,getContracts,getItem,send]
    .some(fn=>typeof fn!=="function")||
    !Number.isSafeInteger(maxIncidents)||maxIncidents<1||maxIncidents>1024||
    !Number.isSafeInteger(ttlMs)||ttlMs<60000||ttlMs>3600000)
@@ -200,7 +207,7 @@ function createOperations(options={}){
    const tokens=String(argumentText||"").trim().split(/\s+/).filter(Boolean);
    const command=String(tokens[0]||"status").toLowerCase();
    if(command==="help")return {status:"HELP",message:
-    "Co-op operations: /coopops status | convoy | focus <pirateID> | guard <haulerID> | role <intercept|escort|salvage|haul> [pirateID]. Commands never grant ISK/items or auto-fire weapons."};
+    "Co-op operations: /coopops status | convoy | deliveries | escort <contractID> | focus <pirateID> | guard <haulerID> | role <intercept|escort|salvage|haul> [pirateID]. Uses real native ships, fleet tags and contract rewards only."};
    const scene=getScene(session),ctx=fleetContext(session,scene);
    if(!ctx.ok)return {status:ctx.reason,message:"[Co-op] "+ctx.reason+
      ". Two authenticated ships in one native fleet/system are required."};
@@ -238,6 +245,74 @@ function createOperations(options={}){
        x.role+" #"+x.entityID+" ore="+x.ore).join("; ")+
        ". Cover the hauler while your partner fights; real item exchange/courier contracts and the market handle player earnings."
       :"[Co-op] No verified native mining ships in this system. No virtual cargo or fake rewards."};
+   }
+   // Courier contracts are NOT virtual work orders. Read only native
+   // records that EveJS's own character filter grants to this caller.
+   const visibleCourierContracts=()=>{
+    const records=getContracts(session);
+    if(!Array.isArray(records))return [];
+    const selected=new Map();
+    for(const contract of records){
+     const contractID=id(contract?.contractID);
+     if(!contractID||contract?.forCorp===true||Number(contract.type)!==3||
+      ![0,1].includes(Number(contract.status))||
+      (id(contract.issuerID)!==ctx.characterID&&
+       id(contract.acceptorID)!==ctx.characterID))continue;
+     selected.set(contractID,contract);
+    }
+    return [...selected.values()].sort((a,b)=>id(b.contractID)-id(a.contractID));
+   };
+   if(command==="deliveries"){
+    const rows=visibleCourierContracts().slice(0,6);
+    return {status:rows.length?"NATIVE_COURIER_CONTRACTS":"NO_NATIVE_COURIER_CONTRACTS",
+     message:rows.length
+      ?"[Co-op] Authentic EVE courier contracts: "+rows.map(c=>
+       "#"+id(c.contractID)+" "+(Number(c.status)===1?"IN_PROGRESS":"OUTSTANDING")+
+       " station "+id(c.startStationID)+" → "+id(c.endStationID)+
+       " reward="+Math.max(0,Number(c.reward)||0)+" ISK").join("; ")+
+       ". The acceptor must carry the actual plastic wrap and finish in the native contract UI."
+      :"[Co-op] No own/accepted native courier contract. Create or accept one using EVE's actual contracts UI."};
+   }
+   if(command==="escort"){
+    if(tokens.length!==2||!id(tokens[1]))
+     return {status:"INVALID_CONTRACT_ID",message:"Usage: /coopops escort <native contractID>"};
+    const contractID=id(tokens[1]);
+    const contract=visibleCourierContracts().find(x=>id(x.contractID)===contractID);
+    if(!contract||Number(contract.status)!==1)
+     return {status:"NOT_AN_ACCEPTED_NATIVE_CONTRACT",message:
+      "[Co-op] Contract is not your in-progress personal courier contract."};
+    const issuer=id(contract.issuerID),acceptor=id(contract.acceptorID);
+    const courier=ctx.crewmates.find(x=>x.characterID===acceptor);
+    if(!courier||issuer===acceptor||
+       !ctx.crewmates.some(x=>x.characterID===issuer))
+     return {status:"CONTRACT_PARTIES_NOT_IN_NATIVE_FLEET",message:
+      "[Co-op] The real courier and issuer must both be in this native fleet."};
+    const wrapID=id(contract.plasticWrapItemID),wrap=wrapID?getItem(wrapID):null;
+    // Only advertise a "live protected courier" when the package is
+    // PHYSICALLY in the acceptor's ship cargo. Docked hangar ≠ in transit.
+    if(!wrap||id(wrap.itemID)!==wrapID||
+       id(wrap.ownerID)!==acceptor||id(wrap.locationID)!==courier.shipID)
+     return {status:"NATIVE_COURIER_PACKAGE_NOT_LOADED",message:
+      "[Co-op] Courier must move the genuine plastic-wrapped package into the active ship's cargo first."};
+    const changed=ctx.fleets.setFleetTargetTag(session,courier.shipID,"3")===true;
+    const me=ctx.fleets.getMemberRecord(ctx.fleet,ctx.characterID),fc=ctx.fleets.FLEET;
+    const permitted=Boolean(me&&fc&&(
+      (Number(me.job||0)&Number(fc.FLEET_JOB_CREATOR||0))!==0||
+      Array.isArray(fc.FLEET_CMDR_ROLES)&&fc.FLEET_CMDR_ROLES.includes(Number(me.role))));
+    const tag=typeof ctx.fleets.getTargetTagForCharacter==="function"
+     ?ctx.fleets.getTargetTagForCharacter(ctx.characterID,courier.shipID):null;
+    if(!changed&&(!permitted||tag!=="3"))
+     return {status:"NATIVE_COMMAND_PERMISSION_DENIED",message:
+      "[Co-op] Only an authorized native fleet commander can tag the courier."};
+    for(const member of ctx.crewmates)if(member.characterID!==ctx.characterID){
+     try{send(member.session,"[Co-op] Protect courier ship #"+courier.shipID+
+      " (native fleet tag 3), contract #"+contractID+" to station #"+
+      id(contract.endStationID)+". The actual contract pays rewards only when completed.",chatHub);}catch(_){}
+    }
+    return {status:changed?"NATIVE_COURIER_ESCORT_TAGGED":"NATIVE_COURIER_ESCORT_ALREADY_TAGGED",
+     message:"[Co-op] Real contract #"+contractID+" escort assigned to native ship #"+
+      courier.shipID+" (tag 3). Destination station #"+id(contract.endStationID)+
+      ". No ISK or cargo created."};
    }
    if(command==="focus"||command==="guard"){
     if(tokens.length!==2||!id(tokens[1]))
@@ -297,7 +372,7 @@ function createOperations(options={}){
       ". Roles are coordination only: no passive bonuses, synthetic earnings or automatic shots."};
    }
    return {status:"UNKNOWN_COMMAND",message:
-    "Usage: /coopops help | status | convoy | focus <pirateID> | guard <haulerID> | role <role> [pirateID]"};
+    "Usage: /coopops help | status | convoy | deliveries | escort <contractID> | focus <pirateID> | guard <haulerID> | role <role> [pirateID]"};
   }catch(error){
    return {status:"NATIVE_OPERATION_UNAVAILABLE",message:
     "[Co-op] Native fleet/raid validation unavailable: "+
