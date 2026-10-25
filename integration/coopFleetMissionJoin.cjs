@@ -7,7 +7,7 @@ const id=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const text=x=>String(x==null?"":x).trim();
 function offer({characterID,agentRecord,fleetRuntime,sessions,
  getMissionRecord,getClientMissionRecord,offerSpecificMission,
- isMissionOfferAllowedForAgent,canUseAgent,
+ getDockedLocationID,isMissionOfferAllowedForAgent,canUseAgent,
  getReplayUntilFileTime,resolveReplayRemainingTicks}={}){
  try{
   const peer=id(characterID),agent=id(agentRecord?.agentID);
@@ -17,6 +17,7 @@ function offer({characterID,agentRecord,fleetRuntime,sessions,
    typeof fleetRuntime.getMemberRecord!=="function"||
    typeof getMissionRecord!=="function"||
    typeof getClientMissionRecord!=="function"||
+   typeof getDockedLocationID!=="function"||
    typeof offerSpecificMission!=="function"||
    typeof isMissionOfferAllowedForAgent!=="function"||
    typeof canUseAgent!=="function"||
@@ -39,10 +40,8 @@ function offer({characterID,agentRecord,fleetRuntime,sessions,
   const wing=matches(peer),captain=matches(leader);
   if(wing.length!==1||captain.length!==1||
    !wing[0].socket||!captain[0].socket||
-   id(wing[0].stationid)!==station||
-   id(captain[0].stationid)!==station||
-   id(wing[0].locationid)!==station||
-   id(captain[0].locationid)!==station)
+   id(getDockedLocationID(wing[0]))!==station||
+   id(getDockedLocationID(captain[0]))!==station)
    return {status:"NOT_TWO_AUTHENTIC_DOCKED_PLAYERS"};
   // Preserve standing requirements, native replay/cooldown restrictions and
   // existing offered/accepted missions. Never override a personal offer.
