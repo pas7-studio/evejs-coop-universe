@@ -986,6 +986,12 @@ function npcModuleSummary(ship){
    const online=typeof fitting.isModuleOnline==="function"?fitting.isModuleOnline(item):null;
    return {typeID:Number(item?.typeID)||0,miningEffects,
     online,flagID:Number(item?.flagID)||0,
+    // Does the native runtime really hold this module in an active cycle?
+    active:ship?.activeModuleEffects instanceof Map?
+     Boolean(ship.activeModuleEffects.get(Number(item?.itemID)||0)):null,
+    activeTarget:ship?.activeModuleEffects instanceof Map?
+     Number(ship.activeModuleEffects.get(Number(item?.itemID)||0)?.targetID)||0:0,
+    capacitor:Number.isFinite(ship?.capacitorCharge)?Math.round(ship.capacitorCharge):null,
     hasState:Boolean(item?.moduleState&&typeof item.moduleState==="object"),
     hasExplicit:typeof fitting.hasExplicitModuleOnlineState==="function"?
      fitting.hasExplicitModuleOnlineState(item):null};
