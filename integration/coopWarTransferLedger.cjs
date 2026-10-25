@@ -277,6 +277,43 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
    modulesHash:hashes.modules,cargoHash:hashes.cargo,
    updatedAt:flight.updatedAt};
  }
+ // Explicit administrative intent is recorded BEFORE the authorized
+ // action, inside the same durable fleet SQL row. It is an attempted action,
+ // not a false claim of completion after a crash between durable owners.
+ function recordRecoveryAttempt({entityID,transferID,action,
+  witnessHash,principalID,reason}={}){
+  if(!enabled())return {status:"DISABLED"};
+  if(!pos(entityID)||!key(transferID)||
+   !["ABORT","NATIVE_COMMIT","RELOCATE_PILOT","FINISH",
+    "RESTORE","CLEANUP_JOURNAL"].includes(action)||
+   typeof principalID!=="string"||
+   !/^[A-Za-z0-9_.:@-]{3,100}$/.test(principalID)||
+   typeof reason!=="string"||reason.trim().length<12||
+   reason.length>240||!/^[a-f0-9]{64}$/.test(witnessHash))
+   return {status:"INVALID_ADMIN_AUDIT"};
+  const auditID=crypto.createHash("sha256").update(
+   [transferID,action,witnessHash].join("|")).digest("hex");
+  return transact(tx=>{
+   const state=fleet.validate(tx.get(fleet.TABLE,fleet.KEY)),
+    row=state.ships[String(entityID)],
+    flight=state.transfers?.[String(entityID)];
+   if(!row||!flight||flight.transferID!==transferID)
+    return {status:"BLOCKED",reason:"TRANSFER_NO_LONGER_PRESENT"};
+   if(!Array.isArray(state.recoveryAudit))state.recoveryAudit=[];
+   const previous=state.recoveryAudit.find(x=>x.id===auditID);
+   if(previous)return {status:"ALREADY_RECORDED",auditID};
+   const at=clock();
+   if(!pos(at))throw Error("WAR_RECOVERY_AUDIT_CLOCK_UNSAFE");
+   state.recoveryAudit.push({id:auditID,entityID,transferID,
+    action,witnessHash,principalID,reason:reason.trim(),at,
+    phaseWhenRequested:flight.phase});
+   if(state.recoveryAudit.length>128)
+    state.recoveryAudit.splice(0,state.recoveryAudit.length-128);
+   fleet.validate(state);
+   tx.put(fleet.TABLE,fleet.KEY,state);
+   return {status:"RECORDED",auditID};
+  });
+ }
  function pending(){
   if(!enabled())return {status:"DISABLED",pending:[]};
   const state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
@@ -295,6 +332,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   restore:request=>operation("RESTORE",request),
   auditPersisted,
   witness,
+  recordRecoveryAttempt,
   pending
  });
 }
