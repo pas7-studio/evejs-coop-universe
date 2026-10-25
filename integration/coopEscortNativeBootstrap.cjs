@@ -88,9 +88,11 @@ function createPinnedOfferAuthority({quoteRoot,manifestRoot,amountISK,
   }});
  return paid;
 }
-function verifiedHaulerLoss({readOutcomes,contract}){
- if(typeof readOutcomes!=="function"||!contract)
-  return {status:"NATIVE_FAILURE_UNAVAILABLE"};
+function verifiedHaulerLoss({readOutcomes,contract,readManifest,
+ readWarehouseReceipt,findWarehouseItem}){
+ if([readOutcomes,readManifest,readWarehouseReceipt,findWarehouseItem]
+   .some(fn=>typeof fn!=="function")||!contract)
+  return {status:"NATIVE_FAILURE_WAREHOUSE_SOURCES_UNAVAILABLE"};
  let o;try{o=readOutcomes()}catch{return {status:"NATIVE_FAILURE_UNAVAILABLE"}}
  const rows=o?.outcomes?.filter(x=>x.key===contract.incidentKey&&
   x.systemID===contract.systemID&&x.pirateID===contract.pirateID&&
@@ -102,6 +104,36 @@ function verifiedHaulerLoss({readOutcomes,contract}){
  if(o?.status!=="READY"||rows?.length!==1)
   return {status:"NATIVE_FAILURE_NOT_VERIFIED"};
  const row=rows[0];
+ // A zero-row incident journal is NOT enough: unfinished station transfer
+ // could have created a native item or a durable warehouse receipt before
+ // the outcome journal was updated. Every original cargoID must be absent
+ // from BOTH authoritative stores, or manual reconciliation is required.
+ let original;
+ try{original=readManifest(contract.manifestKey)}
+ catch{return {status:"NATIVE_FAILURE_MANIFEST_UNAVAILABLE"}}
+ const m=original?.record;
+ if(original?.status!=="READY"||m?.key!==contract.manifestKey||
+  m.systemID!==contract.systemID||
+  m.stationID!==contract.stationID||
+  m.corporationID!==contract.corporationID||
+  !Array.isArray(m.haulerIDs)||m.haulerIDs.length!==1||
+  m.haulerIDs[0]!==contract.haulerID||
+  !Array.isArray(m.cargo)||m.cargo.length===0)
+  return {status:"NATIVE_FAILURE_ORIGINAL_CARGO_UNVERIFIED"};
+ try{
+  for(const cargo of m.cargo){
+   if(!pos(cargo.cargoID)||cargo.haulerID!==contract.haulerID)
+    return {status:"NATIVE_FAILURE_CARGO_SOURCE_INVALID"};
+   // Any PREPARED, DEBIT, CREDIT or COMMITTED receipt means the
+   // item transfer could be in-flight and an automatic refund is unsafe.
+   const receipt=readWarehouseReceipt(cargo.cargoID);
+   if(receipt!==null)return {status:"NATIVE_FAILURE_WAREHOUSE_RECEIPT_PRESENT"};
+   const item=findWarehouseItem({ownerID:m.corporationID,
+    stationID:m.stationID,cargoID:cargo.cargoID});
+   if(item!==null&&item!==undefined)
+    return {status:"NATIVE_FAILURE_NATIVE_WAREHOUSE_STOCK_PRESENT"};
+  }
+ }catch{return {status:"NATIVE_FAILURE_WAREHOUSE_RECONCILIATION_REQUIRED"}}
  return {status:"DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE",
   contractID:contract.contractID,manifestKey:contract.manifestKey,
   corporationID:contract.corporationID,reason:"NATIVE_HAULER_WRECK",
@@ -140,11 +172,21 @@ function installNativeEscorts(){
    return {status:accepted.status};
   const incidents=()=>createOperations().snapshot();
   const outcomes=()=>createOutcomes({incidents}).snapshot();
+  const manifest=createManifest({root:manifestRoot,store:npcStore,items,
+   getNativeEntity:npcStore.getNativeEntity});
+  const fs=require("node:fs"),path=require("node:path");
+  const warehouseReceipt=cargoID=>{
+   try{return JSON.parse(fs.readFileSync(path.join(manifestRoot,
+    "receipts",String(cargoID)+".json"),"utf8"))}
+   catch(e){if(e?.code==="ENOENT")return null;throw e}
+  };
   const mount=require("./coopEscortNativeMount").installPinnedNative({
    root:manifestRoot,
    readAuthorizedOffer:route=>require("./coopEscortPricedOffers").approvedForManifest(route),
    readPilotConsent:route=>require("./coopEscortPricedOffers").consentForManifest(route),
-   readNativeFailure:contract=>verifiedHaulerLoss({readOutcomes:outcomes,contract})
+   readNativeFailure:contract=>verifiedHaulerLoss({readOutcomes:outcomes,
+    contract,readManifest:manifest.read,readWarehouseReceipt:warehouseReceipt,
+    findWarehouseItem:request=>items.findWarehouseItem(request)})
   });
   lastState=mount;return mount;
  }catch{return {status:"ESCORT_NATIVE_BOOTSTRAP_UNAVAILABLE"}}
