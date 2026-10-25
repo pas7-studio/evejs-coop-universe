@@ -7,7 +7,7 @@ const DST=[
 '      credit: () => appendNpcCargo(entity,mineableState.yieldTypeID,transferredQuantity),',
 '      moduleItem,',
 '      commitScene: () => applyMiningDelta(scene,targetEntity,',
-'        miningResult.normalQuantity,miningResult.wastedQuantity,{',
+'        transferredQuantity,miningResult.wastedQuantity,{',
 '          broadcast:true,nowMs:cycleBoundaryMs,sourceEntity:entity,moduleItem,',
 '          quantityAdded:transferredQuantity,amountWasted:miningResult.wastedQuantity,',
 '          amountCritBonus:miningResult.criticalHitQuantity,',
