@@ -68,6 +68,10 @@ async function run(opts) {
   const commit=cp.execFileSync('git',['-C',path.dirname(codePath),'rev-parse','HEAD'],{encoding:'utf8',timeout:10000}).trim();
   if(commit!==PIN)throw Error(`PIN_MISMATCH ${commit}`);
   const dbPath=path.resolve(opts.db);
+  if(opts.mode==='apply') {
+    if(opts['approve-sha256']!==digest||opts['confirm-stopped']!=='yes')throw Error('PLAN_HASH_OR_SERVER_STOP_CONFIRMATION_REQUIRED');
+    inspectStopped(opts.container); // Before even opening DB in write mode.
+  }
   if(!fs.existsSync(dbPath))throw Error('DB_NOT_FOUND');
   const BetterSqlite3=require(require.resolve('better-sqlite3',{paths:[path.join(codePath,'server')]}));
   const db=new BetterSqlite3(dbPath,{readonly:opts.mode==='plan',fileMustExist:true});
