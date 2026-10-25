@@ -6,8 +6,9 @@ const POS=x=>Number.isSafeInteger(x)&&x>0;
 const SAME=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>x===b[i]);
 const deny=status=>({status});
-function createPeacefulEscortSettlement({readFlight,readNativeDelivery,nativeFunds}={}){
+function createPeacefulEscortSettlement({readFlight,readNativeDelivery,verifyService,nativeFunds}={}){
  if(typeof readFlight!=="function"||typeof readNativeDelivery!=="function"||
+  typeof verifyService!=="function"||
   ["capabilities","verifyReservation","verifySettlement","settleAtomic"].some(x=>
    typeof nativeFunds?.[x]!=="function"))
   throw Error("PEACEFUL_ESCORT_NATIVE_AUTHORITIES_REQUIRED");
@@ -25,7 +26,7 @@ function createPeacefulEscortSettlement({readFlight,readNativeDelivery,nativeFun
    return deny("NATIVE_SETTLEMENT_RECEIPT_MISMATCH");
   return {status:"ALREADY_NATIVE_PAID",contractID:c.contractID};
  }
- function settle(manifestKey){
+ function settle(manifestKey,scene){
   if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
    return deny("DISABLED");
   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
@@ -72,6 +73,12 @@ function createPeacefulEscortSettlement({readFlight,readNativeDelivery,nativeFun
    !SAME(proof.cargoIDs,original?.cargoIDs)||
    !SAME(proof.haulerIDs,original?.haulerIDs))
    return deny("NATIVE_FULL_WAREHOUSE_DELIVERY_UNVERIFIED");
+  let service;try{service=verifyService(b,scene)}
+  catch{return deny("NATIVE_ESCORT_SERVICE_PROOF_UNAVAILABLE")}
+  if(service?.status!=="VERIFIED_NATIVE_ESCORT_SERVICE"||
+   !SAME(service.characters,b.characters)||service.fleetID!==b.playerFleetID||
+   service.haulerID!==b.haulerID||service.systemID!==b.systemID)
+   return deny("NATIVE_ESCORT_SERVICE_NOT_VERIFIED");
   let result;try{
    result=nativeFunds.settleAtomic({contractID:b.contractID,
     corporationID:b.corporationID,amountISK:b.amountISK,
