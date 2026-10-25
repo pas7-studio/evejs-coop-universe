@@ -170,7 +170,7 @@ function createRuntimeAlifeManufacturing({
      nativeMutation:response.nativeMutation===true,
      proof:response.proof||null});
    }
-   last={status:"DISPATCHED_TO_VERIFIED_NATIVE_DIRECTOR",
+   last={status:"ADMISSION_EVALUATED",
     count:results.length,results};
    try{onResult(last)}catch(_ignored){}
    return last;
