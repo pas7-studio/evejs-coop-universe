@@ -18,7 +18,7 @@ param(
   [switch]$EnableFactionPatrols,
   [switch]$CoopCombat,
   [switch]$LivingCoop,
-  [ValidateSet(6,12,24,48)][int]$CoopSkillTrainingSpeed = 48,
+  [ValidateSet(6,12,24,48,100)][int]$CoopSkillTrainingSpeed = 100,
   [switch]$ConfirmActiveTrainingRebased,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,

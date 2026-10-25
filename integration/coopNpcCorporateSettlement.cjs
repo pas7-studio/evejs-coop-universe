@@ -5,12 +5,62 @@
  * escrow+receipt -> idempotent Rust FINALIZE. Never uses normal character-seller.
  * No live registration; exact producer-owned item; no mint/split, no partial fill.
  */
+const crypto=require("node:crypto");
 const TABLES=Object.freeze(["characters","corporationRuntime","items","marketEscrow","npcMarketFills"]);
 const ESCROW_BASE=9200000000;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const cents=x=>Number.isFinite(x)&&x>=0&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 const isk=c=>Math.round(c)/100;
-const validID=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
+const isSalvage=x=>typeof x==="string"&&/^npc-salvage:[0-9a-f]{32}$/.test(x);
+const validID=x=>typeof x==="string"&&
+ (/^npc-manufacture:[0-9a-f]{32}$/.test(x)||isSalvage(x));
+const salvageMarker=(wreckID,sourceCargoID)=>
+ "coop-salvage-rival:v1:"+wreckID+":"+sourceCargoID;
+function verifySalvageOriginal(tx,identity,escrow,item){
+ const op=identity.operationID;
+ if(!isSalvage(op))throw Error("SALVAGE_SETTLEMENT_OPERATION_INVALID");
+ const ops=tx.get("corporationRuntime","coopSalvageMarketOps");
+ if(ops?.version!==1||!ops.bySource||
+  typeof ops.bySource!=="object"||Array.isArray(ops.bySource))
+  throw Error("SALVAGE_SETTLEMENT_ORIGINAL_JOURNAL_MISSING");
+ const entry=Object.values(ops.bySource).filter(x=>x?.operationID===op);
+ if(entry.length!==1||entry[0].phase!=="LISTED"||
+  entry[0].nativeItemID!==identity.itemID||
+  entry[0].corporationID!==identity.ownerID||
+  entry[0].stationID!==identity.stationID||
+  entry[0].typeID!==identity.typeID||
+  entry[0].quantity!==identity.quantity||
+  entry[0].orderID!==identity.orderID)
+  throw Error("SALVAGE_SETTLEMENT_ORIGINAL_OPERATION_CONFLICT");
+ const a=entry[0],r=tx.get("corporationRuntime","coopSalvageRivalMoves");
+ const pickup=r?.moves?.[String(a.wreckItemID)];
+ if(r?.version!==1||!pickup||pickup.v!==1||
+  pickup.state!=="NPC_STOCK_DELIVERED"||
+  pickup.manifestKey!==a.manifestKey||
+  pickup.wreckID!==a.wreckID||
+  pickup.wreckItemID!==a.wreckItemID||
+  pickup.sourceCargoID!==a.sourceCargoID||
+  pickup.npcCargoID!==a.npcCargoID||
+  pickup.entityID!==a.entityID||
+  pickup.corporationID!==identity.ownerID||
+  pickup.stationID!==identity.stationID||
+  pickup.nativeItemID!==identity.itemID)
+  throw Error("SALVAGE_SETTLEMENT_ORIGINAL_RECEIPT_CONFLICT");
+ const expected="npc-salvage:"+crypto.createHash("sha256")
+  .update([a.manifestKey,a.wreckID,a.wreckItemID,
+   a.nativeItemID,a.sourceCargoID,a.corporationID,a.stationID].join(":"))
+  .digest("hex").slice(0,32);
+ if(expected!==op||escrow.coopSource!=="NATIVE_SALVAGE"||
+  item.customInfo!==salvageMarker(a.wreckItemID,a.sourceCargoID))
+  throw Error("SALVAGE_SETTLEMENT_SOURCE_MARKER_CONFLICT");
+ // Read the same native source table inside the finance transaction:
+ // a second row carrying this salvage provenance must not survive a sale.
+ if(tx.scan("items").filter(x=>
+  x.value?.customInfo===salvageMarker(a.wreckItemID,a.sourceCargoID))
+  .length!==1)
+  throw Error("SALVAGE_SETTLEMENT_DUPLICATE_SOURCE_ITEM");
+ return {entry:a,sourceKey:String(a.wreckItemID),ops};
+}
 function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verifyNpcCorporation,
  clock=()=>Date.now()}={}){
  if(typeof gameStore?.transact!=="function"||
@@ -21,6 +71,9 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
  function gate(){return process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
    process.env.EVEJS_COOP_NATIVE_NPC_CORP_SETTLEMENT_PROOF==="1"}
  function requireClaim(order,buyer,identity,maxPriceCents){
+  if(isSalvage(identity?.operationID)&&
+   process.env.EVEJS_COOP_SALVAGE_NATIVE_MARKET!=="1")
+   throw Error("SALVAGE_SETTLEMENT_DISABLED");
   if(!order||order.source!=="coop-npc"||!["settling","filled"].includes(order.state)||
    !validID(order.operation_id)||!pos(Number(order.order_id))||
    !pos(Number(order.source_item_id))||!pos(Number(order.owner_id))||
@@ -56,6 +109,8 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
    if(prior!==null&&prior!==undefined){
     if(prior.fillID!==fillID||prior.buyerID!==buyerID||prior.itemID!==identity.itemID||
        prior.grossCents!==grossCents||prior.ownerID!==identity.ownerID||
+       prior.operationID!==identity.operationID||
+       (isSalvage(identity.operationID)&&prior.coopSource!=="NATIVE_SALVAGE")||
        prior.phase!=="NATIVE_COMMITTED")throw Error("NPC_CORPORATE_FILL_REPLAY_CONFLICT");
     return {status:"ALREADY_NATIVE_COMMITTED",fillID,orderID:identity.orderID,
       buyerID,itemID:identity.itemID,quantity:identity.quantity,grossCents};
@@ -75,9 +130,14 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
    if(!item||item.itemID!==identity.itemID||item.ownerID!==identity.ownerID||
       item.typeID!==identity.typeID||item.locationID!==ESCROW_BASE+identity.orderID||
       item.flagID!==4||item.singleton!==0||item.quantity!==identity.quantity||
-      item.stacksize!==identity.quantity||
-      !/^coop-industry:v1:[0-9]+$/.test(String(item.customInfo||"")))
+      item.stacksize!==identity.quantity)
     throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
+   // Manufacturing and original NPC salvage share the same native wallet
+   // settlement, but never the same provenance authority.
+   const salvage=isSalvage(identity.operationID);
+   if(!salvage&&!/^coop-industry:v1:[0-9]+$/.test(String(item.customInfo||"")))
+    throw Error("NPC_MARKET_OUTPUT_CUSTODY_INVALID");
+   const original=salvage?verifySalvageOriginal(tx,identity,escrow,item):null;
    if(!character||Number(character.characterID??character.charID??buyerID)!==buyerID||
       !Number.isFinite(character.balance)||cents(character.balance)===null||
       cents(character.balance)<grossCents)throw Error("NPC_BUYER_INSUFFICIENT_FUNDS");
@@ -116,6 +176,7 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
        transactions:[...division.transactions,corpEntry].slice(-2000)}}}};
    const delivered={...item,ownerID:buyerID,locationID:identity.stationID};
    const receipt={phase:"NATIVE_COMMITTED",fillID,orderID:identity.orderID,operationID:identity.operationID,
+    coopSource:salvage?"NATIVE_SALVAGE":"NATIVE_INDUSTRY",
     itemID:identity.itemID,buyerID,ownerID:identity.ownerID,stationID:identity.stationID,
     typeID:identity.typeID,quantity:identity.quantity,priceCents,grossCents,
     buyerBeforeCents:oldBuyer,buyerAfterCents:nextBuyer,
@@ -126,12 +187,53 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
    tx.put("items",itemKey,delivered);
    tx.del("marketEscrow",orderKey);
    tx.put("npcMarketFills",fillKey,receipt);
+   if(original){
+    const e=original.entry;
+    e.phase="NATIVE_SALE_COMMITTED";
+    e.fillID=fillID;e.buyerID=buyerID;e.grossCents=grossCents;
+    e.saleCommittedAt=now;
+    tx.put("corporationRuntime","coopSalvageMarketOps",original.ops);
+   }
    return {status:"NATIVE_COMMITTED",fillID,orderID:identity.orderID,buyerID,
     itemID:identity.itemID,quantity:identity.quantity,grossCents};
   });
  }
+ // A sale is SOLD only after the Rust fill was finalized and independently
+ // read back. Native wallet+item COMMIT is never confused with Rust success.
+ function confirmSalvageSold(identity,buyerID,fillID){
+  if(!isSalvage(identity.operationID))return;
+  const key="order"+String.fromCharCode(31)+identity.orderID;
+  gameStore.transact(["corporationRuntime","npcMarketFills"],tx=>{
+   const paid=tx.get("npcMarketFills",key);
+   const ops=tx.get("corporationRuntime","coopSalvageMarketOps");
+   const entries=Object.values(ops?.bySource||{}).filter(e=>
+    e?.operationID===identity.operationID);
+   if(paid?.phase!=="NATIVE_COMMITTED"||
+    paid.coopSource!=="NATIVE_SALVAGE"||paid.fillID!==fillID||
+    paid.buyerID!==buyerID||paid.itemID!==identity.itemID||
+    paid.operationID!==identity.operationID||
+    ops?.version!==1||entries.length!==1||
+    entries[0].fillID!==fillID||entries[0].buyerID!==buyerID||
+    entries[0].orderID!==identity.orderID)
+    throw Error("SALVAGE_RUST_FINALIZED_NATIVE_RECEIPT_CONFLICT");
+   const entry=entries[0];
+   if(entry.phase==="SOLD")return {status:"ALREADY_SOLD"};
+   if(entry.phase!=="NATIVE_SALE_COMMITTED")
+    throw Error("SALVAGE_RUST_FINALIZED_PHASE_CONFLICT");
+   const now=clock();if(!Number.isSafeInteger(now)||now<=0)
+    throw Error("SALVAGE_FINALIZE_CLOCK_INVALID");
+   entry.phase="SOLD";entry.rustFinalizedAt=now;
+   tx.put("corporationRuntime","coopSalvageMarketOps",ops);
+   return {status:"NATIVE_SALVAGE_SOLD"};
+  });
+ }
  async function purchaseOnce({buyerID,identity,maxPriceCents}={}){
   if(!gate())return {status:"BLOCKED",error:"NPC_CORPORATE_SETTLEMENT_DISABLED"};
+  // A disabled salvage market must not leave a Rust order claimed by a
+  // buyer. Check BEFORE the external claim, not only in atomicSettle.
+  if(isSalvage(identity?.operationID)&&
+   process.env.EVEJS_COOP_SALVAGE_NATIVE_MARKET!=="1")
+   return {status:"BLOCKED",error:"SALVAGE_SETTLEMENT_DISABLED"};
   if(!pos(buyerID)||!Number.isSafeInteger(maxPriceCents)||maxPriceCents<=0||
      !identity||!validID(identity.operationID)||
      [identity.orderID,identity.ownerID,identity.stationID,
@@ -157,6 +259,7 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
    if(observed?.state!=="filled"||Number(observed.fill_id)!==receipt.fillID||
       Number(observed.buyer_id)!==buyerID)
      throw Error("NPC_RUST_FILL_ACK_UNCERTAIN");
+   confirmSalvageSold(identity,buyerID,receipt.fillID);
    return {...receipt,status:"PURCHASED"};
   }finally{active.delete(key)}
  }

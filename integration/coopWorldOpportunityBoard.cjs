@@ -347,10 +347,35 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    const local=Number(session?._space?.systemID||session?.solarsystemid||session?.solarSystemID);
    const r=list({systemID:local,all:op==="all",limit:8});
    if(r.status!=="READY")return {status:r.status,message:"[Co-op Events] "+r.status};
-   if(!r.events.length)return {status:"READY",message:"[Co-op Events] No verified active events. /events all for whole universe; /events watch local|all|off."};
-   return {status:"READY",message:"[Co-op Events] Verified active events:\n"+
-    r.events.map(e=>e.id+" | "+(e.stage==="PREPARING"?"[PREPARING] ":"")+e.title+" | system "+e.systemID+
-     " | /events info "+e.id).join("\n")};
+   // Show only source-verified rescue quotes, never virtual jobs or fake ISK.
+   const rescueOffers=[];
+   if(process.env.EVEJS_COOP_RESCUE_CONTRACTS==="1"){
+    try{
+     const files=io.readdirSync(eventDir);
+     if(files.length<=2000){
+      for(const filename of files.sort().slice(-100)){
+       if(!filename.endsWith(".json"))continue;
+       const loaded=readEvent(filename.slice(0,-5)),event=loaded?.event;
+       if(loaded?.status!=="READY"||event?.type!=="CONVOY"||
+          event.stage!=="PREPARING"||event.phase!=="RESOLVED"||
+          event.outcome!=="DEPARTED"||
+          (op!=="all"&&POS(local)&&event.systemID!==local))continue;
+       const offer=require("./coopRescueNativeGame").runGame(session,"offer",event.id);
+       if(offer?.status!=="READY"||!Array.isArray(offer.expected))continue;
+       rescueOffers.push(event.id+" | [RESCUE] NPC corporation "+
+        offer.contract.corporationID+" offers "+offer.contract.amountISK+
+        " ISK for "+offer.expected.reduce((n,x)=>n+x.quantity,0)+
+        " verified native cargo units | /events rescue offer "+event.id);
+       if(rescueOffers.length>=5)break;
+      }
+     }
+    }catch{/* Unverified event sources never produce offers. */}
+   }
+   if(!r.events.length&&!rescueOffers.length)
+    return {status:"READY",message:"[Co-op Events] No verified active events or rescue jobs. /events all for whole universe; /events watch local|all|off."};
+   return {status:"READY",message:"[Co-op Events] Verified active opportunities:\\n"+
+    [...r.events.map(e=>e.id+" | "+(e.stage==="PREPARING"?"[PREPARING] ":"")+e.title+" | system "+e.systemID+
+     " | /events info "+e.id),...rescueOffers].join("\\n")};
   }
   if(op==="info"){
    const r=readEvent(tokens[0]);const n=nowOK();
@@ -400,6 +425,42 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     " | stock and ISK are server-authoritative."};
   }
   if(op==="rescue"){
+   // Paid rescue is a separate explicitly opt-in native-custody contract.
+   // With the flag OFF, preserve normal stock-wreck navigation.
+   if(process.env.EVEJS_COOP_RESCUE_CONTRACTS==="1"){
+    const action=String(tokens[0]||"").toLowerCase();
+    if(["offer","accept","claim","cancel","history"].includes(action)){
+     const result=require("./coopRescueNativeGame").runGame(session,action,tokens[1]);
+     const message=result?.status==="READY"&&result.contract&&result.expected?
+      "[Co-op Rescue] Native corporation "+result.contract.corporationID+
+      " offers "+result.contract.amountISK+" ISK for "+
+      result.expected.reduce((n,x)=>n+x.quantity,0)+
+      " original cargo units. Two pilots must each accept the offer.":
+      result?.status==="RESCUE_NATIVE_FUNDED"?
+      "[Co-op Rescue] Real corporate escrow reserved "+result.amountISK+
+      " ISK. Deliver the original native cargo to the station before claiming.":
+      result?.status==="RESCUE_NATIVE_PAID"?
+      "[Co-op Rescue] Verified native payout: "+result.perPilotISK+" ISK per pilot.":
+      ["RESCUE_NATIVE_RIVAL_REFUNDED","RESCUE_ALREADY_REFUNDED"].includes(result?.status)?
+      "[Co-op Rescue] Source-verified NPC rival custody. Original corporation refund: "+
+       result.amountISK+" ISK. No player payment.":
+      "[Co-op Rescue] "+(result?.status||"NATIVE_RESCUE_AUTHORITY_UNAVAILABLE");
+     return {status:result?.status||"BLOCKED",message};
+    }
+    if(action==="deliver"){
+     const manifestKey=tokens[1],itemID=Number(tokens[2]);
+     const stationID=Number(session?.stationID||session?.stationid);
+     let corporationID=0;try{corporationID=Number(
+      require("./worldData").getStationByID(stationID)?.corporationID)||0}catch{}
+     const result=require("./coopRescueNativeWarehouse").deliverInGame(session,
+      {manifestKey,stationID,corporationID,itemID});
+     return {status:result.status,message:result.status===
+      "NATIVE_RESCUE_WAREHOUSE_COMMITTED"?
+      "[Co-op Rescue] Original native item "+result.itemID+
+      " delivered ("+result.quantity+" units). Claim after independent verification.":
+      "[Co-op Rescue] "+result.status+". No stock or funds granted."};
+    }
+   }
    const result=require("./coopEscortRescueNavigation")
     .rescueInGame(session,tokens[0]);
    return {status:result.status,message:["RESCUE_NATIVE_WARP_ACKNOWLEDGED","RESCUE_NATIVE_APPROACH_ACKNOWLEDGED"].includes(result.status)?

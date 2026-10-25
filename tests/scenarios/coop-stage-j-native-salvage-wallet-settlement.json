@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "feature": "Stage J native original salvage -> Rust full-stack sale -> real corp wallet",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Authorized disposable native EveJS/Code and its GameStore; protect running evejs-data",
+    "Original NPC salvage delivered and verified using Stage J warehouse receipt",
+    "PR #142 real pending native market sale and Rust settlement patch installed on disposable instance",
+    "Authenticated and docked buyer with native character balance",
+    "No GitHub Actions or unapproved production wallet mutation"
+  ],
+  "scenarios": [
+    {
+      "id": "SJ-FILL-01",
+      "name": "Real original salvage to corporate revenue",
+      "expected": "One Rust claim and finalized fill, one native item transfer, exactly one player debit and NPC corp gross ISK credit, durable native fill receipt and SOLD journal"
+    },
+    {
+      "id": "SJ-FILL-02",
+      "name": "Repeat same buyer and order after reconnect",
+      "expected": "No duplicate item, wallet debit or corp credit; same fillID reconciled"
+    },
+    {
+      "id": "SJ-FILL-03",
+      "name": "Two buyers attempt same original salvage",
+      "expected": "Only one canonical Rust claim buyer; loser receives no item and no wallet debit"
+    },
+    {
+      "id": "SJ-FILL-04",
+      "name": "Native buyer lacks spendable ISK",
+      "expected": "Rust order remains settling until operator reconciliation; no GameStore stock or wallet mutation, never mint currency"
+    },
+    {
+      "id": "SJ-FILL-05",
+      "name": "Source salvage receipt missing or changed",
+      "expected": "Source-specific native GameStore check aborts before wallet changes and leaves Rust order unfinalized"
+    },
+    {
+      "id": "SJ-FILL-06",
+      "name": "Duplicate provenance marker after listing",
+      "expected": "No sale, fraud repair required; exactly one original source item demanded"
+    },
+    {
+      "id": "SJ-FILL-07",
+      "name": "Forged industry marker or escrow source",
+      "expected": "Reject salvage as manufactured stock; original corp wallet unchanged"
+    },
+    {
+      "id": "SJ-FILL-08",
+      "name": "Crash in native transaction after buyer debit but before receipt",
+      "expected": "SQLite rolls back all tables or native poison requires operator intervention; zero partial credits"
+    },
+    {
+      "id": "SJ-FILL-09",
+      "name": "Crash after SQLite COMMIT but before Rust finalization",
+      "expected": "Same durable fillID and wallet balances; retry finalizes only Rust, never second debit"
+    },
+    {
+      "id": "SJ-FILL-10",
+      "name": "Rust finalize ACK lost",
+      "expected": "GameStore payment remains exactly once; on new attempt Rust claim readback allows journal SOLD seal"
+    },
+    {
+      "id": "SJ-FILL-11",
+      "name": "Fake Rust filled state / mismatching fillID",
+      "expected": "Cannot mark SOLD; native financial state remains at NATIVE_SALE_COMMITTED and is reconciled"
+    },
+    {
+      "id": "SJ-FILL-12",
+      "name": "Salvage flag OFF but manufacturing ON",
+      "expected": "No salvage Rust claim acquired or wallet/item mutation; industrial settlement unchanged"
+    },
+    {
+      "id": "SJ-FILL-13",
+      "name": "Rust salvage operation namespace disabled",
+      "expected": "All salvage pending/claim/finalize/get RPCs reject, manufacturing operations remain valid"
+    },
+    {
+      "id": "SJ-FILL-14",
+      "name": "Native market order partially filled",
+      "expected": "Full-stack-only authority rejects partial quantity; no implicit inventory splitting or ISK overpayment"
+    },
+    {
+      "id": "SJ-FILL-15",
+      "name": "Real market taxes and broker fees not configured",
+      "expected": "No invented fee or net profit; gross settlement only, production deployment blocked until explicit native fee policy decision"
+    },
+    {
+      "id": "SJ-FILL-16",
+      "name": "Two authenticated players validate shared world",
+      "expected": "Real fleet/market/dock presence, inventory refresh for buyer and native NPC source disappearance verified in both clients"
+    }
+  ]
+}
