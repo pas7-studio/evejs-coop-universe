@@ -9,10 +9,10 @@ const warp=x=>String(x?.mode||"").toUpperCase().includes("WARP")||
 const {combatEnabled,ammoEnabled}=require("./coopWarCombatAuthority"+
  (__filename.endsWith(".js")?"":".cjs"));
 function createWarBattleDirector({authority,bridge,sceneForSystem,
- issueNativeAttack,isAmmoDepleted=()=>false,isTactical=()=>false,
+ issueNativeAttack,getController,isAmmoDepleted=()=>false,isTactical=()=>false,
  clock=()=>Date.now(),env=process.env,maxOrders=2,cooldownMs=120000}={}){
  if(!authority?.snapshots||!authority?.evaluatePair||!bridge?.issue||
-  [sceneForSystem,issueNativeAttack,isAmmoDepleted,isTactical,clock].some(x=>typeof x!=="function")||
+  [sceneForSystem,issueNativeAttack,getController,isAmmoDepleted,isTactical,clock].some(x=>typeof x!=="function")||
   !Number.isSafeInteger(maxOrders)||maxOrders<1||maxOrders>3||
   !Number.isSafeInteger(cooldownMs)||cooldownMs<30000)
   throw Error("FW_NATIVE_BATTLE_AUTHORITIES_REQUIRED");
@@ -41,8 +41,11 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
    for(const shipRow of fleet){
     if(orders.length>=maxOrders)break;
     const id=shipRow.entityID,attacker=scene.getEntityByID(id),
-      key=String(id);
+      key=String(id),controller=getController(id);
     if(players.has(id)||!attacker||!vec(attacker.position)||warp(attacker)||
+      controller?.entityID!==id||controller.systemID!==systemID||
+      Number(controller.currentTargetID)>0||
+      (controller.manualOrder&&controller.manualOrder.type!=="resumeBehavior")||
       nextAt.get(key)>at||isAmmoDepleted(systemID,id)||isTactical(id))
       continue;
     const opponents=fleet.filter(x=>x.entityID!==id&&
@@ -62,13 +65,24 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
       {requireAttackIntent:false,proof:snapshots});
      if(authorized.status!=="AUTHORIZED")continue;
      const targetID=opponent.row.entityID;
+     const targetController=getController(targetID);
+     // A war fleet does not steal a ship already engaged by a player,
+     // raid, rescue or another active manual native order.
+     if(targetController?.entityID!==targetID||
+        targetController.systemID!==systemID||
+        Number(targetController.currentTargetID)>0||
+        (targetController.manualOrder&&
+         targetController.manualOrder.type!=="resumeBehavior"))continue;
      let answer;
      try{
       answer=bridge.issue({entityID:id,systemID,owner:"WAR",action:"attack",
        holdMs:120000,execute:()=>{
         if(!combatEnabled(env)||!ammoEnabled(env)||
           isAmmoDepleted(systemID,id)||isTactical(id)||
-          warp(attacker)||warp(opponent.entity))return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
+          warp(attacker)||warp(opponent.entity)||
+          Number(getController(id)?.currentTargetID)>0||
+          Number(getController(targetID)?.currentTargetID)>0)
+          return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
         const fresh=authority.evaluatePair(attacker,opponent.entity,
          {requireAttackIntent:false});
         if(fresh.status!=="AUTHORIZED")return {success:false,errorMsg:"WAR_NATIVE_PROOF_CHANGED"};
