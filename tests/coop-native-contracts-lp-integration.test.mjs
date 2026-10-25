@@ -80,7 +80,8 @@ test("native courier completion and failure reject third party, stale or forged 
     /Only the original courier acceptor/);
   assert.throws(()=>callGuard(action,{...contract,acceptorID:0},courier),
     /Only the original courier acceptor/);
-  assert.equal(callGuard(action,contract,captain,false),true,"Flag disabled retains stock behavior");
+  assert.throws(()=>callGuard(action,contract,captain,false),/Only the original courier acceptor/,
+    "Direct contractProxy must remain protected even when contractMgr alias is OFF");
   const corp={acceptorID:88,acceptorWallet:{kind:"corporation",ownerID:88}};
   assert.equal(callGuard(action,corp,{characterID:101,corporationID:88}),true);
   assert.throws(()=>callGuard(action,corp,{characterID:102,corporationID:44}),

@@ -52,3 +52,7 @@ After the first integration merge, PR #2 advanced to `e06c7b3e23d7722bcc6eb3f681
 ## Opt-in native contracts deployment flag
 
 PR #2's newer `4ca22f9546c49216b4026c93f982236b3f60e9df` adds an explicit `-EnableNativeCoopContracts` switch. It is now included **without enabling** contracts in default LivingCoop. No real courier, escrow, crash-replay or UI acceptance was executed. Local verifier already includes `coop-native-contracts-lp-integration.test.mjs`.
+
+## P0 co-op LP standing sync
+
+Latest PR #2 `f6646c31dfd3b2500b49ef47b5612d07b9165f6f` adds authoritative static LP standing requirements and native contracts/LP documentation. The integration installer now includes its reversible standing patch and module. Native LP standing gate is **OFF by default**; explicitly selected `-EnableNativeLpStandings` only. Manual Node verifier registers its tests; no real authorized client LP purchase was verified. Keep original PR #2 active and this integration branch Draft.
