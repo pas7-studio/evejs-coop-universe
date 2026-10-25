@@ -9,7 +9,15 @@ const crypto=require("node:crypto");
 const TABLES=Object.freeze(["characters","corporationRuntime","items","marketEscrow","npcMarketFills"]);
 const ESCROW_BASE=9200000000;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const cents=x=>Number.isFinite(x)&&x>=0&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+// Existing native wallet balances are authoritative. A sub-cent balance
+// indicates unverified currency state: do not round it while moving items
+// or crediting the corporate market ledger.
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0)return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
 const isk=c=>Math.round(c)/100;
 const isSalvage=x=>typeof x==="string"&&/^npc-salvage:[0-9a-f]{32}$/.test(x);
 const validID=x=>typeof x==="string"&&
