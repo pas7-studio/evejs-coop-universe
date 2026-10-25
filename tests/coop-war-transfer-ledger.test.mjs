@@ -10,7 +10,7 @@ const flags=()=>({EVEJS_COOP_FACTION_WAR:"1",
  EVEJS_COOP_FACTION_WAR_FLEETS:"1",
  EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER:"1",
  EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1"});
-function fixture(){
+function fixture({journalClosed=()=>true}={}){
  const env=flags();
  const physical=new Map([[101,new Set([501])],[202,new Set()],[303,new Set()]]);
  const ship={itemID:501,kind:"ship",nativeNpc:true,corporationID:31};
@@ -54,7 +54,7 @@ function fixture(){
   listNativeCargoForEntity:()=>cargo};
  const ledger=createWarTransferLedger({
   gameStore,identityRegistry,env,clock:()=>1234567,
-  verifyJournalClosed:()=>true,
+  verifyJournalClosed:journalClosed,
   sceneForSystem:systemID=>({systemID,
    getEntityByID:id=>physical.get(systemID)?.has(id)?ship:null}),
   nativeStore:store,getController:()=>controller
@@ -230,4 +230,18 @@ test("wrong sequence cannot become a valid repeat-transfer receipt",()=>{
  assert.equal(f.ledger.begin({...f.cmd,transferID:"fw:501:101:202:42"}).reason,
   "WAR_HANDOFF_SEQUENCE_CONFLICT");
  assert.equal(f.fleet().nextTransferSerial,undefined);
+});
+
+test("old native transfer journal blocks retirement and prevents reusing ship",()=>{
+ const f=fixture({journalClosed:()=>false}),start=f.ledger.begin(f.cmd);
+ f.move(202);
+ f.ledger.nativeCommit({entityID:501,transferID:start.transferID});
+ f.identityRegistry.relocate("coop-pilot-001",101,501,202);
+ f.ledger.finish({entityID:501,transferID:start.transferID});
+ assert.equal(f.ledger.retire({entityID:501,
+  transferID:start.transferID}).reason,"NATIVE_TRANSFER_JOURNAL_NOT_CLOSED");
+ assert.equal(f.fleet().transfers["501"].phase,"COMPLETE");
+ assert.equal(f.fleet().transferHistory,undefined);
+ assert.equal(f.ledger.begin({entityID:501,sourceSystemID:202,
+  destinationSystemID:303}).reason,"WAR_HANDOFF_ALREADY_RECORDED");
 });
