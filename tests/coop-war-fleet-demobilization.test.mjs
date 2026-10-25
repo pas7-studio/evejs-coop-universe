@@ -9,7 +9,7 @@ const WAR_KEY="coop-faction-war\u001fstate-v1";
 const env=()=>({EVEJS_COOP_FACTION_WAR:"1",
  EVEJS_COOP_FACTION_WAR_FLEETS:"1",
  EVEJS_COOP_FACTION_WAR_DEMOBILIZE:"1",
- EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1"});
+ EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_ALIFE:"1"});
 function fixture(){
  const flags=env();let physicallyPresent=true,idle=true,ordersIdle=true;
  const war={version:1,wars:{w1:{state:"ACTIVE",
