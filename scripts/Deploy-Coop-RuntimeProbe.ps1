@@ -144,6 +144,9 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_NATIVE_TACTICS: '1'"
   $yamlLines += "      EVEJS_COOP_RIVAL_NPC_COMBAT: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_SAFETY: '1'"
+  # Native fleet-only item/inactive-hull gifts and verified two-person agent turn-ins.
+  $yamlLines += "      EVEJS_COOP_FLEET_TRADE_SAFETY: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_WEAPON_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_QUARANTINE: '1'"
