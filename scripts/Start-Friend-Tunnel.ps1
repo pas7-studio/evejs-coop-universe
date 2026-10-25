@@ -8,8 +8,10 @@ param(
   [int]$SshPort=22,
   [string]$IdentityFile='',
   # VPN meshes other than Tailscale use their own private addressing
-  # (Radmin 26/8, Hamachi 25/8, ...). Public peer addresses are never allowed.
-  [string[]]$ExtraPeerRanges=@()
+  # (Radmin 26/8, Hamachi 25/8, ...). Some P2P VPNs hand out real public
+  # addresses; those need an explicit -AllowPublicPeer acknowledgement.
+  [string[]]$ExtraPeerRanges=@(),
+  [switch]$AllowPublicPeer
 )
 $ErrorActionPreference='Stop'
 $privateRanges=@('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16','100.64.0.0/10')+$ExtraPeerRanges
@@ -42,7 +44,10 @@ if($octets.Length -ne 4){throw 'HostVpnIPv4 must be IPv4.'}
 $allowed=$false
 foreach($range in $privateRanges){ if(Test-CidrMatch $octets $range){$allowed=$true;break} }
 if(-not $allowed){
-  throw ("HostVpnIPv4 $HostVpnIPv4 is not a private/VPN address. Allowed: " + ($privateRanges -join ', ') + ". For another mesh pass -ExtraPeerRanges <cidr>. No public-IP forwarding.")
+  if(-not $AllowPublicPeer){
+    throw ("HostVpnIPv4 $HostVpnIPv4 is not a private/VPN address. Allowed: " + ($privateRanges -join ', ') + ". For another mesh pass -ExtraPeerRanges <cidr>. A P2P VPN that hands out public addresses requires -AllowPublicPeer. No public-IP forwarding.")
+  }
+  Write-Warning "Peer $HostVpnIPv4 is a PUBLIC address. Only continue if it is this P2P VPN's own peer address: the host must firewall SSH to exactly this address and use key-only authentication."
 }
 if($IdentityFile -and -not (Test-Path -LiteralPath $IdentityFile -PathType Leaf)){throw "Missing SSH identity key: $IdentityFile"}
 }
@@ -78,7 +83,8 @@ foreach($port in $ports){
   }
 }
 Write-Host '[CHECK] Required client-side localhost ports are available.'
-Write-Host ('[CHECK] Peer ' + $HostVpnIPv4 + ' is inside an allowed private/VPN range; independently verify the peer identity and SSH host key.')
+Write-Host ('[CHECK] Peer ' + $HostVpnIPv4 + ' is an allowed VPN peer; independently verify the peer identity and SSH host key.')
+if ($AllowPublicPeer) { Write-Warning 'Peer address is public: the host firewall rule must be scoped to this exact address and SSH must be key-only.' }
 Write-Host '[CHECK] This does not prove an EVE client can connect or that the host is authorized.'
 if($Action -eq 'Check'){return}
 $argsList=@('-N','-T','-4',

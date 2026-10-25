@@ -76,21 +76,39 @@ The tunnel only needs a private IP route between the two PCs; it does not care
 which VPN product provides it. Allowed peer addresses are `10.0.0.0/8`,
 `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` (Tailscale CGNAT). A mesh
 with its own range (for example Radmin `26.0.0.0/8`) must be declared
-explicitly, and public addresses are always refused:
+explicitly, and public addresses need an explicit acknowledgement:
 
 ```powershell
 .\scripts\Start-Friend-Tunnel.ps1 -Action Check -HostVpnIPv4 26.14.7.9 -SshUser coopguest -ExtraPeerRanges '26.0.0.0/8'
+```
+
+Some commercial "P2P" clients give every device a real public exit address and
+a single forwarded port instead of a routable mesh. In that case the host
+publishes **only SSH** through the client's port-forwarding feature, and the
+friend still reaches EveJS through the tunnel:
+
+| Model | Host | Friend |
+| --- | --- | --- |
+| A. Mesh (peers route to each other) | `-FriendAddress <friend VPN ip>` | `-HostVpnIPv4 <host VPN ip>` |
+| B. NAT + forwarded port | forward `36933` → `127.0.0.1:2222`, run sshd on 2222 | `-HostVpnIPv4 159.26.120.41 -SshPort 36933` |
+
+In model B the traffic reaches sshd from the VPN provider's relay, so scope the
+firewall rule to that relay address (ask the provider) and never to `Any`.
+Verify from the friend's PC before touching the game client:
+
+```powershell
+Test-NetConnection 159.26.120.41 -Port 36933
 ```
 
 Host side, once (read-only by default):
 
 ```powershell
 .\scripts\Prepare-Friend-Access.ps1                                  # report only
-.\scripts\Prepare-Friend-Access.ps1 -Apply -FriendAddress <friend vpn ip> -FriendPublicKeyFile <his key.pub>
+.\scripts\Prepare-Friend-Access.ps1 -Apply -FriendAddress <friend or relay ip> -FriendPublicKeyFile <his key.pub> -SshPort 2222
 ```
 
 That enables OpenSSH Server, starts it, and creates one inbound firewall rule
-scoped to the friend's VPN address. It never publishes an EveJS port: `26000`,
+scoped to the given address. It never publishes an EveJS port: `26000`,
 `26001`, `26002`, `26003`, `443`, `5222` stay bound to `127.0.0.1`, and the
 script warns if any of them is not.
 

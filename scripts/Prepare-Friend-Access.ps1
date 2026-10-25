@@ -4,6 +4,10 @@ param(
   [string]$FriendAddress = '',
   [int]$SshPort = 22,
   [string]$FriendPublicKeyFile = '',
+  # Some P2P VPNs (for example a WireGuard mesh that hands out real public
+  # addresses) require this acknowledgement; the firewall rule stays
+  # peer-scoped either way.
+  [switch]$AllowPublicPeer,
   [switch]$Apply
 )
 # Host side of the friend-PC path. Read-only unless -Apply.
@@ -37,28 +41,45 @@ if($FriendAddress){
   if($octets.Length -ne 4){throw '-FriendAddress must be IPv4'}
   foreach($range in $privateRanges){ if(Test-CidrMatch $octets $range){$friendIsPrivate=$true;break} }
   if(-not $friendIsPrivate){
-    throw ("-FriendAddress $FriendAddress is not a private/VPN address (" + ($privateRanges -join ', ') + "). Refusing to open a firewall rule for a public peer.")
+    if(-not $AllowPublicPeer){
+      throw ("-FriendAddress $FriendAddress is not a private/VPN address (" + ($privateRanges -join ', ') + "). Refusing to open a firewall rule for a public peer without -AllowPublicPeer.")
+    }
+    Write-Warning "-FriendAddress $FriendAddress is public. The rule stays scoped to that single address, so only this VPN peer can reach SSH. Use a non-default -SshPort and key-only authentication."
   }
+}
+
+function Get-HostIPv4Addresses {
+  # Get-NetIPAddress can be unavailable (NetTCPIP module missing); fall back to
+  # ipconfig so the report is never empty on a connected machine.
+  $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -ne '127.0.0.1' -and $_.AddressState -eq 'Preferred' } |
+    Select-Object -ExpandProperty IPAddress)
+  if ($addresses.Count -eq 0) {
+    $addresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+      Where-Object { $_.IPAddress -ne '127.0.0.1' } |
+      Select-Object -ExpandProperty IPAddress -Unique)
+  }
+  if ($addresses.Count -eq 0) {
+    $lines = @(ipconfig 2>$null)
+    foreach ($line in $lines) {
+      $match = [regex]::Match($line, 'IPv4[^:]*:\s*([0-9]{1,3}(\.[0-9]{1,3}){3})')
+      if ($match.Success -and $match.Groups[1].Value -ne '127.0.0.1') { $addresses += $match.Groups[1].Value }
+    }
+    $addresses = @($addresses | Select-Object -Unique)
+  }
+  return $addresses
 }
 
 Write-Host '[FRIEND] Host-side preparation. Nothing is changed without -Apply.'
 Write-Host ''
 Write-Host '1) Addresses this host offers to the VPN:'
-$vpnAddresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-  Where-Object { $_.IPAddress -ne '127.0.0.1' -and $_.AddressState -eq 'Preferred' } |
-  Select-Object -ExpandProperty IPAddress)
-if ($vpnAddresses.Count -eq 0) {
-  # Some VPN adapters report a non-Preferred state while connected.
-  $vpnAddresses = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -ne '127.0.0.1' } |
-    Select-Object -ExpandProperty IPAddress -Unique)
-}
+$vpnAddresses = @(Get-HostIPv4Addresses)
 if ($vpnAddresses.Count -eq 0) { Write-Warning 'No non-loopback IPv4 found; is the VPN client connected?' }
 foreach ($address in $vpnAddresses) {
   $isPrivate = $false
   $bytes = ([System.Net.IPAddress]::Parse($address)).GetAddressBytes()
   foreach ($range in $privateRanges) { if (Test-CidrMatch $bytes $range) { $isPrivate = $true; break } }
-  Write-Host ("   {0}  {1}" -f $address, $(if ($isPrivate) { 'private/VPN (usable)' } else { 'PUBLIC - never use for the tunnel' }))
+  Write-Host ("   {0}  {1}" -f $address, $(if ($isPrivate) { 'private/VPN (usable)' } elseif ($AllowPublicPeer) { 'public VPN peer address (usable, firewall-scoped)' } else { 'PUBLIC - requires -AllowPublicPeer' }))
 }
 
 Write-Host ''
@@ -70,6 +91,9 @@ if ($capability) { Write-Host ("   capability: {0} ({1})" -f $capability.Name, $
 $sshd = Get-Service -Name sshd -ErrorAction SilentlyContinue
 if ($sshd) { Write-Host ("   service sshd: {0} / start {1}" -f $sshd.Status, $sshd.StartType) }
 else { Write-Host '   service sshd: not installed' }
+if ($AllowPublicPeer -and $SshPort -eq 22) {
+  Write-Warning 'Peer addresses are public: prefer a non-default -SshPort (for example 2222) and key-only authentication, so internet scanners cannot even reach sshd on 22.'
+}
 
 Write-Host ''
 Write-Host '3) EveJS listeners must stay loopback-only (checked, never changed):'
