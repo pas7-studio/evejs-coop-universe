@@ -37,10 +37,14 @@ for(const eol of ["\n","\r\n"])test("single-stack atomic native market hook reve
  assert.equal(patch(first),first);
  assert.equal(patch(first,{remove:true}),source);
  assert.doesNotThrow(()=>new Function(first));
- assert.equal((first.match(/P2P_ATOMIC_FULL_SINGLE_SELL_ORDER_REQUIRED/g)||[]).length,1);
+ assert.equal((first.match(/P2P_ATOMIC_SINGLE_STACK_SELL_ORDER_REQUIRED/g)||[]).length,1);
  assert.match(first,/P2P_ATOMIC_PREPAID_BUY_RESERVE_NOT_YET_PROVEN/);
  assert.match(first,/P2P_ATOMIC_ALL_NATIVE_FLAGS_REQUIRED/);
  assert.match(first,/P2P_ATOMIC_REQUIRED_WITH_RUST_CLAIMS/);
+ assert.match(first,/tradedQuantity<=0/);
+ assert.match(first,/fullEscrowItems\[0\]\?\.stacksize!==availableQuantity/);
+ assert.match(first,/vol_remaining:coopPlayerSellProof.volumeAfter/);
+ assert.match(first,/ORDER_REASON_PARTIAL/);
  assert.match(first,/coopPlayerMarketAtomicRuntime/);
 });
 test("missing original Rust claim or buyer source proof refuses stale patch",()=>{
