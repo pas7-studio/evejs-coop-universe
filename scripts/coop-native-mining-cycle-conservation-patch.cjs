@@ -55,6 +55,9 @@ function patch(source,file,remove=false){
  if(file.endsWith("/miningRuntime.js")){
   const marker=normalize(guard);
   const already=text.includes(marker);
+  if(already && (!text.includes(normalize(runtimeReplace)) ||
+      !text.includes(normalize(newDelta)) || !text.includes(strictCargoReturn)))
+    throw Error("ALIFE06 partially patched runtime source");
   if(remove&&!already)return text;
   if(!remove&&already)return text;
   if(remove){
@@ -72,7 +75,9 @@ function patch(source,file,remove=false){
   }
  }else if(file.endsWith("/miningRuntimeState.js")){
   const a=normalize(stateNeedle),b=normalize(stateReplacement),c=normalize(stateProp),d=normalize(statePropNew);
-  const already=text.includes(b)&&text.includes(d);
+  const hasWrite=text.includes(b),hasProp=text.includes(d);
+  if(hasWrite!==hasProp)throw Error("ALIFE06 partially patched mining state");
+  const already=hasWrite&&hasProp;
   if(remove&&!already)return text;
   if(!remove&&already)return text;
   if(remove){text=transform(text,b,a,false);text=transform(text,d,c,false);}
