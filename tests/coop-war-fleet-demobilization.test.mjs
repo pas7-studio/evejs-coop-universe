@@ -14,7 +14,7 @@ function fixture(){
  const flags=env();let physicallyPresent=true,idle=true,ordersIdle=true;
  const war={version:1,wars:{w1:{state:"ACTIVE",
   attackerFactionID:11,defenderFactionID:22}},
-  campaigns:{c1:{warID:"w1",state:"OCCUPIED",revision:7},
+  campaigns:{c1:{campaignID:"c1",warID:"w1",state:"OCCUPIED",revision:7},
    c2:{warID:"w1",state:"PREPARING",revision:1}}};
  const initial={version:1,ships:{"501":{entityID:501,
   systemID:202,pilotID:"coop-pilot-001",corporationID:31,
