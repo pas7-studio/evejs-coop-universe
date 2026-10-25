@@ -93,3 +93,28 @@ test("native fleet warp physical timeout does not imply both players arrived",()
  assert.equal(r.nativeFleetWarpArrivalsUnverified,1);
  assert.equal(r.lastUnverifiedFleetArrivals[0].reason,"NATIVE_ARRIVAL_TIMEOUT");
 });
+
+test("two accepted same-route warps verify only the latest successful trip",()=>{
+ const t=Date.parse("2026-10-25T12:00:00Z");
+ const base={commanderCharacterID:2001,commanderShipID:90001,
+  followerCharacterID:2002,followerShipID:90002,
+  systemID:30000144,targetEntityID:44221};
+ const row=(event,seconds,extra)=>JSON.stringify({
+  event,at:new Date(t+seconds*1000).toISOString(),...base,...extra
+ });
+ const events=[
+  row("coop-fleet-warp-native-order",0,{status:"NATIVE_WARP_ORDER_ACCEPTED"}),
+  row("coop-fleet-warp-native-order",20,{status:"NATIVE_WARP_ORDER_ACCEPTED"}),
+  row("coop-fleet-warp-physical-arrival",55,{
+   status:"NATIVE_FLEET_FOLLOWER_ARRIVAL_VERIFIED",
+   actualFollowerWarpObserved:true,arrivalVerified:true})
+ ];
+ const report=summarize(events.join("\n"),{now:t+60000});
+ assert.equal(report.fleetWarpArrivalVerified,true);
+ assert.deepEqual(report.lastNativeFleetWarpOrders.map(x=>x.arrivalVerified),[false,true]);
+ assert.equal(report.nativeFleetWarpPhysicalArrivalsVerified,1);
+ const changedTarget=row("coop-fleet-warp-native-order",40,{
+  targetEntityID:55555,status:"NATIVE_WARP_ORDER_ACCEPTED"});
+ assert.equal(summarize([...events.slice(0,2),changedTarget,events[2]].join("\n"),
+  {now:t+60000}).fleetWarpArrivalVerified,false);
+});
