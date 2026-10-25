@@ -19,7 +19,7 @@ function fixture(){
  put("identityState","version",1);put("identityState","nextItemID",1990000200);
  put("npcEntities","entities"+SEP+"101",{entityID:101,ownerID:900,systemID:30000144});
  put("npcModules","modules"+SEP+"401",{moduleID:401,entityID:101,ownerID:900,typeID:123,flagID:27,categoryID:7});
- put("npcCargo","cargo",{"501":{cargoID:501,entityID:101,moduleID:401,ownerID:900,typeID:35,flagID:27,categoryID:8,quantity:5}});
+ put("npcCargo","cargo",{"501":{cargoID:501,entityID:101,moduleID:401,ownerID:900,typeID:35,categoryID:8,quantity:5}});
  const load=t=>{const o={};for(const {key,json} of db.prepare('SELECT key,json FROM "'+t+'"').all()){
   const [a,b]=key.split(SEP),v=JSON.parse(json);
   if(b!==undefined&&({corporationRuntime:"corporations",industryBlueprintState:"records",industryJobs:"jobs",npcEntities:"entities",npcModules:"modules"})[t]===a)
