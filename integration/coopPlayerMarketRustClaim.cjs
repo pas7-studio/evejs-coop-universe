@@ -43,7 +43,34 @@ async function finalize({ticket,proof,client}={}){
   buyer_id:request.buyer_id,seller_id:request.seller_id
  });
  assertFillAck({proof,ack});
+ if(ack.release_pending!==true)
+  throw Error("P2P_RUST_FINALIZE_REQUIRES_LOCKED_RELEASE_PENDING");
  return ack;
+}
+async function release({ticket,proof,client,receipt}={}){
+ if(typeof client?.call!=="function")
+  throw Error("P2P_RUST_MARKET_DAEMON_REQUIRED");
+ const d=details(ticket,proof);
+ const key="p2p:"+ticket.orderID+":"+ticket.cycle;
+ if(!receipt||receipt.key!==key||
+    receipt.phase!=="GAMESTORE_COMMITTED"||
+    receipt.orderID!==d.order_id||receipt.cycle!==d.cycle||
+    receipt.buyerID!==d.buyer_id||receipt.sellerID!==d.seller_id||
+    receipt.quantity!==d.filled_quantity||
+    receipt.priceCents!==d.price_cents||
+    receipt.grossCents!==d.price_cents*d.filled_quantity)
+  throw Error("P2P_RUST_RELEASE_DURABLE_NATIVE_RECEIPT_REQUIRED");
+ const response=await client.call("ReleasePlayerFill",{
+  order_id:d.order_id,cycle:d.cycle,buyer_id:d.buyer_id,
+  seller_id:d.seller_id,native_receipt_key:key
+ });
+ if(response?.order_id!==d.order_id||response.cycle!==d.cycle||
+    response.phase!=="released"||response.native_receipt_key!==key||
+    response.state!==(proof.volumeAfter===0?"filled":"open")||
+    response.ack?.order_id!==d.order_id||
+    response.ack?.release_pending!==true)
+  throw Error("P2P_RUST_RELEASE_ACK_UNVERIFIED");
+ return response;
 }
 async function readClaim({ticket,client}={}){
  if(typeof client?.call!=="function"||!id(ticket?.orderID)||
@@ -51,4 +78,4 @@ async function readClaim({ticket,client}={}){
  return client.call("GetPlayerFillClaim",
   {order_id:ticket.orderID,cycle:ticket.cycle});
 }
-module.exports={details,claim,finalize,readClaim};
+module.exports={details,claim,finalize,release,readClaim};
