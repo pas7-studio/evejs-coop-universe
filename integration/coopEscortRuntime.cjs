@@ -29,7 +29,8 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    duo=verifyNativeDuo({systemID:route.systemID,
     stationID:route.stationID,corporationID:route.corporationID,
     cargoIDs:route.cargoIDs,characters:offer?.characters,
-    fleetID:offer?.playerFleetID})}
+    fleetID:offer?.playerFleetID,manifestKey:route.manifestKey,
+    haulerID:route.haulerIDs?.[0],contractID:offer?.contractID})}
   catch{return blocked("DENIED_NATIVE_DUO_UNAVAILABLE")}
   if(offer?.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING"||
    duo?.status!=="VERIFIED_NATIVE_DUO_FLEET"||
