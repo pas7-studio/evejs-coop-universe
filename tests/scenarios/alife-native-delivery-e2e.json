@@ -1,0 +1,180 @@
+{
+  "schema": "evejs-coop/alife-native-delivery-e2e/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "dependsOn": [
+    "real pinned EveJS overlay + native NPC mining",
+    "EVEJS_COOP_NPC_STATION_DELIVERY=1",
+    "EVEJS_COOP_NATIVE_HAUL_MANIFEST=1",
+    "real warehouse itemStore and two authorized clients"
+  ],
+  "scenarios": [
+    {
+      "id": "ALIFE-DEL-001",
+      "title": "Actual miner target and ore cargo attachment",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Spawn authorized native mining fleet in disposable Perimeter 30000144",
+        "Record a real mining controller target and cargo quantity growth at the same miner itemID",
+        "Read nativeNpcStore cargo rather than virtual mining ledger"
+      ],
+      "expected": [
+        "No positive mining result without a real controller and quantity delta",
+        "No E2E PASS from state=MINING alone"
+      ],
+      "requiredEvidence": [
+        "native shipID/minerID/controllerTarget and timestamp",
+        "cargoID/typeID/quantity before and after"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-002",
+      "title": "Haul transfers exactly one native cargo identity",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Make miner hold a physically recorded positive ore cargoID",
+        "Allow normal native mining fleet cargo transfer to durable hauler",
+        "Compare miner and hauler nativeNpcStore rows and owner/system"
+      ],
+      "expected": [
+        "Identical cargoID moves from one physical ship to one physical ship",
+        "No duplicated original stack remains on miner"
+      ],
+      "requiredEvidence": [
+        "nativeNpcStore cargo row before/after",
+        "hauler entityID and fleetID"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-003",
+      "title": "Durable full manifest precedes accepted warp",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Enable native full haul manifest on a disposable overlay",
+        "Load at least two actual ore stacks with distinct IDs",
+        "Observe manifest fsync before first accepted warp",
+        "Verify exact manifest IDs and native route station"
+      ],
+      "expected": [
+        "No warp on PREPARE uncertainty or missing cargo",
+        "No anonymous or synthetic cargo rows"
+      ],
+      "requiredEvidence": [
+        "fsynced manifest filename and raw cargoIDs",
+        "native controller warp acknowledgment"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-004",
+      "title": "Physical station arrival, dwell, warehouse COMMITTED and itemStore credit",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Warp named fleet to real in-scene native station",
+        "Verify actual surface distance, ship state and dwell time",
+        "Inspect each warehouse source debit receipt and itemStore unique tagged item",
+        "Read ALIFE native delivery evidence only after full manifest verified"
+      ],
+      "expected": [
+        "Each source cargo debited exactly once and only one native itemStore destination item appears",
+        "Stable eventID includes full manifest, carries physical cargoIDs and never awards ISK"
+      ],
+      "requiredEvidence": [
+        "station coordinates/ship coordinates/radius and timestamps",
+        "COMMITTED warehouse receipts",
+        "itemStore owner/location/flag/itemID/tag and quantity"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-005",
+      "title": "Last cargo committed but terminal in-memory state missing",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Prepare genuine two-stack manifest and settle its final native warehouse receipt",
+        "Drop only in-memory delivery completedStackCount or simulated tick acknowledgment",
+        "Run next normal arrival tick with empty hauler and full original manifest",
+        "Repeat tick once more"
+      ],
+      "expected": [
+        "Already-committed cargo is never debited/granted twice",
+        "Recovered delivery comes from full manifest, not empty cargo assumption",
+        "One full manifest evidence and dedup key"
+      ],
+      "requiredEvidence": [
+        "source cargo absent with same cargoID",
+        "warehouse COMMITTED and native itemStore identities",
+        "before/after item/ISK counts"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-006",
+      "title": "Crash after native cargo debit before warehouse item credit",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Use disposable fault injection to lose native itemStore grant response after source removal",
+        "Restart local server preserving receipts and SQLite state",
+        "Read warehouse pending/outcome-unknown status and attempt ordinary retry"
+      ],
+      "expected": [
+        "No automatic second grant, no phantom item, pending receipt stays operator repair required",
+        "No ALIFE settlement success event when manifest incomplete"
+      ],
+      "requiredEvidence": [
+        "journal phase and exception log",
+        "native itemStore before/after",
+        "source cargo row and unique tag"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-007",
+      "title": "Cross-fleet cargo replay and station owner spoof",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Attempt reusing existing cargoID in new native fleet manifest",
+        "Attempt mismatched station corporation/system and forged or incomplete manifest",
+        "Audit copied ALIFE event JSONL with read-only CLI"
+      ],
+      "expected": [
+        "Conflicting cargoID and native receipt identities cannot prove settlement",
+        "No native transfer, wallet credit or reward from audit"
+      ],
+      "requiredEvidence": [
+        "full source and target owner/cargo identity",
+        "conflict audit report and immutable manifests"
+      ]
+    },
+    {
+      "id": "ALIFE-DEL-008",
+      "title": "Two-client visual proof and missing native station fail closed",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Connect two authorized EVE co-op clients in the disposable system",
+        "Observe actual hauler trip and native warehouse success event with common fleetID",
+        "Remove or invalidate station native scene proof on a separate test run"
+      ],
+      "expected": [
+        "Both clients observe the same real ship and station arrival, not synthetic teleport",
+        "Invalid station or ship cannot produce delivery or A-Life SETTLE"
+      ],
+      "requiredEvidence": [
+        "two client timestamps and positions",
+        "native controller orders and warehouse/manifest records"
+      ]
+    }
+  ]
+}
