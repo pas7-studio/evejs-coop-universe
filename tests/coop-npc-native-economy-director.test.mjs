@@ -145,3 +145,31 @@ test("missing native market wallet credit prevents phantom profit",()=>run(f=>{
  assert.throws(()=>d.tick(ctx),/NATIVE_SALE_WALLET_NOT_SETTLED/);
  assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
 }));
+
+test("async Rust market RPC retains station journal lock until receipt",async()=>{
+ const f=fixture(),old=process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY;
+ process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY="1";
+ try{
+  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+  const original=f.market.listOnce;let resolveRPC;
+  f.market.listOnce=request=>new Promise(resolve=>{resolveRPC=()=>resolve(original(request))});
+  const pending=d.tick(ctx);assert.equal(typeof pending?.then,"function");
+  assert.equal(d.tick(ctx).status,"ECONOMY_LOCKED");
+  resolveRPC();assert.equal((await pending).status,"LISTED");
+  assert.equal(f.listings,1);
+ }finally{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY;
+  else process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY=old;f.close()}
+});
+test("lost Rust market RPC acknowledgment cannot list the same item twice",async()=>{
+ const f=fixture(),old=process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY;
+ process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY="1";
+ try{
+  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+  const original=f.market.listOnce;
+  f.market.listOnce=request=>{original(request);return Promise.reject(Error("LOST_MARKET_ACK"))};
+  await assert.rejects(d.tick(ctx),/LOST_MARKET_ACK/);
+  assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");
+  assert.equal(f.listings,1);
+ }finally{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY;
+  else process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY=old;f.close()}
+});
