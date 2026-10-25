@@ -19,11 +19,13 @@ const flag=env=>env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"&&
  (env.EVEJS_COOP_ALIFE==="1"||env.EVEJS_COOP_NPC_ORDER_ARBITER==="1");
 function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
  getGate,nativeStore,service,getController,isScrambled,clock=()=>Date.now(),
- journalDir="/var/lib/evejs/coop-war-native-transfers",env=process.env}={}){
+ journalDir="/var/lib/evejs/coop-war-native-transfers",env=process.env,
+ nativeTransferFactory=createNativeGateTransfer}={}){
  if(typeof identityRegistry?.relocate!=="function"||
   typeof identityRegistry.snapshot!=="function"||
   [sceneForSystem,getGate,getController,isScrambled,clock]
    .some(x=>typeof x!=="function")||
+  typeof nativeTransferFactory!=="function"||
   !service||!nativeStore)throw Error("WAR_NATIVE_TRANSFER_AUTHORITIES_REQUIRED");
  const ledger=createWarTransferLedger({
   gameStore,identityRegistry,sceneForSystem,nativeStore,getController,clock,env
@@ -49,7 +51,7 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
    return linked;
   }
  };
- const nativeTransfer=createNativeGateTransfer({
+ const nativeTransfer=nativeTransferFactory({
   sceneForSystem,getGate,store:nativeStore,service,getController,
   registry:facade,journalDir,clock,isScrambled
  });
