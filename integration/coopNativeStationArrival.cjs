@@ -11,7 +11,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -44,6 +44,9 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
  const arrivals=new Map();
+ const manifestEnabled=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST==="1";
+ const manifestDirector=manifestEnabled?
+  (manifest||require("./coopNativeHaulManifest").createManifest({root,store,items,getNativeEntity,clock})):null;
  const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,
   verifyArrival:args=>{
    const scene=getScene(args.systemID),point=scene&&isValidStation(scene,getStation(args.stationID),args.systemID);
@@ -75,8 +78,19 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(!cargo.length)return {status:"NO_ORE_TO_DELIVER",terminal:true};
   // Flush existing physical NPC entities and native cargo before moving.
   for(const name of ["npcEntities","npcCargo"]){if(!flush(name)?.success)return pause("PERSISTENCE_UNCERTAIN");}
+  let manifestProof=null;
+  if(manifestDirector){
+   manifestProof=manifestDirector.prepare({systemID,fleetID,stationID:destination.stationID,
+    corporationID:destination.corporationID,startedAt:now,haulerIDs:ships});
+   if(manifestProof?.status!=="MANIFEST_DURABLY_PREPARED")
+    return pause(manifestProof?.status||"MANIFEST_PREPARE_UNAVAILABLE");
+  }
   const result={stationID:destination.stationID,corporationID:destination.corporationID,
    systemID,fleetID,startedAt:now,haulers:Object.fromEntries(ships.map(id=>[id,{arrivedAt:0}]))};
+  if(manifestProof){
+   result.manifestID=manifestProof.key;
+   result.expectedCargoIDs=manifestProof.cargoIDs;
+  }
   fleet.coopStationArrival=result; // In-memory intent is never proof of inventory.
   for(const [index,id] of ships.entries()){
    const target={...destination.position,x:destination.position.x+750+index*100};
@@ -114,6 +128,10 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    if(now-arrival.arrivedAt<ARRIVAL_DWELL_MS)return pause("ARRIVAL_DWELL_PENDING");
    const cargo=(store.listNativeCargoForEntity(id)||[]).filter(row=>
     pos(row.cargoID)&&Number(row.coopHaulFleetID)===trip.fleetID&&Number(row.moduleID||0)===0);
+   if(manifestDirector&&(!trip.manifestID||!Array.isArray(trip.expectedCargoIDs)))
+    return pause("MANIFEST_TRIP_CONTEXT_MISSING");
+   if(manifestDirector&&cargo.some(item=>!trip.expectedCargoIDs.includes(Number(item.cargoID))))
+    return pause("MANIFEST_NEW_UNDECLARED_CARGO");
    for(const item of cargo){
     const result=factory.deposit({cargoID:Number(item.cargoID),haulerID:id,
       fleetID:trip.fleetID,systemID:trip.systemID,stationID:trip.stationID,
@@ -131,13 +149,22 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   // previously committed source receipt exists in this trip.
   if(!stackCount&&!trip.completedStackCount)return pause("EMPTY_DELIVERY_NOT_PROVEN");
   trip.completedStackCount=(trip.completedStackCount||0)+stackCount;
+  let manifestVerified=null;
+  if(manifestDirector){
+   manifestVerified=manifestDirector.verify({key:trip.manifestID,systemID:trip.systemID,
+    fleetID:trip.fleetID,stationID:trip.stationID,corporationID:trip.corporationID,
+    haulerIDs:Object.keys(trip.haulers).map(Number)});
+   if(manifestVerified?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED")
+    return pause(manifestVerified?.status||"MANIFEST_FULL_CARGO_UNVERIFIED");
+  }
   if(stackCount)probe.observe("living-npc-station-delivered",null,{spaceState:{systemID:trip.systemID}},
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
-  return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity};
+  return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
+   ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,verify:stableAt,warehouse:factory};
+ return {start,tick,verify:stableAt,warehouse:factory,manifest:manifestDirector};
 }
 let runtimeDirector;
 function getRuntimeDirector(){
