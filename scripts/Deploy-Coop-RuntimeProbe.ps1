@@ -24,6 +24,8 @@ param(
   [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableNpcStationDelivery,
+[switch]$Alife,
+[switch]$AlifeTrace,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -38,6 +40,8 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
 }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
+if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
+if ($AlifeTrace -and -not $Alife) { throw '-AlifeTrace requires -Alife' }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -175,6 +179,14 @@ if ($LivingCoop) {
   if ($EnableNpcStationDelivery) {
     $yamlLines += "      EVEJS_COOP_NPC_STATION_DELIVERY: '1'"
     $yamlLines += "      EVEJS_COOP_NPC_WAREHOUSE_DIR: '/var/lib/evejs/coop-native-warehouse'"
+  }
+  if ($Alife) {
+    # ALIFE-1: one master switch implies native order arbitration.
+    $yamlLines += "      EVEJS_COOP_ALIFE: '1'"
+  }
+  if ($AlifeTrace) {
+    # Blockers are data: name the reason instead of a silent skip.
+    $yamlLines += "      EVEJS_COOP_ALIFE_TRACE: '1'"
   }
   $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
   $yamlLines += "      EVEJS_COOP_HAULER_HOLD_MS: '45000'"
