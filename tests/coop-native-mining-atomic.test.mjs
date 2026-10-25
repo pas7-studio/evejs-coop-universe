@@ -168,3 +168,29 @@ test("owner mismatch in original cargo is never rewritten",t=>{
  assert.equal(f.cargo()[0].ownerID,999);
  assert.equal(f.source(),undefined);
 });
+
+test("all-waste cycle atomically depletes source without a zero-quantity cargo stack",t=>{
+ const f=fixture(t);
+ f.input.miningResult={normalQuantity:0,wastedQuantity:8};
+ f.input.transferredQuantity=0;
+ const result=f.settler.settle(f.input);
+ assert.equal(result.success,true);
+ assert.equal(f.source().remainingQuantity,92);
+ assert.equal(f.cargo().length,0);
+ assert.equal(f.miner.nativeCargoItems.length,0);
+ assert.equal(f.receipts().length,1);
+ const replay=f.settler.settle(f.input);
+ assert.equal(replay.success,true);
+ assert.equal(replay.receipt.replayed,true);
+ assert.equal(f.cargo().length,0);
+});
+test("same operation cannot change the immutable yield fingerprint",t=>{
+ const f=fixture(t);
+ assert.equal(f.settler.settle(f.input).success,true);
+ const sameCycleChangedYield={...f.input,
+  miningResult:{normalQuantity:6,wastedQuantity:2},transferredQuantity:6};
+ const result=f.settler.settle(sameCycleChangedYield);
+ assert.equal(result.success,false);
+ assert.equal(f.source().remainingQuantity,92);
+ assert.equal(f.cargo()[0].quantity,7);
+});
