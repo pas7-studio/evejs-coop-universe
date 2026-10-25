@@ -521,4 +521,5 @@ test("out-of-band change to original fsynced journal while auditing never commit
   quantity:100,soldQuantity:100,remainingQuantity:0,revenueCents:120000,
   fillIDs:[910000000001],readOnly:true,nativeMutation:false,
   proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"};
- }}));
+ }});
+});
