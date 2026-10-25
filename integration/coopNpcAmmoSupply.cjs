@@ -50,8 +50,8 @@ function createAmmoSupply({store,getWeaponModules,resolveFamily,isOptional,compa
    // Hull-synthetic and charge-optional weapons stay usable without cargo.
    const moduleID=id(weapon?.itemID);
    const actual=moduleID&&modulesByID.get(moduleID);
-   if(weapon?.npcSyntheticHullWeapon===true||
-    !actual){other++;continue;}
+   if(weapon?.npcSyntheticHullWeapon===true){other++;continue;}
+   if(!actual)return out("NATIVE_FITTING_NOT_VERIFIED");
    const family=resolveFamily(weapon);
    if(!["missileLauncher","projectileTurret","hybridTurret","precursorTurret",
     "laserTurret"].includes(family)){other++;continue;}
