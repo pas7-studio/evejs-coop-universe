@@ -46,6 +46,50 @@ declaration from merely seeing two faction IDs.
 The pinned AgentMgr/EVE client dialogue and real GameStore SQLite still
 require local gameplay/transaction acceptance.
 
+## FW-003 native warship ownership / order-lease policy (first slice)
+
+**Implemented in source, NOT accepted for live combat:**
+- `coopWarFleetRegistry.cjs` persists a 1:1 exclusive mapping between
+  physical `entityID`, named `pilotID`, faction/corporation, campaign
+  and fleet ID in the existing `corporationRuntime` native SQLite row.
+  One event key commits only once; mismatching replays are blocked.
+  Corrupt records stop operations; a missing physical ship does not
+  silently remove its reservation.
+- `coopWarFleetNativeProofs.cjs` validates original native NPC store,
+  already-existing scene ship, controller, durable named identity,
+  real SDE faction and the *same SQLite transaction's* active war and
+  currently preparing or assaulted campaign. Initial registration
+  requires the ship to be idle and not warping or fighting.
+- Existing `coopNpcOrderArbiter` now recognizes non-preemptive `WAR`.
+  `TACTICS` emergency orders may preempt it. `RAID`, `PATROL`,
+  `GATE`, `CIVILIAN` and another `WAR` order cannot steal its lease.
+- Existing `coopNpcOrderBridge` adds strict `warShipClaim` authority:
+  `WAR` must be explicitly registered; other directors cannot retask
+  a reserved warship even after a nominal order-lease expiry. Unknown
+  registry state fences unsafe orders (TACTICS survives).
+- Existing A-Life runtime creates the verified GameStore-backed registry
+  only when explicitly enabled. Existing shared NPC order bridge uses the
+  claim dynamically, so late flag changes cannot bypass native custody.
+  No second scheduler and no synthetic NPC ships have been added.
+
+**Additional opt-in flag:** `EVEJS_COOP_FACTION_WAR_FLEETS=1`, requiring
+`EVEJS_COOP_FACTION_WAR=1`, `EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`
+and shared order arbitration `EVEJS_COOP_ALIFE=1` (or the
+existing `EVEJS_COOP_NPC_ORDER_ARBITER=1`).
+
+**Safety boundary:** this code does not declare wars by itself, consume
+corporation ISK, spawn native ships, fire weapons, grant loot or move
+NPCs between scenes. Direct battle commands and their native hostility
+permission are deliberately **not** connected before combat objective
+proof, verified enemy ownership, ammo debit and AI life-safety guards
+are tested. The WAR owner is a fenced authority ready for that next step.
+
+**Validation still required:** local real SQLite with its FULL
+synchronous/restore/cache invalidation contract; 2-player EVE session;
+reversible overlay and installed `.js` module load; 30s tick performance,
+especially repeated GameStore reads on large fleets; physical NPC
+combat evidence and restart with an already leased fleet.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
