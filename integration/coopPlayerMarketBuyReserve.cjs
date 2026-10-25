@@ -289,7 +289,7 @@ function active(){
   require("../gameStore").coopAtomicNativeRows});
  return runtime;
 }
-module.exports={createBuyReserve,requireQuote,
+module.exports={createBuyReserve,requireQuote,validDebitReceipt,
  begin:q=>active().begin(q),bind:(receipt,order)=>active().bind(receipt,order),
  inspect:id=>active().inspect(id),
  assertExisting:(orders,id)=>active().assertExisting(orders,id)};

@@ -39,8 +39,11 @@ function fixture(){
    kind:"P2P_BUY_RESERVE",key:reserveKey,phase:"BOUND",
    orderID:"23",operationID,buyerID:201,stationID:60001234,
    typeID:34,priceCents:1234,quantity:7,reservedCents:8638,
+   minVolume:2,durationDays:30,orderRange:0,
    brokerCents:123,sccCents:45,totalCents:8806,
-   buyerBeforeCents:100000,buyerAfterCents:91194
+   buyerBeforeCents:100000,buyerAfterCents:91194,
+   journalIDs:[5000000000000000,5000000000000001,5000000000000002],
+   createdAt:123456
   }
  },
  identityState:{coopP2PMarketJournal:{next:5000000000000000}}
@@ -251,5 +254,45 @@ test("BUY PAID replay cannot bless a forged paid balance while preserving valid 
   }
   x.db.playerMarketFills[genuine.key]=genuine;
   assert.equal(s.settle(args).replayed,true);
+ }finally{reset()}
+});
+ 
+test("native BUY payout preflight must reuse canonical original BUY debit receipt authority",()=>{
+ const reset=enabled();try{
+  const scenarios=[
+   r=>{r.journalIDs=[]},
+   r=>{r.journalIDs=[1,2,3]},
+   r=>{delete r.createdAt},
+   r=>{r.createdAt=0},
+   r=>{r.buyerBeforeCents=-1;r.buyerAfterCents=-8807},
+   r=>{r.minVolume=0},
+   r=>{r.durationDays=0},
+   r=>{r.key="buy-reserve:forged"},
+   r=>{r.reservedCents=8637;r.spentCents=0;r.remainingReserveCents=8638}
+  ];
+  for(const mutate of scenarios){
+   const x=fixture(),record=x.db.playerMarketFills[reserveKey];
+   mutate(record);const before=structuredClone(x.db);
+   const s=createBuySettlement({gameStore:x.store});
+   assert.throws(()=>s.preflight({proof:proof(),sourceItemID:800}),
+    /P2P_BUY_PAY_ORIGINAL_NATIVE_RESERVE_RECEIPT_MISSING/);
+   assert.throws(()=>s.settle({ticket:ticket(),proof:proof(),
+    sourceItemID:800,tax:1}),
+    /P2P_BUY_PAY_ORIGINAL_NATIVE_RESERVE_RECEIPT_MISSING/);
+   assert.equal(x.commits,0);
+   assert.deepEqual(x.db,before);
+  }
+ }finally{reset()}
+});
+test("native BUY seller payment still accepts canonical reserved journal proof",()=>{
+ const reset=enabled();try{
+  const x=fixture(),s=createBuySettlement({gameStore:x.store,clock:()=>123456});
+  const p=proof();
+  assert.equal(s.preflight({proof:p,sourceItemID:800}),true);
+  const receipt=s.settle({ticket:ticket(),proof:p,sourceItemID:800,tax:1});
+  assert.equal(receipt.phase,"GAMESTORE_COMMITTED");
+  assert.equal(x.db.characters["201"].balance,911.94);
+  assert.equal(x.db.characters["301"].balance,536.02);
+  assert.equal(s.requireReceipt(ticket(),p).key,receipt.key);
  }finally{reset()}
 });
