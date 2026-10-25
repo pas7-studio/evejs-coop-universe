@@ -161,7 +161,8 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   return contracts.refund(contractID);
  }
  return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,
-  refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
+  refundProvenLoss,refundWreckedFlight,readFlight:flight.read,
+  listDeliveredFlights:flight.listDelivered,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
 }
