@@ -6,6 +6,10 @@
 
 The historical coopNativeHaulCargo.transferCargo reparented native cargo via upsertNativeCargo and only afterward cleared a temporary transient path and flushed the GameStore cache. On failure the cache could show ore in a hauler without a confirmed durable record, while the miner could continue mining.
 
+## Compatibility with parallel physical-haul safety work
+
+The existing opt-in EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD strict branch in latest main is retained. ALIFE-10 first runs its original native ore category 25 check, miner/hauler owner and custody check, physical 2,500 m proximity, non-warping hull checks, and SDE-derived hauler capacity check; only the final cargo write is replaced by the SQLite atomic source→hauler transaction. Ordinary guards and unrelated changes are not overwritten. Persistent ALIFE-08 startup fleets now require this guarded path even if the older EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD flag is off.
+
 ## Native cargo transaction
 
 1. Confirm original persistent NPC miner + hauler scene, same system, exact durable slot, original stable fleetID, native entity/controller and owner roles.
