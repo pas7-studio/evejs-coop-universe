@@ -568,3 +568,50 @@ test("legacy single-stack receipt without deliveries array retains read-only acc
   assert.equal(settle.requireReceipt(ticket(),proof()).key,receipt.key);
  }finally{cleanup()}
 });
+
+
+test("original partial multi-stack receipt may not downgrade to legacy by omitting delivery witnesses",()=>{
+ const cleanup=flags();try{
+  const x=fixture();
+  x.db.items["800"].quantity=3;x.db.items["800"].stacksize=3;
+  x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+  x.db.identityState.nextItemID=1990000990;
+  const partial=Object.freeze({...proof(),filledQuantity:4,volumeAfter:3});
+  const payload={ticket:ticket(),proof:partial,tax:1,sourceItemIDs:[800,801]};
+  const settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const original=settle.settle(payload);
+  const key=receiptKey(ticket()),before=structuredClone(x.db);
+  for(const corrupted of [
+   {...original,deliveries:undefined},
+   {...original,deliveries:null},
+   (()=>{const row={...original};delete row.deliveries;return row})(),
+   (()=>{const row={...original};delete row.sourceItemIDs;return row})(),
+   {...original,sourceItemIDs:null}
+  ]){
+   x.db.playerMarketFills[key]=corrupted;
+   const saved=structuredClone(x.db),commits=x.commits;
+   assert.throws(()=>settle.requireReceipt(ticket(),partial),
+    /P2P_ATOMIC_DURABLE_NATIVE_RECEIPT_REQUIRED/);
+   assert.throws(()=>settle.settle(payload),
+    /P2P_ATOMIC_COMMITTED_RECEIPT_REPLAY_CONFLICT/);
+   assert.deepEqual(x.db,saved);
+   assert.equal(x.commits,commits+1); // read-only requireReceipt uses the transactional facade
+  }
+  x.db.playerMarketFills[key]=original;
+  assert.equal(settle.requireReceipt(ticket(),partial).key,key);
+  assert.equal(settle.settle(payload).replayed,true);
+  assert.equal(before.characters["301"].balance,x.db.characters["301"].balance);
+ }finally{cleanup()}
+});
+test("genuine historical single-stack record without both new custody fields still replays",()=>{
+ const cleanup=flags();try{
+  const x=fixture(),settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const receipt=settle.settle({ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800});
+  const legacy={...receipt};delete legacy.deliveries;delete legacy.sourceItemIDs;
+  x.db.playerMarketFills[receipt.key]=legacy;
+  assert.equal(settle.requireReceipt(ticket(),proof()).key,receipt.key);
+  assert.equal(settle.settle({
+   ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+  }).replayed,true);
+ }finally{cleanup()}
+});
