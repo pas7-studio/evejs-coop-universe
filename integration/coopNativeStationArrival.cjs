@@ -67,6 +67,10 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(escortEnabled&&(!durableWarpFence||
    ["inspectSource","prepare","confirm"].some(k=>typeof durableWarpFence[k]!=="function")))
    return pause("ESCORT_DURABLE_WARP_FENCE_REQUIRED");
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   (process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+    typeof escortGate?.recordEscortDeparture!=="function"))
+   return pause("ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
   if(escortEnabled&&(!manifestEnabled||
     typeof escortGate?.fundBeforeWarp!=="function"||
     typeof escortGate?.recordDelivered!=="function"))
@@ -168,6 +172,16 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   if(escortEnabled){
    if(!manifestProof?.key)return pause("ESCORT_PREWARP_MANIFEST_REQUIRED");
+   const originalRoute={manifestKey:manifestProof.key,systemID,fleetID,
+    stationID:destination.stationID,corporationID:destination.corporationID,
+    haulerIDs:ships.slice()};
+   if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"){
+    let witness;try{witness=escortGate.recordEscortDeparture(originalRoute,scene)}
+    catch{return pause("ESCORT_DEPARTURE_WITNESS_UNAVAILABLE")}
+    if(!["DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS",
+     "DURABLE_ESCORT_DEPARTURE_REPLAY"].includes(witness?.status))
+     return pause("ESCORT_"+(witness?.status||"DEPARTURE_WITNESS_BLOCKED"));
+   }
    let funded;try{funded=escortGate.fundBeforeWarp({
     manifestKey:manifestProof.key,systemID,fleetID,stationID:destination.stationID,
     corporationID:destination.corporationID,haulerIDs:ships.slice()
