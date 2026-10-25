@@ -117,7 +117,6 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     prior.stationID!==b.stationID||
     prior.contract?.corporationID!==b.corporationID||
     !same(prior.contract?.characters,b.characters)||
-    prior.contract?.amountISK!==amountISK||
     prior.originalManifestKey!==b.manifestKey||
     prior.expected.some(x=>!m.cargo.some(z=>
      z.cargoID===x.sourceCargoID&&z.typeID===x.typeID&&
@@ -135,10 +134,11 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     quantity:x.quantity})).sort((a,b)=>a.sourceCargoID-b.sourceCargoID);
   }
   const first=Math.min(...expected.map(x=>x.sourceCargoID));
+  const quotedISK=prior?prior.contract.amountISK:amountISK;
   const contract={contractID:persistedID,
    manifestKey:b.systemID+"-"+wreckID+"-"+first,
    corporationID:b.corporationID,
-   amountISK,characters:b.characters.slice()};
+   amountISK:quotedISK,characters:b.characters.slice()};
   const quote={status:"READY",eventID,wreckID,
    stationID:b.stationID,systemID:b.systemID,
    contract,expected,
@@ -258,6 +258,17 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
   if(paid?.status==="SETTLED")return deny("RESCUE_ALREADY_PAID_NO_REFUND");
   if(!["NOT_SETTLED","NOT_FOUND"].includes(paid?.status))
    return deny("RESCUE_TERMINAL_WALLET_UNCERTAIN");
+  let refunded;
+  try{refunded=nativeFunds.verifyRefund(c)}
+  catch{return deny("RESCUE_REFUND_LEDGER_UNAVAILABLE")}
+  if(refunded?.status==="REFUNDED"&&refunded.nativeDurable===true&&
+   refunded.contractID===c.contractID&&
+   refunded.corporationID===c.corporationID&&
+   refunded.amountISK===c.amountISK)
+   return {status:"RESCUE_ALREADY_REFUNDED",
+    contractID:c.contractID,amountISK:c.amountISK};
+  if(!["NOT_FOUND","NOT_REFUNDED"].includes(refunded?.status))
+   return deny("RESCUE_REFUND_LEDGER_UNCERTAIN");
   let r;try{r=nativeFunds.refundRescueAtomic(c)}
   catch{return deny("RESCUE_REFUND_UNCERTAIN_OR_NOT_PROVEN")}
   return r?.status==="REFUNDED"?
