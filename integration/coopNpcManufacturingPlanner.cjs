@@ -48,6 +48,13 @@ function createPlanner(deps={}){
   // Treating status 4 (or cancelled jobs) as WIP causes permanent ghost stock:
   // the NPC never restarts manufacturing after the finished batch is sold.
   // Only active manufacturing jobs at this EXACT station reserve output.
+  // Stock EveJS status 100 is COMPLETED but not necessarily DELIVERED.
+  // Treat its undelivered output as an operator reconciliation boundary, not
+  // either confirmed hangar stock or safely discarded WIP.
+  if(installed.some(j=>Number(j?.ownerID)===owner&&
+     Number(j.stationID??j.facilityID)===station&&Number(j.activityID)===1&&
+     Number(j.status)===100))
+   return{status:'NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED',jobs:[]};
   // Active native jobs missing station/activity identity are NOT evidence of
   // zero pending stock. Refuse a new paid install until the reader is repaired.
   if(installed.some(j=>Number(j?.ownerID)===owner&&
