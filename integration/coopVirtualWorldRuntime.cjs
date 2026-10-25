@@ -486,7 +486,7 @@ function observeNativeAmmoConsumption(){
 // Stage J: one opt-in native competing salvage step on the EXISTING 30s
 // A-Life tick. Uses existing named NPC hulls, actual native movements and
 // one atomic original cargo debit; never spawns a rival or mints a stack.
-let salvageRivalDirector=null;
+let salvageRivalDirector=null,salvageRivalStationDelivery=null;
 function advanceNativeSalvageRivals(){
  if(process.env.EVEJS_COOP_ALIFE_SALVAGE_RIVALS!=="1"||
   !alifeOrderArbitrationEnabled(process.env)||
@@ -542,6 +542,26 @@ function advanceNativeSalvageRivals(){
     ()=>npc.orbit(id,wreckID,meters),runtime.ensureScene(
      store.getNativeEntity(id)?.systemID,{refreshStargates:false})?.systemID)
   });
+ if(!salvageRivalStationDelivery)
+  salvageRivalStationDelivery=require("./coopSalvageNpcStationDelivery")
+   .createNpcSalvageDelivery({
+    atomic,readNativeCargo:store.listNativeCargoForEntity,
+    readRivalJournal:()=>{
+     const r=gameStore.read("corporationRuntime","/coopSalvageRivalMoves");
+     if(r?.errorMsg==="ENTRY_NOT_FOUND")
+      return {version:1,moves:{}};
+     if(!r?.success)throw Error("SALVAGE_RIVAL_JOURNAL_UNAVAILABLE");
+     return r.data;
+    },
+    readNativeEntity:store.getNativeEntity,
+    getController:id=>controllers.getControllerByEntityID(id),
+    getStation:id=>require("./worldData").getStationByID(id),
+    buildInventoryItem:items.buildInventoryItem,
+    warp:(id,stationID)=>npcNativeOrder("CIVILIAN",id,"rival-station-warp",
+     ()=>npc.warpToEntity(id,stationID)),
+    orbit:(id,stationID,meters)=>npcNativeOrder("CIVILIAN",id,"rival-station-orbit",
+     ()=>npc.orbit(id,stationID,meters))
+   });
  const roles=world?.snapshot()?.pilots||[];
  const links=[...bridge.snapshot(),...Object.values(
   identityRegistry.snapshot()?.links||{})];
@@ -556,6 +576,18 @@ function advanceNativeSalvageRivals(){
   if(wreckRecoveryDirector)for(const id of wreckRecoveryDirector.activeIDs(systemID))
    blockedIDs.add(id);
   addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
+  const delivery=salvageRivalStationDelivery.tick({scene,
+   assignments:links,blockedIDs});
+  if(delivery.orders.length||delivery.deliveries.length)
+   require("./coopRuntimeProbe").observe("alife-salvage-rival-station",
+    null,{spaceState:{systemID}},{
+     status:delivery.status,orders:delivery.orders,
+     nativeStockDeliveries:delivery.deliveries,
+     nativeInventoryAtomic:true,iskGranted:false
+    });
+  // A cargo-occupied NPC returning to a station must not also receive
+  // a new wreck warp order from another A-Life director in this tick.
+  if(delivery.orders.length||delivery.deliveries.length)continue;
   const result=salvageRivalDirector.tick({scene,assignments:links,roles,
    blockedIDs});
   if(result.orders.length||result.pickups.length)
