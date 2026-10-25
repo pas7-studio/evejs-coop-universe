@@ -159,3 +159,17 @@ test("atomic native weapon bank executes before turret damage and missile launch
  assert.ok(missile.includes("coopAtomicMissileResults.get("));
  assert.equal(patch(patch(source),{remove:true}),source);
 });
+
+test("no native per-module ammo writer can bypass atomic guard before any cargo mutation",()=>{
+ const patched=patch(source);
+ const block=patched.slice(patched.indexOf("function consumeTurretAmmoCharge("),
+  patched.indexOf("\nfunction executeTurretCycle("));
+ const guard=block.indexOf('coopNpcAmmoBankAtomic").guardDirectDebit(');
+ const quantity=block.indexOf("const nextQuantity = Math.max(");
+ const proof=block.indexOf('coopNpcFireDebitProof").verify(');
+ assert.ok(guard>0 && guard<quantity && guard<proof,
+  "guard must execute before charge debit and journal begin");
+ assert.ok(block.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(block.includes("if (!guard.allowed) return"));
+ assert.equal(patch(patched,{remove:true}),source);
+});
