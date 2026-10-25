@@ -12,8 +12,7 @@ names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitne
 
 const nativeEconomyModules=[
  "coopAlifeNativeBuyerDispatch","coopAlifeNativeBuyerRuntime",
- "coopAlifeNativeEconomyAct","coopAlifeStationAuthority",
- "coopAlifeStationAuthorityRuntime","coopNpcBuyerNativeBindings",
+ "coopAlifeNativeEconomyAct","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopNpcBuyerNativeBindings",
  "coopNpcBuyerCoordinator","coopNpcCorporateBuyerAtomic",
  "coopNpcMarketPolicy","coopNpcDemandAuthority",
  "coopNpcNativeEconomyDirector","coopNpcPartialFillAtomic"
