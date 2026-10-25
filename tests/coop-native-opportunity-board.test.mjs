@@ -82,6 +82,18 @@ test("native convoy is listed only after genuine in-scene route was started",()=
  const row=f.board.list({all:true}).events[0];
  assert.equal(row.type,"CONVOY");assert.equal(row.stationID,9000001);
 }));
+test("verified native terminal delivery resolves the discoverable convoy",()=>withFixture({},f=>{
+ assert.equal(f.board.nativeConvoy({scene:f.scene,fleet:f.fleet,route:f.route}).status,"EVENT_PUBLISHED");
+ const trip=f.fleet.coopStationArrival;
+ assert.equal(f.board.nativeConvoyOutcome({scene:f.scene,trip,terminal:{status:"DELIVERED",terminal:true}}).status,"NATIVE_CONVOY_EVENT_RESOLVED");
+ assert.equal(f.board.list({all:true}).events.length,0);
+ assert.equal(f.board.nativeConvoyOutcome({scene:f.scene,trip,terminal:{status:"DELIVERED",terminal:true}}).status,"ALREADY_RESOLVED");
+}));
+test("an unverified terminal status cannot close an active native convoy",()=>withFixture({},f=>{
+ f.board.nativeConvoy({scene:f.scene,fleet:f.fleet,route:f.route});
+ assert.equal(f.board.nativeConvoyOutcome({scene:f.scene,trip:f.fleet.coopStationArrival,terminal:{status:"DELIVERED",terminal:false}}).status,"NATIVE_DELIVERY_NOT_VERIFIED");
+ assert.equal(f.board.list({all:true}).events.length,1);
+}));
 test("a fabricated pending convoy cannot publish",()=>withFixture({},f=>{
  f.fleet.coopStationArrival=null;
  assert.equal(f.board.nativeConvoy({scene:f.scene,fleet:f.fleet,route:f.route}).status,"NO_VERIFIED_NATIVE_CONVOY");
