@@ -14,6 +14,8 @@ No new scheduler, native order, NPC, trade or asset was introduced.
 
 An alife-economy-intent is NOT an authoritative transaction or reward. Existing runtime market and rearm directors already emit factual living-native-market-trade and living-npc-earned-rearm records. The read-only scripts/alife-audit.cjs --reconcile option correlates a previously planned intent with a later reported native outcome.
 
+The observer's event.time can be epoch milliseconds (the extra.at field overrides the probe's ISO timestamp); native order/trade telemetry may still carry an ISO timestamp. The reconciler validates both formats and rejects seconds/invalid timestamps.
+
 Strict matching requires:
 - Exact named pilotID, positive physical entityID, solar system, and (for buying) native station.
 - Event after intent inside a bounded time window (default 10 minutes).
@@ -33,7 +35,7 @@ Never mints items, changes ISK, invokes market RPC, publishes native orders or r
 ## Tests and manual scenarios
 
 - Focused source/arbiter cases in tests/coop-alife-order-authority.test.mjs.
-- 13 new native proof and replay scenarios in tests/coop-alife-native-intent-reconciliation.test.mjs.
+- 15 new native proof and replay scenarios in tests/coop-alife-native-intent-reconciliation.test.mjs.
 - Existing 22 local economic scenarios remain NOT_RUN in tests/scenarios/alife-native-economy-e2e.json.
 - New 8 local integration scenarios remain NOT_RUN in tests/scenarios/alife-native-authority-integration.json, covering two-client events, competing native orders, ammo rearm, one-time purchase, mining-to-market, restart and crash faults.
 
@@ -45,7 +47,7 @@ Or:
 
     node --test tests/coop-alife-order-authority.test.mjs tests/coop-alife-native-intent-reconciliation.test.mjs tests/coop-alife-integration-acceptance.test.mjs
 
-**Evidence actually run:** existing runtime source parses with seven legacy-only guards removed; 18 focused order-authority and reconciliation cases passed in isolated V8. Full repository Node test runner, live Docker/real native GameStore and two-client gameplay have NOT been run here.
+**Evidence actually run:** existing runtime source parses with seven legacy-only guards removed; 20 focused order-authority and reconciliation cases passed in isolated V8. Full repository Node test runner, live Docker/real native GameStore and two-client gameplay have NOT been run here.
 
 ## Remaining ACT/SETTLE integration
 
