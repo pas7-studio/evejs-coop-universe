@@ -101,6 +101,7 @@ $files = @(
   "tests/coop-npc-seller-tax-authority.test.mjs",
   "tests/coop-npc-buyer-recovery-audit.test.mjs",
   "tests/coop-npc-buyer-controlled-recovery.test.mjs",
+  "tests/coop-npc-buyer-admin-control.test.mjs",
   "tests/coop-npc-market-completion-notify.test.mjs",
   "tests/coop-alife-native-buyer-wiring.test.mjs",
   "tests/coop-alife-native-overlay-compat.test.mjs",

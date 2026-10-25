@@ -120,3 +120,37 @@ test("invalid journal, missing authorities and ambiguous phase fail closed",asyn
  f.journal.entries[BUYER+":"+ORDER].phase="FAKE";
  assert.equal((await f.audit()).entries[0].reason,"JOURNAL_IDENTITY_CONFLICT");
 });
+
+test("negative-net settlement receipt cannot authorize Rust finalization or journal ACK",async()=>{
+ const bad={...receipt(),taxCents:2501,netCents:-1};
+ for(const state of ["settling","filled"]){
+  const r=await one({state,receipts:[bad]});
+  assert.equal(r.status,"HOLD_MANUAL");
+  assert.equal(r.reason,"GAMESTORE_RECEIPT_IDENTITY_OR_TAX_CONFLICT");
+ }
+});
+test("duplicate durable claim key quarantines BOTH entries before querying any database",async()=>{
+ const f=fixture({rustClaim:null});
+ f.journal.entries[BUYER+":"+(ORDER+1)]={...entry(),orderID:ORDER+1};
+ const r=await f.audit();
+ assert.equal(r.status,"HOLD_MANUAL");
+ assert.equal(r.entries.length,2);
+ assert.deepEqual(r.entries.map(x=>x.reason),
+  ["JOURNAL_IDENTITY_CONFLICT","JOURNAL_IDENTITY_CONFLICT"]);
+ assert.equal(f.reads,0);
+ assert.equal(f.receiptsRead,0);
+});
+test("recovery journal exceeding native purchase limits is not actionable",async()=>{
+ for(const change of [
+  {quantity:50001},
+  {unitPriceCents:100000001},
+  {quantity:50000,unitPriceCents:3000000}
+ ]){
+  const f=fixture({rustClaim:null});
+  Object.assign(f.journal.entries[BUYER+":"+ORDER],change);
+  const r=await f.audit();
+  assert.equal(r.status,"HOLD_MANUAL");
+  assert.equal(r.entries[0].reason,"JOURNAL_IDENTITY_CONFLICT");
+  assert.equal(f.reads,0);
+ }
+});
