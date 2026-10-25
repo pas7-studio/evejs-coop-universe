@@ -6,6 +6,15 @@ function validID(x){return typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x)
 function positive(x){const v=Number(x);return Number.isSafeInteger(v)&&v>0?v:null;}
 function createRegistry({file,exists,clock=()=>Date.now()}){
  if(!file||typeof exists!=="function")throw Error("file and exists required");
+ // When the experimental native military transfer is enabled an orphan
+ // identity-write temp file is a crash signal, not permission to respawn.
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"){
+  const dir=path.dirname(file),base=path.basename(file)+".tmp-";
+  try{
+   if(fs.readdirSync(dir).some(name=>name.startsWith(base)))
+    throw Error("WAR_IDENTITY_UNRESOLVED_TEMP_WRITE");
+  }catch(e){if(e.code!=="ENOENT")throw e;}
+ }
  let state={version:1,links:{}};
  try{const raw=JSON.parse(fs.readFileSync(file,"utf8"));if(raw?.version!==1||!raw.links||typeof raw.links!=="object")throw Error("invalid registry");state=raw;}
  catch(err){if(err.code!=="ENOENT")throw err;}
