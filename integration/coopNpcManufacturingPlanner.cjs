@@ -35,19 +35,19 @@ function createPlanner(deps={}){
   const rawAvailable=findMap(owned.filter(i=>Number(i.categoryID)!==9));
   const remaining=new Map(rawAvailable);
   for(const [key,q] of Object.entries(reservedMaterials)){const type=pos(key),qty=count(q);if(!type||qty===null||qty>(remaining.get(type)||0))return{status:'RESERVATION_UNVERIFIED',jobs:[]};remaining.set(type,(remaining.get(type)||0)-qty);}
-  // Native COOP industry: 1=INSTALLED, 3=READY, 4=DELIVERED.
+  // Industry: 1=INSTALLED, 2=PAUSED, 3=READY; COOP delivery=4.
   // Treating status 4 (or cancelled jobs) as WIP causes permanent ghost stock:
   // the NPC never restarts manufacturing after the finished batch is sold.
   // Only active manufacturing jobs at this EXACT station reserve output.
   // Active native jobs missing station/activity identity are NOT evidence of
   // zero pending stock. Refuse a new paid install until the reader is repaired.
   if(installed.some(j=>Number(j?.ownerID)===owner&&
-     [1,3].includes(Number(j.status))&&
+     [1,2,3].includes(Number(j.status))&&
      (!pos(j.stationID??j.facilityID)||!pos(j.activityID))))
    return{status:'NATIVE_ACTIVE_JOB_SCOPE_UNVERIFIED',jobs:[]};
   const existingJobs=installed.filter(j=>Number(j.ownerID)===owner&&
     Number(j.stationID??j.facilityID)===station&&Number(j.activityID)===1&&
-    [1,3].includes(Number(j.status)));
+    [1,2,3].includes(Number(j.status)));
   const candidateProducts=[...new Set(validArray(productTypeIDs).map(pos).filter(Boolean))].sort(sort);
   const candidates=[],blocked=[];
   for(const typeID of candidateProducts){
