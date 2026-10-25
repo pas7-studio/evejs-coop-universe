@@ -11,8 +11,8 @@ const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(
 const closed=x=>x==="SOLD";
 function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
  if(typeof file!=="string"||!path.isAbsolute(file)||!planner||typeof planner.plan!=="function"||
-  !native||["quote","installOnce","markReadyOnce","deliverOnce","getJob","getItem"].some(k=>typeof native[k]!=="function")||
-  !market||["listOnce","getOrder","getSaleEvidence"].some(k=>typeof market[k]!=="function")||
+  !native||["quote","installOnce","markReadyOnce","deliverOnce","getJob","getItem","getIndustryDebit"].some(k=>typeof native[k]!=="function")||
+  !market||["listOnce","getOrder","getSaleEvidence","getWalletEntry"].some(k=>typeof market[k]!=="function")||
   !observe||["getOwner","getStation","snapshot"].some(k=>typeof observe[k]!=="function")||
   typeof clock!=="function"||!Number.isSafeInteger(maxActive)||maxActive<1||maxActive>2||
   !Number.isSafeInteger(maxStock)||maxStock<1||maxStock>1000000||
@@ -44,11 +44,20 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   for(const v of [...s.items,...s.orders,...s.jobs])if(!v||!safeInt(v.typeID)||!Number.isSafeInteger(v.quantity)||v.quantity<0)
     throw Error("NATIVE_ECONOMY_NEGATIVE_QUANTITY");
   for(const v of s.demandReceipts)if(!v||!safeInt(v.typeID)||!Number.isSafeInteger(v.quantity)||v.quantity<1||
-    !v.authoritativeNative||!v.receiptID)throw Error("NATIVE_ECONOMY_DEMAND_NOT_ATTESTED");
+    !v.authoritativeNative||!v.receiptID||!Number.isSafeInteger(v.at)||
+    !["NATIVE_MARKET_FILL","NATIVE_WEAPON_CONSUMPTION","NATIVE_NPC_PURCHASE"].includes(v.source)||
+    v.ownerID!==ownerID||v.stationID!==stationID)throw Error("NATIVE_ECONOMY_DEMAND_NOT_ATTESTED");
+  if(s.demandReceipts.length>2000||new Set(s.demandReceipts.map(x=>x.receiptID)).size!==s.demandReceipts.length)
+    throw Error("NATIVE_ECONOMY_DEMAND_RECEIPT_REPLAY");
   return s;
  }
- function demand(s,typeID){const target=s.targets[String(typeID)];if(!Number.isSafeInteger(target)||target<0||target>maxStock)
+ function demand(s,typeID){const base=s.targets[String(typeID)];if(!Number.isSafeInteger(base)||base<0||base>maxStock)
    throw Error("NATIVE_ECONOMY_TARGET_INVALID");
+  const consumed=s.demandReceipts.filter(x=>x.typeID===typeID&&clock()-x.at>=0&&clock()-x.at<=86400000)
+   .reduce((sum,x)=>sum+x.quantity,0);
+  if(!Number.isSafeInteger(consumed))throw Error("NATIVE_ECONOMY_CONSUMPTION_OVERFLOW");
+  // Consumption raises replenishment only within a policy cap; never creates items or ISK.
+  const target=Math.min(maxStock,base+Math.min(base*2,consumed));
   // Only count actual corporate station items, owned escrow and unfinished jobs.
   const sum=(rows,field)=>rows.filter(x=>x.typeID===typeID&&x.ownerID===s.ownerID&&x.stationID===s.stationID)
     .reduce((a,x)=>a+x[field],0);
@@ -77,6 +86,9 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
       j?.jobID!==r.jobID||j?.ownerID!==ownerID||j?.coopOperationID!==id||
       j?.productTypeID!==e.typeID||j?.blueprintID!==e.plan.blueprintItemID)
       return halt("INSTALL_OUTCOME_UNKNOWN",id);
+   const debit=native.getIndustryDebit(j.jobID);
+   if(!debit||debit.verifiedNative!==true||debit.ownerID!==ownerID||debit.jobID!==j.jobID||
+      debit.amountCents!==cents(q.totalCost))return halt("NATIVE_INDUSTRY_ISK_DEBIT_UNVERIFIED",id);
    e.phase="INSTALLED";e.jobID=j.jobID;e.installCostCents=cents(q.totalCost);save(state);
    return {status:"INSTALLED",operationID:id,jobID:j.jobID};
   }
@@ -126,7 +138,12 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    const filled=sales.reduce((sum,x)=>{
     if(!x||x.orderID!==e.orderID||x.ownerID!==ownerID||x.typeID!==e.typeID||
        !safeInt(x.quantity)||!safeInt(x.transactionID)||cents(x.price)===null||x.nativeWalletSettled!==true)
-       throw Error("NATIVE_SALE_LEDGER_INVALID");return sum+x.quantity;
+       throw Error("NATIVE_SALE_LEDGER_INVALID");
+    const wallet=market.getWalletEntry(x.transactionID),expected=cents(x.price)*x.quantity;
+    if(!wallet||wallet.verifiedNative!==true||wallet.transactionID!==x.transactionID||
+       wallet.ownerID!==ownerID||wallet.orderID!==e.orderID||wallet.amountCents!==expected)
+       throw Error("NATIVE_SALE_WALLET_NOT_SETTLED");
+    return sum+x.quantity;
    },0);
    if(new Set(sales.map(x=>x.transactionID)).size!==sales.length||filled+order.remainingQuantity!==e.quantity)
     return halt("NATIVE_MARKET_QUANTITY_NOT_CONSERVED",id);
