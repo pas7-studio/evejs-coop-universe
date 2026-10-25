@@ -141,7 +141,6 @@ $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
 $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
   if ($EnableConvoyOperations) {
     $yamlLines += "      EVEJS_COOP_CONVOY_OPERATIONS: '1'"
-    $yamlLines += "      EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'"
   }
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
 }
