@@ -42,8 +42,8 @@ function patch(src,{remove=false}={}){
   expiry="async function processPendingExpiryEvents(";
  const sellProof=lineIn(bs,ss,"coopPlayerSellProof =");
  const buyProof=lineIn(ss,be,"const coopPlayerBuyProof =");
- const sellAck=lineIn(bs,ss,"if (coopPlayerSellProof) ");
- const buyAck=lineIn(ss,be,"if (coopPlayerBuyProof) ");
+ const sellAck=lineIn(bs,ss,"if (coopPlayerSellProof) require(");
+ const buyAck=lineIn(ss,be,"if (coopPlayerBuyProof) require(");
  edit(bs,ss,sellProof,
   '        const coopPlayerSellTicket = coopPlayerSellProof && '+gate+
   ' ? '+svc+'.begin(coopPlayerSellProof,{chargeBuyerWallet}) : null;', {after:true});
