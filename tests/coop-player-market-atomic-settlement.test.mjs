@@ -212,3 +212,117 @@ test("partial SELL rejects missing native allocator, occupied ID, foreign stack 
   }
  }finally{cleanup()}
 });
+
+
+test("three physical SELL stacks: exact 8-unit partial fill across 3+4+1 and 4-unit terminal",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture(),seller=x.db.items["800"];
+  seller.quantity=3;seller.stacksize=3;
+  x.db.items["801"]={...seller,itemID:801,quantity:4,stacksize:4};
+  x.db.items["802"]={...seller,itemID:802,quantity:5,stacksize:5};
+  x.db.marketEscrow["23"].remainingQuantity=12;
+  x.db.identityState.nextItemID=1990000900;
+  const s=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const firstProof=Object.freeze({...proof(),volumeBefore:12,
+   filledQuantity:8,volumeAfter:4});
+  const first=s.settle({ticket:ticket(),proof:firstProof,tax:1,
+   sourceItemIDs:[802,800,801]});
+  assert.equal(first.partial,true);
+  assert.equal(first.quantity,8);
+  assert.equal(first.deliveries.length,3);
+  assert.deepEqual(first.deliveries,[
+   {sourceItemID:800,itemID:800,quantity:3},
+   {sourceItemID:801,itemID:801,quantity:4},
+   {sourceItemID:802,itemID:1990000900,quantity:1}
+  ]);
+  assert.equal(x.db.items["800"].ownerID,301);
+  assert.equal(x.db.items["801"].ownerID,301);
+  assert.equal(x.db.items["802"].ownerID,201);
+  assert.equal(x.db.items["802"].quantity,4);
+  assert.equal(x.db.items["1990000900"].ownerID,301);
+  assert.equal(x.db.items["1990000900"].quantity,1);
+  assert.equal(x.db.marketEscrow["23"].remainingQuantity,4);
+  assert.equal(x.db.identityState.nextItemID,1990000901);
+  assert.equal(x.db.characters["301"].balance,901.28);
+  assert.equal(x.db.characters["201"].balance,597.72);
+  assert.equal(s.requireReceipt(ticket(),firstProof).deliveries.length,3);
+  const snapshot=structuredClone(x.db);
+  assert.equal(s.settle({ticket:ticket(),proof:firstProof,tax:1,
+   sourceItemIDs:[800,801,802]}).replayed,true);
+  assert.deepEqual(x.db,snapshot);
+  const secondTicket={orderID:"23",cycle:2};
+  const secondProof=Object.freeze({...proof(),volumeBefore:4,
+   filledQuantity:4,volumeAfter:0});
+  const second=s.settle({ticket:secondTicket,proof:secondProof,tax:1,
+   sourceItemIDs:[802]});
+  assert.equal(second.deliveries.length,1);
+  assert.equal(second.deliveries[0].itemID,802);
+  assert.equal(x.db.items["802"].ownerID,301);
+  assert.equal(x.db.items["802"].quantity,4);
+  assert.equal(x.db.marketEscrow["23"],undefined);
+  assert.equal(x.db.items["800"].quantity+x.db.items["801"].quantity+
+   x.db.items["802"].quantity+x.db.items["1990000900"].quantity,12);
+  assert.equal(x.db.characters["301"].balance,851.92);
+  assert.equal(x.db.characters["201"].balance,646.08);
+  assert.equal(Object.keys(x.db.playerMarketFills).length,2);
+  assert.equal(x.commits,4); // two writes + two read-only receipt accesses
+ }finally{cleanup()}
+});
+test("partial SELL can move an entire source stack without minting a split item",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();x.db.items["800"].quantity=3;
+  x.db.items["800"].stacksize=3;
+  x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+  const s=createAtomicSell({gameStore:x.gameStore});
+  const p=Object.freeze({...proof(),volumeBefore:7,filledQuantity:3,volumeAfter:4});
+  const v=s.settle({ticket:ticket(),proof:p,tax:1,sourceItemIDs:[800,801]});
+  assert.deepEqual(v.deliveries,[{sourceItemID:800,itemID:800,quantity:3}]);
+  assert.equal(x.db.identityState.nextItemID,undefined);
+  assert.equal(x.db.items["801"].ownerID,201);
+  assert.equal(x.db.items["801"].quantity,4);
+  assert.equal(x.db.items["800"].ownerID,301);
+  assert.equal(x.db.marketEscrow["23"].remainingQuantity,4);
+ }finally{cleanup()}
+});
+test("multi-stack escrow mismatch, duplicate source, missing allocator and altered replay roll back",()=>{
+ const cleanup=flags();
+ try{
+  const malformed=[
+   {ids:[800,800,801],apply:()=>{}},
+   {ids:[800,801],apply:()=>{}},
+   {ids:[800,801,802],apply:x=>x.items["802"].ownerID=999},
+   {ids:[800,801,802],apply:x=>x.items["802"].quantity=4},
+   {ids:[800,801,802],apply:x=>x.items["802"].stacksize=7},
+   {ids:[800,801,802],apply:x=>x.items["802"].typeID=44},
+   {ids:[800,801,802],apply:x=>x.identityState.nextItemID=undefined},
+   {ids:[800,801,802],apply:x=>x.identityState.nextItemID=Number.MAX_SAFE_INTEGER},
+   {ids:[800,801,802],apply:x=>x.items["wrong"]={...x.items["800"],itemID:123}},
+  ];
+  const p=Object.freeze({...proof(),volumeBefore:12,filledQuantity:8,volumeAfter:4});
+  for(const {ids,apply} of malformed){
+   const x=fixture();x.db.items["800"].quantity=3;x.db.items["800"].stacksize=3;
+   x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+   x.db.items["802"]={...x.db.items["800"],itemID:802,quantity:5,stacksize:5};
+   x.db.marketEscrow["23"].remainingQuantity=12;
+   x.db.identityState.nextItemID=1990000900;
+   apply(x.db);
+   const before=structuredClone(x.db),s=createAtomicSell({gameStore:x.gameStore});
+   assert.throws(()=>s.settle({ticket:ticket(),proof:p,tax:1,sourceItemIDs:ids}),/P2P_ATOMIC_/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,0);
+  }
+  const x=fixture();
+  x.db.items["800"].quantity=3;x.db.items["800"].stacksize=3;
+  x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+  x.db.marketEscrow["23"].remainingQuantity=7;
+  const s=createAtomicSell({gameStore:x.gameStore});
+  const p2=Object.freeze({...proof(),filledQuantity:3,volumeAfter:4});
+  s.settle({ticket:ticket(),proof:p2,tax:1,sourceItemIDs:[800,801]});
+  const prev=structuredClone(x.db);
+  assert.throws(()=>s.settle({ticket:ticket(),proof:p2,tax:1,
+   sourceItemIDs:[800]}),/REPLAY_CONFLICT/);
+  assert.deepEqual(x.db,prev);
+ }finally{cleanup()}
+});
