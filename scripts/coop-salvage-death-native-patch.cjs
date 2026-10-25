@@ -44,8 +44,28 @@ const changes=[
   ["  for (const cargoEntry of cargoDrops) {",
    "    if(coopSalvageCargoMoved)break;"].join("\n")]
 ];
+// Stock pickup grants the destination before source removal; original
+// salvage sourceIDs must use the two-stage native ACID path.
+const vanillaPickupAnchor="  const wreckItemRecord = nativeNpcStore.getNativeWreckItem(wreckItemID);";
+const vanillaPickupGuard=[
+ vanillaPickupAnchor,
+ '  if (process.env.EVEJS_COOP_SALVAGE_ATOMIC_TRANSFER === "1" &&',
+ '      Number(wreckItemRecord?.sourceCargoID)>0) {',
+ '    return {success:false,errorMsg:"SALVAGE_USE_NATIVE_ATOMIC_PICKUP"};',
+ '  }'
+].join("\n");
 function patch(source,remove=false){
  let s=source;
+ if(remove){
+  if(s.includes(vanillaPickupGuard))s=s.replace(vanillaPickupGuard,vanillaPickupAnchor);
+  else if(!s.includes(vanillaPickupAnchor))throw Error("SALVAGE_NATIVE_PICKUP_ANCHOR_DRIFT");
+ }else{
+  if(!s.includes(vanillaPickupGuard)){
+   if(s.split(vanillaPickupAnchor).length!==2)
+    throw Error("SALVAGE_NATIVE_PICKUP_ANCHOR_DRIFT");
+   s=s.replace(vanillaPickupAnchor,vanillaPickupGuard);
+  }
+ }
  for(const [oldLine,newLine] of changes){
   if(remove){
    if(s.includes(newLine)){s=s.replace(newLine,oldLine);continue;}
