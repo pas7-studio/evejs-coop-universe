@@ -17,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,deliveryEvidence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -786,7 +786,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     haulerIDs:Object.keys(trip.haulers).map(Number)});
    if(manifestVerified?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED")
     return pause(manifestVerified?.status||"MANIFEST_FULL_CARGO_UNVERIFIED");
-   alifeDeliveryWitness=require("./coopAlifeNativeDeliveryEvidence")
+   alifeDeliveryWitness=(deliveryEvidence||require("./coopAlifeNativeDeliveryEvidence"))
     .verifyFullNativeDelivery(trip,manifestVerified);
    if(alifeDeliveryWitness?.status!=="NATIVE_FULL_MANIFEST_WITNESSED")
     return pause(alifeDeliveryWitness?.reason||"ALIFE_NATIVE_DELIVERY_PROOF_UNVERIFIED");
