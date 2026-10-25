@@ -1007,6 +1007,35 @@ function observeSession(session,ship){
         if(spoke.sent)require("./coopRuntimeProbe").observe("living-npc-chatter-delivered",null,null,
          {spaceState:{systemID},...spoke});
       }catch(error){console.warn("[CoopNpcChatter]",error.message);}}
+      // ALIFE news: the same observed events become a short in-client digest.
+      // It never invents an event and is throttled per system.
+      if(process.env.EVEJS_COOP_ALIFE_NEWS==="1"){try{
+        const probe=require("./coopRuntimeProbe");
+        const sessions=require("../services/chat/sessionRegistry").getSessions();
+        const news=runtime.__coopAlifeNews||(runtime.__coopAlifeNews=require("./coopAlifeNews").createNews());
+        if(!runtime.__coopAlifeNewsSubscribed){
+          probe.subscribe(record=>{
+            if(process.env.EVEJS_COOP_ALIFE_NEWS!=="1")return;
+            news.record(record.event,{...record,
+             systemID:Number(record.systemID||record.spaceState?.systemID||0)});
+          });
+          runtime.__coopAlifeNewsSubscribed=true;
+        }
+        const digest=news.digest(systemID);
+        if(digest){
+          let delivered=0;
+          for(const session of sessions){
+            if(!session||Number(session?._space?.systemID)!==Number(systemID))continue;
+            try{require("../services/chat/chatHub").sendSystemMessage(session,digest.text);delivered++;}
+            catch(_error){}
+          }
+          if(delivered){
+            news.markSent(systemID);
+            probe.observe("living-alife-news-delivered",null,{spaceState:{systemID}},
+             {items:digest.items,delivered,text:digest.text});
+          }
+        }
+      }catch(error){console.warn("[CoopAlifeNews]",error.message);}}
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const presented=[];
       for(const link of result){
