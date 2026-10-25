@@ -470,6 +470,179 @@
         "market orders"
       ],
       "destructive": false
+    },
+    {
+      "id": "ALIFE-023",
+      "title": "Foreign corporation at same station cannot borrow wallet or stock",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Spawn two named trader NPCs with distinct real corporation owner IDs at one station",
+        "Populate only one corporation's hangar and wallet",
+        "Run A-Life authority observation"
+      ],
+      "expected": [
+        "Only the owning corporation may receive a verified production intent",
+        "Other NPC receives NATIVE_OWNER_STATION_AUTHORITY_MISMATCH or an explicit missing native proof blocker"
+      ],
+      "requiredEvidence": [
+        "real native ship owners",
+        "corporation wallet division 1000",
+        "A-Life blocker and intent"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-024",
+      "title": "Rust order exists without physical GameStore escrow",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Insert one isolated coop-npc Rust ask without matching physical escrow receipt",
+        "Poll A-Life read-only authority"
+      ],
+      "expected": [
+        "Order is never counted as sellable native NPC stock",
+        "A-Life reports NATIVE_RUST_MARKET_ESCROW_MISMATCH or equivalent blocker"
+      ],
+      "requiredEvidence": [
+        "Rust order ID and source",
+        "GameStore marketEscrow rows",
+        "native item locations"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-025",
+      "title": "Physical escrow orphaned from Rust order book",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Prepare native GameStore escrow and original item at order-specific escrow location",
+        "Make pinned Rust order pending or invisible",
+        "Observe A-Life station inventory"
+      ],
+      "expected": [
+        "Station authority blocks instead of presenting escrow stock as market supply",
+        "No second listing or free stock minted automatically"
+      ],
+      "requiredEvidence": [
+        "escrow itemID and quantity",
+        "Rust GetOrders response",
+        "A-Life blocker"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-026",
+      "title": "Item mutation during asynchronous Rust order-book read",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Read station item mutation version and wallet",
+        "Change a physical item or corporate wallet while delayed GetOrders completes",
+        "Run next A-Life observation",
+        "Repeat with a direct native GameStore item transfer that leaves the itemStore mutation version unchanged"
+      ],
+      "expected": [
+        "Stale station snapshot is rejected",
+        "No manufacturing or market ACT command is issued",
+        "Canonical owned item rows also differ and the station authority rejects the stale snapshot"
+      ],
+      "requiredEvidence": [
+        "itemStore mutation version before and after",
+        "wallet snapshots",
+        "station authority error",
+        "canonical owned itemIDs, location, quantity and owner before and after"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-027",
+      "title": "Rust market daemon stalls beyond read timeout",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Delay GetOrders longer than configured safe timeout in disposable Rust daemon",
+        "Run existing A-Life 30 second cycle twice"
+      ],
+      "expected": [
+        "One read is rejected and future ticks remain recoverable; no second scheduler starts",
+        "No ISK, item, order or industry job is mutated"
+      ],
+      "requiredEvidence": [
+        "timeout blocker event",
+        "native wallet/item snapshots",
+        "world tick events"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-028",
+      "title": "Native BPO and SDE quote missing or inconsistent",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Remove genuine original BPO or corrupt its verified materials quote in disposable fixture",
+        "Present mineral and ISK stock to A-Life"
+      ],
+      "expected": [
+        "No manufacturing intent without a genuine owner-locked BPO and matching SDE material requirements",
+        "Authoritative quote failure is visible as a named blocker"
+      ],
+      "requiredEvidence": [
+        "blueprintState record",
+        "native BPO itemID",
+        "SDE recipe/material costs",
+        "A-Life blocker"
+      ],
+      "destructive": false
+    },
+    {
+      "id": "ALIFE-029",
+      "title": "Installed BPO at location 2003 does not conceal a READY job",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Install NPC manufacturing job through native GameStore; verify original blueprint item moved from hangar to locationID=2003",
+        "Advance isolated world clock until native job is READY with blueprint still installed",
+        "Run A-Life economic observation and native ready/delivery path"
+      ],
+      "expected": [
+        "A-Life reports COMPLETE_JOB despite no free BPO in station hangar",
+        "Exact original BPO owner/type/location and READY jobID are verified; no fabricated BPO",
+        "One physical output item and no duplicate ISK/mineral debit"
+      ],
+      "requiredEvidence": [
+        "native BPO itemID and installed locationID=2003",
+        "industryJobs READY jobID and blueprintID",
+        "native delivered output itemID and original debit journal"
+      ]
+    },
+    {
+      "id": "ALIFE-030",
+      "title": "Empty NPC wallet can list already-produced goods and earn its first sale",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Use disposable NPC corporate wallet division 1000 with verified balance exactly 0 ISK",
+        "Provide an already-produced native item stack and no free original BPO in station hangar",
+        "Run A-Life observer, native escrow listing and an authenticated player purchase",
+        "Attempt a new paid manufacture and paid material buy while balance still zero"
+      ],
+      "expected": [
+        "A-Life may emit LIST_OUTPUT and physical escrow checks still apply",
+        "After authenticated player purchase NPC corporation wallet earns the actual item price",
+        "Paid MANUFACTURE and BUY_SUPPLIES remain blocked without sufficient native ISK; missing wallet proof still blocks all intents"
+      ],
+      "requiredEvidence": [
+        "corporationRuntime wallet before/after",
+        "native output itemID and escrow orderID",
+        "Rust fillID and buyer debit receipt",
+        "A-Life intent and blocker events"
+      ]
     }
   ]
 }
