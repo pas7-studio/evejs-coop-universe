@@ -7,12 +7,22 @@ fn coop_npc_check_operation(op: &str) -> Result<()> {
     if std::env::var("EVEJS_COOP_RUST_NPC_MARKET_PENDING").ok().as_deref() != Some("1") {
         bail!("NPC market pending RPC disabled");
     }
-    let Some(token)=op.strip_prefix("npc-manufacture:") else {
-        bail!("invalid NPC manufacturing operation");
+    // Stage J uses the SAME pending-order and claim/finalize protocol.
+    // Salvage has an additional independent feature gate and a distinct
+    // source operation namespace, never a manufactured item identity.
+    let token=if let Some(value)=op.strip_prefix("npc-manufacture:"){
+        value
+    } else if let Some(value)=op.strip_prefix("npc-salvage:"){
+        if std::env::var("EVEJS_COOP_RUST_NPC_SALVAGE_MARKET").ok().as_deref()!=Some("1") {
+            bail!("NPC salvage market RPC disabled");
+        }
+        value
+    } else {
+        bail!("invalid NPC market source operation");
     };
     if token.len()!=32 || !token.bytes().all(|b|
         b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
-        bail!("invalid NPC manufacturing operation");
+        bail!("invalid NPC market source operation");
     }
     Ok(())
 }
