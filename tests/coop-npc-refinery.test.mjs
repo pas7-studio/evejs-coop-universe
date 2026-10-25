@@ -125,3 +125,40 @@ each('native item patch is reversible including CRLF and idempotent',()=>{
   assert.equal(patch(next,TARGET,true),input);
  }
 });
+
+test('live adapter does not load native stores or create refinery when flag is disabled',()=>{
+ const source=fs.readFileSync(new URL('../integration/coopNpcRefineryRuntime.cjs',import.meta.url),'utf8');
+ let loaded=0;
+ const lib={exports:{}};
+ new Function('module','exports','require','process',source)(lib,lib.exports,id=>{
+  loaded++;if(id==='node:path')return path;if(id==='./coopNpcRefinery')return {createRefinery:()=>{throw Error('MUST_NOT_INSTANTIATE')}};throw Error('Unexpected import '+id);
+ },{env:{}});
+ assert.throws(()=>lib.exports.createLiveRefinery({root:'/tmp/warehouse'}),/NPC_REFINERY_DISABLED/);
+ assert.equal(loaded,2);
+});
+
+test('live adapter uses actual NPC corporation and station service, never impersonates player',()=>{
+ const source=fs.readFileSync(new URL('../integration/coopNpcRefineryRuntime.cjs',import.meta.url),'utf8');
+ let received;
+ const nativeItems={refineNpcWarehouseOreAtomic:()=>true};
+ const deps={
+  '../services/inventory/itemStore':nativeItems,
+  '../services/reprocessing/reprocessingRuntime':{buildReprocessingQuoteForItem:()=>({})},
+  './worldData':{getStationByID:id=>({stationID:id,solarSystemID:30000144})},
+  '../services/corporation/corporationState':{
+   getCorporationRecord:id=>({corporationID:id,isNPC:true}),isNpcCorporationID:id=>id===1001},
+  '../services/_shared/stationStaticData':{
+   getStationRecord:(_session,id)=>({stationID:id,solarSystemID:30000144}),
+   stationServiceIsEnabledForStationRecord:(_station,service)=>service===8192},
+ };
+ const mod={exports:{}};
+ const load=id=>id==='node:path'?path:id==='./coopNpcRefinery'?{
+  createRefinery:v=>{received=v;return {trusted:true}}}:deps[id];
+ new Function('module','exports','require','process',source)(mod,mod.exports,load,{
+  env:{EVEJS_COOP_NPC_REFINERY:'1',EVEJS_COOP_NPC_REFINERY_DIR:'/tmp/coop-test'}});
+ assert.deepEqual(mod.exports.createLiveRefinery({root:'/tmp/coop-test'}),{trusted:true});
+ assert.equal(received.isNpcCorporation(1001),true);
+ assert.equal(received.isNpcCorporation(555),false);
+ assert.equal(received.facilityAvailable({stationID:2001,solarSystemID:30000144},1001),true);
+ assert.equal(received.getStation(2001).stationID,2001);
+});
