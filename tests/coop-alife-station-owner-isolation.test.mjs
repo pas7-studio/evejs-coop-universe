@@ -39,6 +39,34 @@ test("empty native division-1000 wallet never grants free manufacturing",()=>{
  assert.equal(r.intents.length,0);
  assert.equal(r.blockers[0].reason,"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY");
 });
+test("NPC can sell already-built goods with zero ISK to replenish its corporate wallet",()=>{
+ const r=choose(pilot(O,{economy:economy(O,{walletCents:0,nativeOutputQty:100,
+  productShortage:100})}));
+ assert.equal(r.intents.length,1);
+ assert.equal(r.intents[0].stage,"LIST_OUTPUT");
+ assert.equal(r.intents[0].nativeMutation,false);
+});
+test("already-paid READY output can be delivered even when corp wallet is empty",()=>{
+ const r=choose(pilot(O,{economy:economy(O,{walletCents:0,nativeReadyJobs:1,
+  nativeOutputQty:0})}));
+ assert.equal(r.intents.length,1);
+ assert.equal(r.intents[0].stage,"COMPLETE_JOB");
+});
+test("zero cash prohibits new paid mineral buying and factory installs, not valid unpaid work",()=>{
+ const buyer=choose(pilot(O,{economy:economy(O,{walletCents:0,materialShortage:20,
+  mineralStock:0,nativeOreToRefine:0})}));
+ assert.equal(buyer.intents.length,0);
+ assert.equal(buyer.blockers[0].reason,"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY");
+ const manufacturing=choose(pilot(O,{economy:economy(O,{walletCents:0,materialShortage:0,
+  mineralStock:20,productShortage:50})}));
+ assert.equal(manufacturing.intents.length,0);
+ assert.equal(manufacturing.blockers[0].reason,"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY");
+});
+test("missing wallet evidence still blocks listing, despite existing physical output",()=>{
+ const r=choose(pilot(O,{economy:economy(O,{walletCents:null,nativeOutputQty:10})}));
+ assert.equal(r.intents.length,0);
+ assert.equal(r.blockers[0].reason,"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY");
+});
 test("precise Rust escrow failure reaches A-Life blocker news without made-up success",()=>{
  const r=choose(pilot(O,{economy:{authoritativeNative:false,
   reason:"NATIVE_RUST_ESCROW_ORDER_NOT_VISIBLE"}}));
