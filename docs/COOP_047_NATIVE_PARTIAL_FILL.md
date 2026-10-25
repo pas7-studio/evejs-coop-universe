@@ -35,7 +35,7 @@ Unknown outcomes after a Rust claim remain `SETTLING` and invisible to other buy
 
 ## Tests
 
-- `tests/coop-npc-partial-fill-atomic.test.mjs`: **16/16 PASS** isolated exact-source JS with deterministic transaction rollback, lost ACK, final residual stack, replay and item allocator faults.
+- `tests/coop-npc-partial-fill-atomic.test.mjs`: **17/17 PASS** isolated exact-source JS with deterministic transaction rollback, lost ACK, final residual stack, replay, item allocator faults and 100 sequential conserved partial/terminal fills.
 - `tests/coop-rust-npc-partial-patch.test.mjs`: **5/5 PASS** isolated reversible LF/CRLF Rust overlay checks.
 - `tests/coop-npc-partial-real-sqlite.test.mjs`: **6 test cases added, not yet executed in this environment**; use Node with `node:sqlite` on the disposable checkout to test the actual six-table SQLite transaction.
 - `tests/scenarios/coop-047-native-partial-market-e2e.json`: **7 gameplay/E2E acceptance scenarios, all NOT_RUN**; require real Rust daemon, native GameStore, authenticated buyers and before/after item/ISK ledger snapshots.
