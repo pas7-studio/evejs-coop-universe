@@ -33,6 +33,36 @@ function spawnPoolForRole(role, { enabled = false } = {}) {
   return { ...entry };
 }
 
+// Native aggression policy per role. The SDE pools we use for civilians and
+// guards inherit a profile that never auto-attacks a player, so a pirate that
+// only differs by hull colour ignores a capsuleer sitting next to it. Pirates
+// get the same explicit target classes the native gate-rats rule uses
+// (`npcDefaultConcordRules` / dynamic gate rats: autoAggro + ["player"]), plus
+// "npc" so the existing rival-combat director keeps working.
+const PIRATE_AGGRESSION = Object.freeze({
+  autoAggro: true,
+  autoAggroTargetClasses: Object.freeze(["player", "npc"]),
+  allowPodKill: false,
+});
+const CIVILIAN_CALM = Object.freeze({
+  autoAggro: false,
+  autoActivateWeapons: false,
+  targetPreference: "none",
+});
+
+function behaviorOverridesForRole(role, { enabled = false } = {}) {
+  if (!enabled) return {}; // legacy: the pool profile decides, as before
+  if (isHostileRole(role)) {
+    return {
+      behaviorOverrides: {
+        ...PIRATE_AGGRESSION,
+        autoAggroTargetClasses: [...PIRATE_AGGRESSION.autoAggroTargetClasses],
+      },
+    };
+  }
+  return { behaviorOverrides: { ...CIVILIAN_CALM } };
+}
+
 function isHostileRole(role) {
   return String(role || "") === "pirate";
 }
@@ -41,4 +71,4 @@ function isHostilePool(pool) {
   return String(pool || "") === "npc_hostiles";
 }
 
-module.exports = { ROLE_POOLS, LEGACY_POOL, ROLES, spawnPoolForRole, isHostileRole, isHostilePool };
+module.exports = { ROLE_POOLS, LEGACY_POOL, ROLES, spawnPoolForRole, behaviorOverridesForRole, isHostileRole, isHostilePool };

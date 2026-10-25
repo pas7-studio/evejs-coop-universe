@@ -8,7 +8,7 @@ import { dirname, join } from "node:path";
 const require = createRequire(import.meta.url);
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
-const { ROLE_POOLS, LEGACY_POOL, ROLES, spawnPoolForRole, isHostileRole, isHostilePool } =
+const { ROLE_POOLS, LEGACY_POOL, ROLES, spawnPoolForRole, behaviorOverridesForRole, isHostileRole, isHostilePool } =
   require("../integration/coopNpcSpawnPools.cjs");
 
 const runtime = readFileSync(join(root, "integration", "coopVirtualWorldRuntime.cjs"), "utf8");
@@ -67,6 +67,31 @@ test("the runtime wires both spawn sites through the role map, env-gated", () =>
   const hardcoded = runtime.match(/defaultPoolID:"npc_hostiles"/g) || [];
   assert.equal(hardcoded.length, 0, "a spawn site still hardcodes the hostile pool");
   // Pirates must keep native aggression; civilians must keep calm behaviour.
-  assert.match(runtime, /const hostile=pilot\.role==="pirate"/);
-  assert.match(runtime, /autoAggro:false/);
+  assert.match(runtime, /behaviorOverridesForRole\(pilot\.role,/);
+  // No inline autoAggro:false may remain next to the nautical spawn call.
+  assert.doesNotMatch(runtime, /const hostile=pilot\.role==="pirate"/);
+  // A reused durable pirate keeps its original controller, so the policy has to
+  // be re-applied at runtime as well.
+  assert.match(runtime, /getControllerByEntityID\(link\.entityID\)/);
+});
+
+test("pirates aggro players, civilians never do", () => {
+  const pirate = behaviorOverridesForRole("pirate", { enabled: true });
+  assert.equal(pirate.behaviorOverrides.autoAggro, true);
+  assert.deepEqual(pirate.behaviorOverrides.autoAggroTargetClasses, ["player", "npc"]);
+  assert.equal(pirate.behaviorOverrides.allowPodKill, false);
+  for (const role of ["miner", "hauler", "trader", "patrol"]) {
+    assert.deepEqual(behaviorOverridesForRole(role, { enabled: true }), {
+      behaviorOverrides: { autoAggro: false, autoActivateWeapons: false, targetPreference: "none" },
+    });
+  }
+  // OFF keeps the previous behaviour: the pool profile alone decides.
+  for (const role of ROLES) assert.deepEqual(behaviorOverridesForRole(role), {});
+  // A caller cannot mutate the shared policy through the returned object.
+  const first = behaviorOverridesForRole("pirate", { enabled: true });
+  first.behaviorOverrides.autoAggroTargetClasses.push("drone");
+  assert.deepEqual(behaviorOverridesForRole("pirate", { enabled: true }).behaviorOverrides.autoAggroTargetClasses, [
+    "player",
+    "npc",
+  ]);
 });

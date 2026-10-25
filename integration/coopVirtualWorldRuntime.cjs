@@ -1403,9 +1403,6 @@ function observeSession(session,ship){
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
             const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
-            const hostile=pilot.role==="pirate";
-            // Colour follows the real owner faction: civilians spawn as ORE /
-            // CONCORD hulls, only pirates from the hostile pool.
             const pool=require("./coopNpcSpawnPools").spawnPoolForRole(pilot.role,
              {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"});
             return npc.spawnBatchInSystem(system,{
@@ -1413,11 +1410,10 @@ function observeSession(session,ship){
               transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
               broadcast:true,
               ...pool,
-              // Pirates retain native EveJS aggression. Civilians and ordinary
-              // guards move and work without automatically attacking players.
-              ...(hostile?{}:{behaviorOverrides:{
-                autoAggro:false,autoActivateWeapons:false,targetPreference:"none"
-              }})
+              // Pirates actively hunt players and rival NPCs; civilians and
+              // ordinary guards move and work without attacking a capsuleer.
+              ...require("./coopNpcSpawnPools").behaviorOverridesForRole(pilot.role,
+               {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"})
             });
           }
         });
@@ -1530,6 +1526,22 @@ function observeSession(session,ship){
           presented.push({pilotID:link.pilotID,...change});
       }
       if(presented.length)require("./coopRuntimeProbe").observe("virtual-world-identity-projected",session,ship,{presented});
+      // A reused durable pirate keeps the controller it was born with, so the
+      // new aggression policy above only reaches fresh spawns. Push the same
+      // target classes onto the live controller, otherwise a pirate that was
+      // already linked still ignores a capsuleer parked next to it.
+      if(process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"){
+        const aggression=require("./coopNpcSpawnPools")
+          .behaviorOverridesForRole("pirate",{enabled:true}).behaviorOverrides;
+        for(const link of result){
+          if(!link.entityID||pilotsByID.get(link.pilotID)?.role!=="pirate")continue;
+          try{
+            const controller=require("./npc/npcRegistry").getControllerByEntityID(link.entityID);
+            if(controller)
+              controller.behaviorOverrides={...(controller.behaviorOverrides||{}),...aggression};
+          }catch(_error){/* controller index is optional during startup */}
+        }
+      }
       for(const entry of result){
         if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
         const npcID=entry.entityID;
