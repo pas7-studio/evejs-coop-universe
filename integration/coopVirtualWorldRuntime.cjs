@@ -510,6 +510,22 @@ function nativeMarketAllowlist(name){
  return [...new Set(String(process.env[name]||"").split(",").map(Number)
   .filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,20);
 }
+// Distance from a ship to the closest scene station, honouring both radii.
+// Pure helper so the market gate's skip diagnostics are testable.
+function nearestStationMeters(ship,stations){
+ let best={meters:null,stationID:null};
+ for(const station of Array.isArray(stations)?stations:[]){
+  const dx=ship?.position?.x-station?.position?.x;
+  const dy=ship?.position?.y-station?.position?.y;
+  const dz=ship?.position?.z-station?.position?.z;
+  if(![dx,dy,dz].every(Number.isFinite))continue;
+  const meters=Math.round(Math.hypot(dx,dy,dz)-
+   Math.max(0,Number(station.radius)||0)-Math.max(0,Number(ship.radius)||0));
+  if(best.meters===null||meters<best.meters)
+   best={meters,stationID:Number(station.itemID)||null};
+ }
+ return best;
+}
 async function advanceNativeMarket(){
  if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
   nativeMarketBlocked||nativeMarketTickRunning||
@@ -556,27 +572,48 @@ async function advanceNativeMarket(){
    .filter(l=>l?.pilotID&&l.entityID)
    .sort((a,b)=>String(a.pilotID).localeCompare(String(b.pilotID)));
   let completed=0;
+  // Opt-in diagnostics: without this a silent preflight skip is
+  // indistinguishable from "the feature does nothing". Counters only, one
+  // event per tick, and only when EVEJS_COOP_NPC_MARKET_TRACE=1.
+  const trace=process.env.EVEJS_COOP_NPC_MARKET_TRACE==="1"?{
+   sellTypes,buyTypes,links:links.length,roleSkip:0,blockedSkip:0,busySkip:0,
+   noStation:0,systemsNoStation:0,candidates:[],statuses:{},executed:0
+  }:null;
   for(const systemID of visitedSystems){
    if(completed>=2)break;
    const scene=runtime.ensureScene(systemID,{refreshStargates:false});
    const stations=(scene.staticEntities||[]).filter(x=>x?.kind==="station"&&Number(x.itemID)>0);
-   if(!stations.length)continue;
+   if(!stations.length){if(trace)trace.systemsNoStation++;continue;}
    for(const link of links.filter(x=>Number(x.systemID)===Number(systemID))){
     if(completed>=2)break;
     const role=roles.get(link.pilotID)||link.role;
-    if(!["trader","hauler"].includes(role)||blocked.has(Number(link.entityID)))continue;
+    if(!["trader","hauler"].includes(role)){if(trace)trace.roleSkip++;continue;}
+    if(blocked.has(Number(link.entityID))){if(trace)trace.blockedSkip++;continue;}
     const ship=scene.getEntityByID(Number(link.entityID));
     const ctrl=controllers.getControllerByEntityID(Number(link.entityID));
     if(!ship||ship.nativeNpc!==true||Number(ctrl?.currentTargetID)>0||
      ctrl?.manualOrder?.type==="attack"||
-     String(ship.mode||"").toUpperCase().includes("WARP"))continue;
+     String(ship.mode||"").toUpperCase().includes("WARP")){
+     if(trace){trace.busySkip++;
+      if(trace.busySample===undefined)trace.busySample={pilotID:link.pilotID,role,
+       ship:!!ship,nativeNpc:ship?.nativeNpc===true,
+       target:Number(ctrl?.currentTargetID)||0,mode:String(ship?.mode||"")};}
+     continue;
+    }
+    const nearest=nearestStationMeters(ship,stations);
     const station=stations.find(x=>{
      const dx=ship.position?.x-x.position?.x,dy=ship.position?.y-x.position?.y,
       dz=ship.position?.z-x.position?.z;
      return [dx,dy,dz].every(Number.isFinite)&&Math.hypot(dx,dy,dz)<=10000+
       Math.max(0,Number(x.radius)||0)+Math.max(0,Number(ship.radius)||0);
     });
-    if(!station)continue;
+    if(!station){
+     if(trace){trace.noStation++;
+      if(trace.stationSample===undefined)trace.stationSample={pilotID:link.pilotID,role,
+       nearestStationMeters:nearest.meters,nearestStationID:nearest.stationID,
+       stations:stations.length};}
+     continue;
+    }
     const nativeCargo=store.listNativeCargoForEntity(Number(link.entityID))||[];
     const ownedSellTypes=[...new Set(nativeCargo.filter(c=>Number(c.moduleID||0)===0&&
      c.singleton!==true&&Number(c.quantity)>0&&sellTypes.includes(Number(c.typeID)))
@@ -585,12 +622,18 @@ async function advanceNativeMarket(){
      ...ownedSellTypes.map(typeID=>({side:"sell",typeID})),
      ...buyTypes.map(typeID=>({side:"buy",typeID}))
     ];
+    if(trace)trace.candidates.push({pilotID:link.pilotID,role,
+     stationID:Number(station.itemID),cargo:nativeCargo.length,
+     sellTypes:ownedSellTypes,planned:tradeCandidates.length});
     for(const trade of tradeCandidates){
      const result=await nativeMarketTrader.execute({
       scene,pilotID:link.pilotID,entityID:Number(link.entityID),
       stationID:Number(station.itemID),
       ...trade,buyTypes,sellTypes
      });
+     if(trace){trace.executed++;
+      const key=trade.side+":"+trade.typeID+":"+result.status;
+      trace.statuses[key]=(trace.statuses[key]||0)+1;}
      if(result.status==="TRADE_SETTLED"){
       completed++;
       require("./coopRuntimeProbe").observe("living-native-market-trade",null,
@@ -602,11 +645,13 @@ async function advanceNativeMarket(){
       nativeMarketBlocked=true;
       require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,
        {spaceState:{systemID}},{pilotID:link.pilotID,status:result.status});
+      if(trace)trace.halted=result.status;
       return;
      }
     }
    }
   }
+  if(trace)require("./coopRuntimeProbe").observe("living-native-market-trace",null,null,trace);
  }finally{nativeMarketTickRunning=false;}
 }
 function advanceNativeCivilianOrders(){
@@ -1231,4 +1276,4 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady};
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,nearestStationMeters};
