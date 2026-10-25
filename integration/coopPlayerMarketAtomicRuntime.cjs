@@ -4,6 +4,7 @@
 // witnesses: the native SQLite receipt and the fsynced settlement journal.
 const ext=__filename.endsWith(".cjs")?".cjs":"";
 const store=require("./coopPlayerMarketAtomicSettlement"+ext);
+const buyStore=require("./coopPlayerMarketBuySettlement"+ext);
 const rust=require("./coopPlayerMarketRustClaim"+ext);
 const fence=require("./coopPlayerMarketSettlementFence"+ext);
 function enabled(){
@@ -13,7 +14,7 @@ function enabled(){
   process.env.EVEJS_COOP_PLAYER_MARKET_SETTLEMENT_FENCE==="1"&&
   process.env.EVEJS_COOP_RUST_P2P_CLAIM==="1";
 }
-function createAtomicRuntime({atomicStore=store,rustAPI=rust,journal=fence,enabledFn=enabled}={}){
+function createAtomicRuntime({atomicStore=store,atomicBuyStore=buyStore,rustAPI=rust,journal=fence,enabledFn=enabled}={}){
 async function settleSell({ticket,proof,tax,sourceItemID,sourceItemIDs,client}={}){
  if(!enabledFn())throw Error("P2P_ATOMIC_SETTLEMENT_FLAGS_DISABLED");
  if(typeof client?.call!=="function"||!ticket||!proof||
@@ -42,7 +43,34 @@ async function settleSell({ticket,proof,tax,sourceItemID,sourceItemIDs,client}={
  const release=await rustAPI.release({ticket,proof,client,receipt:durable});
  return {receipt:durable,release,ack};
 }
-return Object.freeze({settleSell});
+async function settleBuy({ticket,proof,tax,sourceItemID,client}={}){
+ if(!enabledFn()||process.env.EVEJS_COOP_PLAYER_MARKET_BUY_RESERVE!=="1")
+  throw Error("P2P_BUY_PAY_STRICT_FLAGS_REQUIRED");
+ if(typeof client?.call!=="function"||!ticket||!Object.isFrozen(proof)||
+    proof.bid!==true)
+  throw Error("P2P_BUY_PAY_NATIVE_RUST_AUTHORITIES_REQUIRED");
+ const expected=rustAPI.details(ticket,proof);
+ const claim=await rustAPI.readClaim({ticket,client});
+ if(!claim||claim.phase!=="claimed"||
+    claim.order_id!==expected.order_id||claim.cycle!==expected.cycle||
+    claim.buyer_id!==expected.buyer_id||
+    claim.seller_id!==expected.seller_id||
+    claim.volume_before!==expected.volume_before||
+    claim.filled_quantity!==expected.filled_quantity||
+    claim.volume_after!==expected.volume_before-expected.filled_quantity)
+  throw Error("P2P_BUY_PAY_ORIGINAL_RUST_CLAIM_NOT_VERIFIED");
+ const receipt=atomicBuyStore.settle({ticket,proof,sourceItemID,tax});
+ if(!receipt||receipt.phase!=="GAMESTORE_COMMITTED"||receipt.replayed)
+  throw Error("P2P_BUY_PAY_COMMITTED_REPLAY_REQUIRES_RECONCILIATION");
+ const ack=await rustAPI.finalize({ticket,proof,client});
+ journal.confirmRust(ticket,ack);
+ journal.complete(ticket,{salesTax:tax});
+ journal.requireSettled(ticket);
+ const durable=atomicBuyStore.requireReceipt(ticket,proof);
+ const release=await rustAPI.release({ticket,proof,client,receipt:durable});
+ return {receipt:durable,ack,release};
 }
-const {settleSell}=createAtomicRuntime();
-module.exports={enabled,settleSell,createAtomicRuntime};
+return Object.freeze({settleSell,settleBuy});
+}
+const {settleSell,settleBuy}=createAtomicRuntime();
+module.exports={enabled,settleSell,settleBuy,createAtomicRuntime};
