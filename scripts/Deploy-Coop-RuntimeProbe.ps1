@@ -134,6 +134,9 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_NATIVE_MINING: '1'"
   # A failed first native mining spawn must be retryable; never duplicate an already seeded fleet.
   $yamlLines += "      EVEJS_COOP_MINING_STARTUP_RETRY: '1'"
+  # Destroyed complete native convoys may reappear only after 30min, max 4 attempts/day.
+  # Ordinary NPC combat still uses physical EveJS hulls and real mining startup.
+  $yamlLines += "      EVEJS_COOP_CONVOY_RENEWAL: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
   $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
   $yamlLines += "      EVEJS_COOP_HAULER_HOLD_MS: '120000'"
