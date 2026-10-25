@@ -33,6 +33,7 @@ function receiptDeliveries(record){
 }
 function checkDeliveries(record,expectedSources,expectedQuantity){
  const deliveries=receiptDeliveries(record);
+ const hasOriginalDeliveryWitness=Array.isArray(record.deliveries);
  if(!Array.isArray(expectedSources)||expectedSources.length===0||
     expectedSources.length>MAX_STACKS||
     expectedSources.some((x,i)=>!pos(x)||
@@ -43,7 +44,14 @@ function checkDeliveries(record,expectedSources,expectedQuantity){
     expectedSources[0]!==record.sourceItemID)return false;
  const sources=new Set(expectedSources),seen=new Set(),dest=new Set();
  let sum=0;
- for(const d of deliveries){
+ for(const [index,d] of deliveries.entries()){
+  // The original multi-stack writer consumes escrow in sorted source-ID
+  // order. A durable receipt cannot substitute a different physical stack
+  // or omit its before/after custody witnesses during release/replay.
+  // Keep the old pre-multistack single-item receipt fallback compatible.
+  if(hasOriginalDeliveryWitness&&
+     (d?.sourceItemID!==expectedSources[index]||
+      !pos(d.sourceBefore)||!safe(d.sourceAfter)))return false;
   if(!pos(d?.sourceItemID)||!sources.has(d.sourceItemID)||
      seen.has(d.sourceItemID)||!pos(d.itemID)||dest.has(d.itemID)||
      !pos(d.quantity)||!Number.isSafeInteger(sum+d.quantity))return false;

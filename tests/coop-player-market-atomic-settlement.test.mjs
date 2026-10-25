@@ -501,3 +501,70 @@ test("receipt-only P2P replay also rejects noncanonical balance witness and zero
   }).replayed,true);
  }finally{cleanup()}
 });
+
+
+test("P2P multi-stack Rust release never trusts out-of-order or unwitnessed original custody",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();
+  x.db.items["800"].quantity=3;x.db.items["800"].stacksize=3;
+  x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+  const settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const payload={ticket:ticket(),proof:proof(),tax:1.23,sourceItemIDs:[800,801]};
+  const original=settle.settle(payload),key=receiptKey(ticket());
+  assert.deepEqual(original.deliveries.map(d=>d.sourceItemID),[800,801]);
+  assert.equal(settle.requireReceipt(ticket(),proof()).key,key);
+  const bad=[
+   {...original,itemID:original.deliveries[1].itemID,
+    deliveries:[...original.deliveries].reverse()},
+   {...original,deliveries:original.deliveries.map(
+    ({sourceItemID,itemID,quantity})=>({sourceItemID,itemID,quantity}))}
+  ];
+  for(const corrupted of bad){
+   x.db.playerMarketFills[key]=corrupted;
+   const before=structuredClone(x.db);
+   assert.throws(()=>settle.requireReceipt(ticket(),proof()),
+    /P2P_ATOMIC_DURABLE_NATIVE_RECEIPT_REQUIRED/);
+   assert.throws(()=>settle.settle(payload),
+    /P2P_ATOMIC_COMMITTED_RECEIPT_REPLAY_CONFLICT/);
+   assert.deepEqual(x.db,before);
+  }
+  x.db.playerMarketFills[key]=original;
+  assert.equal(settle.requireReceipt(ticket(),proof()).key,key);
+  assert.equal(settle.settle(payload).replayed,true);
+ }finally{cleanup()}
+});
+test("canonical ordered original two-stack partial fill with native split remains valid",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();
+  x.db.items["800"].quantity=3;x.db.items["800"].stacksize=3;
+  x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+  x.db.identityState.nextItemID=1990000900;
+  const partial=Object.freeze({...proof(),filledQuantity:4,volumeAfter:3});
+  const settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const payload={ticket:ticket(),proof:partial,tax:1,sourceItemIDs:[800,801]};
+  const receipt=settle.settle(payload);
+  assert.deepEqual(receipt.deliveries.map(d=>d.sourceItemID),[800,801]);
+  assert.deepEqual(receipt.deliveries.map(d=>d.sourceAfter),[0,3]);
+  assert.equal(receipt.deliveries[1].itemID,1990000900);
+  assert.equal(settle.requireReceipt(ticket(),partial).key,receipt.key);
+  const before=structuredClone(x.db);
+  assert.equal(settle.settle(payload).replayed,true);
+  assert.deepEqual(x.db,before);
+ }finally{cleanup()}
+});
+test("legacy single-stack receipt without deliveries array retains read-only acceptance",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture(),settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const receipt=settle.settle({
+   ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+  });
+  const legacy={...receipt};
+  delete legacy.deliveries;
+  delete legacy.sourceItemIDs;
+  x.db.playerMarketFills[receipt.key]=legacy;
+  assert.equal(settle.requireReceipt(ticket(),proof()).key,receipt.key);
+ }finally{cleanup()}
+});
