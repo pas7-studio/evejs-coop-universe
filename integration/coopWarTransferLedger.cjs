@@ -175,6 +175,37 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
     destinationSystemID:entry.destinationSystemID};
   });
  }
+ function auditPersisted(){
+  if(!enabled())return {status:"DISABLED",problems:[]};
+  let state;
+  try{state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)))}
+  catch{return {status:"NEEDS_OPERATOR_REPAIR",problems:[{reason:"SQL_FLEET_NOT_READABLE"}]}}
+  const problems=[];
+  for(const flight of Object.values(state.transfers||{})){
+   const ship=state.ships[String(flight.entityID)];
+   if(!ship||!["COMPLETE","ABORTED"].includes(flight.phase)){
+    problems.push({entityID:flight.entityID,reason:"TRANSFER_IN_FLIGHT"});continue;
+   }
+   const system=flight.phase==="COMPLETE"?
+    flight.destinationSystemID:flight.sourceSystemID;
+   const hashes=digests(ship);
+   let native,controller;
+   try{
+    native=nativeStore.getNativeEntity(ship.entityID);
+    controller=nativeStore.getNativeController(ship.entityID);
+   }catch{}
+   if(typeof nativeStore.getNativeController!=="function"||
+    ship.systemID!==system||!identity(ship,system)||
+    native?.entityID!==ship.entityID||native.systemID!==system||
+    native.corporationID!==ship.corporationID||
+    controller?.entityID!==ship.entityID||controller.systemID!==system||
+    hashes.modules!==flight.modulesHash||
+    hashes.cargo!==flight.cargoHash)
+    problems.push({entityID:ship.entityID,reason:"COMPLETED_NATIVE_CUSTODY_DRIFT"});
+  }
+  return {status:problems.length?"NEEDS_OPERATOR_REPAIR":"CLEAN",
+   problems:problems.slice(0,50)};
+ }
  function pending(){
   if(!enabled())return {status:"DISABLED",pending:[]};
   const state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
@@ -191,6 +222,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   finish:request=>operation("FINISH",request),
   abort:request=>operation("ABORT",request),
   restore:request=>operation("RESTORE",request),
+  auditPersisted,
   pending
  });
 }
