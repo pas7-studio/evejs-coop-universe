@@ -123,8 +123,8 @@ function createNativeStructureControlWitness({sceneForSystem,
     try{char=getCharacterRecord(session.characterID)}
     catch{return unknown("NATIVE_CHARACTER_RECORD_UNAVAILABLE")}
     if(!char||typeof char!=="object"||
-     (Number(char.characterID||char.charID||session.characterID)!==session.characterID)||
-     (POS(Number(char.shipID))&&Number(char.shipID)!==id)){
+     (POS(Number(char.characterID||char.charID))&&
+      Number(char.characterID||char.charID)!==session.characterID)){
      defenderCount++;unaffiliatedPlayers++;continue;
     }
     const enlistment=warState.enlistments[String(session.characterID)];
