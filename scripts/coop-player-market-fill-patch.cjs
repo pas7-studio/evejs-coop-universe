@@ -29,10 +29,22 @@ function patch(source,{remove=false}={}){
  const buyerStart="async function matchSellOrdersForBuyer({",
   sellerStart="async function matchBuyOrdersForSeller({",
   buyEnd="async function executeBuyRequest({";
+ // Once a P2P item transfer starts, a later Rust/wallet error is UNKNOWN.
+ // Native stock catch would refund a buyer who may already own the goods.
+ insert(buyerStart,sellerStart,
+  "    let buyerWalletResult = null;",
+  "    let coopPlayerSellProof = null;"+nl+
+  "    let coopPlayerSellIrreversible = false;",{before:false});
  insert(buyerStart,sellerStart,
   "        purchaseCounterpartyID = sellerCharacterID;",
-  '        const coopPlayerSellProof = '+flag+' ? '+svc+'.checkSellMatch({order:playerSellOrder,bookRow:sellOrder,escrow:escrowRecord,items:listEscrowItemsForOrder(sellOrder && sellOrder.order_id,sellerCharacterID),buyerCharacterID,tradedQuantity,price:orderPrice}) : null;',
+  '        coopPlayerSellProof = '+flag+' ? '+svc+'.checkSellMatch({order:playerSellOrder,bookRow:sellOrder,escrow:escrowRecord,items:listEscrowItemsForOrder(sellOrder && sellOrder.order_id,sellerCharacterID),buyerCharacterID,tradedQuantity,price:orderPrice}) : null;',
   {before:false});
+ insert(buyerStart,sellerStart,
+  "          const moveResult = moveItemToLocation(",
+  "          if (coopPlayerSellProof) coopPlayerSellIrreversible = true;");
+ insert(buyerStart,sellerStart,
+  "      if (buyerWalletResult) {",
+  "      if (coopPlayerSellIrreversible) buyerWalletResult = null;");
  insert(buyerStart,sellerStart,
   '        const grossAmount = roundIsk(orderPrice * tradedQuantity);',
   '        if (coopPlayerSellProof) '+svc+'.assertFillAck({proof:coopPlayerSellProof,ack:fillResponse});');
