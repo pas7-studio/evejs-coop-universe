@@ -363,3 +363,118 @@ test("valid two-decimal sale price retains exact original corporate revenue",()=
  assert.equal(result.status,"SOLD");
  assert.equal(result.revenueCents,120500);
 }));
+
+
+async function runAuditedSold(fn,{proofOverride=null,authorize=null}={}){
+ const f=fixture({target:100});
+ const envKeys=["EVEJS_COOP_NATIVE_NPC_ECONOMY",
+  "EVEJS_COOP_NATIVE_NPC_SOLD_FINALIZE_PROOF"];
+ const before=envKeys.map(key=>process.env[key]);
+ envKeys.forEach(key=>{process.env[key]="1"});
+ let audits=0;
+ const saleAudit={audit:async scope=>{
+  audits++;
+  return proofOverride?proofOverride(scope):{
+   status:"ORIGINAL_FULL_SALE_ATTESTED",operationID:scope.operationID,
+   orderID:scope.orderID,ownerID:scope.ownerID,stationID:scope.stationID,
+   quantity:100,soldQuantity:100,remainingQuantity:0,
+   revenueCents:120000,fillIDs:[910000000001],
+   readOnly:true,nativeMutation:false,
+   proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"
+  };
+ }};
+ try{
+  const director=f.create({saleAudit,
+   authorizeSoldOperator:authorize||(({operatorGrant})=>operatorGrant==="authorized")});
+  const params={ownerID:OWNER,stationID:STATION,productTypeIDs:[TYPE]};
+  assert.equal(director.tick(params).status,"PREPARED");
+  assert.equal(director.tick(params).status,"INSTALLED");
+  f.setElapsed(true);
+  assert.equal(director.tick(params).status,"READY");
+  assert.equal(director.tick(params).status,"DELIVERED");
+  assert.equal(director.tick(params).status,"LISTED");
+  const original=director.inspect();
+  const operationID=Object.keys(original.entries)[0];
+  f.sell(100,12);
+  return await fn({f,director,operationID,
+   request:{operationID,ownerID:OWNER,stationID:STATION,
+    operatorGrant:"authorized"},params,
+   audits:()=>audits});
+ }finally{
+  for(const [i,key]of envKeys.entries()){
+   if(before[i]===undefined)delete process.env[key];
+   else process.env[key]=before[i];
+  }
+  f.close();
+ }
+}
+test("manual original Rust/GameStore audit makes one fsynced durable SOLD journal",()=>runAuditedSold(async x=>{
+ assert.equal(x.director.tick(x.params).reason,
+  "ORIGINAL_NATIVE_SOLD_OPERATOR_AUDIT_REQUIRED");
+ const balance=x.f.balance,head=x.director.inspect();
+ const result=await x.director.confirmSoldOnce(x.request);
+ assert.equal(result.status,"SOLD");
+ assert.equal(result.revenueCents,120000);
+ assert.equal(result.nativeMutation,false);
+ assert.equal(result.durableJournalUpdate,true);
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"SOLD");
+ assert.equal(x.director.inspect().entries[x.operationID].settlementFillIDs[0],910000000001);
+ assert.equal(x.f.balance,balance);
+ assert.equal(x.f.installs,1);
+ assert.equal(x.f.listings,1);
+ assert.equal(x.audits(),1);
+}));
+test("fsynced SOLD replay is idempotent after recreating director; no new wallet mutation",()=>runAuditedSold(async x=>{
+ const a=await x.director.confirmSoldOnce(x.request);
+ const restarted=x.f.create({saleAudit:{audit:()=>{throw Error("MUST_NOT_REAUDIT")}},
+  authorizeSoldOperator:()=>true});
+ const cash=x.f.balance;
+ const b=await restarted.confirmSoldOnce(x.request);
+ assert.equal(a.status,"SOLD");assert.equal(b.status,"ALREADY_SOLD");
+ assert.equal(b.revenueCents,a.revenueCents);
+ assert.equal(x.f.balance,cash);
+ assert.equal(x.audits(),1);
+}));
+test("operator grant is mandatory before read-only Rust/SQLite audit",()=>runAuditedSold(async x=>{
+ const result=await x.director.confirmSoldOnce({...x.request,operatorGrant:"forged"});
+ assert.equal(result.reason,"NATIVE_SOLD_OPERATOR_NOT_AUTHORIZED");
+ assert.equal(x.audits(),0);
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+}));
+test("partial native Rust sale cannot be stored as SOLD",()=>runAuditedSold(async x=>{
+ const result=await x.director.confirmSoldOnce(x.request);
+ assert.equal(result.reason,"NATIVE_SOLD_ORIGINAL_FINANCE_NOT_ATTESTED");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:scope=>({status:"ORIGINAL_PARTIAL_SALE_ATTESTED",
+ operationID:scope.operationID,ownerID:scope.ownerID,stationID:scope.stationID,
+ orderID:scope.orderID,quantity:100,soldQuantity:50,remainingQuantity:50,
+ revenueCents:60000,fillIDs:[910000000001],readOnly:true,
+ nativeMutation:false,proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"})}));
+test("forged fill ID, price or Rust provenance cannot finalize native NPC SOLD",()=>runAuditedSold(async x=>{
+ const result=await x.director.confirmSoldOnce(x.request);
+ assert.equal(result.reason,"NATIVE_SOLD_ORIGINAL_FINANCE_NOT_ATTESTED");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:scope=>({status:"ORIGINAL_FULL_SALE_ATTESTED",
+ operationID:scope.operationID,ownerID:scope.ownerID,stationID:scope.stationID,
+ orderID:scope.orderID,quantity:100,soldQuantity:100,remainingQuantity:0,
+ revenueCents:120000,fillIDs:[123,123],readOnly:true,nativeMutation:false,
+ proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"})}));
+test("read-only original audit exception leaves fsynced LISTED unchanged",()=>runAuditedSold(async x=>{
+ const r=await x.director.confirmSoldOnce(x.request);
+ assert.equal(r.reason,"NATIVE_SOLD_AUDIT_UNAVAILABLE");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:()=>{throw Error("ORIGINAL_RUST_CONNECTION_LOST")}}));
+test("manual SOLD feature remains OFF and cannot be triggered by normal tick",()=>runAuditedSold(async x=>{
+ delete process.env.EVEJS_COOP_NATIVE_NPC_SOLD_FINALIZE_PROOF;
+ const r=await x.director.confirmSoldOnce(x.request);
+ assert.equal(r.reason,"NATIVE_SOLD_OPERATOR_FINALIZATION_DISABLED");
+ assert.equal(x.director.tick(x.params).reason,
+  "ORIGINAL_NATIVE_SOLD_OPERATOR_AUDIT_REQUIRED");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+}));
+test("original director rejects half-wired sale audit/authorization at construction",()=>run(f=>{
+ assert.throws(()=>f.create({saleAudit:{audit:async()=>({status:"READY"})}}),
+  /NPC_ECONOMY_NATIVE_AUTHORITIES_REQUIRED/);
+ assert.throws(()=>f.create({authorizeSoldOperator:()=>true}),
+  /NPC_ECONOMY_NATIVE_AUTHORITIES_REQUIRED/);
+}));
