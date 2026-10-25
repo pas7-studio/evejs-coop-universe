@@ -89,6 +89,14 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   // Consent is a prerequisite, not permission to create funds or warp:
   // the independent native Stage E binding still authorizes both.
   let preparingEventID=null;
+  // Paid escort NEVER departs without discoverable source and an explicit
+  // independently priced, two-character contract acceptance. Optional native
+  // NPC routes remain unchanged with the paid escort flag OFF.
+  if(escortEnabled&&(
+   process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1"||
+   process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_PAID_ACCEPT!=="1"))
+   return pause("ESCORT_DISCOVERY_AND_PAID_CONSENT_REQUIRED");
   if(escortEnabled&&process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
    if(process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1")
     return pause("ESCORT_VOLUNTEER_GATE_DISABLED");
@@ -101,6 +109,17 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     return pause("ESCORT_"+(event?.status||"PREPARING_EVENT_FAILED"));
    preparingEventID=event.id;
    fleet.coopEscortPredepartureEventID=preparingEventID;
+   // Native corporation quote must be durably prepared while the original
+   // source cargo and source NPC still exist; never accept client pricing.
+   let quoted;try{quoted=require("./coopEscortPricedOffers")
+    .offerFromNative({eventID:preparingEventID,route:{
+     systemID,fleetID,stationID:destination.stationID,
+     corporationID:destination.corporationID,haulerID:ships[0],
+     cargoIDs:cargo.map(x=>Number(x.cargoID)).sort((a,b)=>a-b)
+    }})}
+   catch{return pause("ESCORT_NATIVE_CORPORATE_QUOTE_UNAVAILABLE")}
+   if(!["NATIVE_QUOTE_DURABLY_PREPARED","NATIVE_QUOTE_READY"].includes(quoted?.status))
+    return pause("ESCORT_"+(quoted?.status||"PAID_QUOTE_NOT_VERIFIED"));
    let duo;try{duo=require("./coopEscortVolunteers")
     .readVerifiedNativePair(preparingEventID)}
    catch{return pause("ESCORT_VOLUNTEER_RECEIPT_UNAVAILABLE")}
@@ -110,6 +129,21 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     !Array.isArray(duo.pilots)||duo.pilots.length!==2||
     duo.pilots.some(x=>!pos(x.characterID)||!pos(x.shipID)))
     return pause("ESCORT_AWAITING_TWO_NATIVE_VOLUNTEERS");
+   let paid;try{paid=require("./coopEscortPricedOffers")
+    .readNativeAccepted(preparingEventID)}
+   catch{return pause("ESCORT_PAID_ACCEPTANCE_READER_UNAVAILABLE")}
+   if(paid?.status!=="DURABLE_TWO_PILOT_PAID_ACCEPTANCE"||
+    paid.eventID!==preparingEventID||
+    paid.quote?.systemID!==systemID||
+    paid.quote?.fleetID!==fleetID||
+    paid.quote?.stationID!==destination.stationID||
+    paid.quote?.corporationID!==destination.corporationID||
+    paid.quote?.haulerID!==ships[0]||
+    paid.characters?.length!==2||
+    paid.characters[0]!==duo.pilots[0].characterID||
+    paid.characters[1]!==duo.pilots[1].characterID||
+    paid.fleetID!==duo.fleetID)
+    return pause("ESCORT_AWAITING_TWO_PAID_ACCEPTANCES");
   }
   let manifestProof=null;
   if(manifestDirector){
