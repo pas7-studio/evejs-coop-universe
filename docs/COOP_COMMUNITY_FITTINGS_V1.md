@@ -1,6 +1,6 @@
 # COOP-043 — Native Community Fittings for EveJS Co-op
 
-**Status:** DESIGN / NOT IMPLEMENTED / NO GAME DATA MUTATED.
+**Status:** offline source tooling IMPLEMENTED and 8 local isolated tests PASS; no public fitting data harvested in this session, NO LIVE GAME DATA MUTATED and NO NATIVE CLIENT ACCEPTANCE. See [implementation/rollout](COOP_COMMUNITY_FITTINGS_IMPLEMENTATION.md).
 **Priority:** P1 gameplay usability (native source verification is complete; client acceptance is not).
 **Scope:** Both co-op pilots see the same useful, attributable, compatible ship fittings in the existing native EVE fitting browser.
 
@@ -26,7 +26,7 @@ When the player opens the ship fitting browser -> Community Fittings, show curat
 
 Player should be able to `Save As` / copy into their personal list and fit the modules **only if they own them**. A saved fit is not a grant of modules. Buying missing items must use native market/wallet/inventory settlement and must fail safely when stock is absent. Do not represent clipboard import as auto-install.
 
-**Initial pack:** 24–48 reviewed fits across useful early co-op hulls (Venture, Heron, Merlin, Rifter, Punisher, Tristan, Caracal, Vexor, Osprey, Scythe, Drake, Procurer, etc., only if available in pinned SDE). Favor cheap T1/meta alternatives. Avoid overwhelming the 600-entry browser.
+**Initial staged smoke pack:** 24–48 reviewed fits across useful early co-op hulls (Venture, Heron, Merlin, Rifter, Punisher, Tristan, Caracal, Vexor, Osprey, Scythe, Drake, Procurer, etc., only if available in pinned SDE). Favor cheap T1/meta alternatives. Avoid overwhelming the 600-entry browser.
 
 ## Sources and rights
 
@@ -81,4 +81,4 @@ For every imported fitting retain `source`, `sourceURL`, `author`, `retrievedAt`
 
 A merged spec or importer alone is **NOT** feature completion. DONE means both real clients have opened usable community fits from native server state and a fitting action has been proven against real inventory without illicit item creation. Include screenshots/test receipts in the owner's private test record (not public repo) and a redacted report here.
 
-**Current milestone:** source analysis complete; implementation, seed, deployment and client validation remain TODO.
+**Current milestone:** offline import/harvest/merge/seed-plan source committed, 8/8 Node tests PASS. Native game seeding, 3–5 per supported hull collection coverage, >600 UI behavior, actual fitting Dogma and two-client gameplay acceptance remain unverified. Draft PR only until the local owner completes the staged gates.
