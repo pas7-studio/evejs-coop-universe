@@ -1,26 +1,27 @@
-﻿## Fleet survivability (2026-10-25 22:45 UTC)
+﻿## Durable mining fleet: where it stands (2026-10-25 23:05 UTC)
 
-Goal: the mining fleet must not die with a scene or a container restart, and its cargo/trip
-must resume. Five layers, all opt-in:
+**Working:** witness reconciliation. Every boot logs a full slot:
+`ALIFE08 slot 30000145-1 -> RESTORED miners=2 haulers=1 restored=2`. Abandoned
+witnesses are archived (never wiped), orphan cargo/fitting of provably absent hulls is
+archived then released, partly lost slots are repaired in place, and incomplete runtime
+records are widened instead of raising `ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT`.
 
-1. **Durable ships** - `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE=1` (ALIFE08). Entity, controller,
-   modules and cargo live in the native store; a boot materializes the SAME hulls by ID.
-2. **Abandoned witness re-seed** (new) - `EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=1`.
-   A slot witness left by a transient generation (every recorded ship provably absent: no durable
-   row, no physical ship, no cargo row, no module row) is ARCHIVED to
-   `/coopMiningFleetSlotsArchive/<key>-<ts>` and that slot is seeded again. PREPARING stays
-   quarantined, and any surviving cargo/module row keeps the slot blocked for an operator.
-3. **Stale runtime fleet adoption** (new) - a runtime fleet record whose listed ships all
-   disappeared is re-pointed at the verified survivors instead of throwing
-   `ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT` forever. A record that still owns a real ship is
-   never touched.
-4. **Trip resume** - `EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY=1` + `EVEJS_COOP_NATIVE_HAUL_MANIFEST=1`
-   makes `resumePendingStationCargo` put a restored loaded hauler back into `loaded` so the
-   station trip runs again with the SAME cargo.
-5. **Stuck warp landing** - `coopStuckWarpRecovery` lands only a warp whose own clock elapsed.
+**Still broken:** the roster does not survive the native tick. Within ~1-2 minutes the
+mining fleet state shows `miners 0 haulers 1` or `miners 1 haulers 1`, and the ships sit
+`STOP` with 0 ore. `pruneMiningFleet` drops any ship without a runtime controller; we
+re-attach controllers at startup (`ensureControllers`, logged as `restored=N`), yet the
+roster still decays. Next suspects, in order: (1) something unregisters the controller
+after startup, (2) the fleet record is rebuilt from another path, (3) the ships are
+destroyed and re-created with new IDs.
 
-Tests: `tests/coop-native-mining-fleet-durable.test.mjs` 20/20 (3 new: abandoned re-seed,
-cargo protection, stale runtime adoption), overlay test 5/5, station arrival 15/15, market 23/23.
+**Proven alternative (path B):** with `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE` OFF the
+transient fleet mines reliably (26 153 ore mined, haul loaded, station chosen, sale
+attempted at 21:57). It only loses state when the container restarts.
 
-Deployed with all five flags; watcher `%TEMP%\opencode\economy-watch.log` waits for
-`living-npc-station-sold` or the exact skip reason.
+**Open decision for the owner:** keep pushing path A (durable hulls), or switch to path B -
+keep the fleet transient and make the ECONOMY durable: journal the hauler cargo and the
+station trip, then re-attach that cargo to the freshly spawned hauler after a restart.
+Path B is shorter and does not fight native lifecycle code.
+
+Flags currently ON in compose.coop-probe.yaml: durable=1, slot reconcile=1, trip recovery=1,
+haul manifest=1. Turning durable OFF restores the previously proven mining behaviour.
