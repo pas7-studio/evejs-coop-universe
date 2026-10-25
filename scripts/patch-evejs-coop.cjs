@@ -9,6 +9,8 @@ const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","co
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody");
 // FW-001: source-only war state, no native hook or scheduler.
 names.splice(names.indexOf("coopFactionDirector")+1,0,"coopFactionWarCore","coopFactionWarStore");
+// FW-002: canonical native faction proofs + stock militia agent UI.
+names.splice(names.indexOf("coopFactionWarStore")+1,0,"coopFactionWarNativeProofs","coopFactionWarAgent");
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
@@ -397,11 +399,13 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/agent/agentMgrService.js"){
   // Remove job hooks first, then existing dialogue patch. Install in reverse.
   if(remove){
+   text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
   }else{
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:false});
   }
  }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
