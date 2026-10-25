@@ -419,6 +419,7 @@ function advanceNativeWreckRecovery(){
   if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
   if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
     runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
+  if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
   addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
   const result=wreckRecoveryDirector.tick({systemID,scene,claims,assignments,store,
    getController:id=>controllers.getControllerByEntityID(id),blockedIDs,
@@ -881,8 +882,12 @@ function advanceNativeRaids(){
  // Validate persisted goal state before allowing any new native raid command.
  const goals=npcPersonalGoals();
  for(const systemID of visitedSystems){
-  const pirates=bridge.snapshot().filter(p=>p.systemID===systemID&&roles[p.pilotID]?.role==="pirate")
-   .map(x=>x.entityID);
+  // Once a pilot has genuinely recovered cargo and begun physical delivery,
+  // it must not abandon its sale route to accept an opportunistic new raid.
+  const delivering=lootCommerce?.activeIDs(systemID)||new Set();
+  const pirates=bridge.snapshot().filter(p=>
+   p.systemID===systemID&&roles[p.pilotID]?.role==="pirate"&&
+   !delivering.has(Number(p.entityID))).map(x=>x.entityID);
   if(!pirates.length)continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const fleets=mining.getMiningFleetsForSystem(systemID);
