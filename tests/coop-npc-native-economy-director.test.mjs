@@ -455,3 +455,29 @@ test("genuine higher Rust buyer match price and original ASK minimum both remain
  assert.equal(d.tick(ctx).status,"SOLD");
  assert.equal(Object.values(d.inspect().entries)[0].revenueCents,120500);
 }));
+
+
+test("read-only NPC partial sale remains visible if factory has no new eligible job",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+ assert.equal(d.tick(ctx).status,"LISTED");
+ f.sell(50);
+ f.setNow(1100000);
+ f.planner.plan=()=>({status:"NO_ELIGIBLE_JOB",jobs:[],
+  blocked:[{typeID:TYPE,reason:"NEEDS_MINERALS"}]});
+ const r=d.tick(ctx);
+ assert.equal(r.status,"PARTIALLY_SOLD");
+ assert.equal(r.filled,50);
+ assert.equal(r.remaining,50);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+ assert.equal(f.installs,1);
+},{target:200}));
+test("native listed waiting for buyer is not overwritten by unrelated planner no-job state",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+ assert.equal(d.tick(ctx).status,"LISTED");
+ f.setNow(1100000);
+ f.planner.plan=()=>({status:"NO_ELIGIBLE_JOB",jobs:[]});
+ assert.equal(d.tick(ctx).status,"LISTED_AWAITING_BUYER");
+ assert.equal(f.installs,1);
+},{target:200}));
