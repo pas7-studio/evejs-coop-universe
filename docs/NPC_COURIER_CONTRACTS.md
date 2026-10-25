@@ -307,3 +307,26 @@ Two honest options, and the choice must be explicit:
 
 Option 2 is the one consistent with "no invented state", and it is the next
 piece of work.
+
+## Flight path (option 2, landed as a state machine)
+
+`integration/coopCourierFlight.cjs` implements the courier flight without any
+client session: `docked(origin) -> undock -> warp -> arrive -> dock -> done`.
+
+- one native warp call per leg with an ingress duration, never a per-tick path;
+- `advanceFlight` only moves on a **confirmed** native outcome; anything else
+  leaves the step where it is, so nothing is retried blindly;
+- every step has a timeout (`undock` 30 s, `warp` 180 s, `dock` 60 s), so a
+  broken leg fails visibly instead of hanging;
+- `selectActiveFlights` caps concurrent flights (default 3), which is what keeps
+  the per-tick cost flat regardless of how many contracts exist.
+
+Performance reality check on this server: it already runs ~100 NPC pilots
+across four systems (51 / 16 / 15 / 18). One courier is one more ship with a
+handful of state transitions - a warp and a dock, not a per-frame simulation.
+The cost would only matter if we spawned a ship per contract; the cap prevents
+that.
+
+Not yet wired: the native driver that performs `undock`/`warp`/`dock` on a real
+entity owned by the courier character, and the acceptance test that proves the
+package really moves.
