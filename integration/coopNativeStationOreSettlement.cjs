@@ -153,32 +153,45 @@ function createStationOreSettlement({file, depot, inventory, getStation,
       persist(file, {...state, entries: {...state.entries, [key]: entry}});
       let result, originalSource = null;
       try {
-        result = inventory.grantItemToOwnerLocation(ticket.ownerID, ticket.stationID,
-          inventory.ITEM_FLAGS.HANGAR, {typeID: ticket.typeID}, ticket.quantity,
-          strict ? {singleton: 0, customInfo: marker} : {singleton: 0});
+        result = strict
+          ? inventory.grantUniqueNpcDepotItem({
+              ownerID: ticket.ownerID, stationID: ticket.stationID,
+              typeID: ticket.typeID, quantity: ticket.quantity,
+              cargoID: ticket.cargoID
+            })
+          : inventory.grantItemToOwnerLocation(ticket.ownerID, ticket.stationID,
+              inventory.ITEM_FLAGS.HANGAR, {typeID: ticket.typeID},
+              ticket.quantity, {singleton: 0});
         if (result?.success !== true ||
-            Number(result?.data?.quantity) !== ticket.quantity ||
-            stock(ticket) !== before + ticket.quantity)
+            (strict ? (result.data?.existing !== false || !pos(result.data?.itemID))
+              : Number(result.data?.quantity) !== ticket.quantity))
+          return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
+        if (strict) {
+          // writeItems only updates a deferred GameStore cache. Do not
+          // persist a COMPLETED receipt until the already-existing native
+          // synchronous flush confirms the original items table.
+          if (flushNativeItems("items")?.success !== true)
+            return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
+        }
+        if (stock(ticket) !== before + ticket.quantity)
           return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
         if (strict) {
           // Original native ItemStore must actually honor the provenance
           // marker and create ONE separate physical source stack. An ignored
           // option or an automatic merge leaves GRANT_OUTCOME_UNKNOWN.
           // Never repeat the grant to try to guess which item was changed.
-          const after = inventory.listContainerItems(ticket.ownerID,
-            ticket.stationID, inventory.ITEM_FLAGS.HANGAR);
-          if (!Array.isArray(after)) return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
-          const found = after.filter(x => x?.customInfo === marker);
-          if (found.length !== 1 || !pos(found[0]?.itemID) ||
-              Number(found[0].ownerID) !== ticket.ownerID ||
-              Number(found[0].locationID) !== ticket.stationID ||
-              Number(found[0].flagID) !== inventory.ITEM_FLAGS.HANGAR ||
-              Number(found[0].typeID) !== ticket.typeID ||
-              Number(found[0].quantity) !== ticket.quantity ||
-              Number(found[0].stacksize) !== ticket.quantity ||
-              Number(found[0].singleton) !== 0)
+          const found = inventory.findWarehouseItem({cargoID: ticket.cargoID});
+          if (!found || Number(found.itemID) !== Number(result.data.itemID) ||
+              Number(found.ownerID) !== ticket.ownerID ||
+              Number(found.locationID) !== ticket.stationID ||
+              Number(found.flagID) !== inventory.ITEM_FLAGS.HANGAR ||
+              Number(found.typeID) !== ticket.typeID ||
+              Number(found.quantity) !== ticket.quantity ||
+              Number(found.stacksize) !== ticket.quantity ||
+              Number(found.singleton) !== 0 ||
+              found.customInfo !== marker)
             return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
-          originalSource = {oreItemID: Number(found[0].itemID),
+          originalSource = {oreItemID: Number(found.itemID),
             sourceCustomInfo: marker};
         }
         persist(file, {...state, entries: {...state.entries,
