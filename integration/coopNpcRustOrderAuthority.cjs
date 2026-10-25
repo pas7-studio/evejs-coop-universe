@@ -12,8 +12,11 @@ const decimal=v=>{
 const cents=v=>{
  if(typeof v!=="number"||!Number.isFinite(v)||v<=0||
     v>1000000)return null;
- const n=Math.round(v*100);
- return Number.isSafeInteger(n)&&n>0?n:null;
+ // Public OrderRow and private OwnerOrderRow must agree on an ORIGINAL
+ // whole-cent price. Rounding 1.254 ISK into 125 cents fabricates a valid
+ // player ASK quote and may authorize NPC corporate spend at a changed price.
+ const scaled=v*100,n=Math.round(scaled);
+ return Number.isSafeInteger(n)&&n>0&&Math.abs(scaled-n)<=1e-7?n:null;
 };
 const deny=reason=>({ok:false,reason});
 function decodeNativeGetOrder(raw){
