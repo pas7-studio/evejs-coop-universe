@@ -47,21 +47,73 @@ function sceneIdentity(rows) {
 }
 function checkWorld(raw, meta, now, minutes) {
   if (!raw || !String(raw).trim()) return pass('BLOCKED', 'MISSING_TELEMETRY: inspect effective running overlay with DiagnoseWorld');
-  const {all, recent, input} = runtimeEvents(raw,meta,now,minutes);
+  const {all, recent, input, started} = runtimeEvents(raw,meta,now,minutes);
   if (all.invalid) return pass('FAIL', 'Malformed or incomplete telemetry JSONL', {invalidLines: all.invalid});
   if (!recent.length) return pass('BLOCKED', 'No current telemetry within evidence window');
   // Boot record can be older than the activity window, but must belong to THIS
   // real container process. A previous boot or a source flag alone cannot pass.
   const latestBoot = [...all.rows].reverse().find(e => e.event === 'living-headless-boot-requested');
   if (!latestBoot) return pass('BLOCKED', 'Current-container headless boot not evidenced (possibly truncated telemetry tail)');
-  const world = summarizeWorld(input, {now, windowMinutes: minutes, requireActivity:true});
-  if (world.status !== 'READY_FOR_CLIENT_PLAYTEST') return pass('BLOCKED', world.status, {
-    worldStatus:world.status, activityStatus:world.activity?.status || null,
-    scenery:world.scenery, missing:world.blockers?.slice(0,2) || []
+  // The upstream World reporter applies its own time cutoff. Give it the
+  // current Docker process history so its headless/topology/industry anchors
+  // remain visible after long uptime. This must NOT widen the freshness gate:
+  // recent measured native activity is checked independently below.
+  const processMinutes = Math.max(minutes, Math.ceil((now - started) / 60000) + 2);
+  // Consider every system with freshly measured native activity. The most
+  // recent topology can belong to a different system, especially with two
+  // configured headless routes. Never combine evidence across systems.
+  const fresh = recent.filter(e => e.event === 'living-native-activity' &&
+    e.status === 'SAMPLED' && e._t >= latestBoot._t && positive(e.systemID));
+  const systemIds = [...new Set(fresh.map(e => Number(e.systemID)))];
+  const candidates = systemIds.map(systemID => {
+    const world = summarizeWorld(input, {now, windowMinutes:processMinutes,
+      requireActivity:true, systemID});
+    const samples = fresh.filter(e => Number(e.systemID) === systemID);
+    // Real headless scenes reconcile roughly every two minutes. Historical
+    // miner/hauler or named-NPC registration proves boot, not that these
+    // physical ships still exist today. Take the LATEST native refresh, not
+    // any older positive record (a later empty fleet must revoke readiness).
+    const freshnessCutoff = now - Math.min(minutes, 5) * 60000;
+    const refreshes = recent.filter(e => Number(e.systemID) === systemID &&
+      e._t >= latestBoot._t && e._t >= freshnessCutoff);
+    const latestIndustry = [...refreshes].reverse().find(e =>
+      e.event === 'living-native-industry' && Array.isArray(e.fleets));
+    const latestNamedShips = [...refreshes].reverse().find(e =>
+      e.event === 'virtual-world-materialization' && Array.isArray(e.livingShips));
+    const fleet = Boolean(latestIndustry?.fleets?.some(f =>
+      Array.isArray(f.minerIDs) && f.minerIDs.length > 0 &&
+      Array.isArray(f.haulerIDs) && f.haulerIDs.length > 0));
+    const named = Boolean(latestNamedShips?.livingShips?.some(s =>
+      positive(s.entityID) && /^coop-pilot-[0-9]{3,}$/.test(String(s.pilotID || ''))));
+    return {systemID,world,samples,fleet,named,
+      movement:samples.some(e => Number(e.observedMovement) > 0),
+      interaction:samples.some(e => Number(e.oreGrowth) > 0 || Number(e.engagedNativeNpcs) > 0),
+      physical:samples.some(e => Number(e.physicalNpcShips) > 0)};
   });
-  return pass('PASS_SERVER', 'Real native topology, physical miners/haulers, named NPC and movement + interaction evidenced', {
-    worldStatus:world.status, activityStatus:world.activity.status, scenery:world.scenery,
-    physicalNpcShips:world.physicalNpcShipAssignments
+  const winner = candidates.find(c => c.world.status === 'READY_FOR_CLIENT_PLAYTEST' &&
+    c.movement && c.interaction && c.physical && c.fleet && c.named);
+  if (winner) return pass('PASS_SERVER',
+    'Boot-anchored native world with fresh same-system physical NPC movement and interaction', {
+      systemID:winner.systemID, worldStatus:winner.world.status,
+      activityStatus:winner.world.activity?.status||null,scenery:winner.world.scenery,
+      physicalNpcShips:winner.world.physicalNpcShipAssignments,
+      freshSamples:winner.samples.length
+    });
+  const best = candidates.find(c => c.world.status === 'READY_FOR_CLIENT_PLAYTEST');
+  if (best) return pass('BLOCKED',
+    'Fresh native fleet, named physical NPCs, movement and interaction must all be confirmed in the same solar system', {
+      systemID:best.systemID, freshSamples:best.samples.length,
+      freshMovement:best.movement, freshInteraction:best.interaction,
+      freshPhysicalShips:best.physical, freshNativeFleet:best.fleet,
+      freshNamedShips:best.named
+    });
+  // A missing / unready system is never promoted by another system's scene.
+  const world = candidates[0]?.world || summarizeWorld(input, {
+    now,windowMinutes:processMinutes,requireActivity:true});
+  return pass('BLOCKED',world.status, {
+    worldStatus:world.status, activityStatus:world.activity?.status||null,
+    scenery:world.scenery, missing:world.blockers?.slice(0,2)||[],
+    freshSystemCandidates:systemIds.length
   });
 }
 function checkParty(raw, meta, now, minutes) {

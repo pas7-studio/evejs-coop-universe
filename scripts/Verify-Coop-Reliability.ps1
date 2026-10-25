@@ -67,7 +67,11 @@ try {
     # Include the most recent REAL boot event even if the busy world's
     # 10k-line activity tail no longer contains it. Provenance is still
     # checked against the actual container start by the Node gate.
-    $readEvents = 'f="${EVEJS_COOP_EVENTS_FILE:-/var/lib/evejs/coop-events.jsonl}"; [ -r "$f" ] || exit 12; grep -F "living-headless-boot-requested" "$f" | tail -n 1; tail -n 10000 "$f"'
+    # Always retain the last real boot request independently of bounded scene
+    # anchors and the busy-world event tail, even after many hours of uptime.
+    # All output is still read-only native telemetry. Old activity never
+    # substitutes for fresh samples in coop-reliability-gates.cjs.
+    $readEvents = 'f="${EVEJS_COOP_EVENTS_FILE:-/var/lib/evejs/coop-events.jsonl}"; [ -r "$f" ] || exit 12; grep -F ''"event":"living-headless-boot-requested"'' "$f" | tail -n 1; grep -E ''"event":"(living-headless-boot-system|living-world-topology|living-native-industry|virtual-world-materialization|living-native-durable-recovery|living-native-system-site-readiness|living-native-mining-startup-slot)"'' "$f" | tail -n 300; tail -n 10000 "$f"'
     $events = @(& docker compose @composeArgs exec -T server sh -c $readEvents 2>$null)
     if ($LASTEXITCODE -ne 0) {
         Write-Warning 'BLOCKED_TELEMETRY: events absent or unreadable. Run Local-Two-Client-Test.ps1 -Action DiagnoseWorld.'

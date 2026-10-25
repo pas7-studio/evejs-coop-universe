@@ -26,6 +26,41 @@ function parse(input, {now = Date.now(), minutes = 120} = {}) {
  return {rows,invalid};
 }
 const before=(a,b)=>a._at<b._at||(a._at===b._at&&a._sequence<b._sequence);
+
+// A native loot receipt is written only after the source debit and the
+// destination grant have both been inspected. Bare success/quantity fields
+// never establish the actual inventory movement.
+const NATIVE_DEBIT_EVIDENCE=
+ "NATIVE_GRANT_SUCCESS_PLUS_PHYSICAL_WRECK_AND_POST_TRANSFER_SOURCE_STORE";
+function nativeReceipt(e){
+ return e?.event==="living-native-loot-pickup"&&
+  e.status==="VERIFIED_NATIVE_LOOT_PICKUP"&&
+  e.evidence===NATIVE_DEBIT_EVIDENCE&&
+  pos(e.systemID)&&pos(e.wreckID)&&pos(e.wreckItemID)&&
+  pos(e.sourceEntityID)&&pos(e.characterID)&&pos(e.shipID)&&
+  pos(e.typeID)&&pos(e.destinationLocationID)&&pos(e.quantity)&&
+  Number.isSafeInteger(e.remainingQuantity)&&e.remainingQuantity>=0&&
+  Number.isSafeInteger(e.remainingQuantity+e.quantity);
+}
+// Once a stack has been debited, each later receipt for that exact native
+// wreck item must begin with the preceding residual amount. Distinct wreck
+// items are independent; partial pickups by two players are legitimate.
+function nativeLootConservation(receipts){
+ const last=new Map();
+ for(const e of receipts){
+  if(!nativeReceipt(e))return {ok:false,reason:"INVALID_NATIVE_LOOT_RECEIPT"};
+  const key=[e.systemID,e.wreckID,e.wreckItemID].join(":");
+  const previous=last.get(key);
+  if(previous&&(
+    previous.remainingQuantity===0||
+    previous.remainingQuantity-e.quantity!==e.remainingQuantity||
+    previous.typeID!==e.typeID||
+    previous.sourceEntityID!==e.sourceEntityID))
+   return {ok:false,reason:"NATIVE_LOOT_SOURCE_CHAIN_CONFLICT"};
+  last.set(key,e);
+ }
+ return {ok:true,verifiedReceipts:receipts.length};
+}
 function crew(event){
  if(event?.event!=="coop-shared-scene"||event.mutualVisibility!==true||
   !pos(event.systemID)||!Array.isArray(event.pilots)||event.pilots.length!==2)return null;
@@ -70,10 +105,8 @@ function summarize(input,{now=Date.now(),minutes=120}={}){
  const wrecks=current.filter(e=>e.event==="living-native-wreck-evidence"&&
   e.status==="PHYSICAL_NATIVE_WRECK_VERIFIED"&&pos(e.wreckID)&&pos(e.victimEntityID)&&
   e.lootStatus==="ITEMS_STORED"&&Number(e.storedItemCount)>0);
- const pickups=current.filter(e=>e.event==="living-native-loot-pickup"&&
-  e.status==="VERIFIED_NATIVE_LOOT_PICKUP"&&pos(e.wreckID)&&pos(e.wreckItemID)&&
-  pos(e.characterID)&&pos(e.shipID)&&pos(e.quantity)&&pos(e.sourceEntityID));
- let best=null;
+ const pickups=current.filter(nativeReceipt);
+ let best=null,invalidNativeLootChains=0;
  for(const raid of raids){
   const r=raid._event,systemID=raid.systemID;
   const originalCrew=latestCrew(current,r,systemID);
@@ -82,7 +115,16 @@ function summarize(input,{now=Date.now(),minutes=120}={}){
   const available=wrecks.filter(w=>pos(w.systemID)===systemID&&
    pos(w.victimEntityID)===pos(raid.pirateID)&&before(r,w)&&w._at-r._at<=20*60000);
   for(const wreck of available){
-   const loot=pickups.filter(p=>pos(p.systemID)===systemID&&
+   // Validate all receipts from this source/wreck, not only those belonging
+   // to the selected crew. A conflicting replay cannot be made invisible by
+   // filtering it out before checking conservation.
+   const sourceReceipts=pickups.filter(p=>pos(p.systemID)===systemID&&
+    pos(p.wreckID)===pos(wreck.wreckID)&&
+    pos(p.sourceEntityID)===pos(raid.pirateID)&&
+    before(wreck,p)&&p._at-wreck._at<=30*60000);
+   const chain=nativeLootConservation(sourceReceipts);
+   if(!chain.ok){invalidNativeLootChains++;continue;}
+   const loot=sourceReceipts.filter(p=>pos(p.systemID)===systemID&&
     pos(p.wreckID)===pos(wreck.wreckID)&&
     pos(p.sourceEntityID)===pos(raid.pirateID)&&before(wreck,p)&&
     p._at-wreck._at<=30*60000&&characters.includes(pos(p.characterID))&&
@@ -96,6 +138,9 @@ function summarize(input,{now=Date.now(),minutes=120}={}){
     (candidate.looters===best.looters&&candidate.loot.length>best.loot.length))best=candidate;
   }
  }
+ if(!best&&invalidNativeLootChains)return fail("NATIVE_LOOT_CHAIN_INVALID",
+  "A real wreck has conflicting native source debit receipts; inspect item ledger, quarantine and duplicates before claiming shared loot",
+  {invalidNativeLootChains});
  if(!best)return fail("LINKED_WRECK_NOT_EVIDENCED",
   "Confirm the same native attacking pirate's real wreck and persisted items after its raid; an NPC-vs-NPC attack alone is not a player kill",{nativeRaids:raids.length});
  const sequence=[
@@ -124,4 +169,4 @@ if(require.main===module){
   if(report.status==="INVALID_EVENT_STREAM")process.exitCode=2;
  }catch(e){console.error("Co-op PvE chain report failed:",e.message);process.exitCode=2;}
 }
-module.exports={parse,crew,latestCrew,summarize};
+module.exports={parse,crew,latestCrew,nativeReceipt,nativeLootConservation,summarize};
