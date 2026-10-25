@@ -25,3 +25,5 @@ Path B is shorter and does not fight native lifecycle code.
 
 Flags currently ON in compose.coop-probe.yaml: durable=1, slot reconcile=1, trip recovery=1,
 haul manifest=1. Turning durable OFF restores the previously proven mining behaviour.
+
+**New fact (23:10 UTC):** `npcCargo` currently holds 0 rows and the fleet entity rows are gone too, so a restart loses the whole startup-fleet state, not just hulls. Only the hauler cargo that `coopNativeHaulCargo` marks non-transient during a real haul can survive. That makes path B concrete: journal the haul cargo durably at load time and adopt those rows onto the new fleet's hauler at boot.
