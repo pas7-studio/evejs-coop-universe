@@ -72,7 +72,12 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
    return deny("SALVAGE_ORIGINAL_WITNESS_INVALID");
   const row=witness.record.rows.find(r=>r.cargoID===cargoID);
   if(!row)return deny("SALVAGE_CARGO_NOT_IN_ORIGINAL_WRECK");
-  const offer=readSalvageOffer(m.key);
+  // Do not insist that the wreck still contains physically PICKED UP
+  // goods for commands on a previously escrow-funded rescue.
+  // OFFER/ACCEPT always require original cargo to remain at the wreck.
+  const offer=readSalvageOffer(m.key,{
+   allowStarted:action==="PICKUP"||action==="DELIVER"||action==="REFUND"
+  });
   if(offer?.status!=="SALVAGE_NATIVE_OFFER_READY"||
    offer.eventID!==eventID||offer.wreckID!==wreckID||
    !offer.characters.includes(session.characterID))
