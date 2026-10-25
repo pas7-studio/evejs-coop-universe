@@ -160,3 +160,15 @@ test("original transfer receipt cannot claim a foreign durable owner",t=>{
  f.actors.get(HAULER).ownerID++;
  assert.equal(f.run().reason,"ALIFE13_TRANSFER_ACTOR_OWNER_CONFLICT");
 });
+
+test("historical COMMITTED cargo without original fsynced warp ACK still blocks startup",t=>{
+ const f=fixture(t);f.prepare();f.deliver(f.ids[0]);
+ assert.equal(f.run().reason,"ALIFE13_ORIGINAL_WARP_ACK_MISSING");
+});
+test("historical native ACK identity changed after COMMIT still quarantines",t=>{
+ const f=fixture(t);f.prepare();f.ack();f.deliver(f.ids[0]);
+ const file=path.join(f.root,"trip-departure-acks",f.m.key+".json");
+ const ack=JSON.parse(fs.readFileSync(file,"utf8"));ack.stationID++;
+ fs.writeFileSync(file,JSON.stringify(ack));
+ assert.equal(f.run().reason,"ALIFE13_ORIGINAL_WARP_ACK_CHANGED");
+});
