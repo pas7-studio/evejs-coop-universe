@@ -23,9 +23,21 @@ Stage H's native departure and terminal witnesses close the easiest station-camp
 - Real native warp may complete in ~250 ms in the current overlay configuration. **If the server tick never sees two midroute windows, Stage I correctly refuses payout.** Until a real two-client, event-timestamped native movement test confirms visibility and pacing, this is an experimental strict flag; **do not enable with real money or live world.**
 - No persistent player or NPC data was modified during source development. Run scenario manifests on a disposable snapshot only.
 
+## COOP-055 — Actual native physics observation
+
+This update moves Stage I sampling beyond the station route tick. The pinned upstream `Code/server/src/space/movement/warp/movementWarpState.js` updates the genuine NPC `entity.position` in `advanceSessionlessWarpIngress(entity, now)` before reporting movement. The reversible `scripts/coop-escort-native-motion-patch.cjs` inserts a default-OFF notification **after that actual position update**. It never moves ships, invents coordinates or creates ISK. Only native NPCs are observed; errors in the observer never change physics.
+
+The trusted `coopNativeStationArrival.noteNativeMotion` accepts only the exact original native NPC scene object in a confirmed, active Stage H cargo trip **after durable WARP_ACK**. It checks original fleet, manifest, station and scene. Source registrations are dropped after genuine delivery or proven refund; missing registration, client-controlled objects, startup after restart and unknown warp outcomes fail closed.
+
+The additional `EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=1` flag is **OFF by default**. Strict peaceful Stage I now requires this flag alongside `EVEJS_COOP_ESCORT_ROUTE_WITNESS=1` and the original predeparture witness, otherwise it blocks the route before any manifest or ISK reservation. Real routes shorter than 10km are similarly ineligible. With all strict flags enabled, the native NPC warp uses a longer **real** ingress (at least six server scene beats, bounded to 6–30 seconds); this allows physical intermediate updates to be seen, but does not fabricate them. Real pilot ships must independently follow the actual NPC: Stage I now validates each recorded pilot's travel progress along the original route, preventing stationary pilots passing on short trips.
+
+**Verified only at source level:** original pinned native helper executed against a genuine 100km warp sample and emitted a real 25,925.9259m position after 2/6 of the ingress; observer saw the exact same NPC object. Patch install idempotent and removal byte-exact. `tests/coop-escort-native-warp-motion.test.mjs` adds 6 test cases, 5/5 V8 fallback cases passed and one true pinned checkout check only runs with `-CheckPinned`. Updated native station test is **21/21 V8 PASS**, route witness is **21/21 V8 PASS**. Full Node, GameStore wallet and two-client physical warp **NOT_RUN**.
+
+**Critical remaining gate:** A native warp position update exists, but real server scheduling and real player warp arrival must be verified with two clients before enabling the strict money flags. If two real checkpoints are not observable, the server must not pay based on interpolated or guessed evidence.
+
 ## Flags
 
-`EVEJS_COOP_ESCORT_ROUTE_WITNESS=1` — experimental, **OFF by default** and only relevant with `EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1` and `EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1`. Original NPC bank, route gate, warp fence, native inventory and per-character consent flags must remain independently configured. Enabling this flag does not configure/enable any wallet authority by itself.
+`EVEJS_COOP_ESCORT_ROUTE_WITNESS=1` together with `EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=1` — experimental, **both OFF by default** and only relevant with `EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1` and `EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1`. Original NPC bank, route gate, warp fence, native inventory and per-character consent flags must remain independently configured. Enabling this flag does not configure/enable any wallet authority by itself.
 
 ## Local verification
 
