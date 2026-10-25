@@ -14,6 +14,7 @@ const nativeEconomyModules=[
  "coopAlifeNativeBuyerDispatch","coopAlifeNativeBuyerRuntime",
  "coopAlifeNativeEconomyAct","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopNpcBuyerNativeBindings",
  "coopNpcRustOrderAuthority","coopNpcSellerTaxAuthority",
+ "coopNpcBuyerRecoveryAudit",
  "coopNpcBuyerCoordinator","coopNpcCorporateBuyerAtomic",
  "coopNpcMarketPolicy","coopNpcDemandAuthority",
  "coopNpcNativeEconomyDirector","coopNpcPartialFillAtomic"
