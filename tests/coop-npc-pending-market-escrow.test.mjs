@@ -6,22 +6,23 @@ const {createNpcPendingMarketEscrow,ESCROW_BASE}=require("../integration/coopNpc
 const OP="npc-manufacture:abcdef1234567890abcdef1234567890";
 const X={operationID:OP,ownerID:1000010,stationID:60000001,itemID:1990000200,typeID:215,quantity:100};
 function fixture({reserveFail=false,activationFails=false,escrowFault=false,
-  unitPrice=12,stacksize=X.quantity,afterReserve=null}={}){
+  unitPrice=12,stacksize=X.quantity,afterReserve=null,
+  reserveOverride=null,activateOverride=null,readbackOverride=null}={}){
  const items=new Map([[String(X.itemID),{itemID:X.itemID,ownerID:X.ownerID,locationID:X.stationID,
    flagID:4,typeID:X.typeID,quantity:X.quantity,stacksize,singleton:0,
    customInfo:"coop-industry:v1:970000000000000"}]]);
  const escrow=new Map(),callCounts={reserve:0,activate:0,get:0},id=456,clone=x=>structuredClone(x);
  const order=(state)=>({operation_id:OP,source_item_id:String(X.itemID),order_id:String(id),
   owner_id:X.ownerID,station_id:X.stationID,type_id:X.typeID,quantity:X.quantity,
-  price:Math.round(unitPrice*100)/100,
-  bid:false,is_corp:true,state});
+  price:Math.round(unitPrice*100)/100,source:"coop-npc",
+  vol_remaining:X.quantity,bid:false,is_corp:true,state});
  const call=async(type,p)=>{
   if(type==="ReserveNpcSellOrder"){callCounts.reserve++;if(reserveFail)return{state:"open"};
    if(afterReserve)afterReserve(items);
-   return order("pending");}
+   return {...order("pending"),...reserveOverride};}
   if(type==="ActivateNpcSellOrder"){callCounts.activate++;if(activationFails)throw Error("RUST_ACTIVATION_ACK_LOST");
-   return order("open");}
-  if(type==="GetNpcSellOrder"){callCounts.get++;return order("open");}
+   return {...order("open"),...activateOverride};}
+  if(type==="GetNpcSellOrder"){callCounts.get++;return {...order("open"),...readbackOverride};}
   throw Error("UNEXPECTED_RUST_RPC");
  };
  const tx={get:(table,key)=>(table==="items"?items:escrow).get(key)??null,
@@ -124,3 +125,43 @@ test("stacksize tampering after Rust reserve but before GameStore commit rolls b
  const old=items.get(String(X.itemID));
  items.set(String(X.itemID),{...old,stacksize:old.stacksize+1});
 }}));
+
+
+test("Rust reserve for player source cannot escrow real NPC manufactured stock",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_PENDING_ORDER_NOT_VERIFIED");
+ assert.equal(f.callCounts.reserve,1);
+ assert.equal(f.callCounts.activate,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+},{reserveOverride:{source:"player"}}));
+
+test("depleted Rust pending order cannot move 100 original NPC items into escrow",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_PENDING_ORDER_NOT_VERIFIED");
+ assert.equal(f.callCounts.reserve,1);
+ assert.equal(f.callCounts.activate,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+},{reserveOverride:{vol_remaining:0}}));
+
+test("partial Rust pending order cannot attest full physical manufacturing quantity",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_PENDING_ORDER_NOT_VERIFIED");
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+},{reserveOverride:{vol_remaining:X.quantity-1}}));
+
+test("Rust activation source mismatch is never reported as confirmed listing",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_ACTIVATION_UNVERIFIED");
+ assert.equal(f.callCounts.get,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,ESCROW_BASE+456);
+},{activateOverride:{source:"player"}}));
+
+test("Rust readback with depleted volume is not reported as confirmed sale listing",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_MARKET_LISTING_NOT_RECONCILED");
+ assert.equal(f.callCounts.get,1);
+ assert.equal(f.items.get(String(X.itemID)).locationID,ESCROW_BASE+456);
+},{readbackOverride:{vol_remaining:0}}));
