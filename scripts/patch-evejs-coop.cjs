@@ -79,6 +79,11 @@ const specs=[
  {file:"server/src/_secondary/chat/chatStore.js",patches:[]},
  {file:"server/src/services/mail/mailState.js",patches:[]},
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
+ {file:"server/src/services/industry/industryAccess.js",patches:[]},
+ {file:"server/src/services/inventory/invBrokerService.js",patches:[]},
+ {file:"server/src/services/corporation/corpRegistryRuntime.js",patches:[]},
+ {file:"server/src/services/corporation/corpMemberActionState.js",patches:[]},
+ {file:"server/src/services/corporation/officeManagerService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
  {file:"server/src/services/npe/nesIntroService.js",patches:[]},
  {file:"server/src/services/account/tutorialSvcService.js",patches:[]},
@@ -455,6 +460,11 @@ function transform(source,spec,remove){
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("/space/combat/killmailTracker.js"))
   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
+ // CH31: native corporate custody/role fences; default OFF, reversible.
+ if(["industry/industryAccess.js","inventory/invBrokerService.js",
+     "corporation/corpRegistryRuntime.js","corporation/corpMemberActionState.js",
+     "corporation/officeManagerService.js"].some(p=>spec.file==="server/src/services/"+p))
+  text=require("./coop-player-corporation-access-patch.cjs").patch(text,spec.file,remove);
  // CH38: source-only native NPE hooks; never bypass the stock tutorial state.
  if(spec.file==="server/src/services/npe/airNpeService.js"||
     spec.file==="server/src/services/npe/nesIntroService.js"||
