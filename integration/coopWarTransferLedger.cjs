@@ -23,10 +23,12 @@ function fingerprint(rows,idKey){
  return crypto.createHash("sha256").update(JSON.stringify(sorted)).digest("hex");
 }
 function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
- nativeStore,getController,clock=()=>Date.now(),env=process.env}={}){
+ nativeStore,getController,clock=()=>Date.now(),env=process.env,
+ verifyJournalClosed=()=>false}={}){
  if(typeof gameStore?.coopAtomicNativeRows?.transact!=="function"||
   typeof identityRegistry?.snapshot!=="function"||
   [sceneForSystem,getController,clock].some(x=>typeof x!=="function")||
+  typeof verifyJournalClosed!=="function"||
   !nativeStore||["getNativeEntity","listNativeModulesForEntity",
    "listNativeCargoForEntity"].some(x=>typeof nativeStore[x]!=="function"))
   throw Error("WAR_HANDOFF_NATIVE_AUTHORITIES_REQUIRED");
@@ -87,7 +89,9 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
  function operation(type,req){
   if(!enabled())return {status:"DISABLED"};
   const id=req?.entityID,transferID=req?.transferID;
-  if(!pos(id)||!key(transferID)||!["BEGIN","NATIVE_COMMIT","FINISH","ABORT","RESTORE"].includes(type))
+  if(!pos(id)||!["BEGIN","NATIVE_COMMIT","FINISH","ABORT","RESTORE"].includes(type)||
+   (type==="BEGIN"?(transferID!==undefined&&!key(transferID)):
+    !key(transferID)))
    return {status:"BLOCKED",reason:"INVALID_WAR_HANDOFF_COMMAND"};
   return transact(tx=>{
    const s=fleet.validate(tx.get(fleet.TABLE,fleet.KEY));
@@ -121,7 +125,14 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
     const hashes=digests(row);
     if(!hashes.modules||!hashes.cargo)
      return {status:"BLOCKED",reason:"WAR_HANDOFF_CUSTODY_UNVERIFIED"};
-    entry={transferID,entityID:id,pilotID:row.pilotID,
+    const serial=s.nextTransferSerial===undefined?1:s.nextTransferSerial;
+    if(!pos(serial)||serial>=Number.MAX_SAFE_INTEGER-1)
+     return {status:"BLOCKED",reason:"WAR_HANDOFF_SERIAL_EXHAUSTED"};
+    const issuedID="fw:"+id+":"+from+":"+to+":"+serial;
+    if(transferID!==undefined&&transferID!==issuedID)
+     return {status:"BLOCKED",reason:"WAR_HANDOFF_SEQUENCE_CONFLICT"};
+    s.nextTransferSerial=serial+1;
+    entry={transferID:issuedID,entityID:id,pilotID:row.pilotID,
      warID:row.warID,campaignID:row.campaignID,
      sourceSystemID:from,destinationSystemID:to,
      modulesHash:hashes.modules,cargoHash:hashes.cargo,
@@ -173,6 +184,66 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
    return {status:entry.phase,transferID,entityID:id,
     sourceSystemID:entry.sourceSystemID,
     destinationSystemID:entry.destinationSystemID};
+  });
+ }
+ // A prior trip stays fenced until BOTH systems are physically
+ // observed, the pilot/cargo/SQL witnesses are still exact, AND the
+ // low-level native gate journal has been safely closed or archived.
+ // This is the ONLY path that frees a transferred hull for another hop.
+ function retire({entityID,transferID}={}){
+  if(!enabled())return {status:"DISABLED"};
+  if(!pos(entityID)||!key(transferID))
+   return {status:"BLOCKED",reason:"INVALID_RETIRE_REQUEST"};
+  const current=witness(entityID);
+  if(current.status!=="VERIFIED"||
+   current.action!=="CLEANUP_JOURNAL"||
+   current.transferID!==transferID)
+   return {status:"BLOCKED",reason:"TERMINAL_NATIVE_TRANSFER_NOT_VERIFIED"};
+  let cleared=false;
+  try{cleared=verifyJournalClosed({
+   entityID,pilotID:current.pilotID,transferID,
+   sourceSystemID:current.sourceSystemID,
+   destinationSystemID:current.destinationSystemID
+  })===true}catch{}
+  if(!cleared)return {status:"BLOCKED",reason:"NATIVE_TRANSFER_JOURNAL_NOT_CLOSED"};
+  return transact(tx=>{
+   const state=fleet.validate(tx.get(fleet.TABLE,fleet.KEY)),
+    row=state.ships[String(entityID)],
+    prior=state.transfers?.[String(entityID)];
+   if(!row||!prior||prior.transferID!==transferID||
+    !["COMPLETE","ABORTED"].includes(prior.phase))
+    return {status:"BLOCKED",reason:"RETIRE_STATE_CHANGED"};
+   // Re-read exact durable physical/native proofs before committing the
+   // SQL retirement; an old UI witness alone can never close a flight.
+   const destination=prior.phase==="COMPLETE"?
+    prior.destinationSystemID:prior.sourceSystemID,
+    absent=prior.phase==="COMPLETE"?
+    prior.sourceSystemID:prior.destinationSystemID;
+   const hashes=digests(row);
+   if(row.systemID!==destination||!identity(row,destination)||
+    !inspect(row,destination,true)||!inspect(row,absent,false)||
+    hashes.modules!==prior.modulesHash||
+    hashes.cargo!==prior.cargoHash)
+    return {status:"BLOCKED",reason:"RETIRE_NATIVE_PROOF_CHANGED"};
+   let stillClear=false;
+   try{stillClear=verifyJournalClosed({
+    entityID,pilotID:prior.pilotID,transferID,
+    sourceSystemID:prior.sourceSystemID,
+    destinationSystemID:prior.destinationSystemID
+   })===true}catch{}
+   if(!stillClear)
+    return {status:"BLOCKED",reason:"RETIRE_NATIVE_JOURNAL_CHANGED"};
+   if(!Array.isArray(state.transferHistory))state.transferHistory=[];
+   if(state.transferHistory.length>=512||
+    state.transferHistory.some(h=>h.transferID===transferID))
+    return {status:"BLOCKED",reason:"TRANSFER_HISTORY_CAP_OR_REPLAY"};
+   const retiredAt=clock();
+   if(!pos(retiredAt))throw Error("WAR_TRANSFER_RETIRE_CLOCK_INVALID");
+   state.transferHistory.push({...prior,retiredAt});
+   delete state.transfers[String(entityID)];
+   fleet.validate(state);tx.put(fleet.TABLE,fleet.KEY,state);
+   return {status:"RETIRED",transferID,entityID,retiredAt,
+    historyCount:state.transferHistory.length};
   });
  }
  function auditPersisted(){
@@ -333,6 +404,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   auditPersisted,
   witness,
   recordRecoveryAttempt,
+  retire,
   pending
  });
 }
