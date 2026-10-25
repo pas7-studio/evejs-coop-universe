@@ -99,3 +99,14 @@ test("malformed authoritative SQLite replay fence aborts audit fail-closed",()=>
   assert.throws(f.audit,/INVALID_NATIVE_FENCE/);
  });
 });
+
+test("PREPARED with no native SQLite fence is unresolved, not permission to retry",()=>{
+ fixture(f=>{
+  f.receipt(101,"PREPARED",1000,[401,402]);
+  const report=f.audit();
+  assert.equal(report.counts.NEEDS_RECONCILIATION,1);
+  assert.equal(report.entries[0].sqliteFencePresent,false);
+  assert.equal(report.entries[0].modulesMatched,0);
+  assert.equal(fs.existsSync(path.join(f.dir,"101.json")),true);
+ });
+});
