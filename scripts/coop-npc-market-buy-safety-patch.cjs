@@ -14,8 +14,13 @@ function patch(source,{remove=false}={}){
  }else{
   // The COOP-035 guarded corporate purchase branch replaces COOP-034.
   // A repeated central install must not append an unconditional skip after it.
-  if(text.includes("COOP-035 native NPC corporate seller branch")){
-   if(text.includes(LINE))throw Error("NPC_BUY_GUARD_MIXED_COOP034_COOP035");
+  if(text.includes("COOP-035 native NPC corporate seller branch") ||
+     text.includes("COOP-035 END")){
+   // A label is not sufficient proof: a truncated corporate branch could
+   // omit the wallet/escrow return path while appearing already installed.
+   const {NEW}=require("./coop-npc-corporate-buy-patch.cjs");
+   if(text.split(NEW).length!==2 || text.includes(LINE))
+    throw Error("NPC_BUY_GUARD_CORPORATE_PATCH_DRIFT");
    return source;
   }
   if(text.includes(LINE))throw Error("NPC_BUY_GUARD_ALREADY_PATCHED");
