@@ -86,21 +86,24 @@ function validateSnapshot(snapshot, meta) {
   if (!snapshot || snapshot.source !== 'native-authoritative-export') throw Error('Snapshot requires native-authoritative-export provenance');
   if (snapshot.projectSha !== meta.projectSha || snapshot.upstreamSha !== meta.upstreamSha) throw Error('Snapshot SHA does not match tested revisions');
   if (!validAt(snapshot.capturedAt) || !Array.isArray(snapshot.characters) || snapshot.characters.length < 2) throw Error('Snapshot timestamp and two characters are mandatory');
-  const chars = new Set(), ships = new Set(), items = new Set();
+  const chars = new Set(), accounts = new Set(), ships = new Set(), items = new Set();
   const normalized = [];
   for (const c of snapshot.characters) {
-    const id = String(c.id || ''), ship = String(c.shipId || '');
-    if (!canonicalId(id) || !canonicalId(ship) || !canonicalId(c.systemId) || chars.has(id) || ships.has(ship) || !decimal(c.isk) || !Array.isArray(c.items)) throw Error('Invalid character, ship, wallet or duplicated ownership');
-    chars.add(id); ships.add(ship);
+    const id = String(c.id || ''), ship = String(c.shipId || ''), accountId=String(c.accountId || '');
+    if (!canonicalId(id) || !canonicalId(accountId) || !canonicalId(ship) || !canonicalId(c.systemId) || chars.has(id) || accounts.has(accountId) || ships.has(ship) || !decimal(c.isk) || !Array.isArray(c.items)) throw Error('Invalid character, account, ship, wallet or duplicated ownership');
+    chars.add(id); accounts.add(accountId); ships.add(ship);
     const assets = [];
     for (const item of c.items) {
       const itemId = String(item.id || '');
       if (!canonicalId(itemId) || items.has(itemId) || !canonicalId(item.typeId) || !positive(item.quantity) || !canonicalId(item.locationId)) throw Error('Duplicated, malformed or nonpositive item state');
       items.add(itemId);
-      assets.push({id:itemId, typeId:String(item.typeId), quantity:String(item.quantity), locationId:String(item.locationId)});
+      const categoryId = item.categoryId == null ? null : String(item.categoryId);
+      if (categoryId !== null && !canonicalId(categoryId)) throw Error('Malformed native item category');
+      assets.push({id:itemId, typeId:String(item.typeId), categoryId, quantity:String(item.quantity), locationId:String(item.locationId)});
     }
     assets.sort((a,b) => a.id.localeCompare(b.id));
-    normalized.push({id, ship, systemId:String(c.systemId), isk:c.isk, assets});
+    if (!assets.some(asset => asset.id===ship && asset.categoryId==='6')) throw Error('Active native ship must exist as one owned ship-category inventory item');
+    normalized.push({id, accountId, ship, systemId:String(c.systemId), isk:c.isk, assets});
   }
   normalized.sort((a,b) => a.id.localeCompare(b.id));
   const r = snapshot.runtime;
@@ -120,6 +123,59 @@ function checkPersistence(before, after, meta, expectedIds = null) {
     if (!same(a.normalized, b.normalized)) return pass('FAIL','Character ship, location, ISK or unique item state changed across claimed idle restart');
     return pass('PASS_SNAPSHOT', 'Server restart start-times and unchanged evejs-data volume evidenced; characters, items and balances unchanged', {characters:a.normalized.length});
   } catch(e) {return pass('FAIL', 'Invalid snapshot: '+e.message);}
+}
+// Pairwise read-only native custody audit. Capture both gifts in an idle
+// window, with exactly one ordinary item and one inactive ship changing owner.
+// This is stronger than an operator screenshot and weaker than observing a
+// crash-safe atomic gift transaction: no server write is performed here.
+function checkGifts(before, after, meta, expectedIds = null) {
+  if (!before || !after) return pass('BLOCKED','Capture native before/after snapshots around one ordinary item gift and one inactive ship gift; no game mutation performed by QA');
+  try {
+    const a=validateSnapshot(before,meta), b=validateSnapshot(after,meta);
+    if (b.capturedAt <= a.capturedAt) return pass('FAIL','Gift after-snapshot must follow before-snapshot');
+    // A same-process pair avoids mistaking a restart or unrelated session
+    // transfer for a deliberate docked player-to-player gift.
+    if (before.runtime.containerId !== after.runtime.containerId || a.startedAt !== b.startedAt)
+      return pass('BLOCKED','Gift evidence must be captured within the same running Docker server process');
+    const ids=a.normalized.map(p=>p.id);
+    if (expectedIds && (ids.length!==expectedIds.length || !expectedIds.every(id=>ids.includes(id))))
+      return pass('FAIL','Gift actors do not match actual two-pilot shared-scene IDs');
+    if (a.normalized.length!==2 || b.normalized.length!==2 || !same(ids,b.normalized.map(p=>p.id)))
+      return pass('FAIL','Gift snapshots must contain the same two native characters');
+    for (let i=0;i<2;i++) {
+      const first=a.normalized[i], second=b.normalized[i];
+      if (first.accountId!==second.accountId || first.ship!==second.ship || first.systemId!==second.systemId || first.isk!==second.isk)
+        return pass('FAIL','Unexpected account, active ship, system or wallet change during gift proof');
+    }
+    const inventory=players=>{
+      const m=new Map();
+      for (const owner of players) for (const asset of owner.assets) {
+        if (m.has(asset.id)) throw Error('Duplicate global item identity');
+        m.set(asset.id,{ownerId:owner.id,...asset});
+      }
+      return m;
+    };
+    const beforeItems=inventory(a.normalized), afterItems=inventory(b.normalized);
+    if (beforeItems.size!==afterItems.size || [...beforeItems.keys()].some(id=>!afterItems.has(id)))
+      return pass('FAIL','Gift window created or destroyed a native item instance');
+    const moved=[];
+    for (const [id,item] of beforeItems) {
+      const next=afterItems.get(id);
+      if (item.typeId!==next.typeId || item.categoryId!==next.categoryId || item.quantity!==next.quantity)
+        return pass('FAIL','Gift changed item type, category or quantity');
+      if (item.ownerId===next.ownerId) {
+        if (item.locationId!==next.locationId) return pass('FAIL','Unrelated item location changed in gift window');
+        continue;
+      }
+      if (!ids.includes(next.ownerId) || !ids.includes(item.ownerId) || item.ownerId===next.ownerId)
+        return pass('FAIL','Invalid native item owner transition');
+      if (a.normalized.some(p=>p.ship===id)) return pass('FAIL','Gift cannot take away a player active ship');
+      moved.push({id,kind:item.categoryId==='6'?'ship':'item',from:item.ownerId,to:next.ownerId});
+    }
+    if (moved.length!==2 || moved.filter(m=>m.kind==='item').length!==1 || moved.filter(m=>m.kind==='ship').length!==1)
+      return pass('BLOCKED','Require precisely one identifiable item instance and one inactive ship instance transferred between the two real pilots');
+    return pass('PASS_CUSTODY','Native SQLite confirms exactly one item gift and one inactive ship ownership transfer without cloning or extra ISK', {movements:moved});
+  } catch(error) {return pass('FAIL','Invalid native gift snapshots: '+error.message);}
 }
 function checkEconomy(ledger, meta) {
   if (!ledger) return pass('BLOCKED','Native authoritative transaction export not provided; no claim about absence of duplication');
@@ -165,7 +221,7 @@ function checkClient(observations, meta, now, expectedIds = null) {
     return pass('BLOCKED','Incomplete, stale or revision-mismatched human two-client gameplay attestation');
   return pass('PASS_OPERATOR_ATTESTED','Authorized operator attested actual two-client fleet, item/ship transfers, shared missions/combat/loot and safe reconnect');
 }
-function audit({events='',meta={},before=null,after=null,ledger=null,client=null,now=Date.now(),windowMinutes=30}={}) {
+function audit({events='',meta={},before=null,after=null,giftBefore=null,giftAfter=null,ledger=null,client=null,now=Date.now(),windowMinutes=30}={}) {
   if (!Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 1440) throw Error('Window must be 1..1440 minutes');
   if (!requiredMeta(meta)) return {overall:'BLOCKED_REVISION',reason:'Exact project/upstream SHA, running Docker image and real container start required',gates:{}};
   const context = runtimeEvents(events,meta,now,windowMinutes);
@@ -175,6 +231,7 @@ function audit({events='',meta={},before=null,after=null,ledger=null,client=null
     world:checkWorld(events,meta,now,windowMinutes),
     party:checkParty(events,meta,now,windowMinutes),
     persistence:checkPersistence(before,after,meta,expectedIds),
+    gifts:checkGifts(giftBefore,giftAfter,meta,expectedIds),
     economy:checkEconomy(ledger,meta),
     client:checkClient(client,meta,now,expectedIds)
   };
@@ -182,14 +239,14 @@ function audit({events='',meta={},before=null,after=null,ledger=null,client=null
   const complete = Object.values(gates).every(g => g.status.startsWith('PASS_'));
   return {overall:bad?'FAIL':complete?'PASS_WITH_OPERATOR_ATTESTATION':'BLOCKED',
     meta:{projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,imageId:meta.imageId,containerStartedAt:meta.containerStartedAt},
-    windowMinutes,gateOrder:['world','party','persistence','economy','client'],gates,
+    windowMinutes,gateOrder:['world','party','persistence','gifts','economy','client'],gates,
     limits:['Server-side events cannot prove client rendering or native database truth.',
       'Persistence PASS requires two separately captured authoritative snapshots around an operator-approved idle restart.',
       'Economy PASS requires a native authoritative ledger export; empty/missing data stays BLOCKED.',
       'Operator attestation is not automated visual proof; no CI, redeploy, backup, restart, market rebuild or volume mutation occurs.']};
 }
 function cli(argv=process.argv.slice(2)) {
-  const allowed=new Set(['--events','--meta','--before','--after','--ledger','--client','--out','--window-minutes']);
+  const allowed=new Set(['--events','--meta','--before','--after','--gift-before','--gift-after','--ledger','--client','--out','--window-minutes']);
   const args={};
   for(let i=0;i<argv.length;i+=2){
     const k=argv[i]; if (!allowed.has(k)||!argv[i+1]||args[k]) throw Error('Unknown, duplicated or missing option: '+k);
@@ -197,11 +254,11 @@ function cli(argv=process.argv.slice(2)) {
   }
   const read=key=>args[key]?JSON.parse(fs.readFileSync(args[key],'utf8')):null;
   const events=args['--events']==='-'?fs.readFileSync(0,'utf8'):args['--events']?fs.readFileSync(args['--events'],'utf8'):'';
-  const result=audit({events,meta:read('--meta')||{},before:read('--before'),after:read('--after'),ledger:read('--ledger'),client:read('--client'),windowMinutes:args['--window-minutes']?Number(args['--window-minutes']):30});
+  const result=audit({events,meta:read('--meta')||{},before:read('--before'),after:read('--after'),giftBefore:read('--gift-before'),giftAfter:read('--gift-after'),ledger:read('--ledger'),client:read('--client'),windowMinutes:args['--window-minutes']?Number(args['--window-minutes']):30});
   const output=JSON.stringify(result,null,2)+'\n';
   if(args['--out']) fs.writeFileSync(args['--out'],output,{flag:'wx',mode:0o600});
   else process.stdout.write(output);
   process.exitCode=result.overall==='PASS_WITH_OPERATOR_ATTESTATION'?0:2;
 }
 if(require.main===module){try{cli();}catch(e){console.error('Reliability gate:',e.message);process.exitCode=2;}}
-module.exports={audit,parseEvents,checkWorld,checkParty,checkPersistence,checkEconomy,checkClient,validateSnapshot,cli};
+module.exports={audit,parseEvents,checkWorld,checkParty,checkPersistence,checkEconomy,checkClient,checkGifts,validateSnapshot,cli};

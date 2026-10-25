@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {audit, checkPersistence, checkEconomy, checkWorld, checkParty, checkClient, parseEvents} = require('../scripts/coop-reliability-gates.cjs');
+const {audit, checkPersistence, checkEconomy, checkWorld, checkParty, checkClient, checkGifts, parseEvents} = require('../scripts/coop-reliability-gates.cjs');
 const now=Date.parse('2026-10-25T11:00:00Z');
 const meta={projectSha:'a'.repeat(40),upstreamSha:'b'.repeat(40),imageId:'sha256:'+'c'.repeat(64),containerStartedAt:'2026-10-25T09:00:00Z'};
 const event=(event,props={},time=now-10000)=>JSON.stringify({event,at:new Date(time).toISOString(),systemID:30000142,...props});
@@ -11,11 +11,29 @@ const partyLog=[event('space-login-attach',{characterID:101,shipID:1001}),event(
 function snapshot(at, startedAt,changes={}) {return {
   source:'native-authoritative-export',projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,
   capturedAt:at, runtime:{volumeName:'evejs-data',containerId:'f'.repeat(64),imageId:meta.imageId,containerStartedAt:startedAt},
-  characters:[{id:101,shipId:3001,systemId:30000142,isk:'100000',items:[{id:1001,typeId:34,quantity:500,locationId:3001}]},
-    {id:102,shipId:3002,systemId:30000142,isk:'200000',items:[{id:1002,typeId:35,quantity:100,locationId:3002}]}],...changes
+  characters:[
+    {id:101,accountId:201,shipId:3001,systemId:30000142,isk:'100000',items:[
+      {id:3001,typeId:603,categoryId:6,quantity:1,locationId:30000142},
+      {id:1001,typeId:34,categoryId:18,quantity:500,locationId:3001},
+      {id:4001,typeId:603,categoryId:6,quantity:1,locationId:3001}
+    ]},
+    {id:102,accountId:202,shipId:3002,systemId:30000142,isk:'200000',items:[
+      {id:3002,typeId:604,categoryId:6,quantity:1,locationId:30000142},
+      {id:1002,typeId:35,categoryId:18,quantity:100,locationId:3002}
+    ]}
+  ],...changes
 };}
 const before=snapshot('2026-10-25T10:00:00Z','2026-10-25T09:00:00Z');
 const after=snapshot('2026-10-25T10:15:00Z','2026-10-25T10:05:00Z');
+const giftBefore=snapshot('2026-10-25T10:30:00Z','2026-10-25T10:05:00Z');
+const giftAfter=structuredClone(giftBefore);
+giftAfter.capturedAt='2026-10-25T10:40:00Z';
+for(const id of [1001,4001]){
+  const index=giftAfter.characters[0].items.findIndex(x=>x.id===id);
+  const [moved]=giftAfter.characters[0].items.splice(index,1);
+  moved.locationId=3002;
+  giftAfter.characters[1].items.push(moved);
+}
 const ledger={source:'native-authoritative-export',projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,entries:[
  {entryId:'a',txId:'move1',account:'101',delta:'-200',kind:'transfer'},
  {entryId:'b',txId:'move1',account:'102',delta:'200',kind:'transfer'},
@@ -42,8 +60,8 @@ test('exact balanced ledger and explicit mint qualify only ledger integrity',()=
 test('no ledger gives BLOCKED, never clean economy',()=>assert.equal(checkEconomy(null,meta).status,'BLOCKED'));
 test('outdated operator attestation cannot certify gameplay',()=>{const x=structuredClone(client);x.recordedAt='2026-10-24T11:00:00Z';assert.equal(checkClient(x,meta,now).status,'BLOCKED');});
 test('two different authorized operator-observed clients qualify only attestation',()=>assert.equal(checkClient(client,meta,now).status,'PASS_OPERATOR_ATTESTED'));
-test('complete evidence never reports automated visual proof',()=>{const report=audit({events:worldLog+'\n'+partyLog,meta,before,after,ledger,client,now});assert.equal(report.overall,'PASS_WITH_OPERATOR_ATTESTATION');assert.equal(report.gates.client.status,'PASS_OPERATOR_ATTESTED');});
-test('missing any of the five gates keeps overall BLOCKED',()=>{const report=audit({events:worldLog+'\n'+partyLog,meta,before,after,client,now});assert.equal(report.overall,'BLOCKED');assert.equal(report.gates.economy.status,'BLOCKED');});
+test('complete evidence never reports automated visual proof',()=>{const report=audit({events:worldLog+'\n'+partyLog,meta,before,after,giftBefore,giftAfter,ledger,client,now});assert.equal(report.overall,'PASS_WITH_OPERATOR_ATTESTATION');assert.equal(report.gates.client.status,'PASS_OPERATOR_ATTESTED');});
+test('missing any of the five gates keeps overall BLOCKED',()=>{const report=audit({events:worldLog+'\n'+partyLog,meta,before,after,giftBefore,giftAfter,client,now});assert.equal(report.overall,'BLOCKED');assert.equal(report.gates.economy.status,'BLOCKED');});
 test('valid event rows are bounded by window and rejects malformed timestamps',()=>{const out=parseEvents(event('x')+'\n'+JSON.stringify({event:'a',at:'bad'}),now,30);assert.equal(out.invalid,1);assert.equal(out.rows.length,1);});
 
 test('duplicate reward key inside one transaction also fails',()=>{const x=structuredClone(ledger);x.entries.push({entryId:'new',txId:'mission7',account:'102',delta:'1000',kind:'mint',rewardKey:'mission:7:character:101'});assert.equal(checkEconomy(x,meta).status,'FAIL');});
@@ -89,4 +107,47 @@ test('zero monetary delta cannot count as settled transaction',()=>{
 test('runtime metadata must have a real container start timestamp',()=>{
  const x={...meta};delete x.containerStartedAt;
  assert.equal(audit({events:worldLog,meta:x,now}).overall,'BLOCKED_REVISION');
+});
+
+// Native peer-to-peer item and inactive ship ownership is checked from SQLite,
+// not from client checkboxes or a server chat/loot event.
+test('read-only custody proof sees both a real item and inactive ship move',()=>{
+  const result=checkGifts(giftBefore,giftAfter,meta,['101','102']);
+  assert.equal(result.status,'PASS_CUSTODY');
+  assert.deepEqual(result.movements.map(m=>m.kind).sort(),['item','ship']);
+});
+test('no native before/after gifting state is BLOCKED even if clients claim gifts',()=>{
+  assert.equal(checkGifts(null,null,meta).status,'BLOCKED');
+  const report=audit({events:worldLog+'\n'+partyLog,meta,before,after,ledger,client,now});
+  assert.equal(report.overall,'BLOCKED');assert.equal(report.gates.gifts.status,'BLOCKED');
+});
+test('native player-to-player custody cannot invent inventory or ISK',()=>{
+  const dup=structuredClone(giftAfter);dup.characters[1].items.push({...dup.characters[1].items[0],id:9909});
+  assert.equal(checkGifts(giftBefore,dup,meta).status,'FAIL');
+  const isk=structuredClone(giftAfter);isk.characters[0].isk='100001';
+  assert.equal(checkGifts(giftBefore,isk,meta).status,'FAIL');
+});
+test('native custody must not transfer an active player ship or lack the ordinary gift',()=>{
+  const active=structuredClone(giftAfter);
+  const moved=active.characters[0].items.find(i=>i.id===3001);
+  active.characters[0].items=active.characters[0].items.filter(i=>i.id!==3001);
+  active.characters[1].items.push(moved);
+  assert.equal(checkGifts(giftBefore,active,meta).status,'FAIL');
+  const one=structuredClone(giftAfter);
+  const gift=one.characters[1].items.find(i=>i.id===4001);
+  one.characters[1].items=one.characters[1].items.filter(i=>i.id!==4001);
+  one.characters[0].items.push({...gift,locationId:3001});
+  assert.equal(checkGifts(giftBefore,one,meta).status,'BLOCKED');
+});
+test('gift proof cannot join snapshots across server restarts or different accounts',()=>{
+  const reboot=structuredClone(giftAfter);reboot.runtime.containerStartedAt='2026-10-25T10:35:00Z';
+  assert.equal(checkGifts(giftBefore,reboot,meta).status,'BLOCKED');
+  const sameAccount=structuredClone(giftAfter);sameAccount.characters[1].accountId=201;
+  assert.equal(checkGifts(giftBefore,sameAccount,meta).status,'FAIL');
+});
+test('snapshot provenance rejects same-account pilots and missing active ship',()=>{
+  const sameAccount=structuredClone(before);sameAccount.characters[1].accountId=201;
+  assert.equal(checkPersistence(sameAccount,after,meta).status,'FAIL');
+  const noShip=structuredClone(before);noShip.characters[0].items=noShip.characters[0].items.filter(i=>i.id!==3001);
+  assert.equal(checkPersistence(noShip,after,meta).status,'FAIL');
 });

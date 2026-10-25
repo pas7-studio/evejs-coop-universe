@@ -4,7 +4,7 @@ This branch is a reviewable **integration snapshot**, not a game-night deploymen
 
 ## Provenance and ownership
 
-Base = Draft PR #2 `c76b0663a5877573a81072a96cf64c36c9ff198a`, pinned upstream EveJS `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. Import from Draft PR #3 `42d4f89`, #4 `3f2223f`, #5 `8033810`, #6 `7d3adc1`. Only the **changed paths** of #3-#6 were copied (their older main snapshots must not replace newer PR #2 work). No upstream checkout, container, data volume, client or network configuration was touched.
+Base = Draft PR #2 `c76b0663a5877573a81072a96cf64c36c9ff198a` updated with its newer `9057acd5d154084d331a88bb29c950e88d5a8409` (native contracts opt-in), pinned upstream EveJS `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. Import from Draft PR #3 `191a991` (latest reliability hardening), #4 `3f2223f`, #5 `8033810`, #6 `7d3adc1`. Only the **changed paths** of #3-#6 were copied (their older main snapshots must not replace newer PR #2 work). No upstream checkout, container, data volume, client or network configuration was touched.
 
 ## Actual integration changes
 
@@ -25,10 +25,12 @@ Base = Draft PR #2 `c76b0663a5877573a81072a96cf64c36c9ff198a`, pinned upstream E
 
 ## Source and manual test gates
 
+The native `contractMgr` -> `contractProxy` opt-in routing patch from PR #2 was also synchronized after the first integration commit. It stays **disabled** unless `EVEJS_COOP_NATIVE_CONTRACTS=1` is explicitly set; do not advertise contracts as tested or enable it for game-night without native escrow/courier/client checks.
+
 Run locally from the integrated project checkout (Node 22+):
 
 ```powershell
-node --test tests/coop-crossstream-wiring.test.mjs tests/coop-runtime-probe-ack.test.mjs tests/coop-native-snapshot.test.mjs tests/coop-reliability-gates.test.mjs tests/coop-actionable-intel.test.mjs tests/coop-raid-beacon.test.mjs tests/coop-pve-chain.test.mjs tests/coop-player-combat-witness.test.mjs tests/coop-duo-contribution-report.test.mjs
+node --test tests/coop-crossstream-wiring.test.mjs tests/coop-runtime-probe-ack.test.mjs tests/coop-native-snapshot.test.mjs tests/coop-reliability-gates.test.mjs tests/coop-actionable-intel.test.mjs tests/coop-raid-beacon.test.mjs tests/coop-pve-chain.test.mjs tests/coop-player-combat-witness.test.mjs tests/coop-duo-contribution-report.test.mjs tests/coop-native-contract-routing.test.mjs
 ```
 
 When the exact pinned `Code` checkout is available: run the installer's `--dry-run` and reversible source/overlay tests **without deployment**. First live diagnostic remains:
