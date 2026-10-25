@@ -17,6 +17,7 @@ const receipt=()=>({phase:"NATIVE_NPC_BUY_COMMITTED",claimKey:KEY,
 const rust=()=>({claim_key:KEY,state:"filled",fill_phase:"finalized",
  history_recorded:true,history_day:"2026-10-25",
  fill_id:String(FILL),order_id:String(ORDER),owner_id:String(SELLER),
+ buyer_corp_id:String(CORP),station_id:STATION,type_id:TYPE,
  quantity:20,price_cents:125});
 const order=()=>({source:"player",is_corp:false,state:"filled",
  owner_id:String(SELLER),row:{order_id:String(ORDER),bid:false,
@@ -39,6 +40,8 @@ function fixture({offline=false,badRust=false,badOrder=false,
  const events=[],calls=[],marketR=rust(),marketO=order();
  if(badRust)marketR.history_recorded=false;
  if(badOrder)marketO.owner_id="90000002";
+ // Retain mutable market snapshots to simulate native drift mid-flight.
+ const rustClaim=marketR,ownerOrder=marketO;
  const observerEvents=[],observer={characterID:SELLER+1,
   sendNotification:(name,target,args)=>observerEvents.push({name,target,args})};
  const session={characterID:SELLER,sendNotification:(name,target,args)=>{
@@ -75,6 +78,7 @@ function fixture({offline=false,badRust=false,badOrder=false,
   .get("corp-buy\u001f"+FILL).json);
  const notify=()=>notifier.notifyCommitted({claimKey:KEY,fillID:FILL});
  return {notify,read,events,observerEvents,calls,session,notifier,dependencies,
+  rustClaim,ownerOrder,
   get accountChanges(){return accountChanges},
   close:()=>db.close()};
 }
@@ -244,3 +248,21 @@ test("unbounded or invalid login notification request is rejected without a writ
  assert.equal(f.events.length,0);
  assert.equal(f.read().sellerNotifyClaimedAt,undefined);
 },{catchup:true}));
+
+test("native Rust claim with wrong corporation or station cannot notify seller",()=>run(async f=>{
+ for(const patch of [{buyer_corp_id:String(CORP+1)},
+  {station_id:STATION+1},{type_id:TYPE+1}]){
+  const saved={...f.rustClaim};
+  Object.assign(f.rustClaim,patch);
+  assert.equal((await f.notify()).reason,"RUST_FINALIZE_OR_ORDER_UNVERIFIED");
+  assert.equal(f.events.length,0);
+  Object.assign(f.rustClaim,saved);
+ }
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+}));
+test("partially filled or stale old order volume cannot report full original fill",()=>run(async f=>{
+ f.ownerOrder.row.vol_entered=19;
+ assert.equal((await f.notify()).reason,"RUST_FINALIZE_OR_ORDER_UNVERIFIED");
+ assert.equal(f.events.length,0);
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+}));
