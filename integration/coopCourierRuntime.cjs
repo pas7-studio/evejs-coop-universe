@@ -23,12 +23,23 @@ const flightCore = require("./coopCourierFlight" + EXT);
 const driver = require("./coopCourierFlightDriver" + EXT);
 // Shared identity object for this courier, owned by the generic motion module.
 const motion = require("./coopNativeAgentMotion" + EXT);
+// Legs, resume and the delivery history are generic to any player-like NPC.
+const living = require("./coopLivingAgentRuntime" + EXT);
 const bridge = require("./coopCourierNativeAccept" + EXT);
 const notices = require("./coopCourierNotices" + EXT);
 const nodeFs = require("node:fs");
 // Notice ledger lives on the persistent data volume: a restart or a container
 // recreate must never mail the same courier message twice.
 const NOTICE_FILE = process.env.EVEJS_COOP_COURIER_NOTICE_FILE || "/var/lib/evejs/coop-courier-notices.json";
+// Delivery history per contract: when the courier really departed and what
+// really went wrong. Kept on the data volume so a restart cannot erase the run
+// the owner is later told about.
+const FLIGHT_HISTORY_FILE = process.env.EVEJS_COOP_COURIER_HISTORY_FILE || "/var/lib/evejs/coop-courier-history.json";
+// The flight itself (step, target station, ship entity) is persisted too: after a
+// restart the courier must continue from where it physically is, not fly back to
+// the origin and start the leg again.
+const FLIGHT_FILE = process.env.EVEJS_COOP_COURIER_FLIGHT_FILE || "/var/lib/evejs/coop-courier-flights.json";
+const FLIGHT_STEPS = Object.freeze(["undock", "warp", "arrive", "dock", "done"]);
 
 // Collateral is insurance, not a refusal reason: a courier takes a contract when
 // it actually holds the ISK. requireZeroCollateral stays the pure-core default
@@ -84,8 +95,52 @@ function createCourierDispatch(deps = {}) {
   const now = typeof deps.now === "function" ? deps.now : () => Date.now();
   const log = typeof deps.log === "function" ? deps.log : () => {};
   const flights = new Map();
+  try {
+    const rawFlights = nodeFs.readFileSync(FLIGHT_FILE, "utf8");
+    const parsedFlights = JSON.parse(rawFlights);
+    for (const [key, value] of Object.entries(parsedFlights && parsedFlights.contracts || {})) {
+      if (!value || typeof value !== "object") continue;
+      if (!FLIGHT_STEPS.includes(String(value.step))) continue;
+      if (!(num(value.characterID) > 0) || !(num(value.destinationStationID) > 0)) continue;
+      flights.set(String(num(key)), Object.assign({}, value, { reposition: false }));
+    }
+  } catch (_error) {
+    /* no saved flight yet */
+  }
   const repositions = new Map();
   const attempted = new Set();
+
+  const historyStore = living.createHistoryStore({ file: FLIGHT_HISTORY_FILE, now });
+
+  const legStore = living.createLegStore({ file: FLIGHT_FILE, log });
+  for (const [key, value] of legStore.load()) {
+    flights.set(key, Object.assign({}, value, { reposition: false }));
+  }
+
+  function saveFlights() {
+    for (const [key, value] of flights) {
+      if (!value || value.reposition) continue;
+      legStore.put(Object.assign({}, value, { legID: String(key) }));
+    }
+    legStore.save();
+  }
+
+  // Records something that really happened, in the courier's own words.
+  function noteIncident(contractID, kind, detail) {
+    historyStore.noteIncident(String(num(contractID)), kind, detail);
+  }
+
+  function noteDeparture(contractID) {
+    historyStore.noteDeparture(String(num(contractID)));
+  }
+
+  function clockText(ms) {
+    const value = num(ms);
+    if (!(value > 0)) return "";
+    const date = new Date(value);
+    const pad = (n) => String(n).padStart(2, "0");
+    return pad(date.getUTCHours()) + ":" + pad(date.getUTCMinutes()) + " UTC";
+  }
 
   // Item rows come from the same store as characters: {key,json} with the bare
   // item ID as the key. itemStore.readItems() is not used here because it needs
@@ -282,18 +337,18 @@ function createCourierDispatch(deps = {}) {
   // The courier messages the issuer the same way a player would: a real native
   // EVEmail from its own character. Nothing is invented - the text only carries
   // real contract, station and hull facts.
-  function notify(kind, contract, identity) {
+  function notify(kind, contract, identity, extra) {
     if (!contract || !identity) return null;
     const characterID = num(identity.character.characterID);
     const issuerID = num(contract.issuerID);
-    const built = notices.buildNotice(kind, {
+    const built = notices.buildNotice(kind, Object.assign({
       pilotName: String(identity.character.characterName || "Courier"),
       contractID: num(contract.contractID),
       volumeM3: num(contract.volume),
       fromStationName: stationName(num(contract.startStationID)),
       toStationName: stationName(num(contract.endStationID)),
       reward: num(contract.reward),
-    });
+    }, extra || {}));
     if (built.status !== "NOTICE") return built;
     if (noticeAlreadySent(num(contract.contractID), kind)) {
       log(`[CoopCourier] notice ${kind} already sent for ${num(contract.contractID)}, not repeating`);
@@ -364,6 +419,7 @@ function createCourierDispatch(deps = {}) {
             if (move) {
               repositions.set(pilotID, move);
               log(`[CoopCourier] courier ${pilotID} returning to origin ${move.destinationStationID} for contract ${contractID}`);
+            noteIncident(contractID, "origin-return", "courier was not at the origin station");
             }
           }
           continue;
@@ -374,6 +430,7 @@ function createCourierDispatch(deps = {}) {
         if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("characters");
         identity.character.stationID = num(record.startStationID);
         log(`[CoopCourier] courier ${pilotID} hull is docked at origin ${num(record.startStationID)}, station record repaired`);
+        noteIncident(contractID, "station-repair", "character station record lagged behind the hull");
       }
       const planned = flightCore.createFlight({ contract: record, identity, nowMs: now() });
       if (planned.status !== "FLIGHT_PLANNED") {
@@ -554,11 +611,19 @@ function createCourierDispatch(deps = {}) {
         runtime: contracts,
       });
       if (done.status === "COMPLETED") {
-        log(`[CoopCourier] contract ${contractID} DELIVERED by ${flight.characterID}`);
-        notify("delivered", live, identity);
+        const durationMs = historyStore.durationMs(String(contractID));
+        log(`[CoopCourier] contract ${contractID} DELIVERED by ${flight.characterID} in ${notices.durationText(durationMs)}`);
+        notify("delivered", live, identity, {
+          durationMs,
+          departedClockText: clockText(historyStore.departedAtMs(String(contractID))),
+          incidents: historyStore.incidents(String(contractID)),
+        });
+        historyStore.forget(String(contractID));
         flights.delete(contractID);
+        saveFlights();
       } else {
         log(`[CoopCourier] contract ${contractID} complete ${done.status} ${done.reason || ""}`.trim());
+        noteIncident(contractID, "settle-failed", done.reason || done.status);
       }
       return;
     }
@@ -574,6 +639,7 @@ function createCourierDispatch(deps = {}) {
       const loaded = loadPackageIntoShip(contracts.getContractRecord(contractID), identity);
       if (!loaded.ok) {
         log(`[CoopCourier] contract ${contractID} package not loaded: ${loaded.detail}`);
+        noteIncident(contractID, "cargo-load", loaded.detail);
         return;
       }
       if (loaded.detail === "already loaded") log(`[CoopCourier] contract ${contractID} package already in the hull`);
@@ -598,6 +664,7 @@ function createCourierDispatch(deps = {}) {
       if (!last || now() - last > 60000) {
         const warped = driver.warp(ctx, flight, target);
         log(`[CoopCourier] courier ${flight.characterID} re-warp ${warped.status} ${warped.reason || ""}`.trim());
+        noteIncident(contractID, "rewarp", warped.reason || warped.status);
         flights.set(contractID, Object.assign({}, flight, { rewarpAtMs: now() }));
       }
       return;
@@ -610,6 +677,7 @@ function createCourierDispatch(deps = {}) {
           ? `[CoopCourier] contract ${contractID} package handed over at ${num(flight.destinationStationID)}`
           : `[CoopCourier] contract ${contractID} package not handed over: ${handedOver.detail}`,
       );
+      if (!handedOver.ok) noteIncident(contractID, "handover-failed", handedOver.detail);
     }
     const token = flightCore.stepToken(flight);
     const next = flightCore.advanceFlight(flight, observed.status, now(), token);
@@ -623,11 +691,19 @@ function createCourierDispatch(deps = {}) {
     const label = flight.reposition ? `courier ${flight.characterID} reposition` : `contract ${contractID}`;
     if (observed.status !== driver.OK) {
       log(`[CoopCourier] ${label} ${flight.step} ${observed.status} ${observed.reason || ""}`.trim());
+      if (!flight.reposition) noteIncident(contractID, flight.step + "-failed", observed.reason || observed.status);
     } else {
       log(`[CoopCourier] ${label} ${flight.step} OK -> ${withEntity.step}`);
       if (flight.step === "undock" && !flight.reposition) {
+        noteDeparture(contractID);
         notify("departing", contracts.getContractRecord(contractID), identity);
       }
+    }
+    // A leg that failed must not sit in memory and block the resume scan: the
+    // courier is repaired to the origin, so the next tick re-plans a real leg.
+    if (!flight.reposition && withEntity.step === "failed") {
+      flights.delete(contractID);
+      log(`[CoopCourier] contract ${contractID} leg failed at ${flight.step}, will re-plan from the origin`);
     }
   }
 
@@ -648,6 +724,8 @@ function createCourierDispatch(deps = {}) {
         log(`[CoopCourier] courier ${pilotID} reposition failed ${String(error && error.message || error)}`);
       }
     }
+    // Persist whatever the steps changed, so a restart resumes this exact leg.
+    saveFlights();
   }
 
   return {

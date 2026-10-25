@@ -61,6 +61,35 @@ function markers(store,systemID,slot){
 // the record says ACTIVE, the hulls are gone and nothing will ever match it again.
 // That is abandonment, not a crash, and it is provable read-only: no durable row,
 // no physical ship, no cargo row and no module row may refer to those IDs.
+// Anything a provably absent hull left behind (fitted items, and ore it mined)
+// is unreachable by any live ship. It is archived verbatim under the slot's key
+// instead of being deleted or silently ignored, so the audit trail survives.
+function archiveOrphanRows({db,store,key,entityID}){
+ const out={modules:0,cargo:0};
+ const modules=store.listNativeModulesForEntity(entityID);
+ if(!Array.isArray(modules)||!Array.isArray(store.listNativeCargoForEntity(entityID)))
+  throw Error("ALIFE08_ORPHAN_ROW_LIST_UNAVAILABLE:"+entityID);
+ const cargo=store.listNativeCargoForEntity(entityID);
+ for(const [kind,rows] of [["modules",modules],["cargo",cargo]]){
+  if(!rows.length)continue;
+  const target="/coopMiningFleetSlotsArchive/"+key+"-"+kind+"-"+entityID+"-"+Date.now();
+  if(db.write("npcEntities",target,rows)?.success!==true)
+   throw Error("ALIFE08_ORPHAN_ARCHIVE_WRITE_FAILED:"+kind+":"+entityID);
+  if(db.flushTableSync("npcEntities",{log:false})?.success!==true)
+   throw Error("ALIFE08_ORPHAN_ARCHIVE_FLUSH_FAILED:"+kind+":"+entityID);
+  // The archive is durable, so custody can now move: the orphan rows are
+  // removed from the live store instead of lingering as unreachable ghosts.
+  for(const row of rows){
+   const removed=kind==="modules"
+    ? store.removeNativeModule(row.moduleID)
+    : store.removeNativeCargo(row.cargoID);
+   if(removed?.success!==true&&removed!==true)
+    throw Error("ALIFE08_ORPHAN_REMOVE_FAILED:"+kind+":"+entityID);
+  }
+  out[kind]=rows.length;
+ }
+ return out;
+}
 function slotIsAbandoned({scene,store,systemID,slot,entityIDs}){
  if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1")return false;
  if(!Array.isArray(entityIDs)||!entityIDs.length)return false;
@@ -69,11 +98,9 @@ function slotIsAbandoned({scene,store,systemID,slot,entityIDs}){
  for(const id of entityIDs){
   if(store.getNativeEntity(id)||store.getNativeController(id))return false;
   if(scene?.getEntityByID?.(id))return false;
-  const cargo=store.listNativeCargoForEntity(id);
-  if(!Array.isArray(cargo))throw Error("ALIFE08_CARGO_LIST_UNAVAILABLE");
-  if(cargo.length)return false;
-  const modules=store.listNativeModulesForEntity(id);
-  if(!Array.isArray(modules)||modules.length)return false;
+  if(!Array.isArray(store.listNativeCargoForEntity(id))||
+     !Array.isArray(store.listNativeModulesForEntity(id)))
+   throw Error("ALIFE08_ORPHAN_ROW_LIST_UNAVAILABLE:"+id);
  }
  return true;
 }
@@ -108,32 +135,24 @@ function adoptStaleRuntimeFleet({scene,store,fleet,key,minerIDs,haulerIDs}){
 // the slot must not be re-seeded wholesale and must not stay blocked forever:
 // only the provably missing roles are allocated again, and the witness is merged.
 // A missing ID that still owns cargo or modules is never replaced.
-function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,minerIDs,haulerIDs}){
+function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,minerIDs,haulerIDs}){
  if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1")return null;
  const aliveMin=minerIDs.filter(id=>store.getNativeEntity(id)||scene.getEntityByID(id));
  const aliveHau=haulerIDs.filter(id=>store.getNativeEntity(id)||scene.getEntityByID(id));
  const missingMin=minerIDs.length-aliveMin.length;
  const missingHau=haulerIDs.length-aliveHau.length;
  if(!missingMin&&!missingHau)return null;
- let archivedModules=0;
+ let archivedModules=0,archivedCargo=0;
  for(const id of [...minerIDs,...haulerIDs]){
   if(aliveMin.includes(id)||aliveHau.includes(id))continue;
-  const cargo=store.listNativeCargoForEntity(id);
-  if(!Array.isArray(cargo))throw Error("ALIFE08_CARGO_LIST_UNAVAILABLE");
-  if(cargo.length)throw Error("ALIFE08_MISSING_SHIP_HOLDS_CUSTODY:"+id);
-  const modules=store.listNativeModulesForEntity(id);
-  if(!Array.isArray(modules))throw Error("ALIFE08_MODULE_LIST_UNAVAILABLE");
-  if(modules.length){
-   // A vanished hull can leave fitted items behind. They are unreachable now, so
-   // they are archived verbatim instead of being deleted or silently dropped.
-   if(db.write("npcEntities","/coopMiningFleetSlotsArchive/"+key+"-modules-"+id+"-"+Date.now(),
-     modules)?.success!==true)
-    throw Error("ALIFE08_ORPHAN_MODULE_ARCHIVE_FAILED:"+id);
-   if(db.flushTableSync("npcEntities",{log:false})?.success!==true)
-    throw Error("ALIFE08_ORPHAN_MODULE_ARCHIVE_FLUSH_FAILED:"+id);
-   archivedModules+=modules.length;
-  }
+  const archived=archiveOrphanRows({db,store,key,entityID:id});
+  archivedModules+=archived.modules;
+  archivedCargo+=archived.cargo;
  }
+ // The scene mining state must exist BEFORE allocating, exactly like a first
+ // seed: without it the fresh hulls are created as scene-only actors and their
+ // durable rows never reach the store.
+ ensureState();
  const born=spawn(slot,{miners:missingMin,haulers:missingHau});
  if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
      born.data.haulerSpawnResult?.data?.partialFailure)
@@ -151,11 +170,14 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,minerIDs,haul
   throw Error("ALIFE08_REPAIR_MARKER_MISMATCH");
  const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
  if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
+ const notStored=[...merged.minerEntityIDs,...merged.haulerEntityIDs]
+  .filter(id=>!store.getNativeEntity(id));
+ if(notStored.length)throw Error("ALIFE08_REPAIR_NOT_IN_STORE:"+notStored.join(","));
  const previous=readSlot(db,key)||{};
  saveSlot(db,key,{...previous,version:1,status:"ACTIVE",systemID,slot,
   fleetID:previous.fleetID||fleetIDForSlot(systemID,slot),
   minerEntityIDs:merged.minerEntityIDs,haulerEntityIDs:merged.haulerEntityIDs,
-  repairedAtMs:Date.now(),archivedModules,
+  repairedAtMs:Date.now(),archivedModules,archivedCargo,
   replacedEntityIDs:[...minerIDs,...haulerIDs].filter(id=>
    !merged.minerEntityIDs.includes(id)&&!merged.haulerEntityIDs.includes(id))});
  return merged;
@@ -323,13 +345,17 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      // A slot whose ships were never durable is not a lost fleet: nothing that
      // could hold cargo exists any more. Archive that witness and seed again.
      if(slotIsAbandoned({scene,store,systemID,slot,entityIDs:[...minerIDs,...haulerIDs]})){
+      const orphans=[...minerIDs,...haulerIDs].reduce((acc,id)=>{
+       const a=archiveOrphanRows({db,store,key,entityID:id});
+       return {modules:acc.modules+a.modules,cargo:acc.cargo+a.cargo};
+      },{modules:0,cargo:0});
       archiveSlot(db,key,record);
       log("ALIFE08 slot "+key+" witness archived as abandoned; seeding again");
-      reports.push({...seedSlot(),reseededFrom:"ABANDONED_WITNESS"});
+      reports.push({...seedSlot(),reseededFrom:"ABANDONED_WITNESS",...orphans});
       continue;
      }
      // A slot that lost only some ships keeps the survivors and their cargo.
-     const healed=repairPartialSlot({scene,store,systemID,slot,key,db,spawn,
+     const healed=repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,
       minerIDs,haulerIDs});
      if(healed){
       minerIDs=healed.minerEntityIDs;

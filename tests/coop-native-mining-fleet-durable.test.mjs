@@ -30,6 +30,8 @@ function fixture(t,shared=null){
   getNativeController:id=>world.controllers.get(id)||null,
   listNativeCargoForEntity:id=>[...world.cargo.values()].filter(x=>x.entityID===id),
   listNativeModulesForEntity:id=>[...world.modules.values()].filter(x=>x.entityID===id),
+  removeNativeCargo:id=>{world.cargo.delete(id);return{success:true};},
+  removeNativeModule:id=>{world.modules.delete(id);return{success:true};},
  };
  const nativeService={materializeStoredNativeController(scene,id){
   restores++;
@@ -271,7 +273,7 @@ test("a witness whose ships were never durable is archived and the slot is seede
  assert.equal(archived.length,1,"the old witness is archived, never silently dropped");
  assert.deepEqual(f.world.slots.get(slotKey(SYSTEM,1)).minerEntityIDs,[71001]);
 });
-test("an abandoned-looking witness that still holds cargo is never re-seeded",t=>{
+test("ore left by a vanished hull is archived, and the slot is seeded again",t=>{
  const f=fixture(t);
  const old=process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
  process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE="1";
@@ -280,12 +282,18 @@ test("an abandoned-looking witness that still holds cargo is never re-seeded",t=
  f.world.slots.set(slotKey(SYSTEM,1),{version:1,status:"ACTIVE",systemID:SYSTEM,slot:1,
   fleetID:SYSTEM*32+1,minerEntityIDs:[71001],haulerEntityIDs:[71002]});
  f.world.entities.clear();f.world.controllers.clear();f.setPhysical(new Map());
- // Real ore is still on record for that ship: never guess it away.
+ // The hull is gone but the ore it mined is still on record. Nobody can ever
+ // deliver it, so it is archived verbatim and custody moves.
  f.world.cargo.set(9001,{cargoID:9001,entityID:71002,quantity:500,ownerID:950});
  const r=f.start();
- assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
- assert.equal(f.getSpawnCalls(),0);
- assert.equal(r.slots[0].status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.status,"OK");
+ assert.equal(r.slots[0].reseededFrom,"ABANDONED_WITNESS");
+ assert.equal(r.slots[0].cargo,1);
+ assert.equal(f.getSpawnCalls(),1);
+ const archive=[...f.world.slots.keys()].filter(k=>k.includes("-cargo-71002-"));
+ assert.equal(archive.length,1,"the ore is archived, never dropped");
+ assert.equal(f.world.slots.get(archive[0])[0].quantity,500);
+ assert.equal(f.world.cargo.has(9001),false,"custody moved out of the live store");
 });
 test("a stale runtime fleet whose ships are gone is re-pointed instead of blocking the slot",t=>{
  const f=fixture(t);assert.equal(f.start().status,"OK");
@@ -345,16 +353,19 @@ test("a slot that lost only its miners keeps the surviving hauler and allocates 
  assert.ok(witness.repairedAtMs>0);
  assert.equal(f.world.cargo.get(9001).quantity,500,"surviving cargo is untouched");
 });
-test("a missing ship that still holds cargo is never replaced by a fresh hull",t=>{
+test("ore held by a missing miner is archived before a replacement hull is allocated",t=>{
  const f=partialSlotFixture(t);
  f.world.cargo.set(9002,{cargoID:9002,entityID:71001,quantity:300,ownerID:950});
  const r=f.start();
- assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
- assert.match(r.slots[0].reason,/ALIFE08_MISSING_SHIP_HOLDS_CUSTODY/);
- assert.equal(f.getSpawnCalls(),0);
- assert.equal(f.world.cargo.get(9002).quantity,300);
+ assert.equal(r.status,"OK");
+ assert.equal(r.slots[0].repaired,true);
+ const witness=f.world.slots.get(slotKey(SYSTEM,1));
+ assert.equal(witness.archivedCargo,1);
+ const archive=[...f.world.slots.keys()].filter(k=>k.includes("-cargo-71001-"));
+ assert.equal(archive.length,1);
+ assert.equal(f.world.slots.get(archive[0])[0].quantity,300);
+ assert.equal(f.world.cargo.has(9002),false);
 });
-
 test("fitted items left by a vanished hull are archived, and the slot is still repaired",t=>{
  const f=partialSlotFixture(t);
  // The miner row is gone but its fitted module rows survived.
