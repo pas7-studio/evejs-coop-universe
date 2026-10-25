@@ -15,6 +15,8 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
+// ALIFE-08 durable native miner/hauler identity (opt-in).
+names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetDurable");
 // COOP-048 native /jobs uses the existing authenticated Opportunity Board.
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
 // Stock in-game agent dialogue for jobs, no /jobs text needed.
@@ -312,8 +314,12 @@ function transform(source,spec,remove){
     }
   }
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-native-mining-durable-patch.cjs").patch(text,true);
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-native-mining-durable-patch.cjs").patch(text,false);
  if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js"){
   if(remove){
    text=require("./coop-native-mining-atomic-source-patch.cjs").patch(text,spec.file,true);
