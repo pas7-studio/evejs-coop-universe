@@ -744,7 +744,12 @@ async function advanceNativeMarket(){
    for(const link of links.filter(x=>Number(x.systemID)===Number(systemID))){
     if(completed>=2)break;
     const role=roles.get(link.pilotID)||link.role;
-    if(!["trader","hauler"].includes(role)||blocked.has(Number(link.entityID)))continue;
+    const recoveredPirate=role==="pirate"&&
+     process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
+     process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"&&
+     lootCommerce!==null;
+    if(!["trader","hauler"].includes(role)&&!recoveredPirate||
+       blocked.has(Number(link.entityID)))continue;
     const ship=scene.getEntityByID(Number(link.entityID));
     const ctrl=controllers.getControllerByEntityID(Number(link.entityID));
     if(!ship||ship.nativeNpc!==true||Number(ctrl?.currentTargetID)>0||
@@ -757,14 +762,22 @@ async function advanceNativeMarket(){
       Math.max(0,Number(x.radius)||0)+Math.max(0,Number(ship.radius)||0);
     });
     if(!station)continue;
-    const nativeCargo=store.listNativeCargoForEntity(Number(link.entityID))||[];
-    const ownedSellTypes=[...new Set(nativeCargo.filter(c=>Number(c.moduleID||0)===0&&
-     c.singleton!==true&&Number(c.quantity)>0&&sellTypes.includes(Number(c.typeID)))
-     .map(c=>Number(c.typeID)))];
-    const tradeCandidates=[
-     ...ownedSellTypes.map(typeID=>({side:"sell",typeID})),
-     ...buyTypes.map(typeID=>({side:"buy",typeID}))
-    ];
+    const nativeCargo=recoveredPirate?
+     lootCommerce.stock({pilotID:link.pilotID,entityID:Number(link.entityID)}):
+     store.listNativeCargoForEntity(Number(link.entityID))||[];
+    const eligible= nativeCargo.filter(c=>Number(c.moduleID||0)===0&&
+     c.singleton!==true&&Number(c.quantity)>0&&sellTypes.includes(Number(c.typeID)));
+    const tradeCandidates=recoveredPirate?
+     eligible.filter(c=>lootCommerce.readyFor({
+      pilotID:link.pilotID,entityID:Number(link.entityID),systemID,
+      stationID:Number(station.itemID),cargoID:Number(c.cargoID)
+     })).map(c=>({side:"sell",typeID:Number(c.typeID),
+      cargoID:Number(c.cargoID),
+      verifyCargo:row=>lootCommerce.verifiedCargo({
+       pilotID:link.pilotID,entityID:Number(link.entityID),cargo:row})})):
+     [...new Set(eligible.map(c=>Number(c.typeID)))]
+      .map(typeID=>({side:"sell",typeID}))
+      .concat(buyTypes.map(typeID=>({side:"buy",typeID})));
     for(const trade of tradeCandidates){
      const result=await nativeMarketTrader.execute({
       scene,pilotID:link.pilotID,entityID:Number(link.entityID),
@@ -773,8 +786,12 @@ async function advanceNativeMarket(){
      });
      if(result.status==="TRADE_SETTLED"){
       completed++;
-      require("./coopRuntimeProbe").observe("living-native-market-trade",null,
-       {spaceState:{systemID}},result);
+      require("./coopRuntimeProbe").observe(
+       recoveredPirate?"living-native-loot-market-settled":"living-native-market-trade",
+       null,{spaceState:{systemID}},{
+        ...result,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET",
+        sourceOfFunds:"SEED_MARKET_FILLED_ORDER"
+       });
       break;
      }
      if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
