@@ -57,7 +57,10 @@ function fixture({authorized=true,validDuo=true}={}){
   "./coopEscortRouteWitness":{createRouteWitness:()=>({
    sample:()=>{state.routeSamples++;return {status:"NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED",stage:1}},
    verify:()=>({status:state.routeValid?"VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE":
-    "ROUTE_CHECKPOINT_NOT_FOUND"})})}
+    "ROUTE_CHECKPOINT_NOT_FOUND"})})},
+  "./coopEscortTerminalAttendance":{createEscortTerminalAttendance:()=>({
+   record:()=>({status:"TERMINAL_ATTENDANCE_NOT_FOUND"}),
+   readDurable:()=>({status:"TERMINAL_ATTENDANCE_NOT_FOUND"})})}
  };
  const mod={exports:{}};
  vm.runInNewContext(src,{require:name=>{
