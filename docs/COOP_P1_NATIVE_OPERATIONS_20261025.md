@@ -47,13 +47,13 @@ All commands require the **explicit** `EVEJS_COOP_P1_OPERATIONS=1` opt-in, set v
 - `scripts/coop-p1-operations-native-patch.cjs` — **one** opt-in L1 statement in pinned `server/src/services/chat/chatCommands.js` and byte-exact reversible anchor. All logic stays in L2.
 - `scripts/patch-evejs-coop.cjs` — transactional manifest adds one native source spec, one L2 copied module.
 - `scripts/Deploy-Coop-RuntimeProbe.ps1` — optional deployment flag, default off; does **not** authorize a deployment.
-- `tests/coop-p1-tactical-convoy-operations.test.mjs` — 12 real authorizer/role/raid/wreck/source wiring tests.
+- `tests/coop-p1-tactical-convoy-operations.test.mjs` — 13 real authorizer/role/raid/wreck/source wiring tests, including destroyed-ship versus confirmed-wreck race.
 - `tests/coop-p1-native-courier-escort.test.mjs` — 5 genuine contract/plastic wrap/narrow native ship ownership tests.
 - `tests/coop-p1-native-raid-alerts.test.mjs` — 3 native raid notification opt-in/out and spoof denial tests. Test files are auto-discovered by the latest `Verify-Local-Coop.ps1`; do not add a parallel static test list.
 
 ## Validation already completed and next exact gates
 
-**ISOLATED LOGIC PASS:** 12/12 tactical/raid tests, 5/5 courier/logistics tests and 3/3 event-notification tests executed with mocked stock native dependencies in a V8 JavaScript harness. The full pinned `chatCommands.js` (341,912 bytes) accepted the hook and passed: one apply modifies, second apply no-op, one remove restores **identical** original bytes, second remove no-op, final patched source valid JS. This proves source contract compatibility only.
+**ISOLATED LOGIC PASS:** 13/13 tactical/raid tests, 5/5 courier/logistics tests and 3/3 event-notification tests executed with mocked stock native dependencies in a V8 JavaScript harness. The full pinned `chatCommands.js` (341,912 bytes) accepted the hook and passed: one apply modifies, second apply no-op, one remove restores **identical** original bytes, second remove no-op, final patched source valid JS. This proves source contract compatibility only.
 
 **NOT YET PASSED:** native Node `node --test` on project checkout, complete `scripts/patch-evejs-coop.cjs --dry-run` against pinned checkout, project regression baseline, Docker image, native launcher and two genuine clients.
 
