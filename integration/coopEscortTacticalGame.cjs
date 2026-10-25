@@ -2,9 +2,9 @@
 // P1: stock EveJS NPC movement/behavior only. No fake ship control or ISK.
 const {createTactics}=require("./coopEscortNativeTactics");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-function createNativeTacticalGame({readEvent,readVolunteer,readFlight,
+function createNativeTacticalGame({readEvent,readVolunteer,readFlight,readManifest,
  getScene,getSessions,fleetRuntime,npcRuntime,npcService,clock=()=>Date.now()}={}){
- if([readEvent,readVolunteer,readFlight,getScene,getSessions,clock]
+ if([readEvent,readVolunteer,readFlight,readManifest,getScene,getSessions,clock]
    .some(f=>typeof f!=="function")||
    !fleetRuntime||typeof fleetRuntime.getFleetForCharacter!=="function"||
    typeof fleetRuntime.getMemberRecord!=="function"||
@@ -20,13 +20,16 @@ function createNativeTacticalGame({readEvent,readVolunteer,readFlight,
    typeof e.event.linkedTripID!=="string")
    return {status:"NATIVE_CONVOY_ROUTE_NOT_DEPARTED"};
   const id=e.event.linkedTripID;
-  const f=readFlight(id),b=f?.booking;
+  const f=readFlight(id),b=f?.booking,m=readManifest(id);
   if(f?.status!=="READY"||f.phase!=="FUNDED"||!b||
+   m?.status!=="READY"||m.record?.key!==id||
+   !Array.isArray(m.record?.cargo)||!m.record.cargo.length||
+   m.record.cargo.some(x=>!pos(x.cargoID))||
    b.manifestKey!==id||e.event.entityID!==b.haulerID||
    e.event.systemID!==b.systemID||
    e.event.stationID!==b.stationID||
    eventID!=="convoy-"+b.systemID+"-"+b.fleetID+"-"+
-    String(eventID).split("-").slice(-1)[0]||
+    Math.min(...m.record.cargo.map(x=>x.cargoID))||
    !pos(b.playerFleetID)||!pos(b.haulerID))
    return {status:"NATIVE_CONVOY_ROUTE_NOT_FUNDED"};
   return {status:"NATIVE_CONVOY_EN_ROUTE",eventID,
@@ -106,6 +109,13 @@ function commandInGame(session,eventID,mode){
     readVolunteer:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id),
     readFlight:key=>binding.readFlight?.(key)||
       {status:"NATIVE_FLIGHT_AUTHORITY_UNAVAILABLE"},
+    readManifest:key=>require("./coopNativeHaulManifest").createManifest({
+     root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||
+      "/var/lib/evejs/coop-native-warehouse",
+     store:require("./npc/nativeNpcStore"),
+     items:require("../services/inventory/itemStore"),
+     getNativeEntity:require("./npc/nativeNpcStore").getNativeEntity
+    }).read(key),
     getScene:session=>runtime.getSceneForSession(session),
     getSessions:()=>require("../services/chat/sessionRegistry").getSessions(),
     fleetRuntime:require("../services/fleets/fleetRuntime"),
