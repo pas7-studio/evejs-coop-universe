@@ -23,7 +23,7 @@ const pilot1={characterID:101,_space:{shipID:9001,systemID:30000144,initialState
 const pilot2={characterID:102,_space:{shipID:9002,systemID:30000144,initialStateSent:true}};
 scene.sessions.set(101,pilot1);
 scene.sessions.set(102,pilot2);
-const nativeFleet={members:new Map([[101,{}],[102,{}]])};
+const nativeFleet={fleetID:990001,members:new Map([[101,{}],[102,{}]])};
 const tags=[],messages=[];
 const fleetRuntime={getFleetForCharacter:id=>nativeFleet.members.has(id)?nativeFleet:null,
  getMemberRecord:(f,id)=>f.members.get(id)||null,
@@ -92,6 +92,31 @@ test("different verified crew commitments have distinct play roles, but no fabri
  assert.equal(ops.snapshot().roles.length,2);
  assert.equal(tags.length,2,"roles must not auto-tag or fire weapons");
 });
+test("only real saved EveJS wreck from exact NPC source closes a live event",()=>{
+ const getWreck=id=>id===777?{wreckID:777,sourceEntityID:6001,systemID:30000144}:null;
+ const local=createOperations({clock:()=>time,getScene:()=>scene,getFleets:()=>fleetRuntime,
+  getMiningFleets:()=>nativeFleets,getCargo:id=>cargo.get(id)||[],
+  getWreck,send:()=>{}});
+ assert.equal(local.recordNativeRaid({...valid,actions:[action]}).accepted,1);
+ assert.equal(local.recordNativeWreck({systemID:30000144,npcID:6101,wreckID:777}).status,
+  "NATIVE_WRECK_IDENTITY_MISMATCH");
+ assert.equal(local.recordNativeWreck({systemID:30000144,npcID:6001,wreckID:777}).status,
+  "REAL_WRECK_RESOLVED_OPERATION");
+ assert.equal(local.execute(pilot1,"status").status,"REAL_WRECK_OPERATION_RESOLVED");
+ assert.match(local.execute(pilot1,"status").message,/PIRATE_DESTROYED/);
+ assert.equal(local.recordNativeWreck({systemID:30000144,npcID:6001,wreckID:777}).status,
+  "NO_MATCHING_ACTIVE_OPERATION");
+ assert.equal(local.snapshot().resolved[0].wreckID,777);
+});
+test("role intent is bound to the actual fleet and physical ship, not a shared chat label",()=>{
+ const old=nativeFleet.fleetID;
+ nativeFleet.fleetID=990002;
+ try{
+  assert.equal(ops.execute(pilot2,"role haul 6001").status,"ROLE_DECLARED",
+   "new fleet ID must not count stale old-fleet member role");
+  assert.equal(ops.execute(pilot1,"role intercept 6001").status,"COMPLEMENTARY_ROLES_DECLARED");
+ }finally{nativeFleet.fleetID=old;}
+});
 test("disconnects, duplicated sessions, stale cargo or destroyed targets cannot be exploited",()=>{
  const duplicate={characterID:102,_space:{...pilot2._space}};
  scene.sessions.set("duplicate",duplicate);
@@ -141,4 +166,7 @@ test("world integration records only successful native NPC raid actions when fea
  const notifier=src.lastIndexOf("notifyRaid(scene,result.actions)",guard);
  assert.ok(guard>notifier&&call>guard);
  assert.ok(src.slice(0,guard).includes("if(result.actions.length)"));
+ assert.match(src,/PHYSICAL_NATIVE_WRECK_VERIFIED/);
+ assert.match(src,/PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED/);
+ assert.match(src,/recordNativeWreck\\(\\{systemID,npcID,wreckID\\}\\)/);
 });
