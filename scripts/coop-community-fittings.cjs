@@ -108,15 +108,18 @@ function buildCatalog(hulls, candidates, sde, perHull = 5) {
   }
   const records=[], coverage=[];
   for (const hull of hulls) {
-    const variants=[...(byHull.get(hull.shipTypeID)?.values()||[])].sort((a,b)=>b.slots-a.slots || a.signature.localeCompare(b.signature)).slice(0,perHull);
+    const variants=[...(byHull.get(hull.shipTypeID)?.values()||[])].sort((a,b)=>Number(b.source.kind==='permissioned-eft')-Number(a.source.kind==='permissioned-eft') || b.slots-a.slots || a.signature.localeCompare(b.signature)).slice(0,perHull);
     coverage.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,variants:variants.length,target:perHull});
     for (const [i,fit] of variants.entries()) {
       const sourceURL=text(fit.source.url);
       const id=fit.signature.slice(0,16);
+      const curated=fit.source.kind==='permissioned-eft';
+      const name=curated?text(fit.name||`[COMMUNITY] ${hull.shipName} ${i+1}`):`[FIELD] ${hull.shipName} ${i+1}`;
+      const origin=curated?`Shared EFT by ${text(fit.source.author).slice(0,70)}`:'Public combat-loss fit; not vetted';
       records.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,fitData:fit.fitData,
-        name:`[FIELD] ${hull.shipName} ${i+1}`.slice(0,50),
-        description:`${PREFIX}${id} Public combat-loss fit; not vetted. ${sourceURL}`.slice(0,500),
-        provenance:{kind:fit.source.kind,url:sourceURL,signature:fit.signature}});
+        name:name.slice(0,50),
+        description:`${PREFIX}${id} ${origin}. ${sourceURL}`.slice(0,500),
+        provenance:{kind:fit.source.kind,url:sourceURL,signature:fit.signature,author:curated?fit.source.author:undefined,permission:curated?fit.source.permission:undefined}});
     }
   }
   return {schema:1,source:'public-killmail-esi',sdePin:PIN,records,coverage,invalid,
@@ -145,7 +148,7 @@ function propose(current, input, maxCatalog = 2500) {
     if (!match || !positive(f.shipTypeID) || !Array.isArray(f.fitData) || text(f.name).length>50 || text(f.description).length>500) throw Error('INVALID_SEED_RECORD');
     if(ids.has(match[1])) throw Error('DUPLICATE_INCOMING_SIGNATURE');ids.add(match[1]);
     const id=indexed.get(match[1])||next++;
-    const record={fittingID:id,ownerID:OWNER,shipTypeID:Number(f.shipTypeID),name:text(f.name),description:text(f.description),fitData:f.fitData,savedDate:'0'};
+    const record={fittingID:id,ownerID:OWNER,shipTypeID:Number(f.shipTypeID),name:text(f.name),description:text(f.description),fitData:f.fitData,savedDate:((BigInt(Date.now())+11644473600000n)*10000n).toString()};
     if (updated[String(id)]) {
       // Do not overwrite the saved timestamp when unchanged.
       record.savedDate=updated[String(id)].savedDate||'0';
