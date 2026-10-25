@@ -12,8 +12,27 @@ function createJobNotifications({root,io=fs,clock=()=>Date.now(),
   clock,readEvent,agentsForCorporation,getSessions,watch,sendNativeMail
  ].some(x=>typeof x!=="function"))throw Error("NATIVE_JOB_MAIL_AUTHORITIES_REQUIRED");
  const dir=path.join(root,"coop-opportunities","native-job-agent-mail");
+ function claimPath(eventID,characterID){
+  return path.join(dir,eventID+"-"+characterID+".json");
+ }
+ function readClaim(eventID,characterID){
+  let data;try{data=io.readFileSync(claimPath(eventID,characterID),"utf8")}
+  catch(e){return {status:e?.code==="ENOENT"?"NOT_FOUND":"CLAIM_READ_UNAVAILABLE"}}
+  if(typeof data!=="string"||data.length>1024||!data.endsWith("\n"))
+   return {status:"CLAIM_CORRUPT"};
+  let row;try{row=JSON.parse(data.trim())}
+  catch{return {status:"CLAIM_CORRUPT"}}
+  if(row?.v!==1||row.eventID!==eventID||row.characterID!==characterID||
+   !pos(row.at)||!["PREPARED","SENT"].includes(row.state)||
+   row.state==="SENT"&&!pos(row.messageID))
+   return {status:"CLAIM_CORRUPT"};
+  return {status:row.state==="SENT"?"ALREADY_SENT":"SEND_UNCERTAIN"};
+ }
  function claim(eventID,characterID){
-  const file=path.join(dir,eventID+"-"+characterID+".json");
+  // A completed durable claim is an ordinary duplicate, not an error.
+  const previous=readClaim(eventID,characterID);
+  if(previous.status!=="NOT_FOUND")return previous;
+  const file=claimPath(eventID,characterID);
   let fd,dirfd;
   try{
    io.mkdirSync(dir,{recursive:true});
@@ -21,11 +40,38 @@ function createJobNotifications({root,io=fs,clock=()=>Date.now(),
     state:"PREPARED",at:clock()})+"\n");
    fd=io.openSync(file,"wx",0o600);
    if(io.writeSync(fd,contents,0,contents.length,null)!==contents.length)
+    return {status:"CLAIM_WRITE_UNCERTAIN"};
+   io.fsyncSync(fd);io.closeSync(fd);fd=undefined;
+   dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
+   return {status:"CLAIMED"};
+  }catch(e){
+   return e?.code==="EEXIST"?readClaim(eventID,characterID):
+    {status:"CLAIM_WRITE_UNCERTAIN"};
+  }finally{
+   if(fd!==undefined)try{io.closeSync(fd)}catch{}
+   if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}
+  }
+ }
+ function markSent(eventID,characterID,messageID){
+  if(!pos(messageID))return false;
+  if(readClaim(eventID,characterID).status!=="SEND_UNCERTAIN")return false;
+  const target=claimPath(eventID,characterID),temp=target+".sent.tmp";
+  let fd,dirfd;
+  try{
+   const contents=Buffer.from(JSON.stringify({v:1,eventID,characterID,
+    state:"SENT",at:clock(),messageID})+"\n");
+   fd=io.openSync(temp,"wx",0o600);
+   if(io.writeSync(fd,contents,0,contents.length,null)!==contents.length)
     return false;
    io.fsyncSync(fd);io.closeSync(fd);fd=undefined;
-   dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);return true;
+   io.renameSync(temp,target);
+   dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
+   return readClaim(eventID,characterID).status==="ALREADY_SENT";
   }catch{return false}
-  finally{if(fd!==undefined)try{io.closeSync(fd)}catch{};if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}}
+  finally{
+   if(fd!==undefined)try{io.closeSync(fd)}catch{}
+   if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}
+  }
  }
  function notify(q){
   if(process.env.EVEJS_COOP_NATIVE_JOB_AGENT!=="1"||
@@ -75,10 +121,13 @@ function createJobNotifications({root,io=fs,clock=()=>Date.now(),
    if(sub?.status!=="READY"||sub.mode==="off"||
     sub.mode==="local"&&system!==q.systemID||
     !["local","all"].includes(sub.mode))continue;
-   if(!claim(q.eventID,id)){uncertain++;continue}
+   const receipt=claim(q.eventID,id);
+   if(receipt.status==="ALREADY_SENT")continue;
+   if(receipt.status!=="CLAIMED"){uncertain++;continue}
    let ack;try{ack=sendNativeMail(id,{title:"Corporate Escort: "+name,body,
     eventID:q.eventID,agentID:agent.agentID})}catch{uncertain++;continue}
-   if(ack?.success===true&&pos(Number(ack.messageID)))sent++;
+   if(ack?.success===true&&pos(Number(ack.messageID))&&
+    markSent(q.eventID,id,Number(ack.messageID)))sent++;
    else uncertain++;
   }
   return {status:uncertain?"MAIL_PARTIAL_OR_UNCERTAIN":"NATIVE_AGENT_MAIL_DISPATCHED",
