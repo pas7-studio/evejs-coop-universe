@@ -68,6 +68,16 @@ test("native unfinished installed jobs count against replenishment and prevent d
  const r=await f.read();assert.equal(r.nativeActiveJobs,1);
  assert.equal(r.nativeReadyJobs,0);assert.equal(r.productShortage,10);
 });
+test("paused native job is reserved stock and never creates a second paid manufacturing intent",async()=>{
+ const f=fixture();f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
+  productQuantity:100,blueprintID:BPI,activityID:1,status:2,
+  coopOperationID:"npc-manufacture:"+"c".repeat(32)}];
+ const r=await f.read();
+ assert.equal(r.authoritativeNative,true);
+ assert.equal(r.nativeReadyJobs,0);
+ assert.equal(r.nativeActiveJobs,1);
+ assert.equal(r.productShortage,0);
+});
 test("real READY industry job takes precedence in native inventory authority",async()=>{
  const f=fixture();f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
   productQuantity:100,blueprintID:BPI,activityID:1,status:3,
