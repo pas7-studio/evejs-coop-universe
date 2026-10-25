@@ -62,7 +62,7 @@ test("source threw after possible depletion: journal survives; restarted actor c
  assert.equal(settle(f.input).success,false);
  const restored={...f.input,entity:{itemID:f.entity.itemID}};
  assert.equal(settle(restored).success,false);
- assert.equal(restored.entity.coopMiningCargoNeedsOperatorRepair,"ALIFE06_JOURNAL_CONFLICT");
+ assert.equal(restored.entity.coopMiningCargoNeedsOperatorRepair,"ALIFE06_UNRESOLVED_SOURCE_OR_SHIP");
  assert.equal(JSON.parse(fs.readFileSync(f.filename)).reason,"DEBIT_THROW");
 });
 test("write of ore fails after depletion: durable unresolved journal and local repair latch",t=>{
@@ -174,4 +174,30 @@ test("wiring deploys cycle helper and modifies both stock mining authorities",()
  assert.match(src,/coop-native-mining-cycle-conservation-patch/);
  assert.match(src,/server\/src\/services\/mining\/miningRuntimeState\.js/);
  assert.match(src,/server\/src\/services\/mining\/miningRuntime\.js/);
+});
+
+test("unresolved asteroid debit blocks another miner on the same rock after restart",t=>{
+ const f=harness(t,{credit:()=>false});
+ assert.equal(settle(f.input).success,false);
+ const other={...f.input,entity:{itemID:980000000002}};
+ assert.equal(settle(other).success,false);
+ assert.equal(other.entity.coopMiningCargoNeedsOperatorRepair,"ALIFE06_UNRESOLVED_SOURCE_OR_SHIP");
+});
+test("unresolved ship journal blocks a different asteroid after restart",t=>{
+ const f=harness(t,{credit:()=>false});
+ assert.equal(settle(f.input).success,false);
+ const another={...f.input,entity:{itemID:f.entity.itemID},
+   targetEntity:{itemID:400002}};
+ assert.equal(settle(another).success,false);
+ assert.equal(another.entity.coopMiningCargoNeedsOperatorRepair,"ALIFE06_UNRESOLVED_SOURCE_OR_SHIP");
+});
+test("other miner depletion between committed ticks is allowed, never rock restoration",t=>{
+ const f=harness(t);
+ assert.equal(settle(f.input).success,true);
+ f.input.mineableState.remainingQuantity=88;
+ f.setSource({remainingQuantity:88});
+ f.input.debit=()=>{f.setSource({remainingQuantity:80});return{success:true}};
+ assert.equal(settle(f.input).success,true);
+ f.input.mineableState.remainingQuantity=99;
+ assert.equal(settle({...f.input,entity:{itemID:f.entity.itemID}}).success,false);
 });
