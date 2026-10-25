@@ -102,6 +102,11 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    (process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
     typeof escortGate?.recordEscortDeparture!=="function"))
    return pause("ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
+   (process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER!=="1"||
+    typeof escortGate?.recordEscortRouteSample!=="function"))
+   return pause("ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED");
   if(escortEnabled&&(!manifestEnabled||
     typeof escortGate?.fundBeforeWarp!=="function"||
     typeof escortGate?.recordDelivered!=="function"))
@@ -119,6 +124,12 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     .sort((a,b)=>a.stationID-b.stationID);
   if(!candidates.length)return pause("NO_NATIVE_NPC_STATION");
   const destination=candidates[0];
+  if(strictMotion()){
+   const first=scene.getEntityByID?.(ships[0]);
+   if(!vector(first?.position)||
+    distance(first.position,destination.position)<10000)
+    return pause("ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS");
+  }
   const cargo=ships.flatMap(id=>(store.listNativeCargoForEntity(id)||[]).filter(row=>
    pos(row.cargoID)&&pos(row.typeID)&&pos(row.quantity)&&Number(row.coopHaulFleetID)===fleetID));
   if(cargo.some(row=>row.transient===true))return pause("CARGO_NOT_DURABLE");
