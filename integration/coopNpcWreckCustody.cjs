@@ -235,7 +235,8 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
     groupID:Number(source.groupID),categoryID:Number(source.categoryID),
     itemName:String(source.itemName||type.name||""),
     quantity,singleton:source.singleton===true,
-    flagID:5,moduleState:copy(source.moduleState||null),transient:false};
+    flagID:5,moduleState:copy(source.moduleState||null),transient:false,
+    sourceWreckID:wreckID,sourceWreckItemID:itemID};
    const tx={version:1,phase:"PREPARED",itemID,wreckID,systemID,
     entityID:shipID,pilotID:claim.attackerPilotID,cargoID,
     ownerID:Number(native.ownerID),typeID:Number(source.typeID),
