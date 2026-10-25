@@ -38,11 +38,15 @@ const {calculateNativeDemand}=loadEconomySibling("coopNpcDemandAuthority");
 const {reconcileUnknown}=loadEconomySibling("coopNpcEconomyUnknownRecovery");
 const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
 const closed=x=>x==="SOLD";
-function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
+function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000,
+ saleAudit=null,authorizeSoldOperator=null}={}){
  if(typeof file!=="string"||!path.isAbsolute(file)||!planner||typeof planner.plan!=="function"||
   !native||["quote","installOnce","markReadyOnce","deliverOnce","getJob","getItem","getIndustryDebit"].some(k=>typeof native[k]!=="function")||
   !market||["listOnce","getOrder","getSaleEvidence","getWalletEntry"].some(k=>typeof market[k]!=="function")||
   !observe||["getOwner","getStation","snapshot"].some(k=>typeof observe[k]!=="function")||
+ (saleAudit!==null&&typeof saleAudit?.audit!=="function")||
+ (authorizeSoldOperator!==null&&typeof authorizeSoldOperator!=="function")||
+ ((saleAudit===null)!==(authorizeSoldOperator===null))||
   typeof clock!=="function"||!Number.isSafeInteger(maxActive)||maxActive<1||maxActive>2||
   !Number.isSafeInteger(maxStock)||maxStock<1||maxStock>1000000||
   !Number.isSafeInteger(minReorderMs)||minReorderMs<10000)throw Error("NPC_ECONOMY_NATIVE_AUTHORITIES_REQUIRED");
@@ -189,6 +193,10 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    return rpc&&typeof rpc.then==="function"?rpc.then(verified):verified(rpc);
   }
   if(e.phase==="LISTED"){
+   // With COOP-035/047 source receipts wired, the legacy market projection
+   // is NOT sufficient to mark an NPC corporation paid. Require operator
+   // finalization under this same durable journal lock and original audit.
+   if(saleAudit!==null)return halt("ORIGINAL_NATIVE_SOLD_OPERATOR_AUDIT_REQUIRED",id);
    const order=market.getOrder(e.orderID),sales=market.getSaleEvidence(e.orderID);
    if(!order||order.orderID!==e.orderID||order.ownerID!==ownerID||
       order.nativeEscrowVerified!==true||!Array.isArray(sales))return halt("NATIVE_SALE_EVIDENCE_MISSING",id);
@@ -270,7 +278,95 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    return {status:"PREPARED",operationID,productTypeID:j.productTypeID,shortage:shortage[j.productTypeID]};
   });
  }
+ // LW-04C4: one native fsynced source-of-truth SOLD transition, never a
+ // new Rust order, wallet credit, item delivery or second scheduler.
+ // The configured saleAudit is a captured trusted authority, not proof
+ // furnished by a client or admin command. No public API is registered.
+ async function confirmSoldOnce({ownerID,stationID,operationID,operatorGrant}={}){
+  if(saleAudit===null||
+     process.env.EVEJS_COOP_NATIVE_NPC_SOLD_FINALIZE_PROOF!=="1"||
+     process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY!=="1")
+   return halt("NATIVE_SOLD_OPERATOR_FINALIZATION_DISABLED",operationID);
+  if(!safeInt(ownerID)||!safeInt(stationID)||!isOperation(operationID))
+   return halt("NATIVE_SOLD_SCOPE_INVALID",operationID);
+  return exclusive(async()=>{
+   // Authenticate only against the server-injected operator authority.
+   // An empty grant or source UI status is never an authorization token.
+   let authorized=false;
+   try{
+    const result=authorizeSoldOperator({operatorGrant,ownerID,
+     stationID,operationID});
+    if(result&&typeof result.then==="function")
+     return halt("NATIVE_SOLD_ASYNC_AUTHORIZATION_UNSUPPORTED",operationID);
+    authorized=result===true;
+   }catch(_error){return halt("NATIVE_SOLD_OPERATOR_AUTHORITY_UNAVAILABLE",operationID);}
+   if(!authorized)return halt("NATIVE_SOLD_OPERATOR_NOT_AUTHORIZED",operationID);
+   if(!validateContext(ownerID,stationID))
+    return halt("NPC_OWNER_OR_STATION_UNVERIFIED",operationID);
+   const before=load(),e=before.entries[operationID];
+   if(!e||e.operationID!==operationID||
+      e.ownerID!==ownerID||e.stationID!==stationID||!safeInt(e.orderID)||
+      !safeInt(e.quantity)||!safeInt(e.jobID)||!safeInt(e.itemID))
+    return halt("NATIVE_SOLD_ORIGINAL_ENTRY_MISSING",operationID);
+   // A retried operator action after fsync is a harmless status read.
+   // Do not rerun a Rust transaction, wallet debit or the audit.
+   if(e.phase==="SOLD"){
+    if(!Number.isSafeInteger(e.revenueCents)||e.revenueCents<=0||
+       e.soldQuantity!==e.quantity||
+       e.settlementProof!=="RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"||
+       !Array.isArray(e.settlementFillIDs)||!e.settlementFillIDs.length||
+       !e.settlementFillIDs.every(safeInt)||
+       new Set(e.settlementFillIDs).size!==e.settlementFillIDs.length)
+     return halt("NATIVE_SOLD_PREVIOUS_RECEIPT_INVALID",operationID);
+    return {status:"ALREADY_SOLD",operationID,orderID:e.orderID,
+     revenueCents:e.revenueCents,soldQuantity:e.soldQuantity,
+     settlementFillIDs:[...e.settlementFillIDs],nativeMutation:false};
+   }
+   if(e.phase!=="LISTED")
+    return halt("NATIVE_SOLD_NOT_LISTED",operationID);
+   const unchanged=copy(e);
+   let proof;
+   try{
+    proof=await saleAudit.audit({ownerID,stationID,operationID,
+     orderID:e.orderID});
+   }catch(_error){return halt("NATIVE_SOLD_AUDIT_UNAVAILABLE",operationID);}
+   if(proof?.status!=="ORIGINAL_FULL_SALE_ATTESTED"||
+      proof.readOnly!==true||proof.nativeMutation!==false||
+      proof.proof!=="RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"||
+      proof.ownerID!==ownerID||proof.stationID!==stationID||
+      proof.operationID!==operationID||proof.orderID!==e.orderID||
+      proof.quantity!==e.quantity||proof.soldQuantity!==e.quantity||
+      proof.remainingQuantity!==0||
+      !Number.isSafeInteger(proof.revenueCents)||proof.revenueCents<=0||
+      !Array.isArray(proof.fillIDs)||proof.fillIDs.length<1||
+      proof.fillIDs.length>128||!proof.fillIDs.every(safeInt)||
+      new Set(proof.fillIDs).size!==proof.fillIDs.length)
+    return halt("NATIVE_SOLD_ORIGINAL_FINANCE_NOT_ATTESTED",operationID);
+   // The original audit compares Rust order and director journal before
+   // and after asynchronous reads. Confirm the persisted entry again before
+   // this single source-journal fsync.
+   const now=load(),current=now.entries[operationID];
+   if(!current||JSON.stringify(current)!==JSON.stringify(unchanged))
+    return halt("NATIVE_SOLD_JOURNAL_CHANGED_DURING_AUDIT",operationID);
+   const at=clock();
+   if(!Number.isSafeInteger(at)||at<=0)
+    return halt("NATIVE_SOLD_CLOCK_UNVERIFIED",operationID);
+   current.phase="SOLD";
+   current.revenueCents=proof.revenueCents;
+   current.soldQuantity=proof.soldQuantity;
+   current.settlementFillIDs=[...proof.fillIDs];
+   current.settlementProof=proof.proof;
+   current.soldAt=at;
+   save(now);
+   return {status:"SOLD",operationID,orderID:current.orderID,
+    revenueCents:current.revenueCents,soldQuantity:current.soldQuantity,
+    productionCostCents:current.installCostCents,
+    settlementFillIDs:[...current.settlementFillIDs],
+    nativeMutation:false,durableJournalUpdate:true};
+  });
+ }
  function inspect(){const s=load();return copy({version:s.version,entries:s.entries,history:s.history});}
- return Object.freeze({tick,inspect,mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:false});
+ return Object.freeze({tick,inspect,confirmSoldOnce,
+  mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:false});
 }
 module.exports={createDirector};
