@@ -31,13 +31,25 @@ if (Test-Path -LiteralPath $override -PathType Leaf) { $composeArgs += @('-f',$o
 $containerID = (& docker compose @composeArgs ps -q server | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $containerID) { throw 'Running server unavailable; no gameplay proof' }
 $imageId = (& docker inspect --format '{{.Image}}' $containerID | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or -not $imageId.StartsWith('sha256:')) { throw 'Cannot identify exact running image' }
+if ($LASTEXITCODE -ne 0 -or $imageId -notmatch '^sha256:[0-9a-f]{64}$') { throw 'Cannot identify exact running image' }
+$containerStartedAt = (& docker inspect --format '{{.State.StartedAt}}' $containerID | Out-String).Trim()
+$parsedStartedAt = [DateTimeOffset]::MinValue
+if ($LASTEXITCODE -ne 0 -or -not [DateTimeOffset]::TryParse($containerStartedAt, [ref]$parsedStartedAt)) {
+    throw 'Cannot identify real Docker container start time'
+}
+# The native upstream server mounts this exact named Docker volume. Verify it
+# from the actual running container, not from an untrusted fixture or YAML text.
+$mountJson = (& docker inspect --format '{{json .Mounts}}' $containerID | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $mountJson) { throw 'Cannot inspect actual persistent Docker mounts' }
+$mounts = @($mountJson | ConvertFrom-Json)
+$gameVolumes = @($mounts | Where-Object { $_.Type -eq 'volume' -and $_.Name -eq 'evejs-data' -and $_.Destination -eq '/var/lib/evejs' })
+if ($gameVolumes.Count -ne 1) { throw 'BLOCKED_PERSISTENCE_VOLUME: running server does not mount evejs-data at /var/lib/evejs' }
 New-Item -ItemType Directory -Force -Path $OutputRoot | Out-Null
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $report = Join-Path $OutputRoot "coop-reliability-$timestamp.json"
 $metaPath = Join-Path ([IO.Path]::GetTempPath()) "evejs-reliability-meta-$([Guid]::NewGuid().ToString('N')).json"
 try {
-    $metaText = @{projectSha=$projectSha;upstreamSha=$upstreamSha;imageId=$imageId} | ConvertTo-Json -Compress
+    $metaText = @{projectSha=$projectSha;upstreamSha=$upstreamSha;imageId=$imageId;containerStartedAt=$containerStartedAt} | ConvertTo-Json -Compress
     [IO.File]::WriteAllText($metaPath, $metaText, (New-Object System.Text.UTF8Encoding($false)))
     $args = @((Join-Path $PSScriptRoot 'coop-reliability-gates.cjs'),'--events','-','--meta',$metaPath,'--window-minutes',"$WindowMinutes",'--out',$report)
     $evidenceFiles = @{'--before'=$Before;'--after'=$After;'--ledger'=$Ledger;'--client'=$Client}
@@ -50,7 +62,11 @@ try {
     }
     # Read-only: no redeploy, restart, login, export of confidential DB or network change.
     # Limit collection, keep raw JSONL in-memory, and store only a summarized report.
-    $events = @(& docker compose @composeArgs exec -T server sh -c 'tail -n 10000 "${EVEJS_COOP_EVENTS_FILE:-/var/lib/evejs/coop-events.jsonl}"' 2>$null)
+    # Include the most recent REAL boot event even if the busy world's
+    # 10k-line activity tail no longer contains it. Provenance is still
+    # checked against the actual container start by the Node gate.
+    $readEvents = 'f="${EVEJS_COOP_EVENTS_FILE:-/var/lib/evejs/coop-events.jsonl}"; [ -r "$f" ] || exit 12; grep -F "living-headless-boot-requested" "$f" | tail -n 1; tail -n 10000 "$f"'
+    $events = @(& docker compose @composeArgs exec -T server sh -c $readEvents 2>$null)
     if ($LASTEXITCODE -ne 0) {
         Write-Warning 'BLOCKED_TELEMETRY: events absent or unreadable. Run Local-Two-Client-Test.ps1 -Action DiagnoseWorld.'
         $events = @()
