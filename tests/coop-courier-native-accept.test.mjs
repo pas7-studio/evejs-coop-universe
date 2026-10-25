@@ -101,3 +101,9 @@ test('accept and complete refuse a contract that is not a courier contract',()=>
  assert.equal(accept({contract:{...contract,type:1,contractType:undefined},identity,packageLocationID:60015260,runtime:itemExchange}).status,'REFUSED');
  assert.equal(itemExchange.calls.length,0);
 });
+
+test('the session builder accepts a record identified by id only',()=>{
+ const session=buildNpcSession({id:140000100,accountId:901,corporationID:98000001});
+ assert.equal(session.charid,140000100);
+ assert.equal(session.characterID,140000100);
+});

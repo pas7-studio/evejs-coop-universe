@@ -210,3 +210,15 @@ test('the exact live item and character shapes are accepted',()=>{
  const fitted=evaluateCourierIdentity({character:liveCharacter,ship:{...liveShip,flagID:0}},contract);
  assert.equal(fitted.status,'REFUSED_SHIP_NOT_IN_HANGAR');
 });
+
+test('a stored character record without a characterID field still works',()=>{
+ // The real characters table has no characterID key: the ID is the row key, so
+ // the record is passed with id only.
+ const contract=courier({volume:29500,collateral:300000});
+ const character={id:140000100,accountId:901,stationID:60003760,balance:25000000};
+ const ship={itemID:9988400100000,typeID:20185,ownerID:140000100,locationID:60003760,flagID:4,capacity:465000};
+ const ready=evaluateCourierIdentity({character,ship},contract);
+ assert.equal(ready.status,'READY');
+ assert.equal(ready.characterID,140000100);
+ assert.equal(evaluateCourierIdentity({character:{...character,id:0},ship},contract).status,'REFUSED_NO_CHARACTER');
+});

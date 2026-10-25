@@ -285,7 +285,9 @@ function evaluateCourierIdentity(identity, contract) {
   const character = who.character;
   const ship = who.ship;
   const contractID = Number(contract && contract.contractID) || 0;
-  if (!character || !(Number(character.characterID) > 0) || !(Number(character.accountId) > 0)) {
+  // The stored character record has no characterID field: the ID is the row key.
+  const characterID = Number(character && (character.characterID || character.id)) || 0;
+  if (!character || !(characterID > 0) || !(Number(character.accountId) > 0)) {
     return status("REFUSED_NO_CHARACTER", { contractID });
   }
   const originStationID = Number(contract && contract.startStationID) || 0;
@@ -306,11 +308,11 @@ function evaluateCourierIdentity(identity, contract) {
   }
   // The ship must belong to this courier: an item owned by somebody else is
   // not a ship we may fly, even if it sits at the right station.
-  if (Number(ship.ownerID) !== Number(character.characterID)) {
+  if (Number(ship.ownerID) !== characterID) {
     return status("REFUSED_SHIP_NOT_OWNED", {
       contractID,
       shipOwnerID: Number(ship.ownerID) || 0,
-      characterID: Number(character.characterID),
+      characterID,
     });
   }
   // A real item row has locationID, not stationID: reading stationID alone made
@@ -335,7 +337,7 @@ function evaluateCourierIdentity(identity, contract) {
   }
   return status("READY", {
     contractID,
-    characterID: Number(character.characterID),
+    characterID,
     balance,
     shipItemID: Number(ship.itemID),
     capacityM3,

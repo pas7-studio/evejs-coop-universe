@@ -24,13 +24,15 @@ const OUTSTANDING = 0;
 const IN_PROGRESS = 1;
 
 function buildNpcSession(character) {
-  if (!character || !(Number(character.characterID) > 0) || !(Number(character.accountId) > 0)) {
+  // The stored record has no characterID field; the ID is the row key.
+  const characterID = Number(character && (character.characterID || character.id)) || 0;
+  if (!character || !(characterID > 0) || !(Number(character.accountId) > 0)) {
     return null;
   }
   return {
     // Identity only. No sendNotification on purpose: an NPC has no client.
-    charid: Number(character.characterID),
-    characterID: Number(character.characterID),
+    charid: characterID,
+    characterID,
     userid: Number(character.accountId),
     corpid: Number(character.corporationID) || 0,
     corporationID: Number(character.corporationID) || 0,
