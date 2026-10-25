@@ -9,14 +9,16 @@ function makeNativeGame(){
  const items=require("../services/inventory/itemStore");
  const corps=require("../services/corporation/corporationState");
  const board=require("./coopWorldOpportunityBoard");
+ let game;
  const wallet=require("./coopEscortNativeFunds").createEscortNativeFunds({
   atomicRows:store.coopAtomicNativeRows,
-  isNpcCorporation:corps.isNpcCorporationID});
+  isNpcCorporation:corps.isNpcCorporationID,
+  verifyRescueFailure:c=>game?.verifyRivalLoss(c)});
  const root=process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||
   "/var/lib/evejs/coop-native-warehouse";
  const manifest=require("./coopNativeHaulManifest").createManifest({
   root,store:npc,items,getNativeEntity:npc.getNativeEntity});
- return createRescueContracts({
+ game=createRescueContracts({
   root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs",
   readEvent:board.readNativeEvent,
   readFlight:key=>require("./coopEscortNativeBinding").routeGate()
@@ -29,7 +31,14 @@ function makeNativeGame(){
   isNpcCorporation:corps.isNpcCorporationID,
   readVolunteer:require("./coopEscortVolunteers").readVerifiedNativePair,
   nativeFunds:wallet,
+  readNativeNpcCargo:()=>{
+   const result=store.read("npcCargo","/cargo");
+   if(!result?.success||!result.data||
+    typeof result.data!=="object")throw Error("NPC_CARGO_UNAVAILABLE");
+   return Object.values(result.data);
+  },
   amountISK:Number(process.env.EVEJS_COOP_RESCUE_REWARD_ISK)});
+ return game;
 }
 let instance;
 function runGame(session,operation,eventID){
@@ -40,6 +49,7 @@ function runGame(session,operation,eventID){
   if(operation==="offer")return instance.offer(eventID);
   if(operation==="accept")return instance.accept({session,eventID});
   if(operation==="claim")return instance.claim({session,eventID});
+  if(operation==="cancel")return instance.cancel({session,eventID});
   return {status:"INVALID_RESCUE_OPERATION"};
  }catch{return {status:"RESCUE_CONTRACT_RUNTIME_UNAVAILABLE"}}
 }
