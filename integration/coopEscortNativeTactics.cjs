@@ -27,7 +27,9 @@ function createTactics({readVolunteers,readRoute,getScene,authorizeCommander,
    volunteers.eventID!==eventID||
    route?.status!=="NATIVE_CONVOY_EN_ROUTE"||
    route.systemID!==volunteers.systemID||
-   route.fleetID!==volunteers.fleetID||
+   // NPC source fleet and the two PLAYER pilots belong to distinct native
+   // fleets. Requiring them equal falsely blocks every genuine convoy.
+   route.playerFleetID!==volunteers.fleetID||
    route.entityID!==volunteers.entityID||
    scene?.systemID!==route.systemID||
    !pos(route.entityID)||scene.getEntityByID?.(route.entityID)?.nativeNpc!==true||
@@ -36,12 +38,13 @@ function createTactics({readVolunteers,readRoute,getScene,authorizeCommander,
    return {status:"NATIVE_CONVOY_OR_FLEET_NOT_CONFIRMED"};
   if(authority?.status!=="AUTHORIZED_NATIVE_CONVOY_COMMANDER"||
    authority.characterID!==characterID||
-   authority.fleetID!==route.fleetID)
+   authority.fleetID!==route.playerFleetID)
    return {status:"NATIVE_COMMANDER_NOT_AUTHORIZED"};
   const now=clock(),key=eventID+":"+mode;
   if(!pos(now))return {status:"CLOCK_INVALID"};
   if(last.has(key)&&now-last.get(key)<10000)return {status:"TACTICAL_COOLDOWN"};
   let ack;try{ack=issueNativeCommand({eventID,mode,shipID:route.entityID,
+   npcFleetID:route.fleetID,playerFleetID:route.playerFleetID,
    fleetID:route.fleetID,systemID:route.systemID})}
   catch{return {status:"NATIVE_TACTICAL_COMMAND_FAILED"}}
   if(ack?.status!=="NATIVE_COMMAND_ACCEPTED"||ack.entityID!==route.entityID)
