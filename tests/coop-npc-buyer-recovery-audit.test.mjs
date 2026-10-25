@@ -76,12 +76,16 @@ test("different tax or seller receipt cannot authorize recovery",async()=>{
  }
 });
 test("Rust altered owner/fill or missing history cannot pass",async()=>{
- for(const patch of [{owner_id:"90000002"},{fill_id:"930000000000002"},
+ for(const patch of [{owner_id:"90000002"},
   {quantity:19},{history_recorded:false},{history_day:null}]){
   const r=await one({state:"filled",rustClaim:{...rust("filled"),...patch},
    receipts:[receipt()]});
   assert.equal(r.reason,"RUST_CLAIM_IDENTITY_OR_HISTORY_CONFLICT");
  }
+ const changedFill=await one({state:"filled",
+  rustClaim:{...rust("filled"),fill_id:"930000000000002"},
+  receipts:[receipt()]});
+ assert.equal(changedFill.reason,"GAMESTORE_RECEIPT_IDENTITY_OR_TAX_CONFLICT");
 });
 test("transport exception never proves a durable Rust claim is absent",async()=>{
  assert.equal((await one({throws:true})).reason,"AUTHORITATIVE_DB_UNAVAILABLE");
