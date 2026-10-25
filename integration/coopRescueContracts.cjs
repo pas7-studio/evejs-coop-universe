@@ -96,10 +96,10 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
   let wreck,items;
   try{wreck=getWreck(wreckID);items=getWreckItems(wreckID)}
   catch{return deny("RESCUE_WRECK_NOT_AVAILABLE")}
-  if(wreck?.wreckID!==wreckID||
+  if(!Array.isArray(items))return deny("RESCUE_NATIVE_WRECK_UNVERIFIED");
+  if(wreck&&(wreck.wreckID!==wreckID||
    wreck.systemID!==b.systemID||
-   wreck.sourceEntityID!==b.haulerID||
-   !Array.isArray(items)||items.length<1)
+   wreck.sourceEntityID!==b.haulerID))
    return deny("RESCUE_NATIVE_WRECK_UNVERIFIED");
   const cargo=items.filter(x=>x.wreckID===wreckID&&
    x.sourceKind==="cargo"&&pos(x.sourceCargoID)&&
@@ -109,6 +109,7 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     z.typeID===x.typeID&&z.quantity===x.sourceOriginalQuantity));
   const persistedID="escort-rescue-"+wreckID;
   const prior=readQuote(persistedID);
+  if(!wreck&&!prior)return deny("RESCUE_NATIVE_WRECK_UNVERIFIED");
   if(prior?.status&&prior.status!=="READY")return prior;
   let expected;
   if(prior){
