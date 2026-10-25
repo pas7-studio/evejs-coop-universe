@@ -18,6 +18,7 @@ node --test \
  tests/coop-npc-ammo-journal-audit.test.mjs \
  tests/coop-npc-ammo-posix-crash.test.mjs \
  tests/coop-npc-atomic-weapon-bank.test.mjs \
+ tests/coop-npc-fire-outcome-witness.test.mjs \
  tests/coop-npc-atomic-sqlite-crash.test.mjs \
  tests/coop-npc-atomic-sqlite-audit.test.mjs \
  tests/coop-npc-fire-debit-source.test.mjs \
