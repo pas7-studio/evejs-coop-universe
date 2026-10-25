@@ -677,6 +677,8 @@ function advanceNativeRaids(){
   });
  }
  const roles=economy?.snapshot().pilots||{};
+ // Validate persisted goal state before allowing any new native raid command.
+ const goals=npcPersonalGoals();
  for(const systemID of visitedSystems){
   const pirates=bridge.snapshot().filter(p=>p.systemID===systemID&&roles[p.pilotID]?.role==="pirate")
    .map(x=>x.entityID);
@@ -729,7 +731,6 @@ function advanceNativeRaids(){
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
    getController:id=>controllers.getControllerByEntityID(id)
   });
-  const goals=npcPersonalGoals();
   if(goals){
    const points=npcRealPoints(scene),active=new Set(result.actions.map(a=>Number(a.pirateID)));
    const leased=raidDirector.activePirateIDs(sys=>
