@@ -36,7 +36,7 @@ function main(argv=process.argv.slice(2),env=process.env){
  };
  socket.setTimeout(10000,()=>socket.destroy(Error("RECOVERY_SOCKET_TIMEOUT")));
  let answer="",finished=false;
- socket.on("connect",()=>socket.end(JSON.stringify(request)+"\n"));
+ socket.on("connect",()=>socket.write(JSON.stringify(request)+"\n"));
  socket.on("data",buf=>{
   answer+=buf.toString("utf8");
   if(answer.length>16384)socket.destroy(Error("RESPONSE_TOO_LARGE"));
