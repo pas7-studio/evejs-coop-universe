@@ -21,6 +21,7 @@ const specs=[
   {anchor:"  queuePostSpaceAttachFittingHydration(session, moveResult.data && moveResult.data.itemID, {",line:'  require("./coopSessionPresence").schedule(session, moveResult.data, "stargate");'}
  ]},
  {file:"server/src/services/industry/industryParityHelpers.js",patches:[]},
+ {file:"server/src/services/agent/missionRuntimeState.js",patches:[]},
  {file:"server/src/services/agent/agentMissionRuntime.js",patches:[]},
  {file:"server/src/services/dungeon/dungeonUniverseSiteService.js",patches:[]},
  {file:"server/src/services/agent/agentMgrService.js",patches:[
@@ -212,7 +213,7 @@ function transform(source,spec,remove){
  }
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
- if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
+ if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("agent/missionRuntimeState.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
   text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("industry/industryParityHelpers.js"))
   text=require("./coop-industry-time-patch.cjs").patch(text,spec.file,remove);
