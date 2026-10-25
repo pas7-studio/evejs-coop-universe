@@ -23,7 +23,7 @@ function createHuntPolicy({file, clock = () => Date.now(),
     return data;
   };
   function assess({systemID, scene, pirateID, targetID, targetRole,
-    piratePilotID, contacts = [], getHealth, isScrambled} = {}) {
+    piratePilotID, contacts = [], getHealth, isScrambled, sharedIntel = null} = {}) {
     const system = positive(systemID), attackerID = positive(pirateID), preyID = positive(targetID);
     const fail = reason => ({decision: "SCOUT", reason});
     if (!system || !attackerID || !preyID || attackerID === preyID ||
@@ -45,7 +45,40 @@ function createHuntPolicy({file, clock = () => Date.now(),
           targetRole, position: prey.position, distanceMeters: distance});
       }
     } catch (_error) { return fail("INTEL_PERSISTENCE_FAILED"); }
-    const intel = ledger.recall({pilotID: piratePilotID, targetID: preyID, systemID: system});
+    let intel = ledger.recall({pilotID: piratePilotID, targetID: preyID, systemID: system});
+    let sharedWitness = null;
+    // Shared report must come from a unique, physically nearby named NPC
+    // whose *real* grid contact is still verifiable. Squad faction/legal
+    // membership is enforced by the calling native squad director.
+    if (sharedIntel && sharedIntel.targetID === preyID &&
+        sharedIntel.recipientEntityID === attackerID &&
+        sharedIntel.targetRole === targetRole && sharedIntel.systemID === system &&
+        Number.isSafeInteger(sharedIntel.observedAt) &&
+        clock() >= sharedIntel.observedAt &&
+        clock() - sharedIntel.observedAt <= 60000 &&
+        vec(sharedIntel.position) &&
+        range(sharedIntel.position, prey.position) <= 100000) {
+      const sourceID = positive(sharedIntel.sourceEntityID);
+      const sourcePilot = sharedIntel.sourcePilotID;
+      const sourceLinks = (Array.isArray(contacts) ? contacts : [])
+        .filter(link => Number(link.entityID) === sourceID &&
+          link.pilotID === sourcePilot && link.role === "pirate" &&
+          Number(link.systemID) === system);
+      const source = sourceID && scene.getEntityByID(sourceID);
+      if (sourceID !== attackerID && sourceLinks.length === 1 &&
+          source?.kind === "ship" && source.nativeNpc === true &&
+          !source.session?.characterID && vec(source.position) &&
+          range(source.position, prey.position) <= 180000) {
+        const ageMs = clock() - sharedIntel.observedAt;
+        if (!intel || sharedIntel.observedAt > intel.at) {
+          intel = {pilotID: piratePilotID, targetID: preyID, systemID: system,
+            targetRole, position: {...sharedIntel.position},
+            at: sharedIntel.observedAt, ageMs,
+            confidence: Math.max(0.6, 0.82 - ageMs * 0.22 / 60000)};
+          sharedWitness = source;
+        }
+      }
+    }
     if (!intel) return report(fail("NO_FRESH_WITNESS"), piratePilotID, preyID);
     // No tracking hidden, fast-moving targets beyond last observed grid.
     if (range(intel.position, prey.position) > 250000)
@@ -56,7 +89,8 @@ function createHuntPolicy({file, clock = () => Date.now(),
     if (!Number.isFinite(health) || typeof scramble !== "boolean")
       return report(fail("NATIVE_SAFETY_INPUT_UNAVAILABLE"), piratePilotID, preyID);
     const near = e => !!e && e.kind === "ship" && vec(e.position) &&
-      range(attacker.position, e.position) <= 200000 &&
+      (range(attacker.position, e.position) <= 200000 ||
+        (sharedWitness && range(sharedWitness.position, e.position) <= 200000)) &&
       range(prey.position, e.position) <= 130000;
     let escorts = 0;
     for (const c of Array.isArray(contacts) ? contacts.slice(0, 100) : []) {
