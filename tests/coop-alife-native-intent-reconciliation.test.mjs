@@ -113,3 +113,17 @@ test("empty telemetry never produces a false all-settled status",()=>{
  assert.equal(r.status,"NO_ALIFE_INTENTS_OBSERVED");
  assert.equal(r.matched,0);
 });
+
+test("the actual A-Life observer numeric epoch-millisecond timestamp matches native ISO outcome",()=>{
+ const at=Date.parse(t0);
+ const realObserver={...intent(),at};
+ const result=reconcileNativeIntents([realObserver,buy()]);
+ assert.equal(result.matched,1);
+ assert.equal(result.results[0].status,"NATIVE_OUTCOME_OBSERVED");
+});
+test("bad or second-based numeric chronology cannot fabricate a native outcome",()=>{
+ for(const at of [Date.parse(t0)/1000,NaN,0,-1,9999999999999]){
+  const result=reconcileNativeIntents([intent("BUY_SUPPLIES",{at}),buy()]);
+  assert.equal(result.results[0].status,"INVALID_INTENT_IDENTITY");
+ }
+});
