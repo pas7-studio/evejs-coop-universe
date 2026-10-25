@@ -94,6 +94,20 @@ function recordFollowerWarp({commanderSession,followerSession,spaceRuntime,
    arrivalVerified:false
   };
   report("coop-fleet-warp-native-order",commanderSession,details);
+  if(accepted&&process.env.EVEJS_COOP_FLEET_WARP_ARRIVAL==="1"){
+   // A native accepted warp command is not evidence of arrival. Track
+   // the exact existing ships through real warp and physical landing.
+   try{
+    details.arrivalTracking=require("./coopFleetWarpArrival").observeAccepted({
+     commanderSession,followerSession,spaceRuntime,result,targetEntityID
+    }).status;
+   }catch(error){
+    details.arrivalTracking="TRACKING_FAILED";
+    report("coop-fleet-warp-arrival-tracking-failed",commanderSession,{
+     followerCharacterID:char(followerSession),reason:String(error.message).slice(0,100)
+    });
+   }
+  }
   return details;
  }catch(_){
   return {status:"TELEMETRY_ERROR",arrivalVerified:false};
