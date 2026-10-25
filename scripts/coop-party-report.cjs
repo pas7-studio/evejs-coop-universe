@@ -42,6 +42,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   }
   if(e.event==="coop-fleet-warp-native-order"){
    const record={commanderCharacterID:positive(e.commanderCharacterID),
+    commanderShipID:positive(e.commanderShipID),
     followerCharacterID:positive(e.followerCharacterID),
     followerShipID:positive(e.followerShipID),systemID:positive(e.systemID),
     targetEntityID:positive(e.targetEntityID),at:e.at,
@@ -89,6 +90,7 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   const earlier=fleetWarpAccepted.filter(o=>
    o.commanderCharacterID===e.commanderCharacterID&&
    o.followerCharacterID===e.followerCharacterID&&
+   o.commanderShipID===e.commanderShipID&&
    o.followerShipID===e.followerShipID&&o.systemID===e.systemID&&
    o.targetEntityID===e.targetEntityID&&
    Date.parse(o.at)<=e._at);
@@ -97,11 +99,11 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
   return e._at-Date.parse(mostRecent.at)<=180000;
  });
  const verifiedKeys=new Set(verifiedFleetArrivals.map(e=>
-  [e.commanderCharacterID,e.followerCharacterID,e.followerShipID,
+  [e.commanderCharacterID,e.commanderShipID,e.followerCharacterID,e.followerShipID,
    e.systemID,e.targetEntityID].join(":")));
  for(const order of fleetWarpAccepted){
   order.arrivalVerified=verifiedKeys.has([
-   order.commanderCharacterID,order.followerCharacterID,
+   order.commanderCharacterID,order.commanderShipID,order.followerCharacterID,
    order.followerShipID,order.systemID,order.targetEntityID].join(":"));
  }
  const active=[...pilots.values()].filter(p=>p.active);
