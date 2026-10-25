@@ -58,7 +58,9 @@ test("safe purchasing requires native seller escrow and exact physical stack",()
  assert.match(adapter,/itemStore\.listOwnedItems\(sellerID\)/);
  assert.match(adapter,/physicalOwned!==proof\.available/);
  assert.match(adapter,/ALIFE_BUYER_SOURCE_CHANGED_DURING_RUST_READ/);
- assert.match(adapter,/getOrder:id=>marketClient\.call\("GetOrder"/);
+ assert.match(adapter,/normalizeNativeOrderForCoordinator/);
+ assert.match(adapter,/verifyNativeBookAsk/);
+ assert.match(adapter,/marketClient\.call\("GetOrder"/);
  assert.match(adapter,/getCorporationRuntime|corp\(ownerID\)/);
 });
 test("all authored COOP049 modules parse as proper JavaScript",()=>{
