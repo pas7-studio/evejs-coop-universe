@@ -64,7 +64,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now(),
    }else throw Error("P2P_SETTLEMENT_JOURNAL_INVALID_SEQUENCE");
    map.set(event.orderID,{
     ...event,
-    proof:event.proof||prev?.proof,
+    proof:Object.freeze(event.proof||prev?.proof),
     before:event.before||prev?.before,
     chargeBuyerWallet:event.chargeBuyerWallet??prev?.chargeBuyerWallet
    });
