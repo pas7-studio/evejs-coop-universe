@@ -1,0 +1,44 @@
+name: LW04C3B NPC Original Sale Finance Source
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04c3-rust-sell-custody-20261026
+    paths:
+      - 'integration/coopNpcIndustryOriginal*.*'
+      - 'tests/coop-npc-industry-original-*.test.mjs'
+      - 'tests/coop-npc-corporate-settlement.test.mjs'
+      - 'tests/coop-npc-partial-fill-atomic.test.mjs'
+      - 'tests/coop-native-industry-overlay-graph.test.mjs'
+      - 'tests/scenarios/lw04c3b-factory-sale-finance-e2e.json'
+      - '.github/workflows/lw04c3b-sale-finance-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  npc-original-financial-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check read-only seller and manual buyer modules
+        run: |
+          node --check integration/coopNpcIndustryOriginalSaleAudit.cjs
+          node --check integration/coopNpcIndustryOriginalWalletWitness.cjs
+          node --check integration/coopNpcIndustryOriginalBuyerSettlement.cjs
+      - name: Node source tests of real native COOP-035 and COOP-047 settlement
+        run: |
+          node --test \
+            tests/coop-npc-industry-original-sale-audit.test.mjs \
+            tests/coop-npc-industry-original-buyer-settlement.test.mjs \
+            tests/coop-npc-industry-original-wallet-witness.test.mjs \
+            tests/coop-npc-corporate-settlement.test.mjs \
+            tests/coop-npc-partial-fill-atomic.test.mjs \
+            tests/coop-npc-industry-original-rust-sell.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs
+      - name: Original physical crash/restart/2-client scenarios remain NOT_RUN
+        run: |
+          node -e 'const m=require("./tests/scenarios/lw04c3b-factory-sale-finance-e2e.json");if(m.scenarios.length!==14||m.scenarios.some(x=>x.status!=="NOT_RUN"))process.exit(1)'
