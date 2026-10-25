@@ -50,7 +50,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   // DELIVERED and MUST NOT remain in the WIP stock accounting forever.
   // Treat missing/ambiguous statuses as unverified, never as free future stock.
   for(const j of s.jobs){
-   if(!Number.isSafeInteger(j.status)||![1,3,4].includes(j.status)||
+   if(!Number.isSafeInteger(j.status)||![1,2,3,4].includes(j.status)||
       j.ownerID!==ownerID||j.stationID!==stationID||
       j.status!==4&&(!safeInt(j.jobID)||j.activityID!==1))
     throw Error("NATIVE_ECONOMY_JOB_PROVENANCE_UNVERIFIED");
@@ -74,7 +74,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   const sum=(rows,field)=>rows.filter(x=>x.typeID===typeID&&x.ownerID===s.ownerID&&x.stationID===s.stationID)
     .reduce((a,x)=>a+x[field],0);
   const stored=sum(s.items,"quantity"),listed=sum(s.orders,"quantity"),
-    inFlight=sum(s.jobs.filter(j=>[1,3].includes(j.status)),"quantity");
+    inFlight=sum(s.jobs.filter(j=>[1,2,3].includes(j.status)),"quantity");
   const total=stored+listed+inFlight;
   if(!Number.isSafeInteger(total)||total<0||total>Number.MAX_SAFE_INTEGER)throw Error("NATIVE_ECONOMY_STOCK_INVALID");
   return {target,stored,listed,inFlight,shortage:Math.max(0,target-total)};
