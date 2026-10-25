@@ -25,7 +25,9 @@ function check({entity,moduleItem,bankModuleIDs=[]}={}){
    return allowed("CHARGE_OPTIONAL_WEAPON");
   const native=store.getNativeEntity(entityID);
   if(!native||Number(native.entityID)!==entityID||
-   !positive(native.ownerID)||Number(native.systemID)!==Number(entity.systemID))
+   !positive(native.ownerID)||Number(native.ownerID)!==Number(entity.ownerID)||
+   !positive(native.systemID)||
+   (positive(entity.systemID)&&Number(native.systemID)!==Number(entity.systemID)))
    return refused("NATIVE_SHIP_CUSTODY_MISSING");
   const ownerID=Number(native.ownerID);
   const moduleRows=store.listNativeModulesForEntity(entityID);
