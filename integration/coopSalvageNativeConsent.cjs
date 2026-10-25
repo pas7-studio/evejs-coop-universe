@@ -36,9 +36,9 @@ function createSalvageConsent({root,io=fs,clock=()=>Date.now(),
   catch{return false}
   finally{if(fd!==undefined)try{io.closeSync(fd)}catch{}}
  }
- function source(manifestKey){
+ function source(manifestKey,{allowStarted=false}={}){
   if(!key(manifestKey))return deny("SALVAGE_CONSENT_INVALID_MANIFEST");
-  const quote=readQuote(manifestKey);
+  const quote=readQuote(manifestKey,{allowStarted});
   if(quote?.status!=="SALVAGE_NATIVE_OFFER_READY"||
    quote.manifestKey!==manifestKey||
    !pos(quote.corporationID)||!pos(quote.amountISK)||
@@ -48,9 +48,12 @@ function createSalvageConsent({root,io=fs,clock=()=>Date.now(),
   return {status:"READY",quote};
  }
  function readDuo(manifestKey){
-  const src=source(manifestKey);
-  if(src.status!=="READY")return src;
+  if(!key(manifestKey))return deny("SALVAGE_CONSENT_INVALID_MANIFEST");
+  // An already signed duo receipt is mandatory to read historical terms:
+  // never let a fresh acceptance bypass the actual live wreck source.
   const r=load(pair(manifestKey));if(r.status!=="READY")return r;
+  const src=source(manifestKey,{allowStarted:true});
+  if(src.status!=="READY")return src;
   const p=r.value,q=src.quote;
   if(p?.v!==1||p.manifestKey!==manifestKey||
    p.corporationID!==q.corporationID||p.amountISK!==q.amountISK||
