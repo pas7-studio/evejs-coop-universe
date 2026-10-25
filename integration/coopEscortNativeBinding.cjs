@@ -71,6 +71,23 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
    try{return runtime.recordEscortRouteSample(manifestKey,scene,station)}
    catch{return deny("ROUTE_SAMPLE_UNCERTAIN_REPAIR_REQUIRED")}
   },
+  recordTerminalAttendance(manifestKey,scene,stock){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1"||
+    process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1"||
+    typeof runtime.recordTerminalAttendance!=="function")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+    return deny("TERMINAL_ATTENDANCE_MANIFEST_INVALID");
+   try{return runtime.recordTerminalAttendance(manifestKey,scene,stock)}
+   catch{return deny("TERMINAL_ATTENDANCE_WRITE_UNCERTAIN")}
+  },
+  reconcilePeacefulDeliveries(options){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1"||
+    typeof runtime.reconcilePeacefulDeliveries!=="function")
+    return deny("DISABLED");
+   try{return runtime.reconcilePeacefulDeliveries(options)}
+   catch{return deny("PEACEFUL_REPLAY_UNCERTAIN_OPERATOR_REPAIR")}
+  },
   settlePeacefulDelivery(manifestKey,scene){
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
     return deny("DISABLED");
@@ -227,6 +244,12 @@ const forwarding=Object.freeze({
  recordEscortRouteSample:(key,scene,station)=>enabled()?
   (installed?installed.recordEscortRouteSample(key,scene,station):
    deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ recordTerminalAttendance:(key,scene,stock)=>enabled()?
+  (installed?installed.recordTerminalAttendance(key,scene,stock):
+   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ reconcilePeacefulDeliveries:options=>enabled()?
+  (installed?installed.reconcilePeacefulDeliveries(options):
+   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settlePeacefulDelivery:(key,scene)=>enabled()?(installed?installed.settlePeacefulDelivery(key,scene):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
@@ -252,6 +275,12 @@ function reconcilePendingDeliveries(options){
  return installed?installed.reconcilePendingDeliveries(options):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED");
 }
+function reconcilePeacefulDeliveries(options){
+ if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1")
+  return deny("DISABLED");
+ return installed?installed.reconcilePeacefulDeliveries(options):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED");
+}
 function settlement(manifestKey){
  if(!enabled())return deny("DISABLED");
  return installed?installed.settleVerifiedNativeRaid(manifestKey):
@@ -260,4 +289,4 @@ function settlement(manifestKey){
 function inspect(){return {status:installed?"ESCORT_NATIVE_RUNTIME_BOUND":
  "ESCORT_NATIVE_RUNTIME_NOT_INSTALLED",enabled:enabled(),
  backend:installed?"IN_PROCESS_NATIVE_ONLY":null}}
-module.exports={makeBinding,routeGate,installServerAuthority,settlement,reconcilePendingDeliveries,inspect};
+module.exports={makeBinding,routeGate,installServerAuthority,settlement,reconcilePendingDeliveries,reconcilePeacefulDeliveries,inspect};
