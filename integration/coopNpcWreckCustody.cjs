@@ -42,7 +42,11 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    Number(value.newCargo.entityID)!==Number(value.entityID)||
    Number(value.newCargo.typeID)!==Number(value.typeID)||
    Number(value.newCargo.ownerID)!==Number(value.ownerID)||
-   Number(value.newCargo.quantity)!==Number(value.quantity))
+   Number(value.newCargo.quantity)!==Number(value.quantity)||
+   (value.newCargo.sourceWreckItemID!==undefined&&
+    Number(value.newCargo.sourceWreckItemID)!==Number(value.itemID))||
+   (value.newCargo.sourceWreckID!==undefined&&
+    Number(value.newCargo.sourceWreckID)!==Number(value.wreckID)))
    throw Error("INVALID_NATIVE_WRECK_CUSTODY_JOURNAL");
   return value;
  }
@@ -73,7 +77,11 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    row.singleton===tx.newCargo.singleton&&
    Number(row.groupID)===tx.newCargo.groupID&&
    Number(row.categoryID)===tx.newCargo.categoryID&&
-   Number(row.flagID)===5&&Number(row.moduleID||0)===0;
+   Number(row.flagID)===5&&Number(row.moduleID||0)===0&&
+   (tx.newCargo.sourceWreckItemID===undefined||
+    Number(row.sourceWreckItemID)===Number(tx.newCargo.sourceWreckItemID))&&
+   (tx.newCargo.sourceWreckID===undefined||
+    Number(row.sourceWreckID)===Number(tx.newCargo.sourceWreckID));
  }
  function cargoFor(tx){
   const rows=store.listNativeCargoForEntity(tx.entityID);
