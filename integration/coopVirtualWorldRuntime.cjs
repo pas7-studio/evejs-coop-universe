@@ -767,6 +767,9 @@ async function observeAlifeEconomy(){
     marketClient:require("../services/market/marketDaemonClient").marketDaemonClient
    }});
   }
+  // Global read budget across all systems, not eight stations per system.
+  let remainingStations=8;
+  const stationEvidenceCache=new Map();
   for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4)){
    const scene=native.ensureScene(systemID,{refreshStargates:false});
    const snap=require("./coopAlifeEconomySensor").readEconomySnapshot({
@@ -782,13 +785,12 @@ async function observeAlifeEconomy(){
    if(authorityEnabled&&alifeStationAuthority&&snap.authoritativeNative===true){
     // Bound to the pilot's actual native corporation; never broadcast another
     // corporation's station stock to a trader or a player-owned ship.
-    let sampled=0;
-    const cache=new Map();
+    const cache=stationEvidenceCache;
     for(const pilot of snap.pilots){
      if(pilot.role!=="trader"||!pilot.stationID||!pilot.ownerID)continue;
      const key=pilot.ownerID+":"+pilot.stationID;
      if(cache.has(key)){pilot.economy=cache.get(key);continue;}
-     if(++sampled>8){pilot.economy={authoritativeNative:false,
+     if(remainingStations--<=0){pilot.economy={authoritativeNative:false,
        reason:"NATIVE_ALIFE_STATION_BUDGET_EXCEEDED"};continue;}
      const observed=await alifeStationAuthority.read({
       ownerID:pilot.ownerID,stationID:pilot.stationID,systemID});
