@@ -13,7 +13,7 @@ function main(argv=process.argv.slice(2),env=process.env){
  if(!entityID||!["review","apply"].includes(command))
   throw Error("Usage: review <entityID> | apply <entityID> <action> <witness> <reason...>");
  if(command==="apply"&&(!["ABORT","RESTORE","NATIVE_COMMIT",
-  "RELOCATE_PILOT","FINISH","CLEANUP_JOURNAL"].includes(action)||
+  "RELOCATE_PILOT","FINISH","CLEANUP_JOURNAL","RETIRE_TRANSFER"].includes(action)||
   !/^[a-f0-9]{64}$/.test(witness)||reasonParts.join(" ").length<12))
   throw Error("Apply requires the exact reviewed action, 64-hex witness and reason");
  if(command==="review"&&argv.length!==2)throw Error("Review accepts only entityID");
