@@ -109,17 +109,17 @@ test("large native order identity is preserved as a string, not truncated to JS 
 });
 function sourceFixture(eol="\n"){
  return [
- "async function matchSellOrdersForBuyer() {",
+ "async function matchSellOrdersForBuyer({}={}) {",
  "  if (true) {",
  "        purchaseCounterpartyID = sellerCharacterID;",
  "        const grossAmount = roundIsk(orderPrice * tradedQuantity);",
  "  }",
  "}",
- "async function matchBuyOrdersForSeller() {",
+ "async function matchBuyOrdersForSeller({}={}) {",
  "    const sellerInventoryChanges = [];",
  "    const grossAmount = roundIsk(orderPrice * fillableQuantity);",
  "}",
- "async function executeBuyRequest() {}",
+ "async function executeBuyRequest({}={}) {}",
  ""
  ].join(eol);
 }
