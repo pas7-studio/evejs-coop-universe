@@ -19,7 +19,7 @@ function fixture(fn){
  const receipt=(entityID,phase,boundaryMs,modules)=>fs.writeFileSync(
   path.join(dir,String(entityID)+".json"),
   JSON.stringify({version:1,phase,entityID,boundaryMs,modules,nonce:"test"}));
- const audit=()=>auditBankSqlite({root,sqlitePath});
+ const audit=(opts={})=>auditBankSqlite({root,sqlitePath,...opts});
  try{return fn({root,dir,sqlitePath,db,fence,receipt,audit});}
  finally{db.close();fs.rmSync(root,{recursive:true,force:true});}
 }
@@ -108,5 +108,48 @@ test("PREPARED with no native SQLite fence is unresolved, not permission to retr
   assert.equal(report.entries[0].sqliteFencePresent,false);
   assert.equal(report.entries[0].modulesMatched,0);
   assert.equal(fs.existsSync(path.join(f.dir,"101.json")),true);
+ });
+});
+
+test("strict outcome audit reports COMMITTED bank without native fire outcome",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  assert.equal(f.audit().status,"CLEAN","legacy audit remains backward compatible");
+  const report=f.audit({requireOutcome:true});
+  assert.equal(report.clean,false);
+  assert.equal(report.counts.MISSING_FIRE_OUTCOME,1);
+  assert.equal(report.entries[0].outcomeKind,null);
+ });
+});
+test("strict outcome audit accepts recorded turret miss without refund",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  const p=path.join(f.dir,"101.json"),v=JSON.parse(fs.readFileSync(p,"utf8"));
+  v.outcome={version:1,kind:"TURRET_RESOLVED",boundaryMs:1000,hit:false,observedAtMs:2000};
+  fs.writeFileSync(p,JSON.stringify(v));
+  assert.equal(f.audit({requireOutcome:true}).status,"CLEAN");
+ });
+});
+test("strict outcome audit reports failed missile spawn even with valid cargo debit",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  const p=path.join(f.dir,"101.json"),v=JSON.parse(fs.readFileSync(p,"utf8"));
+  v.outcome={version:1,kind:"MISSILE_LAUNCH_FAILED",boundaryMs:1000,observedAtMs:2000};
+  fs.writeFileSync(p,JSON.stringify(v));
+  const a=f.audit({requireOutcome:true});
+  assert.equal(a.counts.FAILED_FIRE_OUTCOME,1);
+  assert.equal(a.entries[0].outcomeKind,"MISSILE_LAUNCH_FAILED");
+ });
+});
+test("strict outcome audit rejects forged boundary or missile entity metadata",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  const p=path.join(f.dir,"101.json"),v=JSON.parse(fs.readFileSync(p,"utf8"));
+  v.outcome={version:1,kind:"MISSILE_LAUNCHED",boundaryMs:1001,
+   missileID:0,observedAtMs:2000};
+  fs.writeFileSync(p,JSON.stringify(v));
+  const report=f.audit({requireOutcome:true});
+  assert.equal(report.clean,false);
+  assert.equal(report.counts.CORRUPT_NEEDS_REVIEW,1);
  });
 });
