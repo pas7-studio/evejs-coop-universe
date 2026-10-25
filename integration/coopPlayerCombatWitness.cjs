@@ -15,26 +15,50 @@ function observeAppliedDamage({attackerEntity, targetEntity, appliedDamage, sess
     !Number.isFinite(amount) || amount <= 0 || !Array.isArray(sessions) ||
     typeof sceneForSession !== "function" || typeof emit !== "function")
     return {status: "NOT_VERIFIED_NATIVE_PLAYER_DAMAGE"};
-  // Not a user-supplied pilot ID: resolve the exact active ship and target
-  // through the same authoritative native scene and a unique live session.
-  const matches = sessions.filter(session =>
-    positive(session?.characterID) &&
-    positive(session?._space?.shipID) === attackerID &&
-    positive(session?._space?.systemID) &&
-    session._space.initialStateSent === true &&
-    session?.socket?.destroyed !== true &&
-    sceneForSession(session)?.getEntityByID?.(attackerID) === attackerEntity &&
-    sceneForSession(session)?.getEntityByID?.(targetID) === targetEntity &&
-    positive(sceneForSession(session)?.systemID) === positive(session._space.systemID));
+  // Pinned EveJS applies damage, destroys a lethal native NPC and spawns
+  // its physical wreck BEFORE calling killmailTracker.noteDamage. A strict
+  // live-target-only check loses authentic one-shot/final-blow contributions.
+  // Accept an already removed target ONLY with terminal native condition and
+  // the matching physical native wreck still resident in the same scene.
+  // A stale/replaced target, empty scene, spoofed ship or missing wreck fails.
+  function witnessedVictim(scene) {
+    const current = scene.getEntityByID?.(targetID);
+    if (current === targetEntity) return "LIVE_NATIVE_SHIP";
+    if (current != null ||
+        targetEntity?.conditionState?.damage !== 1 ||
+        !(scene.dynamicEntities instanceof Map)) return null;
+    for (const wreck of scene.dynamicEntities.values()) {
+      if (wreck?.nativeNpcWreck === true &&
+          positive(wreck.itemID) &&
+          positive(wreck.launcherID) === targetID &&
+          scene.getEntityByID?.(positive(wreck.itemID)) === wreck)
+        return "TERMINAL_NATIVE_WRECK";
+    }
+    return null;
+  }
+  // Derive identity from one real current native ship/session, never from a
+  // client claim or the killmail-attacker record alone.
+  const matches = sessions.flatMap(session => {
+    if (!positive(session?.characterID) ||
+        positive(session?._space?.shipID) !== attackerID ||
+        !positive(session?._space?.systemID) ||
+        session._space.initialStateSent !== true ||
+        session?.socket?.destroyed === true) return [];
+    const scene = sceneForSession(session);
+    if (!scene || positive(scene.systemID) !== positive(session._space.systemID) ||
+        scene.getEntityByID?.(attackerID) !== attackerEntity) return [];
+    const victimProof = witnessedVictim(scene);
+    return victimProof ? [{session, victimProof}] : [];
+  });
   if(matches.length !== 1)return {status:"NO_UNIQUE_NATIVE_SHIP_OWNER"};
-  const session = matches[0];
+  const {session, victimProof} = matches[0];
   const claimedPilot=positive(attackerEntity.pilotCharacterID ?? attackerEntity.characterID);
   if(claimedPilot && claimedPilot !== positive(session.characterID))
     return {status:"PLAYER_IDENTITY_MISMATCH"};
   const receipt = {
     status:"APPLIED_NATIVE_PLAYER_DAMAGE", systemID:positive(session._space.systemID),
     characterID:positive(session.characterID),shipID:attackerID,
-    victimEntityID:targetID,appliedDamage:amount,
+    victimEntityID:targetID,appliedDamage:amount,victimProof,
     source:"NATIVE_KILLMAIL_TRACKER_NOTE_DAMAGE"
   };
   try {emit(receipt);}catch(error){
@@ -50,8 +74,11 @@ function note(attackerEntity,targetEntity,appliedDamage){
     const runtime=require("./runtime");
     return observeAppliedDamage({attackerEntity,targetEntity,appliedDamage,
       sessions:registry.getSessions(),sceneForSession:s=>runtime.getSceneForSession(s),
-      emit:receipt=>require("./coopRuntimeProbe").observe("coop-native-player-damage",null,
-        {spaceState:{systemID:receipt.systemID}},receipt)});
+      emit:receipt=>{
+        const written=require("./coopRuntimeProbe").observe("coop-native-player-damage",null,
+          {spaceState:{systemID:receipt.systemID}},receipt);
+        if(written!==true)throw Error("TELEMETRY_NOT_RECORDED");
+      }});
   }catch(error){
     console.warn("[CoopPlayerCombatWitness] native hook",String(error?.message||error));
     return {status:"UNAVAILABLE"};

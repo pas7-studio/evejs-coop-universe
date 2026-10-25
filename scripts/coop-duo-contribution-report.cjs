@@ -65,6 +65,10 @@ function report(input,options={}){
   e.status==="PHYSICAL_NATIVE_WRECK_VERIFIED"&&
   pos(e.wreckID)&&pos(e.victimEntityID)&&pos(e.systemID)&&
   e.lootStatus==="ITEMS_STORED"&&Number(e.storedItemCount)>0);
+ // Bind each genuine same-NPC two-pilot damage witness to its exact crew;
+ // a different fleet's valid mission may never complete this combat proof.
+ const damagingCrewPairs=[];
+ const crewKey=ids=>ids.map(pos).sort((a,b)=>a-b).join(":");
  let strongest={count:0,wreck:false,damageEvents:0};
  for(const [key,entries] of evidenceByTarget){
   for(const e of entries){
@@ -73,6 +77,9 @@ function report(input,options={}){
    const valid=entries.filter(x=>x._time>=e._time-20*60000&&x._time<=e._time+20*60000&&
     witness.members.some(m=>m.characterID===pos(x.characterID)&&m.shipID===pos(x.shipID)));
    const participants=new Set(valid.map(x=>pos(x.characterID)));
+   if(participants.size===2)
+    damagingCrewPairs.push({crewKey:crewKey([...participants]),
+     systemID:pos(e.systemID),lastHitAt:Math.max(...valid.map(x=>x._time))});
    const matched=wrecks.some(w=>w.systemID+":"+w.victimEntityID===key&&
     valid.some(x=>precedes(x,w)&&w._time-x._time<=20*60000));
    const candidate={count:participants.size,wreck:matched,damageEvents:valid.length};
@@ -84,15 +91,22 @@ function report(input,options={}){
   pos(e.fleetID)&&pos(e.sourceInstanceID)&&pos(e.agentID)&&
   Array.isArray(e.characterIDs)&&e.characterIDs.length===2&&
   pos(e.characterIDs[0])&&pos(e.characterIDs[1])&&e.characterIDs[0]!==e.characterIDs[1]);
- const matchedMission=mission.some(m=>{
+ const verifiedMissions=mission.filter(m=>{
   const pair=currentCrew(current,m,pos(m.systemID));
   return pair&&pair.members.every(x=>m.characterIDs.includes(x.characterID));
  });
+ // Credit must follow real damage, in the same system, within 30 minutes.
+ const matchedMission=verifiedMissions.some(m=>damagingCrewPairs.some(d=>
+  d.crewKey===crewKey(m.characterIDs)&&d.systemID===pos(m.systemID)&&
+  m._time>=d.lastHitAt&&m._time-d.lastHitAt<=30*60000));
  const coDamage=strongest.count===2;
  return {...base,status:coDamage&&matchedMission?"SERVER_TWO_PLAYER_DAMAGE_AND_MISSION_CREDIT":"INCOMPLETE_NATIVE_COOP_EVIDENCE",
   damage:{status:coDamage?"BOTH_PLAYERS_NATIVE_DAMAGE_SAME_TARGET":strongest.count===1?"ONE_PLAYER_NATIVE_DAMAGE":"NO_SHARED_NATIVE_DAMAGE",
    distinctDamagers:strongest.count,matchedPhysicalWreck:strongest.wreck,damageEvents:strongest.damageEvents},
-  mission:{status:matchedMission?"TWO_NATIVE_DUNGEON_OBJECTIVES_CREDITED":"NO_INDEPENDENT_NATIVE_MISSION_PROOF"},
+  mission:{status:matchedMission?"TWO_NATIVE_DUNGEON_OBJECTIVES_CREDITED":
+   verifiedMissions.some(m=>damagingCrewPairs.length&&
+    !damagingCrewPairs.some(d=>d.crewKey===crewKey(m.characterIDs)))?
+    "MISSION_CREDIT_NOT_LINKED_TO_DAMAGING_CREW":"NO_INDEPENDENT_NATIVE_MISSION_PROOF"},
   // Real damage is server-proven; a wreck match doesn't imply the players made the final blow.
   bothPlayerDamageVerified:coDamage,
   nextAction:coDamage&&matchedMission?

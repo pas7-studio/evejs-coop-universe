@@ -66,3 +66,42 @@ test('verified damage can be real even without wreck, but no final blow claimed'
  assert.equal(r.damage.distinctDamagers,2);assert.equal(r.damage.matchedPhysicalWreck,false);
  assert.equal(r.actualGameplayVerified,false);
 });
+
+test('P0: unrelated pilot pair mission cannot certify another pair combat',()=>{
+ const a=rows();
+ // A+B genuinely damaged the same NPC. C+D join the world afterward and
+ // independently credit a genuine native dungeon; they are NOT A+B.
+ a.splice(5,0,e(8,'coop-shared-scene',{mutualVisibility:true,pilots:[
+  {characterID:21,shipID:301,shipExists:true},
+  {characterID:22,shipID:302,shipExists:true}
+ ]}));
+ a.at(-1).characterIDs=[21,22];
+ const r=run(a);
+ assert.equal(r.damage.distinctDamagers,2);
+ assert.equal(r.mission.status,'MISSION_CREDIT_NOT_LINKED_TO_DAMAGING_CREW');
+ assert.equal(r.status,'INCOMPLETE_NATIVE_COOP_EVIDENCE');
+ assert.equal(r.bothPlayerDamageVerified,true);
+ assert.equal(r.actualGameplayVerified,false);
+});
+
+test('same two pilots may earn genuine mission credit after a refreshed native scene',()=>{
+ const a=rows();
+ a.splice(5,0,e(8,'coop-shared-scene',{mutualVisibility:true,pilots:[
+  {characterID:12,shipID:202,shipExists:true},
+  {characterID:11,shipID:201,shipExists:true}
+ ]}));
+ assert.equal(run(a).status,'SERVER_TWO_PLAYER_DAMAGE_AND_MISSION_CREDIT');
+});
+
+test('global-merge: mission in another system or before authentic hits does not certify same pair',()=>{
+ const other=rows();other.at(-1).systemID=30000142;
+ assert.equal(run(other).mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+ const early=rows();early.at(-1).at=at(4);
+ assert.equal(run(early).mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+});
+test('global-merge: mission 32 minutes after combat does not certify same duo episode',()=>{
+ const a=rows();a.at(-1).at=new Date(now+32*60000).toISOString();
+ const r=report(a.map(x=>JSON.stringify(x)).join('\n'),{now:now+33*60000,windowMinutes:120});
+ assert.equal(r.mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+ assert.equal(r.status,'INCOMPLETE_NATIVE_COOP_EVIDENCE');
+});
