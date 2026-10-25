@@ -44,13 +44,14 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
      proof.corporateCreditCents!==r.grossCents)
    throw Error("LW04C3B_ORIGINAL_WALLET_RECEIPT_MISMATCH");
  }
- function sourceBuyerItem(r){
+ function sourceBuyerItem(r,e){
   const id=r.buyerItemID??r.itemID;
   const item=getOriginalItem(id);
   if(!item||item.itemID!==id||item.ownerID!==r.buyerID||
      item.locationID!==r.stationID||item.flagID!==4||
      item.typeID!==r.typeID||item.singleton!==0||
-     item.quantity!==r.quantity||item.stacksize!==r.quantity)
+     item.quantity!==r.quantity||item.stacksize!==r.quantity||
+     item.customInfo!=="coop-industry:v1:"+e.jobID)
    throw Error("LW04C3B_ORIGINAL_BUYER_ITEM_NOT_ATTESTED");
   return id;
  }
@@ -83,7 +84,7 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
   return {mode:partial?"partial":"whole",fillID:fill,claimKey:partial?r.claimKey:null,
    buyerID:r.buyerID,quantity:r.quantity,remainingBefore:partial?r.remainingBefore:e.quantity,
    remainingAfter:partial?r.remainingAfter:0,priceCents:unit,grossCents:gross,
-   itemID:sourceBuyerItem(r)};
+   itemID:sourceBuyerItem(r,e)};
  }
  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
  async function audit({ownerID,stationID,operationID,orderID}={}){
@@ -131,7 +132,8 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
        num(rust.order_id)!==orderID||
        num(rust.fill_id)!==f.fillID||
        num(rust.buyer_id)!==f.buyerID||
-       rust.fill_phase==="claimed"||rust.fill_phase&&rust.fill_phase!=="finalized"||
+       (f.mode==="partial"?rust.fill_phase!=="finalized":
+         rust.fill_phase!=null&&rust.fill_phase!=="finalized")||
        !["open","filled"].includes(rust.state)||
        f.mode==="partial"&&(rust.claim_key!==f.claimKey||
          num(rust.remaining_after)!==f.remainingAfter)||
