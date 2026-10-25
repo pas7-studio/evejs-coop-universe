@@ -3,6 +3,7 @@
 // No NPC session impersonation, virtual wallet, synthetic cargo, or new timer.
 const {createNpcCorporateBuyer}=require("./coopNpcCorporateBuyerAtomic"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {verifyNativeBookAsk,normalizeNativeOrderForCoordinator}=require("./coopNpcRustOrderAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const count=x=>Number.isSafeInteger(x)&&x>=0;
 const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
@@ -94,15 +95,23 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
    throw Error("ALIFE_BUYER_NATIVE_RUST_BOOK_MISSING");
   const asks=[],seen=new Set();
   for(const o of result.sells){
-   if(o?.source!=="player"||o.is_corp!==false||o.bid!==false||
-      o.state!=="open"||Number(o.station_id)!==stationID||
-      Number(o.type_id)!==typeID)continue;
-   const orderID=Number(o.order_id),sellerID=Number(o.owner_id),
-    quantity=Number(o.vol_remaining),price=cents(Number(o.price));
-   if(!pos(orderID)||seen.has(orderID)||!pos(sellerID)||sellerID===ownerID||
-      !pos(quantity)||quantity>50000||!pos(price)||price>100000000)
-    throw Error("ALIFE_BUYER_RUST_ASK_INVALID");
+   // Actual upstream GetOrders returns a public OrderRow, which does NOT
+   // expose owner_id/is_corp/state. Enrich via authoritative GetOrder.
+   if(o?.source!=="player"||o.bid!==false||
+      Number(o.station_id)!==stationID||Number(o.type_id)!==typeID)continue;
+   const orderID=Number(o.order_id);
+   if(!pos(orderID)||seen.has(orderID))
+    throw Error("ALIFE_BUYER_DUPLICATE_RUST_ORDER");
    seen.add(orderID);
+   const nativeOwner=await marketClient.call("GetOrder",{
+    order_id:String(orderID)});
+   const verified=verifyNativeBookAsk(o,nativeOwner,{stationID,typeID});
+   if(verified.ok!==true)
+    throw Error("ALIFE_BUYER_RUST_OWNER_ROW_INVALID:"+verified.reason);
+   const sellerID=verified.owner_id,quantity=verified.vol_remaining,
+    price=verified.price_cents;
+   if(sellerID===ownerID||quantity>50000||price>100000000)
+    throw Error("ALIFE_BUYER_RUST_ASK_INVALID");
    // No seller session is forged: require a canonical marketEscrow row and
    // exactly one real owner/item in stock location for this first slice.
    let escrow;
@@ -140,7 +149,9 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
    outstandingBuys:0,asks};
  }
  const coordinator=createNpcBuyerCoordinator({
-  file,resolveActor:actor,readProof,getOrder:id=>marketClient.call("GetOrder",{order_id:String(id)}),
+  file,resolveActor:actor,readProof,
+  getOrder:async id=>normalizeNativeOrderForCoordinator(
+   await marketClient.call("GetOrder",{order_id:String(id)})),
   buyer,clock,env
  });
  return Object.freeze({tick:args=>coordinator.tick(args),inspect:()=>coordinator.inspect(),
