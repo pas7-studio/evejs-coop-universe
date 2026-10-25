@@ -52,25 +52,21 @@ Command: `Run-CommunityFittings.ps1 -Action Collect -WorkbenchPages 387 -FieldPa
 | Metric | Value |
 | --- | --- |
 | Hulls in the pinned SDE | 423 (410 fittable, 13 without any module slot) |
-| Fittings installed | **1600** |
+| Fittings installed | **1616** |
 | Hulls with at least one fit | 364 |
 | Hulls with >= 3 fittings | **320** |
-| Hulls with 5 fittings | **284** |
+| Hulls with 5 fittings | **293** |
 | Fittable hulls still below 3 | 90 |
 | Fittable hulls with none | 46 |
 | Duplicate names / signatures | 0 / 0 |
-| By role | ewar 560, combat 503, exploration 280, logistics 100, mining 70 |
+| By role | ewar 560, combat 503, exploration 280, logistics 100, mining 70 (workbench pass) |
 | Source candidates rejected | 5104 (dogma/slot/CPU/PG/hardpoint/data, plus 186 ambiguous item names) |
 
 `coverage-report.json` lists every hull below target with `variants`, `available`, `reason`
 (`NO_PUBLIC_FIT_FOUND`, `TARGET_NOT_MET_ONLY_N_VALID`, `NO_FITTING_SLOTS`, or the first dogma
 rejection code). Shortfalls are visible, never filled with invented fits.
 
-A deeper follow-up run (`-FieldPages 6`, i.e. zKillboard pages 3-6 for every hull below target)
-produced the **same 1600 records with zero new API failures**: those hulls have no further
-distinct public losses, and inventing fittings is forbidden. Breakdown of the 90 hulls still below
-three: 46 have no public fit at all, 28 have exactly one, 16 have two. The 13 hulls without any
-module slot (shuttles, capsules, freighters) are excluded from the denominator.
+A deeper follow-up run (`-FieldPages 6`) produced the **same records with zero new API failures** for hulls below three: those hulls have no further distinct public losses, and inventing fittings is forbidden. A second top-up run with `-FieldTarget 5` (`-FieldPages 4`) added 16 more fits for hulls that already had 3-4, taking the library to 1616 and hulls-with-five to 293. Breakdown of the 90 hulls still below three: 46 have no public fit at all, 28 have exactly one, 16 have two. The 13 hulls without any module slot (shuttles, capsules, freighters) are excluded from the denominator.
 
 ## 5. Staging on a copy of the real world (before touching live)
 
@@ -88,16 +84,16 @@ module slot (shuttles, capsules, freighters) are excluded from the denominator.
 Install of the final catalog through the real upstream `fittingStore`:
 
 ```
-communityFittings 1600 | distinctHulls 364 | >=3 320 | =5 284
+communityFittings 1616 | distinctHulls 364 | >=3 320 | =5 293
 duplicateNames 0 | duplicateSignatures 0 | problemCount 0 | verdict NATIVE_PAYLOAD_OK
-marshalledBytes 705889
+marshalledBytes 711266
 ```
 
 **Large-catalog finding:** the stock client calls `corpFittingMgr.GetCommunityFittings` with no
 paging argument and the server returns one dict for the whole community owner, so a server-side
 page/subset split is impossible without modifying the game client (forbidden by the project
 boundaries). The 600 number is a *player write* limit, not a read limit. What can be measured
-without touching the client: 1600 fittings marshal to ~690 KB before the cached-method-call
+without touching the client: 1616 fittings marshal to ~695 KB before the cached-method-call
 wrapper compresses them. Whether the client UI scrolls/search that volume is a client question
 and is recorded below.
 
@@ -110,13 +106,14 @@ and is recorded below.
 | Container stopped before any DB write | `docker inspect evejs-server-1` → `Running=false` |
 | Volume check | container mounts `evejs-data` (+`evejs-images`); refused otherwise |
 | Source DB copy | `O:\tmp\coop043\live\gamestore.sqlite`, SHA-256 `95EC0E22...E64C5E1A9` |
-| Plan | `afterCommunity=1600`, `created=1600`, `catalogSha256=5996d211adb2fa8ab6204fda797cbe4dd15e5f951e9e0b044f7c49801f7fc7ce` |
+| Plan + first Apply | `afterCommunity=1600`, `created=1600`, `catalogSha256=5996d211adb2fa8ab6204fda797cbe4dd15e5f951e9e0b044f7c49801f7fc7ce` |
 | Apply | `applied=true`, `dogmaValidated=true`, WAL checkpointed |
 | External backup | `O:\tmp\coop043\live-backups\coop043-1792949698034-50416.sqlite` (17,195,008 B), SHA-256 `58DDA0CE...E6E8D0328F` (outside the volume) |
 | Installed DB | SHA-256 `D8621D0459C4699C0F27F514B974D417C10F9D5DDA4C7F57610A0704AEB1C23D`, ownership restored to `1000:1000` |
 | Native read from the volume | 1600 fittings, 364 hulls, 0 duplicate names/signatures, `NATIVE_PAYLOAD_OK` |
 | Server start | `evejs-server-1` `healthy`, no fitting/error lines in the log tail, NPC telemetry resumed (`living-native-activity`) |
 | Restart persistence | after `docker restart`: 1600 fittings, same hull distribution, 0 duplicates, `NATIVE_PAYLOAD_OK` |
+| Top-up install (`-FieldTarget 5`) | catalog `cfdf3db8...c6610`, `created=19`, `unchanged=1597`, total 1616, backup `coop043-1792953467507-10356.sqlite` SHA-256 `183D3AF8...27D23E3`; live store then reads 1616 fittings / 320 hulls with >=3 / 293 with 5 |
 
 Player data was not modified: the seeder writes only `owners\u001f1000282` (community scope) and
 `_meta.nextFittingID`; no ISK, inventory, ship, wallet or character fitting rows were touched.
@@ -127,7 +124,7 @@ Client `W:\EVE Online - 3396210` was launched locally; character `Sasunok1488` (
 in to the live server after the install. Owner-observed in the real client:
 
 - the **Community Fittings window opens** and lists the installed fittings;
-- **scrolling and search work** across the full 1600-record catalog (no freeze, no truncation
+- **scrolling and search work** across the full catalog (1600 records at the time of the test; 1616 after the top-up) (no freeze, no truncation
   reported at this size, i.e. the 690 KB marshalled payload is handled and the 600 number is not a
   read limit);
 - not yet observed by the tester: copy-to-my-fittings, then fitting a real ship with owned
@@ -150,7 +147,7 @@ No client binary was modified; no claim is made from server-side data.
 
 ## 10. Verdict
 
-- Server side: **PASS** — pinned-SDE dogma validation, 1600 real fits, staging apply/rollback,
+- Server side: **PASS** — pinned-SDE dogma validation, 1616 real fits, staging apply/rollback,
   live install with a verified external backup, restart persistence, no duplicates, native
   payload `NATIVE_PAYLOAD_OK`.
 - Client side: **PARTIAL PASS** — the Community Fittings window opens, shows the catalog and
