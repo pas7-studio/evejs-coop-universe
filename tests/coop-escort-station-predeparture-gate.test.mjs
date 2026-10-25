@@ -17,8 +17,9 @@ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
 process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
 process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false,
- sourceDispatched=false,ackDurable=true,witnessValid=true,sourcePilotAway=false}={}){
- const counters={funding:0,warp:0,manifest:0,closures:0,witness:0,routeSamples:0};
+ sourceDispatched=false,ackDurable=true,witnessValid=true,sourcePilotAway=false,
+ stationX=100000}={}){
+ const counters={funding:0,warp:0,manifest:0,closures:0,witness:0,routeSamples:0,warpIngress:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
   position:{x:0,y:0,z:0},radius:100,mode:"STOP"};
@@ -35,8 +36,8 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   [2,{characterID:702,socket:{destroyed:false},
    _space:{initialStateSent:true,systemID:30000144,shipID:1702}}]
  ]);
- const scene={systemID:30000144,sessions,
-  staticEntities:[{itemID:60001,kind:"station",position:{x:100000,y:0,z:0},radius:200}],
+ const scene={systemID:30000144,sessions,_tickIntervalMs:1000,
+  staticEntities:[{itemID:60001,kind:"station",position:{x:stationX,y:0,z:0},radius:200}],
   getEntityByID:id=>id===901&&shipAlive?ship:playerShips.get(id)||null};
  const fleet={fleetID:77,systemID:30000144,haulerEntityIDs:[901]};
  const cargo=[{cargoID:5501,entityID:901,coopHaulFleetID:77,
@@ -75,7 +76,8 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   getNativeEntity:()=>({entityID:901,systemID:30000144,transient:false}),
   getScene:()=>scene,store:{listNativeCargoForEntity:()=>cargo},items:{},
   flush:()=>({success:true}),
-  warpToPoint:()=>{counters.warp++;return {success:warpAccepted}},
+  warpToPoint:(_id,_pt,opts)=>{counters.warp++;counters.warpIngress=opts.ingressDurationMs;
+   return {success:warpAccepted}},
   root:"/tmp/eve",clock:()=>1000000,
   warpFence:{
    inspectSource:()=>({status:sourceDispatched?"WARP_SOURCE_ALREADY_DISPATCHED":"WARP_SOURCE_CLEAR"}),
@@ -287,6 +289,9 @@ test("native warp physics callback only samples fully ACK-confirmed original NPC
   assert.equal(f.counters.routeSamples,1);
   assert.equal(f.counters.funding,1);
   assert.equal(f.counters.warp,1);
+  // A genuine 1000ms scene beat requires a physically longer native ingress:
+  // coordinates must be observed by stock movement, not invented by timers.
+  assert.ok(f.counters.warpIngress>=6000);
  })}finally{
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
@@ -308,6 +313,43 @@ test("native warp observer does not enroll unconfirmed or failed original NPC wa
    "ESCORT_NATIVE_MOTION_NOT_REGISTERED");
   assert.equal(f.counters.routeSamples,0);
  },{})}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+  delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+ }
+});
+test("strict route witness cannot debit escrow without installed native motion flag",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED");
+  assert.equal(f.counters.manifest,0);
+  assert.equal(f.counters.funding,0);
+  assert.equal(f.counters.warp,0);
+ })}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+ }
+});
+test("strict route observation rejects too-short NPC route before spending ISK",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER="1";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS");
+  assert.equal(f.counters.manifest,0);
+  assert.equal(f.counters.funding,0);
+  assert.equal(f.counters.warp,0);
+ },{stationX:5000})}finally{
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
