@@ -41,6 +41,7 @@ if (@($demand.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0)
 }
 $files = @(
   "tests/coop-npc-demand-authority.test.mjs",
+  "tests/coop-alife-native-act.test.mjs",
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
   "tests/coop-alife-economy-wiring.test.mjs",
