@@ -107,3 +107,9 @@ test("a forged market order ID never counts as native settled evidence",()=>{
   assert.equal(result.matched,0);
  }
 });
+
+test("empty telemetry never produces a false all-settled status",()=>{
+ const r=reconcileNativeIntents([]);
+ assert.equal(r.status,"NO_ALIFE_INTENTS_OBSERVED");
+ assert.equal(r.matched,0);
+});
