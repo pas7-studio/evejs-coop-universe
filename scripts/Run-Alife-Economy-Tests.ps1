@@ -117,6 +117,19 @@ try {
   & $node.Source --test @files *> $log
   $code = $LASTEXITCODE
 } finally { Pop-Location }
+if ($code -ne 0) {
+  Write-Host "=== NATIVE ECONOMY TEST FAILURE CONTEXT ==="
+  $failures = @(Select-String -Path $log -Pattern '^not ok [0-9]+' -Context 2,25)
+  if ($failures.Count -eq 0) {
+    Get-Content -Path $log | Select-Object -Last 120 | ForEach-Object { Write-Host $_ }
+  } else {
+    foreach ($failure in $failures) {
+      $failure.Context.PreContext | ForEach-Object { Write-Host $_ }
+      Write-Host $failure.Line
+      $failure.Context.PostContext | ForEach-Object { Write-Host $_ }
+    }
+  }
+}
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
 Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $buyer49.scenarios.Count))
