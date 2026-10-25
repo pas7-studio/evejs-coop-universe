@@ -24,6 +24,12 @@ The reconstructed pointer is **not a source of custody or payment authority**. C
 
 Original pinned `gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` `npcSceneActivity.getSceneActivityState` was source-executed with actual `sessionlessWarpIngress.completeAtMs`. Without connected sessions, a cold scene sleeps until the original completion deadline, then wakes: `sleep-until-deadline` → `deadline-due`. With two EVE player sessions, the original scene stays active: `sessions-present`. **No scheduler patch was added**; a duplicate scheduler could double-wake NPCs. No-player cold sleep means intermediate escort attendance might not be visible; this never entitles either pilot to payment.
 
+## Compatibility with newer main
+
+The project already has **ALIFE-12** non-paid NPC station trip recovery, activated by `EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY=1` when the paid Escort gate is OFF. This patch preserves its independent `createStationArrival.recover`, `tripJournal`, `recoverEnabled` and existing `checkReturn` handling. The new `resumeNativeDelivery` runs only for the separately opted-in **paid** original physical warp and is checked before the predeparture-retry branch; it never replaces the pre-existing non-paid source journal.
+
+The new path was forward-ported onto the newer `main` rather than copying an older native station implementation and overwriting ALIFE-12. The original station-arrival baseline `tests/coop-native-station-arrival.test.mjs` remained **15/15 V8 source-executed PASS** in addition to the Stage I source and recovery suites.
+
 ## Regressions
 
 - `tests/coop-escort-native-route-recovery.test.mjs`: **43/43 isolated V8 source-executed PASS**, including 14 new resume/warehouse tests: original cargo, stale A-Life hint, true native arrival, dwell, warehouse, manifest proof, one simulated terminal settlement, rejected source, wrong fleet, expired warp, corrupted snapshot and fail-closed default OFF.
