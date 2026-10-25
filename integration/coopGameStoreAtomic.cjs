@@ -20,8 +20,9 @@ function serialize(v,t,k){
 }
 function createSqliteAdapter(getDb){
  if(typeof getDb!=="function")throw Error("NATIVE_SQLITE_PROVIDER_REQUIRED");
- let inside=false;
+ let inside=false,claimed=false;
  function transact(tables,mutation){
+  if(process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1")throw Error("NATIVE_SQLITE_ATOMIC_DISABLED");
   assertTables(tables);
   if(typeof mutation!=="function"||inside)throw Error("INVALID_OR_REENTRANT_ATOMIC_MUTATION");
   const db=getDb();if(!db||typeof db.exec!=="function"||typeof db.prepare!=="function")throw Error("NATIVE_SQLITE_UNAVAILABLE");
@@ -41,12 +42,20 @@ function createSqliteAdapter(getDb){
    });
    const result=mutation(tx);
    if(result&&typeof result.then==="function")throw Error("ASYNC_NATIVE_ATOMIC_MUTATION_FORBIDDEN");
-   db.exec("COMMIT");begun=false;
+   try{db.exec("COMMIT");}catch(cause){
+    const uncertain=Error("NATIVE_SQLITE_COMMIT_OUTCOME_UNKNOWN");
+    uncertain.coopCommitOutcomeUnknown=true;uncertain.cause=cause;throw uncertain;
+   }
+   begun=false;
    return {result,changed:Object.fromEntries([...changed].map(([t,keys])=>[t,[...keys]]))};
   }catch(e){if(begun){try{db.exec("ROLLBACK")}catch{}}throw e;}
   finally{inside=false;}
  }
- return Object.freeze({transact});
+ // Only the GameStore owner can claim this SQLite writer; a second caller is refused.
+ return Object.freeze({claimTransactor(){
+  if(claimed)throw Error("NATIVE_SQLITE_WRITER_ALREADY_CLAIMED");
+  claimed=true;return Object.freeze({transact});
+ }});
 }
 function reconcileObject(target,source){
  if(!target||!source||typeof target!=="object"||typeof source!=="object"||Array.isArray(target)!==Array.isArray(source))return source;
@@ -58,13 +67,14 @@ function reconcileObject(target,source){
 function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flushTableSync,
  cache,dirty,flushTimers,inFlightFlushes,transientPaths,dirtyRowKeys,fullDirty,
  rebuildFlushBaselineFromDisk,invalidateNativeItems,fatal}={}){
- if(!sqliteStore||typeof sqliteStore.coopAtomicNativeRows?.transact!=="function"||
+ if(!sqliteStore||typeof sqliteStore.coopAtomicNativeRows?.claimTransactor!=="function"||
     typeof sqliteStore.loadTableObject!=="function"||typeof ensureSqliteReady!=="function"||
     typeof ensureCached!=="function"||typeof flushTableSync!=="function"||
     typeof rebuildFlushBaselineFromDisk!=="function"||!cache||!dirty||!flushTimers||
     !inFlightFlushes||!transientPaths||!dirtyRowKeys||!fullDirty||
     typeof invalidateNativeItems!=="function"||typeof fatal!=="function")
   throw Error("NATIVE_GAMESTORE_AUTHORITIES_REQUIRED");
+ const sqliteWriter=sqliteStore.coopAtomicNativeRows.claimTransactor();
  let busy=false,poisoned=false;
  function transact(tables,mutation){
   if(poisoned)throw Error("NATIVE_GAMESTORE_POISONED");
@@ -84,7 +94,7 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
    }
    if(tables.includes("items")&&invalidateNativeItems("probe")!==true)
      throw Error("NATIVE_INVENTORY_INDEX_INVALIDATOR_UNAVAILABLE");
-   const result=sqliteStore.coopAtomicNativeRows.transact(tables,mutation);
+   const result=sqliteWriter.transact(tables,mutation);
    committed=true;
    for(const t of tables){
     const snapshot=sqliteStore.loadTableObject(t),current=cache[t];
@@ -98,7 +108,7 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
      throw Error("NATIVE_INVENTORY_INDEX_INVALIDATION_FAILED");
    return result.result;
   }catch(e){
-   if(committed){poisoned=true;fatal(e);
+   if(committed||e?.coopCommitOutcomeUnknown===true){poisoned=true;fatal(e);
     throw Error("NATIVE_GAMESTORE_COMMITTED_BUT_CACHE_UNSAFE:"+String(e.message||e));}
    throw e;
   }finally{busy=false;}
