@@ -72,10 +72,12 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   if(method==="FinalizeNpcCorpPlayerSell"){
    stage="filled";phase="finalized";
    if(loss){loss=false;throw Error("LOST_RUST_FINAL_ACK")}
-   return {state:stage,fill_phase:phase,fill_id:String(FILL),vol_remaining:0};
+   return {state:stage,fill_phase:phase,fill_id:String(FILL),
+    vol_remaining:0,history_recorded:phase==="finalized",history_day:"2026-10-25"};
   }
   if(method==="GetNpcCorpPlayerClaim")
-   return {state:stage,fill_phase:phase,fill_id:String(FILL),vol_remaining:0};
+   return {state:stage,fill_phase:phase,fill_id:String(FILL),
+    vol_remaining:0,history_recorded:phase==="finalized",history_day:"2026-10-25"};
   throw Error("UNEXPECTED_RPC:"+method);
  };
  const raw=Object.freeze({ownerID:OWNER,stationID:STATION,typeID:TYPE,
