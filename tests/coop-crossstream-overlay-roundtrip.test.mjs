@@ -9,13 +9,14 @@ import {createRequire} from "node:module";
 const here=path.dirname(fileURLToPath(import.meta.url));
 const project=path.resolve(here,"..");
 const require=createRequire(import.meta.url);
-const {specs,transform}=require("../scripts/patch-evejs-coop.cjs");
+const {specs,transform,names}=require("../scripts/patch-evejs-coop.cjs");
 const installer=fs.readFileSync(path.join(project,"scripts/patch-evejs-coop.cjs"),"utf8");
 
 test("single native overlay has all cross-stream modules and no missing source files",()=>{
  const match=installer.match(/const names=\[([\s\S]*?)\];/);
  assert.ok(match,"Installer module list must be declared");
- const names=JSON.parse("["+match[1]+"]");
+ const declaredNames=JSON.parse("["+match[1]+"]");
+ assert.ok(names.length>=declaredNames.length,"Effective registry must include inline and spliced modules");
  assert.equal(names.length,new Set(names).size,"Duplicate deployed overlay modules");
  for(const name of names)
   assert.ok(fs.existsSync(path.join(project,"integration",name+".cjs")),"Missing module: "+name);
@@ -50,6 +51,7 @@ test("all pinned native source hooks apply twice, parse and reverse byte-for-byt
 test("native overlay remains opt-in and local-only; manual verifier covers cross-stream regression",()=>{
  const deploy=fs.readFileSync(path.join(project,"scripts/Deploy-Coop-RuntimeProbe.ps1"),"utf8");
  assert.match(deploy,/if \(\$EnableNativeCoopContracts\) \{/);
+ assert.match(deploy,/if \(-not \$EnableDuoMissionSettlement\) \{ \$yamlLines \+=/,"Default-off turn-in flag must not override explicit opt-in");
  assert.match(deploy,/if \(\$EnableNativeLpStandings\) \{/);
  assert.match(deploy,/EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'/);
  const verifier=fs.readFileSync(path.join(project,"scripts/Verify-Local-Coop.ps1"),"utf8");

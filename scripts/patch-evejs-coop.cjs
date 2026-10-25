@@ -327,6 +327,32 @@ function transform(source,spec,remove){
  new vm.Script(text,{filename:spec.file});
  return text;
 }
+// All sources are preflighted before the first write. Restore the failed
+// item too: writeFileSync may have already truncated its destination.
+function executePlan(changed,ops=fs){
+ const attempted=[];
+ try{
+  for(const item of changed){
+   attempted.push(item);
+   if(item.after===null)ops.unlinkSync(item.file);
+   else ops.writeFileSync(item.file,item.after,"utf8");
+  }
+ }catch(error){
+  const rollbackFailures=[];
+  for(const item of attempted.reverse()){
+   try{
+    if(item.before===null){if(ops.existsSync(item.file))ops.unlinkSync(item.file);}
+    else ops.writeFileSync(item.file,item.before,"utf8");
+   }catch(rollbackError){
+    rollbackFailures.push(item.file);
+    console.error("Source rollback failed:",item.file,rollbackError.message);
+   }
+  }
+  if(rollbackFailures.length)
+   throw Error("Overlay rollback incomplete: "+rollbackFailures.join(", "),{cause:error});
+  throw error;
+ }
+}
 function run({codePath,remove=false,dryRun=false}){
  const project=path.resolve(__dirname,".."),code=path.resolve(codePath);
  if(!fs.existsSync(path.join(code,"compose.yaml")))throw Error("Missing EveJS compose.yaml: "+code);
@@ -335,6 +361,9 @@ function run({codePath,remove=false,dryRun=false}){
  const plan=[];
  for(const spec of specs){
   const file=path.join(code,spec.file),before=fs.readFileSync(file,"utf8");
+  const sourceState=classifyFile(before,spec);
+  if(sourceState!=="PRISTINE"&&sourceState!=="PATCHED")
+   throw Error("Refusing to modify drifted native source: "+spec.file+" ("+sourceState+")");
   plan.push({file,before,after:transform(before,spec,remove)});
  }
  for(const name of names){
@@ -344,25 +373,15 @@ function run({codePath,remove=false,dryRun=false}){
    const after=fs.readFileSync(src,"utf8");
    new vm.Script(after,{filename:src});
    plan.push({file,before:fs.existsSync(file)?fs.readFileSync(file,"utf8"):null,after});
-  }else if(fs.existsSync(file))plan.push({file,before:fs.readFileSync(file,"utf8"),after:null});
- }
- const changed=plan.filter(p=>p.before!==p.after);
- if(!dryRun){
-  const done=[];
-  try{
-   for(const item of changed){
-    if(item.after===null)fs.unlinkSync(item.file);
-    else fs.writeFileSync(item.file,item.after,"utf8");
-    done.push(item);
-   }
-  }catch(error){
-   for(const item of done.reverse()){
-    try{if(item.before===null)fs.unlinkSync(item.file);else fs.writeFileSync(item.file,item.before,"utf8");}
-    catch(err){console.error("Source rollback failed:",item.file,err.message);}
-   }
-   throw error;
+  }else if(fs.existsSync(file)){
+   const before=fs.readFileSync(file,"utf8");
+   if(before!==fs.readFileSync(src,"utf8"))
+    throw Error("Refusing to remove drifted overlay module: "+name);
+   plan.push({file,before,after:null});
   }
  }
+ const changed=plan.filter(p=>p.before!==p.after);
+ if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};
 }
 function classifyFile(text,spec){
@@ -387,8 +406,9 @@ function check({codePath}){
  }
  for(const name of names){
   const deployed=path.join(code,"server/src/space",name+".js");
-  const expected=fs.readFileSync(path.join(project,"integration",name+".cjs"),"utf8");
-  const state=!fs.existsSync(deployed)?"MISSING":fs.readFileSync(deployed,"utf8")===expected?"CURRENT":"STALE";
+  const source=path.join(project,"integration",name+".cjs");
+  const state=!fs.existsSync(source)?"SOURCE_MISSING":!fs.existsSync(deployed)?"MISSING":
+   fs.readFileSync(deployed,"utf8")===fs.readFileSync(source,"utf8")?"CURRENT":"STALE";
   modules.push({name,state});
   if(state!=="CURRENT")problems.push({target:"server/src/space/"+name+".js",kind:"overlay-module",state});
  }
@@ -421,4 +441,4 @@ if(require.main===module){
   }else console.log(JSON.stringify(result,null,2));
  }catch(error){console.error("[COOP PATCH ERROR]",error.message);process.exitCode=1;}
 }
-module.exports={run,check,classifyFile,transform,strip,specs,PIN};
+module.exports={run,check,executePlan,classifyFile,transform,strip,specs,names,PIN};
