@@ -43,8 +43,9 @@ function inspect(db,{systems=DEFAULT_SYSTEMS}={}) {
   .map(r=>({systemID:Number(r.systemID),station:r.station,types:Number(r.types),units:Number(r.units)}));
  const allEmpty=scopes.every(x=>x.status!=="SELL_LIQUIDITY_PRESENT");
  const totalSeedUnits=Number(db.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM seed_stock WHERE quantity>0").get().n)||0;
- return {status:totalSeedUnits===0?"NO_SEED_STOCK":allEmpty?"NO_LOCAL_SELL_LIQUIDITY":"MARKET_STOCK_AVAILABLE",
-  source:"LIVE_SQLITE_READ_ONLY",systems:scopes,counts:totals,globalSeedUnits:totalSeedUnits,stockedStations:nearest,
+ const globalOpenSellOrders=Number(db.prepare("SELECT COUNT(*) AS n FROM market_orders WHERE state='open' AND bid=0 AND vol_remaining>0").get().n)||0;
+ return {status:!allEmpty?"MARKET_STOCK_AVAILABLE":(totalSeedUnits||globalOpenSellOrders)?"NO_LOCAL_SELL_LIQUIDITY":"NO_SELL_LIQUIDITY",
+  source:"LIVE_SQLITE_READ_ONLY",systems:scopes,counts:totals,globalSeedUnits:totalSeedUnits,globalOpenSellOrders,stockedStations:nearest,
   warning:"Market catalog/client routing and wallet/inventory settlement are independent checks; this report is NOT proof of a successful purchase."};
 }
 function run({file=DB_DEFAULT,systems=DEFAULT_SYSTEMS,Database}={}) {
