@@ -83,6 +83,7 @@ const marketSource=[
  "    }",
  "}",
  "function applyCancelledStructureMarketOrder(order) {",
+ "  if (false) {",
  "  } else {",
  "    moveEscrowItemsBackToSeller(orderID, ownerID, stationID);",
  "    removeEscrowRecord(orderID);",
