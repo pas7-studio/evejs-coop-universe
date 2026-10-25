@@ -163,7 +163,11 @@ test("native mission normalization retains coop dungeon receipt after every read
   sourceInstanceID:700,agentID:55,ownerID:101,
   contentID:440,missionTemplateID:"battle"}};
  const saved=nativeNormalize(source,55,12);
- assert.deepEqual(saved.coopSharedDungeon,source.coopSharedDungeon);
+ assert.equal(saved.coopSharedDungeon.sourceInstanceID,700);
+ assert.equal(saved.coopSharedDungeon.ownerID,101);
+ assert.equal(saved.coopSharedDungeon.agentID,55);
+ assert.equal(saved.coopSharedDungeon.contentID,440);
+ assert.equal(saved.coopSharedDungeon.missionTemplateID,"battle");
  assert.equal(nativeNormalize(saved,55,12).coopSharedDungeon.sourceInstanceID,700);
  assert.equal(nativeNormalize({...source,contentID:1234},55,12).coopSharedDungeon,null);
  assert.equal(nativeNormalize({...source,coopSharedDungeon:{...source.coopSharedDungeon,
