@@ -1,7 +1,7 @@
 "use strict";
 // Actual pinned EVE services mounted only by authenticated chat action.
 // Never creates offers, pays ISK, or writes to a live world when feature OFF.
-let singleton;
+let singleton,historyReader;
 const deny=status=>({status});
 function commandInGame(session,eventID,cargoID,action){
  if(process.env.EVEJS_COOP_SALVAGE_GAME!=="1")return deny("DISABLED");
@@ -65,6 +65,7 @@ function commandInGame(session,eventID,cargoID,action){
      readAcceptedDuo:consent.readDuo
     });
 
+   historyReader=id=>rewards.history(id);
    singleton=require("./coopSalvageGameAuthority").createSalvageGameAuthority({
     readEvent:id=>require("./coopWorldOpportunityBoard").readNativeEvent(id),
     readFlight:id=>require("./coopEscortNativeBinding").routeGate().readFlight(id),
@@ -105,4 +106,20 @@ function commandInGame(session,eventID,cargoID,action){
   return singleton.command({session,eventID,cargoID:Number(cargoID),action});
  }catch{return deny("SALVAGE_PINNED_NATIVE_MOUNT_UNAVAILABLE")}
 }
-module.exports={commandInGame};
+// Invalid dummy event only initialises native read authorities, never writes
+// to a wallet, wreck, consent or shipment. Real history reads wallet source.
+function historyInGame(session){
+ if(process.env.EVEJS_COOP_SALVAGE_GAME!=="1"||
+  process.env.EVEJS_COOP_SALVAGE_REWARDS!=="1")
+  return {status:"DISABLED",history:[]};
+ if(!Number.isSafeInteger(session?.characterID)||session.characterID<=0||
+  session.socket?.destroyed===true)
+  return {status:"SALVAGE_HISTORY_NOT_AUTHENTICATED",history:[]};
+ try{
+  if(!singleton)commandInGame(session,"invalid-event",1,"OFFER");
+  if(typeof historyReader!=="function")
+   return {status:"SALVAGE_HISTORY_NATIVE_MOUNT_UNAVAILABLE",history:[]};
+  return historyReader(session.characterID);
+ }catch{return {status:"SALVAGE_HISTORY_NATIVE_MOUNT_UNAVAILABLE",history:[]}}
+}
+module.exports={commandInGame,historyInGame};
