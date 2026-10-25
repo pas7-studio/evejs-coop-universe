@@ -177,3 +177,18 @@ test("incomplete patch with missing native return is refused, never repaired by 
   "  nativeNpcStore.upsertNativeCargo({");
  assert.throws(()=>patchMiningCargo(broken),/Unexpected native mining cargo integrity source/);
 });
+
+test("fresh native miner without an initialized cargo array earns persisted ore once",()=>{
+ const f=fixture();delete f.ship.nativeCargoItems;
+ assert.equal(f.append(f.ship,34,4),true);
+ assert.equal(f.rows.get(510).quantity,4);
+ assert.equal(f.ship.nativeCargoItems.length,1);
+ assert.equal(f.ship.nativeCargoItems[0].itemID,510);
+});
+test("failed first cargo write does not even create an empty optimistic hull array",()=>{
+ const f=fixture();delete f.ship.nativeCargoItems;
+ f.setWrite("fail");
+ assert.equal(f.append(f.ship,34,4),false);
+ assert.equal(f.ship.nativeCargoItems,undefined);
+ assert.equal(f.rows.size,0);
+});
