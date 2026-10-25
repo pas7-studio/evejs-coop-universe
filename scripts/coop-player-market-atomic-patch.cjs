@@ -1,5 +1,5 @@
 "use strict";
-// Source-only native P2P one-stack full or partial SELL shortcut. This is installed AFTER the
+// Source-only native P2P multi-stack full or partial SELL shortcut. This is installed AFTER the
 // existing custody, journal and Rust claim patches. All flags default OFF.
 const fileName="server/src/services/market/marketProxyService.js";
 const atomic='process.env.EVEJS_COOP_PLAYER_MARKET_ATOMIC === "1"';
@@ -34,19 +34,28 @@ function patch(source,{remove=false}={}){
  inject(sell,buy,'        purchaseCounterpartyID = sellerCharacterID;',
   '        if ('+atomic+') {\n'+
   '          const fullEscrowItems=listEscrowItemsForOrder(sellOrder && sellOrder.order_id,sellerCharacterID);\n'+
-  '          if (!chargeBuyerWallet||tradedQuantity<=0||fullEscrowItems.length!==1||\n'+
-  '              fullEscrowItems[0]?.singleton!==0||fullEscrowItems[0]?.stacksize!==availableQuantity)\n'+
-  '            throw Error("P2P_ATOMIC_SINGLE_STACK_SELL_ORDER_REQUIRED");\n'+
+  '          let escrowSum=0;\n'+
+  '          if (!chargeBuyerWallet||tradedQuantity<=0||fullEscrowItems.length<1||fullEscrowItems.length>10000) throw Error("P2P_ATOMIC_ESCROW_STACK_SET_REQUIRED");\n'+
+  '          for(const original of fullEscrowItems){\n'+
+  '            if(original?.singleton!==0||!Number.isSafeInteger(original?.stacksize)||original.stacksize<=0||!Number.isSafeInteger(escrowSum+original.stacksize)) throw Error("P2P_ATOMIC_ESCROW_STACK_QUANTITY_INVALID");\n'+
+  '            escrowSum+=original.stacksize;\n'+
+  '          }\n'+
+  '          if(escrowSum!==availableQuantity) throw Error("P2P_ATOMIC_ESCROW_TOTAL_NOT_MATCHED");\n'+
   '        }',{before:true});
  const claim='        if (coopPlayerSellTicket) await require("../../space/coopPlayerMarketRustClaim").claim({ticket:coopPlayerSellTicket,proof:coopPlayerSellProof,client:marketDaemonClient});';
  inject(sell,buy,claim,
   '        if ('+atomic+' && coopPlayerSellTicket) {\n'+
   '          const nativeTax=computeSalesTaxAmount(buildCharacterMarketContext(null,sellerCharacterID,destinationStationID),grossCost);\n'+
   '          const physical=listEscrowItemsForOrder(sellOrder && sellOrder.order_id,sellerCharacterID);\n'+
-  '          const result=await '+helper+'.settleSell({ticket:coopPlayerSellTicket,proof:coopPlayerSellProof,tax:nativeTax,sourceItemID:physical[0]?.itemID,client:marketDaemonClient});\n'+
-  '          const delivered=findItemById(result.receipt.itemID);\n'+
-  '          if (!delivered||delivered.ownerID!==buyerCharacterID||delivered.locationID!==destinationStationID) throw Error("P2P_ATOMIC_POST_COMMIT_INVENTORY_VIEW_UNSAFE");\n'+
-  '          notifyBuyerDelivery(buyerCharacterID,[{item:delivered}]);\n'+
+  '          const result=await '+helper+'.settleSell({ticket:coopPlayerSellTicket,proof:coopPlayerSellProof,tax:nativeTax,sourceItemIDs:physical.map(x=>x.itemID),client:marketDaemonClient});\n'+
+  '          const delivered=[];\n'+
+  '          const receiptItems=result.receipt.deliveries??[{itemID:result.receipt.itemID,quantity:result.receipt.quantity}];\n'+
+  '          for(const physicalReceipt of receiptItems){\n'+
+  '            const item=findItemById(physicalReceipt.itemID);\n'+
+  '            if(!item||item.ownerID!==buyerCharacterID||item.locationID!==destinationStationID||item.quantity!==physicalReceipt.quantity||item.stacksize!==physicalReceipt.quantity) throw Error("P2P_ATOMIC_POST_COMMIT_INVENTORY_VIEW_UNSAFE");\n'+
+  '            delivered.push({item});\n'+
+  '          }\n'+
+  '          notifyBuyerDelivery(buyerCharacterID,delivered);\n'+
   '          const nativeWallet=require("../account/walletState");\n'+
   '          nativeWallet.notifyCharacterWalletChange(buyerCharacterID,nativeWallet.getCharacterWallet(buyerCharacterID));\n'+
   '          nativeWallet.notifyCharacterWalletChange(sellerCharacterID,nativeWallet.getCharacterWallet(sellerCharacterID));\n'+
