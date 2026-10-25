@@ -159,13 +159,26 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
    // All original cargo must remain in the real native station and NO
    // source wreck items can still be available for another pickup.
    const all=tx.scan("items"),wrecks=tx.get("npcWreckItems","items");
+   const nativeMoves=tx.get("corporationRuntime","coopSalvageMoves");
+   if(nativeMoves?.version!==1||!nativeMoves.moves)
+    throw Error("SALVAGE_NATIVE_MOVE_JOURNAL_MISSING");
    const used=new Set();
    for(const r of c.rows){
     if(wrecks?.[String(r.wreckItemID)])
      throw Error("SALVAGE_ORIGINAL_WRECK_STILL_HAS_ITEM");
+    const move=nativeMoves.moves[manifestKey+":"+r.cargoID];
+    if(move?.v!==1||move.state!=="DELIVERED"||
+     move.manifestKey!==manifestKey||move.cargoID!==r.cargoID||
+     move.wreckItemID!==r.wreckItemID||move.wreckID!==c.wreckID||
+     move.corporationID!==c.corporationID||
+     move.stationID!==c.stationID||move.quantity!==r.quantity||
+     !pos(move.nativeItemID)||
+     !c.characters.includes(move.characterID))
+     throw Error("SALVAGE_NATIVE_ATOMIC_DELIVERY_RECEIPT_UNVERIFIED");
     const matches=all.filter(x=>x.value?.customInfo===
      marker(manifestKey,r.cargoID,r.wreckItemID));
-    if(matches.length!==1||used.has(matches[0].key))
+    if(matches.length!==1||matches[0].value?.itemID!==move.nativeItemID||
+     used.has(matches[0].key))
      throw Error("SALVAGE_NATIVE_CARGO_NOT_ALL_DELIVERED");
     used.add(matches[0].key);
     const item=matches[0].value;
