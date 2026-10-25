@@ -302,9 +302,13 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   let escortSettlement=null;
   if(escortEnabled){
-   try{escortSettlement=typeof escortGate?.settleVerifiedNativeRaid==="function"?
-    escortGate.settleVerifiedNativeRaid(trip.manifestID):
-    {status:"ESCORT_SETTLEMENT_NOT_WIRED"}}
+   try{escortSettlement=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"?
+    (typeof escortGate?.settlePeacefulDelivery==="function"?
+     escortGate.settlePeacefulDelivery(trip.manifestID):
+     {status:"ESCORT_PEACEFUL_SETTLEMENT_NOT_WIRED"}):
+    (typeof escortGate?.settleVerifiedNativeRaid==="function"?
+     escortGate.settleVerifiedNativeRaid(trip.manifestID):
+     {status:"ESCORT_SETTLEMENT_NOT_WIRED"})}
    catch{escortSettlement={status:"ESCORT_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED"}}
   }
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
