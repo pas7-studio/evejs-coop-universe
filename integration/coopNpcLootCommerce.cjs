@@ -94,14 +94,15 @@ function createLootCommerce({root,store,sceneForSystem,getController,getStation,
    if(!stations.length)continue;
    const station=stations[0],d=dist(ship.position,station.position);
    const key=systemID+":"+entityID;
-   leases.set(key,{pilotID,entityID,systemID,expiresAt:now+commandCooldownMs+30000});
+   const last=leases.get(key)||{};
+   leases.set(key,{...last,pilotID,entityID,systemID,
+    expiresAt:now+commandCooldownMs+30000});
    processed++;
    if(d<=5000){
     ready.push({pilotID,entityID,systemID,stationID:Number(station.itemID),
      cargoIDs:cargo.map(x=>Number(x.cargoID)),status:"PHYSICALLY_AT_NATIVE_STATION"});
     continue;
    }
-   const last=leases.get(key);
    if(last.nextOrderAt>now)continue;
    const warpRequired=d>250000;
    let result;
