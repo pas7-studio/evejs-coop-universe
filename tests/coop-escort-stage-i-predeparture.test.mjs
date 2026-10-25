@@ -13,13 +13,17 @@ const previousPeace=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
 const previousWitness=process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
 const previousRoute=process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS;
 const previousNativeMotion=process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+const previousSnapshot=process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT;
+const previousRecovery=process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY;
 process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
 process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
 process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false,
  sourceDispatched=false,ackDurable=true,witnessValid=true,sourcePilotAway=false,
  stationX=100000}={}){
- const counters={funding:0,warp:0,manifest:0,closures:0,witness:0,routeSamples:0,warpIngress:0};
+ const counters={funding:0,warp:0,manifest:0,closures:0,witness:0,routeSamples:0,warpIngress:0,snapshot:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
   position:{x:0,y:0,z:0},radius:100,mode:"STOP"};
@@ -76,19 +80,30 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   getNativeEntity:()=>({entityID:901,systemID:30000144,transient:false}),
   getScene:()=>scene,store:{listNativeCargoForEntity:()=>cargo},items:{},
   flush:()=>({success:true}),
-  warpToPoint:(_id,_pt,opts)=>{counters.warp++;counters.warpIngress=opts.ingressDurationMs;
+  warpToPoint:(_id,pt,opts)=>{counters.warp++;counters.warpIngress=opts.ingressDurationMs;
+   if(warpAccepted)ship.sessionlessWarpIngress={startTimeMs:1000000,
+    travelCompleteAtMs:1000000+opts.ingressDurationMs,
+    completeAtMs:1000250+opts.ingressDurationMs,
+    origin:{...ship.position},targetPoint:{...pt}};
    return {success:warpAccepted}},
   root:"/tmp/eve",clock:()=>1000000,
   warpFence:{
    inspectSource:()=>({status:sourceDispatched?"WARP_SOURCE_ALREADY_DISPATCHED":"WARP_SOURCE_CLEAR"}),
    prepare:()=>({status:"DURABLE_WARP_PREPARED"}),
    confirm:()=>({status:ackDurable?"DURABLE_WARP_ACK_CONFIRMED":
-    "WARP_ACK_JOURNAL_UNCERTAIN_REPAIR_REQUIRED"})
+    "WARP_ACK_JOURNAL_UNCERTAIN_REPAIR_REQUIRED"}),
+   inspect:()=>({status:"READY",phase:ackDurable?"WARP_ACK_CONFIRMED":"WARP_PREPARED",
+    booking:{manifestKey:"30000144-77-1000000",contractID:"escort-test-01",
+     systemID:30000144,fleetID:77,haulerID:901,stationID:60001,
+     corporationID:10001,cargoIDs:[5501]}})
   },
   warehouse:{deposit:()=>({status:"COMMITTED"})},
   manifest:{prepare:()=>{counters.manifest++;return {status:"MANIFEST_DURABLY_PREPARED",
    key:"30000144-77-1000000",cargoIDs:[5501]}}},
   escortGate:gate?{
+   readDurableEscortDeparture:()=>({status:"VERIFIED_NATIVE_ESCORT_DEPARTURE",
+    manifestKey:"30000144-77-1000000",contractID:"escort-test-01",
+    origin:{x:0,y:0,z:0}}),
    recordEscortRouteSample:()=>{counters.routeSamples++;
     return {status:"ROUTE_NOT_AT_CHECKPOINT"}},
    recordEscortDeparture:()=>{counters.witness++;return {status:witnessValid?
@@ -99,6 +114,12 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
    recordDelivered:()=>({status:"DURABLE_NATIVE_DELIVERY_RECORDED"}),
    refundNativeWreck:()=>lossProven?{status:"REFUNDED",contractID:"escort-test-01",amountISK:20000}:
     {status:"NATIVE_REFUND_HAULER_LOSS_NOT_PROVEN"}}:null,
+  ingressSnapshot:{record:args=>{
+   counters.snapshot++;
+   if(args.verifiedAck?.phase!=="WARP_ACK_CONFIRMED"||
+    !args.ingress?.targetPoint||args.source?.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+    return {status:"INGRESS_SNAPSHOT_NATIVE_ACK_OR_SOURCE_INVALID"};
+   return {status:"DURABLE_NATIVE_INGRESS_SNAPSHOT"}}},
   probe:{observe:()=>{}}});
  const close=()=>{
   board.noteNativeConvoyPreparing=oldPrepare;
@@ -358,6 +379,65 @@ test("strict route observation rejects too-short NPC route before spending ISK",
   delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
  }
 });
+test("original confirmed native NPC warp writes one snapshot AFTER real ACK only",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="1";
+ try{run(f=>{
+  f.approve();
+  const response=f.director.start(f.scene,f.fleet,1000000);
+  assert.equal(response.status,"EN_ROUTE");
+  assert.equal(response.ingressSnapshotStatus,"DURABLE_NATIVE_INGRESS_SNAPSHOT");
+  assert.equal(f.counters.snapshot,1);
+  assert.equal(f.counters.warp,1);
+  assert.equal(f.counters.funding,1);
+  assert.equal(f.counters.warpIngress>=6000,true);
+ })}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+  delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
+  process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+ }
+});
+test("snapshot recovery without all necessary flags denies BEFORE manifest and ISK",()=>{
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="1";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_NATIVE_INGRESS_SNAPSHOT_AUTHORITIES_REQUIRED");
+  assert.equal(f.counters.manifest,0);
+  assert.equal(f.counters.funding,0);
+  assert.equal(f.counters.warp,0);
+  assert.equal(f.counters.snapshot,0);
+ })}finally{process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0"}
+});
+test("failed original native warp cannot write a restorable ingress snapshot",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="1";
+ try{run(f=>{
+  f.approve();f.blockWarp();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "WARP_COMMAND_FAILED");
+  assert.equal(f.counters.snapshot,0);
+  assert.equal(f.counters.warp,1);
+ })}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+  delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
+  process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+ }
+});
 test("paid escort cannot start unless durable warp fence is explicitly enabled",()=>{
  process.env.EVEJS_COOP_ESCORT_WARP_FENCE="0";
  try{run(f=>{
@@ -390,4 +470,8 @@ process.on("exit",()=>{for(const [k,v] of Object.entries(prior))
  else process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS=previousRoute;
  if(previousNativeMotion===undefined)delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
  else process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=previousNativeMotion;
+ if(previousRecovery===undefined)delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY;
+ else process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=previousRecovery;
+ if(previousSnapshot===undefined)delete process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT;
+ else process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT=previousSnapshot;
 });
