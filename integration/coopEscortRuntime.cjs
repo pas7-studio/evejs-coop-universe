@@ -4,6 +4,7 @@
 const {createEscortNativeFunds}=require("./coopEscortNativeFunds");
 const {createEscortFlightGate}=require("./coopEscortFlightGate");
 const {createEscortContractSettlement}=require("./coopEscortContractSettlement");
+const {createPeacefulEscortSettlement}=require("./coopEscortPeacefulSettlement");
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>x===b[i]);
@@ -43,6 +44,40 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
  };
  const flight=createEscortFlightGate({root,io,clock,authorizeBooking:booking,
   readManifest,verifyManifest,nativeFunds:funds});
+ const peaceful=createPeacefulEscortSettlement({readFlight:flight.read,
+  readNativeDelivery:flight.readNativeDelivery,nativeFunds:funds,
+  verifyService:(b,scene)=>{
+   const deny=()=>({status:"NO_NATIVE_ESCORT_SERVICE"});
+   if(scene?.systemID!==b.systemID||
+    typeof scene.getEntityByID!=="function"||
+    typeof scene.sessions?.values!=="function")return deny();
+   let duo;try{duo=verifyNativeDuo({
+    systemID:b.systemID,stationID:b.stationID,corporationID:b.corporationID,
+    fleetID:b.playerFleetID,manifestKey:b.manifestKey,
+    contractID:b.contractID,haulerID:b.haulerID,characters:b.characters.slice()});
+   }catch{return deny()}
+   if(duo?.status!=="VERIFIED_NATIVE_DUO_FLEET"||
+    duo.fleetID!==b.playerFleetID||!equal(duo.characters,b.characters))return deny();
+   const hauler=scene.getEntityByID(b.haulerID);
+   const validPosition=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
+   if(hauler?.kind!=="ship"||hauler.nativeNpc!==true||
+    hauler.itemID!==b.haulerID||!validPosition(hauler.position))return deny();
+   for(const characterID of b.characters){
+    const sessions=[...scene.sessions.values()].filter(x=>
+     x?.characterID===characterID&&x?.socket?.destroyed!==true&&
+     x?._space?.initialStateSent===true&&
+     x._space.systemID===b.systemID&&pos(x._space.shipID));
+    if(sessions.length!==1)return deny();
+    const player=scene.getEntityByID(sessions[0]._space.shipID);
+    if(player?.kind!=="ship"||player.nativeNpc===true||
+     player.itemID!==sessions[0]._space.shipID||!validPosition(player.position)||
+     Math.hypot(player.position.x-hauler.position.x,
+      player.position.y-hauler.position.y,
+      player.position.z-hauler.position.z)>150000)return deny();
+   }
+   return {status:"VERIFIED_NATIVE_ESCORT_SERVICE",characters:b.characters.slice(),
+    fleetID:b.playerFleetID,haulerID:b.haulerID,systemID:b.systemID};
+  }});
  const contracts=createEscortContractSettlement({root,io,clock,
   authorizeOffer:c=>{
    if(!ready())return blocked("DENIED_NATIVE_RUNTIME_DISABLED");
@@ -155,14 +190,17 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
   return contracts.refund(c.contractID);
  }
+ function settlePeacefulFlight(manifestKey,scene){
+  if(!ready())return blocked("DISABLED");
+  return peaceful.settle(manifestKey,scene);
+ }
  function refundProvenLoss(contractID){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,
-  refundProvenLoss,refundWreckedFlight,readFlight:flight.read,
-  listDeliveredFlights:flight.listDelivered,readContract:contracts.read,
+ return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,settlePeacefulFlight,
+  refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
 }
