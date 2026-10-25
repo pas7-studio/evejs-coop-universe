@@ -204,6 +204,24 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     ". Fly to its system to escort or scout. Reward is NOT guaranteed.",
    expiresAt:n+30*60*1000});
  }
+ function nativeConvoyOutcome({scene,trip,terminal}={}){
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1")return {status:"DISABLED"};
+  if(!POS(scene?.systemID)||!POS(trip?.fleetID)||!POS(trip?.startedAt)||
+   trip.systemID!==scene.systemID||terminal?.status!=="DELIVERED"||
+   terminal.terminal!==true||!POS(trip.stationID))
+   return {status:"NATIVE_DELIVERY_NOT_VERIFIED"};
+  const key="convoy-"+scene.systemID+"-"+trip.fleetID+"-"+trip.startedAt;
+  const r=readEvent(key);
+  if(r.status==="NOT_FOUND")return {status:"NO_POSTED_CONVOY_EVENT"};
+  if(r.status!=="READY"||r.event.type!=="CONVOY"||
+   r.event.stationID!==trip.stationID)return {status:"EVENT_PROVENANCE_MISMATCH"};
+  if(r.event.phase==="RESOLVED")return {status:"ALREADY_RESOLVED"};
+  const n=nowOK();
+  if(!n||n<r.event.createdAt)return {status:"CLOCK_INVALID"};
+  const closed={...r.event,phase:"RESOLVED",outcome:"DELIVERED",endedAt:n};
+  if(!durableReplace(eventFile(key),closed))return {status:"EVENT_OUTCOME_WRITE_UNCERTAIN"};
+  return {status:"NATIVE_CONVOY_EVENT_RESOLVED",id:key};
+ }
  function interest(characterID,eventID){
   if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1")return {status:"DISABLED"};
   if(!POS(characterID))return {status:"INVALID_CHARACTER"};
@@ -266,7 +284,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   }
   return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events watch local|all|off"};
  }
- return {publish,nativeRaid,nativeConvoy,readEvent,list,watch,setWatch,interest,alert,handleChat};
+ return {publish,nativeRaid,nativeConvoy,nativeConvoyOutcome,readEvent,list,watch,setWatch,interest,alert,handleChat};
 }
 let singleton;
 function instance(){
@@ -287,4 +305,8 @@ function noteNativeRaid(scene,action){try{return instance().nativeRaid({scene,ac
  catch{return {status:"OPPORTUNITY_RAID_UNAVAILABLE"}}}
 function noteNativeConvoy(scene,fleet,route){try{return instance().nativeConvoy({scene,fleet,route})}
  catch{return {status:"OPPORTUNITY_CONVOY_UNAVAILABLE"}}}
-module.exports={createBoard,handleChat,noteNativeRaid,noteNativeConvoy};
+function noteNativeConvoyOutcome(scene,trip,terminal){
+ try{return instance().nativeConvoyOutcome({scene,trip,terminal})}
+ catch{return {status:"OPPORTUNITY_OUTCOME_UNAVAILABLE"}}
+}
+module.exports={createBoard,handleChat,noteNativeRaid,noteNativeConvoy,noteNativeConvoyOutcome};
