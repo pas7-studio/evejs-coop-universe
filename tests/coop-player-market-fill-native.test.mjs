@@ -110,10 +110,18 @@ test("large native order identity is preserved as a string, not truncated to JS 
 function sourceFixture(eol="\n"){
  return [
  "async function matchSellOrdersForBuyer({}={}) {",
- "  if (true) {",
+ "    let buyerWalletResult = null;",
+ "    try {",
+ "      if (true) {",
  "        purchaseCounterpartyID = sellerCharacterID;",
+ "          const moveResult = moveItemToLocation(1,2,3);",
  "        const grossAmount = roundIsk(orderPrice * tradedQuantity);",
- "  }",
+ "      }",
+ "    } catch (error) {",
+ "      if (buyerWalletResult) {",
+ "        buyerWalletResult = null;",
+ "      }",
+ "    }",
  "}",
  "async function matchBuyOrdersForSeller({}={}) {",
  "    const sellerInventoryChanges = [];",
@@ -131,6 +139,8 @@ test("original native market fill hooks are gated and byte-reversible "+JSON.str
  assert.equal(patch(applied,{remove:true}),original);
  assert.equal((applied.match(/EVEJS_COOP_PLAYER_MARKET_FILL_GUARD/g)||[]).length,2);
  assert.doesNotThrow(()=>new Function(applied));
+ assert.match(applied,/coopPlayerSellIrreversible = true/);
+ assert.match(applied,/if \(coopPlayerSellIrreversible\) buyerWalletResult = null/);
 });
 test("central overlay registers exactly one source module and original market spec",()=>{
  assert.equal(names.filter(n=>n==="coopPlayerMarketFill").length,1);
