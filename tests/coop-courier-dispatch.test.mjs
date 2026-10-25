@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {
- evaluateContract,evaluateCourierIdentity,selectHull,planRoute,piracyOpportunity,quoteCourier,
+ evaluateContract,evaluateCourierIdentity,planSettlement,selectHull,planRoute,piracyOpportunity,quoteCourier,
 }=require('../integration/coopCourierDispatch.cjs');
 
 function courier(overrides={}){
@@ -152,4 +152,15 @@ test('an NPC courier is only ready when it is a real character with funds and a 
  assert.equal(evaluateCourierIdentity({character},contract).status,'REFUSED_NO_SHIP');
  assert.equal(evaluateCourierIdentity({character,ship:{...ship,stationID:60003762}},contract).status,'REFUSED_SHIP_NOT_AT_ORIGIN');
  assert.equal(evaluateCourierIdentity({character,ship:{...ship,capacityM3:4800}},contract).status,'REFUSED_SHIP_TOO_SMALL');
+});
+
+test('the settlement chain refuses a package that is not at the origin or destination',()=>{
+ const contract=courier({volume:29500,collateral:300000});
+ const identity={character:{characterID:140000100,accountId:901,stationID:60003760,balance:25000000},
+  ship:{itemID:9988400100000,typeID:20185,stationID:60003760,capacityM3:465000}};
+ assert.equal(planSettlement(contract,identity,60003760).status,'ACCEPT_THEN_FLY');
+ assert.deepEqual(planSettlement(contract,identity,60003760).steps,['accept','fly','complete']);
+ assert.equal(planSettlement(contract,identity,60003761).status,'SETTLE_NOW');
+ assert.equal(planSettlement(contract,identity,60009999).status,'REFUSED_PACKAGE_ELSEWHERE');
+ assert.equal(planSettlement(contract,{character:identity.character},60003760).status,'REFUSED_NO_SHIP');
 });

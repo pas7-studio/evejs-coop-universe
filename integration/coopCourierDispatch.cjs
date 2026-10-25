@@ -310,6 +310,33 @@ function evaluateCourierIdentity(identity, contract) {
   });
 }
 
+
+// The settlement chain, as data. Accept escrows the courier's own ISK and moves
+// the real package into its hangar; complete is only legal once that package is
+// physically at the destination station. Nothing here mutates anything.
+function planSettlement(contract, identity, packageLocationID) {
+  const readiness = evaluateCourierIdentity(identity, contract);
+  if (readiness.status !== "READY") return readiness;
+  const origin = Number(contract.startStationID) || 0;
+  const destination = Number(contract.endStationID) || 0;
+  const packageAt = Number(packageLocationID) || 0;
+  if (packageAt === destination) {
+    return status("SETTLE_NOW", { contractID: readiness.contractID, steps: ["complete"] });
+  }
+  if (packageAt !== origin) {
+    return status("REFUSED_PACKAGE_ELSEWHERE", {
+      contractID: readiness.contractID, packageAt, origin, destination,
+    });
+  }
+  return status("ACCEPT_THEN_FLY", {
+    contractID: readiness.contractID,
+    characterID: readiness.characterID,
+    origin,
+    destination,
+    steps: ["accept", "fly", "complete"],
+  });
+}
+
 module.exports = {
   COURIER_CONTRACT_TYPE,
   DEFAULT_POLICY,
@@ -317,6 +344,7 @@ module.exports = {
   DEFAULT_QUOTE_POLICY,
   evaluateContract,
   evaluateCourierIdentity,
+  planSettlement,
   selectHull,
   planRoute,
   piracyOpportunity,
