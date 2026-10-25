@@ -75,7 +75,9 @@ function report(input,options={}){
    const participants=new Set(valid.map(x=>pos(x.characterID)));
    const matched=wrecks.some(w=>w.systemID+":"+w.victimEntityID===key&&
     valid.some(x=>precedes(x,w)&&w._time-x._time<=20*60000));
-   const candidate={count:participants.size,wreck:matched,damageEvents:valid.length};
+   const candidate={count:participants.size,wreck:matched,damageEvents:valid.length,
+    systemID:pos(e.systemID),playerIDs:witness.members.map(x=>x.characterID),
+    lastHitAt:Math.max(...valid.map(x=>x._time))};
    if(candidate.count>strongest.count||(candidate.count===strongest.count&&candidate.wreck&&!strongest.wreck)) strongest=candidate;
   }
  }
@@ -84,9 +86,15 @@ function report(input,options={}){
   pos(e.fleetID)&&pos(e.sourceInstanceID)&&pos(e.agentID)&&
   Array.isArray(e.characterIDs)&&e.characterIDs.length===2&&
   pos(e.characterIDs[0])&&pos(e.characterIDs[1])&&e.characterIDs[0]!==e.characterIDs[1]);
- const matchedMission=mission.some(m=>{
+ // A native dungeon credit can be independent of a given NPC kill.
+ // Even the server-only correlation needs the SAME two characters, same
+ // system, and a credit after their shared damage in a bounded window.
+ const matchedMission=strongest.count===2&&mission.some(m=>{
   const pair=currentCrew(current,m,pos(m.systemID));
-  return pair&&pair.members.every(x=>m.characterIDs.includes(x.characterID));
+  return pair&&pos(m.systemID)===strongest.systemID&&
+   m._time>=strongest.lastHitAt&&m._time-strongest.lastHitAt<=30*60000&&
+   pair.members.every(x=>strongest.playerIDs.includes(x.characterID)&&
+    m.characterIDs.includes(x.characterID));
  });
  const coDamage=strongest.count===2;
  return {...base,status:coDamage&&matchedMission?"SERVER_TWO_PLAYER_DAMAGE_AND_MISSION_CREDIT":"INCOMPLETE_NATIVE_COOP_EVIDENCE",
