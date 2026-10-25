@@ -102,6 +102,11 @@ function createStartupCargoAuditor({root,gameStore,store,items,getNativeEntity,i
        !positive(t.sourceOwnerID)||!positive(t.haulerOwnerID)||
        typeof t.afterHash!=="string"||!/^[0-9a-f]{64}$/.test(t.afterHash)||
        seen.has(id))return fail("ALIFE13_TRANSFER_RECEIPT_INVALID",id||0);
+    const miner=getNativeEntity(t.minerID),hauler=getNativeEntity(t.haulerID);
+    if(Number(miner?.ownerID)!==t.sourceOwnerID||
+       Number(hauler?.ownerID)!==t.haulerOwnerID||
+       Number(miner?.systemID)!==systemID||Number(hauler?.systemID)!==systemID)
+     return fail("ALIFE13_TRANSFER_ACTOR_OWNER_CONFLICT",id);
     seen.add(id);transfers++;
     const current=table.cargo[String(id)]||null;
     const cached=actual.get(id)||null;
@@ -141,6 +146,20 @@ function createStartupCargoAuditor({root,gameStore,store,items,getNativeEntity,i
        String(item.customInfo)!==marker(id))
      return fail("ALIFE13_ITEMSTORE_CREDIT_INVALID",id);
     warehouse++;
+   }
+   // Detect orphan original warehouse receipts whose transfer receipt was
+   // lost or removed. A receipt on disk is never a substitute for the source.
+   let receipts;
+   try{receipts=io.readdirSync(path.join(root,"receipts"))}
+   catch(e){if(e?.code==="ENOENT")receipts=[];else throw e}
+   if(!Array.isArray(receipts)||receipts.length>5000)
+    return fail("ALIFE13_WAREHOUSE_DIRECTORY_UNTRUSTED");
+   for(const filename of receipts){
+    if(!/^[1-9]\\d*\\.json$/.test(filename))continue;
+    const id=Number(filename.slice(0,-5));
+    const receipt=readReceipt(id);
+    if(receipt&&(receipt.fleetID===fleetID||receipt.systemID===systemID)&&
+       !seen.has(id))return fail("ALIFE13_ORPHAN_WAREHOUSE_RECEIPT",id);
    }
    for(const [id] of manifests)if(!seen.has(id))
     return fail("ALIFE13_MANIFEST_WITHOUT_ORIGINAL_TRANSFER",id);
