@@ -22,6 +22,11 @@
       "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (mandatory when peaceful payout is ON)",
       "EVEJS_COOP_ESCORT_WARP_FENCE=1 (Stage H native prewarp authority)",
       "EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY=1 (only after reconciled wallet E2E)"
+    ],
+    "experimentalStageI": [
+      "EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 (DISPOSABLE TWO-CLIENT TEST ONLY, default OFF)",
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (DISPOSABLE NATIVE WALLET ONLY)",
+      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (ORIGINAL PREWARP PARTICIPATION REQUIRED)"
     ]
   },
   "scenarios": [
@@ -212,6 +217,58 @@
         "Attempt station convoy start; inspect original native manifest directory and GameStore escrow table"
       ],
       "expected": "Server denies ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID; no original native manifest prepared, no corporation ISK reserved and no warp command dispatched"
+    },
+    {
+      "id": "JOB-UI-20",
+      "name": "Two genuine players escort two observable midroute waypoints",
+      "actions": [
+        "Enable Stage I only on disposable EVEJS snapshot and real 2-client server",
+        "Accept original source-linked real NPC corporate quote via stock Agent UI with two different authenticated pilots",
+        "Observe native server tick while real hauler crosses 20-45% and 55-85% of the actual source-to-station vector with both ships within 10 km",
+        "Confirm full native cargo warehouse delivery, original two-pilot terminal presence, atomic native wallet settlement"
+      ],
+      "expected": "Exactly one original corporate escrow and two immutable unique stage receipts; route witness source validated with real scene positions; exactly one two-pilot native wallet settlement, no extra ISK"
+    },
+    {
+      "id": "JOB-UI-21",
+      "name": "AFK station camper cannot earn route-certified escort wage",
+      "actions": [
+        "Accept two-player job and sign original departure source witness",
+        "One player remains parked at target station while NPC leaves source",
+        "Observe genuine native NPC midroute tick positions",
+        "Complete physical warehouse cargo delivery"
+      ],
+      "expected": "At least one checkpoint missing; strict Stage I prevents peaceful wallet settlement; cargo delivery is still real and not rewritten"
+    },
+    {
+      "id": "JOB-UI-22",
+      "name": "Real player disconnect, ship swap or changed native fleet blocks checkpoint",
+      "actions": [
+        "Record one genuine transit checkpoint",
+        "Disconnect one participant, duplicate their session or change their real ship/fleet",
+        "Allow NPC to continue crossing second checkpoint"
+      ],
+      "expected": "Second stage NOT durably recorded; original signed pilot cannot be replaced from client input; no payout from invalid two-checkpoint claim"
+    },
+    {
+      "id": "JOB-UI-23",
+      "name": "Fast native warp without observable middle positions is NOT entitled to guessed payout",
+      "actions": [
+        "Use actual pinned NPC warp duration and destination with 2 EVE clients",
+        "Instrument number and positions of actual coopNativeStationArrival.tick callbacks",
+        "Observe whether 20-45% and 55-85% windows occur before terminal cargo delivery"
+      ],
+      "expected": "If either real midpoint cannot be sampled, strict Stage I reports missing evidence and refuses payout; disable Stage I until genuine movement tick integration verified, do not generate samples by timer"
+    },
+    {
+      "id": "JOB-UI-24",
+      "name": "Source-linked route checkpoint corrupted or crash ACK uncertain",
+      "actions": [
+        "On disposable operator clone persist first midroute witness",
+        "Inject lost file/directory fsync ACK, symlink/hardlink or corrupt checkpoint then restart",
+        "Resume original native trip and attempt terminal settlement"
+      ],
+      "expected": "No fabricated completion or blind rewrite; file+dir re-fsync required for immutable original receipts; corrupt/linked evidence blocks payout for operator repair"
     }
   ]
 }
