@@ -161,10 +161,16 @@ function createLivingWorldNativeChainProof({
    // Every original source was read from a single explicitly injected
    // authority. Re-read for drift; no source mutation or replay occurs.
    const after=reader(readDirectorJournal);
-   const newMine=reader(readMiningCommit,miningOperationKey);
-   const newJob=reader(readOriginalIndustryJob,operationID);
-   if(immutable(journal)!==immutable(after)||immutable(mine)!==immutable(newMine)||
-      immutable(job)!==immutable(newJob))
+   const again=[
+    [mine,reader(readMiningCommit,miningOperationKey)],
+    [haul,reader(readHaulReceipt,cargoID)],
+    [ore,reader(readStationReceipt,cargoID)],
+    [refine,reader(readRefineryReceipt,refineOperationID)],
+    [job,reader(readOriginalIndustryJob,operationID)],
+    [debit,reader(readIndustryDebit,job.jobID)]
+   ];
+   if(immutable(journal)!==immutable(after)||
+      again.some(([before,current])=>immutable(before)!==immutable(current)))
     throw Error("LW04D_ORIGINAL_SOURCE_CHANGED_DURING_GATE");
    return Object.freeze({status:"SOURCE_CHAIN_ATTESTED",operationID,ownerID,
     systemID,stationID,cargoID,oreItemID,originalMinerID:mine.shipID,
