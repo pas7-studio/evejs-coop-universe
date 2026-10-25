@@ -116,3 +116,21 @@ test("P0 fleet brief denies unauthenticated, disconnected or foreign party",()=>
   "STALE_NATIVE_FLEET_MEMBERS");
  assert.equal(f.messages.length,0);
 });
+
+test("P0 cooldown is fleet-wide even when a different native NPC appears",()=>{
+ const f=fixture();
+ const first={itemID:911,kind:"ship",nativeNpc:true,position:{x:65000,y:0,z:0}};
+ const second={itemID:912,kind:"ship",nativeNpc:true,position:{x:50000,y:0,z:0}};
+ f.scene.dynamicEntities=new Map([[911,first]]);
+ f.ships.set(911,first);f.ships.set(912,second);
+ const args={scene:f.scene,party:f.party,systemID,fleetID:44};
+ assert.equal(f.service.brief(args).status,"FLEET_BRIEF_DELIVERED");
+ f.scene.dynamicEntities=new Map([[912,second]]);
+ assert.equal(f.service.brief(args).status,"COOLDOWN");
+ assert.equal(f.messages.length,2);
+ f.advance(120000);
+ const next=f.service.brief(args);
+ assert.equal(next.status,"FLEET_BRIEF_DELIVERED");
+ assert.equal(next.targetEntityID,912);
+ assert.equal(f.messages.length,4);
+});
