@@ -73,6 +73,9 @@ function decideNativeEconomy(snapshot,{maxIntents=12,now=Date.now(),maxAgeMs=120
   // COOP-043: native NPC pilot owner ID is authoritative. Never reuse a
   // station-level economic projection for an unrelated corporation.
   const e=positive(p.ownerID)?p.economy:station.economy;
+  if(positive(p.ownerID)&&e?.authoritativeNative===false&&
+     /^[A-Z][A-Z0-9_]{3,110}$/.test(String(e.reason||"")))
+   return {stage:"IDLE",reason:e.reason};
   if(positive(p.ownerID)&&(e?.ownerID!==p.ownerID||e?.stationID!==station.stationID||
      e?.systemID!==snapshot.systemID))return{stage:"IDLE",reason:"NATIVE_OWNER_STATION_AUTHORITY_MISMATCH"};
   if(!e||e.authoritativeNative!==true||!natural(e.oreAtStation)||
