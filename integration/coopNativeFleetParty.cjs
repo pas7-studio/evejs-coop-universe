@@ -45,6 +45,11 @@ function inSpaceParty({leaderSession,peerSession,fleetRuntime,spaceRuntime,
   sessions.filter(s=>s?.socket?.destroyed!==true&&s?._space?.initialStateSent===true&&
    s?.characterID===member.peerCharacterID).length!==1)
   return {ok:false,reason:"STALE_OR_DUPLICATE_SESSION"};
+ // The selected characters can be unique while a third authenticated
+ // pilot simultaneously claims one of their native physical ship IDs.
+ if(!require("./coopFleetWarpSafety").uniqueOwners(
+  scene,leaderSession,peerSession,id(scene.systemID)))
+  return {ok:false,reason:"STALE_OR_DUPLICATE_NATIVE_OWNER"};
  const a=scene.getShipEntityForSession?.(leaderSession),
   b=scene.getShipEntityForSession?.(peerSession);
  if(!a||!b||a===b||a.kind!=="ship"||b.kind!=="ship"||
