@@ -155,7 +155,7 @@ test("tampered commit token cannot authorize a different native cargo or barrel"
   const first=f.make().begin(f.args());f.debit(4);
   const forged={...first.token,cargoID:502};
   assert.equal(f.make().commit(forged).status,
-   "NATIVE_AMMO_COMMIT_JOURNAL_MISMATCH");
+   "NATIVE_AMMO_COMMIT_LOCK_LOST");
   assert.equal(f.state().phase,"PREPARED");
  }finally{f.cleanup();}
 });
