@@ -4,6 +4,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const inflight = new Set();
+// A callback may synchronously trigger another mining cycle in this process.
+// The same rock or hull must not enter a second source/cargo mutation even
+// when the second cycle uses a different rock/ship pair.
+const inflightRocks = new Set();
+const inflightShips = new Set();
 const integer = x => Number.isSafeInteger(Number(x)) && Number(x) > 0;
 function fail(entity, reason) {
   if (entity && typeof entity === "object") {
@@ -73,8 +78,12 @@ function settle(input) {
   }catch (_) {return fail(entity,"ALIFE06_JOURNAL_UNAVAILABLE");}
   const key = "alife06-"+systemID+"-"+rockID+"-"+shipID;
   const file = path.join(root,key+".json");
-  if (inflight.has(key)) return fail(entity,"ALIFE06_CYCLE_REENTRANT");
-  inflight.add(key);
+  const rockKey = systemID+":"+rockID, shipKey = systemID+":"+shipID;
+  // In-flight source or hull is a transient conflict, NOT a damaged
+  // transaction. Do not persist an operator-repair latch on the other NPC.
+  if (inflight.has(key)||inflightRocks.has(rockKey)||inflightShips.has(shipKey))
+    return {success:false,stopReason:"cargo",reason:"ALIFE06_CYCLE_REENTRANT"};
+  inflight.add(key);inflightRocks.add(rockKey);inflightShips.add(shipKey);
   let prior, record;
   try {
     // A failed miner/rock pair must quarantine either participant, including
@@ -125,6 +134,8 @@ function settle(input) {
       consumed,cycleBoundaryMs:Number(cycleBoundaryMs)}};
   } catch (_) {
     return fail(entity,"ALIFE06_JOURNAL_IO_UNKNOWN");
-  } finally {inflight.delete(key);}
+  } finally {
+    inflight.delete(key);inflightRocks.delete(rockKey);inflightShips.delete(shipKey);
+  }
 }
 module.exports={settle};
