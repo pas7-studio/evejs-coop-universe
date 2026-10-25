@@ -26,7 +26,9 @@ function patch(source,file,remove=false){
  const eol=source.includes("\r\n")?"\r\n":"\n";
  let result=source;
  for(const [plainLine,guardedLine] of pairs){
-  const plain=plainLine+eol,guarded=guardedLine+eol;
+  // Include the preceding line break so single-job and batch-job indentation
+  // cannot accidentally match one another as overlapping substrings.
+  const plain=eol+plainLine+eol,guarded=eol+guardedLine+eol;
   const count=(s,needle)=>s.split(needle).length-1;
   const base=count(result,plain),installed=count(result,guarded);
   if(base+installed!==1)throw Error("COOP_INDUSTRY_NATIVE_ANCHOR_DRIFT");
