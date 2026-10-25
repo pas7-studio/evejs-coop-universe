@@ -19,6 +19,8 @@ names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobNotifications
 names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelection");
 // Peaceful delivery uses the same native corporate escrow (feature OFF by default).
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
+// Stage H durable native physical warp fence, source-linked original cargo.
+names.splice(names.indexOf("coopEscortNativeBootstrap")+1,0,"coopEscortWarpFence");
 const specs=[
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
