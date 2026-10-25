@@ -23,8 +23,11 @@ function originalSource(file){
  return transform(src,spec,true);
 }
 function fragmentFor(method){
- const src=patch("function "+method+"(contract, session) {\n  if (contract.status !== CONTRACT_STATUS.IN_PROGRESS) {",
-   "server/src/services/contracts/contractRuntimeState.js");
+ const fixture=[
+  "function completeCourierContract(contract, session) {\n  if (contract.status !== CONTRACT_STATUS.IN_PROGRESS) {",
+  "function failCourierContract(contract, session) {\n  if (contract.status !== CONTRACT_STATUS.IN_PROGRESS) {"
+ ].join("\n");
+ const src=patch(fixture,"server/src/services/contracts/contractRuntimeState.js");
  const start=src.indexOf("function "+method+"(contract, session) {");
  const end=src.indexOf("  if (contract.status",start);
  assert.ok(start>=0&&end>start);
@@ -33,7 +36,8 @@ function fragmentFor(method){
 function callGuard(method,contract,session,enabled=true){
  const body=fragmentFor(method);
  const fn=new Function("contract","session","process","toPositiveInteger",
-   "getSessionCharacterID","getSessionCorporationID","throwContractError",body);
+   "getSessionCharacterID","getSessionCorporationID","throwContractError",
+   body+";return "+method+"(contract,session);");
  return fn(contract,session,{env:{EVEJS_COOP_NATIVE_CONTRACTS:enabled?"1":"0"}},
    v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):0,
    s=>s?.characterID||0,s=>s?.corporationID||0,
