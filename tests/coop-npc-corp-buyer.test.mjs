@@ -49,7 +49,10 @@ function fixture({buyerISK=1000,failAt=null}={}){
  };
  const create=()=>createNpcCorporateBuyer({gameStore,market,
   verifyBuyerCorporation:()=>buyerValid,
-  verifyPlayerSeller:()=>sellerValid,clock:()=>1761390000000});
+  verifyPlayerSeller:()=>sellerValid,
+  quoteSellerTax:({sellerID,stationID,grossCents})=>({sellerID,stationID,grossCents,
+   taxCents:Math.round(grossCents*0.08),policy:"EVEJS_NATIVE_MARKET_RULES"}),
+  clock:()=>1761390000000});
  const bridge=create();
  return {data,bridge,market,request,claim,create,
   get claims(){return claims},get finalizes(){return finalizations},
@@ -73,12 +76,15 @@ test("native corporation buys real player escrow: goods and ISK conserved",()=>r
  assert.equal(result.status,"NPC_PURCHASED_PLAYER_GOODS");
  assert.equal(result.itemID,ITEM);assert.equal(result.quantity,20);
  assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975);
- assert.equal(f.data.characters[SELLER].balance,125);
+ assert.equal(f.data.characters[SELLER].balance,123);
  assert.equal(f.data.items[ITEM].ownerID,BUYER);
  assert.equal(f.data.items[ITEM].locationID,STATION);
  assert.equal(f.data.marketEscrow[ORDER],undefined);
  assert.equal(f.data.npcMarketFills[RECEIPT].phase,"NATIVE_NPC_BUY_COMMITTED");
- assert.equal(f.data.characters[SELLER].walletJournal.length,1);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
+ assert.equal(f.data.characters[SELLER].walletJournal[0].entryTypeID,54);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+ assert.equal(f.data.npcMarketFills[RECEIPT].netCents,2300);
  assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].journal.length,1);
  assert.equal(f.claims,1);assert.equal(f.finalizes,1);
 }));
