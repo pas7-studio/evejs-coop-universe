@@ -95,7 +95,8 @@ test("remote attacker needs an authenticated physical scout report, not a global
   const hunt=createHuntPolicy({file:path.join(dir,"intel.json"),clock:f.clock});
   const input={systemID:SID,scene:f.scene,pirateID:102,
    piratePilotID:pilot(2),targetID:201,targetRole:"hauler",
-   contacts:f.pirates,getHealth:()=>1,isScrambled:()=>false};
+   contacts:f.pirates.map(p=>({...p,faction:'independent'})),
+   getHealth:()=>1,isScrambled:()=>false};
   assert.equal(hunt.assess(input).reason,"NO_FRESH_WITNESS");
   f.observe();f.advance(16000);f.observe();
   const report=f.permit(102).report;
@@ -111,7 +112,8 @@ test("physical player escort seen by scout discourages remote pirate raid",()=>{
   const hunt=createHuntPolicy({file:path.join(dir,"intel.json"),clock:f.clock});
   f.observe();f.advance(16000);f.observe();
   const input={systemID:SID,scene:f.scene,pirateID:102,piratePilotID:pilot(2),
-   targetID:201,targetRole:"hauler",contacts:f.pirates,
+   targetID:201,targetRole:"hauler",
+   contacts:f.pirates.map(p=>({...p,faction:'independent'})),
    getHealth:()=>1,isScrambled:()=>false,
    sharedIntel:f.permit(102).report};
   assert.equal(hunt.assess(input).decision,"RAID");
@@ -119,6 +121,30 @@ test("physical player escort seen by scout discourages remote pirate raid",()=>{
    systemID:SID,shipID:401}});
   assert.equal(hunt.assess(input).reason,"RISK_TOO_HIGH");
   f.sessions.clear();f.advance(65000);
+  assert.equal(hunt.assess(input).reason,"NO_FRESH_WITNESS");
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+
+test("native legality gate excludes unauthorized fleet targets before squad selection",()=>{
+ const f=fixture();
+ const r=f.squads.observe({systemID:SID,scene:f.scene,pirates:f.pirates,
+  pilots:f.pilots,fleetShips:f.fleetShips,
+  canAttack:({targetID})=>targetID===202});
+ assert.equal(r.teams.length,1);
+ assert.equal(r.teams[0].targetID,202);
+ assert.equal(f.permit(102,201).reason,"SQUAD_TARGET_RESERVED");
+});
+test("shared report from a different faction is never treated as an attacker sighting",()=>{
+ const f=fixture(2),dir=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-squad-"));
+ try{
+  const hunt=createHuntPolicy({file:path.join(dir,"intel.json"),clock:f.clock});
+  f.observe();f.advance(16000);f.observe();
+  const report=f.permit(102).report;
+  const input={systemID:SID,scene:f.scene,pirateID:102,
+   piratePilotID:pilot(2),targetID:201,targetRole:"hauler",
+   contacts:[{...f.pirates[0],faction:"independent"},
+    {...f.pirates[1],faction:"frontier"}],
+   getHealth:()=>1,isScrambled:()=>false,sharedIntel:report};
   assert.equal(hunt.assess(input).reason,"NO_FRESH_WITNESS");
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
