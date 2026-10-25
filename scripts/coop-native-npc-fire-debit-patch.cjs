@@ -15,11 +15,25 @@ function segment(text,name,fn){
  return text.slice(0,start)+next+text.slice(stop);
 }
 const sourceProof=[
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      (process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" ||',
+ '       process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1")) {',
+ '    const guard = require("./coopNpcAmmoBankAtomic").guardDirectDebit({entity: attackerEntity});',
+ '    if (!guard.allowed) return { success: false, errorMsg: guard.status, stopReason: "ammo" };',
+ '  }',
+ '  let coopAmmoDurableToken = null;',
  '  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
  '    const proof = require("./coopNpcFireDebitProof").verify({',
  '      entity: attackerEntity, moduleItem, chargeItem, quantity: consumeQuantity,',
  '    });',
  '    if (!proof.allowed) return { success: false, errorMsg: "NO_AMMO", stopReason: "ammo" };',
+ '    if (process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1") {',
+ '      const reserved = require("./coopNpcAmmoDebitJournal").begin({',
+ '        entity: attackerEntity, moduleItem, chargeItem, quantity: consumeQuantity, whenMs,',
+ '      });',
+ '      if (!reserved.ok) return { success: false, errorMsg: reserved.status, stopReason: "ammo" };',
+ '      coopAmmoDurableToken = reserved.token;',
+ '    }',
  '  }',
 ].join("\n");
 const persistVerification=[
@@ -43,6 +57,34 @@ const persistVerification=[
  '      }',
  '    }',
 ].join("\n");
+const journalSettle=[
+ '    if (coopAmmoDurableToken) {',
+ '      const settled = require("./coopNpcAmmoDebitJournal").commit(coopAmmoDurableToken);',
+ '      if (!settled.ok) return { success: false, errorMsg: settled.status, stopReason: "ammo" };',
+ '    }',
+].join("\n");
+const turretBankSafety=[
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" &&',
+ '      process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1" &&',
+ '      resolvedWeaponSnapshot.chargeMode === "stack" &&',
+ '      !chargeOptionalTurretWeapon) {',
+ '    const bank = require("./coopNpcAmmoDebitJournal").preflightBank({',
+ '      entity: attackerEntity, entries: activeTurretEntries, whenMs: cycleBoundaryMs,',
+ '    });',
+ '    if (!bank.ok) return { success: false, errorMsg: bank.status, stopReason: "ammo" };',
+ '  }',
+].join("\n");
+const missileBankSafety=[
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" &&',
+ '      process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1") {',
+ '    const bank = require("./coopNpcAmmoDebitJournal").preflightBank({',
+ '      entity: attackerEntity, entries: armedEntries, whenMs: cycleBoundaryMs,',
+ '    });',
+ '    if (!bank.ok) return { success: false, errorMsg: bank.status, stopReason: "ammo" };',
+ '  }',
+].join("\n");
 const turretPreDebit=[
  '  // P0: before actual native fire or turret damage, verify the real',
  '  // fitted cargo. Stack ammo is debited before shot resolution; crystals',
@@ -64,12 +106,20 @@ const turretPreDebit=[
  '  }',
  '  if (strictNativeStackDebit) {',
  '    strictNativeDebitResults = new Map();',
- '    for (const entry of activeTurretEntries) {',
- '      const debit = consumeTurretAmmoCharge(',
- '        attackerEntity, entry.moduleItem, entry.chargeItem, cycleBoundaryMs,',
- '      );',
- '      if (!debit.success) return { success: false, errorMsg: "AMMO_UPDATE_FAILED", stopReason: "ammo" };',
- '      strictNativeDebitResults.set(toInt(entry.moduleItem.itemID, 0), debit);',
+ '    if (process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1") {',
+ '      const bank = require("./coopNpcAmmoBankAtomic").consumeBank({',
+ '        entity: attackerEntity, entries: activeTurretEntries, whenMs: cycleBoundaryMs,',
+ '      });',
+ '      if (!bank.success) return { success: false, errorMsg: bank.errorMsg, stopReason: "ammo" };',
+ '      for (const row of bank.results) strictNativeDebitResults.set(row.moduleID, row.result);',
+ '    } else {',
+ '      for (const entry of activeTurretEntries) {',
+ '        const debit = consumeTurretAmmoCharge(',
+ '          attackerEntity, entry.moduleItem, entry.chargeItem, cycleBoundaryMs,',
+ '        );',
+ '        if (!debit.success) return { success: false, errorMsg: "AMMO_UPDATE_FAILED", stopReason: "ammo" };',
+ '        strictNativeDebitResults.set(toInt(entry.moduleItem.itemID, 0), debit);',
+ '      }',
  '    }',
  '  }',
 ].join("\n");
@@ -118,6 +168,35 @@ const missilePreflight=[
  '    effectState._coopStrictAmmoLastBoundaryMs = cycleBoundaryMs;',
  '  }',
 ].join("\n");
+const missileAtomicSetup=[
+ '  let coopAtomicMissileResults = null;',
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1") {',
+ '    const bank = require("./coopNpcAmmoBankAtomic").consumeBank({',
+ '      entity: attackerEntity, entries: armedEntries, whenMs: cycleBoundaryMs,',
+ '    });',
+ '    if (!bank.success) return { success: false, errorMsg: bank.errorMsg, stopReason: "ammo" };',
+ '    coopAtomicMissileResults = new Map(bank.results.map(row => [row.moduleID, row.result]));',
+ '  }',
+].join("\n");
+const missileConsumeOld=[
+ '    const chargeResult = consumeTurretAmmoCharge(',
+ '      attackerEntity,',
+ '      entry.moduleItem,',
+ '      entry.chargeItem,',
+ '      cycleBoundaryMs,',
+ '    );',
+].join("\n");
+const missileConsumeNew=[
+ '    const chargeResult = coopAtomicMissileResults',
+ '      ? coopAtomicMissileResults.get(toInt(entry.moduleItem.itemID, 0))',
+ '      : consumeTurretAmmoCharge(',
+ '        attackerEntity,',
+ '        entry.moduleItem,',
+ '        entry.chargeItem,',
+ '        cycleBoundaryMs,',
+ '      );',
+].join("\n");
 const missileFail=[
  '  if (groupedAmmoFailure && isNativeNpcEntity(attackerEntity) &&',
  '      process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
@@ -131,7 +210,8 @@ function patch(source,{remove=false}={}){
  // insertion is checked per section. This supports repeated apply + remove.
  const modify=(name,changes)=>{
   text=segment(text,name,body=>{
-   for(const [base,added,where] of changes){
+   // Reverse nested insertions on uninstall to preserve pristine bytes.
+   for(const [base,added,where] of (remove?[...changes].reverse():changes)){
     const old=e(base),fresh=e(added);
     if(remove){
      if(body.includes(fresh))body=once(body,fresh,old,where);
@@ -148,18 +228,25 @@ function patch(source,{remove=false}={}){
  const nativeCargoCache='    if (Array.isArray(attackerEntity.nativeCargoItems)) {';
  modify("consumeTurretAmmoCharge",[
   [quantity,sourceProof+"\n"+quantity,"native-source-proof"],
-  [nativeCargoCache,persistVerification+"\n"+nativeCargoCache,"native-debit-commit-proof"]
+  [nativeCargoCache,persistVerification+"\n"+journalSettle+"\n"+nativeCargoCache,"native-debit-commit-proof"]
  ]);
  const fire='  const shotResult = resolveTurretShot({';
  modify("executeTurretCycle",[
   [fire,turretPreDebit+"\n\n"+fire,"pre-damage debit"],
-  [turretOld,turretNew,"single native debit"]
+  [turretOld,turretNew,"single native debit"],
+  ['  // P0: before actual native fire or turret damage, verify the real',
+   turretBankSafety+"\n"+'  // P0: before actual native fire or turret damage, verify the real',
+   "whole-bank durable preflight"]
  ]);
  const start='  const chargeResults = [];';
  const check='  if (groupedAmmoFailure && chargeResults.every((entry) => !entry.result || !entry.result.success)) {';
  modify("executeMissileCycle",[
-  [start,missilePreflight+"\n"+start,"missile bank preflight"],
-  [check,missileFail+"\n"+check,"block partial bank launch"]
+  [start,missilePreflight+"\n"+missileAtomicSetup+"\n"+start,"missile bank preflight"],
+  [check,missileFail+"\n"+check,"block partial bank launch"],
+  ['  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+   missileBankSafety+"\n"+'  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+   "whole-bank missile journal preflight"],
+  [missileConsumeOld,missileConsumeNew,"single bank missile atomic debit"]
  ]);
  // Syntax validation is performed by the caller's existing vm.Script.
  return text;

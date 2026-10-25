@@ -652,7 +652,10 @@ function ensureCivilianOrders(runtime,npc){
   warp:(id,point,options)=>npcNativeOrder("CIVILIAN",id,"warp",
    ()=>npc.warpToPoint(id,point,options)),
   orbit:(id,targetID,range)=>npcNativeOrder("CIVILIAN",id,"orbit",
-   ()=>npc.orbit(id,targetID,range))
+   ()=>npc.orbit(id,targetID,range)),
+  // With a player on grid, a scheduled civilian route must not warp the NPC
+  // away in front of them (they visually vanish). OFF by default.
+  playerHoldMeters:process.env.EVEJS_COOP_NPC_ROUTE_HOLD==="1"?200000:0
  });
 }
 function observeNativeCombat(){
@@ -1367,11 +1370,15 @@ function observeSession(session,ship){
             const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             const hostile=pilot.role==="pirate";
+            // Colour follows the real owner faction: civilians spawn as ORE /
+            // CONCORD hulls, only pirates from the hostile pool.
+            const pool=require("./coopNpcSpawnPools").spawnPoolForRole(pilot.role,
+             {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"});
             return npc.spawnBatchInSystem(system,{
               ...anchor,amount:1,entityType:"npc",
               transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
               broadcast:true,
-              defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+              ...pool,
               // Pirates retain native EveJS aggression. Civilians and ordinary
               // guards move and work without automatically attacking players.
               ...(hostile?{}:{behaviorOverrides:{
@@ -1450,6 +1457,35 @@ function observeSession(session,ship){
         if(spoke.sent)require("./coopRuntimeProbe").observe("living-npc-chatter-delivered",null,null,
          {spaceState:{systemID},...spoke});
       }catch(error){console.warn("[CoopNpcChatter]",error.message);}}
+      // ALIFE news: the same observed events become a short in-client digest.
+      // It never invents an event and is throttled per system.
+      if(process.env.EVEJS_COOP_ALIFE_NEWS==="1"){try{
+        const probe=require("./coopRuntimeProbe");
+        const sessions=require("../services/chat/sessionRegistry").getSessions();
+        const news=runtime.__coopAlifeNews||(runtime.__coopAlifeNews=require("./coopAlifeNews").createNews());
+        if(!runtime.__coopAlifeNewsSubscribed){
+          probe.subscribe(record=>{
+            if(process.env.EVEJS_COOP_ALIFE_NEWS!=="1")return;
+            news.record(record.event,{...record,
+             systemID:Number(record.systemID||record.spaceState?.systemID||0)});
+          });
+          runtime.__coopAlifeNewsSubscribed=true;
+        }
+        const digest=news.digest(systemID);
+        if(digest){
+          let delivered=0;
+          for(const session of sessions){
+            if(!session||Number(session?._space?.systemID)!==Number(systemID))continue;
+            try{require("../services/chat/chatHub").sendSystemMessage(session,digest.text);delivered++;}
+            catch(_error){}
+          }
+          if(delivered){
+            news.markSent(systemID);
+            probe.observe("living-alife-news-delivered",null,{spaceState:{systemID}},
+             {items:digest.items,delivered,text:digest.text});
+          }
+        }
+      }catch(error){console.warn("[CoopAlifeNews]",error.message);}}
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const presented=[];
       for(const link of result){
@@ -1515,7 +1551,10 @@ function observeSession(session,ship){
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             return npc.spawnBatchInSystem(id,{
               ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
-              defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+              // Faction patrols are law enforcement, not pirates: CONCORD-owned
+              // hulls read as friendly/neutral brackets in the client.
+              ...require("./coopNpcSpawnPools").spawnPoolForRole("patrol",
+               {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"}),
               behaviorOverrides:{autoAggro:false,autoActivateWeapons:false,targetPreference:"none"}
             });
           },
