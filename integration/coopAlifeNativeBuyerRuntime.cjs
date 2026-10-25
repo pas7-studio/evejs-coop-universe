@@ -57,15 +57,17 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
     Math.max(0,Number(physical.radius)||0))return null;
   const occupied=[...(scene.sessions?.values?.()||[])].some(s=>
    Number(s?._space?.shipID)===entityID);
-  return {nativeVerified:!occupied,isNpc:true,role:"trader",
+  const inWarp=Boolean(ship.pendingWarp||ship.warpState||
+   String(ship.mode||"").toUpperCase().includes("WARP"));
+  const underAttack=Number(controller.currentTargetID)>0||
+   controller.manualOrder?.type==="attack";
+  const activeNativeOrder=Boolean(controller.manualOrder&&
+   controller.manualOrder.type!=="idle");
+  return {nativeVerified:!occupied&&!inWarp&&!underAttack&&!activeNativeOrder,
+   isNpc:true,role:"trader",
    entityID,pilotID:p.pilotID,corporationID:p.ownerID,
    stationID:p.stationID,systemID,playerControlled:occupied,
-   underAttack:Number(controller.currentTargetID)>0||
-      controller.manualOrder?.type==="attack",
-   inWarp:Boolean(ship.pendingWarp||ship.warpState||
-     String(ship.mode||"").toUpperCase().includes("WARP")),
-   activeNativeOrder:Boolean(controller.manualOrder&&
-     controller.manualOrder.type!=="idle")};
+   underAttack,inWarp,activeNativeOrder};
  }
  function needs(ownerID,stationID,typeID){
   const ctx=current;if(!ctx)return null;
