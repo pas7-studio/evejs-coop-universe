@@ -3,13 +3,17 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createTactics}=require("../integration/coopNpcTactics.cjs");
-const npc=(itemID,x,y=0)=>({itemID,kind:"ship",position:{x,y,z:0},mode:"STOP"});
+const npc=(itemID,x,y=0)=>({itemID,kind:"ship",nativeNpc:true,position:{x,y,z:0},mode:"STOP"});
 const anchors=[{id:44,kind:"station",name:"Safety Station",position:{x:2000000,y:0,z:0}}];
 function setup({now=1000000,ships=[],assignments=[],controllers={},
  health=()=>({armor:1,structure:1}),scrambled=()=>false,additionalResponders=()=>0}={}){
  let current=now;
  const entities=new Map(ships.map(s=>[s.itemID,s])),orders=[],events=[];
- const scene={getEntityByID:id=>entities.get(id)};
+ const scene={systemID:30000142,sessions:new Map(),getEntityByID:id=>entities.get(id)};
+ const activeControllers={};
+ for(const a of assignments)activeControllers[a.entityID]={entityID:a.entityID,systemID:30000142};
+ for(const [id,c] of Object.entries(controllers))activeControllers[id]={...activeControllers[id],...c,
+  entityID:Number(id),systemID:30000142};
  const tactics=createTactics({
   clock:()=>current,warpToPoint:(id,p)=>{orders.push({type:"retreat",id,p});return {success:true}},
   warpToEntity:(id,target)=>{orders.push({type:"respond-warp",id,target});return {success:true}},
@@ -18,9 +22,10 @@ function setup({now=1000000,ships=[],assignments=[],controllers={},
   stopOrder:id=>{orders.push({type:"stop",id});return {success:true}},
   notify:event=>events.push(event)
  });
- const tick=()=>tactics.tick({systemID:30000142,scene,assignments,
-  controllers,health,isScrambled:scrambled,waypoints:anchors,additionalResponders});
- return {tick,orders,events,tactics,entities,advance:ms=>{current+=ms}};
+ const tick=()=>tactics.tick({systemID:30000142,scene,assignments:assignments.map(x=>({...x,systemID:30000142})),
+  controllers:activeControllers,health,isScrambled:scrambled,waypoints:anchors,additionalResponders});
+ return {tick,orders,events,tactics,entities,scene,controllers:activeControllers,
+  advance:ms=>{current+=ms}};
 }
 test("real damage and attacker trigger native warp retreat to existing safe station",()=>{
  const victim=npc(101,0),attacker=npc(990,10000);
@@ -30,6 +35,8 @@ test("real damage and attacker trigger native warp retreat to existing safe stat
  const first=a.tick();
  assert.ok(first.events.some(e=>e.kind==="npc-retreat"&&e.destinationID===44));
  assert.deepEqual(a.orders.map(e=>e.type),["retreat"]);
+ // Native destination proof, not simply ACK + elapsed time.
+ victim.position={...anchors[0].position};
  a.advance(31000);
  assert.ok(a.tick().events.some(e=>e.kind==="npc-tactical-standdown"));
  assert.deepEqual(a.orders.map(e=>e.type),["retreat","stop"]);

@@ -4,24 +4,82 @@
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
 const pos=x=>x&&["x","y","z"].every(k=>Number.isFinite(Number(x[k])));
 const meters=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+const named=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
+const inWarp=ship=>String(ship?.mode||"").toUpperCase().includes("WARP")||
+ Boolean(ship?.pendingWarp||ship?.warpState||ship?.isWarping);
+
 function createTactics({
  clock=()=>Date.now(),warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder,
  maxResponders=2,callCooldownMs=120000,retreatCooldownMs=300000,
- notify=()=>{}
+ authorizePlayerDefense=()=>false,notify=()=>{}
 }){
  if([warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder].some(x=>typeof x!=="function")||
   !Number.isInteger(maxResponders)||maxResponders<1||maxResponders>3||
+  typeof authorizePlayerDefense!=="function"||
   callCooldownMs<30000||retreatCooldownMs<60000)throw Error("invalid native NPC tactics");
  const calls=new Map(),retreats=new Map(),retreatCooldowns=new Map(),responses=new Map();
  const fresh=(id,map,ms)=>!map.has(id)||clock()-map.get(id)>=ms;
  function tick({systemID,scene,assignments=[],controllers={},health,waypoints=[],isScrambled=()=>false,additionalResponders=()=>0}={}){
   const system=positive(systemID);
-  if(!system||!scene?.getEntityByID||typeof health!=="function")return {status:"NO_SCENE",events:[],engagedIDs:[]};
+  if(!system||Number(scene?.systemID)!==system||
+     typeof scene?.getEntityByID!=="function"||typeof health!=="function"||
+     !Array.isArray(assignments)||!controllers||typeof controllers!=="object")
+   return {status:"NO_NATIVE_SCENE",events:[],engagedIDs:[]};
   const now=clock(),events=[],present=new Map();
+  if(!Number.isSafeInteger(now)||now<0)return {status:"INVALID_CLOCK",events:[],engagedIDs:[]};
+  const pilotCounts=new Map(),entityCounts=new Map();
+  for(const a of assignments){
+   if(named(a?.pilotID))pilotCounts.set(a.pilotID,(pilotCounts.get(a.pilotID)||0)+1);
+   if(positive(a?.entityID))entityCounts.set(Number(a.entityID),(entityCounts.get(Number(a.entityID))||0)+1);
+  }
+  const sessions=[...(scene.sessions?.values?.()||[])];
+  const playerShips=new Map();
+  for(const session of sessions){
+   const id=positive(session?._space?.shipID);
+   if(!id||!positive(session?.characterID)||session?._space?.initialStateSent!==true||
+      session?.socket?.destroyed===true||Number(session?._space?.systemID)!==system)continue;
+   if(!playerShips.has(id))playerShips.set(id,[]);
+   playerShips.get(id).push(session);
+  }
+  function nativeController(id){
+   const c=controllers[id];
+   return c&&Number(c.entityID)===id&&Number(c.systemID)===system?c:null;
+  }
   for(const a of assignments){
    const id=positive(a?.entityID),ship=id&&scene.getEntityByID(id);
-   if(!id||!ship||ship.kind!=="ship"||!a.pilotID||present.has(id))continue;
+   if(!id||!named(a?.pilotID)||pilotCounts.get(a.pilotID)!==1||
+      entityCounts.get(id)!==1||Number(a.systemID)!==system||
+      typeof a.faction!=="string"||!a.faction||
+      !ship||ship.kind!=="ship"||ship.nativeNpc!==true||
+      Number(ship.itemID)!==id||ship.session?.characterID||playerShips.has(id)||
+      !pos(ship.position)||!nativeController(id)||
+      (positive(ship.systemID)&&Number(ship.systemID)!==system))continue;
    present.set(id,{...a,entityID:id,ship});
+  }
+  function attackerContext(id){
+   const ship=id&&scene.getEntityByID(id);
+   if(!id||!ship||Number(ship.itemID)!==id||ship.kind!=="ship"||
+      !pos(ship.position)||(positive(ship.systemID)&&Number(ship.systemID)!==system))return null;
+   if(ship.nativeNpc===true&&(!ship.session?.characterID)&&!playerShips.has(id))
+    return {ship,kind:"npc"};
+   const holders=playerShips.get(id)||[];
+   if(ship.nativeNpc!==true&&holders.length===1&&
+      Number(ship.pilotCharacterID||ship.characterID||holders[0].characterID)===
+       Number(holders[0].characterID))return {ship,kind:"player",session:holders[0]};
+   return null;
+  }
+  function canReinforce(victim,helper,attackerID,attacker){
+   const context=attackerContext(attackerID);
+   if(!context||context.ship!==attacker||!present.has(helper.entityID)||
+      !nativeController(helper.entityID)||inWarp(helper.ship))return false;
+   const attackerLink=present.get(attackerID);
+   if(attackerLink?.faction===helper.faction)return false;
+   if(context.kind==="player"){
+    try{return authorizePlayerDefense({systemID:system,scene,
+      victim: victim?.ship,helper:helper.ship,attacker,
+      session:context.session})===true;}catch(_error){return false;}
+   }
+   return true;
   }
   const engaged=new Set();
   // The true EveJS warp must finish before the NPC can stand down.
@@ -29,10 +87,15 @@ function createTactics({
   for(const [id,state] of retreats){
    if(state.systemID!==system)continue;
    const ship=present.get(id)?.ship;
-   if(!ship){retreats.delete(id);continue;}
-   const warping=String(ship.mode||"").toUpperCase().includes("WARP")||
-    Boolean(ship.pendingWarp||ship.warpState);
-   if(state.phase==="warping"&&!warping&&now>=state.at+10000){
+   if(!ship||ship!==state.shipRef){retreats.delete(id);continue;}
+   const warping=inWarp(ship);
+   if(warping)state.sawWarp=true;
+   // Native ACK is not warp arrival. We require the SAME physical hull at
+   // the real intended station/gate position before stopping its controller.
+   const arrived=!warping&&pos(ship.position)&&
+      meters(ship.position,state.destination)<=100000&&
+      meters(state.origin,state.destination)>150000;
+   if(state.phase==="warping"&&arrived&&now>=state.at+10000){
     const stopped=stopOrder(id);
     if(stopped?.success){
      state.phase="holding";state.holdUntil=now+90000;
@@ -53,14 +116,16 @@ function createTactics({
   for(const [id,aid] of responses){
    if(aid.systemID!==system)continue;
    const helper=present.get(id),target=scene.getEntityByID(aid.attackerID);
-   if(!helper||!target||now>=aid.expiresAt){
-    if(helper&&controllers[id]?.manualOrder?.targetID===aid.attackerID)
-     resumeBehavior(id);
+   const victim=present.get(aid.victimID);
+   if(!helper||helper.ship!==aid.helperRef||!victim||
+      victim.ship!==aid.victimRef||target!==aid.attackerRef||
+      !canReinforce(victim,helper,aid.attackerID,target)||now>=aid.expiresAt){
+    // Do not clear an unrelated order if authority was lost or the target ID
+    // was recycled. Another director may own the ship now.
     responses.delete(id);continue;
    }
    engaged.add(id);
-   if(!pos(helper.ship.position)||!pos(target.position)||
-      String(helper.ship.mode||"").includes("WARP"))continue;
+   if(!pos(helper.ship.position)||!pos(target.position)||inWarp(helper.ship))continue;
    if(meters(helper.ship.position,target.position)>250000){
     if(now>=aid.nextAt){
      const result=warpToEntity(id,aid.attackerID,{forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true});
@@ -78,11 +143,12 @@ function createTactics({
   }
   let rescueCalls=0;
   for(const victim of present.values()){
-   const c=controllers[victim.entityID];
+   const c=nativeController(victim.entityID);
    if(!c||retreats.has(victim.entityID))continue;
-   const attackerID=positive(c.lastAggressorID),attacker=attackerID&&scene.getEntityByID(attackerID);
+   const attackerID=positive(c.lastAggressorID),source=attackerContext(attackerID);
+   const attacker=source?.ship;
    const aggroAt=Number(c.lastAggressedAtMs)||0;
-   if(!attacker||!attackerID||aggroAt<=0||now-aggroAt>120000||aggroAt>now+30000)continue;
+   if(!attacker||!attackerID||aggroAt<=0||now-aggroAt>120000||aggroAt>now)continue;
    const allyAttacker=present.get(attackerID);
    if(allyAttacker&&allyAttacker.faction===victim.faction)continue;
    const ratio=health(victim.ship);
@@ -95,12 +161,14 @@ function createTactics({
     const safe=waypoints.filter(p=>["station","stargate"].includes(p.kind)&&
       pos(p.position)&&meters(p.position,attacker.position)>500000)
       .sort((a,b)=>meters(b.position,attacker.position)-meters(a.position,attacker.position))[0];
-    if(safe){
+    if(safe&&meters(victim.ship.position,safe.position)>150000&&!inWarp(victim.ship)){
      const result=warpToPoint(victim.entityID,safe.position,{
       forceImmediateStart:true,broadcastWarpStartToVisibleSessions:true});
      if(result?.success){
       retreatCooldowns.set(victim.entityID,now);
-      retreats.set(victim.entityID,{at:now,systemID:system,phase:"warping",holdUntil:0});
+      retreats.set(victim.entityID,{at:now,systemID:system,phase:"warping",holdUntil:0,
+       shipRef:victim.ship,origin:{...victim.ship.position},
+       destination:{...safe.position},sawWarp:false});
       engaged.add(victim.entityID);
       events.push({kind:"npc-retreat",systemID:system,entityID:victim.entityID,
        pilotID:victim.pilotID,attackerID,destinationID:safe.id});
@@ -120,10 +188,16 @@ function createTactics({
       helper.faction!==victim.faction||engaged.has(helper.entityID)||responses.has(helper.entityID))return false;
     if(victim.role==="pirate")return helper.role==="pirate";
     return helper.role==="patrol";
-   }).filter(helper=>!positive(controllers[helper.entityID]?.currentTargetID) &&
-     !(positive(controllers[helper.entityID]?.lastAggressorID) &&
-       now-(Number(controllers[helper.entityID]?.lastAggressedAtMs)||0)<120000) &&
-     pos(helper.ship.position)&&pos(attacker.position))
+   }).filter(helper=>{
+     const hc=nativeController(helper.entityID);
+     const manual=String(hc?.manualOrder?.type||"").toLowerCase();
+     return !!hc&&!positive(hc.currentTargetID)&&
+      (!manual||manual==="resumebehavior")&&
+      !(positive(hc.lastAggressorID)&&
+        now-(Number(hc.lastAggressedAtMs)||0)<120000)&&
+      pos(helper.ship.position)&&pos(attacker.position)&&
+      canReinforce(victim,helper,attackerID,attacker);
+   })
      .sort((a,b)=>meters(a.ship.position,attacker.position)-meters(b.ship.position,attacker.position))
      .slice(0,Math.min(3,maxResponders+bonus));
    let mobilized=0;
@@ -134,7 +208,8 @@ function createTactics({
      :attack(helper.entityID,attackerID,{allowWeapons:true,keepLock:true});
     if(action?.success!==true)continue;
     responses.set(helper.entityID,{systemID:system,victimID:victim.entityID,
-     attackerID,expiresAt:now+180000,nextAt:now+(far?30000:120000),
+     attackerID,helperRef:helper.ship,victimRef:victim.ship,attackerRef:attacker,
+     expiresAt:now+180000,nextAt:now+(far?30000:120000),
      phase:far?"approach":"attack"});
     engaged.add(helper.entityID);mobilized++;
     events.push({kind:far?"reinforcement-warp":"reinforcement-attack",systemID:system,
@@ -158,8 +233,11 @@ function createTactics({
    .concat([...retreats.keys()])
  );}
  return {tick,activeIDs,snapshot:()=>({
-  rescuers:[...responses].map(([id,s])=>({entityID:id,...s})),
-  retreats:[...retreats].map(([id,state])=>({entityID:id,...state}))
+  rescuers:[...responses].map(([id,s])=>({entityID:id,systemID:s.systemID,
+   victimID:s.victimID,attackerID:s.attackerID,phase:s.phase,
+   nextAt:s.nextAt,expiresAt:s.expiresAt})),
+  retreats:[...retreats].map(([id,s])=>({entityID:id,systemID:s.systemID,
+   at:s.at,phase:s.phase,holdUntil:s.holdUntil,sawWarp:s.sawWarp}))
  })};
 }
 module.exports={createTactics};
