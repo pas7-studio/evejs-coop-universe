@@ -89,7 +89,7 @@ function deliverInGame(session,args){
     store:npc,items:require("../services/inventory/itemStore"),
     getNativeEntity:npc.getNativeEntity});
    singleton=createRescueWarehouse({
-    atomicRows:(tables,fn)=>gameStore.coopAtomicNativeRows(tables,fn),
+    atomicRows:(tables,fn)=>gameStore.coopAtomicNativeRows.transact(tables,fn),
     isNpcCorporation:require("../services/corporation/corporationState").isNpcCorporationID,
     readStation:id=>require("./worldData").getStationByID(id),
     readOriginalManifest:id=>manifest.read(id)});
