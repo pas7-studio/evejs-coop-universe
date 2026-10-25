@@ -90,8 +90,11 @@ function createWreckRecovery({warp,orbit,clock=()=>Date.now(),
    }
    const far=distance>250000;
    let outcome;
+   const orbitRange=pickupDistance>0?
+    Math.max(500,Math.min(2000,pickupDistance-300)):
+    Math.max(2500,Math.min(approachMeters,4500));
    try{outcome=far?warp(shipID,wreckID,{forceImmediateStart:true}):
-    orbit(shipID,wreckID,Math.max(2500,Math.min(approachMeters,4500)));}
+    orbit(shipID,wreckID,orbitRange);}
    catch(_error){continue;}
    const ok=outcome?.success===true;
    pending.set(key,{entityID:shipID,wreckID,phase:ok?
