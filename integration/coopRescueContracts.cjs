@@ -9,13 +9,13 @@ const mark=(wreckID,itemID,cargoID)=>
  "coop-rescue:v1:wreck:"+wreckID+":item:"+itemID+":cargo:"+cargoID;
 function createRescueContracts({root,readEvent,readFlight,readManifest,
  readOutcomes,getWreck,getWreckItems,readWarehouseItems,
- isNpcCorporation,nativeFunds,readVolunteer,clock=()=>Date.now(),io=fs,
+ readNativeNpcCargo,isNpcCorporation,nativeFunds,readVolunteer,clock=()=>Date.now(),io=fs,
  amountISK}={}){
  if(typeof root!=="string"||!path.isAbsolute(root)||
   [readEvent,readFlight,readManifest,readOutcomes,getWreck,
-   getWreckItems,readWarehouseItems,isNpcCorporation,readVolunteer,clock]
+   getWreckItems,readWarehouseItems,readNativeNpcCargo,isNpcCorporation,readVolunteer,clock]
    .some(f=>typeof f!=="function")||
-  ["reserveAtomic","verifyReservation","settleAtomic","verifySettlement"]
+  ["reserveAtomic","verifyReservation","settleAtomic","verifySettlement","refundRescueAtomic"]
    .some(k=>typeof nativeFunds?.[k]!=="function")||
   !pos(amountISK)||amountISK%2||amountISK>1000000000)
   throw Error("RESCUE_CONTRACT_AUTHORITIES_REQUIRED");
@@ -207,6 +207,64 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
    {status:"RESCUE_NATIVE_FUNDED",contractID:c.contractID,amountISK}:
    deny("RESCUE_ESCROW_NOT_FUNDED");
  }
+
+ // Only a native store row describing the EXACT original rival-captured
+ // source makes the player mission impossible and releases corporate funds.
+ function verifyRivalLoss(c){
+  const q=readQuote(c?.contractID);
+  if(!q||q.status!=="READY"||!same(q.contract,c)||
+   !Array.isArray(q.expected)||!q.expected.length)
+   return deny("RESCUE_RIVAL_ORIGINAL_QUOTE_MISSING");
+  let cargo,stock;try{
+   cargo=readNativeNpcCargo();stock=readWarehouseItems();
+  }catch{return deny("RESCUE_RIVAL_STORE_UNAVAILABLE")}
+  if(!Array.isArray(cargo)||!Array.isArray(stock))
+   return deny("RESCUE_RIVAL_STORE_UNAVAILABLE");
+  const captured=q.expected.flatMap(x=>{
+   const inHold=cargo.filter(y=>y.coopRescueRivalSalvage===true&&
+    y.sourceCargoID===x.sourceCargoID&&
+    y.sourceWreckID===q.wreckID&&
+    y.sourceWreckItemID===x.wreckItemID&&
+    y.typeID===x.typeID&&y.ownerID!==c.corporationID&&
+    pos(y.cargoID)&&pos(y.quantity)).map(y=>y.cargoID);
+   const deposited=stock.filter(y=>y.customInfo===
+    "coop-rescue-npc:v1:wreck:"+q.wreckID+":item:"+
+    x.wreckItemID+":cargo:"+x.sourceCargoID&&
+    y.ownerID!==c.corporationID&&
+    pos(y.itemID)&&pos(y.quantity)).map(y=>y.itemID);
+   return [...inHold,...deposited];
+  });
+  if(captured.length!==1)return deny("RESCUE_RIVAL_PROOF_NOT_UNIQUE");
+  const complete=q.expected.every(x=>stock.some(y=>y.ownerID===
+   c.corporationID&&y.locationID===q.stationID&&
+   y.customInfo===mark(q.wreckID,x.wreckItemID,x.sourceCargoID)&&
+   y.quantity===x.quantity));
+  if(complete)return deny("RESCUE_PLAYER_DELIVERY_ALREADY_COMPLETE");
+  return {status:"DURABLE_NATIVE_RESCUE_RIVAL_FAILURE",
+   contractID:c.contractID,manifestKey:c.manifestKey,
+   corporationID:c.corporationID,
+   reason:"NATIVE_RIVAL_CARGO_CAPTURED",
+   failureWitnessID:captured[0],nativeDurable:true,
+   deliveryImpossible:true,noPriorPayout:true};
+ }
+ function cancel({session,eventID}={}){
+  const o=offer(eventID);if(o.status!=="READY")return o;
+  const c=o.contract;
+  if(!c.characters.includes(session?.characterID)||
+   c.characters.some(id=>!readAccepted(c,id)))
+   return deny("RESCUE_CANCEL_NOT_AUTHORIZED");
+  let paid;try{paid=nativeFunds.verifySettlement(c)}
+  catch{return deny("RESCUE_TERMINAL_WALLET_UNAVAILABLE")}
+  if(paid?.status==="SETTLED")return deny("RESCUE_ALREADY_PAID_NO_REFUND");
+  if(!["NOT_SETTLED","NOT_FOUND"].includes(paid?.status))
+   return deny("RESCUE_TERMINAL_WALLET_UNCERTAIN");
+  let r;try{r=nativeFunds.refundRescueAtomic(c)}
+  catch{return deny("RESCUE_REFUND_UNCERTAIN_OR_NOT_PROVEN")}
+  return r?.status==="REFUNDED"?
+   {status:"RESCUE_NATIVE_RIVAL_REFUNDED",
+    contractID:c.contractID,amountISK:c.amountISK}:
+   deny("RESCUE_REFUND_NOT_CONFIRMED");
+ }
  function claim({session,eventID}={}){
   const o=offer(eventID);if(o.status!=="READY")return o;
   const c=o.contract;
@@ -238,7 +296,12 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     y.customInfo===mark(o.wreckID,x.wreckItemID,x.sourceCargoID));
    return seen.length>0&&seen.reduce((n,y)=>n+(pos(y.quantity)?y.quantity:0),0)===x.quantity;
   });
-  if(!covered)return deny("RESCUE_NATIVE_FULL_CARGO_DELIVERY_NOT_VERIFIED");
+  if(!covered){
+   const rivalry=verifyRivalLoss(c);
+   if(rivalry.status==="DURABLE_NATIVE_RESCUE_RIVAL_FAILURE")
+    return cancel({session,eventID});
+   return deny("RESCUE_NATIVE_FULL_CARGO_DELIVERY_NOT_VERIFIED");
+  }
   let paid;try{paid=nativeFunds.settleAtomic({
    contractID:c.contractID,corporationID:c.corporationID,
    amountISK,credits:c.characters.map(characterID=>({
@@ -249,6 +312,6 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     amountISK,perPilotISK:amountISK/2}:
    deny("RESCUE_NATIVE_PAYOUT_NOT_CONFIRMED");
  }
- return {offer,accept,claim};
+ return {offer,accept,claim,cancel,verifyRivalLoss};
 }
 module.exports={createRescueContracts,mark};
