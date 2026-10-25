@@ -77,8 +77,10 @@ function createBroadcaster({
     const message = action.action === "attack"
      ? "[Living Universe] Пірат атакує " + victim + " " + location + ". Можна захистити конвой або втрутитися в сутичку разом із флотом."
      : "[Living Universe] Пірат здійснює варп до " + (action.targetRole === "hauler" ? "рудовозу" : "шахтаря") + " " + location + ". Це лише наближення, не підтверджений бій; можна підготувати перехоплення чи захист.";
+    const fleetAction=process.env.EVEJS_COOP_P1_OPERATIONS==="1"
+     ?" Form a real fleet and use /coopops status for targets, cargo and escort options.":"";
     try {
-     send(session, message);
+     send(session, message+fleetAction);
      last.delete(key);
      last.set(key, now);
      sent++;
