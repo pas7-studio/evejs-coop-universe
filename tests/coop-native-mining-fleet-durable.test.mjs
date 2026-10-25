@@ -379,3 +379,34 @@ test("fitted items left by a vanished hull are archived, and the slot is still r
  assert.equal(archived.length,1,"the orphaned fitting is archived, never dropped");
  assert.deepEqual(f.world.slots.get(archived[0])[0].moduleID,8801);
 });
+
+test("with reconcile on, a stale runtime fleet is re-pointed at the verified ships even if an old hull is still physical",t=>{
+ const f=fixture(t);
+ const old=process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+ process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE="1";
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+  else process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=old;});
+ assert.equal(f.start().status,"OK");
+ // A newer generation owns the slot: its ships are real and durable, while the
+ // runtime record still points at the previous generation.
+ for(const [id,role] of [[71011,"miner"],[71012,"hauler"]]){
+  const marker=roleMarker(SYSTEM,1,role);
+  f.world.entities.set(id,{entityID:id,systemID:SYSTEM,ownerID:950,
+   operatorKind:marker,nativeNpc:true,transient:false});
+  f.world.controllers.set(id,{entityID:id,systemID:SYSTEM,operatorKind:marker,
+   profileID:"npc-mining",transient:false,startupRuleID:null});
+  f.getPhysical().set(id,{kind:"ship",nativeNpc:true,itemID:id,ownerID:950});
+  f.world.entities.delete(id===71011?71001:71002);
+  f.world.controllers.delete(id===71011?71001:71002);
+  // The previous generation's hauler is still physically here: it must be only
+  // detached and reported, never destroyed to make the numbers match.
+  if(id===71012)f.getPhysical().delete(71002);
+ }
+ f.world.slots.set(slotKey(SYSTEM,1),{version:1,status:"ACTIVE",systemID:SYSTEM,slot:1,
+  fleetID:SYSTEM*32+1,minerEntityIDs:[71011],haulerEntityIDs:[71012]});
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.deepEqual(f.getFleets()[0].minerEntityIDs,[71011]);
+ assert.deepEqual(f.getFleets()[0].haulerEntityIDs,[71012]);
+ assert.ok(f.log.some(x=>x.includes("re-pointed")));
+});

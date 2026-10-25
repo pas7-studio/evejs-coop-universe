@@ -123,15 +123,19 @@ function adoptStaleRuntimeFleet({scene,store,fleet,key,minerIDs,haulerIDs}){
   .map(pos).filter(Boolean);
  const target=new Set([...minerIDs,...haulerIDs]);
  const foreign=listed.filter(id=>!target.has(id));
- if(!foreign.length)return false;
- // Only a foreign ship that is PHYSICALLY here can be a real occupant. A durable
- // row whose hull is not in the scene is a leftover, never a reason to keep the
- // slot blocked forever; it is left untouched, just unmanaged.
- if(foreign.some(id=>scene.getEntityByID(id)))return false;
+ if(!foreign.length)return {adopted:false,detached:[]};
+ if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1"){
+  // Without the reconcile flag a foreign ship is still treated as a real owner.
+  if(foreign.some(id=>scene.getEntityByID(id)))return {adopted:false,detached:[]};
+ }
+ // The witness was verified against the native store and the scene, so it is the
+ // authority. A stale record is re-pointed at it; any old hull that is still
+ // physically here is only DETACHED (reported, never destroyed).
+ const detached=foreign.filter(id=>scene.getEntityByID(id));
  fleet.startupKey=key;
  fleet.minerEntityIDs=[...minerIDs];
  fleet.haulerEntityIDs=[...haulerIDs];
- return true;
+ return {adopted:true,detached};
 }
 // A slot can lose SOME ships while the rest survive (a hull that was never
 // durable, or a failed restore). The survivors keep their cargo and custody, so
@@ -224,7 +228,7 @@ function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
  minerIDs.forEach(id=>check(id,"miner"));
  haulerIDs.forEach(id=>check(id,"hauler"));
 }
-function registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,originAnchor}){
+function registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,originAnchor,log}){
  const existing=getFleets();
  const key=scene.systemID+":"+slot;
  const stableFleetID=fleetIDForSlot(scene.systemID,slot);
@@ -239,8 +243,12 @@ function registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,or
   const a=ids(fleet.minerEntityIDs),b=ids(fleet.haulerEntityIDs);
   if(!a||!b||JSON.stringify(a)!==JSON.stringify(minerIDs)||
      JSON.stringify(b)!==JSON.stringify(haulerIDs)){
-   if(adoptStaleRuntimeFleet({scene,store:store,fleet,key,minerIDs,haulerIDs}))
+   const adoption=adoptStaleRuntimeFleet({scene,store:store,fleet,key,minerIDs,haulerIDs});
+   if(adoption.adopted){
+    if(adoption.detached.length&&typeof log==="function")
+     log("ALIFE08 slot "+key+" re-pointed; detached old hulls: "+adoption.detached.join(","));
     return false;
+   }
    throw Error("ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT");
   }
   return false;
@@ -320,7 +328,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      const active=saveSlot(db,key,{version:1,status:"ACTIVE",systemID,slot,
       fleetID:fleetIDForSlot(systemID,slot),
       minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor:born.data.originAnchor||null});
-     registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,
+     registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:active.originAnchor});
      return result("SPAWNED",slot,{minerIDs,haulerIDs});
     };
@@ -375,7 +383,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       restored++;
      }
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
-     const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,
+     const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:record.originAnchor||null});
      const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
