@@ -77,6 +77,7 @@ function commandInGame(session,eventID,cargoID,action){
     reserveSalvage:id=>rewards.reserve(id),
     verifyEscrow:id=>rewards.verify(id),
     settleSalvage:id=>rewards.settle(id),
+    refundSalvage:id=>rewards.refundUnstarted(id),
     readScene:s=>require("./runtime").getSceneForSession(s),
     readPlayerShip:s=>{
      const target=s?._space?.shipID||
