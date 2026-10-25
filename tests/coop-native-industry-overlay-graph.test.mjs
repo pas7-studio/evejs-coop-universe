@@ -11,7 +11,7 @@ const files=["coopNpcIndustryNativeBindings","coopNpcIndustryGameStoreScope",
  "coopNpcIndustryOriginalGameStorePreflight","coopNpcIndustryOriginalStageExecutor",
  "coopNpcIndustryOriginalRustSell","coopNpcPendingMarketEscrow",
  "coopNpcIndustryOriginalSaleAudit","coopNpcIndustryOriginalWalletWitness",
- "coopNpcIndustryOriginalBuyerSettlement"];
+ "coopNpcIndustryOriginalBuyerSettlement","coopLivingWorldNativeChainProof"];
 const source=n=>fs.readFileSync(new URL("../integration/"+n+".cjs",import.meta.url),"utf8");
 test("local .cjs native industry kernels remain loadable",()=>{
  for(const name of files){
@@ -39,6 +39,8 @@ test("exact pinned-overlay .js graph resolves every industry kernel without .cjs
  assert.equal(typeof saleAudit.createOriginalNpcSaleSettlementAudit,"function");
  assert.equal(typeof walletAudit.createOriginalNpcWalletReceiptWitness,"function");
  assert.equal(typeof buyerBridge.createOriginalNpcIndustryBuyerSettlement,"function");
+ const chain=require(path.join(root,"coopLivingWorldNativeChainProof.js"));
+ assert.equal(typeof chain.createLivingWorldNativeChainProof,"function");
  assert.throws(()=>native.createNativeIndustryBindings(),/NPC_INDUSTRY_NATIVE_BINDINGS_REQUIRED/);
  for(const name of files)assert.equal(fs.existsSync(path.join(root,name+".cjs")),false);
 });
@@ -77,5 +79,6 @@ test("pinned overlay has no duplicate module names after concurrent merges",()=>
  assert.equal(names.filter(x=>x==="coopNpcIndustryOriginalSaleAudit").length,1);
  assert.equal(names.filter(x=>x==="coopNpcIndustryOriginalWalletWitness").length,1);
  assert.equal(names.filter(x=>x==="coopNpcIndustryOriginalBuyerSettlement").length,1);
+ assert.equal(names.filter(x=>x==="coopLivingWorldNativeChainProof").length,1);
  assert.equal(names.filter(x=>x==="coopNpcPendingMarketEscrow").length,1);
 });
