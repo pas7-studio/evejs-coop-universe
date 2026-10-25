@@ -44,7 +44,8 @@ function record({session,scanResult,origin,sites,nowMs=Date.now()}={}){
  let added=0;
  for(const raw of scanResult.results){
   const entry=keyValData(raw);
-  if(!entry||Number(entry.certainty)<1)continue;
+  const certainty=Number(entry&&entry.certainty);
+  if(!entry||!Number.isFinite(certainty)||certainty<1)continue;
   const site=findMatchingSite(sites,entry.id);
   if(!site)continue;
   const id=numberID(site.siteID),targetID=normalizeTargetID(site.targetID);
