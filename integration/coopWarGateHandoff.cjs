@@ -156,6 +156,29 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
   }catch{return {success:false,errorMsg:"WAR_HANDOFF_NEEDS_OPERATOR_REPAIR"}}
   return {success:false,errorMsg:answer?.errorMsg||"WAR_NATIVE_TRANSFER_NOT_APPLIED"};
  }
+ // On each EXISTING A-Life tick, archive only fully proven terminal
+ // flights. A failed/corrupt/cargo-drifted flight is left quarantined for
+ // authenticated recovery; it is NEVER auto-rolled-back or reissued.
+ function retireCompleted({max=2}={}){
+  if(!flag(env))return {status:"DISABLED",retired:[]};
+  if(!Number.isSafeInteger(max)||max<1||max>4)
+   return {status:"INVALID_LIMIT",retired:[]};
+  let candidates;
+  try{candidates=ledger.terminalCandidates()}
+  catch{return {status:"NATIVE_SQL_UNAVAILABLE",retired:[]}}
+  const retired=[],blocked=[];
+  for(const row of candidates.slice(0,max)){
+   let result;
+   try{result=ledger.retire(row)}
+   catch{return {status:"NATIVE_RETIRE_OUTCOME_UNKNOWN",retired,blocked}}
+   if(result?.status==="RETIRED"){
+    retired.push({entityID:row.entityID,transferID:row.transferID,
+     historyCount:result.historyCount});
+   }else blocked.push({entityID:row.entityID,
+    reason:result?.reason||result?.status||"NOT_VERIFIED"});
+  }
+  return {status:blocked.length?"PARTIAL":"OBSERVED",retired,blocked};
+ }
  function recovery({authorizeOperator,io}={}){
   if(typeof authorizeOperator!=="function")
    throw Error("WAR_RECOVERY_TRUSTED_OPERATOR_AUTH_REQUIRED");
@@ -165,6 +188,7 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
     ...(io?{io}:{})
    });
  }
- return Object.freeze({transfer,auditStartup,pending:ledger.pending,recovery});
+ return Object.freeze({transfer,auditStartup,pending:ledger.pending,
+  retireCompleted,recovery});
 }
 module.exports={createWarGateHandoff,flag};
