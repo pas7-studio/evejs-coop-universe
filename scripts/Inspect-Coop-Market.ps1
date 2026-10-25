@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
   [string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',
-  [string]$SolarSystems='30000142,30000144'
+  [string]$SolarSystems='30100032,30000142,30000144'
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
