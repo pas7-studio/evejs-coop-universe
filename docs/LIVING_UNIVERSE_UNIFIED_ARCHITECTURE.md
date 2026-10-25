@@ -1,6 +1,6 @@
 # Living Universe: Unified A-Life Architecture
 
-Date: 2026-10-26. Status: DESIGN ONLY. No code/runtime flags, main branch, Docker, market, private game data or client modified.
+Date: 2026-10-26. Status: DESIGN ONLY. This architecture document does not enable runtime flags, deploy Docker, alter market/game data or modify the client.
 
 ## Decision
 
@@ -27,9 +27,9 @@ Unify the existing Living Universe modules into **one native-evidence-driven wor
 3. coopVirtualEconomy contains bounded virtual ore/goods/credits/demand while native ItemStore/GameStore/Rust has real ore, items and ISK. The virtual state is a nonspendable strategic forecast. It must not become a second native stock or corporate-wallet authority.
 4. coopWorldOpportunityBoard has canonical RAID and CONVOY event records, while Rescue and Salvage expose additional command-specific interfaces. Native SDE agent dialogue + EVEmail cover verified eligible paid convoys only; the actual EVE client UX is not yet proved. The single opportunity model is currently missing.
 5. Various original finance and cargo operations have their own journals and recovery; they must stay authoritative, but startup must reconcile pending original operations before a new mining or paid job. Issue #148 is the known ALIFE-13 cold-restart cargo gap.
-6. scripts/patch-evejs-coop.cjs has one registered integration module list (171 in the inspected main); PR #151 already fixed 30 orphaned modules. Module-registration and reversible-install roundtrip are mandatory per PR.
-7. At audit time open PRs #154 (Escort cargo route recovery), #156 (Node/SQLite+Rust gate and operator recovery), #158 (peaceful Escort exact-once payout). These must be reconciled sequentially on current main, with checks. Their source tests are not two-client gameplay proof.
-8. state/NOW.md was published from older project revision da549fd2, so it is not release evidence for the latest merged or pending branches.
+6. scripts/patch-evejs-coop.cjs has a single core integration module registry (173 in the reviewed post-merge main) plus explicit registered splice additions for specialized modules, including A-Life salvage. PR #151 fixed orphaned modules. Verify the evaluated full registry, deduplication and reversible installer roundtrip after every merge.
+7. PRs #154 (Escort cargo route recovery), #156 (localhost operator recovery and manual Node/SQLite/Rust gates), #158 (peaceful Escort exact-once payout) and #159 (buyer receipt/replay integrity) were merged into main after the original audit. Their source tests, merge resolution and module registration do not establish native two-client gameplay success. The dedicated COOP native economy GitHub Actions workflow was removed in the merge to comply with the repository's manual-only test policy; other pre-existing workflows require separate policy review.
+8. state/NOW.md may predate the completed PR #154/#156/#158/#159 merges. Check the exact recorded project SHA with `node scripts/coop-state.cjs --verify`; a prior local PASS is not release evidence for a newer main revision.
 
 ## Target runtime: one scheduler, many authorities
 
@@ -91,7 +91,7 @@ Show states honestly: OBSERVED, QUOTED, FUNDED, ACCEPTING SECOND PILOT, IN PROGR
 ## Implementation PR sequence
 
 - LW-01 (this document): frozen inventory, trust boundaries, release invariant list.
-- LW-02 (P0): issue #148 startup cargo reconciliation; coordinate existing #154, #156, #158 against latest main. No activation on persistent world before real gates.
+- LW-02 (P0): issue #148 startup cargo reconciliation; audit the merged #154, #156, #158 and #159 physical-delivery, operator, payout and integrity paths together on the final main revision. No activation on persistent world before real gates.
 - LW-03 (P0): extract existing 30s runtime phase registry and bounded orchestration without behavioral change, preserve arbiter and installed modules.
 - LW-04 (P0): connect A-Life MANUFACTURE/COMPLETE_JOB/LIST_OUTPUT intents to existing native economy director with durable per-owner/station claim. Ban parallel legacy scheduler in unified mode. Native demand/cargo/ISK only.
 - LW-05 (P1): shared source-backed Opportunity projection and supported Agent + EVEmail adapters; no new wallet/escrow executor.
