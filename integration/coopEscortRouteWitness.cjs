@@ -78,6 +78,18 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
   if(!Number.isFinite(projected)||Math.abs(projected-x.progress)>0.000001||
    !Number.isFinite(deviation)||deviation>150000)
    return denied("ROUTE_CHECKPOINT_SOURCE_MISMATCH");
+  // At short native routes, 10 km NPC proximity alone can be satisfied by a
+  // pilot parked at the origin. Require both *recorded* player positions to
+  // have progressed independently along the true source-to-target vector.
+  for(const pilot of x.pilotPositions){
+   const projectedPilot=((pilot.x-p.origin.x)*dx+
+    (pilot.y-p.origin.y)*dy+(pilot.z-p.origin.z)*dz)/
+    (tripDistance*tripDistance);
+   if(!Number.isFinite(projectedPilot)||
+    Math.abs(projectedPilot-x.progress)>0.12||
+    projectedPilot<Math.max(0.10,WINDOWS[stage-1][0]-0.10))
+    return denied("ROUTE_PILOT_PROGRESS_MISMATCH");
+  }
   return {status:"VERIFIED_NATIVE_ROUTE_CHECKPOINT",row:x};
  }
  function fsyncStored(manifestKey,stage){
@@ -182,6 +194,13 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
      ship.position.y-npc.position.y,
      ship.position.z-npc.position.z)>10000)
     return denied("ROUTE_PILOT_NOT_ESCORTING_NPC");
+   const pilotProgress=((ship.position.x-p.origin.x)*dx+
+    (ship.position.y-p.origin.y)*dy+
+    (ship.position.z-p.origin.z)*dz)/(length*length);
+   if(!Number.isFinite(pilotProgress)||
+    Math.abs(pilotProgress-progress)>0.12||
+    pilotProgress<Math.max(0.10,WINDOWS[stage-1][0]-0.10))
+    return denied("ROUTE_PILOT_PROGRESS_MISMATCH");
    pilotPositions.push({x:ship.position.x,y:ship.position.y,
     z:ship.position.z});
   }
