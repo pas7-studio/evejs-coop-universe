@@ -292,7 +292,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
    reason.length>240||!/^[a-f0-9]{64}$/.test(witnessHash))
    return {status:"INVALID_ADMIN_AUDIT"};
   const auditID=crypto.createHash("sha256").update(
-   [transferID,action,witnessHash].join("|")).digest("hex");
+   [transferID,action,witnessHash,principalID,reason.trim()].join("|")).digest("hex");
   return transact(tx=>{
    const state=fleet.validate(tx.get(fleet.TABLE,fleet.KEY)),
     row=state.ships[String(entityID)],
