@@ -238,7 +238,16 @@ function installServerAuthority(api){
  authority=api;return {status:"PRICED_ESCORT_NATIVE_AUTHORITY_INSTALLED"};
 }
 function offerFromNative(route){
- return authority?authority.quoteFromNative(route):fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
+ const result=authority?authority.quoteFromNative(route):
+  fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
+ if(result?.status==="NATIVE_QUOTE_DURABLY_PREPARED"&&
+  process.env.EVEJS_COOP_NATIVE_JOB_AGENT==="1"&&
+  process.env.EVEJS_COOP_OPPORTUNITY_MAIL==="1"){
+  // Trusted native quote; notification never changes price or escrow.
+  try{require("./coopNativeJobNotifications").notifyNativeQuote(result.quote)}
+  catch{/* Native mail is optional; contract remains source of truth. */}
+ }
+ return result;
 }
 function readVisibleQuote(eventID){
  return authority?authority.readQuote(eventID):fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
