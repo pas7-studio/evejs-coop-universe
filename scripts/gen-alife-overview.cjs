@@ -169,7 +169,7 @@ function shipGroupIds() {
   return data.groups.map(Number).filter((id) => Number.isSafeInteger(id) && id > 0);
 }
 
-function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати ", groups = null } = {}) {
+function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати ", groups = null, targetsShipsOnly = true } = {}) {
   const lines = splitLines(baseText);
   const presets = parsePresets(lines);
   const byName = new Map(presets.blocks.map((block) => [block.name, block]));
@@ -180,6 +180,14 @@ function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC 
 
   const blocks = presets.blocks.map((block) => block.lines);
   if (!byName.has(presetName)) blocks.push(presetWithGroups(source, presetName, hullGroups).lines);
+  // The owner's own Targets tab is bound to the `Targets` preset, whose 403
+  // groups also carry gates, belts, billboards and stations. Rewriting its
+  // group list (never its name, never the tab order) makes that existing tab
+  // list hulls only, so pirates show up without adding or reordering a tab.
+  if (targetsShipsOnly && byName.has("Targets")) {
+    const at = presets.blocks.indexOf(byName.get("Targets"));
+    if (at >= 0) blocks[at] = presetWithGroups(byName.get("Targets"), "Targets", hullGroups).lines;
+  }
 
   const tabRange = sectionRange(lines, "tabSetup");
   const existingTabs = [];
@@ -209,16 +217,22 @@ function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC 
   ].join("\n");
 }
 
-function verifyMinimal(text, baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати ", groups = null } = {}) {
+function verifyMinimal(text, baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати ", groups = null, targetsShipsOnly = true } = {}) {
   const problems = [];
   const expected = Array.isArray(groups) && groups.length ? groups.map(Number) : shipGroupIds();
   const base = parsePresets(splitLines(baseText));
   const out = parsePresets(splitLines(text));
-  // Every original preset must survive byte-identical in name and group list.
+  const hullsWanted = [...new Set(expected)].sort((a, b) => a - b).join(",");
+  // Every original preset must survive byte-identical in name and group list,
+  // except `Targets`, which we deliberately narrow to hulls when asked to.
   for (const block of base.blocks) {
     const same = out.blocks.find((entry) => entry.name === block.name);
     if (!same) problems.push(`lost preset ${block.name}`);
-    else if (same.groups.join(",") !== block.groups.join(",")) problems.push(`changed groups of ${block.name}`);
+    else if (targetsShipsOnly && block.name === "Targets") {
+      if (same.groups.slice().sort((a, b) => a - b).join(",") !== hullsWanted) {
+        problems.push(`Targets preset was not narrowed to hulls (${same.groups.length} groups)`);
+      }
+    } else if (same.groups.join(",") !== block.groups.join(",")) problems.push(`changed groups of ${block.name}`);
   }
   const added = out.blocks.filter((block) => !base.blocks.some((entry) => entry.name === block.name));
   if (added.length !== 1) problems.push(`expected exactly one new preset, got ${added.length}`);
