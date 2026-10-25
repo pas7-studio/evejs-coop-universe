@@ -52,7 +52,16 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return authorizeOffer(c);
   },
   readManifest,verifyManifest,readIncidents,readOutcomes,
-  readNativeDelivery:c=>flight.readNativeDelivery(c),
+  readNativeDelivery:c=>{
+   const active=flight.readNativeDelivery(c);
+   if(active?.status==="DELIVERED")return active;
+   // Audit alone can read a paid trip; never use paid receipt as a
+   // substitute for RESERVED before first warp or before payout.
+   let receipt;try{receipt=funds.verifySettlement(c)}catch{}
+   if(receipt?.status==="SETTLED"&&receipt.nativeDurable===true)
+    return flight.readNativeDeliveryForAudit(c);
+   return active;
+  },
   readNativeFailure,nativeFunds:funds,
   readPrefunded:c=>flight.readFunded(c)});
  function fundBeforeWarp(route){
