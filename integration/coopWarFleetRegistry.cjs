@@ -40,7 +40,16 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
  function claim(link){
   if(!enabled())return "DISABLED";
   try{
-   const state=snapshot(),v=state.ships[String(link?.entityID)];
+   // Hot A-Life arbiter path: use the GameStore cache, not a new SQLite
+   // BEGIN IMMEDIATE for each visible NPC. Native atomic writes refresh it.
+   let state;
+   if(typeof gameStore.read==="function"){
+    const row=gameStore.read(TABLE,"/"+KEY);
+    if(row?.success===true)state=validate(row.data);
+    else if(row?.errorMsg==="ENTRY_NOT_FOUND")state=empty();
+    else return "UNKNOWN";
+   }else state=snapshot(); // only injectable offline fixtures
+   const v=state.ships[String(link?.entityID)];
    if(!v)return "UNASSIGNED";
    return v.entityID===link.entityID&&v.pilotID===link.pilotID&&
     v.systemID===link.systemID?"ASSIGNED":"UNKNOWN";
