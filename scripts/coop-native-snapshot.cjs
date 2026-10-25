@@ -19,12 +19,23 @@ function moneyToCents(value) {
 }
 function quantity(item) {
   if (!item || typeof item !== 'object') throw Error('Malformed item record');
-  const values=[item.quantity,item.stacksize].filter(x=>x!==undefined && x!==null);
-  if(values.some(x=>!Number.isSafeInteger(Number(x)) || Number(x)<0)) throw Error('Invalid native item quantity');
+  const singleton=Number(item.singleton ?? 0);
+  if (!Number.isSafeInteger(singleton) || singleton<0 || singleton>2) throw Error('Invalid native item singleton state');
+  const rawQuantity=item.quantity, rawStack=item.stacksize;
+  // Exact pinned EveJS itemStore semantics: singleton 1/2 has quantity
+  // -1/-2 but stacksize 1. Never mistake these sentinels for negative cargo.
+  if (singleton===1 || singleton===2) {
+    if (rawQuantity != null && Number(rawQuantity)!==-singleton && Number(rawQuantity)!==1)
+      throw Error('Invalid native singleton quantity');
+    if (rawStack != null && Number(rawStack)!==1)
+      throw Error('Invalid native singleton stacksize');
+    return '1';
+  }
+  const values=[rawQuantity,rawStack].filter(x=>x!==undefined && x!==null);
+  if (values.some(x=>!Number.isSafeInteger(Number(x)) || Number(x)<0)) throw Error('Invalid native item quantity');
   const n=values.length?Math.max(...values.map(Number)):1;
-  // ItemStore represents singleton ships/modules with one item record.
-  if(n===0 && item.singleton!==1 && item.singleton!==true) throw Error('Native non-singleton item has zero quantity');
-  return String(n>0?n:1);
+  if(n===0) throw Error('Native non-singleton item has zero quantity');
+  return String(n);
 }
 function verifyInput(meta, ids) {
   if(!meta||!sha(meta.projectSha)||!sha(meta.upstreamSha)||!runtime(meta.runtime)) throw Error('Missing exact source revisions and inspected live Docker runtime');
