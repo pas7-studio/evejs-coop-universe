@@ -42,7 +42,7 @@ See full [24-mechanic native gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20
 
 | ID | Severity | Owner recommendation | Action / gate |
 |---|---|---|---|
-| BLOCK-01 | **P0** | Existing mission/overlay agent | At audited commit, `scripts/patch-evejs-coop.cjs` calls `coop-fleet-mission-native-patch.cjs` twice for agent+dungeon sources, once including `missionRuntimeState.js`; verify source once, eliminate double apply where unsafe, prove `--dry-run`, no-op reapply and `--remove` round trip against exactly pinned upstream |
+| CHECK-01 | P0 overlay maintenance | Existing mission/overlay agent | Duplicate helper call confirmed **idempotent on three pinned upstream source files** by read-only double-apply/double-remove test (second apply no changes; first remove restores byte-for-byte); still remove redundant call for clarity and run **complete** Node overlay dry-run/reapply/remove preflight; not a proven double-injection bug |
 | BLOCK-02 | **P0** | Existing multiplayer/combat agent | Real two-client fleet invite→warp→combat→loot→reconnect; stop conflating isolated source tests with gameplay |
 | BLOCK-03 | **P0** | Existing mission agent | Durable once-per-character reward journal and same shared mission/instance acceptance; automatic peer reward flag stays OFF until replay safe |
 | BLOCK-04 | **P0** | Existing mining/industry agent | Native owner-tagged item transfer from NPC hauler to actual depot; ensure persistent stable transfer ID and debited source cargo |
