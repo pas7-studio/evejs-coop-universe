@@ -47,21 +47,56 @@ function sceneIdentity(rows) {
 }
 function checkWorld(raw, meta, now, minutes) {
   if (!raw || !String(raw).trim()) return pass('BLOCKED', 'MISSING_TELEMETRY: inspect effective running overlay with DiagnoseWorld');
-  const {all, recent, input} = runtimeEvents(raw,meta,now,minutes);
+  const {all, recent, input, started} = runtimeEvents(raw,meta,now,minutes);
   if (all.invalid) return pass('FAIL', 'Malformed or incomplete telemetry JSONL', {invalidLines: all.invalid});
   if (!recent.length) return pass('BLOCKED', 'No current telemetry within evidence window');
   // Boot record can be older than the activity window, but must belong to THIS
   // real container process. A previous boot or a source flag alone cannot pass.
   const latestBoot = [...all.rows].reverse().find(e => e.event === 'living-headless-boot-requested');
   if (!latestBoot) return pass('BLOCKED', 'Current-container headless boot not evidenced (possibly truncated telemetry tail)');
-  const world = summarizeWorld(input, {now, windowMinutes: minutes, requireActivity:true});
-  if (world.status !== 'READY_FOR_CLIENT_PLAYTEST') return pass('BLOCKED', world.status, {
-    worldStatus:world.status, activityStatus:world.activity?.status || null,
-    scenery:world.scenery, missing:world.blockers?.slice(0,2) || []
+  // The upstream World reporter applies its own time cutoff. Give it the
+  // current Docker process history so its headless/topology/industry anchors
+  // remain visible after long uptime. This must NOT widen the freshness gate:
+  // recent measured native activity is checked independently below.
+  const processMinutes = Math.max(minutes, Math.ceil((now - started) / 60000) + 2);
+  // Consider every system with freshly measured native activity. The most
+  // recent topology can belong to a different system, especially with two
+  // configured headless routes. Never combine evidence across systems.
+  const fresh = recent.filter(e => e.event === 'living-native-activity' &&
+    e.status === 'SAMPLED' && e._t >= latestBoot._t && positive(e.systemID));
+  const systemIds = [...new Set(fresh.map(e => Number(e.systemID)))];
+  const candidates = systemIds.map(systemID => {
+    const world = summarizeWorld(input, {now, windowMinutes:processMinutes,
+      requireActivity:true, systemID});
+    const samples = fresh.filter(e => Number(e.systemID) === systemID);
+    return {systemID,world,samples,
+      movement:samples.some(e => Number(e.observedMovement) > 0),
+      interaction:samples.some(e => Number(e.oreGrowth) > 0 || Number(e.engagedNativeNpcs) > 0),
+      physical:samples.some(e => Number(e.physicalNpcShips) > 0)};
   });
-  return pass('PASS_SERVER', 'Real native topology, physical miners/haulers, named NPC and movement + interaction evidenced', {
-    worldStatus:world.status, activityStatus:world.activity.status, scenery:world.scenery,
-    physicalNpcShips:world.physicalNpcShipAssignments
+  const winner = candidates.find(c => c.world.status === 'READY_FOR_CLIENT_PLAYTEST' &&
+    c.movement && c.interaction && c.physical);
+  if (winner) return pass('PASS_SERVER',
+    'Boot-anchored native world with fresh same-system physical NPC movement and interaction', {
+      systemID:winner.systemID, worldStatus:winner.world.status,
+      activityStatus:winner.world.activity?.status||null,scenery:winner.world.scenery,
+      physicalNpcShips:winner.world.physicalNpcShipAssignments,
+      freshSamples:winner.samples.length
+    });
+  const best = candidates.find(c => c.world.status === 'READY_FOR_CLIENT_PLAYTEST');
+  if (best) return pass('BLOCKED',
+    'No fresh same-system measured native NPC movement and interaction in requested evidence window', {
+      systemID:best.systemID, freshSamples:best.samples.length,
+      freshMovement:best.movement, freshInteraction:best.interaction,
+      freshPhysicalShips:best.physical
+    });
+  // A missing / unready system is never promoted by another system's scene.
+  const world = candidates[0]?.world || summarizeWorld(input, {
+    now,windowMinutes:processMinutes,requireActivity:true});
+  return pass('BLOCKED',world.status, {
+    worldStatus:world.status, activityStatus:world.activity?.status||null,
+    scenery:world.scenery, missing:world.blockers?.slice(0,2)||[],
+    freshSystemCandidates:systemIds.length
   });
 }
 function checkParty(raw, meta, now, minutes) {
