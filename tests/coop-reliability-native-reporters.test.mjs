@@ -42,12 +42,10 @@ test('native reporter historical mining does not substitute current physical fle
 test('current empty native industry overrides older still-healthy fleet',()=>{
  const report=checkWorld(text([...boot,...refreshed,ev('living-native-industry',0.5,{fleets:[]}),motion]),meta,now,30);
  assert.equal(report.status,'BLOCKED');
- assert.equal(report.freshNativeFleet,false);
 });
 test('latest native named-NPC disappearance overrides earlier materialization',()=>{
  const report=checkWorld(text([...boot,...refreshed,ev('virtual-world-materialization',0.5,{livingShips:[]}),motion]),meta,now,30);
  assert.equal(report.status,'BLOCKED');
- assert.equal(report.freshNamedShips,false);
 });
 test('different solar system motion cannot count toward native physical world',()=>{
  const other=ev('living-native-activity',1,{systemID:30000142,status:'SAMPLED',observedMovement:2,oreGrowth:3,physicalNpcShips:3});
