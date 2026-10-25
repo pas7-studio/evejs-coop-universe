@@ -39,8 +39,9 @@ function routeForRole(scene,role){
   default:return select(["station","stargate","asteroidBelt"]).slice(0,4);
  }
 }
-function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dwellMs=120000,playerHoldMeters=0,playerHoldRetryMs=15000}){
+function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dwellMs=120000,playerHoldMeters=0,playerHoldRetryMs=15000,playerHoldRoles=["pirate"]}){
  if(typeof sceneForSystem!=="function"||typeof warp!=="function"||typeof orbit!=="function")throw Error("native scene and movement required");
+ const holdRoles=new Set(Array.isArray(playerHoldRoles)?playerHoldRoles:["pirate"]);
  const history=new Map();
  function tick(assignments,roles={},options={}){
   const result=[];
@@ -81,9 +82,9 @@ function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dw
    if(!target)continue;
    let order=null,action="";
    if(distance(ship.position,target.position)>250000){
-    // A player on grid means the NPC stays: no scheduled warp out. It keeps
-    // its current motion and retries shortly, so combat is not interrupted.
-    if(playersFor(system).some(p=>distance(ship.position,p)<=playerHoldMeters)){
+    // A player on grid means an enemy stays: no scheduled warp out, so a fight
+    // cannot be cancelled by a timer. Civilians keep their own routes.
+    if(holdRoles.has(role)&&playersFor(system).some(p=>distance(ship.position,p)<=playerHoldMeters)){
      previous.nextAt=clock()+playerHoldRetryMs;
      history.set(key,previous);
      continue;

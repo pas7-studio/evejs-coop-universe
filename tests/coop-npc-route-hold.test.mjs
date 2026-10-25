@@ -53,7 +53,7 @@ function harness({ holdMeters, player }) {
 }
 
 const assignments = [{ pilotID: "p1", systemID: 30000145, entityID: 42 }];
-const roles = { p1: { role: "patrol" } };
+const roles = { p1: { role: "pirate" } };
 
 test("without a player on grid the scheduled route still warps the NPC", () => {
   const h = harness({ holdMeters: 200000, player: false });
@@ -61,11 +61,11 @@ test("without a player on grid the scheduled route still warps the NPC", () => {
   assert.equal(h.warps.length, 1, "no hold flag needed when nobody watches");
 });
 
-test("a player on grid stops the scheduled warp that made NPCs vanish", () => {
+test("a player on grid stops the pirate's scheduled warp that made enemies vanish", () => {
   const h = harness({ holdMeters: 200000, player: true });
   const issued = h.orders.tick(assignments, roles, {});
   assert.deepEqual(issued, [], "no warp order while the player is close");
-  assert.equal(h.warps.length, 0, "the NPC must not warp out from under the player");
+  assert.equal(h.warps.length, 0, "the pirate must not warp out from under the player");
   // It retries shortly instead of freezing forever.
   h.advance(14999);
   h.orders.tick(assignments, roles, {});
@@ -73,6 +73,15 @@ test("a player on grid stops the scheduled warp that made NPCs vanish", () => {
   h.advance(2);
   h.orders.tick(assignments, roles, {});
   assert.equal(h.warps.length, 0, "still held: the player is still there");
+});
+
+test("civilians keep their routes: the hold is for pirates only", () => {
+  const h = harness({ holdMeters: 200000, player: true });
+  h.orders.tick(assignments, { p1: { role: "trader" } }, {});
+  assert.equal(h.warps.length, 1, "a trader still travels while the player watches");
+  const h2 = harness({ holdMeters: 200000, player: true });
+  h2.orders.tick(assignments, { p1: { role: "patrol" } }, {});
+  assert.equal(h2.warps.length, 1, "a patrol still travels while the player watches");
 });
 
 test("the hold is OFF unless meters are configured", () => {
