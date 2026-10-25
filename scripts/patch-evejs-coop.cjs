@@ -8,7 +8,7 @@ const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","co
 // CH38: original native NPE state and identity, opt-in, default OFF.
 names.splice(names.indexOf("coopAgentDialogue")+1,0,"coopNpeSafety");
 // Chat 29: source-level buy cancellation custody, default OFF.
-names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody");
+names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody");
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
@@ -230,8 +230,15 @@ function transform(source,spec,remove){
    text=require("./coop-npc-corporate-buy-patch.cjs").patch(text,{remove:false});
   }
  }
- if(spec.file==="server/src/services/market/marketProxyService.js")
-  text=require("./coop-market-cancel-custody-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/services/market/marketProxyService.js") {
+  if(remove) {
+   text=require("./coop-market-sell-custody-patch.cjs").patch(text,{remove:true});
+   text=require("./coop-market-cancel-custody-patch.cjs").patch(text,{remove:true});
+  } else {
+   text=require("./coop-market-cancel-custody-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-market-sell-custody-patch.cjs").patch(text,{remove:false});
+  }
+ }
  if(spec.file==="server/src/space/runtime.js")if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
