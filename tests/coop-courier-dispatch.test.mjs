@@ -164,3 +164,9 @@ test('the settlement chain refuses a package that is not at the origin or destin
  assert.equal(planSettlement(contract,identity,60009999).status,'REFUSED_PACKAGE_ELSEWHERE');
  assert.equal(planSettlement(contract,{character:identity.character},60003760).status,'REFUSED_NO_SHIP');
 });
+
+test('the live numeric contract status is accepted alongside the string form',()=>{
+ const numeric=evaluateContract(courier({status:0}),{},{walletIsk:0,hullCapacityM3:4800});
+ assert.equal(numeric.status,'ELIGIBLE');
+ assert.equal(evaluateContract(courier({status:1}),{},{hullCapacityM3:4800}).status,'REFUSED_STATUS');
+});

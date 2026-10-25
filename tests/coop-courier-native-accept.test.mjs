@@ -84,5 +84,6 @@ test('complete uses the native FINISHED status for the real acceptor',()=>{
  const runtime=fakeRuntime({acceptorID:140000100});
  const result=complete({contract,identity,packageLocationID:60015262,runtime});
  assert.equal(result.status,'COMPLETED');
- assert.deepEqual(runtime.calls[0].slice(0,3),['complete',980000000,5]);
+ assert.deepEqual(runtime.calls[0].slice(0,3),['complete',980000000,4]);
+ assert.notEqual(runtime.calls[0][2],5,'5 is CANCELLED, not FINISHED');
 });

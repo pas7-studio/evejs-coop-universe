@@ -8,7 +8,9 @@
 // Nothing here is evidence that an NPC has ever carried a contract.
 const COURIER_CONTRACT_TYPE = "courier";
 const OUTSTANDING_STATUS = "outstanding";
-const LEGAL_STATUSES = Object.freeze(["outstanding"]);
+// The live contractRuntime stores numeric status (0 = outstanding) while the
+// client-facing shape uses strings, so both must be accepted.
+const LEGAL_STATUSES = Object.freeze(["outstanding", "0"]);
 
 const DEFAULT_POLICY = Object.freeze({
   sameSystemOnly: true,
@@ -53,7 +55,7 @@ function evaluateContract(contract, policy, context) {
   if (String(contract.contractType || "").toLowerCase() !== COURIER_CONTRACT_TYPE) {
     return status("REFUSED_NOT_COURIER", { contractID });
   }
-  if (!LEGAL_STATUSES.includes(String(contract.status || "").toLowerCase())) {
+  if (!LEGAL_STATUSES.includes(String(contract.status === 0 ? "0" : contract.status || "").toLowerCase())) {
     return status("REFUSED_STATUS", { contractID, contractStatus: String(contract.status || "") });
   }
   // The package must be a real item; a contract without one cannot be carried.

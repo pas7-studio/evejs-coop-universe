@@ -79,3 +79,10 @@ test('runStep executes exactly one step of the flight',()=>{
  assert.equal(runStep(runtime,{...flight,step:'done'},position).status,'DONE');
  assert.equal(runStep(runtime,{...flight,step:'nope'},position).status,'REFUSED');
 });
+
+test('arrival is never assumed: it needs real scene evidence',()=>{
+ const runtime=ctx();
+ const atArrive={...flight,step:'arrive'};
+ assert.equal(runStep(runtime,atArrive,position).status,'REFUSED');
+ assert.equal(runStep({...runtime,arrivalConfirmed:true},atArrive,position).status,'OK');
+});

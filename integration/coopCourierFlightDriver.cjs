@@ -114,7 +114,13 @@ function runStep(ctx, flight, stationPosition) {
   if (!flight || !flight.step) return result("REFUSED", { reason: "no flight" });
   if (flight.step === "undock") return undock(ctx, flight);
   if (flight.step === "warp") return warp(ctx, flight, stationPosition);
-  if (flight.step === "arrive") return result(OK, { note: "arrival is confirmed by the warp completion" });
+  if (flight.step === "arrive") {
+    // Arrival is never assumed: the caller must supply real evidence that the
+    // ship is at the destination before the flight is allowed to dock.
+    return ctx && ctx.arrivalConfirmed === true
+      ? result(OK)
+      : result("REFUSED", { reason: "arrival is not confirmed by the scene" });
+  }
   if (flight.step === "dock") return dock(ctx, flight);
   if (flight.step === "done") return result("DONE");
   return result("REFUSED", { reason: "unknown flight step: " + flight.step });

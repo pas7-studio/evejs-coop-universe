@@ -17,7 +17,10 @@
 // can be finished, and an ambiguous error is reported, never retried.
 const { planSettlement } = require("./coopCourierDispatch.cjs");
 
-const FINISHED = 5;
+// Mirrors contractRuntimeState.CONTRACT_STATUS: OUTSTANDING 0, IN_PROGRESS 1,
+// FINISHED 4 (5 is CANCELLED - getting this wrong would cancel the contract).
+const FINISHED = 4;
+const OUTSTANDING = 0;
 
 function buildNpcSession(character) {
   if (!character || !(Number(character.characterID) > 0) || !(Number(character.accountId) > 0)) {
@@ -52,7 +55,7 @@ function accept({ contract, identity, packageLocationID, runtime }) {
   if (!session) return refusal("courier character is not a usable identity");
   const live = runtime.getContractRecord(contract.contractID);
   if (!live) return refusal("contract not found in the live runtime");
-  if (Number(live.status) !== 0) return refusal("contract is no longer outstanding", { status: live.status });
+  if (Number(live.status) !== OUTSTANDING) return refusal("contract is no longer outstanding", { status: live.status });
   if (Number(live.acceptorID) !== 0) return refusal("contract already has an acceptor", { acceptorID: live.acceptorID });
   try {
     const accepted = runtime.acceptContract(contract.contractID, session, false);
