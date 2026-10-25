@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal"];
 const specs=[
  {file:"server/src/space/npc/nativeNpcStore.js",patches:[]},
  {file:"server/src/services/_shared/sessionDisconnect.js",patches:[
@@ -28,6 +28,7 @@ const specs=[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
  ]},
  {file:"server/src/services/mining/miningNpcOperations.js",patches:[
+  {anchor:'  if (startupSceneSeedSet.has(startupKey)) {',line:'  if (process.env.EVEJS_COOP_CONVOY_RENEWAL === "1") { const renewal = require("../../space/coopNativeConvoyRenewal").inspect({scene,systemID:scene.systemID,slotCount:resolveStartupFleetCount(),seeded:startupSceneSeedSet.has(startupKey),fleets:getMiningFleetsForSystem(scene.systemID)}); if (!renewal.allowed) return; if (renewal.renewal) startupSceneSeedSet.delete(startupKey); }'},
   {anchor:'  const responsePlan = resolveResponsePlan(scene, fleetRecord, aggressorEntity, {',
    line:'  if (process.env.EVEJS_COOP_PLAYER_CONSEQUENCES === "1") { try { require("../../space/coopNativeConsequences").noteMiningAggression(scene, fleetRecord, aggressorEntity, aggressionEventAtMs); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); } }'}
  ]},
@@ -46,6 +47,7 @@ const specs=[
  ]}
 ];
 const oldLines=[
+ "  if (process.env.EVEJS_COOP_CONVOY_RENEWAL === \"1\") { const renewal = require(\"../../space/coopNativeConvoyRenewal\").inspect({scene,systemID:scene.systemID,slotCount:resolveStartupFleetCount(),seeded:startupSceneSeedSet.has(startupKey),fleets:getMiningFleetsForSystem(scene.systemID)}); if (!renewal.allowed) return; if (renewal.renewal) startupSceneSeedSet.delete(startupKey); }",
  "  if (process.env.EVEJS_COOP_NATIVE_LOOT_QUARANTINE === \"1\") { const guard = require(\"../coopNativeLootQuarantine\").check({wreckID,wreckItemID}); if (guard.status !== \"ALLOW\") return {success:false,errorMsg:\"COOP_LOOT_QUARANTINED\"}; }",
  "  if (process.env.EVEJS_COOP_NATIVE_LOOT_EVIDENCE === \"1\") { try { require(\"../coopNativeLootPickupEvidence\").note({scene:spaceRuntime.ensureScene(wreckRecord.systemID),wreck:wreckRecord,characterID,wreckItemID,sourceBefore:wreckItemRecord,sourceAfter:nativeNpcStore.getNativeWreckItem(wreckItemID),availableQuantity,requestedQuantity,grantResult}); } catch (_coopError) { console.warn(\"[CoopNativeLoot]\",_coopError.message); } }",
  "  if (process.env.EVEJS_COOP_NATIVE_LOOT_EVIDENCE === \"1\") { try { require(\"../coopNativeLootPickupEvidence\").note({scene:spaceRuntime.ensureScene(wreckRecord.systemID),wreck:wreckRecord,characterID,wreckItemID,destinationLocationID,sourceBefore:wreckItemRecord,sourceAfter:nativeNpcStore.getNativeWreckItem(wreckItemID),availableQuantity,requestedQuantity,grantResult}); } catch (_coopError) { console.warn(\"[CoopNativeLoot]\",_coopError.message); } }",
