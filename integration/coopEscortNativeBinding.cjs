@@ -65,6 +65,27 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
     stationID:b.stationID,corporationID:b.corporationID,
     pirateID:i.pirateID,incidentKey:i.key,fleetDuoID:i.duoFleetID,
     characters:b.characters.slice(),amountISK:b.amountISK};
+   // Read existing real wallet terminal BEFORE any attempt to pay again.
+   // This also lets reputation history recover after money COMMIT but before
+   // its own fsync; history cannot itself create another wallet credit.
+   let paid;try{paid=runtime.nativeFunds.verifySettlement(contract)}
+   catch{return deny("NATIVE_TERMINAL_WALLET_UNAVAILABLE")}
+   if(paid?.status==="SETTLED"){
+    if(paid.nativeDurable!==true||paid.contractID!==contract.contractID||
+     paid.corporationID!==contract.corporationID||
+     paid.amountISK!==contract.amountISK||
+     !Array.isArray(paid.credits)||paid.credits.length!==2||
+     paid.credits.some((x,i)=>x.characterID!==contract.characters[i]||
+      x.amountISK!==contract.amountISK/2))
+     return deny("NATIVE_TERMINAL_PAID_RECEIPT_CONFLICT");
+    let history={status:"DISABLED"};
+    if(recordTerminal)try{history=recordTerminal(contract.contractID)}
+    catch{history={status:"NATIVE_HISTORY_WRITE_UNAVAILABLE"}}
+    return {status:"ALREADY_NATIVE_SETTLED",contractID:contract.contractID,
+     historyStatus:history?.status||"NATIVE_HISTORY_WRITE_UNAVAILABLE"};
+   }
+   if(!["NOT_FOUND","NOT_SETTLED"].includes(paid?.status))
+    return deny("NATIVE_TERMINAL_WALLET_CONFLICT");
    let result;try{result=runtime.finishAfterRaid(contract)}
    catch{return deny("NATIVE_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
    if(result?.status==="SETTLED"&&recordTerminal){
@@ -79,6 +100,27 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
     return deny("DISABLED");
    if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
     return deny("NATIVE_REFUND_MANIFEST_KEY_INVALID");
+   // If corporate refund already committed in native wallet but the
+   // reputation fsync failed, retry HISTORY ONLY, never another credit.
+   let flight,historyContract;
+   try{flight=runtime.readFlight(manifestKey);
+    historyContract=runtime.readContract(flight?.booking?.contractID)}
+   catch{return deny("NATIVE_REFUND_HISTORY_SOURCE_UNAVAILABLE")}
+   if(historyContract?.status==="READY"&&historyContract.phase==="REFUNDED"){
+    const c=historyContract.contract;
+    let verified;try{verified=runtime.nativeFunds.verifyRefund(c)}
+    catch{return deny("NATIVE_REFUND_HISTORY_WALLET_UNAVAILABLE")}
+    if(verified?.status!=="REFUNDED"||verified.nativeDurable!==true||
+     verified.contractID!==c.contractID||
+     verified.corporationID!==c.corporationID||
+     verified.amountISK!==c.amountISK)
+     return deny("NATIVE_REFUND_HISTORY_WALLET_CONFLICT");
+    let history={status:"DISABLED"};
+    if(recordTerminal)try{history=recordTerminal(c.contractID)}
+    catch{history={status:"NATIVE_HISTORY_WRITE_UNAVAILABLE"}}
+    return {status:"ALREADY_NATIVE_REFUNDED",contractID:c.contractID,
+     historyStatus:history?.status||"NATIVE_HISTORY_WRITE_UNAVAILABLE"};
+   }
    let result;try{result=runtime.refundWreckedFlight(manifestKey)}
    catch{return deny("NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED")}
    if(result?.status==="REFUNDED"&&recordTerminal){
