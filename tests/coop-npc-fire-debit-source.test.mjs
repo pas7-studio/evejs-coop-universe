@@ -140,3 +140,36 @@ test("whole-bank journal preflight precedes any turret debit and missile launch"
  assert.ok(turret.includes('EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
  assert.ok(missile.includes('EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
 });
+
+test("atomic native weapon bank executes before turret damage and missile launch",()=>{
+ const transformed=patch(source);
+ const turret=transformed.slice(transformed.indexOf("function executeTurretCycle("),
+  transformed.indexOf("\nfunction executeMissileCycle("));
+ const missile=transformed.slice(transformed.indexOf("function executeMissileCycle("),
+  transformed.indexOf("\nfunction trailingFunction("));
+ const tAtomic=turret.indexOf('coopNpcAmmoBankAtomic").consumeBank({');
+ const tDamage=turret.indexOf("const shotResult = resolveTurretShot(");
+ const mAtomic=missile.indexOf('coopNpcAmmoBankAtomic").consumeBank({');
+ const mCharge=missile.indexOf("const chargeResults = [];");
+ assert.ok(tAtomic>=0 && tDamage>tAtomic);
+ assert.ok(mAtomic>=0 && mCharge>mAtomic);
+ assert.ok(turret.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(missile.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(turret.includes("for (const row of bank.results)"));
+ assert.ok(missile.includes("coopAtomicMissileResults.get("));
+ assert.equal(patch(patch(source),{remove:true}),source);
+});
+
+test("no native per-module ammo writer can bypass atomic guard before any cargo mutation",()=>{
+ const patched=patch(source);
+ const block=patched.slice(patched.indexOf("function consumeTurretAmmoCharge("),
+  patched.indexOf("\nfunction executeTurretCycle("));
+ const guard=block.indexOf('coopNpcAmmoBankAtomic").guardDirectDebit(');
+ const quantity=block.indexOf("const nextQuantity = Math.max(");
+ const proof=block.indexOf('coopNpcFireDebitProof").verify(');
+ assert.ok(guard>0 && guard<quantity && guard<proof,
+  "guard must execute before charge debit and journal begin");
+ assert.ok(block.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(block.includes("if (!guard.allowed) return"));
+ assert.equal(patch(patched,{remove:true}),source);
+});

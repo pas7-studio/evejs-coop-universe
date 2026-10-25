@@ -208,6 +208,16 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
   if(!entityID||!ownerID||!validBoundary(boundaryMs)||
    !Array.isArray(entries)||!entries.length||entries.length>16)
    return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_INVALID"};
+  // A prior atomic multi-barrel debit may have reached SQLite while its
+  // ship journal remains PREPARED. Never switch back to module-wise fire
+  // to bypass that unresolved transaction.
+  const bankShip=require("./coopNpcAmmoBankAtomic").inspectShip({root,entityID});
+  if(!bankShip.ok)return {ok:false,status:"NATIVE_AMMO_BANK_SHIP_QUARANTINED",
+   reason:bankShip.status};
+  // Never downgrade a ship with atomic cargo history back to separate
+  // module writes: the latter do not carry its SQLite replay fences.
+  if(bankShip.receipt&&process.env.EVEJS_COOP_NPC_BANK_ATOMIC!=="1")
+   return {ok:false,status:"NATIVE_AMMO_ATOMIC_DOWNGRADE_FORBIDDEN"};
   const activeModules=new Set();
   for(const entry of entries){
    const moduleID=positive(entry?.moduleItem?.itemID);
@@ -215,6 +225,9 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
     return {ok:false,status:"NATIVE_AMMO_BANK_DUPLICATE_MODULE"};
    activeModules.add(moduleID);
   }
+  if(bankShip.receipt&&boundaryMs<=bankShip.receipt.boundaryMs&&
+    bankShip.receipt.modules.some(m=>activeModules.has(m)))
+   return {ok:false,status:"NATIVE_AMMO_BANK_REPLAY"};
   // Even if a gun was unloaded after an uncertain debit, its journal
   // must still quarantine the *ship*. Otherwise changing bank membership
   // lets previously healthy guns debit repeatedly before failing again.

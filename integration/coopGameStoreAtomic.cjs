@@ -3,7 +3,7 @@
  * COOP-032D. In-process native SQLite/GameStore atomic row bridge.
  * Infrastructure only, never exports supportsAtomicInstall/Delivery.
  */
-const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills"]);
+const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","npcEntities","npcModules","npcCargo"]);
 const SEP="\u001f",hasOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function assertTables(names){
  if(!Array.isArray(names)||names.length<1||names.length>ALLOWED.size||

@@ -4,7 +4,7 @@ import fs from "node:fs";import os from "node:os";import path from "node:path";
 import {DatabaseSync} from "node:sqlite";import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createSqliteAdapter,createGameStoreAdapter,reconcileObject}=require("../integration/coopGameStoreAtomic.cjs");
-const SEP="\u001f",names=["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState"];
+const SEP="\u001f",names=["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","npcEntities","npcModules","npcCargo"];
 function fixture(){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop-game-store-"));
  const db=new DatabaseSync(path.join(dir,"gamestore.sqlite"));
@@ -17,9 +17,12 @@ function fixture(){
  put("industryBlueprintState","records"+SEP+"91",{itemID:91,original:true,jobID:null});
  put("industryJobs","_meta",{nextJobID:970000000000000});put("industryJobs","jobs",{});
  put("identityState","version",1);put("identityState","nextItemID",1990000200);
+ put("npcEntities","entities"+SEP+"101",{entityID:101,ownerID:900,systemID:30000144});
+ put("npcModules","modules"+SEP+"401",{moduleID:401,entityID:101,ownerID:900,typeID:123,flagID:27,categoryID:7});
+ put("npcCargo","cargo",{"501":{cargoID:501,entityID:101,moduleID:401,ownerID:900,typeID:35,categoryID:8,quantity:5}});
  const load=t=>{const o={};for(const {key,json} of db.prepare('SELECT key,json FROM "'+t+'"').all()){
   const [a,b]=key.split(SEP),v=JSON.parse(json);
-  if(b!==undefined&&({corporationRuntime:"corporations",industryBlueprintState:"records",industryJobs:"jobs"})[t]===a)
+  if(b!==undefined&&({corporationRuntime:"corporations",industryBlueprintState:"records",industryJobs:"jobs",npcEntities:"entities",npcModules:"modules"})[t]===a)
    (o[a]??={})[b]=v;
   else o[key]=v;
  }return o;};
@@ -185,4 +188,28 @@ test("postcommit account cache invalidation error poisons bridge after durable w
   const row=tx.get("characters","701");row.balance+=1;tx.put("characters","701",row);
  }),/COMMITTED_BUT_CACHE_UNSAFE/);
  assert.equal(f.bridge.isPoisoned(),true);assert.equal(f.fatal.length,1);
+}));
+
+test("native npcCargo and replay fence commit together with authoritative NPC identity rows",()=>run(f=>{
+ const oldCargo=f.cache.npcCargo.cargo;
+ assert.equal(f.bridge.transact(["npcEntities","npcModules","npcCargo"],tx=>{
+  const entity=tx.get("npcEntities","entities"+SEP+"101");
+  const module=tx.get("npcModules","modules"+SEP+"401");
+  const root=tx.get("npcCargo","cargo");
+  assert.equal(entity.ownerID,900);assert.equal(module.entityID,entity.entityID);
+  assert.equal(root["501"].quantity,5);
+  tx.put("npcCargo","cargo",{...root,"501":{...root["501"],quantity:4}});
+  tx.put("npcCargo","coopAmmoCycles_101",{version:1,entityID:101,modules:{"401":1000}});
+  return "BANK_COMMITTED";
+ }),"BANK_COMMITTED");
+ assert.equal(f.cache.npcCargo.cargo,oldCargo);
+ assert.equal(f.cache.npcCargo.cargo["501"].quantity,4);
+ assert.equal(f.cache.npcCargo.coopAmmoCycles_101.modules["401"],1000);
+ const before=f.snapshot();
+ assert.throws(()=>f.bridge.transact(["npcCargo"],tx=>{
+  tx.put("npcCargo","cargo",{"501":{cargoID:501,quantity:3}});
+  throw Error("SIMULATED_SECOND_BARREL_INVALID");
+ }),/SIMULATED_SECOND_BARREL_INVALID/);
+ assert.deepEqual(f.snapshot(),before);
+ assert.equal(f.cache.npcCargo.cargo["501"].quantity,4);
 }));
