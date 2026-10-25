@@ -6,6 +6,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$previousPinnedCode = $env:EVEJS_COOP_PINNED_CODE_PATH
+if ($CheckPinned) {
+  if (-not (Test-Path -LiteralPath $CodePath -PathType Container)) {
+    throw "Pinned EveJS Code checkout not found: $CodePath"
+  }
+  $env:EVEJS_COOP_PINNED_CODE_PATH = (Resolve-Path -LiteralPath $CodePath).Path
+}
 Push-Location $root
 try {
   if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -27,6 +34,7 @@ try {
     'tests/coop-escort-departure-witness.test.mjs',
     'tests/coop-escort-route-attendance-gate.test.mjs',
     'tests/coop-escort-route-witness.test.mjs',
+    'tests/coop-escort-native-warp-motion.test.mjs',
     'tests/coop-escort-refund-manifest.test.mjs'
   )
   foreach ($file in $files) {
@@ -57,5 +65,10 @@ try {
   }
   Write-Host '[COOP-049] Local source tests passed. REAL EVE CLIENT/SQLite/WALLET VALIDATION STILL PENDING.'
 } finally {
+  if ($null -eq $previousPinnedCode) {
+    Remove-Item Env:EVEJS_COOP_PINNED_CODE_PATH -ErrorAction SilentlyContinue
+  } else {
+    $env:EVEJS_COOP_PINNED_CODE_PATH = $previousPinnedCode
+  }
   Pop-Location
 }
