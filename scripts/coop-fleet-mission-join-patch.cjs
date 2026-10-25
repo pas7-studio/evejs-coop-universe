@@ -3,7 +3,7 @@
 // offerMission(), Accept, mission selection, agent dialogue, or rewards.
 const FILE="server/src/services/agent/agentMissionRuntime.js";
 const ANCHOR="    const offerResult = offerMission(normalizedCharacterID, agentRecord);";
-const HOOK='    if (process.env.EVEJS_COOP_MISSION_JOIN === "1") require("../../space/coopFleetMissionJoin").offer({characterID:normalizedCharacterID,agentRecord,fleetRuntime:require("../fleets/fleetRuntime"),sessions:sessionRegistry.getSessions(),getMissionRecord,getClientMissionRecord,offerSpecificMission,isMissionOfferAllowedForAgent,canUseAgent,getReplayUntilFileTime,resolveReplayRemainingTicks});';
+const HOOK='    if (process.env.EVEJS_COOP_MISSION_JOIN === "1") require("../../space/coopFleetMissionJoin").offer({characterID:normalizedCharacterID,agentRecord,fleetRuntime:require("../fleets/fleetRuntime"),sessions:sessionRegistry.getSessions(),getMissionRecord,getClientMissionRecord,offerSpecificMission,getDockedLocationID:require("../structure/structureLocation").getDockedLocationID,isMissionOfferAllowedForAgent,canUseAgent,getReplayUntilFileTime,resolveReplayRemainingTicks});';
 const count=(s,v)=>s.split(v).length-1;
 function patch(source,file,remove=false){
  if(file!==FILE)return source;
