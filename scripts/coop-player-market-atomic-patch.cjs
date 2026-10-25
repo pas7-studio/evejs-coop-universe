@@ -25,6 +25,10 @@ function patch(source,{remove=false}={}){
    if(!remove)text=text.slice(0,i)+original.replace(old,wrapped)+text.slice(j);
   }else throw Error("P2P_ATOMIC_NATIVE_HOOK_DRIFT");
  }
+ const config='  if (process.env.EVEJS_COOP_RUST_P2P_CLAIM === "1" && process.env.EVEJS_COOP_PLAYER_MARKET_ATOMIC !== "1") throw Error("P2P_ATOMIC_REQUIRED_WITH_RUST_CLAIMS");'+nl+
+  '  if ('+atomic+' && (process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS !== "1" || process.env.EVEJS_COOP_RUST_P2P_CLAIM !== "1" || process.env.EVEJS_COOP_PLAYER_MARKET_SETTLEMENT_FENCE !== "1" || process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD !== "1")) throw Error("P2P_ATOMIC_ALL_NATIVE_FLAGS_REQUIRED");';
+ inject(sell,buy,'  const typeLabel = getMarketTypeLabel(typeID);',config,{before:true});
+ inject(buy,end,'  let remainingQuantity = normalizePositiveInteger(requestedQuantity, 0);',config,{before:true});
  // Pre-admission *before* the existing #189 proof and #204 durable begin,
  // so an unsupported multi-stack/partial order cannot lock the Rust order.
  inject(sell,buy,'        purchaseCounterpartyID = sellerCharacterID;',
