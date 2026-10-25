@@ -51,8 +51,16 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   const fd=fs.openSync(temp,"wx",0o600);
   try{fs.writeFileSync(fd,JSON.stringify(tx));fs.fsyncSync(fd);}
   finally{fs.closeSync(fd);}
-  try{fs.renameSync(temp,file);}
-  catch(error){try{fs.unlinkSync(temp);}catch(_){}throw error;}
+  try{
+   fs.renameSync(temp,file);
+   // Durable name switch is also part of the write-ahead fence on Linux:
+   // fsync() of the file alone does not persist its directory entry.
+   const directory=fs.openSync(dir,"r");
+   try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
+  }catch(error){
+   try{fs.unlinkSync(temp);}catch(_){}
+   throw error;
+  }
  }
  function sameCargo(row,tx){
   return row&&Number(row.cargoID)===tx.cargoID&&
