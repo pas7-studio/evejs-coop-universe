@@ -9,6 +9,17 @@
  * its own single-flight lock, journal and outcome reconciliation.
  */
 const VALID_PHASE=/^[a-z][a-z0-9:-]{0,95}$/;
+const loadRegistry=()=>{
+ try{return require("./coopLivingWorldPhaseRegistry")}
+ catch(error){
+  // Installed overlay has .js siblings; source checkout has .cjs.
+  if(error?.code!=="MODULE_NOT_FOUND"||
+     !String(error.message).includes("Cannot find module './coopLivingWorldPhaseRegistry'"))
+   throw error;
+  return require("./coopLivingWorldPhaseRegistry.cjs");
+ }
+};
+const {classifyPhase,catalog}=loadRegistry();
 function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}){
  if(typeof execute!=="function"||typeof clock!=="function"||
     typeof onCycle!=="function")
@@ -16,7 +27,8 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
  let active=false,sequence=0,last=null;
  function snapshot(){
   return {active,sequence,last:last?{
-   ...last,phaseNames:last.phaseNames.slice()
+   ...last,phaseNames:last.phaseNames.slice(),
+   groups:{...last.groups},unknownNames:last.unknownNames.slice()
   }:null};
  }
  function tick(run){
@@ -26,11 +38,17 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
   if(active)return {status:"REENTRANT_SKIPPED",sequence,nativeMutation:false};
   const startedAt=clock();
   active=true;sequence++;
-  const names=[];let phaseCount=0,status="COMPLETED";
+  const names=[],unknownNames=[],groups=Object.create(null);
+  let phaseCount=0,status="COMPLETED";
   const phase=(name,fn)=>{
    if(typeof name!=="string"||!VALID_PHASE.test(name)||typeof fn!=="function")
     throw Error("LIVING_WORLD_PHASE_INVALID");
    phaseCount++;
+   const kind=classifyPhase(name);
+   const group=kind.group||"unclassified";
+   groups[group]=(groups[group]||0)+1;
+   if(kind.status==="UNCLASSIFIED"&&unknownNames.length<32)
+    unknownNames.push(name);
    // Observability is bounded; execution is NOT truncated.
    if(names.length<128)names.push(name);
    // Preserve exactly the old safeNpcPhase error boundary and sync order.
@@ -55,11 +73,14 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
    last=Object.freeze({sequence,status,startedAt,
     durationMs:Number.isFinite(endedAt-startedAt)?
      Math.max(0,endedAt-startedAt):0,phaseCount,
-    phaseNames:Object.freeze(names.slice())});
+    phaseNames:Object.freeze(names.slice()),
+    groups:Object.freeze({...groups}),
+    unknownNames:Object.freeze(unknownNames.slice()),
+    source:"DISPATCH_ATTEMPTS_NOT_NATIVE_SETTLEMENT"});
    // Operator telemetry is diagnostic only: never change a game outcome.
    try{onCycle(snapshot().last)}catch(_ignored){}
   }
  }
- return Object.freeze({tick,snapshot});
+ return Object.freeze({tick,snapshot,phaseCatalog:catalog});
 }
 module.exports={createPhaseCoordinator};
