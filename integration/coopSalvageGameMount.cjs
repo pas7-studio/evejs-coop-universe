@@ -91,6 +91,11 @@ function commandInGame(session,eventID,cargoID,action){
       atomic,readWitness:ledger.read,readManifest:manifest.read,
       readOriginalWreckItem:store.getNativeWreckItem,
       listNativeItems:()=>Object.values(items.getAllItems()),
+      readMoveJournal:()=>{
+       const r=require("../gameStore").read("corporationRuntime",
+        "/coopSalvageMoves");
+       return r?.success===true?r.data:null;
+      },
       buildInventoryItem:items.buildInventoryItem,
       verifyPickupPresence,verifyDocking
      })
