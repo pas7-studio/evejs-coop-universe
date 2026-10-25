@@ -9,8 +9,9 @@ function parseTargets(json){
   throw Error("ALIFE_ECONOMY_PRODUCTS_INVALID");
  return values.map(p=>({typeID:p?.typeID,targetStock:p?.targetStock}));
 }
-function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps}={}){
- if(!Array.isArray(products)||!deps)throw Error("NATIVE_ALIFE_RUNTIME_AUTHORITY_REQUIRED");
+function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps,rpcTimeoutMs=5000}={}){
+ if(!Array.isArray(products)||!deps||!Number.isSafeInteger(rpcTimeoutMs)||
+    rpcTimeoutMs<1000||rpcTimeoutMs>15000)throw Error("NATIVE_ALIFE_RUNTIME_AUTHORITY_REQUIRED");
  const {
   worldData,corporationState,corporationRuntime,itemStore,industryStatic,
   industryRuntime,industryParity,gameStore,marketClient
@@ -40,7 +41,13 @@ function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps}={}){
   getBlueprintState:(id,item)=>industryRuntime.getBlueprintState(id,item),
   getMaterials:(def,activity,runs,params)=>
    industryParity.buildIndustryActivityMaterials(def,activity,runs,params),
-  getOrders:(regionID,typeID)=>marketClient.call("GetOrders",{region_id:regionID,type_id:typeID}),
+  getOrders:(regionID,typeID)=>{
+   let timeout;
+   return Promise.race([
+    Promise.resolve().then(()=>marketClient.call("GetOrders",{region_id:regionID,type_id:typeID})),
+    new Promise((_,reject)=>{timeout=setTimeout(()=>reject(Error("NATIVE_RUST_ORDERBOOK_TIMEOUT")),rpcTimeoutMs);})
+   ]).finally(()=>clearTimeout(timeout));
+  },
   getItemVersion:()=>itemStore.getItemMutationVersion()
  });
 }
