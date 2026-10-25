@@ -8,10 +8,11 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings,"coopNativeScanProof"];
 const specs=[
  {file:"server/index.js",patches:[]},
  {file:"server/src/services/machoNet/machoNetService.js",patches:[]},
+ {file:"server/src/services/exploration/scanMgrService.js",patches:[]},
  {file:"server/src/services/contracts/contractRuntimeState.js",patches:[]},
  {file:"server/src/space/combat/killmailTracker.js",patches:[]},
  {file:"server/src/services/evermarks/lpStoreMgrService.js",patches:[]},
@@ -227,6 +228,9 @@ function transform(source,spec,remove){
   text=require("./coop-native-contract-routing-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/evermarks/lpStoreMgrService.js")
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/exploration/scanMgrService.js" ||
+    spec.file==="server/src/services/ship/beyonceService.js")
+  text=require("./coop-native-exploration-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("/space/combat/killmailTracker.js"))
   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
  if(!remove)for(const patch of spec.patches){
