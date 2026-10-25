@@ -230,7 +230,8 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   const e=existing.event;
   if(e.type!=="CONVOY"||e.stage!=="PREPARING"||
    e.phase!=="ACTIVE"||e.systemID!==scene?.systemID||
-   e.entityID!==trip?.haulerIDs?.[0]||
+   !trip?.haulers||Object.keys(trip.haulers).length!==1||
+   e.entityID!==Number(Object.keys(trip.haulers)[0])||
    e.entityID!==fleet?.haulerEntityIDs?.[0]||
    e.stationID!==trip?.stationID||
    trip?.fleetID!==fleet?.fleetID||
