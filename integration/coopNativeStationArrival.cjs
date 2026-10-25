@@ -171,8 +171,13 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    return pause("ESCORT_NATIVE_MOTION_TRIP_NOT_ACTIVE");
   if(active.recovered&&(active.entity!==entity||
    active.ingress!==entity.sessionlessWarpIngress||
-   !vector(active.ingress?.origin)||
-   distance(active.ingress.origin,active.origin)>1))
+   !vector(active.ingress?.origin)||!vector(active.ingress?.targetPoint)||
+   distance(active.ingress.origin,active.origin)>1||
+   distance(active.ingress.targetPoint,{
+    ...active.destination,x:active.destination.x+750})>1||
+   !Number.isFinite(active.ingress.startTimeMs)||
+   !Number.isFinite(active.ingress.travelCompleteAtMs)||
+   now<active.ingress.startTimeMs||now>active.ingress.travelCompleteAtMs))
    return pause("ESCORT_NATIVE_RECOVERY_INGRESS_CHANGED");
   let scene;try{scene=getScene(active.systemID)}
   catch{return pause("ESCORT_NATIVE_MOTION_SCENE_UNAVAILABLE")}
