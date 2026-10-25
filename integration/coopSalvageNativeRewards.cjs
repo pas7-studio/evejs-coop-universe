@@ -14,11 +14,13 @@ const marker=(key,cargoID,wreckItemID)=>
 const copy=x=>JSON.parse(JSON.stringify(x));
 function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
  readManifest,readAcceptedDuo,clock=()=>Date.now(),
- ratePerUnitISK=5,maxRewardISK=1000000}={}){
+ ratePerUnitISK=5,maxRewardISK=1000000,
+ refundAfterMs=3600000}={}){
  if(typeof atomic?.transact!=="function"||
   [isNpcCorporation,readWitness,readManifest,readAcceptedDuo,clock]
   .some(x=>typeof x!=="function")||
-  !pos(ratePerUnitISK)||!pos(maxRewardISK)||maxRewardISK>1000000000)
+  !pos(ratePerUnitISK)||!pos(maxRewardISK)||maxRewardISK>1000000000||
+  !Number.isSafeInteger(refundAfterMs)||refundAfterMs<60000)
   throw Error("SALVAGE_NATIVE_WALLET_AUTHORITIES_REQUIRED");
  function quote(manifestKey){
   if(!/^\d+-\d+-\d+$/.test(String(manifestKey)))return deny("SALVAGE_QUOTE_INVALID_KEY");
@@ -103,7 +105,8 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
      saved.corporationID!==c.corporationID||
      JSON.stringify(saved.characters)!==JSON.stringify(c.characters))
      throw Error("SALVAGE_ESCROW_IDENTITY_CONFLICT");
-    return {status:saved.status==="SETTLED"?"SALVAGE_ALREADY_PAID":"SALVAGE_ALREADY_RESERVED",
+    return {status:saved.status==="SETTLED"?"SALVAGE_ALREADY_PAID":
+     saved.status==="REFUNDED"?"SALVAGE_ALREADY_REFUNDED":"SALVAGE_ALREADY_RESERVED",
      contractID:c.contractID};
    }
    if(Object.keys(l.byContract).length>=512)
@@ -206,6 +209,51 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
     amountISK:c.amountISK,credits:saved.credits,nativeDurable:true};
   })}catch{return deny("SALVAGE_SETTLEMENT_NOT_VERIFIED_OR_UNCERTAIN")}
  }
- return {quote,reserve,verify,settle};
+ // An unused, timed-out contract can release its OWN original escrow
+ // only if EVERY original wreck item still exists and NO pickup receipt exists.
+ // Active salvage in any player ship blocks auto-refund for manual repair.
+ function refundUnstarted(manifestKey){
+  if(!ready())return deny("DISABLED");
+  const c=quote(manifestKey);
+  if(c.status!=="SALVAGE_NATIVE_QUOTE_READY")return c;
+  try{return atomic.transact(["corporationRuntime","npcWreckItems"],tx=>{
+   const l=ledger(tx),saved=l.byContract[c.contractID];
+   if(!saved)return deny("SALVAGE_ESCROW_NOT_RESERVED");
+   if(saved.status==="REFUNDED")
+    return {status:"SALVAGE_ALREADY_REFUNDED",contractID:c.contractID};
+   if(saved.status!=="RESERVED"||saved.corporationID!==c.corporationID||
+    saved.amountISK!==c.amountISK||
+    JSON.stringify(saved.rows)!==JSON.stringify(c.rows))
+    return deny("SALVAGE_ESCROW_NOT_REFUNDABLE");
+   const now=clock();
+   if(!pos(now)||now<saved.reservedAt||
+    now-saved.reservedAt<refundAfterMs)
+    return deny("SALVAGE_ESCROW_REFUND_NOT_DUE");
+   const wrecks=tx.get("npcWreckItems","items");
+   const moves=tx.get("corporationRuntime","coopSalvageMoves");
+   if(!wrecks||c.rows.some(r=>{
+    const w=wrecks[String(r.wreckItemID)];
+    return !w||w.wreckID!==c.wreckID||
+     w.sourceCargoID!==r.cargoID||w.typeID!==r.typeID||
+     w.quantity!==r.quantity||
+     Boolean(moves?.moves?.[manifestKey+":"+r.cargoID]);
+   }))
+    return deny("SALVAGE_STARTED_OR_WRECK_UNVERIFIED");
+   const company=corp(tx,c),sum=cents(c.amountISK);
+   const next=company.balance+sum;
+   if(!Number.isSafeInteger(next))
+    throw Error("SALVAGE_CORP_REFUND_BALANCE_OVERFLOW");
+   company.division.balance=money(next);
+   const e=entry(c,"refund",sum,next,now);
+   company.division.journal=[...company.division.journal,e].slice(-100);
+   company.division.transactions=[...company.division.transactions,e].slice(-2000);
+   tx.put("corporationRuntime",company.key,company.rec);
+   saved.status="REFUNDED";saved.refundedAt=now;
+   tx.put("corporationRuntime",CORP_ESCROWS,l);
+   return {status:"SALVAGE_NATIVE_CORP_ESCROW_REFUNDED",
+    contractID:c.contractID,amountISK:c.amountISK,nativeDurable:true};
+  })}catch{return deny("SALVAGE_NATIVE_REFUND_UNCERTAIN")}
+ }
+ return {quote,reserve,verify,settle,refundUnstarted};
 }
 module.exports={createSalvageNativeRewards};
