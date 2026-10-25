@@ -176,8 +176,8 @@ function installNativeEscorts(){
    getNativeEntity:npcStore.getNativeEntity});
   const fs=require("node:fs"),path=require("node:path");
   const warehouseReceipt=cargoID=>{
-   try{return JSON.parse(fs.readFileSync(path.join(manifestRoot,
-    "receipts",String(cargoID)+".json"),"utf8"))}
+   try{fs.readFileSync(path.join(manifestRoot,
+    "receipts",String(cargoID)+".json"),"utf8");return {exists:true}}
    catch(e){if(e?.code==="ENOENT")return null;throw e}
   };
   const mount=require("./coopEscortNativeMount").installPinnedNative({
