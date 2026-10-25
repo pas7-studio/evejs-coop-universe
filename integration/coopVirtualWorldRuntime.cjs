@@ -52,7 +52,7 @@ function addNpcOrderBlocks(blockedIDs,systemID,owner){
 function npcPersonalGoals(){
  if(process.env.EVEJS_COOP_NPC_PERSONAL_GOALS!=="1"||
     process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1"||
-    process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
+    !alifeOrderArbitrationEnabled(process.env))return null;
  if(!personalGoals)personalGoals=require("./coopNpcPersonalGoals").createPersonalGoals({
   file:process.env.EVEJS_COOP_NPC_GOALS_FILE||"/var/lib/evejs/coop-npc-goals.json"
  });
@@ -434,7 +434,7 @@ function observeNativeAmmoConsumption(){
 function advanceNativeWreckRecovery(){
  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !identityRegistry||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry");
@@ -474,7 +474,7 @@ function advanceNativeWreckCustody(){
  if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   nativeMarketTickRunning||!identityRegistry||!bridge)return;
  const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
   controllers=require("./npc/npcRegistry");
@@ -558,7 +558,7 @@ function advanceNativeWreckCustody(){
 function advanceNativeLootStationDelivery(){
  if(process.env.EVEJS_COOP_NPC_LOOT_COMMERCE!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !identityRegistry||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   controllers=require("./npc/npcRegistry"),
@@ -805,7 +805,7 @@ async function advanceNativeMarket(){
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
   const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
    process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
-   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+   alifeOrderArbitrationEnabled(process.env);
   if(rearmEnabled&&!nativeRearm)
    nativeRearm=require("./coopNpcNativeRearm").createNativeRearm({
     store,registry:identityRegistry,
@@ -1002,7 +1002,7 @@ function advanceNativeCivilianOrders(){
 function advanceNativeAmmoSupply(){
  if(process.env.EVEJS_COOP_NPC_AMMO_SUPPLY!=="1"||
   process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !bridge||!identityRegistry||!world||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry"),
@@ -1090,7 +1090,7 @@ function advanceNativeRaids(){
   // attack loop. Existing native stock mining raid legality still runs first.
   const squadEnabled=process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&
    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&
-   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+   alifeOrderArbitrationEnabled(process.env);
   if(squadEnabled&&!squadDirector)
    squadDirector=require("./coopNpcSquadDirector").createSquadDirector();
   const squads=squadEnabled?squadDirector:null;
