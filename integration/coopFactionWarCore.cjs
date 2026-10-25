@@ -5,6 +5,7 @@ const VERSION=1, MAX_EVENTS=10000, MAX_HISTORY=500;
 const POS=x=>Number.isSafeInteger(x)&&x>0;
 const KEY=x=>typeof x==="string"&&/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(x);
 const clone=x=>structuredClone(x);
+const own=(obj,key)=>Object.prototype.hasOwnProperty.call(obj,key);
 const empty=()=>({version:VERSION,wars:{},territories:{},campaigns:{},enlistments:{},processed:{},history:[]});
 const deny=(reason)=>({status:"BLOCKED",reason});
 function validateState(s){
@@ -18,7 +19,7 @@ function transition(source,command,{now=Date.now(),proofs={}}={}){
  validateState(source);
  if(!command||!KEY(command.eventID)||typeof command.type!=="string"||
   !Number.isSafeInteger(now)||now<=0)return deny("INVALID_COMMAND");
- const signature=JSON.stringify(command),old=source.processed[command.eventID];
+ const signature=JSON.stringify(command),old=own(source.processed,command.eventID)?source.processed[command.eventID]:null;
  if(old)return old.signature===signature?{status:"DUPLICATE",receipt:clone(old.receipt),state:source}:
   deny("EVENT_ID_CONFLICT");
  if(Object.keys(source.processed).length>=MAX_EVENTS)return deny("EVENT_LEDGER_CAP_REACHED");
@@ -29,7 +30,7 @@ function transition(source,command,{now=Date.now(),proofs={}}={}){
  let receipt;
  if(type==="DECLARE_WAR"){
   const {warID,attackerFactionID:a,defenderFactionID:b}=command;
-  if(!KEY(warID)||!POS(a)||!POS(b)||a===b||state.wars[warID])return deny("INVALID_WAR");
+  if(!KEY(warID)||!POS(a)||!POS(b)||a===b||own(state.wars,warID))return deny("INVALID_WAR");
   if(Object.values(state.wars).some(w=>w.state==="ACTIVE"&&
    ((w.attackerFactionID===a&&w.defenderFactionID===b)||
     (w.attackerFactionID===b&&w.defenderFactionID===a))))return deny("WAR_ALREADY_ACTIVE");
@@ -48,7 +49,7 @@ function transition(source,command,{now=Date.now(),proofs={}}={}){
   const war=state.wars[warID],src=state.territories[String(sourceSystemID)],
    dst=state.territories[String(targetSystemID)];
   if(!KEY(campaignID)||!KEY(warID)||!KEY(supplyReservationID)||
-   state.campaigns[campaignID]||!POS(sourceSystemID)||!POS(targetSystemID)||
+   own(state.campaigns,campaignID)||!POS(sourceSystemID)||!POS(targetSystemID)||
    sourceSystemID===targetSystemID||war?.state!=="ACTIVE"||
    src?.militaryControllerFactionID!==war.attackerFactionID||
    dst?.militaryControllerFactionID!==war.defenderFactionID||
