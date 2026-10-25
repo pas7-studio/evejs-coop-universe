@@ -140,7 +140,9 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    let receipt;try{receipt=sendNativeMail(characterID,{
     title:"New Eden: "+e.title,
     body:e.summary+" | System "+e.systemID+" | /events info "+e.id+
-     " | /events interest "+e.id+" | /events watch off",
+     " | /events interest "+e.id+
+     (e.stage==="PREPARING"?" | /events volunteer "+e.id:"")+
+     " | /events watch off",
     eventID:e.id})}catch{blocked++;continue}
    if(receipt?.success!==true||!POS(Number(receipt.messageID))){blocked++;continue}
    sent++;
@@ -159,7 +161,8 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   const entry={v:1,id:event.id,type:event.type,systemID:event.systemID,
    entityID:event.entityID,stationID:POS(event.stationID)?event.stationID:null,
    title:event.title,summary:event.summary,createdAt:n,
-   expiresAt:event.expiresAt,phase:"ACTIVE",source:"NATIVE_VERIFIED"};
+   expiresAt:event.expiresAt,phase:"ACTIVE",source:"NATIVE_VERIFIED",
+   ...(event.type==="CONVOY"&&["PREPARING","EN_ROUTE"].includes(event.stage)?{stage:event.stage}:{})};
   if(!durableNew(eventFile(entry.id),entry))
    return {status:"EVENT_ALREADY_EXISTS_OR_WRITE_UNCERTAIN"};
   // Notification failures cannot retroactively change the authoritative event.
@@ -184,6 +187,69 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    summary:"Native pirate ship "+action.pirateID+" is attacking NPC "+
     action.targetRole+" "+action.targetID+". You can intervene in the real system.",
    expiresAt:n+30*60*1000});
+ }
+
+ // Pre-warp event ID uses a real immutable cargoID, not a retry timer.
+ // The same physical NPC cargo cannot get unlimited new paid offers on restart.
+ function nativeConvoyPreparing({scene,fleet,stationID,cargoIDs}={}){
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1")return {status:"DISABLED"};
+  if(!POS(scene?.systemID)||fleet?.systemID!==scene.systemID||
+   !POS(fleet?.fleetID)||!POS(stationID)||
+   !Array.isArray(fleet.haulerEntityIDs)||fleet.haulerEntityIDs.length!==1||
+   !Array.isArray(cargoIDs)||!cargoIDs.length||
+   cargoIDs.length>1000||cargoIDs.some(x=>!POS(x))||
+   new Set(cargoIDs).size!==cargoIDs.length)
+   return {status:"PREPARING_SOURCE_INVALID"};
+  const haulerID=fleet.haulerEntityIDs[0],ship=scene.getEntityByID?.(haulerID);
+  if(!POS(haulerID)||ship?.nativeNpc!==true||ship.kind!=="ship"||
+   ship.itemID!==haulerID||ship.transient===true)
+   return {status:"PREPARING_NATIVE_HAULER_NOT_PRESENT"};
+  const sourceCargoID=Math.min(...cargoIDs);
+  const eventID="convoy-"+scene.systemID+"-"+fleet.fleetID+"-"+sourceCargoID;
+  const existing=readEvent(eventID),n=nowOK();
+  if(!n)return {status:"CLOCK_INVALID"};
+  if(existing.status==="READY"){
+   const e=existing.event;
+   if(e.type!=="CONVOY"||e.stage!=="PREPARING"||
+    e.systemID!==scene.systemID||e.entityID!==haulerID||
+    e.stationID!==stationID||e.expiresAt<=n||e.phase!=="ACTIVE")
+    return {status:"PREPARING_EVENT_IDENTITY_OR_EXPIRY_CONFLICT"};
+   return {status:"NATIVE_PREPARING_EVENT_READY",id:eventID};
+  }
+  if(existing.status!=="NOT_FOUND")
+   return {status:"PREPARING_JOURNAL_UNTRUSTED"};
+  return publish({id:eventID,type:"CONVOY",stage:"PREPARING",
+   systemID:scene.systemID,entityID:haulerID,stationID,
+   title:"NPC convoy preparing — escort volunteers needed",
+   summary:"Real NPC hauler "+haulerID+" is preparing for station "+stationID+
+    ". Volunteer only if you want to escort it. Two pilots must consent. No ISK promised.",
+   expiresAt:n+2*60*60*1000});
+ }
+ function nativePreparingDeparted({scene,fleet,preparingEventID,trip}={}){
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD!=="1")return {status:"DISABLED"};
+  const existing=readEvent(preparingEventID),n=nowOK();
+  if(existing.status!=="READY"||!n)return {status:"PREPARING_EVENT_NOT_VERIFIED"};
+  const e=existing.event;
+  if(e.type!=="CONVOY"||e.stage!=="PREPARING"||
+   !["ACTIVE","RESOLVED"].includes(e.phase)||e.systemID!==scene?.systemID||
+   !trip?.haulers||Object.keys(trip.haulers).length!==1||
+   e.entityID!==Number(Object.keys(trip.haulers)[0])||
+   e.entityID!==fleet?.haulerEntityIDs?.[0]||
+   e.stationID!==trip?.stationID||
+   trip?.fleetID!==fleet?.fleetID||
+   trip?.systemID!==scene?.systemID||
+   !POS(trip?.startedAt)||!POS(trip?.stationID))
+   return {status:"PREPARING_DEPARTURE_PROVENANCE_MISMATCH"};
+  if(e.phase==="RESOLVED")
+   return e.outcome==="DEPARTED"&&e.linkedTripID===trip.manifestID?
+    {status:"NATIVE_PREPARING_EVENT_CLOSED",id:preparingEventID}:
+    {status:"PREPARING_DEPARTURE_TERMINAL_CONFLICT"};
+  // This flag comes only after the native warpToPoint accepted a real warp.
+  const closed={...e,phase:"RESOLVED",outcome:"DEPARTED",
+   endedAt:n,linkedTripID:trip.manifestID||null};
+  if(!durableReplace(eventFile(preparingEventID),closed))
+   return {status:"PREPARING_DEPARTURE_WRITE_UNCERTAIN"};
+  return {status:"NATIVE_PREPARING_EVENT_CLOSED",id:preparingEventID};
  }
  function nativeConvoy({scene,fleet,route}={}){
   if(route?.status!=="EN_ROUTE"||!POS(scene?.systemID)||
@@ -272,7 +338,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    if(r.status!=="READY")return {status:r.status,message:"[Co-op Events] "+r.status};
    if(!r.events.length)return {status:"READY",message:"[Co-op Events] No verified active events. /events all for whole universe; /events watch local|all|off."};
    return {status:"READY",message:"[Co-op Events] Verified active events:\n"+
-    r.events.map(e=>e.id+" | "+e.title+" | system "+e.systemID+
+    r.events.map(e=>e.id+" | "+(e.stage==="PREPARING"?"[PREPARING] ":"")+e.title+" | system "+e.systemID+
      " | /events info "+e.id).join("\n")};
   }
   if(op==="info"){
@@ -282,8 +348,11 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    return {status:"READY",message:"[Co-op Events] "+e.title+" | "+e.id+
     "\n"+e.summary+"\nSystem: "+e.systemID+
     (e.stationID?" | station: "+e.stationID:"")+
-    "\nTo participate voluntarily: /events interest "+e.id+
-    " then fly to the actual location and use native EVE fleet/warp."};
+    (e.stage==="PREPARING"?
+      "\nTo volunteer before departure: /events interest "+e.id+
+      " then both real fleet pilots in the same system use /events volunteer "+e.id:
+      "\nTo participate voluntarily: /events interest "+e.id+
+      " then fly to the actual location and use native EVE fleet/warp.")};
   }
   if(op==="history"||op==="reputation"){
    return require("./coopEscortReputation").listNativeHistory(session);
@@ -311,7 +380,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   }
   return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events history | /events watch local|all|off"};
  }
- return {publish,nativeRaid,nativeConvoy,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
+ return {publish,nativeRaid,nativeConvoy,nativeConvoyPreparing,nativePreparingDeparted,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
 let singleton;
 function instance(){
@@ -336,4 +405,13 @@ function noteNativeConvoyOutcome(scene,trip,terminal){
  try{return instance().nativeConvoyOutcome({scene,trip,terminal})}
  catch{return {status:"OPPORTUNITY_OUTCOME_UNAVAILABLE"}}
 }
-module.exports={createBoard,handleChat,noteNativeRaid,noteNativeConvoy,noteNativeConvoyOutcome};
+function noteNativeConvoyPreparing(scene,fleet,stationID,cargoIDs){
+ try{return instance().nativeConvoyPreparing({scene,fleet,stationID,cargoIDs})}
+ catch{return {status:"PREPARING_NATIVE_SOURCE_UNAVAILABLE"}}
+}
+function noteNativePreparingDeparted(scene,fleet,preparingEventID,trip){
+ try{return instance().nativePreparingDeparted({scene,fleet,preparingEventID,trip})}
+ catch{return {status:"PREPARING_DEPARTURE_WRITE_UNCERTAIN"}}
+}
+module.exports={createBoard,handleChat,noteNativeRaid,noteNativeConvoy,
+ noteNativeConvoyPreparing,noteNativePreparingDeparted,noteNativeConvoyOutcome};
