@@ -45,7 +45,7 @@ function latestCrew(rows,beforeRow,systemID,requiredIDs=null){
  const disconnected=rows.some(e=>e.event==="disconnect-after-persist"&&
   actual.pilots.some(p=>p.characterID===pos(e.characterID))&&
   before(recent,e)&&before(e,beforeRow));
- return disconnected?null:actual;
+ return disconnected?null:{...actual,observedAt:recent.at};
 }
 function summarize(input,{now=Date.now(),minutes=120}={}){
  const {rows,invalid}=parse(input,{now,minutes});
@@ -91,7 +91,7 @@ function summarize(input,{now=Date.now(),minutes=120}={}){
      return paired&&paired.pilots.some(x=>x.characterID===pos(p.characterID)&&x.shipID===pos(p.shipID));
     })());
    const looters=new Set(loot.map(p=>pos(p.characterID)));
-   const candidate={raid:r,wreck,loot,looters:looters.size,pilots:characters};
+   const candidate={raid:r,wreck,loot,looters:looters.size,pilots:characters,crewAt:originalCrew.observedAt};
    if(!best||candidate.looters>best.looters||
     (candidate.looters===best.looters&&candidate.loot.length>best.loot.length))best=candidate;
   }
@@ -99,7 +99,7 @@ function summarize(input,{now=Date.now(),minutes=120}={}){
  if(!best)return fail("LINKED_WRECK_NOT_EVIDENCED",
   "Confirm the same native attacking pirate's real wreck and persisted items after its raid; an NPC-vs-NPC attack alone is not a player kill",{nativeRaids:raids.length});
  const sequence=[
-  {phase:"TWO_NATIVE_PILOTS_IN_SCENE",at:best.raid._at&&new Date(best.raid._at).toISOString()},
+  {phase:"TWO_NATIVE_PILOTS_IN_SCENE",at:best.crewAt},
   {phase:"NATIVE_PIRATE_ATTACK_ORDER",at:best.raid.at},
   {phase:"PHYSICAL_PIRATE_WRECK_WITH_STORED_ITEMS",at:best.wreck.at},
   ...best.loot.slice(0,6).map(e=>({phase:"NATIVE_LOOT_GRANT_AND_SOURCE_DEBIT",at:e.at}))
