@@ -8,6 +8,12 @@ const count=x=>Number.isSafeInteger(x)&&x>=0;
 const money=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
  Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 const clone=x=>JSON.parse(JSON.stringify(x));
+// SQL-native item moves may bypass itemStore mutation-version bumps. Compare
+// canonical owned item rows too, so post-buy direct SQLite commits are visible.
+const itemProof=items=>JSON.stringify(items.map(i=>[
+ i.itemID,i.typeID,i.ownerID,i.locationID,i.flagID,i.quantity??null,
+ i.stacksize??null,i.singleton??null,i.customInfo??null
+ ]).sort((a,b)=>a[0]-b[0]));
 const reason=(error,extra={})=>({authoritativeNative:false,reason:error,...extra});
 const NATIVE_OP=/^npc-manufacture:[0-9a-f]{32}$/;
 function createStationAuthority({getCorporation,getCorporationRuntime,getStation,getFacility,
@@ -161,6 +167,7 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
    const after=sample(ownerID,stationID,systemID),end=clock();
    if(!count(end)||end<start||end-start>10000||
      before.version!==after.version||before.walletCents!==after.walletCents||
+     itemProof(before.items)!==itemProof(after.items)||
      JSON.stringify(before.jobsForStation)!==JSON.stringify(after.jobsForStation)||
      JSON.stringify(before.ownedEscrow)!==JSON.stringify(after.ownedEscrow))
     throw Error("NATIVE_STATION_AUTHORITY_CHANGED_DURING_READ");
