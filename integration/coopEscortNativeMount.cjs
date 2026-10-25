@@ -156,7 +156,18 @@ function installPinnedNative({readAuthorizedOffer,readPilotConsent,
    sessions:require("../services/chat/sessionRegistry"),
    spaceRuntime:require("./runtime"),
    fleetRuntime:require("../services/fleets/fleetRuntime")});
-  return require("./coopEscortNativeBinding").installServerAuthority(o);
+  // The same authoritative native terminal engine is the ONLY history
+  // writer. Player chat /events history is read-only; it cannot award XP.
+  const reputation=require("./coopEscortReputation").createReputation({
+   root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs",
+   readContract:o.runtime.readContract,
+   verifySettlement:c=>o.runtime.nativeFunds.verifySettlement(c),
+   verifyRefund:c=>o.runtime.nativeFunds.verifyRefund(c),
+   readProof:c=>o.runtime.proof(c)});
+  return require("./coopEscortNativeBinding").installServerAuthority({
+   ...o,
+   recordTerminal:contractID=>reputation.recordVerified(contractID)
+  });
  }catch{return deny("NATIVE_RUNTIME_MOUNT_UNAVAILABLE")}
 }
 module.exports={createNativeMount,installPinnedNative};
