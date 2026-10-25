@@ -1,11 +1,50 @@
 # FW-001 — Faction Warfare authoritative state (first code slice)
 
-Status: **source implemented, not deployed.** 10 isolated Node tests passed locally on the corresponding source. **Real EveJS SQLite / NPC / two-client gate not yet executed.**
+Status: **source implemented, not deployed.** 21 isolated Node tests passed locally across FW-001/002 on the corresponding source. **Real EveJS SQLite / NPC / two-client gate not yet executed.**
 
 ## Delivered
 - `integration/coopFactionWarCore.cjs`: pure fail-closed transitions for territory registration, declaration of war, supply-gated campaign, deployed assault, proven objectives, military-only occupation, verified ceasefire and per-character militia enlist/leave with cooldown.
 - `integration/coopFactionWarStore.cjs`: native GameStore transactional boundary, one namespaced `corporationRuntime` record, source-event replay protection, default-OFF `EVEJS_COOP_FACTION_WAR=1` gate.
 - `tests/coop-faction-war-core.test.mjs`, `tests/coop-faction-war-store.test.mjs`: negative proofs, state transitions, replay/conflict, disabled state and write failures.
+
+## FW-002 native militia agent (source-level, NOT gameplay-verified)
+New files: `coopFactionWarAgent.cjs`, `coopFactionWarNativeProofs.cjs`,
+`scripts/coop-faction-war-agent-patch.cjs`. The existing stock
+`agentMgrService.Handle_DoAction` and mission briefing are extended by
+reversible one-call hooks. The militia handler runs before the existing
+corporate convoy handler, but an actual native agent mission wins before both.
+
+Only an authenticated, unique live character session docked at the
+**actual SDE agent station** can receive the faction offer. The SDE
+agent's corporation must resolve to a real faction with a real
+`militiaCorporationID`. Only operator-allowlisted faction IDs are eligible.
+Native faction standing >=0 is required for enlistment, not for resignation.
+The request-local proof is checked again at the atomic transition.
+
+Flags, all default OFF:
+- `EVEJS_COOP_NATIVE_ATOMIC_ROWS=1` (existing native SQLite safety gate)
+- `EVEJS_COOP_FACTION_WAR=1` (domain state gate)
+- `EVEJS_COOP_FACTION_MILITIA_AGENT=1` (stock agent dialogue)
+- `EVEJS_COOP_MILITIA_FACTION_IDS=<comma-separated native SDE faction IDs>`
+  (empty means no faction can recruit).
+
+The native stock client action `Accept` enlists a character. On an
+already active matching service desk the stock `Decline` action explicitly
+ends militia service with a 24-hour cooldown. This is an MVP compromise
+using stock button labels; richer leave UX requires pinned-client
+verification. Neither action modifies the character's real corporation
+membership, NPC ownership, inventory, standing or ISK.
+
+`coopFactionWarNativeProofs` provides canonical native identity,
+SDE territory ownership and bidirectional stargate checks. It refuses
+supply, fleet deployment, objective, capture and ceasefire proof until
+those subsystems exist. Real war declaration also requires an explicit
+trusted operator-side `allowDeclaration` callback; no automatic
+declaration from merely seeing two faction IDs.
+
+**DO NOT enable these flags on the live server based only on source tests.**
+The pinned AgentMgr/EVE client dialogue and real GameStore SQLite still
+require local gameplay/transaction acceptance.
 
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
