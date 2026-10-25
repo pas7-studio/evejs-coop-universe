@@ -13,7 +13,7 @@ const keyOK = x => typeof x === "string" && /^escort-[a-zA-Z0-9-]{1,48}$/.test(x
 const manifestOK = x => typeof x === "string" && /^[0-9]+-[0-9]+-[0-9]+$/.test(x);
 const isErr = (e,code) => e && e.code === code;
 function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authorizeOffer,
- readManifest,verifyManifest,readIncidents,readOutcomes,readNativeDelivery,nativeFunds,readPrefunded=null}={}) {
+ readManifest,verifyManifest,readIncidents,readOutcomes,readNativeDelivery,nativeFunds,readPrefunded=null,readNativeFailure=null}={}) {
  if(typeof root!=="string" || !path.isAbsolute(root) ||
   [authorizeOffer,readManifest,verifyManifest,readIncidents,readOutcomes,
    readNativeDelivery].some(fn=>typeof fn!=="function") ||
@@ -51,13 +51,14 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
   const contract=events[0].contract;
   if(!valid(contract)||contract.contractID!==contractID)
    return status("CONTRACT_JOURNAL_CORRUPT");
-  const transitions={OFFERED:"FUNDING_PREPARED",FUNDING_PREPARED:"FUNDED",
-   FUNDED:"SETTLEMENT_PREPARED",SETTLEMENT_PREPARED:"SETTLED"};
+  const transitions={OFFERED:["FUNDING_PREPARED"],FUNDING_PREPARED:["FUNDED"],
+   FUNDED:["SETTLEMENT_PREPARED","REFUND_PREPARED"],SETTLEMENT_PREPARED:["SETTLED"],
+   REFUND_PREPARED:["REFUNDED"]};
   let phase="OFFERED";
   for(let i=0;i<events.length;i++){
    const ev=events[i];
    if(ev?.v!==1||ev.contractID!==contractID||!Number.isSafeInteger(ev.at)||ev.at<=0||
-    (i===0?ev.phase!=="OFFERED":ev.phase!==transitions[phase])||
+    (i===0?ev.phase!=="OFFERED":!transitions[phase]?.includes(ev.phase))||
     (i>0 && Object.keys(ev).some(k=>!["v","phase","contractID","at"].includes(k))))
     return status("CONTRACT_JOURNAL_CORRUPT");
    phase=ev.phase;
@@ -276,6 +277,78 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    release();return {status:"SETTLED",contractID,credits:paid.credits};
   });
  }
- return {create,fund,attachPrefunded,settle,read,proof};
+ function refund(contractID){
+  if(process.env.EVEJS_COOP_ESCORT_CONTRACTS!=="1"||
+    process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")return status("DISABLED");
+  if(!keyOK(contractID))return status("CONTRACT_ID_INVALID");
+  if(typeof readNativeFailure!=="function"||
+   typeof nativeFunds?.refundAtomic!=="function"||
+   typeof nativeFunds?.verifyRefund!=="function")
+   return status("REFUND_NATIVE_AUTHORITIES_UNAVAILABLE");
+  return guarded(contractID,release=>{
+   const state=read(contractID);
+   if(state.status!=="READY"){release();return state}
+   if(state.phase!=="FUNDED"){release();return status("CONTRACT_REFUND_NOT_REPLAYABLE")}
+   if(!capabilities()){release();return status("ATOMIC_NATIVE_WALLET_PROVIDER_UNAVAILABLE")}
+   const c=state.contract;
+   let failure,previous,payout,delivery;
+   try{
+    failure=readNativeFailure(c);
+    previous=nativeFunds.verifyRefund(c);
+    payout=nativeFunds.verifySettlement(c);
+    delivery=readNativeDelivery(c);
+   }catch{release();return status("REFUND_PREFLIGHT_AUTHORITY_UNAVAILABLE")}
+   if(failure?.status!=="DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE"||
+    failure.contractID!==c.contractID||
+    failure.manifestKey!==c.manifestKey||
+    failure.corporationID!==c.corporationID||
+    !positive(failure.failureWitnessID)||
+    !["NATIVE_HAULER_WRECK","NATIVE_PREWARP_CANCELLED"].includes(failure.reason)||
+    failure.nativeDurable!==true||
+    failure.deliveryImpossible!==true||failure.noPriorPayout!==true){
+    release();return status("NATIVE_REFUND_FAILURE_NOT_PROVEN");
+   }
+   if(delivery?.status==="DELIVERED"){
+    release();return status("NATIVE_DELIVERY_ALSO_PRESENT_REFUND_BLOCKED");
+   }
+   // A failed read is NOT proof of no delivery; only explicit not-delivered.
+   if(delivery?.status!=="FLIGHT_TERMINAL_DELIVERY_NOT_PERSISTED"&&
+      delivery?.status!=="NOT_DELIVERED"){
+    release();return status("NATIVE_DELIVERY_STATE_UNKNOWN_REFUND_BLOCKED");
+   }
+   if(previous?.status!=="NOT_FOUND"||payout?.status!=="NOT_FOUND"){
+    release();return status("REFUND_PREFLIGHT_FUNDS_ALREADY_CONSUMED");
+   }
+   if(!append(file(contractID),{v:1,contractID,phase:"REFUND_PREPARED",at:clock()}))
+    return status("REFUND_PREPARE_UNCERTAIN");
+   try{nativeFunds.refundAtomic(c)}catch{}
+   let receipt;try{receipt=nativeFunds.verifyRefund(c)}catch{}
+   if(receipt?.status!=="REFUNDED"||receipt.nativeDurable!==true||
+    receipt.contractID!==c.contractID||
+    receipt.corporationID!==c.corporationID||
+    receipt.amountISK!==c.amountISK||
+    receipt.failureWitnessID!==failure.failureWitnessID||
+    receipt.reason!==failure.reason)
+    return status("REFUND_NATIVE_COMMIT_UNCERTAIN_REPAIR_REQUIRED");
+   if(!append(file(contractID),{v:1,contractID,phase:"REFUNDED",at:clock()}))
+    return status("REFUND_JOURNAL_UNCERTAIN_REPAIR_REQUIRED");
+   release();return {status:"REFUNDED",contractID,amountISK:c.amountISK};
+  });
+ }
+ function inspectRefundRecovery(contractID){
+  const state=read(contractID);
+  if(state.status!=="READY")return state;
+  if(state.phase!=="REFUND_PREPARED")return status("NO_REFUND_RECOVERY_PENDING");
+  if(typeof nativeFunds?.verifyRefund!=="function")
+   return status("REFUND_NATIVE_AUTHORITY_UNAVAILABLE");
+  let receipt;try{receipt=nativeFunds.verifyRefund(state.contract)}catch{
+   return status("REFUND_NATIVE_OUTCOME_UNKNOWN")}
+  if(receipt?.status==="REFUNDED"&&receipt.nativeDurable===true&&
+   receipt.contractID===contractID&&receipt.corporationID===state.contract.corporationID&&
+   receipt.amountISK===state.contract.amountISK)
+   return {status:"REFUND_APPLIED_JOURNAL_UNFINISHED_MANUAL_REPAIR",contractID};
+  return status("REFUND_OUTCOME_UNCERTAIN_DO_NOT_RETRY");
+ }
+ return {create,fund,attachPrefunded,settle,refund,inspectRefundRecovery,read,proof};
 }
 module.exports={createEscortContractSettlement};
