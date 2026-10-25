@@ -4,12 +4,14 @@
 const {createNpcCorporateBuyer}=require("./coopNpcCorporateBuyerAtomic"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {verifyNativeBookAsk,normalizeNativeOrderForCoordinator}=require("./coopNpcRustOrderAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {createNativeNpcSellerTaxQuote}=require("./coopNpcSellerTaxAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const count=x=>Number.isSafeInteger(x)&&x>=0;
 const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
  Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
- getStation,resolveActor,readNeeds,file,clock=()=>Date.now(),env=process.env}={}){
+ getStation,resolveActor,readNeeds,file,marketRules,
+ clock=()=>Date.now(),env=process.env}={}){
  if(typeof gameStore?.read!=="function"||
     typeof gameStore?.coopAtomicNativeRows?.transact!=="function"||
     typeof itemStore?.listOwnedItems!=="function"||
@@ -59,8 +61,15 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   inspectClaim:({claimKey})=>marketClient.call("GetNpcCorpPlayerClaim",{
    claim_key:claimKey})
  };
+ // Exact native market tax from EveJS (skills + location discounts).
+ // Only a validated native context authorizes seller net proceeds.
+ const rules=marketRules||require("../services/market/marketRules");
+ const quoteSellerTax=createNativeNpcSellerTaxQuote({
+  getMarketContext:rules?.getMarketContext,
+  computeSalesTaxAmount:rules?.computeSalesTaxAmount});
  const buyer=createNpcCorporateBuyer({gameStore:gameStore.coopAtomicNativeRows,
-  market,verifyBuyerCorporation:verifyCorp,verifyPlayerSeller:verifySeller,clock});
+  market,verifyBuyerCorporation:verifyCorp,verifyPlayerSeller:verifySeller,
+  quoteSellerTax,clock});
  const actor=id=>resolveActor(id);
  async function readProof(ownerID,stationID,typeID){
   const station=getStation(stationID);
