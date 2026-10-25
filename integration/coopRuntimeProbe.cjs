@@ -5,6 +5,15 @@
 const fs = require("node:fs");
 const path = require("node:path");
 let lastWarning = "";
+// Opt-in, additive subscribers (e.g. the ALIFE news digest). They receive the
+// exact record that was appended, can never change it, and are isolated so a
+// broken listener cannot stop telemetry.
+const subscribers = new Set();
+function subscribe(listener) {
+  if (typeof listener !== "function") return () => {};
+  subscribers.add(listener);
+  return () => subscribers.delete(listener);
+}
 function positive(value){const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:null;}
 function describe(session,ship){
   return {
@@ -38,6 +47,10 @@ function observe(event,session,ship,extra={}){
     fs.mkdirSync(path.dirname(destination),{recursive:true});
     fs.appendFileSync(destination,JSON.stringify(record)+"\n",{encoding:"utf8",flag:"a"});
     lastWarning="";
+    // Listeners get the record after it is durable; failures are isolated.
+    for(const listener of subscribers){
+      try{listener(record);}catch(_ignored){}
+    }
     return true;
   } catch(err) {
     // Optional diagnostics must NEVER interrupt login, disconnect or combat.
@@ -46,4 +59,4 @@ function observe(event,session,ship,extra={}){
     return false;
   }
 }
-module.exports={observe};
+module.exports={observe,subscribe};

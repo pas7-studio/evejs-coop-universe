@@ -215,6 +215,8 @@ if ($LivingCoop) {
   if ($Alife) {
     # ALIFE-1: one master switch implies native order arbitration.
     $yamlLines += "      EVEJS_COOP_ALIFE: '1'"
+    # Short in-client digest of already-observed native events (throttled).
+    $yamlLines += "      EVEJS_COOP_ALIFE_NEWS: '1'"
   }
   if ($AlifeTrace) {
     # Blockers are data: name the reason instead of a silent skip.

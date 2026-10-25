@@ -5,6 +5,24 @@ const {waypoints}=require("./coopNpcTopology");
 const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const valid=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinite(p[k]));
+
+// Real player ships currently on grid. A scheduled civilian route must never
+// warp an NPC out from under a player who just flew up to it: the client sees
+// the ship simply vanish. Sessions are the only honest source of "a human is
+// here", so ghost/disconnected sessions are ignored.
+function playerShipPositions(scene){
+ const out=[];
+ try{
+  for(const session of scene?.sessions?.values?.()||[]){
+   const shipID=positive(session?._space?.shipID);
+   if(!shipID||session?.socket?.destroyed===true)continue;
+   const ship=scene.getEntityByID?.(shipID);
+   if(ship&&ship.kind==="ship"&&valid(ship.position))out.push(ship.position);
+  }
+ }catch{}
+ return out;
+}
+
 function routeForRole(scene,role){
  const all=waypoints(scene);
  const select=kinds=>all.filter(w=>kinds.includes(w.kind));
@@ -21,11 +39,19 @@ function routeForRole(scene,role){
   default:return select(["station","stargate","asteroidBelt"]).slice(0,4);
  }
 }
-function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dwellMs=120000}){
+function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dwellMs=120000,playerHoldMeters=0,playerHoldRetryMs=15000,playerHoldRoles=["pirate"]}){
  if(typeof sceneForSystem!=="function"||typeof warp!=="function"||typeof orbit!=="function")throw Error("native scene and movement required");
+ const holdRoles=new Set(Array.isArray(playerHoldRoles)?playerHoldRoles:["pirate"]);
  const history=new Map();
  function tick(assignments,roles={},options={}){
   const result=[];
+  const playersBySystem=new Map();
+  const playersFor=system=>{
+   if(!(playerHoldMeters>0))return [];
+   if(!playersBySystem.has(system))
+    playersBySystem.set(system,playerShipPositions(sceneForSystem(system)));
+   return playersBySystem.get(system);
+  };
   for(const assignment of assignments||[]){
    const system=positive(assignment.systemID),id=positive(assignment.entityID);
    if(!system||!id||options.blockedIDs?.has(id))continue;
@@ -56,6 +82,13 @@ function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dw
    if(!target)continue;
    let order=null,action="";
    if(distance(ship.position,target.position)>250000){
+    // A player on grid means an enemy stays: no scheduled warp out, so a fight
+    // cannot be cancelled by a timer. Civilians keep their own routes.
+    if(holdRoles.has(role)&&playersFor(system).some(p=>distance(ship.position,p)<=playerHoldMeters)){
+     previous.nextAt=clock()+playerHoldRetryMs;
+     history.set(key,previous);
+     continue;
+    }
     action="warp";order=warp(id,{...target.position},{targetEntityID:target.id});
    }else if(id!==target.id){
     action="orbit";order=orbit(id,target.id,role==="miner"?12000:15000);
