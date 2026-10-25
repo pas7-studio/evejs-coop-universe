@@ -4,7 +4,7 @@ import fs from "node:fs";import os from "node:os";import path from "node:path";
 import {DatabaseSync} from "node:sqlite";import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createSqliteAdapter,createGameStoreAdapter,reconcileObject}=require("../integration/coopGameStoreAtomic.cjs");
-const SEP="\u001f",names=["items","corporationRuntime","industryBlueprintState","industryJobs","identityState"];
+const SEP="\u001f",names=["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState"];
 function fixture(){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop-game-store-"));
  const db=new DatabaseSync(path.join(dir,"gamestore.sqlite"));
@@ -12,6 +12,7 @@ function fixture(){
  const put=(t,k,v)=>db.prepare('INSERT INTO "'+t+'"(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(String(k),JSON.stringify(v));
  put("items","91",{itemID:91,ownerID:1001,locationID:500,quantity:1});
  put("items","92",{itemID:92,ownerID:1001,locationID:500,quantity:10});
+ put("characters","701",{characterID:701,balance:100,balanceChange:0,walletJournal:[]});
  put("corporationRuntime","corporations"+SEP+"1001",{corporationID:1001,wallet:{divisions:{"1000":{balance:300}}}});
  put("industryBlueprintState","records"+SEP+"91",{itemID:91,original:true,jobID:null});
  put("industryJobs","_meta",{nextJobID:970000000000000});put("industryJobs","jobs",{});
@@ -158,4 +159,19 @@ test("SQLite writer refuses mutations with atomic feature disabled",()=>run(f=>{
  delete process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
  assert.throws(()=>direct.transact(["items"],tx=>tx.del("items","92")),/NATIVE_SQLITE_ATOMIC_DISABLED/);
  assert.deepEqual(f.snapshot(),before);
+}));
+
+test("character cache record reference changes after native GameStore wallet commit",()=>run(f=>{
+ const table=f.cache.characters,oldRecord=table["701"];
+ const memo={rawRecord:oldRecord,normalized:{balance:oldRecord.balance}};
+ assert.equal(memo.rawRecord,table["701"]);
+ f.bridge.transact(["characters"],tx=>{
+   const row=tx.get("characters","701");row.balance+=250;
+   tx.put("characters","701",row);
+ });
+ assert.equal(f.cache.characters,table);
+ assert.notEqual(table["701"],oldRecord);
+ assert.equal(table["701"].balance,350);
+ assert.notEqual(memo.rawRecord,table["701"]);
+ assert.equal(f.db.prepare('SELECT json FROM "characters" WHERE key=?').get("701").json.includes('"balance":350'),true);
 }));
