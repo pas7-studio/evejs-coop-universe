@@ -12,7 +12,7 @@ for(const k of Object.keys(old))process.env[k]="1";
 const copy=x=>JSON.parse(JSON.stringify(x));
 function fixture(fn){
  let time=1000000,loss=true,warp=0,orbit=0,shipAt=0,rollback=false;
- let db={npcEntities:{"entities\\u001f2002":{entityID:2002,systemID:30000144,
+ let db={npcEntities:{"entities\u001f2002":{entityID:2002,systemID:30000144,
     corporationID:20002,transient:false}},
   npcWreckItems:{items:{"8201":{wreckItemID:8201,wreckID:8001,
     sourceKind:"cargo",sourceCargoID:5501,sourceOriginalQuantity:8,
