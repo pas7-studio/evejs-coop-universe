@@ -145,7 +145,7 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
   let interested,volunteer,accept;
   try{
    interested=dispatch({session,command:"events",argumentText:"interest "+id});
-   if(!["INTEREST_RECORDED","ALREADY_INTERESTED_OR_WRITE_UNCERTAIN"].includes(interested?.status)){
+   if(!["INTEREST_RECORDED","INTEREST_ALREADY_DURABLY_RECORDED"].includes(interested?.status)){
     return reply(render(j,"Cannot register your interest: "+(interested?.status||"unavailable")),[[3,3],[1,1]]);
    }
    volunteer=dispatch({session,command:"events",argumentText:"volunteer "+id});
