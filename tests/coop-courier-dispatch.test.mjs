@@ -194,3 +194,19 @@ test('the live numeric contract type 3 is recognised as a courier contract',()=>
  assert.equal(isCourierContract({contractType:'courier'}),true);
  assert.equal(isCourierContract({type:7}),false);
 });
+
+test('the exact live item and character shapes are accepted',()=>{
+ // Copied from the real rows: items use locationID/flagID/capacity and the
+ // character record carries stationID/balance. Anything else must still work.
+ const liveShip={itemID:9988400100000,typeID:20185,ownerID:140000100,locationID:60003760,flagID:4,quantity:-1,stacksize:1,singleton:1,capacity:465000};
+ const liveCharacter={characterID:140000100,accountId:901,stationID:60003760,balance:25000000,corporationID:98000001};
+ const contract=courier({volume:29500,collateral:300000});
+ const ready=evaluateCourierIdentity({character:liveCharacter,ship:liveShip},contract);
+ assert.equal(ready.status,'READY');
+ assert.equal(ready.capacityM3,465000);
+ const elsewhere=evaluateCourierIdentity({character:liveCharacter,ship:{...liveShip,locationID:60009999}},contract);
+ assert.equal(elsewhere.status,'REFUSED_SHIP_NOT_AT_ORIGIN');
+ assert.equal(elsewhere.shipStationID,60009999);
+ const fitted=evaluateCourierIdentity({character:liveCharacter,ship:{...liveShip,flagID:0}},contract);
+ assert.equal(fitted.status,'REFUSED_SHIP_NOT_IN_HANGAR');
+});

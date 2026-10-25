@@ -313,14 +313,22 @@ function evaluateCourierIdentity(identity, contract) {
       characterID: Number(character.characterID),
     });
   }
-  if (Number(ship.stationID) !== originStationID) {
+  // A real item row has locationID, not stationID: reading stationID alone made
+  // every real ship look like it was somewhere else.
+  const shipLocationID = Number(ship.locationID || ship.stationID) || 0;
+  if (shipLocationID !== originStationID) {
     return status("REFUSED_SHIP_NOT_AT_ORIGIN", {
       contractID,
-      shipStationID: Number(ship.stationID) || 0,
+      shipStationID: shipLocationID,
       originStationID,
     });
   }
-  const capacityM3 = Number(ship.capacityM3) || 0;
+  // 4 is the hangar flag; an assembled or fitted ship is not a cargo hauler.
+  if (ship.flagID !== undefined && Number(ship.flagID) !== 4) {
+    return status("REFUSED_SHIP_NOT_IN_HANGAR", { contractID, flagID: Number(ship.flagID) });
+  }
+  // A real item row carries capacity, not capacityM3.
+  const capacityM3 = Number(ship.capacityM3 || ship.capacity) || 0;
   const volumeM3 = Number(contract && contract.volume) || 0;
   if (capacityM3 < volumeM3) {
     return status("REFUSED_SHIP_TOO_SMALL", { contractID, capacityM3, volumeM3 });
