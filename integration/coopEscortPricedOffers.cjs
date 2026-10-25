@@ -204,6 +204,7 @@ function createPricedOffers({root,io=fs,clock=()=>Date.now(),readEvent,
   const r=readAccepted(eventID);if(r.status!=="DURABLE_TWO_PILOT_PAID_ACCEPTANCE")
    return fail("PAID_DUO_ACCEPTANCE_NOT_COMPLETE");
   const q=r.quote;
+  if(q.expiresAt<=clock())return fail("PAID_QUOTE_EXPIRED_BEFORE_NATIVE_ESCROW");
   if(q.systemID!==systemID||q.fleetID!==fleetID||
    q.stationID!==stationID||q.corporationID!==corporationID||
    q.haulerID!==haulerID||!same(q.cargoIDs,ids))
@@ -240,5 +241,29 @@ function approvedForManifest(route){
  return authority?authority.acceptedForManifest(route):
   fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
 }
+function readNativeAccepted(eventID){
+ return authority?authority.readAccepted(eventID):
+  fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
+}
+function consentForManifest({manifestKey,contractID,haulerID,systemID,
+ playerFleetID,characters}={}){
+ if(!authority)return fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
+ if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+  return fail("MANIFEST_KEY_INVALID");
+ // Look up original route through its authentic prewarp manifest.
+ // The caller must supply station, corporation and NPC fleet from the
+ // same immutable source; they are not inferred from the chat session.
+ const route=arguments[0];
+ const a=authority.acceptedForManifest(route);
+ if(a.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING"||
+  a.contractID!==contractID||a.haulerID!==haulerID||
+  a.systemID!==systemID||a.playerFleetID!==playerFleetID||
+  !same(a.characters,characters))
+  return fail("PRICED_DUO_CONSENT_NOT_VERIFIED");
+ return {status:"DURABLE_TWO_PILOT_CONSENT",manifestKey,
+  contractID,haulerID,systemID,fleetID:playerFleetID,
+  characters:a.characters.slice()};
+}
+
 module.exports={createPricedOffers,installServerAuthority,offerFromNative,
- readVisibleQuote,acceptInGame,approvedForManifest};
+ readVisibleQuote,acceptInGame,approvedForManifest,readNativeAccepted,consentForManifest};
