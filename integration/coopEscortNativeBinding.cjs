@@ -10,7 +10,7 @@ const deny=status=>({status});
 const enabled=()=>flags.every(k=>process.env[k]==="1");
 function makeBinding({runtime,readNativeIncident}={}){
  if(!runtime||typeof readNativeIncident!=="function"||
-  ["fundBeforeWarp","recordDelivery","finishAfterRaid","refundProvenLoss",
+  ["fundBeforeWarp","recordDelivery","finishAfterRaid","settlePeacefulFlight","refundProvenLoss",
    "readFlight","inspectRefundRecovery","refundWreckedFlight"].some(k=>typeof runtime[k]!=="function")||
   runtime.nativeFunds?.capabilities?.().nativeDurable!==true||
   runtime.nativeFunds?.capabilities?.().atomicDualCredit!==true)
@@ -34,6 +34,14 @@ function makeBinding({runtime,readNativeIncident}={}){
     return deny("NATIVE_TERMINAL_ROUTE_UNVERIFIED");
    try{return runtime.recordDelivery(args)}
    catch{return deny("NATIVE_TERMINAL_WRITE_UNCERTAIN_REPAIR_REQUIRED")}
+  },
+  settlePeacefulDelivery(manifestKey){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+    return deny("NATIVE_MANIFEST_KEY_INVALID");
+   try{return runtime.settlePeacefulFlight(manifestKey)}
+   catch{return deny("NATIVE_PEACEFUL_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
   },
   settleVerifiedNativeRaid(manifestKey){
    if(!enabled())return deny("DISABLED");
@@ -82,6 +90,8 @@ const forwarding=Object.freeze({
  fundBeforeWarp:route=>enabled()?(installed?installed.fundBeforeWarp(route):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordDelivered:args=>enabled()?(installed?installed.recordDelivered(args):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ settlePeacefulDelivery:key=>enabled()?(installed?installed.settlePeacefulDelivery(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
