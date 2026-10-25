@@ -184,3 +184,24 @@ test("inspecting a wreck at 5km is not automatically a valid 2.5km cargo pickup"
   assert.equal(f.create().transfer(f.input()).status,"NATIVE_WRECK_OR_SHIP_UNVERIFIED");
  }finally{f.cleanup();}
 });
+
+test("crash between native source debit and durable DEBIT marker never mints cargo",()=>{
+ const f=fixture();const original=fs.renameSync;
+ let writes=0;
+ try{
+  fs.renameSync=(from,to)=>{
+   writes++;
+   if(writes===2)throw Error("SIMULATED_DEBIT_CONFIRMATION_DISK_FAULT");
+   return original(from,to);
+  };
+  const first=f.create().transfer(f.input());
+  fs.renameSync=original;
+  assert.equal(first.status,"NATIVE_CUSTODY_REPAIR_REQUIRED");
+  assert.equal(f.sources.size,0);
+  assert.equal(f.cargo.size,0);
+  const attempt=f.create();
+  assert.equal(attempt.recover().status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(attempt.transfer(f.input()).status,"PREPARED_REQUIRES_REPAIR");
+  assert.equal(f.cargo.size,0);
+ }finally{fs.renameSync=original;f.cleanup();}
+});
