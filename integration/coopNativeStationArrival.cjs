@@ -119,6 +119,12 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   probe.observe("living-npc-station-warp-requested",null,{spaceState:{systemID}},
    {fleetID,stationID:destination.stationID,haulers:ships.length});
+  // Publish the actual native started convoy; no promise of a paid contract.
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1"){
+   try{require("./coopWorldOpportunityBoard").noteNativeConvoy(
+    scene,fleet,{status:"EN_ROUTE",stationID:destination.stationID})}
+   catch(error){console.warn("[CoopOpportunityBoard] convoy",String(error?.message||error).slice(0,120))}
+  }
   return {status:"EN_ROUTE",terminal:false,stationID:destination.stationID};
  }
  function tick(scene,fleet,now=clock()){
