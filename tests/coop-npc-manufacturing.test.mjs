@@ -8,7 +8,7 @@ const require=createRequire(import.meta.url);
 const {createPlanner}=require('../integration/coopNpcManufacturingPlanner.cjs');
 const {createJournal}=require('../integration/coopNpcManufacturingJournal.cjs');
 const OWNER=1000010,STATION=60000001,AMMO=215,BP=1234;
-function fixture({stock=0,minerals=100,blueprint=true,busy=false,corp=true,facility=true,jobs=[],category=8,material=20}={}){
+function fixture({stock=0,minerals=100,blueprint=true,busy=false,corp=true,facility=true,jobs=[],category=8,material=20,itemsOverride=null}={}){
  const items=[{itemID:56,ownerID:OWNER,locationID:STATION,flagID:4,typeID:35,categoryID:4,quantity:minerals},
   {itemID:72,ownerID:OWNER,locationID:STATION,flagID:4,typeID:AMMO,categoryID:8,quantity:stock}];
  if(blueprint)items.push({itemID:91,ownerID:OWNER,locationID:STATION,flagID:4,typeID:BP,categoryID:9,singleton:1,quantity:1});
@@ -18,7 +18,7 @@ function fixture({stock=0,minerals=100,blueprint=true,busy=false,corp=true,facil
   getBlueprintDefinition:id=>id===AMMO?{blueprintTypeID:BP,productTypeID:AMMO,activities:{manufacturing:{}}}:null,
   getIndustryActivity:()=>({products:[{typeID:AMMO,quantity:100}],materials:[{typeID:35,quantity:material}]}),
   buildMaterials:()=>[{typeID:35,quantity:material}],getBlueprintStates:()=>({records:{91:{typeID:BP,original:true,jobID:busy?5:null,materialEfficiency:0}}}),
-  listOwnerItems:()=>items,listJobs:()=>jobs,getType:()=>({typeID:AMMO,categoryID:category})});
+  listOwnerItems:()=>itemsOverride||items,listJobs:()=>jobs,getType:()=>({typeID:AMMO,categoryID:category})});
 }
 const args=overrides=>({ownerID:OWNER,stationID:STATION,productTypeIDs:[AMMO],targetStock:{[AMMO]:500},marketStock:{[AMMO]:0},...overrides});
 test('real native blueprint + available minerals gives one starter-ammo proposal',()=>{
@@ -32,6 +32,22 @@ test('proposal is read-only and does not use stock as sellable products',()=>{
 });
 test('missing minerals yields no jobs, never free goods',()=>{
  const p=fixture({minerals:19}).plan(args());assert.equal(p.status,'NO_ELIGIBLE_JOB');assert.equal(p.blocked[0].reason,'NEEDS_MINERALS');
+});
+test('negative or fractional native mineral stack blocks new paid manufacturing work',()=>{
+ const negative=fixture({minerals:-3}).plan(args());
+ assert.equal(negative.status,'NATIVE_ITEM_PROVENANCE_UNVERIFIED');
+ const fractional=fixture({minerals:0.5}).plan(args());
+ assert.equal(fractional.status,'NATIVE_ITEM_PROVENANCE_UNVERIFIED');
+});
+test('two physical items claiming the same native itemID never double-count stock',()=>{
+ const ownerItems=[
+  {itemID:56,ownerID:OWNER,locationID:STATION,flagID:4,typeID:35,categoryID:4,quantity:100},
+  {itemID:56,ownerID:OWNER,locationID:STATION,flagID:4,typeID:35,categoryID:4,quantity:100},
+  {itemID:91,ownerID:OWNER,locationID:STATION,flagID:4,typeID:BP,categoryID:9,singleton:1,quantity:1}
+ ];
+ const p=fixture({itemsOverride:ownerItems}).plan(args());
+ assert.equal(p.status,'NATIVE_ITEM_PROVENANCE_UNVERIFIED');
+ assert.equal(p.jobs.length,0);
 });
 test('missing blueprint blocks manufacturing',()=>{
  const p=fixture({blueprint:false}).plan(args());assert.equal(p.blocked[0].reason,'REAL_ORIGINAL_BLUEPRINT_REQUIRED');
