@@ -117,6 +117,15 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    return true;
   });
  }
+ function assertStationClear(stationID){
+  return withLock(()=>{
+   if(!natural(stationID))throw Error("P2P_SETTLEMENT_STATION_INVALID");
+   for(const row of records().values())
+    if(row.phase!=="SETTLED"&&row.proof.stationID===stationID)
+     throw Error("P2P_SETTLEMENT_STATION_HAS_UNRECONCILED_FILLS");
+   return true;
+  });
+ }
  function begin(proof,{chargeBuyerWallet=true}={}){
   return withLock(()=>{
    if(!proof||!Object.isFrozen(proof)||!positiveID(proof.orderID)||
@@ -192,7 +201,7 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    buyerID:x.before.buyerID,sellerID:x.before.sellerID
   })));
  }
- return Object.freeze({begin,confirmRust,complete,assertClear,inspect});
+ return Object.freeze({begin,confirmRust,complete,assertClear,assertStationClear,inspect});
 }
 let instance=null,root=null;
 function active(){
@@ -238,4 +247,5 @@ module.exports={makeSettlementFence,
  confirmRust:(ticket,ack)=>active().confirmRust(ticket,ack),
  complete:(ticket,opts)=>active().complete(ticket,opts),
  assertClear:orderID=>active().assertClear(orderID),
+ assertStationClear:stationID=>active().assertStationClear(stationID),
  inspect:()=>active().inspect()};
