@@ -1,0 +1,176 @@
+{
+  "schema": "evejs-coop/alife12-original-physical-route-restart/v1",
+  "status": "NOT_RUN",
+  "mode": "DISPOSABLE_WORLD_ONLY",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "ALIFE12-01",
+      "title": "Original asteroid debit and cargo creation",
+      "status": "NOT_RUN",
+      "steps": "Use disposable pinned EveJS, run real persistent NPC mining against native asteroid",
+      "expected": "One depleted source and original native cargoID on original NPC miner",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-02",
+      "title": "Atomic handoff with concurrent transient NPCs",
+      "status": "NOT_RUN",
+      "steps": "Move original cargoID to ALIFE-08 hauler via ALIFE-10/11 while two transient NPC ships have cargo",
+      "expected": "Only durable cargo reparent and receipt persisted, transient cargo never enters SQLite",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-03",
+      "title": "Departure manifest and native warp ACK",
+      "status": "NOT_RUN",
+      "steps": "Start real canonical station delivery and record successful native sessionless warp",
+      "expected": "Fsynced original trip-manifests/<key>.json and trip-departure-acks/<key>.json match exact IDs; warp issued once",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-04",
+      "title": "Restart after manifest before warp ACK",
+      "status": "NOT_RUN",
+      "steps": "Kill process in disposable test world before first warp ACK journal confirmation",
+      "expected": "No rewarp, no station warehouse credit, explicit operator repair required",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-05",
+      "title": "Restart after confirmed warp ACK",
+      "status": "NOT_RUN",
+      "steps": "Kill process after ACK file fsync, before scene arrival observation",
+      "expected": "Original miner/hauler and fleetID persist, original cargoID still in native hauler, recovered route has no additional warp order",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-06",
+      "title": "Physical arrival after restart",
+      "status": "NOT_RUN",
+      "steps": "Let restored hauler physically complete native motion, stop at original canonical station and dwell 2s",
+      "expected": "No teleport; first tick waits arrival, second waits dwell, only then warehouse deposit",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-07",
+      "title": "Crash after first of two warehouse commits",
+      "status": "NOT_RUN",
+      "steps": "With two real cargo stacks, stop server after first receipt COMMITTED but before second",
+      "expected": "After cold restart one credited original stack, one original cargo still on hauler, no duplicated grants",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-08",
+      "title": "Corrupt manifest, ACK or mismatch owner",
+      "status": "NOT_RUN",
+      "steps": "Change one field in disposable journal/SQLite item preimage, then restart",
+      "expected": "Fail closed NEEDS_OPERATOR_REPAIR, no second warp, no new warehouse items or ISK",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-09",
+      "title": "Old completed trip plus fresh load",
+      "status": "NOT_RUN",
+      "steps": "After an original full delivery, mine and transfer a NEW original cargo stack, then prepare next trip",
+      "expected": "Old manifest not replayed; new route uses new original cargoID and manifest key",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-10",
+      "title": "Station absent or journey timed out",
+      "status": "NOT_RUN",
+      "steps": "Restart with original station missing, ship missing, wrong system, or original route older than 15 minutes",
+      "expected": "No delivery, no renewed deadline, no auto-teleport/warp",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-11",
+      "title": "Two clients and double cold restart",
+      "status": "NOT_RUN",
+      "steps": "Two connected co-op clients observe mining, one physical haul and station delivery; cold restart twice",
+      "expected": "Both clients see one consistent original fleet, one source debit, one cargoID transfer and one warehouse credit",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE12-12",
+      "title": "Post-commit lost in-memory cargo, receipt uncertain",
+      "status": "NOT_RUN",
+      "steps": "Crash after cargo removed from hauler but before native warehouse COMMITTED receipt; restart",
+      "expected": "Original miner must not resume further mining unless failed cargo is reconciled; unresolved remains NOT_RUN until startup audit implemented",
+      "evidence": [
+        "Native original cargoID and stable fleetID",
+        "Original mining source and npcCargo SQLite rows",
+        "fsynced manifest and WARP_ACK journal file",
+        "native physical station dwell and warehouse receipt",
+        "two client logs and cold restart when applicable"
+      ]
+    }
+  ]
+}

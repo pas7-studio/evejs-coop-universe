@@ -127,6 +127,32 @@ function createService({db,store,nativeService,ensureState,spawn,register,
     typeof ensureState!=="function"||typeof spawn!=="function"||
     typeof register!=="function"||typeof getFleets!=="function")
   throw Error("ALIFE08_AUTHORITIES_REQUIRED");
+ // Original persistent haulers with cargo MUST resume the station trip after
+ // cold restart instead of restarting the mining state with unresolved ore.
+ function resumePendingStationCargo(scene,slot,haulerIDs){
+  if(process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY!=="1"||
+     process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST!=="1")return false;
+  const id=fleetIDForSlot(scene.systemID,slot);
+  const live=getFleets().filter(x=>x.startupKey===scene.systemID+":"+slot&&
+    Number(x.fleetID)===id);
+  if(live.length!==1)throw Error("ALIFE12_RUNTIME_FLEET_TO_RESUME_NOT_UNIQUE");
+  const rows=haulerIDs.flatMap(entityID=>{
+   const cargo=store.listNativeCargoForEntity(entityID);
+   if(!Array.isArray(cargo))throw Error("ALIFE12_NATIVE_HAUL_CARGO_UNAVAILABLE");
+   return cargo;
+  });
+  if(!rows.length)return false;
+  if(rows.some(x=>!pos(x.cargoID)||!pos(x.quantity)||
+    !haulerIDs.includes(Number(x.entityID))||
+    Number(x.coopHaulFleetID)!==id||x.transient===true))
+   throw Error("ALIFE12_NATIVE_HAUL_CUSTODY_AMBIGUOUS");
+  const fleet=live[0];
+  if(fleet.state!=="loaded"&&fleet.state!=="haulereturn"){
+   fleet.state="loaded";
+   fleet.nextThinkAtMs=0;
+  }
+  return true;
+ }
  function start({scene,fleetCount}={}){
   const systemID=pos(scene?.systemID);
   if(!systemID||!fleetIDForSlot(systemID,1)||
@@ -195,8 +221,9 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      const registered=registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,
       originAnchor:record.originAnchor||null});
+     const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
-      minerIDs,haulerIDs,restored}));
+      minerIDs,haulerIDs,restored,pendingStationCargo}));
     }catch(error){
      const reason=String(error?.message||error).slice(0,160);
      reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason}));

@@ -25,6 +25,8 @@ names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetD
 names.splice(names.indexOf("coopNativeHaulCargo")+1,0,"coopNativeHaulTransferAtomic");
 // ALIFE-11 cargo transient shadow restricted to original atomic miner-to-hauler mode.
 names.splice(names.indexOf("coopNativeHaulTransferAtomic")+1,0,"coopNativeCargoTransientIsolation");
+// ALIFE-12 original NPC station departure ACK and read-only route recovery.
+names.splice(names.indexOf("coopNativeStationArrival")+1,0,"coopNativeStationTripJournal");
 // COOP-048 native /jobs uses the existing authenticated Opportunity Board.
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
 // Stock in-game agent dialogue for jobs, no /jobs text needed.

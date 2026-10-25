@@ -198,3 +198,50 @@ test("native cargo haul tag matches same fleetID after physical hauler restore",
  assert.equal(reboot.world.cargo.get(cargoID).quantity,9);
  assert.equal(reboot.getSpawnCalls(),0);
 });
+
+test("ALIFE-12 persistent hauler with original cargo resumes loaded delivery after cold start",t=>{
+ const old=process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY;
+ const oldManifest=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
+ process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY="1";
+ process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST="1";
+ t.after(()=>{
+  if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY;
+  else process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY=old;
+  if(oldManifest===undefined)delete process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
+  else process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST=oldManifest;
+ });
+ const first=fixture(t);assert.equal(first.start().status,"OK");
+ const cargoID=980200000181,fleetID=SYSTEM*32+1;
+ first.world.cargo.set(cargoID,{cargoID,entityID:71002,ownerID:950,
+  typeID:34,quantity:15,transient:false,coopHaulFleetID:fleetID,
+  coopHaulFromMinerID:71001});
+ const reboot=fixture(t,first.world),result=reboot.start();
+ assert.equal(result.status,"OK");
+ assert.equal(result.slots[0].status,"RESTORED");
+ assert.equal(result.slots[0].pendingStationCargo,true);
+ assert.equal(reboot.getFleets()[0].state,"loaded");
+ assert.equal(reboot.getFleets()[0].nextThinkAtMs,0);
+ assert.equal(reboot.getSpawnCalls(),0);
+ assert.equal(reboot.world.cargo.get(cargoID).entityID,71002);
+ assert.equal(reboot.world.cargo.size,1);
+});
+test("ALIFE-12 original restored cargo with wrong fleet ID quarantines slot",t=>{
+ const old=process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY;
+ const oldManifest=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
+ process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY="1";
+ process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST="1";
+ t.after(()=>{
+  if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY;
+  else process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY=old;
+  if(oldManifest===undefined)delete process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
+  else process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST=oldManifest;
+ });
+ const first=fixture(t);assert.equal(first.start().status,"OK");
+ first.world.cargo.set(980201,{cargoID:980201,entityID:71002,ownerID:950,
+  typeID:34,quantity:10,transient:false,coopHaulFleetID:123,
+  coopHaulFromMinerID:71001});
+ const reboot=fixture(t,first.world),result=reboot.start();
+ assert.equal(result.status,"NEEDS_OPERATOR_REPAIR");
+ assert.match(result.slots[0].reason,/ALIFE12_NATIVE_HAUL_CUSTODY_AMBIGUOUS/);
+ assert.equal(reboot.getSpawnCalls(),0);
+});
