@@ -43,10 +43,21 @@ function verify({scene,wreck,characterID,wreckItemID,destinationLocationID,sourc
   Number(nativeWreck.launcherID)!==Number(wreck.sourceEntityID))
   return {status:"NO_PHYSICAL_NATIVE_WRECK"};
  const sessions=Array.from(scene.sessions?.values?.()||[]);
- const matching=sessions.filter(s=>Number(s?.characterID)===character&&
-  positive(s?._space?.shipID)&&
-  Number(s?._space?.systemID)===systemID&&
-  scene.getEntityByID(Number(s._space.shipID))?.kind==="ship");
+ // A stale scene membership is not an authenticated *active* looter.
+ // Match EveJS co-op shared-scene admission: a completed Ballpark handshake,
+ // a still-connected session and its exact current physical ship.
+ const matching=sessions.filter(s=>{
+  const shipID=positive(s?._space?.shipID);
+  if(Number(s?.characterID)!==character||!shipID||
+   Number(s?._space?.systemID)!==systemID||
+   s?._space?.initialStateSent!==true||s?.socket?.destroyed===true)
+   return false;
+  const liveShip=scene.getEntityByID(shipID);
+  if(liveShip?.kind!=="ship"||positive(liveShip.itemID)!==shipID)
+   return false;
+  const pilotID=positive(liveShip.pilotCharacterID??liveShip.characterID);
+  return !pilotID||pilotID===character;
+ });
  if(matching.length!==1)return {status:"NO_UNIQUE_AUTHENTICATED_SPACE_LOOTER"};
  return {
   status:"VERIFIED_NATIVE_LOOT_PICKUP",systemID,wreckID,
