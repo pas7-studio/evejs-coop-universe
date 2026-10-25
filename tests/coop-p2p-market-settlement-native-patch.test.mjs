@@ -45,7 +45,6 @@ function nativeFixture(nl="\n"){
  '    }',
  '',
  '    totalSold += fillableQuantity;',
- '  }',
  '}',
  'async function executeBuyRequest({}={}){}',
  'class MarketProxy {',
