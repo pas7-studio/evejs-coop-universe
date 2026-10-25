@@ -120,3 +120,9 @@ test("incomplete physical census denies all player participation",()=>{
  const f=fixture();f.scene.staticEntities=null;
  assert.equal(f.observe().reason,"INCOMPLETE_SCENE_ENUMERATION");
 });
+
+test("character selection live socket does not interrupt a legitimate siege",()=>{
+ const f=fixture();
+ f.sessions.push({socket:{destroyed:false},_space:null});
+ assert.equal(f.observe().status,"UNCONTESTED_NATIVE_ATTACKER");
+});
