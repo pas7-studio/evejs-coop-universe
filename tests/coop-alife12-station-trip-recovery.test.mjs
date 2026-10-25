@@ -44,7 +44,8 @@ function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
  const journal={
   confirm:()=>{acks++;if(ackFail)return{status:"NEEDS_OPERATOR_REPAIR"};
    writtenAck=true;return{status:"DURABLE_DEPARTURE_CONFIRMED"}},
-  recover:()=>missingAck?{status:"NEEDS_OPERATOR_REPAIR",reason:"ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED"}:
+  recover:()=>!prepares?{status:"NO_PENDING_TRIP"}:
+    missingAck?{status:"NEEDS_OPERATOR_REPAIR",reason:"ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED"}:
     recoveryBlocked?{status:"NEEDS_OPERATOR_REPAIR",reason:"ALIFE12_SOURCE_CARGO_CHANGED"}:
     writtenAck&&cargo.has(CARGO)?{
       status:"RECOVERED_NATIVE_TRIP",trip:{
@@ -148,7 +149,7 @@ test("expired original route never gets a new deadline or automatic rewarp",t=>{
  const f=fixture(t),fleet=f.newFleet();
  f.director().start(f.scene,fleet,START);
  const reboot=f.newFleet(),r=f.director().start(f.scene,reboot,START+16*60*1000);
- assert.equal(r.status,"ALIFE12_RECOVERED_STATION_OR_DEADLINE_INVALID");
+ assert.equal(r.status,"NO_NATIVE_NPC_STATION");
  assert.equal(f.warps,1);
  assert.equal(f.deposits,0);
 });
