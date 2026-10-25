@@ -74,7 +74,7 @@ function settle(input) {
     // A failed miner/rock pair must quarantine either participant, including
     // after restart when the miner switches target or another miner arrives.
     for (const entry of fs.readdirSync(root)) {
-      const match=/^alife06-(\\d+)-(\\d+)-(\\d+)\\.json$/.exec(entry);
+      const match=/^alife06-(\d+)-(\d+)-(\d+)\.json$/.exec(entry);
       if (!match || Number(match[1])!==systemID ||
           (Number(match[2])!==rockID && Number(match[3])!==shipID)) continue;
       const witness=JSON.parse(fs.readFileSync(path.join(root,entry),"utf8"));
