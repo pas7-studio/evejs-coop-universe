@@ -26,3 +26,19 @@ Draft safety infrastructure only, default OFF. This branch extends the native wa
 - 9/9 focused isolated V8 transaction-compatible checks against committed refund module PASS (real core code, fake native SQLite adapter): reserve, refund, duplicate, refund-versus-settle exclusion, settlement-versus-refund exclusion, bad/missing durable proof, atomic rollback after escrow write fault, disabled flag.
 - 10 new official Node test scenarios appended to the original 12-case tests/coop-escort-native-funds.test.mjs. File parses; full official Node 22 suite with real SQLite driver has not been executed in this current environment.
 - No GitHub Actions/CI, main merge, Docker restart, game client, existing character balances or live evejs-data touched.
+
+
+## Stage A contract-journal integration (second P0 slice)
+
+The branch also modifies integration/coopEscortContractSettlement.cjs and its native contract test suite.
+
+- Original accepted journal sequence OFFERED -> FUNDING_PREPARED -> FUNDED -> SETTLEMENT_PREPARED -> SETTLED is preserved.
+- A separate terminal branch is now accepted only from FUNDED: REFUND_PREPARED -> REFUNDED. Both mutually exclusive paths are immutable in the same journal format.
+- refund(contractID) first checks the server-side native failure source, the independently verified native payout/refund status, and the terminal native delivery status. A delivered route, unknown delivery, missing authority or unsupported native wallet is NOT refundable.
+- A fsynced REFUND_PREPARED event is written before invoking the atomic corporate refund, and a native verifyRefund receipt with matching contract, amount and real wreck witness is independently required before appending REFUNDED.
+- An uncertain refund leaves the writer lock and journal pending. inspectRefundRecovery() only REPORTS whether the durable native money refund exists: it NEVER repeats credits, removes the writer lock, or fabricates a successful terminal.
+- Stage A proof() now returns the REAL pirate nativeWreckID after full warehouse, combat and two-pilot verification. Read-only post-settlement proof can verify the terminal dual-wallet receipt in place of still-RESERVED escrow; this allows a later audited reputation entry without authorizing another payment.
+
+Five additional contract refund Node test scenarios were committed. In this session 9/9 isolated V8 tests verified actual committed Stage A source through an injected in-memory filesystem: accepted real offer, one corporate reserve, no loss no refund, delivered plus loss conflict blocks, uncertain result remains REFUND_PREPARED and lock remains, manual inspection does not retry. This is NOT evidence of real pinned better-sqlite3 or EVE client gameplay.
+
+**Important:** the native failure reader and the wallet provider's independent verifyNativeFailure are not wired to real EVE object/wreck provenance. This feature remains OFF; do not treat a mocked witness as accepted live refund proof. Full paid Escort gameplay issue #82 is open.
