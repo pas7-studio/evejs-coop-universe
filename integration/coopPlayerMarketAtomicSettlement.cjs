@@ -32,6 +32,14 @@ function receiptDeliveries(record){
  return null;
 }
 function checkDeliveries(record,expectedSources,expectedQuantity){
+ // Only historical receipts with BOTH modern fields absent may use
+ // single-stack fallback. A new multi-stack receipt cannot downgrade
+ // by deleting/nulling its deliveries array while keeping sourceItemIDs.
+ const hasSources=Object.prototype.hasOwnProperty.call(record,"sourceItemIDs"),
+  hasDeliveryField=Object.prototype.hasOwnProperty.call(record,"deliveries");
+ if(hasSources!==hasDeliveryField||
+    (hasSources&&(!Array.isArray(record.sourceItemIDs)||
+      !Array.isArray(record.deliveries))))return false;
  const deliveries=receiptDeliveries(record);
  const hasOriginalDeliveryWitness=Array.isArray(record.deliveries);
  if(!Array.isArray(expectedSources)||expectedSources.length===0||
