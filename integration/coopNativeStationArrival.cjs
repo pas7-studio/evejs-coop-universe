@@ -106,7 +106,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   // Real NPC cargo + native hauler must be observed BEFORE an escort offer.
   // Consent is a prerequisite, not permission to create funds or warp:
   // the independent native Stage E binding still authorizes both.
-  let preparingEventID=null;
+  let preparingEventID=null,approvedDepartPilots=null;
   // Paid escort NEVER departs without discoverable source and an explicit
   // independently priced, two-character contract acceptance. Optional native
   // NPC routes remain unchanged with the paid escort flag OFF.
@@ -162,6 +162,33 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     paid.characters[1]!==duo.pilots[1].characterID||
     paid.fleetID!==duo.fleetID)
     return pause("ESCORT_AWAITING_TWO_PAID_ACCEPTANCES");
+   approvedDepartPilots=duo.pilots.map(x=>({characterID:x.characterID,shipID:x.shipID}));
+  }
+  // Fast, non-writing source grid proof BEFORE persisting the native cargo
+  // manifest. Full durable actor/escrow authority is still rechecked in Stage
+  // E before debit; this preflight avoids orphan manifest on absent pilots.
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"){
+   const npc=scene.getEntityByID?.(ships[0]);
+   const onGrid=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
+   const sessions=typeof scene.sessions?.values==="function"?
+    [...scene.sessions.values()]:null;
+   if(!Array.isArray(approvedDepartPilots)||approvedDepartPilots.length!==2||
+    !Array.isArray(sessions)||!onGrid(npc?.position))
+    return pause("ESCORT_DEPARTURE_ON_GRID_PREFLIGHT_UNAVAILABLE");
+   for(const pilot of approvedDepartPilots){
+    const active=sessions.filter(x=>x?.characterID===pilot.characterID&&
+     x?.socket?.destroyed!==true&&x?._space?.initialStateSent===true&&
+     x._space.systemID===systemID&&x._space.shipID===pilot.shipID);
+    if(active.length!==1)return pause("ESCORT_DEPARTURE_PILOT_NOT_AT_SOURCE");
+    const ship=scene.getEntityByID?.(pilot.shipID);
+    if(ship?.itemID!==pilot.shipID||ship.kind!=="ship"||
+     ship.nativeNpc===true||ship.transient===true||
+     !onGrid(ship.position)||
+     Math.hypot(ship.position.x-npc.position.x,
+      ship.position.y-npc.position.y,
+      ship.position.z-npc.position.z)>150000)
+     return pause("ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID");
+   }
   }
   let manifestProof=null;
   if(manifestDirector){
