@@ -74,7 +74,7 @@ test("reject independent scheduler and market writer before native ACT",async()=
 });
 test("exact station and source-grounded native actor can call a live native director",async()=>{
  const f=fixture();const result=await f.runtime.tick(f);
- assert.equal(result.status,"DISPATCHED_TO_VERIFIED_NATIVE_DIRECTOR");
+ assert.equal(result.status,"ADMISSION_EVALUATED");
  assert.equal(result.results.length,1);
  assert.equal(result.results[0].directorStatus,"PREPARED");
  assert.deepEqual(f.calls,[{ownerID:OWNER,stationID:STATION,productTypeIDs:[215,216]}]);
