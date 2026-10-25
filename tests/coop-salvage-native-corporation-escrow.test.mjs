@@ -52,7 +52,14 @@ function fixture(fn){
    itemID:100000,customInfo:"coop-salvage:v1:"+key+":5501:9001",
    ownerID:10001,locationID:60001,flagID:4,
    typeID:34,quantity:5,stacksize:5,singleton:0}},
-  moveStock:()=>db.items["100000"].locationID=60002});
+  moveStock:()=>db.items["100000"].locationID=60002,
+  consumeStock:()=>{delete db.items["100000"]},
+  stripProof:()=>{delete db.corporationRuntime.coopSalvageEscrows
+   .byContract["salvage-"+key].deliveryProof},
+  corruptProof:()=>{db.corporationRuntime.coopSalvageEscrows
+   .byContract["salvage-"+key].deliveryProof[0].nativeItemID=999999},
+  deleteMoveReceipt:()=>{delete db.corporationRuntime.coopSalvageMoves
+   .moves[key+":5501"]}});
 }
 test("original NPC corporation actually reserves ISK, exact two players",()=>fixture(f=>{
  assert.equal(f.rewards.reserve(key).status,"SALVAGE_NATIVE_CORP_ESCROW_RESERVED");
@@ -88,6 +95,39 @@ test("repeat settlement after crash cannot credit a second time",()=>fixture(f=>
 test("native warehouse item moved to wrong station forbids payment",()=>fixture(f=>{
  f.rewards.reserve(key);f.deliver();f.moveStock();
  assert.equal(f.rewards.settle(key).status,"SALVAGE_SETTLEMENT_NOT_VERIFIED_OR_UNCERTAIN");
+}));
+
+test("settled rescue keeps wallet-backed reputation after lawful NPC consumption",()=>fixture(f=>{
+ f.rewards.reserve(key);f.deliver();
+ assert.equal(f.rewards.settle(key).status,"SALVAGE_NATIVE_DUO_PAID");
+ const sealed=f.db().corporationRuntime.coopSalvageEscrows
+  .byContract["salvage-"+key].deliveryProof;
+ assert.equal(sealed.length,1);
+ assert.equal(sealed[0].nativeItemID,100000);
+ f.consumeStock();
+ const history=f.rewards.history(701);
+ assert.equal(history.status,"READY");
+ assert.equal(history.history[0].outcome,"SETTLED");
+ assert.equal(history.history[0].earnedISK,12);
+ assert.equal(history.reputation.score,12);
+ assert.equal(f.rewards.settle(key).status,"SALVAGE_ALREADY_PAID");
+ assert.equal(f.db().characters["701"].balance,1012);
+ assert.equal(f.db().characters["702"].balance,1012);
+}));
+test("legacy paid rescue without sealed proof never invents history after stock leaves",()=>fixture(f=>{
+ f.rewards.reserve(key);f.deliver();f.rewards.settle(key);
+ f.stripProof();f.consumeStock();
+ assert.equal(f.rewards.history(701).status,"SALVAGE_HISTORY_STOCK_NOT_VERIFIED");
+}));
+test("corrupted settlement-time cargo seal is never treated as earned reputation",()=>fixture(f=>{
+ f.rewards.reserve(key);f.deliver();f.rewards.settle(key);
+ f.corruptProof();
+ assert.equal(f.rewards.history(701).status,"SALVAGE_HISTORY_DELIVERY_RECEIPT_CONFLICT");
+}));
+test("missing GameStore delivery receipt fails sealed historical reputation",()=>fixture(f=>{
+ f.rewards.reserve(key);f.deliver();f.rewards.settle(key);
+ f.consumeStock();f.deleteMoveReceipt();
+ assert.equal(f.rewards.history(701).status,"SALVAGE_HISTORY_DELIVERY_RECEIPT_CONFLICT");
 }));
 test("native salvage rewards default OFF",()=>fixture(f=>{
  process.env.EVEJS_COOP_SALVAGE_REWARDS="0";

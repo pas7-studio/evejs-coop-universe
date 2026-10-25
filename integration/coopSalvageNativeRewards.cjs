@@ -165,7 +165,7 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
    const nativeMoves=tx.get("corporationRuntime","coopSalvageMoves");
    if(nativeMoves?.version!==1||!nativeMoves.moves)
     throw Error("SALVAGE_NATIVE_MOVE_JOURNAL_MISSING");
-   const used=new Set();
+   const used=new Set(),deliveryProof=[];
    for(const r of c.rows){
     if(wrecks?.[String(r.wreckItemID)])
      throw Error("SALVAGE_ORIGINAL_WRECK_STILL_HAS_ITEM");
@@ -190,6 +190,14 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
      item.flagID!==4||item.quantity!==r.quantity||
      item.stacksize!==r.quantity||item.singleton!==0)
      throw Error("SALVAGE_NATIVE_CUSTODY_NOT_FINAL");
+    if(!pos(move.shipID))throw Error("SALVAGE_NATIVE_ORIGINAL_SHIP_UNVERIFIED");
+    // Seal original item custody in the SAME transaction as wallet credits:
+    // later legitimate sales must not erase earned reputation/history.
+    deliveryProof.push({v:1,manifestKey,
+     cargoID:r.cargoID,wreckItemID:r.wreckItemID,
+     nativeItemID:move.nativeItemID,typeID:r.typeID,quantity:r.quantity,
+     characterID:move.characterID,shipID:move.shipID,
+     stationID:c.stationID,corporationID:c.corporationID});
    }
    const people=chars(tx,c),half=cents(c.amountISK/2);
    const now=clock();if(!pos(now))throw Error("SALVAGE_CLOCK_INVALID");
@@ -204,6 +212,7 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
    saved.status="SETTLED";saved.settledAt=now;
    saved.credits=c.characters.map(characterID=>({
     characterID,amountISK:c.amountISK/2}));
+   saved.deliveryProof=deliveryProof;
    tx.put("corporationRuntime",CORP_ESCROWS,l);
    return {status:"SALVAGE_NATIVE_DUO_PAID",contractID:c.contractID,
     amountISK:c.amountISK,credits:saved.credits,nativeDurable:true};
@@ -281,7 +290,44 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
        z.characterID!==x.characters[i]||
        z.amountISK!==x.amountISK/2))
       return {status:"SALVAGE_HISTORY_NATIVE_CREDITS_UNVERIFIED",history:[]};
-     for(const r of x.rows){
+     // Sealed proofs were written only after native custody checks inside
+     // the payout transaction. They survive subsequent lawful NPC sales.
+     const sealed=x.deliveryProof;
+     if(sealed!==undefined&&(!Array.isArray(sealed)||
+      sealed.length!==x.rows.length))
+      return {status:"SALVAGE_HISTORY_DELIVERY_PROOF_INVALID",history:[]};
+     const sealedItemIDs=new Set();
+     for(const [i,r] of x.rows.entries()){
+      if(sealed!==undefined){
+       const p=sealed[i];
+       if(p?.v!==1||p.manifestKey!==x.manifestKey||
+        p.cargoID!==r.cargoID||p.wreckItemID!==r.wreckItemID||
+        p.typeID!==r.typeID||p.quantity!==r.quantity||
+        p.stationID!==x.stationID||
+        p.corporationID!==x.corporationID||
+        !pos(p.nativeItemID)||!pos(p.shipID)||
+        !x.characters.includes(p.characterID)||
+        sealedItemIDs.has(p.nativeItemID))
+        return {status:"SALVAGE_HISTORY_DELIVERY_PROOF_INVALID",history:[]};
+       // Cross-check the proof against the separately durable GameStore
+       // movement receipt. The warehouse item itself may have been sold.
+       const recorded=moves?.moves?.[x.manifestKey+":"+r.cargoID];
+       if(recorded?.v!==1||recorded.state!=="DELIVERED"||
+        recorded.manifestKey!==x.manifestKey||
+        recorded.cargoID!==p.cargoID||
+        recorded.wreckItemID!==p.wreckItemID||
+        recorded.nativeItemID!==p.nativeItemID||
+        recorded.quantity!==p.quantity||
+        recorded.characterID!==p.characterID||
+        recorded.shipID!==p.shipID||
+        recorded.corporationID!==p.corporationID||
+        recorded.stationID!==p.stationID)
+        return {status:"SALVAGE_HISTORY_DELIVERY_RECEIPT_CONFLICT",history:[]};
+       sealedItemIDs.add(p.nativeItemID);
+       continue;
+      }
+      // Legacy settlement without a sealed proof: never backfill
+      // history by inference, retain strict current-stock verification.
       const m=moves?.moves?.[x.manifestKey+":"+r.cargoID];
       if(m?.v!==1||m.state!=="DELIVERED"||
        m.cargoID!==r.cargoID||m.wreckItemID!==r.wreckItemID||
