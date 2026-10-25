@@ -1,0 +1,2 @@
+# Force POSIX runner line endings even when the repo is checked out by Git for Windows.
+scripts/test-coop-npc-ammo-atomic.sh text eol=lf
