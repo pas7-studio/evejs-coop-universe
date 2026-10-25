@@ -634,6 +634,8 @@ function advanceNativeRaids(){
    }
    console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:result.actions}));
    require("./coopWorldSignals").notifyRaid(scene,result.actions);
+   if(process.env.EVEJS_COOP_P1_OPERATIONS==="1")
+    safeNpcPhase("native-fleet-operation",()=>require("./coopFleetOperations").recordNativeRaid({scene,systemID,actions:result.actions,fleetShips}));
    require("./coopRuntimeProbe").observe("living-pirate-raid",null,
     {spaceState:{systemID}},{actions:result.actions});
   }
