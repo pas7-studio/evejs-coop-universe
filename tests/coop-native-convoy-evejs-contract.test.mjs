@@ -18,10 +18,15 @@ test("exact pinned EveJS native startup hook is reversible and renews after actu
  const native=fs.readFileSync(file,"utf8");
  const spec=specs.find(s=>s.file==="server/src/services/mining/miningNpcOperations.js");
  assert.ok(spec);
- const patched=transform(native,spec,false);
+ // The host may already have the reversible overlay installed.
+ // Compare against the exact pristine pinned source representation in
+ // both cases; never modify or reset the actual user's EveJS checkout.
+ const pristine=transform(native,spec,true);
+ const patched=transform(pristine,spec,false);
  new vm.Script(patched);
  assert.equal(transform(patched,spec,false),patched);
- assert.equal(transform(patched,spec,true),native);
+ assert.equal(transform(patched,spec,true),pristine);
+ assert.ok(native===pristine||native===patched);
  const start=patched.indexOf("function handleSceneCreated(scene) {");
  const finish=patched.indexOf("function deactivateMiningModulesForEntity(",start);
  assert.ok(start>=0&&finish>start);
