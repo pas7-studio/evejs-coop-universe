@@ -377,9 +377,12 @@ function createOperations(options={}){
    return {status:"UNKNOWN_COMMAND",message:
     "Usage: /coopops help | status | convoy | deliveries | escort <contractID> | focus <pirateID> | guard <haulerID> | role <role> [pirateID]"};
   }catch(error){
+   // Internal native contract / inventory errors may contain private IDs
+   // or other backend details. Do not echo exceptions to game chat.
+   console.warn("[CoopFleetOperations] native validation unavailable",
+    String(error?.code||error?.name||"UNKNOWN").slice(0,48));
    return {status:"NATIVE_OPERATION_UNAVAILABLE",message:
-    "[Co-op] Native fleet/raid validation unavailable: "+
-    String(error?.message||error).replace(/[<>\x00-\x1f]/g," ").slice(0,100)};
+    "[Co-op] Native fleet, contract or cargo validation is unavailable; no operation was performed."};
   }
  }
  function snapshot(){
