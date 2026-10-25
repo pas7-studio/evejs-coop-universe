@@ -13,6 +13,8 @@ names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitne
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
 // Stock in-game agent dialogue for jobs, no /jobs text needed.
 names.splice(names.indexOf("coopNpcJobBoard")+1,0,"coopNativeJobAgent");
+// Native opt-in EVEmail notification bridge for priced corporate offers.
+names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobNotifications");
 // Peaceful delivery uses the same native corporate escrow (feature OFF by default).
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 const specs=[
