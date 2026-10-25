@@ -5,13 +5,13 @@
 const groups=[
  ["opportunities",["courier-observe","courier-dispatch"]],
  ["world-state",["virtual-travel","virtual-economy","native-depot"]],
- ["alife-perception",["alife-native-mining-proof","alife-native-economy-observe","faction"]],
+ ["alife-strategy",["alife-native-mining-proof","alife-native-economy-observe","faction"]],
  ["combat",["native-ammo-readiness","native-ammo-survival","native-ammo-supply",
   "native-raids","native-tactics","native-ammo-observe"]],
  ["salvage",["native-wreck-recovery","native-salvage-rivals","native-salvage-market",
   "native-wreck-custody","native-loot-station-delivery"]],
  ["movement",["native-gate-approach","native-patrols","npc-recognition","native-civilians"]],
- ["market-observation",["native-market-schedule","economy-destination-ore"]],
+ ["market",["native-market-schedule","economy-destination-ore"]],
  ["activity",["native-activity"]],
  ["reconciliation",["npc-reconcile:"]]
 ];
