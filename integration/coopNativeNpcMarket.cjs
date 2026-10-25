@@ -242,11 +242,14 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    const rows=pre.side==="sell"?book?.buys:book?.sells;
    // A seller takes the BEST price on the station, not whatever row the
    // daemon happened to return first. Deepest volume breaks a tie.
+   // `maxPrice` is a SPENDING cap: it must never refuse a higher bid when the
+   // NPC is the seller, or a rich buyer would look like "no counterparty".
    const candidates=(Array.isArray(rows)?rows:[]).filter(x=>
     x.source==="seed"&&Number(x.station_id)===pre.stationID&&
     Number(x.type_id)===pre.typeID&&
     Number(x.vol_remaining)>=1&&Number(x.price)>0&&
-    Number(x.price)<=maxPrice&&/^[0-9]+$/.test(String(x.order_id||"")))
+    (pre.side==="sell"||Number(x.price)<=maxPrice)&&
+    /^[0-9]+$/.test(String(x.order_id||"")))
     .sort((left,right)=>Number(right.price)-Number(left.price)||
      Number(right.vol_remaining)-Number(left.vol_remaining));
    const row=candidates[0];

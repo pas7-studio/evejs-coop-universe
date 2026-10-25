@@ -160,7 +160,10 @@ test('the settlement chain refuses a package that is not at the origin or destin
   ship:{itemID:9988400100000,typeID:20185,ownerID:140000100,stationID:60003760,capacityM3:465000}};
  assert.equal(planSettlement(contract,identity,60003760).status,'ACCEPT_THEN_FLY');
  assert.deepEqual(planSettlement(contract,identity,60003760).steps,['accept','fly','complete']);
- assert.equal(planSettlement(contract,identity,60003761).status,'SETTLE_NOW');
+ const atDestination={character:{...identity.character,stationID:60003761},ship:{...identity.ship,locationID:60003761}};
+ assert.equal(planSettlement(contract,atDestination,60003761).status,'SETTLE_NOW');
+ // The courier must actually be at the destination to settle there.
+ assert.equal(planSettlement(contract,identity,60003761).status,'REFUSED_CHARACTER_NOT_AT_ORIGIN');
  assert.equal(planSettlement(contract,identity,60009999).status,'REFUSED_PACKAGE_ELSEWHERE');
  assert.equal(planSettlement(contract,{character:identity.character},60003760).status,'REFUSED_NO_SHIP');
 });

@@ -76,13 +76,15 @@ test('complete refuses until the package is physically at the destination',()=>{
 
 test('complete refuses when this courier is not the acceptor',()=>{
  const runtime=fakeRuntime({acceptorID:140000101,status:1});
- assert.equal(complete({contract,identity,packageLocationID:60015262,runtime}).status,'REFUSED');
+ const atDestination={character:{...identity.character,stationID:60015262},ship:{...identity.ship,locationID:60015262}};
+ assert.equal(complete({contract,identity:atDestination,packageLocationID:60015262,runtime}).status,'REFUSED');
  assert.equal(runtime.calls.length,0);
 });
 
 test('complete uses the native FINISHED status for the real acceptor',()=>{
  const runtime=fakeRuntime({acceptorID:140000100,status:1});
- const result=complete({contract,identity,packageLocationID:60015262,runtime});
+ const atDestination={character:{...identity.character,stationID:60015262},ship:{...identity.ship,locationID:60015262}};
+ const result=complete({contract,identity:atDestination,packageLocationID:60015262,runtime});
  assert.equal(result.status,'COMPLETED');
  assert.deepEqual(runtime.calls[0].slice(0,3),['complete',980000000,4]);
  assert.notEqual(runtime.calls[0][2],5,'5 is CANCELLED, not FINISHED');
@@ -90,7 +92,8 @@ test('complete uses the native FINISHED status for the real acceptor',()=>{
 
 test('complete refuses a contract that is not in progress',()=>{
  const runtime=fakeRuntime({acceptorID:140000100,status:0});
- const result=complete({contract,identity,packageLocationID:60015262,runtime});
+ const atDestination={character:{...identity.character,stationID:60015262},ship:{...identity.ship,locationID:60015262}};
+ const result=complete({contract,identity:atDestination,packageLocationID:60015262,runtime});
  assert.equal(result.status,'REFUSED');
  assert.equal(runtime.calls.length,0);
 });

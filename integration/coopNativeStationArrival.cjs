@@ -826,7 +826,8 @@ function routeFromHaul(scene,fleet,runtime,now,ingressDurationMs){
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
  const result=getRuntimeDirector().start(scene,fleet,now,{ingressDurationMs});
  if(result.status==="NO_ORE_TO_DELIVER")fleet.coopStationNoCargo=true;
- if(result.status!=="EN_ROUTE"&&result.status!=="NO_ORE_TO_DELIVER")
+ if(result.status!=="EN_ROUTE"&&result.status!=="NO_ORE_TO_DELIVER"&&
+  result.status!=="ROUTE_ALREADY_ACTIVE")
   noteRouteStatus(fleet,result.status);
  return result;
 }

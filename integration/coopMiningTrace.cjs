@@ -8,7 +8,7 @@ const THROTTLE_MS = 120000;
 function note(reason, payload = {}) {
   if (process.env.EVEJS_COOP_MINING_TRACE !== "1") return;
   const now = Date.now();
-  const key = `${reason}:${payload.fleetID || 0}`;
+  const key = `${reason}:${payload.systemID || 0}:${payload.fleetID || 0}`;
   if (now - (lastAt.get(key) || 0) < THROTTLE_MS) return;
   lastAt.set(key, now);
   try {

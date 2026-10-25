@@ -280,7 +280,7 @@ function quoteCourier(request, policy) {
 // owned by that character, and both must be at the contract origin station.
 // identity: { character:{characterID,accountId,stationID,balance},
 //             ship:{itemID,typeID,stationID,capacityM3} }
-function evaluateCourierIdentity(identity, contract) {
+function evaluateCourierIdentity(identity, contract, atStationID) {
   const who = identity || {};
   const character = who.character;
   const ship = who.ship;
@@ -290,7 +290,10 @@ function evaluateCourierIdentity(identity, contract) {
   if (!character || !(characterID > 0) || !(Number(character.accountId) > 0)) {
     return status("REFUSED_NO_CHARACTER", { contractID });
   }
-  const originStationID = Number(contract && contract.startStationID) || 0;
+  // The expected station is explicit: acceptance happens at the origin, but
+  // completion happens at the DESTINATION, so a hard-coded origin check would
+  // make a successful delivery impossible to settle.
+  const originStationID = Number(atStationID) || Number(contract && contract.startStationID) || 0;
   if (Number(character.stationID) !== originStationID) {
     return status("REFUSED_CHARACTER_NOT_AT_ORIGIN", {
       contractID,
@@ -350,14 +353,16 @@ function evaluateCourierIdentity(identity, contract) {
 // the real package into its hangar; complete is only legal once that package is
 // physically at the destination station. Nothing here mutates anything.
 function planSettlement(contract, identity, packageLocationID) {
-  const readiness = evaluateCourierIdentity(identity, contract);
-  if (readiness.status !== "READY") return readiness;
-  const origin = Number(contract.startStationID) || 0;
-  const destination = Number(contract.endStationID) || 0;
+  const origin = Number(contract && contract.startStationID) || 0;
+  const destination = Number(contract && contract.endStationID) || 0;
   const packageAt = Number(packageLocationID) || 0;
   if (packageAt === destination) {
-    return status("SETTLE_NOW", { contractID: readiness.contractID, steps: ["complete"] });
+    const atDestination = evaluateCourierIdentity(identity, contract, destination);
+    if (atDestination.status !== "READY") return atDestination;
+    return status("SETTLE_NOW", { contractID: atDestination.contractID, steps: ["complete"] });
   }
+  const readiness = evaluateCourierIdentity(identity, contract, origin);
+  if (readiness.status !== "READY") return readiness;
   if (packageAt !== origin) {
     return status("REFUSED_PACKAGE_ELSEWHERE", {
       contractID: readiness.contractID, packageAt, origin, destination,

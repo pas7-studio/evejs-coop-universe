@@ -1173,8 +1173,6 @@ async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKE
   const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
   const market=ensureMarketTrader();
   if(!market)return;
-  ensureMarketTrader();
-  if(!nativeMarketTrader)return;
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
   const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
    process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
@@ -2194,6 +2192,21 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
 // market job and the arrival pauses until it settles, bounded by a hard
 // timeout: a hung RPC can never freeze a hauler or fake a sale.
 const arrivalSales=new Map();
+const saleNotes=new Map();
+// A sale that silently does not happen is indistinguishable from a bug, so every
+// skip reason is reported once per hauler and reason per five minutes.
+function noteSaleSkip(systemID,stationID,haulerID,reason){
+ const key=String(systemID)+":"+String(haulerID)+":"+String(reason);
+ const now=Date.now();
+ if(now-(saleNotes.get(key)||0)<300000)return;
+ saleNotes.set(key,now);
+ try{
+  require("./coopRuntimeProbe").observe("living-npc-sale-skipped",null,
+   {spaceState:{systemID:Number(systemID)||0}},
+   {stationID:Number(stationID)||0,haulerID:Number(haulerID)||0,
+    reason:String(reason||"").slice(0,80)});
+ }catch(_error){/* telemetry must never break a delivery */}
+}
 function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  if(process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL!=="1")return {status:"DISABLED"};
  if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1")return {status:"MARKET_OFF"};
@@ -2205,6 +2218,7 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
   if(running.settled)return running.settled;
   if(Date.now()-running.startedAt>45000){
    arrivalSales.delete(key);
+   noteSaleSkip(systemID,stationID,haulerID,"SALE_TIMEOUT");
    return {status:"NOT_SOLD",reason:"SALE_TIMEOUT"};
   }
   return {status:"PENDING"};
@@ -2212,12 +2226,12 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  const link=Object.values(identityRegistry?.snapshot()?.links||{})
   .find(entry=>Number(entry.entityID)===Number(haulerID)&&
    Number(entry.systemID)===Number(systemID));
- if(!link)return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};
+ if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
  const trader=ensureMarketTrader();
- if(!trader)return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};
+ if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
  const wanted=[...new Set(sellTypes.filter(typeID=>
   !types.length||types.map(Number).includes(Number(typeID))))];
- if(!wanted.length)return {status:"NOT_SOLD",reason:"NO_ALLOWED_ORE"};
+ if(!wanted.length){noteSaleSkip(systemID,stationID,haulerID,"NO_ALLOWED_ORE");return {status:"NOT_SOLD",reason:"NO_ALLOWED_ORE"};}
  const job={startedAt:Date.now(),settled:null};
  arrivalSales.set(key,job);
  void (async()=>{
