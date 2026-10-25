@@ -51,6 +51,7 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   findItemById:id=>tables.items[id]||null
  };
  let stage="open",phase=null,loss=false,claims=0,orderPrice=1.25;
+ let rememberedClaimKey=null;
  let getOrderCalls=0;
  // Actual Rust GetOrders returns public OrderRow without owner.
  const publicOrder=()=>({source:"player",order_id:String(ORDER),
@@ -63,7 +64,8 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   if(method==="GetOrders")return {sells:[publicOrder()]};
   if(method==="GetOrder"){getOrderCalls++;return ownerOrder();}
   if(method==="ClaimNpcCorpPlayerSell"){
-   claims++;if(stage==="open"){stage="settling";phase="claimed";}
+   claims++;rememberedClaimKey=args.claim_key;
+   if(stage==="open"){stage="settling";phase="claimed";}
    return {source:"player",state:stage,fill_phase:phase,is_corp:false,bid:false,
     claim_key:args.claim_key,fill_id:String(FILL),order_id:String(ORDER),
     buyer_corp_id:String(OWNER),owner_id:String(SELLER),quantity:20,
@@ -76,8 +78,13 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
     vol_remaining:0,history_recorded:phase==="finalized",history_day:"2026-10-25"};
   }
   if(method==="GetNpcCorpPlayerClaim")
-   return {state:stage,fill_phase:phase,fill_id:String(FILL),
-    vol_remaining:0,history_recorded:phase==="finalized",history_day:"2026-10-25"};
+   return {source:"player",state:stage,fill_phase:phase,
+    claim_key:rememberedClaimKey,is_corp:false,bid:false,
+    fill_id:String(FILL),order_id:String(ORDER),buyer_corp_id:String(OWNER),
+    owner_id:String(SELLER),station_id:STATION,type_id:TYPE,
+    quantity:20,price_cents:125,vol_remaining:stage==="filled"?0:20,
+    history_recorded:phase==="finalized",
+    history_day:phase==="finalized"?"2026-10-25":null};
   throw Error("UNEXPECTED_RPC:"+method);
  };
  const raw=Object.freeze({ownerID:OWNER,stationID:STATION,typeID:TYPE,
@@ -154,4 +161,24 @@ test("lost Rust finalize ACK recovers from same durable GameStore receipt",()=>r
  assert.equal(f.load().entries[OWNER+":"+ORDER].claimKey,original.claimKey);
  assert.equal(f.tables.characters[SELLER].walletJournal.length,2);
  assert.equal(f.claims,2);
+}));
+test("crash audit reads settled journal, Rust claim and GameStore receipt without mutation",()=>run(async f=>{
+ await f.tick();
+ const before=structuredClone(f.tables),journalBefore=structuredClone(f.load());
+ const r=await f.bridge.audit();
+ assert.equal(r.status,"AUDITED");
+ assert.equal(r.entries[0].status,"CONSISTENT");
+ assert.equal(r.entries[0].historyDay,"2026-10-25");
+ assert.deepEqual(f.tables,before);
+ assert.deepEqual(f.load(),journalBefore);
+}));
+test("lost finalize ACK audits as ACK_JOURNAL, never a new market claim",()=>run(async f=>{
+ f.failNext();
+ await assert.rejects(f.tick(),/LOST_RUST_FINAL_ACK/);
+ const before=structuredClone(f.tables);
+ const r=await f.bridge.audit();
+ assert.equal(r.entries[0].status,"ACK_JOURNAL_SAME_CLAIM");
+ assert.equal(r.entries[0].requiresOperator,true);
+ assert.deepEqual(f.tables,before);
+ assert.equal(f.claims,1);
 }));
