@@ -20,9 +20,15 @@ function createDepot({file,clock=()=>Date.now()}){
    try{fs.writeFileSync(fd,JSON.stringify(next));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
    fs.renameSync(tmp,file);
    // Directory fsync makes the atomic rename survive host power failure on
-   // supported Linux filesystems, not just a Node process crash.
-   const dirfd=fs.openSync(path.dirname(file),'r');
-   try{fs.fsyncSync(dirfd);}finally{fs.closeSync(dirfd);}
+   // supported (POSIX) filesystems only. Windows refuses to fsync a directory
+   // handle with EPERM/EACCES, so that single step stays best-effort instead
+   // of making every depot write fail on a developer machine or on NTFS.
+   try{
+    const dirfd=fs.openSync(path.dirname(file),'r');
+    try{fs.fsyncSync(dirfd);}finally{fs.closeSync(dirfd);}
+   }catch(error){
+    if(!["EPERM","EACCES","EISDIR","EINVAL","EBADF"].includes(error?.code))throw error;
+   }
   }catch(e){try{fs.unlinkSync(tmp);}catch(_ignored){}throw e;}
   state=next;
  }

@@ -54,8 +54,9 @@ function inspect({commanderSession,followerSession,spaceRuntime}={}){
  const joined=[...scene.sessions.values()];
  if(!joined.includes(commanderSession)||!joined.includes(followerSession))
   return {ok:false,reason:"SESSION_NOT_IN_SCENE"};
- if(!uniqueOwners(scene,commanderSession,followerSession,a))
-  return {ok:false,reason:"STALE_OR_DUPLICATE_NATIVE_OWNER"};
+ // Readiness is checked before ownership: uniqueOwners() deliberately ignores
+ // sessions that are disconnected or not yet Ballpark-ready, so reporting a
+ // duplicate owner for such a pair would name the wrong cause.
  if(commanderSession?._space?.initialStateSent!==true||
     followerSession?._space?.initialStateSent!==true)
   return {ok:false,reason:"SPACE_NOT_READY"};
@@ -66,6 +67,8 @@ function inspect({commanderSession,followerSession,spaceRuntime}={}){
  const followerID=positive(followerSession?._space?.shipID);
  if(!leaderID||!followerID||leaderID===followerID)
   return {ok:false,reason:"SHIP_ID_MISSING_OR_SHARED"};
+ if(!uniqueOwners(scene,commanderSession,followerSession,a))
+  return {ok:false,reason:"STALE_OR_DUPLICATE_NATIVE_OWNER"};
  const leader=scene.getShipEntityForSession(commanderSession),
   ship=scene.getShipEntityForSession(followerSession);
  if(!leader||!ship||Number(leader.itemID)!==leaderID||

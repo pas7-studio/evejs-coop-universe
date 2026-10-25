@@ -5,9 +5,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 
 const code = process.env.EVEJS_CODE_PATH;
-if (!code) throw new Error('EVEJS_CODE_PATH must identify EveJS/Code');
 process.env.EVEJS_SKIP_NPC_STARTUP = '1';
 process.env.EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE = '1';
 const require = createRequire(import.meta.url);
@@ -111,3 +115,4 @@ test('two players independently command ships and receive each others movement i
     runtime._testing.clearScenes();
   }
 });
+}

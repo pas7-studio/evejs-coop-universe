@@ -24,12 +24,29 @@ function transferCargo(scene,fleet,miner,options={}){
   let moved=0,quantity=0,volume=0;
   for(const item of items){
    const cached=(miner.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
-   const amount=Number(item.quantity);
-   const result=store.upsertNativeCargo({...item,entityID:Number(hauler.itemID),
+   const amount=Math.max(0,Number(item.quantity)||0);
+   const durable=process.env.EVEJS_COOP_NPC_STATION_DELIVERY==="1"&&hauler.transient!==true;
+   const result=store.upsertNativeCargo({
+    ...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
     ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
-    [haulFlag]:Number(fleet.fleetID),coopHaulFromMinerID:Number(miner.itemID),
-    coopHaulLoadedAt:Date.now()},{transient:hauler.transient===true});
+    [haulFlag]:Number(fleet.fleetID),
+    coopHaulFromMinerID:Number(miner.itemID),
+    coopHaulLoadedAt:Date.now()
+   },{transient:durable?true:hauler.transient===true});
    if(!result?.success)continue;
+   if(durable){
+    // A transient miner's cargoID is transient-marked in native GameStore.
+    // Reparent the SAME cargoID, clear its transient path and flush npcCargo.
+    const repo=options.database||require("../gameStore");
+    repo.setTransientPath("npcCargo",`/cargo/${Number(item.cargoID)}`,false);
+    if(repo.flushTableSync("npcCargo")?.success!==true){
+     probe.observe("living-hauler-cargo-persist-failed",null,
+      {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
+      {fleetID:fleet.fleetID,cargoID:item.cargoID});
+     continue;
+    }
+   }
+   // Re-read the authoritative cargo before removing the in-memory mirror.
    if(!(store.listNativeCargoForEntity(hauler.itemID)||[]).some(x=>Number(x.cargoID)===Number(item.cargoID)))continue;
    miner.nativeCargoItems=(miner.nativeCargoItems||[]).filter(x=>Number(x.itemID)!==Number(item.cargoID));
    quantity+=amount;volume+=amount*Math.max(0,Number(cached?.volume)||0);moved++;

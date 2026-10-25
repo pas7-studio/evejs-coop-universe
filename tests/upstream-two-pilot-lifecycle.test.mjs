@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
 
-if (!process.env.EVEJS_CODE_PATH) throw new Error('EVEJS_CODE_PATH is required');
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
+
 process.env.EVEJS_SKIP_NPC_STARTUP = '1';
 process.env.EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE = '1';
 const require = createRequire(import.meta.url);
@@ -82,3 +86,4 @@ test('registry and scene independently retain pilot B after pilot A disconnect',
     registry.unregister(a); registry.unregister(b); registry.unregister(hidden);
   }
 });
+}

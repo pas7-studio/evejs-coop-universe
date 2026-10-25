@@ -24,6 +24,7 @@ param(
   [switch]$EnableMissionJoin,
   [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
+  [switch]$EnableNpcStationDelivery,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -38,6 +39,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
 }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableMissionJoin -and -not $LivingCoop) { throw 'Native mission join requires -LivingCoop' }
+if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -114,7 +116,7 @@ $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
 $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
 }
-# Native wingman mission join is independently OFF until two-client acceptance.
+# Native wingman mission join independently OFF until two-client acceptance.
 if ($EnableMissionJoin) {
   $yamlLines += "      EVEJS_COOP_MISSION_JOIN: '1'"
 }
@@ -176,6 +178,10 @@ if ($LivingCoop) {
   # Ordinary NPC combat still uses physical EveJS hulls and real mining startup.
   $yamlLines += "      EVEJS_COOP_CONVOY_RENEWAL: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
+  if ($EnableNpcStationDelivery) {
+    $yamlLines += "      EVEJS_COOP_NPC_STATION_DELIVERY: '1'"
+    $yamlLines += "      EVEJS_COOP_NPC_WAREHOUSE_DIR: '/var/lib/evejs/coop-native-warehouse'"
+  }
   $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
   $yamlLines += "      EVEJS_COOP_HAULER_HOLD_MS: '45000'"
   $yamlLines += "      EVEJS_COOP_NPC_RAIDS: '1'"

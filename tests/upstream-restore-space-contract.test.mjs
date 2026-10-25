@@ -5,8 +5,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 const root=process.env.EVEJS_CODE_PATH;
-if(!root)throw new Error('EVEJS_CODE_PATH required');
 const transitions=readFileSync(resolve(root,'server/src/space/transitions.js'),'utf8');
 const disconnect=readFileSync(resolve(root,'server/src/services/_shared/sessionDisconnect.js'),'utf8');
 const start=transitions.indexOf('function restoreSpaceSession(session)');
@@ -56,3 +60,4 @@ test('logoff persists ship space state and reattach consumes it',()=>{
   assert.match(save,/persistedSpaceState\.systemID/);
   assert.match(restore,/activeShip\.spaceState/);
 });
+}
