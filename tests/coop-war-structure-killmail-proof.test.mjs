@@ -4,6 +4,7 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const core=require("../integration/coopFactionWarCore.cjs");
 const {KEY:WAR_KEY,TABLE}=require("../integration/coopFactionWarStore.cjs");
+const {KEY:FLEET_KEY}=require("../integration/coopWarFleetRegistry.cjs");
 const {KEY:OBJECTIVE_KEY,createWarObjectiveAdjudicator}=
  require("../integration/coopWarObjectiveAdjudicator.cjs");
 const {KEY:KILL_KEY,createWarStructureCombatProof}=
@@ -20,7 +21,12 @@ function fixture(){
  s.campaigns.c1={campaignID:"c1",warID:"w1",
   state:"ASSAULT",targetSystemID:202,sourceSystemID:101,
   objectiveEvidence:[],revision:2};
- const db=new Map([[WAR_KEY,s]]);
+ const fleet={version:1,ships:{"501":{
+  entityID:501,pilotID:"coop-pilot-001",corporationID:31,
+  factionID:11,warID:"w1",campaignID:"c1",
+  fleetID:"fw-c1-11",systemID:202
+ }},processed:{},history:[]};
+ const db=new Map([[WAR_KEY,s],[FLEET_KEY,fleet]]);
  const structure={structureID:700,typeID:1010,solarSystemID:202,
   ownerCorpID:32,destroyedAt:null,state:7,
   position:{x:0,y:0,z:0}};
