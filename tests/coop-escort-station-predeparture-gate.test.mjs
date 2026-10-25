@@ -253,6 +253,7 @@ test("Stage I observer uses real native station tick and never player commands",
  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER="1";
  try{run(f=>{
   f.approve();
   assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"EN_ROUTE");
@@ -266,6 +267,7 @@ test("Stage I observer uses real native station tick and never player commands",
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+  delete process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER;
  }
 });
 test("native warp physics callback only samples fully ACK-confirmed original NPC flight",()=>{
