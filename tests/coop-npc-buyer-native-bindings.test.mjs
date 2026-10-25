@@ -85,6 +85,9 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_NPC_BUY_PLAYER_ASK:"1"};
  const bridge=createNativeNpcBuyerBindings({file,gameStore,itemStore,
   marketClient:{call},clock:()=>1000000,env,
+  marketRules:{getMarketContext:({characterID,stationID})=>({
+   characterID,stationID,limits:{acc:0.08}}),
+   computeSalesTaxAmount:(ctx,gross)=>Math.round(gross*ctx.limits.acc*100)/100},
   getStation:()=>({stationID:STATION,regionID:REGION}),
   resolveActor:async()=>({nativeVerified:true,isNpc:true,role:"trader",
    corporationID:OWNER,stationID:STATION,pilotID:"coop-pilot-100",
@@ -110,7 +113,8 @@ test("native GameStore+Rust witness closes actual physical NPC purchase",()=>run
  assert.equal(f.tables.items[ITEM].ownerID,OWNER);
  assert.equal(f.tables.items[ITEM].locationID,STATION);
  assert.equal(f.tables.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975);
- assert.equal(f.tables.characters[SELLER].balance,125);
+ assert.equal(f.tables.characters[SELLER].balance,123);
+ assert.equal(f.tables.npcMarketFills["corp-buy\\u001f"+FILL].taxCents,200);
  assert.equal(f.tables.marketEscrow[ORDER],undefined);
  assert.equal(f.tables.npcMarketFills["corp-buy\u001f"+FILL].fillID,FILL);
  assert.equal(f.claims,1);
@@ -146,6 +150,6 @@ test("lost Rust finalize ACK recovers from same durable GameStore receipt",()=>r
  const r=await f.tick();
  assert.equal(r.status,"NPC_PLAYER_PURCHASE_SETTLED");
  assert.equal(f.load().entries[OWNER+":"+ORDER].claimKey,original.claimKey);
- assert.equal(f.tables.characters[SELLER].walletJournal.length,1);
+ assert.equal(f.tables.characters[SELLER].walletJournal.length,2);
  assert.equal(f.claims,2);
 }));
