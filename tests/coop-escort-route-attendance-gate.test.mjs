@@ -46,11 +46,11 @@ function fixture({authorized=true,validDuo=true}={}){
    read:()=>state.recorded?{status:"VERIFIED_NATIVE_ESCORT_DEPARTURE",
     manifestKey:route.manifestKey,contractID:offer.contractID,
     at:10000,characters:[701,702],shipIDs:[7001,7002],origin:{x:0,y:0,z:0}}:
-    {status:"DEPARTURE_NOT_RECORDED"}}),
+    {status:"DEPARTURE_NOT_RECORDED"}})},
   "./coopEscortRouteWitness":{createRouteWitness:()=>({
    sample:()=>{state.routeSamples++;return {status:"NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED",stage:1}},
    verify:()=>({status:state.routeValid?"VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE":
-    "ROUTE_CHECKPOINT_NOT_FOUND"})})}}
+    "ROUTE_CHECKPOINT_NOT_FOUND"})})}
  };
  const mod={exports:{}};
  vm.runInNewContext(src,{require:name=>{
