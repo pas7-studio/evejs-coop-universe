@@ -162,3 +162,12 @@ test('live adapter uses actual NPC corporation and station service, never impers
  assert.equal(received.facilityAvailable({stationID:2001,solarSystemID:30000144},1001),true);
  assert.equal(received.getStation(2001).stationID,2001);
 });
+
+each('refinery journal lock prevents simultaneous writers from different executor instances',f=>{
+ const id='coop-refine:v1:700:100';
+ fs.writeFileSync(path.join(f.dir,id+'.json.lock'),'other-instance');
+ assert.equal(f.engine.refine(args).status,'REFINERY_LOCKED_NEEDS_REVIEW');
+ assert.equal(f.engine.reconcile(700,100,{authorize:true}).status,'REFINERY_LOCKED_NEEDS_REVIEW');
+ assert.equal(f.writes(),0);
+ assert.equal(fs.existsSync(path.join(f.dir,id+'.json.lock')),true);
+});
