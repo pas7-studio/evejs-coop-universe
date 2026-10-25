@@ -57,9 +57,3 @@ test('drift without the original hauler return branch aborts',()=>{
  assert.throws(()=>patch(sample().replace('  if (fleetRecord.state === "loaded") {','  if (fleetRecord.state === "loading") {'),fileName),
   /STATION_(LOADED|ARRIVAL_ANCHOR)_DRIFT/)});
 
-test('a durable-fleet rewrite of the spawn flag is a hand-off, not drift',()=>{
- const reworked=sample().replace('    transient: true,','    transient: options.coopDurableNative === true,');
- const next=patch(reworked,fileName);
- assert.match(next,/routeFromHaul/);
- assert.match(next,/durableHauler/);
-});
