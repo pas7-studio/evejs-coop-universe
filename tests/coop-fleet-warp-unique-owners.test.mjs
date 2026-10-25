@@ -4,6 +4,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {inspect,uniqueOwners} = require("../integration/coopFleetWarpSafety.cjs");
 const {createTracker} = require("../integration/coopFleetWarpArrival.cjs");
+const {inSpaceParty} = require("../integration/coopNativeFleetParty.cjs");
 
 function fixture(){
  let now=1000000;
@@ -102,4 +103,20 @@ test("single real ship owners still physically complete an observed fleet warp",
  f.tracker.tick();
  assert.equal(f.events[0].status,"NATIVE_FLEET_FOLLOWER_ARRIVAL_VERIFIED");
  assert.equal(f.events[0].arrivalVerified,true);
+});
+
+test("real co-op party cannot proceed when another pilot holds the wingman's native ship",()=>{
+ const f=fixture();
+ const fleet={fleetID:7001};
+ const fleetRuntime={
+  getFleetForCharacter:id=>[5001,5002].includes(id)?fleet:null,
+  getMemberRecord:(record,id)=>record===fleet&&[5001,5002].includes(id)?{characterID:id}:null
+ };
+ const args={leaderSession:f.a,peerSession:f.b,fleetRuntime,
+  spaceRuntime:f.spaceRuntime};
+ assert.equal(inSpaceParty(args).ok,true);
+ f.scene.sessions.set(9001,{characterID:9001,
+  _space:{shipID:f.b._space.shipID,systemID:30000144,initialStateSent:true},
+  socket:{destroyed:false}});
+ assert.equal(inSpaceParty(args).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
 });
