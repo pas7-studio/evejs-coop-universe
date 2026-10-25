@@ -34,11 +34,16 @@ $files = @(
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
   "tests/coop-alife-economy-wiring.test.mjs",
+  "tests/coop-alife-station-authority.test.mjs",
+  "tests/coop-alife-station-runtime.test.mjs",
+  "tests/coop-alife-station-owner-isolation.test.mjs",
+  "tests/coop-alife-station-wiring.test.mjs",
   "tests/coop-npc-manufacturing.test.mjs",
   "tests/coop-npc-native-economy-director.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
+    "tests/coop-npc-native-economy-director.test.mjs",
     "tests/coop-npc-native-bindings.test.mjs",
     "tests/coop-npc-economy-scheduler.test.mjs"
   )

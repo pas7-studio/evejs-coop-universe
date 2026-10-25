@@ -20,6 +20,7 @@ function readFile(file){
   !valid(v.entityID)||!Number.isFinite(v.boundaryMs)||v.boundaryMs<=0||
   !Array.isArray(v.modules)||!v.modules.length||v.modules.length>16||
   v.modules.some(m=>!valid(m))||new Set(v.modules).size!==v.modules.length||
+  (v.outcomeRequired!==undefined&&typeof v.outcomeRequired!=="boolean")||
   (v.outcome!==undefined&&(
    !v.outcome||v.outcome.version!==1||
    !["TURRET_RESOLVED","MISSILE_LAUNCHED","MISSILE_LAUNCH_FAILED"].includes(v.outcome.kind)||
@@ -37,6 +38,7 @@ function validateFence(raw,id){
  if(v?.version!==1||v.entityID!==id||!v.modules||
   typeof v.modules!=="object"||Array.isArray(v.modules)||
   Object.keys(v.modules).length>2048||
+  (v.outcomeRequired!==undefined&&typeof v.outcomeRequired!=="boolean")||
   Object.entries(v.modules).some(([k,n])=>!valid(k)||
     String(valid(k))!==k||!Number.isFinite(n)||n<=0))
   throw Error("INVALID_NATIVE_FENCE");
@@ -88,7 +90,7 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000,requireOutcome=false}={}
  const entries=[],counts={MATCH_COMMITTED:0,NEEDS_RECONCILIATION:0,
   COMMIT_MISMATCH:0,NATIVE_FENCE_WITHOUT_JOURNAL:0,
   JOURNAL_WITHOUT_NATIVE_FENCE:0,CORRUPT_NEEDS_REVIEW:0,
-  MISSING_FIRE_OUTCOME:0,FAILED_FIRE_OUTCOME:0};
+  MISSING_FIRE_OUTCOME:0,FAILED_FIRE_OUTCOME:0,OUTCOME_MODE_MISMATCH:0};
  for(const id of [...ids].sort((a,b)=>a-b)){
   const entriesForShip=files.get(id)||[];
   const lock=entriesForShip.includes(String(id)+".json.lock");
@@ -112,10 +114,15 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000,requireOutcome=false}={}
      Number(fence.modules[String(mid)]||0)>=receipt.boundaryMs).length;
     status=modulesMatched===receipt.modules.length?
      "MATCH_COMMITTED":"COMMIT_MISMATCH";
-    if(status==="MATCH_COMMITTED"&&requireOutcome){
-     if(!receipt.outcome)status="MISSING_FIRE_OUTCOME";
-     else if(receipt.outcome.kind==="MISSILE_LAUNCH_FAILED")
-      status="FAILED_FIRE_OUTCOME";
+    if(status==="MATCH_COMMITTED"){
+     if(Boolean(fence.outcomeRequired)!==Boolean(receipt.outcomeRequired))
+      status="OUTCOME_MODE_MISMATCH";
+     else if(requireOutcome||receipt.outcomeRequired===true||
+             fence.outcomeRequired===true){
+      if(!receipt.outcome)status="MISSING_FIRE_OUTCOME";
+      else if(receipt.outcome.kind==="MISSILE_LAUNCH_FAILED")
+       status="FAILED_FIRE_OUTCOME";
+     }
     }
    }
   }catch(_){status="CORRUPT_NEEDS_REVIEW";}
@@ -124,7 +131,8 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000,requireOutcome=false}={}
    boundaryMs:receipt?.boundaryMs||null,
    lock,orphanTemp,sqliteFencePresent:!!fence,
    modulesMatched,modulesTotal:receipt?.modules.length||0,
-   outcomeKind:receipt?.outcome?.kind||null});
+   outcomeKind:receipt?.outcome?.kind||null,
+   outcomeRequired:receipt?.outcomeRequired===true||fence?.outcomeRequired===true});
  }
  const clean=warnings.length===0&&
   entries.every(r=>r.status==="MATCH_COMMITTED");
