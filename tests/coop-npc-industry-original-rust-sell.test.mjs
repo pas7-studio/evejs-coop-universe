@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, {after} from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 import fs from "node:fs";
@@ -11,6 +11,16 @@ const FLAGS={EVEJS_COOP_NATIVE_NPC_ECONOMY:"1",
  EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_NATIVE_NPC_TX_PROOF:"1",
  EVEJS_COOP_NATIVE_NPC_MANUAL_FACTORY_PROOF:"1",
  EVEJS_COOP_NATIVE_NPC_MARKET_PENDING:"1"};
+ // The existing COOP-034 adapter deliberately checks process.env itself.
+ // Tests must set its original flags, rather than only injecting a new env
+ // into the LW-04C3 wrapper. Restore state after this isolated test file.
+ const originalFlags=Object.fromEntries(Object.keys(FLAGS)
+  .map(k=>[k,process.env[k]]));
+ for(const [key,value] of Object.entries(FLAGS))process.env[key]=value;
+ after(()=>{for(const [key,value] of Object.entries(originalFlags)){
+  if(value===undefined)delete process.env[key];else process.env[key]=value;
+ }});
+
 function fixture({env=FLAGS,ackLost=false,mutateRust=null}={}){
  const items=new Map([[String(ITEM),{itemID:ITEM,ownerID:OWNER,locationID:STATION,
   flagID:4,typeID:TYPE,quantity:30,stacksize:30,singleton:0,
