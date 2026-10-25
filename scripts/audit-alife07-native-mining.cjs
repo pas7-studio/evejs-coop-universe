@@ -30,13 +30,15 @@ function inspect(file,DatabaseSync){
       Number(src.yieldTypeID)!==Number(receipt.oreTypeID) ||
       Number(src.remainingQuantity)>Number(receipt.afterRock))
      anomalies.push({key:receipt.key,reason:"SOURCE_RECEIPT_CONFLICT"});
-   const row=cargo[String(receipt.cargoID)]||null;
+   const noOre=Number(receipt.quantity)===0;
+   const row=noOre?null:(cargo[String(receipt.cargoID)]||null);
    if(row && (Number(row.ownerID)!==Number(receipt.ownerID) ||
        Number(row.typeID)!==Number(receipt.oreTypeID) ||
        Number(row.entityID)!==Number(receipt.shipID) ||
        Number(row.quantity)<Number(receipt.nextCargo)))
      anomalies.push({key:receipt.key,reason:"CARGO_RECEIPT_CONFLICT"});
-   if(row)totals.stillInMiner++;
+   if(noOre){} // Waste-only native source debit; no cargo was ever created.
+   else if(row)totals.stillInMiner++;
    else totals.movedOrMissing++; // Requires separate native hauler/warehouse custody proof.
    totals.unitsCredited+=Number(receipt.quantity)||0;
    totals.resourceUnitsRemoved+=(Number(receipt.normal)||0)+(Number(receipt.wasted)||0);
