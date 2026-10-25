@@ -57,11 +57,19 @@ function createRescueWarehouse({atomicRows,isNpcCorporation,readStation,
       x.cargoID===sourceCargoID&&x.typeID===item.typeID);
     if(original.length!==1||item.quantity>original[0].quantity)
      throw Error("RESCUE_ORIGINAL_MANIFEST_MISMATCH");
-    if(tx.scan("items").some(x=>x.key!==String(itemID)&&
+    // Separate audited PARTIAL pickups share one immutable original
+    // cargo marker but have distinct native itemIDs and quantities.
+    // Moving either item is idempotently secured by its current PLAYER
+    // ownership and location, not by forbidding the second genuine stack.
+    const delivered=tx.scan("items").filter(x=>
+     x.key!==String(itemID)&&
      x.value?.ownerID===corporationID&&
      x.value?.customInfo===item.customInfo&&
-     x.value?.locationID===stationID))
-     throw Error("RESCUE_DUPLICATE_WAREHOUSE_ITEM");
+     x.value?.locationID===stationID);
+    const already=delivered.reduce((n,x)=>n+
+     (pos(x.value?.quantity)?x.value.quantity:0),0);
+    if(already+item.quantity>original[0].quantity)
+     throw Error("RESCUE_WAREHOUSE_SOURCE_QUANTITY_OVERFLOW");
     const moved={...item,ownerID:corporationID,
      locationID:stationID,flagID:4};
     // Same immutable itemID and original source marker, never minting.
