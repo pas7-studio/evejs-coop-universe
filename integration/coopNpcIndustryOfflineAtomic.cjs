@@ -131,7 +131,19 @@ function createOfflineAtomicInstaller({db,offlineExclusive=false,verifyNativeQuo
      timeInSeconds:Number(quote.timeInSeconds),probability:1,productTypeID:plan.productTypeID,
      optionalTypeID:null,optionalTypeID2:null,outputLocationID:plan.stationID,outputFlagID:4,
      inputLocationID:plan.stationID,inputFlagID:4,account:['cash',1000],
-     materials:Object.fromEntries(plan.materials.map(x=>[String(x.typeID),x.quantity])),coopOperationID:operationID,
+     materials:Object.fromEntries(plan.materials.map(x=>[String(x.typeID),x.quantity])),
+     // LW-04D original input custody: record the exact SOURCE ItemStore item
+     // IDs and consumed amounts INSIDE the existing single SQLite transaction.
+     // No new item, allocator, wallet, or material transfer. This proves
+     // WHICH owned physical mineral stacks paid for this BPO install.
+     coopMaterialDebits:reductions.map(line=>({
+      itemID:line.source.itemID,typeID:line.source.typeID,
+      ownerID:line.source.ownerID,stationID:line.source.locationID,
+      beforeQuantity:line.source.quantity,consumedQuantity:line.removed,
+      afterQuantity:line.source.quantity-line.removed,
+      sourceCustomInfo:line.source.customInfo??null
+     })),
+     coopOperationID:operationID,
      coopQuoteSignature:JSON.stringify(quote)};
    put('industryJobs',rowKey('jobs',jobID),job);
    put('industryJobs','_meta',{...meta,nextJobID:jobID+1,lastUpdatedAt:new Date(now).toISOString()});
