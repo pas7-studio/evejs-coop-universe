@@ -60,6 +60,7 @@ fn coop_npc_partial_value(db:&Connection,op:&str,claim:&str)
     base["buyer_id"]=serde_json::json!(buyer.to_string());
     base["fill_quantity"]=serde_json::json!(qty);
     base["remaining_before"]=serde_json::json!(before);
+    base["remaining_after"]=serde_json::json!(before-qty);
     base["price_cents"]=serde_json::json!(price);
     base["fill_phase"]=serde_json::json!(phase);
     Ok(Some(base))
