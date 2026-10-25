@@ -26,7 +26,7 @@ function fixture({target=100}={}) {
   markReadyOnce:id=>{if(!elapsed)return{status:"BLOCKED",error:"NATIVE_JOB_NOT_YET_READY"};job.status=3;return{status:"READY"}},
   deliverOnce:id=>{if(job.status!==3)throw Error("NOT_READY");job.status=4;job.coopDelivery={itemID:1990000200,quantity:100};
     produced={itemID:1990000200,typeID:TYPE,ownerID:OWNER,locationID:STATION,quantity:100,
-      customInfo:"coop-industry:v1:"+job.jobID};
+      stacksize:100,flagID:4,singleton:0,customInfo:"coop-industry:v1:"+job.jobID};
     return{status:"DELIVERED",itemID:1990000200,quantity:100}},
   getJob:id=>job,getItem:id=>produced&&produced.itemID===id?produced:null,getIndustryDebit:jobID=>debit};
  const market={
@@ -42,6 +42,7 @@ function fixture({target=100}={}) {
  const create=(opts={})=>createDirector({file:path.join(root,"director.json"),planner,native,market,observe,clock:()=>now,...opts});
  return {root,create,native,market,observe,planner,
   get balance(){return wallet},get installs(){return installCalls},get listings(){return ordersCreated},
+  getProduced:()=>produced,
   setElapsed:v=>elapsed=v,setNow:v=>now=v,
   addDemand:(quantity=20)=>demands.push({receiptID:"native:"+demands.length,source:"NATIVE_WEAPON_CONSUMPTION",
     typeID:TYPE,quantity,authoritativeNative:true,at:now,ownerID:OWNER,stationID:STATION}),
@@ -314,4 +315,51 @@ test("a lost delivery ACK recovers the exact produced item, then lists it once",
  assert.equal(restarted.tick(ctx).status,"LISTED");
  assert.equal(f.listings,1);
  assert.equal(f.installs,1);
+}));
+
+test("post-delivery non-warehouse output cannot advance to durable DELIVERED",()=>run(f=>{
+ const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ assert.equal(d.tick(ctx).status,"READY");
+ const deliver=f.native.deliverOnce;
+ f.native.deliverOnce=id=>{
+  const receipt=deliver(id);
+  f.getProduced().flagID=5;
+  return receipt;
+ };
+ const result=d.tick(ctx);
+ assert.equal(result.reason,"DELIVERY_ITEM_IDENTITY_UNKNOWN");
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"DELIVERY_UNKNOWN");
+ assert.equal(f.listings,0);
+}));
+test("tampered stacksize before listing cannot advance DELIVERED into LIST_UNKNOWN",()=>run(f=>{
+ const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);assert.equal(d.tick(ctx).status,"DELIVERED");
+ f.getProduced().stacksize=1;
+ const result=d.tick(ctx);
+ assert.equal(result.reason,"NATIVE_OUTPUT_NO_LONGER_AVAILABLE");
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"DELIVERED");
+ assert.equal(f.listings,0);
+}));
+test("sub-cent Rust market order quote cannot certify a native factory listing",()=>run(f=>{
+ const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+ const original=f.market.getOrder;
+ f.market.getOrder=id=>({...original(id),price:0.004});
+ const result=d.tick(ctx);
+ assert.equal(result.reason,"NATIVE_MARKET_PRICE_INVALID");
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LIST_UNKNOWN");
+}));
+test("sub-cent paid sale receipt cannot certify free stock liquidation",()=>run(f=>{
+ const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ f.sell(100,0.004);
+ f.market.getWalletEntry=id=>({verifiedNative:true,transactionID:id,ownerID:OWNER,
+  orderID:101,amountCents:0});
+ assert.throws(()=>d.tick(ctx),/NATIVE_SALE_LEDGER_INVALID/);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+}));
+test("valid two-decimal sale price retains exact original corporate revenue",()=>run(f=>{
+ const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ f.sell(100,12.05);
+ const result=d.tick(ctx);
+ assert.equal(result.status,"SOLD");
+ assert.equal(result.revenueCents,120500);
 }));
