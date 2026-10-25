@@ -70,7 +70,15 @@ function decideNativeEconomy(snapshot,{maxIntents=12,now=Date.now(),maxAgeMs=120
     "NPC_AMMO_NATIVE_EVIDENCE_REQUIRED"};
   }
   if(p.role!=="trader")return{stage:"IDLE",reason:"NO_ECONOMY_ROLE"};
-  const e=station.economy;
+  // COOP-043: native NPC pilot owner ID is authoritative. Never reuse a
+  // station-level economic projection for an unrelated corporation.
+  const e=positive(p.ownerID)?p.economy:station.economy;
+  if(positive(p.ownerID)&&!e)return{stage:"IDLE",reason:"NATIVE_FACTORY_MARKET_PROOF_REQUIRED"};
+  if(positive(p.ownerID)&&e?.authoritativeNative===false&&
+     /^[A-Z][A-Z0-9_]{3,110}$/.test(String(e.reason||"")))
+   return {stage:"IDLE",reason:e.reason};
+  if(positive(p.ownerID)&&(e?.ownerID!==p.ownerID||e?.stationID!==station.stationID||
+     e?.systemID!==snapshot.systemID))return{stage:"IDLE",reason:"NATIVE_OWNER_STATION_AUTHORITY_MISMATCH"};
   if(!e||e.authoritativeNative!==true||!natural(e.oreAtStation)||
      !natural(e.mineralStock)||!natural(e.materialShortage)||
      !natural(e.productShortage)||!natural(e.nativeOutputQty)||
@@ -78,21 +86,32 @@ function decideNativeEconomy(snapshot,{maxIntents=12,now=Date.now(),maxAgeMs=120
      !natural(e.nativeActiveJobs)||typeof e.factoryOnline!=="boolean"||
      typeof e.marketOnline!=="boolean")
    return {stage:"IDLE",reason:"NATIVE_FACTORY_MARKET_PROOF_REQUIRED"};
+  // Zero ISK must NOT lock a corporation out of delivering or listing
+  // already-paid-for goods. Otherwise the NPC can never earn its first sale.
+  // Missing/invalid wallet proof still blocks ALL economic intents.
+  if(positive(p.ownerID)&&!natural(e.walletCents))
+   return{stage:"IDLE",reason:"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY"};
   if(e.nativeOutputQty>0&&e.marketOnline)
    return{stage:"LIST_OUTPUT",reason:"NATIVE_MANUFACTURED_OUTPUT_UNLISTED",
       stationID:station.stationID,resource:"station:"+station.stationID+":list"};
   if(e.nativeReadyJobs>0)
    return{stage:"COMPLETE_JOB",reason:"NATIVE_JOB_READY_PROVEN",
       stationID:station.stationID,resource:"station:"+station.stationID+":job"};
-  if(e.productShortage>0&&e.factoryOnline&&e.materialShortage===0&&e.mineralStock>0&&e.nativeActiveJobs<2)
+  if(e.productShortage>0&&e.factoryOnline&&e.materialShortage===0&&e.mineralStock>0&&e.nativeActiveJobs<2){
+   if(positive(p.ownerID)&&e.walletCents===0)
+    return{stage:"IDLE",reason:"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY"};
    return{stage:"MANUFACTURE",reason:"VERIFIED_SHORTAGE_AND_NATIVE_INPUTS",
       stationID:station.stationID,resource:"station:"+station.stationID+":job"};
+  }
   if(e.materialShortage>0&&e.nativeOreToRefine>0)
    return{stage:"REFINE",reason:"NATIVE_ORE_AVAILABLE_FOR_MINERAL_SHORTAGE",
       stationID:station.stationID,resource:"station:"+station.stationID+":refine"};
-  if(e.materialShortage>0)
+  if(e.materialShortage>0){
+   if(positive(p.ownerID)&&e.walletCents===0)
+    return{stage:"IDLE",reason:"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY"};
    return{stage:"BUY_SUPPLIES",reason:"MATERIAL_DEFICIT_REQUIRES_REAL_MARKET_PURCHASE",
       stationID:station.stationID,resource:"station:"+station.stationID+":supplies"};
+  }
   return{stage:"IDLE",reason:e.productShortage===0?"ENOUGH_REAL_STOCK":"PRODUCTION_DEPENDENCY_NOT_READY"};
  }
  const ordered=[...pilots.values()].sort((a,b)=>
