@@ -162,8 +162,8 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
    const sellerAfter=sellerBefore+amounts.gross-taxCents;
    const seq=tx.get("identityState","coopP2PMarketJournal");
    const next=seq?.next??5000000000000000;
-   if(!pos(next)||next<5000000000000000||!pos(next+2)||
-      next+2>Number.MAX_SAFE_INTEGER)
+   if(!pos(next)||next<5000000000000000||!pos(next+3)||
+      next+3>Number.MAX_SAFE_INTEGER)
     throw Error("P2P_BUY_PAY_JOURNAL_ID_EXHAUSTED");
    const at=clock();
    if(!pos(at))throw Error("P2P_BUY_PAY_CLOCK_UNAVAILABLE");
@@ -182,7 +182,7 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
     description:"Original funded BUY seller sales tax "+receiptKey};
    const existing=[...seller.walletJournal,...buyer.walletJournal,
     ...seller.marketTransactions,...buyer.marketTransactions];
-   if(existing.some(e=>e?.transactionID===next||e?.transactionID===next+1))
+   if(existing.some(e=>e?.transactionID===next||e?.transactionID===next+1||e?.transactionID===next+2))
     throw Error("P2P_BUY_PAY_NATIVE_TRANSACTION_ID_COLLISION");
    const trade={transactionDate:when,typeID:proof.typeID,
     quantity:proof.filledQuantity,price:money(proof.priceCents),
@@ -219,7 +219,7 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
    });
    tx.put("characters",String(proof.ownerID),{
     ...buyer,
-    marketTransactions:[{...trade,transactionID:next+1,
+    marketTransactions:[{...trade,transactionID:next+2,
       clientID:proof.counterpartyID,journalRefID:-1},
       ...buyer.marketTransactions].slice(0,2000)
    });
@@ -238,7 +238,7 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
     remainingReserveCents:amounts.reserveAfter
    });
    tx.put("playerMarketFills",receiptKey,result);
-   tx.put("identityState","coopP2PMarketJournal",{next:next+2});
+   tx.put("identityState","coopP2PMarketJournal",{next:next+3});
    return result;
   });
  }
