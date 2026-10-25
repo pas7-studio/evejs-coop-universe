@@ -205,3 +205,28 @@ test("crash between native source debit and durable DEBIT marker never mints car
   assert.equal(f.cargo.size,0);
  }finally{fs.renameSync=original;f.cleanup();}
 });
+
+test("stale interprocess lock blocks recovery and all native cargo grants",()=>{
+ const f=fixture();try{
+  fs.writeFileSync(path.join(f.dir,"native-wreck-custody.writer.lock"),
+   '{"version":1,"pid":123,"purpose":"NATIVE_WRECK_ITEM_CUSTODY"}');
+  const worker=f.create();
+  assert.equal(worker.transfer(f.input()).status,"NATIVE_CUSTODY_WRITER_LOCK_UNSAFE");
+  assert.equal(worker.recover().status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(f.sources.size,1);assert.equal(f.cargo.size,0);
+ }finally{f.cleanup();}
+});
+test("two interleaved native transfer workers cannot debit one wreck stack twice",()=>{
+ const f=fixture();try{
+  const original=f.store.removeNativeWreckItem;
+  let concurrent=null;
+  f.store.removeNativeWreckItem=id=>{
+   concurrent=f.create().transfer(f.input());
+   return original(id);
+  };
+  const result=f.create().transfer(f.input());
+  assert.equal(result.status,"NATIVE_WRECK_CARGO_SETTLED");
+  assert.equal(concurrent.status,"NATIVE_CUSTODY_WRITER_LOCK_UNSAFE");
+  assert.equal(f.sources.size,0);assert.equal(f.cargo.size,1);
+ }finally{f.cleanup();}
+});
