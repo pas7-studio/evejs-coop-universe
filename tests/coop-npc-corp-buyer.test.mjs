@@ -34,6 +34,7 @@ function fixture({buyerISK=1000,failAt=null}={}){
    del:(t,k)=>{if(failAt===t)throw Error("INJECTED_ATOMIC_FAULT:"+t);delete data[t][k]}
   })}catch(e){for(const t of TABLES)data[t]=backup[t];throw e}
  }};
+ let quoteMode="valid",taxRate=0.08;
  let state="settling",phase="claimed",claims=0,finalizations=0,
   loseFinal=false,buyerValid=true,sellerValid=true,releaseClaim=null;
  const claim=()=>({source:"player",state,fill_phase:phase,is_corp:false,bid:false,
@@ -50,14 +51,17 @@ function fixture({buyerISK=1000,failAt=null}={}){
  const create=()=>createNpcCorporateBuyer({gameStore,market,
   verifyBuyerCorporation:()=>buyerValid,
   verifyPlayerSeller:()=>sellerValid,
-  quoteSellerTax:({sellerID,stationID,grossCents})=>({sellerID,stationID,grossCents,
-   taxCents:Math.round(grossCents*0.08),policy:"EVEJS_NATIVE_MARKET_RULES"}),
+  quoteSellerTax:({sellerID,stationID,grossCents})=>({
+   sellerID,stationID,grossCents,
+   taxCents:quoteMode==="malformed"?-1:Math.round(grossCents*taxRate),
+   policy:quoteMode==="unauthorized"?"FAKE_MARKET":"EVEJS_NATIVE_MARKET_RULES"}),
   clock:()=>1761390000000});
  const bridge=create();
  return {data,bridge,market,request,claim,create,
   get claims(){return claims},get finalizes(){return finalizations},
   fault:t=>{failAt=t},loseAck:()=>{loseFinal=true},
   setBuyer:v=>{buyerValid=v},setSeller:v=>{sellerValid=v},
+  setTaxMode:v=>{quoteMode=v},setTaxRate:v=>{taxRate=v},
   setMarketDone:()=>{state="filled";phase="finalized"},
   async stallClaim(){let unlock;releaseClaim=new Promise(r=>{unlock=r});return unlock}
  };
@@ -172,4 +176,30 @@ test("a committed native receipt remains idempotent if later ammo was consumed",
  assert.equal(again.status,"NPC_PURCHASED_PLAYER_GOODS");
  assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,balances.buyer);
  assert.equal(f.data.characters[SELLER].balance,balances.seller);
+}));
+test("malformed or forged seller tax aborts all five native tables",()=>run(async f=>{
+ for(const taxMode of ["malformed","unauthorized"]){
+  const before=structuredClone(f.data);f.setTaxMode(taxMode);
+  await assert.rejects(buy(f),/NATIVE_SELLER_TAX_UNVERIFIED/);
+  assert.deepEqual(f.data,before);
+ }
+}));
+test("legitimate zero tax keeps the sale paid without a fake tax journal",()=>run(async f=>{
+ f.setTaxRate(0);
+ const result=await buy(f);
+ assert.equal(result.status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(result.taxCents,0);assert.equal(result.netCents,2500);
+ assert.equal(f.data.characters[SELLER].balance,125);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,1);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,0);
+}));
+test("lost native finalize ACK never charges seller tax twice",()=>run(async f=>{
+ f.loseAck();
+ await assert.rejects(buy(f),/LOST_RUST_FINALIZE_ACK/);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
+ assert.equal((await f.create().purchaseOnce(f.request)).status,
+  "NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(f.data.characters[SELLER].balance,123);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
 }));
