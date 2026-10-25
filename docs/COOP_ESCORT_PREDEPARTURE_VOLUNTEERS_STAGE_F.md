@@ -44,7 +44,7 @@ With the flags OFF, the original native station route is unchanged.
 
 - 10/10 isolated V8 source checks PASS on committed Opportunity Board: actual predeparture event, stable original cargo ID, exactly one email, /events info actionable volunteer instructions, duplicate/restart safe ready state, missing ship rejection, true DEPARTED terminal linked to actual trip.
 - 8/8 isolated V8 checks PASS on committed real station director with controlled native scene/manifest/escrow/warp providers: no volunteer = no manifest, money or warp; real persisted duo triggers exact source path; predeparture event closed only after native warp ACK.
-- 10 Node board event scenarios and 5 Node station predeparture scenarios committed, syntax PASS. Full official Node runner and real pinned EveJS client/Docker NOT RUN.
+- 11 Node board event scenarios and 6 Node station predeparture scenarios committed, syntax PASS. Full official Node runner and real pinned EveJS client/Docker NOT RUN.
 - Reversible overlay remains the existing installer mechanism (no additional upstream source patch in this branch).
 
 Release state: READY FOR CODE REVIEW, NOT LIVE GAMEPLAY GO.
