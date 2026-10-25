@@ -1,0 +1,188 @@
+"use strict";
+// P0: atomic native GameStore single-stack FULL SELL order settlement.
+// No parallel inventory, wallet, or market; all effects via the pinned
+// GameStore coopAtomicNativeRows.transact(...) with one durable SQLite COMMIT.
+// Partial, multi-stack and pre-funded BUY matches deliberately fail closed.
+const TABLES=Object.freeze(["characters","items","marketEscrow","identityState","playerMarketFills"]);
+const pos=n=>typeof n==="number"&&Number.isSafeInteger(n)&&n>0;
+const safe=n=>typeof n==="number"&&Number.isSafeInteger(n)&&n>=0;
+const cents=n=>{
+ if(typeof n!=="number"||!Number.isFinite(n)||n<0)return null;
+ const v=n*100,k=Math.round(v);
+ return Number.isSafeInteger(k)&&Math.abs(k-v)<=1e-6?k:null;
+};
+const isk=n=>n/100;
+const receiptKey=t=>"p2p:"+t.orderID+":"+t.cycle;
+function checkTicket(ticket,proof){
+ if(!ticket||!proof||!Object.isFrozen(proof)||ticket.orderID!==proof.orderID||
+    typeof proof.orderID!=="string"||!/^[1-9][0-9]*$/.test(proof.orderID)||
+    !pos(ticket.cycle)||!pos(proof.ownerID)||!pos(proof.counterpartyID)||
+    proof.bid!==false||proof.ownerID===proof.counterpartyID||
+    !pos(proof.stationID)||!pos(proof.typeID)||
+    !pos(proof.filledQuantity)||!pos(proof.volumeBefore)||
+    !pos(proof.priceCents)||!pos(proof.sellerSourceLocationID)||
+    proof.filledQuantity!==proof.volumeBefore||proof.volumeAfter!==0)
+  throw Error("P2P_ATOMIC_ONLY_FULL_NATIVE_SELL_WITH_VERIFIED_TICKET");
+ const escrowLocation=BigInt(proof.orderID)+9200000000n;
+ if(escrowLocation>BigInt(Number.MAX_SAFE_INTEGER)||
+    Number(escrowLocation)!==proof.sellerSourceLocationID)
+  throw Error("P2P_ATOMIC_UNSAFE_ESCROW_LOCATION");
+ const gross=proof.priceCents*proof.filledQuantity;
+ if(!pos(gross))throw Error("P2P_ATOMIC_GROSS_OVERFLOW");
+ return gross;
+}
+function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
+ if(typeof gameStore?.transact!=="function"||typeof clock!=="function")
+  throw Error("P2P_ATOMIC_NATIVE_GAMESTORE_REQUIRED");
+ function enabled(){
+  return process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
+   process.env.EVEJS_COOP_PLAYER_MARKET_ATOMIC==="1"&&
+   process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD==="1"&&
+   process.env.EVEJS_COOP_PLAYER_MARKET_SETTLEMENT_FENCE==="1"&&
+   process.env.EVEJS_COOP_RUST_P2P_CLAIM==="1";
+ }
+ function settle({ticket,proof,tax,sourceItemID}={}){
+  if(!enabled())throw Error("P2P_ATOMIC_FLAGS_DISABLED");
+  const gross=checkTicket(ticket,proof),taxCents=cents(tax);
+  if(taxCents===null||taxCents>gross||!pos(sourceItemID))
+   throw Error("P2P_ATOMIC_TAX_OR_SOURCE_INVALID");
+  const buyer=proof.counterpartyID,seller=proof.ownerID,key=receiptKey(ticket);
+  return gameStore.transact(TABLES,tx=>{
+   const existing=tx.get("playerMarketFills",key);
+   if(existing){
+    if(existing.phase!=="GAMESTORE_COMMITTED"||existing.key!==key||
+       existing.orderID!==ticket.orderID||existing.cycle!==ticket.cycle||
+       existing.buyerID!==buyer||existing.sellerID!==seller||
+       existing.itemID!==sourceItemID||existing.quantity!==proof.filledQuantity||
+       existing.stationID!==proof.stationID||existing.typeID!==proof.typeID||
+       existing.priceCents!==proof.priceCents||existing.taxCents!==taxCents||
+       existing.grossCents!==gross||
+       existing.buyerBeforeCents-existing.buyerAfterCents!==gross||
+       existing.sellerAfterCents-existing.sellerBeforeCents!==gross-taxCents)
+     throw Error("P2P_ATOMIC_COMMITTED_RECEIPT_REPLAY_CONFLICT");
+    // A player may already have sold/used their received item. Never
+    // require it to remain in the hangar and never replay wallet movement.
+    return {...existing,replayed:true};
+   }
+   const escrow=tx.get("marketEscrow",ticket.orderID);
+   if(!escrow||String(escrow.orderId)!==ticket.orderID||
+      escrow.escrowType!=="sell"||escrow.isCorp!==false||
+      escrow.ownerId!==seller||escrow.stationId!==proof.stationID||
+      escrow.typeId!==proof.typeID||
+      escrow.remainingQuantity!==proof.filledQuantity||
+      escrow.escrowLocationID!==proof.sellerSourceLocationID)
+    throw Error("P2P_ATOMIC_ESCROW_UNVERIFIED");
+   const stacks=tx.scan("items").filter(({value})=>
+    value?.ownerID===seller&&value.locationID===proof.sellerSourceLocationID&&
+    value.flagID===4);
+   if(stacks.length!==1||stacks[0].key!==String(sourceItemID))
+    throw Error("P2P_ATOMIC_SINGLE_PHYSICAL_STACK_REQUIRED");
+   const {value:item}=stacks[0];
+   if(item.itemID!==sourceItemID||item.typeID!==proof.typeID||
+      item.singleton!==0||item.quantity!==proof.filledQuantity||
+      item.stacksize!==proof.filledQuantity||
+      !pos(item.itemID)||!pos(item.categoryID))
+    throw Error("P2P_ATOMIC_ORIGINAL_ITEM_MISMATCH");
+   const buyerRow=tx.get("characters",String(buyer)),
+    sellerRow=tx.get("characters",String(seller));
+   if(!buyerRow||!sellerRow||
+      Number(buyerRow.characterID??buyerRow.charID)!==buyer||
+      Number(sellerRow.characterID??sellerRow.charID)!==seller||
+      !Array.isArray(buyerRow.walletJournal)||!Array.isArray(sellerRow.walletJournal)||
+      !Array.isArray(buyerRow.marketTransactions)||
+      !Array.isArray(sellerRow.marketTransactions))
+    throw Error("P2P_ATOMIC_CHARACTER_WALLET_AUTHORITY_MISSING");
+   const buyerBefore=cents(buyerRow.balance),sellerBefore=cents(sellerRow.balance);
+   if(buyerBefore===null||sellerBefore===null||buyerBefore<gross||
+      !safe(sellerBefore+gross-taxCents))
+    throw Error("P2P_ATOMIC_WALLET_FUNDS_OR_PRECISION_INVALID");
+   const buyerAfter=buyerBefore-gross,sellerAfter=sellerBefore+gross-taxCents;
+   const seed=tx.get("identityState","coopP2PMarketJournal");
+   const next=seed?.next??5000000000000000;
+   if(!pos(next)||next<5000000000000000||
+      !pos(next+3)||next+3>Number.MAX_SAFE_INTEGER)
+    throw Error("P2P_ATOMIC_JOURNAL_ID_EXHAUSTED");
+   const ids=[next,next+1,next+2];
+   const prev=[...buyerRow.walletJournal,...sellerRow.walletJournal,
+    ...buyerRow.marketTransactions,...sellerRow.marketTransactions];
+   if(prev.some(x=>ids.includes(x?.transactionID)))
+    throw Error("P2P_ATOMIC_JOURNAL_ID_COLLISION");
+   const at=clock();
+   if(!pos(at))throw Error("P2P_ATOMIC_CLOCK_INVALID");
+   const time=String(BigInt(at)*10000n+116444736000000000n);
+   const base={transactionDate:time,referenceID:ticket.orderID,
+    currency:1,accountKey:1000,sortValue:1,ownerID1:buyer,ownerID2:seller,
+    description:"Native player-to-player market fill "+key};
+   const buyerEntry={...base,transactionID:ids[0],entryTypeID:2,
+    amount:isk(-gross),balance:isk(buyerAfter)};
+   const sellerEntry={...base,transactionID:ids[1],entryTypeID:2,
+    amount:isk(gross),balance:isk(sellerBefore+gross)};
+   const taxEntry={...base,transactionID:ids[2],entryTypeID:54,
+    amount:isk(-taxCents),balance:isk(sellerAfter),
+    ownerID1:proof.stationID,ownerID2:seller,
+    description:"Native market transaction tax "+key};
+   const trade={transactionID:ids[0],transactionDate:time,
+    typeID:proof.typeID,quantity:proof.filledQuantity,
+    price:isk(proof.priceCents),stationID:proof.stationID,
+    locationID:proof.stationID,buyerID:buyer,sellerID:seller,
+    accountID:1000,buyerAccountID:1000,sellerAccountID:1000};
+   const buyerNext={...buyerRow,balance:isk(buyerAfter),balanceChange:isk(-gross),
+    walletJournal:[buyerEntry,...buyerRow.walletJournal].slice(0,100),
+    marketTransactions:[{...trade,clientID:seller,journalRefID:ids[0]},
+     ...buyerRow.marketTransactions].slice(0,2000)};
+   const sellerNext={...sellerRow,balance:isk(sellerAfter),
+    balanceChange:isk(gross-taxCents),
+    walletJournal:[...(taxCents>0?[taxEntry]:[]),sellerEntry,
+     ...sellerRow.walletJournal].slice(0,100),
+    marketTransactions:[{...trade,transactionID:ids[1],
+     clientID:buyer,journalRefID:ids[1]},
+     ...sellerRow.marketTransactions].slice(0,2000)};
+   const moved={...item,ownerID:buyer,locationID:proof.stationID,flagID:4};
+   const result={key,phase:"GAMESTORE_COMMITTED",orderID:ticket.orderID,
+    cycle:ticket.cycle,buyerID:buyer,sellerID:seller,
+    stationID:proof.stationID,typeID:proof.typeID,itemID:sourceItemID,
+    quantity:proof.filledQuantity,priceCents:proof.priceCents,
+    grossCents:gross,taxCents,
+    buyerBeforeCents:buyerBefore,buyerAfterCents:buyerAfter,
+    sellerBeforeCents:sellerBefore,sellerAfterCents:sellerAfter,
+    committedAt:at};
+   tx.put("items",String(sourceItemID),moved);
+   tx.put("characters",String(buyer),buyerNext);
+   tx.put("characters",String(seller),sellerNext);
+   tx.del("marketEscrow",ticket.orderID);
+   tx.put("identityState","coopP2PMarketJournal",{next:next+3});
+   tx.put("playerMarketFills",key,result);
+   return result;
+  });
+ }
+ function requireReceipt(ticket,proof){
+  checkTicket(ticket,proof);
+  const key=receiptKey(ticket);
+  return gameStore.transact(["playerMarketFills"],tx=>{
+   const receipt=tx.get("playerMarketFills",key);
+   if(!receipt||receipt.key!==key||receipt.phase!=="GAMESTORE_COMMITTED"||
+      receipt.orderID!==ticket.orderID||receipt.cycle!==ticket.cycle||
+      receipt.buyerID!==proof.counterpartyID||receipt.sellerID!==proof.ownerID||
+      receipt.quantity!==proof.filledQuantity||
+      receipt.priceCents!==proof.priceCents||
+      receipt.grossCents!==proof.priceCents*proof.filledQuantity||
+      !safe(receipt.taxCents)||
+      receipt.buyerBeforeCents-receipt.buyerAfterCents!==receipt.grossCents||
+      receipt.sellerAfterCents-receipt.sellerBeforeCents!==
+       receipt.grossCents-receipt.taxCents)
+    throw Error("P2P_ATOMIC_DURABLE_NATIVE_RECEIPT_REQUIRED");
+   return receipt;
+  });
+ }
+ return Object.freeze({settle,requireReceipt});
+}
+let single=null;
+function active(){
+ if(!single)single=createAtomicSell({
+  gameStore:require("../gameStore").coopAtomicNativeRows
+ });
+ return single;
+}
+module.exports={createAtomicSell,receiptKey,
+ settle:args=>active().settle(args),
+ requireReceipt:(ticket,proof)=>active().requireReceipt(ticket,proof)};
