@@ -245,7 +245,8 @@ function reconcileNativeIntents(rows,{windowMs=600000,maxIntents=5000}={}){
    stage:String(intent.stage||"UNKNOWN"),systemID:intent.systemID||null,
    status,proof});
  }
- return {status:results.some(x=>x.status==="INVALID_INTENT_IDENTITY")?
+ return {status:results.length===0?"NO_ALIFE_INTENTS_OBSERVED":
+  results.some(x=>x.status==="INVALID_INTENT_IDENTITY")?
   "INVALID_EVIDENCE":results.some(x=>x.status!=="NATIVE_OUTCOME_OBSERVED")?
   "REQUIRES_NATIVE_E2E_PROOF":"ALL_SUPPORTED_INTENTS_HAVE_NATIVE_EVIDENCE",
   intents:results.length,matched:counts.NATIVE_OUTCOME_OBSERVED,
@@ -255,7 +256,7 @@ function reconcileNativeIntents(rows,{windowMs=600000,maxIntents=5000}={}){
 if (require.main === module) {
   const file = process.argv[2];
   if (!file || !fs.existsSync(file)) {
-    console.error("usage: node scripts/alife-audit.cjs <coop-events.jsonl> [--since ISO] [--top N]");
+    console.error("usage: node scripts/alife-audit.cjs <coop-events.jsonl> [--since ISO] [--top N] [--timeline|--reconcile]");
     process.exit(2);
   }
   const sinceFlag = process.argv.indexOf("--since");
