@@ -8,7 +8,6 @@ const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","co
 // Chat 29: source-level buy cancellation custody, default OFF.
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody","coopPlayerMarketFill");
 // P0 staged modules registered separately to avoid conflicts in the shared list.
-// P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
 // COOP-046: opt-in post-commit combat outcome witness for atomic ammo banks.
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
@@ -246,7 +245,7 @@ function transform(source,spec,remove){
    text=require("./coop-player-market-fill-patch.cjs").patch(text,{remove:false});
   }
  }
- if(spec.file==="server/src/space/runtime.js")if(spec.file==="server/src/space/runtime.js")
+ if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
   text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
