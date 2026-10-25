@@ -49,7 +49,7 @@ function fixture(){
    put:(table,key,val)=>{assert.equal(table,TABLE);next.set(key,structuredClone(val));writes++}};
   const out=fn(tx);rows.clear();for(const [k,v] of next)rows.set(k,v);return out;
  }}};
- const store={getNativeEntity:()=>native,
+ const store={getNativeEntity:()=>native,getNativeController:()=>controller,
   listNativeModulesForEntity:()=>modules,
   listNativeCargoForEntity:()=>cargo};
  const ledger=createWarTransferLedger({
@@ -87,6 +87,7 @@ test("native destination then SQL + JSON relocation finish exactly once",()=>{
  assert.equal(f.identityRegistry.relocate("coop-pilot-001",101,501,202).status,"RELOCATED");
  assert.equal(f.ledger.finish(f.cmd).status,"COMPLETE");
  assert.equal(f.ledger.pending().status,"CLEAN");
+ assert.equal(f.ledger.auditPersisted().status,"CLEAN");
  assert.equal(f.ledger.finish(f.cmd).status,"BLOCKED");
  assert.equal(f.fleet().ships["501"].systemID,202);
 });
@@ -129,8 +130,17 @@ test("corrupt fingerprint input and unverified filesystem links reject handoff",
  const f=fixture();f.links["coop-pilot-002"]={entityID:501,systemID:101};
  assert.equal(f.ledger.begin(f.cmd).reason,"WAR_HANDOFF_SOURCE_UNVERIFIED");
 });
-test("disabled native handoff performs no store writes",()=>{
- const f=fixture();f.ledger.begin(f.cmd);
- const disabled=createWarTransferLedger;
- assert.equal(typeof disabled,"function");
+test("a previously completed transfer is not safe after pilot or native drift",()=>{
+ const f=fixture();f.ledger.begin(f.cmd);f.move(202);
+ f.ledger.nativeCommit(f.cmd);
+ f.identityRegistry.relocate("coop-pilot-001",101,501,202);
+ f.ledger.finish(f.cmd);
+ assert.equal(f.ledger.auditPersisted().status,"CLEAN");
+ f.native.systemID=101;
+ assert.equal(f.ledger.auditPersisted().status,"NEEDS_OPERATOR_REPAIR");
+});
+test("an incomplete handoff is an explicit restart repair blocker",()=>{
+ const f=fixture();
+ assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
+ assert.equal(f.ledger.auditPersisted().status,"NEEDS_OPERATOR_REPAIR");
 });
