@@ -24,7 +24,7 @@ Local enabling of these policies alone **cannot** put new goods or ISK in a worl
 
 ## Verification
 
-**17/17 PASS** pure V8 policy regressions against exact current branch file.
+**18/18 PASS** pure V8 policy regressions against exact current branch file.
 `tests/coop-npc-market-policy.test.mjs` is included in
 `scripts/Run-Alife-Economy-Tests.ps1`.
 Six independent native acceptance scenarios in
