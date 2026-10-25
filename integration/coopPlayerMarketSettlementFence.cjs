@@ -53,7 +53,8 @@ function makeSettlementFence({file,storage=fs,readNative,clock=()=>Date.now()}={
    map.set(event.orderID,{
     ...event,
     proof:event.proof||prev?.proof,
-    before:event.before||prev?.before
+    before:event.before||prev?.before,
+    chargeBuyerWallet:event.chargeBuyerWallet??prev?.chargeBuyerWallet
    });
   }
   return map;
