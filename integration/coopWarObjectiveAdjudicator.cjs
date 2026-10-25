@@ -177,7 +177,7 @@ function createWarObjectiveAdjudicator({gameStore,getNativeStructure,
      return {status:"BLOCKED",reason:"OBJECTIVE_NATIVE_STRUCTURE_DRIFT"};
     // Presence requires physically loaded native ships in range; missing
     // scene / ambiguous fighter identity is UNKNOWN, not enemy absent.
-    const present=witness?.status==="UNCONTESTED_NATIVE_ATTCKER"&&
+    const present=witness?.status==="UNCONTESTED_NATIVE_ATTACKER"&&
      witness.systemID===obj.systemID&&
      witness.attackerFactionID===active.attackerFactionID&&
      witness.defenderFactionID===active.defenderFactionID&&
@@ -222,7 +222,7 @@ function createWarObjectiveAdjudicator({gameStore,getNativeStructure,
       observationAt:now,objectiveDestroyedAt:obj.destroyedAt});
     }catch{return {status:"BLOCKED",reason:"NATIVE_CAPTURE_WITNESS_UNAVAILABLE"}}
     if(n?.structureID!==obj.structureID||n.destroyedAt!==obj.destroyedAt||
-     witness?.status!=="UNCONTESTED_NATIVE_ATTCKER"||
+     witness?.status!=="UNCONTESTED_NATIVE_ATTACKER"||
      witness.systemID!==obj.systemID||
      witness.attackerFactionID!==active.attackerFactionID||
      witness.defenderFactionID!==active.defenderFactionID||
