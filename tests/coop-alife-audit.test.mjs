@@ -59,3 +59,18 @@ test("report prints blockers and trades, and stays readable with no data", () =>
   assert.match(text, /TRADE .*"typeID":1228/);
   assert.match(report(summarize([])), /blockers[\s\S]*none/);
 });
+test("--timeline renders the life chain per actor in order", () => {
+  const text = require("../scripts/alife-audit.cjs").timeline(rows).map((entry) => entry.line).join("\n");
+  assert.match(text, /cargo-loaded .*hauler:980000000200/);
+  assert.match(text, /blocked .*WARP_REJECTED_BY_NATIVE/);
+  assert.match(text, /station-delivered .*hauler:980000000200/);
+  assert.match(text, /market-trade .*coop-pilot-002/);
+  const order = require("../scripts/alife-audit.cjs").timeline(rows).map((entry) => entry.stage);
+  assert.deepEqual(order, ["cargo-loaded", "blocked", "blocked", "blocked", "station-delivered", "market-trade"]);
+});
+
+test("unknown events never appear in the timeline", () => {
+  const entries = require("../scripts/alife-audit.cjs").timeline([{ at: "t", event: "living-world-topology" }]);
+  assert.deepEqual(entries, []);
+  assert.equal(require("../scripts/alife-audit.cjs").stageOf("living-npc-station-warp-requested"), "warp-to-station");
+});
