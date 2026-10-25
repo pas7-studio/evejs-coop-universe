@@ -250,7 +250,12 @@ function createOperations(options={}){
     const changed=ctx.fleets.setFleetTargetTag(session,targetID,tag)===true;
     const currentTag=typeof ctx.fleets.getTargetTagForCharacter==="function"
       ?ctx.fleets.getTargetTagForCharacter(ctx.characterID,targetID):null;
-    if(!changed&&currentTag!==tag)
+    const me=ctx.fleets.getMemberRecord(ctx.fleet,ctx.characterID);
+    const fc=ctx.fleets.FLEET;
+    const authorized=Boolean(me&&fc&&(
+      (Number(me.job||0)&Number(fc.FLEET_JOB_CREATOR||0))!==0||
+      Array.isArray(fc.FLEET_CMDR_ROLES)&&fc.FLEET_CMDR_ROLES.includes(Number(me.role))));
+    if(!changed&&(!authorized||currentTag!==tag))
      return {status:"NATIVE_COMMAND_PERMISSION_DENIED",
       message:"[Co-op] Only an authorized native EVE fleet commander can tag a target."};
     if(!changed)return {status:"NATIVE_FLEET_TARGET_ALREADY_TAGGED",targetID,tag,
