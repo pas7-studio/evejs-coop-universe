@@ -68,7 +68,7 @@ function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
   if(w.action==="CLEANUP_JOURNAL"&&j.status==="ABSENT")
    return {status:"CLEAN",entityID:id,transferID:w.transferID};
   const action=w.action;
-  const normalized={entityID:w.entityID,transferID:w.transferID,
+  const normalized={entityID:w.entityID,transferID:w.transferID,pilotID:w.pilotID,
    phase:w.phase,rowSystemID:w.rowSystemID,physicalSystemID:w.physicalSystemID,
    pilotSystemID:w.pilotSystemID,sourceSystemID:w.sourceSystemID,
    destinationSystemID:w.destinationSystemID,modulesHash:w.modulesHash,
