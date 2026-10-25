@@ -5,7 +5,7 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
-let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null;
+let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -64,6 +64,37 @@ function npcRealPoints(scene){
  return {gateCount:points.filter(p=>p.kind==="stargate").length,
   beltCount:points.filter(p=>p.kind==="asteroidBelt").length,
   stationCount:points.filter(p=>p.kind==="station").length};
+}
+function observeNativeMiningProof(){
+ if(!world||!visitedSystems.size)return;
+ const runtime=require("./runtime"),mining=require("../services/mining/miningNpcOperations"),
+  miningState=require("../services/mining/miningRuntimeState"),
+  store=require("./npc/nativeNpcStore"),probe=require("./coopRuntimeProbe");
+ if(!nativeMiningWitness)nativeMiningWitness=
+  require("./coopAlifeNativeMiningWitness").createNativeMiningWitness();
+ // Never create a scene for an observer: physical mining must already exist.
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,2)){
+  const scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;
+  if(!scene)continue;
+  const result=nativeMiningWitness.tick({
+   scene,fleets:mining.getMiningFleetsForSystem(systemID),
+   getNativeEntity:id=>store.getNativeEntity(id),
+   listNativeCargo:id=>store.listNativeCargoForEntity(id),
+   isMineableStaticEntity:miningState.isMineableStaticEntity,
+   getMineableState:(sc,id)=>miningState.getMineableState(sc,id)
+  });
+  if(result.status!=="OBSERVED"){
+   if(backgroundTicks%10===0)probe.observe("alife-native-mining-blocker",null,
+    {spaceState:{systemID}},{status:result.status,source:"NATIVE_MINING_READ_ONLY"});
+   continue;
+  }
+  for(const row of result.results){
+   if(row.status!=="NATIVE_MINING_ACTIVE_NO_YIELD_DELTA"||
+      backgroundTicks%10===0)
+    probe.observe("alife-native-mining-proof",null,
+     {spaceState:{systemID}},row);
+  }
+ }
 }
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
@@ -149,6 +180,12 @@ function start(){
   });
   if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
   safeNpcPhase("native-depot",syncNativeDeliveries);
+  // ALIFE-04: existing 30s tick only; original native mining rock locks,
+  // active module effects, and real nativeNpcStore cargo identity.
+  if(process.env.EVEJS_COOP_ALIFE==="1"&&
+   process.env.EVEJS_COOP_NATIVE_MINING==="1"&&
+   process.env.EVEJS_COOP_ALIFE_MINING_PROOF==="1")
+   safeNpcPhase("alife-native-mining-proof",observeNativeMiningProof);
   // COOP-042: one A-Life 30-second tick; READ ONLY, no extra scheduler.
   if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_ALIFE_ECONOMY==="1")
    safeNpcPhase("alife-native-economy-observe",()=>{
