@@ -13,7 +13,7 @@ const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
  Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
  getStation,resolveActor,readNeeds,file,marketRules,
- clock=()=>Date.now(),env=process.env}={}){
+ authorizeRecoveryOperator=null,clock=()=>Date.now(),env=process.env}={}){
  if(typeof gameStore?.read!=="function"||
     typeof gameStore?.coopAtomicNativeRows?.transact!=="function"||
     typeof itemStore?.listOwnedItems!=="function"||
@@ -169,7 +169,8 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   file,resolveActor:actor,readProof,
   getOrder:async id=>normalizeNativeOrderForCoordinator(
    await marketClient.call("GetOrder",{order_id:String(id)})),
-  buyer,clock,env
+  buyer,clock,env,
+  auditRecovery:()=>audit(),authorizeRecoveryOperator
  });
  async function audit(){
   // No mutations. A read-only GameStore snapshot and Rust inspection must
@@ -200,6 +201,9 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   });
  }
  return Object.freeze({tick:args=>coordinator.tick(args),
+  // Operator API is never called by the A-Life scheduler. Requires a
+  // trusted authenticator injected by a separate server-admin adapter.
+  recoverApproved:args=>coordinator.recoverApproved(args),
   inspect:()=>coordinator.inspect(),audit,
   mode:"ALIFE_NATIVE_RUST_GAMESTORE_BUYER",supportsLiveRuntime:false});
 }
