@@ -4,8 +4,13 @@
 // Source is original GameStore npcCargo + native ItemStore + immutable trip
 // manifest, warp acknowledgement and warehouse receipts. Never repairs/mints.
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
-const {createManifest}=require("./coopNativeHaulManifest");
-const {createJournal}=require("./coopNativeStationTripJournal");
+// In the overlay these ship as .js; direct Node tests use the .cjs copies.
+const load=name=>{try{return require("./"+name)}catch(e){
+ if(e?.code!=="MODULE_NOT_FOUND")throw e;
+ return require("./"+name+".cjs");
+}};
+const {createManifest}=load("coopNativeHaulManifest");
+const {createJournal}=load("coopNativeStationTripJournal");
 const positive=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>0;
 const marker=id=>"coop-warehouse:v1:cargo:"+id;
 const fail=(reason,cargoID=0)=>({status:"NEEDS_OPERATOR_REPAIR",reason,cargoID,nativeMutation:false});
