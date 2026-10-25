@@ -13,6 +13,8 @@ names.splice(names.indexOf("coopFactionDirector")+1,0,"coopFactionWarCore","coop
 names.splice(names.indexOf("coopFactionWarStore")+1,0,"coopFactionWarNativeProofs","coopFactionWarAgent");
 // FW-003B: native combat proof on existing 30s world tick, no new timer.
 names.splice(names.indexOf("coopWarFleetNativeProofs")+1,0,"coopWarCombatPolicy","coopWarCombatAuthority","coopWarBattleDirector");
+// FW-003C: existing physical patrol mobilization on shared A-Life tick.
+names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarMobilizer");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
 names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 // P0 staged modules registered separately to avoid conflicts in the shared list.
