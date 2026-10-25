@@ -22,7 +22,8 @@ function fixture(size=3){
  const pilots=pirates.map(p=>({id:p.pilotID,faction:"independent"}));
  const fleetShips=[{id:201,role:"hauler"},{id:202,role:"miner"}];
  const squads=createSquadDirector({clock:()=>now});
- const observe=()=>squads.observe({systemID:SID,scene,pirates,pilots,fleetShips});
+ const observe=()=>squads.observe({systemID:SID,scene,pirates,pilots,fleetShips,
+  canAttack:()=>true});
  const permit=(pirateID,targetID=201)=>squads.permit({
   systemID:SID,scene,pirateID,targetID});
  return {ships,pos,scene,pirates,pilots,fleetShips,squads,sessions,observe,permit,
