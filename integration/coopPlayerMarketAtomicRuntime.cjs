@@ -1,5 +1,5 @@
 "use strict";
-// Only FULL, ONE-STACK original player SELL fills. Atomic GameStore COMMIT
+// Exact native multi-stack original player SELL fills. Atomic GameStore COMMIT
 // first; Rust finalize keeps the order locked; release needs two durable
 // witnesses: the native SQLite receipt and the fsynced settlement journal.
 const ext=__filename.endsWith(".cjs")?".cjs":"";
@@ -14,7 +14,7 @@ function enabled(){
   process.env.EVEJS_COOP_RUST_P2P_CLAIM==="1";
 }
 function createAtomicRuntime({atomicStore=store,rustAPI=rust,journal=fence,enabledFn=enabled}={}){
-async function settleSell({ticket,proof,tax,sourceItemID,client}={}){
+async function settleSell({ticket,proof,tax,sourceItemID,sourceItemIDs,client}={}){
  if(!enabledFn())throw Error("P2P_ATOMIC_SETTLEMENT_FLAGS_DISABLED");
  if(typeof client?.call!=="function"||!ticket||!proof||
   proof.bid!==false||!Object.isFrozen(proof))
@@ -31,7 +31,7 @@ async function settleSell({ticket,proof,tax,sourceItemID,client}={}){
     observed.filled_quantity!==request.filled_quantity||
     observed.volume_after!==request.volume_before-request.filled_quantity)
   throw Error("P2P_ATOMIC_ORIGINAL_RUST_CLAIM_NOT_VERIFIED");
- const receipt=atomicStore.settle({ticket,proof,tax,sourceItemID});
+ const receipt=atomicStore.settle({ticket,proof,tax,sourceItemID,sourceItemIDs});
  if(receipt?.phase!=="GAMESTORE_COMMITTED"||receipt?.replayed)
   throw Error("P2P_ATOMIC_NATIVE_COMMIT_REPLAY_REQUIRES_RECONCILIATION");
  const ack=await rustAPI.finalize({ticket,proof,client});
