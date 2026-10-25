@@ -7,19 +7,24 @@ const lastSceneObservation=new Map();
 let notices=null;
 function pos(x){const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:null;}
 function readyPilots(scene,systemID){
- if(!scene?.sessions||typeof scene.sessions.values!=="function")return [];
- const byChar=new Map();
+ if(!scene?.sessions||typeof scene.sessions.values!=="function"||
+  Number(scene.systemID)!==systemID||typeof scene.getEntityByID!=="function")return [];
+ const byChar=new Map(),duplicates=new Set();
  for(const session of scene.sessions.values()){
   const charID=pos(session?.characterID);
   const shipID=pos(session?._space?.shipID);
   if(!charID||!shipID||session?._space?.initialStateSent!==true||session?.socket?.destroyed===true)continue;
   if(pos(session._space.systemID)!==systemID)continue;
-  const ship=scene.getEntityByID?.(shipID);
-  if(!ship?.position||["x","y","z"].some(k=>!Number.isFinite(ship.position[k])))continue;
+  // Two live Ballpark sessions with one character are ambiguous during
+  // reconnect. Fail closed instead of replacing the first with a ghost.
+  if(byChar.has(charID)){duplicates.add(charID);continue;}
+  const ship=scene.getEntityByID(shipID);
+  if(ship?.kind!=="ship"||Number(ship.itemID)!==shipID||
+   !ship.position||["x","y","z"].some(k=>!Number.isFinite(ship.position[k])))continue;
   if(String(ship.mode||"").toUpperCase().includes("WARP"))continue;
   byChar.set(charID,{session,ship,characterID:charID,shipID});
  }
- return [...byChar.values()];
+ return [...byChar.values()].filter(p=>!duplicates.has(p.characterID));
 }
 function findParty(scene,systemID,maxDistance=250000){
  const pilots=readyPilots(scene,systemID);
