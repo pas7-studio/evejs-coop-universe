@@ -142,14 +142,14 @@ test("a physically absent real station after restart cannot authorize cargo cred
  f.director().start(f.scene,fleet,START);
  f.scene.staticEntities=[];
  const reboot=f.newFleet(),r=f.director().start(f.scene,reboot,START+1000);
- assert.equal(r.status,"ALIFE12_RECOVERED_STATION_OR_DEADLINE_INVALID");
+ assert.equal(r.status,"NO_NATIVE_NPC_STATION");
  assert.equal(f.deposits,0);
 });
 test("expired original route never gets a new deadline or automatic rewarp",t=>{
  const f=fixture(t),fleet=f.newFleet();
  f.director().start(f.scene,fleet,START);
  const reboot=f.newFleet(),r=f.director().start(f.scene,reboot,START+16*60*1000);
- assert.equal(r.status,"NO_NATIVE_NPC_STATION");
+ assert.equal(r.status,"ALIFE12_RECOVERED_STATION_OR_DEADLINE_INVALID");
  assert.equal(f.warps,1);
  assert.equal(f.deposits,0);
 });
