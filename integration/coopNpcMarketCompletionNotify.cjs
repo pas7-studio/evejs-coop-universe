@@ -28,7 +28,8 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
    pos(r.quantity)&&pos(r.priceCents)&&
    r.grossCents===r.quantity*r.priceCents&&
    nonneg(r.taxCents)&&r.netCents===r.grossCents-r.taxCents&&
-   r.taxPolicy==="EVEJS_NATIVE_MARKET_RULES";
+   r.taxPolicy==="EVEJS_NATIVE_MARKET_RULES"&&
+   nonneg(r.sellerAfterCents)&&nonneg(r.buyerAfterCents);
  }
  function orderProof(o,r){
   const row=o?.row;
@@ -72,7 +73,8 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
    return denied("CLAIM_SCOPE_INVALID");
   const key="corp-buy"+SEP+fillID;
   const load=()=>gameStore.transact(["npcMarketFills"],tx=>tx.get("npcMarketFills",key));
-  const first=load()?.result??null;
+  const nativeRead=load();
+  const first=nativeRead?.result??nativeRead;
   if(!receiptProof(first,claimKey,fillID))
    return denied("GAMESTORE_RECEIPT_INVALID");
   if(first.sellerNotifyClaimedAt!==undefined)
@@ -102,7 +104,7 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
   try{wallet=walletState.getCharacterWallet(first.sellerID)}
   catch{return denied("NATIVE_WALLET_UNAVAILABLE")}
   if(wallet?.characterID!==first.sellerID||
-     money(wallet.balance)===null||money(wallet.balance)<first.sellerAfterCents)
+     money(wallet.balance)===null||money(wallet.balance)<0)
    return denied("NATIVE_WALLET_UNVERIFIED");
   let payload;
   try{payload=helpers.buildList([orderEntry(order,first)])}
