@@ -53,10 +53,14 @@ function createWarFleetNativeProofs({sceneForSystem,getController,getNativeEntit
    core.validateState(s);
    const campaign=s.campaigns[d.campaignID],war=s.wars[d.warID];
    if(war?.state!=="ACTIVE"||campaign?.warID!==d.warID||
-      war.attackerFactionID!==d.factionID||
       !["PREPARING","ASSAULT"].includes(campaign.state))return false;
-   // Preparing must form in its controlled source; assault moves only after
-   // the physical transfer verifier puts the same ship at the target.
+   // Defenders are genuine native ships in the besieged target system.
+   // They must join the same battle, not masquerade as attackers.
+   if(d.factionID===war.defenderFactionID)
+    return d.systemID===campaign.targetSystemID;
+   if(d.factionID!==war.attackerFactionID)return false;
+   // Attackers initially form in their controlled source. No implicit
+   // teleportation into the target system from a virtual campaign.
    const expected=campaign.state==="PREPARING"?
     campaign.sourceSystemID:campaign.targetSystemID;
    return d.systemID===expected;
