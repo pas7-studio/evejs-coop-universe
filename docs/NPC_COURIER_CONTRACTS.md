@@ -243,3 +243,29 @@ half-done delivery.
 Still missing before a real run: seeding one courier character (account,
 character, balance from its earned ledger) and a real hauler item at the origin
 station, then the session-less accept/complete adapter and the flight itself.
+
+## Seeded courier pilots (2026-10-26)
+
+Seven real characters exist now, one row in `characters`, `accounts` and `items`
+each, all written while the server was stopped and verified present after the
+restart:
+
+| ID | Pilot | Station | Hull | Cargo | Balance |
+| --- | --- | --- | --- | --- | --- |
+| 140000100 | Haul Jita Charon | Jita IV-4 Bureau (60003466) | Charon | 465 000 m3 | 25 000 000 |
+| 140000101 | Haul Jita Bestower | Jita IV-4 Bureau (60003466) | Bestower | 4 800 m3 | 3 000 000 |
+| 140000102 | Haul Perimeter Fenrir | Perimeter II-1 Navy (60003754) | Fenrir | 435 000 m3 | 12 000 000 |
+| 140000103 | Haul Amarr Providence | Amarr VIII-4 (60002569) | Providence | 435 000 m3 | 12 000 000 |
+| 140000104 | Haul Dodixie Obelisk | Dodixie IX-20 Navy (60011866) | Obelisk | 440 000 m3 | 12 000 000 |
+| 140000105 | Haul Rens Badger | Rens VII-17 Bureau (60004594) | Badger | 3 900 m3 | 2 500 000 |
+| 140000106 | Haul Hek Mammoth | Hek IV Bureau (60004516) | Mammoth | 5 500 m3 | 2 500 000 |
+
+Honest note: the balances are a **seeded grant**, not earnings - a brand new
+character has no history, and the journal is empty on purpose rather than
+invented. If the owner wants couriers funded only from real work, the grant
+must be replaced by a real transfer from the co-op economy ledger.
+
+`scripts/seed-courier-pilots.cjs` is idempotent per run (new IDs each time,
+existing IDs skipped) and dry-run by default. It must be applied with the
+server stopped, in a one-off container that mounts `evejs-data`, because the
+live server keeps gameStore tables in a write cache.
