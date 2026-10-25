@@ -25,6 +25,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
   if(!sys||Number(scene?.systemID)!==sys||typeof scene.getEntityByID!=="function"||
    !Array.isArray(pirates)||!Array.isArray(pilots)||!Array.isArray(fleetShips)||
    !Number.isSafeInteger(now)||now<0)return {status:"INVALID",teams:[]};
+  const priorTeams=new Map(teams);
   for(const [key,team] of teams)if(team.expiresAt<now||team.systemID===sys)teams.delete(key);
   const factions=new Map(pilots.filter(p=>named(p?.id)&&typeof p.faction==="string"&&
    p.faction.length>0&&p.faction.length<80).map(p=>[p.id,p.faction]));
@@ -74,7 +75,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
       meters(b.ship.position,target.ship.position)||a.pilotID.localeCompare(b.pilotID))
     .slice(0,maxAttackers).map(p=>p.entityID);
    if(!attackerIDs.length)continue;
-   const prior=teams.get(key);
+   const prior=priorTeams.get(key);
    const continuing=prior?.scoutID===scout.entityID&&
     prior.targetID===target.targetID&&prior.firstSeenAt<=now&&
     prior.expiresAt>=now&&meters(prior.position,target.ship.position)<=100000;
