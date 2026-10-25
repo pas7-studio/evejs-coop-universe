@@ -319,10 +319,23 @@ function ensureNativeMining(scene,systemID){
  // If the scene was only partially initialized, retry on the next pass.
  require("../services/mining/miningRuntime").handleSceneCreated(scene);
  const mining=require("../services/mining/miningNpcOperations");
- if((mining.getMiningFleetsForSystem(systemID)||[]).some(f=>
-    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
-      .some(id=>scene.getEntityByID?.(Number(id)))))
-   initializedNativeMiningScenes.add(scene);
+ const expected=Number(process.env.EVEJS_MINING_NPC_STARTUP_FLEET_COUNT||1);
+ const configured=String(process.env.EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS||"")
+  .split(",").map(x=>Number(x.trim())).filter(Number.isSafeInteger);
+ // A lone ship, a GM fleet or just the first of multiple startup
+ // slots is not enough: keep retrying missing native fleet slots.
+ if(process.env.EVEJS_COOP_MINING_STARTUP_RETRY==="1"&&
+  process.env.EVEJS_MINING_NPC_STARTUP_ENABLED==="true"&&
+  (!configured.length||configured.includes(Number(systemID)))){
+  const outcome=require("./coopNativeMiningReadiness").inspect({
+   scene,systemID,expectedCount:expected,
+   fleets:mining.getMiningFleetsForSystem(systemID)
+  });
+  if(outcome.ready)initializedNativeMiningScenes.add(scene);
+ }else if((mining.getMiningFleetsForSystem(systemID)||[]).some(f=>
+   [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])]
+    .some(id=>scene.getEntityByID?.(Number(id)))))
+  initializedNativeMiningScenes.add(scene);
 }
 function ensureCivilianOrders(runtime,npc){
  if(civilianOrders)return;
