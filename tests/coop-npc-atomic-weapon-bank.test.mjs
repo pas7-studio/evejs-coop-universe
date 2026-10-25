@@ -7,6 +7,7 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {auditBanks}=require("../scripts/audit-npc-ammo-banks.cjs");
 const {createAtomicAmmoBank,inspectShip,gate}=require("../integration/coopNpcAmmoBankAtomic.cjs");
+const {createAmmoDebitJournal}=require("../integration/coopNpcAmmoDebitJournal.cjs");
 
 const SEP="\u001f";
 function fixture(){
@@ -177,4 +178,24 @@ test("operator audit reports a stranded bank PREPARED/lock and never repairs it"
   assert.equal(auditBanks({root:f.root}).counts.BANK_LOCKED_RECONCILE,1);
   assert.equal(fs.existsSync(file),true);
  }finally{f.cleanup();}
+});
+
+test("strict per-module fallback cannot bypass a ship that previously used atomic bank receipts",()=>{
+ const f=fixture(),prior=process.env.EVEJS_COOP_NPC_BANK_ATOMIC;
+ try{
+  assert.equal(fire(f).success,true);
+  delete process.env.EVEJS_COOP_NPC_BANK_ATOMIC;
+  const store={
+   getNativeEntity:()=>({entityID:101,ownerID:900,systemID:30000144}),
+   listNativeCargoForEntity:()=>Object.values(f.state().npcCargo.cargo)
+  };
+  const journal=createAmmoDebitJournal({root:f.root,store});
+  const result=journal.preflightBank({entity:f.entity,whenMs:1200,
+   entries:[{moduleItem:{itemID:401}}]});
+  assert.equal(result.status,"NATIVE_AMMO_ATOMIC_DOWNGRADE_FORBIDDEN");
+ }finally{
+  if(prior===undefined)delete process.env.EVEJS_COOP_NPC_BANK_ATOMIC;
+  else process.env.EVEJS_COOP_NPC_BANK_ATOMIC=prior;
+  f.cleanup();
+ }
 });
