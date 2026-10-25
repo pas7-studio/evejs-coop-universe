@@ -1,0 +1,176 @@
+{
+  "schema": "evejs-coop/native-mining-cargo-integrity-e2e/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "featureFlag": "EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY",
+  "scenarios": [
+    {
+      "id": "ALIFE-CARGO-001",
+      "title": "Persisted ore before hull-local credit",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Start only an isolated disposable pinned EveJS mining world with the strict cargo flag ON",
+        "Witness miner target lock, real mining module and source rock depletion",
+        "Measure nativeNpcStore cargoID and local hull cargoID across two ticks"
+      ],
+      "expected": [
+        "Only a positive native-stored cargoID can appear as hull cargo",
+        "Native store quantity and local quantity exactly match"
+      ],
+      "requiredEvidence": [
+        "nativeNpcStore cargoID owner/entity/typeID/quantity",
+        "hull nativeCargoItems same ID and quantity",
+        "native mining module and target"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-002",
+      "title": "Native cargo ID allocator refuses new row",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Fault-inject an allocateCargoID failure on disposable local storage",
+        "Allow one legitimate stock mining yield callback",
+        "Verify hull cargo and native store after failed allocator"
+      ],
+      "expected": [
+        "No negative cargoID and no new local stack",
+        "Error observable without optimistic inventory"
+      ],
+      "requiredEvidence": [
+        "failed allocator response",
+        "source cargo before/after",
+        "living-native-mining-cargo-integrity-blocked"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-003",
+      "title": "Write acknowledged failure",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Fault-inject nativeNpcStore upsert success=false",
+        "Allow one native mining yield callback in isolated scene",
+        "Verify no local hull credit or automatic repeated grant"
+      ],
+      "expected": [
+        "No positive hull cargo quantity from the failed write",
+        "Unknown write is operator repair, not an automatic retry"
+      ],
+      "requiredEvidence": [
+        "native upsert result",
+        "hull/store snapshot",
+        "operator repair blocker"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-004",
+      "title": "Write commits then throws before hull mutation",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Write native ore row but inject exception before write RPC returns",
+        "Capture source row ID and unchanged local hull view",
+        "Run another tick and check for duplicate writes"
+      ],
+      "expected": [
+        "Exactly the original native row remains without duplicated local cargo",
+        "Fail-closed in-memory repair state holds until reconciliation"
+      ],
+      "requiredEvidence": [
+        "same original cargoID",
+        "upsert/journal evidence",
+        "no second allocation or ISK"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-005",
+      "title": "Restart after confirmed native write with lost hull view",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Persist one stock miner native store cargo row and lose its in-memory cargo snapshot in disposable world",
+        "Restart and restore original physical miner ID",
+        "Attempt ordinary mining yield for same ore type"
+      ],
+      "expected": [
+        "Existing type/owner native row blocks an unrelated newly allocated cargoID",
+        "No free resource minted through restart replay"
+      ],
+      "requiredEvidence": [
+        "before/after native store rows",
+        "mining fleet/ship IDs",
+        "restart event sequence"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-006",
+      "title": "Existing stack quantity, owner and type divergence",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Load known durable native ore with a single cargoID",
+        "Inject corrupted source quantity or owner in disposable test",
+        "Run strict mining cargo callback"
+      ],
+      "expected": [
+        "Mismatch cannot increment local hull cargo or overwrite native owner",
+        "Operator repair names the source conflict"
+      ],
+      "requiredEvidence": [
+        "source cargoID typeID ownerID quantity",
+        "hull same-ID cargo",
+        "repair event"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-007",
+      "title": "No loss of native haul custody downstream",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Use authentic mined ore with positive cargoID",
+        "Transfer miner source cargo to original native hauler using existing cargo custody bridge",
+        "Dock physically at valid real station and reconcile complete warehouse manifest"
+      ],
+      "expected": [
+        "Same cargoID moves through proper committed custody chain exactly once",
+        "No second mining, hauling or warehouse value writer"
+      ],
+      "requiredEvidence": [
+        "miner to hauler native cargo IDs",
+        "source debit and warehouse COMMITTED receipt",
+        "real itemStore destination tagged item"
+      ]
+    },
+    {
+      "id": "ALIFE-CARGO-008",
+      "title": "Two clients and failback OFF behavior",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Connect two authorized clients to disposable EveJS Perimeter 30000144",
+        "Observe physical miner and cargo progression with strict flag ON",
+        "Disable flag in separately reset disposable environment and confirm pinned original behavior"
+      ],
+      "expected": [
+        "Same physical NPC and cargoID visible to both clients",
+        "Default flag OFF does not change upstream source semantics"
+      ],
+      "requiredEvidence": [
+        "two client observations and timestamps",
+        "read-only upstream SHA preflight",
+        "source patch byte-exact uninstall"
+      ]
+    }
+  ]
+}
