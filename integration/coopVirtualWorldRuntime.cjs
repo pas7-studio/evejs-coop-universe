@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -712,6 +712,8 @@ async function advanceNativeMarket(){
     sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
     getController:id=>controllers.getControllerByEntityID(id),
     resolveType:id=>inventory.resolveItemByTypeID(id),
+    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||
+     "/var/lib/evejs/coop-native-market",
     maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
     maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
     cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000)))
@@ -728,6 +730,25 @@ async function advanceNativeMarket(){
    nativeMarketTrader=market;
   }
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+  const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
+   process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
+   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+  if(rearmEnabled&&!nativeRearm)
+   nativeRearm=require("./coopNpcNativeRearm").createNativeRearm({
+    store,registry:identityRegistry,
+    sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+    getController:id=>controllers.getControllerByEntityID(id),
+    getStation:id=>worldData.getStationByID(id),
+    resolveType:id=>inventory.resolveItemByTypeID(id),
+    compatible:(module,typeID)=>require("./npc/npcCapabilityResolver")
+     .isNpcChargeCompatibleWithModule(module,typeID),
+    verifyCombatCharge:(ship,module)=>require("./npc/npcEquipment")
+     .getNpcLoadedChargeForModule(ship,module),
+    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||
+     "/var/lib/evejs/coop-native-market"
+   });
+  const rearmTypes=rearmEnabled?nativeMarketAllowlist(
+   "EVEJS_COOP_NPC_REARM_CHARGE_TYPES").filter(x=>buyTypes.includes(x)):[];
   const blocked=tacticsDirector?.activeIDs()||new Set();
   if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blocked.add(id);
   if(raidDirector)for(const id of raidDirector.activePirateIDs(id=>
@@ -749,8 +770,10 @@ async function advanceNativeMarket(){
      process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
      process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"&&
      lootCommerce!==null;
-    if(!["trader","hauler"].includes(role)&&!recoveredPirate||
-       blocked.has(Number(link.entityID)))continue;
+    const rearmingPirate=role==="pirate"&&rearmEnabled&&
+     nativeRearm!==null&&rearmTypes.length>0;
+    if(!["trader","hauler"].includes(role)&&!recoveredPirate&&
+       !rearmingPirate||blocked.has(Number(link.entityID)))continue;
     const ship=scene.getEntityByID(Number(link.entityID));
     const ctrl=controllers.getControllerByEntityID(Number(link.entityID));
     if(!ship||ship.nativeNpc!==true||Number(ctrl?.currentTargetID)>0||
@@ -776,9 +799,35 @@ async function advanceNativeMarket(){
       cargoID:Number(c.cargoID),
       verifyCargo:row=>lootCommerce.verifiedCargo({
        pilotID:link.pilotID,entityID:Number(link.entityID),cargo:row})})):
-     [...new Set(eligible.map(c=>Number(c.typeID)))]
-      .map(typeID=>({side:"sell",typeID}))
-      .concat(buyTypes.map(typeID=>({side:"buy",typeID})));
+     ["trader","hauler"].includes(role)?
+      [...new Set(eligible.map(c=>Number(c.typeID)))]
+       .map(typeID=>({side:"sell",typeID}))
+       .concat(buyTypes.map(typeID=>({side:"buy",typeID}))):[];
+    // Only a genuinely earned positive native NPC ledger balance may fund
+    // new seeded-market charge purchases. No virtual bounties or free ISK.
+    let loadPlan=null;
+    if(rearmingPirate&&nativeMarketTrader.snapshot().pilots[link.pilotID]?.balance>0){
+     loadPlan=nativeRearm.candidates({pilotID:link.pilotID,
+      entityID:Number(link.entityID),systemID,
+      stationID:Number(station.itemID),allowedTypes:rearmTypes});
+     if(loadPlan.status==="REARM_READY"){
+      const loaded=nativeRearm.load({pilotID:link.pilotID,
+       entityID:Number(link.entityID),systemID,
+       stationID:Number(station.itemID),cargoID:loadPlan.cargoID,
+       moduleID:loadPlan.moduleID});
+      if(loaded.status==="NATIVE_NPC_CHARGE_LOADED"||
+       loaded.status==="ALREADY_LOADED"){
+       completed++;
+       require("./coopRuntimeProbe").observe("living-npc-earned-rearm",null,
+        {spaceState:{systemID}},loaded);
+      }else require("./coopRuntimeProbe").observe("living-npc-rearm-blocked",null,
+       {spaceState:{systemID}},{status:loaded.status,
+        pilotID:link.pilotID,entityID:Number(link.entityID)});
+      continue;
+     }
+     if(loadPlan.status==="REARM_NEEDS_PURCHASE")
+      tradeCandidates.push({side:"buy",typeID:loadPlan.typeID});
+    }
     for(const trade of tradeCandidates){
      const result=await nativeMarketTrader.execute({
       scene,pilotID:link.pilotID,entityID:Number(link.entityID),
@@ -788,11 +837,25 @@ async function advanceNativeMarket(){
      if(result.status==="TRADE_SETTLED"){
       completed++;
       require("./coopRuntimeProbe").observe(
-       recoveredPirate?"living-native-loot-market-settled":"living-native-market-trade",
+       rearmingPirate&&trade.side==="buy"?
+        "living-native-npc-ammo-purchased":
+        recoveredPirate?"living-native-loot-market-settled":"living-native-market-trade",
        null,{spaceState:{systemID}},{
         ...result,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET",
         sourceOfFunds:"SEED_MARKET_FILLED_ORDER"
        });
+      // The actual native market purchase is already settled. Bind that
+      // very cargo ID to an already fitted compatible module; if loading
+      // fails, the bought stack remains real cargo for later reconciliation.
+      if(rearmingPirate&&trade.side==="buy"&&loadPlan?.moduleID){
+       const loaded=nativeRearm.load({pilotID:link.pilotID,
+        entityID:Number(link.entityID),systemID,
+        stationID:Number(station.itemID),cargoID:result.cargoID,
+        moduleID:loadPlan.moduleID});
+       require("./coopRuntimeProbe").observe("living-npc-earned-rearm",null,
+        {spaceState:{systemID}},{...loaded,
+         purchaseSettled:true,cargoID:result.cargoID});
+      }
       break;
      }
      if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
