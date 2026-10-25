@@ -37,6 +37,52 @@ function blockerKey(row) {
     .join(" / ");
 }
 
+const LIFE_STAGES = [
+  ["living-native-mining-startup-slot", "fleet-seeded"],
+  ["living-hauler-loaded", "cargo-loaded"],
+  ["living-npc-station-warp-requested", "warp-to-station"],
+  ["living-npc-station-delivered", "station-delivered"],
+  ["living-hauler-delivered", "depot-delivered"],
+  ["living-native-market-trade", "market-trade"],
+  ["alife-blocker", "blocked"],
+  ["living-npc-warehouse-blocked", "warehouse-blocked"],
+];
+
+function stageOf(event) {
+  const hit = LIFE_STAGES.find(([name]) => name === event);
+  return hit ? hit[1] : null;
+}
+
+function timeline(rows, { limit = 40 } = {}) {
+  return rows
+    .map((row) => {
+      const stage = stageOf(String(row.event || ""));
+      if (!stage) return null;
+      const who =
+        row.pilotID ||
+        (row.haulerID ? `hauler:${row.haulerID}` : "") ||
+        (row.shipID ? `ship:${row.shipID}` : "") ||
+        (row.fleetID ? `fleet:${row.fleetID}` : "");
+      const detail =
+        row.reason ||
+        row.status ||
+        (row.side ? `${row.side}:${row.typeID}` : "") ||
+        (row.cargoQuantity ? `cargo:${row.cargoQuantity}` : "") ||
+        (row.oreQuantity ? `ore:${row.oreQuantity}` : "") ||
+        (row.haulers ? `haulers:${row.haulers}` : "");
+      return {
+        at: row.at,
+        stage,
+        who,
+        detail,
+        systemID: row.systemID || null,
+        line: `${row.at || "?"}  ${stage.padEnd(18)} ${String(who || "-").padEnd(22)} ${detail || ""}`.trimEnd(),
+      };
+    })
+    .filter(Boolean)
+    .slice(-limit);
+}
+
 function summarize(rows, { top = 8, since = "" } = {}) {
   const fresh = since ? rows.filter((row) => String(row.at || "") >= since) : rows;
   const events = new Map();
@@ -120,7 +166,13 @@ if (require.main === module) {
   const since = sinceFlag > 0 ? String(process.argv[sinceFlag + 1] || "") : "";
   const top = topFlag > 0 ? Math.max(1, Number(process.argv[topFlag + 1]) || 8) : 8;
   const rows = parse(fs.readFileSync(file, "utf8"));
+  if (process.argv.includes("--timeline")) {
+    const windowRows = since ? rows.filter((row) => String(row.at || "") >= since) : rows;
+    const lines = timeline(windowRows).map((entry) => entry.line);
+    console.log(lines.length ? lines.join("\n") : "no life stages in this window");
+    process.exit(0);
+  }
   console.log(report(summarize(rows, { since, top })));
 }
 
-module.exports = { parse, summarize, report, blockerKey };
+module.exports = { parse, summarize, report, blockerKey, timeline, stageOf };
