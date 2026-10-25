@@ -8,17 +8,19 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const vector=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 function createSalvageGameAuthority({readEvent,readFlight,readManifest,
  readVolunteers,readOutcomes,ledger,createTransfer,readScene,
- readPlayerShip,readDockedStation,getSessions}={}){
+ readPlayerShip,readDockedStation,getSessions,readSalvageOffer,
+ acceptSalvage,reserveSalvage,verifyEscrow,settleSalvage}={}){
  if([readEvent,readFlight,readManifest,readVolunteers,readOutcomes,
   createTransfer,readScene,readPlayerShip,readDockedStation,
-  getSessions].some(x=>typeof x!=="function")||
+  getSessions,readSalvageOffer,acceptSalvage,reserveSalvage,
+  verifyEscrow,settleSalvage].some(x=>typeof x!=="function")||
   !ledger||typeof ledger.witness!=="function"||
   typeof ledger.read!=="function")
   throw Error("SALVAGE_GAME_NATIVE_AUTHORITIES_REQUIRED");
  function command({session,eventID,cargoID,action}={}){
   if(process.env.EVEJS_COOP_SALVAGE_GAME!=="1")
    return deny("DISABLED");
-  if(!["PICKUP","DELIVER"].includes(action)||
+  if(!["OFFER","ACCEPT","PICKUP","DELIVER"].includes(action)||
    !/^convoy-\d+-\d+-\d+$/.test(String(eventID))||
    !pos(cargoID)||!pos(session?.characterID)||session.socket?.destroyed===true)
    return deny("SALVAGE_GAME_INVALID_REQUEST");
@@ -58,7 +60,8 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
   try{witness=ledger.read(m.key)}
   catch{return deny("SALVAGE_ORIGINAL_WITNESS_UNAVAILABLE")}
   if(witness.status==="NOT_FOUND"){
-   if(action!=="PICKUP")return deny("SALVAGE_ORIGINAL_WITNESS_NOT_PREPARED");
+   if(!["PICKUP","OFFER","ACCEPT"].includes(action))
+    return deny("SALVAGE_ORIGINAL_WITNESS_NOT_PREPARED");
    witness=ledger.witness({manifestKey:m.key,wreckID,
     haulerID:b.haulerID,systemID:m.systemID});
    if(witness.status!=="SALVAGE_ORIGIN_DURABLE")
@@ -69,6 +72,22 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
    return deny("SALVAGE_ORIGINAL_WITNESS_INVALID");
   const row=witness.record.rows.find(r=>r.cargoID===cargoID);
   if(!row)return deny("SALVAGE_CARGO_NOT_IN_ORIGINAL_WRECK");
+  const offer=readSalvageOffer(m.key);
+  if(offer?.status!=="SALVAGE_NATIVE_OFFER_READY"||
+   offer.eventID!==eventID||offer.wreckID!==wreckID||
+   !offer.characters.includes(session.characterID))
+   return deny("SALVAGE_NATIVE_OFFER_NOT_VERIFIED");
+  if(action==="OFFER")return offer;
+  if(action==="ACCEPT"){
+   const accepted=acceptSalvage(session,m.key);
+   if(accepted?.status!=="VERIFIED_DUO_SALVAGE_ACCEPT")
+    return accepted;
+   return reserveSalvage(m.key);
+  }
+  const escrow=verifyEscrow(m.key);
+  if(!["RESERVED","SETTLED"].includes(escrow?.status)||
+   escrow.nativeDurable!==true)
+   return deny("SALVAGE_CORPORATION_ESCROW_NOT_RESERVED");
   const ship=readPlayerShip(session);
   if(!pos(ship?.itemID)||ship.ownerID!==session.characterID)
    return deny("SALVAGE_PLAYER_SHIP_UNVERIFIED");
@@ -114,9 +133,18 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
    });
   }catch{return deny("SALVAGE_NATIVE_TRANSFER_PROVIDER_UNAVAILABLE")}
   const result=action==="PICKUP"?transfer.pickup(args):transfer.deliver(args);
-  return {...result,manifestKey:m.key,cargoID,contractID:b.contractID,
-   playerCharacterID:session.characterID,rewardISK:0,
-   escrowPaid:false};
+  if(action==="DELIVER"&&result?.status==="ATOMIC_NATIVE_ITEM_MOVED"&&
+   escrow.status!=="SETTLED"){
+   const payout=settleSalvage(m.key);
+   if(["SALVAGE_NATIVE_DUO_PAID","SALVAGE_ALREADY_PAID"].includes(payout?.status))
+    return {...result,payoutStatus:payout.status,
+     nativePaidContractID:payout.contractID,
+     nativePaidAmountISK:payout.amountISK||escrow.amountISK};
+  }
+  return {...result,manifestKey:m.key,cargoID,
+   contractID:offer.contractID,
+   playerCharacterID:session.characterID,
+   escrowPaid:escrow.status==="SETTLED"};
  }
  return {command};
 }
