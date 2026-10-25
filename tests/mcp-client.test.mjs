@@ -78,6 +78,49 @@ test("tab rename refuses a length change, refuses while the client runs, and bac
   assert.ok(readdirSync(settings).some((name) => name.includes(".bak-")));
 });
 
+test("client_launch resolves a moved launcher instead of hardcoding Play.bat", async (t) => {
+  const { root } = workspace(t);
+  const tq = join(root, "EVE Online - 3396210", "tq");
+  mkdirSync(join(tq, "bin64"), { recursive: true });
+  writeFileSync(join(tq, "bin64", "exefile.exe"), "stub");
+  const calls = [];
+  const fakeExec = (argv, options = {}) => {
+    calls.push({ argv, cwd: options.cwd });
+    if (argv[0] === "tasklist") return notRunning();
+    return { ok: true, code: 0, stdout: "", stderr: "" };
+  };
+  const tools = createClientTools({
+    env: { USERPROFILE: root, LOCALAPPDATA: join(root, "AppData", "Local"), EVEJS_CLIENT_ROOT: join(root, "EVE Online - 3396210") },
+    exec: fakeExec,
+  }).tools;
+  const launch = (args = {}) => tools.find((tool) => tool.name === "client_launch").handler(args);
+  assert.match(await launch({ confirm: false }), /refused/);
+  const started = await launch({ confirm: true });
+  assert.match(started, /launch requested: .*bin64[\\/]exefile\.exe/);
+  const spawnCall = calls.find((call) => call.argv[0] === "cmd");
+  assert.ok(spawnCall, "the launcher was actually started");
+  // EVE needs the tq directory as cwd, exactly like Play.bat did.
+  assert.equal(spawnCall.cwd, tq);
+  assert.match(await build(root, running).call("client_launch", { confirm: true }), /already running \(pid 4242\)/);
+});
+
+test("client_launch reports every path it tried when nothing is installed", async (t) => {
+  const { root } = workspace(t);
+  const tools = createClientTools({
+    env: {
+      USERPROFILE: root,
+      LOCALAPPDATA: join(root, "AppData", "Local"),
+      EVEJS_CLIENT_ROOT: join(root, "nowhere"),
+      EVEJS_CLIENT_ALLOW_DEFAULTS: "0",
+    },
+    exec: notRunning,
+  }).tools;
+  const missing = await tools.find((tool) => tool.name === "client_launch").handler({ confirm: true });
+  assert.match(missing, /launcher not found/);
+  assert.match(missing, /EVEJS_CLIENT_LAUNCHER/);
+  assert.match(missing, /Play\.bat/);
+});
+
 test("profile install only accepts a real exported overview and never overwrites the live client", async (t) => {
   const { root } = workspace(t);
   const { call } = build(root);

@@ -98,6 +98,39 @@ function createClientTools({
     return pid ? Number(pid) : null;
   }
 
+  // The launcher has moved between installs: Play.bat existed earlier, today
+  // only bin64/exefile.exe is present. Resolve instead of hardcoding one path.
+  function launcherCandidates(explicit) {
+    const list = [];
+    if (explicit) list.push(explicit);
+    if (env.EVEJS_CLIENT_LAUNCHER) list.push(env.EVEJS_CLIENT_LAUNCHER);
+    const roots = [
+      env.EVEJS_CLIENT_ROOT,
+      // Well-known installs, skipped when a caller wants deterministic
+      // resolution (tests, or a machine with several installs).
+      ...(env.EVEJS_CLIENT_ALLOW_DEFAULTS === "0"
+        ? []
+        : [
+            "W:\\EVE Online - 3396210",
+            env.ProgramFiles ? path.join(env.ProgramFiles, "EVE Online - 3396210") : "",
+            "C:\\EVE\\EVE Online - 3396210",
+          ]),
+    ].filter(Boolean);
+    for (const root of roots) {
+      list.push(path.join(root, "tq", "Play.bat"));
+      list.push(path.join(root, "tq", "bin64", "exefile.exe"));
+    }
+    return [...new Set(list)];
+  }
+
+  function resolveLauncher(explicit) {
+    for (const candidate of launcherCandidates(explicit)) {
+      const stat = statOrNull(candidate);
+      if (stat && stat.isFile()) return candidate;
+    }
+    return null;
+  }
+
   const tools = [
     {
       name: "client_status",
@@ -256,7 +289,7 @@ function createClientTools({
         type: "object",
         properties: {
           confirm: { type: "boolean", description: "Must be true." },
-          bat: { type: "string", description: "Path to the launcher .bat (default W:/EVE Online - 3396210/tq/Play.bat).", maxLength: 400 },
+          bat: { type: "string", description: "Launcher path (.bat or exefile.exe). Omit to auto-detect.", maxLength: 400 },
         },
         required: ["confirm"],
       },
@@ -264,10 +297,27 @@ function createClientTools({
         if (args.confirm !== true) return "refused: pass confirm: true to launch the client";
         const pid = clientRunning();
         if (pid) return `client already running (pid ${pid})`;
-        const bat = args.bat || "W:\\EVE Online - 3396210\\tq\\Play.bat";
-        if (!statOrNull(bat)) return `launcher not found: ${bat}`;
-        const result = exec(["cmd", "/c", "start", "", bat], { timeoutMs: 20000 });
-        return `launch requested (exit ${result.code}); the client window belongs to the user`;
+        const launcher = resolveLauncher(args.bat);
+        if (!launcher) {
+          return [
+            "launcher not found. Looked at:",
+            ...launcherCandidates(args.bat).map((entry) => `  ${entry}`),
+            "pass a launcher path, or set EVEJS_CLIENT_LAUNCHER",
+          ].join("\n");
+        }
+        // EVE must start with the tq directory as cwd; Play.bat did the same.
+        const cwd = /[\\/]bin64[\\/]exefile\.exe$/i.test(launcher)
+          ? path.dirname(path.dirname(launcher))
+          : path.dirname(launcher);
+        const result = /\.(bat|cmd)$/i.test(launcher)
+          ? exec(["cmd", "/c", "start", "", launcher], { timeoutMs: 20000, cwd })
+          : exec(["cmd", "/c", "start", "", launcher], { timeoutMs: 20000, cwd });
+        return [
+          `launch requested: ${launcher}`,
+          `cwd: ${cwd}`,
+          `exit: ${result.code}`,
+          "the client window belongs to the user; check with client_status",
+        ].join("\n");
       },
     },
   ];
@@ -285,7 +335,7 @@ function createClientTools({
     });
   }
 
-  return { tools, settingsDir, settingsDirs, docsEve, overviewDir, clientRunning };
+  return { tools, settingsDir, settingsDirs, docsEve, overviewDir, clientRunning, resolveLauncher, launcherCandidates };
 }
 
 module.exports = { createClientTools, decode };
