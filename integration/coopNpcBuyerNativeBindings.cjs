@@ -93,7 +93,11 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
    region_id:station.regionID,type_id:typeID});
   if(!result||!Array.isArray(result.sells)||result.sells.length>2000)
    throw Error("ALIFE_BUYER_NATIVE_RUST_BOOK_MISSING");
-  const asks=[],seen=new Set();
+  // Global per-proof RPC budget: GetOrders is a public/ownerless book and
+  // GetOrder requires an additional authoritative network round-trip.
+  // Never fan out thousands of owner lookups in a 30-second A-Life tick.
+  const MAX_OWNER_LOOKUPS=12;
+  const asks=[],seen=new Set();let ownerLookups=0;
   for(const o of result.sells){
    // Actual upstream GetOrders returns a public OrderRow, which does NOT
    // expose owner_id/is_corp/state. Enrich via authoritative GetOrder.
@@ -103,6 +107,8 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
    if(!pos(orderID)||seen.has(orderID))
     throw Error("ALIFE_BUYER_DUPLICATE_RUST_ORDER");
    seen.add(orderID);
+   if(ownerLookups>=MAX_OWNER_LOOKUPS)break;
+   ownerLookups++;
    const nativeOwner=await marketClient.call("GetOrder",{
     order_id:String(orderID)});
    const verified=verifyNativeBookAsk(o,nativeOwner,{stationID,typeID});
