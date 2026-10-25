@@ -373,11 +373,14 @@ function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
   const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
-  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
-  if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>{
-   const native=require("./runtime");return native.ensureScene(sys,{refreshStargates:false});
-  }))blockedIDs.add(id);
-  addNpcOrderBlocks(blockedIDs,Number(systemID),"PATROL");
+  // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
+  if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1"){
+   if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+   if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>{
+    const native=require("./runtime");return native.ensureScene(sys,{refreshStargates:false});
+   }))blockedIDs.add(id);
+   addNpcOrderBlocks(blockedIDs,Number(systemID),"PATROL");
+  }
   const result=patrolNavigator.tick(Number(systemID),entityIDs,{blockedIDs});
   if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
  }
