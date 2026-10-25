@@ -54,9 +54,13 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   try{
    if(!pos(id)||!pos(stationID))return false;
    const s=read("characters","/"+id);
-   return Number(s?.characterID??s?.charID)===id&&
+   // The original native GameStore key and verified Rust seller escrow
+   // bind this record. Vanilla characterState may omit embedded IDs.
+   const embedded=s?.characterID??s?.charID;
+   return Boolean(s&&
+     (embedded===undefined||embedded===null||Number(embedded)===id)&&
      cents(s.balance)!==null&&Array.isArray(s.walletJournal)&&
-     Array.isArray(s.marketTransactions);
+     Array.isArray(s.marketTransactions));
   }catch{return false}
  }
  const market={
