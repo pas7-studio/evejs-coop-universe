@@ -28,6 +28,16 @@ Date: 2026-10-25. **Draft source integration; no real two-client/SQLite/Docker e
 - Exact pinned upstream `agentMgrService.js` reversible agent patch (both previous and new hooks) after Stage H integration: patched classification, repeated install identical, **byte-exact restoration** verified.
 - Full Node runner of newly imported Stage H tests, actual warp ACK in the physical native runtime, native GameStore better-sqlite3 transaction/credit, dual EVE client Agent dialogue, startup/terminal crash injection **NOT RUN**. No GitHub Actions; no populated `evejs-data` touched.
 
+## Additional code review — native Agent consent idempotence
+
+The original `coopWorldOpportunityBoard.interest` used one ambiguous status `ALREADY_INTERESTED_OR_WRITE_UNCERTAIN` for both a genuine existing actor signature and a lost file/directory fsync ACK. `coopNativeJobAgent` incorrectly accepted this ambiguous value and proceeded to volunteer/paid consent.
+
+**Fixed:** If creating the interest receipt fails, the board re-reads the exact authenticated `characterID + eventID` receipt, requires the original `INTEREST_RECORDED` identity, and synchronizes both the original receipt **file** and its **parent directory** before returning `INTEREST_ALREADY_DURABLY_RECORDED`. Anything malformed, missing or unsyncable returns `INTEREST_WRITE_UNCERTAIN_NEEDS_REPAIR` and cannot proceed. The stock Agent Accept handler allows `INTEREST_RECORDED` or this specifically verified replay; the old ambiguous status is never considered valid.
+
+- `tests/coop-native-job-agent-interest-replay.test.mjs`: 5 explicit source-executed V8 checks PASS (first/duplicate, fsync lost, mismatched actor, valid agent retry, uncertain retry fail closed).
+- Existing `tests/coop-native-job-agent.test.mjs`: 21/21 source-executed V8 PASS after new status gate.
+- The real file-based Node versions of these tests and the full native two-client game tests still need local execution.
+
 ## P0 gate before any financial rollout
 
 - On operator-approved disposable EVEJS data clone run `scripts/Run-NativeJob-Tests.ps1 -CheckPinned` plus full original repo baseline.
