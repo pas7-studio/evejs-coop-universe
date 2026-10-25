@@ -188,6 +188,39 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
    return blocked("FLIGHT_TERMINAL_STOCK_RECHECK_FAILED");
   return JSON.parse(JSON.stringify(state.delivery));
  }
- return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery};
+ function readNativeDeliveryForAudit(contract){
+  // READ ONLY after real dual-wallet settlement. Cannot be used as a
+  // reservation proof, payout trigger, or pre-warp authorization.
+  if(!contractOK(contract?.contractID)||!keyOK(contract?.manifestKey))
+   return blocked("FLIGHT_CONTRACT_IDENTITY_INVALID");
+  const state=read(contract.manifestKey);
+  if(state.status!=="READY"||state.phase!=="DELIVERED")
+   return blocked("FLIGHT_TERMINAL_DELIVERY_NOT_PERSISTED");
+  const b=state.booking;
+  if(["contractID","manifestKey","systemID","fleetID","haulerID",
+   "stationID","corporationID","amountISK"].some(k=>b[k]!==contract[k])||
+   !equal(b.characters,contract.characters))
+   return blocked("FLIGHT_CONTRACT_IDENTITY_MISMATCH");
+  let payment,stock;try{
+   payment=nativeFunds.verifySettlement(contract);
+   stock=verifyManifest({key:b.manifestKey,systemID:b.systemID,
+    fleetID:b.fleetID,stationID:b.stationID,
+    corporationID:b.corporationID,haulerIDs:[b.haulerID]});
+  }catch{return blocked("FLIGHT_AUDIT_AUTHORITIES_UNAVAILABLE")}
+  if(payment?.status!=="SETTLED"||payment.nativeDurable!==true||
+   payment.contractID!==b.contractID||
+   payment.corporationID!==b.corporationID||
+   payment.amountISK!==b.amountISK||
+   !Array.isArray(payment.credits)||payment.credits.length!==2||
+   payment.credits.some((x,i)=>x.characterID!==b.characters[i]||
+    x.amountISK!==b.amountISK/2))
+   return blocked("FLIGHT_AUDIT_WALLET_NOT_SETTLED");
+  if(stock?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED"||
+   stock.key!==b.manifestKey||
+   !equal(stock.cargoIDs,state.delivery.nativeFullManifestProof.cargoIDs))
+   return blocked("FLIGHT_AUDIT_WAREHOUSE_MISMATCH");
+  return JSON.parse(JSON.stringify(state.delivery));
+ }
+ return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery,readNativeDeliveryForAudit};
 }
 module.exports={createEscortFlightGate};
