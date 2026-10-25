@@ -130,3 +130,20 @@ test('stale job identity prevents any output grant',()=>{
   assert.equal(a.deliver(p.operationID).status,'JOB_IDENTITY_MISMATCH');assert.equal(f.getCalls(),1);
  }finally{f.clean()}
 });
+test('mismatched native output quantity or owner never confirms delivery',()=>{
+ const f=journalFixture();try{
+  const a=f.make(),p=a.prepare(args());a.install(p.operationID);
+  f.native.getJobByOperation=()=>({jobID:17001,ownerID:OWNER,blueprintID:91,status:3});
+  f.native.verifyDelivered=()=>({delivered:true,items:[{itemID:8001,typeID:AMMO,quantity:999,ownerID:OWNER,locationID:STATION}]});
+  assert.equal(a.deliver(p.operationID).status,'DELIVERY_OUTCOME_UNKNOWN');
+  assert.equal(f.make().deliver(p.operationID).status,'DELIVERY_OUTCOME_UNKNOWN');
+ }finally{f.clean()}
+});
+test('job identity mismatch after install never advances PREPARED into success',()=>{
+ const f=journalFixture();try{
+  f.native.getJobByOperation=()=>({jobID:17001,ownerID:OWNER,blueprintID:9999,facilityID:STATION,productTypeID:AMMO,status:1});
+  const a=f.make(),p=a.prepare(args());
+  assert.equal(a.install(p.operationID).status,'INSTALL_OUTCOME_UNKNOWN');
+  assert.equal(a.inspect(p.operationID).status,'INSTALL_OUTCOME_UNKNOWN');
+ }finally{f.clean()}
+});
