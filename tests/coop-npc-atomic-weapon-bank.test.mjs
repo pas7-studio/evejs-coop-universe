@@ -6,7 +6,7 @@ import path from "node:path";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {auditBanks}=require("../scripts/audit-npc-ammo-banks.cjs");
-const {createAtomicAmmoBank,inspectShip,gate}=require("../integration/coopNpcAmmoBankAtomic.cjs");
+const {createAtomicAmmoBank,inspectShip,gate,verifyDirectDebit}=require("../integration/coopNpcAmmoBankAtomic.cjs");
 const {createAmmoDebitJournal}=require("../integration/coopNpcAmmoDebitJournal.cjs");
 
 const SEP="\u001f";
@@ -198,4 +198,50 @@ test("strict per-module fallback cannot bypass a ship that previously used atomi
   else process.env.EVEJS_COOP_NPC_BANK_ATOMIC=prior;
   f.cleanup();
  }
+});
+
+test("legacy direct debit is denied using authoritative SQLite history even if journal directory is deleted",()=>{
+ const f=fixture();try{
+  assert.equal(fire(f).success,true);
+  // Simulates a misconfigured new journal mount: SQLite replay history remains.
+  const emptyRoot=fs.mkdtempSync(path.join(os.tmpdir(),"coop-bank-new-root-"));
+  try{
+   const result=verifyDirectDebit({entity:f.entity,root:emptyRoot,
+    env:{EVEJS_COOP_NPC_STRICT_AMMO:"1"},
+    database:{read(table,key){
+     assert.equal(table,"npcCargo");
+     assert.equal(key,"/coopAmmoCycles_101");
+     return {success:true,data:f.state().npcCargo.coopAmmoCycles_101};
+    }}});
+   assert.equal(result.status,"BANK_DIRECT_SQLITE_FENCE_PRESENT");
+  }finally{fs.rmSync(emptyRoot,{recursive:true,force:true});}
+ }finally{f.cleanup();}
+});
+test("strict native direct debit is denied by committed bank receipt even without a DB fence",()=>{
+ const f=fixture();try{
+  assert.equal(fire(f).success,true);
+  const response=verifyDirectDebit({entity:f.entity,root:f.root,
+   env:{EVEJS_COOP_NPC_STRICT_AMMO:"1"},
+   database:{read(){throw Error("should not query DB after journal proof");}}});
+  assert.equal(response.status,"BANK_DIRECT_RECEIPT_PRESENT");
+ }finally{f.cleanup();}
+});
+test("direct ammo debit is allowed only after authoritative missing-history proof",()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"coop-bank-empty-"));
+ try{
+  let reads=0;
+  const entity={kind:"ship",nativeNpc:true,itemID:101,ownerID:900};
+  const allowed=verifyDirectDebit({entity,root,env:{},
+   database:{read(){reads++;return {success:false,errorMsg:"ENTRY_NOT_FOUND",data:null};}}});
+  assert.equal(allowed.allowed,true);
+  assert.equal(reads,1);
+  const broken=verifyDirectDebit({entity,root,env:{},
+   database:{read(){return {success:false,errorMsg:"READ_ERROR",data:null};}}});
+  assert.equal(broken.allowed,false);
+  assert.equal(broken.status,"BANK_DIRECT_NATIVE_READ_UNSAFE");
+  const misconfigured=verifyDirectDebit({entity,root,
+   env:{EVEJS_COOP_NPC_BANK_ATOMIC:"1"},
+   database:{read(){throw Error("should not read");}}});
+  assert.equal(misconfigured.status,"BANK_ATOMIC_DIRECT_DEBIT_FORBIDDEN");
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
