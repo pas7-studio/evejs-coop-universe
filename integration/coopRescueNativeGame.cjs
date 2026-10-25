@@ -49,6 +49,7 @@ function runGame(session,operation,eventID){
   if(operation==="offer")return instance.offer(eventID);
   if(operation==="accept")return instance.accept({session,eventID});
   if(operation==="claim")return instance.claim({session,eventID});
+  if(operation==="history")return instance.history({characterID:session?.characterID,limit:8});
   if(operation==="cancel")return instance.cancel({session,eventID});
   return {status:"INVALID_RESCUE_OPERATION"};
  }catch{return {status:"RESCUE_CONTRACT_RUNTIME_UNAVAILABLE"}}
