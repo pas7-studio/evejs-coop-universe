@@ -183,9 +183,20 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      written.manifestKey!==trip.manifestID)
     return pause("ESCORT_"+(written?.status||"TERMINAL_WRITE_BLOCKED"));
   }
+  // Physical delivery already has an authoritative warehouse and fsync.
+  // Payout is optional, but never presumed: an absent pirate wreck or
+  // uncertain native funds leaves a visible pending settlement, not fake ISK.
+  let escortSettlement=null;
+  if(escortEnabled){
+   try{escortSettlement=typeof escortGate?.settleVerifiedNativeRaid==="function"?
+    escortGate.settleVerifiedNativeRaid(trip.manifestID):
+    {status:"ESCORT_SETTLEMENT_NOT_WIRED"}}
+   catch{escortSettlement={status:"ESCORT_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED"}}
+  }
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
+   ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
  return {start,tick,verify:stableAt,warehouse:factory,manifest:manifestDirector};
@@ -205,7 +216,11 @@ function getRuntimeDirector(){
   store,items:nativeItems,flush:table=>repo.flushTableSync(table),
   warpToPoint:(id,p,opts)=>runtime.warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
-  probe:require("./coopRuntimeProbe")});
+  probe:require("./coopRuntimeProbe"),
+  // Stable server-only forwarding object: a late binding works, while no
+  // real native authority means NO warp (never silently unpaid).
+  escortGate:process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"?
+   require("./coopEscortNativeBinding").routeGate():null});
  return runtimeDirector;
 }
 function routeFromHaul(scene,fleet,runtime,now,ingressDurationMs){
