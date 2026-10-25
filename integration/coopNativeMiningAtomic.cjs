@@ -46,7 +46,7 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
       entity.pilotCharacterID ?? entity.characterID), oreTypeID=Number(mineableState?.yieldTypeID);
     const moduleID=Number(moduleItem?.itemID), before=Number(mineableState?.remainingQuantity);
     const normal=Number(miningResult?.normalQuantity), wasted=Number(miningResult?.wastedQuantity);
-    const quantity=Number(transferredQuantity), consumed=normal+wasted;
+    const quantity=Number(transferredQuantity), consumed=quantity+wasted;
     const cycle=Number(cycleBoundaryMs);
     if (![systemID,rockID,shipID,ownerID,oreTypeID,moduleID,cycle].every(positive) ||
         ![before,normal,wasted,quantity,consumed].every(integer) ||
