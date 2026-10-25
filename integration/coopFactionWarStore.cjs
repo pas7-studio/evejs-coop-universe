@@ -1,7 +1,9 @@
 "use strict";
 // FW-001: one atomic GameStore record; external proofs must be supplied by
 // trusted server adapters. No public chat or client payload bypasses proof.
-const core=require("./coopFactionWarCore.cjs");
+// The overlay deploys .cjs sources as .js; source-level tests load .cjs.
+const fs=require("node:fs"),path=require("node:path");
+const core=require("./coopFactionWarCore"+(fs.existsSync(path.join(__dirname,"coopFactionWarCore.js"))?".js":".cjs"));
 const TABLE="corporationRuntime", KEY="coop-faction-war\u001fstate-v1";
 function createFactionWarStore({gameStore,proofs,clock=()=>Date.now()}={}){
  if(typeof gameStore?.transact!=="function"||!proofs||typeof proofs!=="object"||
