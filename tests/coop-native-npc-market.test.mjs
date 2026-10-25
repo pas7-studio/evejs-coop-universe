@@ -235,3 +235,52 @@ test("unknown NPC cargo hull capacity stops purchases without altering seed stoc
   assert.equal(x.getRemaining().sell,100);
  }finally{x.cleanup()}
 });
+
+test("real seeded purchase keeps durable exact native cargo witness for offline rearm",async()=>{
+ const x=fixture();try{
+  const t=x.trader();
+  assert.equal((await t.execute(x.params("sell",34))).status,"TRADE_SETTLED");
+  x.advance();
+  const bought=await t.execute(x.params("buy",35));
+  assert.equal(bought.status,"TRADE_SETTLED");
+  assert.equal(bought.buyReceipt.cargoID,bought.cargoID);
+  const receipt=JSON.parse(readFileSync(join(x.root,"purchases",
+   String(bought.cargoID)+".json"),"utf8"));
+  assert.equal(receipt.phase,"SETTLED");
+  assert.equal(receipt.source,"EVEJS_SEED_MARKET");
+  assert.equal(receipt.pilotID,"coop-pilot-005");
+  assert.equal(receipt.typeID,35);
+  assert.equal(receipt.quantity,bought.quantity);
+  assert.equal(receipt.marketOrderID,"9000000000000000444");
+  assert.equal(x.getCalls().filter(c=>c.method==="AdjustSeedStock").length,1);
+ }finally{x.cleanup()}
+});
+test("crash writing purchase receipt after real market ACK resumes without new market RPC",async()=>{
+ const x=fixture();const nativeFS=require("node:fs");
+ const rename=nativeFS.renameSync;
+ try{
+  const t=x.trader();
+  assert.equal((await t.execute(x.params("sell",34))).status,"TRADE_SETTLED");
+  x.advance();
+  let interrupted=false;
+  nativeFS.renameSync=(from,to)=>{
+   if(!interrupted&&String(to).includes("purchases")){
+    interrupted=true;throw Error("POWER_LOSS_AFTER_ACK");
+   }
+   return rename(from,to);
+  };
+  const first=await t.execute(x.params("buy",35));
+  nativeFS.renameSync=rename;
+  assert.equal(first.status,"NEEDS_MARKET_REPAIR");
+  assert.equal(x.getRemaining().sell,90);
+  const resumed=x.trader().recover();
+  assert.equal(resumed.status,"RECOVERED");
+  assert.equal(x.getCalls().filter(c=>c.method==="AdjustSeedStock").length,1);
+  assert.equal(x.getCargo().filter(c=>c.typeID===35).length,1);
+  const cargo=x.getCargo().find(c=>c.typeID===35);
+  const receipt=JSON.parse(readFileSync(join(x.root,"purchases",
+   String(cargo.cargoID)+".json"),"utf8"));
+  assert.equal(receipt.source,"EVEJS_SEED_MARKET");
+  assert.equal(x.trader().recover().status,"CLEAN");
+ }finally{nativeFS.renameSync=rename;x.cleanup()}
+});

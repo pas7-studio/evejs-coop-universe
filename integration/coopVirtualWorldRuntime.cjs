@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -47,6 +47,22 @@ function addNpcOrderBlocks(blockedIDs,systemID,owner){
  const guard=npcOrderBridge();
  if(guard)for(const id of guard.blocksForSystem(systemID,owner))blockedIDs.add(id);
  return blockedIDs;
+}
+// Personal intentions affect only NPC routes; no native funds, kills or cargo.
+function npcPersonalGoals(){
+ if(process.env.EVEJS_COOP_NPC_PERSONAL_GOALS!=="1"||
+    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1"||
+    process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
+ if(!personalGoals)personalGoals=require("./coopNpcPersonalGoals").createPersonalGoals({
+  file:process.env.EVEJS_COOP_NPC_GOALS_FILE||"/var/lib/evejs/coop-npc-goals.json"
+ });
+ return personalGoals;
+}
+function npcRealPoints(scene){
+ const points=require("./coopNpcTopology").waypoints(scene);
+ return {gateCount:points.filter(p=>p.kind==="stargate").length,
+  beltCount:points.filter(p=>p.kind==="asteroidBelt").length,
+  stationCount:points.filter(p=>p.kind==="station").length};
 }
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
@@ -133,8 +149,13 @@ function start(){
   if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
   safeNpcPhase("native-depot",syncNativeDeliveries);
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
+  safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
+  safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
+  safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
+  safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
   safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
@@ -354,6 +375,10 @@ function advanceNativeGateApproach(){
  const blockedIDs=tacticsDirector?.activeIDs()||new Set();
  if(raidDirector)for(const id of raidDirector.activePirateIDs(system=>
   runtime.ensureScene(system,{refreshStargates:false})))blockedIDs.add(id);
+ if(wreckRecoveryDirector)for(const sys of visitedSystems)
+  for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
+ if(lootCommerce)for(const sys of visitedSystems)
+  for(const id of lootCommerce.activeIDs(sys))blockedIDs.add(id);
  for(const systemID of visitedSystems){
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const assignments=links.filter(a=>Number(a.systemID)===Number(systemID));
@@ -384,10 +409,196 @@ function advanceNativeGateApproach(){
     });
  }
 }
+// This does not infer hits, and it never edits native cargo. The strict native
+// reload policy is hooked separately into the pinned missile/local-cycle code.
+function observeNativeAmmoConsumption(){
+ if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  !identityRegistry||!visitedSystems.size)return;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+ if(!nativeAmmoWitness)nativeAmmoWitness=
+  require("./coopNpcAmmoWitness").createAmmoWitness({store});
+ const assignments=Object.values(identityRegistry.snapshot().links||{});
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const result=nativeAmmoWitness.sample({scene,assignments});
+  if(result.events.length)
+   require("./coopRuntimeProbe").observe("living-native-npc-ammo-debit",null,
+    {spaceState:{systemID}},{events:result.events,
+     status:"NATIVE_CARGO_DELTA_ONLY_NOT_AUTHORED_SHOT"});
+ }
+}
+// Source-verified native kill -> real surviving wreck -> same killer ship.
+function advanceNativeWreckRecovery(){
+ if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
+  process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !identityRegistry||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
+  store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry");
+ const journal=require("./coopNpcWreckClaims").getWreckClaims();
+ if(!wreckRecoveryDirector)
+  wreckRecoveryDirector=require("./coopNpcWreckRecovery").createWreckRecovery({
+   warp:(entityID,wreckID,options)=>npcNativeOrder("CIVILIAN",entityID,"wreck-warp",
+    ()=>npc.warpToEntity(entityID,wreckID,options)),
+   orbit:(entityID,wreckID,meters)=>npcNativeOrder("CIVILIAN",entityID,"wreck-orbit",
+    ()=>npc.orbit(entityID,wreckID,meters))
+  });
+ const assignments=bridge.snapshot().concat(
+  Object.values(identityRegistry.snapshot().links||{}));
+ for(const systemID of visitedSystems){
+  const claims=journal.active(systemID);
+  if(!claims.length)continue;
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const blockedIDs=new Set();
+  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+  if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
+    runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
+  if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
+  addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
+  const result=wreckRecoveryDirector.tick({systemID,scene,claims,assignments,store,
+   getController:id=>controllers.getControllerByEntityID(id),blockedIDs,
+   pickupDistance:process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"?2500:0});
+  if(result.orders.length||result.inspections.length)
+   require("./coopRuntimeProbe").observe("living-npc-postraid-wreck-recovery",null,
+    {spaceState:{systemID}},{orders:result.orders,inspections:result.inspections,
+     transferStatus:"NOT_IMPLEMENTED_NO_NATIVE_ATOMIC_CUSTODY"});
+ }
+}
+// Native source-first wreck debit -> native cargo credit. This phase is
+// separate from mere wreck inspection and disabled by default.
+function advanceNativeWreckCustody(){
+ if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
+  process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
+  process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  nativeMarketTickRunning||!identityRegistry||!bridge)return;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  controllers=require("./npc/npcRegistry");
+ if(!wreckCustody)wreckCustody=require("./coopNpcWreckCustody").createWreckCustody({
+  store,sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  resolveType:id=>require("../services/inventory/itemTypeRegistry").resolveItemByTypeID(id),
+  root:process.env.EVEJS_COOP_NPC_WRECK_CUSTODY_ROOT||
+   "/var/lib/evejs/coop-npc-wreck-custody"
+ });
+ const recovered=wreckCustody.recover();
+ if(recovered.status!=="CLEAN"){
+  require("./coopRuntimeProbe").observe("living-npc-wreck-custody-blocked",
+   null,null,{status:recovered.status,
+    pending:recovered.pending?.slice(0,5)});
+  return;
+ }
+ const claims=require("./coopNpcWreckClaims").getWreckClaims();
+ const byPilot=new Map();
+ for(const row of [...bridge.snapshot(),
+  ...Object.values(identityRegistry.snapshot().links||{})]){
+  if(!row?.pilotID||!Number.isSafeInteger(Number(row.entityID)))continue;
+  const key=String(row.pilotID)+":"+String(row.entityID)+":"+String(row.systemID);
+  byPilot.set(key,row);
+ }
+ const assignments=[...byPilot.values()];
+ let count=0;
+ for(const systemID of visitedSystems){
+  if(count>=2)break;
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  for(const claim of claims.active(systemID)){
+   if(count>=2)break;
+   const ship=scene.getEntityByID(claim.attackerEntityID),
+    wreck=scene.getEntityByID(claim.wreckID);
+   if(ship?.kind!=="ship"||ship.nativeNpc!==true||
+    wreck?.nativeNpcWreck!==true||!ship.position||!wreck.position||
+    !["x","y","z"].every(k=>Number.isFinite(ship.position[k])&&
+     Number.isFinite(wreck.position[k]))||
+    Math.hypot(ship.position.x-wreck.position.x,
+     ship.position.y-wreck.position.y,
+     ship.position.z-wreck.position.z)>2500)continue;
+   if(tacticsDirector?.activeIDs().has(Number(claim.attackerEntityID))||
+    gateTravelDirector?.activeIDs().has(Number(claim.attackerEntityID))||
+    raidDirector?.activePirateIDs(sys=>runtime.ensureScene(sys,{refreshStargates:false}))
+     .has(Number(claim.attackerEntityID)))continue;
+   const items=store.listNativeWreckItemsForWreck(claim.wreckID);
+   if(!Array.isArray(items))continue;
+   for(const item of items.slice(0,2)){
+    if(count>=2)break;
+    const result=wreckCustody.transfer({claim,scene,
+     entityID:Number(claim.attackerEntityID),
+     wreckItemID:Number(item.wreckItemID),assignments,
+     getController:id=>controllers.getControllerByEntityID(id),
+     verifyClaim:({claim:presented})=>
+      claims.active(systemID).some(saved=>
+       Number(saved.wreckID)===Number(presented.wreckID)&&
+       Number(saved.sourceEntityID)===Number(presented.sourceEntityID)&&
+       Number(saved.attackerEntityID)===Number(presented.attackerEntityID)&&
+       saved.attackerPilotID===presented.attackerPilotID&&
+       Number(saved.at)===Number(presented.at)),
+     canLoot:({wreck,native})=>
+      Number(wreck.ownerID)>0&&Number(wreck.ownerID)===Number(native.ownerID)||
+      Number(wreck.lootRightCorpID)>0&&
+       Number(wreck.lootRightCorpID)===Number(native.corporationID)&&
+       Number(native.corporationID)>0});
+    if(result.status==="NATIVE_WRECK_CARGO_SETTLED"){
+     count++;
+     require("./coopRuntimeProbe").observe("living-npc-wreck-cargo-settled",null,
+      {spaceState:{systemID}},result);
+    }else if(!["NATIVE_LOOT_RIGHTS_NOT_VERIFIED","INVALID_NATIVE_CUSTODY_PROOF",
+     "NATIVE_WRECK_OR_SHIP_UNVERIFIED","NATIVE_COMBAT_ORDER_ACTIVE",
+     "NATIVE_CARGO_FULL","ALREADY_SETTLED"].includes(result.status)){
+     require("./coopRuntimeProbe").observe("living-npc-wreck-custody-refused",null,
+      {spaceState:{systemID}},{status:result.status,
+       wreckID:claim.wreckID,itemID:item.wreckItemID});
+    }
+   }
+  }
+ }
+}
+// Move only source-authenticated recovered wreck cargo; no market side effects.
+function advanceNativeLootStationDelivery(){
+ if(process.env.EVEJS_COOP_NPC_LOOT_COMMERCE!=="1"||
+  process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !identityRegistry||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
+  controllers=require("./npc/npcRegistry"),
+  store=require("./npc/nativeNpcStore"),worldData=require("./worldData");
+ if(!lootCommerce)lootCommerce=require("./coopNpcLootCommerce").createLootCommerce({
+  root:process.env.EVEJS_COOP_NPC_WRECK_CUSTODY_ROOT||
+   "/var/lib/evejs/coop-npc-wreck-custody",
+  store,sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getController:id=>controllers.getControllerByEntityID(id),
+  getStation:id=>worldData.getStationByID(id),
+  warp:(id,stationID,opts)=>npcNativeOrder("CIVILIAN",id,"loot-station-warp",
+   ()=>npc.warpToEntity(id,stationID,opts)),
+  orbit:(id,stationID,range)=>npcNativeOrder("CIVILIAN",id,"loot-station-orbit",
+   ()=>npc.orbit(id,stationID,range))
+ });
+ const byKey=new Map();
+ for(const row of [...bridge.snapshot(),
+  ...Object.values(identityRegistry.snapshot().links||{})])
+  if(row?.pilotID&&Number(row.entityID)>0&&Number(row.systemID)>0)
+   byKey.set(row.pilotID+":"+row.entityID+":"+row.systemID,row);
+ const assignments=[...byKey.values()],blockedIDs=new Set();
+ if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+ if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+ if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
+   runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
+ if(wreckRecoveryDirector)for(const sys of visitedSystems)
+  for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
+ for(const sys of visitedSystems)addNpcOrderBlocks(blockedIDs,sys,"CIVILIAN");
+ const result=lootCommerce.tick({assignments,blockedIDs});
+ if(result.orders.length||result.ready.length)
+  require("./coopRuntimeProbe").observe("living-npc-loot-station",null,null,{
+   nativeMovementOrders:result.orders,physicallyReady:result.ready,
+   source:"AUTHENTICATED_NATIVE_WRECK_CARGO",iskCredited:false
+  });
+}
 function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
   const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
+  if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
+   for(const id of wreckRecoveryDirector.activeIDs(Number(systemID)))blockedIDs.add(id);
+  if(lootCommerce)for(const id of lootCommerce.activeIDs(Number(systemID)))blockedIDs.add(id);
+  if(nativeAmmoSupply)for(const id of nativeAmmoSupply.activeIDs(Number(systemID)))blockedIDs.add(id);
   // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
   if(alifeOrderArbitrationEnabled(process.env)){
    if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
@@ -537,6 +748,8 @@ async function advanceNativeMarket(){
     sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
     getController:id=>controllers.getControllerByEntityID(id),
     resolveType:id=>inventory.resolveItemByTypeID(id),
+    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||
+     "/var/lib/evejs/coop-native-market",
     maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
     maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
     cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000)))
@@ -553,6 +766,25 @@ async function advanceNativeMarket(){
    nativeMarketTrader=market;
   }
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+  const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
+   process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
+   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+  if(rearmEnabled&&!nativeRearm)
+   nativeRearm=require("./coopNpcNativeRearm").createNativeRearm({
+    store,registry:identityRegistry,
+    sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+    getController:id=>controllers.getControllerByEntityID(id),
+    getStation:id=>worldData.getStationByID(id),
+    resolveType:id=>inventory.resolveItemByTypeID(id),
+    compatible:(module,typeID)=>require("./npc/npcCapabilityResolver")
+     .isNpcChargeCompatibleWithModule(module,typeID),
+    verifyCombatCharge:(ship,module)=>require("./npc/npcEquipment")
+     .getNpcLoadedChargeForModule(ship,module),
+    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||
+     "/var/lib/evejs/coop-native-market"
+   });
+  const rearmTypes=rearmEnabled?nativeMarketAllowlist(
+   "EVEJS_COOP_NPC_REARM_CHARGE_TYPES").filter(x=>buyTypes.includes(x)):[];
   const blocked=tacticsDirector?.activeIDs()||new Set();
   if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blocked.add(id);
   if(raidDirector)for(const id of raidDirector.activePirateIDs(id=>
@@ -570,7 +802,14 @@ async function advanceNativeMarket(){
    for(const link of links.filter(x=>Number(x.systemID)===Number(systemID))){
     if(completed>=2)break;
     const role=roles.get(link.pilotID)||link.role;
-    if(!["trader","hauler"].includes(role)||blocked.has(Number(link.entityID)))continue;
+    const recoveredPirate=role==="pirate"&&
+     process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
+     process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"&&
+     lootCommerce!==null;
+    const rearmingPirate=role==="pirate"&&rearmEnabled&&
+     nativeRearm!==null&&rearmTypes.length>0;
+    if(!["trader","hauler"].includes(role)&&!recoveredPirate&&
+       !rearmingPirate||blocked.has(Number(link.entityID)))continue;
     const ship=scene.getEntityByID(Number(link.entityID));
     const ctrl=controllers.getControllerByEntityID(Number(link.entityID));
     if(!ship||ship.nativeNpc!==true||Number(ctrl?.currentTargetID)>0||
@@ -583,14 +822,48 @@ async function advanceNativeMarket(){
       Math.max(0,Number(x.radius)||0)+Math.max(0,Number(ship.radius)||0);
     });
     if(!station)continue;
-    const nativeCargo=store.listNativeCargoForEntity(Number(link.entityID))||[];
-    const ownedSellTypes=[...new Set(nativeCargo.filter(c=>Number(c.moduleID||0)===0&&
-     c.singleton!==true&&Number(c.quantity)>0&&sellTypes.includes(Number(c.typeID)))
-     .map(c=>Number(c.typeID)))];
-    const tradeCandidates=[
-     ...ownedSellTypes.map(typeID=>({side:"sell",typeID})),
-     ...buyTypes.map(typeID=>({side:"buy",typeID}))
-    ];
+    const nativeCargo=recoveredPirate?
+     lootCommerce.stock({pilotID:link.pilotID,entityID:Number(link.entityID)}):
+     store.listNativeCargoForEntity(Number(link.entityID))||[];
+    const eligible= nativeCargo.filter(c=>Number(c.moduleID||0)===0&&
+     c.singleton!==true&&Number(c.quantity)>0&&sellTypes.includes(Number(c.typeID)));
+    const tradeCandidates=recoveredPirate?
+     eligible.filter(c=>lootCommerce.readyFor({
+      pilotID:link.pilotID,entityID:Number(link.entityID),systemID,
+      stationID:Number(station.itemID),cargoID:Number(c.cargoID)
+     })).map(c=>({side:"sell",typeID:Number(c.typeID),
+      cargoID:Number(c.cargoID),
+      verifyCargo:row=>lootCommerce.verifiedCargo({
+       pilotID:link.pilotID,entityID:Number(link.entityID),cargo:row})})):
+     ["trader","hauler"].includes(role)?
+      [...new Set(eligible.map(c=>Number(c.typeID)))]
+       .map(typeID=>({side:"sell",typeID}))
+       .concat(buyTypes.map(typeID=>({side:"buy",typeID}))):[];
+    // Only a genuinely earned positive native NPC ledger balance may fund
+    // new seeded-market charge purchases. No virtual bounties or free ISK.
+    let loadPlan=null;
+    if(rearmingPirate&&nativeMarketTrader.snapshot().pilots[link.pilotID]?.balance>0){
+     loadPlan=nativeRearm.candidates({pilotID:link.pilotID,
+      entityID:Number(link.entityID),systemID,
+      stationID:Number(station.itemID),allowedTypes:rearmTypes});
+     if(loadPlan.status==="REARM_READY"){
+      const loaded=nativeRearm.load({pilotID:link.pilotID,
+       entityID:Number(link.entityID),systemID,
+       stationID:Number(station.itemID),cargoID:loadPlan.cargoID,
+       moduleID:loadPlan.moduleID});
+      if(loaded.status==="NATIVE_NPC_CHARGE_LOADED"||
+       loaded.status==="ALREADY_LOADED"){
+       completed++;
+       require("./coopRuntimeProbe").observe("living-npc-earned-rearm",null,
+        {spaceState:{systemID}},loaded);
+      }else require("./coopRuntimeProbe").observe("living-npc-rearm-blocked",null,
+       {spaceState:{systemID}},{status:loaded.status,
+        pilotID:link.pilotID,entityID:Number(link.entityID)});
+      continue;
+     }
+     if(loadPlan.status==="REARM_NEEDS_PURCHASE")
+      tradeCandidates.push({side:"buy",typeID:loadPlan.typeID});
+    }
     for(const trade of tradeCandidates){
      const result=await nativeMarketTrader.execute({
       scene,pilotID:link.pilotID,entityID:Number(link.entityID),
@@ -599,8 +872,29 @@ async function advanceNativeMarket(){
      });
      if(result.status==="TRADE_SETTLED"){
       completed++;
-      require("./coopRuntimeProbe").observe("living-native-market-trade",null,
-       {spaceState:{systemID}},result);
+      require("./coopRuntimeProbe").observe(
+       rearmingPirate&&trade.side==="buy"?
+        "living-native-npc-ammo-purchased":
+        recoveredPirate?"living-native-loot-market-settled":"living-native-market-trade",
+       null,{spaceState:{systemID}},{
+        ...result,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET",
+        sourceOfFunds:trade.side==="buy"?
+         "PREVIOUS_NPC_MARKET_LEDGER_EARNINGS":"SEED_MARKET_FILLED_ORDER"
+       });
+      // The actual native market purchase is already settled. Bind that
+      // very cargo ID to an already fitted compatible module; if loading
+      // fails, the bought stack remains real cargo for later reconciliation.
+      if(rearmingPirate&&trade.side==="buy"&&loadPlan?.moduleID){
+       const loaded=nativeRearm.load({pilotID:link.pilotID,
+        entityID:Number(link.entityID),systemID,
+        stationID:Number(station.itemID),cargoID:result.cargoID,
+        moduleID:loadPlan.moduleID});
+       require("./coopRuntimeProbe").observe(
+        ["NATIVE_NPC_CHARGE_LOADED","ALREADY_LOADED"].includes(loaded.status)?
+         "living-npc-earned-rearm":"living-npc-rearm-blocked",null,
+        {spaceState:{systemID}},{...loaded,
+         purchaseSettled:true,cargoID:result.cargoID});
+      }
       break;
      }
      if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
@@ -625,11 +919,87 @@ function advanceNativeCivilianOrders(){
  })||new Set();
  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+ if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
+  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+   for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
+ if(lootCommerce)for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+  for(const id of lootCommerce.activeIDs(sys))blockedIDs.add(id);
+ if(nativeAmmoSupply)for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+  for(const id of nativeAmmoSupply.activeIDs(sys))blockedIDs.add(id);
+ // A physically observing squad scout must stay on-grid for the 15s relay:
+ // don't let generic civilian waypoints warp that SAME native ship away.
+ if(process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&squadDirector)
+  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+   for(const scoutID of squadDirector.activeScoutIDs(sys))blockedIDs.add(scoutID);
  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
   addNpcOrderBlocks(blockedIDs,sys,"CIVILIAN");
- const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{},{blockedIDs});
+ const roles=economy?.snapshot().pilots||{};
+ const goals=npcPersonalGoals(),routeOverrides={};
+ if(goals){
+  const snapshots=goals.snapshot().pilots;
+  const runtime=require("./runtime");
+  for(const pilot of assignments){
+   if(roles[pilot.pilotID]?.role!=="pirate")continue;
+   const scene=runtime.ensureScene(pilot.systemID,{refreshStargates:false});
+   const ship=scene?.getEntityByID?.(Number(pilot.entityID));
+   if(ship?.nativeNpc!==true||ship.kind!=="ship"||ship.session?.characterID)continue;
+   if(!snapshots[pilot.pilotID]||snapshots[pilot.pilotID].systemID!==Number(pilot.systemID))
+    goals.decide({pilotID:pilot.pilotID,systemID:pilot.systemID,...npcRealPoints(scene)});
+   const role=goals.routeRole({pilotID:pilot.pilotID,systemID:pilot.systemID});
+   if(role)routeOverrides[pilot.pilotID]=role;
+  }
+ }
+ const orders=civilianOrders.tick(assignments,roles,{blockedIDs,routeOverrides});
+ if(goals)for(const order of orders){
+  if(!routeOverrides[order.pilotID])continue;
+  try{goals.observeNativeOrder({pilotID:order.pilotID,
+    systemID:assignments.find(a=>a.pilotID===order.pilotID)?.systemID,
+    entityID:order.entityID,targetID:order.targetID,action:order.action});
+  }catch(error){console.warn("[CoopNpcGoals] native route evidence",error.message);}
+ }
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
+}
+// Physically stranded NPCs cannot invent ammo. Warping away from battle
+// uses a real unscrumbled native hull, with safe real station destination.
+function advanceNativeAmmoSupply(){
+ if(process.env.EVEJS_COOP_NPC_AMMO_SUPPLY!=="1"||
+  process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !bridge||!identityRegistry||!world||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
+  store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry"),
+  equipment=require("./npc/npcEquipment"),dogma=require("./combat/weaponDogma"),
+  types=require("./npc/npcCapabilityResolver"),
+  worldData=require("./worldData"),
+  scramble=require("./modules/hostileModuleRuntime");
+ if(!nativeAmmoSupply)nativeAmmoSupply=
+  require("./coopNpcAmmoSupply").createAmmoSupply({
+   store,getWeaponModules:equipment.getNpcWeaponModules,
+   resolveFamily:weapon=>dogma.resolveWeaponFamily(weapon),
+   isOptional:weapon=>dogma.isChargeOptionalTurretWeapon(weapon),
+   compatible:types.isNpcChargeCompatibleWithModule,
+   getController:id=>controllers.getControllerByEntityID(id),
+   getStation:id=>worldData.getStationByID(id),
+   warp:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"ammo-retreat-warp",
+    ()=>npc.warpToEntity(id,targetID,options)),
+   orbit:(id,targetID,range)=>npcNativeOrder("CIVILIAN",id,"ammo-resupply-orbit",
+    ()=>npc.orbit(id,targetID,range)),
+   isScrambled:ship=>scramble.isEntityWarpScrambled(ship)
+  });
+ const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+ const assignments=bridge.snapshot().filter(x=>roles.get(x.pilotID)==="pirate");
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const blockedIDs=new Set();
+  if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
+  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+  const result=nativeAmmoSupply.tick({scene,assignments,blockedIDs});
+  if(result.orders.length||result.events.length)
+   require("./coopRuntimeProbe").observe("living-native-ammo-supply",null,
+    {spaceState:{systemID}},{orders:result.orders,events:result.events,
+     nativeCargoSupplyOnly:true,cargoCredited:false});
+ }
 }
 function advanceNativeRaids(){
  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
@@ -654,9 +1024,17 @@ function advanceNativeRaids(){
   });
  }
  const roles=economy?.snapshot().pilots||{};
+ // Validate persisted goal state before allowing any new native raid command.
+ const goals=npcPersonalGoals();
  for(const systemID of visitedSystems){
-  const pirates=bridge.snapshot().filter(p=>p.systemID===systemID&&roles[p.pilotID]?.role==="pirate")
-   .map(x=>x.entityID);
+  // Once a pilot has genuinely recovered cargo and begun physical delivery,
+  // it must not abandon its sale route to accept an opportunistic new raid.
+  const delivering=lootCommerce?.activeIDs(systemID)||new Set();
+  const outOfAmmo=nativeAmmoSupply?.activeIDs(systemID)||new Set();
+  const pirates=bridge.snapshot().filter(p=>
+   p.systemID===systemID&&roles[p.pilotID]?.role==="pirate"&&
+   !delivering.has(Number(p.entityID))&&
+   !outOfAmmo.has(Number(p.entityID))).map(x=>x.entityID);
   if(!pirates.length)continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const fleets=mining.getMiningFleetsForSystem(systemID);
@@ -668,6 +1046,34 @@ function advanceNativeRaids(){
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
   const actualPilots=world.snapshot().pilots;
+  const factionByPilot=new Map(actualPilots.map(p=>[p.id,p.faction]));
+  const squadContacts=activeLinks.map(p=>({...p,
+   faction:factionByPilot.get(p.pilotID)}));
+  // Squad coordination is optional, NPC-on-NPC only, and never a second
+  // attack loop. Existing native stock mining raid legality still runs first.
+  const squadEnabled=process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&
+   process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&
+   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+  if(squadEnabled&&!squadDirector)
+   squadDirector=require("./coopNpcSquadDirector").createSquadDirector();
+  const squads=squadEnabled?squadDirector:null;
+  // Native ore custody is only a server-side eligibility prefilter,
+  // NEVER cargo-scan knowledge supplied to the NPC or shared report.
+  const raidCandidates=squads?fleetShips.filter(candidate=>
+   (nativeStore.listNativeCargoForEntity(candidate.id)||[]).some(c=>
+    Number(c?.moduleID||0)===0&&Number(c?.quantity)>0)):fleetShips;
+  const squadState=squads?.observe({systemID,scene,
+   pirates:squadContacts.filter(p=>p.role==="pirate"),
+   pilots:actualPilots,fleetShips:raidCandidates,
+   canAttack:({pirateID,targetID})=>raidPolicy.isAuthorizedStockMiningRaid({
+    systemID,attacker:scene.getEntityByID(pirateID),
+    target:scene.getEntityByID(targetID),links:activeLinks,
+    pilots:actualPilots,fleetShips:raidCandidates
+   })});
+  if(squadState?.teams?.length&&backgroundTicks%10===0)
+   require("./coopRuntimeProbe").observe("living-npc-scout-relay",null,
+    {spaceState:{systemID}},{teams:squadState.teams});
+  const assessments=new Map();
   const canAttack=({pirateID,targetID})=>{
    // The existing source-verified NPC combat gate ALWAYS runs first.
    if(!raidPolicy.isAuthorizedStockMiningRaid({
@@ -680,10 +1086,13 @@ function advanceNativeRaids(){
    const pirateLink=activeLinks.find(x=>Number(x.entityID)===Number(pirateID));
    const targetRole=fleetShips.find(x=>Number(x.id)===Number(targetID))?.role;
    if(!pirateLink||!targetRole)return false;
+   const report=squads?.permit({systemID,scene,pirateID,targetID});
+   if(report&&!report.allowed)return false;
    const damage=require("./combat/damage");
    const scramble=require("./modules/hostileModuleRuntime");
    const decision=huntPolicy.assess({systemID,scene,pirateID,targetID,
-    targetRole,piratePilotID:pirateLink.pilotID,contacts:activeLinks,
+    targetRole,piratePilotID:pirateLink.pilotID,contacts:squadContacts,
+    sharedIntel:report?.report||null,
     getHealth:entity=>{
      const maximum=damage.getEntityMaxHealthLayers(entity);
      const actual=damage.getEntityCurrentHealthLayers(entity,maximum);
@@ -695,6 +1104,9 @@ function advanceNativeRaids(){
     },
     isScrambled:entity=>scramble.isEntityWarpScrambled(entity)
    });
+   const seen=assessments.get(Number(pirateID))||[];
+   seen.push(decision.decision);
+   assessments.set(Number(pirateID),seen);
    return decision.decision==="RAID";
   };
   const result=raidDirector.tick({
@@ -702,6 +1114,27 @@ function advanceNativeRaids(){
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
    getController:id=>controllers.getControllerByEntityID(id)
   });
+  if(goals){
+   const points=npcRealPoints(scene),active=new Set(result.actions.map(a=>Number(a.pirateID)));
+   const leased=raidDirector.activePirateIDs(sys=>
+    runtime.ensureScene(sys,{refreshStargates:false}));
+   for(const rawID of pirates){
+    const id=Number(rawID),link=activeLinks.find(a=>Number(a.entityID)===id);
+    const ship=scene.getEntityByID(id);
+    if(!link||!ship||ship.nativeNpc!==true||ship.session?.characterID)continue;
+    const decisions=assessments.get(id)||[];
+    const assessment=decisions.includes("RETREAT")?"RETREAT":
+      (active.has(id)||leased.has(id))?"RAID":
+      decisions.includes("WORK")?"WORK":
+      decisions.includes("RAID")?"RAID":"SCOUT";
+    const planned=goals.decide({pilotID:link.pilotID,systemID,assessment,
+      verifiedRaid:active.has(id)||leased.has(id),...points});
+    if(planned.status==="PLANNED")
+     require("./coopRuntimeProbe").observe("living-npc-personal-goal",null,
+      {spaceState:{systemID}},{pilotID:link.pilotID,intent:planned.intent,
+       reason:planned.reason,verifiedRaid:active.has(id)||leased.has(id)});
+   }
+  }
   if(result.actions.length){
    // Only a successful native ATTACK order against another named NPC
    // is faction tension evidence. Warp approaches aren't battles.
@@ -742,10 +1175,20 @@ function advanceNativeTactics(){
   tacticsDirector=require("./coopNpcTactics").createTactics({
    warpToPoint:(id,point,options)=>npcNativeOrder("TACTICS",id,"retreat-warp",
     ()=>npc.warpToPoint(id,point,options)),
-   warpToEntity:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"rescue-warp",
-    ()=>npc.warpToEntity(id,targetID,options)),
-   attack:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"rescue-attack",
-    ()=>npc.issueAttackOrder(id,targetID,options)),
+   warpToEntity:(id,targetID,options)=>{
+    const systemID=Number(controllers.getControllerByEntityID(id)?.systemID);
+    if(nativeAmmoSupply?.activeIDs(systemID).has(Number(id)))
+     return {success:false,errorMsg:"NATIVE_AMMO_EXHAUSTED"};
+    return npcNativeOrder("TACTICS",id,"rescue-warp",
+     ()=>npc.warpToEntity(id,targetID,options));
+   },
+   attack:(id,targetID,options)=>{
+    const systemID=Number(controllers.getControllerByEntityID(id)?.systemID);
+    if(nativeAmmoSupply?.activeIDs(systemID).has(Number(id)))
+     return {success:false,errorMsg:"NATIVE_AMMO_EXHAUSTED"};
+    return npcNativeOrder("TACTICS",id,"rescue-attack",
+     ()=>npc.issueAttackOrder(id,targetID,options));
+   },
    resumeBehavior:id=>npcNativeOrder("TACTICS",id,"resume",
     ()=>npc.resumeBehavior(id)),
    stopOrder:id=>npcNativeOrder("TACTICS",id,"stop",
@@ -1203,6 +1646,13 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     });
     require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
      null,{spaceState:{systemID}},proof);
+    // Physical hauler destruction must be observed before any native convoy outcome.
+    if(process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"&&
+       proof.status==="PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED"&&
+       proof.victimRole==="hauler"){
+     try{require("./coopConvoyOutcomeProof").noteLoss(proof)}
+     catch(error){console.warn("[CoopConvoyOutcomeProof] hauler loss",String(error?.message||error))}
+    }
    }
    return;
   }

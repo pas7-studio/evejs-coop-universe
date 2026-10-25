@@ -82,6 +82,12 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   if(!target)return answer("TARGET_NOT_VERIFIED",record);
   record={...record,phase:statuses.CREDIT,itemID:target.itemID,updatedAt:clock()};persist(record.cargoID,record);
   record={...record,phase:statuses.COMMITTED,updatedAt:clock()};persist(record.cargoID,record);
+  // Observe a native delivery only AFTER debit, flush, target identity and
+  // a durable COMMITTED receipt. Errors never roll back genuine native stock.
+  if(process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"){
+   try{require("./coopConvoyOutcomeProof").noteWarehouse(record,target,!findCargo(record))}
+   catch(error){console.warn("[CoopConvoyOutcomeProof] stock",String(error?.message||error))}
+  }
   return answer("COMMITTED",record,{itemID:record.itemID,quantity:record.quantity});
  }
  function deposit({cargoID,haulerID,fleetID,systemID,stationID,corporationID}={}){
