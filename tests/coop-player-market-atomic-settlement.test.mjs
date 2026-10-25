@@ -431,3 +431,73 @@ test("original keyed buyer and seller support partial P2P fill and receipt-only 
   assert.deepEqual(x.db,committed);
  }finally{cleanup()}
 });
+
+
+test("P2P final Rust release gate refuses a paid receipt with foreign native station or item type",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture(),settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  settle.settle({ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800});
+  const key=receiptKey(ticket()),original=structuredClone(x.db.playerMarketFills[key]);
+  for(const bad of [{stationID:60001235},{typeID:35}]){
+   x.db.playerMarketFills[key]={...original,...bad};
+   const before=structuredClone(x.db);
+   assert.throws(()=>settle.requireReceipt(ticket(),proof()),
+    /P2P_ATOMIC_DURABLE_NATIVE_RECEIPT_REQUIRED/);
+   assert.deepEqual(x.db,before);
+  }
+  x.db.playerMarketFills[key]=original;
+  assert.equal(settle.requireReceipt(ticket(),proof()).key,key);
+ }finally{cleanup()}
+});
+test("P2P durable receipt must prove canonical before/after cents and valid fee before Rust release",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture(),settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  settle.settle({ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800});
+  const key=receiptKey(ticket()),original=structuredClone(x.db.playerMarketFills[key]);
+  for(const bad of [
+   {buyerBeforeCents:-1,buyerAfterCents:-8639},
+   {buyerBeforeCents:100000,buyerAfterCents:100000},
+   {sellerBeforeCents:-10000,sellerAfterCents:-1485},
+   {sellerBeforeCents:50000,sellerAfterCents:50000},
+   {taxCents:8639,sellerAfterCents:49999},
+   {committedAt:0},
+   {sellerAfterCents:Number.MAX_SAFE_INTEGER}
+  ]){
+   x.db.playerMarketFills[key]={...original,...bad};
+   const before=structuredClone(x.db);
+   assert.throws(()=>settle.requireReceipt(ticket(),proof()),
+    /P2P_ATOMIC_DURABLE_NATIVE_RECEIPT_REQUIRED/,JSON.stringify(bad));
+   assert.deepEqual(x.db,before);
+  }
+  x.db.playerMarketFills[key]=original;
+  const genuine=settle.requireReceipt(ticket(),proof());
+  assert.equal(genuine.phase,"GAMESTORE_COMMITTED");
+  assert.equal(genuine.buyerBeforeCents-genuine.buyerAfterCents,genuine.grossCents);
+ }finally{cleanup()}
+});
+test("receipt-only P2P replay also rejects noncanonical balance witness and zero timestamp",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture(),settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  settle.settle({ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800});
+  const key=receiptKey(ticket()),original=structuredClone(x.db.playerMarketFills[key]);
+  for(const bad of [
+   {buyerBeforeCents:-1,buyerAfterCents:-8639},
+   {sellerBeforeCents:-10000,sellerAfterCents:-1485},
+   {committedAt:0}
+  ]){
+   x.db.playerMarketFills[key]={...original,...bad};
+   const before=structuredClone(x.db);
+   assert.throws(()=>settle.settle({
+    ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+   }),/P2P_ATOMIC_COMMITTED_RECEIPT_REPLAY_CONFLICT/);
+   assert.deepEqual(x.db,before);
+  }
+  x.db.playerMarketFills[key]=original;
+  assert.equal(settle.settle({
+   ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+  }).replayed,true);
+ }finally{cleanup()}
+});
