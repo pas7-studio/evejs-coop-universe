@@ -3,7 +3,9 @@
 // The only sale writer remains coopSalvageNpcPendingMarket + native Rust.
 // Real witness files and GameStore are read without seeding records.
 const fs=require("node:fs"),path=require("node:path");
-const {createAlifeSalvageMarket}=require("./coopAlifeSalvageMarket");
+// Source .cjs modules become .js siblings in the deployed EveJS overlay.
+const siblingSuffix=typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs";
+const {createAlifeSalvageMarket}=require("./coopAlifeSalvageMarket"+siblingSuffix);
 let instance=null,busy=false;
 function createBindings({gameStore,itemStore,marketClient,worldData,
  getEscrow,root,systems}={}){
@@ -51,7 +53,7 @@ function createBindings({gameStore,itemStore,marketClient,worldData,
    s.solarSystemID>0&&isNpcCorporation(owner);
  };
  const marketFactory=priceCents=>
-  require("./coopSalvageNpcPendingMarket").createSalvagePendingMarket({
+  require("./coopSalvageNpcPendingMarket"+siblingSuffix).createSalvagePendingMarket({
    atomic,call:(method,params)=>marketClient.call(method,params),
    getItem:id=>itemStore.findItemById(id),
    getEscrow:id=>getEscrow(id)||null,
