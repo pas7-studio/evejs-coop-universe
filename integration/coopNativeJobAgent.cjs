@@ -14,14 +14,17 @@ const reply=(s,actions=[])=>({success:true,data:{
  agentSays:[s,null],actions,lastActionInfo:{}}});
 const safeText=x=>String(x||"").replace(/[<>\x00-\x1f]/g," ").slice(0,180);
 function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
- getAgent,getMission,getSessions,dispatch,clock=()=>Date.now()}={}){
+ getAgent,getMission,getSessions,dispatch,selection,clock=()=>Date.now()}={}){
  if([listEvents,readEvent,readQuote,readAccepted,getAgent,getMission,
-   getSessions,dispatch,clock].some(f=>typeof f!=="function"))
+   getSessions,dispatch,clock].some(f=>typeof f!=="function")||
+  typeof selection?.read!=="function"||typeof selection?.pin!=="function")
   throw Error("NATIVE_JOB_AGENT_AUTHORITIES_REQUIRED");
- // A single native agent conversation must not silently switch its chosen job
- // when a new convoy is published in between VIEW and ACCEPT requests.
- const selected=new Map(); // only read-only request state; validated each call
- const cacheKey=(char,agent)=>String(char)+":"+String(agent);
+ // Persist the exact job behind the stock agent's ID-less Accept button.
+ const pinned=(session,agentID)=>{
+  try{return selection.read(session.characterID,agentID)}
+  catch{return {status:"SELECTION_READ_UNAVAILABLE"}}
+ };
+ const blocked=message=>({blocked:true,message});
  function validated(session,agentID){
   if(!pos(session?.characterID)||session?.socket?.destroyed===true||!pos(agentID))return null;
   let online,a,mission;
@@ -68,16 +71,14 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
  }
  function jobFor(session,agentID){
   const a=validated(session,agentID);if(!a)return null;
-  const jobs=offers(a);if(!jobs.length)return null;
-  const key=cacheKey(session.characterID,agentID);
-  const previous=selected.get(key);
-  // If pinned event is no longer present, do NOT silently accept a different
-  // source ID. Explicit fresh dialogue request (null action) may select again.
-  if(previous){
-   const found=jobs.find(x=>x.event.id===previous);
-   return found?{...found,agent:a}:null;
-  }
-  return {...jobs[0],agent:a};
+  const proof=pinned(session,agentID);
+  if(proof.status!=="READY")
+   return blocked("No current durable selection for this agent. Reopen the contact. "+
+    "No mission or money was changed: "+proof.status);
+  const job=offers(a).find(x=>x.event.id===proof.eventID);
+  return job?{...job,agent:a}:
+   blocked("Selected corporate job is no longer valid. No other job can "+
+    "be silently substituted.");
  }
  function render(j,notes=""){
   const total=j.quote.amountISK.toLocaleString("en-US");
@@ -90,13 +91,26 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
    (notes?"\n"+safeText(notes):"");
  }
  function intro(session,agentID){
-  const a=validated(session,agentID);
-  if(!a)return null;
-  const key=cacheKey(session.characterID,agentID);
-  selected.delete(key);
-  const jobs=offers(a);if(!jobs.length)return null;
-  const j={...jobs[0],agent:a};selected.set(key,j.event.id);
-  return j;
+  const a=validated(session,agentID);if(!a)return null;
+  const before=pinned(session,agentID);
+  if(!["READY","EXPIRED","NOT_FOUND"].includes(before.status))
+   return blocked("Native job selection needs operator repair: "+before.status);
+  const jobs=offers(a);
+  if(before.status==="READY"){
+   const found=jobs.find(x=>x.event.id===before.eventID);
+   return found?{...found,agent:a}:
+    blocked("Previously selected job is no longer available. Reopen "+
+     "after the original offer expires.");
+  }
+  if(!jobs.length)return null;
+  const chosen=jobs[0];
+  let saved;try{saved=selection.pin(session.characterID,agentID,
+   chosen.event.id,chosen.event.expiresAt)}
+  catch{return blocked("Native selection persistence unavailable.");}
+  if(saved?.status!=="SELECTED"||saved.eventID!==chosen.event.id)
+   return blocked("Unable to persist the agent's job: "+
+    (saved?.status||"UNAVAILABLE"));
+  return {...chosen,agent:a};
  }
  function readSelected(session,agentID){
   return jobFor(session,agentID);
@@ -104,13 +118,13 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
  function doAction({session,agentID,actionID}={}){
   if(process.env.EVEJS_COOP_NATIVE_JOB_AGENT!=="1")return null;
   const j=actionID==null?intro(session,agentID):readSelected(session,agentID);
+  if(j?.blocked)return reply(j.message);
   if(!j){
-   // A selected job that expires during the dialog must NEVER fall through
-   // to a different stock mission action. Require a fresh initial contact.
-   const key=cacheKey(session?.characterID,agentID);
-   if(actionID!=null&&selected.has(key)&&validated(session,agentID))
-    return reply("This corporate job expired or changed. Close and reopen this agent contact; no native mission was accepted.");
-   return null; // stock agent mission unaffected
+   const a=actionID!=null?validated(session,agentID):null;
+   if(a&&offers(a).length&&[1,2,3,5].includes(Number(actionID)))
+    return reply("Reopen this native agent contact before choosing work. "+
+     "No money or native mission was changed.");
+   return null; // original stock mission is never hidden without a job
   }
   const id=j.event.id;
   if(actionID===null||actionID===undefined||Number(actionID)===1||Number(actionID)===2){
@@ -152,7 +166,7 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
  }
  function briefing({session,agentID}={}){
   if(process.env.EVEJS_COOP_NATIVE_JOB_AGENT!=="1")return null;
-  const j=readSelected(session,agentID);if(!j)return null;
+  const j=readSelected(session,agentID);if(!j||j.blocked)return null;
   return {"ContentID":null,"Mission Title ID":"NPC Convoy Escort",
    "Mission Briefing ID":render(j),
    "Mission Keywords":{},"Mission Image":null,"Decline Time":null,
@@ -174,7 +188,9 @@ function native(){
    readEvent:board.readNativeEvent,readQuote:priced.readVisibleQuote,
    readAccepted:priced.readNativeAccepted,getAgent:agentAuthority.getAgentByID,
    getMission:missions.getMissionRecord,getSessions:registry.getSessions,
-   dispatch:board.handleChat});
+   dispatch:board.handleChat,
+   selection:require("./coopNativeJobAgentSelection").createNativeJobSelection({
+    root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs"})});
  }
  return singleton;
 }
