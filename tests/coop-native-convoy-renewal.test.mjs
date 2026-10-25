@@ -37,7 +37,7 @@ test("destroyed whole convoy waits thirty minutes before native startup can repl
  assert.equal(accepted.status,"NATIVE_CONVOY_RENEWAL_AUTHORIZED");
  assert.equal(accepted.renewal,true);
  assert.deepEqual(accepted.missing,[1]);
- assert.equal(f.ships.size,0); // helper never spawns or grants ships
+ assert.equal(f.ships.size,1); // untouched unrelated ship, helper never spawns
 });
 test("failed replacement does not flood EveJS startup on next background ticks",()=>{
  const f=fixture();f.check([f.fleet(201)]);f.ships.delete(201);f.check([]);
