@@ -8,7 +8,7 @@ const hash=x=>crypto.createHash("sha256").update(x).digest("hex");
 function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
  journalDir="/var/lib/evejs/coop-war-native-transfers",
  env=process.env,io=fs,clock=()=>Date.now()}={}){
- if(!ledger||["witness","nativeCommit","finish","abort","restore"]
+ if(!ledger||["witness","nativeCommit","finish","abort","restore","recordRecoveryAttempt"]
   .some(k=>typeof ledger[k]!=="function")||
   typeof identityRegistry?.relocate!=="function"||
   typeof authorizeOperator!=="function"||
@@ -120,6 +120,17 @@ function createWarRecoveryConsole({ledger,identityRegistry,authorizeOperator,
    // No destination, fleet, pilot or cargo fields are accepted from the
    // caller: all mutation arguments derive from the fresh native witness.
    const req={entityID,transferID:w.transferID};
+   // Durable native fleet audit is required before any SQL/JSON/FS
+   // mutation. This cannot be a best-effort post-action console log.
+   let audit;
+   try{
+    audit=ledger.recordRecoveryAttempt({
+     ...req,action,witnessHash:expectedWitness,
+     principalID:operator?.principalID,reason:reason.trim()
+    });
+   }catch{return {status:"AUDIT_OUTCOME_UNKNOWN_RECHECK_REQUIRED"}}
+   if(!["RECORDED","ALREADY_RECORDED"].includes(audit?.status))
+    return {status:"AUDIT_REQUIRED",reason:audit?.reason||audit?.status};
    let result;
    try{
     if(action==="ABORT")result=ledger.abort(req);
