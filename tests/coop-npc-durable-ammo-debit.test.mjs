@@ -252,3 +252,31 @@ test("bank identity and repeated module IDs fail closed",()=>{
   }).status,"NATIVE_AMMO_BANK_IDENTITY_MISMATCH");
  }finally{f.cleanup();}
 });
+
+test("unloaded pending weapon still quarantines entire ship before a new bank debit",()=>{
+ const f=fixture();try{
+  const j=f.make(),first=j.begin(f.args());
+  f.debit(4);assert.equal(j.commit(first.token).ok,true);
+  const pending=j.begin(f.args({moduleItem:{itemID:402,flagID:27},
+   chargeItem:{itemID:502,typeID:35,quantity:5}}));
+  assert.equal(pending.status,"PREPARED");
+  // Simulate gun 402 no longer listed among active weapon-bank members.
+  const result=j.preflightBank({entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}}],whenMs:1200});
+  assert.equal(result.status,"NATIVE_AMMO_BANK_NEEDS_RECONCILIATION");
+  assert.equal(result.moduleID,402);
+  assert.equal(f.rows[0].quantity,4);
+ }finally{f.cleanup();}
+});
+
+test("unexpected journal filename fails the ship-wide preflight closed",()=>{
+ const f=fixture();try{
+  const j=f.make(),one=j.begin(f.args());f.debit(4);
+  assert.equal(j.commit(one.token).ok,true);
+  fs.writeFileSync(path.join(f.root,"ships","101","401.json.tmp-UNKNOWN"),"bad");
+  const result=j.preflightBank({entity:f.args().entity,
+   entries:[{moduleItem:{itemID:401}}],whenMs:1100});
+  assert.equal(result.status,"NATIVE_AMMO_BANK_UNKNOWN_FILE");
+  assert.equal(f.rows[0].quantity,4);
+ }finally{f.cleanup();}
+});
