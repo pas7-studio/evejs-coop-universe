@@ -168,6 +168,18 @@ function start(){
  }
  timer=setInterval(()=>{
   backgroundTicks++;
+  // Read-only courier pass (COOP-024). It never mutates a contract: it only
+  // reports what the decision core thinks of the outstanding courier contracts,
+  // so the live wiring can be verified before anything is accepted.
+  if(process.env.EVEJS_COOP_COURIER_OBSERVE==="1")safeNpcPhase("courier-observe",()=>{
+   const {listContractRecords}=require("../services/contracts/contractRuntimeState");
+   const {evaluateContract}=require("./coopCourierDispatch");
+   for(const record of listContractRecords()){
+    if(Number(record&&record.type)!==3||Number(record&&record.status)!==0)continue;
+    const decision=evaluateContract(record,{sameSystemOnly:true},{walletIsk:0,hullCapacityM3:465000});
+    console.log(`[CoopCourier] contract ${record.contractID} volume ${record.volume} -> ${decision.status}`);
+   }
+  });
   safeNpcPhase("virtual-travel",()=>{
    // A real physical EveJS ship is pinned to its actual system.
    const pins={};

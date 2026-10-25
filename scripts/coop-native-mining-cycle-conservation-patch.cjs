@@ -54,7 +54,11 @@ function patch(source,file,remove=false){
  let text=String(source);
  if(file.endsWith("/miningRuntime.js")){
   const marker=normalize(guard);
-  const already=text.includes(marker);
+  // The stable sentinel is the marker comment, not the whole guard block: the
+  // guard body legitimately evolves (other mining patches touch it), and
+  // matching the full text made a patched file look pristine, which then failed
+  // with 'missing stock mining cycle'.
+  const already=text.includes("// COOP_ALIFE_NATIVE_MINING_CONSERVATION_V1");
   if(already && (!text.includes(normalize(runtimeReplace)) ||
       !text.includes(normalize(newDelta)) || !text.includes(strictCargoReturn)))
     throw Error("ALIFE06 partially patched runtime source");
