@@ -53,18 +53,32 @@ function tick(){
    const scene=runtime.getSceneForSession(owner.session);
    if(!scene)continue;
    const party=findParty(scene,systemID,Number(process.env.EVEJS_COOP_PARTY_RANGE_METERS||250000));
-   const signature=party?.pilots.map(p=>p.characterID).sort((a,b)=>a-b).join(":")||"waiting";
+   // Distinguish merely being close from ACTUALLY accepting a native
+   // EveJS fleet invite. Only stock fleetRuntime proves membership.
+   let nativeFleet=null;
+   if(party)try{
+    nativeFleet=require("./coopNativeFleetParty").membership({
+     leaderSession:party.pilots[0].session,
+     peerSession:party.pilots[1].session,
+     fleetRuntime:require("../services/fleets/fleetRuntime")
+    });
+   }catch(_){/* optional evidence cannot stop native scene activity */}
+   const signature=party
+    ?party.pilots.map(p=>p.characterID).sort((a,b)=>a-b).join(":")+
+     (nativeFleet?.ok?":fleet-"+nativeFleet.fleetID:":not-in-fleet")
+    :"waiting";
    const changed=owner.lastParty!==signature;
    const time=Date.now();
    if(changed){
     for(const item of registered.values())if(item.systemID===systemID)item.lastParty=signature;
     require("./coopRuntimeProbe").observe("coop-party-proximity",owner.session,owner.ship,{
-     ready:Boolean(party),characterIDs:party?.pilots.map(p=>p.characterID)||[],separationMeters:party?.separation||null
+     ready:Boolean(party),characterIDs:party?.pilots.map(p=>p.characterID)||[],separationMeters:party?.separation||null,
+     nativeFleetID:nativeFleet?.ok?nativeFleet.fleetID:null,nativeFleetVerified:nativeFleet?.ok===true
     });
     if(party&&process.env.EVEJS_COOP_PARTY_NOTICES==="1"){
      try{
       if(!notices)notices=require("./coopPartyNotices").createNotices();
-      notices.rendezvous({scene,party,systemID});
+      notices.rendezvous({scene,party,systemID,fleetID:nativeFleet?.ok?nativeFleet.fleetID:null});
      }catch(error){console.warn("[CoopDuoCoordinator] party notice",error.message);}
     }
    }
