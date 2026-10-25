@@ -129,7 +129,27 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
   if(!enabled())return blocked("DISABLED");
   const current=read(manifestKey);
   if(current.status!=="READY")return current;
-  if(current.phase==="DELIVERED")return blocked("FLIGHT_DELIVERY_ALREADY_RECORDED");
+  if(current.phase==="DELIVERED"){
+   // Crash after fsynced terminal commit but before native station ACK:
+   // re-reading the SAME physical trip/proof is idempotent and cannot
+   // generate cargo, corporate debits or a second delivery event.
+   const b=current.booking,p=current.delivery?.nativeFullManifestProof;
+   if(trip?.manifestID!==manifestKey||trip.systemID!==b.systemID||
+    trip.fleetID!==b.fleetID||trip.stationID!==b.stationID||
+    trip.corporationID!==b.corporationID||
+    !equal(Object.keys(trip.haulers||{}).map(Number),[b.haulerID])||
+    terminalProof?.status!=="DELIVERED"||terminalProof.terminal!==true||
+    terminalProof.nativeFullManifestProof?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED"||
+    terminalProof.nativeFullManifestProof?.key!==manifestKey||
+    terminalProof.nativeFullManifestProof?.stationID!==p?.stationID||
+    !equal(terminalProof.nativeFullManifestProof?.haulerIDs,[b.haulerID])||
+    !equal(terminalProof.nativeFullManifestProof?.cargoIDs,p?.cargoIDs)||
+    terminalProof.nativeFullManifestProof?.stacks!==p?.stacks||
+    terminalProof.nativeFullManifestProof?.quantity!==p?.quantity)
+    return blocked("FLIGHT_DELIVERY_REPLAY_IDENTITY_CONFLICT");
+   return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey,
+    replayed:true};
+  }
   if(current.phase!=="FUNDED")return blocked("FLIGHT_NOT_FUNDED");
   const b=current.booking;
   if(trip?.manifestID!==manifestKey||trip.systemID!==b.systemID||
