@@ -98,3 +98,12 @@ test('unauthorized owner and unverified canonical output both refuse settlement'
  assert.match(f.delivery({verifyNativeOutput:()=>false}).deliverOnce(OP).error,/OUTPUT_AUTHORITY/);
  assert.deepEqual(f.snapshot(),before);
 }));
+
+test('a matching amount in unrelated stack is not a valid delivery receipt',()=>withFixture(f=>{
+ assert.equal(f.delivery().deliverOnce(OP).status,'DELIVERED');
+ const j=f.read('industryJobs',`jobs${SEP}${job.jobID}`);
+ const item=f.read('items',String(j.coopDelivery.itemID));
+ delete item.customInfo;f.put('items',String(item.itemID),item);
+ const before=f.snapshot(),r=f.delivery().deliverOnce(OP);
+ assert.match(r.error,/DELIVERY_RECEIPT_CORRUPT/);assert.deepEqual(f.snapshot(),before);
+}));
