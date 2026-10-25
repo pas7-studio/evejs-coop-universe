@@ -66,3 +66,16 @@ test('verified damage can be real even without wreck, but no final blow claimed'
  assert.equal(r.damage.distinctDamagers,2);assert.equal(r.damage.matchedPhysicalWreck,false);
  assert.equal(r.actualGameplayVerified,false);
 });
+
+test('another system mission, or a mission before both hits, never qualifies same duo PvE episode',()=>{
+ const other=rows();other.at(-1).systemID=30000142;
+ assert.equal(run(other).mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+ const early=rows();early.at(-1).at=at(4);
+ assert.equal(run(early).mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+});
+test('mission credit later than bounded 30-minute encounter window cannot borrow old damage',()=>{
+ const s=rows();s.at(-1).at=new Date(now+32*60000).toISOString();
+ // Relax report window specifically to include post-combat event.
+ const r=report(s.map(x=>JSON.stringify(x)).join('\n'),{now:now+33*60000,windowMinutes:120});
+ assert.equal(r.mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+});
