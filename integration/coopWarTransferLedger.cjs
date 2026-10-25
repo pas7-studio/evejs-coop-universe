@@ -206,6 +206,77 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   return {status:problems.length?"NEEDS_OPERATOR_REPAIR":"CLEAN",
    problems:problems.slice(0,50)};
  }
+ // Source-backed read-only witness. A witnessed native row is evidence
+ // only when BOTH physical scenes are currently loaded; missing scenes are
+ // never treated as an absent ship.
+ function witness(entityID){
+  if(!enabled())return {status:"DISABLED"};
+  if(!pos(entityID))return {status:"INVALID_ENTITY"};
+  let state;
+  try{state=transact(tx=>structuredClone(fleet.validate(tx.get(fleet.TABLE,fleet.KEY))))}
+  catch{return {status:"UNAVAILABLE",reason:"FLEET_SQL_READ_FAILED"}}
+  const row=state.ships[String(entityID)],
+   flight=state.transfers?.[String(entityID)];
+  if(!row||!flight)return {status:"NO_ACTIVE_TRANSFER"};
+  try{validate(row,flight)}catch{return {status:"UNSAFE",reason:"CORRUPT_TRANSFER"}}
+  const from=flight.sourceSystemID,to=flight.destinationSystemID;
+  let fromScene,toScene,entity,controller,links;
+  try{
+   fromScene=sceneForSystem(from);toScene=sceneForSystem(to);
+   entity=nativeStore.getNativeEntity(entityID);
+   controller=getController(entityID);
+   links=identityRegistry.snapshot()?.links;
+  }catch{return {status:"UNSAFE",reason:"NATIVE_READ_FAILED"}}
+  if(fromScene?.systemID!==from||toScene?.systemID!==to||
+   typeof fromScene.getEntityByID!=="function"||
+   typeof toScene.getEntityByID!=="function")
+   return {status:"UNSAFE",reason:"PHYSICAL_SCENE_NOT_LOADED"};
+  let sourceShip,destinationShip;
+  try{
+   sourceShip=fromScene.getEntityByID(entityID);
+   destinationShip=toScene.getEntityByID(entityID);
+  }catch{return {status:"UNSAFE",reason:"SCENE_LOOKUP_FAILED"}}
+  if(Boolean(sourceShip)===Boolean(destinationShip))
+   return {status:"UNSAFE",reason:sourceShip?"DUPLICATE_PHYSICAL_HULL":"NO_PHYSICAL_HULL"};
+  const physicalSystemID=sourceShip?from:to,ship=sourceShip||destinationShip,
+   nativeID=entity?.entityID,controllerID=controller?.entityID;
+  if(ship?.kind!=="ship"||ship.nativeNpc!==true||
+   ship.itemID!==entityID||ship.session?.characterID||
+   ship.corporationID!==row.corporationID||
+   nativeID!==entityID||controllerID!==entityID||
+   entity.systemID!==physicalSystemID||controller.systemID!==physicalSystemID||
+   entity.corporationID!==row.corporationID)
+   return {status:"UNSAFE",reason:"NATIVE_ENTITY_OR_CONTROLLER_MISMATCH"};
+  const link=links?.[flight.pilotID];
+  if(!link||link.entityID!==entityID||
+   ![from,to].includes(link.systemID)||
+   Object.values(links).filter(v=>v?.entityID===entityID||
+    v?.pilotID===flight.pilotID).length!==1)
+   return {status:"UNSAFE",reason:"PILOT_IDENTITY_CONFLICT"};
+  const hashes=digests(row);
+  if(hashes.modules!==flight.modulesHash||hashes.cargo!==flight.cargoHash)
+   return {status:"UNSAFE",reason:"MODULE_OR_CARGO_FINGERPRINT_CHANGED"};
+  let action=null;
+  if(flight.phase==="PREPARED"&&row.systemID===from){
+   if(physicalSystemID===from&&link.systemID===from)action="ABORT";
+   else if(physicalSystemID===to&&link.systemID===from)action="NATIVE_COMMIT";
+  }else if(flight.phase==="NATIVE_COMMITTED"&&row.systemID===to){
+   if(physicalSystemID===to&&link.systemID===from)action="RELOCATE_PILOT";
+   else if(physicalSystemID===to&&link.systemID===to)action="FINISH";
+   else if(physicalSystemID===from&&link.systemID===from)action="RESTORE";
+  }else if(flight.phase==="COMPLETE"&&row.systemID===to&&
+   physicalSystemID===to&&link.systemID===to)action="CLEANUP_JOURNAL";
+  else if(flight.phase==="ABORTED"&&row.systemID===from&&
+   physicalSystemID===from&&link.systemID===from)action="CLEANUP_JOURNAL";
+  if(!action)return {status:"UNSAFE",reason:"UNSUPPORTED_CROSS_STORE_CONFIGURATION"};
+  return {status:"VERIFIED",action,entityID,
+   transferID:flight.transferID,pilotID:flight.pilotID,
+   phase:flight.phase,rowSystemID:row.systemID,
+   physicalSystemID,pilotSystemID:link.systemID,
+   sourceSystemID:from,destinationSystemID:to,
+   modulesHash:hashes.modules,cargoHash:hashes.cargo,
+   updatedAt:flight.updatedAt};
+ }
  function pending(){
   if(!enabled())return {status:"DISABLED",pending:[]};
   const state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
@@ -223,6 +294,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   abort:request=>operation("ABORT",request),
   restore:request=>operation("RESTORE",request),
   auditPersisted,
+  witness,
   pending
  });
 }
