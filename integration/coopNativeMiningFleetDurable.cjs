@@ -257,11 +257,14 @@ function start(args){
   "EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_NPC_STATION_DELIVERY"
  ].some(k=>process.env[k]!=="1"))
   return {status:"BLOCKED",reason:"ALIFE13_REQUIRED_NATIVE_GATES_OFF",slots:[]};
- const auditStartupCargo=enabled?
-  require("./coopAlifeStartupCargoAudit").createStartupCargoAuditor({
+ let auditStartupCargo=null;
+ if(enabled){
+  try{auditStartupCargo=require("./coopAlifeStartupCargoAudit").createStartupCargoAuditor({
    root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
    gameStore:db,store,items:require("../services/inventory/itemStore"),
-   getNativeEntity:store.getNativeEntity}).audit:null;
+   getNativeEntity:store.getNativeEntity}).audit}
+  catch(error){return {status:"BLOCKED",reason:"ALIFE13_NATIVE_AUDITOR_INITIALIZATION_FAILED",slots:[]}}
+ }
  return createService({db,store,auditStartupCargo,
    nativeService:require("./npc/nativeNpcService"),
    spawn,register,getFleets,ensureState,log:message=>console.warn("[ALIFE08]",message)
