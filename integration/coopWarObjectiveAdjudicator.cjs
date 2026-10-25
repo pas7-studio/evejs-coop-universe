@@ -171,6 +171,7 @@ function createWarObjectiveAdjudicator({gameStore,getNativeStructure,
       structureID:obj.structureID,systemID:obj.systemID,
       position:{...obj.position},attackerFactionID:active.attackerFactionID,
       defenderFactionID:active.defenderFactionID,fleetState:fleet,
+      warState:war,
       observationAt:now,objectiveDestroyedAt:obj.destroyedAt});
     }catch{return {status:"BLOCKED",reason:"NATIVE_CONTROL_OBSERVATION_FAILED"}}
     if(n?.structureID!==obj.structureID||n.destroyedAt!==obj.destroyedAt)
@@ -219,6 +220,7 @@ function createWarObjectiveAdjudicator({gameStore,getNativeStructure,
       structureID:obj.structureID,systemID:obj.systemID,
       position:{...obj.position},attackerFactionID:active.attackerFactionID,
       defenderFactionID:active.defenderFactionID,fleetState:fleet,
+      warState:war,
       observationAt:now,objectiveDestroyedAt:obj.destroyedAt});
     }catch{return {status:"BLOCKED",reason:"NATIVE_CAPTURE_WITNESS_UNAVAILABLE"}}
     if(n?.structureID!==obj.structureID||n.destroyedAt!==obj.destroyedAt||
