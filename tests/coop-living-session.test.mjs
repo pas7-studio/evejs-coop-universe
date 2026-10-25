@@ -26,16 +26,17 @@ test("two players get actionable native NPC mining, loaded cargo and pirate loca
  assert.equal(built.status,"ACTIVE");
  assert.equal(built.activity[0].waypointID,44);
  assert.match(built.messages[0],/Broken Comet Belt/);
- assert.match(built.messages[0],/300 ore units/);
- assert.match(built.messages[1],/pirate/i);
+ assert.match(built.messages[0],/300 од\. руди/);
+ assert.match(built.messages[1],/пірат/i);
  const sent=[];let clock=0;
  const announcer=createAnnouncer({clock:()=>clock,cooldownMs:90000,send:(s,text)=>sent.push({id:s.characterID,text})});
- const pilot={characterID:70001,_space:{systemID:30000142,initialStateSent:true}};
+ const pilot={characterID:70001,_space:{shipID:101,systemID:30000142,initialStateSent:true}};
  assert.equal(announcer.announce(pilot,scene,{fleets,pirateIDs:[901]}).status,"DELIVERED");
  assert.equal(announcer.announce(pilot,scene,{fleets,pirateIDs:[901]}).status,"COOLDOWN");
  clock+=91000;
- assert.equal(announcer.announce(pilot,scene,{fleets,pirateIDs:[901]}).status,"DELIVERED");
- assert.equal(sent.length,4);
+ // After the cooldown the identical digest is still suppressed until refreshMs.
+ assert.equal(announcer.announce(pilot,scene,{fleets,pirateIDs:[901]}).status,"UNCHANGED");
+ assert.equal(sent.length,2);
 });
 test("hauler delivery never removes unrelated native cargo; moved ore retains exact cargo ID",()=>{
  const cargo=new Map([

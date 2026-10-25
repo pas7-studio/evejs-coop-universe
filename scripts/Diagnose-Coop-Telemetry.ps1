@@ -47,7 +47,10 @@ if [ -f "$world" ] && command -v sha256sum >/dev/null 2>&1; then
 fi
 '@
 Write-Host '[COOP-TELEMETRY] Read-only runtime checks:'
-$lines = @(& docker compose @opts exec -T server sh -c $check)
+# CRLF from the here-string makes `sh -c` fail on `then\r` / `fi\r` (Windows).
+$check = ($check -replace "`r`n", "`n") -replace "`r", "`n"
+$encodedCheck = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($check))
+$lines = @(& docker compose @opts exec -T server sh -c "echo $encodedCheck | base64 -d | sh -s")
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect installed runtime inside server container' }
 $lines | ForEach-Object { Write-Host $_ }
 $localProbe = Join-Path $root 'integration/coopRuntimeProbe.cjs'
