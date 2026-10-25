@@ -35,6 +35,21 @@ function makeBinding({runtime,readNativeIncident}={}){
    try{return runtime.recordDelivery(args)}
    catch{return deny("NATIVE_TERMINAL_WRITE_UNCERTAIN_REPAIR_REQUIRED")}
   },
+  recordEscortDeparture(route,scene){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
+    return deny("DISABLED");
+   if(!route||typeof route.manifestKey!=="string"||
+    !/^\d+-\d+-\d+$/.test(route.manifestKey)||
+    ![route.systemID,route.fleetID,route.stationID,route.corporationID]
+     .every(pos)||!Array.isArray(route.haulerIDs)||
+    route.haulerIDs.length!==1||!pos(route.haulerIDs[0]))
+    return deny("DEPARTURE_ROUTE_INVALID");
+   if(typeof runtime.recordEscortDeparture!=="function")
+    return deny("DEPARTURE_WITNESS_PROVIDER_NOT_WIRED");
+   try{return runtime.recordEscortDeparture(route,scene)}
+   catch{return deny("DEPARTURE_WITNESS_UNCERTAIN_REPAIR_REQUIRED")}
+  },
   settlePeacefulDelivery(manifestKey,scene){
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
     return deny("DISABLED");
@@ -143,6 +158,8 @@ const forwarding=Object.freeze({
  fundBeforeWarp:route=>enabled()?(installed?installed.fundBeforeWarp(route):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordDelivered:args=>enabled()?(installed?installed.recordDelivered(args):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ recordEscortDeparture:(route,scene)=>enabled()?(installed?installed.recordEscortDeparture(route,scene):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settlePeacefulDelivery:(key,scene)=>enabled()?(installed?installed.settlePeacefulDelivery(key,scene):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
