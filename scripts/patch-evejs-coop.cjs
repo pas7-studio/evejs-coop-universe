@@ -29,8 +29,12 @@ const specs=[
  {file:"server/src/space/npc/nativeNpcWreckService.js",patches:[
    {anchor:'      moduleID: toPositiveInt(options.moduleID, 0),',
     line:'      sourceCargoID: process.env.EVEJS_COOP_RESCUE_PROVENANCE === "1" ? toPositiveInt(options.sourceCargoID, 0) : 0,',after:true},
+   {anchor:'      sourceCargoID: process.env.EVEJS_COOP_RESCUE_PROVENANCE === "1" ? toPositiveInt(options.sourceCargoID, 0) : 0,',
+    line:'      sourceOriginalQuantity: process.env.EVEJS_COOP_RESCUE_PROVENANCE === "1" ? toPositiveInt(options.sourceOriginalQuantity, 0) : 0,',after:true},
    {anchor:'      sourceKind: "cargo",',
     line:'      sourceCargoID: process.env.EVEJS_COOP_RESCUE_PROVENANCE === "1" ? cargoEntry.itemID : 0,',after:true},
+   {anchor:'      sourceCargoID: process.env.EVEJS_COOP_RESCUE_PROVENANCE === "1" ? cargoEntry.itemID : 0,',
+    line:'      sourceOriginalQuantity: process.env.EVEJS_COOP_RESCUE_PROVENANCE === "1" ? cargoEntry.quantity : 0,',after:true},
    {anchor:'function transferNativeWreckItemToCharacterLocation(options = {}) {',
     line:'  if (process.env.EVEJS_COOP_RESCUE_ATOMIC === "1" && nativeNpcStore.getNativeWreckItem(options.wreckItemID)?.sourceCargoID) return require("../coopRescueNativeTransfer").transfer(options);',after:true}
  ]},
