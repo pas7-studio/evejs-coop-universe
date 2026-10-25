@@ -72,3 +72,22 @@ test("normal CoopStart enables live duo coordination, never scripted combat wave
  assert.match(deploy,/EVEJS_COOP_PARTY_NOTICES: '1'/);
  assert.match(deploy,/LivingCoop runs autonomous NPCs; scripted PvE encounters cannot be combined/);
 });
+
+test("duplicate active session for same player cannot trigger a fake rendezvous",()=>{
+ const f=harness();
+ f.scene.sessions.set(502,f.b);
+ f.scene.sessions.set(503,{...f.a,
+  _space:{...f.a._space}});
+ f.logic.register(f.a,f.shipA);
+ f.logic.register(f.b,f.shipB);
+ assert.equal(f.greetings.length,0);
+ assert.equal(f.events.some(e=>e.name==="coop-party-proximity"&&e.ready===true),false);
+});
+test("a fake or misidentified physical hull cannot join real co-op rendezvous",()=>{
+ const f=harness();
+ f.shipB.kind="asteroidBelt";
+ f.scene.sessions.set(502,f.b);
+ f.logic.register(f.a,f.shipA);
+ f.logic.register(f.b,f.shipB);
+ assert.equal(f.greetings.length,0);
+});
