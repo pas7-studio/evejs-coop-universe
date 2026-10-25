@@ -63,8 +63,14 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
      scout:pilot,distance});
    }
   }
+  const stillScout=c=>{
+   const prior=priorTeams.get(sys+":"+c.faction);
+   return prior?.targetID===c.target.targetID&&
+    prior.scoutID===c.scout.entityID&&prior.expiresAt>=now?0:1;
+  };
   visible.sort((a,b)=>a.faction.localeCompare(b.faction)||
    (a.target.targetRole==="hauler"?0:1)-(b.target.targetRole==="hauler"?0:1)||
+   stillScout(a)-stillScout(b)||
    a.distance-b.distance||a.target.targetID-b.target.targetID||
    a.scout.pilotID.localeCompare(b.scout.pilotID));
   const next=new Map(),summary=[];
