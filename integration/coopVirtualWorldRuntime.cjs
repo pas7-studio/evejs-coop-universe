@@ -113,14 +113,15 @@ function nextHeadlessRetryMs(attempts){
  return 15*60000;
 }
 function isHeadlessNativeReady({miningEnabled=true,physicalNpcCount=0,
- beltCount=0,physicalMiningShips=0,waypointCount=0,sdeBeltCount=null}={}){
+ beltCount=0,physicalMiningShips=0,waypointCount=0,sdeBeltCount=null,
+ startupSlotsReady=true}={}){
  // A beltless solar system is legitimately not mineable. Require mining
  // fleet/physical belts only when the authoritative SDE says the *system*
  // has mining belts. Never invent a Jita belt or treat it as corrupt data.
  const hasSdeEvidence=Number.isSafeInteger(sdeBeltCount)&&sdeBeltCount>=0;
  const miningRequired=miningEnabled&&(!hasSdeEvidence||sdeBeltCount>0);
  return physicalNpcCount>0&&waypointCount>0&&
-  (!miningRequired||(beltCount>0&&physicalMiningShips>0));
+  (!miningRequired||(beltCount>0&&physicalMiningShips>0&&startupSlotsReady===true));
 }
 // Initialize real EveJS scenes without waiting for a human to log in.
 // This is not a client/gameplay proof: only existing native entities count.
@@ -146,9 +147,10 @@ function scheduleHeadlessWorldBoot(route){
     const scene=runtime.ensureScene(systemID,{refreshStargates:false});
     // Non-mining worlds must not depend on EveJS mining service being
     // configured, available, or importable merely to finish boot.
+    const fleetRecords=miningEnabled
+     ?require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID)||[]:[];
     const fleetShips=miningEnabled
-     ?(require("../services/mining/miningNpcOperations").getMiningFleetsForSystem(systemID)||[])
-       .flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
+     ?fleetRecords.flatMap(f=>[...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])])
        .filter(id=>{
         const entity=scene?.getEntityByID?.(Number(id));
         return entity?.nativeNpc===true&&entity?.kind==="ship";
@@ -172,6 +174,18 @@ function scheduleHeadlessWorldBoot(route){
     if(tracked)visitedSystems.add(systemID);
     const miningStartup=policy.nativeMiningStartupPolicy({
      systemID,sdeBelts,sceneBelts:beltCount});
+    const startupSystems=String(process.env.EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS||"")
+     .split(",").map(x=>Number(x.trim())).filter(id=>Number.isSafeInteger(id)&&id>0);
+    const requireSlots=miningEnabled&&sdeBelts>0&&beltCount>0&&
+     process.env.EVEJS_COOP_MINING_STARTUP_RETRY==="1"&&
+     process.env.EVEJS_MINING_NPC_STARTUP_ENABLED==="true"&&
+     (!startupSystems.length||startupSystems.includes(Number(systemID)));
+    const startupSlots=requireSlots
+     ?require("./coopNativeMiningReadiness").inspect({
+       scene,systemID,fleets:fleetRecords,
+       expectedCount:Number(process.env.EVEJS_MINING_NPC_STARTUP_FLEET_COUNT||1)
+      })
+     :{status:"NOT_REQUIRED",ready:true,missingSlots:[]};
     // Zero belts in Jita are expected SDE geography; a global SDE belt
     // counter cannot prove a mineable belt in the physical system scene.
     require("./coopRuntimeProbe").observe("living-native-system-site-readiness",null,
@@ -185,7 +199,7 @@ function scheduleHeadlessWorldBoot(route){
      miningEnabled,
      physicalNpcCount:links.length,waypointCount:topology.length,
      beltCount,physicalMiningShips:fleetShips.length,
-     sdeBeltCount:sdeBelts
+     sdeBeltCount:sdeBelts,startupSlotsReady:startupSlots.ready
     });
     // A real named native NPC can operate even if stock mining or static
     // topology is incomplete. Readiness remains a stricter separate gate.
@@ -197,6 +211,7 @@ function scheduleHeadlessWorldBoot(route){
       miningApplicable:miningEnabled&&sdeBelts>0,
       trackedForReconcile:tracked,
       miningStartupStatus:miningStartup.status,
+      nativeStartupSlots:startupSlots,
       physicalMiningShips:fleetShips.length,
       actualNamedNpcShips:links.length,sceneReady:Boolean(scene)});
    }catch(error){
