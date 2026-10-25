@@ -65,7 +65,7 @@ function fixture(){
   root:"/tmp/native-recovery-guard",clock:()=>1002000,
   warpFence:gate,escortGate:escort,probe:{observe:()=>{}}
  });
- return {...state,director,escort};
+ return {...state,director,escort,setSampleResult:value=>{state.sampleResult=value}};
 }
 function recover(f,now=1002000){return f.director.noteNativeMotion(f.npc,now).status}
 test("genuine current native NPC warp reattaches observer using confirmed durable originals",()=>{
@@ -175,7 +175,7 @@ test("no observer after real ingress terminates or passes its original stop time
  assert.equal(f.counters.sample,0);
 });
 test("fake route evidence status cannot directly create escrow or warp",()=>{
- const f=fixture();f.sampleResult="VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE";
+ const f=fixture();f.setSampleResult("VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE");
  assert.equal(recover(f),"VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE");
  assert.equal(f.counters.warp,0);
  assert.equal(f.counters.fund,0);
