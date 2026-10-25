@@ -1536,9 +1536,19 @@ function observeSession(session,ship){
         for(const link of result){
           if(!link.entityID||pilotsByID.get(link.pilotID)?.role!=="pirate")continue;
           try{
+            const behavior=require("./npc/npcBehaviorLoop");
             const controller=require("./npc/npcRegistry").getControllerByEntityID(link.entityID);
-            if(controller)
-              controller.behaviorOverrides={...(controller.behaviorOverrides||{}),...aggression};
+            if(!controller)continue;
+            const current=controller.behaviorOverrides||{};
+            if(Array.isArray(current.autoAggroTargetClasses)&&
+               current.autoAggroTargetClasses.includes("player")&&current.autoAggro===true)continue;
+            const applied=behavior.setBehaviorOverrides(link.entityID,{...current,...aggression});
+            if(applied?.success)
+              require("./coopRuntimeProbe").observe("living-pirate-aggression",session,ship,{
+                pilotID:link.pilotID,entityID:link.entityID,
+                previousClasses:Array.isArray(current.autoAggroTargetClasses)
+                  ?current.autoAggroTargetClasses:null
+              });
           }catch(_error){/* controller index is optional during startup */}
         }
       }

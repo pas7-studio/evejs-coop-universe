@@ -19,6 +19,18 @@ test("only real observed events can reach the digest", () => {
   assert.equal(instance.pendingFor(30000145), 1);
 });
 
+test("a no-op event never becomes news", () => {
+  const { instance } = news();
+  assert.equal(instance.record("living-pirate-raid", { systemID: 30000145, pirates: 0 }), false);
+  assert.equal(instance.record("living-native-combat-damage", { systemID: 30000145, damage: 0 }), false);
+  assert.equal(instance.record("living-hauler-loaded", { systemID: 30000145, haulerID: 7, cargoQuantity: 0 }), false);
+  assert.equal(instance.record("living-npc-station-delivered", { systemID: 30000145, stacks: 0, oreQuantity: 0 }), false);
+  assert.equal(instance.pendingFor(30000145), 0);
+  assert.equal(instance.digest(30000145), null, "no digest may be built from nothing");
+  // A real quantity still passes.
+  assert.equal(instance.record("living-pirate-raid", { systemID: 30000145, pirates: 2 }), true);
+});
+
 test("a digest summarises the window and names the system", () => {
   const { instance } = news();
   instance.record("living-native-market-trade",

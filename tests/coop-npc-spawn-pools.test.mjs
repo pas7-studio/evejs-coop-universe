@@ -71,8 +71,11 @@ test("the runtime wires both spawn sites through the role map, env-gated", () =>
   // No inline autoAggro:false may remain next to the nautical spawn call.
   assert.doesNotMatch(runtime, /const hostile=pilot\.role==="pirate"/);
   // A reused durable pirate keeps its original controller, so the policy has to
-  // be re-applied at runtime as well.
-  assert.match(runtime, /getControllerByEntityID\(link\.entityID\)/);
+  // be re-applied at runtime as well, through the native setter that also
+  // resets the think timer. Assigning controller.behaviorOverrides directly
+  // would leave the next think scheduled and skip normalization.
+  assert.match(runtime, /setBehaviorOverrides\(link\.entityID,/);
+  assert.doesNotMatch(runtime, /controller\.behaviorOverrides=\{/);
 });
 
 test("pirates aggro players, civilians never do", () => {
