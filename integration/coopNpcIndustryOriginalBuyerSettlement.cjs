@@ -9,7 +9,7 @@ const reject=(reason,operationID)=>({status:"BLOCKED",reason,operationID,
  nativeMutation:false});
 function createOriginalNpcIndustryBuyerSettlement({
  director,whole,partial,saleAudit,getOriginalItem,getOriginalEscrow,
- getRustOrder,verifyAuthenticatedBuyer,env=process.env
+ getRustOrder,verifyAuthenticatedBuyer,verifyNativePartialClaimKey,env=process.env
 }={}){
  if(typeof director?.inspect!=="function"||
     whole?.mode!=="WHOLE_STACK_PROOF_ONLY"||
@@ -20,7 +20,7 @@ function createOriginalNpcIndustryBuyerSettlement({
     typeof partial.purchaseOnce!=="function"||
     typeof saleAudit?.audit!=="function"||
     [getOriginalItem,getOriginalEscrow,getRustOrder,
-     verifyAuthenticatedBuyer].some(x=>typeof x!=="function"))
+     verifyAuthenticatedBuyer,verifyNativePartialClaimKey].some(x=>typeof x!=="function"))
   throw Error("LW04C3B_ORIGINAL_RUST_BUYER_SETTLEMENT_AUTHORITIES_REQUIRED");
  const active=new Set(),repair=new Set();
  const enabled=mode=>env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
@@ -56,6 +56,9 @@ function createOriginalNpcIndustryBuyerSettlement({
   try{
    if(verifyAuthenticatedBuyer({buyerID,stationID,operationID,
       orderID})!==true)return reject("LW04C3B_NATIVE_BUYER_SESSION_REQUIRED",operationID);
+   if(mode==="partial"&&verifyNativePartialClaimKey({claimKey,buyerID,
+      ownerID,stationID,operationID,orderID,quantity})!==true)
+    return reject("LW04C3B_PARTIAL_CLAIM_BINDING_UNVERIFIED",operationID);
    const e=entry({operationID,ownerID,stationID,orderID});
    const book=await getRustOrder(operationID);
    const remaining=Number(book?.vol_remaining),id=Number(book?.order_id);
