@@ -64,6 +64,25 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
    // an I/O fault occurs; the exclusive lock remains as a safety fence.
   }
  }
+ function ensureDurableShipDirectory(dir){
+  // Persist *directory entries* before a native debit is possible. A
+  // fsynced receipt alone cannot survive power loss if its new parent
+  // directories were never fsynced.
+  const ships=path.join(root,"ships");
+  const rootStat=fs.lstatSync(root);
+  if(!rootStat.isDirectory()||rootStat.isSymbolicLink())
+   throw Error("INVALID_AMMO_DEBIT_ROOT");
+  for(const [parent,child] of [[root,ships],[ships,dir]]){
+   try{fs.mkdirSync(child,{mode:0o700});}
+   catch(e){if(e.code!=="EEXIST")throw e;}
+   const stat=fs.lstatSync(child);
+   if(!stat.isDirectory()||stat.isSymbolicLink())
+    throw Error("UNSAFE_AMMO_JOURNAL_DIRECTORY");
+   // Sync the parent even on EEXIST: another process may have created
+   // the entry but not yet persisted it.
+   syncDir(parent);
+  }
+ }
  function begin({entity,moduleItem,chargeItem,quantity=1,whenMs}={}){
   const entityID=positive(entity?.itemID),moduleID=positive(moduleItem?.itemID),
    cargoID=positive(chargeItem?.itemID),typeID=positive(chargeItem?.typeID),
@@ -88,7 +107,7 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
     return {ok:false,status:"NATIVE_AMMO_CYCLE_NEEDS_RECONCILIATION"};
    if(previous&&boundaryMs<=previous.boundaryMs)
     return {ok:false,status:"NATIVE_AMMO_CYCLE_REPLAY"};
-   fs.mkdirSync(dir,{recursive:true});
+   ensureDurableShipDirectory(dir);
    const lockFD=fs.openSync(lock,"wx",0o600);
    try{
     fs.writeFileSync(lockFD,JSON.stringify({version:1,entityID,moduleID,
