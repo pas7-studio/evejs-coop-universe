@@ -26,6 +26,7 @@ try {
     'tests/coop-escort-peaceful-settlement.test.mjs',
     'tests/coop-escort-departure-witness.test.mjs',
     'tests/coop-escort-route-attendance-gate.test.mjs',
+    'tests/coop-escort-route-witness.test.mjs',
     'tests/coop-escort-refund-manifest.test.mjs'
   )
   foreach ($file in $files) {
