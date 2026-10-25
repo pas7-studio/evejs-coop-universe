@@ -90,13 +90,17 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000}={}){
    if(receipt&&receipt.entityID!==id)throw Error("ENTITY_MISMATCH");
    if(!receipt&&!fence)status="CORRUPT_NEEDS_REVIEW";
    else if(!receipt)status="NATIVE_FENCE_WITHOUT_JOURNAL";
-   else if(!fence)status="JOURNAL_WITHOUT_NATIVE_FENCE";
+   else if(lock||orphanTemp||receipt.phase==="PREPARED"){
+    modulesMatched=fence?receipt.modules.filter(mid=>
+     Number(fence.modules[String(mid)]||0)>=receipt.boundaryMs).length:0;
+    // PREPARED is never proof of rollback even if no fence is visible;
+    // protect both the pre-COMMIT and lost-COMMIT-ack cases equally.
+    status="NEEDS_RECONCILIATION";
+   }else if(!fence)status="JOURNAL_WITHOUT_NATIVE_FENCE";
    else{
     modulesMatched=receipt.modules.filter(mid=>
      Number(fence.modules[String(mid)]||0)>=receipt.boundaryMs).length;
-    if(lock||orphanTemp||receipt.phase==="PREPARED")
-     status="NEEDS_RECONCILIATION";
-    else status=modulesMatched===receipt.modules.length?
+    status=modulesMatched===receipt.modules.length?
      "MATCH_COMMITTED":"COMMIT_MISMATCH";
    }
   }catch(_){status="CORRUPT_NEEDS_REVIEW";}
