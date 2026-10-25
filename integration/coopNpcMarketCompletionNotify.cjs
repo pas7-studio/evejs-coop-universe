@@ -155,6 +155,80 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
   return {status:failed?"CLAIMED_PARTIAL":"NOTIFIED",
    fillID,delivered,failed,at};
  }
- return Object.freeze({notifyCommitted,mode:"NATIVE_SELLER_AT_MOST_ONCE"});
+ // Bounded on-login sweep, not a timer. All candidates are immutable
+ // GameStore receipts, and every send is fully rechecked against Rust order
+ // and history by notifyCommitted. Never deliver another owner's receipt.
+ async function notifyPendingForSeller({sellerID,maxNotifications=4}={}){
+  if(env.EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP!=="1"||
+     env.EVEJS_COOP_NPC_BUY_NOTIFY!=="1"||
+     env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1"||
+     env.EVEJS_COOP_NPC_BUY_PLAYER_ASK!=="1")
+   return {status:"DISABLED",attempted:0,results:[]};
+  if(!pos(sellerID)||!Number.isSafeInteger(maxNotifications)||
+     maxNotifications<1||maxNotifications>8)
+   return {status:"BLOCKED",reason:"SELLER_CATCHUP_SCOPE_INVALID",
+    attempted:0,results:[]};
+  let candidates;
+  try{
+   const read=gameStore.transact(["npcMarketFills"],tx=>{
+    const rows=tx.scan("npcMarketFills");
+    if(!Array.isArray(rows)||rows.length>20000)
+     throw Error("NPC_MARKET_CATCHUP_RECEIPT_SCAN_LIMIT");
+    const hits=rows.filter(({value})=>value?.sellerID===sellerID&&
+       value?.sellerNotifyClaimedAt===undefined&&
+       receiptProof(value,value?.claimKey,value?.fillID));
+    if(hits.length>128)throw Error("NPC_MARKET_CATCHUP_SELLER_BACKLOG_CAP");
+    return hits.map(({value})=>({claimKey:value.claimKey,
+     fillID:value.fillID,committedAt:value.committedAt}))
+     .sort((a,b)=>a.committedAt-b.committedAt||a.fillID-b.fillID)
+     .slice(0,maxNotifications);
+   });
+   candidates=read?.result??read;
+  }catch{return {status:"READ_UNAVAILABLE",attempted:0,results:[]}}
+  if(!Array.isArray(candidates))
+   return {status:"READ_UNAVAILABLE",attempted:0,results:[]};
+  const results=[];
+  for(const candidate of candidates){
+   const result=await notifyCommitted(candidate);
+   results.push({fillID:candidate.fillID,status:result.status,
+    reason:result.reason||null});
+   // No live session remains: do not repeatedly roundtrip Rust.
+   if(result.status==="SELLER_OFFLINE")break;
+  }
+  return {status:"CATCHUP_CHECKED",attempted:results.length,results};
+ }
+ return Object.freeze({notifyCommitted,notifyPendingForSeller,
+  mode:"NATIVE_SELLER_AT_MOST_ONCE"});
 }
-module.exports={createNpcMarketCompletionNotifier};
+// Server-owned entrypoint for the pinned session registry after character bind.
+// No public RPC, command parser or supplied authorization token. A login event
+// can only cause a transient, source-proven notification, never wallet writes.
+const loginBusy=new Set();
+async function notifyPendingSellerOnLogin(characterID){
+ if(process.env.EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP!=="1"||
+    process.env.EVEJS_COOP_NPC_BUY_NOTIFY!=="1"||
+    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1"||
+    process.env.EVEJS_COOP_NPC_BUY_PLAYER_ASK!=="1")
+  return {status:"DISABLED"};
+ if(!pos(characterID)||loginBusy.has(characterID))
+  return {status:"SKIPPED"};
+ loginBusy.add(characterID);
+ try{
+  const store=require("../gameStore");
+  if(typeof store?.coopAtomicNativeRows?.transact!=="function")
+   return {status:"NATIVE_GAMESTORE_UNAVAILABLE"};
+  const notifier=createNpcMarketCompletionNotifier({
+   gameStore:store.coopAtomicNativeRows,
+   marketClient:require("../services/market/marketDaemonClient").marketDaemonClient,
+   sessions:require("../services/chat/sessionRegistry"),
+   helpers:require("../services/_shared/serviceHelpers"),
+   walletState:require("../services/account/walletState"),
+   env:process.env
+  });
+  return await notifier.notifyPendingForSeller({sellerID:characterID});
+ }catch{
+  // Login must continue; native receipts are untouched if the sweep failed.
+  return {status:"CATCHUP_UNAVAILABLE"};
+ }finally{loginBusy.delete(characterID)}
+}
+module.exports={createNpcMarketCompletionNotifier,notifyPendingSellerOnLogin};
