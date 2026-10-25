@@ -156,3 +156,16 @@ test("physical scout remains assigned when strike wing warps closer to prey",()=
  assert.equal(f.squads.snapshot()[0].scoutID,101);
  assert.equal(f.permit(102).reason,"SCOUT_RELAY_CONFIRMED");
 });
+
+test("losing and reacquiring physical scout contact restarts relay delay",()=>{
+ const f=fixture();f.observe();f.advance(16000);f.observe();
+ assert.equal(f.permit(102).allowed,true);
+ f.ships.get(101).position.x=400000;f.advance(16000);f.observe();
+ assert.equal(f.permit(102).reason,"NO_CURRENT_WITNESS");
+ f.ships.get(101).position.x=0;
+ assert.equal(f.permit(102).reason,"NO_CURRENT_WITNESS");
+ f.observe();
+ assert.equal(f.permit(102).reason,"RELAY_IN_FLIGHT");
+ f.advance(16000);f.observe();
+ assert.equal(f.permit(102).allowed,true);
+});
