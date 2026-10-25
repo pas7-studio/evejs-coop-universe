@@ -68,6 +68,7 @@ function advanceNativeWarCombat(){
    authority,bridge:guard,
    sceneForSystem:id=>runtime.scenes instanceof Map?runtime.scenes.get(id):null,
    issueNativeAttack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
+   getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
    isAmmoDepleted:(sys,id)=>nativeAmmoSupply?.activeIDs(sys)?.has(id)===true,
    isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
   });
