@@ -1,5 +1,5 @@
 "use strict";
-// Source-only native P2P full SELL shortcut. This is installed AFTER the
+// Source-only native P2P one-stack full or partial SELL shortcut. This is installed AFTER the
 // existing custody, journal and Rust claim patches. All flags default OFF.
 const fileName="server/src/services/market/marketProxyService.js";
 const atomic='process.env.EVEJS_COOP_PLAYER_MARKET_ATOMIC === "1"';
@@ -34,9 +34,9 @@ function patch(source,{remove=false}={}){
  inject(sell,buy,'        purchaseCounterpartyID = sellerCharacterID;',
   '        if ('+atomic+') {\n'+
   '          const fullEscrowItems=listEscrowItemsForOrder(sellOrder && sellOrder.order_id,sellerCharacterID);\n'+
-  '          if (!chargeBuyerWallet||tradedQuantity!==availableQuantity||fullEscrowItems.length!==1||\n'+
-  '              fullEscrowItems[0]?.singleton!==0||fullEscrowItems[0]?.stacksize!==tradedQuantity)\n'+
-  '            throw Error("P2P_ATOMIC_FULL_SINGLE_SELL_ORDER_REQUIRED");\n'+
+  '          if (!chargeBuyerWallet||tradedQuantity<=0||fullEscrowItems.length!==1||\n'+
+  '              fullEscrowItems[0]?.singleton!==0||fullEscrowItems[0]?.stacksize!==availableQuantity)\n'+
+  '            throw Error("P2P_ATOMIC_SINGLE_STACK_SELL_ORDER_REQUIRED");\n'+
   '        }',{before:true});
  const claim='        if (coopPlayerSellTicket) await require("../../space/coopPlayerMarketRustClaim").claim({ticket:coopPlayerSellTicket,proof:coopPlayerSellProof,client:marketDaemonClient});';
  inject(sell,buy,claim,
@@ -50,7 +50,7 @@ function patch(source,{remove=false}={}){
   '          const nativeWallet=require("../account/walletState");\n'+
   '          nativeWallet.notifyCharacterWalletChange(buyerCharacterID,nativeWallet.getCharacterWallet(buyerCharacterID));\n'+
   '          nativeWallet.notifyCharacterWalletChange(sellerCharacterID,nativeWallet.getCharacterWallet(sellerCharacterID));\n'+
-  '          notifyOwnOrdersChanged(sellerCharacterID,[{...playerSellOrder,row:{...getOwnerOrderResponseOrder(playerSellOrder),vol_remaining:0,price:orderPrice},state:"filled"}],ORDER_REASON_FILLED);\n'+
+  '          notifyOwnOrdersChanged(sellerCharacterID,[{...playerSellOrder,row:{...getOwnerOrderResponseOrder(playerSellOrder),vol_remaining:coopPlayerSellProof.volumeAfter,price:orderPrice},state:coopPlayerSellProof.volumeAfter===0?"filled":"open"}],coopPlayerSellProof.volumeAfter===0?ORDER_REASON_FILLED:ORDER_REASON_PARTIAL);\n'+
   '          totalSpent=roundIsk(totalSpent+grossCost);\n'+
   '          totalBought+=tradedQuantity;\n'+
   '          remainingQuantity-=tradedQuantity;\n'+
