@@ -71,6 +71,17 @@ test('cancelled and unrelated-station jobs do not fabricate local inventory',()=
  assert.equal(p.status,'PLAN_READY');
  assert.equal(p.jobs[0].shortage,500);
 });
+test('missing station or manufacturing activity on an active native job prevents speculative job install',()=>{
+ const cases=[
+  {jobID:970000000000012,ownerID:OWNER,activityID:1,productTypeID:AMMO,productQuantity:100,status:1},
+  {jobID:970000000000013,ownerID:OWNER,stationID:STATION,productTypeID:AMMO,productQuantity:100,status:3}
+ ];
+ for(const job of cases){
+  const p=fixture({jobs:[job]}).plan(args());
+  assert.equal(p.status,'NATIVE_ACTIVE_JOB_SCOPE_UNVERIFIED');
+  assert.equal(p.jobs.length,0);
+ }
+});
 test('ambiguous active job with malformed output cannot trigger an extra paid install',()=>{
  const jobs=[{jobID:970000000000007,ownerID:OWNER,stationID:STATION,activityID:1,
   productTypeID:AMMO,productQuantity:-2,status:1}];
