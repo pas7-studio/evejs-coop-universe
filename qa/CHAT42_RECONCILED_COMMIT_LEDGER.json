@@ -1,0 +1,854 @@
+{
+  "schema": "coop-qa42-reconciled-commits/v1",
+  "sourceRepository": "pas7-studio/evejs-coop-universe",
+  "originalQA42Commit": "f49b05bf41ab6eea23b48fd356e9afdb1f803de5",
+  "reviewedMainHead": "489839519a0b6db87f44d5fdc8bf71f69e0ff4a0",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "postQA42CommitCount": 66,
+  "postQA42Commits": [
+    {
+      "sha": "6434134b558c4bb5bf53ac2edb85a50be65d9b0e",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:32:47Z",
+      "subject": "fix(coop-034): reject subcent sale prices and inconsistent native item stacksize",
+      "body": ""
+    },
+    {
+      "sha": "0a1bfef33b0466f8544df861a70753092c3e7419",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:32:59Z",
+      "subject": "test(coop-034): subcent, exact-cent and native cargo stacksize conservation",
+      "body": ""
+    },
+    {
+      "sha": "e87614cca3126e63bd44dd410facb843bd33d81b",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:33:11Z",
+      "subject": "test(coop-034): race-inject post-Rust native stack mutation before escrow commit",
+      "body": ""
+    },
+    {
+      "sha": "268453c6007c54d897f301ad66ad252dbef7426f",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:34:29Z",
+      "subject": "fix(coop-033): verify native warehouse custody and exact-cent sale evidence before journal transitions",
+      "body": ""
+    },
+    {
+      "sha": "049bcd2578906569a9fb9597e32df945687a94a4",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:34:50Z",
+      "subject": "test(coop-033): reject foreign cargo, incorrect warehouse stack and subcent market receipts",
+      "body": ""
+    },
+    {
+      "sha": "594afebc1397860443391fd42c0ef3b9aae591af",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:36:24Z",
+      "subject": "fix(coop-048): refuse noncanonical cent balances before atomic NPC buyer wallet debit",
+      "body": ""
+    },
+    {
+      "sha": "7920bed2331a177b3313c3d5ef7167e5cce0f836",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:36:33Z",
+      "subject": "test(coop-048): enforce cent conservation for native buyer and seller wallets",
+      "body": ""
+    },
+    {
+      "sha": "b41b3d4c7609f201828c1f4520e821f305d67c78",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:36:35Z",
+      "subject": "test(coop-048): enforce cent conservation for native buyer and seller wallets",
+      "body": ""
+    },
+    {
+      "sha": "9eb5256ffdc9149e2e4b109631878c9a9534985b",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:42:46Z",
+      "subject": "Merge P0 PR #171: preserve exact wallet cents in NPC player-ask settlement",
+      "body": "COOP-048: preserve exact native wallet cents on NPC-to-player market purchases"
+    },
+    {
+      "sha": "be95aeb1379a00edc4111d490f224e711084d823",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:42:56Z",
+      "subject": "Merge P0 PR #166: exact-cent native market prices and physical stack integrity",
+      "body": "COOP-034: enforce exact-cent NPC sell prices and physical stack integrity"
+    },
+    {
+      "sha": "db8f4b94e235ac151f6480d74164f002f76ee03b",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:43:01Z",
+      "subject": "Merge P0 PR #168: verified native factory output custody and exact-cent paid sales",
+      "body": "COOP-033: fail closed on non-warehouse factory output and subcent NPC sale receipts"
+    },
+    {
+      "sha": "e3d453694fb2d0e68ca99ea8a08e41419849d4f9",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:48:07Z",
+      "subject": "fix(LW-04): resolve native economy helpers in deployed JS overlay and source CJS tests",
+      "body": ""
+    },
+    {
+      "sha": "c21fd5ea28c5a47d690f6ecf52e05e9e2c0ca2c9",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:48:22Z",
+      "subject": "test(LW-04): verify exact native JS overlay imports and local CJS fallback",
+      "body": ""
+    },
+    {
+      "sha": "244c8930533ed07ea0a3bbb9810c5f706ba71277",
+      "author": "Nazar Ukolov",
+      "authorDate": "2026-10-25T21:49:36Z",
+      "subject": "fix(haul): land a finished warp for the hauler too, so a headless trip is not silently lost",
+      "body": ""
+    },
+    {
+      "sha": "674575d928bcb93fbb59346b29caacf38387b47d",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:50:58Z",
+      "subject": "Merge P0 fix PR #180: restore native NPC economy dependencies in deployed overlay",
+      "body": "fix(LW-04A): resolve native economy director dependencies in deployed JS overlay"
+    },
+    {
+      "sha": "c8e838e9f4ab85c3ca0677f4aae5fa88067a4901",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:51:50Z",
+      "subject": "feat: verify native seller escrow stacks and original item return without minting inventory",
+      "body": ""
+    },
+    {
+      "sha": "36d59b061025883502c3e354842087db2fa7c7df",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:52:03Z",
+      "subject": "fix(rearm): lock fitted native module across cargo writers and re-attest replay visibility",
+      "body": ""
+    },
+    {
+      "sha": "cae20f8373c8ac8ea978921c11fc8e45face954b",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:52:13Z",
+      "subject": "test(rearm): competing cargo same-module race, stale locks and replay visibility",
+      "body": ""
+    },
+    {
+      "sha": "5785bc64ac5deb0233042e67bba0b45ded4f661f",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:52:46Z",
+      "subject": "feat: hook pre- and post-return proof into native sell cancellation and expiry",
+      "body": ""
+    },
+    {
+      "sha": "2ea3b9a3411c29932999ae09ccf0b64543184baf",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:52:50Z",
+      "subject": "Merge P0 PR #181: fence competing NPC weapon charge writes and verify loaded native cargo",
+      "body": "P0 ALIFE rearm: prevent competing charges to same weapon and false loaded ACK"
+    },
+    {
+      "sha": "ab5b5fe9b233dd5a2c56df2ecc75a61fc3943bbf",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:53:04Z",
+      "subject": "feat: register native sell-return custody in central reversible market overlay",
+      "body": ""
+    },
+    {
+      "sha": "e9bc93d28bba5d8aa62fbac944f150c46b835e2a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:53:21Z",
+      "subject": "fix(integration): reconcile post-42 native modules, local-only QA and deployed sibling imports",
+      "body": "Register 23 late-delivered L2 modules for copy-only installation without activating unreviewed hooks. Repair CJS source vs JS deployment imports for clone and player industry receipt guards; add isolated two-mode tests and enforce local/manual QA by removing unauthorized ALIFE-11/12 GitHub Actions. Preserve pinned EveJS, existing hook set, private host defaults, and Chat 40 atomic native account cache fences. No live volume, remote deployment or client state changed.\n\nSOURCE_RECONCILED / FULL_LOCAL_AND_TWO_CLIENT_UNVERIFIED"
+    },
+    {
+      "sha": "734cfad41f7fa2e880b9dfb50a7d39ed10dcf0cf",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:53:31Z",
+      "subject": "fix(stage-j): resolve pending-market escrow authority in both .cjs checkout and deployed .js overlay",
+      "body": ""
+    },
+    {
+      "sha": "63dc1a9cfc969e97cb90edd5e886f8d4e84c9079",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:53:43Z",
+      "subject": "test(stage-j): local CJS and deployed JS escrow import parity with strict missing-transitive handling",
+      "body": ""
+    },
+    {
+      "sha": "ba8cc94c12896daec11fcda5771c126497cd648d",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:53:49Z",
+      "subject": "fix(qa): correct post-42 native module filename regression matcher",
+      "body": ""
+    },
+    {
+      "sha": "1a50e5434b7af9a21b26a10cac1fd2663d041730",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:54:01Z",
+      "subject": "fix: retain buy-custody source hook adjacency under sell-custody composition",
+      "body": ""
+    },
+    {
+      "sha": "7be732c1db0af8accc9e80bc021181f83e72f56e",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:54:02Z",
+      "subject": "Merge P0 PR #182: restore Stage J source/deployed NPC market import parity",
+      "body": "P0 Stage J: restore salvage pending-market dependency resolution in source and installed overlay"
+    },
+    {
+      "sha": "98d5ffba4e3982d23688fc6802438a93f7fea856",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:54:38Z",
+      "subject": "fix: reject unsafe Rust order ID to JavaScript escrow-location collisions",
+      "body": ""
+    },
+    {
+      "sha": "8f3b3ea2599d560e0481acbed6bc70acb2561006",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:54:58Z",
+      "subject": "test: enforce native sell escrow identity, item conservation, and reversible source hooks",
+      "body": ""
+    },
+    {
+      "sha": "e5e62d4b64129334de9512cba2d97a31b738431c",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:55:07Z",
+      "subject": "test: make minimal native structure cancellation fixture syntactically valid",
+      "body": ""
+    },
+    {
+      "sha": "f27b281d9f1bbc9d44abe40f13ae8a95edef19e1",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:55:42Z",
+      "subject": "fix: require original Rust CancelOrder ACK before native sell item return",
+      "body": ""
+    },
+    {
+      "sha": "fde38212365abc1d1736c05748daee87eeca2159",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:55:54Z",
+      "subject": "test: invalid Rust sell cancellation ACK blocks item return before escrow removal",
+      "body": ""
+    },
+    {
+      "sha": "754fa9aaf1649745cd3dcec04ae0f1f9e36f72fa",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:56:53Z",
+      "subject": "fix: block missing native sell escrow before expiry-event acknowledgment",
+      "body": ""
+    },
+    {
+      "sha": "9f057f33e73339173171c46fe589cb4eacc4948d",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:57:04Z",
+      "subject": "fix(alife10): enforce native miner-hauler proximity and warp fence inside atomic cargo mover",
+      "body": ""
+    },
+    {
+      "sha": "7a81e56b80c4c3afbda6abac63b280974d061825",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:57:15Z",
+      "subject": "test(alife10): distant and warping native haulers preserve durable ore, nearby transfers commit",
+      "body": ""
+    },
+    {
+      "sha": "d2147d128a2d090714891abc73b8780a37a9c40d",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:58:02Z",
+      "subject": "Merge P0 PR #186: enforce physical NPC mining haul proximity",
+      "body": "P0 ALIFE-10: forbid remote or in-warp NPC ore cargo transfers inside atomic writer"
+    },
+    {
+      "sha": "34e2ed67986ba6a2126abbfca9e3e073d1a9137b",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:58:35Z",
+      "subject": "Merge P0 PR #184: fail-closed native player SELL escrow custody and cancel ACK",
+      "body": "P0 market: fail-closed native sell escrow conservation and Rust cancel ACK"
+    },
+    {
+      "sha": "d70d8650b76471db1e5d54a88efb352f88b91ad4",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:59:02Z",
+      "subject": "fix(coop-035): refuse subcent buyer or NPC corporate balances before native market sale",
+      "body": ""
+    },
+    {
+      "sha": "00fbc02687e16b7062cebb7b67fd7e7f03917bfd",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:59:14Z",
+      "subject": "test(coop-035): reject unverified buyer/corp cents without custody mutation, preserve exact cents",
+      "body": ""
+    },
+    {
+      "sha": "d5a184a4b6717e74aaa8b762ebf7ebda732016d3",
+      "author": "Nazar Ukolov",
+      "authorDate": "2026-10-25T21:59:19Z",
+      "subject": "feat(courier): fly a real accepted contract to the destination and mail the issuer",
+      "body": "Live dispatch now resumes an IN_PROGRESS contract whose acceptor is one of our seeded pilots: the courier returns to the origin, undocks, warps, docks at the destination and completes natively. Without this the accepted cargo sat in the hangar forever after a restart.\n\nFixes found against the live server: gameStore.read returns {success,data} and keys are bare IDs (every pilot looked like a non-identity), item rows come from the same store, the courier session needs a no-op sendSessionChange or the native undock throws after mutating real state, warps must use startSessionlessWarpIngress (space.warpToPoint expects a client session and silently did nothing), a real EveJS package sits in the issuer's office location until accepted, and an interrupted undock leaves stationID null plus a hull pointing at the solar system - repaired through the store, never by faking a flight.\n\nNotices are real native EVEmail from the courier character to the issuer: accepted, departing, delivered."
+    },
+    {
+      "sha": "7e0f3d2c794c3243985cc4d9047b2d217306d085",
+      "author": "Nazar Ukolov",
+      "authorDate": "2026-10-25T21:59:39Z",
+      "subject": "feat(market): a stock mining hauler sells under its own stable slot ledger, not only coop-pilot identities",
+      "body": ""
+    },
+    {
+      "sha": "b0a10b0ce205855de56a973bbb1a48c66d9365b0",
+      "author": "Назар",
+      "authorDate": "2026-10-25T21:59:42Z",
+      "subject": "Merge P0 PR #187: conserve exact native corporate sale wallet cents",
+      "body": "P0 COOP-035: conserve exact native wallet cents in NPC corporate item sales"
+    },
+    {
+      "sha": "69266379cf4b25766568f41f7c9cd540b3b6fb04",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:00:37Z",
+      "subject": "feat: verify native player market escrow/source provenance and exact Rust fill ACK",
+      "body": ""
+    },
+    {
+      "sha": "c88812ea3debb75e6341b31ce515f2135fbd2610",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:00:55Z",
+      "subject": "feat: wire exact native P2P fill admission and Rust ACK to both match loops",
+      "body": ""
+    },
+    {
+      "sha": "40cf2a739339e6fce44641b1b0ee0ebdf48e41d1",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:01:09Z",
+      "subject": "feat: register P2P fill guard in existing reversible native market installer",
+      "body": ""
+    },
+    {
+      "sha": "d280548fd017fb76cdd87d1fb8fe77eca2c3298c",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:01:32Z",
+      "subject": "test: native P2P order provenance, material custody and Rust fill acknowledgment",
+      "body": ""
+    },
+    {
+      "sha": "bdeace12ba569b145e253a7163b3492442a0ea71",
+      "author": "Nazar Ukolov",
+      "authorDate": "2026-10-25T22:01:20Z",
+      "subject": "fix(telemetry): a blocked warehouse deposit is retried every tick, so report it once per two minutes",
+      "body": ""
+    },
+    {
+      "sha": "127635d03d1c4e1621cf35f9c928781411eca8be",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:01:40Z",
+      "subject": "test: match pinned async native market method signatures in reversible fixture",
+      "body": ""
+    },
+    {
+      "sha": "3b0c455a61417d829b8698034918a8431dc86b7a",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:02:31Z",
+      "subject": "fix: keep market installer idempotent when COOP-035 replaces COOP-034 NPC guard",
+      "body": ""
+    },
+    {
+      "sha": "d82007c2bc7112987bbf61d0960eff9c62c356cc",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:03:18Z",
+      "subject": "fix(coop034): require native Rust NPC sale provenance and unconsumed full quantity before physical escrow",
+      "body": ""
+    },
+    {
+      "sha": "30252e20f370a9eb7d2ccc52622344b71e9c51a1",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:03:26Z",
+      "subject": "fix: quarantine ambiguous native P2P buyer fills instead of refunding delivered cargo",
+      "body": ""
+    },
+    {
+      "sha": "98823ef30f27dbb53a764f0040607165720f8b97",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:03:30Z",
+      "subject": "test(coop034): deny Rust foreign/depleted sell reserves and unverified active readbacks",
+      "body": ""
+    },
+    {
+      "sha": "56949284affa1500ccfd2b46c0320b56e85c639f",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:03:39Z",
+      "subject": "test: guard against native buyer refund after physical item transfer started",
+      "body": ""
+    },
+    {
+      "sha": "6a0b8b6ad74bb8ef3b830826235a9810a891c941",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:04:14Z",
+      "subject": "Merge P0 PR #188: attest full Rust NPC sell reserve and manufacturer custody",
+      "body": "P0 COOP-034: require Rust NPC sell provenance and full unconsumed quantity before escrow"
+    },
+    {
+      "sha": "2a0b51a1bd434610aebe4915dc9a28059cafb4a1",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:04:17Z",
+      "subject": "fix: detect mixed COOP-034/035 source and preserve idempotent native NPC buyer branch",
+      "body": ""
+    },
+    {
+      "sha": "71597993a7d0cdab4e6cbf00fd307da88bea755d",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:04:20Z",
+      "subject": "test: guard repeated full installer apply and mixed native NPC source",
+      "body": ""
+    },
+    {
+      "sha": "4aef2b4b06e8cc2042468b1663f07c3bf6c11013",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:05:02Z",
+      "subject": "fix(coop035): attest complete immutable sale receipt and wallet cents before idempotent replay",
+      "body": ""
+    },
+    {
+      "sha": "4559ec53d3baac846293c62c356f056f3ca4dfe6",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:05:15Z",
+      "subject": "docs: delimit P2P native fill admission from unimplemented cross-database atomicity",
+      "body": ""
+    },
+    {
+      "sha": "3bed34f4f9f6eedd6c9904d861521a1748f60fc1",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T22:05:15Z",
+      "subject": "fix(integration): reconcile Chat 23/30/37 native overlay and review handoff",
+      "body": "Wire original native contractProxy mutation fence through the one authoritative\npinned EveJS installer (default OFF), retaining stock contract RPC and wallet\nownership. Remove duplicate coopCourierRuntime module deployment entry.\nPreserve the existing Chat 23 native wormhole hook and Chat 37 read-only SDE\nand Small Skill Injector correction without client-content imports.\n\nAdd deterministic cross-stream wiring/rollback tests and a bot-owner handoff\nwith exact provenance commits 40b23b7, 98f8f86 and bdb3705.\n\n55 focused previous-package Node tests PASS; new full-repo integration and\nnative two-client acceptance require owner-side runs. No CI or live data."
+    },
+    {
+      "sha": "d67ca422459b6575bfcd3e1f4327627517bfcb22",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:05:21Z",
+      "subject": "test(coop035): incomplete or contradictory paid sale receipts never pass Rust recovery",
+      "body": ""
+    },
+    {
+      "sha": "57780cf1cf64938bbd9532f32d4eb4e5fb0098c2",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:05:48Z",
+      "subject": "Merge P0 PR #190: attest original NPC sale receipt and wallet conservation before Rust replay",
+      "body": "P0 COOP-035: reject incomplete or forged paid NPC market receipts during idempotent replay"
+    },
+    {
+      "sha": "f1c61d4f8563c07125f6d7a44b5b27193492d97f",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:06:28Z",
+      "subject": "Merge P0 PR #189: native P2P fill admission and exact Rust ACK",
+      "body": "Fail-closed source hooks for original player market matching, unsafe refund quarantine, and idempotent NPC market patch composer. Default OFF; runtime financial atomicity remains unverified."
+    },
+    {
+      "sha": "37700c874f9e6fb34cb84fe78f44a729c2b2fd5b",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:07:35Z",
+      "subject": "Merge P0 PR #191: restore native contract mutation source-hook registration",
+      "body": "fix(integration): reconcile Chats 23/30/37 native wormholes, contracts and SDE"
+    },
+    {
+      "sha": "eb5d8f651141ce6e175148f8b7a118bdd1d3652d",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:09:18Z",
+      "subject": "fix(coop032b): require exact wallet/quote cents and physically consistent native mineral stacks before installation",
+      "body": ""
+    },
+    {
+      "sha": "0e9170361f4d51fc7326ed0b8eae03c95cac38a3",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:09:31Z",
+      "subject": "test(coop032b): fail closed on subcent ISK/quote, one-cent drift, native mineral stack mismatch and string wallet",
+      "body": ""
+    },
+    {
+      "sha": "489839519a0b6db87f44d5fdc8bf71f69e0ff4a0",
+      "author": "Назар",
+      "authorDate": "2026-10-25T22:10:04Z",
+      "subject": "Merge P0 PR #196: native offline manufacturing ISK and mineral conservation",
+      "body": "P0 COOP-032B: exact wallet/quote cents and original mineral stack conservation during offline NPC manufacturing"
+    }
+  ],
+  "danbalanMainCommitCount": 54,
+  "danbalanMainCommits": [
+    {
+      "sha": "3bed34f4f9f6eedd6c9904d861521a1748f60fc1",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T22:05:15Z",
+      "subject": "fix(integration): reconcile Chat 23/30/37 native overlay and review handoff",
+      "body": "Wire original native contractProxy mutation fence through the one authoritative\npinned EveJS installer (default OFF), retaining stock contract RPC and wallet\nownership. Remove duplicate coopCourierRuntime module deployment entry.\nPreserve the existing Chat 23 native wormhole hook and Chat 37 read-only SDE\nand Small Skill Injector correction without client-content imports.\n\nAdd deterministic cross-stream wiring/rollback tests and a bot-owner handoff\nwith exact provenance commits 40b23b7, 98f8f86 and bdb3705.\n\n55 focused previous-package Node tests PASS; new full-repo integration and\nnative two-client acceptance require owner-side runs. No CI or live data."
+    },
+    {
+      "sha": "ba8cc94c12896daec11fcda5771c126497cd648d",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:53:49Z",
+      "subject": "fix(qa): correct post-42 native module filename regression matcher",
+      "body": ""
+    },
+    {
+      "sha": "e9bc93d28bba5d8aa62fbac944f150c46b835e2a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:53:21Z",
+      "subject": "fix(integration): reconcile post-42 native modules, local-only QA and deployed sibling imports",
+      "body": "Register 23 late-delivered L2 modules for copy-only installation without activating unreviewed hooks. Repair CJS source vs JS deployment imports for clone and player industry receipt guards; add isolated two-mode tests and enforce local/manual QA by removing unauthorized ALIFE-11/12 GitHub Actions. Preserve pinned EveJS, existing hook set, private host defaults, and Chat 40 atomic native account cache fences. No live volume, remote deployment or client state changed.\n\nSOURCE_RECONCILED / FULL_LOCAL_AND_TWO_CLIENT_UNVERIFIED"
+    },
+    {
+      "sha": "f49b05bf41ab6eea23b48fd356e9afdb1f803de5",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:42:34Z",
+      "subject": "test(qa42): independent 41-owner native gameplay readiness gate and evidence handoffs",
+      "body": "Add 45-case evidence matrix covering two authenticated clients, fleet, combat, NPC, missions, mining, inventory, industry, Rust market, corporation and restart. Enforce source/unit/integration/runtime/two-client separation and no auto PASS from stale logs or attestation-only receipts. Record 89 isolated passes/10 skips and 20/20 QA42 tests, historical host evidence boundaries, digest gap and forbidden workflows. Route blockers to Chat 01/03/05/21/28/35/40/41 via issues #172-#175.\n\nQA outcome NO-GO_NOT_PROVEN_COMPLETE. No upstream/gameplay changes, no CI, no listener or live-volume mutation. One final QA-only commit."
+    },
+    {
+      "sha": "b6e590406658a18d7884051d90d9642713002ea9",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:41:31Z",
+      "subject": "ops(private): stage two-PC loopback tunnel audit and offline volume recovery",
+      "body": "Add fail-closed effective Compose/advertisement/auth validation for pinned EveJS, blocking loopback escapes, unscoped SSH peers, unexpected RPC ports and insecure native dev login flags. Add read-only Windows host checks, private TCP latency probes and an owner-operated offline volume backup/verification/restore-to-new-only tool with exact image ID and archive SHA-256 checks. Add pinned upgrade dry-run gate and private two-player operational runbook.\n\n32/32 local Node tests PASS. Native pinned config currently enables unsafe devSkipPasswordValidation/devAutoCreateAccounts: remote access must remain blocked until owner explicitly provisions two accounts and disables both. No live Windows/Docker/SSH/firewall/volume changes or actual two-client tests; no existing files modified. Single batch commit."
+    },
+    {
+      "sha": "81b6469b463afd7d6add891bc0458d73c732a222",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:36:36Z",
+      "subject": "fix(persistence): enforce economic SQLite durability and native account cache coherence",
+      "body": "Require SQLite synchronous=FULL before every opt-in atomic native economic\ntransaction, not only mining/hauling. Probe character/corporation cache\ninvalidators before wallet/escrow commit, invoke them after committed\nGameStore reload, and poison/fatal on uncertain postcommit cache state.\nPreserve existing one-writer, native table allowlist and lost-ACK halt.\n\nAdd read-only cross-ledger economy/conservation recovery verifier detecting\norphan Rust fills, duplicate claims, ghost native items, escrow overlaps,\nwallet imbalance, manufacturing delivery drift and ambiguous journals.\n\n27/27 disposable Node/SQLite tests PASS; 7/7 source-executed bridge\nscenarios PASS. Pinned better-sqlite3, native persistence worker and live\nRust/two-client crash gates remain unverified. No central installer or\nruntime changes, no live writes, no remote CI.\n\nCODE_READY / LIVE_UNVERIFIED"
+    },
+    {
+      "sha": "003b97380dbf73e3c3f5aa5ecdd1fdf7d7d4b4b4",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:32:55Z",
+      "subject": "feat(pochven): enforce SDE-backed native Conduit Loop access (default OFF)",
+      "body": "Apply reciprocal native Pochven stargate and original 6.00 raw Triglavian Home standings policy before native transition. Deny k-space bypass, capital or unknown hull classes; preserve wormhole system Chat23, real inventory/standing state and all concurrent overlay hooks. Include 14/14 passing Node regressions, 10 NOT_RUN two-client cases and verified 2026 vs pinned coverage report; no fabricated NPCs/sites/rewards."
+    },
+    {
+      "sha": "530415ee4bc99be04f8b39c6fde985d7141ddc7f",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:32:17Z",
+      "subject": "coop(social): stage native scoped chat and durable mail/backlog guards",
+      "body": "Check original character/corporation/alliance/fleet membership before scoped\nXMPP join and send. Confirm original GameStore chatBacklog fsync before event\nfan-out; quarantine unknown writes. Clone original mail state and flush native\nmail table before original live EVEmail/notification delivery; block unknown\ncommit replays. Default OFF reversible pinned EveJS hooks (3 native sources),\nsource-level tests and 14 NOT_RUN two-client social UI/reconnect acceptance\nscenarios. No invented client RPC, no proprietary binary, no central installer,\nno parallel state store. Live gameplay and full system coverage unverified."
+    },
+    {
+      "sha": "6d0c2ea29a5ec0d5f27a1ab84899fcde23ae3257",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:32:07Z",
+      "subject": "fix(npe): protect native tutorial state and remove synthetic beginner achievements",
+      "body": "Keep native character creation, rookie ships, career agents, mission rewards and fleet authority unchanged. Add opt-in identity/account-bound AIR/NES tutorial RPC handling, native tutorial state lookup and truthful empty achievement defaults; reversible pinned EveJS overlay wiring. 14/14 isolated tests pass. Gameplay, starter space, real clients and first mission/battle remain LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "bdb37050bf915ee7984cf317f87dc1714ea272f6",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:31:09Z",
+      "subject": "fix(sde): correct Small Skill Injector typeID and add pinned SDE compatibility gate",
+      "body": "Fix skill market seed Small Skill Injector 40521 -> canonical 45635 without\nchanging market prices, quantities, or live orders. Add read-only JSONL\nnative-vs-2026-SDE integrity/dogma/market-group audit with default fail-closed\nclient-unverified result. No new ship/module imports or client assets.\n\n17 local Node tests passed, 0 failed. Full 2026 CCP SDE download, pinned\nGameStore snapshot comparison and two-client gameplay are NOT RUN.\nNo CI, central installer or deployed DB changes."
+    },
+    {
+      "sha": "f863d41ce6d27e656521469e201cae6207c48510",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:19:14Z",
+      "subject": "fix(fw): guard native enlistment authority and expose campaign compatibility gaps",
+      "body": "Add default-OFF one-statement hooks for real militia IDs, raw standings, exact retirement cooldown, corp CEO/Director whitelist and native persisted-write receipts. Hide static Pirate Insurgency snapshots only when explicitly opted in. Audit pinned VP, occupation, LP and 2026 Military Campaigns surfaces without synthetic territory or rewards.\n\n20 local tests pass, 3 pinned checkout tests skipped; 11/11 source contracts and 7 unique anchors checked. Shared installer untouched, real two-client FW capture/settlement remains unverified."
+    },
+    {
+      "sha": "ede7b727eb1fc9079b044c7b31e897fd3c629e9a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:18:59Z",
+      "subject": "feat(clones): stage native clone, implant and booster custody safety guards",
+      "body": "Add default-off native-authority preflights for per-character clone IDs, origin/destination and capsule custody, implant slots, boosters, home station and FILETIME cooldowns. Deny unsafe fitted-ship clone teleports, forged clone/remote station targets and unprivileged jump/home timer reset RPCs. Add postflight native item, dogma, ship, wallet and death readbacks and a durable fsync-backed at-most-once journal that quarantines uncertain outcomes.\n\n36/36 isolated V8 JS regressions pass, including independently owned two-character clone jump, implant installation, pod death and reconnect safety. Pinned EveJS ship vat and fitted-ship jump flow remain blocked until native integration. Central installer untouched; no Docker/native live, gameplay, SQLite or two-client acceptance claimed."
+    },
+    {
+      "sha": "c70487306dd93cc4f010d982cadb1c1915aeb2d6",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:17:30Z",
+      "subject": "fix(corporations): fence native asset, membership and wallet role bypasses",
+      "body": "Add default-OFF read-only native corporation authorization based on persisted player membership, canonical CEO, office, hangar and wallet division roles. Provide reversible pinned hooks for native inventory, industry, registry, member-action and office services. Prevent self-approved applications, role escalation, fleet-based access, foreign asset moves and unsafe non-atomic cash/share grants. Preserve all existing EveJS corporate inventory, wallet and industry writers.\n\n29/29 isolated Node regression cases PASS; live two-client GameStore/SQLite gameplay and crash recovery unverified. Central Chat 01 overlay integration required. CODE_READY / LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "e4401c58e6c69107e7ba346d4d1f0182a0974990",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:15:57Z",
+      "subject": "fix(skills): fence native rate cutovers and audit independent queue ETA",
+      "body": "Stage native old-speed SP rebase orchestration with fsynced PREPARED,\nper-character receipts, unchanged queue order and no automatic replay after\nuncertain native writes. Verify native Alpha/Omega per-character SP/min,\ntraining end-time and separately observed client ETA without changing SP.\n\nPreserve the operator's existing 100x deployment default; 48x remains an\nexplicit optional rate only after quiesced, backed-up migration approval.\nIncludes 29 PASS isolated Node regressions, 6 optional pinned-source checks\n(SKIP without checkout), and 20 NOT_RUN real two-client acceptance scenarios.\n\nNo central installer/deploy hooks, active skill queues or live world changed.\nChat 01 integration and native multi-store atomicity remain outstanding.\n\nCODE_READY / LIVE_UNVERIFIED"
+    },
+    {
+      "sha": "98f8f8665a5bf9f64fe07962adaf70eb5e4ecf68",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:15:26Z",
+      "subject": "feat(contracts): stage native item and wallet mutation replay fence",
+      "body": "Opt-in original contractProxy guard with durable PREPARED receipts, owner/item\ncustody and personal-wallet delta readback, synchronous original GameStore\nflush confirmation, and fail-closed crash/restart replay protection.\n\nPreserve NPC Job Board, escrow/volunteers/refund authorities. Corporate\ncontracts and batch deletion remain blocked in strict mode until role and\natomicity verification; auction and Freelance APIs remain unsupported upstream.\n\n19 isolated Node tests PASS; full native SQLite, installer and two-client\nacceptance NOT RUN. No CI, no deployed world/volume changes."
+    },
+    {
+      "sha": "8e211509022d63287a40b3983adb7bee5dcee424",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:13:23Z",
+      "subject": "fix(structures): stage native alliance executor and structure ownership admission guards",
+      "body": "Verify canonical character, corporation and durable member roles before\n24 original alliance mutations and 3 native structure gates. Deny foreign\nstructure control, malformed alliance applications, forged GM acceptance,\nunauthorized wars and invalid/alien War HQ before bill creation. Reversible\npinned upstream hooks default OFF, with 11 V8 authorization/roundtrip tests\nand 11 explicitly NOT_RUN client/restart E2E gates.\n\nNo central installer changes, no new structure or sovereignty records, no\nwallet/asset mutations. Deployment deed/structure transaction, war financing,\nasset safety, UI and two-client restart remain LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "70c24d66268ef45e115e19dbe05a2425b5bfb7d5",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:10:23Z",
+      "subject": "fix(market): fail closed on unbacked native buy order cancellation refunds",
+      "body": "Add OFF-by-default Rust/marketEscrow exact-identity and cents-proof gates for native buy cancellation, expiry, structure-service loss and escrow sync. Require matching Rust CancelOrder ACK before release. Integrate reversible patch into existing pinned EveJS installer without modifying active market SQLite or existing NPC/Rust settlement flows. Add 10 isolated regression cases and live acceptance blockers; complete player-to-player atomic settlement remains unverified."
+    },
+    {
+      "sha": "7e1d291e36fffb10f273c01a0799bb5526b850b1",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T21:02:43Z",
+      "subject": "fix(moon): gate unsafe moon reads and unbacked Metenox fuel cycles",
+      "body": "Add opt-in owner-bound moon extraction read controls, fail-closed Metenox output settlement fence, read-only native inventory delta/source auditors, reversible pinned-source transformers, local tests and Chat 01/27/32 integration contract.\n\n23 local tests pass, 0 fail, 3 pinned tests skip without local Code. No native moon chunks or automatic product settlement exist yet; no gameplay/live verification, no central installer modification."
+    },
+    {
+      "sha": "17d2b8c3aa021c5992bedc8b44b8576ca055f071",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:59:29Z",
+      "subject": "feat(industry): stage native player blueprint custody and crash-safe paid job guards",
+      "body": "Add default-off native authority gates for BPO/BPC manufacture, ME/TE research, copying and reactions; validate real quotes, roles, facility, material inputs, wallet fees and READY jobs. Add durable at-most-once install/delivery journal, exact native inventory/wallet/blueprint receipts, and quantity-conserving two-character native handoff checks.\n\n42/42 isolated JS regressions pass including full simulated ore trade -> paid BPO job -> actual output -> second-character trade. Invention remains unsupported by pinned EveJS native InstallJob. Source modules are NOT installed or deployed: central hooks owned by Chat 01, real native SQLite transactions / two-client gameplay unverified. No shared files touched."
+    },
+    {
+      "sha": "023cc059f09b1838d55fe2eff2887c633f87515d",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:56:57Z",
+      "subject": "fix(player-mining): source-first ore, ice, gas and drone custody guard",
+      "body": "Add default-OFF native player mining custody with rock/ship/module-cycle fencing, critical depletion conservation, authenticated pilot/ship validation, native itemStore quantity/hold checks and fail-closed journal on uncertain outcomes. Include reversible pinned-source patches for laser/harvester and drone cycles, leaving NPC mining and central installer ownership unchanged. 15/15 isolated Node regressions PASS; live SQLite/worker/two-client restart unverified.\n\nCODE_READY / LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "bc46aec5dd293282e64b2fb909414572812e8e53",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:56:28Z",
+      "subject": "coop(logistics): stage fail-closed native player ore reprocessing with durable receipts",
+      "body": "Protect one original player-owned station-hangar ore item with native SDE quote,\nzero-ISK-cost limit, native itemStore single-write debit+mineral credit and\nsynchronous flush. Write PREPARED/COMMITTED receipts; forbid blind replay and\nallow only operator-authorized proof-based recovery. Prevent stock pre-RPC\nstack splitting when enabled. Add reversible pinned source patches, 12\nisolated regression cases, and 11 explicitly NOT_RUN two-player crash gates.\nFlags default OFF. Central installer and other chats' files untouched.\nFull player hauling, paid tax, compression durability and client E2E remain\nLIVE_UNVERIFIED."
+    },
+    {
+      "sha": "e9ee798cb37bb02dd3066b85fbfaed13c546032d",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:56:15Z",
+      "subject": "fix(pi): add native commodity custody and customs authority fences",
+      "body": "Stage default-OFF PI integrity guard for exact command-center ItemStore ownership,\nplanet/system-matched customs offices, restricted orbital settings and GM\nmutations, and physicalized launch container proof with exact item IDs and\nstack quantities. Preserve native extractor, schematic, cargo, wallet and\nstation/industry ownership; no virtual commodities or separate economy.\n\nAdd 26 passing local regressions, seven pinned-source hook contracts,\n16 NOT_RUN two-player PI scenarios and Chat 01 integration instructions.\nCentral installer/native hooks remain with Chat 01. Native PI+ItemStore+wallet\nmulti-store atomicity and live two-client crash/restart acceptance remain open.\n\nCODE_READY / LIVE_UNVERIFIED"
+    },
+    {
+      "sha": "3b9b0cbc2fe379a81f7f1131ba1a500d850bbf8a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:54:50Z",
+      "subject": "fix(exploration): bind native perfect-scan proof to ship and physical site",
+      "body": "Fence scan bookmark creation to the original real scanning ship, exact server-marshalled 100% position, immutable site identity and fresh live session; fail closed on recycled/moved signatures or duplicate results. Add read-only two-pilot native scene/shared-bookmark arrival witness, strengthen reconnect/fleet cases, preserve source-backed scanner, bookmarks, warp and loot. 13 isolated tests PASS; live clients and safe hacking remain unverified."
+    },
+    {
+      "sha": "40b23b7a0f8bf8d4e44318529dee8608202ba76f",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:53:19Z",
+      "subject": "feat(wormholes): stage fail-closed native mass-before-travel fence",
+      "body": "Add default-off original wormholeMgr handoff guard with original native mass and\npolarization confirmation before a real wormhole-anchored physical jump.\nPersistent PREPARED/MASS_COMMITTED/ARRIVED tickets quarantine uncertain replay;\nno synthetic wormholes, no new mass owner, no stargate fallback.\n\n19 isolated Node tests pass; central installer Chat-01 integration and\nphysical two-client gameplay remain unverified. No remote CI/deploy."
+    },
+    {
+      "sha": "1e79d7122543b65bf7b15a27e3ecbd3c69c5e44c",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:28:15Z",
+      "subject": "fix(pve): guard native anomaly objective completion and audit pinned PvE coverage",
+      "body": "Add default-OFF, reversible native anomaly completion fence and read-only source support audit. Preserve shared installer ownership. 13 isolated tests pass, 2 local pinned tests skipped; live two-client rewards and unsupported modes remain unverified."
+    },
+    {
+      "sha": "39ac7ab09bf339ab9f66ee8cdc6184c33882051c",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:20:55Z",
+      "subject": "feat(storyline): fence native Epic Arc progression and personal rewards",
+      "body": "Add default-off native-state guards for career/storyline/Epic branch edges, canonical mission sequences, 90-day replay and reconnect continuation. Add durable distinct pregrant reservations for initial agent gifts and personal mission completion, rejecting replay/unknown settlement without synthetic wallet or mission state.\n\n12 storyline/arc + 10 settlement isolated JS regressions passed. No central hooks, native upstream changes, deployments, CI or gameplay acceptance. Live EVE co-op unverified; Chat 01 and 19 integration follow-up documented."
+    },
+    {
+      "sha": "a721bbe082b5d56625b2e63dbf3f7cb2877f6083",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:18:21Z",
+      "subject": "fix(missions): bind co-op objectives and payouts to native mission instances",
+      "body": "Durably link a wingman's authenticated native Request/Offer sequence to the\ncaptain's exact accepted native mission sequence and physical dungeon ID.\nFail closed before shared objective credit and second-recipient native turn-in\nwhen the independently accepted mission or native shared-objective receipt\nis not proven. Reuse native mission reward writers and existing per-recipient\nfsynced settlement guards; do not fabricate ISK, LP, standings or items.\n\nNew flag EVEJS_COOP_MISSION_INSTANCE_LINK defaults OFF and requires Chat 01's\ncentral module-copy registration before activation. Includes 19 passing\nlocal unit checks and source-executed integration scenarios.\n\nCODE_READY / LIVE_UNVERIFIED"
+    },
+    {
+      "sha": "a57029f759bc6569fef4012adad68c1c04ebb988",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:17:47Z",
+      "subject": "fix(npc-faction): durable event identity, memory rollback, native corporation guard",
+      "body": "Preserve native EveJS NPC identities, standing authority and order hooks.\nHarden faction loss/order/advance fsync and failed-write rollback; detect\nconflicting event replays. Persist memory atomically and reject ambiguous\nnamed-NPC registry links. Keep virtual faction tags subordinate to actual\nnative corporation identity. Expand offline regression coverage and document\nlive two-client acceptance gaps. No central hooks, CI or deployment."
+    },
+    {
+      "sha": "cb273c296d3ecb2390b5da4ff43b51eb51752768",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:16:19Z",
+      "subject": "fix(npc-hauling): native miner-to-hauler cargo ownership and capacity gate",
+      "body": "Default-OFF physical handoff validation, source owner and SDE ore checks,\ncapacity/proximity/ship survival gates, durable exact-cargoID readback,\nuncertain-write quarantine, tests and live acceptance contract.\n\n12 isolated tests pass; real two-client gameplay remains unverified."
+    },
+    {
+      "sha": "1861f709456c9875df582371fbaf80b0d2b4ea90",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:15:27Z",
+      "subject": "fix(npc-combat): verify physical tactical authority before reinforcement and retreat",
+      "body": "Fail closed on spoofed or duplicate NPC assignments, stale controller/target identity and unauthorized NPC-vs-player retaliation; require physical arrival before standdown after warp ACK. Preserve native orders, existing ammo logic and central director. Add 10 negative scenarios and update the native fixture regression suite; document Chat01 handoff."
+    },
+    {
+      "sha": "01837680c42543f25f6cc9460b6c2dcc5ece9de6",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:15:02Z",
+      "subject": "fix(npc-economy): reconcile native manufacturing ACK loss without duplicate custody",
+      "body": "Recover exact INSTALL_UNKNOWN and DELIVERY_UNKNOWN only after native job, wallet debit, delivery receipt and item-store custody verification. Keep Rust LIST_UNKNOWN and unresolved states fenced. Preserve the existing journal, director, flags and architecture; no new economy writer.\n\nAdd 13 local recovery regressions (PASS) and two director restart tests (not run in full checkout), plus Chat 01 integration handoff. CODE_READY / LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "c82dd0ff4b155a83364fd7f97c89135fe8fac75a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:03:06Z",
+      "subject": "feat(travel): stage native player transition continuity guard",
+      "body": "Add a fail-closed native-authority preflight/handoff/arrival witness for stargate, solar-system jump, docking and undocking. Verify physical ship/session identity, reciprocal gates, inventory and fitting custody, HP, source removal and real destination state; never synthesize travel or replay ambiguous transitions.\n\nAdd 47 isolated regressions and a Chat 01 integration contract. Central hooks, installer and feature activation remain untouched; two-client gameplay LIVE_UNVERIFIED.\n\nTests: node --test tests/coop-player-travel-guard.test.mjs (47 pass, 0 fail); node --check (module + tests)."
+    },
+    {
+      "sha": "c7556a90783bce5ae4f5d586098164d8905bf40b",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T20:01:46Z",
+      "subject": "fix(station): stage native dock and ship-custody guards",
+      "body": "Default-OFF native boarding, undock, and physical dock validation with strict\nownership/location/session verification before mutation. Includes 30 local\nregressions, 4 pinned-upstream source contracts and Chat 01 central hook\ncontract. No shared installer or native source changes.\n\nCODE_READY / LIVE_UNVERIFIED"
+    },
+    {
+      "sha": "148826cd6ff44f2e74cb7ac0ddceb27d7ae0af84",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:55:37Z",
+      "subject": "fix(npc-ai): fence conflicting native NPC orders through proven physical activity",
+      "body": "Retain per-hull native command ownership across warp/orbit/manual orders,\nblock stale-controller takeover after restart, fence reentrant dispatch and\nambiguous native acknowledgements. Add 25 local regression scenarios and\nChat 01 integration contract; no central hooks or deployment flags changed.\n\nCODE_READY / LIVE_UNVERIFIED"
+    },
+    {
+      "sha": "d29f74bb5316300e6db773a409c77c0b033ea5e9",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:54:51Z",
+      "subject": "coop(drone-fighter): stage native ownership guards and pinned admission hooks",
+      "body": "Add default-off native drone/fighter authorization module, reversible pinned\nsource transform, and 13 focused negative/roundtrip tests. Document explicit\nChat 01 overlay handoff and unresolved native inventory failure-atomicity,\nclient fighter UI, damage and two-client gameplay gates. No central hooks,\ndeployment, or synthetic gameplay state."
+    },
+    {
+      "sha": "791c49b7b5b50504acd503e1b0242f7929d5449f",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:54:39Z",
+      "subject": "fix(loot): harden native wreck pickup evidence and durable quarantine",
+      "body": "Validate real net granted inventory quantity, owner and live hull identity; serialize persistent quarantine writes with a crash-safe writer fence. Add 24 focused local tests and correct the partial-stack native fixture.\n\nInclude Chat 01 contract for unresolved native atomic wreck/salvage/jetcan transactions. This commit does not change native mutation hooks, flags or deployed runtime. CODE_READY / LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "fcc15c5d3eee4be5023973766e2da383f0435d33",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:54:18Z",
+      "subject": "fix(ewar): stage native Dogma NOS and remote-repair corrections",
+      "body": "Add fail-closed native capacitor-fraction NOS eligibility and accurate post-cycle remote repair receipts; retain opt-in OFF and byte-exact reversible patch helper. Add read-only pinned-source audit, negative regression tests, and Chat 01 installer integration contract. No central bootstrap or native module source modified."
+    },
+    {
+      "sha": "cab553fc78055d42221f968cc042078ba2a16860",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:53:06Z",
+      "subject": "fix(crime): require native attacker and physical wreck for NPC standings",
+      "body": "Validate authenticated native ship/drone and real destruction before standing effects. Reject forged killer hints and stale sessions; remove controller-target-derived defense credit. Add regression tests and document remaining native payout/Crimewatch gaps.\n\nIsolated tests: 6 passed, 0 failed. Live two-client gameplay unverified."
+    },
+    {
+      "sha": "3143618d3935d17e13f0f5ccf70ef3e0a206ad4e",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:52:26Z",
+      "subject": "feat(fitting): stage native Dogma slot and source guards with tests",
+      "body": "Add default-off pure fitting slot validation and strict personal ownership guard,\nreversible single-anchor slot patch helper and Chat-01 integration contract.\nNo central installer or live deployment changes.\n\nIsolated local tests: 25 passed, 0 failed; two-client gameplay unverified."
+    },
+    {
+      "sha": "ec400ebe0a334f9e6bc6565611ce63cf345f662e",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:31:36Z",
+      "subject": "fix(combat): fence native NPC weapon bank and module custody",
+      "body": "Reject charged-bank bypass via charge-optional lead modules, require exact native fitted module identity, and fail closed on ambiguous ammo stacks. Add 13 focused negative tests and pinned damage-layer audit/handoff. Strict ammo remains opt-in; native damage and central hooks untouched."
+    },
+    {
+      "sha": "bb3ff00dcf3605c5b6ff7bdf5bd01e4b47be1adb",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:15:32Z",
+      "subject": "fix(fleet): guard native warp and party against stale ship owners",
+      "body": "Verify real physical ship owner/pilot/session and authoritative scene identity; validate native member records without duplicating fleet services. Extend safety, arrival, and co-op fleet regression contracts. Client gameplay remains LIVE_UNVERIFIED."
+    },
+    {
+      "sha": "25a5ba5ab605c882bbe83aaac735d9c80504018a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:12:55Z",
+      "subject": "fix(coop-session): fence co-op admission to native account and ship custody",
+      "body": "Verify registry, account, active inventory ship, and native Ballpark before co-op side effects; prevent stale and duplicate party registrations. Add 17 isolated session and reconnect tests plus Chat 01 native RPC integration contract."
+    },
+    {
+      "sha": "0b807bd07d0b4605fa6e0c7168ec2712a9c50e9b",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:12:46Z",
+      "subject": "fix(coop): guard overlay drift and rollback; deduplicate mission deployment flag",
+      "body": "Preserve current native hooks on mismatched sources, refuse removing stale modules,\ninclude failed write in transaction rollback, validate effective module registry,\nand keep explicit duo mission opt-in from conflicting with LivingCoop default.\n\nLocal focused rollback tests passed; pinned apply/remove and client gates need operator validation."
+    },
+    {
+      "sha": "91ab46e6edda4c79c913c74a4cb4316cb5d70cd9",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:12:25Z",
+      "subject": "coop(world): add native observer divergence guard and source-graded tests",
+      "body": "Add default-off, bounded observer visibility reconciliation that only invokes the\npinned EveJS scene's own sync method. Reject ambiguous session, ship,\nentity and warp states; cover two observers, grid separation, reconnect,\nNPC despawn and failure/replay cases. Document Chat 01-only integration hook\nand unverified live-client acceptance. No central runtime or native hooks changed."
+    },
+    {
+      "sha": "540cae26308ed811948526083ff3e5664d6063aa",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T19:11:25Z",
+      "subject": "compat: audit pinned EveJS RPC and SDE drift without runtime mutation",
+      "body": "Add SHA-locked read-only source/manifest preflight, offline JSONL SDE delta report, negative fixture tests, and evidence-graded 2026 compatibility matrix. No native hooks or gameplay flags changed."
+    },
+    {
+      "sha": "4e101e0f6760974613c8216f92465c2ebf71f772",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:43:51Z",
+      "subject": "test(coop): reject shared hull, conflicting owner and stale cross-system visibility",
+      "body": ""
+    },
+    {
+      "sha": "9ef01deff2b0bc9e20d9fe0c5392d8dea0262a3c",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:43:37Z",
+      "subject": "fix(coop): require distinct native hull ownership for mutual visibility evidence",
+      "body": ""
+    },
+    {
+      "sha": "b82a1c9286aaf53ed239da772a28bb66ab2415bb",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:40:22Z",
+      "subject": "test(coop): shared native party rejects another pilot owning fleet ship",
+      "body": ""
+    },
+    {
+      "sha": "b61bed7bec3b098c31f3c633586819c86599579a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:40:11Z",
+      "subject": "fix(coop): prevent ambiguous native ship ownership from authorizing in-space party",
+      "body": ""
+    },
+    {
+      "sha": "7c0a699537fa1c738f3d23eca1120b5956b84af0",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:38:40Z",
+      "subject": "test(coop): reject cross-system active duplicate in a native scene",
+      "body": ""
+    },
+    {
+      "sha": "ceee039300163ba2229fdc6508cb2aaf5498c144",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:38:38Z",
+      "subject": "fix(coop): block inconsistent cross-system native hull owners",
+      "body": ""
+    },
+    {
+      "sha": "7ce922681bc28df7e4f039c11f3402e1bb360b9f",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:37:53Z",
+      "subject": "test(coop): cover active duplicate ship and pilot ownership during native fleet warp",
+      "body": ""
+    },
+    {
+      "sha": "a3f124ab2fa44ec72f397c1224373b1c766ae86a",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:37:18Z",
+      "subject": "fix(coop): reject duplicate native fleet warp ship and character owners",
+      "body": ""
+    },
+    {
+      "sha": "1e636e556d3394c27409ff8100ffb3edc9817c21",
+      "author": "Danbalan",
+      "authorDate": "2026-10-25T13:37:15Z",
+      "subject": "fix(coop): reject duplicate native fleet warp ship and character owners",
+      "body": ""
+    }
+  ],
+  "scope": "GitHub source provenance only; commit presence is not runtime/two-client gameplay evidence"
+}
