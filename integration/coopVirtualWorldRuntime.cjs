@@ -842,7 +842,8 @@ async function advanceNativeMarket(){
         recoveredPirate?"living-native-loot-market-settled":"living-native-market-trade",
        null,{spaceState:{systemID}},{
         ...result,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET",
-        sourceOfFunds:"SEED_MARKET_FILLED_ORDER"
+        sourceOfFunds:trade.side==="buy"?
+         "PREVIOUS_NPC_MARKET_LEDGER_EARNINGS":"SEED_MARKET_FILLED_ORDER"
        });
       // The actual native market purchase is already settled. Bind that
       // very cargo ID to an already fitted compatible module; if loading
@@ -852,7 +853,9 @@ async function advanceNativeMarket(){
         entityID:Number(link.entityID),systemID,
         stationID:Number(station.itemID),cargoID:result.cargoID,
         moduleID:loadPlan.moduleID});
-       require("./coopRuntimeProbe").observe("living-npc-earned-rearm",null,
+       require("./coopRuntimeProbe").observe(
+        ["NATIVE_NPC_CHARGE_LOADED","ALREADY_LOADED"].includes(loaded.status)?
+         "living-npc-earned-rearm":"living-npc-rearm-blocked",null,
         {spaceState:{systemID}},{...loaded,
          purchaseSettled:true,cargoID:result.cargoID});
       }
