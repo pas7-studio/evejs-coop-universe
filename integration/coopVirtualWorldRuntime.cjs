@@ -16,8 +16,14 @@ function safeNpcPhase(phase,run){
  }
 }
 // Opt-in shared native order arbitration; original native behavior stays OFF.
+// ALIFE-1 Phase A: one master switch for order authority. The ALIFE flag
+// implies arbitration so a world cannot be "alive" while six directors race
+// for the same hull; the legacy arbiter flag keeps working unchanged.
+function alifeOrderArbitrationEnabled(env={}){
+ return env.EVEJS_COOP_ALIFE==="1"||env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+}
 function npcOrderBridge(){
- if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
+ if(!alifeOrderArbitrationEnabled(process.env))return null;
  if(!nativeOrderBridge){
   const native=require("./runtime"),controllers=require("./npc/npcRegistry");
   const arbiter=require("./coopNpcOrderArbiter").createOrderArbiter();
@@ -383,7 +389,7 @@ function advanceNativePatrolRoutes(){
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
   const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
   // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
-  if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1"){
+  if(alifeOrderArbitrationEnabled(process.env)){
    if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
    if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>{
     const native=require("./runtime");return native.ensureScene(sys,{refreshStargates:false});
@@ -1160,8 +1166,7 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     });
     require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
      null,{spaceState:{systemID}},proof);
-    // Source of truth is the existing physical stock-fleet native wreck proof.
-    // No lost cargo is fabricated by an NPC memory or virtual death counter.
+    // Only verified physical native stock hauler loss may reach the observer.
     if(process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"&&
        proof.status==="PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED"&&
        proof.victimRole==="hauler"){
@@ -1239,4 +1244,4 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady};
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled};
