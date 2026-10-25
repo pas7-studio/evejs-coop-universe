@@ -73,7 +73,10 @@ function createNativeStructureControlWitness({sceneForSystem,
    for(const session of liveSessions){
     const cid=session?.characterID,shipID=Number(session?._space?.shipID),
      sid=Number(session?._space?.systemID);
-    if(!POS(cid)||!session.socket||session.socket.destroyed||
+    // Character-selection / login sessions have no in-space ship
+    // and are not combat actors. They must not stop every siege.
+    if(!POS(cid))continue;
+    if(!session.socket||session.socket.destroyed||
      sessionsByCharacter.has(cid))
      return unknown("DUPLICATE_OR_INVALID_LIVE_CHARACTER");
     sessionsByCharacter.set(cid,session);
