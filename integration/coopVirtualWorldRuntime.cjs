@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -694,6 +694,20 @@ function advanceNativeRaids(){
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
   const actualPilots=world.snapshot().pilots;
+  // Squad coordination is optional, NPC-on-NPC only, and never a second
+  // attack loop. Existing native stock mining raid legality still runs first.
+  const squadEnabled=process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&
+   process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&
+   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+  if(squadEnabled&&!squadDirector)
+   squadDirector=require("./coopNpcSquadDirector").createSquadDirector();
+  const squads=squadEnabled?squadDirector:null;
+  const squadState=squads?.observe({systemID,scene,
+   pirates:activeLinks.filter(p=>p.role==="pirate"),
+   pilots:actualPilots,fleetShips});
+  if(squadState?.teams?.length&&backgroundTicks%10===0)
+   require("./coopRuntimeProbe").observe("living-npc-scout-relay",null,
+    {spaceState:{systemID}},{teams:squadState.teams});
   const assessments=new Map();
   const canAttack=({pirateID,targetID})=>{
    // The existing source-verified NPC combat gate ALWAYS runs first.
@@ -707,10 +721,13 @@ function advanceNativeRaids(){
    const pirateLink=activeLinks.find(x=>Number(x.entityID)===Number(pirateID));
    const targetRole=fleetShips.find(x=>Number(x.id)===Number(targetID))?.role;
    if(!pirateLink||!targetRole)return false;
+   const report=squads?.permit({systemID,scene,pirateID,targetID});
+   if(report&&!report.allowed)return false;
    const damage=require("./combat/damage");
    const scramble=require("./modules/hostileModuleRuntime");
    const decision=huntPolicy.assess({systemID,scene,pirateID,targetID,
     targetRole,piratePilotID:pirateLink.pilotID,contacts:activeLinks,
+    sharedIntel:report?.report||null,
     getHealth:entity=>{
      const maximum=damage.getEntityMaxHealthLayers(entity);
      const actual=damage.getEntityCurrentHealthLayers(entity,maximum);
