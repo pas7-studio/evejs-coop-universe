@@ -50,6 +50,19 @@ function note(scene,victim,options,wreck){
   if(proof.status!=="VICTIM_NOT_NAMED"&&proof.status!=="INVALID_NATIVE_DESTRUCTION")
    require("./coopRuntimeProbe").observe("living-native-destruction-attacker",null,
     {spaceState:{systemID:proof.systemID}},proof);
+  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"&&
+   proof.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"){
+   try{
+    const received=require("./coopNpcWreckClaims").getWreckClaims().record({proof,wreck});
+    if(received.status!=="KILL_PROOF_RECORDED"&&
+       received.status!=="ALREADY_RECORDED")
+     console.warn("[CoopNpcWreck] unclaimed native destruction",received.status);
+   }catch(error){
+    // Authoritative wreck creation already happened; never turn telemetry
+    // failure into a retry of native destruction or a fabricated new wreck.
+    console.warn("[CoopNpcWreck] durable claim recording failed",String(error?.message||"UNAVAILABLE"));
+   }
+  }
   return proof;
  }catch(error){
   if(error.code!=="ENOENT")console.warn("[CoopNpcDestructionAttacker] evidence",error.message);
