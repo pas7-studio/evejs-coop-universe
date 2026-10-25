@@ -141,6 +141,24 @@ test("expired kill receipt and stale physical wreck never justify recovery",()=>
   assert.equal(f.tick(saved).orders.length,0);
  }finally{f.cleanup();}
 });
+test("opt-in collection mode closes the last 5km into true native pickup range",()=>{
+ const f=fixture();try{
+  const j=f.create();j.record({proof:f.proof,wreck:f.record});
+  const calls=[];const nav=createWreckRecovery({clock:f.now,
+   warp:()=>({success:true}),
+   orbit:(id,wreckID,range)=>{
+    calls.push({id,wreckID,range});return {success:true};
+   }});
+  f.ship.position.x=396500; // 3.5km from wreck
+  const result=nav.tick({systemID:SID,scene:f.scene,claims:j.active(SID),
+   assignments:f.assignments,store:f.store,
+   getController:()=>f.controller,pickupDistance:2500});
+  assert.equal(result.inspections.length,0);
+  assert.equal(result.orders.length,1);
+  assert.equal(result.orders[0].action,"NATIVE_ORBIT_WRECK");
+  assert.equal(calls[0].range,2000);
+ }finally{f.cleanup();}
+});
 test("same real wreck can't receive repeated native orders every 30-second world tick",()=>{
  const f=fixture();try{const j=f.create();j.record({proof:f.proof,wreck:f.record});
   const claims=j.active(SID);
