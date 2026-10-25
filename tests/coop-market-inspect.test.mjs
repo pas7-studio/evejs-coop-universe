@@ -15,7 +15,7 @@ function db({jita=100,perimeter=0,orders=0}={}){
     if(query.includes("SELECT s.solar_system_id AS systemID, s.station_name"))return jita?[{systemID:30000142,station:"Jita IV",types:50,units:jita}]:[];
     throw Error("Unrecognized SQL: "+query);
    },
-   get(){if(query.includes("SUM(quantity)"))return {n:jita+perimeter};return {count:10};}
+   get(){if(query.includes("SUM(quantity)"))return {n:jita+perimeter};if(query.includes("WHERE state='open'"))return {n:orders};return {count:10};}
   };return statement;}};
 }
 test("real stock present only in Jita diagnoses Perimeter as not locally stocked",()=>{
@@ -26,7 +26,12 @@ test("real stock present only in Jita diagnoses Perimeter as not locally stocked
 });
 test("entire selected geography has no live stock without inventing orders",()=>{
  const r=inspect(db({jita:0,perimeter:0}),{});
- assert.equal(r.status,"NO_SEED_STOCK");assert.equal(r.stockedStations.length,0);
+ assert.equal(r.status,"NO_SELL_LIQUIDITY");assert.equal(r.stockedStations.length,0);
+});
+test("existing player orders still count as real liquidity without seeded stock",()=>{
+ const r=inspect(db({jita:0,perimeter:0,orders:2}),{});
+ assert.equal(r.status,"MARKET_STOCK_AVAILABLE");
+ assert.equal(r.globalOpenSellOrders,2);
 });
 test("missing native market tables fail closed",()=>{
  const mock=db();mock.prepare=q=>({all:()=>[{name:"stations"}]});
