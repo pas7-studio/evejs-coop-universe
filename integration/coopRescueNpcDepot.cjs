@@ -64,7 +64,7 @@ function createRescueNpcDepot({getCargo,getStations,atomicRows,
    const original=cargo[0];
    let done;
    try{done=atomicRows(["npcCargo","npcEntities","items","identityState"],tx=>{
-    const entity=tx.get("npcEntities","entities")?.[String(candidate.entityID)];
+    const entity=tx.get("npcEntities","entities\u001f"+candidate.entityID);
     const root=tx.get("npcCargo","cargo");
     const row=root?.[String(original.cargoID)];
     if(entity?.entityID!==candidate.entityID||
