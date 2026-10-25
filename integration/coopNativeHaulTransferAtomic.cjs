@@ -123,11 +123,15 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
       minerCargo.some(x=>pos(x.cargoID)===id)||sha(moved[0])!==afterHash||
       outcome?.cargoID!==id||outcome?.afterHash!==afterHash)
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED");
-   const minerLocal=(Array.isArray(miner.nativeCargoItems)?miner.nativeCargoItems:[]);
-   miner.nativeCargoItems=minerLocal.filter(x=>pos(x?.itemID)!==id);
    if(typeof nativeStore.buildNativeCargoItems!=="function")
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CARGO_BUILDER_MISSING");
-   hauler.nativeCargoItems=nativeStore.buildNativeCargoItems(haulerID);
+   const rebuilt=nativeStore.buildNativeCargoItems(haulerID);
+   if(!Array.isArray(rebuilt)||rebuilt.filter(x=>pos(x?.itemID)===id).length!==1)
+    return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CARGO_BUILD_INVALID");
+   // Update both in-memory ships only after ALL source/readback checks pass.
+   const minerLocal=Array.isArray(miner.nativeCargoItems)?miner.nativeCargoItems:[];
+   miner.nativeCargoItems=minerLocal.filter(x=>pos(x?.itemID)!==id);
+   hauler.nativeCargoItems=rebuilt;
    return {status:"COMMITTED",cargoID:id,fleetID,quantity,
      volumeM3:quantity*volumePerUnit,receipt:outcome};
   }catch(error){
