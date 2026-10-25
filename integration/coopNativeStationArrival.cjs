@@ -54,26 +54,141 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER==="1";
+ // Crash-recovery is read-only provenance reconstruction, never a rewarp.
+ // Source comes from the protected original cargo, fsynced WARP_ACK, funded
+ // flight, signed departure, and the NPC's *current* native ingress state.
+ function recoverNativeMotion(entity,now){
+  if(!strictMotion()||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+   typeof durableWarpFence?.inspectSource!=="function"||
+   typeof durableWarpFence?.inspect!=="function"||
+   typeof escortGate?.readFlight!=="function"||
+   typeof escortGate?.readDurableEscortDeparture!=="function")
+   return pause("ESCORT_NATIVE_RECOVERY_DISABLED");
+  const id=Number(entity?.itemID),ingress=entity?.sessionlessWarpIngress;
+  if(!pos(id)||entity?.kind!=="ship"||entity.nativeNpc!==true||
+   entity.transient===true||!vector(entity.position)||
+   !vector(ingress?.origin)||!vector(ingress?.targetPoint)||
+   !Number.isFinite(now)||!Number.isFinite(ingress?.startTimeMs)||
+   !Number.isFinite(ingress?.travelCompleteAtMs)||
+   now<ingress.startTimeMs||now>ingress.travelCompleteAtMs||
+   ingress.travelCompleteAtMs-ingress.startTimeMs>30000||
+   ingress.travelCompleteAtMs-ingress.startTimeMs<6000)
+   return pause("ESCORT_NATIVE_RECOVERY_NOT_ACTIVE_INGRESS");
+  const durable=getNativeEntity(id),systemID=pos(durable?.systemID);
+  if(!systemID||pos(durable?.entityID||durable?.itemID)!==id||
+   durable.transient===true)
+   return pause("ESCORT_NATIVE_RECOVERY_HAULER_NOT_DURABLE");
+  let scene;try{scene=getScene(systemID)}
+  catch{return pause("ESCORT_NATIVE_RECOVERY_SCENE_UNAVAILABLE")}
+  if(scene?.systemID!==systemID||scene.getEntityByID?.(id)!==entity)
+   return pause("ESCORT_NATIVE_RECOVERY_ENTITY_MISMATCH");
+  let cargo;try{cargo=store.listNativeCargoForEntity(id)}
+  catch{return pause("ESCORT_NATIVE_RECOVERY_CARGO_UNAVAILABLE")}
+  if(!Array.isArray(cargo)||!cargo.length||
+   cargo.some(x=>x?.transient===true||x?.entityID!==id||
+    !pos(x.cargoID)||!pos(x.coopHaulFleetID)||
+    !pos(x.quantity)||Number(x.moduleID||0)!==0))
+   return pause("ESCORT_NATIVE_RECOVERY_CARGO_NOT_ORIGINAL");
+  const fleetID=pos(cargo[0].coopHaulFleetID);
+  if(cargo.some(x=>x.coopHaulFleetID!==fleetID))
+   return pause("ESCORT_NATIVE_RECOVERY_CARGO_FLEET_MISMATCH");
+  const cargoIDs=cargo.map(x=>x.cargoID).sort((a,b)=>a-b);
+  if(new Set(cargoIDs).size!==cargoIDs.length||cargoIDs.length>1000)
+   return pause("ESCORT_NATIVE_RECOVERY_CARGO_DUPLICATE");
+  let source;try{source=durableWarpFence.inspectSource({
+   systemID,fleetID,haulerID:id,cargoIDs})}
+  catch{return pause("ESCORT_NATIVE_RECOVERY_WARP_SOURCE_UNAVAILABLE")}
+  if(source?.status!=="WARP_SOURCE_ALREADY_DISPATCHED"||
+   source.phase!=="WARP_ACK_CONFIRMED"||
+   typeof source.manifestKey!=="string")
+   return pause("ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+  const key=source.manifestKey;
+  let fence,flight,departure;try{
+   fence=durableWarpFence.inspect(key);
+   flight=escortGate.readFlight(key);
+   departure=escortGate.readDurableEscortDeparture(key);
+  }catch{return pause("ESCORT_NATIVE_RECOVERY_PROVENANCE_UNAVAILABLE")}
+  const b=flight?.booking,w=fence?.booking;
+  if(fence?.status!=="READY"||fence.phase!=="WARP_ACK_CONFIRMED"||
+   flight?.status!=="READY"||flight.phase!=="FUNDED"||
+   departure?.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE"||
+   !b||!w||b.manifestKey!==key||w.manifestKey!==key||
+   b.contractID!==w.contractID||b.contractID!==departure.contractID||
+   b.systemID!==systemID||w.systemID!==systemID||
+   b.fleetID!==fleetID||w.fleetID!==fleetID||
+   b.haulerID!==id||w.haulerID!==id||
+   b.stationID!==w.stationID||
+   b.corporationID!==w.corporationID||
+   !Array.isArray(b.characters)||b.characters.length!==2||
+   b.characters[0]!==departure.characters?.[0]||
+   b.characters[1]!==departure.characters?.[1]||
+   !vector(departure.origin)||
+   !Array.isArray(w.cargoIDs)||w.cargoIDs.length!==cargoIDs.length||
+   w.cargoIDs.some((x,i)=>x!==cargoIDs[i]))
+   return pause("ESCORT_NATIVE_RECOVERY_PROVENANCE_MISMATCH");
+  const station=isValidStation(scene,getStation(b.stationID),systemID);
+  if(!station||station.corporationID!==b.corporationID||
+   distance(ingress.origin,departure.origin)>1||
+   distance(ingress.targetPoint,{
+    ...station.position,x:station.position.x+750})>1)
+   return pause("ESCORT_NATIVE_RECOVERY_PHYSICAL_WARP_MISMATCH");
+  return {status:"ESCORT_NATIVE_RECOVERY_VERIFIED",manifestKey:key,
+   systemID,fleetID,stationID:b.stationID,
+   corporationID:b.corporationID,entity,ingress,
+   // Immutable references are checked on every subsequent scene callback.
+   booking:b,origin:{...departure.origin},
+   destination:{...station.position}};
+ }
  // Only true confirmed NPC warps can be sampled. Never infer position from
  // timer, navigation commands, forecast points or player RPC.
  function noteNativeMotion(entity,now){
   if(!strictMotion()||entity?.nativeNpc!==true||!pos(entity.itemID)||
    !Number.isFinite(now)||!entity.sessionlessWarpIngress)
    return pause("ESCORT_NATIVE_MOTION_DISABLED_OR_NOT_WARPING");
-  const active=activeNativeEscortWarps.get(Number(entity.itemID));
-  if(!active)return pause("ESCORT_NATIVE_MOTION_NOT_REGISTERED");
-  const trip=active.fleet?.coopStationArrival;
-  if(!trip||trip!==active.trip||trip.manifestID!==active.manifestKey||
+  let active=activeNativeEscortWarps.get(Number(entity.itemID));
+  if(!active){
+   const recovered=recoverNativeMotion(entity,now);
+   if(recovered.status!=="ESCORT_NATIVE_RECOVERY_VERIFIED")
+    return recovered.status==="ESCORT_NATIVE_RECOVERY_DISABLED"?
+     pause("ESCORT_NATIVE_MOTION_NOT_REGISTERED"):recovered;
+   active={recovered:true,manifestKey:recovered.manifestKey,
+    systemID:recovered.systemID,fleetID:recovered.fleetID,
+    stationID:recovered.stationID,corporationID:recovered.corporationID,
+    entity:recovered.entity,ingress:recovered.ingress,
+    origin:recovered.origin,destination:recovered.destination};
+   activeNativeEscortWarps.set(Number(entity.itemID),active);
+  }
+  const trip=active.recovered?{
+   manifestID:active.manifestKey,systemID:active.systemID,
+   fleetID:active.fleetID,stationID:active.stationID,
+   corporationID:active.corporationID,
+   haulers:{[entity.itemID]:{arrivedAt:0}}
+  }:active.fleet?.coopStationArrival;
+  if(!trip||(!active.recovered&&trip!==active.trip)||
+   trip.manifestID!==active.manifestKey||
    trip.systemID!==active.systemID||trip.fleetID!==active.fleetID||
    !Object.prototype.hasOwnProperty.call(trip.haulers,String(entity.itemID)))
    return pause("ESCORT_NATIVE_MOTION_TRIP_NOT_ACTIVE");
+  if(active.recovered&&(active.entity!==entity||
+   active.ingress!==entity.sessionlessWarpIngress||
+   !vector(active.ingress?.origin)||!vector(active.ingress?.targetPoint)||
+   distance(active.ingress.origin,active.origin)>1||
+   distance(active.ingress.targetPoint,{
+    ...active.destination,x:active.destination.x+750})>1||
+   !Number.isFinite(active.ingress.startTimeMs)||
+   !Number.isFinite(active.ingress.travelCompleteAtMs)||
+   now<active.ingress.startTimeMs||now>active.ingress.travelCompleteAtMs))
+   return pause("ESCORT_NATIVE_RECOVERY_INGRESS_CHANGED");
   let scene;try{scene=getScene(active.systemID)}
   catch{return pause("ESCORT_NATIVE_MOTION_SCENE_UNAVAILABLE")}
   if(scene?.systemID!==active.systemID||
-   scene.getEntityByID?.(Number(entity.itemID))!==entity)
+   scene.getEntityByID?.(Number(entity.itemID))!==entity||
+   (active.recovered&&!findShip(scene,Number(entity.itemID),active.systemID)))
    return pause("ESCORT_NATIVE_MOTION_ENTITY_NOT_CURRENT");
   const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
-  if(!point||point.corporationID!==trip.corporationID)
+  if(!point||point.corporationID!==trip.corporationID||
+   (active.recovered&&distance(point.position,active.destination)>1))
    return pause("ESCORT_NATIVE_MOTION_STATION_CHANGED");
   if(typeof escortGate?.recordEscortRouteSample!=="function")
    return pause("ESCORT_NATIVE_MOTION_AUTHORITY_UNAVAILABLE");

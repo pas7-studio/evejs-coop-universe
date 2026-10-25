@@ -52,6 +52,14 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
    try{return runtime.recordEscortDeparture(route,scene)}
    catch{return deny("DEPARTURE_WITNESS_UNCERTAIN_REPAIR_REQUIRED")}
   },
+  readDurableEscortDeparture(manifestKey){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+    typeof runtime.readDurableEscortDeparture!=="function"||
+    typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+    return deny("ESCORT_RECOVERY_PROVENANCE_UNAVAILABLE");
+   try{return runtime.readDurableEscortDeparture(manifestKey)}
+   catch{return deny("ESCORT_RECOVERY_DURABLE_SOURCE_UNAVAILABLE")}
+  },
   recordEscortRouteSample(manifestKey,scene,station){
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
     process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
@@ -213,6 +221,9 @@ const forwarding=Object.freeze({
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordEscortDeparture:(route,scene)=>enabled()?(installed?installed.recordEscortDeparture(route,scene):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ readDurableEscortDeparture:key=>enabled()?
+  (installed?installed.readDurableEscortDeparture(key):
+   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordEscortRouteSample:(key,scene,station)=>enabled()?
   (installed?installed.recordEscortRouteSample(key,scene,station):
    deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
