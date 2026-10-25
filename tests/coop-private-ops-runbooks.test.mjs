@@ -83,3 +83,25 @@ test('dry-run overlay upgrade requires exact upstream SHA, preapproved backup, p
  assert.match(script,/Install-Coop-RuntimeProbe\.ps1.*-DryRun/);
  assert.doesNotMatch(script,/docker compose up|docker compose build|Deploy-Coop-RuntimeProbe\.ps1'\) -/);
 });
+
+test('backup does not silently omit portraits and rechecks consumers before and after archives',()=>{
+ const script=source('Coop-Volume-Safeguard.ps1');
+ assert.match(script,/AllowMissingPortraitVolume/);
+ assert.match(script,/Backup would silently omit persistent image data/);
+ assert.match(script,/foreach \(\$entry in \$volumes\) \{ Assert-VolumeStopped \$entry.Source \}/);
+ assert.match(script,/portraitsIncluded=/);
+});
+test('pinned native upstream revision cannot be silently overridden via argument',()=>{
+ const script=source('Plan-Private-Coop-Update.ps1');
+ assert.doesNotMatch(script,/\[string\]\$ExpectedUpstreamSha\s*=/);
+ assert.match(script,/\$ExpectedUpstreamSha = 'c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'/);
+});
+
+test('volume manifest checks member target and parses archive before restore is permitted',()=>{
+ const sourceText=source('Coop-Volume-Safeguard.ps1');
+ assert.match(sourceText,/Archive target metadata mismatch/);
+ assert.match(sourceText,/coop-private-tar-audit\.cjs/);
+ assert.match(sourceText,/& node \$tarValidator \$full/);
+ assert.match(sourceText,/if \(\$LASTEXITCODE -ne 0\) \{ throw "Unsafe TAR archive:/);
+ assert.ok(sourceText.indexOf('Verify-Manifest $dir')<sourceText.indexOf("Invoke-Docker @('volume','create'"));
+});

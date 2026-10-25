@@ -45,9 +45,9 @@ function environmentOf(service){
 }
 function isLoopback(host){return host==='127.0.0.1'||host==='::1';}
 function isLoopbackName(host){return isLoopback(host)||host==='localhost';}
-function urlIsLoopback(url){
+function urlIsLoopback(url,expectedPort){
   if(typeof url!=='string'||!url.trim())return false;
-  try{const value=new URL(url);return ['http:','https:'].includes(value.protocol)&&isLoopbackName(value.hostname)&&!value.username&&!value.password;}
+  try{const value=new URL(url);return value.protocol==='http:'&&isLoopbackName(value.hostname)&&Number(value.port)===expectedPort&&!value.username&&!value.password&&!value.hash;}
   catch{return false;}
 }
 function validateCompose(compose){
@@ -96,12 +96,12 @@ function validateCompose(compose){
   for(const [key,expected] of Object.entries({EVEJS_GAME_SERVER_HOST:'127.0.0.1',EVEJS_XMPP_CONNECT_HOST:'localhost'})){
     if(env[key]!==expected)errors.push('NON_LOOPBACK_ADVERTISEMENT_'+key);
   }
-  for(const key of ['EVEJS_IMAGE_SERVER_URL','EVEJS_MICROSERVICES_PUBLIC_BASE_URL','EVEJS_MICROSERVICES_REDIRECT_URL'])
-    if(!urlIsLoopback(env[key]))errors.push('NON_LOOPBACK_ADVERTISEMENT_'+key);
+  for(const [key,port] of Object.entries({EVEJS_IMAGE_SERVER_URL:26001,EVEJS_MICROSERVICES_PUBLIC_BASE_URL:26002,EVEJS_MICROSERVICES_REDIRECT_URL:26002}))
+    if(!urlIsLoopback(env[key],port))errors.push('NON_LOOPBACK_ADVERTISEMENT_'+key);
   if(env.EVEJS_MARKET_DAEMON_HOST!=='market'||String(env.EVEJS_MARKET_DAEMON_PORT)!=='40111')
     warnings.push('MARKET_INTERNAL_ENDPOINT_DRIFT');
   for(const [key,value] of Object.entries(env)){
-    if(/^EVEJS_DEV_(SKIP_PASSWORD_VALIDATION|AUTO_CREATE_ACCOUNTS)$/.test(key)&&String(value).toLowerCase()==='true')
+    if(/^EVEJS_DEV_(SKIP_PASSWORD_VALIDATION|AUTO_CREATE_ACCOUNTS)$/.test(key)&&['true','1','yes','on'].includes(String(value).trim().toLowerCase()))
       errors.push('UNSAFE_AUTH_ENV_'+key);
   }
   return {errors:[...new Set(errors)],warnings:[...new Set(warnings)],gameVolume:data[0]?.source||null,
