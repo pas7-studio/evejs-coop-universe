@@ -6,6 +6,7 @@ const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator"+(typeof __
 const {verifyNativeBookAsk,normalizeNativeOrderForCoordinator}=require("./coopNpcRustOrderAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {createNativeNpcSellerTaxQuote}=require("./coopNpcSellerTaxAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {auditNativeNpcBuyerRecovery}=require("./coopNpcBuyerRecoveryAudit"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {createNpcMarketCompletionNotifier}=require("./coopNpcMarketCompletionNotify"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const fs=require("node:fs");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const count=x=>Number.isSafeInteger(x)&&x>=0;
@@ -13,6 +14,7 @@ const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
  Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
  getStation,resolveActor,readNeeds,file,marketRules,
+ authorizeRecoveryOperator=null,marketNotifier=null,
  clock=()=>Date.now(),env=process.env}={}){
  if(typeof gameStore?.read!=="function"||
     typeof gameStore?.coopAtomicNativeRows?.transact!=="function"||
@@ -169,7 +171,8 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   file,resolveActor:actor,readProof,
   getOrder:async id=>normalizeNativeOrderForCoordinator(
    await marketClient.call("GetOrder",{order_id:String(id)})),
-  buyer,clock,env
+  buyer,clock,env,
+  auditRecovery:()=>audit(),authorizeRecoveryOperator
  });
  async function audit(){
   // No mutations. A read-only GameStore snapshot and Rust inspection must
@@ -199,7 +202,34 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
    }
   });
  }
- return Object.freeze({tick:args=>coordinator.tick(args),
+ // Genuine EveJS seller UI updates are optional and strictly post-commit.
+ // Do not send one from a speculative A-Life opportunity or pending claim.
+ const notifyAdapter=env.EVEJS_COOP_NPC_BUY_NOTIFY==="1"?
+  marketNotifier||createNpcMarketCompletionNotifier({
+   gameStore:gameStore.coopAtomicNativeRows,marketClient,
+   sessions:require("../services/chat/sessionRegistry"),
+   helpers:require("../services/_shared/serviceHelpers"),
+   walletState:require("../services/account/walletState"),clock,env
+  }):null;
+ async function withSellerNotification(result,successStatus){
+  if(!notifyAdapter||result?.status!==successStatus||
+     !/^npc-corpbuy:[0-9a-f]{32}$/.test(result?.operation||"")||
+     !pos(result?.fillID))return result;
+  let sent;
+  try{sent=await notifyAdapter.notifyCommitted({
+   claimKey:result.operation,fillID:result.fillID})}
+  catch{sent={status:"NOT_SENT",reason:"NOTIFY_AUTHORITY_UNAVAILABLE"}}
+  // Best-effort UI delivery does not turn a successfully paid transaction
+  // into a failed buyer tick and NEVER calls RecordTrade.
+  return {...result,notification:sent?.status||"NOT_SENT"};
+ }
+ return Object.freeze({
+  tick:args=>coordinator.tick(args).then(r=>
+   withSellerNotification(r,"NPC_PLAYER_PURCHASE_SETTLED")),
+  // Operator API is never called by the A-Life scheduler. Requires a
+  // trusted authenticator injected by a separate server-admin adapter.
+  recoverApproved:args=>coordinator.recoverApproved(args).then(r=>
+   withSellerNotification(r,"NPC_BUY_OPERATOR_RECOVERED")),
   inspect:()=>coordinator.inspect(),audit,
   mode:"ALIFE_NATIVE_RUST_GAMESTORE_BUYER",supportsLiveRuntime:false});
 }
