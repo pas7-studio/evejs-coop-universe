@@ -72,6 +72,9 @@ function writeAtomic(io,file,receipt){
 function prepare(io,root,entityID,modules,whenMs,clock){
  const status=inspectShip({root,entityID,io});
  if(!status.ok)throw Error(status.status);
+ if(status.receipt&&whenMs<=status.receipt.boundaryMs&&
+    status.receipt.modules.some(m=>modules.has(m)))
+  throw Error("BANK_CYCLE_REPLAY");
  const dir=path.join(root,"bank-ships");
  const rootStat=io.lstatSync(root);
  if(!rootStat.isDirectory()||rootStat.isSymbolicLink())throw Error("BANK_ROOT_UNSAFE");
