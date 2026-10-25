@@ -19,6 +19,9 @@ function nativeFixture(nl="\n"){
  '}',
  'async function processPendingExpiryEvents(){}',
  'async function matchSellOrdersForBuyer({}={}) {',
+ '  const book = await marketDaemonClient.call("GetOrders", {',
+ '    region_id: 1,',
+ '  });',
  '  for(const sellOrder of []){',
  '      if(true){',
  '        coopPlayerSellProof = process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD === "1" ? {} : null;',
@@ -34,6 +37,9 @@ function nativeFixture(nl="\n"){
  '  }',
  '}',
  'async function matchBuyOrdersForSeller({}={}) {',
+ '  const book = await marketDaemonClient.call("GetOrders", {',
+ '    region_id: 1,',
+ '  });',
  '  for(const buyOrder of []){',
  '    const coopPlayerBuyProof = !isSeedBuyOrder && process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD === "1" ? {} : null;',
  '    const sellerInventoryChanges = [];',
@@ -66,6 +72,7 @@ test("native market P2P settlement overlay is source-gated and reversible",()=>{
  assert.equal(patch(applied,{remove:true}),source);
  assert.doesNotThrow(()=>new Function(applied));
  assert.equal((applied.match(/coopPlayerMarketSettlementFence/g)||[]).length>=10,true);
+ assert.match(applied,/P2P_SETTLEMENT_REQUIRES_PLAYER_FILL_GUARD/);
 });
 test("CRLF and uninstalled remove preserve byte-exact native source",()=>{
  const source=nativeFixture("\r\n"),applied=patch(source);
