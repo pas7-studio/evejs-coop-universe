@@ -77,6 +77,22 @@ test('native READY status 3 still reserves output until actual delivery',()=>{
  assert.equal(p.jobs.length,0);
  assert.equal(p.blocked[0].reason,'SUFFICIENT_STOCK');
 });
+test('EveJS status 100 COMPLETED without a delivered item is a manual reconciliation boundary',()=>{
+ const jobs=[{jobID:970000000000019,ownerID:OWNER,stationID:STATION,activityID:1,
+  productTypeID:AMMO,productQuantity:500,status:100}];
+ const p=fixture({jobs}).plan(args());
+ assert.equal(p.status,'NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED');
+ assert.equal(p.jobs.length,0);
+});
+test('EveJS DELIVERED 101 and CANCELLED 102 are historical, never pending output',()=>{
+ for(const status of [101,102,103]){
+  const jobs=[{jobID:970000000000019,ownerID:OWNER,stationID:STATION,activityID:1,
+   productTypeID:AMMO,productQuantity:500,status}];
+  const p=fixture({jobs}).plan(args());
+  assert.equal(p.status,'PLAN_READY');
+  assert.equal(p.jobs[0].shortage,500);
+ }
+});
 test('paused manufacturing job reserves native WIP and prevents another install',()=>{
  const jobs=[{jobID:970000000000014,ownerID:OWNER,stationID:STATION,activityID:1,
   productTypeID:AMMO,productQuantity:500,status:2}];
