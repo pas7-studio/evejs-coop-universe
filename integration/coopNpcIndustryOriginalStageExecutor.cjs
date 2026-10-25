@@ -13,7 +13,6 @@ const ID=/^npc-manufacture:[0-9a-f]{32}$/;
 const STAGES=new Set(["INSTALL","MARK_READY","DELIVER","INSPECT"]);
 const blocked=(reason,stage,operationID)=>({status:"BLOCKED",reason,stage,
  operationID,nativeMutation:false});
-const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function createOriginalManufacturingStageExecutor({
  native,env=process.env,assertOriginalGameStore,clock=()=>Date.now()
 }={}){
@@ -152,7 +151,8 @@ function createOriginalManufacturingStageExecutor({
     throw Error("LW04C2_DELIVERY_NOT_ATTESTED");
    return {status:outcome.status,stage,operationID,
     jobID:after.jobID,itemID:after.itemID||null,
-    quantity:after.quantity||null,nativeMutation:true,
+    quantity:after.quantity||null,
+    nativeMutation:["INSTALLED","READY","DELIVERED"].includes(outcome.status),
     proof:"ORIGINAL_GAMESTORE_AND_ITEMSTORE_READBACK_NOT_LIVE_E2E"};
   }catch(error){
    // An exception after the native kernel may mean COMMIT happened; never
@@ -162,7 +162,8 @@ function createOriginalManufacturingStageExecutor({
     reason:String(error?.message||error).slice(0,110),nativeMutation:false};
   }finally{inFlight.delete(key)}
  }
- return Object.freeze({run,inspect:run,
+ return Object.freeze({run,
+  inspect:scope=>run({...scope,stage:"INSPECT"}),
   status:()=>({quarantined:[...quarantined],active:[...inFlight]}),
   mode:"MANUAL_ORIGINAL_GAMESTORE_PROOF_ONLY",
   supportsLiveRuntime:false,supportsAutomaticAlife:false});
