@@ -112,7 +112,8 @@ function createLootCommerce({root,store,sceneForSystem,getController,getStation,
    try{result=warpRequired?warp(entityID,Number(station.itemID),
     {forceImmediateStart:true}):orbit(entityID,Number(station.itemID),2000);}
    catch(_){result={success:false};}
-   leases.set(key,{...last,nextOrderAt:now+
+   leases.set(key,{...last,pilotID,entityID,systemID,
+    expiresAt:now+commandCooldownMs+30000,nextOrderAt:now+
     (result?.success===true?commandCooldownMs:30000)});
    if(result?.success===true)
     orders.push({pilotID,entityID,systemID,stationID:Number(station.itemID),
