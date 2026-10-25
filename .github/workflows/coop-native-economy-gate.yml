@@ -2,11 +2,14 @@ name: COOP Native Economy Integrity
 on:
   push:
     branches:
+      - main
+      - feat/coop-059-native-economy-ci-and-admin-recovery-20261026
       - feat/coop-049-alife-native-buyer-wiring-20261025
       - feat/coop-055-native-market-notify-20261026
       - feat/coop-056-seller-login-catchup-20261026
   pull_request:
     branches:
+      - main
       - feat/coop-049-alife-native-buyer-wiring-20261025
       - feat/coop-054-controlled-npc-buy-recovery-20261026
       - feat/coop-055-native-market-notify-20261026
@@ -16,6 +19,7 @@ on:
       - 'rust/**'
       - 'scripts/**'
       - '.github/workflows/coop-native-economy-gate.yml'
+      - 'docs/COOP_059_*'
   workflow_dispatch:
 
 permissions:
@@ -35,6 +39,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Confirm real node:sqlite is available
+        run: |
+          node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE ci(value INTEGER);INSERT INTO ci VALUES(1)');if(db.prepare('SELECT value FROM ci').get().value!==1)process.exit(1);db.close()"
       - name: Verify real Node SQLite and all COOP A-Life regressions
         shell: pwsh
         run: ./scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests -ReportDir "${{ runner.temp }}/evejs-alife-economy-gates"
@@ -60,7 +67,7 @@ jobs:
           ref: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
           path: isolated-upstream
           persist-credentials: false
-      - name: Assert exact upstream pin
+      - name: Assert exact upstream pin and isolated checkout
         run: |
           test "$(git -C isolated-upstream rev-parse HEAD)" = "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f"
           test -f isolated-upstream/Code/compose.yaml
