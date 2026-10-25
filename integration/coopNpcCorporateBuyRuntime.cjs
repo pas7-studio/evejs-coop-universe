@@ -22,6 +22,7 @@ const {getCorporationRuntime}=require("../services/corporation/corporationRuntim
 const {getDockedLocationID}=require("../services/structure/structureLocation");
 const {findItemById}=require("../services/inventory/itemStore");
 const {getCharacterRecord}=require("../services/character/characterState");
+const {getAccountByUserName}=require("../services/login/accountStore");
 const {notifyInventoryChangesToCharacter}=require("../services/raffles/raffleInventory");
 const gameStore=require("../gameStore");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
@@ -58,14 +59,22 @@ function makeForSession(session){
   if(actor!==buyerID||session?.socket?.destroyed===true||
      sessionID(session)!==buyerID||
      Number(getDockedLocationID(session))!==stationID)return false;
-  // Native characterState rows are keyed by character ID. Their persisted
-  // accountId is authoritative even when no embedded characterID exists.
+  // Pinned EveJS characterState records are keyed by character ID, and
+  // neither characterID nor accountId is persisted on the character row.
+  // The trusted handshake binds userName -> account.id to session.userid;
+  // character selection already binds the same native session to buyerID.
   const record=getCharacterRecord(buyerID);
-  const account=canonicalID(session.userid);
-  const persisted=canonicalID(record?.accountId??record?.accountID);
+  const userID=canonicalID(session.userid??session.userID??session.accountID);
+  const userName=session.userName??session.username;
+  const account=typeof userName==="string"&&userName.length>0?
+   getAccountByUserName(userName):null;
   const embedded=record?.characterID??record?.charID;
-  return Boolean(record&&account&&account===persisted&&
-   (embedded===undefined||embedded===null||canonicalID(embedded)===buyerID));
+  const optionalAccountID=record?.accountId??record?.accountID;
+  return Boolean(record&&userID&&account&&account.banned!==true&&
+   canonicalID(account.id)===userID&&
+   (embedded===undefined||embedded===null||canonicalID(embedded)===buyerID)&&
+   (optionalAccountID===undefined||optionalAccountID===null||
+    canonicalID(optionalAccountID)===userID));
  };
  const verifyNpcCorporation=(corpID,stationID)=>{
   const record=getCorporationRecord(corpID),runtime=getCorporationRuntime(corpID);
