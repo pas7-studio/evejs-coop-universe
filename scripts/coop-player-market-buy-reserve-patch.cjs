@@ -16,9 +16,18 @@ function patch(source,{remove=false}={}){
    next=before?added+eol+base:base+eol+added;
   const n=(hay,needle)=>hay.split(needle).length-1;
   let part;
-  if(n(beforePart,next)===1){
-   part=remove?beforePart.replace(next,base):beforePart;
-  }else if(n(beforePart,base)===1&&!beforePart.includes(added)){
+  if(n(beforePart,added)===1){
+   // Other market patches may install their own hooks between this
+   // guard and its upstream anchor on a repeated central install.
+   if(remove){
+    const removeBefore=added+eol,removeAfter=eol+added;
+    if(n(beforePart,removeBefore)===1)part=beforePart.replace(removeBefore,"");
+    else if(n(beforePart,removeAfter)===1)part=beforePart.replace(removeAfter,"");
+    else throw Error("P2P_BUY_RESERVE_INJECTED_HOOK_NOT_REVERSIBLE");
+   }else part=beforePart;
+  }else if(n(beforePart,added)>1){
+   throw Error("P2P_BUY_RESERVE_DUPLICATE_SOURCE_GUARD");
+  }else if(n(beforePart,base)===1){
    part=remove?beforePart:beforePart.replace(base,next);
   }else throw Error("P2P_BUY_RESERVE_HOOK_ANCHOR_DRIFT");
   s=s.slice(0,i)+part+s.slice(j);
