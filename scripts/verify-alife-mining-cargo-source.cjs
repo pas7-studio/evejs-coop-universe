@@ -7,8 +7,11 @@ const {patchMiningCargo}=require("./coop-native-mining-cargo-integrity-patch.cjs
 const PINNED_NATIVE_MINING_BLOB="80e8aa4e43afc4665a2a885d03c2fd81e7171eee";
 function inspectNativeMiningSource(file){
  const original=fs.readFileSync(file,"utf8");
+ // Git on Windows may check out the *same pinned bytes* using CRLF.
+ // Hash the canonical LF Git blob while preserving original disk bytes.
+ const canonical=original.replace(/\r\n/g,"\n");
  const sha=crypto.createHash("sha1").update(
-  "blob "+Buffer.byteLength(original)+"\0").update(original).digest("hex");
+  "blob "+Buffer.byteLength(canonical)+"\0").update(canonical).digest("hex");
  if(sha!==PINNED_NATIVE_MINING_BLOB)
   return {status:"UPSTREAM_PIN_MISMATCH",expected:PINNED_NATIVE_MINING_BLOB,actual:sha};
  const patched=patchMiningCargo(original);
@@ -28,7 +31,8 @@ function inspectNativeMiningSource(file){
  return {status:"PINNED_NATIVE_MINING_PATCH_VERIFIED",sha,
   newFeatureFlag:"EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY",
   originalBytes:Buffer.byteLength(original),
-  patchedBytes:Buffer.byteLength(patched),reversible:true,modifiedDisk:false};
+  patchedBytes:Buffer.byteLength(patched),eol:original.includes("\r\n")?"CRLF":"LF",
+  reversible:true,modifiedDisk:false};
 }
 if(require.main===module){
  const input=process.argv[2];
