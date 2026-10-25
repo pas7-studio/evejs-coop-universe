@@ -199,3 +199,57 @@ test("contradictory embedded native wallet ID blocks payment without moving item
  }
  }finally{reset()}
 });
+
+
+test("BUY PAID Rust release requires original durable receipt key and original funded reserve identity",()=>{
+ const reset=enabled();try{
+  const x=fixture(),s=createBuySettlement({gameStore:x.store,clock:()=>123456});
+  const p=proof(),args={ticket:ticket(),proof:p,sourceItemID:800,tax:1};
+  const genuine=s.settle(args);
+  for(const mutation of [
+   r=>{r.key="p2p:23:999"},
+   r=>{delete r.reserveOperationID},
+   r=>{r.reserveOperationID="12345678-1234-4234-8234-123456789abd"},
+   r=>{delete r.reserveReceiptKey},
+   r=>{r.reserveReceiptKey="buy-reserve:another"},
+   r=>{r.reserveReceiptKey="other:"+operationID},
+   r=>{r.reserveBeforeCents=3702;r.reserveAfterCents=0}
+  ]){
+   const corrupted=structuredClone(genuine);mutation(corrupted);
+   x.db.playerMarketFills[genuine.key]=corrupted;
+   const before=structuredClone(x.db),commits=x.commits;
+   assert.throws(()=>s.requireReceipt(ticket(),p),
+    /P2P_BUY_PAY_DURABLE_COMMITTED_RECEIPT_REQUIRED/);
+   assert.throws(()=>s.settle(args),/P2P_BUY_PAY_REPLAY_IDENTITY_CONFLICT/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,commits+1); // read-only access; failed replay rolls back
+  }
+  x.db.playerMarketFills[genuine.key]=genuine;
+  assert.equal(s.requireReceipt(ticket(),p).key,genuine.key);
+  const snapshot=structuredClone(x.db);
+  assert.equal(s.settle(args).replayed,true);
+  assert.deepEqual(x.db,snapshot);
+ }finally{reset()}
+});
+test("BUY PAID replay cannot bless a forged paid balance while preserving valid idempotence",()=>{
+ const reset=enabled();try{
+  const x=fixture(),s=createBuySettlement({gameStore:x.store,clock:()=>123456});
+  const p=proof(),args={ticket:ticket(),proof:p,sourceItemID:800,tax:1};
+  const genuine=s.settle(args);
+  for(const corrupt of [
+   r=>{r.buyerAfterCents+=1},
+   r=>{r.sellerBeforeCents=-1;r.sellerAfterCents=3601},
+   r=>{r.sellerAfterCents+=1},
+   r=>{r.committedAt=0},
+   r=>{r.reserveBeforeCents=1;r.reserveAfterCents=-3701}
+  ]){
+   const row=structuredClone(genuine);corrupt(row);
+   x.db.playerMarketFills[genuine.key]=row;
+   const saved=structuredClone(x.db),commits=x.commits;
+   assert.throws(()=>s.settle(args),/P2P_BUY_PAY_REPLAY_IDENTITY_CONFLICT/);
+   assert.deepEqual(x.db,saved);assert.equal(x.commits,commits);
+  }
+  x.db.playerMarketFills[genuine.key]=genuine;
+  assert.equal(s.settle(args).replayed,true);
+ }finally{reset()}
+});
