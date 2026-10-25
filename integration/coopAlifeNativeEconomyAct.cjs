@@ -9,7 +9,7 @@ function createAlifeNativeAct({resolveActor,resolveDirector,resolveProductTypes,
  env=process.env}={}){
  if([resolveActor,resolveDirector,resolveProductTypes].some(f=>typeof f!=="function"))
   throw Error("ALIFE_NATIVE_ACT_AUTHORITIES_REQUIRED");
- const busy=new Set();
+ const busy=new Set(),seen=new Set();
  async function dispatch(intent){
   if(env.EVEJS_COOP_ALIFE_ECONOMY_ACT!=="1"||
      env.EVEJS_COOP_NATIVE_NPC_ECONOMY!=="1")
@@ -32,14 +32,28 @@ function createAlifeNativeAct({resolveActor,resolveDirector,resolveProductTypes,
    return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_PRODUCT_PROOF_MISSING"};
   const key=actor.ownerID+":"+actor.stationID;
   if(busy.has(key))return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_STATION_IN_FLIGHT"};
+  if(seen.has(intent.intentID))
+   return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_INTENT_ALREADY_ROUTED"};
   busy.add(key);
   try{
+   // Re-observe the native actor after async product discovery. If it left
+   // the station or changed ownership, fail before invoking the director.
+   const fresh=await resolveActor(intent.entityID);
+   if(!fresh||fresh.nativeVerified!==true||fresh.isNpc!==true||
+      fresh.ownerID!==actor.ownerID||fresh.stationID!==actor.stationID||
+      fresh.systemID!==actor.systemID||fresh.pilotID!==actor.pilotID||
+      fresh.underAttack===true||fresh.inWarp===true||
+      fresh.activeNativeOrder===true||fresh.playerControlled===true)
+    return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_ACTOR_CHANGED"};
    const director=await resolveDirector(actor.ownerID,actor.stationID);
    if(!director||typeof director.tick!=="function"||
       director.mode!=="NATIVE_AUTHORITIES_ONLY")
     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_DIRECTOR_NOT_NATIVE"};
    // The director (not this intent) decides the next durable step under its
    // native station lock, with verified receipts before any settlement.
+   // Record before the native call: lost ACK must not replay the same intent.
+   seen.add(intent.intentID);
+   if(seen.size>4096)seen.delete(seen.values().next().value);
    const result=await director.tick({ownerID:actor.ownerID,stationID:actor.stationID,
     productTypeIDs:types});
    if(!result||typeof result.status!=="string")
