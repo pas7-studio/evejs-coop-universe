@@ -89,6 +89,10 @@ function createRescueRivalry({getWrecks,getWreckItems,readVerifiedLoss,atomicRow
       throw Error("RIVAL_WRECK_SOURCE_CHANGED");
      const root=tx.get("npcCargo","cargo"),
       nextID=tx.get("npcCargo","nextCargoID");
+     // A wreck may be visible before stock NPC destruction removes the
+     // original hauler cargo. Never duplicate it in a rival's ship.
+     if(root?.[String(row.sourceCargoID)])
+      throw Error("RIVAL_ORIGINAL_HAULER_STILL_OWNS_SOURCE");
      if(!root||typeof root!=="object"||!pos(nextID)||
       root[String(row.sourceCargoID)]||root[String(nextID)])
       throw Error("RIVAL_CARGO_IDENTITY_CONFLICT");
