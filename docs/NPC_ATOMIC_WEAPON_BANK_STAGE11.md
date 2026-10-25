@@ -16,6 +16,10 @@ New integration module: integration/coopNpcAmmoBankAtomic.cjs. A single GameStor
 
 No shadow inventory, player item table writes, market trades, counterfeit charge or secondary SQLite writer is introduced. Too-large rows, unavailable GameStore and unquiesced native persistence fail closed.
 
+## Pinned upstream cargo compatibility
+
+The persisted native NPC loaded-charge row normally omits `flagID`. It contains authoritative `moduleID`; runtime builds the loaded charge with the equipped module's flag. The SQLite transaction validates module, ship and owner linkage, while accepting an absent persisted flag or the generic cargo flag 5. Unknown nonmatching flags are rejected.
+
 ## Durable ship-bank journal
 
 Path: AMMO_DEBIT_ROOT/bank-ships/<shipID>.json. A POSIX-exclusive lock and fsynced PREPARED receipt are written before opening the native transaction. COMMITTED follows successful native SQLite transaction, verified readback and filesystem sync. Only then are NPC in-scene cargo cache and charge results updated.
@@ -48,7 +52,7 @@ Preserve the original SQLite file, receipts, locks and relevant logs before any 
 
 - Full pinned upstream space/runtime.js (1,205,085 characters) transformed; patched JavaScript syntax parsed; idempotent apply and byte-for-byte remove passed. Both turret and missile paths invoke atomic bank debit before their old effect paths.
 - Isolated V8 mock SQLite and POSIX filesystem check: two bank cargo rows moved 5 to 4 together; both module replay fences persisted; repeated same boundary denied without another transaction.
-- Committed **15** atomic-bank behavior tests, **2** Linux `SIGKILL` child-process tests backed by `node:sqlite`, **1** added GameStore/SQLite bridge integration case and **2** source-transform regression tests (20 newly added cases in this PR). A safe Windows runner is `scripts/Test-Coop-NpcAmmoAtomic.ps1`. These committed Node tests have **not** been executed in a checkout with the full Node runner. Live native EveJS and two-client combat are unverified.
+- Committed **18** atomic-bank behavior tests, **2** Linux `SIGKILL` child-process tests backed by `node:sqlite`, **1** added GameStore/SQLite bridge integration case and **2** source-transform regression tests (23 newly added cases in this PR). A safe Windows runner is `scripts/Test-Coop-NpcAmmoAtomic.ps1`. These committed Node tests have **not** been executed in a checkout with the full Node runner. Live native EveJS and two-client combat are unverified.
 
 ## Merge and live acceptance gates
 
