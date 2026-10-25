@@ -1,6 +1,6 @@
 # COOP-054 — Stage I: native real-route escort participation
 
-Status: **source implemented, experimental/default OFF, NOT VALIDATED in 2 real EVE clients**. Date: 2026-10-25. Integration branch: `feat/escort-stage-h-jobs-integration-20261025` (Draft PR #117, based on Draft PR #102). Pinned original client/server source remains untouched.
+Status: **source implemented, experimental/default OFF, NOT VALIDATED in 2 real EVE clients**. Date: 2026-10-25. Integration branch: `feat/coop-stage-i-native-motion-main-20261025` (Draft PR #129, based on current `main`; historical PR #117 forward-ported without overwriting other main work). Pinned original client/server source remains untouched.
 
 ## Why Stage I exists
 
@@ -44,7 +44,13 @@ The additional `EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=1` flag is **OFF by defau
 Run `scripts/Run-NativeJob-Tests.ps1 -CheckPinned` on the approved local Windows machine. Stage I additions:
 - `tests/coop-escort-route-witness.test.mjs`: real sample-source scenarios, 2-pass progress and strict original identity, 10-km anti-AFK, session disconnect, duplicated actors, wrong native fleet, changed destination, corruption, hardlink/symlink, fsync ACK recovery and OFF guard. **V8 source-executed with mocked fs**, official local Node suite NOT_RUN.
 - `tests/coop-escort-route-attendance-gate.test.mjs`: runtime wallet/direct caller and peace payout permission gate. **V8 source-executed**, official Node suite NOT_RUN.
-- `tests/coop-escort-station-predeparture-gate.test.mjs`: Stage I observer wired to native station director tick without client action. **V8 source-executed**, official Node suite NOT_RUN.
+- `tests/coop-escort-stage-i-predeparture.test.mjs`: Stage I observer wired to native station director tick without client action. **V8 source-executed**, official Node suite NOT_RUN.
 - `tests/scenarios/coop-049-native-agent-opportunities.json`: operator-owned actual two-client tests; `status: NOT_RUN`.
 
 **Release blocker:** prove original stock NPC physical warp emits at least two real intermediate scenes that can be observed before terminal arrival. If it does not, capture native movement updates at the stock warp-progress authority rather than lowering security thresholds, inventing synthetic samples or changing the bank to pay on a timer. Record true source coordinates and EVE wallet deltas for both pilots on a throwaway world snapshot.
+
+## Main-based integration review
+
+The previous #117 integration PR was merged into its historical feature base during concurrent work; this current branch ports Stage I **onto latest main**, retains native economy oracle destination choice, original cargo warehouse, reputation/event history and descriptive warp failure telemetry. Source-executed isolated checks on main-based code: Stage I physical native station source **21/21 PASS**, runtime source+terminal fund authorization **12/12 PASS**, genuine NPC route witness **21/21 PASS**, native source physics observer fallback **5/5 PASS**, Agent duplicate consent receipt **5/5 PASS**, and modified JavaScript syntax **15/15 PASS**. Full local Node, actual source-state warp through 2 clients and real GameStore escrow/WAL **NOT_RUN**. The new main-based PR is still Draft and currently has merge conflicts/concurrent base advances; do not merge it until baseline and wallet safety gates pass.
+
+The independent P0 Agent receipt patch also fixes the existing main acceptance of ambiguous lost-fsync status: repeated player interest must independently re-read the original character/event journal and fsync both file and parent directory before downstream volunteer/priced acceptance.
