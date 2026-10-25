@@ -1,40 +1,40 @@
-# P0 isolated native NPC ammo acceptance, READ-ONLY against deployed world.
-# Execute in this repository. Tests create throwaway temp directories and SQLite DBs.
+# P0 isolated native NPC ammo durability acceptance, no production writes.
+# Windows: delegates POSIX fsync / SIGKILL checks to Linux WSL2.
 [CmdletBinding()]
 param(
   [string]$DisposableCodePath = ""
 )
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
-$root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-Push-Location $root
-try {
-  $versionText = (& node --version)
-  if ($LASTEXITCODE -ne 0) { throw "Node.js is not available" }
-  $major = [int]($versionText -replace '^v([0-9]+)\..*$', '$1')
-  if ($major -lt 22) { throw "Node.js 22+ required for node:sqlite; found $versionText" }
-  Write-Host "P0 native NPC ammo isolated validation with $versionText"
-  $testFiles = @(
-    "tests/coop-npc-strict-ammo.test.mjs",
-    "tests/coop-npc-durable-ammo-debit.test.mjs",
-    "tests/coop-npc-ammo-journal-audit.test.mjs",
-    "tests/coop-npc-ammo-posix-crash.test.mjs",
-    "tests/coop-npc-atomic-weapon-bank.test.mjs",
-    "tests/coop-npc-atomic-sqlite-crash.test.mjs",
-    "tests/coop-npc-atomic-sqlite-audit.test.mjs",
-    "tests/coop-npc-fire-debit-source.test.mjs",
-    "tests/coop-gamestore-atomic.test.mjs"
-  )
-  & node --test @testFiles
-  if ($LASTEXITCODE -ne 0) { throw "NPC_AMMO_TARGETED_TESTS_FAILED" }
-  # Only explicit disposable checkouts; NEVER patch the live upstream in this script.
+$runner = (Join-Path $PSScriptRoot "test-coop-npc-ammo-atomic.sh")
+if (!(Test-Path -LiteralPath $runner -PathType Leaf)) {
+  throw "NPC_AMMO_LINUX_RUNNER_MISSING"
+}
+if ([System.Environment]::OSVersion.Platform -eq [System.PlatformID]::Win32NT) {
+  if (!(Get-Command wsl.exe -ErrorAction SilentlyContinue)) {
+    throw "NPC_AMMO_WSL2_REQUIRED: run in Ubuntu/WSL2 with Node 22+ for POSIX durability tests."
+  }
+  $linuxRunner = (& wsl.exe -- wslpath -a -u $runner)
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($linuxRunner)) {
+    throw "NPC_AMMO_WSL_PATH_RESOLVE_FAILED"
+  }
+  $linuxArgs = @($linuxRunner.Trim())
   if ($DisposableCodePath -ne "") {
     if (!(Test-Path -LiteralPath $DisposableCodePath -PathType Container)) {
-      throw "DisposableCodePath does not exist"
+      throw "NPC_AMMO_DISPOSABLE_CODE_PATH_MISSING"
     }
-    & node scripts/patch-evejs-coop.cjs --dry-run --code-path $DisposableCodePath
-    if ($LASTEXITCODE -ne 0) { throw "NPC_AMMO_OVERLAY_DRY_RUN_FAILED" }
+    $converted = (& wsl.exe -- wslpath -a -u $DisposableCodePath)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($converted)) {
+      throw "NPC_AMMO_WSL_CODE_PATH_RESOLVE_FAILED"
+    }
+    $linuxArgs += $converted.Trim()
   }
-  Write-Host "NPC_AMMO_TARGETED_TESTS_PASS (not a live gameplay acceptance)"
+  & wsl.exe -- bash @linuxArgs
+  if ($LASTEXITCODE -ne 0) { throw "NPC_AMMO_WSL_TESTS_FAILED" }
+} else {
+  $linuxArgs = @($runner)
+  if ($DisposableCodePath -ne "") { $linuxArgs += $DisposableCodePath }
+  & bash @linuxArgs
+  if ($LASTEXITCODE -ne 0) { throw "NPC_AMMO_LINUX_TESTS_FAILED" }
 }
-finally { Pop-Location }
+Write-Host "NPC_AMMO_POSIX_TESTS_PASS (not a live gameplay acceptance)"
