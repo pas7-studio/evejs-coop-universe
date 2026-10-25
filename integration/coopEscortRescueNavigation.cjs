@@ -4,10 +4,10 @@
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const finite=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 function createRescueNavigation({readEvent,readFlight,readManifest,
- readOutcomes,getWreck,getWreckItems,getScene,warpPlayer,
+ readOutcomes,getWreck,getWreckItems,getScene,warpPlayer,followPlayer,
  readVolunteer,clock=()=>Date.now()}={}){
  if([readEvent,readFlight,readManifest,readOutcomes,getWreck,getWreckItems,
-  getScene,warpPlayer,readVolunteer,clock].some(x=>typeof x!=="function"))
+  getScene,warpPlayer,followPlayer,readVolunteer,clock].some(x=>typeof x!=="function"))
   throw Error("ESCORT_RESCUE_AUTHORITIES_REQUIRED");
  const cooldown=new Map();
  function navigate(session,eventID){
@@ -80,15 +80,28 @@ function createRescueNavigation({readEvent,readFlight,readManifest,
    return {status:"RESCUE_NATIVE_WARP_COOLDOWN"};
   // Actual EVE warpToPoint uses the authenticated player session. The
   // resulting player's normal inventory/looting UI must perform the transfer.
+  // Stock Destiny warp cannot launch inside its minimum warp distance.
+  // Nearby player pilots physically approach using FollowBall instead.
+  const playerShip=scene.getEntityByID?.(session._space.shipID);
+  if(playerShip?.itemID!==session._space.shipID||
+   !finite(playerShip.position))
+   return {status:"RESCUE_PLAYER_SHIP_NOT_IN_NATIVE_SCENE"};
+  const meters=Math.hypot(playerShip.position.x-real.position.x,
+   playerShip.position.y-real.position.y,
+   playerShip.position.z-real.position.z);
+  const near=meters<150000;
   let result;try{
-   result=warpPlayer(session,{...real.position},{
-    minimumRange:2500,targetEntityID:loss.haulerNativeWreckID});
-  }catch{return {status:"RESCUE_NATIVE_WARP_FAILED"}}
+   result=near?
+    followPlayer(session,loss.haulerNativeWreckID,1200):
+    warpPlayer(session,{...real.position},{
+     minimumRange:2500,targetEntityID:loss.haulerNativeWreckID});
+  }catch{return {status:"RESCUE_NATIVE_MOVEMENT_FAILED"}}
   if(result!==true&&result?.success!==true)
-   return {status:"RESCUE_NATIVE_WARP_NOT_ACKNOWLEDGED"};
+   return {status:"RESCUE_NATIVE_MOVEMENT_NOT_ACKNOWLEDGED"};
   cooldown.set(key,now);
   if(cooldown.size>256)cooldown.delete(cooldown.keys().next().value);
-  return {status:"RESCUE_NATIVE_WARP_ACKNOWLEDGED",
+  return {status:near?"RESCUE_NATIVE_APPROACH_ACKNOWLEDGED":
+   "RESCUE_NATIVE_WARP_ACKNOWLEDGED",
    wreckID:loss.haulerNativeWreckID,sourceCargoIDs:surviving.map(x=>x.sourceCargoID),
    survivingQuantity:surviving.reduce((n,x)=>n+x.quantity,0),
    inventoryTransferVerified:false,rewardISK:0};
@@ -118,6 +131,7 @@ function rescueInGame(session,eventID){
     getWreckItems:store.listNativeWreckItemsForWreck,
     getScene:s=>runtime.getSceneForSession(s),
     warpPlayer:(s,point,opts)=>runtime.warpToPoint(s,point,opts),
+    followPlayer:(s,wreckID,range)=>runtime.followBall(s,wreckID,range),
     readVolunteer:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id)
    });
   }
