@@ -141,6 +141,102 @@ function buildProfile(baseText) {
   return [...head, ...blocks.flat(), ...middle, "tabSetup:", ...tabs, ...tail].join("\n");
 }
 
+// Minimal variant: keep the owner's presets and tabs exactly as exported and
+// only ADD one preset plus one tab bound to it. Renaming or reordering tabs is
+// what made the first attempt appear empty in the client.
+function buildMinimal(baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати " } = {}) {
+  const lines = splitLines(baseText);
+  const presets = parsePresets(lines);
+  const byName = new Map(presets.blocks.map((block) => [block.name, block]));
+  const source = byName.get("Common") || byName.get("Everything");
+  if (!source) throw new Error("base export has neither Common nor Everything preset");
+  const missing = SHIP_GROUPS.filter((id) => !source.groups.includes(id));
+  if (missing.length) throw new Error(`source preset ${source.name} lacks ship groups ${missing.join(",")}`);
+
+  const blocks = presets.blocks.map((block) => block.lines);
+  if (!byName.has(presetName)) blocks.push(clonePreset(source, presetName).lines);
+
+  const tabRange = sectionRange(lines, "tabSetup");
+  const existingTabs = [];
+  for (let i = tabRange.start + 1; i < tabRange.end; i += 1) {
+    if (lines[i].startsWith("- - ")) existingTabs.push(Number(lines[i].slice(4)));
+  }
+  const nextIndex = existingTabs.length ? Math.max(...existingTabs) + 1 : 0;
+  const newTab = tabBlock({
+    index: nextIndex,
+    label,
+    fontSize: 12,
+    color: "0xFFFF3300",
+    preset: presetName,
+  }).map((line) => line.replace(/^- - \d+$/, `- - ${nextIndex}`));
+
+  const head = lines.slice(0, presets.start + 1);
+  const middle = lines.slice(presets.end, tabRange.start);
+  const tail = lines.slice(tabRange.end);
+  return [
+    ...head,
+    ...blocks.flat(),
+    ...middle,
+    "tabSetup:",
+    ...lines.slice(tabRange.start + 1, tabRange.end),
+    ...newTab,
+    ...tail,
+  ].join("\n");
+}
+
+function verifyMinimal(text, baseText, { presetName = "NPC (all ships)", label = " NPC / Пірати " } = {}) {
+  const problems = [];
+  const base = parsePresets(splitLines(baseText));
+  const out = parsePresets(splitLines(text));
+  // Every original preset must survive byte-identical in name and group list.
+  for (const block of base.blocks) {
+    const same = out.blocks.find((entry) => entry.name === block.name);
+    if (!same) problems.push(`lost preset ${block.name}`);
+    else if (same.groups.join(",") !== block.groups.join(",")) problems.push(`changed groups of ${block.name}`);
+  }
+  const added = out.blocks.filter((block) => !base.blocks.some((entry) => entry.name === block.name));
+  if (added.length !== 1) problems.push(`expected exactly one new preset, got ${added.length}`);
+  else {
+    const missing = SHIP_GROUPS.filter((id) => !added[0].groups.includes(id));
+    if (missing.length) problems.push(`new preset misses ship groups ${missing.join(",")}`);
+    if (added[0].name !== presetName) problems.push(`new preset is named ${added[0].name}`);
+  }
+  // Tabs: all original index<->overview pairs must be untouched.
+  const baseTabs = tabPairs(splitLines(baseText));
+  const outTabs = tabPairs(splitLines(text));
+  for (const [index, preset] of baseTabs) {
+    const hit = outTabs.find(([outIndex]) => outIndex === index);
+    if (!hit) problems.push(`lost tab ${index}`);
+    else if (hit[1] !== preset) problems.push(`tab ${index} moved from ${preset} to ${hit[1]}`);
+  }
+  if (outTabs.length !== baseTabs.length + 1) problems.push(`expected one extra tab, got ${outTabs.length - baseTabs.length}`);
+  const newTab = outTabs.find(([index]) => !baseTabs.some(([baseIndex]) => baseIndex === index));
+  if (newTab && newTab[1] !== presetName) problems.push(`new tab points at ${newTab[1]}`);
+  if (!text.includes(label.replace(/^\s+|\s+$/g, ""))) problems.push("new tab label missing");
+  const lostKeys = topLevelKeys(baseText).filter((key) => !topLevelKeys(text).includes(key));
+  if (lostKeys.length) problems.push(`lost top-level sections: ${lostKeys.join(", ")}`);
+  return { problems, baseTabs, outTabs };
+}
+
+function tabPairs(lines) {
+  const { start, end } = sectionRange(lines, "tabSetup");
+  const pairs = [];
+  let current = null;
+  for (let i = start + 1; i < end; i += 1) {
+    const line = lines[i];
+    if (line.startsWith("- - ")) {
+      if (current) pairs.push(current);
+      current = [Number(line.slice(4)), ""];
+      continue;
+    }
+    if (current && /^\s+- \S/.test(line) && lines[i - 1] && /overview$/.test(lines[i - 1])) {
+      current[1] = line.replace(/^\s+- /, "").replace(/^'|'$/g, "");
+    }
+  }
+  if (current) pairs.push(current);
+  return pairs;
+}
+
 function topLevelKeys(text) {
   return splitLines(text).filter((line) => /^[A-Za-z][A-Za-z0-9_]*:/.test(line)).map((line) => line.slice(0, line.indexOf(":")));
 }
@@ -184,9 +280,23 @@ function verify(text, baseText) {
 
 function main(argv) {
   const home = process.env.USERPROFILE || process.env.HOME || "";
-  const basePath = argv[0] || path.join(home, "Documents", "EVE", "Overview", "alife-base.yaml");
-  const outPath = argv[1] || path.join(home, "Documents", "EVE", "Overview", "alife.yaml");
+  const mode = argv.includes("--minimal") ? "minimal" : "full";
+  const rest = argv.filter((arg) => !arg.startsWith("--"));
+  const basePath = rest[0] || path.join(home, "Documents", "EVE", "Overview", "alife-base.yaml");
+  const outPath = rest[1] || path.join(home, "Documents", "EVE", "Overview", mode === "minimal" ? "alife-npc.yaml" : "alife.yaml");
   const baseText = fs.readFileSync(basePath, "utf8");
+  if (mode === "minimal") {
+    const built = buildMinimal(baseText);
+    const check = verifyMinimal(built, baseText);
+    if (check.problems.length) {
+      console.error("refusing to write an invalid profile:\n  " + check.problems.join("\n  "));
+      process.exit(1);
+    }
+    fs.writeFileSync(outPath, built, "utf8");
+    console.log(`wrote ${outPath} (${Buffer.byteLength(built, "utf8")} bytes)`);
+    console.log(`tabs: ${check.baseTabs.length} kept + 1 added -> ${check.outTabs.map(([i, p]) => `${i}:${p}`).join(", ")}`);
+    return { outPath, check };
+  }
   const built = buildProfile(baseText);
   const check = verify(built, baseText);
   if (check.problems.length) {
@@ -203,4 +313,14 @@ function main(argv) {
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { buildProfile, verify, parsePresets, groupsOf, TABS, SHIP_GROUPS };
+module.exports = {
+  buildProfile,
+  buildMinimal,
+  verify,
+  verifyMinimal,
+  parsePresets,
+  groupsOf,
+  tabPairs,
+  TABS,
+  SHIP_GROUPS,
+};

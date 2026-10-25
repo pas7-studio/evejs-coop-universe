@@ -90,6 +90,21 @@ test("every tab points at a preset that exists, in a stable order", () => {
   assert.ok(TABS.some((tab) => tab.label.includes("Майнінг")), "a dedicated mining tab exists");
 });
 
+test("the minimal variant adds one tab and never touches the owner's own tabs", () => {
+  const { buildMinimal, verifyMinimal, tabPairs } = require("../scripts/gen-alife-overview.cjs");
+  const built = buildMinimal(BASE);
+  const check = verifyMinimal(built, BASE);
+  assert.deepEqual(check.problems, []);
+  const before = tabPairs(BASE.split("\n"));
+  const after = tabPairs(built.split("\n"));
+  assert.equal(after.length, before.length + 1);
+  // Original tab index -> preset bindings must survive unchanged.
+  for (const [index, preset] of before) assert.deepEqual(after.find(([i]) => i === index), [index, preset]);
+  const added = after.find(([index]) => !before.some(([baseIndex]) => baseIndex === index));
+  assert.deepEqual(added, [Math.max(...before.map(([index]) => index)) + 1, "NPC (all ships)"]);
+  assert.match(built, /NPC \/ Пірати/);
+});
+
 test("a degenerate export is refused instead of producing an empty sky", () => {
   const noShips = BASE.replace(preset("Common", [6, 10, 15, ...SHIP_GROUPS]), preset("Common", [6, 10, 15]));
   assert.throws(() => buildProfile(noShips), /lacks ship groups/);
