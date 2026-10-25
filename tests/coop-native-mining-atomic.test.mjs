@@ -194,3 +194,16 @@ test("same operation cannot change the immutable yield fingerprint",t=>{
  assert.equal(f.source().remainingQuantity,92);
  assert.equal(f.cargo()[0].quantity,7);
 });
+
+test("critical bonus ore is also debited from the native asteroid, not minted",t=>{
+ const f=fixture(t);
+ f.input.miningResult={normalQuantity:4,wastedQuantity:1,criticalHitQuantity:3};
+ f.input.transferredQuantity=7;
+ const result=f.settler.settle(f.input);
+ assert.equal(result.success,true);
+ assert.equal(result.receipt.normal,4);
+ assert.equal(result.receipt.quantity,7);
+ assert.equal(result.receipt.afterRock,92); // 100 - (7 reward + 1 waste)
+ assert.equal(f.cargo()[0].quantity,7);
+ assert.equal(f.source().remainingQuantity,92);
+});
