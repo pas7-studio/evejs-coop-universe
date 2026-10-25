@@ -63,6 +63,8 @@ test("two independently verified native fleet pilots physically hit SAME pirate 
  assert.equal(x.duoConfirmed,false);
  x=o.damage({scene:f.scene,receipt:f.receipt(22),fleetRuntime:f.fleetRuntime});
  assert.equal(x.duoConfirmed,true);
+ assert.equal(x.newlyConfirmedDuo,true);
+ assert.equal(o.damage({scene:f.scene,receipt:f.receipt(22),fleetRuntime:f.fleetRuntime}).newlyConfirmedDuo,false);
  assert.equal(o.snapshot().incidents[0].duoFleetID,77);
  assert.deepEqual(o.snapshot().incidents[0].characters,[11,22]);
  assert.deepEqual(f.lines().map(x=>x.state),["UNDER_ATTACK","PLAYER_HIT","PLAYER_HIT","DUO_INTERVENED"]);
@@ -104,6 +106,7 @@ test("a physically verified pirate native wreck closes the attack; does NOT clai
  f.wreck();
  const r=o.damage({scene:f.scene,receipt:f.receipt(11,"TERMINAL_NATIVE_WRECK"),fleetRuntime:f.fleetRuntime});
  assert.equal(r.pirateWreckConfirmed,true);
+ assert.equal(r.newlyConfirmedWreck,true);
  assert.equal(o.snapshot().incidents[0].nativeWreckID,80001);
  assert.equal(o.snapshot().incidents[0].closed,true);
  assert.equal(f.lines().at(-1).state,"PIRATE_WRECK_CONFIRMED");
