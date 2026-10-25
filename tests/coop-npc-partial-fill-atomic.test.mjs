@@ -189,3 +189,23 @@ test("duplicate item keys in native GameStore fail closed before allocation",()=
  f.data.items[1990000999]={...f.data.items[ITEM],itemID:ITEM};
  await assert.rejects(execute(f),/ITEM_KEY_MISMATCH/);
 }));
+
+test("100 successive one-unit native partial and terminal fills conserve 100 items and 1200 ISK",()=>run(async f=>{
+ for(let i=1;i<=100;i++){
+  const key="npc-partial:"+i.toString(16).padStart(32,"0");
+  f.configure({claimKey:key,fillID:910000000000000+i,
+   remainingBefore:101-i,quantity:1});
+  const result=await execute(f,key,1);
+  assert.equal(result.status,"PURCHASED_PARTIAL");
+  assert.equal(result.remainingQuantity,100-i);
+ }
+ const all=Object.values(f.data.items);
+ assert.equal(all.reduce((n,item)=>n+item.quantity,0),100);
+ assert.equal(all.filter(item=>item.ownerID===BUYER).length,100);
+ assert.equal(all.some(item=>item.ownerID===OWNER),false);
+ assert.equal(f.data.identityState.nextItemID,1990000399);
+ assert.equal(f.data.marketEscrow[ORDER],undefined);
+ assert.equal(f.data.characters[BUYER].balance,3800);
+ assert.equal(f.data.corporationRuntime["corporations\u001f"+OWNER].wallet.divisions["1000"].balance,1300);
+ assert.equal(Object.keys(f.data.npcMarketFills).length,100);
+}));
