@@ -103,6 +103,8 @@ function buildCatalog(hulls, candidates, sde, perHull = 5) {
     if (!byHull.has(shipTypeID)) byHull.set(shipTypeID,new Map());
     if (byHull.get(shipTypeID).has(result.signature)) continue;
     const source=candidate.source || {};
+    if (source.kind==='permissioned-eft' && (!source.permission || !source.author || text(candidate.name).includes('@@'))) {invalid.push({shipTypeID,reason:'INVALID_CURATED_ATTRIBUTION_OR_NAME'});continue;}
+    if (!text(source.url).startsWith('https://')) {invalid.push({shipTypeID,reason:'INVALID_SOURCE_URL'});continue;}
     if (source.kind!=='public-killmail' && source.kind!=='permissioned-eft') {invalid.push({shipTypeID,reason:'UNSUPPORTED_SOURCE'});continue;}
     byHull.get(shipTypeID).set(result.signature,{...candidate,fitData:result.fitData,signature:result.signature,slots:result.slots});
   }
