@@ -52,7 +52,8 @@ function note(scene,victim,options,wreck){
    process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"){
    const fleets=require("../services/mining/miningNpcOperations")
     .getMiningFleetsForSystem(Number(scene?.systemID));
-   proof=require("./coopNpcStockWreckProof").verifyStockKill({
+   const ext=__filename.endsWith(".cjs")?".cjs":"";
+   proof=require("./coopNpcStockWreckProof"+ext).verifyStockKill({
     scene,victim,options,wreck,links,fleets
    });
   }
@@ -62,7 +63,8 @@ function note(scene,victim,options,wreck){
   if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"&&
    proof.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"){
    try{
-    const received=require("./coopNpcWreckClaims").getWreckClaims().record({proof,wreck});
+    const ext=__filename.endsWith(".cjs")?".cjs":"";
+    const received=require("./coopNpcWreckClaims"+ext).getWreckClaims().record({proof,wreck});
     if(received.status!=="KILL_PROOF_RECORDED"&&
        received.status!=="ALREADY_RECORDED")
      console.warn("[CoopNpcWreck] unclaimed native destruction",received.status);
