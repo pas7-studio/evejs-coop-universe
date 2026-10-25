@@ -80,6 +80,7 @@ test("native killmail proof binds structure ID not present in vanilla killmail r
  assert.equal(recorded.receipt.damageTaken,1500.5);
  assert.equal(f.db.get(KILL_KEY).byStructure["700"].proofID,"structure-kill:9000");
  assert.equal(f.adjudicator.neutralize(f.neutral).status,"APPLIED");
+ assert.equal(f.proof.noteFromNativeKillmail(f.payload()).status,"DUPLICATE");
  assert.equal(f.db.get(WAR_KEY).campaigns.c1.objectiveEvidence.length,1);
 });
 test("destroyedAt from GM action alone grants no objective and no receipt",()=>{
@@ -118,7 +119,7 @@ test("native killmail source cannot be replayed as a second lethal structure",()
  assert.equal(f.proof.noteFromNativeKillmail(input).status,"DUPLICATE");
  const other=f.payload();other.record.killID=9001;
  assert.equal(f.proof.noteFromNativeKillmail(other).reason,
-  "STORED_NATIVE_COMBAT_KILLMAIL_UNVERIFIED");
+  "STRUCTURE_KILLMAIL_REPLAY_CONFLICT");
  assert.equal(Object.keys(f.db.get(KILL_KEY).byStructure).length,1);
 });
 test("native killmail proof cannot be used after source record is changed",()=>{
