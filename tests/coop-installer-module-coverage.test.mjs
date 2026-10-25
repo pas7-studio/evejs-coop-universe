@@ -19,7 +19,7 @@ const emitted=vm.runInNewContext(
  "(()=>{"+declaration+";return names;})()",Object.create(null),{timeout:2000});
 const names=Array.from(emitted,String);
 const bundled=readdirSync(resolve(root,"integration"))
- .filter(name=>/^coop[A-Za-z0-9]+\\.cjs$/.test(name))
+ .filter(name=>/^coop[A-Za-z0-9]+\.cjs$/.test(name))
  .map(name=>name.slice(0,-4));
 
 test("every bundled coop integration source is installed by the native overlay",()=>{
