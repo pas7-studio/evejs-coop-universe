@@ -26,13 +26,19 @@ function createSqliteAdapter(getDb){
   assertTables(tables);
   if(typeof mutation!=="function"||inside)throw Error("INVALID_OR_REENTRANT_ATOMIC_MUTATION");
   const db=getDb();if(!db||typeof db.exec!=="function"||typeof db.prepare!=="function")throw Error("NATIVE_SQLITE_UNAVAILABLE");
-  if(tables.includes("miningRuntimeState")) {
-    if(process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
+  const mining=tables.includes("miningRuntimeState");
+  const hauling=tables.includes("npcCargo") &&
+    process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC==="1";
+  if(mining||hauling){
+    if(mining&&process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
       throw Error("ALIFE07_MINING_ATOMIC_DISABLED");
+    // Both the asteroid debit and the original cargo reparent/receipt must
+    // survive a process crash: FULL is set BEFORE BEGIN IMMEDIATE.
     db.exec("PRAGMA synchronous = FULL");
     const pragma=db.prepare("PRAGMA synchronous").get();
     if(!pragma || Number(pragma.synchronous)!==2)
-      throw Error("ALIFE07_SQLITE_DURABILITY_NOT_FULL");
+      throw Error(mining?"ALIFE07_SQLITE_DURABILITY_NOT_FULL":
+        "ALIFE10_SQLITE_DURABILITY_NOT_FULL");
   }
   const scope=new Set(tables),changed=new Map();
   const tbl=t=>{if(!scope.has(t))throw Error("UNDECLARED_NATIVE_TABLE");return '"'+t+'"';};
