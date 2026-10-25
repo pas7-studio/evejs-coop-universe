@@ -19,7 +19,15 @@ function readFile(file){
  if(v?.version!==1||!["PREPARED","COMMITTED"].includes(v.phase)||
   !valid(v.entityID)||!Number.isFinite(v.boundaryMs)||v.boundaryMs<=0||
   !Array.isArray(v.modules)||!v.modules.length||v.modules.length>16||
-  v.modules.some(m=>!valid(m))||new Set(v.modules).size!==v.modules.length)
+  v.modules.some(m=>!valid(m))||new Set(v.modules).size!==v.modules.length||
+  (v.outcome!==undefined&&(
+   !v.outcome||v.outcome.version!==1||
+   !["TURRET_RESOLVED","MISSILE_LAUNCHED","MISSILE_LAUNCH_FAILED"].includes(v.outcome.kind)||
+   v.outcome.boundaryMs!==v.boundaryMs||
+   !Number.isFinite(v.outcome.observedAtMs)||v.outcome.observedAtMs<=0||
+   (v.outcome.kind==="TURRET_RESOLVED"&&typeof v.outcome.hit!=="boolean")||
+   (v.outcome.kind==="MISSILE_LAUNCHED"&&!valid(v.outcome.missileID))
+  )))
   throw Error("INVALID_BANK_RECEIPT");
  return v;
 }
@@ -34,9 +42,10 @@ function validateFence(raw,id){
   throw Error("INVALID_NATIVE_FENCE");
  return v;
 }
-function auditBankSqlite({root,sqlitePath,maxShips=2000}={}){
+function auditBankSqlite({root,sqlitePath,maxShips=2000,requireOutcome=false}={}){
  if(!path.isAbsolute(root||"")||!path.isAbsolute(sqlitePath||"")||
-  !Number.isSafeInteger(maxShips)||maxShips<1||maxShips>20000)
+  !Number.isSafeInteger(maxShips)||maxShips<1||maxShips>20000||
+  typeof requireOutcome!=="boolean")
   throw Error("INVALID_BANK_AUDIT_INPUT");
  const rootSt=fs.lstatSync(root),dbSt=fs.lstatSync(sqlitePath);
  if(rootSt.isSymbolicLink()||!rootSt.isDirectory()||
@@ -78,7 +87,8 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000}={}){
  if(ids.size>maxShips)throw Error("BANK_AUDIT_SHIP_LIMIT");
  const entries=[],counts={MATCH_COMMITTED:0,NEEDS_RECONCILIATION:0,
   COMMIT_MISMATCH:0,NATIVE_FENCE_WITHOUT_JOURNAL:0,
-  JOURNAL_WITHOUT_NATIVE_FENCE:0,CORRUPT_NEEDS_REVIEW:0};
+  JOURNAL_WITHOUT_NATIVE_FENCE:0,CORRUPT_NEEDS_REVIEW:0,
+  MISSING_FIRE_OUTCOME:0,FAILED_FIRE_OUTCOME:0};
  for(const id of [...ids].sort((a,b)=>a-b)){
   const entriesForShip=files.get(id)||[];
   const lock=entriesForShip.includes(String(id)+".json.lock");
@@ -102,13 +112,19 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000}={}){
      Number(fence.modules[String(mid)]||0)>=receipt.boundaryMs).length;
     status=modulesMatched===receipt.modules.length?
      "MATCH_COMMITTED":"COMMIT_MISMATCH";
+    if(status==="MATCH_COMMITTED"&&requireOutcome){
+     if(!receipt.outcome)status="MISSING_FIRE_OUTCOME";
+     else if(receipt.outcome.kind==="MISSILE_LAUNCH_FAILED")
+      status="FAILED_FIRE_OUTCOME";
+    }
    }
   }catch(_){status="CORRUPT_NEEDS_REVIEW";}
   counts[status]++;
   entries.push({entityID:id,status,receiptPhase:receipt?.phase||null,
    boundaryMs:receipt?.boundaryMs||null,
    lock,orphanTemp,sqliteFencePresent:!!fence,
-   modulesMatched,modulesTotal:receipt?.modules.length||0});
+   modulesMatched,modulesTotal:receipt?.modules.length||0,
+   outcomeKind:receipt?.outcome?.kind||null});
  }
  const clean=warnings.length===0&&
   entries.every(r=>r.status==="MATCH_COMMITTED");
@@ -117,9 +133,13 @@ function auditBankSqlite({root,sqlitePath,maxShips=2000}={}){
 }
 if(require.main===module){
  try{
+  if(process.argv[4]!==undefined&&process.argv[4]!=="--require-outcome")
+   throw Error("INVALID_BANK_AUDIT_ARGUMENT");
+  if(process.argv.length>5)throw Error("INVALID_BANK_AUDIT_ARGUMENT");
   const report=auditBankSqlite({
    root:process.argv[2],
-   sqlitePath:process.argv[3]
+   sqlitePath:process.argv[3],
+   requireOutcome:process.argv[4]==="--require-outcome"
   });
   process.stdout.write(JSON.stringify(report,null,2)+"\n");
   if(!report.clean)process.exitCode=2;

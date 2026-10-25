@@ -84,6 +84,16 @@ function prepare(io,root,entityID,modules,whenMs,clock){
  if(status.receipt&&whenMs<=status.receipt.boundaryMs&&
     status.receipt.modules.some(m=>modules.has(m)))
   throw Error("BANK_CYCLE_REPLAY");
+ // COOP-046: when outcome attestation is requested, never overwrite a
+ // successful cargo debit whose native fire result is still unknown.
+ if(process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"&&status.receipt){
+  const o=status.receipt.outcome;
+  if(!o||o.version!==1||o.boundaryMs!==status.receipt.boundaryMs||
+     !Number.isFinite(o.observedAtMs)||o.observedAtMs<=0||
+     !(o.kind==="TURRET_RESOLVED"&&typeof o.hit==="boolean"||
+       o.kind==="MISSILE_LAUNCHED"&&pos(o.missileID)))
+   throw Error("BANK_OUTCOME_NOT_ATTESTED");
+ }
  const dir=path.join(root,"bank-ships");
  const rootStat=io.lstatSync(root);
  if(!rootStat.isDirectory()||rootStat.isSymbolicLink())throw Error("BANK_ROOT_UNSAFE");

@@ -63,6 +63,10 @@ const journalSettle=[
  '      if (!settled.ok) return { success: false, errorMsg: settled.status, stopReason: "ammo" };',
  '    }',
 ].join("\n");
+const witnessPreflight=["  if (isNativeNpcEntity(attackerEntity) &&","      process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS === \"1\" &&","      !require(\"./coopNpcFireOutcomeWitness\").enabled())","    return { success: false, errorMsg: \"BANK_OUTCOME_FLAGS_INCOMPLETE\", stopReason: \"ammo\" };"].join("\n");
+const turretOutcomeWitness=["  if (strictNativeStackDebit && process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS === \"1\") {","    const record = require(\"./coopNpcFireOutcomeWitness\").record({","      entity: attackerEntity, whenMs: cycleBoundaryMs, kind: \"TURRET_RESOLVED\",","      hit: Boolean(shotResult && shotResult.hit),","    });","    if (!record.ok) return { success: false, errorMsg: record.status, stopReason: \"ammo\" };","  }"].join("\n");
+const missileSuccessWitness=["  if (coopAtomicMissileResults && process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS === \"1\") {","    const record = require(\"./coopNpcFireOutcomeWitness\").record({","      entity: attackerEntity, whenMs: cycleBoundaryMs, kind: \"MISSILE_LAUNCHED\",","      missileID: toInt(launchResult.data.entity && launchResult.data.entity.itemID, 0),","    });","    if (!record.ok) return { success: false, errorMsg: record.status, stopReason: \"ammo\" };","  }"].join("\n");
+const missileFailWitness=["    if (coopAtomicMissileResults && process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS === \"1\") {","      // Still record the known failed launch; never refund or retry.","      require(\"./coopNpcFireOutcomeWitness\").record({","        entity: attackerEntity, whenMs: cycleBoundaryMs, kind: \"MISSILE_LAUNCH_FAILED\",","      });","    }"].join("\n");
 const turretBankSafety=[
  '  if (isNativeNpcEntity(attackerEntity) &&',
  '      process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" &&',
@@ -203,6 +207,10 @@ const missileFail=[
  '    return { success: false, errorMsg: "AMMO_UPDATE_FAILED", stopReason: "ammo" };',
  '  }',
 ].join("\n");
+const turretSuccessAnchor='  return {\n    success: true,\n    data: {\n      moduleItem,\n      chargeItem: resolvedChargeItem,';
+const missileFailAnchor='  if (!launchResult.success || !launchResult.data) {\n    return {';
+const missileFailNew='  if (!launchResult.success || !launchResult.data) {\n'+missileFailWitness+'\n    return {';
+const missileSuccessAnchor='  const reloadStates =\n    depletedEntries.length > 0';
 function patch(source,{remove=false}={}){
  let text=source;
  const eol=text.includes("\r\n")?"\r\n":"\n",e=x=>x.replace(/\n/g,eol);
@@ -235,8 +243,9 @@ function patch(source,{remove=false}={}){
   [fire,turretPreDebit+"\n\n"+fire,"pre-damage debit"],
   [turretOld,turretNew,"single native debit"],
   ['  // P0: before actual native fire or turret damage, verify the real',
-   turretBankSafety+"\n"+'  // P0: before actual native fire or turret damage, verify the real',
-   "whole-bank durable preflight"]
+   witnessPreflight+"\n"+turretBankSafety+"\n"+'  // P0: before actual native fire or turret damage, verify the real',
+   "whole-bank durable preflight"],
+  [turretSuccessAnchor,turretOutcomeWitness+"\n"+turretSuccessAnchor,"post-turret outcome witness"]
  ]);
  const start='  const chargeResults = [];';
  const check='  if (groupedAmmoFailure && chargeResults.every((entry) => !entry.result || !entry.result.success)) {';
@@ -244,9 +253,11 @@ function patch(source,{remove=false}={}){
   [start,missilePreflight+"\n"+missileAtomicSetup+"\n"+start,"missile bank preflight"],
   [check,missileFail+"\n"+check,"block partial bank launch"],
   ['  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
-   missileBankSafety+"\n"+'  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+   witnessPreflight+"\n"+missileBankSafety+"\n"+'  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
    "whole-bank missile journal preflight"],
-  [missileConsumeOld,missileConsumeNew,"single bank missile atomic debit"]
+  [missileConsumeOld,missileConsumeNew,"single bank missile atomic debit"],
+  [missileFailAnchor,missileFailNew,"record failed missile spawn"],
+  [missileSuccessAnchor,missileSuccessWitness+"\n"+missileSuccessAnchor,"record launched missile"]
  ]);
  // Syntax validation is performed by the caller's existing vm.Script.
  return text;
