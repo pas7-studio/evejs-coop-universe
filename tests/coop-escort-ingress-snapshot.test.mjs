@@ -63,7 +63,7 @@ test("invalid physical ingress, excessive duration and too-short path rejected",
  assert.equal(f.write({ingress:{...ingress(),travelCompleteAtMs:1050000}}).status,
   "INGRESS_SNAPSHOT_NATIVE_ACK_OR_SOURCE_INVALID");
  assert.equal(f.write({ingress:{...ingress(),targetPoint:{x:500,y:0,z:0}}}).status,
-  "INGRESS_SNAPSHOT_RECHECK_UNCERTAIN");
+  "INGRESS_SNAPSHOT_NATIVE_ACK_OR_SOURCE_INVALID");
 }));
 test("lost file or directory fsync ACK blocks durability until original resync",()=>use(f=>{
  const io={...fs,fsyncSync(){throw Error("ACK_LOST")}};
