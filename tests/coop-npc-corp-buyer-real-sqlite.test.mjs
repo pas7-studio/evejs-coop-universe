@@ -37,7 +37,8 @@ function fixture(){
   remainingQuantity:20,escrowLocationID:9200000000+ORDER});
  let writer=createSqliteAdapter(()=>db).claimTransactor();
  let phase="claimed",rustState="settling",dropAck=false;
- const claim=()=>({source:"player",state:rustState,fill_phase:phase,is_corp:false,bid:false,
+ const claim=()=>({history_recorded:phase==="finalized",history_day:phase==="finalized"?"2026-10-25":null,
+  source:"player",state:rustState,fill_phase:phase,is_corp:false,bid:false,
   claim_key:KEY,fill_id:String(FILL),order_id:String(ORDER),
   owner_id:String(SELLER),buyer_corp_id:String(BUYER),quantity:20,
   station_id:STATION,type_id:TYPE,price_cents:125,
