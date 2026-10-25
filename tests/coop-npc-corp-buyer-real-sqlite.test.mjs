@@ -84,7 +84,7 @@ test("native real SQLite purchase transfers one player item and exactly 25 ISK",
  assert.equal(f.read("corporationRuntime",CKEY).wallet.divisions["1000"].balance,975);
  assert.equal(f.read("characters",SELLER).balance,123);
  assert.equal(f.read("characters",SELLER).walletJournal.length,2);
- assert.equal(f.read("npcMarketFills","corp-buy\\u001f"+FILL).taxCents,200);
+ assert.equal(f.read("npcMarketFills","corp-buy\u001f"+FILL).taxCents,200);
  assert.equal(f.read("npcMarketFills","corp-buy\u001f"+FILL).itemID,ITEM);
 }));
 test("SQLite connection restart replays completed Rust claim without extra debit",()=>run(async f=>{
