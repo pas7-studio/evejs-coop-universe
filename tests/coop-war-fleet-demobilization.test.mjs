@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createWarFleetRegistry,KEY,TABLE}=require("../integration/coopWarFleetRegistry.cjs");
+const {createWarMobilizer}=require("../integration/coopWarMobilizer.cjs");
+const {createWarDemobilizer}=require("../integration/coopWarDemobilizer.cjs");
 const WAR_KEY="coop-faction-war\u001fstate-v1";
 const env=()=>({EVEJS_COOP_FACTION_WAR:"1",
  EVEJS_COOP_FACTION_WAR_FLEETS:"1",
@@ -109,4 +111,47 @@ test("wrong fleet identity and missing default-off feature gate deny mutation",(
  f.flags.EVEJS_COOP_FACTION_WAR_DEMOBILIZE="0";
  assert.equal(f.registry.execute(f.old).status,"DISABLED");
  assert.equal(f.ships["501"].entityID,501);
+});
+
+test("same native A-Life tick demobilizes then remobilizes the same physical ship",()=>{
+ const f=fixture();
+ f.flags.EVEJS_COOP_FACTION_WAR_MOBILIZE="1";
+ f.flags.EVEJS_COOP_NPC_STRICT_AMMO="1";
+ f.flags.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE="1";
+ f.flags.EVEJS_COOP_NPC_BANK_ATOMIC="1";
+ const next=f.db.get(WAR_KEY).campaigns.c2;
+ Object.assign(next,{campaignID:"c2",warID:"w1",state:"PREPARING",
+  sourceSystemID:202,targetSystemID:303,startedAt:200});
+ const links=[{pilotID:"coop-pilot-001",entityID:501,
+  systemID:202,role:"patrol"}];
+ const war=()=>f.db.get(WAR_KEY);
+ const demob=createWarDemobilizer({
+  registry:f.registry,env:f.flags,clock:()=>100000,
+  readWarState:war,readLinks:()=>links,getOrderLeases:()=>[]
+ });
+ const mobilize=createWarMobilizer({
+  registry:f.registry,env:f.flags,clock:()=>100000,
+  readWarState:war,readLinks:()=>links,
+  sceneForSystem:id=>id===202?{systemID:202,sessions:new Map(),
+   getEntityByID:shipID=>shipID===501?{itemID:501,kind:"ship",
+    nativeNpc:true,corporationID:31,ownerID:31,mode:"STOP"}:null}:null,
+  getNativeEntity:id=>id===501?{entityID:501,systemID:202,
+   corporationID:31,ownerID:31}:null,
+  getController:id=>id===501?{entityID:501,systemID:202,
+   manualOrder:null,currentTargetID:0}:null,
+  getFactionForCorporation:corp=>corp===31?11:null,
+  inspectReadiness:()=>({ready:true,armedModuleCount:1}),
+  getOrderLeases:()=>[],isTactical:()=>false
+ });
+ const freed=demob.tick({systemIDs:[202]});
+ assert.equal(freed.demobilized.length,1);
+ assert.equal(f.ships["501"],undefined);
+ const reused=mobilize.tick({systemIDs:[202]});
+ assert.equal(reused.mobilized.length,1);
+ assert.equal(reused.mobilized[0].entityID,501);
+ assert.equal(reused.mobilized[0].campaignID,"c2");
+ assert.equal(f.ships["501"].campaignID,"c2");
+ assert.equal(f.ships["501"].entityID,501);
+ assert.deepEqual(f.db.get(KEY).history.map(x=>x.type),
+  ["DEMOBILIZE","ASSIGN"]);
 });
