@@ -326,3 +326,31 @@ test("multi-stack escrow mismatch, duplicate source, missing allocator and alter
   assert.deepEqual(x.db,prev);
  }finally{cleanup()}
 });
+
+
+test("full multi-stack SELL transfers original item IDs and never allocates",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();
+  x.db.items["800"].quantity=3;x.db.items["800"].stacksize=3;
+  x.db.items["801"]={...x.db.items["800"],itemID:801,quantity:4,stacksize:4};
+  const s=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const result=s.settle({ticket:ticket(),proof:proof(),tax:1,
+   sourceItemIDs:[801,800]});
+  assert.equal(result.partial,false);
+  assert.deepEqual(result.sourceItemIDs,[800,801]);
+  assert.equal(result.deliveries.length,2);
+  assert.equal(result.deliveries[0].sourceAfter,0);
+  assert.equal(result.deliveries[1].sourceAfter,0);
+  assert.equal(x.db.items["800"].ownerID,301);
+  assert.equal(x.db.items["801"].ownerID,301);
+  assert.equal(x.db.identityState.nextItemID,undefined);
+  assert.equal(x.db.marketEscrow["23"],undefined);
+  assert.equal(x.db.characters["301"].balance,913.62);
+  assert.equal(x.db.characters["201"].balance,585.38);
+  const snapshot=structuredClone(x.db);
+  assert.equal(s.settle({ticket:ticket(),proof:proof(),tax:1,
+   sourceItemIDs:[800,801]}).replayed,true);
+  assert.deepEqual(x.db,snapshot);
+ }finally{cleanup()}
+});
