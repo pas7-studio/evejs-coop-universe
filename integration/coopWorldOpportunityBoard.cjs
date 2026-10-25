@@ -119,10 +119,6 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    w.mode==="local"&&POS(sessionSystemID)&&sessionSystemID===systemID);
  }
  function alert(e){
-  // Native agent mode sends one verified priced-agent notice AFTER native quote.
-  // Avoid prematurely mailing an unpaid PREPARING event with chat commands.
-  if(process.env.EVEJS_COOP_NATIVE_JOB_AGENT==="1"&&e?.stage==="PREPARING")
-   return {status:"NATIVE_AGENT_QUOTE_PENDING",sent:0};
   if(process.env.EVEJS_COOP_OPPORTUNITY_MAIL!=="1"||!sendNativeMail)
    return {status:"MAIL_DISABLED",sent:0};
   let sessions;try{sessions=getSessions()}catch{return {status:"SESSIONS_UNAVAILABLE",sent:0}}
@@ -143,7 +139,13 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    }
    let receipt;try{receipt=sendNativeMail(characterID,{
     title:"New Eden: "+e.title,
-    body:e.summary+" | System "+e.systemID+" | /events info "+e.id+
+    body:process.env.EVEJS_COOP_NATIVE_JOB_AGENT==="1"?
+     e.summary+" | Native event in system "+e.systemID+
+     (e.stage==="PREPARING"?
+      " | An NPC convoy is preparing; this is NOT a paid offer. A separate "+
+      "in-game corporate agent EVEmail may follow only after a genuine native quote.":
+      " | Travel and respond using the actual EVE ship, overview and fleet controls."):
+     e.summary+" | System "+e.systemID+" | /events info "+e.id+
      " | /events interest "+e.id+
      (e.stage==="PREPARING"?" | /events volunteer "+e.id+" | /events info "+e.id+" (priced accept only after NPC quote)":"")+
      " | /events watch off",
