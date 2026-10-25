@@ -130,7 +130,7 @@ test("a forged duplicate character session cannot open corporate offer",()=>{
 test("stale selected source refuses client Accept without accepting unrelated native mission",()=>{
  const f=fixture();f.start();f.jobs.length=0;
  const r=f.action(3);
- assert.match(r.data.agentSays[0],/expired or changed/);
+ assert.match(r.data.agentSays[0],/no longer valid/);
  assert.equal(f.called.length,0);
 });
 test("new job cannot replace selected immutable ID between view and accept",()=>{
@@ -141,7 +141,7 @@ test("new job cannot replace selected immutable ID between view and accept",()=>
 });
 test("changed source ship or quote cannot be accepted after initial view",()=>{
  const f=fixture();f.start();f.changeQuote({...quote(),haulerID:999});
- const r=f.action(3);assert.match(r.data.agentSays[0],/expired or changed/);
+ const r=f.action(3);assert.match(r.data.agentSays[0],/no longer valid/);
  assert.equal(f.called.length,0);
 });
 test("both signed pilots see View only, never another Accept money action",()=>{
@@ -161,7 +161,7 @@ test("disabled native agent gate leaves stock EveJS dialogue untouched",()=>{
 test("post-restart Accept with no durable selection never silently selects another job",()=>{
  const f=fixture();
  const r=f.action(3);
- assert.match(r.data.agentSays[0],/Reopen this native agent/);
+ assert.match(r.data.agentSays[0],/Reopen the contact/);
  assert.equal(f.called.length,0);
 });
 test("selection persists with actor and agent and cannot switch to newer offer",()=>{
