@@ -26,7 +26,10 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  const stop=(reason,uncertain=false,hauler=null,cargoID=0)=>{
   if(uncertain){
    miner.coopHaulNeedsOperatorRepair=reason;
+   miner.coopHaulCargoNeedsOperatorRepair=reason;
+   miner.coopMiningCargoNeedsOperatorRepair=reason;
    fleet.coopHaulNeedsOperatorRepair=reason;
+   fleet.coopHaulCargoNeedsOperatorRepair=reason;
    if(hauler)hauler.coopHaulNeedsOperatorRepair=reason;
   }
   try{probe.observe("living-haul-custody-blocked",null,
@@ -39,6 +42,10 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
   return stop("HAUL_NATIVE_PERSISTENCE_FLAGS_REQUIRED");
+ const atomicRequired=process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"&&
+   typeof fleet?.startupKey==="string"&&fleet.startupKey.length>0;
+ if(atomicRequired&&process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC!=="1")
+  return stop("ALIFE10_ATOMIC_HAUL_REQUIRED",true);
  const systemID=Number(scene?.systemID),fleetID=Number(fleet?.fleetID);
  const minerID=Number(miner?.itemID),minerOwner=Number(miner?.ownerID);
  if(![systemID,fleetID,minerID,minerOwner].every(integer)||
@@ -96,9 +103,9 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    return stop("HAUL_LOCAL_CARGO_WITHOUT_NATIVE_SOURCE",true);
   return 0;
  }
- const db=options.database||require("../gameStore");
- if(!db||typeof db.setTransientPath!=="function"||
-  typeof db.flushTableSync!=="function")return stop("HAUL_GAMESTORE_UNAVAILABLE");
+ const db=atomicRequired?null:(options.database||require("../gameStore"));
+ if(!atomicRequired&&(!db||typeof db.setTransientPath!=="function"||
+  typeof db.flushTableSync!=="function"))return stop("HAUL_GAMESTORE_UNAVAILABLE");
  let totalMoved=0,quantity=0,count=0;
  // Pick the first physical, in-range hull with VERIFIED remaining capacity;
  // never merge, split, or invent an ore stack to satisfy a capacity deficit.
@@ -140,26 +147,39 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   if(strictInFlight.has(key))return stop("HAUL_TRANSFER_REENTRANT",true,selected,cargoID);
   strictInFlight.add(key);
   try{
-   const updated={...item,cargoID,entityID:selected.itemID,
-    ownerID:minerOwner,transient:false,[haulFlag]:fleetID,
-    coopHaulFromMinerID:minerID,coopHaulLoadedAt:Date.now()};
-   const ack=store.upsertNativeCargo(updated,{transient:true});
-   // An unsuccessful ACK does not establish that nothing was written.
-   if(ack?.success!==true)return stop("HAUL_SOURCE_MOVE_UNCERTAIN",true,selected,cargoID);
-   db.setTransientPath("npcCargo","/cargo/"+cargoID,false);
-   if(db.flushTableSync("npcCargo")?.success!==true)
-    return stop("HAUL_SOURCE_FLUSH_UNCERTAIN",true,selected,cargoID);
-   const after=store.listNativeCargo();
-   const hits=Array.isArray(after)?after.filter(x=>Number(x?.cargoID)===cargoID):[];
-   if(hits.length!==1||Number(hits[0].entityID)!==selected.itemID||
-      Number(hits[0].ownerID)!==minerOwner||Number(hits[0].typeID)!==Number(item.typeID)||
-      Number(hits[0].quantity)!==Number(item.quantity)||
-      Number(hits[0][haulFlag])!==fleetID||
-      Number(hits[0].coopHaulFromMinerID)!==minerID||hits[0].transient!==false||
-      store.listNativeCargoForEntity(minerID).some(x=>Number(x?.cargoID)===cargoID))
-    return stop("HAUL_POSTCOMMIT_IDENTITY_UNKNOWN",true,selected,cargoID);
-   miner.nativeCargoItems=miner.nativeCargoItems.filter(x=>Number(x.itemID)!==cargoID);
-   selected.nativeCargoItems=store.buildNativeCargoItems(selected.itemID);
+   if(atomicRequired){
+    // Keep all upstream physical range, capacity, and original ore type guards.
+    // Only the final native cargo reparent is made transactional.
+    const atomic=options.atomicMover||require("./coopNativeHaulTransferAtomic");
+    const result=atomic.transfer({scene,fleet,miner,hauler:selected,cargoID});
+    if(result?.status!=="COMMITTED")
+     return stop("ALIFE10_"+String(result?.reason||result?.status||"UNKNOWN"),true,selected,cargoID);
+    if(Number(result.quantity)!==Number(item.quantity)||
+       !Number.isFinite(result.volumeM3)||
+       Math.abs(result.volumeM3-volume)>1e-6)
+     return stop("ALIFE10_AFTER_COMMIT_VOLUME_CONFLICT",true,selected,cargoID);
+   }else{
+    const updated={...item,cargoID,entityID:selected.itemID,
+     ownerID:minerOwner,transient:false,[haulFlag]:fleetID,
+     coopHaulFromMinerID:minerID,coopHaulLoadedAt:Date.now()};
+    const ack=store.upsertNativeCargo(updated,{transient:true});
+    // An unsuccessful ACK does not establish that nothing was written.
+    if(ack?.success!==true)return stop("HAUL_SOURCE_MOVE_UNCERTAIN",true,selected,cargoID);
+    db.setTransientPath("npcCargo","/cargo/"+cargoID,false);
+    if(db.flushTableSync("npcCargo")?.success!==true)
+     return stop("HAUL_SOURCE_FLUSH_UNCERTAIN",true,selected,cargoID);
+    const after=store.listNativeCargo();
+    const hits=Array.isArray(after)?after.filter(x=>Number(x?.cargoID)===cargoID):[];
+    if(hits.length!==1||Number(hits[0].entityID)!==selected.itemID||
+       Number(hits[0].ownerID)!==minerOwner||Number(hits[0].typeID)!==Number(item.typeID)||
+       Number(hits[0].quantity)!==Number(item.quantity)||
+       Number(hits[0][haulFlag])!==fleetID||
+       Number(hits[0].coopHaulFromMinerID)!==minerID||hits[0].transient!==false||
+       store.listNativeCargoForEntity(minerID).some(x=>Number(x?.cargoID)===cargoID))
+     return stop("HAUL_POSTCOMMIT_IDENTITY_UNKNOWN",true,selected,cargoID);
+    miner.nativeCargoItems=miner.nativeCargoItems.filter(x=>Number(x.itemID)!==cargoID);
+    selected.nativeCargoItems=store.buildNativeCargoItems(selected.itemID);
+   }
    totalMoved+=volume;quantity+=Number(item.quantity);count++;
   }catch(_){return stop("HAUL_TRANSFER_OUTCOME_UNKNOWN",true,selected,cargoID);}
   finally{strictInFlight.delete(key);}
@@ -176,7 +196,10 @@ function transferCargo(scene,fleet,miner,options={}){
  try{
   if(!scene||!positive(miner?.itemID)||!positive(fleet?.fleetID))return 0;
   const {store,probe}=dependenciesOf(options);
-  if(process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD==="1")
+  const durableRequired=process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"&&
+    miner?.transient===false&&typeof fleet?.startupKey==="string"&&
+    fleet.startupKey.length>0;
+  if(durableRequired||process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD==="1")
    return strictTransferCargo(scene,fleet,miner,options,store,probe);
   const hauler=(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID(Number(id)))
     .find(x=>x?.kind==="ship"&&positive(x.itemID)&&x.itemID!==miner.itemID);
@@ -215,7 +238,15 @@ function transferCargo(scene,fleet,miner,options={}){
      stacks:moved,cargoQuantity:quantity,volumeM3:volume});
   }
   return volume;
- }catch(error){console.warn("[CoopHaul] transfer",error.message);return 0;}
+ }catch(error){
+  if(miner?.transient===false&&process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"){
+   const reason="ALIFE10_UNEXPECTED_HAUL_OUTCOME";
+   miner.coopMiningCargoNeedsOperatorRepair=reason;
+   miner.coopHaulNeedsOperatorRepair=reason;
+   fleet.coopHaulNeedsOperatorRepair=reason;
+  }
+  console.warn("[CoopHaul] transfer",error.message);return 0;
+ }
 }
 function unloadCargo(scene,fleet,options={}){
  try{

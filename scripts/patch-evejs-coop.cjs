@@ -17,6 +17,8 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConserva
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
 // ALIFE-08 durable native miner/hauler identity (opt-in).
 names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetDurable");
+// ALIFE-10 strict native miner->hauler original cargoID atomic handoff.
+names.splice(names.indexOf("coopNativeHaulCargo")+1,0,"coopNativeHaulTransferAtomic");
 // COOP-048 native /jobs uses the existing authenticated Opportunity Board.
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
 // Stock in-game agent dialogue for jobs, no /jobs text needed.
