@@ -114,7 +114,7 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
     characterID:ctx.characterID,factionID:ctx.factionID});
    return result?.status==="OBSERVED"&&
     typeof result.text==="string"?
-    result.text.replace(/[<>\\x00-\\x1f]/g," ").slice(0,600):"";
+    result.text.replace(/[<>]/g," ").replace(/[\x00-\x1f]/g," ").slice(0,600):"";
   }catch{return ""}
  }
  function briefing({session,agentID}={}){
