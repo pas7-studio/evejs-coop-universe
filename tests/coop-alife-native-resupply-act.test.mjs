@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {nativeResupplyActEnabled,selectAmmoResupply}=require("../integration/coopAlifeNativeResupplyBridge.cjs");
+const {createAmmoSupply}=require("../integration/coopNpcAmmoSupply.cjs");
 const SID=30000144,PILOT="coop-pilot-005",ID=501,STATION=60003760;
 const now=1800000000030,observedAt=1800000000000;
 function caseData(){
@@ -134,4 +135,76 @@ test("reject invalid modes and missing physical proof rather than mutating state
   const r=selectAmmoResupply({...f,...opts});
   assert.equal(r.status,"BLOCKED");
  }
+});
+
+function realDirectorHarness(){
+ const pilots=[{pilotID:PILOT,entityID:ID,systemID:SID},
+  {pilotID:"coop-pilot-006",entityID:502,systemID:SID}];
+ const hulls=new Map(pilots.map(p=>[p.entityID,{
+  kind:"ship",itemID:p.entityID,nativeNpc:true,hpRatio:1,
+  position:{x:0,y:0,z:0}}]));
+ const controllers=new Map(pilots.map(p=>[p.entityID,{
+  entityID:p.entityID,systemID:SID,currentTargetID:0}]));
+ const station={kind:"station",itemID:STATION,
+  position:{x:800000,y:0,z:0}};
+ const scene={systemID:SID,staticEntities:[station],sessions:new Map(),
+  getEntityByID:id=>hulls.get(id)||(id===STATION?station:null)};
+ const nativeOrders=[];
+ const store={getNativeEntity:id=>hulls.has(id)?{
+   entityID:id,ownerID:900,systemID:SID}:null,
+  listNativeModulesForEntity:id=>[{moduleID:id+100,entityID:id,
+   ownerID:900,categoryID:7,typeID:123,flagID:27}],
+  listNativeCargoForEntity:id=>[]};
+ const director=createAmmoSupply({store,getWeaponModules:ship=>[{
+   itemID:ship.itemID+100,typeID:123,flagID:27}],
+  resolveFamily:()=>"projectileTurret",isOptional:()=>false,
+  compatible:(_weapon,typeID)=>typeID===35,
+  getController:id=>controllers.get(id),
+  getStation:id=>id===STATION?{stationID:STATION,solarSystemID:SID}:null,
+  warp:(id,target)=>{nativeOrders.push({id,target});
+   return {success:true}},
+  orbit:()=>({success:false}),
+  isScrambled:()=>false,clock:()=>now});
+ const decision={...caseData().decision};
+ return {pilots,hulls,controllers,station,scene,nativeOrders,director,decision,
+  select:mode=>selectAmmoResupply({mode,systemID:SID,assignments:pilots,
+   decision,scene,getController:id=>controllers.get(id),
+   inspectAmmo:args=>director.inspect(args),now})};
+}
+test("end-to-end mocked native driver: A-Life intent dispatches only one real pirate warp",()=>{
+ const f=realDirectorHarness();
+ const monitor=f.director.tick({scene:f.scene,assignments:f.pilots,
+  observeOnly:true});
+ assert.equal(monitor.orders.length,0);
+ assert.equal(f.director.activeIDs(SID).size,2,
+  "both depleted NPCs remain excluded from new raids");
+ const selection=f.select("PLANNED");
+ assert.deepEqual(selection.selected.map(x=>x.entityID),[501]);
+ const actual=f.director.tick({scene:f.scene,assignments:selection.selected});
+ assert.equal(actual.orders.length,1);
+ assert.equal(actual.orders[0].action,"NATIVE_AMMO_RESUPPLY_WARP");
+ assert.deepEqual(f.nativeOrders,[{id:501,target:STATION}]);
+ assert.equal(f.director.activeIDs(SID).size,2);
+ const repeated=f.director.tick({scene:f.scene,assignments:selection.selected});
+ assert.equal(repeated.orders.length,0,"native ammo director cooldown prevents repeat");
+ assert.equal(f.nativeOrders.length,1);
+});
+test("end-to-end mocked native driver: invalid plan cannot issue action but shortages remain fenced",()=>{
+ const f=realDirectorHarness();
+ f.director.tick({scene:f.scene,assignments:f.pilots,observeOnly:true});
+ f.decision={...f.decision,proof:"VIRTUAL"};
+ const selected=f.select("PLANNED");
+ assert.equal(selected.selected.length,0);
+ assert.equal(f.nativeOrders.length,0);
+ assert.equal(f.director.activeIDs(SID).size,2);
+});
+test("end-to-end mocked native survival continues without planner approval",()=>{
+ const f=realDirectorHarness();
+ f.controllers.get(ID).currentTargetID=700;
+ f.director.tick({scene:f.scene,assignments:f.pilots,observeOnly:true});
+ const selected=f.select("SURVIVAL");
+ assert.deepEqual(selected.selected.map(x=>x.entityID),[ID]);
+ const report=f.director.tick({scene:f.scene,assignments:selected.selected});
+ assert.equal(report.orders.length,1);
+ assert.deepEqual(f.nativeOrders,[{id:ID,target:STATION}]);
 });
