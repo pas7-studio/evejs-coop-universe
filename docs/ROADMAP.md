@@ -1,5 +1,15 @@
 # Delivery roadmap — agent-ready tasks
 
+> **2026-10-25: Coop Economy + Progression V1 proposal** — the authoritative
+> step-by-step implementation specification for native fleet, item/ship gifts,
+> per-player shared mission credit, actual ore-to-blueprint industry, market
+> liquidity, NPC mining/crafting, faction reputation, native Alpha/Omega
+> subscriptions and 6x skill training is in
+> [COOP_ECONOMY_PROGRESSION_V1.md](COOP_ECONOMY_PROGRESSION_V1.md).
+> Proposal only: full multiplayer/industry/economy gates remain UNVERIFIED.
+> Do not enable in-progress shared dungeon hooks or deploy to real worlds.
+
+
 Status definitions: **TODO** not started; **BLOCKED** dependency outstanding; **IMPLEMENTED_UNVERIFIED** code exists but live evidence is missing; **DONE** actual acceptance evidence recorded. The gameplay test order is in GAMEPLAY_TESTING.md.
 
 ## Owner-defined execution order and current gameplay blocker (2026-10-25)
