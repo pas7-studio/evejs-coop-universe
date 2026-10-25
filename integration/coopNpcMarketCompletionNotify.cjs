@@ -7,8 +7,14 @@ const FILL_BASE=930000000000000,SEP="\u001f";
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const nonneg=n=>Number.isSafeInteger(n)&&n>=0;
 const number=n=>typeof n==="string"&&/^(0|[1-9][0-9]*)$/.test(n)?Number(n):n;
-const money=v=>typeof v==="number"&&Number.isFinite(v)&&
- Number.isSafeInteger(Math.round(v*100))?Math.round(v*100):null;
+// Never round pre-existing native wallet balances or a Rust market price
+// into a convincing notification about an unaudited paid settlement.
+const money=v=>{
+ if(typeof v!=="number"||!Number.isFinite(v))return null;
+ const scaled=v*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
 function createNpcMarketCompletionNotifier({gameStore,marketClient,
  sessions,helpers,walletState,clock=()=>Date.now(),env=process.env}={}){
  if(typeof gameStore?.transact!=="function"||
@@ -31,7 +37,16 @@ function createNpcMarketCompletionNotifier({gameStore,marketClient,
    nonneg(r.netCents)&&r.netCents===r.grossCents-r.taxCents&&
    Number.isSafeInteger(r.grossCents)&&
    r.taxPolicy==="EVEJS_NATIVE_MARKET_RULES"&&
-   nonneg(r.sellerAfterCents)&&nonneg(r.buyerAfterCents);
+   // Keep best-effort seller UI claims aligned with the same paid receipt
+   // contract required for original Rust/GameStore crash recovery.
+   nonneg(r.buyerBeforeCents)&&nonneg(r.buyerAfterCents)&&
+   nonneg(r.sellerBeforeCents)&&nonneg(r.sellerAfterCents)&&
+   r.buyerBeforeCents>=r.grossCents&&
+   r.buyerAfterCents===r.buyerBeforeCents-r.grossCents&&
+   nonneg(r.sellerBeforeCents+r.grossCents)&&
+   r.sellerAfterCents===r.sellerBeforeCents+r.netCents&&
+   r.taxTransactionID===(r.taxCents>0?fillID+100000000000000:null)&&
+   pos(r.committedAt);
  }
  // If the paid receipt changed while Rust and session were verified,
  // abort inside the same GameStore transaction that claims UI delivery.
