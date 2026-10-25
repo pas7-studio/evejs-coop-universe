@@ -26,6 +26,45 @@ function commandInGame(session,eventID,cargoID,action){
       x.customInfo.split(":").at(-2)===String(id))
    });
    const atomic=require("../gameStore").coopAtomicNativeRows;
+   const offers=require("./coopSalvageNativeOffers").createSalvageOffers({
+    readManifest:manifest.read,readWitness:ledger.read,
+    readEvent:id=>require("./coopWorldOpportunityBoard").readNativeEvent(id),
+    readVolunteers:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id),
+    readOutcomes:()=>require("./coopConvoyOutcomeProof").createOutcomes().snapshot(),
+    isNpcCorporation:require("../services/corporation/corporationState")
+     .isNpcCorporationID
+   });
+   const consent=require("./coopSalvageNativeConsent").createSalvageConsent({
+    root,readQuote:offers.readOffer,
+    verifyPilot:(session,manifestKey,offer)=>{
+     const pair=require("./coopEscortVolunteers")
+      .readVerifiedNativePair(offer.eventID);
+     const sessions=require("../services/chat/sessionRegistry").getSessions();
+     const fleets=require("../services/fleets/fleetRuntime");
+     const fleet=fleets.getFleetForCharacter(session.characterID);
+     if(pair?.status!=="VERIFIED_NATIVE_DUO_VOLUNTEER"||
+      pair.eventID!==offer.eventID||fleet?.fleetID!==pair.fleetID||
+      !Array.isArray(sessions)||!Array.isArray(pair.pilots)||
+      pair.pilots.length!==2||!Array.isArray(offer.characters)||
+      !pair.pilots.some(p=>p.characterID===session.characterID&&
+       p.shipID===session._space?.shipID)||
+      !session._space?.initialStateSent||
+      sessions.filter(x=>x.characterID===session.characterID&&
+       x.socket?.destroyed!==true).length!==1)
+      return {status:"SALVAGE_PLAYER_FLEET_NOT_VERIFIED"};
+     return {status:"SALVAGE_AUTHENTIC_PILOT",
+      characterID:session.characterID};
+    }
+   });
+   const rewards=require("./coopSalvageNativeRewards")
+    .createSalvageNativeRewards({
+     atomic,
+     isNpcCorporation:require("../services/corporation/corporationState")
+      .isNpcCorporationID,
+     readWitness:ledger.read,readManifest:manifest.read,
+     readAcceptedDuo:consent.readDuo
+    });
+
    singleton=require("./coopSalvageGameAuthority").createSalvageGameAuthority({
     readEvent:id=>require("./coopWorldOpportunityBoard").readNativeEvent(id),
     readFlight:id=>require("./coopEscortNativeBinding").routeGate().readFlight(id),
@@ -33,6 +72,11 @@ function commandInGame(session,eventID,cargoID,action){
     readVolunteers:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id),
     readOutcomes:()=>require("./coopConvoyOutcomeProof").createOutcomes().snapshot(),
     ledger,
+    readSalvageOffer:offers.readOffer,
+    acceptSalvage:(s,id)=>consent.accept(s,id),
+    reserveSalvage:id=>rewards.reserve(id),
+    verifyEscrow:id=>rewards.verify(id),
+    settleSalvage:id=>rewards.settle(id),
     readScene:s=>require("./runtime").getSceneForSession(s),
     readPlayerShip:s=>{
      const target=s?._space?.shipID||
