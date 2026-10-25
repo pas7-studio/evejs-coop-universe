@@ -73,6 +73,20 @@ function createWarStructureCombatProof({gameStore,getNativeKillmail,
    !Number.isFinite(record.finalDamageDone)||record.finalDamageDone<=0)
    return {status:"BLOCKED",reason:"NOT_NATIVE_STRUCTURAL_COMBAT_KILL"};
   return transact(tx=>{
+   // Replay of an already committed original combat kill remains
+   // idempotent even after a campaign becomes OCCUPIED or the native
+   // structure has been salvaged. Never regenerate a new victim event.
+   const previous=validate(tx.get(TABLE,KEY)||empty()).byStructure[String(id)];
+   if(previous){
+    const same=previous.killID===killID&&
+     previous.systemID===targetEntity.systemID&&
+     previous.ownerCorporationID===corp&&
+     previous.typeID===targetEntity.typeID&&
+     previous.attackerCorporationID===attackerCorp&&
+     nativeMatch(previous);
+    return same?{status:"DUPLICATE",receipt:{...previous}}:
+     {status:"BLOCKED",reason:"STRUCTURE_KILLMAIL_REPLAY_CONFLICT"};
+   }
    const war=tx.get(TABLE,WAR_KEY),
     objectiveState=tx.get(TABLE,OBJECTIVE_KEY);
    if(!war||!objectiveState)
@@ -108,11 +122,7 @@ function createWarStructureCombatProof({gameStore,getNativeKillmail,
      damageTaken:record.victimDamageTaken,
      finalDamageDone:record.finalDamageDone}))
     return {status:"BLOCKED",reason:"STORED_NATIVE_COMBAT_KILLMAIL_UNVERIFIED"};
-   const row=validate(tx.get(TABLE,KEY)||empty()),
-    prior=row.byStructure[String(id)];
-   if(prior)return prior.killID===killID?
-    {status:"DUPLICATE",receipt:{...prior}}:
-    {status:"BLOCKED",reason:"STRUCTURE_KILLMAIL_REPLAY_CONFLICT"};
+   const row=validate(tx.get(TABLE,KEY)||empty());
    if(row.byKillID[String(killID)]||Object.keys(row.byStructure).length>=128)
     return {status:"BLOCKED",reason:"STRUCTURE_KILLMAIL_ID_OR_CAP"};
    const recordedAt=clock();
