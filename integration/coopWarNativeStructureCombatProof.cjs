@@ -156,7 +156,20 @@ function createWarStructureCombatProof({gameStore,getNativeKillmail,
    obj.objectives[campaignID].warID!==warID)return false;
   return nativeMatch(rec);
  }
- return Object.freeze({noteFromNativeKillmail,verifyNativeCombatDestruction});
+ function receiptForStructure(structureID){
+  if(!enabled())return {status:"DISABLED"};
+  if(!POS(structureID))return {status:"INVALID_STRUCTURE"};
+  return transact(tx=>{
+   const row=validate(tx.get(TABLE,KEY)||empty()),
+    receipt=row.byStructure[String(structureID)];
+   if(!receipt)return {status:"NO_NATIVE_COMBAT_RECEIPT"};
+   if(!nativeMatch(receipt))
+    return {status:"STORED_KILLMAIL_SOURCE_DRIFT"};
+   return {status:"VERIFIED",receipt:{...receipt}};
+  });
+ }
+ return Object.freeze({noteFromNativeKillmail,verifyNativeCombatDestruction,
+  receiptForStructure});
 }
 // The pinned stock killmailTracker calls only this opt-in native server
 // entrypoint AFTER its real `createKillmailRecord` commits. No admin
