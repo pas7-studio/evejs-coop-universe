@@ -23,7 +23,7 @@ function runtime({hasAmmo=true,strict=true,active=false}={}){
   moduleID:401,typeID:35,categoryID:8,quantity:2}]:[];
  const store={getNativeEntity:()=>({entityID:101,ownerID:900,systemID:30000144}),
   listNativeModulesForEntity:()=>[{moduleID:401,entityID:101,
-   ownerID:900,categoryID:7,flagID:27}],
+   ownerID:900,typeID:12001,categoryID:7,flagID:27}],
   listNativeCargoForEntity:()=>cargo};
  const policy=createAmmoGate({store,
   dogma:{resolveWeaponFamily:()=>"projectileTurret",
