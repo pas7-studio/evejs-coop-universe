@@ -55,7 +55,8 @@ function patch(source,remove=false){
  const replacement=n(durableWing);
  const installed=wing.includes(replacement);
  const bootstrap=text.includes(n(bootCall));
- if(installed!==bootstrap)throw Error("ALIFE08_PARTIAL_INSTALL");
+ if(installed!==bootstrap || (installed && (!text.includes(n(minerTo)) || !text.includes(n(haulerTo)))))
+  throw Error("ALIFE08_PARTIAL_INSTALL");
  if(remove&&!installed)return text;
  if(!remove&&installed)return text;
  if(remove){
