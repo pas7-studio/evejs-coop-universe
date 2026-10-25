@@ -167,9 +167,9 @@ function realDirectorHarness(){
   isScrambled:()=>false,clock:()=>now});
  const decision={...caseData().decision};
  return {pilots,hulls,controllers,station,scene,nativeOrders,director,decision,
-  select:mode=>selectAmmoResupply({mode,systemID:SID,assignments:pilots,
-   decision,scene,getController:id=>controllers.get(id),
-   inspectAmmo:args=>director.inspect(args),now})};
+  select(mode){return selectAmmoResupply({mode,systemID:SID,assignments:pilots,
+   decision:this.decision,scene,getController:id=>controllers.get(id),
+   inspectAmmo:args=>director.inspect(args),now});}};
 }
 test("end-to-end mocked native driver: A-Life intent dispatches only one real pirate warp",()=>{
  const f=realDirectorHarness();
