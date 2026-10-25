@@ -924,11 +924,15 @@ function observeSession(session,ship){
             const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             const hostile=pilot.role==="pirate";
+            // Colour follows the real owner faction: civilians spawn as ORE /
+            // CONCORD hulls, only pirates from the hostile pool.
+            const pool=require("./coopNpcSpawnPools").spawnPoolForRole(pilot.role,
+             {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"});
             return npc.spawnBatchInSystem(system,{
               ...anchor,amount:1,entityType:"npc",
               transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
               broadcast:true,
-              defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+              ...pool,
               // Pirates retain native EveJS aggression. Civilians and ordinary
               // guards move and work without automatically attacking players.
               ...(hostile?{}:{behaviorOverrides:{
@@ -1101,7 +1105,10 @@ function observeSession(session,ship){
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             return npc.spawnBatchInSystem(id,{
               ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
-              defaultPoolID:"npc_hostiles",fallbackProfileID:"generic_hostile",
+              // Faction patrols are law enforcement, not pirates: CONCORD-owned
+              // hulls read as friendly/neutral brackets in the client.
+              ...require("./coopNpcSpawnPools").spawnPoolForRole("patrol",
+               {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"}),
               behaviorOverrides:{autoAggro:false,autoActivateWeapons:false,targetPreference:"none"}
             });
           },
