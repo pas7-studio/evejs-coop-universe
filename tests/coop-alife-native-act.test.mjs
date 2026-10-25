@@ -159,3 +159,15 @@ test("validated live audit and stable native actor may advance existing director
  assert.equal(result.status,"NATIVE_DIRECTOR_RESULT");
  assert.equal(calls,1);
 });
+
+test("unavailable original industry recovery auditor fails closed without native debit",async()=>{
+ let calls=0;const f=fixture();f.setDirector({
+  mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:true,
+  auditBeforeTick:async()=>{throw Error("original SQLite source offline")},
+  tick:()=>{calls++;return{status:"INSTALLED"}}
+ });
+ const result=await f.bridge.dispatch({...intent,intentID:"live-audit-unavailable-1"});
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(result.reason,"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_UNAVAILABLE");
+ assert.equal(calls,0);
+});
