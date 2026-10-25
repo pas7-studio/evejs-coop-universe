@@ -12,7 +12,7 @@ if ([string]::IsNullOrWhiteSpace($ReportDir)) {
 }
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $manifestPath = Join-Path $root "tests/scenarios/alife-native-economy-e2e.json"
-if (-not (Test-Path $manifestPath)) { throw "Missing 22-scenario ALIFE acceptance manifest" }
+if (-not (Test-Path $manifestPath)) { throw "Missing native A-Life acceptance manifest" }
 $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
 if ($manifest.schema -ne "coop-alife-economy-acceptance/v1" -or $manifest.scenarios.Count -lt 20) {
   throw "Invalid ALIFE native economy test manifest"
@@ -76,6 +76,10 @@ if (@($buyer49.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0
   throw "Do not claim native ALife buyer gameplay E2E without receipts"
 }
 $files = @(
+  "tests/coop-alife-station-authority.test.mjs",
+  "tests/coop-alife-station-owner-isolation.test.mjs",
+  "tests/coop-alife-station-runtime.test.mjs",
+  "tests/coop-alife-station-wiring.test.mjs",
   "tests/coop-alife-native-buyer-dispatch.test.mjs",
   "tests/coop-alife-native-buyer-runtime.test.mjs",
   "tests/coop-npc-buyer-native-bindings.test.mjs",
