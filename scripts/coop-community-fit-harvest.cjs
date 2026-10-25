@@ -56,14 +56,14 @@ async function harvest(opts) {
   let failures=0;
   for(let h=0;h<hulls.length;h++) {
     const hull=hulls[h];const hashes=new Set();
-    for(let page=1;page<=opts.pages && hashes.size<opts['per-hull'];page++) {
+    for(let page=1;page<=opts.pages && hashes.size<opts['per-hull']*3;page++) {
       let summaries;
       try{summaries=await cachedJson(`https://zkillboard.com/api/losses/shipTypeID/${hull.shipTypeID}/page/${page}/`,path.join(opts.cache,'zkill',`${hull.shipTypeID}-${page}.json`));}
       catch(e){failures++;process.stderr.write(`API_WARN ${hull.shipName}: ${e.message}\n`);break;}
       if(!Array.isArray(summaries)||summaries.length===0) break;
       const ordered=summaries.sort((a,b)=>Number(b?.zkb?.fittedValue||0)-Number(a?.zkb?.fittedValue||0)).slice(0,opts['per-page']);
       for(const summary of ordered) {
-        if(hashes.size>=opts['per-hull']) break;
+        if(hashes.size>=opts['per-hull']*3) break;
         const id=Number(summary?.killmail_id), hash=String(summary?.zkb?.hash||'');
         if(!Number.isSafeInteger(id)||id<=0||!/^[a-f\d]{20,80}$/i.test(hash)) continue;
         let mail;
@@ -82,8 +82,8 @@ async function harvest(opts) {
   }
   const catalog=buildCatalog(hulls,candidates,sde,opts['per-hull']);
   catalog.summary.apiFailures=failures;
-  catalog.summary.dogmaValidated=false;
-  catalog.summary.note='Public combat loss snapshots; not skill/CPU/PG/rig compatible or curated. Never auto-grant items.';
+  catalog.summary.dogmaValidated=Boolean(sde.dogma);
+  catalog.summary.note='Public combat loss snapshots; verified against pinned SDE dogma but not curated recommendations. Never auto-grant items.';
   const parent=path.dirname(path.resolve(opts.out));fs.mkdirSync(parent,{recursive:true});
   const tmp=`${path.resolve(opts.out)}.tmp-${process.pid}`;
   fs.writeFileSync(tmp,JSON.stringify(catalog,null,2));fs.renameSync(tmp,path.resolve(opts.out));

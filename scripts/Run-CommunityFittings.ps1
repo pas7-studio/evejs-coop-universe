@@ -21,6 +21,7 @@ param(
   [int]$PerHull = 5,
   [int]$WorkbenchPages = 120,
   [int]$FieldPages = 3,
+  [int]$MaxFits = 2000,
   [string]$CodePath = '',
   [string]$DbPath = '',
   [string]$Container = 'evejs-local',
@@ -32,6 +33,8 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PerHull -lt 3 -or $PerHull -gt 5) { throw 'PerHull must be 3..5.' }
+if ($FieldPages -lt 0 -or $FieldPages -gt 6) { throw 'FieldPages must be 0..6 (0 = public killmail fallback disabled).' }
+if ($MaxFits -lt 100 -or $MaxFits -gt 10000) { throw 'MaxFits must be 100..10000.' }
 if (-not (Test-Path -LiteralPath (Join-Path $SdePath 'types.jsonl')) -or -not (Test-Path -LiteralPath (Join-Path $SdePath 'groups.jsonl'))) {
   throw 'SDE root must contain types.jsonl and groups.jsonl from the PINNED EveJS game data. Locate the real SDE snapshot; do not substitute a live EVE SDE.'
 }
@@ -45,10 +48,11 @@ function Invoke-Node([string[]] $Arguments) {
 }
 if ($Action -eq 'Collect') {
   # Strict tests first; do not touch a real game database.
-  Invoke-Node -Arguments @('--test',(Join-Path $Tools '..\tests\coop-community-fittings.test.mjs'),(Join-Path $Tools '..\tests\coop-community-fitting-pipeline.test.mjs'))
+  Invoke-Node -Arguments @('--test',(Join-Path $Tools '..\tests\coop-community-fittings.test.mjs'),(Join-Path $Tools '..\tests\coop-community-fitting-pipeline.test.mjs'),(Join-Path $Tools '..\tests\coop-community-fit-dogma.test.mjs'))
   $wb = Join-Path $OutputRoot 'workbench.json'
   $wbArgs = @((Join-Path $Tools 'coop-community-fit-workbench.cjs'), '--sde', $SdePath, '--out', $wb,
-    '--cache',(Join-Path $OutputRoot 'cache-workbench'),'--pages',[string]$WorkbenchPages,'--per-hull',[string]$PerHull)
+    '--cache',(Join-Path $OutputRoot 'cache-workbench'),'--pages',[string]$WorkbenchPages,'--per-hull',[string]$PerHull,
+    '--max-fits',[string]$MaxFits)
   if ($Ships) { $wbArgs += @('--ships', $Ships) }
   $inputs = @()
   $need = @()
@@ -62,7 +66,7 @@ if ($Action -eq 'Collect') {
   } catch {
     Write-Warning "EVE Workbench API unavailable or changed; proceeding using public killmail fallback. $($_.Exception.Message)"
   }
-  if ((-not $workbenchSucceeded) -or $need.Count -gt 0) {
+  if (((-not $workbenchSucceeded) -or $need.Count -gt 0) -and $FieldPages -gt 0) {
     $field = Join-Path $OutputRoot 'field.json'
     $fieldArgs = @((Join-Path $Tools 'coop-community-fit-harvest.cjs'),'--sde',$SdePath,'--out',$field,
       '--cache',(Join-Path $OutputRoot 'cache-field'),'--per-hull',[string]$PerHull,
@@ -91,19 +95,52 @@ if ($Action -eq 'Collect') {
     if (-not $sourceCounts.ContainsKey($key)) { $sourceCounts[$key] = 0 }
     $sourceCounts[$key]++
   }
-  $missing = @($result.coverage | Where-Object { $_.variants -lt 3 } | Select-Object shipTypeID,shipName,variants,target)
+  $roleCounts = @{}
+  foreach ($fit in $result.records) {
+    $key = if ($fit.role) { [string]$fit.role } else { 'unknown' }
+    if (-not $roleCounts.ContainsKey($key)) { $roleCounts[$key] = 0 }
+    $roleCounts[$key]++
+  }
+  $invalidList = @()
+  if ($result.PSObject.Properties.Name -contains 'invalid') { $invalidList = @($result.invalid) }
+  $rejectedList = @()
+  if ($result.PSObject.Properties.Name -contains 'rejected') { $rejectedList = @($result.rejected) }
+  $reasonCounts = @{}
+  foreach ($rej in @($invalidList + $rejectedList)) {
+    if (-not $rej) { continue }
+    $key = [string]$rej.reason
+    if (-not $key) { continue }
+    if (-not $reasonCounts.ContainsKey($key)) { $reasonCounts[$key] = 0 }
+    $reasonCounts[$key]++
+  }
+  $rejectedTotal = $invalidList.Count + $rejectedList.Count
+  $dogmaValidated = $false
+  if ($result.summary.PSObject.Properties.Name -contains 'dogmaValidated') { $dogmaValidated = [bool]$result.summary.dogmaValidated }
+  $dogmaChecked = 0
+  if ($result.summary.PSObject.Properties.Name -contains 'dogmaChecked') { $dogmaChecked = [int]$result.summary.dogmaChecked }
+  $missing = @($result.coverage | Where-Object { $_.variants -lt 3 } | Select-Object shipTypeID,shipName,variants,target,available,reason,roles)
+  $hullsWithAny = @($result.coverage | Where-Object { $_.variants -ge 1 }).Count
   $report = [ordered]@{
     generatedAt = (Get-Date).ToUniversalTime().ToString('o')
     source = 'Published EVE Workbench; public killmails; explicitly permissioned EFT'
-    hulls = $result.summary.hulls
-    fits = $result.summary.fits
+    sdePin = $result.sdePin
+    catalog = $Catalog
+    shipsTotal = $result.summary.hulls
+    shipsWithAtLeastOneFit = $hullsWithAny
+    shipsWithoutFit = $result.summary.hulls - $hullsWithAny
+    fittingsTotal = $result.summary.fits
     atLeastThree = $covered
     atLeastFive = $withFive
-    bySource = $sourceCounts
     fewerThanThree = $missing.Count
+    bySource = $sourceCounts
+    byRole = $roleCounts
+    rejectedTotal = $rejectedTotal
+    rejectedReasons = $reasonCounts
     missing = $missing
-    dogmaValidated = $false
+    dogmaValidated = $dogmaValidated
+    dogmaCheckedRecords = $dogmaChecked
     nativeClientValidated = $false
+    clientNotes = 'Coverage is server-side only until a real client browses and saves these fittings.'
   }
   $reportFile = Join-Path $OutputRoot 'coverage-report.json'
   $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8

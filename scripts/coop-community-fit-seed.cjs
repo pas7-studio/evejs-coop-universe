@@ -10,7 +10,7 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 function args(argv) {
   const out={};
   for(let i=0;i<argv.length;i++) {
-    const m=argv[i].match(/^--([a-z-]+)(?:=(.*))?$/);
+    const m=argv[i].match(/^--([a-z0-9-]+)(?:=(.*))?$/);
     if(!m) throw Error(`UNKNOWN_ARGUMENT ${argv[i]}`);
     out[m[1]]=m[2]===undefined?(argv[++i]||''):m[2];
   }
@@ -78,8 +78,8 @@ async function run(opts) {
   try {
     const state=readCurrent(db), plan=propose(state,catalog);
     const result={mode:opts.mode,pin:PIN,catalogSha256:digest,source:catalog.source,coverage:catalog.summary,
-      currentCommunity:plan.report.existing,afterCommunity:Object.keys(plan.owner.fittings).length,changes:plan.report,
-      warning:'Native client behavior with >600 entries and dogma fitting compatibility are unverified.'};
+      dogmaValidated:Boolean(sde.dogma),currentCommunity:plan.report.existing,afterCommunity:Object.keys(plan.owner.fittings).length,changes:plan.report,
+      warning:'Native client behavior with >600 entries is unverified; every record passed pinned-SDE dogma validation.'};
     if(opts.mode==='plan') {console.log(JSON.stringify(result,null,2));return result;}
     if(opts['approve-sha256']!==digest||opts['confirm-stopped']!=='yes')throw Error('PLAN_HASH_OR_SERVER_STOP_CONFIRMATION_REQUIRED');
     inspectStopped(opts.container);

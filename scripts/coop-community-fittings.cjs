@@ -1,9 +1,9 @@
 'use strict';
 // COOP-043. Original native fitting record validation, harvesting and seed planning.
 // Deliberately contains no client modifications, market mutations or default-on hooks.
-const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { readJsonl, loadDogma, validateDogma, profileFit } = require('./coop-community-fit-dogma.cjs');
 
 const OWNER = 1000282;
 const PREFIX = 'COOP043#';
@@ -18,28 +18,16 @@ const positive = value => Number.isSafeInteger(Number(value)) && Number(value) >
 const text = value => String(value == null ? '' : value);
 const typeName = row => typeof row?.name === 'string' ? row.name : (row?.name?.en || '');
 
-function readJsonl(file, limit = 100000) {
-  const items = new Map();
-  const content = fs.readFileSync(file, 'utf8');
-  if (content.length > 50_000_000) throw Error('SDE_FILE_TOO_LARGE');
-  const lines = content.split(/\r?\n/).filter(Boolean);
-  if (lines.length > limit) throw Error('SDE_ROW_LIMIT');
-  for (const line of lines) {
-    const row = JSON.parse(line);
-    const id = Number(row._key ?? row.typeID ?? row.groupID);
-    if (positive(id)) items.set(id, row);
-  }
-  return items;
-}
 function loadSde(dir) {
   const types = readJsonl(path.join(dir, 'types.jsonl'));
   const groups = readJsonl(path.join(dir, 'groups.jsonl'));
+  const dogma = loadDogma(dir);
   const ships = [...types.entries()].filter(([id, t]) => {
     const g = groups.get(Number(t.groupID));
     return t.published === true && Number(g?.categoryID) === 6 && typeName(t);
   }).map(([shipTypeID, t]) => ({shipTypeID, shipName:typeName(t), groupID:Number(t.groupID)}));
   ships.sort((a,b)=>a.shipTypeID-b.shipTypeID);
-  return {types, groups, ships};
+  return {types, groups, dogma, ships};
 }
 function fitHash(shipTypeID, fitData) {
   const ordered = fitData.map(x=>x.map(Number)).sort((a,b)=>a[1]-b[1] || a[0]-b[0] || a[2]-b[2]);
@@ -69,7 +57,16 @@ function validateFit(record, sde) {
   if (slots===0) return {ok:false,reason:'NO_FITTED_MODULES'};
   const fitData=[...record.fitData.filter(x=>SLOTS.has(Number(x[1]))).map(x=>x.map(Number)), ...[...merged.entries()].map(([key,qty])=>[...key.split(':').map(Number),qty])];
   fitData.sort((a,b)=>a[1]-b[1] || a[0]-b[0]);
-  return {ok:true,fitData,slots,signature:fitHash(record.shipTypeID,fitData),warning:'DOGMA_CPU_PG_SKILLS_NOT_CHECKED'};
+  const canonical={...record,fitData};
+  const dogma=validateDogma(canonical,sde);
+  if (dogma.ok!==true) {
+    const first=dogma.reasons[0]||{code:'DOGMA_REJECTED',detail:{}};
+    return {ok:false,reason:first.code,detail:first.detail,reasons:dogma.reasons,stats:dogma.stats};
+  }
+  return {ok:true,fitData,slots,signature:fitHash(record.shipTypeID,fitData),
+    profile:profileFit(fitData,sde),
+    dogma:dogma.skipped?null:{stats:dogma.stats,skills:dogma.skills,needsSkills:dogma.needsSkills,unclassified:dogma.unclassified},
+    warning:dogma.skipped?'DOGMA_CPU_PG_SKILLS_NOT_CHECKED':'DOGMA_VALIDATED'};
 }
 function fromKillmail(hull, summary, mail) {
   const victim=mail?.victim;
@@ -93,12 +90,44 @@ function fromKillmail(hull, summary, mail) {
   if (!positive(id)||!/^[a-f0-9]{20,80}$/i.test(hash)) return null;
   return {shipTypeID:hull.shipTypeID,shipName:hull.shipName,fitData:tuples,source:{kind:'public-killmail',url:`https://zkillboard.com/kill/${id}/`,killmailID:id,hash}};
 }
+function sourcePriority(kind) {
+  return kind==='permissioned-eft'?3:kind==='public-workbench'?2:1;
+}
+const ROLE_LABEL={combat:'Combat',mining:'Mining',ewar:'EWAR',logistics:'Logi',exploration:'Explo',hauling:'Haul'};
+const TIER_LABEL={budget:'budget',standard:'improved',advanced:'specialized'};
+// Pick genuinely different fittings: round-robin over (role,tier) buckets instead of
+// taking the first N records, which used to return near-identical duplicates.
+function selectDiverse(variants, perHull) {
+  const buckets=new Map();
+  const keyOf=fit=>(fit.profile&&fit.profile.bucket)||(fit.role&&fit.tier?`${fit.role}:${fit.tier}`:'combat:standard');
+  const sigOf=fit=>fit.signature||fit.provenance?.signature||fit.name||'';
+  for (const fit of variants) {
+    const bucket=keyOf(fit);
+    if (!buckets.has(bucket)) buckets.set(bucket,[]);
+    buckets.get(bucket).push(fit);
+  }
+  const order=[...buckets.entries()].sort((a,b)=>
+    sourcePriority(b[1][0].source?.kind||b[1][0].provenance?.kind)-sourcePriority(a[1][0].source?.kind||a[1][0].provenance?.kind) ||
+    (b[1][0].slots||0)-(a[1][0].slots||0) || a[0].localeCompare(b[0]));
+  for (const [,items] of order) items.sort((a,b)=>(b.slots||0)-(a.slots||0) || sigOf(a).localeCompare(sigOf(b)));
+  const picked=[];
+  for (let round=0; picked.length<perHull; round++) {
+    let added=false;
+    for (const [,items] of order) {
+      if (picked.length>=perHull) break;
+      if (items[round]) { picked.push(items[round]); added=true; }
+    }
+    if (!added) break;
+  }
+  return picked;
+}
 function buildCatalog(hulls, candidates, sde, perHull = 5) {
   if (!Number.isInteger(perHull) || perHull<1 || perHull>5) throw Error('INVALID_PER_HULL');
-  const byHull=new Map(); const invalid=[];
+  const byHull=new Map(); const invalid=[]; let dogmaChecked=0;
   for (const candidate of candidates) {
     const result=validateFit(candidate,sde);
     if (!result.ok) {invalid.push({shipTypeID:candidate?.shipTypeID,reason:result.reason});continue;}
+    if (result.dogma) dogmaChecked++;
     const shipTypeID=Number(candidate.shipTypeID);
     if (!byHull.has(shipTypeID)) byHull.set(shipTypeID,new Map());
     if (byHull.get(shipTypeID).has(result.signature)) continue;
@@ -106,28 +135,41 @@ function buildCatalog(hulls, candidates, sde, perHull = 5) {
     if (source.kind==='permissioned-eft' && (!source.permission || !source.author || text(candidate.name).includes('@@'))) {invalid.push({shipTypeID,reason:'INVALID_CURATED_ATTRIBUTION_OR_NAME'});continue;}
     if (!text(source.url).startsWith('https://')) {invalid.push({shipTypeID,reason:'INVALID_SOURCE_URL'});continue;}
     if (source.kind!=='public-killmail' && source.kind!=='permissioned-eft' && source.kind!=='public-workbench') {invalid.push({shipTypeID,reason:'UNSUPPORTED_SOURCE'});continue;}
-    byHull.get(shipTypeID).set(result.signature,{...candidate,fitData:result.fitData,signature:result.signature,slots:result.slots});
+    byHull.get(shipTypeID).set(result.signature,{...candidate,fitData:result.fitData,signature:result.signature,slots:result.slots,profile:result.profile});
   }
   const records=[], coverage=[];
+  const dogmaValidated=Boolean(sde.dogma);
   for (const hull of hulls) {
-    const priority=k=>k==='permissioned-eft'?3:k==='public-workbench'?2:1;
-    const variants=[...(byHull.get(hull.shipTypeID)?.values()||[])].sort((a,b)=>priority(b.source.kind)-priority(a.source.kind) || b.slots-a.slots || a.signature.localeCompare(b.signature)).slice(0,perHull);
-    coverage.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,variants:variants.length,target:perHull});
+    const all=[...(byHull.get(hull.shipTypeID)?.values()||[])].sort((a,b)=>sourcePriority(b.source.kind)-sourcePriority(a.source.kind) || b.slots-a.slots || a.signature.localeCompare(b.signature));
+    const variants=selectDiverse(all,perHull);
+    const missReason=all.length===0
+      ? (invalid.filter(x=>Number(x.shipTypeID)===hull.shipTypeID).map(x=>x.reason)[0]||'NO_PUBLIC_FIT_FOUND')
+      : (all.length<3?'TARGET_NOT_MET_ONLY_'+all.length+'_VALID':undefined);
+    coverage.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,variants:variants.length,target:perHull,
+      available:all.length, roles:variants.map(f=>f.profile?`${f.profile.role}:${f.profile.tier}`:null), reason:missReason});
     for (const [i,fit] of variants.entries()) {
       const sourceURL=text(fit.source.url);
       const id=fit.signature.slice(0,16);
       const curated=fit.source.kind==='permissioned-eft';
       const workbench=fit.source.kind==='public-workbench';
-      const name=curated?text(fit.name||`[COMMUNITY] ${hull.shipName} ${i+1}`):workbench?`[EWB] ${text(fit.name||hull.shipName)}`:`[FIELD] ${hull.shipName} ${i+1}`;
+      const roleLabel=ROLE_LABEL[fit.profile?.role]||'Combat';
+      const tierLabel=TIER_LABEL[fit.profile?.tier]||'improved';
+      const tag=`${roleLabel} ${tierLabel}`;
+      const name=curated?text(fit.name||`[COMMUNITY] ${hull.shipName} ${i+1}`):workbench?`[EWB] ${tag}: ${text(fit.name||hull.shipName)}`:`[FIELD] ${tag}: ${hull.shipName} ${i+1}`;
       const origin=curated?`Shared EFT by ${text(fit.source.author).slice(0,70)}`:workbench?`Public EVE Workbench fit by ${text(fit.source.author).slice(0,60)}`:'Public combat-loss fit; not vetted';
       records.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,fitData:fit.fitData,
         name:name.slice(0,50),
         description:`${PREFIX}${id} ${origin}. ${sourceURL}`.slice(0,500),
+        role:fit.profile?.role||'combat', tier:fit.profile?.tier||'standard',
         provenance:{kind:fit.source.kind,url:sourceURL,signature:fit.signature,author:curated||workbench?fit.source.author:undefined,permission:curated?fit.source.permission:undefined}});
     }
   }
+  const byRole={};
+  for (const record of records) byRole[record.role]=(byRole[record.role]||0)+1;
   return {schema:1,source:'public-killmail-esi',sdePin:PIN,records,coverage,invalid,
-    summary:{hulls:hulls.length,fits:records.length,withAtLeast3:coverage.filter(x=>x.variants>=3).length,zero:coverage.filter(x=>!x.variants).length}};
+    summary:{hulls:hulls.length,fits:records.length,withAtLeast3:coverage.filter(x=>x.variants>=3).length,
+      withFive:coverage.filter(x=>x.variants>=5).length,zero:coverage.filter(x=>!x.variants).length,
+      dogmaValidated,dogmaChecked,byRole}};
 }
 function propose(current, input, maxCatalog = 5000) {
   if (!input || input.schema !== 1 || input.sdePin !== PIN || !Array.isArray(input.records) || input.records.length > maxCatalog) throw Error('BAD_CATALOG_OR_PIN');
@@ -163,4 +205,4 @@ function propose(current, input, maxCatalog = 5000) {
   if(Object.keys(updated).length>maxCatalog) throw Error('CATALOG_TOO_LARGE');
   return {owner:{...community,fittings:updated},next,report};
 }
-module.exports={OWNER,PIN,PREFIX,FLAGS,SLOTS,loadSde,fitHash,validateFit,fromKillmail,buildCatalog,propose};
+module.exports={OWNER,PIN,PREFIX,FLAGS,SLOTS,loadSde,fitHash,validateFit,fromKillmail,buildCatalog,propose,selectDiverse,sourcePriority,ROLE_LABEL,TIER_LABEL};

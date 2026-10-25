@@ -97,3 +97,19 @@ test('EVE Workbench wins over field reports but author-permissioned EFT wins ove
  assert.equal(output.records.length,1);
  assert.equal(output.records[0].provenance.kind,'public-workbench');
 });
+test('accepts the live PascalCase EVE Workbench schema as well as the legacy fixture shape',()=>{
+ const {validatePublicPage}=require('../scripts/coop-community-fit-workbench.cjs');
+ const live={Error:false,NumberOfPages:387,CurrentPage:1,PageSize:100,TotalFits:38647,Fits:[{Id:'x',ShipId:600,CharacterName:'pilot'}]};
+ const parsed=validatePublicPage(live);
+ assert.equal(parsed.pages,387);assert.equal(parsed.fits.length,1);assert.equal(parsed.fits[0].ShipId,600);
+ assert.deepEqual(validatePublicPage({fits:[],numberOfPages:1}),{fits:[],pages:1});
+ assert.throws(()=>validatePublicPage({Error:true,Fits:[]}),/SCHEMA/);
+});
+test('seed arguments accept hash and boundary flags containing digits',()=>{
+ const {args}=require('../scripts/coop-community-fit-seed.cjs');
+ const base=['--mode','plan','--sde','s','--db','d','--code-path','c','--catalog','k'];
+ assert.equal(args(base).mode,'plan');
+ const apply=args([...base,'--allow-over-600','yes','--approve-sha256','a'.repeat(64),'--confirm-stopped','yes','--backup-dir','b']);
+ assert.equal(apply['approve-sha256'],'a'.repeat(64));
+ assert.equal(apply['allow-over-600'],'yes');
+});

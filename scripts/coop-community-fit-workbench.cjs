@@ -51,14 +51,20 @@ async function loadJson(url,cacheFile){
   return data;
 }
 function validatePublicPage(data){
-  if(!data||data.error===true||!Array.isArray(data.fits))throw Error('WORKBENCH_LIST_SCHEMA_CHANGED');
-  return {fits:data.fits,pages:Number(data.numberOfPages)||1};
+  // The live API answers with PascalCase keys (Fits/NumberOfPages); the historical
+  // fixture shape is camelCase. Both are accepted, anything else fails loudly.
+  const fits=data&&(data.fits??data.Fits);
+  if(!data||data.error===true||data.Error===true||!Array.isArray(fits))throw Error('WORKBENCH_LIST_SCHEMA_CHANGED');
+  return {fits,pages:Number(data.numberOfPages??data.NumberOfPages)||1};
 }
 async function collect(opts){
   const sde=loadSde(path.resolve(opts.sde));
   const hulls=selectHulls(sde,opts.ships);
   const selected=new Set(hulls.map(h=>h.shipTypeID));
   const successes=new Map(), seenSignatures=new Map(), failures=[];
+  // Collect several candidates per hull so buildCatalog can pick genuinely different
+  // (role, tier) variants instead of the first N records of the same setup.
+  const candidateCap=Math.min(40,Math.max(opts['per-hull'],opts['per-hull']*4));
   let pagesRead=0,seen=0;
   for(let page=1;page<=opts.pages;page++){
     const raw=await loadJson(`${API}/v1/fits/public?page=${page}`,path.join(opts.cache,'pages',`${page}.json`));
@@ -66,15 +72,16 @@ async function collect(opts){
     if(!response.fits.length)break;
     for(const info of response.fits){
       if(seen>=opts['max-fits'])break;
-      const shipID=Number(info?.shipId),id=String(info?.id||'');
+      const shipID=Number(info?.shipId??info?.ShipId),id=String(info?.id??info?.Id??'');
       if(!selected.has(shipID)||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id))continue;
       const existing=successes.get(shipID)||[];
-      if(existing.length>=opts['per-hull'])continue;
+      if(existing.length>=candidateCap)continue;
       seen++;
       try{
         const data=await loadJson(`${API}/v1/fits/${id}/eft`,path.join(opts.cache,'eft',`${id}.json`));
-        if(data?.error===true||typeof data?.eft!=='string')throw Error('WORKBENCH_EFT_SCHEMA_CHANGED');
-        const fit=parseEft(data.eft,sde,{kind:'public-workbench',sourceURL:`https://eveworkbench.com/fit/${id}`,author:String(info.characterName||'Anonymous author')});
+        const eft=data?.eft??data?.Eft;
+        if(data?.error===true||data?.Error===true||typeof eft!=='string')throw Error('WORKBENCH_EFT_SCHEMA_CHANGED');
+        const fit=parseEft(eft,sde,{kind:'public-workbench',sourceURL:`https://eveworkbench.com/fit/${id}`,author:String(info.characterName??info.CharacterName??'Anonymous author')});
         if(fit.shipTypeID!==shipID)throw Error('WORKBENCH_HULL_MISMATCH');
         const signature=fitHash(shipID,fit.fitData);
         const signatures=seenSignatures.get(shipID)||new Set();
@@ -84,14 +91,14 @@ async function collect(opts){
       }catch(e){failures.push({fitID:id,shipTypeID:shipID,reason:e.message});}
     }
     process.stdout.write(`WORKBENCH_PAGE ${page}/${response.pages} selected=${seen} valid=${[...successes.values()].reduce((n,a)=>n+a.length,0)}\n`);
-    if(page>=response.pages||seen>=opts['max-fits']||hulls.every(h=>(successes.get(h.shipTypeID)||[]).length>=opts['per-hull']))break;
+    if(page>=response.pages||seen>=opts['max-fits']||hulls.every(h=>(successes.get(h.shipTypeID)||[]).length>=candidateCap))break;
   }
   const candidates=[...successes.values()].flat();
   const catalog=buildCatalog(hulls,candidates,sde,opts['per-hull']);
   catalog.source='public-eveworkbench';
   catalog.summary.pagesRead=pagesRead;
   catalog.summary.importFailures=failures.length;
-  catalog.summary.dogmaValidated=false;
+  catalog.summary.dogmaValidated=Boolean(sde.dogma);
   catalog.importFailures=failures;
   fs.mkdirSync(path.dirname(path.resolve(opts.out)),{recursive:true});
   const tmp=path.resolve(opts.out)+'.tmp-'+process.pid;

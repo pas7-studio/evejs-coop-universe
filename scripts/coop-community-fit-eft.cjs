@@ -4,6 +4,8 @@
 const fs=require('node:fs');
 const path=require('node:path');
 const {loadSde,validateFit,buildCatalog}=require('./coop-community-fittings.cjs');
+const {effectSet}=require('./coop-community-fit-dogma.cjs');
+const EFFECT_SUBSYSTEM=3772, EFFECT_SERVICE_SLOT=6306, SUBSYSTEM_CATEGORY_ID=32;
 const FAMILIES=[[11,18],[19,26],[27,34],[92,99],[125,132],[164,171]];
 const DUMMY_LINE=/^\[empty\s+(low|med|medium|high|hi|rig|subsystem|service)\s+slot\]$/i;
 function parseEft(raw,sde,metadata={}) {
@@ -53,7 +55,25 @@ function parseEft(raw,sde,metadata={}) {
     const base=(quantity?quantity[1]:item).trim();
     const qty=quantity?Number(quantity[2]):1;
     if(!Number.isSafeInteger(qty)||qty<1||qty>100000)throw Error('EFT_BAD_QUANTITY');
-    if(section<6){
+    const nextFree=(start,end)=>{for(let f=start;f<=end;f++)if(!fitData.some(x=>Number(x[1])===f))return f;throw Error('EFT_TOO_MANY_SLOTS');};
+    if(sde.dogma){
+      // With real dogma data the item itself says which slot kind it belongs to. Blank-line
+      // section counting is unreliable because empty sections are collapsed by exporters.
+      const comma=base.indexOf(',');
+      const moduleName=(comma===-1?base:base.slice(0,comma)).replace(/\s+\/offline$/i,'').trim();
+      const chargeName=comma===-1?'':base.slice(comma+1).trim();
+      const type=resolve(moduleName),row=sde.types.get(type);
+      const category=Number(sde.groups.get(Number(row.groupID))?.categoryID);
+      const effects=effectSet(sde.dogma,type);
+      const families=[['high',27,34,12],['mid',19,26,13],['low',11,18,11],['rig',92,99,2663],['subsystem',125,132,3772],['service',164,171,6306]];
+      const family=families.find(entry=>effects.has(entry[3]));
+      if(family){if(qty!==1)throw Error('EFT_MODULE_QUANTITY_NOT_ONE');fitData.push([type,nextFree(family[1],family[2]),1]);}
+      else if(category===18)fitData.push([type,87,qty]);
+      else if(category===87)fitData.push([type,158,qty]);
+      else if(category===SUBSYSTEM_CATEGORY_ID)fitData.push([type,nextFree(125,132),qty]);
+      else fitData.push([type,5,qty]);
+      if(chargeName&&family)fitData.push([resolve(chargeName),5,1]);
+    }else if(section<4){
       const comma=base.indexOf(',');
       const moduleName=(comma===-1?base:base.slice(0,comma)).replace(/\s+\/offline$/i,'').trim();
       const chargeName=comma===-1?'':base.slice(comma+1).trim();
@@ -63,12 +83,19 @@ function parseEft(raw,sde,metadata={}) {
       fitData.push([resolve(moduleName),start+offset,1]);offset++;
       if(chargeName)fitData.push([resolve(chargeName),5,1]);
     }else{
-      // Drone and fighter entries may occur after omitted empty sections.
-      // Use SDE item category rather than treating charge/cargo as drones.
+      // After the rig section the position is no longer reliable: EVE Workbench and the
+      // native client collapse empty subsystem/service sections, so drones, fighters,
+      // cargo and subsystem modules all appear here. Classify by real SDE data.
       const type=resolve(base),row=sde.types.get(type);
       const category=Number(sde.groups.get(Number(row.groupID))?.categoryID);
-      const flag=category===18?87:category===87?158:5;
-      fitData.push([type,flag,qty]);
+      const effects=sde.dogma?effectSet(sde.dogma,type):new Set();
+      const nextFree=(start,end)=>{for(let f=start;f<=end;f++)if(!fitData.some(x=>Number(x[1])===f))return f;throw Error('EFT_TOO_MANY_SLOTS');};
+      if(effects.has(EFFECT_SERVICE_SLOT))fitData.push([type,nextFree(164,171),1]);
+      else if(effects.has(EFFECT_SUBSYSTEM))fitData.push([type,nextFree(125,132),1]);
+      else if(category===18)fitData.push([type,87,qty]);
+      else if(category===87)fitData.push([type,158,qty]);
+      else if(category===SUBSYSTEM_CATEGORY_ID)fitData.push([type,nextFree(125,132),qty]);
+      else fitData.push([type,5,qty]);
     }
   }
   const kind=metadata.kind||'permissioned-eft';
@@ -79,7 +106,11 @@ function parseEft(raw,sde,metadata={}) {
   const fit={shipTypeID,shipName:heading[1].trim(),name:heading[2].trim(),fitData,
     source:{kind,url:metadata.sourceURL,author:metadata.author,permission:metadata.permission}};
   const check=validateFit(fit,sde);
-  if(!check.ok)throw Error(`EFT_INVALID_FIT ${check.reason}`);
+  if(!check.ok){
+    const error=Error(`EFT_INVALID_FIT ${check.reason} ${JSON.stringify(check.detail||{})}`);
+    error.fit=fit;error.stats=check.stats;error.reasons=check.reasons;
+    throw error;
+  }
   fit.fitData=check.fitData;
   return fit;
 }
