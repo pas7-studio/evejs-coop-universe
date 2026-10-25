@@ -15,6 +15,8 @@ Scope: **real stock → industry job → READY → delivered output → physical
 
 Pinned source statuses verified against `gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`, `Code/server/src/services/industry/industryConstants.js`: stock EveJS `INSTALLED=1`, `PAUSED=2`, `READY=3`, `COMPLETED=100`, `DELIVERED=101`, `CANCELLED=102`. Our COOP-032C native NPC industry layer uses `DELIVERED=4`. The special COOP delivered status is **not** the same as stock EveJS `READY=3`. Both must be accounted for deliberately.
 
+| P1 | Stock EveJS `COMPLETED=100` does not prove that output has entered the owner's physical hangar | A second factory batch might be installed while the previous output remains pending/uncertain | Planner/director block with `NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED` until item custody is verified; `DELIVERED=101`, `CANCELLED=102`, `REVERTED=103` remain historical, not WIP |
+
 ## Regression tests committed
 
 `tests/coop-npc-manufacturing.test.mjs`: delivered status 4 never counts as active stock, PAUSED and READY do count, cancelled/wrong-station jobs excluded, missing owner station/activity fails closed, corrupt or repeated native itemID/negative mineral quantity blocks new jobs, malformed output and duplicate active jobID refuse a new paid install.
@@ -23,7 +25,7 @@ Pinned source statuses verified against `gameboys84/EveJS@c3ea396b6761a0ed3e71ad
 
 New `tests/scenarios/coop-044-industry-replenishment-integrity.json`: **10 additional local E2E, all NOT_RUN**, including 5 full buy/replenish iterations, crash after native install, dual NPC corporation isolation, Rust client settlement and post-restart conservation. The existing `scripts/Run-Alife-Economy-Tests.ps1` now includes both test files in the default local run, and verifies the 10 scenario rows are still `NOT_RUN`.
 
-**Source-level isolated checks executed this turn:** 23/23 pure planner cases; 22/22 director cases with a deterministic in-memory native filesystem journal (not a full Node filesystem); dependent PR #98 A-Life wallet/isolation 12/12. Full Node runner, compiled Rust daemon, native GameStore worker and player client E2E **not executed**. Do not mark the 10 gameplay scenarios passed from mocks.
+**Source-level isolated checks executed this turn:** 25/25 pure planner cases; 24/24 director cases with a deterministic in-memory native filesystem journal (not a full Node filesystem); dependent PR #98 A-Life wallet/isolation 12/12. Full Node runner, compiled Rust daemon, native GameStore worker and player client E2E **not executed**. Do not mark the 10 gameplay scenarios passed from mocks.
 
 ## Local acceptance
 
@@ -42,7 +44,7 @@ Then execute every row of `tests/scenarios/coop-044-industry-replenishment-integ
 - Full A-Life **ACT/SETTLE** routing is not yet connected; COOP-033/034/035 still gate their own real native writers. There must be one idempotent native dispatcher and durable operation identity, not an additional scheduler.
 - Partial market purchases require an atomically conserved native stack split. Current verified corporate buyer settlement is whole-stack only.
 - Rust pending order and GameStore escrow can temporarily disagree during a crash; pending orders must stay invisible to all buyers until reconciled. The 10 acceptance scenarios intentionally cover this boundary.
-- Native job status `COMPLETED=100` needs authoritative stock/upstream semantics review before using it to count undelivered supply; do not silently treat unknown status as available stock.
+- Native job status `COMPLETED=100` now **requires manual reconciliation** before new paid production. Its real output custody still needs review on the full pinned runtime, and cannot be counted as verified hangar goods.
 - The upstream inventory, Rust market and transaction concurrency still need real executable acceptance. In-memory tests are necessary but insufficient.
 
 Feature flags default OFF. This patch does not change Docker, player inventory, market data, `main` or `evejs-data`.
