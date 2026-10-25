@@ -31,7 +31,7 @@ function patch(source,{remove=false}={}){
   end="async function executeBuyRequest({";
  const admission=(indent)=>indent+'if ('+fenceFlag+' === "1" && '+rustFlag+' !== "1") throw Error("P2P_RUST_EXCLUSIVE_CLAIM_REQUIRED");'+nl+
   indent+'if ('+rustFlag+' === "1" && '+fenceFlag+' !== "1") throw Error("P2P_RUST_NATIVE_SETTLEMENT_FENCE_REQUIRED");';
- const matchAnchor='  const book = await marketDaemonClient.call("GetOrders", {';
+ const matchAnchor='  if (process.env.EVEJS_COOP_PLAYER_MARKET_SETTLEMENT_FENCE === "1" && process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD !== "1") throw Error("P2P_SETTLEMENT_REQUIRES_PLAYER_FILL_GUARD");';
  edit(sell,buy,matchAnchor,admission('  ')+nl+matchAnchor);
  edit(buy,end,matchAnchor,admission('  ')+nl+matchAnchor);
  const sellTicket='        const coopPlayerSellTicket = coopPlayerSellProof && '+fenceFlag+' === "1" ? require("../../space/coopPlayerMarketSettlementFence").begin(coopPlayerSellProof,{chargeBuyerWallet}) : null;';
