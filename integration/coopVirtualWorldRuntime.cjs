@@ -546,6 +546,7 @@ function advanceNativeSalvageRivals(){
   salvageRivalStationDelivery=require("./coopSalvageNpcStationDelivery")
    .createNpcSalvageDelivery({
     atomic,readNativeCargo:store.listNativeCargoForEntity,
+    readNativeItems:()=>Object.values(items.getAllItems()),
     readRivalJournal:()=>{
      const r=gameStore.read("corporationRuntime","/coopSalvageRivalMoves");
      if(r?.errorMsg==="ENTRY_NOT_FOUND")
