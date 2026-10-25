@@ -21,7 +21,7 @@ function createMovementWarpStateHelpers(deps={}){
   const eased=progress*progress*(3-2*progress);
   entity.position={x:ingressState.targetPoint.x*eased,
    y:ingressState.targetPoint.y*eased,z:ingressState.targetPoint.z*eased};
-  ingressState.lastUpdateAtMs = now;
+    ingressState.lastUpdateAtMs = now;
   return {changed:entity.position.x!==previous.x};
  }
  return {advanceSessionlessWarpIngress};
