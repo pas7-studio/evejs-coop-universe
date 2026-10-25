@@ -66,9 +66,13 @@ function createOfflineAtomicDelivery({db, offlineExclusive = false, verifyNative
         const bp = read("items",String(job.blueprintID));
         const state = read("industryBlueprintState",`records${SEP}${job.blueprintID}`);
         if (!receipt || receipt.operationID !== operationID || !outputIdentity(item,job,quantity) ||
-            item.itemID !== receipt.itemID || !bp || bp.ownerID !== job.ownerID ||
+            item.itemID !== receipt.itemID || receipt.quantity !== quantity ||
+            receipt.typeID !== job.productTypeID || item.customInfo !== `coop-industry:v1:${job.jobID}` ||
+            !bp || bp.itemID !== job.blueprintID || bp.typeID !== job.blueprintTypeID || bp.ownerID !== job.ownerID ||
             bp.locationID !== job.blueprintLocationID || bp.flagID !== job.blueprintLocationFlagID ||
-            state?.jobID !== null || state.original !== true) throw Error("DELIVERY_RECEIPT_CORRUPT");
+            state?.jobID !== null || state.original !== true ||
+            !positive(read("identityState","nextItemID")) || read("identityState","nextItemID") <= item.itemID)
+          throw Error("DELIVERY_RECEIPT_CORRUPT");
         db.exec("COMMIT"); begun = false;
         return {status:"ALREADY_DELIVERED",jobID:job.jobID,itemID:item.itemID,quantity};
       }
