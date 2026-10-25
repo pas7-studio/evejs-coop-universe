@@ -41,3 +41,28 @@ Next, in a fresh session:
 2. Only if that passes: wire the driver, enable EVEJS_COOP_COURIER_DISPATCH for
    one contract (the owner's 980000000), watch accept -> fly -> complete.
 3. Keep the concurrency cap at 3 and every env gate OFF by default.
+
+## 2026-10-26 (owner said "готовий") - the last piece, precisely
+
+The modules are ready and tested (49 tests) but the server never calls them.
+Nothing has been flown, and no contract has been touched.
+
+Hook point identified: `integration/coopVirtualWorldRuntime.cjs`, inside
+`start()` there is `timer=setInterval(() => { ... safeNpcPhase("virtual-travel",
+...) ... })`. A courier phase belongs there, wrapped in `safeNpcPhase` and gated
+by `EVEJS_COOP_COURIER_DISPATCH === "1"` (default OFF).
+
+What that phase must do, in order, with no shortcuts:
+1. `contractRuntimeState.listContractRecords()` -> outstanding courier contracts
+   (`type === 3`, `status === 0`, `acceptorID === 0`).
+2. Pick an idle seeded courier (140000100-140000106) whose character station and
+   hangar ship match the contract origin; refuse otherwise.
+3. `coopCourierNativeAccept.accept(...)` with the live runtime; on AMBIGUOUS stop
+   and journal, never retry.
+4. Drive `coopCourierFlight` + `coopCourierFlightDriver` one step per tick
+   (undock -> warp -> arrive -> dock), cap 3 concurrent.
+5. `coopCourierNativeAccept.complete(...)` only when the package is at the
+   destination.
+
+Verification for each step: telemetry events plus the client's contract window.
+Until that exists, the honest status is: implemented, never flown.
