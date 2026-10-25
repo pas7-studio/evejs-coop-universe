@@ -317,6 +317,6 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    {status:"NEEDS_OPERATOR_REPAIR",recovered:0,
     pending:[{reason:"NATIVE_CUSTODY_WRITER_LOCK_UNSAFE"}]});
  }
- return {transfer,recover,inspectExisting};
+ return {transfer,recover};
 }
 module.exports={createWreckCustody};
