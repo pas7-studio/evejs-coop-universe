@@ -8,9 +8,10 @@ const valid=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinite
 function routeForRole(scene,role){
  const all=waypoints(scene);
  const select=kinds=>all.filter(w=>kinds.includes(w.kind));
+ const prefer=kinds=>kinds.flatMap(kind=>all.filter(w=>w.kind===kind));
  switch(role){
-  case "scout":return select(["stargate","asteroidBelt","station"]).slice(0,6);
-  case "watch":return select(["asteroidBelt","stargate"]).slice(0,6);
+  case "scout":return prefer(["stargate","asteroidBelt","station"]).slice(0,6);
+  case "watch":return prefer(["asteroidBelt","stargate"]).slice(0,6);
   case "lay-low":return select(["station"]).slice(0,4);
   case "miner":return select(["asteroidBelt"]).concat(select(["station"])).slice(0,4);
   case "hauler":return [select(["asteroidBelt"])[0],select(["station"])[0],select(["stargate"])[0]].filter(Boolean);
