@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createNativeStructureControlWitness}=
+const {createNativeStructureControlWitness,listPinnedSceneShips}=
  require("../integration/coopWarNativeStructureControl.cjs");
 function fixture(){
  const entity={itemID:501,kind:"ship",nativeNpc:true,
@@ -71,4 +71,27 @@ test("ships outside objective radius do not count for sustained occupancy",()=>{
  const f=fixture();f.entity.position={x:25000,y:0,z:0};
  const w=f.witness();assert.equal(w.attackerCount,0);
  assert.equal(w.status,"CONTESTED_NATIVE_OBJECTIVE");
+});
+
+test("pinned EveJS dynamic Map and static Array are both enumerated exactly",()=>{
+ const attacker={itemID:501,kind:"ship",nativeNpc:true,
+  corporationID:31,position:{x:0,y:0,z:0}};
+ const shipID=501;
+ const scene={systemID:202,dynamicEntities:new Map([[shipID,attacker]]),
+  staticEntities:[],sessions:new Map([["pilot",{
+   _space:{shipID}}]]),getEntityByID:id=>id===501?attacker:null};
+ const answer=listPinnedSceneShips(scene);
+ assert.equal(answer.complete,true);
+ assert.equal(answer.ships.length,1);
+});
+test("missing connected player ship or incomplete pinned collection blocks native capture",()=>{
+ const attacker={itemID:501,kind:"ship",nativeNpc:true,
+  corporationID:31,position:{x:0,y:0,z:0}};
+ const scene={systemID:202,dynamicEntities:new Map([[501,attacker]]),
+  staticEntities:[],sessions:new Map([["pilot",{_space:{shipID:999}}]]),
+  getEntityByID:id=>id===501?attacker:null};
+ assert.equal(listPinnedSceneShips(scene).complete,false);
+ scene.sessions.clear();
+ scene.staticEntities=null;
+ assert.equal(listPinnedSceneShips(scene).complete,false);
 });
