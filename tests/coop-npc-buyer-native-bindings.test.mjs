@@ -114,7 +114,7 @@ test("native GameStore+Rust witness closes actual physical NPC purchase",()=>run
  assert.equal(f.tables.items[ITEM].locationID,STATION);
  assert.equal(f.tables.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975);
  assert.equal(f.tables.characters[SELLER].balance,123);
- assert.equal(f.tables.npcMarketFills["corp-buy\\u001f"+FILL].taxCents,200);
+ assert.equal(f.tables.npcMarketFills["corp-buy\u001f"+FILL].taxCents,200);
  assert.equal(f.tables.marketEscrow[ORDER],undefined);
  assert.equal(f.tables.npcMarketFills["corp-buy\u001f"+FILL].fillID,FILL);
  assert.equal(f.claims,1);
