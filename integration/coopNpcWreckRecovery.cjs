@@ -14,7 +14,7 @@ function createWreckRecovery({warp,orbit,clock=()=>Date.now(),
   throw Error("INVALID_WRECK_RECOVERY_OPTIONS");
  const pending=new Map();
  function tick({systemID,scene,claims=[],assignments=[],store,
-  getController=()=>null,blockedIDs=new Set()}={}){
+  getController=()=>null,blockedIDs=new Set(),pickupDistance=0}={}){
   const system=id(systemID);
   if(!system||Number(scene?.systemID)!==system||
    typeof scene.getEntityByID!=="function"||!Array.isArray(claims)||
@@ -76,7 +76,11 @@ function createWreckRecovery({warp,orbit,clock=()=>Date.now(),
    const key=system+":"+shipID,lease=pending.get(key);
    if(lease&&lease.nextAt>now)continue;
    const distance=meters(hunter.position,physical.position);
-   if(distance<=approachMeters){
+   // When the separately gated custody feature is enabled, a mere 5-km
+   // inspection must not strand the ship outside its 2.5-km pickup radius.
+   const needPickupApproach=pickupDistance>0&&pickupDistance<=approachMeters&&
+    distance>pickupDistance;
+   if(distance<=approachMeters&&!needPickupApproach){
     inspections.push({status:"NATIVE_WRECK_REACHED",systemID:system,
      pilotID:claim.attackerPilotID,entityID:shipID,wreckID,
      distinctNativeItemCount:contents.length,source:"LIVE_NATIVE_WRECK_STORE",
