@@ -12,9 +12,9 @@ const validAt = value => Number.isFinite(Date.parse(value));
 const decimal = value => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
 const signed = value => typeof value === 'string' && /^-?(0|[1-9][0-9]*)$/.test(value) && value !== '-0';
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const requiredMeta = meta => meta && /^[a-f0-9]{40}$/.test(meta.projectSha || '') && /^[a-f0-9]{40}$/.test(meta.upstreamSha || '') && typeof meta.imageId === 'string' && /^sha256:[a-f0-9]{64}$/.test(meta.imageId);
+const requiredMeta = meta => meta && /^[a-f0-9]{40}$/.test(meta.projectSha || '') && /^[a-f0-9]{40}$/.test(meta.upstreamSha || '') && typeof meta.imageId === 'string' && /^sha256:[a-f0-9]{64}$/.test(meta.imageId) && validAt(meta.containerStartedAt);
 
-function parseEvents(raw, now, minutes) {
+function parseEvents(raw, now, minutes, since = -Infinity) {
   let invalid = 0;
   const rows = [];
   for (const line of String(raw || '').split(/\r?\n/)) {
@@ -23,20 +23,38 @@ function parseEvents(raw, now, minutes) {
       const row = JSON.parse(line);
       const t = Date.parse(row.at);
       if (!row || typeof row.event !== 'string' || !Number.isFinite(t)) { invalid++; continue; }
-      if (t >= now - minutes * 60000 && t <= now + 60000) rows.push({...row, _t: t});
+      if (t >= Math.max(now - minutes * 60000, since) && t <= now + 60000) rows.push({...row, _t: t});
     } catch { invalid++; }
   }
   rows.sort((a,b) => a._t - b._t);
   return {rows, invalid};
 }
+function runtimeEvents(raw, meta, now, minutes) {
+  const started = Date.parse(meta.containerStartedAt);
+  const all = parseEvents(raw, now, Math.max(minutes, Math.ceil((now - started) / 60000) + 2), started);
+  const recent = all.rows.filter(e => e._t >= now - minutes * 60000);
+  return {all, recent, started, input: all.rows.map(e => JSON.stringify(e)).join('\n')};
+}
+function sceneIdentity(rows) {
+  const scene = [...rows].reverse().find(e => e.event === 'coop-shared-scene' && Array.isArray(e.pilots));
+  if (!scene || scene.pilots.length !== 2 || scene.mutualVisibility !== true) return null;
+  const ids = scene.pilots.map(p => String(p.characterID));
+  const ships = scene.pilots.map(p => String(p.shipID));
+  if (!ids.every(canonicalId) || !ships.every(canonicalId) ||
+      new Set(ids).size !== 2 || new Set(ships).size !== 2 ||
+      !scene.pilots.every(p => p.shipExists === true)) return null;
+  return {ids, ships, at:scene._t};
+}
 function checkWorld(raw, meta, now, minutes) {
   if (!raw || !String(raw).trim()) return pass('BLOCKED', 'MISSING_TELEMETRY: inspect effective running overlay with DiagnoseWorld');
-  const parsed = parseEvents(raw, now, minutes);
-  if (parsed.invalid) return pass('FAIL', 'Malformed or incomplete telemetry JSONL', {invalidLines: parsed.invalid});
-  if (!parsed.rows.length) return pass('BLOCKED', 'No current telemetry within evidence window');
-  const latestBoot = [...parsed.rows].reverse().find(e => e.event === 'living-headless-boot-requested');
-  if (!latestBoot) return pass('BLOCKED', 'Headless startup hook event not observed in current window');
-  const world = summarizeWorld(raw, {now, windowMinutes: minutes, requireActivity:true});
+  const {all, recent, input} = runtimeEvents(raw,meta,now,minutes);
+  if (all.invalid) return pass('FAIL', 'Malformed or incomplete telemetry JSONL', {invalidLines: all.invalid});
+  if (!recent.length) return pass('BLOCKED', 'No current telemetry within evidence window');
+  // Boot record can be older than the activity window, but must belong to THIS
+  // real container process. A previous boot or a source flag alone cannot pass.
+  const latestBoot = [...all.rows].reverse().find(e => e.event === 'living-headless-boot-requested');
+  if (!latestBoot) return pass('BLOCKED', 'Current-container headless boot not evidenced (possibly truncated telemetry tail)');
+  const world = summarizeWorld(input, {now, windowMinutes: minutes, requireActivity:true});
   if (world.status !== 'READY_FOR_CLIENT_PLAYTEST') return pass('BLOCKED', world.status, {
     worldStatus:world.status, activityStatus:world.activity?.status || null,
     scenery:world.scenery, missing:world.blockers?.slice(0,2) || []
@@ -46,17 +64,19 @@ function checkWorld(raw, meta, now, minutes) {
     physicalNpcShips:world.physicalNpcShipAssignments
   });
 }
-function checkParty(raw, now, minutes) {
+function checkParty(raw, meta, now, minutes) {
   if (!raw || !String(raw).trim()) return pass('BLOCKED', 'No party event log');
-  const party = summarizeParty(raw, {now, windowMinutes:minutes});
-  if (party.invalidLines) return pass('FAIL', 'Malformed party telemetry', {invalidLines:party.invalidLines});
-  const sceneAge = validAt(party.lastSceneAt) ? now - Date.parse(party.lastSceneAt) : Infinity;
-  const currentBoot = [...parseEvents(raw, now, minutes).rows].reverse().find(e => e.event === 'living-headless-boot-requested');
-  const afterBoot = !currentBoot || (validAt(party.lastSceneAt) && Date.parse(party.lastSceneAt) >= currentBoot._t);
-  if (party.serverMutualVisibility !== true || party.sharedScenePilotCount !== 2 || party.activePilotCount < 2 || !afterBoot || sceneAge < 0 || sceneAge > 5*60000)
-    return pass('BLOCKED', 'Two fresh, independently identified pilots with mutual scene visibility not evidenced', {
+  const {all, recent, input} = runtimeEvents(raw,meta,now,minutes);
+  if (all.invalid) return pass('FAIL', 'Malformed party telemetry', {invalidLines:all.invalid});
+  const party = summarizeParty(input, {now, windowMinutes:minutes});
+  const identity = sceneIdentity(recent);
+  const sceneAge = identity ? now - identity.at : Infinity;
+  const laterBoot = identity && all.rows.some(e => e.event === 'living-headless-boot-requested' && e._t > identity.at);
+  if (party.serverMutualVisibility !== true || party.sharedScenePilotCount !== 2 ||
+      party.activePilotCount !== 2 || !identity || laterBoot || sceneAge < 0 || sceneAge > 5*60000)
+    return pass('BLOCKED', 'Two fresh distinct pilots and ships with mutual scene visibility not evidenced', {
       partyStatus:party.status, activePilots:party.activePilotCount,
-      sharedScenePilots:party.sharedScenePilotCount, sceneFresh:sceneAge >= 0 && sceneAge <= 5*60000 && afterBoot
+      sharedScenePilots:party.sharedScenePilotCount, sceneFresh:sceneAge >= 0 && sceneAge <= 5*60000
     });
   return pass('PASS_SERVER', 'Two distinct sessions, ships and reciprocal server-side scene visibility observed', {
     activePilots:party.activePilotCount, sharedScenePilots:party.sharedScenePilotCount
@@ -90,10 +110,11 @@ function validateSnapshot(snapshot, meta) {
     throw Error('Native snapshot requires verifiable Docker container, image, start time and preserved evejs-data volume');
   return {normalized, capturedAt:Date.parse(snapshot.capturedAt), startedAt:Date.parse(r.containerStartedAt)};
 }
-function checkPersistence(before, after, meta) {
+function checkPersistence(before, after, meta, expectedIds = null) {
   if (!before || !after) return pass('BLOCKED', 'Provide read-only authoritative before/after restart snapshots; restart NOT performed by gate');
   try {
     const a = validateSnapshot(before, meta), b = validateSnapshot(after, meta);
+    if (expectedIds && !expectedIds.every(id => a.normalized.some(c => c.id === id) && b.normalized.some(c => c.id === id))) return pass('FAIL','Persisted character identities do not match the two observed co-op pilots');
     if (b.capturedAt <= a.capturedAt) return pass('FAIL','After snapshot must be later than before snapshot');
     if (b.startedAt <= a.capturedAt) return pass('BLOCKED','No independent evidence of Docker server restart between the two snapshots');
     if (!same(a.normalized, b.normalized)) return pass('FAIL','Character ship, location, ISK or unique item state changed across claimed idle restart');
@@ -110,11 +131,13 @@ function checkEconomy(ledger, meta) {
     if (!e || typeof e.entryId !== 'string' || !e.entryId || entries.has(e.entryId) || typeof e.txId !== 'string' || !e.txId || typeof e.account !== 'string' || !e.account || !signed(e.delta) || !['transfer','mint','burn'].includes(e.kind))
       return pass('FAIL','Duplicate entry identity, invalid transaction or non-exact monetary delta');
     entries.add(e.entryId);
-    const tx = txs.get(e.txId) || {sum:0n, kind:e.kind, count:0};
+    const tx = txs.get(e.txId) || {sum:0n, kind:e.kind, count:0, accounts:new Set(), positive:0, negative:0};
     if (tx.kind !== e.kind) return pass('FAIL','Mixed transaction kinds with same transaction ID');
     if (e.kind === 'mint' && BigInt(e.delta) <= 0n) return pass('FAIL','Mint contains nonpositive ledger entry');
     if (e.kind === 'burn' && BigInt(e.delta) >= 0n) return pass('FAIL','Burn contains nonnegative ledger entry');
-    tx.sum += BigInt(e.delta); tx.count++;
+    if (BigInt(e.delta) === 0n) return pass('FAIL','Zero-value monetary entry is not valid evidence');
+    tx.sum += BigInt(e.delta); tx.count++; tx.accounts.add(e.account);
+    if (BigInt(e.delta) > 0n) tx.positive++; else tx.negative++;
     if (e.kind === 'mint') {
       if (typeof e.rewardKey !== 'string' || !e.rewardKey) return pass('FAIL','Mint has no unique reward/issuance key');
       if (rewards.has(e.rewardKey)) return pass('FAIL','Double reward issuance for same key');
@@ -123,13 +146,13 @@ function checkEconomy(ledger, meta) {
     txs.set(e.txId, tx);
   }
   for (const tx of txs.values()) {
-    if (tx.kind === 'transfer' && (tx.sum !== 0n || tx.count < 2)) return pass('FAIL','Unbalanced or incomplete transfer ledger');
+    if (tx.kind === 'transfer' && (tx.sum !== 0n || tx.count < 2 || tx.accounts.size < 2 || !tx.positive || !tx.negative)) return pass('FAIL','Unbalanced or incomplete transfer ledger');
     if (tx.kind === 'mint' && tx.sum <= 0n) return pass('FAIL','Nonpositive mint');
     if (tx.kind === 'burn' && tx.sum >= 0n) return pass('FAIL','Nonnegative burn');
   }
   return pass('PASS_LEDGER','All sampled transactions balance or have explicit issuance/destruction semantics; unique entry and reward keys', {transactions:txs.size, entries:entries.size});
 }
-function checkClient(observations, meta, now) {
+function checkClient(observations, meta, now, expectedIds = null) {
   if (!observations) return pass('BLOCKED','Two-client authenticated gameplay needs actual operator-confirmed observations; no TCP/JSONL substitute');
   const fields = ['loginA','loginB','undockA','undockB','npcVisible','mutualVisibility','fleetInviteAccepted','fleetWarp','sharedCombat','sharedLoot','itemGift','shipGift','sharedQuestCredit','reconnectRetainsShip','secondPilotSurvivesDisconnect'];
   if (observations.projectSha !== meta.projectSha || observations.upstreamSha !== meta.upstreamSha || observations.imageId !== meta.imageId ||
@@ -137,24 +160,28 @@ function checkClient(observations, meta, now) {
     Math.abs(now-Date.parse(observations.recordedAt))>30*60000 ||
     !Array.isArray(observations.characterIds) || observations.characterIds.length !== 2 ||
     !observations.characterIds.every(positive) || String(observations.characterIds[0]) === String(observations.characterIds[1]) ||
+    (expectedIds && !expectedIds.every(id => observations.characterIds.some(x => String(x) === id))) ||
     !observations.observations || !fields.every(x => observations.observations[x] === true))
     return pass('BLOCKED','Incomplete, stale or revision-mismatched human two-client gameplay attestation');
   return pass('PASS_OPERATOR_ATTESTED','Authorized operator attested actual two-client fleet, item/ship transfers, shared missions/combat/loot and safe reconnect');
 }
 function audit({events='',meta={},before=null,after=null,ledger=null,client=null,now=Date.now(),windowMinutes=30}={}) {
   if (!Number.isInteger(windowMinutes) || windowMinutes < 1 || windowMinutes > 1440) throw Error('Window must be 1..1440 minutes');
-  if (!requiredMeta(meta)) return {overall:'BLOCKED_REVISION',reason:'Exact 40-char project/upstream SHA and running Docker image digest required',gates:{}};
+  if (!requiredMeta(meta)) return {overall:'BLOCKED_REVISION',reason:'Exact project/upstream SHA, running Docker image and real container start required',gates:{}};
+  const context = runtimeEvents(events,meta,now,windowMinutes);
+  const identity = sceneIdentity(context.recent);
+  const expectedIds = identity?.ids || null;
   const gates = {
     world:checkWorld(events,meta,now,windowMinutes),
-    party:checkParty(events,now,windowMinutes),
-    persistence:checkPersistence(before,after,meta),
+    party:checkParty(events,meta,now,windowMinutes),
+    persistence:checkPersistence(before,after,meta,expectedIds),
     economy:checkEconomy(ledger,meta),
-    client:checkClient(client,meta,now)
+    client:checkClient(client,meta,now,expectedIds)
   };
   const bad = Object.values(gates).some(g => g.status === 'FAIL');
   const complete = Object.values(gates).every(g => g.status.startsWith('PASS_'));
   return {overall:bad?'FAIL':complete?'PASS_WITH_OPERATOR_ATTESTATION':'BLOCKED',
-    meta:{projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,imageId:meta.imageId},
+    meta:{projectSha:meta.projectSha,upstreamSha:meta.upstreamSha,imageId:meta.imageId,containerStartedAt:meta.containerStartedAt},
     windowMinutes,gateOrder:['world','party','persistence','economy','client'],gates,
     limits:['Server-side events cannot prove client rendering or native database truth.',
       'Persistence PASS requires two separately captured authoritative snapshots around an operator-approved idle restart.',
