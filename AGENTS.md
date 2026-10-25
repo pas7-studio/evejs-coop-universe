@@ -1,5 +1,12 @@
 # Agent operating agreement
 
+**Cloud or local session: read [`state/NOW.md`](state/NOW.md) and
+[docs/AGENT_START_HERE.md](docs/AGENT_START_HERE.md) first.** They carry the
+last local test result, overlay drift state, gate status and the next action,
+published by `scripts/Publish-SessionState.ps1`. Never infer the current state
+from an older document; `node scripts/coop-state.cjs --verify` reports
+`STATE_STALE` when the bundle predates real changes.
+
 For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` and relevant upstream docs as needed.
 
 ## Primary goal for game-test agents (2026-10-25): prove gameplay, NOT scan dependencies

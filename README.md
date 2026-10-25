@@ -8,6 +8,12 @@ A community-oriented **two-player cooperative world** concept built *around* [Ev
 
 ## How to verify the actual game (not just Docker)
 
+**Cloud session with no access to this PC? Read [`state/NOW.md`](state/NOW.md)
+first** (plus [docs/AGENT_START_HERE.md](docs/AGENT_START_HERE.md)): it is the
+generated, redacted snapshot of the last local test run, overlay state, gate
+status and next action. Refresh it locally with
+`.\scripts\Publish-SessionState.ps1`.
+
 **Start with [Gameplay acceptance and agent instructions](docs/GAMEPLAY_TESTING.md).**
 The companion [gameplay report template](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md)
 separates genuine NPC and client observations from unit tests and TCP sockets.

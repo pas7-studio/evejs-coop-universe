@@ -263,6 +263,17 @@ Use `docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md`. Include actual project commit, pinn
 
 Do not report a global `PASS` for World/gameplay until each requested stage passes; status remains `PARTIAL` or `BLOCKED` where evidence is absent. **Prove the intended mechanic, not the general health of the infrastructure.**
 
+**Publish before you stop.** A cloud session cannot see this machine, so finish
+every run with a redacted snapshot and commit it:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action Publish -Note "what passed/failed" -Next "one concrete next blocker"
+git add state && git commit -m "state: <what this run proved>"
+```
+
+`state/NOW.md` is then the first thing any other session reads. Raw logs stay in
+`test-results/` (never committed); only counts, tails and hashes are published.
+
 The already-discovered seven npm advisories remain important but **out-of-scope for this gameplay run**; keep loopback binding and record them separately for authorized remediation. Do not pretend an npm audit is a real player experience test.
 
 Related: [HEADLESS_NPC_VALIDATION.md](HEADLESS_NPC_VALIDATION.md), [TWO_CLIENTS_ONE_PC.md](TWO_CLIENTS_ONE_PC.md), [VERIFY_BACKEND_ONE_COMMAND.md](VERIFY_BACKEND_ONE_COMMAND.md), [NATIVE_NPC_GATE_TRAVEL.md](NATIVE_NPC_GATE_TRAVEL.md), [NATIVE_NPC_MARKET.md](NATIVE_NPC_MARKET.md).

@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','StockRaidLoot','LootPickup','FinalBlow','Market','Logs','Stop')]
+    [ValidateSet('Prepare','Start','CoopStart','LaunchOne','LaunchTwo','Status','Smoke','Party','World','DiagnoseWorld','Combat','StockRaid','StockRaidLoot','LootPickup','FinalBlow','Market','Logs','Stop','Publish')]
     [string]$Action = 'Status',
     [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
     [string]$OutputRoot = '',
@@ -10,6 +10,8 @@ param(
     [int]$NpcSystemID = 30000142,
     # Dedicated physical-mining World gate: Jita legitimately has zero belts.
     [int]$WorldSystemID = 30000144,
+    [string]$Note = '',
+    [string]$Next = '',
     [switch]$ConfirmClientPermission
 )
 $ErrorActionPreference = 'Stop'
@@ -50,6 +52,19 @@ function Wait-BackendHealthy {
     throw "Backend did not become healthy within $HealthTimeoutSeconds seconds. Run -Action Logs for diagnostics."
 }
 function Get-Timestamp { Get-Date -Format 'yyyyMMdd-HHmmss' }
+# Cloud sessions cannot see this machine, so every launch writes a small,
+# redacted snapshot into state/ (tests, overlay, server events, client tail).
+function Publish-StateSnapshot([string]$StateNote,[string]$StateNext,[switch]$IncludeTests) {
+    $publisher = Join-Path $PSScriptRoot 'Publish-SessionState.ps1'
+    if (-not (Test-Path -LiteralPath $publisher -PathType Leaf)) { return }
+    try {
+        $arguments = @{ CodePath = $CodePath; Note = $StateNote; Next = $StateNext }
+        if (-not $IncludeTests) { $arguments['SkipTests'] = $true }
+        & $publisher @arguments
+    } catch {
+        Write-Warning "[STATE] Session state publish failed: $($_.Exception.Message)"
+    }
+}
 switch ($Action) {
     'Prepare' {
         Assert-BackendPrerequisites
@@ -67,6 +82,7 @@ switch ($Action) {
         Invoke-Compose @('up','--detach')
         Wait-BackendHealthy
         Write-Host 'Server running. Next: -Action LaunchTwo'
+        Publish-StateSnapshot -StateNote 'server started (plain Start)' -StateNext 'launch one authorized client, then two'
     }
     'CoopStart' {
         Assert-BackendPrerequisites
@@ -86,6 +102,7 @@ switch ($Action) {
         Write-Host '[COOP] No waves or player-triggered combat arenas. NPC ship losses persist with a recovery delay.'
         Write-Host '[COOP] First inspect headless NPC with DiagnoseWorld and World; Party is for two authenticated players.'
         Write-Warning 'Friend-PC/VPN access is NOT enabled by this command. Upstream still binds localhost.'
+        Publish-StateSnapshot -StateNote "LivingCoop deployed (route $virtualRoute)" -StateNext 'run -Action World -WorldSystemID 30000144'
     }
     'LaunchOne' {
         Assert-BackendPrerequisites
@@ -94,6 +111,7 @@ switch ($Action) {
         Start-Process -FilePath 'cmd.exe' -ArgumentList '/k call Play.bat' -WorkingDirectory $CodePath | Out-Null
         Write-Host '[PLAY] Started one local game client. Use the same authoritative Docker server for the second pilot.'
         Write-Warning 'For a second PC use only a separately authorized client and a verified private tunnel; no public ports.'
+        Publish-StateSnapshot -StateNote 'one client launcher started' -StateNext 'log in, then capture the client log tail via -Action Publish'
     }
     'LaunchTwo' {
         Assert-BackendPrerequisites
@@ -112,6 +130,7 @@ switch ($Action) {
             if ($n -eq 1 -and $LaunchGapSeconds -gt 0) { Start-Sleep -Seconds $LaunchGapSeconds }
         }
         Write-Host 'Use separate test accounts/characters, never the same character in two sessions.'
+        Publish-StateSnapshot -StateNote 'two client launchers started' -StateNext 'prove two authenticated characters in one world (-Action Party)'
     }
     'Status' {
         Assert-BackendPrerequisites
@@ -157,6 +176,7 @@ switch ($Action) {
             throw 'Physical NPC activity is not yet confirmed. Inspect movement, ore and native target evidence in the report, then -Action Logs.'
         }
         Write-Host "[WORLD] Native mining+physical NPC evidence verified for $WorldSystemID. Client rendering, combat and loot remain unverified."
+        Publish-StateSnapshot -StateNote "World gate PASS for system $WorldSystemID (server-native)" -StateNext 'one authorized client must visually confirm the same NPC'
     }
     'Combat' {
         Assert-BackendPrerequisites
@@ -242,5 +262,16 @@ switch ($Action) {
         Write-Warning 'Stop both client windows manually first. This does not terminate or kill client processes.'
         Invoke-Compose @('down')
         Write-Host 'Backend stopped. Named volumes preserved.'
+        Publish-StateSnapshot -StateNote 'backend stopped (volumes preserved)' -StateNext 'restart with -Action Start or CoopStart'
+    }
+    'Publish' {
+        # Full publish: local suite + overlay + server events + redacted client tail.
+        if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Node.js 22+ is required to publish session state.' }
+        $publisher = Join-Path $PSScriptRoot 'Publish-SessionState.ps1'
+        $publishNote = if ($Note) { $Note } else { 'manual state publish' }
+        $publishNext = if ($Next) { $Next } else { 'read state/NOW.md and continue from there' }
+        & $publisher -CodePath $CodePath -Note $publishNote -Next $publishNext
+        if (-not $?) { throw 'Session state publish failed.' }
+        Write-Host '[STATE] state/ updated; commit it so cloud sessions can see this run.'
     }
 }

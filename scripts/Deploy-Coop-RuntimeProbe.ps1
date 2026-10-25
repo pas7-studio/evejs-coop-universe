@@ -256,6 +256,16 @@ try {
     'persistent Living Universe started'
   } else { 'optional co-op runtime started' }))
   Write-Host '[COOP] EveJS data volumes were preserved. Game clients still require live validation.'
+  # Publish a redacted snapshot so cloud sessions can see what was deployed.
+  $publisher = Join-Path $PSScriptRoot 'Publish-SessionState.ps1'
+  if ((Test-Path -LiteralPath $publisher -PathType Leaf) -and (Get-Command node -ErrorAction SilentlyContinue)) {
+    $mode = if ($Remove) { 'remove' } elseif ($LivingCoop) { 'LivingCoop' } else { 'optional runtime' }
+    try {
+      & $publisher -CodePath $code -Note "deploy $mode" -Next 'run -Action World -WorldSystemID 30000144' -SkipTests -SkipClient
+    } catch {
+      Write-Warning "[STATE] Session state publish failed: $($_.Exception.Message)"
+    }
+  }
 }
 finally {
   Pop-Location

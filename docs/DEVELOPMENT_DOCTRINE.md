@@ -129,9 +129,7 @@ read-only and prints:
 Run it before every deployment, after any manual investigation of the container,
 and as the first step of any bug report about "the fix did not work".
 
-## 6a. Regression baseline (no CI, so noise must be explicit)
-
-`node scripts/coop-test-baseline.cjs` runs every local `tests/*.test.mjs` file
+## 6a. Regression baseline (no CI, so noise must be explicit)`node scripts/coop-test-baseline.cjs` runs every local `tests/*.test.mjs` file
 separately and compares failing test names against
 `docs/evidence/test-baseline.json`. `--record` rewrites the baseline;
 `--include-upstream` adds the isolated `upstream-*` contracts (they need
@@ -140,6 +138,31 @@ separately and compares failing test names against
 Recorded 2026-10-25: 78 files, 518 pass, 0 fail, 16 skipped. A baseline with
 known failures is a baseline nobody reads; keep it empty or explain every entry
 in the commit that adds it.
+
+## 6b. Session state bundle (how cloud sessions see local reality)
+
+There is no CI and no shared disk, so `state/` is the transport for cloud
+agents: `scripts/Publish-SessionState.ps1` renders a redacted, size-capped
+snapshot of the local machine and commits it.
+
+| File | Budget | Content |
+| --- | --- | --- |
+| `state/NOW.md` | 40 lines / 4 KB | rev, pin, overlay, tests, gates, next action |
+| `state/status.json` | 4 KB | same facts, machine-readable |
+| `state/ledger.json` | — | every `COOP-*` task, generated from `ROADMAP.md` |
+| `state/digests/<runId>.md` | 80 lines | server event counts + redacted client tail |
+| `state/changelog.jsonl` | 200 chars/line, last 100 | what changed, when |
+
+Rules:
+
+- Raw logs, screenshots, DB dumps and pilot names **never** enter `state/`; the
+  redactor runs before anything is written and `--verify` re-checks the files.
+- `state/status.json.projectRev` is the commit the facts came from. Staleness
+  means "files outside `state/` changed after the publish", so committing
+  `state/` itself never makes it stale.
+- Publishing is part of finishing a run, not an optional extra: an unpublished
+  run is invisible to every other session.
+- `state/` is generated. Never hand-edit it; fix the publisher instead.
 
 ## 7. Anti-footgun list
 
@@ -159,6 +182,7 @@ possible at least once.
 | `npm audit` / dependency bump as a gameplay fix | unrelated risk, no gameplay signal | separate security track |
 | Kill processes/containers you did not start | this is a shared machine | ask the owner for the PID |
 | Add GitHub Actions | owner prohibition | manual local runs with recorded evidence |
+| Hand-edit `state/` or "fix" a stale bundle by editing JSON | the next publish overwrites it and hides the real gap | re-run `Publish-SessionState.ps1` |
 | Claim PASS from tests or TCP sockets | acceptance requires observed activity | follow the gate ladder |
 
 ## 8. Definition of done ladder
