@@ -29,10 +29,10 @@ Use an existing persistent POSIX root specified by EVEJS_COOP_NPC_AMMO_DEBIT_ROO
 ## Changed code
 
 - integration/coopNpcFireOutcomeWitness.cjs — validate matching COMMITTED receipt, exclusive lock, fsync, atomically persist kind, cycle timestamp and small outcome evidence. Reject duplicates and stale cycles.
-- integration/coopNpcAmmoBankAtomic.cjs — require a successful previous outcome witness before writing the next PREPARED when the new flag is enabled.
+- integration/coopNpcAmmoBankAtomic.cjs — require the successful prior outcome, and cross-attest every previous COMMITTED receipt against its native SQLite replay fence. Persist the **outcomeRequired** mode latch in both stores and refuse flag downgrade, root rotation and missing/stale prior fences.
 - scripts/coop-native-npc-fire-debit-patch.cjs — reversible pinned source hooks after turret resolution/damage and after missile launch success/failure. The existing ammo transaction remains authoritative.
-- scripts/audit-npc-atomic-sqlite.cjs — optional read-only --require-outcome mode classifies missing/failed outcomes, validates metadata; legacy audit behavior unchanged.
-- tests/coop-npc-fire-outcome-witness.test.mjs — 10 dedicated journal and next-cycle tests; tests/coop-npc-fire-debit-source.test.mjs — 2 ordering tests; tests/coop-npc-atomic-sqlite-audit.test.mjs — 4 audit cases.
+- scripts/audit-npc-atomic-sqlite.cjs — optional read-only --require-outcome mode classifies missing/failed outcomes, validates metadata; latched outcome mode is enforced even without that flag. Reports OUTCOME_MODE_MISMATCH if SQLite and filesystem disagree; truly legacy entries remain compatible.
+- tests/coop-npc-fire-outcome-witness.test.mjs — 15 dedicated journal and next-cycle tests; tests/coop-npc-fire-debit-source.test.mjs — 2 ordering tests; tests/coop-npc-atomic-sqlite-audit.test.mjs — 7 audit cases.
 
 ## Verified now
 
@@ -40,9 +40,17 @@ Use an existing persistent POSIX root specified by EVEJS_COOP_NPC_AMMO_DEBIT_ROO
 - Isolated V8 filesystem shim demonstrated persisted turret miss, missile entity ID, known launch failure and safe duplicate rejection.
 - **Node repository test runner not yet executed**. Real SQLite SIGKILL/restart tests and dual-client gameplay still require local manual acceptance.
 
+## Recovery and test scenarios
+
+The automated cases cover a native confirmed turret miss, a successful missile entity launch, a failed missile spawn, an incomplete witness, an interrupted receipt write, stale/fabricated witness contents, a new empty journal root with old SQLite fences, a forged receipt with no corresponding SQLite state, older SQLite cycle boundaries, a turned-off witness flag after a latched ship, and divergent outcomeRequired flags across the two stores. Unresolved cases must never write new cargo or silently clear an exclusive lock.
+
+**Performance acceptance** is separate from crash safety. The disposable benchmark uses real Node SQLite with WAL and FULL synchronization, plus POSIX fsync receipts; it uses a native-shaped adapter, **not** production GameStore or real NPC combat. Interpret results accordingly. The suggested latency metrics are debit p50/p95/p99, outcome p50/p95/p99, and total cycle p50/p95/p99 for 1/2/4/8/16 barrels. No hard SLA has been demonstrated yet.
+
 ## Local commands (Node 22+ in Linux/WSL2)
 
     bash scripts/test-coop-npc-ammo-atomic.sh
+
+    node scripts/bench-coop-npc-atomic-outcome.cjs --iterations=100 --warmup=10 --barrels=8
 
 Read-only matching bank journal and native SQLite snapshot:
 
