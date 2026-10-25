@@ -12,6 +12,7 @@ function db({jita=100,perimeter=0,orders=0}={}){
     if(query.includes("stockedStations"))return [{systemID:30000142,stations:2,stockedStations:jita>0?2:0,seededTypes:jita?50:0,seededUnits:jita},
       {systemID:30000144,stations:1,stockedStations:perimeter?1:0,seededTypes:perimeter?20:0,seededUnits:perimeter}];
     if(query.includes("AS sellOrders"))return [{systemID:30000142,sellOrders:orders,buyOrders:0},{systemID:30000144,sellOrders:0,buyOrders:0}];
+    if(query.includes("FROM seed_stock k JOIN stations s ON s.station_id=k.station_id") && query.includes("AS item"))return jita?[{stationID:60003760,systemID:30000142,station:"Jita IV",typeID:34,item:"Tritanium",price:5.5,quantity:jita}]:[];
     if(query.includes("SELECT s.solar_system_id AS systemID, s.station_name"))return jita?[{systemID:30000142,station:"Jita IV",types:50,units:jita}]:[];
     throw Error("Unrecognized SQL: "+query);
    },
@@ -23,6 +24,7 @@ test("real stock present only in Jita diagnoses Perimeter as not locally stocked
  assert.equal(r.systems[0].status,"SELL_LIQUIDITY_PRESENT");
  assert.equal(r.systems[1].status,"NO_LOCAL_SELL_LIQUIDITY");
  assert.equal(r.globalSeedUnits,100);
+ assert.equal(r.affordableSeedExamples[0].typeID,34);
 });
 test("entire selected geography has no live stock without inventing orders",()=>{
  const r=inspect(db({jita:0,perimeter:0}),{});
