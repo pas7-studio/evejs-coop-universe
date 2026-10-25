@@ -56,6 +56,9 @@ names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 names.push(
  "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
 );
+// LW-04B: original A-Life native admission without live financial bindings.
+names.splice(names.indexOf("coopAlifeNativeBuyerRuntime")+1,0,
+ "coopAlifeNativeManufacturingRuntime");
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},

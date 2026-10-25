@@ -49,6 +49,17 @@ function createAlifeNativeAct({resolveActor,resolveDirector,resolveProductTypes,
    if(!director||typeof director.tick!=="function"||
       director.mode!=="NATIVE_AUTHORITIES_ONLY")
     return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_DIRECTOR_NOT_NATIVE"};
+   // Revalidate original physical NPC identity after awaiting native director
+   // resolution. An in-flight Rust/GameStore read can change the ship owner,
+   // active order, system, location or combat state before any ISK debit.
+   const current=await resolveActor(intent.entityID);
+   if(!current||current.nativeVerified!==true||current.isNpc!==true||
+      current.role!=="trader"||current.ownerID!==actor.ownerID||
+      current.stationID!==actor.stationID||current.systemID!==actor.systemID||
+      current.entityID!==intent.entityID||current.pilotID!==actor.pilotID||
+      current.underAttack===true||current.inWarp===true||
+      current.activeNativeOrder===true||current.playerControlled===true)
+    return {status:"BLOCKED",reason:"ALIFE_NATIVE_ACT_ACTOR_CHANGED_AFTER_DIRECTOR"};
    // The director (not this intent) decides the next durable step under its
    // native station lock, with verified receipts before any settlement.
    // Record before the native call: lost ACK must not replay the same intent.
