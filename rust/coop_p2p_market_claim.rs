@@ -64,7 +64,9 @@ fn coop_p2p_claim_db(
         tx.commit()?;
         return Ok(serde_json::json!({
             "order_id":order_id.to_string(),"cycle":cycle,"phase":phase,
-            "buyer_id":buyer_id,"seller_id":seller_id
+            "buyer_id":buyer_id,"seller_id":seller_id,
+            "volume_before":old_before,"filled_quantity":old_filled,
+            "volume_after":old_before-old_filled
         }));
     }
     let (owner,corp,source,bid,price,remaining,station,type_id,region,solar,min_volume,state)=
@@ -290,22 +292,23 @@ fn coop_p2p_get_claim_db(path:&Path,order_id:i64,cycle:i64)
     coop_p2p_schema(&db)?;
     let row=db.query_row(
         "SELECT buyer_id,seller_id,phase,volume_before,filled_quantity,
-                volume_after,ack_json FROM coop_p2p_fill_claims
+                volume_after,ack_json,native_receipt_key FROM coop_p2p_fill_claims
          WHERE order_id=?1 AND cycle=?2",
         params![order_id,cycle],
         |r|Ok((r.get::<_,u64>(0)?,r.get::<_,u64>(1)?,
                r.get::<_,String>(2)?,r.get::<_,u64>(3)?,
                r.get::<_,u64>(4)?,r.get::<_,u64>(5)?,
-               r.get::<_,Option<String>>(6)?))
+               r.get::<_,Option<String>>(6)?,r.get::<_,Option<String>>(7)?))
     ).optional()?;
     Ok(match row {
         None=>serde_json::Value::Null,
-        Some((buyer,seller,phase,before,filled,after,ack))=>
+        Some((buyer,seller,phase,before,filled,after,ack,receipt_key))=>
            serde_json::json!({
             "order_id":order_id.to_string(),"cycle":cycle,
             "buyer_id":buyer,"seller_id":seller,"phase":phase,
             "volume_before":before,"filled_quantity":filled,
             "volume_after":after,
+            "native_receipt_key":receipt_key,
             "ack":ack.map(|v|serde_json::from_str::<serde_json::Value>(&v)).transpose()?
            })
     })
