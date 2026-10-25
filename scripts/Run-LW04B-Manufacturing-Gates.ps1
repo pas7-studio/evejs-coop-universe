@@ -14,7 +14,7 @@ $tests=@(
  "tests/coop-alife-native-act.test.mjs",
  "tests/coop-native-industry-overlay-graph.test.mjs",
  "tests/coop-npc-native-economy-director.test.mjs",
- "tests/coop-native-economy-overlay-resolution.test.mjs",
+ "tests/coop-native-economy-overlay-resolution.test.mjs"
 )
 foreach($file in $tests){
  if(-not (Test-Path (Join-Path $repo $file))){throw "LW04B_TEST_MISSING:$file"}
