@@ -25,7 +25,7 @@ function fixture(fn,{duo=true}={}){
   characters:[701,702],amountISK:20000};
  const clone=x=>JSON.parse(JSON.stringify(x));
  let db={corporationRuntime:{"corporations\u001f10001":{
-  wallet:{divisions:{"1000":{balance:50000,journal:[],transactions:[]}}}}},
+  wallet:{divisions:{"1000":{key:1000,balance:50000,journal:[],transactions:[]}}}}},
   characters:{"701":{characterID:701,balance:500,balanceChange:0,walletJournal:[]},
    "702":{characterID:702,balance:500,balanceChange:0,walletJournal:[]}}};
  let transactions=0,verified=false;
