@@ -40,6 +40,13 @@ function patch(src,{remove=false}={}){
   stru="function applyCancelledStructureMarketOrder(order) {",
   service="async function cancelStructureMarketOrdersForServiceLoss(",
   expiry="async function processPendingExpiryEvents(";
+ const configGuard='  if ('+gate+' && process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD !== "1") throw Error("P2P_SETTLEMENT_REQUIRES_PLAYER_FILL_GUARD");';
+ edit(bs,ss,
+  '  const book = await marketDaemonClient.call("GetOrders", {',
+  configGuard);
+ edit(ss,be,
+  '  const book = await marketDaemonClient.call("GetOrders", {',
+  configGuard);
  const sellProof=lineIn(bs,ss,"coopPlayerSellProof =");
  const buyProof=lineIn(ss,be,"const coopPlayerBuyProof =");
  const sellAck=lineIn(bs,ss,"if (coopPlayerSellProof) require(");
