@@ -22,6 +22,8 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   throw Error("INVALID_NATIVE_WRECK_CUSTODY_DEPENDENCIES");
  const dir=path.join(root,"tx");
  const busy=new Set();
+ const writerLock=path.join(root,"native-wreck-custody.writer.lock");
+ let lockUnsafe=false;
  const filename=itemID=>path.join(dir,String(itemID)+".json");
  function read(txID){
   const file=filename(txID);
@@ -128,7 +130,7 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   try{return settle(tx);}
   catch(_){return {status:"CUSTODY_REPAIR_REQUIRED"};}
  }
- function transfer({claim,scene,entityID,wreckItemID,assignments=[],
+ function transferUnlocked({claim,scene,entityID,wreckItemID,assignments=[],
   getController=()=>null,canLoot=()=>false,verifyClaim=()=>false}={}){
   const itemID=validID(wreckItemID),shipID=validID(entityID),
    systemID=validID(scene?.systemID),wreckID=validID(claim?.wreckID);
@@ -250,7 +252,7 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
     reason:String(error?.message||error).slice(0,110)};
   }finally{busy.delete(itemID);}
  }
- function recover(){
+ function recoverUnlocked(){
   let files;
   try{files=fs.readdirSync(dir);}catch(e){if(e.code==="ENOENT")return {status:"CLEAN",recovered:0};throw e;}
   if(files.some(x=>!/^\d+\.json$/.test(x))||files.length>maxTransactions)
@@ -271,6 +273,49 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   }
   return {status:pending.length?"NEEDS_OPERATOR_REPAIR":"CLEAN",
    recovered,pending};
+ }
+ // The lock file is an interprocess fence, not a TTL lease. A stale file
+ // after a crash must be inspected and cleared by the operator, never stolen.
+ function withWriter(action,blocked){
+  if(lockUnsafe)return blocked;
+  let fd;
+  try{
+   fs.mkdirSync(root,{recursive:true});
+   fd=fs.openSync(writerLock,"wx",0o600);
+   fs.writeFileSync(fd,JSON.stringify({version:1,pid:process.pid,
+    at:clock(),purpose:"NATIVE_WRECK_ITEM_CUSTODY"}));
+   fs.fsyncSync(fd);
+   const directory=fs.openSync(root,"r");
+   try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
+  }catch(_){
+   if(fd!==undefined){
+    try{fs.closeSync(fd);}catch(_){}
+    // Never auto-clear uncertain lock acquisition/durability state.
+    lockUnsafe=true;
+   }
+   return blocked;
+  }
+  let result;
+  try{result=action();}
+  finally{
+   try{fs.closeSync(fd);}catch(_){lockUnsafe=true;}
+   try{
+    fs.unlinkSync(writerLock);
+    const directory=fs.openSync(root,"r");
+    try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
+   }catch(_){lockUnsafe=true;}
+  }
+  if(lockUnsafe)return blocked;
+  return result;
+ }
+ function transfer(args){
+  return withWriter(()=>transferUnlocked(args),
+   {status:"NATIVE_CUSTODY_WRITER_LOCK_UNSAFE"});
+ }
+ function recover(){
+  return withWriter(recoverUnlocked,
+   {status:"NEEDS_OPERATOR_REPAIR",recovered:0,
+    pending:[{reason:"NATIVE_CUSTODY_WRITER_LOCK_UNSAFE"}]});
  }
  return {transfer,recover,inspectExisting};
 }
