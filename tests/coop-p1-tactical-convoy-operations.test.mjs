@@ -168,5 +168,5 @@ test("world integration records only successful native NPC raid actions when fea
  assert.ok(src.slice(0,guard).includes("if(result.actions.length)"));
  assert.match(src,/PHYSICAL_NATIVE_WRECK_VERIFIED/);
  assert.match(src,/PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED/);
- assert.match(src,/recordNativeWreck\\(\\{systemID,npcID,wreckID\\}\\)/);
+ assert.ok(src.includes("recordNativeWreck({systemID,npcID,wreckID})"));
 });
