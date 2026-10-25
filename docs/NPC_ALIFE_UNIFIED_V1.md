@@ -132,3 +132,38 @@ version of this rule.
 - Not proved live: station arrival → sale; two-client visible Alife loop.
 - Never claim a phase done from unit tests: each phase ends with a manual gate
   report under `docs/`, per `DEVELOPMENT_DOCTRINE.md`.
+
+## News digest: the world reports itself
+
+`integration/coopAlifeNews.cjs` (opt-in `EVEJS_COOP_ALIFE_NEWS=1`, enabled by
+`-Alife`) is the RECORD stage made player-visible. It subscribes to the same
+probe records that are already appended to `coop-events.jsonl`
+(`coopRuntimeProbe.subscribe`), and every 5 minutes per system turns them into
+one short system message in the players' Local channel:
+
+    [ALIFE] New Caldari (30000145): ������ 1228 x1 @4605.77 � 3 ����(��) �� ���������
+
+Hard rules:
+- it never invents, predicts or replays an event - only observed records;
+- one digest per system per window, duplicates collapsed, <= 240 chars;
+- stale items expire instead of being reported as fresh news;
+- a broken listener can never stop telemetry (subscribers are isolated).
+
+## Integration roadmap (what is written and what is missing)
+
+Written and mergeable now: order arbitration (A), intent/priority ladder, custody
+settle for depot/warehouse/station/market, evidence envelope + `alife-audit`
+(+ `--timeline`), news digest, station arrival, mining/trade safety guards.
+
+Missing, in dependency order:
+1. **Mining attachment proof** - the clean-volume gate showed a fleet at
+   `state:'mining'` with miners 18-20 km from a belt and `controllerTarget 0`.
+   PERCEIVE must fail the fleet instead of reporting a healthy state.
+2. **Hauler delivery chain** - once mining produces ore, prove
+   loaded -> warp -> dwell -> warehouse receipt with the same `cargoID`.
+3. **Sale on arrival** - settle the market trade at the same station the hauler
+   reached (today the gate and the delivery are separate paths).
+4. **Reservations** - rocks, berths, order ids and gates need TTL leases so two
+   intents can never claim the same resource (Phase B of the ladder).
+5. **Client-visible loop** - one player sees the same NPC do the same thing for
+   the same reason; only then does a phase count as done.

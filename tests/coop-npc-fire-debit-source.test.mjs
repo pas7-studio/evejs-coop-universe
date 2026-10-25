@@ -108,3 +108,68 @@ test("native store commit must be verified before changing live cargo cache",()=
  assert.ok(writeProof>preflight);
  assert.ok(cacheWrite>writeProof);
 });
+
+test("durable ammo cycle creates PREPARED before native debit and commits before live cargo cache",()=>{
+ const transformed=patch(source);
+ const segment=transformed.slice(
+  transformed.indexOf("function consumeTurretAmmoCharge("),
+  transformed.indexOf("\nfunction executeTurretCycle("));
+ const pre=segment.indexOf('coopNpcAmmoDebitJournal").begin(');
+ const debit=segment.indexOf("const nextQuantity = Math.max");
+ const settle=segment.indexOf('coopNpcAmmoDebitJournal").commit(');
+ const cache=segment.indexOf("if (Array.isArray(attackerEntity.nativeCargoItems))");
+ assert.ok(pre>=0 && debit>pre);
+ assert.ok(settle>debit && cache>settle);
+ assert.ok(segment.includes('process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
+});
+
+test("whole-bank journal preflight precedes any turret debit and missile launch",()=>{
+ const transformed=patch(source);
+ const turret=transformed.slice(transformed.indexOf("function executeTurretCycle("),
+  transformed.indexOf("\nfunction executeMissileCycle("));
+ const missile=transformed.slice(transformed.indexOf("function executeMissileCycle("),
+  transformed.indexOf("\nfunction trailingFunction("));
+ const turretBank=turret.indexOf('coopNpcAmmoDebitJournal").preflightBank(');
+ const firstTurretDebit=turret.indexOf("if (strictNativeStackDebit) {");
+ const missileBank=missile.indexOf('coopNpcAmmoDebitJournal").preflightBank(');
+ const firstMissileDebit=missile.indexOf("const chargeResults = []");
+ assert.ok(turretBank>=0&&firstTurretDebit>turretBank);
+ assert.ok(missileBank>=0&&firstMissileDebit>missileBank);
+ assert.equal((turret.match(/\.preflightBank\(/g)||[]).length,1);
+ assert.equal((missile.match(/\.preflightBank\(/g)||[]).length,1);
+ assert.ok(turret.includes('EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
+ assert.ok(missile.includes('EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
+});
+
+test("atomic native weapon bank executes before turret damage and missile launch",()=>{
+ const transformed=patch(source);
+ const turret=transformed.slice(transformed.indexOf("function executeTurretCycle("),
+  transformed.indexOf("\nfunction executeMissileCycle("));
+ const missile=transformed.slice(transformed.indexOf("function executeMissileCycle("),
+  transformed.indexOf("\nfunction trailingFunction("));
+ const tAtomic=turret.indexOf('coopNpcAmmoBankAtomic").consumeBank({');
+ const tDamage=turret.indexOf("const shotResult = resolveTurretShot(");
+ const mAtomic=missile.indexOf('coopNpcAmmoBankAtomic").consumeBank({');
+ const mCharge=missile.indexOf("const chargeResults = [];");
+ assert.ok(tAtomic>=0 && tDamage>tAtomic);
+ assert.ok(mAtomic>=0 && mCharge>mAtomic);
+ assert.ok(turret.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(missile.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(turret.includes("for (const row of bank.results)"));
+ assert.ok(missile.includes("coopAtomicMissileResults.get("));
+ assert.equal(patch(patch(source),{remove:true}),source);
+});
+
+test("no native per-module ammo writer can bypass atomic guard before any cargo mutation",()=>{
+ const patched=patch(source);
+ const block=patched.slice(patched.indexOf("function consumeTurretAmmoCharge("),
+  patched.indexOf("\nfunction executeTurretCycle("));
+ const guard=block.indexOf('coopNpcAmmoBankAtomic").guardDirectDebit(');
+ const quantity=block.indexOf("const nextQuantity = Math.max(");
+ const proof=block.indexOf('coopNpcFireDebitProof").verify(');
+ assert.ok(guard>0 && guard<quantity && guard<proof,
+  "guard must execute before charge debit and journal begin");
+ assert.ok(block.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
+ assert.ok(block.includes("if (!guard.allowed) return"));
+ assert.equal(patch(patched,{remove:true}),source);
+});

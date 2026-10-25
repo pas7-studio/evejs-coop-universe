@@ -51,6 +51,13 @@ function createBroadcaster({
    try{require("./coopConvoyOperations").noteRaid(scene,action)}
    catch(error){console.warn("[CoopConvoyOperations] raid",String(error?.message||error))}
   }
+  // Real, already validated native raid actions become discoverable events.
+  // Failure of the optional board never changes native NPC combat.
+  if(process.env.EVEJS_COOP_OPPORTUNITY_BOARD==="1")for(const action of valid){
+   if(action.action!=="attack")continue;
+   try{require("./coopWorldOpportunityBoard").noteNativeRaid(scene,action)}
+   catch(error){console.warn("[CoopOpportunityBoard] raid",String(error?.message||error).slice(0,120))}
+  }
   // A real attack supersedes an earlier approach for the same pair.
   const attackingPairs = new Set(valid.filter(item => item.action === "attack")
    .map(item => item.pirateID + ":" + item.targetID));
