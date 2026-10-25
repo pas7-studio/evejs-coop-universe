@@ -44,7 +44,8 @@ function fixture(){
  const create=()=>createWreckCustody({store,sceneForSystem:()=>scene,
   resolveType:id=>types[id],root:dir,clock:()=>now});
  const input=(other={})=>({claim,scene,entityID:101,wreckItemID:500,
-  assignments,getController:()=>controller,canLoot:()=>true,...other});
+  assignments,getController:()=>controller,canLoot:()=>true,
+  verifyClaim:()=>true,...other});
  return {dir,native,hunter,physical,wreck,source,store,types,claim,
   cargo,sources,assignments,scene,controller,create,input,
   failDebit:v=>{failDebit=v},failCredit:v=>{failCredit=v},
@@ -166,5 +167,20 @@ test("one full wreck stack yields one new cargo ID; no partial free leftovers",(
   assert.equal(f.create().transfer(f.input()).status,"NATIVE_WRECK_CARGO_SETTLED");
   assert.equal([...f.cargo.values()][0].quantity,9);
   assert.equal(f.sources.size,0);
+ }finally{f.cleanup();}
+});
+
+test("fabricated receipt cannot reuse a live native wreck or bypass custody attestation",()=>{
+ const f=fixture();try{
+  assert.equal(f.create().transfer(f.input({verifyClaim:()=>false})).status,
+   "NATIVE_KILL_RECEIPT_NOT_VERIFIED");
+  assert.equal(f.sources.size,1);
+  assert.equal(f.cargo.size,0);
+ }finally{f.cleanup();}
+});
+test("inspecting a wreck at 5km is not automatically a valid 2.5km cargo pickup",()=>{
+ const f=fixture();try{
+  f.physical.position.x=4900;
+  assert.equal(f.create().transfer(f.input()).status,"NATIVE_WRECK_OR_SHIP_UNVERIFIED");
  }finally{f.cleanup();}
 });
