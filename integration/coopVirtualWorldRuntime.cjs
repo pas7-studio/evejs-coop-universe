@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
-let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
+let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -1010,6 +1010,27 @@ async function observeAlifeEconomy(){
     }
    }
    const decision=alifeEconomyObserver.tick(snap);
+   // LW-04B: source-grounded native manufacturing admission shares this
+   // already-single-flight A-Life economy tick. The currently shipped
+   // industry bindings are NOT live-safe: without verified live director
+   // bindings the ACT bridge MUST report BLOCKED and never debit ISK.
+   if(process.env.EVEJS_COOP_ALIFE_ECONOMY_ACT==="1"){
+    if(!alifeManufacturingRuntime)alifeManufacturingRuntime=
+     require("./coopAlifeNativeManufacturingRuntime").createRuntimeAlifeManufacturing({
+      getNativeEntity:id=>npcStore.getNativeEntity(id),
+      getController:id=>controllers.getControllerByEntityID(id),
+      sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+      getStation:id=>worldData.getStationByID(id)
+     });
+    const result=await alifeManufacturingRuntime.tick({
+     snapshot:snap,decision,registry:identityRegistry});
+    if(result.status==="BLOCKED"||result.status==="DISPATCHED_TO_VERIFIED_NATIVE_DIRECTOR")
+     probe.observe("alife-native-manufacturing-admission",null,
+      {spaceState:{systemID}},
+      {status:result.status,reason:result.reason||null,
+       count:result.count||0,nativeMutation:false,
+       source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
+   }
    if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
     safeNpcPhase("alife-native-resupply-act",()=>
      advanceNativeAmmoSupply({mode:"PLANNED",systemIDFilter:systemID,decision}));
