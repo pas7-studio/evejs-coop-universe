@@ -23,6 +23,8 @@ names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeM
 names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetDurable");
 // ALIFE-10 strict native miner->hauler original cargoID atomic handoff.
 names.splice(names.indexOf("coopNativeHaulCargo")+1,0,"coopNativeHaulTransferAtomic");
+// ALIFE-12 original NPC station-trip fsynced warp ACK and read-only restart recovery.
+names.splice(names.indexOf("coopNativeStationArrival")+1,0,"coopNativeStationTripJournal");
 // COOP-048 native /jobs uses the existing authenticated Opportunity Board.
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
 // Stock in-game agent dialogue for jobs, no /jobs text needed.
