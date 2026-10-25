@@ -21,11 +21,11 @@ function pilot(characterID=101,solarSystemID=systemID){
 }
 function keyVal(id,certainty){
  return {type:"object",name:"util.KeyVal",args:{type:"dict",entries:[
-  ["id",id],["certainty",certainty],["pos",{type:"list",items:[12,14,18]}]
+  ["id",id],["certainty",certainty],["pos",{type:"list",items:[5,2,1]}]
  ]}};
 }
 const scan=(...entries)=>({results:entries});
-const origin=(characterID=101,solarSystemID=systemID)=>({characterID,systemID:solarSystemID});
+const origin=(characterID=101,solarSystemID=systemID)=>({characterID,systemID:solarSystemID,shipID:91000+characterID});
 
 test("perfect native probe result authorizes only scanner's real string or numeric site ID",()=>{
  const a=pilot();
@@ -87,7 +87,7 @@ test("receipt expires, requires same catalog target and ends on reconnect/system
 
 test("receipt storage capped; stale and mismatched native origins cannot fill cache",()=>{
  const a=pilot();
- const many=Array.from({length:100},(_,i)=>({siteID:100000+i,targetID:"SIG-"+i}));
+ const many=Array.from({length:100},(_,i)=>({siteID:100000+i,targetID:"SIG-"+i,actualPosition:{x:5,y:2,z:1}}));
  const result=record({session:a,scanResult:scan(...many.map(s=>keyVal(s.targetID,1))),
   origin:origin(),sites:many,nowMs:now});
  assert.equal(result.count,100);
