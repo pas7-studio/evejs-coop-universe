@@ -72,13 +72,26 @@ function note(attackerEntity,targetEntity,appliedDamage){
   try {
     const registry=require("../services/chat/sessionRegistry");
     const runtime=require("./runtime");
-    return observeAppliedDamage({attackerEntity,targetEntity,appliedDamage,
-      sessions:registry.getSessions(),sceneForSession:s=>runtime.getSceneForSession(s),
+    const sessions=registry.getSessions();
+    const receipt=observeAppliedDamage({attackerEntity,targetEntity,appliedDamage,
+      sessions,sceneForSession:s=>runtime.getSceneForSession(s),
       emit:receipt=>{
         const written=require("./coopRuntimeProbe").observe("coop-native-player-damage",null,
           {spaceState:{systemID:receipt.systemID}},receipt);
         if(written!==true)throw Error("TELEMETRY_NOT_RECORDED");
       }});
+    if(receipt?.status==="APPLIED_NATIVE_PLAYER_DAMAGE"&&
+       process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"){
+      try{
+       const owners=sessions.filter(s=>Number(s?.characterID)===receipt.characterID);
+       if(owners.length===1){
+        const scene=runtime.getSceneForSession(owners[0]);
+        require("./coopConvoyOperations").noteDamage(scene,receipt,
+         require("../services/fleets/fleetRuntime"));
+       }
+      }catch(error){console.warn("[CoopConvoyOperations] damage",String(error?.message||error))}
+    }
+    return receipt;
   }catch(error){
     console.warn("[CoopPlayerCombatWitness] native hook",String(error?.message||error));
     return {status:"UNAVAILABLE"};
