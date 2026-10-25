@@ -28,6 +28,10 @@ The two pilots may need to reconfirm after the peer opts in, because the existin
 - Native duo volunteer/paid acceptance currently requires two connected real pilots/ships in the actual system, and stock NPC agent window visibility while undocked must be checked. Inability to open the same agent in space is a gameplay blocker, not an excuse to weaken acceptance.
 - Real paid mining-guard shift, solo escrow, full contribution proofs, financial crash recovery, Stage H #96 integration and native gameplay remain not done. The safe peaceful Escort code from #102 remains default OFF until independent native SQLite/2-client validation. No populated `evejs-data` writes, upstream fork, client files or GitHub Actions were touched.
 
+## Current integration branch: source escort attendance gate (PR #117 only)
+
+The follow-up integration branch adds `EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1` as a mandatory companion to paid peaceful Escort. Both accepted player ships must be on the original NPC grid before `manifest.prepare`; Stage E fsyncs immutable two-pilot service proof before native corporate escrow and verifies it again at full physical delivery. This reduces station-camping abuse but does **not** yet prove uninterrupted service between departure and terminal. This is not part of original PR #102 and remains disabled/unverified in real EVE client until the Stage H/Job Market integration gate.
+
 ## Verification performed, and pending
 
 - **21/21** source-executed V8 native agent dialogue/authority/Accept/safety scenarios PASS (after adding durable selection).
