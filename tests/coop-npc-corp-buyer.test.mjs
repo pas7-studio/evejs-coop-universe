@@ -37,7 +37,8 @@ function fixture({buyerISK=1000,failAt=null}={}){
  let quoteMode="valid",taxRate=0.08;
  let state="settling",phase="claimed",claims=0,finalizations=0,
   loseFinal=false,buyerValid=true,sellerValid=true,releaseClaim=null;
- const claim=()=>({source:"player",state,fill_phase:phase,is_corp:false,bid:false,
+ const claim=()=>({history_recorded:phase==="finalized",history_day:phase==="finalized"?"2026-10-25":null,
+  source:"player",state,fill_phase:phase,is_corp:false,bid:false,
   claim_key:KEY,fill_id:String(FILL),order_id:String(ORDER),
   owner_id:String(SELLER),buyer_corp_id:String(BUYER),
   station_id:STATION,type_id:TYPE,quantity:20,price_cents:125,vol_remaining:state==="filled"?0:20});
