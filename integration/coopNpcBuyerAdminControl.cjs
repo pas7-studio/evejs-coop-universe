@@ -25,7 +25,7 @@ function createLocalNpcBuyerRecoveryControl({getBinding,secretFile,
  auditLogFile,port=17171,env=process.env,clock=()=>Date.now(),
  serverFactory=http.createServer}={}){
  if(typeof getBinding!=="function"||typeof clock!=="function"||
-    !pos(port)||port>65535||
+    (!Number.isSafeInteger(port)||port<0||port>65535)||
     typeof auditLogFile!=="string"||
     !require("node:path").isAbsolute(auditLogFile))
   throw Error("NPC_ADMIN_INVALID_CONFIGURATION");
@@ -188,7 +188,7 @@ function createLocalNpcBuyerRecoveryControl({getBinding,secretFile,
     server.once("error",reject);
     server.listen(port,"127.0.0.1",()=>{server.removeListener("error",reject);resolve()});
    })}catch(e){server=null;throw e}
-  return {host:"127.0.0.1",port};
+  return {host:"127.0.0.1",port:server.address().port};
  }
  async function close(){
   closing=true;
