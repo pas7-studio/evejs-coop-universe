@@ -15,6 +15,7 @@
 1. Reserve an ID only through original nativeNpcStore.allocateCargoID (persistent mode). Native counter changes flush before source/cargo commit; skipped IDs on failed attempts are harmless.
 2. Derive operation ID from original system, asteroid, miner, module and cycle timestamp. Store hash, fingerprint, and COMMITTED receipt in SQLite.
 3. In ONE SQLite transaction, compare original asteroid source and original NPC cargo ID, owner, type, quantity, then update miningRuntimeState and npcCargo plus the receipt.
+   - Conservation: asteroid depletion includes the full transferred ore quantity (including critical bonus) plus waste. A critical hit cannot create free cargo.
 4. Allow exact replay without second credit or source debit; refuse conflicts, moved custody and unknown outcomes.
 5. After SQLite COMMIT, use original applyMiningDelta for visuals/in-memory scene only, with an explicit already-persisted marker. No second source write.
 6. Reconcile original native cargo store readback into hull-local cargo. Quarantine failed/unknown postcommit reconciliation.
