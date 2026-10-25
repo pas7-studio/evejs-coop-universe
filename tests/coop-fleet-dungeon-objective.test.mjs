@@ -131,3 +131,41 @@ test("wrong instance, wrong mission, wrong system and duplicate login never coun
   assert.notEqual(observe(f.options).status,"TWO_PLAYER_NATIVE_DUNGEON_OBJECTIVE_CREDITED",kind);
  }
 });
+
+test("native mission normalization retains coop dungeon receipt after every read/reconnect",t=>{
+ if(!prefix){t.skip("Requires pinned EveJS Code");return;}
+ const file="server/src/services/agent/missionRuntimeState.js";
+ const spec=specs.find(x=>x.file===file);
+ assert.ok(spec);
+ const original=fs.readFileSync(path.join(prefix,file),"utf8");
+ const clean=transform(original,spec,true);
+ const patched=transform(clean,spec,false);
+ new vm.Script(patched);
+ assert.equal(transform(patched,spec,false),patched);
+ assert.equal(transform(patched,spec,true),clean);
+ const start=patched.indexOf("function normalizeMissionRecord(");
+ const end=patched.indexOf("function normalizeHistoryEntry(",start);
+ assert.ok(start>=0&&end>start);
+ const nativeNormalize=new Function("isRetiredActiveMissionRuntimeRecord",
+  "toPositiveInteger","normalizeMissionContentID","normalizeText",
+  "toBoolean","toFiniteNumber","currentFileTimeString",
+  "futureFileTimeString","OFFER_EXPIRY_MS","cloneValue",
+  "normalizeMissionRewards",
+  patched.slice(start,end)+";return normalizeMissionRecord")(
+  ()=>false,(v,fb=0)=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):fb,
+  v=>v,(v,fb="")=>v===null||v===undefined?fb:String(v),
+  (v,fb=false)=>v===null||v===undefined?fb:Boolean(v),
+  (v,fb=0)=>Number.isFinite(Number(v))?Number(v):fb,
+  ()=> "133700000000000000",()=> "133800000000000000",86400000,
+  x=>JSON.parse(JSON.stringify(x)),()=>({}));
+ const f=makeFixture(loadNative());
+ const source={...f.records.get(102),coopSharedDungeon:{
+  sourceInstanceID:700,agentID:55,ownerID:101,
+  contentID:440,missionTemplateID:"battle"}};
+ const saved=nativeNormalize(source,55,12);
+ assert.deepEqual(saved.coopSharedDungeon,source.coopSharedDungeon);
+ assert.equal(nativeNormalize(saved,55,12).coopSharedDungeon.sourceInstanceID,700);
+ assert.equal(nativeNormalize({...source,contentID:1234},55,12).coopSharedDungeon,null);
+ assert.equal(nativeNormalize({...source,coopSharedDungeon:{...source.coopSharedDungeon,
+  ownerID:-1}},55,12).coopSharedDungeon,null);
+});
