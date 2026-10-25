@@ -5,7 +5,19 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const STATES=new Set(["PREPARED","INSTALL_UNKNOWN","INSTALLED","READY","DELIVERY_UNKNOWN","DELIVERED","LIST_UNKNOWN","LISTED","SOLD","REPAIR_REQUIRED"]);
 const safeInt=x=>Number.isSafeInteger(x)&&x>0;
-const cents=x=>Number.isFinite(x)&&x>=0&&x<=1e12&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0||x>1e12)return null;
+ const scaled=x*100,n=Math.round(scaled);
+ return Number.isSafeInteger(n)&&Math.abs(scaled-n)<=1e-6?n:null;
+};
+// The original signed job quote must conserve exact ISK cents BEFORE
+// persisting INSTALL_UNKNOWN or asking the atomic GameStore writer to pay.
+// Recovery verifies the same cost/tax/total contract on lost acknowledgements.
+const quoteCents=q=>{
+ const cost=cents(q?.cost),tax=cents(q?.tax),total=cents(q?.totalCost);
+ return cost!==null&&tax!==null&&total!==null&&cost+tax===total?
+  total:null;
+};
 // A sale price must be at least one whole cent; rounding a sub-cent quote
 // to zero would let a physical native item be considered sold for free.
 const saleCents=x=>{
@@ -132,7 +144,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   const job=()=>native.getJob(id);
   if(e.phase==="PREPARED"){
    const q=native.quote(e.plan);
-   if(!q||q.verifiedNative!==true||cents(q.totalCost)===null||q.ownerID!==ownerID||
+   if(!q||q.verifiedNative!==true||quoteCents(q)===null||q.ownerID!==ownerID||
      q.blueprintID!==e.plan.blueprintItemID||q.productTypeID!==e.typeID||q.facilityID!==stationID)
     return halt("UNVERIFIED_CANONICAL_QUOTE",id);
    e.phase="INSTALL_UNKNOWN";e.quote=copy(q);save(state);
