@@ -267,3 +267,16 @@ when an older startup snapshot was positive. This is intentionally stricter
 than a healthy TCP service and does not modify any NPC state. The existing
 headless reconciler normally refreshes native scenes about every two minutes;
 if it does not, World remains BLOCKED until a true native refresh occurs.
+
+### Native reporter cross-module contract (2026-10-25)
+
+`tests/coop-reliability-native-reporters.test.mjs` imports the actual repository
+`scripts/coop-world-report.cjs`, `scripts/coop-party-report.cjs` and QA gate.
+Unlike the earlier local fixture suite, these eight regressions directly
+exercise the real World/Party summarizers. The cases include boot evidence
+older than the normal activity window; fresh physical fleet/named NPC
+reconciliation; a newer empty fleet or materialization revoking readiness;
+activity from the wrong solar system; two real-character scene identities;
+and a player disconnect after visibility. They are manual Node tests, not
+GitHub Actions. Real Docker telemetry and graphical client acceptance remain
+separate unavailable evidence until run on the user-owned Windows host.
