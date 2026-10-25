@@ -30,6 +30,15 @@ if ($integration.schema -ne "evejs-coop/alife-integration-acceptance/v1" -or $in
 if (@($integration.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Never mark live A-Life gameplay accepted from an isolated test run"
 }
+$actManifestPath = Join-Path $root "tests/scenarios/alife-native-resupply-act-e2e.json"
+if (-not (Test-Path $actManifestPath)) { throw "Missing native A-Life RESUPPLY ACT acceptance manifest" }
+$actManifest = Get-Content -Raw -Path $actManifestPath | ConvertFrom-Json
+if ($actManifest.schema -ne "evejs-coop/alife-native-resupply-act-acceptance/v1" -or $actManifest.scenarios.Count -ne 7) {
+ throw "Invalid native RESUPPLY ACT scenarios"
+}
+if (@($actManifest.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+ throw "Never claim live native resupply ACT from source-only tests"
+}
 $files = @(
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
@@ -43,7 +52,8 @@ $files = @(
   "tests/coop-alife-integration-acceptance.test.mjs",
   "tests/coop-alife-native-resupply-act.test.mjs",
   "tests/coop-alife-native-resupply-wiring.test.mjs",
-  "tests/coop-npc-ammo-supply.test.mjs"
+  "tests/coop-npc-ammo-supply.test.mjs",
+  "tests/coop-alife-native-resupply-acceptance.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
@@ -64,7 +74,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local source checks. Native economy E2E NOT_RUN: " + $manifest.scenarios.Count + "; A-Life integration E2E NOT_RUN: " + $integration.scenarios.Count)
-Write-Host ("Evidence checklists: " + $manifestPath + " ; " + $integrationManifestPath)
+Write-Host ("PASS: local source checks. Native economy E2E NOT_RUN: " + $manifest.scenarios.Count + "; A-Life integration E2E NOT_RUN: " + $integration.scenarios.Count + "; native ACT E2E NOT_RUN: " + $actManifest.scenarios.Count)
+Write-Host ("Evidence checklists: " + $manifestPath + " ; " + $integrationManifestPath + " ; " + $actManifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."
