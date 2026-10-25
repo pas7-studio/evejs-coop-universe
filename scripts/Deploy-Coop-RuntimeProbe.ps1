@@ -28,6 +28,7 @@ param(
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
+  [switch]$EnableConvoyOperations,
   [switch]$EnableFullHaulManifest,
 [switch]$Alife,
 [switch]$AlifeTrace,
@@ -47,6 +48,7 @@ if ($EnableMissionJoin -and -not $LivingCoop) { throw 'Native mission join requi
 if ($EnableDuoMissionSettlement -and -not $LivingCoop) { throw 'Duo settlement requires -LivingCoop' }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
+if ($EnableConvoyOperations -and -not $LivingCoop) { throw 'Native convoy operations require -LivingCoop' }
 if ($EnableFullHaulManifest -and (-not $LivingCoop -or -not $EnableNpcStationDelivery)) { throw 'Full native cargo manifest requires LivingCoop and station delivery' }
 if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
 if ($AlifeTrace -and -not $Alife) { throw '-AlifeTrace requires -Alife' }
@@ -137,6 +139,9 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
 $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
 $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
+  if ($EnableConvoyOperations) {
+    $yamlLines += "      EVEJS_COOP_CONVOY_OPERATIONS: '1'"
+  }
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
 }
 if ($EnableMissionJoin) { $yamlLines += "      EVEJS_COOP_MISSION_JOIN: '1'" }

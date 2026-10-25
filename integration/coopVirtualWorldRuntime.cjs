@@ -1167,6 +1167,13 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     });
     require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
      null,{spaceState:{systemID}},proof);
+    // Physical hauler destruction must be observed before any native convoy outcome.
+    if(process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"&&
+       proof.status==="PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED"&&
+       proof.victimRole==="hauler"){
+     try{require("./coopConvoyOutcomeProof").noteLoss(proof)}
+     catch(error){console.warn("[CoopConvoyOutcomeProof] hauler loss",String(error?.message||error))}
+    }
    }
    return;
   }
