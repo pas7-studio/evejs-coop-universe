@@ -5,6 +5,8 @@ param(
     [string]$OutputRoot = '',
     [string]$Before = '',
     [string]$After = '',
+    [string]$GiftBefore = '',
+    [string]$GiftAfter = '',
     [string]$Ledger = '',
     [string]$Client = '',
     [ValidateRange(1,1440)][int]$WindowMinutes = 30
@@ -52,7 +54,7 @@ try {
     $metaText = @{projectSha=$projectSha;upstreamSha=$upstreamSha;imageId=$imageId;containerStartedAt=$containerStartedAt} | ConvertTo-Json -Compress
     [IO.File]::WriteAllText($metaPath, $metaText, (New-Object System.Text.UTF8Encoding($false)))
     $args = @((Join-Path $PSScriptRoot 'coop-reliability-gates.cjs'),'--events','-','--meta',$metaPath,'--window-minutes',"$WindowMinutes",'--out',$report)
-    $evidenceFiles = @{'--before'=$Before;'--after'=$After;'--ledger'=$Ledger;'--client'=$Client}
+    $evidenceFiles = @{'--before'=$Before;'--after'=$After;'--gift-before'=$GiftBefore;'--gift-after'=$GiftAfter;'--ledger'=$Ledger;'--client'=$Client}
     foreach ($key in $evidenceFiles.Keys) {
         $value = $evidenceFiles[$key]
         if ($value) {
