@@ -58,7 +58,7 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
     if(pos(l?.entityID))
      entityCounts.set(l.entityID,(entityCounts.get(l.entityID)||0)+1);
    }
-   const candidateLinks=links.filter(l=>named(l?.pilotID)&&
+   const candidateLinks=links.filter(l=>reachable.has(l?.systemID)&&named(l?.pilotID)&&
     pilotCounts.get(l.pilotID)===1&&pos(l.entityID)&&
     entityCounts.get(l.entityID)===1&&l.role==="patrol")
     .sort((a,b)=>a.entityID-b.entityID).slice(0,512);
