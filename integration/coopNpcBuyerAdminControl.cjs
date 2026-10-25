@@ -7,15 +7,21 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 function readOperatorKey(file){
  if(typeof file!=="string"||!require("node:path").isAbsolute(file))
   throw Error("NPC_ADMIN_SECRET_ABSOLUTE_PATH_REQUIRED");
- const st=fs.lstatSync(file);
- if(!st.isFile()||st.isSymbolicLink()||st.size<32||st.size>4096)
-  throw Error("NPC_ADMIN_SECRET_INVALID_FILE");
- if(typeof process.getuid==="function"&&
-    (st.uid!==process.getuid()||(st.mode&0o077)!==0))
-  throw Error("NPC_ADMIN_SECRET_PERMISSIONS");
- const key=fs.readFileSync(file);
- if(key.length<32||key.length>4096)throw Error("NPC_ADMIN_SECRET_INVALID_LENGTH");
- return key;
+ // Open with O_NOFOLLOW and validate the OPEN file descriptor; an attacker
+ // must not be able to swap a safe key for a symlink between stat and read.
+ const fd=fs.openSync(file,fs.constants.O_RDONLY|
+   (fs.constants.O_NOFOLLOW||0));
+ try{
+  const st=fs.fstatSync(fd);
+  if(!st.isFile()||st.size<32||st.size>4096)
+   throw Error("NPC_ADMIN_SECRET_INVALID_FILE");
+  if(typeof process.getuid==="function"&&
+     (st.uid!==process.getuid()||(st.mode&0o077)!==0))
+   throw Error("NPC_ADMIN_SECRET_PERMISSIONS");
+  const key=fs.readFileSync(fd);
+  if(key.length<32||key.length>4096)throw Error("NPC_ADMIN_SECRET_INVALID_LENGTH");
+  return key;
+ }finally{fs.closeSync(fd)}
 }
 function signRequest(key,{timestamp,nonce,path,body}){
  return createHmac("sha256",key).update(String(timestamp)+"\n"+nonce+"\n"+
@@ -45,9 +51,22 @@ function createLocalNpcBuyerRecoveryControl({getBinding,secretFile,
        (st.uid!==process.getuid()||(st.mode&0o077)!==0))))
    throw Error("NPC_ADMIN_AUDIT_FILE_UNSAFE");
   if(!st)fs.mkdirSync(logPath.dirname(auditLogFile),{recursive:true});
-  const fd=fs.openSync(auditLogFile,"a",0o600);
-  try{fs.writeSync(fd,JSON.stringify({at:clock(),...event})+"\n");fs.fsyncSync(fd)}
-  finally{fs.closeSync(fd)}
+  // Even when an operator log is created for the first time, its containing
+  // directory cannot be writable by another user. Never follow log symlinks.
+  const parent=fs.statSync(logPath.dirname(auditLogFile));
+  if(!parent.isDirectory()||(typeof process.getuid==="function"&&
+    ((parent.mode&0o022)!==0||parent.uid!==process.getuid())))
+   throw Error("NPC_ADMIN_AUDIT_DIR_UNSAFE");
+  const fd=fs.openSync(auditLogFile,fs.constants.O_WRONLY|
+    fs.constants.O_CREAT|fs.constants.O_APPEND|
+    (fs.constants.O_NOFOLLOW||0),0o600);
+  try{
+   const actual=fs.fstatSync(fd);
+   if(!actual.isFile()||(typeof process.getuid==="function"&&
+      (actual.uid!==process.getuid()||(actual.mode&0o077)!==0)))
+    throw Error("NPC_ADMIN_AUDIT_FILE_UNSAFE");
+   fs.writeSync(fd,JSON.stringify({at:clock(),...event})+"\n");fs.fsyncSync(fd);
+  }finally{fs.closeSync(fd)}
  }
  function safeJSON(res,status,content){
   const output=JSON.stringify(content);
