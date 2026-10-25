@@ -19,7 +19,7 @@ function fakeRuntime(live={}){
  const calls=[];
  return {
   calls,
-  getContractRecord:()=>Object.assign({status:0,acceptorID:0},live),
+  getContractRecord:()=>Object.assign({type:3,status:0,acceptorID:0},live),
   acceptContract:(id,session,forCorp)=>{calls.push(['accept',id,session,forCorp]);return {contractID:id};},
   completeContract:(id,target,session)=>{calls.push(['complete',id,target,session]);return true;},
  };
@@ -93,4 +93,11 @@ test('complete refuses a contract that is not in progress',()=>{
  const result=complete({contract,identity,packageLocationID:60015262,runtime});
  assert.equal(result.status,'REFUSED');
  assert.equal(runtime.calls.length,0);
+});
+
+test('accept and complete refuse a contract that is not a courier contract',()=>{
+ const itemExchange=fakeRuntime({type:1});
+ itemExchange.getContractRecord=()=>Object.assign({status:0,acceptorID:0,type:1}, {});
+ assert.equal(accept({contract:{...contract,type:1,contractType:undefined},identity,packageLocationID:60015260,runtime:itemExchange}).status,'REFUSED');
+ assert.equal(itemExchange.calls.length,0);
 });

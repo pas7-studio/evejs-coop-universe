@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {
- evaluateContract,evaluateCourierIdentity,planSettlement,selectHull,planRoute,piracyOpportunity,quoteCourier,
+ evaluateContract,evaluateCourierIdentity,isCourierContract,planSettlement,selectHull,planRoute,piracyOpportunity,quoteCourier,
 }=require('../integration/coopCourierDispatch.cjs');
 
 function courier(overrides={}){
@@ -184,4 +184,13 @@ test('a contract without real solar systems is refused, never treated as same-sy
  const unknown=evaluateContract(courier({startSolarSystemID:0,endSolarSystemID:0}),{},{hullCapacityM3:4800});
  assert.equal(unknown.status,'REFUSED_UNKNOWN_SYSTEM');
  assert.equal(evaluateContract(courier({startSolarSystemID:30000144,endSolarSystemID:0}),{},{hullCapacityM3:4800}).status,'REFUSED_UNKNOWN_SYSTEM');
+});
+
+test('the live numeric contract type 3 is recognised as a courier contract',()=>{
+ const live=courier({contractType:undefined,type:3});
+ assert.equal(evaluateContract(live,{},{hullCapacityM3:4800}).status,'ELIGIBLE');
+ assert.equal(evaluateContract(courier({contractType:undefined,type:1}),{},{hullCapacityM3:4800}).status,'REFUSED_NOT_COURIER');
+ assert.equal(isCourierContract({type:3}),true);
+ assert.equal(isCourierContract({contractType:'courier'}),true);
+ assert.equal(isCourierContract({type:7}),false);
 });

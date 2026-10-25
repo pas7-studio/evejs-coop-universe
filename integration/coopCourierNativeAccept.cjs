@@ -15,7 +15,7 @@
 //
 // Everything is fail-closed: a chain is only started when planSettlement says it
 // can be finished, and an ambiguous error is reported, never retried.
-const { planSettlement } = require("./coopCourierDispatch.cjs");
+const { planSettlement, isCourierContract } = require("./coopCourierDispatch.cjs");
 
 // Mirrors contractRuntimeState.CONTRACT_STATUS: OUTSTANDING 0, IN_PROGRESS 1,
 // FINISHED 4 (5 is CANCELLED - getting this wrong would cancel the contract).
@@ -58,6 +58,7 @@ function accept({ contract, identity, packageLocationID, runtime }) {
   if (!session) return refusal("courier character is not a usable identity");
   const live = runtime.getContractRecord(contract.contractID);
   if (!live) return refusal("contract not found in the live runtime");
+  if (!isCourierContract(live)) return refusal("not a courier contract", { type: live.type, contractType: live.contractType });
   if (Number(live.status) !== OUTSTANDING) return refusal("contract is no longer outstanding", { status: live.status });
   if (Number(live.acceptorID) !== 0) return refusal("contract already has an acceptor", { acceptorID: live.acceptorID });
   try {
@@ -89,6 +90,7 @@ function complete({ contract, identity, packageLocationID, runtime }) {
   if (!session) return refusal("courier character is not a usable identity");
   const live = runtime.getContractRecord(contract.contractID);
   if (!live) return refusal("contract not found in the live runtime");
+  if (!isCourierContract(live)) return refusal("not a courier contract", { type: live.type, contractType: live.contractType });
   if (Number(live.status) !== IN_PROGRESS) {
     return refusal("contract is not in progress", { status: live.status });
   }

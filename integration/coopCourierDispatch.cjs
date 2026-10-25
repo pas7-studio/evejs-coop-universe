@@ -7,6 +7,15 @@
 // Design and the phase gates: docs/NPC_COURIER_CONTRACTS.md
 // Nothing here is evidence that an NPC has ever carried a contract.
 const COURIER_CONTRACT_TYPE = "courier";
+// The live contractRuntime record has no contractType field at all: it stores
+// the numeric type, where 3 is courier. Both shapes must be recognised or a
+// real contract is refused as "not a courier contract".
+const COURIER_CONTRACT_TYPE_ID = 3;
+function isCourierContract(contract) {
+  if (!contract || typeof contract !== "object") return false;
+  if (String(contract.contractType || "").toLowerCase() === COURIER_CONTRACT_TYPE) return true;
+  return Number(contract.type) === COURIER_CONTRACT_TYPE_ID;
+}
 const OUTSTANDING_STATUS = "outstanding";
 // The live contractRuntime stores numeric status (0 = outstanding) while the
 // client-facing shape uses strings, so both must be accepted.
@@ -52,7 +61,7 @@ function evaluateContract(contract, policy, context) {
     return status("REFUSED_NO_CONTRACT");
   }
   const contractID = Number(contract.contractID) || 0;
-  if (String(contract.contractType || "").toLowerCase() !== COURIER_CONTRACT_TYPE) {
+  if (!isCourierContract(contract)) {
     return status("REFUSED_NOT_COURIER", { contractID });
   }
   if (!LEGAL_STATUSES.includes(String(contract.status === 0 ? "0" : contract.status || "").toLowerCase())) {
@@ -355,6 +364,8 @@ function planSettlement(contract, identity, packageLocationID) {
 
 module.exports = {
   COURIER_CONTRACT_TYPE,
+  COURIER_CONTRACT_TYPE_ID,
+  isCourierContract,
   DEFAULT_POLICY,
   DEFAULT_PIRACY_POLICY,
   DEFAULT_QUOTE_POLICY,
