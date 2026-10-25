@@ -11,6 +11,8 @@ names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
 // COOP-048 native /jobs uses the existing authenticated Opportunity Board.
 names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
+// Peaceful delivery uses the same native corporate escrow (feature OFF by default).
+names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 const specs=[
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
