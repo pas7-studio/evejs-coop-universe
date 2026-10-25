@@ -1024,11 +1024,13 @@ async function observeAlifeEconomy(){
      });
     const result=await alifeManufacturingRuntime.tick({
      snapshot:snap,decision,registry:identityRegistry});
-    if(result.status==="BLOCKED"||result.status==="DISPATCHED_TO_VERIFIED_NATIVE_DIRECTOR")
+    if(result.status==="BLOCKED"||result.status==="ADMISSION_EVALUATED")
      probe.observe("alife-native-manufacturing-admission",null,
       {spaceState:{systemID}},
       {status:result.status,reason:result.reason||null,
-       count:result.count||0,nativeMutation:false,
+       count:result.count||0,
+       directorReportedNativeAction:result.results?.some(x=>x.nativeMutation===true)===true,
+       nativeSettlementVerified:false,
        source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
    }
    if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
