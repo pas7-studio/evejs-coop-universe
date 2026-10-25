@@ -15,6 +15,12 @@ function segment(text,name,fn){
  return text.slice(0,start)+next+text.slice(stop);
 }
 const sourceProof=[
+ '  if (isNativeNpcEntity(attackerEntity) &&',
+ '      (process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1" ||',
+ '       process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1")) {',
+ '    const guard = require("./coopNpcAmmoBankAtomic").guardDirectDebit({entity: attackerEntity});',
+ '    if (!guard.allowed) return { success: false, errorMsg: guard.status, stopReason: "ammo" };',
+ '  }',
  '  let coopAmmoDurableToken = null;',
  '  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
  '    const proof = require("./coopNpcFireDebitProof").verify({',
