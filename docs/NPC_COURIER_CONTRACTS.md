@@ -113,6 +113,27 @@ present, and no fake destruction events.
 5. No player-facing claim of success without a captured live run.
 6. Default OFF; every phase has its own env gate.
 
+## Blocking prerequisite found 2026-10-26: NPCs have no contract identity
+
+A courier contract is owned by a **character**: `issuerOwnerID`/`acceptorID`,
+a wallet ref, and inventory ownership. Co-op NPCs have none of that. Verified
+in `gamestore.sqlite` and `coop-npc-links.json`:
+
+- links are keyed by native space `entityID` (`980000000110`, ...), not by a
+  character ID;
+- the `characters` table contains only real player characters (`140000001`
+  "Test Pilot", `140000005` the owner), no NPC rows;
+- there is no `wallets` table at all; wallet state lives per character record.
+
+So phase 2 needs a courier NPC that owns a **real native character record**
+(account, character, wallet, inventory owner) and whose ship entity is owned by
+that character - not just a durable entity. That is a much larger change than
+"call acceptCourier without a session", and it must not be faked with a
+synthetic character that has no wallet.
+
+Until that exists, the only honest way to move a player contract is a second
+real character (a second client or the friend), which is also the missing live
+verification of the native courier path.
 ## Correction (2026-10-25): runtime state is SQLite, contracts do persist
 
 An earlier version of this section claimed contracts were cache-only and lost on
