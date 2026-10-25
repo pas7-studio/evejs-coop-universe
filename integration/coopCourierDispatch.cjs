@@ -207,12 +207,66 @@ function piracyOpportunity(route, policy, seed) {
   });
 }
 
+// Published courier rate. The issuer needs a number BEFORE creating the
+// contract, so the formula is deliberately simple, documented and printable
+// (scripts/Get-CourierRateTable.cjs). It is a service price, not a market
+// clearing price, and it never moves ISK by itself.
+const DEFAULT_QUOTE_POLICY = Object.freeze({
+  baseIsk: 50000,
+  iskPerM3: 120,
+  iskPerJump: 25000,
+  collateralPremiumRate: 0.02,
+  hullMultiplier: Object.freeze({ industrial: 1, freighter: 1.6 }),
+});
+
+function roundIsk(value) {
+  return Math.round(Number(value) / 1000) * 1000;
+}
+
+// quoteCourier({volumeM3, jumps, collateral, hullClass}) -> breakdown in ISK
+function quoteCourier(request, policy) {
+  const rules = Object.assign({}, DEFAULT_QUOTE_POLICY, policy || {});
+  const input = request || {};
+  const volumeM3 = Number(input.volumeM3);
+  if (!positive(volumeM3)) {
+    return status("NO_QUOTE", { reason: "volume must be positive" });
+  }
+  const jumps = Math.max(1, Math.trunc(Number(input.jumps) || 1));
+  const collateral = money(input.collateral);
+  const hullClass = String(input.hullClass || "industrial").toLowerCase();
+  const hullMultiplier = Number(rules.hullMultiplier[hullClass]);
+  if (!Number.isFinite(hullMultiplier) || hullMultiplier <= 0) {
+    return status("NO_QUOTE", { reason: "unknown hull class: " + hullClass });
+  }
+  const volumeIsk = volumeM3 * Number(rules.iskPerM3);
+  const distanceIsk = jumps * Number(rules.iskPerJump);
+  const riskIsk = collateral * Number(rules.collateralPremiumRate);
+  const subtotal = Number(rules.baseIsk) + volumeIsk + distanceIsk + riskIsk;
+  return status("QUOTED", {
+    hullClass,
+    hullMultiplier,
+    volumeM3,
+    jumps,
+    collateral,
+    breakdown: {
+      baseIsk: roundIsk(rules.baseIsk),
+      volumeIsk: roundIsk(volumeIsk),
+      distanceIsk: roundIsk(distanceIsk),
+      riskIsk: roundIsk(riskIsk),
+      hullIsk: roundIsk(subtotal * hullMultiplier) - roundIsk(subtotal),
+    },
+    totalIsk: roundIsk(subtotal * hullMultiplier),
+  });
+}
+
 module.exports = {
   COURIER_CONTRACT_TYPE,
   DEFAULT_POLICY,
   DEFAULT_PIRACY_POLICY,
+  DEFAULT_QUOTE_POLICY,
   evaluateContract,
   selectHull,
   planRoute,
   piracyOpportunity,
+  quoteCourier,
 };

@@ -53,7 +53,11 @@ Rules encoded here, not in the server loop:
 - the package must exist (`plasticWrapItemID > 0`) and the volume must be
   known and positive;
 - `collateral` must be `0`, or fully covered by the NPC's **native** wallet;
-  there is no simulated money anywhere;
+  there is no simulated money anywhere. The owner wants collateral-bearing
+  contracts (it is the courier's insurance), so the live policy enables them
+  once the NPC wallet funding path exists; the module default stays
+  fail-closed (`requireZeroCollateral: true`) so nothing is accepted by
+  accident.
 - volume must fit the chosen hull's real capacity, otherwise the contract is
   refused rather than partially loaded;
 - same-system only in phase 1; a cross-system contract is reported as
@@ -88,7 +92,9 @@ native attack order on the same scene as the courier. Outcomes:
 
 - courier survives and delivers - reward paid, contract finished;
 - courier is destroyed - native wreck, native loot, native
-  `failCourierContract`, collateral lost, issuer notified. The courier's ship
+  `failCourierContract`; the courier **forfeits the collateral to the issuer**,
+  which is exactly what the collateral is for. With zero collateral the issuer
+  gets nothing back and the courier loses only the reward. The courier's ship
   and cargo are gone for real; nothing is restored to make the test pass.
 
 No scripted "pirate spawns because the timer fired" without a physical hostile
@@ -106,6 +112,42 @@ present, and no fake destruction events.
    possibly applied write.
 5. No player-facing claim of success without a captured live run.
 6. Default OFF; every phase has its own env gate.
+
+## Pricing: what the issuer sees before creating the contract
+
+The owner's question is the right one - a courier contract cannot be priced by
+guessing, and the client gives no rate. So the rate is published, not hidden:
+
+`quoteCourier({ volumeM3, jumps, collateral, hullClass })` in
+`integration/coopCourierDispatch.cjs` returns a breakdown:
+
+```
+total = hullMultiplier x (base + volumeM3 x iskPerM3 + jumps x iskPerJump
+                          + collateral x collateralPremiumRate)
+```
+
+Defaults: `base` 50 000, `iskPerM3` 120, `iskPerJump` 25 000,
+`collateralPremiumRate` 0.02, `hullMultiplier` industrial 1.0 /
+freighter 1.6. Freighters cost more because they are slower and the loss is
+larger. The collateral premium is the insurance part: it is what the courier
+charges for risking its own ISK.
+
+Print the table before creating anything:
+
+```powershell
+node scripts/Get-CourierRateTable.cjs
+node scripts/Get-CourierRateTable.cjs --volume 5000 --jumps 2 --collateral 5000000 --hull freighter
+```
+
+That gives real numbers today, without any NPC involvement. Example: 5 000 m3,
+2 jumps, 5 M ISK collateral, freighter = 1 280 000 ISK.
+
+Honest limits: this is a **service price**, not a market clearing price. It is
+not yet visible in the game client - surfacing it (a station billboard, an NPC
+"courier services" agent, or a mail from the NPC hauler) is a separate phase,
+and until it exists the issuer reads the table above. The rate also does not
+yet react to real risk on the route; when piracy is enabled the premium should
+be driven by the actual interdiction chance, not a constant.
 
 ## Env gates (all default OFF)
 
