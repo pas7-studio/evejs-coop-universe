@@ -35,6 +35,7 @@ jobs:
             tests/coop-npc-industry-original-sale-audit.test.mjs \
             tests/coop-npc-industry-original-buyer-settlement.test.mjs \
             tests/coop-npc-industry-original-wallet-witness.test.mjs \
+            tests/coop-npc-factory-original-sale-finance-chain.test.mjs \
             tests/coop-npc-corporate-settlement.test.mjs \
             tests/coop-npc-partial-fill-atomic.test.mjs \
             tests/coop-npc-industry-original-rust-sell.test.mjs \
