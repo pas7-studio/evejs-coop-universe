@@ -30,7 +30,18 @@ if ($integrity.schema -ne "coop-044-native-industry-replenishment-integrity/v1" 
 if (@($integrity.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Do not mark native industry acceptance scenarios PASS before real gameplay validation"
 }
+$demandManifest = Join-Path $root "tests/scenarios/coop-045-native-demand-lifecycle.json"
+if (-not (Test-Path $demandManifest)) { throw "Missing native demand lifecycle scenarios" }
+$demand = Get-Content -Raw -Path $demandManifest | ConvertFrom-Json
+if ($demand.schema -ne "coop-045-native-demand-lifecycle/v1" -or $demand.scenarios.Count -lt 8) {
+  throw "Invalid native demand lifecycle acceptance manifest"
+}
+if (@($demand.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not mark demand lifecycle gameplay scenarios PASS without actual native evidence"
+}
 $files = @(
+  "tests/coop-npc-demand-authority.test.mjs",
+  "tests/coop-alife-native-act.test.mjs",
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
   "tests/coop-alife-economy-wiring.test.mjs",
@@ -60,7 +71,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count))
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count))
 Write-Host ("Evidence checklist: " + $manifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."

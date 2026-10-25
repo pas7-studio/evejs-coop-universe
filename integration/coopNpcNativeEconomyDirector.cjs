@@ -7,6 +7,7 @@ const STATES=new Set(["PREPARED","INSTALL_UNKNOWN","INSTALLED","READY","DELIVERY
 const safeInt=x=>Number.isSafeInteger(x)&&x>0;
 const cents=x=>Number.isFinite(x)&&x>=0&&x<=1e12&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 const copy=x=>JSON.parse(JSON.stringify(x));
+const {calculateNativeDemand}=require("./coopNpcDemandAuthority.cjs");
 const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
 const closed=x=>x==="SOLD";
 function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
@@ -66,21 +67,25 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
     throw Error("NATIVE_ECONOMY_DEMAND_RECEIPT_REPLAY");
   return s;
  }
- function demand(s,typeID){const base=s.targets[String(typeID)];if(!Number.isSafeInteger(base)||base<0||base>maxStock)
+ function demand(s,typeID){
+  const base=s.targets[String(typeID)];
+  if(!Number.isSafeInteger(base)||base<0||base>maxStock)
    throw Error("NATIVE_ECONOMY_TARGET_INVALID");
-  const consumed=s.demandReceipts.filter(x=>x.typeID===typeID&&clock()-x.at>=0&&clock()-x.at<=86400000)
-   .reduce((sum,x)=>sum+x.quantity,0);
-  if(!Number.isSafeInteger(consumed))throw Error("NATIVE_ECONOMY_CONSUMPTION_OVERFLOW");
-  // Consumption raises replenishment only within a policy cap; never creates items or ISK.
-  const target=Math.min(maxStock,base+Math.min(base*2,consumed));
-  // Only count actual corporate station items, owned escrow and unfinished jobs.
-  const sum=(rows,field)=>rows.filter(x=>x.typeID===typeID&&x.ownerID===s.ownerID&&x.stationID===s.stationID)
-    .reduce((a,x)=>a+x[field],0);
+  const {target,physicalConsumed,marketFill,npcPurchased}=calculateNativeDemand({
+   receipts:s.demandReceipts,ownerID:s.ownerID,stationID:s.stationID,typeID,
+   base,maxStock,now:clock()
+  });
+  // Buying transfers stock; only a verified physical debit raises demand.
+  const sum=(rows,field)=>rows.filter(x=>x.typeID===typeID&&
+     x.ownerID===s.ownerID&&x.stationID===s.stationID)
+   .reduce((a,x)=>a+x[field],0);
   const stored=sum(s.items,"quantity"),listed=sum(s.orders,"quantity"),
-    inFlight=sum(s.jobs.filter(j=>[1,2,3].includes(j.status)),"quantity");
+   inFlight=sum(s.jobs.filter(j=>[1,2,3].includes(j.status)),"quantity");
   const total=stored+listed+inFlight;
-  if(!Number.isSafeInteger(total)||total<0||total>Number.MAX_SAFE_INTEGER)throw Error("NATIVE_ECONOMY_STOCK_INVALID");
-  return {target,stored,listed,inFlight,shortage:Math.max(0,target-total)};
+  if(!Number.isSafeInteger(total)||total<0)
+   throw Error("NATIVE_ECONOMY_STOCK_INVALID");
+  return {target,stored,listed,inFlight,physicalConsumed,marketFill,npcPurchased,
+   shortage:Math.max(0,target-total)};
  }
  function receipt(job,r){return Boolean(job&&r&&safeInt(job.jobID)&&job.coopOperationID===r.operationID&&
   job.status===4&&r.jobID===job.jobID&&r.status==="DELIVERED"&&safeInt(r.itemID)&&
@@ -110,6 +115,8 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   }
   if(e.phase==="INSTALLED"){
    const j=job();if(j?.jobID!==e.jobID||j.ownerID!==ownerID||j.coopOperationID!==id)return halt("JOB_IDENTITY_CHANGED",id);
+   // Native PAUSED=2 reserves output; neither redeliver nor double-charge.
+   if(j.status===2)return {status:"WAITING_FOR_NATIVE_RESUME",operationID:id};
    if(j.status===1){const r=native.markReadyOnce(id);
     if(r?.status==="BLOCKED"&&/NOT_YET_READY/.test(String(r.error)))return {status:"WAITING_FOR_NATIVE_TIMER",operationID:id};
     if(!["READY","ALREADY_READY"].includes(r?.status))return halt("NATIVE_READY_NOT_VERIFIED",id);
@@ -179,28 +186,50 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   if(process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY!=="1")return {status:"NPC_ECONOMY_DISABLED"};
   return exclusive(()=>{
    if(!validateContext(ownerID,stationID))return halt("NPC_OWNER_OR_STATION_UNVERIFIED");
-   const state=load(),active=Object.values(state.entries).filter(e=>!closed(e.phase)&&e.ownerID===ownerID&&e.stationID===stationID)
-     .sort((a,b)=>a.createdAt-b.createdAt||a.operationID.localeCompare(b.operationID));
-   if(active.length)return stepEntry(state,active[0],ownerID,stationID);
+   const state=load(),active=Object.values(state.entries).filter(e=>!closed(e.phase)&&
+     e.ownerID===ownerID&&e.stationID===stationID);
+   // Unknown native writes must never be bypassed by subsequent installs.
+   const unsafe=active.find(e=>["INSTALL_UNKNOWN","DELIVERY_UNKNOWN","LIST_UNKNOWN",
+     "REPAIR_REQUIRED"].includes(e.phase));
+   if(unsafe)return halt("OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION",unsafe.operationID);
+   const working=active.filter(e=>e.phase!=="LISTED")
+    .sort((a,b)=>a.createdAt-b.createdAt||a.operationID.localeCompare(b.operationID));
+   if(working.length)return stepEntry(state,working[0],ownerID,stationID);
+   let listingResult=null;
+   const listed=active.filter(e=>e.phase==="LISTED").sort((a,b)=>
+    (a.lastPolledAt||0)-(b.lastPolledAt||0)||a.createdAt-b.createdAt||
+    a.operationID.localeCompare(b.operationID));
+   if(listed.length){
+    listingResult=stepEntry(state,listed[0],ownerID,stationID);
+    if(listingResult?.status==="BLOCKED"||listingResult?.status==="SOLD")
+     return listingResult;
+    listed[0].lastPolledAt=clock();save(state);
+   }
    if(Object.keys(state.entries).length>50000)return halt("ECONOMY_JOURNAL_CAP_REACHED");
    const s=snapshot(ownerID,stationID);
    const selected=[...new Set(productTypeIDs)].sort((a,b)=>a-b).filter(safeInt);
    if(!selected.length||selected.length>8)return halt("PRODUCT_ALLOWLIST_REQUIRED");
    const shortage={},target={},stock={};
-   for(const type of selected){const d=demand(s,type);shortage[type]=d.shortage;target[type]=d.target;stock[type]=d.listed;}
-   if(selected.every(t=>!shortage[t]))return {status:"SUFFICIENT_NATIVE_STOCK",shortage};
-   const key=ownerID+":"+stationID;
-   if(Number.isFinite(state.history[key])&&clock()-state.history[key]<minReorderMs)
-    return {status:"NPC_ECONOMY_REORDER_COOLDOWN"};
-   const p=planner.plan({ownerID,stationID,productTypeIDs:selected.filter(t=>shortage[t]>0),targetStock:target,
+   for(const type of selected){const d=demand(s,type);shortage[type]=d.shortage;
+     target[type]=d.target;stock[type]=d.listed;}
+   if(selected.every(t=>!shortage[t]))
+    return listingResult||{status:"SUFFICIENT_NATIVE_STOCK",shortage};
+   // Cool down per product, not per station: a non-selling ask must not
+   // suppress an unrelated item with a verified shortage.
+   const available=selected.filter(t=>shortage[t]>0&&
+    (!Number.isFinite(state.history[ownerID+":"+stationID+":"+t])||
+      clock()-state.history[ownerID+":"+stationID+":"+t]>=minReorderMs));
+   if(!available.length)return listingResult||{status:"NPC_ECONOMY_REORDER_COOLDOWN"};
+
+   const p=planner.plan({ownerID,stationID,productTypeIDs:available,targetStock:target,
     marketStock:stock,maxJobs:Math.min(maxActive,2)});
    if(p?.status!=="PLAN_READY"||!Array.isArray(p.jobs)||!p.jobs.length)return {status:"NO_NATIVE_FACTORY_JOB",blocked:p?.blocked||[]};
    const j=p.jobs[0];if(!safeInt(j.blueprintItemID)||!safeInt(j.productTypeID)||j.ownerID!==ownerID||
-     j.stationID!==stationID||!shortage[j.productTypeID]||j.outputQuantity>maxStock)
+     j.stationID!==stationID||!available.includes(j.productTypeID)||j.outputQuantity>maxStock)
      return halt("PLANNER_JOB_CONTEXT_INVALID");
    const operationID="npc-manufacture:"+crypto.randomUUID().replace(/-/g,"");
    state.entries[operationID]={operationID,phase:"PREPARED",ownerID,stationID,typeID:j.productTypeID,
-    plan:copy(j),createdAt:clock()};state.history[key]=clock();save(state);
+    plan:copy(j),createdAt:clock()};state.history[ownerID+":"+stationID+":"+j.productTypeID]=clock();save(state);
    return {status:"PREPARED",operationID,productTypeID:j.productTypeID,shortage:shortage[j.productTypeID]};
   });
  }

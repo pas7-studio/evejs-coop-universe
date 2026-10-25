@@ -1,0 +1,188 @@
+{
+  "schema": "coop-045-native-demand-lifecycle/v1",
+  "upstream": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "runner": "scripts/Run-Alife-Economy-Tests.ps1",
+  "doNotModifyVolume": "evejs-data",
+  "allRequireDisposableNativeWorld": true,
+  "scenarios": [
+    {
+      "id": "COOP045-001",
+      "title": "One market fill + one purchase + one physical consumption never double count",
+      "steps": [
+        "Complete native corporate sale with Rust fill and wallet ledger IDs",
+        "Physically debit same ammo in a native fire-cycle",
+        "Advance A-Life and native demand observation"
+      ],
+      "expected": [
+        "Seller target is not boosted by transfer receipts",
+        "Only real ammo debit boosts consumption forecast once",
+        "All stack and ISK balances conserve"
+      ],
+      "requiredEvidence": [
+        "Rust fillID",
+        "buyer/seller wallet journal IDs",
+        "native fire debit ID",
+        "demand snapshot"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-002",
+      "title": "Unfilled ask does not starve a second product",
+      "steps": [
+        "List product A and leave ask open",
+        "Introduce real shortage of product B at same NPC station",
+        "Advance one shared factory director"
+      ],
+      "expected": [
+        "Product A remains in escrow unchanged",
+        "Product B obtains exactly one PREPARED native job",
+        "No additional sale/escrow/wallet entry for product A"
+      ],
+      "requiredEvidence": [
+        "A orderID",
+        "B operationID/jobID",
+        "station stock by type",
+        "corporate wallet journal"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-003",
+      "title": "Real PAUSED to RESUMED production",
+      "steps": [
+        "Install native job and confirm first debit",
+        "PAUSE status 2 for multiple scheduler ticks",
+        "Resume and wait for native timer"
+      ],
+      "expected": [
+        "No duplicate install while status 2",
+        "One READY and one physical delivery after resume",
+        "Original blueprint installed custody at 2003 preserved"
+      ],
+      "requiredEvidence": [
+        "native jobID and status changes",
+        "same BPO itemID",
+        "material debit and ISK ledger"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-004",
+      "title": "Duplicate native consumption notifications do not grow production",
+      "steps": [
+        "Fire one verified NPC weapon shot",
+        "Replay identical native debit under different telemetry receiptIDs",
+        "Attempt second restock"
+      ],
+      "expected": [
+        "Duplicate consumptionID fails closed",
+        "No second paid job or stock mint",
+        "Operator blocker contains canonical native debit ID"
+      ],
+      "requiredEvidence": [
+        "fire debit",
+        "two receipt IDs",
+        "job and wallet counts"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-005",
+      "title": "Aged demand decays without synthetic buys",
+      "steps": [
+        "Consume finite verified physical ammo",
+        "Advance isolated native clock beyond 24h",
+        "No new buys or weapon uses"
+      ],
+      "expected": [
+        "Forecast returns to configured base target",
+        "Old market fills never multiply demand",
+        "No idle infinite manufacturing"
+      ],
+      "requiredEvidence": [
+        "receipt timestamps",
+        "station stock",
+        "production journal before and after"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-006",
+      "title": "Two NPC corporations cannot share receipts",
+      "steps": [
+        "Place two corporations in same station and product type",
+        "Give native ammo consumption only to owner A",
+        "Advance demand and native planning for owner B"
+      ],
+      "expected": [
+        "B's stock target remains unchanged",
+        "A's debit is never reused by B",
+        "No cross-corporation ISK or item transfer"
+      ],
+      "requiredEvidence": [
+        "ownerID on consumption",
+        "two corporation wallets",
+        "two planning snapshots"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-007",
+      "title": "Multiple passive Rust asks rotate without blocking active work",
+      "steps": [
+        "Establish several separately verified corporate sell orders",
+        "Keep buyers absent and advance many ticks",
+        "Introduce shortage on independent product"
+      ],
+      "expected": [
+        "All passive asks remain reconciled to native escrow",
+        "Polling rotates between asks",
+        "New valid production proceeds under capacity limits"
+      ],
+      "requiredEvidence": [
+        "orderIDs and escrow rows",
+        "lastPollAt journal entries",
+        "new jobID"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP045-008",
+      "title": "Restart and lost ACK conserve passive orders",
+      "steps": [
+        "List a native product and let another product start",
+        "Restart GameStore, Rust and native director between transitions",
+        "Inject lost native settlement ACK and retry"
+      ],
+      "expected": [
+        "No duplicate Rust order, item or ISK credits",
+        "Unknown outcomes block unsafe retries",
+        "All existing orders and jobs retain owner/station identity"
+      ],
+      "requiredEvidence": [
+        "before/after Rust SQLite orders",
+        "GameStore escrow",
+        "durable operation journal",
+        "wallet/item ledger"
+      ],
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "requiresDisposableData": true
+    }
+  ]
+}
