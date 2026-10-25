@@ -308,8 +308,13 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     return {status:"INTEREST_NOT_AUTHORIZED"};
   }
   if(!durableNew(interestFile(eventID,characterID),
-    {v:1,characterID,eventID,at:n,phase:"INTERESTED"}))
-   return {status:"ALREADY_INTERESTED_OR_WRITE_UNCERTAIN"};
+    {v:1,characterID,eventID,at:n,phase:"INTERESTED"})){
+   const proof=readInterest(characterID,eventID);
+   if(proof.status!=="INTEREST_RECORDED"||
+    !sync(interestFile(eventID,characterID))||!sync(interestDir))
+    return {status:"INTEREST_WRITE_UNCERTAIN_NEEDS_REPAIR"};
+   return {status:"INTEREST_ALREADY_DURABLY_RECORDED",eventID,characterID};
+  }
   // NOT a fleet join and never a reward promise.
   return {status:"INTEREST_RECORDED",eventID,systemID:r.event.systemID,
    note:"Interest only. Travel and join an actual EVE fleet manually."};
