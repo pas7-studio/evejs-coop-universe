@@ -61,8 +61,8 @@ test("pinned overlay contains both authority modules before the local test runne
 });
 test("original local acceptance manifest retains all 22 and adds six unexecuted authority gates",()=>{
  assert.equal(manifest.schema,"coop-alife-economy-acceptance/v1");
- assert.equal(manifest.scenarios.length,28);
- assert.equal(new Set(manifest.scenarios.map(x=>x.id)).size,28);
+ assert.equal(manifest.scenarios.length,30);
+ assert.equal(new Set(manifest.scenarios.map(x=>x.id)).size,30);
  assert.ok(manifest.scenarios.every(x=>x.status==="NOT_RUN"&&x.destructive===false));
  for(let n=23;n<=28;n++)assert.ok(manifest.scenarios.some(s=>s.id==="ALIFE-"+String(n).padStart(3,"0")));
 });
