@@ -52,6 +52,8 @@ function fixture(){
  const settlement=()=>createNpcCorporateBuyer({
   gameStore:{transact:(tables,fn)=>writer.transact(tables,fn).result},
   market,verifyBuyerCorporation:()=>true,verifyPlayerSeller:()=>true,
+  quoteSellerTax:({sellerID,stationID,grossCents})=>({sellerID,stationID,grossCents,
+   taxCents:Math.round(grossCents*0.08),policy:"EVEJS_NATIVE_MARKET_RULES"}),
   clock:()=>1761390000000
  });
  const buy=()=>settlement().purchaseOnce(REQ);
@@ -80,7 +82,9 @@ test("native real SQLite purchase transfers one player item and exactly 25 ISK",
  assert.equal(f.read("items",ITEM).locationID,STATION);
  assert.equal(f.read("marketEscrow",ORDER),null);
  assert.equal(f.read("corporationRuntime",CKEY).wallet.divisions["1000"].balance,975);
- assert.equal(f.read("characters",SELLER).balance,125);
+ assert.equal(f.read("characters",SELLER).balance,123);
+ assert.equal(f.read("characters",SELLER).walletJournal.length,2);
+ assert.equal(f.read("npcMarketFills","corp-buy\\u001f"+FILL).taxCents,200);
  assert.equal(f.read("npcMarketFills","corp-buy\u001f"+FILL).itemID,ITEM);
 }));
 test("SQLite connection restart replays completed Rust claim without extra debit",()=>run(async f=>{
