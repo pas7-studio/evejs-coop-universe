@@ -60,23 +60,9 @@ function createDepot({file,clock=()=>Date.now()}){
      [String(systemID)]:previous+candidate.quantity}});
   return {status:"COMMITTED",quantity:candidate.quantity};
  }
- // Legacy API retained for old receipts/tests, but new native unload MUST use
- // prepare() -> removeNativeCargo() -> commit() instead.
- function record({systemID,fleetID,deliveries=[]}={}){
-  if(!positive(systemID)||!positive(fleetID)||!Array.isArray(deliveries))return {status:"INVALID",accepted:0};
-  let accepted=0,quantity=0;
-  for(const item of deliveries){
-   const candidate=normalize({systemID,fleetID,item,legacy:true});
-   if(!candidate||state.receipts[candidate.cargoID]||state.pending[candidate.cargoID])continue;
-   const previous=Number(state.totals[String(systemID)]||0);
-   if(!Number.isSafeInteger(previous+candidate.quantity))continue;
-   persist({...state,receipts:{...state.receipts,
-    [candidate.cargoID]:{...candidate,at:clock()}},totals:{...state.totals,
-     [String(systemID)]:previous+candidate.quantity}});
-   accepted++;quantity+=candidate.quantity;
-  }
-  return {status:accepted?"RECORDED":"ALREADY_RECORDED",accepted,quantity};
- }
+ // Legacy direct credits are deliberately disabled: the old API was able to
+ // invent virtual ore without a witnessed removal from native hauler cargo.
+ function record(){return {status:'UNVERIFIED_DIRECT_CREDIT_DISABLED',accepted:0,quantity:0};}
  function audit(){
   // Derive physical input quantities from immutable committed cargo receipts.
   // Never use synthetic system totals as the source of item/type provenance.
