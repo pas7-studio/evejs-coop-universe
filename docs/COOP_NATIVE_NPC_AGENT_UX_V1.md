@@ -37,4 +37,13 @@ The two pilots may need to reconfirm after the peer opts in, because the existin
 - Existing COOP-048 source-executed V8 ledger/job-board tests passed previously. **DO NOT report the two-client native protocol, actual Docker, Node runner, real better-sqlite3 or final wallet payout PASS.**
 - Dedicated native-client cases: `tests/scenarios/coop-049-native-agent-opportunities.json` (15 `NOT_RUN` scenarios), in addition to original `tests/scenarios/coop-048-native-paid-jobs.json`.
 
+**One-command safe local source gate (Windows, no Docker write):**
+
+```powershell
+.\scripts\Run-NativeJob-Tests.ps1
+.\scripts\Run-NativeJob-Tests.ps1 -CheckPinned
+```
+
+The optional `-CheckPinned` performs a read-only overlay dry run at the configured pinned EveJS Code path; it does not deploy, change native economy state or mark gameplay scenarios complete. Client acceptance is tracked in [#112](https://github.com/pas7-studio/evejs-coop-universe/issues/112), and genuine native mission journal integration in [#113](https://github.com/pas7-studio/evejs-coop-universe/issues/113).
+
 **Next release gate:** merge/reconcile Stages H (#96) and Job Market (#102) in a throwaway worktree, run pinned `--dry-run`/reversible overlay, `node --test tests/coop-native-job-agent.test.mjs tests/coop-native-job-agent-selection.test.mjs tests/coop-native-job-notifications.test.mjs`, the existing full local baseline, and two actual EVE clients. Verify agent dialog, native mail, server-owned duo acceptance, corporate reserve, real cargo delivery and exactly-once wallet mutation. All live flags default OFF until the user-approved local sandbox gate passes.
