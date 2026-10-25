@@ -11,6 +11,11 @@ const fs=require("node:fs");
 const path=require("node:path");
 const pos=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 const boundary=v=>typeof v==="number"&&Number.isFinite(v)&&v>0;
+// Pinned nativeNpcService creates fitted ammo cargo with moduleID but no
+// flagID. Runtime getNpcLoadedChargeForModule adds the fitted module flag;
+// a persisted cargo flag, when supplied, may be generic cargo flag 5.
+const compatibleCargoFlag=(record,moduleFlag)=>record.flagID==null||
+ Number(record.flagID)===5||Number(record.flagID)===moduleFlag;
 let sequence=0;
 const maxReceiptBytes=16384;
 const gate=env=>env.EVEJS_COOP_NPC_STRICT_AMMO==="1"&&
@@ -182,7 +187,7 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
        Number(row.ownerID)!==ownerID||
        Number(row.typeID)!==part.typeID||
        Number(row.categoryID)!==8||
-       Number(row.flagID)!==part.flagID||
+       !compatibleCargoFlag(row,part.flagID)||
        Number(row.quantity)!==part.qty||
        row.transient===true)
       throw Error("BANK_NATIVE_CARGO_STALE");
@@ -219,7 +224,7 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
        Number(actual[0].ownerID)!==ownerID||
        Number(actual[0].moduleID)!==row.moduleID||
        Number(actual[0].typeID)!==row.typeID||
-       Number(actual[0].flagID)!==expected.find(x=>x.moduleID===row.moduleID)?.flagID)
+       !compatibleCargoFlag(actual[0],expected.find(x=>x.moduleID===row.moduleID)?.flagID))
      return fail("BANK_ATOMIC_READBACK_MISMATCH");
    }
    settle(io,token);
