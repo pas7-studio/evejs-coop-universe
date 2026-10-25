@@ -1,0 +1,272 @@
+{
+  "schema": "coop-049-alife-native-buyer-v1",
+  "upstream": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "doNotModifyVolume": "evejs-data",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "scenarios": [
+    {
+      "id": "COOP049-001",
+      "title": "A-Life buys real missing SDE material from player",
+      "steps": [
+        "Configure native read-only authority and one original corporate BPO",
+        "Player lists one physical single-stack material at verified station",
+        "A-Life BUY_SUPPLIES resolves exact materialTypeID and NPC funds",
+        "Rust claim -> GameStore settlement -> Rust finalize"
+      ],
+      "expected": [
+        "Selected materialTypeID comes from SDE recipe, not invented",
+        "Single NPC corporation debit == player seller credit",
+        "Existing material itemID belongs to NPC corp hangar",
+        "Rust order FILLED; no virtual cargo grant"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-002",
+      "title": "Player sells two different materials and NPC picks real deficit",
+      "steps": [
+        "Create two SDE material needs with unequal actual shortages",
+        "Provide separate verified player asks and native wallet",
+        "Advance one A-Life tick"
+      ],
+      "expected": [
+        "Only highest concrete SDE shortage considered",
+        "No duplicate same-station purchase",
+        "Other escrow and wallet remain unchanged"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-003",
+      "title": "Bought materials reduce native factory shortage",
+      "steps": [
+        "Purchase physical materials through corporate buyer",
+        "Refresh station authority and planner after SQLite commit",
+        "Create a native industry job only when complete recipe becomes affordable"
+      ],
+      "expected": [
+        "Buyer item appears in real GameStore owned inventory",
+        "Shortage decreases by exact bought amount",
+        "Job debits original materials/ISK, no double mint"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-004",
+      "title": "Survival/combat/warp preempt market buyer",
+      "steps": [
+        "Begin native NPC buyer planning at station",
+        "Before final actor recheck move ship into warp/attack",
+        "Advance A-Life tick"
+      ],
+      "expected": [
+        "No Rust corporate buy claim or GameStore mutation",
+        "NPC returns to survival or native order authority",
+        "One operator-readable blocker"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-005",
+      "title": "Rust market price changes before purchase",
+      "steps": [
+        "Snapshot affordable player ask and write native SDE shortage proof",
+        "Reprice or fill seller order concurrently before coordinator final read",
+        "Try same A-Life intent"
+      ],
+      "expected": [
+        "Changed price or quantity blocks before any spending",
+        "No fabricated purchase or station stock",
+        "Durable claim handles only actually reserved attempts"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-006",
+      "title": "NPC corporate reserve and zero balance",
+      "steps": [
+        "Set NPC corporation runtime wallet to zero",
+        "Keep real ready industry output and real player sell order",
+        "Tick A-Life and compare station finance"
+      ],
+      "expected": [
+        "No free ISK material purchase",
+        "Already paid READY delivery/listing continues via native authority",
+        "No extra manufacture on empty wallet"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-007",
+      "title": "Restart across Rust claim, GameStore commit and ACK",
+      "steps": [
+        "Persist native coordinator PREPARED claimKey",
+        "Drop claim or finalize acknowledgement",
+        "Restart headless server and market daemon on disposable DB",
+        "Retry same A-Life intent"
+      ],
+      "expected": [
+        "Same claimKey and fillID reused",
+        "Exactly one item ownership change",
+        "Exactly one buyer debit and seller credit"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-008",
+      "title": "Simultaneous two players and same-station buyer",
+      "steps": [
+        "Two real clients compete with NPC corporation for one sell order",
+        "Run stock player fill and Rust corporate claim concurrently",
+        "Inspect Rust and native SQLite before and after"
+      ],
+      "expected": [
+        "Only one market claim may settle",
+        "No duplicate physical item or ISK transfer",
+        "Loser receives explicit conflict, not fake fulfillment"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-009",
+      "title": "Legacy seeded NPC trader must not run in parallel",
+      "steps": [
+        "Enable native seed NPC market option and ALife corporate buyer",
+        "Tick same physical NPC twice on 30-second boundary"
+      ],
+      "expected": [
+        "A-Life corporate buyer refuses concurrent legacy market writer",
+        "No secondary timer or double corporate wallet write"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-010",
+      "title": "Wrong or missing corporation ownership",
+      "steps": [
+        "Make physical NPC hull owner differ from A-Life station/corp proof",
+        "Attempt BUY_SUPPLIES from source-backed station"
+      ],
+      "expected": [
+        "Native actor rejected before Rust claim",
+        "No other corporation wallet debited",
+        "No foreign or player-controlled ship operates as NPC"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    },
+    {
+      "id": "COOP049-011",
+      "title": "Long-term physical demand conservation",
+      "steps": [
+        "Run at least 100 manufacturing/replenishment cycles with genuine SDE materials",
+        "Alternate NPC production, player purchases, NPC purchases and ammo consumption",
+        "Restart during random claim/finalize boundaries"
+      ],
+      "expected": [
+        "Physical material/item balances conserve end to end",
+        "Market transfer does not count as weapon consumption",
+        "No infinite NPC ISK, unbounded production or double receipts"
+      ],
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "requiredEvidence": [
+        "A-Life pilot/entityID/corporationID/stationID and material SDE recipe",
+        "Rust player source orderID, claimKey, fillID, state and price",
+        "GameStore wallet division 1000 and player ISK journal before/after",
+        "Native original itemID ownership, marketEscrow and npcMarketFills receipts",
+        "Crash/restart or two-client trace as applicable"
+      ]
+    }
+  ]
+}

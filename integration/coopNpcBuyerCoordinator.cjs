@@ -3,7 +3,7 @@
 // Rust player order -> existing GameStore/Rust NPC corporate buyer writer.
 // Not registered on the live timer; does not impersonate player sessions.
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
-const {planNpcNativePurchase}=require("./coopNpcMarketPolicy.cjs");
+const {planNpcNativePurchase}=require("./coopNpcMarketPolicy"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>0&&
  Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;

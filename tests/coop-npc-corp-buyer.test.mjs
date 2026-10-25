@@ -34,9 +34,13 @@ function fixture({buyerISK=1000,failAt=null}={}){
    del:(t,k)=>{if(failAt===t)throw Error("INJECTED_ATOMIC_FAULT:"+t);delete data[t][k]}
   })}catch(e){for(const t of TABLES)data[t]=backup[t];throw e}
  }};
+ let quoteMode="valid",taxRate=0.08;
+ let allowHistoryWitness=true;
  let state="settling",phase="claimed",claims=0,finalizations=0,
   loseFinal=false,buyerValid=true,sellerValid=true,releaseClaim=null;
- const claim=()=>({source:"player",state,fill_phase:phase,is_corp:false,bid:false,
+ const claim=()=>({history_recorded:phase==="finalized"&&allowHistoryWitness,
+  history_day:phase==="finalized"&&allowHistoryWitness?"2026-10-25":null,
+  source:"player",state,fill_phase:phase,is_corp:false,bid:false,
   claim_key:KEY,fill_id:String(FILL),order_id:String(ORDER),
   owner_id:String(SELLER),buyer_corp_id:String(BUYER),
   station_id:STATION,type_id:TYPE,quantity:20,price_cents:125,vol_remaining:state==="filled"?0:20});
@@ -49,12 +53,19 @@ function fixture({buyerISK=1000,failAt=null}={}){
  };
  const create=()=>createNpcCorporateBuyer({gameStore,market,
   verifyBuyerCorporation:()=>buyerValid,
-  verifyPlayerSeller:()=>sellerValid,clock:()=>1761390000000});
+  verifyPlayerSeller:()=>sellerValid,
+  quoteSellerTax:({sellerID,stationID,grossCents})=>({
+   sellerID,stationID,grossCents,
+   taxCents:quoteMode==="malformed"?-1:Math.round(grossCents*taxRate),
+   policy:quoteMode==="unauthorized"?"FAKE_MARKET":"EVEJS_NATIVE_MARKET_RULES"}),
+  clock:()=>1761390000000});
  const bridge=create();
  return {data,bridge,market,request,claim,create,
   get claims(){return claims},get finalizes(){return finalizations},
   fault:t=>{failAt=t},loseAck:()=>{loseFinal=true},
   setBuyer:v=>{buyerValid=v},setSeller:v=>{sellerValid=v},
+  setTaxMode:v=>{quoteMode=v},setTaxRate:v=>{taxRate=v},
+  setHistoryWitness:v=>{allowHistoryWitness=v},
   setMarketDone:()=>{state="filled";phase="finalized"},
   async stallClaim(){let unlock;releaseClaim=new Promise(r=>{unlock=r});return unlock}
  };
@@ -73,12 +84,15 @@ test("native corporation buys real player escrow: goods and ISK conserved",()=>r
  assert.equal(result.status,"NPC_PURCHASED_PLAYER_GOODS");
  assert.equal(result.itemID,ITEM);assert.equal(result.quantity,20);
  assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975);
- assert.equal(f.data.characters[SELLER].balance,125);
+ assert.equal(f.data.characters[SELLER].balance,123);
  assert.equal(f.data.items[ITEM].ownerID,BUYER);
  assert.equal(f.data.items[ITEM].locationID,STATION);
  assert.equal(f.data.marketEscrow[ORDER],undefined);
  assert.equal(f.data.npcMarketFills[RECEIPT].phase,"NATIVE_NPC_BUY_COMMITTED");
- assert.equal(f.data.characters[SELLER].walletJournal.length,1);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
+ assert.equal(f.data.characters[SELLER].walletJournal[0].entryTypeID,54);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+ assert.equal(f.data.npcMarketFills[RECEIPT].netCents,2300);
  assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].journal.length,1);
  assert.equal(f.claims,1);assert.equal(f.finalizes,1);
 }));
@@ -166,4 +180,41 @@ test("a committed native receipt remains idempotent if later ammo was consumed",
  assert.equal(again.status,"NPC_PURCHASED_PLAYER_GOODS");
  assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,balances.buyer);
  assert.equal(f.data.characters[SELLER].balance,balances.seller);
+}));
+test("malformed or forged seller tax aborts all five native tables",()=>run(async f=>{
+ for(const taxMode of ["malformed","unauthorized"]){
+  const before=structuredClone(f.data);f.setTaxMode(taxMode);
+  await assert.rejects(buy(f),/NATIVE_SELLER_TAX_UNVERIFIED/);
+  assert.deepEqual(f.data,before);
+ }
+}));
+test("legitimate zero tax keeps the sale paid without a fake tax journal",()=>run(async f=>{
+ f.setTaxRate(0);
+ const result=await buy(f);
+ assert.equal(result.status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(result.taxCents,0);assert.equal(result.netCents,2500);
+ assert.equal(f.data.characters[SELLER].balance,125);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,1);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,0);
+}));
+test("lost native finalize ACK never charges seller tax twice",()=>run(async f=>{
+ f.loseAck();
+ await assert.rejects(buy(f),/LOST_RUST_FINALIZE_ACK/);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
+ assert.equal((await f.create().purchaseOnce(f.request)).status,
+  "NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(f.data.characters[SELLER].balance,123);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+}));
+test("Rust completed without durable history witness refuses paid success until retry",()=>run(async f=>{
+ f.setHistoryWitness(false);
+ await assert.rejects(buy(f),/NPC_CORP_BUY_RUST_FINALIZE_UNCERTAIN/);
+ assert.equal(f.data.items[ITEM].ownerID,BUYER);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+ const ledger=structuredClone(f.data);
+ f.setHistoryWitness(true);
+ assert.equal((await f.create().purchaseOnce(f.request)).status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.deepEqual(f.data,ledger);
+ assert.equal(f.data.characters[SELLER].walletJournal.length,2);
 }));

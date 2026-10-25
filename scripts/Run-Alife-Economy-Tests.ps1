@@ -84,7 +84,24 @@ if ($actManifest.schema -ne "evejs-coop/alife-native-resupply-act-acceptance/v1"
 if (@($actManifest.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
  throw "Never claim live native resupply ACT from source-only tests"
 }
+$buyer49Manifest = Join-Path $root "tests/scenarios/coop-049-alife-native-buyer-e2e.json"
+if (-not (Test-Path $buyer49Manifest)) { throw "Missing A-Life native buyer acceptance scenarios" }
+$buyer49 = Get-Content -Raw -Path $buyer49Manifest | ConvertFrom-Json
+if ($buyer49.schema -ne "coop-049-alife-native-buyer-v1" -or $buyer49.scenarios.Count -lt 11) {
+  throw "Invalid A-Life native buyer acceptance manifest"
+}
+if (@($buyer49.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not claim native A-Life buyer E2E without physical receipts"
+}
 $files = @(
+  "tests/coop-alife-native-buyer-dispatch.test.mjs",
+  "tests/coop-alife-native-buyer-runtime.test.mjs",
+  "tests/coop-npc-buyer-native-bindings.test.mjs",
+  "tests/coop-npc-rust-order-authority.test.mjs",
+  "tests/coop-npc-seller-tax-authority.test.mjs",
+  "tests/coop-npc-buyer-recovery-audit.test.mjs",
+  "tests/coop-alife-native-buyer-wiring.test.mjs",
+  "tests/coop-alife-native-overlay-compat.test.mjs",
   "tests/coop-npc-corp-buyer.test.mjs",
   "tests/coop-npc-buyer-coordinator.test.mjs",
   "tests/coop-npc-corp-buyer-real-sqlite.test.mjs",
@@ -129,9 +146,23 @@ try {
   & $node.Source --test @files *> $log
   $code = $LASTEXITCODE
 } finally { Pop-Location }
+
+if ($code -ne 0) {
+  Write-Host "=== NATIVE ECONOMY TEST FAILURE CONTEXT ==="
+  $failures = @(Select-String -Path $log -Pattern '^not ok [0-9]+' -Context 2,25)
+  if ($failures.Count -eq 0) {
+    Get-Content -Path $log | Select-Object -Last 120 | ForEach-Object { Write-Host $_ }
+  } else {
+    foreach ($failure in $failures) {
+      $failure.Context.PreContext | ForEach-Object { Write-Host $_ }
+      Write-Host $failure.Line
+      $failure.Context.PostContext | ForEach-Object { Write-Host $_ }
+    }
+  }
+}
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $integration.scenarios.Count + $actManifest.scenarios.Count))
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $integration.scenarios.Count + $actManifest.scenarios.Count + $buyer49.scenarios.Count))
 Write-Host ("Evidence checklists: " + $manifestPath + " ; " + $integrationManifestPath + " ; " + $actManifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."

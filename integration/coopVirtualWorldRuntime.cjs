@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null;
-let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false;
+let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -965,6 +965,24 @@ async function observeAlifeEconomy(){
    if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
     safeNpcPhase("alife-native-resupply-act",()=>
      advanceNativeAmmoSupply({mode:"PLANNED",systemIDFilter:systemID,decision}));
+   // COOP-049: exactly one existing A-Life authority may dispatch the
+   // opt-in native corporate buyer. Independent legacy market writers block it.
+   if(process.env.EVEJS_COOP_ALIFE_NATIVE_BUYER==="1"){
+    if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET==="1"||nativeMarketTickRunning){
+     probe.observe("alife-native-buyer-blocked",null,{spaceState:{systemID}},
+      {reason:"PARALLEL_NATIVE_MARKET_WRITER_ENABLED",status:"BLOCKED"});
+    }else{
+     if(!alifeBuyerRuntime)alifeBuyerRuntime=require("./coopAlifeNativeBuyerRuntime")
+      .createRuntimeAlifeBuyer({file:process.env.EVEJS_COOP_NPC_CORP_BUY_JOURNAL||
+       "/var/lib/evejs/coop-npc-corp-buy-journal.json"});
+     const purchased=await alifeBuyerRuntime.tick({snapshot:snap,decision,
+      registry:identityRegistry,world});
+     if(purchased.purchases?.length||purchased.status==="BLOCKED")
+      probe.observe("alife-native-buyer-result",null,{spaceState:{systemID}},
+       {status:purchased.status,purchases:purchased.purchases||[],
+        reason:purchased.reason||null});
+    }
+   }
   }
  }finally{alifeEconomyAuthorityBusy=false}
 }

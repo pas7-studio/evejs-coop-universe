@@ -140,3 +140,22 @@ test("A-Life startup without real pilots or stations emits named blockers",()=>{
  assert.ok(r.blockers.some(x=>x.reason==="NATIVE_ECONOMY_NO_VERIFIED_PILOTS"));
  assert.ok(r.blockers.some(x=>x.reason==="NATIVE_ECONOMY_NO_VERIFIED_STATIONS"));
 });
+
+test("material shortage cannot spend ISK after the product target is already satisfied",()=>{
+ const e={...factory(),productShortage:0,materialShortage:200,mineralStock:0,nativeOreToRefine:0};
+ const r=decide(sample(undefined,e));
+ assert.equal(r.intents.length,0);
+ assert.equal(r.blockers[0].reason,"ENOUGH_REAL_STOCK");
+});
+test("full native WIP capacity cannot queue unnecessary material purchase",()=>{
+ const e={...factory(),productShortage:80,materialShortage:200,
+  mineralStock:0,nativeActiveJobs:2,nativeOreToRefine:0};
+ const r=decide(sample(undefined,e));
+ assert.equal(r.intents.length,0);
+ assert.equal(r.blockers[0].reason,"PRODUCTION_DEPENDENCY_NOT_READY");
+});
+test("real shortage without WIP still permits source-backed BUY_SUPPLIES",()=>{
+ const e={...factory(),productShortage:80,materialShortage:200,
+  mineralStock:0,nativeActiveJobs:0,nativeOreToRefine:0};
+ assert.equal(decide(sample(undefined,e)).intents[0].stage,"BUY_SUPPLIES");
+});

@@ -12,10 +12,10 @@ const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
  Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 const isk=x=>x/100;
 function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verifyPlayerSeller,
- clock=()=>Date.now()}={}){
+ quoteSellerTax,clock=()=>Date.now()}={}){
  if(typeof gameStore?.transact!=="function"||
   ["claimOnce","finalizeOnce","inspectClaim"].some(x=>typeof market?.[x]!=="function")||
-  [verifyBuyerCorporation,verifyPlayerSeller,clock].some(x=>typeof x!=="function"))
+  [verifyBuyerCorporation,verifyPlayerSeller,quoteSellerTax,clock].some(x=>typeof x!=="function"))
   throw Error("NPC_CORP_BUY_NATIVE_AUTHORITIES_REQUIRED");
  const busy=new Set();
  function enabled(){return process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
@@ -62,6 +62,9 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
        previous.sellerID!==sellerID||previous.stationID!==request.stationID||
        previous.typeID!==request.typeID||previous.quantity!==quantity||
        previous.priceCents!==priceCents||previous.grossCents!==grossCents||
+       !nonneg(previous.taxCents)||
+       previous.netCents!==grossCents-previous.taxCents||
+       previous.taxPolicy!=="EVEJS_NATIVE_MARKET_RULES"||
        !pos(previous.itemID))
      throw Error("NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT");
     // A valid committed receipt remains valid if a later consumer used the
@@ -100,30 +103,49 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
      !Array.isArray(seller.walletJournal)||!Array.isArray(seller.marketTransactions))
     throw Error("NPC_CORP_BUY_NATIVE_WALLET_INVALID");
    const buyerBefore=cents(division.balance),sellerBefore=cents(seller.balance);
-   const buyerAfter=buyerBefore-grossCents,sellerAfter=sellerBefore+grossCents;
+   // Quote exactly the seller's real marketRules context, not an NPC flat tax.
+   // Both gross credit and transaction tax debit commit in this same SQLite tx.
+   const tax=quoteSellerTax({sellerID,stationID:request.stationID,grossCents});
+   const taxCents=tax?.taxCents,netCents=grossCents-taxCents;
+   if(tax?.policy!=="EVEJS_NATIVE_MARKET_RULES"||
+      tax.sellerID!==sellerID||tax.stationID!==request.stationID||
+      tax.grossCents!==grossCents||!nonneg(taxCents)||
+      taxCents>grossCents||!nonneg(netCents))
+    throw Error("NPC_CORP_BUY_NATIVE_SELLER_TAX_UNVERIFIED");
+   const buyerAfter=buyerBefore-grossCents,sellerGross=sellerBefore+grossCents,
+    sellerAfter=sellerGross-taxCents;
    if(buyerAfter<request.minReserveCents)
     throw Error("NPC_CORP_BUY_ISK_RESERVE_OR_FUNDS_EXCEEDED");
-   if(!nonneg(buyerAfter)||!nonneg(sellerAfter))
+   if(!nonneg(buyerAfter)||!nonneg(sellerGross)||!nonneg(sellerAfter))
     throw Error("NPC_CORP_BUY_WALLET_OVERFLOW");
-   if(division.transactions.some(r=>r?.transactionID===fillID)||
+   // The tax gets its own stable ledger ID, distinct from the gross fill.
+   const taxTransactionID=fillID+100000000000000;
+   if(!pos(taxTransactionID)||
+      division.transactions.some(r=>r?.transactionID===fillID)||
       division.journal.some(r=>r?.transactionID===fillID)||
-      seller.walletJournal.some(r=>r?.transactionID===fillID))
+      seller.walletJournal.some(r=>[fillID,taxTransactionID].includes(r?.transactionID)))
     throw Error("NPC_CORP_BUY_WALLET_TRANSACTION_COLLISION");
    const at=clock();if(!pos(at))throw Error("NPC_CORP_BUY_CLOCK_INVALID");
    const filetime=String(BigInt(at)*10000n+116444736000000000n);
    const base={transactionID:fillID,transactionDate:filetime,
-    referenceID:request.orderID,entryTypeID:10,accountKey:1000,currency:1,
+    referenceID:request.orderID,entryTypeID:2,accountKey:1000,currency:1,
     sortValue:1,ownerID1:request.buyerCorpID,ownerID2:sellerID,
     description:"Native NPC corporation purchase "+orderKey};
    const debit={...base,amount:isk(-grossCents),balance:isk(buyerAfter)};
-   const credit={...base,amount:isk(grossCents),balance:isk(sellerAfter)};
+   const credit={...base,entryTypeID:2,amount:isk(grossCents),
+    balance:isk(sellerGross)};
+   const taxDebit={...base,transactionID:taxTransactionID,
+    entryTypeID:54,amount:isk(-taxCents),balance:isk(sellerAfter),
+    ownerID1:request.stationID,ownerID2:sellerID,
+    description:"Transaction tax for native NPC market sale "+orderKey};
    const corpNext={...corporation,wallet:{...corporation.wallet,divisions:{
     ...corporation.wallet.divisions,"1000":{...division,balance:isk(buyerAfter),
      journal:[...division.journal,debit].slice(-100),
      transactions:[...division.transactions,debit].slice(-2000)}}}};
    const sellerNext={...seller,balance:isk(sellerAfter),
-    balanceChange:isk(grossCents),
-    walletJournal:[credit,...seller.walletJournal].slice(0,100),
+    balanceChange:isk(netCents),
+    walletJournal:[...(taxCents>0?[taxDebit]:[]),credit,
+      ...seller.walletJournal].slice(0,100),
     marketTransactions:[{transactionID:fillID,transactionDate:filetime,
      typeID:request.typeID,quantity,price:isk(priceCents),
      stationID:request.stationID,locationID:request.stationID,
@@ -135,7 +157,10 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    const receipt={phase:"NATIVE_NPC_BUY_COMMITTED",claimKey:request.claimKey,
     fillID,orderID:request.orderID,buyerCorpID:request.buyerCorpID,
     sellerID,stationID:request.stationID,typeID:request.typeID,itemID:item.itemID,
-    quantity,priceCents,grossCents,buyerBeforeCents:buyerBefore,
+    quantity,priceCents,grossCents,taxCents,netCents,
+    taxPolicy:"EVEJS_NATIVE_MARKET_RULES",
+    taxTransactionID:taxCents>0?taxTransactionID:null,
+    buyerBeforeCents:buyerBefore,
     buyerAfterCents:buyerAfter,sellerBeforeCents:sellerBefore,
     sellerAfterCents:sellerAfter,committedAt:at};
    tx.put("corporationRuntime",corpKey,corpNext);
@@ -144,7 +169,7 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    tx.del("marketEscrow",orderKey);
    tx.put("npcMarketFills",fillKey,receipt);
    return {status:"NATIVE_NPC_BUY_COMMITTED",fillID,itemID:item.itemID,
-    quantity,grossCents};
+    quantity,grossCents,taxCents,netCents};
   });
  }
  async function purchaseOnce(request={}){
@@ -171,10 +196,15 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    const final=await market.finalizeOnce({claimKey:request.claimKey,
     orderID:request.orderID,buyerCorpID:request.buyerCorpID,fillID:result.fillID});
    if(final?.state!=="filled"||final.fill_phase!=="finalized"||
+      final.history_recorded!==true||
+      typeof final.history_day!=="string"||
+      !/^\d{4}-\d{2}-\d{2}$/.test(final.history_day)||
       Number(final.fill_id)!==result.fillID||Number(final.vol_remaining)!==0)
     throw Error("NPC_CORP_BUY_RUST_FINALIZE_UNCERTAIN");
    const observed=await market.inspectClaim({claimKey:request.claimKey});
    if(observed?.state!=="filled"||observed.fill_phase!=="finalized"||
+      observed.history_recorded!==true||
+      observed.history_day!==final.history_day||
       Number(observed.fill_id)!==result.fillID||Number(observed.vol_remaining)!==0)
     throw Error("NPC_CORP_BUY_RUST_INSPECT_UNCERTAIN");
    return {...result,status:"NPC_PURCHASED_PLAYER_GOODS"};
