@@ -41,11 +41,13 @@ test('bounded native battle pass through WAR bridge only, orders are not kills',
 });
 test('one order per cooldown; never create scenes for missing systems',()=>{
  const f=fixture();f.director.tick({systemIDs:[202]});
+ // Each side may respond once, but the same ship cannot spam native orders.
+ assert.equal(f.director.tick({systemIDs:[202]}).orders.length,1);
  assert.equal(f.director.tick({systemIDs:[202]}).orders.length,0);
  f.advance(120001);
  assert.equal(f.director.tick({systemIDs:[202]}).orders.length,1);
  assert.equal(f.director.tick({systemIDs:[999]}).orders.length,0);
- assert.equal(f.lookups,3);
+ assert.equal(f.lookups,5);
 });
 test('player ship, warp, out of range and disabled ammo prevent attack',()=>{
  const f=fixture();f.ships.get(501).mode='WARP';
