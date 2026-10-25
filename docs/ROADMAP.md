@@ -1,4 +1,6 @@
 # Delivery roadmap — agent-ready tasks
+> [NPC capsuleers: autonomous goals, opportunistic raids and hunting](NPC_CAPSULEER_AGENCY_HUNTING_V1.md) — design proposal, not implemented gameplay.
+> [NPC manufacturing, real warehouses and demand-driven industrial economy](NPC_NATIVE_INDUSTRIAL_ECONOMY_V1.md) — architecture and implementation plan; native full-loop acceptance pending.
 
 > **P1 co-op gameplay:** [Duo interceptor/escort native raid tactics, logistics and living incidents](COOP_P1_GAMEPLAY_PILLARS_20261025.md). Native gameplay proof still required.
 > **2026-10-25 native-mechanics discovery / parallel-agent checkpoint:**
