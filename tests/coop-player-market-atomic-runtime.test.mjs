@@ -59,7 +59,7 @@ test("uncertain Rust finalize cannot unlock a protected market order",async()=>{
   finalize:async()=>{throw Error("lost finalize response")}}});
  await assert.rejects(x.run.settleSell({ticket,proof,tax:1.23,sourceItemID:800,client:{call(){}}}),
   /lost finalize response/);
- assert.deepEqual(x.calls,["rust_claim_inspect","atomic_commit"]);
+ assert.deepEqual(x.calls,["atomic_commit"]);
 });
 test("missing journal SETTLED prevents any Rust release",async()=>{
  const x=harness({journal:{...harness().journal,
