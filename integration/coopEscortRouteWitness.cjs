@@ -76,12 +76,26 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
    return denied("ROUTE_CHECKPOINT_SOURCE_MISMATCH");
   return {status:"VERIFIED_NATIVE_ROUTE_CHECKPOINT",row:x};
  }
+ function fsyncStored(manifestKey,stage){
+  let fd,dirfd;try{
+   fd=io.openSync(file(manifestKey,stage),"r");io.fsyncSync(fd);
+   io.closeSync(fd);fd=undefined;
+   dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
+   return true;
+  }catch{return false}
+  finally{if(fd!==undefined)try{io.closeSync(fd)}catch{}
+   if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}}
+ }
  function verify(b,p){
   if(!identity(b,p))return denied("ROUTE_IDENTITY_INVALID");
   const first=readOne(b,p,1);if(first.status!=="VERIFIED_NATIVE_ROUTE_CHECKPOINT")
    return first;
   const second=readOne(b,p,2);if(second.status!=="VERIFIED_NATIVE_ROUTE_CHECKPOINT")
    return second;
+  // A written file with lost fsync ACK must never be trusted as durable payout
+  // authority until BOTH immutable checkpoint file and parent are re-synced.
+  if(!fsyncStored(b.manifestKey,1)||!fsyncStored(b.manifestKey,2))
+   return denied("ROUTE_CHECKPOINT_FSYNC_UNCERTAIN");
   if(!equal(first.row.destination,second.row.destination)||
    second.row.at-first.row.at<500||
    second.row.at-first.row.at>MAX_AGE||
@@ -125,14 +139,8 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
   if(!stage)return denied("ROUTE_NOT_AT_CHECKPOINT");
   const prev=readOne(b,p,stage);
   if(prev.status==="VERIFIED_NATIVE_ROUTE_CHECKPOINT"){
-   // Existing file must be durable before a crash replay can authorize it.
-   let fd,dirfd;try{
-    fd=io.openSync(file(b.manifestKey,stage),"r");io.fsyncSync(fd);
-    io.closeSync(fd);fd=undefined;
-    dirfd=io.openSync(dir,"r");io.fsyncSync(dirfd);
-   }catch{return denied("ROUTE_REPLAY_FSYNC_UNCERTAIN")}
-   finally{if(fd!==undefined)try{io.closeSync(fd)}catch{}
-    if(dirfd!==undefined)try{io.closeSync(dirfd)}catch{}}
+   if(!fsyncStored(b.manifestKey,stage))
+    return denied("ROUTE_REPLAY_FSYNC_UNCERTAIN");
    return {status:"NATIVE_ROUTE_CHECKPOINT_ALREADY_RECORDED",stage};
   }
   if(prev.status!=="ROUTE_CHECKPOINT_NOT_FOUND")return prev;
@@ -141,6 +149,8 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
    return denied("ROUTE_EARLIER_CHECKPOINT_REQUIRED");
   if(stage===2&&!equal(earlier.row.destination,destination))
    return denied("ROUTE_DESTINATION_CHANGED");
+  if(stage===2&&!fsyncStored(b.manifestKey,1))
+   return denied("ROUTE_EARLIER_CHECKPOINT_FSYNC_UNCERTAIN");
   const now=clock();
   if(!pos(now)||now<=p.at||now-p.at>MAX_AGE||
    (stage===2&&now-earlier.row.at<500))
