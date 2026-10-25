@@ -6,7 +6,7 @@ const {createStationArrival}=require("../integration/coopNativeStationArrival.cj
 const prior=Object.fromEntries([
  "EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_OPPORTUNITY_BOARD","EVEJS_COOP_EVENT_VOLUNTEERS",
- "EVEJS_COOP_ESCORT_PAID_ACCEPT","EVEJS_COOP_ESCORT_REFUNDS"
+ "EVEJS_COOP_ESCORT_PAID_ACCEPT","EVEJS_COOP_ESCORT_REFUNDS","EVEJS_COOP_ESCORT_WARP_FENCE"
 ].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(prior))process.env[k]="1";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false}={}){
@@ -57,6 +57,11 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   flush:()=>({success:true}),
   warpToPoint:()=>{counters.warp++;return {success:warpAccepted}},
   root:"/tmp/eve",clock:()=>1000000,
+  warpFence:{
+   inspectSource:()=>({status:"WARP_SOURCE_CLEAR"}),
+   prepare:()=>({status:"DURABLE_WARP_PREPARED"}),
+   confirm:()=>({status:"DURABLE_WARP_ACK_CONFIRMED"})
+  },
   warehouse:{deposit:()=>({status:"COMMITTED"})},
   manifest:{prepare:()=>{counters.manifest++;return {status:"MANIFEST_DURABLY_PREPARED",
    key:"30000144-77-1000000",cargoIDs:[5501]}}},
