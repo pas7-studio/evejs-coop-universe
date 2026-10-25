@@ -4,10 +4,10 @@
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const deny=status=>({status});
 function createSalvageOffers({readManifest,readWitness,readEvent,
- readVolunteers,readOutcomes,isNpcCorporation,ratePerUnitISK=5,
+ readVolunteers,readOutcomes,isNpcCorporation,getWreckItems,ratePerUnitISK=5,
  maxRewardISK=1000000}={}){
  if([readManifest,readWitness,readEvent,readVolunteers,
-  readOutcomes,isNpcCorporation].some(f=>typeof f!=="function")||
+  readOutcomes,isNpcCorporation,getWreckItems].some(f=>typeof f!=="function")||
   !pos(ratePerUnitISK)||!pos(maxRewardISK)||maxRewardISK>1000000000)
   throw Error("SALVAGE_NATIVE_OFFER_SOURCES_REQUIRED");
  function readOffer(manifestKey){
@@ -24,6 +24,16 @@ function createSalvageOffers({readManifest,readWitness,readEvent,
    !Array.isArray(m.cargo)||!m.cargo.length||
    !Array.isArray(r.rows)||!r.rows.length)
    return deny("SALVAGE_OFFER_WRECK_UNVERIFIED");
+  // An NPC rival or an already-completed player pickup makes the original
+  // wreck source no longer available. Never reserve corporate ISK for it.
+  let nativeWreckItems;try{nativeWreckItems=getWreckItems(r.wreckID)}
+  catch{return deny("SALVAGE_OFFER_NATIVE_WRECK_UNAVAILABLE")}
+  if(!Array.isArray(nativeWreckItems)||
+   r.rows.some(x=>nativeWreckItems.filter(w=>
+    w.wreckItemID===x.wreckItemID&&w.wreckID===r.wreckID&&
+    w.sourceCargoID===x.cargoID&&w.sourceKind==="cargo"&&
+    w.typeID===x.typeID&&w.quantity===x.quantity).length!==1))
+   return deny("SALVAGE_OFFER_SOURCE_ALREADY_RECOVERED");
   const eventID="convoy-"+m.systemID+"-"+m.fleetID+"-"+
    Math.min(...m.cargo.map(x=>x.cargoID));
   let e,v,o;try{e=readEvent(eventID);v=readVolunteers(eventID);
