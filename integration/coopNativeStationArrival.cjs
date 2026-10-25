@@ -306,6 +306,12 @@ function getRuntimeDirector(){
  const repo=require("../gameStore");
  const corporations=require("../services/corporation/corporationState");
  const runtime=require("./runtime");
+ if(process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"&&
+    process.env.EVEJS_COOP_ESCORT_RUNTIME_MOUNT==="1"){
+   const binding=require("./coopEscortNativeBootstrap").installNativeEscorts();
+   if(binding?.status!=="ESCORT_NATIVE_RUNTIME_BOUND")
+    console.warn("[CoopEscort] native paid runtime not installed:",binding?.status||"UNAVAILABLE");
+ }
  runtimeDirector=createStationArrival({
   getStations:worldData.getStationsForSystem,getStation:worldData.getStationByID,
   getCorporation:corporations.getCorporationRecord,isNpcCorporation:corporations.isNpcCorporationID,
