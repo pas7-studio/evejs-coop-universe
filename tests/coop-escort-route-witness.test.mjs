@@ -140,11 +140,27 @@ test("prior two files cannot authorize payout after lost final fsync ACK",()=>wi
  assert.equal(f.witness(io).verify(booking(),departure()).status,
   "ROUTE_CHECKPOINT_FSYNC_UNCERTAIN");
 }));
-test("symlink or hardlink route checkpoint is never payable",t=>withFixture(f=>{
+test("hardlinked route checkpoint is never payable",()=>withFixture(f=>{
  const w=two(f);
  const first=path.join(f.root,"escort-route-witness",key+".stage-1.json");
  fs.linkSync(first,first+".extra");
  assert.equal(w.verify(booking(),departure()).status,"ROUTE_NONREGULAR_OR_LINKED_JOURNAL");
+}));
+test("symlinked route checkpoint cannot verify or produce a second paid sample",t=>withFixture(f=>{
+ const w=f.witness();
+ assert.equal(w.sample(f.input()).status,"NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED");
+ const first=path.join(f.root,"escort-route-witness",key+".stage-1.json");
+ const backup=first+".backup";
+ fs.renameSync(first,backup);
+ try{fs.symlinkSync(backup,first)}catch(error){
+  if(error?.code==="EPERM"||error?.code==="EACCES"){t.skip("Symlink requires Windows Developer Mode/admin");return}
+  throw error;
+ }
+ assert.equal(w.verify(booking(),departure()).status,
+  "ROUTE_NONREGULAR_OR_LINKED_JOURNAL");
+ f.move(70000);f.later(1000);
+ assert.equal(w.sample(f.input()).status,
+  "ROUTE_NONREGULAR_OR_LINKED_JOURNAL");
 }));
 test("optional Stage I is truly OFF by default and does not write route samples",()=>withFixture(f=>{
  process.env[FLAG]="0";
