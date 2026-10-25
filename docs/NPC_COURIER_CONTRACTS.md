@@ -113,21 +113,21 @@ present, and no fake destruction events.
 5. No player-facing claim of success without a captured live run.
 6. Default OFF; every phase has its own env gate.
 
-## Blocking prerequisite found on 2026-10-25: contracts are not persisted
+## Correction (2026-10-25): runtime state is SQLite, contracts do persist
 
-`contractRuntimeState` reads and writes the table `contractRuntime` through
-`gameStore/tableRepository`, which is a **write cache**: the disk snapshot only
-happens on `flushTableSync`/`flushTablesSync`/`flushAllSync`. After hours of
-live play with a real contract (ID `980000000`, issuer `140000005`), the
-container had **no** `gameStore/data/contractRuntime` directory at all, and the
-container was then restarted by another compose `up -d`. The contract did not
-survive that.
+An earlier version of this section claimed contracts were cache-only and lost on
+restart. That was wrong, and the mistake was reading the seed directory:
+`gameStore/data/*.json` is the seeded input, while live runtime state lives in
+`/var/lib/evejs/gameStore/gamestore.sqlite` (+ WAL). The `contractRuntime`
+table there held the owner's real contract after several container recreations.
 
-Consequence for this feature: a courier must never accept a contract that only
-exists in a volatile cache - a restart would destroy the package, the escrow and
-the delivery. Persisting `contractRuntime` (flush on write, or on a bounded
-interval, or at shutdown) is a prerequisite for phase 2, not a nice-to-have.
-This is also a player-visible bug independent of couriers.
+Verified on the owner's own contract `980000000`: `type 3` (courier),
+`status 0` (outstanding), `acceptorID 0`, volume 29 500 m3, reward 30 000 ISK,
+collateral 300 000 ISK, package `plasticWrapItemID 9988400000874` still owned by
+the issuer at the origin station. So nothing was carrying it - the record is
+simply outstanding, exactly as expected with no courier implemented.
+
+Lesson for future sessions: query `gamestore.sqlite`, not `gameStore/data`.
 
 ## Pricing: what the issuer sees before creating the contract
 
