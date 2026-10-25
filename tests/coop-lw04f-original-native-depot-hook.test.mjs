@@ -22,7 +22,7 @@ function native(){
   buildInventoryItem:x=>({...x,itemName:"Ore",categoryID:4,groupID:18}),
   writeItems:x=>{writes++;items=x;return true}
  };
- const f=new Function("env","with(env){ "+hook+";return {grantUniqueNpcDepotItem,findWarehouseItem};}")(env);
+ const f=new Function("env","with(env){ "+hook+"\n;return {grantUniqueNpcDepotItem,findWarehouseItem};}")(env);
  return {...f,get items(){return items},get writes(){return writes}};
 }
 const args={ownerID:1001,stationID:2001,typeID:34,quantity:50,cargoID:777};
