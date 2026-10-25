@@ -2,7 +2,19 @@
 // COOP-035 optional server-side bridge. Only called by authenticated native market
 // handler with exact docked session; NEVER impersonates a character or corp.
 // Intentionally no background/startup side effects or timer.
-const {createNpcCorporateSettlement}=require("./coopNpcCorporateSettlement");
+// Source checkout contains .cjs, while pinned EveJS overlay deploys .js.
+ // Keep native .js resolution first; do not disguise transitive missing deps.
+function loadSettlement(){
+ try{return require("./coopNpcCorporateSettlement")}
+ catch(error){
+  if(error?.code!=="MODULE_NOT_FOUND"||
+     String(error.message).split("\n")[0]!==
+      "Cannot find module './coopNpcCorporateSettlement'")
+   throw error;
+  return require("./coopNpcCorporateSettlement.cjs");
+ }
+}
+const {createNpcCorporateSettlement}=loadSettlement();
 const {marketDaemonClient}=require("../services/market/marketDaemonClient");
 const {getEscrowRecord}=require("../services/market/marketEscrowState");
 const {getCorporationRecord}=require("../services/corporation/corporationState");
@@ -13,7 +25,15 @@ const {getCharacterRecord}=require("../services/character/characterState");
 const {notifyInventoryChangesToCharacter}=require("../services/raffles/raffleInventory");
 const gameStore=require("../gameStore");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const sessionID=s=>Number(s&&(s.characterID??s.charid));
+const canonicalID=x=>{
+ const n=Number(x);
+ return (typeof x==="number"||typeof x==="string"&&/^[1-9][0-9]*$/.test(x))&&
+  Number.isSafeInteger(n)&&n>0?n:0;
+};
+const sessionID=s=>{
+ const a=canonicalID(s?.characterID),b=canonicalID(s?.charid);
+ return a&&b&&a!==b?0:a||b;
+};
 // Session guard: never run an untrusted global buyer session across concurrent RPCs.
 // Build a fresh actor-scoped instance with the same captured native authorities.
 function makeForSession(session){
@@ -34,9 +54,19 @@ function makeForSession(session){
   inspectClaim:({operationID})=>marketDaemonClient.call("GetNpcSellClaim",{
    operation_id:operationID})
  };
- const verifyBuyerSession=(actor,stationID)=>actor===buyerID&&
-  Number(getDockedLocationID(session))===stationID&&
-  getCharacterRecord(buyerID)?.characterID===buyerID;
+ const verifyBuyerSession=(actor,stationID)=>{
+  if(actor!==buyerID||session?.socket?.destroyed===true||
+     sessionID(session)!==buyerID||
+     Number(getDockedLocationID(session))!==stationID)return false;
+  // Native characterState rows are keyed by character ID. Their persisted
+  // accountId is authoritative even when no embedded characterID exists.
+  const record=getCharacterRecord(buyerID);
+  const account=canonicalID(session.userid);
+  const persisted=canonicalID(record?.accountId??record?.accountID);
+  const embedded=record?.characterID??record?.charID;
+  return Boolean(record&&account&&account===persisted&&
+   (embedded===undefined||embedded===null||canonicalID(embedded)===buyerID));
+ };
  const verifyNpcCorporation=(corpID,stationID)=>{
   const record=getCorporationRecord(corpID),runtime=getCorporationRuntime(corpID);
   return Boolean(record?.corporationID===corpID&&record.isNPC===true&&
