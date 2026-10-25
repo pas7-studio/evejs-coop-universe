@@ -36,6 +36,9 @@ const turretPreDebit=[
  '      entity: attackerEntity, entries: activeTurretEntries,',
  '    });',
  '    if (!proof.allowed) return { success: false, errorMsg: "NO_AMMO", stopReason: "ammo" };',
+ '    if (effectState._coopStrictAmmoLastBoundaryMs === cycleBoundaryMs)',
+ '      return { success: false, errorMsg: "NATIVE_FIRE_CYCLE_REPLAY", stopReason: "ammo" };',
+ '    effectState._coopStrictAmmoLastBoundaryMs = cycleBoundaryMs;',
  '    strictNativeDebitResults = new Map();',
  '    for (const entry of activeTurretEntries) {',
  '      const debit = consumeTurretAmmoCharge(',
@@ -86,6 +89,9 @@ const missilePreflight=[
  '      entity: attackerEntity, entries: armedEntries,',
  '    });',
  '    if (!proof.allowed) return { success: false, errorMsg: "NO_AMMO", stopReason: "ammo" };',
+ '    if (effectState._coopStrictAmmoLastBoundaryMs === cycleBoundaryMs)',
+ '      return { success: false, errorMsg: "NATIVE_FIRE_CYCLE_REPLAY", stopReason: "ammo" };',
+ '    effectState._coopStrictAmmoLastBoundaryMs = cycleBoundaryMs;',
  '  }',
 ].join("\n");
 const missileFail=[
@@ -94,17 +100,6 @@ const missileFail=[
  '    return { success: false, errorMsg: "AMMO_UPDATE_FAILED", stopReason: "ammo" };',
  '  }',
 ].join("\n");
-function mutate(text,remove=false){
- const eol=text.includes("\r\n")?"\r\n":"\n";
- const x=s=>s.replace(/\n/g,eol);
- text=segment(text,"consumeTurretAmmoCharge",body=>once(body,
-  x("  const nextQuantity = Math.max(0, previousQuantity - consumeQuantity);"),
-  x((remove?"":"")+ (remove?
-    "  const nextQuantity = Math.max(0, previousQuantity - consumeQuantity);":
-    sourceProof+"\n  const nextQuantity = Math.max(0, previousQuantity - consumeQuantity);")),
-  "consume native charge source"));
- return text;
-}
 function patch(source,{remove=false}={}){
  let text=source;
  const eol=text.includes("\r\n")?"\r\n":"\n",e=x=>x.replace(/\n/g,eol);
