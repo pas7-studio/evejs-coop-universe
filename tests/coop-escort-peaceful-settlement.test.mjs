@@ -11,7 +11,7 @@ const booking=()=>({
 const warehouse=()=>({status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED",
  key:manifestKey,stationID:6001001,haulerIDs:[901],cargoIDs:[123,124]});
 const delivery=()=>({status:"DELIVERED",terminal:true,nativeFullManifestProof:warehouse()});
-function fixture({flight,stock,reservation,already=false,unknownAck=false,wrongCaps=false}={}){
+function fixture({flight,stock,reservation,already=false,unknownAck=false,wrongCaps=false,serviceAllowed=true}={}){
  const b=booking();
  const f=flight||{status:"READY",phase:"DELIVERED",booking:b,delivery:delivery()};
  const d=stock||delivery();
@@ -36,7 +36,10 @@ function fixture({flight,stock,reservation,already=false,unknownAck=false,wrongC
    return {status:"SETTLED",contractID};
   }
  };
- const service=createPeacefulEscortSettlement({readFlight:()=>f,readNativeDelivery:()=>d,nativeFunds:funds});
+ const service=createPeacefulEscortSettlement({readFlight:()=>f,readNativeDelivery:()=>d,
+  verifyService:b=>serviceAllowed?{status:"VERIFIED_NATIVE_ESCORT_SERVICE",
+   characters:b.characters.slice(),fleetID:b.playerFleetID,haulerID:b.haulerID,
+   systemID:b.systemID}:{status:"NO_NATIVE_ESCORT_SERVICE"},nativeFunds:funds});
  return {service,b,f,d,funds,calls:()=>calls,held:()=>held,credits:()=>credits};
 }
 const old=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
@@ -100,6 +103,11 @@ test("wallet unreserved or refunded fails closed",()=>{
  assert.equal(f.service.settle(manifestKey).status,"NATIVE_ESCROW_NOT_RESERVED");
  assert.equal(f.calls(),0);
 });
+test("native escort participation missing prevents payout",()=>{
+ const f=fixture({serviceAllowed:false});
+ assert.equal(f.service.settle(manifestKey).status,"NATIVE_ESCORT_SERVICE_NOT_VERIFIED");
+ assert.equal(f.calls(),0);
+});
 test("atomic native GameStore capability is mandatory",()=>{
  const f=fixture({wrongCaps:true});
  assert.equal(f.service.settle(manifestKey).status,"NATIVE_FUNDS_NOT_ATOMIC");
@@ -136,8 +144,8 @@ test("last trusted source is native station, not a chat grant",async()=>{
  const binding=fs.readFileSync(new URL("../integration/coopEscortNativeBinding.cjs",import.meta.url),"utf8");
  const runtime=fs.readFileSync(new URL("../integration/coopEscortRuntime.cjs",import.meta.url),"utf8");
  assert.match(station,/EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT/);
- assert.match(station,/settlePeacefulDelivery\(trip\.manifestID\)/);
- assert.match(binding,/settlePeacefulFlight\(manifestKey\)/);
+ assert.match(station,/settlePeacefulDelivery\(trip\.manifestID,scene\)/);
+ assert.match(binding,/settlePeacefulFlight\(manifestKey,scene\)/);
  assert.match(runtime,/createPeacefulEscortSettlement/);
 });
 process.on("exit",()=>{
