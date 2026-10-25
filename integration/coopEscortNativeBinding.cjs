@@ -77,7 +77,7 @@ function makeBinding({runtime,readNativeIncident}={}){
   refundNativeWreck:manifestKey=>{
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
     return deny("DISABLED");
-   if(typeof manifestKey!=="string"||!/^d+-d+-d+$/.test(manifestKey))
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
     return deny("NATIVE_REFUND_MANIFEST_KEY_INVALID");
    try{return runtime.refundWreckedFlight(manifestKey)}
    catch{return deny("NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED")}
