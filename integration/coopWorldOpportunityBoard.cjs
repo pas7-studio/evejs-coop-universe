@@ -141,7 +141,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     title:"New Eden: "+e.title,
     body:e.summary+" | System "+e.systemID+" | /events info "+e.id+
      " | /events interest "+e.id+
-     (e.stage==="PREPARING"?" | /events volunteer "+e.id:"")+
+     (e.stage==="PREPARING"?" | /events volunteer "+e.id+" | /events info "+e.id+" (priced accept only after NPC quote)":"")+
      " | /events watch off",
     eventID:e.id})}catch{blocked++;continue}
    if(receipt?.success!==true||!POS(Number(receipt.messageID))){blocked++;continue}
@@ -349,13 +349,33 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     "\n"+e.summary+"\nSystem: "+e.systemID+
     (e.stationID?" | station: "+e.stationID:"")+
     (e.stage==="PREPARING"?
-      "\nTo volunteer before departure: /events interest "+e.id+
-      " then both real fleet pilots in the same system use /events volunteer "+e.id:
+      "\nTo volunteer: /events interest "+e.id+
+      " then both real EVE fleet pilots use /events volunteer "+e.id+
+      "\n"+(function(){const q=require("./coopEscortPricedOffers").readVisibleQuote(e.id);
+       return q.status==="READY"?
+        "NPC-funded quote: "+q.quote.amountISK+" ISK total ("+
+        q.quote.amountISK/2+" per pilot). Both must explicitly accept: /events accept "+e.id:
+        "No verified funded quote yet. /events accept is unavailable until server publishes one.";})():
       "\nTo participate voluntarily: /events interest "+e.id+
       " then fly to the actual location and use native EVE fleet/warp.")};
   }
   if(op==="history"||op==="reputation"){
    return require("./coopEscortReputation").listNativeHistory(session);
+  }
+  if(op==="accept"){
+   if(process.env.EVEJS_COOP_ESCORT_PAID_ACCEPT!=="1")
+    return {status:"DISABLED",
+     message:"[Co-op Escort] Paid contract acceptance is disabled."};
+   const r=require("./coopEscortPricedOffers").acceptInGame(session,tokens[0]);
+   const message=r.status==="DURABLE_TWO_PILOT_PAID_ACCEPTANCE"?
+    "[Co-op Escort] Both pilots explicitly accepted the native quote: "+
+    r.amountISK+" ISK total, "+(r.amountISK/2)+" ISK per pilot. This is NOT payment yet; the NPC corporation must actually reserve funds before warp.":
+    r.status==="WAITING_FOR_OTHER_PAID_ACCEPTOR"?
+    "[Co-op Escort] Accepted "+r.amountISK+" ISK total ("+
+    (r.amountISK/2)+" ISK each). The second authenticated pilot must separately use /events accept "+tokens[0]+".":
+    "[Co-op Escort] "+r.status+
+    ". No ISK has been reserved by this command.";
+   return {status:r.status,message};
   }
   if(op==="volunteer"){
    if(process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1")
@@ -378,7 +398,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      ", find the actual NPC via overview, join a real fleet manually. No automatic warp or ISK award.":
      "[Co-op Events] "+r.status};
   }
-  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events history | /events watch local|all|off"};
+  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events accept <id> | /events history | /events watch local|all|off"};
  }
  return {publish,nativeRaid,nativeConvoy,nativeConvoyPreparing,nativePreparingDeparted,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
