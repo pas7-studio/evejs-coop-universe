@@ -23,7 +23,7 @@ function sandbox(){
  db.exec('CREATE TABLE "characters" (key TEXT PRIMARY KEY,json TEXT NOT NULL)');
  const insert=(table,key,val)=>db.prepare('INSERT INTO "'+table+'"(key,json) VALUES(?,?)').run(key,JSON.stringify(val));
  insert('corporationRuntime','corporations\u001f10001',corp);insert('characters','701',char(701));insert('characters','702',char(702));
- let txCalls=0,fault=null;
+ let txCalls=0,fault=null,failureProof=false,corruptFailure=false;
  const txProvider={mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>false,
   transact(tables,fn){txCalls++;
    assert.deepEqual([...tables].sort(),['characters','corporationRuntime']);
@@ -35,9 +35,15 @@ function sandbox(){
    }catch(e){db.exec('ROLLBACK');throw e}
   }};
  const engine=createEscortNativeFunds({atomicRows:txProvider,isNpcCorporation:id=>id===10001,
-  clock:()=>1234567});
+  clock:()=>1234567,verifyNativeFailure:v=>failureProof?{
+   status:"DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE",
+   contractID:v.contractID,manifestKey:corruptFailure?"wrong":v.manifestKey,
+   corporationID:v.corporationID,reason:"NATIVE_HAULER_WRECK",
+   failureWitnessID:9001,nativeDurable:true,deliveryImpossible:true,
+   noPriorPayout:true}:null});
  const get=(t,k)=>JSON.parse(db.prepare('SELECT json FROM "'+t+'" WHERE key=?').get(k).json);
  return {db,filename,root,engine,get,txCalls:()=>txCalls,failAt:k=>fault=k,
+  setFailureProof:()=>failureProof=true,setCorruptFailure:()=>corruptFailure=true,
   close:()=>{db.close();rmSync(root,{recursive:true,force:true})}};
 }
 function run(fn){const t=sandbox();try{fn(t)}finally{t.close()}}
@@ -116,6 +122,79 @@ test('committed escrow and both native recipients survive reopening SQLite',()=>
  assert.equal(JSON.parse(another.prepare('SELECT json FROM "characters" WHERE key=?').get('701').json).balance,10500);
  assert.equal(JSON.parse(another.prepare('SELECT json FROM "corporationRuntime" WHERE key=?').get(ESCROW_KEY).json).byContract[c.contractID].status,'SETTLED');
  another.close();
+}));
+
+test('proof-backed refund restores exactly the corporate debit without crediting pilots',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();
+  assert.equal(t.engine.refundAtomic(c).status,'REFUNDED');
+  assert.equal(t.get('corporationRuntime','corporations\u001f10001').wallet.divisions['1000'].balance,50000);
+  assert.equal(t.get('characters','701').balance,500);
+  assert.equal(t.get('characters','702').balance,500);
+  assert.equal(t.engine.verifyRefund(c).status,'REFUNDED');
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('refund cannot run twice after a valid durable native failure',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();t.engine.refundAtomic(c);
+  assert.throws(()=>t.engine.refundAtomic(c),/REFUND_NOT_ALLOWED/);
+  assert.equal(t.get('corporationRuntime','corporations\u001f10001').wallet.divisions['1000'].balance,50000);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('refunded escrow cannot ever be paid to characters afterward',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();t.engine.refundAtomic(c);
+  assert.throws(()=>t.engine.settleAtomic(pay),/RESERVATION_NOT_PAYABLE/);
+  assert.equal(t.get('characters','701').balance,500);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('settled escrow can never be refunded even with a claimed terminal failure',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.engine.settleAtomic(pay);t.setFailureProof();
+  assert.throws(()=>t.engine.refundAtomic(c),/REFUND_NOT_ALLOWED/);
+  assert.equal(t.get('characters','701').balance,10500);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('a timeout without durable loss witness cannot refund a native escrow',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);
+  assert.throws(()=>t.engine.refundAtomic(c),/NATIVE_FAILURE_NOT_VERIFIED/);
+  assert.equal(t.engine.verifyReservation(c).status,'RESERVED');
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('refunding needs exact trusted manifest identity in failure witness',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();t.setCorruptFailure();
+  assert.throws(()=>t.engine.refundAtomic(c),/NATIVE_FAILURE_NOT_VERIFIED/);
+  assert.equal(t.engine.verifyReservation(c).status,'RESERVED');
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('refund remains feature disabled by default even if failure witness exists',()=>run(t=>{
+ t.engine.reserveAtomic(c);t.setFailureProof();
+ delete process.env.EVEJS_COOP_ESCORT_REFUNDS;
+ assert.throws(()=>t.engine.refundAtomic(c),/REFUNDS_DISABLED/);
+ assert.equal(t.engine.verifyReservation(c).status,'RESERVED');
+}));
+test('SQLite fault at escrow receipt rolls back native refund corporate credit',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();t.failAt(ESCROW_KEY);
+  assert.throws(()=>t.engine.refundAtomic(c),/INJECTED_WRITE_FAILURE/);
+  assert.equal(t.get('corporationRuntime','corporations\u001f10001').wallet.divisions['1000'].balance,30000);
+  assert.equal(t.engine.verifyReservation(c).status,'RESERVED');
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('wrong requested contract identity cannot refund other escrow',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();
+  assert.throws(()=>t.engine.refundAtomic({...c,amountISK:18000}),/REFUND_NOT_ALLOWED/);
+  assert.equal(t.get('corporationRuntime','corporations\u001f10001').wallet.divisions['1000'].balance,30000);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('native escrow remains a single-manifest claim even after refund',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{t.engine.reserveAtomic(c);t.setFailureProof();t.engine.refundAtomic(c);
+  assert.throws(()=>t.engine.reserveAtomic({...c,contractID:'escort-test-02'}),/MANIFEST_ALREADY_FUNDED/);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
 }));
 process.on('exit',()=>{
  if(originalA===undefined)delete process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;else process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS=originalA;

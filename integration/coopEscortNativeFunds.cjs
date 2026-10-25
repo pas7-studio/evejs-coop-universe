@@ -76,7 +76,7 @@ function appendCorpLedger(division,record){
 function appendCharLedger(row,record){
  row.walletJournal=[record,...row.walletJournal].slice(0,100);
 }
-function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now()}={}){
+function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now(),verifyNativeFailure=null}={}){
  if(typeof atomicRows?.transact!=="function"||
   typeof atomicRows?.isPoisoned!=="function"||
   typeof isNpcCorporation!=="function"||typeof clock!=="function")
@@ -180,7 +180,64 @@ function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now
    return {status:"SETTLED",contractID,credits:paid};
   });
  }
- return Object.freeze({capabilities,verifyReservation,verifySettlement,
-  reserveAtomic,settleAtomic});
+
+ // REFUNDED is a terminal alternative to SETTLED; not a new ISK source.
+ // A timeout, missing process ACK or unproven empty scene is NOT a failure proof.
+ function verifyRefund(c){
+  checkContract(c,isNpcCorporation);
+  return apply(tx=>{
+   const row=readEscrows(tx).byContract[c.contractID];
+   if(!row)return {status:"NOT_FOUND"};
+   if(!exact(row,c))fail("ESCROW_IDENTITY_CONFLICT");
+   if(row.status!=="REFUNDED")return {status:"NOT_REFUNDED"};
+   if(!pos(row.refundedAt)||!pos(row.failureWitnessID)||
+    !["NATIVE_HAULER_WRECK","NATIVE_PREWARP_CANCELLED"].includes(row.refundReason))
+    fail("REFUND_CORRUPT");
+   return {status:"REFUNDED",contractID:c.contractID,
+    corporationID:c.corporationID,amountISK:c.amountISK,
+    escrowKey:c.contractID,nativeDurable:true,
+    reason:row.refundReason,failureWitnessID:row.failureWitnessID};
+  });
+ }
+ function refundAtomic(c){
+  if(process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")fail("REFUNDS_DISABLED");
+  checkContract(c,isNpcCorporation);
+  if(typeof verifyNativeFailure!=="function")fail("FAILURE_AUTHORITY_NOT_WIRED");
+  // This callback MUST read durable, irreversible server-owned native
+  // evidence, never a client request, UI timer or transient missing ship.
+  let witness;try{witness=verifyNativeFailure(clone(c))}
+  catch{fail("NATIVE_FAILURE_PROOF_UNAVAILABLE")}
+  if(!isObject(witness)||witness.status!=="DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE"||
+    witness.contractID!==c.contractID||
+    witness.manifestKey!==c.manifestKey||
+    witness.corporationID!==c.corporationID||
+    !["NATIVE_HAULER_WRECK","NATIVE_PREWARP_CANCELLED"].includes(witness.reason)||
+    !pos(witness.failureWitnessID)||witness.nativeDurable!==true||
+    witness.deliveryImpossible!==true||
+    witness.noPriorPayout!==true)
+    fail("NATIVE_FAILURE_NOT_VERIFIED");
+  return apply(tx=>{
+   const ledger=readEscrows(tx),record=ledger.byContract[c.contractID];
+   if(!record)fail("RESERVATION_NOT_FOUND");
+   if(!exact(record,c)||record.status!=="RESERVED")fail("REFUND_NOT_ALLOWED");
+   const corp=readCorp(tx,c),add=cents(c.amountISK);
+   const next=corp.balanceCents+add;
+   if(!Number.isSafeInteger(next))fail("CORPORATION_BALANCE_OVERFLOW");
+   const now=clock();if(!pos(now))fail("INVALID_CLOCK");
+   corp.division.balance=money(next);
+   appendCorpLedger(corp.division,entry(c,"refund",add,next,now,
+    c.corporationID,0));
+   tx.put("corporationRuntime",keyOf(c),corp.row);
+   record.status="REFUNDED";record.refundedAt=now;
+   record.refundReason=witness.reason;
+   record.failureWitnessID=witness.failureWitnessID;
+   ledger.byContract[c.contractID]=record;
+   tx.put("corporationRuntime",ESCROW_KEY,ledger);
+   return {status:"REFUNDED",contractID:c.contractID,
+    corporationID:c.corporationID,amountISK:c.amountISK};
+  });
+ }
+ return Object.freeze({capabilities,verifyReservation,verifySettlement,verifyRefund,
+  reserveAtomic,settleAtomic,refundAtomic});
 }
 module.exports={createEscortNativeFunds,ESCROW_KEY,TABLES};
