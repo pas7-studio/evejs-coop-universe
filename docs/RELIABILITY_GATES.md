@@ -36,13 +36,14 @@ until native evidence from the correct boot is obtained. No made-up marker.
 The report also rejects stale events from previous container processes,
 replayed shared scenes and duplicate native ship IDs.
 
-## Five independent gates
+## Six independent gates
 
 | Gate | PASS evidence | Must remain BLOCKED/FAIL when |
 | --- | --- | --- |
 | World | Native headless boot; topology; physical miner+hauler; named NPC; sampled native motion AND ore/target | Missing, malformed or stale JSONL, empty native static data, stock/NPC inactivity |
 | Party | Two current distinct native pilots in the same fresh reciprocal-visibility scene | Raw TCP sockets, stale/disconnected pilots, scene without both ships |
 | Persistence | Two native authoritative snapshots of **at least two** characters, same `evejs-data` volume/image, independently evidenced restart between capture timestamps, identical ship/ISK/items | No native exporter, unsanctioned restart, duplicated item/ship ID, lost/crafted ISK or cargo |
+| Gifts | Two current-process native snapshots, exactly one ordinary item and one inactive ship change owner across different accounts, no unrelated wealth/assets change | No real native custody difference, stack merges/splits, duplicate item, same-account pilots, or unrelated state changes |
 | Economy | Native authoritative entry export with unique entry IDs and reward keys, exact integer double-entry transfer sums, explicit positive mint/negative burn | No ledger, repeated reward, repeated entry, unbalanced transfer, invalid money values |
 | Client | Operator-confirmed **lawful** two-client login, undock, NPC interaction, mutual visibility, accepted fleet invitation/warp, shared combat/loot, actual item/ship gifts, shared quest credit, reconnect with the same ship and unaffected second pilot on the exact tested SHA/image | Missing legal client, real gameplay not observed, wrong client identities, stale/reused attestation |
 
@@ -228,3 +229,5 @@ The tests cover the native snapshot structure and read-only gift custody
 invariants. Those tests are deterministic; they do **not** prove a real
 EVEJS client can yet execute both gifts. No deployment, restart, or source
 changes to the parallel gameplay implementation are performed here.
+
+**Native singleton accounting (2026-10-25):** The pinned upstream `itemStore.js` stores `singleton:1` with `quantity:-1` (and `singleton:2` with `quantity:-2`), while each has `stacksize:1`. The exporter normalizes these to one real item instance. Negative quantity without the corresponding native singleton marker remains invalid. This corrects a prior false-failure risk for every valid ship snapshot; see the dedicated regression tests.
