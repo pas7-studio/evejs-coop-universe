@@ -36,6 +36,28 @@ until native evidence from the correct boot is obtained. No made-up marker.
 The report also rejects stale events from previous container processes,
 replayed shared scenes and duplicate native ship IDs.
 
+### Integrated-main long-uptime fix (2026-10-25)
+
+The original runner passed a historical headless-boot event to the World
+reporter but asked the reporter to apply the short **activity** time window
+to every record, discarding that same boot, topology and native industry
+record again. The read-only runner now extracts (1) the last real boot
+request, (2) up to 300 real headless/topology/mining/industry/materialization
+anchors, and (3) the last 10,000 event lines. These are *real* JSONL
+records, not synthesized events. The World reporter evaluates the available
+native scene history since the currently running Docker process started;
+**a separate strict per-system check still requires measured physical NPC
+movement plus ore growth or real targeting and actual NPC ship presence in
+the requested `-WindowMinutes` interval**. Historical activity never grants
+PASS, and current activity in a different solar system cannot satisfy a
+stale or unrelated scene. The historical anchor sample is bounded; a very
+large server log with missing anchors remains BLOCKED rather than claiming
+that the physical world exists.
+
+Manual verification is still needed on a running Windows Docker host after
+the fix is merged. The local regression suite uses stand-in World/Party
+adapters; use real project reporters on the actual checkout for acceptance.
+
 ## Six independent gates
 
 | Gate | PASS evidence | Must remain BLOCKED/FAIL when |
