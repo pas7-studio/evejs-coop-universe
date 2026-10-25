@@ -241,11 +241,9 @@ impl MarketRuntime {
           coop_p2p_claim_db(&path,order_id,cycle,buyer,seller,before,quantity,price_cents)
         ).await.context("P2P claim task join failed")??;
         let order=self.get_order(order_id).await?;
-        if let Some(order)=order{
-            self.invalidate_scope_caches(order.row.region_id,
-              order.row.solar_system_id,order.row.station_id,order.row.type_id).await;
-            self.refresh_region_summary_row(order.row.region_id,order.row.type_id).await?;
-        }
+        self.invalidate_scope_caches(order.row.region_id,
+          order.row.solar_system_id,order.row.station_id,order.row.type_id).await;
+        self.refresh_region_summary_row(order.row.region_id,order.row.type_id).await?;
         Ok(v)
     }
     pub async fn coop_p2p_finalize(
@@ -256,11 +254,9 @@ impl MarketRuntime {
             coop_p2p_finalize_db(&path,order_id,cycle,buyer,seller)
         ).await.context("P2P finalize task join failed")??;
         let order=self.get_order(order_id).await?;
-        if let Some(order)=order{
-            self.invalidate_scope_caches(order.row.region_id,
-              order.row.solar_system_id,order.row.station_id,order.row.type_id).await;
-            self.refresh_region_summary_row(order.row.region_id,order.row.type_id).await?;
-        }
+        self.invalidate_scope_caches(order.row.region_id,
+          order.row.solar_system_id,order.row.station_id,order.row.type_id).await;
+        self.refresh_region_summary_row(order.row.region_id,order.row.type_id).await?;
         Ok(v)
     }
     pub async fn coop_p2p_get_claim(
