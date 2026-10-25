@@ -74,7 +74,7 @@ function beginPeerSettlement(ticket,file){
 // receipt is intentionally independent. This fence is only enabled on an
 // explicitly approved two-recipient mission settlement deployment.
 const DEFAULT_LEADER_FENCE="/var/lib/evejs/coop-duo-mission-leader-fence.jsonl";
-const LEADER_STATES=["PREPARED","LEADER_CONFIRMED","BOTH_CONFIRMED"];
+const LEADER_STATES=["PREPARED","LEADER_NATIVE_CLEARED","BOTH_NATIVE_CLEARED"];
 function leaderFenceKey(ticket){
  const m=ticket?.leaderMission||{};
  if(!ticket?.ok||!id(ticket.leader)||!id(ticket.peerID)||
@@ -120,9 +120,9 @@ function readLeaderFence(file,key){
   }else{
    if(last.peerID!==event.peerID||
     last.peerMissionSequence!==event.peerMissionSequence||
-    (last.state==="PREPARED"&&event.state!=="LEADER_CONFIRMED")||
-    (last.state==="LEADER_CONFIRMED"&&event.state!=="BOTH_CONFIRMED")||
-    last.state==="BOTH_CONFIRMED")
+    (last.state==="PREPARED"&&event.state!=="LEADER_NATIVE_CLEARED")||
+    (last.state==="LEADER_NATIVE_CLEARED"&&event.state!=="BOTH_NATIVE_CLEARED")||
+    last.state==="BOTH_NATIVE_CLEARED")
     return {status:"LEADER_FENCE_INVALID_TRANSITION"};
   }
   latest.set(event.key,event);
@@ -161,7 +161,7 @@ function advanceLeaderFence(ticket,nextState){
  if(!fence)return {status:"LEADER_FENCE_NOT_PREPARED"};
  const record=readLeaderFence(fence.file,fence.key);
  if(record.status!=="READY")return record;
- const expected=nextState==="LEADER_CONFIRMED"?"PREPARED":"LEADER_CONFIRMED";
+ const expected=nextState==="LEADER_NATIVE_CLEARED"?"PREPARED":"LEADER_NATIVE_CLEARED";
  if(record.previous?.state!==expected||
   record.previous.peerID!==ticket.peerID||
   record.previous.peerMissionSequence!==ticket.peerMission?.missionSequence)
@@ -238,7 +238,7 @@ function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalP
  if(ticket._leaderFence){
   // Native original agent completed. Mark AFTER actual mission record deletion
   // but BEFORE attempting the second recipient's independent reward.
-  const leaderRecord=advanceLeaderFence(ticket,"LEADER_CONFIRMED");
+  const leaderRecord=advanceLeaderFence(ticket,"LEADER_NATIVE_CLEARED");
   if(leaderRecord.status!=="READY")
    return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION",
     reason:leaderRecord.status};
@@ -282,7 +282,7 @@ function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalP
  if(safeMode&&!durableWrite(file,intent.key,"AWARDED"))
   return {status:"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
  if(ticket._leaderFence){
-  const both=advanceLeaderFence(ticket,"BOTH_CONFIRMED");
+  const both=advanceLeaderFence(ticket,"BOTH_NATIVE_CLEARED");
   if(both.status!=="READY")
    return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION",
     reason:both.status};
