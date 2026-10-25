@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {
- STEPS,createFlight,nextAction,advanceFlight,selectActiveFlights,
+ STEPS,createFlight,nextAction,advanceFlight,selectActiveFlights,stepToken,
 }=require('../integration/coopCourierFlight.cjs');
 
 const contract={contractID:980000000,startStationID:60015260,endStationID:60015262};
@@ -42,7 +42,7 @@ test('an unconfirmed outcome does not advance and does not retry blindly',()=>{
 });
 
 test('a stuck step times out instead of hanging forever',()=>{
- const flight=createFlight({contract,identity,nowMs:0});
+ const flight=createFlight({contract,identity,nowMs:1000});
  const timeout=nextAction(flight,999999);
  assert.equal(timeout.status,'FLIGHT_TIMEOUT');
  assert.equal(timeout.step,'undock');
@@ -56,4 +56,21 @@ test('concurrency is capped so per-tick cost stays flat',()=>{
  assert.deepEqual(selected.deferred,[4,5]);
  const finished=[{contractID:1,step:'done'},{contractID:2,step:'failed'}];
  assert.equal(selectActiveFlights(finished,{maxConcurrentFlights:3}).activeCount,0);
+});
+
+test('a duplicated OK cannot advance two steps and skip the warp',()=>{
+ let flight=createFlight({contract,identity,nowMs:1000});
+ const token=stepToken(flight);
+ flight=advanceFlight(flight,'OK',2000,token);
+ assert.equal(flight.step,'warp');
+ const stale=advanceFlight(flight,'OK',3000,token);
+ assert.equal(stale.step,'warp','a stale token must not advance');
+ assert.equal(stale.lastRejectedToken,token);
+ const fresh=advanceFlight(flight,'OK',4000,stepToken(flight));
+ assert.equal(fresh.step,'arrive');
+});
+
+test('a step that was never stamped is not instantly timed out',()=>{
+ const flight={...createFlight({contract,identity,nowMs:1000}),stepStartedAtMs:0};
+ assert.equal(nextAction(flight,999999).status,'ACTION');
 });

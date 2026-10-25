@@ -64,7 +64,10 @@ function nextAction(flight, nowMs, policy) {
     return status("NO_ACTION", { reason: "unknown flight step" });
   }
   const rules = Object.assign({}, DEFAULT_FLIGHT_POLICY, policy || {});
-  const elapsed = (Number(nowMs) || 0) - (Number(flight.stepStartedAtMs) || 0);
+  // A step that was never stamped must not look infinitely old: without this,
+  // a caller that forgets nowMs gets an instant FLIGHT_TIMEOUT.
+  const startedAt = Number(flight.stepStartedAtMs) || 0;
+  const elapsed = startedAt > 0 ? (Number(nowMs) || 0) - startedAt : 0;
   const timeout = stepTimeoutMs(flight.step, rules);
   if (timeout > 0 && elapsed > timeout) {
     return status("FLIGHT_TIMEOUT", { step: flight.step, elapsedMs: elapsed, timeoutMs: timeout });
@@ -82,9 +85,19 @@ function nextAction(flight, nowMs, policy) {
 
 // Advance only on a confirmed native outcome. An unconfirmed outcome leaves the
 // flight where it is, so nothing is retried blindly.
-function advanceFlight(flight, observed, nowMs) {
+// stepToken is `${step}:${stepStartedAtMs}` from the action that was executed.
+// Without it a duplicated OK would advance two steps and silently skip the
+// warp, so a mismatched token advances nothing.
+function stepToken(flight) {
+  return `${String(flight && flight.step || "")}:${Number(flight && flight.stepStartedAtMs) || 0}`;
+}
+
+function advanceFlight(flight, observed, nowMs, token) {
   const at = Number(nowMs) || 0;
   const current = String(flight && flight.step || "");
+  if (token !== undefined && token !== null && String(token) !== stepToken(flight)) {
+    return Object.assign({}, flight, { lastRejectedToken: String(token), lastObservedAtMs: at });
+  }
   if (observed === "FAILED") {
     return Object.assign({}, flight, { step: "failed", stepStartedAtMs: at });
   }
@@ -114,6 +127,7 @@ function selectActiveFlights(flights, policy) {
 
 module.exports = {
   STEPS,
+  stepToken,
   DEFAULT_FLIGHT_POLICY,
   createFlight,
   nextAction,
