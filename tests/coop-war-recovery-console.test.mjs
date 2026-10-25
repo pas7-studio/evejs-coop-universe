@@ -17,6 +17,7 @@ function fixture(){
   sourceSystemID:101,destinationSystemID:202,
   modulesHash:"a".repeat(64),cargoHash:"b".repeat(64),updatedAt:1000};
  const witness=()=>{
+  if(phase===null)return {status:"NO_ACTIVE_TRANSFER"};
   let action=null;
   if(phase==="PREPARED"&&physical===101&&pilot===101)action="ABORT";
   if(phase==="PREPARED"&&physical===202&&pilot===101)action="NATIVE_COMMIT";
@@ -39,7 +40,8 @@ function fixture(){
   nativeCommit:()=>{writes++;phase="NATIVE_COMMITTED";sql=202;return {status:phase}},
   finish:()=>{writes++;phase="COMPLETE";return {status:phase}},
   abort:()=>{writes++;phase="ABORTED";return {status:phase}},
-  restore:()=>{writes++;phase="ABORTED";sql=101;return {status:phase}}
+  restore:()=>{writes++;phase="ABORTED";sql=101;return {status:phase}},
+  retire:()=>{writes++;phase=null;return {status:"RETIRED"}}
  };
  const identityRegistry={relocate:(p,from,id,to)=>{
   assert.equal(p,"coop-pilot-001");assert.equal(from,101);
@@ -93,8 +95,11 @@ test("operator must independently confirm each of the three durable steps",()=>{
   const relocate=f.apply(b);assert.equal(relocate.nextAction,"FINISH");
   const c=f.review(),finish=f.apply(c);
   assert.equal(finish.status,"REPAIR_STEP_APPLIED");
+  const terminal=f.review();
+  assert.equal(terminal.action,"RETIRE_TRANSFER");
+  assert.equal(f.apply(terminal).status,"REPAIR_STEP_APPLIED");
   assert.equal(f.review().status,"CLEAN");
-  assert.equal(f.writes,2);
+  assert.equal(f.writes,3);
  }finally{fs.rmSync(f.dir,{recursive:true,force:true})}
 });
 test("finished matching native journal is archived, not silently erased",()=>{
@@ -104,6 +109,9 @@ test("finished matching native journal is archived, not silently erased",()=>{
   const w=f.review();assert.equal(w.action,"CLEANUP_JOURNAL");
   const result=f.apply(w);
   assert.equal(result.status,"REPAIR_STEP_APPLIED");
+  const retirement=f.review();
+  assert.equal(retirement.action,"RETIRE_TRANSFER");
+  assert.equal(f.apply(retirement).status,"REPAIR_STEP_APPLIED");
   assert.equal(f.review().status,"CLEAN");
   assert.equal(fs.existsSync(path.join(f.dir,"coop-pilot-001.json")),false);
   assert.equal(fs.readdirSync(f.dir+".recovered").length,1);
