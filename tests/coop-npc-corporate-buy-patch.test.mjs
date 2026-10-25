@@ -56,7 +56,8 @@ test("NPC corporate buy bypasses already-reserved buyer-wallet matching path",()
 const runtimeSource=require("node:fs").readFileSync(
  new URL("../integration/coopNpcCorporateBuyRuntime.cjs",import.meta.url),"utf8");
 function runtimeForTest({deployed=false,brokenChild=false}={}){
- let accountId=9001,destroyed=false,embedded;
+ let accountId=9001,destroyed=false,embedded,optionalCharacterAccount,
+  banned=false,accountExists=true;
  const stub={createNpcCorporateSettlement:proof=>({verify:proof.verifyBuyerSession})};
  const stores={
   "../services/market/marketDaemonClient":{marketDaemonClient:{call:()=>({})}},
@@ -66,7 +67,10 @@ function runtimeForTest({deployed=false,brokenChild=false}={}){
   "../services/structure/structureLocation":{getDockedLocationID:()=>60001},
   "../services/inventory/itemStore":{findItemById:()=>null},
   "../services/character/characterState":{getCharacterRecord:()=>({
-   accountId,...(embedded===undefined?{}:{characterID:embedded})})},
+   ...(optionalCharacterAccount===undefined?{}:{accountId:optionalCharacterAccount}),
+   ...(embedded===undefined?{}:{characterID:embedded})})},
+  "../services/login/accountStore":{getAccountByUserName:name=>
+   accountExists&&name==="pilot-owner"?{id:accountId,banned}:null},
   "../services/raffles/raffleInventory":{notifyInventoryChangesToCharacter:()=>{}},
   "../gameStore":{coopAtomicNativeRows:{}}
  };
@@ -88,9 +92,10 @@ function runtimeForTest({deployed=false,brokenChild=false}={}){
  };
  new Function("module","require","process",runtimeSource)(m,load,{env:{}});
  return {runtime:m.exports,loaded,session:()=>({characterID:701,charid:701,
-  userid:9001,socket:{destroyed}}),
+  userid:9001,userName:"pilot-owner",socket:{destroyed}}),
   setAccount:v=>{accountId=v},setDestroyed:v=>{destroyed=v},
-  setEmbedded:v=>{embedded=v}};
+  setEmbedded:v=>{embedded=v},setCharacterAccount:v=>{optionalCharacterAccount=v},
+  setBanned:v=>{banned=v},setExists:v=>{accountExists=v}};
 }
 test("native COOP-035 buyer accepts keyed character record without embedded ID",()=>{
  const f=runtimeForTest(),s=f.session();
@@ -117,4 +122,25 @@ test("COOP-035 source checkout uses .cjs sibling without altering deployed .js l
 test("COOP-035 runtime does not hide a missing transitive native dependency",()=>{
  assert.throws(()=>runtimeForTest({deployed:true,brokenChild:true}),
   /broken-corporate-child/);
+});
+
+
+test("pinned EveJS characterState lacks character accountId: native handshake account is source of truth",()=>{
+ const f=runtimeForTest(),session=f.session();
+ assert.equal(f.runtime.makeForSession(session).verify(701,60001),true);
+ assert.ok(f.loaded.includes("../services/login/accountStore"));
+ f.setExists(false);
+ assert.equal(f.runtime.makeForSession(session).verify(701,60001),false);
+ f.setExists(true);f.setBanned(true);
+ assert.equal(f.runtime.makeForSession(session).verify(701,60001),false);
+ f.setBanned(false);f.setCharacterAccount(9002);
+ assert.equal(f.runtime.makeForSession(session).verify(701,60001),false);
+ f.setCharacterAccount(9001);
+ assert.equal(f.runtime.makeForSession(session).verify(701,60001),true);
+});
+test("buyer cannot borrow a different authenticated user name or use an unbound account",()=>{
+ const f=runtimeForTest(),session=f.session();
+ assert.equal(f.runtime.makeForSession({...session,userName:"other"}).verify(701,60001),false);
+ assert.equal(f.runtime.makeForSession({...session,userName:undefined}).verify(701,60001),false);
+ assert.equal(f.runtime.makeForSession({...session,userid:0}).verify(701,60001),false);
 });
