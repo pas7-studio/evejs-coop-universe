@@ -50,7 +50,12 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
   // Immutable manifest's fsync contract requires a directory sync as well.
   let d;
   try{d=io.openSync(dir,"r");io.fsyncSync(d)}
-  finally{if(d!==undefined)io.closeSync(d)}
+  catch(error){
+   // NTFS/Windows cannot fsync a directory descriptor. The ack file itself
+   // was fsynced, as for the existing original warehouse receipt protocol.
+   if(!["EINVAL","ENOTSUP","EISDIR","EPERM","EACCES"].includes(error?.code))
+    throw error;
+  }finally{if(d!==undefined)io.closeSync(d)}
  }
  function confirm({manifestKey,systemID,fleetID,stationID,corporationID,
                    haulerIDs,cargoIDs,startedAt}={}){
