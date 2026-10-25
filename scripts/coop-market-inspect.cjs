@@ -41,11 +41,20 @@ function inspect(db,{systems=DEFAULT_SYSTEMS}={}) {
   FROM seed_stock k JOIN stations s ON s.station_id=k.station_id
   WHERE k.quantity>0 GROUP BY s.station_id ORDER BY units DESC LIMIT 8`).all()
   .map(r=>({systemID:Number(r.systemID),station:r.station,types:Number(r.types),units:Number(r.units)}));
+ const examples=db.prepare(`SELECT k.station_id AS stationID, s.station_name AS station,
+  s.solar_system_id AS systemID, k.type_id AS typeID, t.name AS item,
+  k.price AS price, k.quantity AS quantity
+  FROM seed_stock k JOIN stations s ON s.station_id=k.station_id
+  JOIN market_types t ON t.type_id=k.type_id
+  WHERE k.quantity>0 AND s.solar_system_id IN (${holders})
+  ORDER BY k.price ASC, k.quantity DESC LIMIT 12`).all(...ids)
+  .map(r=>({stationID:Number(r.stationID),systemID:Number(r.systemID),station:r.station,
+    typeID:Number(r.typeID),item:r.item,price:Number(r.price),quantity:Number(r.quantity)}));
  const allEmpty=scopes.every(x=>x.status!=="SELL_LIQUIDITY_PRESENT");
  const totalSeedUnits=Number(db.prepare("SELECT COALESCE(SUM(quantity),0) AS n FROM seed_stock WHERE quantity>0").get().n)||0;
  const globalOpenSellOrders=Number(db.prepare("SELECT COUNT(*) AS n FROM market_orders WHERE state='open' AND bid=0 AND vol_remaining>0").get().n)||0;
  return {status:!allEmpty?"MARKET_STOCK_AVAILABLE":(totalSeedUnits||globalOpenSellOrders)?"NO_LOCAL_SELL_LIQUIDITY":"NO_SELL_LIQUIDITY",
-  source:"LIVE_SQLITE_READ_ONLY",systems:scopes,counts:totals,globalSeedUnits:totalSeedUnits,globalOpenSellOrders,stockedStations:nearest,
+  source:"LIVE_SQLITE_READ_ONLY",systems:scopes,counts:totals,globalSeedUnits:totalSeedUnits,globalOpenSellOrders,stockedStations:nearest,affordableSeedExamples:examples,
   warning:"Market catalog/client routing and wallet/inventory settlement are independent checks; this report is NOT proof of a successful purchase."};
 }
 function run({file=DB_DEFAULT,systems=DEFAULT_SYSTEMS,Database}={}) {
