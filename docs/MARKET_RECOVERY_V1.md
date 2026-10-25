@@ -19,7 +19,7 @@ From `C:\Games\EveCoopProject` after updating the project checkout (but **not** 
 The tool opens the **existing** `/var/lib/evejs/market/market.sqlite` with `better-sqlite3` in `readonly` + `PRAGMA query_only` mode. It reports seeded quantities, station coverage, open sell orders, and the systems with the most stock. It never executes `rebuild`, `AdjustSeedStock`, `PlaceOrder`, `docker down`, any restart, or market inventory mutation.
 
 - `MISSING_MARKET_DB` / `MARKET_SCHEMA_INCOMPLETE`: identify the issue before attempting repair. Do NOT create a fresh DB in place.
-- `NO_SEED_STOCK`: no remaining seeded stock globally; check backups and player orders. Restoring a snapshot destroys newer state and needs explicit approval.
+- `NO_SELL_LIQUIDITY`: no positive seeded quantities or open player sell orders globally. Check backups and player order records before any intervention. Restoring a snapshot destroys newer state and needs explicit approval.
 - `NO_LOCAL_SELL_LIQUIDITY`: stocks exist, but not at selected stations. Verify the system and travel to an actually stocked hub; do not interpret an out-of-system purchase as delivery to Perimeter.
 - `MARKET_STOCK_AVAILABLE`: the underlying market has sell stock in at least one selected system. This **does not** prove the in-client market works, account has ISK, correct faction/structure access or item delivery.
 - If SQLite reports missing columns, inspect the actual schema and pin. The tool fails closed rather than silently migrating anything.
