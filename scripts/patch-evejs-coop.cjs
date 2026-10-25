@@ -217,6 +217,8 @@ function transform(source,spec,remove){
   text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("industry/industryParityHelpers.js"))
   text=require("./coop-industry-time-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file.endsWith("/agent/agentMissionRuntime.js") || spec.file.endsWith("/dungeon/dungeonUniverseSiteService.js"))
+  text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
