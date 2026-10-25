@@ -2,7 +2,7 @@
 // Reuse EveJS's real mining fleet controller, rock depletion, cargo and response.
 // This adapter never simulates asteroid yields or spawns substitute miners.
 const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
-function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present}){
+function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present,getController}){
  if(!positive(systemID)||!scene||typeof getFleets!=="function"||typeof getCargo!=="function")
   return {status:"UNAVAILABLE",fleets:[],assignments:[]};
  const fleets=(getFleets(systemID)||[]).filter(f=>Number(f?.systemID)===Number(systemID));
@@ -34,6 +34,28 @@ function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present})
   const outcome=typeof present==="function"?present(scene,id,pilot):null;
   assigned.push({pilotID:pilot.id,entityID:id,role:pilot.role,presented:outcome?.status||"NO_DISPLAY"});
  }
+ // ALIFE-1 PERCEIVE assertion: a fleet that says "mining" while producing
+ // nothing is the same silent-blocker class one stage earlier. Opt-in only.
+ const trace=process.env.EVEJS_COOP_ALIFE_TRACE==="1";
+ const belts=trace?(scene.staticEntities||[]).filter(x=>
+  x?.kind==="asteroidBelt"&&["x","y","z"].every(k=>Number.isFinite(x?.position?.[k]))):[];
+ const minerEvidence=id=>{
+  const ship=scene.getEntityByID?.(id);
+  const controller=typeof getController==="function"?getController(id):null;
+  let nearest=null;
+  for(const belt of belts){
+   const dx=ship?.position?.x-belt.position.x,dy=ship?.position?.y-belt.position.y,
+    dz=ship?.position?.z-belt.position.z;
+   if(![dx,dy,dz].every(Number.isFinite))continue;
+   const meters=Math.round(Math.hypot(dx,dy,dz));
+   if(nearest===null||meters<nearest)nearest=meters;
+  }
+  return {entityID:id,mode:String(ship?.mode||""),
+   controllerTarget:Number(controller?.currentTargetID)||0,
+   shipTarget:Number(ship?.targetID)||0,
+   sceneCargoStacks:(ship?.nativeCargoItems||[]).length,
+   nearestBeltMeters:nearest,belts:belts.length};
+ };
  const details=fleets.map(f=>{
   const live=(ids)=>[...(ids||[])].filter(id=>{
    const ship=scene.getEntityByID?.(Number(id));
@@ -55,7 +77,8 @@ function observe({systemID,scene,pilots=[],registry,getFleets,getCargo,present})
    cargo,haulerCargo,loadedHaulerOreQuantity:haulerCargo.reduce((n,x)=>n+x.oreQuantity,0),
    oreStacks:cargo.reduce((n,x)=>n+x.items.length,0),
    oreQuantity:cargo.reduce((n,x)=>n+x.items.reduce((sum,y)=>sum+y.quantity,0),0),
-   lastHauledVolumeM3:Number(f.lastHauledVolumeM3)||0,lastHauledAtMs:Number(f.lastHauledAtMs)||0
+   lastHauledVolumeM3:Number(f.lastHauledVolumeM3)||0,lastHauledAtMs:Number(f.lastHauledAtMs)||0,
+   ...(trace?{mining:miners.map(minerEvidence)}:{})
   };
  });
  return {status:fleets.length?"ACTIVE":"NO_NATIVE_FLEET",fleets:details,assignments:assigned};

@@ -118,3 +118,30 @@ test("native mining identity never binds to static entity or another player ship
  assert.deepEqual(outcome.fleets[0].haulerIDs,[]);
  assert.equal(outcome.assignments.length,1);
 });
+test("ALIFE trace proves whether a 'mining' fleet is actually at a belt",()=>{
+ const scene={
+  staticEntities:[
+   {kind:"asteroidBelt",itemID:1,position:{x:1000,y:0,z:0}},
+   {kind:"asteroidBelt",itemID:2,position:{x:50000,y:0,z:0}}
+  ],
+  getEntityByID:id=>id===101?{itemID:101,kind:"ship",nativeNpc:true,mode:"ORBIT",
+   position:{x:1500,y:0,z:0},nativeCargoItems:[]}:null
+ };
+ const base={systemID:30000142,scene,pilots:[],
+  getFleets:()=>[{fleetID:9,systemID:30000142,state:"mining",minerEntityIDs:[101],haulerEntityIDs:[]}],
+  getCargo:()=>[],getController:()=>({currentTargetID:555})};
+ process.env.EVEJS_COOP_ALIFE_TRACE='1';
+ try{
+  const traced=observe(base);
+  const mining=traced.fleets[0].mining;
+  assert.equal(mining.length,1);
+  assert.equal(mining[0].entityID,101);
+  assert.equal(mining[0].mode,"ORBIT");
+  assert.equal(mining[0].controllerTarget,555);
+  assert.equal(mining[0].nearestBeltMeters,500);
+  assert.equal(mining[0].belts,2);
+  assert.equal(mining[0].sceneCargoStacks,0);
+ }finally{delete process.env.EVEJS_COOP_ALIFE_TRACE;}
+ const quiet=observe(base);
+ assert.equal(quiet.fleets[0].mining,undefined,"no diagnostics without the flag");
+});

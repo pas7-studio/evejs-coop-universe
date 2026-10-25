@@ -948,6 +948,7 @@ function observeSession(session,ship){
             systemID,scene,pilots:residents,registry:identityRegistry,
             getFleets:id=>mining.getMiningFleetsForSystem(id),
             getCargo:id=>cargo.listNativeCargoForEntity(id),
+            getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
             present
           });
           require("./coopRuntimeProbe").observe("living-native-industry",session,ship,{
