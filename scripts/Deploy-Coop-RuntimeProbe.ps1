@@ -20,6 +20,7 @@ param(
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
+  [switch]$EnableNativeExploration,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -115,6 +116,12 @@ if ($EnableNativeCoopContracts) {
 # Opt in only after confirming offers/standing data on the two real characters.
 if ($EnableNativeLpStandings) {
   $yamlLines += "      EVEJS_COOP_LP_STANDING_REQUIREMENTS: '1'"
+}
+# Expeditions use authentic completed native scans and permissioned shared bookmarks.
+# Explicit opt-in until two-client scanner/warp RPCs are validated.
+if ($EnableNativeExploration) {
+  $yamlLines += "      EVEJS_COOP_EXPEDITION_SCAN_PROOF: '1'"
+  $yamlLines += "      EVEJS_COOP_EXPEDITION_FLEET_BOOKMARKS: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
