@@ -69,7 +69,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
   const next=new Map(),summary=[];
   for(const candidate of visible){
    const {faction,members,target,scout}=candidate,key=sys+":"+faction;
-   if(next.has(key)||next.size>=maxTeams)continue;
+   if(next.has(key)||teams.size+next.size>=maxTeams)continue;
    const attackerIDs=members.filter(p=>p.entityID!==scout.entityID)
     .sort((a,b)=>meters(a.ship.position,target.ship.position)-
       meters(b.ship.position,target.ship.position)||a.pilotID.localeCompare(b.pilotID))
@@ -90,6 +90,13 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
     attackerIDs:[...team.attackerIDs],targetID:team.targetID,
     readyAt:team.firstSeenAt+relayDelayMs});
   }
+  // A temporarily lost witness must not instantly turn the same coordinated
+  // pirates into unrestricted solo hunters. Hold the old team until TTL;
+  // permit() still refuses any order if the physical scout cannot testify.
+  for(const [key,old] of priorTeams)if(old.systemID===sys&&
+   !next.has(key)&&old.expiresAt>=now&&
+   validShip(scene,old.targetID)&&teams.size+next.size<maxTeams)
+    next.set(key,old);
   for(const [key,value] of next)teams.set(key,value);
   return {status:"OK",teams:summary};
  }
