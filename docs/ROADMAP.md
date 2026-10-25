@@ -2,6 +2,7 @@
 > **2026-10-25 native-mechanics discovery / parallel-agent checkpoint:**
 > [24-mechanic upstream-to-co-op gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md)
 > [First implementation: native item/courier contracts + LP Store standing gates](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md), source-tested and pending real two-client/escrow replay acceptance.
+> [New native exploration implementation: verified scan receipts + permissioned immediate fleet bookmarks](COOP_NATIVE_EXPLORATION_IMPLEMENTATION_20261025.md) — source-reviewed; two-client scan and bookmark RPC acceptance pending.
 > [Native exploration + shared bookmarks / wormhole two-player acceptance](COOP_EXPLORATION_NATIVE_GAP_20261025.md) — source audit, live unverified; coordinate any beyonce changes with fleet-warp owner.
 > and [current P0 progress, blockers and agent ownership handoff](COOP_PARALLEL_AGENT_HANDOFF_20261025.md).
 > These are source-level findings and acceptance requirements, **not** claims

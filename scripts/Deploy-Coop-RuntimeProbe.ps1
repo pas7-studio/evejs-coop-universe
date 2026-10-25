@@ -21,6 +21,7 @@ param(
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
   [switch]$EnableMarketCatalog,
+  [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
@@ -128,6 +129,11 @@ if ($EnableNativeLpStandings) {
 }
 if ($EnableMarketCatalog) {
   $yamlLines += "      EVEJS_COOP_MARKET_CATALOG: '1'"
+}
+# Explicit opt-in only after native two-client exploration validation.
+if ($EnableNativeExploration) {
+  $yamlLines += "      EVEJS_COOP_EXPEDITION_SCAN_PROOF: '1'"
+  $yamlLines += "      EVEJS_COOP_EXPEDITION_FLEET_BOOKMARKS: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
