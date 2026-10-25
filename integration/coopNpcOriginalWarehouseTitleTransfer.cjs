@@ -92,9 +92,9 @@ function createOriginalWarehouseTitleTransfer({
    if(grant?.phase!=="COMPLETED"||grant.cargoID!==cargoID||
       grant.ownerID!==sourceOwnerID||grant.stationID!==stationID||
       grant.typeID!==typeID||grant.quantity!==quantity||
-      (grant.oreItemID!=null&&grant.oreItemID!==oreItemID)||
-      (grant.sourceCustomInfo!=null&&
-       grant.sourceCustomInfo!=="coop-warehouse:v1:cargo:"+cargoID)||
+      grant.oreItemID!==oreItemID||
+      grant.sourceCustomInfo!=="coop-warehouse:v1:cargo:"+cargoID||
+      !POS(grant.completedAt)||
       !NN(grant.before)||grant.after-grant.before!==quantity)
     return blocked("LW04E_NATIVE_STATION_GRANT_NOT_ATTESTED",operationID);
    const quote=quoteTransfer({cargoID,oreItemID,sourceOwnerID,
