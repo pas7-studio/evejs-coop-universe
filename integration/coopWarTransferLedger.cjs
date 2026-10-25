@@ -181,7 +181,7 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
    s.transfers[String(id)]=entry;
    fleet.validate(s);
    tx.put(fleet.TABLE,fleet.KEY,s);
-   return {status:entry.phase,transferID,entityID:id,
+   return {status:entry.phase,transferID:entry.transferID,entityID:id,
     sourceSystemID:entry.sourceSystemID,
     destinationSystemID:entry.destinationSystemID};
   });
