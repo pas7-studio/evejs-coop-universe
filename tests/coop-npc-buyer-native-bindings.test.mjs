@@ -51,12 +51,17 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   findItemById:id=>tables.items[id]||null
  };
  let stage="open",phase=null,loss=false,claims=0,orderPrice=1.25;
- const readRustOrder=()=>({source:"player",order_id:String(ORDER),is_corp:false,
-  bid:false,state:stage,station_id:STATION,region_id:REGION,type_id:TYPE,
-  owner_id:String(SELLER),vol_remaining:stage==="open"?20:0,price:orderPrice});
+ let getOrderCalls=0;
+ // Actual Rust GetOrders returns public OrderRow without owner.
+ const publicOrder=()=>({source:"player",order_id:String(ORDER),
+  bid:false,station_id:STATION,region_id:REGION,type_id:TYPE,
+  vol_remaining:stage==="filled"?0:20,price:orderPrice});
+ // GetOrder returns OwnerOrderRow with nested .row and owner metadata.
+ const ownerOrder=()=>({source:"player",is_corp:false,state:stage,
+  owner_id:String(SELLER),row:publicOrder()});
  const call=async(method,args)=>{
-  if(method==="GetOrders")return {sells:[readRustOrder()]};
-  if(method==="GetOrder")return readRustOrder();
+  if(method==="GetOrders")return {sells:[publicOrder()]};
+  if(method==="GetOrder"){getOrderCalls++;return ownerOrder();}
   if(method==="ClaimNpcCorpPlayerSell"){
    claims++;if(stage==="open"){stage="settling";phase="claimed";}
    return {source:"player",state:stage,fill_phase:phase,is_corp:false,bid:false,
@@ -67,10 +72,10 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
   if(method==="FinalizeNpcCorpPlayerSell"){
    stage="filled";phase="finalized";
    if(loss){loss=false;throw Error("LOST_RUST_FINAL_ACK")}
-   return {...readRustOrder(),fill_phase:phase,fill_id:String(FILL)};
+   return {state:stage,fill_phase:phase,fill_id:String(FILL),vol_remaining:0};
   }
   if(method==="GetNpcCorpPlayerClaim")
-   return {...readRustOrder(),fill_phase:phase,fill_id:String(FILL)};
+   return {state:stage,fill_phase:phase,fill_id:String(FILL),vol_remaining:0};
   throw Error("UNEXPECTED_RPC:"+method);
  };
  const raw=Object.freeze({ownerID:OWNER,stationID:STATION,typeID:TYPE,
@@ -92,7 +97,7 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
  try{return await fn({tick,tables,bridge,load:()=>fs.existsSync(file)?
   JSON.parse(fs.readFileSync(file,"utf8")):null,
   failNext:()=>{loss=true},price:v=>{orderPrice=v},
-  get claims(){return claims}})}
+  get claims(){return claims},get getOrderCalls(){return getOrderCalls}})}
  finally{
   originals.forEach((k,i)=>{if(previous[i]===undefined)delete process.env[k];
    else process.env[k]=previous[i]});
@@ -109,6 +114,7 @@ test("native GameStore+Rust witness closes actual physical NPC purchase",()=>run
  assert.equal(f.tables.marketEscrow[ORDER],undefined);
  assert.equal(f.tables.npcMarketFills["corp-buy\u001f"+FILL].fillID,FILL);
  assert.equal(f.claims,1);
+ assert.ok(f.getOrderCalls>=2);
 }));
 test("stale recipe quantity versus real GameStore stock fails closed",()=>run(async f=>{
  await assert.rejects(f.tick(),/MATERIAL_SHORTAGE_STALE/);
