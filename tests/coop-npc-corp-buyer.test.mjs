@@ -229,3 +229,23 @@ test("replayed receipt with negative net and excess tax fails closed without wal
   /NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT/);
  assert.deepEqual(f.data,before);
 }));
+
+test("noncanonical fractional-cent NPC corporation wallet is rejected without any native mutation",()=>run(async f=>{
+ const before=structuredClone(f.data);
+ await assert.rejects(buy(f),/NPC_CORP_BUY_NATIVE_WALLET_INVALID/);
+ assert.deepEqual(f.data,before);
+},{buyerISK:1000.004}));
+test("noncanonical fractional-cent player wallet is rejected without giving or losing ISK",()=>run(async f=>{
+ f.data.characters[SELLER].balance=100.004;
+ const before=structuredClone(f.data);
+ await assert.rejects(buy(f),/NPC_CORP_BUY_NATIVE_WALLET_INVALID/);
+ assert.deepEqual(f.data,before);
+}));
+test("valid fractional-dollar cent balances preserve exact native debit and seller net",()=>run(async f=>{
+ f.data.characters[SELLER].balance=100.05;
+ const r=await buy(f);
+ assert.equal(r.status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(f.data.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975.05);
+ assert.equal(f.data.characters[SELLER].balance,123.05);
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
+},{buyerISK:1000.05}));

@@ -8,8 +8,14 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const nonneg=x=>Number.isSafeInteger(x)&&x>=0;
 const validKey=x=>typeof x==="string"&&/^npc-corpbuy:[0-9a-f]{32}$/.test(x);
 const toInt=x=>typeof x==="string"&&/^(0|[1-9][0-9]*)$/.test(x)?Number(x):x;
-const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
- Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+// Native wallets must already be canonical to the cent. Rounding an
+// existing balance during an atomic buy silently destroys or invents ISK.
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0)return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
 const isk=x=>x/100;
 function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verifyPlayerSeller,
  quoteSellerTax,clock=()=>Date.now()}={}){

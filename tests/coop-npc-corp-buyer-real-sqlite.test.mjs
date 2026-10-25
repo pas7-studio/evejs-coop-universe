@@ -116,3 +116,12 @@ test("missing native receipt table cannot leave a half-committed purchase",()=>r
  await assert.rejects(f.buy(),/no such table/);
  assert.deepEqual(snapshot(),before);
 }));
+
+test("real SQLite rejects a fractional-cent seller wallet before any item or ISK change",()=>run(async f=>{
+ const seller=f.read("characters",SELLER);
+ f.put("characters",SELLER,{...seller,balance:100.004});
+ const before=f.snapshot();
+ await assert.rejects(f.buy(),/NPC_CORP_BUY_NATIVE_WALLET_INVALID/);
+ assert.deepEqual(f.snapshot(),before);
+ assert.equal(f.read("items",ITEM).ownerID,SELLER);
+}));
