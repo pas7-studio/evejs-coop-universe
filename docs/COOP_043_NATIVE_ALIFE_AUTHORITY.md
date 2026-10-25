@@ -65,7 +65,7 @@ The runner includes the previous COOP-042 unit suites plus:
 `tests/coop-alife-station-owner-isolation.test.mjs`,
 `tests/coop-alife-station-wiring.test.mjs`.
 
-The `tests/scenarios/alife-native-economy-e2e.json` pack has **28** independent, explicitly `NOT_RUN` local gameplay/engine scenarios. The original 22 cover mine → physical haul → refine → BPO industry job → native Rust escrow → human buy → consumption → finite reorder, concurrent buyers, restart/lost ACK and balance conservation. Six more cover foreign corporation ownership at the same station, orphan Rust order, orphan escrow, concurrent native inventory/ISK mutation during market reads, Rust timeout and invalid BPO/SDE quote.
+The `tests/scenarios/alife-native-economy-e2e.json` pack has **30** independent, explicitly `NOT_RUN` local gameplay/engine scenarios. The original 22 cover mine → physical haul → refine → BPO industry job → native Rust escrow → human buy → consumption → finite reorder, concurrent buyers, restart/lost ACK and balance conservation. Eight more cover foreign corporation ownership at the same station, orphan Rust order, orphan escrow, concurrent native inventory/ISK mutation during market reads, Rust timeout and invalid BPO/SDE quote.
 
 Mandatory outstanding real acceptance: exact pinned Rust `cargo check --locked`/`cargo test --locked`, a fresh native `better-sqlite3` persistence worker, actual runtime read+write restart cases, two live clients, strict before/after owned-item and native corporate-wallet ledgers. These were **not run on the user's local server** in this turn.
 
@@ -74,3 +74,6 @@ Mandatory outstanding real acceptance: exact pinned Rust `cargo check --locked`/
 COOP-044 can add real demand receipt aggregation (native market fills and weapon ammo debits) plus an idempotent A-Life-to-native ACT dispatcher with a single durable operation/lease, recovering ambiguous outcomes rather than reissuing jobs/orders. Partial stack buys also require a separate native splitter with atomic ISK and escrow conservation.
 
 No live `main`, Docker container, source market SQLite or `evejs-data` is modified by this branch.
+
+### COOP-044 bug-audit follow-up
+A free BPO in the station hangar is required for a **new** industry install, but cannot be required for COMPLETE_JOB: the pinned EveJS installer moves the original BPO into industry installed location ID 2003 while the job runs. COOP-043 now verifies exact installed BPO custody (itemID, typeID, ownerID, 2003, singleton) for active/READY jobs, and permits listing already-manufactured physical output even if a free BPO is no longer available. This does **not** authorize new manufacturing without a free verified BPO. Combined with the already-fixed zero-ISK resale gate, this prevents a self-inflicted economic deadlock. Added scenarios ALIFE-029/030, both NOT_RUN until local server acceptance.
