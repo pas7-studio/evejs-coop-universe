@@ -9,9 +9,13 @@ const prior=Object.fromEntries([
  "EVEJS_COOP_ESCORT_PAID_ACCEPT","EVEJS_COOP_ESCORT_REFUNDS","EVEJS_COOP_ESCORT_WARP_FENCE"
 ].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(prior))process.env[k]="1";
+const previousPeace=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
+const previousWitness=process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
+process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false,
- sourceDispatched=false,ackDurable=true}={}){
- const counters={funding:0,warp:0,manifest:0,closures:0};
+ sourceDispatched=false,ackDurable=true,witnessValid=true}={}){
+ const counters={funding:0,warp:0,manifest:0,closures:0,witness:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
   position:{x:0,y:0,z:0},radius:100,mode:"STOP"};
@@ -68,6 +72,9 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   manifest:{prepare:()=>{counters.manifest++;return {status:"MANIFEST_DURABLY_PREPARED",
    key:"30000144-77-1000000",cargoIDs:[5501]}}},
   escortGate:gate?{
+   recordEscortDeparture:()=>{counters.witness++;return {status:witnessValid?
+    "DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS":
+    "DEPARTURE_PLAYER_NOT_ON_CONVOY_GRID"}},
    fundBeforeWarp:()=>{counters.funding++;return {status:"FUNDED_BEFORE_WARP",
     manifestKey:"30000144-77-1000000",contractID:"escort-test-01"}},
    recordDelivered:()=>({status:"DURABLE_NATIVE_DELIVERY_RECORDED"}),
@@ -168,6 +175,45 @@ test("unknown durable ACK does not declare successful paid NPC departure",()=>ru
  assert.equal(f.counters.funding,1);
  assert.equal(f.counters.warp,1);
 },{ackDurable:false}));
+test("paid peaceful escort requires native departure witness flag before any ISK debit",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
+  assert.equal(f.counters.funding,0);assert.equal(f.counters.warp,0);
+ })}finally{process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0"}
+});
+test("source pilot camping elsewhere blocks peaceful escort BEFORE corporate reservation",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_DEPARTURE_PLAYER_NOT_ON_CONVOY_GRID");
+  assert.equal(f.counters.witness,1);
+  assert.equal(f.counters.funding,0);
+  assert.equal(f.counters.warp,0);
+ },{witnessValid:false})}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+ }
+});
+test("valid native departure witness is required before paid peaceful warp",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"EN_ROUTE");
+  assert.equal(f.counters.witness,1);
+  assert.equal(f.counters.funding,1);
+  assert.equal(f.counters.warp,1);
+ })}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+ }
+});
 test("paid escort cannot start unless durable warp fence is explicitly enabled",()=>{
  process.env.EVEJS_COOP_ESCORT_WARP_FENCE="0";
  try{run(f=>{
@@ -191,4 +237,9 @@ test("missing event board cannot bypass PAID EVE player acceptance",()=>{
  finally{process.env.EVEJS_COOP_OPPORTUNITY_BOARD="1"}
 });
 process.on("exit",()=>{for(const [k,v] of Object.entries(prior))
- if(v===undefined)delete process.env[k];else process.env[k]=v});
+ if(v===undefined)delete process.env[k];else process.env[k]=v;
+ if(previousPeace===undefined)delete process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
+ else process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=previousPeace;
+ if(previousWitness===undefined)delete process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
+ else process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=previousWitness;
+});
