@@ -39,7 +39,14 @@ const source=[
  '        cycleBoundaryMs,',
  '      );',
  ' }',
- ' return shotResult;',
+  '  return {',
+ '    success: true,',
+ '    data: {',
+ '      moduleItem,',
+ '      chargeItem: resolvedChargeItem,',
+ '      shotResult,',
+ '    },',
+ '  };',
  '}',
  'function executeMissileCycle(scene,attackerEntity,effectState,cycleBoundaryMs){',
  ' const armedEntries=[];',
@@ -48,6 +55,14 @@ const source=[
  '  if (groupedAmmoFailure && chargeResults.every((entry) => !entry.result || !entry.result.success)) {',
  '  return {success:false};',
  ' }',
+  '  const launchResult = scene.launchMissile(attackerEntity,1,{});',
+ '  if (!launchResult.success || !launchResult.data) {',
+ '    return {success:false};',
+ '  }',
+ '  const depletedEntries = [];',
+ '  const reloadStates =',
+ '    depletedEntries.length > 0',
+ '      ? [] : [];',
  ' return {success:true};',
  '}',
  'function trailingFunction(){return true;}',
@@ -172,4 +187,32 @@ test("no native per-module ammo writer can bypass atomic guard before any cargo 
  assert.ok(block.includes('process.env.EVEJS_COOP_NPC_BANK_ATOMIC === "1"'));
  assert.ok(block.includes("if (!guard.allowed) return"));
  assert.equal(patch(patched,{remove:true}),source);
+});
+
+test("opt-in witness preflight precedes native bank debit for both weapon types",()=>{
+ const transformed=patch(source);
+ const turret=transformed.slice(transformed.indexOf("function executeTurretCycle("),
+  transformed.indexOf("\nfunction executeMissileCycle("));
+ const missile=transformed.slice(transformed.indexOf("function executeMissileCycle("),
+  transformed.indexOf("\nfunction trailingFunction("));
+ for(const block of [turret,missile]){
+  const gate=block.indexOf('coopNpcFireOutcomeWitness").enabled()');
+  const debit=block.indexOf('coopNpcAmmoBankAtomic").consumeBank(');
+  assert.ok(gate>=0 && gate<debit,"witness flags must be validated before ammo debit");
+ }
+});
+test("turret outcome follows shot resolution, missile success/failure outcomes follow actual launch",()=>{
+ const transformed=patch(source);
+ const turret=transformed.slice(transformed.indexOf("function executeTurretCycle("),
+  transformed.indexOf("\nfunction executeMissileCycle("));
+ const missile=transformed.slice(transformed.indexOf("function executeMissileCycle("),
+  transformed.indexOf("\nfunction trailingFunction("));
+ assert.ok(turret.indexOf('kind: "TURRET_RESOLVED"')>
+  turret.indexOf("const shotResult = resolveTurretShot("));
+ const failed=missile.indexOf('kind: "MISSILE_LAUNCH_FAILED"');
+ const launched=missile.indexOf('kind: "MISSILE_LAUNCHED"');
+ const launch=missile.indexOf("const launchResult = scene.launchMissile(");
+ assert.ok(failed>launch&&launched>failed);
+ assert.equal(patch(transformed),transformed);
+ assert.equal(patch(transformed,{remove:true}),source);
 });
