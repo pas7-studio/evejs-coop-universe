@@ -416,6 +416,10 @@ function instance(){
  }
  return singleton;
 }
+function readNativeEvent(id){
+ try{return instance().readEvent(id)}
+ catch{return {status:"NATIVE_EVENT_SOURCE_UNAVAILABLE"}}
+}
 function handleChat(x){return instance().handleChat(x)}
 function noteNativeRaid(scene,action){try{return instance().nativeRaid({scene,action})}
  catch{return {status:"OPPORTUNITY_RAID_UNAVAILABLE"}}}
@@ -433,5 +437,5 @@ function noteNativePreparingDeparted(scene,fleet,preparingEventID,trip){
  try{return instance().nativePreparingDeparted({scene,fleet,preparingEventID,trip})}
  catch{return {status:"PREPARING_DEPARTURE_WRITE_UNCERTAIN"}}
 }
-module.exports={createBoard,handleChat,noteNativeRaid,noteNativeConvoy,
+module.exports={createBoard,handleChat,readNativeEvent,noteNativeRaid,noteNativeConvoy,
  noteNativeConvoyPreparing,noteNativePreparingDeparted,noteNativeConvoyOutcome};
