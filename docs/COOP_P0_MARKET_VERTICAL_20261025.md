@@ -11,6 +11,8 @@ The last owner-published client log showed an undock at **Manifest V — AIR Lab
 
 This branch starts from recent main `0ef58c302dad7ef635aea770a28af59067edc7e2`, not outdated PR copies of the deployment or patch scripts. It merges independent source/docs/tests from #25 and #27; it **only adds** the `coopMarketCatalog` integration module and native `server/src/services/market/marketProxyService.js` hook to the existing transactional patcher and adds a separate opt-in `-EnableMarketCatalog` PowerShell parameter. **Existing NPC Local chatter, agent-dialogue hooks, current native World, and VPN/friend-PC setup remain intact.**
 
+**Keyed-SDE compatibility fix:** the native market catalog hook now uses EveJS's canonical `readStaticRows("itemTypes")` instead of raw `readStaticTable`, and the adapter also accepts dictionary-form `types` keyed by native type IDs (`_key` fallback). Without this, a populated, keyed native SDE could still produce an empty MarketGroups listing. Regression coverage includes both keyed and normalized SDE row formats, with no invented marketGroupIDs.
+
 ## Read-only operator workflow
 
 These commands run inspections only, do not rebuild/restart Docker or change any player/world/market state.
@@ -45,7 +47,7 @@ PR #25 includes a **strictly offline and manually confirmed** additive importer 
 ## Evidence & next gates
 
 1. The **actual pinned EveJS** `marketProxyService.js` was fetched from upstream SHA `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. The integrated full `patch-evejs-coop.cjs.transform()` parsed successfully, applied a single opt-in GetMarketGroups patch, was idempotent and **reverted byte-for-byte**.
-2. Original native `coopMarketCatalog` tests: **3/3 PASS** in isolated JS harness. New `coop-market-station-readiness` tests: **9/9 PASS** in isolated JS harness, covering real/published group IDs, exact station, other-station false positives, real player orders, missing schema, invalid IDs, and no mutation SQL.
+2. Native `coopMarketCatalog` tests: **4/4 PASS** in isolated JS harness. New `coop-market-station-readiness` tests: **9/9 PASS** in isolated JS harness, covering real/published group IDs, exact station, other-station false positives, real player orders, missing schema, invalid IDs, and no mutation SQL.
 3. Original upstream-agent market importer/candidate and catalog suites are present but were **not** rerun in a full Windows Node `--test` runner during this chat. No real SQLite donor merge, Docker upgrade, in-game category rendering, native ISK debit or actual native hangar receipt was tested.
 4. Owner-local review should run:
    ```powershell
