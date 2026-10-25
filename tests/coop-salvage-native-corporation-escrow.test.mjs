@@ -9,16 +9,19 @@ process.env.EVEJS_COOP_SALVAGE_REWARDS="1";
 process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS="1";
 const key="30000144-77-1000000",corpKey="corporations\u001f10001";
 function fixture(fn){
- let commits=0;
+ let commits=0,beforeTransaction=null;
  let db={corporationRuntime:{[corpKey]:{wallet:{divisions:{
   "1000":{key:1000,balance:50000,journal:[],transactions:[]}}}}},
   characters:{"701":{characterID:701,balance:1000,walletJournal:[]},
    "702":{characterID:702,balance:1000,walletJournal:[]}},
   items:{},
   npcWreckItems:{items:{"9001":{wreckItemID:9001,sourceCargoID:5501,
-   wreckID:8001,typeID:34,quantity:5}}}};
+   wreckID:8001,typeID:34,quantity:5,sourceKind:"cargo"}}}};
  const atomic={mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,
   transact:(names,fn)=>{
+   // Deterministic adversarial interleaving: another actor may modify the
+   // native wreck after the pre-transaction quote was read.
+   if(beforeTransaction){const run=beforeTransaction;beforeTransaction=null;run(db)}
    const copy=structuredClone(db);
    const tx={get:(t,k)=>copy[t][k]??null,
     put:(t,k,v)=>copy[t][k]=v,
@@ -59,12 +62,37 @@ function fixture(fn){
   corruptProof:()=>{db.corporationRuntime.coopSalvageEscrows
    .byContract["salvage-"+key].deliveryProof[0].nativeItemID=999999},
   deleteMoveReceipt:()=>{delete db.corporationRuntime.coopSalvageMoves
-   .moves[key+":5501"]}});
+   .moves[key+":5501"]},
+  scheduleBeforeTransaction:fn=>beforeTransaction=fn});
 }
 test("original NPC corporation actually reserves ISK, exact two players",()=>fixture(f=>{
  assert.equal(f.rewards.reserve(key).status,"SALVAGE_NATIVE_CORP_ESCROW_RESERVED");
  assert.equal(f.db().corporationRuntime[corpKey].wallet.divisions["1000"].balance,49976);
  assert.equal(f.rewards.verify(key).status,"RESERVED");
+}));
+test("NPC rival wins between quote and escrow transaction: no corporate debit",()=>fixture(f=>{
+ const before=f.db().corporationRuntime[corpKey].wallet.divisions["1000"].balance;
+ f.scheduleBeforeTransaction(db=>{
+  delete db.npcWreckItems.items["9001"];
+  db.corporationRuntime.coopSalvageRivalMoves={version:1,moves:{
+   "9001":{v:1,state:"NPC_CARGO",wreckItemID:9001}}};
+ });
+ assert.equal(f.rewards.reserve(key).status,"SALVAGE_RESERVATION_SOURCE_ALREADY_MOVED");
+ assert.equal(f.db().corporationRuntime[corpKey].wallet.divisions["1000"].balance,before);
+ assert.equal(f.db().corporationRuntime.coopSalvageEscrows,undefined);
+}));
+test("forged restored wreck row cannot bypass a durable rival pickup receipt",()=>fixture(f=>{
+ f.scheduleBeforeTransaction(db=>{
+  db.corporationRuntime.coopSalvageRivalMoves={version:1,moves:{
+   "9001":{v:1,state:"NPC_CARGO",wreckItemID:9001}}};
+ });
+ assert.equal(f.rewards.reserve(key).status,"SALVAGE_RESERVATION_SOURCE_ALREADY_MOVED");
+ assert.equal(f.db().corporationRuntime[corpKey].wallet.divisions["1000"].balance,50000);
+}));
+test("missing original sourceKind fails funding even with a matching quote",()=>fixture(f=>{
+ f.scheduleBeforeTransaction(db=>{delete db.npcWreckItems.items["9001"].sourceKind});
+ assert.equal(f.rewards.reserve(key).status,"SALVAGE_RESERVATION_SOURCE_ALREADY_MOVED");
+ assert.equal(f.db().corporationRuntime[corpKey].wallet.divisions["1000"].balance,50000);
 }));
 test("successful reserve cannot pay before physically recovered goods",()=>fixture(f=>{
  f.rewards.reserve(key);

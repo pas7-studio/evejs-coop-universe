@@ -97,7 +97,7 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
   if(!ready())return deny("DISABLED");
   const c=quote(manifestKey);
   if(c.status!=="SALVAGE_NATIVE_QUOTE_READY")return c;
-  try{return atomic.transact(["corporationRuntime","characters"],tx=>{
+  try{return atomic.transact(["corporationRuntime","characters","npcWreckItems"],tx=>{
    const l=ledger(tx);
    if(l.byContract[c.contractID]){
     const saved=l.byContract[c.contractID];
@@ -111,6 +111,34 @@ function createSalvageNativeRewards({atomic,isNpcCorporation,readWitness,
    }
    if(Object.keys(l.byContract).length>=512)
     throw Error("SALVAGE_ESCROW_CAP");
+   // The quote was read before the transaction. A native NPC rival
+   // may have acquired a wreck item in that interval. The original
+   // wreck rows, duplicate provenance and rival receipts must be checked
+   // INSIDE the same SQLite write transaction as the corporate ISK debit.
+   const wrecks=tx.get("npcWreckItems","items");
+   const playerMoves=tx.get("corporationRuntime","coopSalvageMoves");
+   const rivals=tx.get("corporationRuntime","coopSalvageRivalMoves");
+   if(!wrecks||typeof wrecks!=="object"||Array.isArray(wrecks)||
+    (playerMoves&&(playerMoves.version!==1||!playerMoves.moves))||
+    (rivals&&(rivals.version!==1||!rivals.moves)))
+    return deny("SALVAGE_RESERVATION_NATIVE_SOURCE_UNAVAILABLE");
+   const seenCargo=new Set(),seenWreck=new Set();
+   for(const item of c.rows){
+    if(!pos(item.cargoID)||!pos(item.wreckItemID)||
+     !pos(item.typeID)||!pos(item.quantity)||
+     seenCargo.has(item.cargoID)||seenWreck.has(item.wreckItemID))
+     return deny("SALVAGE_RESERVATION_ORIGINAL_ROWS_CONFLICT");
+    seenCargo.add(item.cargoID);seenWreck.add(item.wreckItemID);
+    const live=wrecks[String(item.wreckItemID)];
+    if(!live||live.wreckID!==c.wreckID||
+     live.wreckItemID!==item.wreckItemID||
+     live.sourceKind!=="cargo"||
+     live.sourceCargoID!==item.cargoID||
+     live.typeID!==item.typeID||live.quantity!==item.quantity||
+     playerMoves?.moves?.[manifestKey+":"+item.cargoID]||
+     rivals?.moves?.[String(item.wreckItemID)])
+     return deny("SALVAGE_RESERVATION_SOURCE_ALREADY_MOVED");
+   }
    chars(tx,c);
    const company=corp(tx,c),debit=cents(c.amountISK);
    if(company.balance<debit)throw Error("SALVAGE_CORP_INSUFFICIENT_FUNDS");

@@ -113,8 +113,21 @@ function createSalvageRivals({atomic,readCases,readEscrow,getController,
        next=tx.get("npcCargo","nextCargoID"),
        journal=tx.get("corporationRuntime","coopSalvageRivalMoves")||
         {version:1,moves:{}};
+      // The preflight escrow read happens before this transaction; a
+      // real duo may reserve corporate ISK before the rival moves.
+      // Serialize the final eligibility check with that same escrow row.
+      const escrows=tx.get("corporationRuntime","coopSalvageEscrows");
+      if(escrows!==null&&
+       (escrows?.version!==1||!escrows.byContract||
+        typeof escrows.byContract!=="object"||
+        Array.isArray(escrows.byContract)))
+       throw Error("ALIFE_SALVAGE_ESCROW_LEDGER_UNTRUSTED");
+      if(escrows?.byContract?.["salvage-"+c.manifestKey])
+       throw Error("ALIFE_SALVAGE_FUNDED_CONTRACT_OWNS_SOURCE");
       const real=w?.[String(entry.wreckItemID)];
       if(!real||real.wreckID!==c.wreckID||
+       real.wreckItemID!==entry.wreckItemID||
+       real.sourceKind!=="cargo"||real.singleton===true||
        real.sourceCargoID!==entry.sourceCargoID||
        real.typeID!==entry.typeID||real.quantity!==entry.quantity||
        !cargo||!id(next)||journal.version!==1||!journal.moves||
