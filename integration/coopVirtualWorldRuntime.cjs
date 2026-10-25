@@ -2573,7 +2573,10 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
       getFactionForCorporation:id=>
        require("../services/faction/factionState").getFactionIDForCorporation(id),
       verifyNativeWreck:({systemID:sys,entityID:id,wreckID:wid,pilotID:pid})=>{
-       const links=Object.values(identityRegistry?.snapshot()?.links||{});
+       // The authoritative callback already read the on-disk native
+       // pilot link; do not require the virtual A-Life registry to be
+       // initialized before this synchronous physical wreck hook.
+       const links=Object.values(registry.links||{});
        return require("./coopNativeCombatEvidence").verifyWreck({
         systemID:sys,npcID:id,wreckID:wid,
         scene:runtime.ensureScene(sys,{refreshStargates:false}),
