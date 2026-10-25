@@ -15,11 +15,19 @@ function segment(text,name,fn){
  return text.slice(0,start)+next+text.slice(stop);
 }
 const sourceProof=[
+ '  let coopAmmoDurableToken = null;',
  '  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
  '    const proof = require("./coopNpcFireDebitProof").verify({',
  '      entity: attackerEntity, moduleItem, chargeItem, quantity: consumeQuantity,',
  '    });',
  '    if (!proof.allowed) return { success: false, errorMsg: "NO_AMMO", stopReason: "ammo" };',
+ '    if (process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1") {',
+ '      const reserved = require("./coopNpcAmmoDebitJournal").begin({',
+ '        entity: attackerEntity, moduleItem, chargeItem, quantity: consumeQuantity, whenMs,',
+ '      });',
+ '      if (!reserved.ok) return { success: false, errorMsg: reserved.status, stopReason: "ammo" };',
+ '      coopAmmoDurableToken = reserved.token;',
+ '    }',
  '  }',
 ].join("\n");
 const persistVerification=[
@@ -41,6 +49,12 @@ const persistVerification=[
  '          : observed.length !== 0)) {',
  '        return { success: false, errorMsg: "AMMO_WRITE_UNVERIFIED", stopReason: "ammo" };',
  '      }',
+ '    }',
+].join("\n");
+const journalSettle=[
+ '    if (coopAmmoDurableToken) {',
+ '      const settled = require("./coopNpcAmmoDebitJournal").commit(coopAmmoDurableToken);',
+ '      if (!settled.ok) return { success: false, errorMsg: settled.status, stopReason: "ammo" };',
  '    }',
 ].join("\n");
 const turretPreDebit=[
@@ -148,7 +162,7 @@ function patch(source,{remove=false}={}){
  const nativeCargoCache='    if (Array.isArray(attackerEntity.nativeCargoItems)) {';
  modify("consumeTurretAmmoCharge",[
   [quantity,sourceProof+"\n"+quantity,"native-source-proof"],
-  [nativeCargoCache,persistVerification+"\n"+nativeCargoCache,"native-debit-commit-proof"]
+  [nativeCargoCache,persistVerification+"\n"+journalSettle+"\n"+nativeCargoCache,"native-debit-commit-proof"]
  ]);
  const fire='  const shotResult = resolveTurretShot({';
  modify("executeTurretCycle",[
