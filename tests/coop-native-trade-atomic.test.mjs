@@ -57,7 +57,7 @@ test('exact reversible pinned overlay transform on source-shaped anchors',()=>{
 test('native commit writes complete ownership graph in ONE real items-table call',()=>{
  const before=data(),writes=[];
  const result=commitNative({trade,roots:[{itemID:1001},{itemID:1004}],activeShipIDs:[],
-   readItems:()=>before,readCharacters:()=>({'11':{shipID:3001},'22':{shipID:3002}}),writeItems:(next,options)=>{writes.push({next,options});return true},
+   readItems:()=>before,readCharacters:()=>({'11':{shipID:3001},'22':{shipID:3002}}),flushItems:()=>({success:true}),writeItems:(next,options)=>{writes.push({next,options});return true},
    normalizeInventoryItem:x=>({...x}),buildInventoryItem:x=>({...x}),
    indexDeltaFromChanges:changes=>({upsertedIDs:changes.map(x=>x.item.itemID),removedIDs:[]}),
    cloneValue:x=>JSON.parse(JSON.stringify(x))});
@@ -69,7 +69,7 @@ test('native commit writes complete ownership graph in ONE real items-table call
 test('failed native one-write cannot mutate original memory or wallet',()=>{
  const before=data();let writes=0;
  const deps={trade,roots:[{itemID:1001},{itemID:1004}],activeShipIDs:[],
-   readItems:()=>before,readCharacters:()=>({'11':{shipID:3001},'22':{shipID:3002}}),writeItems:()=>{writes++;return false},
+   readItems:()=>before,readCharacters:()=>({'11':{shipID:3001},'22':{shipID:3002}}),flushItems:()=>({success:true}),writeItems:()=>{writes++;return false},
    normalizeInventoryItem:x=>({...x}),buildInventoryItem:x=>({...x}),
    indexDeltaFromChanges:()=>({}),cloneValue:x=>JSON.parse(JSON.stringify(x))};
  assert.equal(commitNative(deps).errorMsg,'TRADE_ATOMIC_WRITE_FAILED');
@@ -85,8 +85,19 @@ test('zero-ISK gate rejects money before any native wallet call',()=>{
 
 test('authoritative character shipID is checked even if network session omits it',()=>{
  const before=data();const result=commitNative({trade,roots:[{itemID:1001},{itemID:1004}],activeShipIDs:[],
-   readItems:()=>before,readCharacters:()=>({'11':{shipID:1001},'22':{shipID:3002}}),
+   readItems:()=>before,readCharacters:()=>({'11':{shipID:1001},'22':{shipID:3002}}),flushItems:()=>({success:true}),
    writeItems:()=>{throw Error('MUST NOT WRITE')},normalizeInventoryItem:x=>x,
    buildInventoryItem:x=>x,indexDeltaFromChanges:()=>({}),cloneValue:x=>x});
  assert.equal(result.errorMsg,'INVALID_TRADE_ROOT');
+});
+
+test('native sync flush is required before reporting successful trade',()=>{
+ const before=data();const writes=[];
+ const deps={trade,roots:[{itemID:1001},{itemID:1004}],activeShipIDs:[],
+   readItems:()=>before,readCharacters:()=>({'11':{shipID:3001},'22':{shipID:3002}}),
+   writeItems:()=>{writes.push('write');return true},flushItems:()=>{writes.push('flush');return {success:false}},
+   normalizeInventoryItem:x=>({...x}),buildInventoryItem:x=>({...x}),
+   indexDeltaFromChanges:()=>({}),cloneValue:x=>JSON.parse(JSON.stringify(x))};
+ assert.equal(commitNative(deps).errorMsg,'TRADE_PERSISTENCE_UNCERTAIN_NEEDS_REPAIR');
+ assert.deepEqual(writes,['write','flush']);
 });
