@@ -56,6 +56,10 @@ names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 names.push(
  "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopCourierRuntime", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
 );
+// LW-04B: native A-Life manufacturing admission with financial ACT blocked
+// until verified live GameStore/ItemStore/Rust bindings are explicitly available.
+names.splice(names.indexOf("coopAlifeNativeBuyerRuntime")+1,0,
+ "coopAlifeNativeManufacturingRuntime");
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
