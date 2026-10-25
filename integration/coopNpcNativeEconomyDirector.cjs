@@ -50,9 +50,12 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   // DELIVERED and MUST NOT remain in the WIP stock accounting forever.
   // Treat missing/ambiguous statuses as unverified, never as free future stock.
   for(const j of s.jobs){
-   if(!Number.isSafeInteger(j.status)||![1,2,3,4].includes(j.status)||
+   // Stock status 100 COMPLETED is not proof of delivery. It cannot
+   // silently trigger a new paid job until native custody is reconciled.
+   if(j.status===100)throw Error("NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED");
+   if(!Number.isSafeInteger(j.status)||![1,2,3,4,101,102,103].includes(j.status)||
       j.ownerID!==ownerID||j.stationID!==stationID||
-      j.status!==4&&(!safeInt(j.jobID)||j.activityID!==1))
+      [1,2,3].includes(j.status)&&(!safeInt(j.jobID)||j.activityID!==1))
     throw Error("NATIVE_ECONOMY_JOB_PROVENANCE_UNVERIFIED");
   }
   for(const v of s.demandReceipts)if(!v||!safeInt(v.typeID)||!Number.isSafeInteger(v.quantity)||v.quantity<1||
