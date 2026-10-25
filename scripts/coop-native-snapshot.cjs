@@ -37,9 +37,11 @@ function buildSnapshot({meta,characterIds,readCharacter,iterateItems,now=()=>new
     const record=readCharacter(id);
     if (!record||typeof record!=='object'||!canonical(record.shipID)||!canonical(record.solarSystemID))
       throw Error('Missing native character/active ship/system record');
-    return {id,shipId:String(record.shipID),systemId:String(record.solarSystemID),isk:moneyToCents(record.balance),items:[]};
+    if(!canonical(record.accountId)) throw Error('Missing native character account ownership');
+    return {id,accountId:String(record.accountId),shipId:String(record.shipID),systemId:String(record.solarSystemID),isk:moneyToCents(record.balance),items:[]};
   });
   if(new Set(players.map(p=>p.shipId)).size!==2) throw Error('Two characters share the same native active ship');
+  if(new Set(players.map(p=>p.accountId)).size!==2) throw Error('Two characters belong to the same native EveJS account');
   const byID=new Map(players.map(p=>[p.id,p]));
   const itemIds=new Set();
   for(const {key,json} of iterateItems()) {
@@ -50,7 +52,8 @@ function buildSnapshot({meta,characterIds,readCharacter,iterateItems,now=()=>new
     if(!canonical(key)||!canonical(item.itemID)||key!==String(item.itemID)||itemIds.has(key)||
        !canonical(item.typeID)||!positive(item.locationID)) throw Error('Invalid native item identity, ownership or location');
     itemIds.add(key);
-    byID.get(owner).items.push({id:key,typeId:String(item.typeID),quantity:quantity(item),locationId:String(item.locationID)});
+    const categoryId=positive(item.categoryID)?String(item.categoryID):null;
+    byID.get(owner).items.push({id:key,typeId:String(item.typeID),categoryId,quantity:quantity(item),locationId:String(item.locationID)});
   }
   for(const player of players){
     if(!itemIds.has(player.shipId))throw Error('Active player ship missing from authoritative owned items');
