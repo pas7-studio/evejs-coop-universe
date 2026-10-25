@@ -36,7 +36,7 @@ function fixture(){
  const rebuildFlushBaselineFromDisk=t=>baselines[t]=new Map(db.prepare('SELECT key,json FROM "'+t+'"').all().map(r=>[r.key,r.json]));
  names.forEach(rebuildFlushBaselineFromDisk);
  const fatal=[],events=[],inventory={ids:[],rebuilds:0};
- let badFlush=false,badReload=false,badInvalidation=false;
+ let badFlush=false,badReload=false,badInvalidation=false,badAccountInvalidation=false;
  const bridge=createGameStoreAdapter({
   sqliteStore:{...sqliteStore,loadTableObject(t){if(badReload)throw Error("POSTCOMMIT_RELOAD");return load(t);}},
   ensureSqliteReady:()=>events.push("ready"),ensureCached:t=>!!cache[t],
@@ -45,11 +45,13 @@ function fixture(){
   cache,dirty,flushTimers,inFlightFlushes,transientPaths,dirtyRowKeys,fullDirty,rebuildFlushBaselineFromDisk,
   invalidateNativeItems:mode=>{events.push("inventory:"+mode);if(mode==="probe")return true;
    if(badInvalidation)return false;inventory.ids=Object.keys(cache.items);inventory.rebuilds++;return true;},
+  invalidateNativeAccounts:(mode,tables)=>{events.push("accounts:"+mode);return mode==="probe"||!badAccountInvalidation;},
   fatal:e=>fatal.push(e.message)
  });
  return {db,put,cache,bridge,sqliteStore,dirty,inFlightFlushes,transientPaths,baselines,events,inventory,fatal,
   setCommitFault:v=>ambiguousCommit=v,
   setBadFlush:v=>badFlush=v,setBadReload:v=>badReload=v,setBadInvalidation:v=>badInvalidation=v,
+  setBadAccountInvalidation:v=>badAccountInvalidation=v,
   snapshot:()=>Object.fromEntries(names.map(t=>[t,db.prepare('SELECT key,json FROM "'+t+'" ORDER BY key').all()])),
   close(){db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
@@ -177,6 +179,15 @@ test("character cache record reference changes after native GameStore wallet com
  assert.equal(table["701"].balance,350);
  assert.notEqual(memo.rawRecord,table["701"]);
  assert.equal(f.db.prepare('SELECT json FROM "characters" WHERE key=?').get("701").json.includes('"balance":350'),true);
+}));
+
+
+test("postcommit account cache invalidation error poisons bridge after durable wallet write",()=>run(f=>{
+ f.setBadAccountInvalidation(true);
+ assert.throws(()=>f.bridge.transact(["characters"],tx=>{
+  const row=tx.get("characters","701");row.balance+=1;tx.put("characters","701",row);
+ }),/COMMITTED_BUT_CACHE_UNSAFE/);
+ assert.equal(f.bridge.isPoisoned(),true);assert.equal(f.fatal.length,1);
 }));
 
 test("native npcCargo and replay fence commit together with authoritative NPC identity rows",()=>run(f=>{
