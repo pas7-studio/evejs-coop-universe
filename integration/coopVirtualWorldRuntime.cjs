@@ -73,7 +73,7 @@ function observeNativeMiningProof(){
   require("./coopAlifeNativeMiningWitness").createNativeMiningWitness();
  // Never create a scene for an observer: physical mining must already exist.
  for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,2)){
-  const scene=typeof runtime.getScene==="function"?runtime.getScene(systemID):null;
+  const scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;
   if(!scene)continue;
   const result=nativeMiningWitness.tick({
    scene,fleets:mining.getMiningFleetsForSystem(systemID),
