@@ -34,6 +34,8 @@ test('warship registration requires exact existing physical native NPC and nativ
  f.ship.corporationID=31;f.controller.manualOrder={type:'attack'};
  assert.equal(f.proofs.verifyNativeShip(f.command),false);
  f.controller.manualOrder=null;f.links.push({...f.links[0]});
+ assert.equal(f.proofs.verifyNativeShip(f.command),true);
+ f.links.push({entityID:502,systemID:101,pilotID:'coop-pilot-001'});
  assert.equal(f.proofs.verifyNativeShip(f.command),false);
 });
 test('same-transaction campaign attestation and source vs assault system',()=>{
