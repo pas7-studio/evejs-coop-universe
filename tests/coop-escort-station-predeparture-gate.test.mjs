@@ -52,7 +52,7 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
  };
  duo.readVerifiedNativePair=()=>pairApproved?{
   status:"VERIFIED_NATIVE_DUO_VOLUNTEER",eventID:"convoy-30000144-77-5501",
-  systemID:30000144,entityID:901,pilots:[{characterID:701,shipID:1701},
+  systemID:30000144,entityID:901,fleetID:33,pilots:[{characterID:701,shipID:1701},
    {characterID:702,shipID:1702}]}:{status:"NOT_FOUND"};
  const director=createStationArrival({getStations:()=>[target],
   getStation:()=>target,getCorporation:()=>({corporationID:10001}),
