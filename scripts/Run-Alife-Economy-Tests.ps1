@@ -40,7 +40,10 @@ $files = @(
   "tests/coop-alife-station-wiring.test.mjs",
   "tests/coop-alife-order-authority.test.mjs",
   "tests/coop-alife-native-intent-reconciliation.test.mjs",
-  "tests/coop-alife-integration-acceptance.test.mjs"
+  "tests/coop-alife-integration-acceptance.test.mjs",
+  "tests/coop-alife-native-resupply-act.test.mjs",
+  "tests/coop-alife-native-resupply-wiring.test.mjs",
+  "tests/coop-npc-ammo-supply.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
