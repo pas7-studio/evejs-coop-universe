@@ -702,9 +702,14 @@ function advanceNativeRaids(){
   if(squadEnabled&&!squadDirector)
    squadDirector=require("./coopNpcSquadDirector").createSquadDirector();
   const squads=squadEnabled?squadDirector:null;
+  // Native ore custody is only a server-side eligibility prefilter,
+  // NEVER cargo-scan knowledge supplied to the NPC or shared report.
+  const raidCandidates=squads?fleetShips.filter(candidate=>
+   (nativeStore.listNativeCargoForEntity(candidate.id)||[]).some(c=>
+    Number(c?.moduleID||0)===0&&Number(c?.quantity)>0)):fleetShips;
   const squadState=squads?.observe({systemID,scene,
    pirates:activeLinks.filter(p=>p.role==="pirate"),
-   pilots:actualPilots,fleetShips});
+   pilots:actualPilots,fleetShips:raidCandidates});
   if(squadState?.teams?.length&&backgroundTicks%10===0)
    require("./coopRuntimeProbe").observe("living-npc-scout-relay",null,
     {spaceState:{systemID}},{teams:squadState.teams});
