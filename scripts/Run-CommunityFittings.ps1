@@ -82,7 +82,15 @@ if ($Action -eq 'Collect') {
   Invoke-Node -Arguments (@((Join-Path $Tools 'coop-community-fit-merge.cjs'),'--sde',$SdePath,'--out',$Catalog,
       '--per-hull',[string]$PerHull) + $inputs)
   $result = Get-Content -Raw -LiteralPath $Catalog | ConvertFrom-Json
+  if ([int]$result.summary.fits -eq 0) { throw 'NO_FITS_COLLECTED: both sources returned nothing. Do not seed an empty catalog; inspect API failures and caches.' }
   $covered = @($result.coverage | Where-Object { $_.variants -ge 3 }).Count
+  $withFive = @($result.coverage | Where-Object { $_.variants -ge 5 }).Count
+  $sourceCounts = @{}
+  foreach ($fit in $result.records) {
+    $key = [string]$fit.provenance.kind
+    if (-not $sourceCounts.ContainsKey($key)) { $sourceCounts[$key] = 0 }
+    $sourceCounts[$key]++
+  }
   $missing = @($result.coverage | Where-Object { $_.variants -lt 3 } | Select-Object shipTypeID,shipName,variants,target)
   $report = [ordered]@{
     generatedAt = (Get-Date).ToUniversalTime().ToString('o')
@@ -90,6 +98,8 @@ if ($Action -eq 'Collect') {
     hulls = $result.summary.hulls
     fits = $result.summary.fits
     atLeastThree = $covered
+    atLeastFive = $withFive
+    bySource = $sourceCounts
     fewerThanThree = $missing.Count
     missing = $missing
     dogmaValidated = $false
@@ -97,7 +107,7 @@ if ($Action -eq 'Collect') {
   }
   $reportFile = Join-Path $OutputRoot 'coverage-report.json'
   $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportFile -Encoding UTF8
-  Write-Host "COLLECTED: $($result.summary.fits) valid unique fits, $covered hulls with >=3. Uncovered hulls: $($missing.Count)."
+  Write-Host "COLLECTED: $($result.summary.fits) valid unique fits, $covered hulls with >=3, $withFive hulls with 5. Uncovered hulls: $($missing.Count)."
   Write-Host "CATALOG: $Catalog"
   Write-Host "REPORT: $reportFile"
   Write-Warning 'No server data changed; actual native fitting eligibility and 600+ client rendering still require a staging acceptance test.'
