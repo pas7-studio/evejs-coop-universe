@@ -121,6 +121,10 @@ test("same-tick nonreentrant guard blocks recursive source debit",t=>{
  assert.equal(inner.reason,"ALIFE06_CYCLE_REENTRANT");
 });
 const runtime=[
+ 'function appendNpcCargo(entity,typeID,quantity){',
+ '  const miningNpcOperations = require("./miningNpcOperations");',
+ '  miningNpcOperations.appendNpcMiningCargo(entity, typeID, quantity);',
+ '}',
  'function executeMiningCycle(scene, entity, effectState, cycleBoundaryMs) {',
  '  const transferredQuantity = miningResult.getTotalTransferredQuantity();',
  '  if (transferredQuantity <= 0 && miningResult.wastedQuantity <= 0) {',
