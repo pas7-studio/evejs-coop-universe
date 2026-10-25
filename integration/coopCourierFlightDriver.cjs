@@ -99,17 +99,22 @@ function warp(ctx, flight, stationPosition) {
   try {
     // A courier has no session, so the session-less ingress is the honest call:
     // space.warpToPoint expects a client session and silently did nothing here.
+    let firstFailure = null;
     if (typeof ctx.space.startSessionlessWarpIngress === "function") {
       const outcome = ctx.space.startSessionlessWarpIngress(entityID, stationPosition, options);
-      if (outcome === false || (outcome && outcome.success === false)) {
-        return result(FAILED, { reason: String(outcome && outcome.errorMsg || "sessionless warp refused") });
-      }
-      return result(OK, { entityID });
+      if (outcome !== false && !(outcome && outcome.success === false)) return result(OK, { entityID });
+      firstFailure = String(outcome && outcome.errorMsg || "sessionless warp refused");
     }
-    const warped = ctx.space.warpToPoint(entityID, stationPosition, options);
-    return warped === false
-      ? result(FAILED, { reason: "warpToPoint refused" })
-      : result(OK, { entityID });
+    // The session-less ingress can miss an entity that was just created by a
+    // real undock. The session form is the stock client call, so retry with the
+    // courier identity before giving up.
+    const session = buildCourierSession(ctx.character, flight.originStationID);
+    if (session && typeof ctx.space.warpToPoint === "function") {
+      const warped = ctx.space.warpToPoint(session, stationPosition, options);
+      if (warped !== false && !(warped && warped.success === false)) return result(OK, { entityID });
+      firstFailure = firstFailure + " / warpToPoint " + String(warped && warped.errorMsg || "refused");
+    }
+    return result(FAILED, { reason: firstFailure || "warp refused" });
   } catch (error) {
     return result(AMBIGUOUS, { reason: String(error && error.message || error) });
   }

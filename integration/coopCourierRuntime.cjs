@@ -23,6 +23,10 @@ const flightCore = require("./coopCourierFlight" + EXT);
 const driver = require("./coopCourierFlightDriver" + EXT);
 const bridge = require("./coopCourierNativeAccept" + EXT);
 const notices = require("./coopCourierNotices" + EXT);
+const nodeFs = require("node:fs");
+// Notice ledger lives on the persistent data volume: a restart or a container
+// recreate must never mail the same courier message twice.
+const NOTICE_FILE = process.env.EVEJS_COOP_COURIER_NOTICE_FILE || "/var/lib/evejs/coop-courier-notices.json";
 
 // Collateral is insurance, not a refusal reason: a courier takes a contract when
 // it actually holds the ISK. requireZeroCollateral stays the pure-core default
@@ -55,6 +59,26 @@ function createCourierDispatch(deps = {}) {
   const sceneForSystem = deps.sceneForSystem;
   const pilots = (Array.isArray(deps.pilots) ? deps.pilots : []).map(num).filter((id) => id > 0);
   const sendMail = typeof deps.sendMail === "function" ? deps.sendMail : null;
+  let sentNotices = {};
+  try {
+    const raw = nodeFs.readFileSync(NOTICE_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object") sentNotices = parsed;
+  } catch (_error) {
+    sentNotices = {};
+  }
+  function noticeAlreadySent(contractID, kind) {
+    const row = sentNotices[String(contractID)];
+    return Boolean(row && row[kind]);
+  }
+  function rememberNotice(contractID, kind) {
+    sentNotices[String(contractID)] = Object.assign({}, sentNotices[String(contractID)], { [kind]: new Date().toISOString() });
+    try {
+      nodeFs.writeFileSync(NOTICE_FILE, JSON.stringify(sentNotices));
+    } catch (_error) {
+      /* the mail is already out; a lost ledger line must not throw */
+    }
+  }
   const now = typeof deps.now === "function" ? deps.now : () => Date.now();
   const log = typeof deps.log === "function" ? deps.log : () => {};
   const flights = new Map();
@@ -216,12 +240,17 @@ function createCourierDispatch(deps = {}) {
       reward: num(contract.reward),
     });
     if (built.status !== "NOTICE") return built;
+    if (noticeAlreadySent(num(contract.contractID), kind)) {
+      log(`[CoopCourier] notice ${kind} already sent for ${num(contract.contractID)}, not repeating`);
+      return built;
+    }
     if (!sendMail || !(issuerID > 0) || !(characterID > 0)) {
       log(`[CoopCourier] notice ${kind} not sent (no mail authority) for ${num(contract.contractID)}`);
       return built;
     }
     try {
       sendMail({ senderID: characterID, toCharacterIDs: [issuerID], title: built.subject, body: built.body });
+      rememberNotice(num(contract.contractID), kind);
       log(`[CoopCourier] notice ${kind} mailed to ${issuerID} for ${num(contract.contractID)}`);
     } catch (error) {
       log(`[CoopCourier] notice ${kind} failed ${String(error && error.message || error)}`);

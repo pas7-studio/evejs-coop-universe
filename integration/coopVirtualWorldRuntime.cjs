@@ -2354,26 +2354,34 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
   }
   return {status:"PENDING"};
  }
- // A stock mining-fleet hauler is a real persisted native ship, but it has no
-// coop-pilot identity. Its durable slot marker is a stable merchant identity, so
-// the same hull keeps one earned-ISK ledger across restarts and respawns.
- function merchantIdentityFor(entityID,systemID){
-  let native=null;
-  try{native=require("./npc/nativeNpcStore").getNativeEntity(Number(entityID));}
-  catch(_error){return null;}
-  if(!native||Number(native.entityID)!==Number(entityID)||
-   Number(native.systemID)!==Number(systemID))return null;
-  const marker=/^coop-mining-(\d+)-(\d+)-hauler$/.exec(String(native.operatorKind||""));
-  if(!marker||Number(marker[1])!==Number(systemID))return null;
-  const slot=Number(marker[2]);
-  if(!Number.isSafeInteger(slot)||slot<1)return null;
-  return {pilotID:"coop-hauler-"+systemID+"-"+slot,entityID:Number(entityID),
-   systemID:Number(systemID)};
+ // Reuse the identity mechanism that already names the mining fleet: a real
+// fleet hauler is adopted by a free miner/hauler resident exactly the way
+// coopNativeIndustry.observe does, so it keeps a NORMAL coop-pilot identity and
+// ledger instead of inventing a second identifier scheme.
+ function adoptMerchant(scene,haulerID,systemID){
+  const registry=identityRegistry;
+  if(!registry||typeof registry.link!=="function"||typeof registry.get!=="function")
+   return null;
+  const pilots=(world?.snapshot()?.pilots||[]).filter(p=>p?.role==="hauler"||p?.role==="miner");
+  const links=Object.values(registry.snapshot()?.links||{});
+  if(links.some(x=>Number(x.entityID)===Number(haulerID)))return null;
+  for(const pilot of pilots){
+    if(registry.get(pilot.id))continue;
+    let linked=null;
+    try{linked=registry.link(pilot,Number(systemID),Number(haulerID));}
+    catch(_error){continue;}
+    if(!linked||Number(linked.entityID)!==Number(haulerID))continue;
+    try{require("./coopNpcPresentation").presentVirtualPilot(scene,Number(haulerID),pilot);}
+    catch(_error){/* a failed name broadcast must not block the sale */}
+    return linked;
+  }
+  return null;
  }
  let link=Object.values(identityRegistry?.snapshot()?.links||{})
   .find(entry=>Number(entry.entityID)===Number(haulerID)&&
    Number(entry.systemID)===Number(systemID));
- if(!link)link=merchantIdentityFor(haulerID,systemID);
+ if(!link)link=adoptMerchant(require("./runtime").ensureScene(Number(systemID),
+  {refreshStargates:false}),haulerID,systemID);
  if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
  const trader=ensureMarketTrader();
  if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
@@ -2394,7 +2402,7 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
      if(settlements>=8||Date.now()-job.startedAt>30000)break;
      const result=await trader.execute({scene,pilotID:link.pilotID,
       entityID:Number(haulerID),stationID:Number(stationID),
-      identity:link,side:"sell",typeID,buyTypes:[],sellTypes},
+      side:"sell",typeID,buyTypes:[],sellTypes},
       {withinBatch:settlements>0});
      if(result.status!=="TRADE_SETTLED"){last=String(result.status||"UNKNOWN");break;}
      settlements++;
