@@ -143,7 +143,7 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
  function activeScoutIDs(systemID){
   const sys=integer(systemID),now=clock(),result=new Set();
   if(!sys)return result;
-  for(const team of teams.values)if(team.systemID===sys&&
+  for(const team of teams.values())if(team.systemID===sys&&
    team.witnessLost!==true&&team.expiresAt>=now)result.add(team.scoutID);
   return result;
  }
