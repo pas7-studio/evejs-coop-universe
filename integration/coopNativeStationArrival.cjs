@@ -851,6 +851,19 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   if(stackCount)probe.observe("living-npc-station-delivered",null,{spaceState:{systemID:trip.systemID}},
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
+  let terminalAttendanceStatus="NOT_REQUIRED";
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY==="1"){
+   // Persist authentic terminal presence BEFORE committing the final native
+   // delivery journal. The cargo must already be warehouse-reconciled and
+   // original full-manifest proof independently verified. An unavailable
+   // pilot cannot be granted a fictitious receipt after restart.
+   try{
+    const proof=escortGate?.recordTerminalAttendance?.(
+     trip.manifestID,scene,manifestVerified);
+    terminalAttendanceStatus=proof?.status||"TERMINAL_ATTENDANCE_NOT_WIRED";
+   }catch{terminalAttendanceStatus="TERMINAL_ATTENDANCE_UNCERTAIN_REPAIR_REQUIRED"}
+  }
   if(escortEnabled){
    const terminal={status:"DELIVERED",terminal:true,nativeFullManifestProof:manifestVerified};
    let written;try{written=escortGate.recordDelivered({
@@ -890,7 +903,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
    ...(trip.soldStacks?{soldStacks:trip.soldStacks,soldQuantity:trip.soldQuantity||0,
     soldISK:trip.soldISK||0,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"}:{}),
-   ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
+   ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE",
+    terminalAttendanceStatus}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
  return {start,tick,recover,resumeNativeDelivery,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
