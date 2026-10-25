@@ -58,6 +58,10 @@ function offer({characterID,agentRecord,fleetRuntime,sessions,
    leaderMission.runtimeStatus!=="accepted"||
    leaderMission.objectiveMode!=="dungeon"||
    leaderMission.gmCompleted===true||
+   leaderMission.importantMission===true||
+   leaderMission.storylineOfferProjection===true||
+   agentRecord.importantMission===true||
+   agentRecord.isCareerAgent===true||
    leaderMission.objectiveCompleted===true||
    !text(leaderMission.contentID)||
    !text(leaderMission.missionTemplateID)||
