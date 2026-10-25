@@ -9,7 +9,7 @@ const specs=[
  ["coopAlifeNativeBuyerRuntime",["coopAlifeNativeBuyerDispatch"]],
  ["coopNpcBuyerNativeBindings",["coopNpcCorporateBuyerAtomic","coopNpcBuyerCoordinator"]],
  ["coopNpcBuyerCoordinator",["coopNpcMarketPolicy"]],
- ["coopNpcBuyerNativeBindings",["coopNpcRustOrderAuthority","coopNpcSellerTaxAuthority"]],
+ ["coopNpcBuyerNativeBindings",["coopNpcRustOrderAuthority","coopNpcSellerTaxAuthority","coopNpcBuyerRecoveryAudit"]],
  ["coopNpcNativeEconomyDirector",["coopNpcDemandAuthority"]]
 ];
 for(const [file,needs] of specs){
