@@ -395,6 +395,8 @@ The native startup patch has been applied in memory to upstream EveJS at `c3ea39
 
 ## P0 native mission progress / industry / premium skill QA gate
 
+> New/rebased worlds can use 48× skill training. Existing 6× characters must not be silently changed: inspect effective running speed and rebase native active queues per [COOP_LOCAL_PROGRESSION_V2.md](COOP_LOCAL_PROGRESSION_V2.md). Live client ETA and SP acceptance is still pending.
+
 The living-coop overlay includes new **nondeployed** pinned-source patches for native agent mission state, native dungeon objective sync and native industry time. It also requests `EVEJS_OMEGA_LICENSE=true`, `EVEJS_SKILL_TRAINING_SPEED=6`, and `EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER=0.35`. All remain **NOT TESTED WITH LIVE CLIENTS**.
 
 1. `Verify-Local-Coop.ps1` sets `EVEJS_COOP_CODE_PATH` for source-level tests. Require exact pinned source parse, idempotent apply, byte-for-byte rollback for `agentMissionRuntime.js`, `missionRuntimeState.js`, `dungeonUniverseSiteService.js` and `industryParityHelpers.js`. Do not run any nonreversible patch on the operator's local uncommitted upstream files.

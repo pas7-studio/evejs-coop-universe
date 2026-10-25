@@ -35,7 +35,7 @@ test("pinned EveJS manufacturing source overlays cleanly without material/cost c
  assert.match(patched,/resolveRequiredSkillTimeModifier/);
  assert.match(patched,/resolveFacilityTimeModifier/);
 });
-test("native config has one real authoritative 6x skill-training and Omega source",t=>{
+test("native config has one real authoritative skill-training and Omega source",t=>{
  if(!codePath){t.skip("Requires pinned source: EVEJS_COOP_CODE_PATH");return;}
  const config=fs.readFileSync(path.join(codePath,"server/src/config/index.js"),"utf8");
  const skills=fs.readFileSync(path.join(codePath,"server/src/services/skills/training/skillTrainingMath.js"),"utf8");
@@ -48,12 +48,14 @@ test("native config has one real authoritative 6x skill-training and Omega sourc
  assert.match(omega,/function resolveOmegaLicenseState\(/);
  assert.match(subscription,/resolveOmegaLicenseState\(/);
 });
-test("only LivingCoop deployment activates 6x Omega and bounded native manufacturing",()=>{
+test("only LivingCoop deployment activates bounded skill pace, Omega and native manufacturing",()=>{
  const deploy=fs.readFileSync(new URL("../scripts/Deploy-Coop-RuntimeProbe.ps1",import.meta.url),"utf8");
  const start=deploy.indexOf("if ($LivingCoop) {",deploy.indexOf("EVEJS_COOP_VIRTUAL_ECONOMY"));
  const config=deploy.slice(start,deploy.indexOf("if ($LivingCoop)",start+1)>0?
   deploy.indexOf("if ($LivingCoop)",start+1):undefined);
- assert.match(config,/EVEJS_SKILL_TRAINING_SPEED: '6'/);
+ assert.match(config,/EVEJS_SKILL_TRAINING_SPEED: '\$CoopSkillTrainingSpeed'/);
+ assert.match(deploy,/\[ValidateSet\(6,12,24,48\)\]\[int\]\$CoopSkillTrainingSpeed = 48/);
+ assert.match(deploy,/ConfirmActiveTrainingRebased/);
  assert.match(config,/EVEJS_OMEGA_LICENSE: 'true'/);
  assert.match(config,/EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: '0.35'/);
  assert.match(config,/EVEJS_COOP_FLEET_MISSION_SHARE: '1'/);
