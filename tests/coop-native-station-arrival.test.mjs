@@ -6,7 +6,11 @@ const require=createRequire(import.meta.url);
 const path=require('node:path');
 const source=fs.readFileSync(new URL('../integration/coopNativeStationArrival.cjs',import.meta.url),'utf8');
 const compiled={exports:{}};
-new Function('require','module','exports',source)(id=>id==='./coopNativeWarehouse'?{createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}}:require(id),compiled,compiled.exports);
+new Function('require','module','exports',source)(id=>{
+ if(id==='./coopNativeWarehouse')return {createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}};
+ if(id==='./coopEconomyDestination')return require('../integration/coopEconomyDestination.cjs');
+ return require(id);
+},compiled,compiled.exports);
 const {createStationArrival}=compiled.exports;
 function fixture(options={}){
  let time=1_000_000;
@@ -68,3 +72,27 @@ test('failed native warehouse credit holds fleet for operator repair',()=>{
 test('timeout blocks without treating deadline as arrival',()=>{const f=fixture();f.dir.start(f.scene,f.fleet,f.now());assert.equal(f.dir.tick(f.scene,f.fleet,f.now()+16*60*1000).status,'ARRIVAL_TIMED_OUT_REPAIR_REQUIRED');assert.equal(f.deposits.length,0)});
 test('fleet does not restart delivery while route in progress',()=>{const f=fixture();f.dir.start(f.scene,f.fleet,f.now());assert.equal(f.dir.start(f.scene,f.fleet,f.now()+5000).status,'ROUTE_ALREADY_ACTIVE');assert.equal(f.warps.length,1)});
 test('no cargo skips unneeded station warp without creating goods',()=>{const f=fixture();f.cargo.clear();assert.equal(f.dir.start(f.scene,f.fleet,f.now()).status,'NO_ORE_TO_DELIVER');assert.equal(f.warps.length,0)});
+test('a fleet with no physical trip returns home instead of stalling forever',()=>{
+ const {checkReturn}=compiled.exports;
+ const previous=process.env.EVEJS_COOP_NPC_STATION_DELIVERY;
+ process.env.EVEJS_COOP_NPC_STATION_DELIVERY='1';
+ try{
+  let ticked=0;
+  const director={
+   tick:()=>{ticked++;return {status:'AWAITING_PHYSICAL_ARRIVAL',terminal:false};},
+   start:()=>({status:'EN_ROUTE',terminal:false})
+  };
+  const scene={systemID:30000144};
+  const stalled=checkReturn(scene,{fleetID:7,systemID:30000144,haulerEntityIDs:[]},1000,director);
+  assert.equal(stalled.status,'NO_ACTIVE_TRIP');
+  assert.equal(stalled.terminal,true,'nothing is in flight, so the fleet must resume mining');
+  assert.equal(ticked,0,'a fleet without a trip must never be ticked');
+  const live=checkReturn(scene,{fleetID:7,systemID:30000144,
+   coopStationArrival:{fleetID:7,systemID:30000144,haulers:{}}},1000,director);
+  assert.equal(live.terminal,false);
+  assert.equal(ticked,1,'a real trip is still advanced');
+ }finally{
+  if(previous===undefined)delete process.env.EVEJS_COOP_NPC_STATION_DELIVERY;
+  else process.env.EVEJS_COOP_NPC_STATION_DELIVERY=previous;
+ }
+});

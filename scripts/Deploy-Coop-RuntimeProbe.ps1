@@ -242,7 +242,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_FLEET_TRADE_SAFETY: '1'"
   # Objective sharing is safe; automatic second reward is not yet crash-atomic.
   # Keep native player-by-player turn-ins until durable multi-recipient settlement.
-  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '0'"
+  if (-not $EnableDuoMissionSettlement) { $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '0'" }
   # Closed-server progression uses the original EveJS account/skill authority.
   # This affects the actual skill queue and client estimates, not fake SP grants.
   $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '$CoopSkillTrainingSpeed'"

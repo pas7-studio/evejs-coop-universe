@@ -153,6 +153,7 @@ test("attested legitimate turret miss permits next durable native debit boundary
    assert.equal(transactions,1);
    assert.equal(state.npcCargo.cargo["501"].quantity,3);
    assert.equal(state.npcCargo.coopAmmoCycles_101.modules["401"],1100);
+   assert.equal(state.npcCargo.coopAmmoCycles_101.outcomeRequired,true);
    assert.equal(f.inspect().status,"COMMITTED");
   }finally{
    if(prior===undefined)delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
@@ -181,4 +182,123 @@ test("forged incomplete outcome cannot unblock a bank even when kind and boundar
    else process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=prior;
   }
  },{outcome:{kind:"TURRET_RESOLVED",boundaryMs:1000}});
+});
+
+function checkPriorBankFence({dropJournal=false,dropFence=false,staleBoundary=false}={}){
+ fixture(f=>{
+  assert.equal(f.record({entity,whenMs:1000,kind:"TURRET_RESOLVED",hit:false}).ok,true);
+  if(dropJournal)fs.unlinkSync(f.file); // disposable fixture ONLY
+  const previous=process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS="1";
+  try{
+   const sep="\u001f";
+   const state={
+    npcEntities:{["entities"+sep+"101"]:{entityID:101,ownerID:900,systemID:30000144}},
+    npcModules:{["modules"+sep+"401"]:{moduleID:401,entityID:101,ownerID:900,
+      typeID:123,categoryID:7,flagID:27}},
+    npcCargo:{cargo:{"501":{cargoID:501,entityID:101,ownerID:900,
+      moduleID:401,typeID:35,categoryID:8,quantity:4}}}
+   };
+   if(!dropFence)state.npcCargo.coopAmmoCycles_101={
+    version:1,entityID:101,modules:{"401":staleBoundary?999:1000}};
+   let transactions=0,writes=0;
+   const bank=createAtomicAmmoBank({
+    root:f.root,
+    atomicRows:{transact(_tables,callback){
+     transactions++;
+     return callback({get:(table,key)=>state[table][key]??null,
+      put(){writes++;throw Error("WRITES_FORBIDDEN_WHEN_PRIOR_PROOF_MISMATCH");}});
+    }},
+    store:{listNativeCargoForEntity:()=>Object.values(state.npcCargo.cargo)},
+    compatible:()=>true,clock:()=>3000
+   });
+   const fired=bank.consume({
+    entity:{...entity,nativeCargoItems:[{itemID:501,quantity:4,stacksize:4}]},
+    entries:[{moduleItem:{itemID:401,flagID:27,typeID:123},
+      chargeItem:{itemID:501,typeID:35,quantity:4}}],
+    whenMs:1100
+   });
+   assert.equal(fired.success,false);
+   assert.equal(fired.errorMsg,"BANK_ATOMIC_TRANSACTION_UNCERTAIN");
+   assert.equal(transactions,1,"test must reach authoritative SQLite proof");
+   assert.equal(writes,0,"no native cargo may change");
+   assert.equal(state.npcCargo.cargo["501"].quantity,4);
+   assert.equal(fs.existsSync(f.file+".lock"),true,
+     "unresolved state must retain the writer lock");
+  }finally{
+   if(previous===undefined)delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+   else process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=previous;
+  }
+ });
+}
+test("new empty POSIX root cannot bypass an existing authoritative SQLite prior debit",()=>{
+ checkPriorBankFence({dropJournal:true});
+});
+test("forged attested POSIX receipt without corresponding SQLite fence cannot debit",()=>{
+ checkPriorBankFence({dropFence:true});
+});
+test("stale SQLite boundary cannot validate a later attested POSIX bank receipt",()=>{
+ checkPriorBankFence({staleBoundary:true});
+});
+
+test("once receipt witnesses a native bank, turning the flag OFF cannot downgrade the next cycle",()=>{
+ fixture(f=>{
+  assert.equal(f.record({entity,whenMs:1000,kind:"TURRET_RESOLVED",hit:false}).ok,true);
+  const receipt=JSON.parse(fs.readFileSync(f.file,"utf8"));
+  receipt.outcomeRequired=true;
+  fs.writeFileSync(f.file,JSON.stringify(receipt));
+  const prev=process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  try{
+   let calls=0;
+   const bank=createAtomicAmmoBank({root:f.root,
+    atomicRows:{transact(){calls++;throw Error("SHOULD_NOT_REACH_DB");}},
+    store:{listNativeCargoForEntity:()=>[]},compatible:()=>true});
+   const result=bank.consume({entity,whenMs:1100,
+    entries:[{moduleItem:{itemID:401,typeID:123,flagID:27},
+     chargeItem:{itemID:501,typeID:35,quantity:4}}]});
+   assert.equal(result.success,false);
+   assert.equal(result.errorMsg,"BANK_ATOMIC_JOURNAL_UNSAFE");
+   assert.equal(calls,0);
+   assert.equal(fs.existsSync(f.file+".lock"),false);
+  }finally{
+   if(prev!==undefined)process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=prev;
+  }
+ });
+});
+test("SQLite outcome-mode latch blocks flag downgrade even after journal root is lost",()=>{
+ fixture(f=>{
+  assert.equal(f.record({entity,whenMs:1000,kind:"TURRET_RESOLVED",hit:false}).ok,true);
+  fs.unlinkSync(f.file); // disposable root only
+  const prev=process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  try{
+   let writes=0;
+   const sep="\u001f";
+   const data={
+    npcEntities:{["entities"+sep+"101"]:{entityID:101,ownerID:900,systemID:30000144}},
+    npcModules:{["modules"+sep+"401"]:{moduleID:401,entityID:101,ownerID:900,
+     typeID:123,categoryID:7,flagID:27}},
+    npcCargo:{cargo:{"501":{cargoID:501,entityID:101,moduleID:401,
+     ownerID:900,typeID:35,categoryID:8,quantity:4}},
+     coopAmmoCycles_101:{version:1,entityID:101,modules:{"401":1000},outcomeRequired:true}}
+   };
+   const bank=createAtomicAmmoBank({root:f.root,
+    atomicRows:{transact:(_,callback)=>callback({
+     get:(t,k)=>data[t][k]??null,put(){writes++;throw Error("NO_WRITE_ALLOWED");}
+    })},
+    store:{listNativeCargoForEntity:()=>Object.values(data.npcCargo.cargo)},
+    compatible:()=>true});
+   const result=bank.consume({entity,whenMs:1100,
+    entries:[{moduleItem:{itemID:401,typeID:123,flagID:27},
+     chargeItem:{itemID:501,typeID:35,quantity:4}}]});
+   assert.equal(result.success,false);
+   assert.equal(result.errorMsg,"BANK_ATOMIC_TRANSACTION_UNCERTAIN");
+   assert.equal(writes,0);
+   assert.equal(data.npcCargo.cargo["501"].quantity,4);
+   assert.equal(fs.existsSync(f.file+".lock"),true);
+  }finally{
+   if(prev!==undefined)process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=prev;
+  }
+ });
 });

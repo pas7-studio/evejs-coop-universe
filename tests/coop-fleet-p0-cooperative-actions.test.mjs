@@ -264,3 +264,18 @@ test("P0 an interrupted PREPARED journal remains blocked on next process start",
   assert.equal(beginPeerSettlement(ticket,file).status,"JOURNAL_CORRUPTED");
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test("native fleet member lookup cannot impersonate another character record",()=>{
+ const f=fixture(),args={leaderSession:f.alice,peerSession:f.bob,fleetRuntime:f.fleetRuntime};
+ assert.equal(membership(args).ok,true);
+ f.fleet.members.set(102,{charID:9001});
+ assert.equal(membership(args).reason,"NATIVE_FLEET_MEMBER_RECORD_MISMATCH");
+});
+test("native commander role change does not create a virtual fleet",()=>{
+ const f=fixture(),args={leaderSession:f.alice,peerSession:f.bob,fleetRuntime:f.fleetRuntime};
+ f.fleet.members.get(101).role=4;
+ f.fleet.members.get(102).role=1;
+ assert.equal(membership(args).fleetID,f.fleet.fleetID);
+ f.fleet.members.delete(102);
+ assert.equal(membership(args).ok,false);
+});

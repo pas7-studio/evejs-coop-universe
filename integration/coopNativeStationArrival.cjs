@@ -2,6 +2,12 @@
 // Source-of-truth physical station arrival gate for NPC mining haulers.
 // A warp order or elapsed timer is NEVER proof of an arrival or a delivery.
 const {createWarehouse} = require("./coopNativeWarehouse");
+// The resolver deploys as .js next to this file, but is stored as .cjs in the
+// orchestration repo, so resolve either spelling instead of keeping a stale copy.
+function loadEconomyDestination(){
+ try{return require("./coopEconomyDestination");}
+ catch(error){return require("./coopEconomyDestination.cjs");}
+}
 const pos = value => Number.isSafeInteger(Number(value)) && Number(value)>0 ? Number(value) : 0;
 const vector = value => value && ["x","y","z"].every(k => typeof value[k]==="number" && Number.isFinite(value[k]));
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -11,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,warpFence=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -123,25 +129,49 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     .map(s=>isValidStation(scene,s,systemID)).filter(Boolean)
     .sort((a,b)=>a.stationID-b.stationID);
   if(!candidates.length)return pause("NO_NATIVE_NPC_STATION");
-  const destination=candidates[0];
-  if(strictMotion()){
-   const first=scene.getEntityByID?.(ships[0]);
-   if(!vector(first?.position)||
-    distance(first.position,destination.position)<10000)
-    return pause("ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS");
-  }
   const cargo=ships.flatMap(id=>(store.listNativeCargoForEntity(id)||[]).filter(row=>
    pos(row.cargoID)&&pos(row.typeID)&&pos(row.quantity)&&Number(row.coopHaulFleetID)===fleetID));
   if(cargo.some(row=>row.transient===true))return pause("CARGO_NOT_DURABLE");
   if(!cargo.length)return {status:"NO_ORE_TO_DELIVER",terminal:true};
+  // The fleet picks the station that really pays for the ore it carries. The
+  // buyer list is the live seed book of the fleet's own region, capped by the
+  // remaining volume, so no station is ever preferred by ID. Without a known
+  // book we keep the plain physical route and say so in telemetry.
+  let destination=candidates[0],economy=null;
+  if(destinationOracle){
+   try{
+    const ship=findShip(scene,ships[0],systemID);
+    const measured=candidates.map(candidate=>({...candidate,distanceMeters:
+     ship&&vector(ship.position)&&vector(candidate.position)?
+      Math.round(distance(ship.position,candidate.position)):null}));
+    economy=destinationOracle.decide({cargo,candidates:measured,systemID});
+    if(economy?.status==="CHOSEN"){
+     const picked=candidates.find(candidate=>candidate.stationID===economy.stationID);
+     if(picked)destination=picked;
+     else economy={...economy,status:"CHOSEN_STATION_NOT_PHYSICAL"};
+    }
+   }catch(error){economy={status:"ORACLE_FAILED",reason:String(error?.message||error).slice(0,80)};}
+   if(typeof probe?.observe==="function")
+    probe.observe("living-economy-destination",null,{spaceState:{systemID}},{
+     fleetID,status:economy?.status||"UNKNOWN",regionID:economy?.regionID||0,
+     stationID:destination.stationID,
+     chosenRevenue:economy?.revenue||0,filled:economy?.filled||0,
+     unfilled:economy?.unfilled||0,totalQuantity:economy?.totalQuantity||0,
+     cargoTypes:economy?.cargoTypes||[],
+     top:(economy?.ranked||[]).slice(0,3).map(entry=>({stationID:entry.stationID,
+      revenue:entry.revenue,filled:entry.filled,unfilled:entry.unfilled}))
+    });
+  }
   if(escortEnabled){
    if(ships.length!==1)return pause("ESCORT_REQUIRES_ONE_NATIVE_HAULER");
-   let source;try{source=durableWarpFence.inspectSource({
-    systemID,fleetID,haulerID:ships[0],
-    cargoIDs:cargo.map(x=>Number(x.cargoID))})}
+   let source;try{source=durableWarpFence.inspectSource({systemID,fleetID,haulerID:ships[0],cargoIDs:cargo.map(x=>Number(x.cargoID))})}
    catch{return pause("ESCORT_WARP_FENCE_SOURCE_UNAVAILABLE")}
-   if(source?.status!=="WARP_SOURCE_CLEAR")
-    return pause("ESCORT_"+(source?.status||"WARP_FENCE_UNVERIFIED"));
+   if(source?.status!=="WARP_SOURCE_CLEAR")return pause("ESCORT_"+(source?.status||"WARP_FENCE_UNVERIFIED"));
+  }
+  if(strictMotion()){
+   const first=scene.getEntityByID?.(ships[0]);
+   if(!vector(first?.position)||distance(first.position,destination.position)<10000)
+    return pause("ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS");
   }
   // Flush existing physical NPC entities and native cargo before moving.
   for(const name of ["npcEntities","npcCargo"]){if(!flush(name)?.success)return pause("PERSISTENCE_UNCERTAIN");}
@@ -260,13 +290,10 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     return pause("ESCORT_"+(funded?.status||"FUNDING_UNVERIFIED"));
    // A native warp ACK can be lost after the ship physically moved.
    // Until ALL warp results are explicitly accepted, forbid an in-process retry.
-   // Durable PREPARED must be fsynced before native warp; if this fails
-   // the escrow remains reserved for operator reconciliation, not retried.
    let intent;try{intent=durableWarpFence.prepare({
     manifestKey:manifestProof.key,contractID:funded.contractID,
-    systemID,fleetID,haulerID:ships[0],
-    stationID:destination.stationID,corporationID:destination.corporationID,
-    cargoIDs:manifestProof.cargoIDs.slice()})}
+    systemID,fleetID,haulerID:ships[0],stationID:destination.stationID,
+    corporationID:destination.corporationID,cargoIDs:manifestProof.cargoIDs.slice()})}
    catch{return pause("ESCORT_WARP_INTENT_UNAVAILABLE")}
    if(intent?.status!=="DURABLE_WARP_PREPARED")
     return pause("ESCORT_"+(intent?.status||"WARP_INTENT_UNVERIFIED"));
@@ -286,17 +313,23 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    const sceneBeat=Math.max(250,Math.min(5000,Number(scene._tickIntervalMs)||1000));
    const realIngress=strictMotion()?
     Math.min(30000,Math.max(6000,sceneBeat*6)):0;
-   let ack;
+   let ack,warpError=null;
    try{ack=warpToPoint(id,target,{forceImmediateStart:true,
     broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
-    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250,
-     realIngress)});}catch(_){ack=null;}
+    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250,realIngress)});}catch(error){ack=null;warpError=String(error?.message||error).slice(0,120);}
    if(!truthy(ack)){delete fleet.coopStationArrival;
-    for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED");}
+    for(const raw of ships)arrivals.delete(raw);
+    // A rejected warp is the difference between "the fleet is working" and
+    // "the fleet is silently stuck", so it must never be swallowed.
+    const rejection={fleetID,haulerID:id,stationID:destination.stationID,
+     systemID,errorMsg:String(ack?.errorMsg||ack?.error||warpError||"").slice(0,120),
+     ackKeys:ack&&typeof ack==="object"?Object.keys(ack).slice(0,8):[]};
+    noteRouteStatus(fleet,"WARP_COMMAND_FAILED");
+    if(typeof probe?.observe==="function")
+     probe.observe("living-npc-station-warp-rejected",null,{spaceState:{systemID}},rejection);
+    return pause("WARP_COMMAND_FAILED");}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
   }
-  // We just received real native warp ACKs, but this is still not durable
-  // until the independent source-linked journal records them.
   if(escortEnabled){
    let committed;try{committed=durableWarpFence.confirm(manifestProof.key)}
    catch{return pause("ESCORT_WARP_ACK_JOURNAL_UNAVAILABLE")}
@@ -379,8 +412,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      catch{refund={status:"NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED"}}
      if(refund?.status==="REFUNDED"){
       for(const raw of Object.keys(trip.haulers)){
-       arrivals.delete(Number(raw));activeNativeEscortWarps.delete(Number(raw));
-      }
+   arrivals.delete(Number(raw));activeNativeEscortWarps.delete(Number(raw));
+  }
       delete fleet.coopStationArrival;
       return {status:"ESCORT_NATIVE_HAULER_LOSS_REFUNDED",terminal:true,
        contractID:refund.contractID,
@@ -418,15 +451,28 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   // No cargo remaining is evidence of completion only if at least one
   // previously committed source receipt exists in this trip.
-  if(!stackCount&&!trip.completedStackCount)return pause("EMPTY_DELIVERY_NOT_PROVEN");
+  // With a durable full native manifest, a crash/failed notification may
+  // follow the LAST committed warehouse debit but precede this in-memory
+  // counter update. The cargo is then correctly empty on the next tick.
+  // The *full* manifest proof, NOT an empty hull, must decide completion.
+  if(!stackCount&&!trip.completedStackCount&&!manifestDirector)
+   return pause("EMPTY_DELIVERY_NOT_PROVEN");
   trip.completedStackCount=(trip.completedStackCount||0)+stackCount;
-  let manifestVerified=null;
+  let manifestVerified=null,alifeDeliveryWitness=null;
   if(manifestDirector){
    manifestVerified=manifestDirector.verify({key:trip.manifestID,systemID:trip.systemID,
     fleetID:trip.fleetID,stationID:trip.stationID,corporationID:trip.corporationID,
     haulerIDs:Object.keys(trip.haulers).map(Number)});
    if(manifestVerified?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED")
     return pause(manifestVerified?.status||"MANIFEST_FULL_CARGO_UNVERIFIED");
+   alifeDeliveryWitness=require("./coopAlifeNativeDeliveryEvidence")
+    .verifyFullNativeDelivery(trip,manifestVerified);
+   if(alifeDeliveryWitness?.status!=="NATIVE_FULL_MANIFEST_WITNESSED")
+    return pause(alifeDeliveryWitness?.reason||"ALIFE_NATIVE_DELIVERY_PROOF_UNVERIFIED");
+   // Reconcile ALL committed cargo stacks rather than just stacks observed
+   // on this tick. Never synthesize inventory or a new warehouse receipt.
+   stackCount=alifeDeliveryWitness.stacks;
+   oreQuantity=alifeDeliveryWitness.quantity;
   }
   if(stackCount)probe.observe("living-npc-station-delivered",null,{spaceState:{systemID:trip.systemID}},
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
@@ -455,6 +501,13 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      {status:"ESCORT_SETTLEMENT_NOT_WIRED"})}
    catch{escortSettlement={status:"ESCORT_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED"}}
   }
+  // A-Life SETTLE is a read-only observation of the native warehouse's
+  // already-COMMITTED manifest. Failure to append telemetry cannot re-debit
+  // items, trigger a repeat settlement or block physical cargo ownership.
+  if(alifeDeliveryWitness){try{
+   probe.observe("alife-native-delivery-settled",null,
+    {spaceState:{systemID:trip.systemID}},alifeDeliveryWitness);
+  }catch(error){console.warn("[CoopALifeDelivery] telemetry",String(error?.message||error).slice(0,80));}}
   for(const raw of Object.keys(trip.haulers)){
    arrivals.delete(Number(raw));activeNativeEscortWarps.delete(Number(raw));
   }
@@ -463,7 +516,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,noteNativeMotion,verify:stableAt,warehouse:factory,manifest:manifestDirector};
+ return {start,tick,noteNativeMotion,verify:stableAt,warehouse:factory,manifest:manifestDirector,
+  oracle:destinationOracle};
 }
 let runtimeDirector;
 function getRuntimeDirector(){
@@ -484,18 +538,52 @@ function getRuntimeDirector(){
   getCorporation:corporations.getCorporationRecord,isNpcCorporation:corporations.isNpcCorporationID,
   getNativeEntity:store.getNativeEntity,getScene:id=>runtime.getScene?.(id)||runtime.ensureScene(id),
   store,items:nativeItems,flush:table=>repo.flushTableSync(table),
-  warpToPoint:(id,p,opts)=>runtime.warpToPoint(id,p,opts),
+  // A durable native hauler has no session, so the session-bound
+  // space/runtime.warpToPoint() silently rejects it. Use the same sessionless
+  // NPC warp the stock mining code uses, otherwise every station trip failed
+  // with WARP_COMMAND_FAILED and the ore never left the belt.
+  warpToPoint:(id,p,opts)=>require("./npc/npcRuntime").warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
+  destinationOracle:process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1"?
+   loadEconomyDestination().createDestinationOracle({
+    call:(method,params)=>require("../services/market/marketDaemonClient")
+     .marketDaemonClient.call(method,params),
+    getOreTypes:systemID=>require("../services/mining/miningVisuals")
+     .getSolarSystemOreTypeRecords(systemID),
+    getSystemRegion:systemID=>worldData.getSolarSystemByID(systemID),
+    probe:require("./coopRuntimeProbe")}):null,
   escortGate:process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"?
    require("./coopEscortNativeBinding").routeGate():null});
  return runtimeDirector;
+}
+// Which ore this system should prefer, from real belt ore crossed with real
+// buyers. Read-only: it advises the next haul, it never spawns or moves a ship.
+function observePreferredOre({systemID,reason="periodic"}={}){
+ if(process.env.EVEJS_COOP_ECONOMY_DESTINATION!=="1")return null;
+ const director=getRuntimeDirector();
+ return director.oracle?.observePreferredOre?.({systemID,reason})||null;
 }
 function routeFromHaul(scene,fleet,runtime,now,ingressDurationMs){
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
  const result=getRuntimeDirector().start(scene,fleet,now,{ingressDurationMs});
  if(result.status==="NO_ORE_TO_DELIVER")fleet.coopStationNoCargo=true;
+ if(result.status!=="EN_ROUTE"&&result.status!=="NO_ORE_TO_DELIVER")
+  noteRouteStatus(fleet,result.status);
  return result;
+}
+// A stalled haul used to be completely silent. One event per fleet and status
+// per two minutes makes the physical blocker visible without log spam.
+const routeStatusAt=new Map();
+function noteRouteStatus(fleet,status){
+ const fleetID=pos(fleet?.fleetID),now=Date.now(),key=fleetID+":"+status;
+ if(!fleetID||now-(routeStatusAt.get(key)||0)<120000)return;
+ routeStatusAt.set(key,now);
+ try{
+  require("./coopRuntimeProbe").observe("living-npc-station-route",null,
+   {spaceState:{systemID:pos(fleet?.systemID)}},{fleetID,status,
+    fleetState:String(fleet?.state||""),haulers:(fleet?.haulerEntityIDs||[]).length});
+ }catch(_error){/* diagnostics must never break the native route */}
 }
 function noteNativeMotion(entity,now){
  // Never construct a runtime/scene during a native SpaceScene physics tick.
@@ -503,13 +591,24 @@ function noteNativeMotion(entity,now){
   return pause("ESCORT_NATIVE_MOTION_NOT_INSTALLED");
  return runtimeDirector.noteNativeMotion(entity,now);
 }
-function checkReturn(scene,fleet,now){
+function checkReturn(scene,fleet,now,director=null){
+ const run=director||getRuntimeDirector();
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
  if(fleet?.coopStationNoCargo){delete fleet.coopStationNoCargo;return {status:"NO_CARGO",terminal:true};}
  if(process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"&&
     fleet?.coopEscortPredepartureEventID&&!fleet?.coopStationArrival){
-   return getRuntimeDirector().start(scene,fleet,now);
+   return run.start(scene,fleet,now);
  }
- return getRuntimeDirector().tick(scene,fleet,now);
+ // Nothing is physically in flight, so there is nothing left to wait for. This
+ // is also the self-healing exit for a fleet that stalled without any trip.
+ if(!fleet?.coopStationArrival){
+  noteRouteStatus(fleet,"NO_ACTIVE_TRIP");
+  return {status:"NO_ACTIVE_TRIP",terminal:true};
+ }
+ // Dwell and physical-arrival waits are progress, not blockers.
+ const arrival=run.tick(scene,fleet,now);
+ if(arrival?.terminal!==true&&arrival?.status!=="AWAITING_PHYSICAL_ARRIVAL"&&
+  arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
+ return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn,noteNativeMotion};
+module.exports={createStationArrival,routeFromHaul,checkReturn,noteNativeMotion,observePreferredOre};

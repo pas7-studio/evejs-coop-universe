@@ -1,0 +1,122 @@
+{
+  "schema": "evejs-coop/alife-native-mining-physical-proof/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "featureFlag": "EVEJS_COOP_ALIFE_MINING_PROOF",
+  "scenarios": [
+    {
+      "id": "ALIFE-MINE-001",
+      "title": "Real stock miner attaches an actual asteroid target",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "steps": [
+        "Boot a disposable pinned EveJS world in Perimeter 30000144 with real asteroid sites and native stock mining enabled",
+        "Inspect loaded SpaceRuntime.scenes and actual stock fleet miner itemID and assigned asteroid",
+        "Capture scene target-lock IDs and active mining effect targetIDs"
+      ],
+      "expected": [
+        "Genuine mineable target exists, lock and active effect target match",
+        "A combat controllerTarget=0 does not count as mining failure"
+      ],
+      "requiredEvidence": [
+        "scene and fleet identities",
+        "active native module IDs/target locks"
+      ]
+    },
+    {
+      "id": "ALIFE-MINE-002",
+      "title": "Positive actual native ore cargoID growth across two samples",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "steps": [
+        "Observe an authentic NPC miner with empty or previously known native cargo",
+        "Sample after two 30-second ALIFE mining witness ticks",
+        "Compare exact original nativeNpcStore cargoID/typeID/ownerID/quantity"
+      ],
+      "expected": [
+        "Only positive matched ore cargo growth reports NATIVE_ORE_GROWTH_CONFIRMED",
+        "Same cargoID+quantity on another tick is not extra mined ore"
+      ],
+      "requiredEvidence": [
+        "both timestamped native cargo snapshots",
+        "rock lock/effect references and quantityDelta"
+      ]
+    },
+    {
+      "id": "ALIFE-MINE-003",
+      "title": "No target lock, no mineable effects and lack of modules",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "steps": [
+        "Disable or remove real miner target lock in disposable test scene without destroying preserved data",
+        "Restore lock but remove active module effect",
+        "Run strict local mining world gate"
+      ],
+      "expected": [
+        "Every failed native proof names blocker, no positive mining result",
+        "No artificial ore, repair tool or phantom advancement"
+      ],
+      "requiredEvidence": [
+        "native controller/effect state",
+        "world report blocker after each action"
+      ]
+    },
+    {
+      "id": "ALIFE-MINE-004",
+      "title": "Authoritative cargo identity and NPC ownership safety",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "steps": [
+        "Make duplicated/invalid owner or transient native ore row in an isolated test fixture",
+        "Attempt to reference player ship as an NPC miner",
+        "Verify minable guard and strict read-only auditing"
+      ],
+      "expected": [
+        "Forged cargo never counts as proof of production",
+        "No mutation occurs in witness module"
+      ],
+      "requiredEvidence": [
+        "native owner and entityID",
+        "cargoID provenance and read-only status"
+      ]
+    },
+    {
+      "id": "ALIFE-MINE-005",
+      "title": "Physical miner to hauler to station stock",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "steps": [
+        "Observe positive original native cargoID growth from a real miner",
+        "Allow existing native haul cargo reparent without changing cargoID",
+        "Verify native station route, warehouse COMMITTED receipt and itemStore unique cargo tag"
+      ],
+      "expected": [
+        "Exactly one positive ore source delivered to matching warehouse owner and station",
+        "Neither ALIFE witness nor plan creates new ore or credits ISK"
+      ],
+      "requiredEvidence": [
+        "miner/hauler cargoID before after",
+        "full manifest COMMITTED and itemStore receipt"
+      ]
+    },
+    {
+      "id": "ALIFE-MINE-006",
+      "title": "Two clients see actual mining and know when it stalls",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "steps": [
+        "Connect two authorized local clients to a disposable Perimeter world",
+        "Watch physical asteroid lock, module visual activity, ore growth or named blocker",
+        "Run world report --require-mining-yield on server log"
+      ],
+      "expected": [
+        "Both clients see same stock hull and real asteroid interaction",
+        "Only actual native ore delta satisfies report, never a mining state flag"
+      ],
+      "requiredEvidence": [
+        "two client screenshots/time labels",
+        "same systemID, shipID, cargoID and two witness samples"
+      ]
+    }
+  ]
+}

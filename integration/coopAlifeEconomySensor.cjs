@@ -88,6 +88,7 @@ function readEconomySnapshot({systemID,scene,links=[],roles=new Map(),
     ammoState=inspected.status;
   }catch(_error){} // No native ammo proof means no resupply intent.
   pilots.push({pilotID:link.pilotID,entityID:link.entityID,systemID,role,
+   ownerID:Number(native.ownerID),
    nativeVerified:true,playerControlled:false,health:hp,
    underAttack:Number(controller.currentTargetID)>0||
     controller.manualOrder?.type==="attack",

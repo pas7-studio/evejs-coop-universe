@@ -168,3 +168,37 @@ test("unverified native fitting never cancels a previously proven ammo shortage"
  assert.equal(f.tick().events[0].kind,"npc-ammo-resupplied");
  assert.equal(f.director.activeIDs(SID).size,0);
 });
+
+test("ALIFE-02 monitor-only retains native scarcity fence without issuing a warp",()=>{
+ const f=fixture();
+ const report=f.tick({observeOnly:true});
+ assert.equal(report.status,"OK");
+ assert.equal(report.orders.length,0);
+ assert.equal(report.events[0].kind,"npc-ammo-exhausted");
+ assert.equal(f.director.activeIDs(SID).has(101),true);
+ assert.equal(f.orders.length,0);
+});
+test("ALIFE-02 monitor-only cleared by real fitted cargo without phantom resupply",()=>{
+ const f=fixture();f.tick({observeOnly:true});
+ f.cargo.push({cargoID:501,entityID:101,ownerID:777,
+  moduleID:401,categoryID:8,typeID:35,quantity:5,transient:false});
+ const report=f.tick({observeOnly:true});
+ assert.equal(report.orders.length,0);
+ assert.equal(report.events[0].kind,"npc-ammo-resupplied");
+ assert.equal(f.director.activeIDs(SID).size,0);
+ assert.equal(f.orders.length,0);
+});
+test("ALIFE-02 planned or survival tick issues one real native warp after monitor-only",()=>{
+ const f=fixture();f.tick({observeOnly:true});
+ const acted=f.tick();
+ assert.equal(acted.orders.length,1);
+ assert.equal(f.orders.length,1);
+ assert.equal(f.director.activeIDs(SID).has(101),true);
+});
+test("ALIFE-02 invalid observeOnly shape cannot issue a native order",()=>{
+ const f=fixture();
+ const result=f.tick({observeOnly:"yes"});
+ assert.equal(result.status,"INVALID");
+ assert.equal(result.orders.length,0);
+ assert.equal(f.orders.length,0);
+});
