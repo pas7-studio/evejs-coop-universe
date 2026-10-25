@@ -76,10 +76,11 @@ test("native agent completion hook credits both distinct accepted completed obje
  };
  const patchedMethod=method(native,"Handle_DoAction","Handle_GetMissionBriefingInfo");
  const handle=new Function("require","agentMissionRuntime","normalizePositiveInteger",
-  "buildDoActionResponsePayload","console",
+  "buildDoActionResponsePayload","console","process",
   "return ({"+patchedMethod+"}).Handle_DoAction")(
    resolve,missionRuntime,x=>Number(x)||0,x=>x,
-   {warn:(...args)=>warnings.push(args)});
+   {warn:(...args)=>warnings.push(args)},
+   {env:{EVEJS_COOP_FLEET_MISSION_TURNIN:"1"}});
  const svc={_resolveBoundAgentID:()=>99};
  const result=handle.call(svc,[6],f.alice);
  assert.equal(result.success,true);
@@ -115,9 +116,10 @@ test("native incomplete peer objective stays open after leader turns in",t=>{
   id==="../structure/structureLocation"?{getDockedLocationID:f.station}:
   id==="../../space/coopRuntimeProbe"?{observe:()=>{}}:(()=>{throw Error(id)})();
  const handle=new Function("require","agentMissionRuntime","normalizePositiveInteger",
-  "buildDoActionResponsePayload",
+  "buildDoActionResponsePayload","process",
   "return ({"+method(native,"Handle_DoAction","Handle_GetMissionBriefingInfo")+
-  "}).Handle_DoAction")(req,rt,x=>Number(x)||0,x=>x);
+  "}).Handle_DoAction")(req,rt,x=>Number(x)||0,x=>x,
+   {env:{EVEJS_COOP_FLEET_MISSION_TURNIN:"1"}});
  handle.call({_resolveBoundAgentID:()=>99},[6],f.alice);
  assert.deepEqual(completion,[101]);
  assert.equal(journal.has(102),true);
