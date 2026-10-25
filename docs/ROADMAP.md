@@ -1,4 +1,8 @@
 # Delivery roadmap — agent-ready tasks
+> **2026-10-25 P1 native fleet operations (tactics + logistics + live incidents):**
+> [Implementation, real-source contracts and two-client acceptance](COOP_P1_NATIVE_OPERATIONS_20261025.md).
+> Reuses authentic mining cargo/raids/wrecks, stock fleet tags and existing courier escrow; flag OFF by default, live UAT still required.
+
 > **2026-10-25 native-mechanics discovery / parallel-agent checkpoint:**
 > [24-mechanic upstream-to-co-op gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md)
 > [First implementation: native item/courier contracts + LP Store standing gates](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md), source-tested and pending real two-client/escrow replay acceptance.
