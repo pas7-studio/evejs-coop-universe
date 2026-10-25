@@ -12,7 +12,7 @@ function ctx(overrides={}){
  const calls=[];
  return Object.assign({
   calls,
-  character:{characterID:140000100,accountId:901,corporationID:98000001},
+  character:{characterID:140000100,accountId:901,corporationID:98000001,stationID:60015260},
   transitions:{
    undockSession:(session,options)=>{calls.push(['undock',session.characterID,session.locationid]);return {success:true,data:{ship:{entityID:980000000999}}};},
    dockSession:(session,stationID)=>{calls.push(['dock',session.characterID,stationID]);return {success:true};},
@@ -85,4 +85,11 @@ test('arrival is never assumed: it needs real scene evidence',()=>{
  const atArrive={...flight,step:'arrive'};
  assert.equal(runStep(runtime,atArrive,position).status,'REFUSED');
  assert.equal(runStep({...runtime,arrivalConfirmed:true},atArrive,position).status,'OK');
+});
+
+test('undock refuses when the courier is docked somewhere else',()=>{
+ const runtime=ctx({character:{characterID:140000100,accountId:901,stationID:60009999}});
+ const result=undock(runtime,flight);
+ assert.equal(result.status,'REFUSED');
+ assert.equal(runtime.calls.length,0);
 });

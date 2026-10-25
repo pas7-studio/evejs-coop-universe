@@ -143,7 +143,7 @@ test('a quote refuses unknown hull classes and empty volume',()=>{
 test('an NPC courier is only ready when it is a real character with funds and a real ship at the origin',()=>{
  const contract=courier({volume:29500,collateral:300000});
  const character={characterID:140000010,accountId:9,stationID:60003760,balance:500000};
- const ship={itemID:9988400000999,typeID:20185,stationID:60003760,capacityM3:435000};
+ const ship={itemID:9988400000999,typeID:20185,ownerID:140000010,stationID:60003760,capacityM3:435000};
  assert.equal(evaluateCourierIdentity({character,ship},contract).status,'READY');
  assert.equal(evaluateCourierIdentity({ship},contract).status,'REFUSED_NO_CHARACTER');
  assert.equal(evaluateCourierIdentity({character:{...character,accountId:0},ship},contract).status,'REFUSED_NO_CHARACTER');
@@ -157,7 +157,7 @@ test('an NPC courier is only ready when it is a real character with funds and a 
 test('the settlement chain refuses a package that is not at the origin or destination',()=>{
  const contract=courier({volume:29500,collateral:300000});
  const identity={character:{characterID:140000100,accountId:901,stationID:60003760,balance:25000000},
-  ship:{itemID:9988400100000,typeID:20185,stationID:60003760,capacityM3:465000}};
+  ship:{itemID:9988400100000,typeID:20185,ownerID:140000100,stationID:60003760,capacityM3:465000}};
  assert.equal(planSettlement(contract,identity,60003760).status,'ACCEPT_THEN_FLY');
  assert.deepEqual(planSettlement(contract,identity,60003760).steps,['accept','fly','complete']);
  assert.equal(planSettlement(contract,identity,60003761).status,'SETTLE_NOW');
@@ -169,4 +169,13 @@ test('the live numeric contract status is accepted alongside the string form',()
  const numeric=evaluateContract(courier({status:0}),{},{walletIsk:0,hullCapacityM3:4800});
  assert.equal(numeric.status,'ELIGIBLE');
  assert.equal(evaluateContract(courier({status:1}),{},{hullCapacityM3:4800}).status,'REFUSED_STATUS');
+});
+
+test('a ship owned by somebody else is never flown',()=>{
+ const contract=courier({volume:29500,collateral:300000});
+ const character={characterID:140000100,accountId:901,stationID:60003760,balance:25000000};
+ const ship={itemID:9988400100000,typeID:20185,ownerID:140000005,stationID:60003760,capacityM3:465000};
+ const result=evaluateCourierIdentity({character,ship},contract);
+ assert.equal(result.status,'REFUSED_SHIP_NOT_OWNED');
+ assert.equal(result.shipOwnerID,140000005);
 });

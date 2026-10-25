@@ -44,13 +44,21 @@ function preflight(ctx) {
   return missing.length ? { status: "NOT_READY", missing } : { status: "READY" };
 }
 
-function result(status, extra) {
-  return Object.assign({ status }, extra || {});
+function result(state, extra) {
+  // Extra fields must not clobber the state for the same reason as refusal().
+  return Object.assign({}, extra || {}, { status: state });
 }
 
 function undock(ctx, flight) {
   const ready = preflight(ctx);
   if (ready.status !== "READY") return result("NOT_READY", { missing: ready.missing });
+  if (Number(ctx.character && ctx.character.stationID) !== Number(flight.originStationID)) {
+    return result("REFUSED", {
+      reason: "courier is not docked at the contract origin",
+      characterStationID: Number(ctx.character && ctx.character.stationID) || 0,
+      originStationID: Number(flight.originStationID) || 0,
+    });
+  }
   const session = buildCourierSession(ctx.character, flight.originStationID);
   if (!session) return result("REFUSED", { reason: "courier character is not usable" });
   let outcome;

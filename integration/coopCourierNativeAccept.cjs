@@ -21,6 +21,7 @@ const { planSettlement } = require("./coopCourierDispatch.cjs");
 // FINISHED 4 (5 is CANCELLED - getting this wrong would cancel the contract).
 const FINISHED = 4;
 const OUTSTANDING = 0;
+const IN_PROGRESS = 1;
 
 function buildNpcSession(character) {
   if (!character || !(Number(character.characterID) > 0) || !(Number(character.accountId) > 0)) {
@@ -39,7 +40,9 @@ function buildNpcSession(character) {
 }
 
 function refusal(reason, extra) {
-  return Object.assign({ status: "REFUSED", reason }, extra || {});
+  // Extra fields must never be able to overwrite the status: passing
+  // {status: live.status} used to replace "REFUSED" with the contract status.
+  return Object.assign({}, extra || {}, { status: "REFUSED", reason });
 }
 
 // runtime: { acceptContract, completeContract, getContractRecord }
@@ -86,6 +89,9 @@ function complete({ contract, identity, packageLocationID, runtime }) {
   if (!session) return refusal("courier character is not a usable identity");
   const live = runtime.getContractRecord(contract.contractID);
   if (!live) return refusal("contract not found in the live runtime");
+  if (Number(live.status) !== IN_PROGRESS) {
+    return refusal("contract is not in progress", { status: live.status });
+  }
   if (Number(live.acceptorID) !== session.charid) {
     return refusal("this courier is not the acceptor", { acceptorID: live.acceptorID });
   }

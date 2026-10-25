@@ -290,6 +290,15 @@ function evaluateCourierIdentity(identity, contract) {
   if (!ship || !(Number(ship.itemID) > 0) || !(Number(ship.typeID) > 0)) {
     return status("REFUSED_NO_SHIP", { contractID });
   }
+  // The ship must belong to this courier: an item owned by somebody else is
+  // not a ship we may fly, even if it sits at the right station.
+  if (Number(ship.ownerID) !== Number(character.characterID)) {
+    return status("REFUSED_SHIP_NOT_OWNED", {
+      contractID,
+      shipOwnerID: Number(ship.ownerID) || 0,
+      characterID: Number(character.characterID),
+    });
+  }
   if (Number(ship.stationID) !== originStationID) {
     return status("REFUSED_SHIP_NOT_AT_ORIGIN", {
       contractID,

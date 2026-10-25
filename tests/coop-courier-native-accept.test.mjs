@@ -12,7 +12,7 @@ const contract={
 };
 const identity={
  character:{characterID:140000100,accountId:901,corporationID:98000001,stationID:60015260,balance:25000000},
- ship:{itemID:9988400100000,typeID:20185,stationID:60015260,capacityM3:465000},
+ ship:{itemID:9988400100000,typeID:20185,ownerID:140000100,stationID:60015260,capacityM3:465000},
 };
 
 function fakeRuntime(live={}){
@@ -75,15 +75,22 @@ test('complete refuses until the package is physically at the destination',()=>{
 });
 
 test('complete refuses when this courier is not the acceptor',()=>{
- const runtime=fakeRuntime({acceptorID:140000101});
+ const runtime=fakeRuntime({acceptorID:140000101,status:1});
  assert.equal(complete({contract,identity,packageLocationID:60015262,runtime}).status,'REFUSED');
  assert.equal(runtime.calls.length,0);
 });
 
 test('complete uses the native FINISHED status for the real acceptor',()=>{
- const runtime=fakeRuntime({acceptorID:140000100});
+ const runtime=fakeRuntime({acceptorID:140000100,status:1});
  const result=complete({contract,identity,packageLocationID:60015262,runtime});
  assert.equal(result.status,'COMPLETED');
  assert.deepEqual(runtime.calls[0].slice(0,3),['complete',980000000,4]);
  assert.notEqual(runtime.calls[0][2],5,'5 is CANCELLED, not FINISHED');
+});
+
+test('complete refuses a contract that is not in progress',()=>{
+ const runtime=fakeRuntime({acceptorID:140000100,status:0});
+ const result=complete({contract,identity,packageLocationID:60015262,runtime});
+ assert.equal(result.status,'REFUSED');
+ assert.equal(runtime.calls.length,0);
 });
