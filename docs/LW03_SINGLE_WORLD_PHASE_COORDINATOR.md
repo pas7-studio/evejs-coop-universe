@@ -29,10 +29,10 @@ call-sites in the same order and behind the same feature flags**.
 
 ## LW-03B: source-domain phase registry and telemetry
 
-The pure `coopLivingWorldPhaseRegistry.cjs` now defines the stable ordering
+The static groups describe execution domains, NOT safety permissions: the\n`faction` step advances virtual faction state and `native-market-schedule` can\ninitiate an original native market action. Counts are attempted dispatches only.\n\nThe pure `coopLivingWorldPhaseRegistry.cjs` now defines the stable ordering
 and names of the 27 current phase call-sites in 9 contiguous domains:
-opportunities, world-state, alife-perception, combat, salvage, movement,
-market-observation, activity and reconciliation. Dynamic physical system
+opportunities, world-state, alife-strategy, combat, salvage, movement,
+market, activity and reconciliation. Dynamic physical system
 reconciles are named `npc-reconcile:<systemID>` only for positive safe integers.
 
 The **same legacy callback bodies** still execute in their original sequence;
