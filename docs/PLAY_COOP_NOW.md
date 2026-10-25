@@ -362,3 +362,16 @@ Read-only diagnostics from the existing running world:
 If `nativeFleetWarpOrdersAccepted` increases but `nativeFleetWarpPhysicalArrivalsVerified` remains zero, investigate actual scene/wrap state, ship identity and destination rather than assuming a successful transfer. Even a verified physical arrival remains **server-side** evidence; visual behavior in both real EVE clients must be checked directly.
 
 The startup gate also checks the actual configured stock mining-fleet slots. If a fleet fails to materialize, the world continues bounded retries instead of mistakenly marking a partially initialized convoy as ready. This does not spawn fake miners, add arena enemies, or wipe persistent state.
+
+## Native convoy recovery: pirate victories matter, but the world keeps moving
+
+LivingCoop now opts into `EVEJS_COOP_CONVOY_RENEWAL=1`, using **the pinned EveJS real mining-fleet startup machinery** rather than spawning scripted enemies, replacement dummy ships, free ore or player items.
+
+- Your successful defense matters: as long as a genuine native startup convoy has at least one live mining/hauling ship, that convoy is **not replaced**. Damaged or reduced fleets persist until EveJS naturally resolves them.
+- If an **entire startup convoy slot** has been destroyed and removed from EveJS's authoritative fleet registry, the system first waits **30 minutes** before authorizing another native convoy attempt. Failed native spawns are retried no sooner than **10 minutes** later. At most **four renewal attempts per system per UTC day** are authorized in one running process.
+- The native EveJS startup function still owns the actual ship hulls, spawn selection, ore, hauling and combat. No player commands, artificial target or fake quest encounter are injected.
+- New native fleets are only attempted in scenes with a **real asteroid belt**, after native startup configuration permits that system. Jita remains beltless. The repeated check runs during the already existing bounded living-world reconcile, not every combat frame.
+- **Runtime limitation:** EveJS's stock mining fleets are transient. The cooldown/cap are process-memory controls, not a separate persistent economy ledger. A deliberate EveJS server restart resets transient fleets and their replacement counters; do not claim that the 30-minute delay survives a reboot. Restarting is not a replacement for testing real spawning and gameplay.
+- **Proof:** Native source transform is idempotent and exactly reversible. A source-level integration run against the **exact pinned EveJS `handleSceneCreated` function** verified one initial convoy, no duplicate when it remains alive, no immediate replacement after destruction, and a new native three-ship fleet only after the 30-minute cooldown. Regression tests `coop-native-convoy-renewal.test.mjs` and `coop-native-convoy-evejs-contract.test.mjs` are included in the manual local verifier; the latter reads the operator's pinned checkout and does not write to it.
+
+After an approved deployment, spend a session scouting **Perimeter (30000144)**, watch a real miner/hauler convoy operate, decide whether to escort it or hunt it, then return to the actual belt later to see whether the world has naturally sent a replacement. This is intentionally **not** an immediate endless NPC spawn farm.
