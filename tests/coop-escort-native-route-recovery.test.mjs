@@ -149,6 +149,12 @@ test("original source position and native ingress origin are indivisible",()=>{
  assert.equal(recover(f),"ESCORT_NATIVE_RECOVERY_PHYSICAL_WARP_MISMATCH");
  assert.equal(f.counters.sample,0);
 });
+test("malformed persisted source coordinates reject recovery without throwing from physics",()=>{
+ const f=fixture();f.departure.origin=null;
+ assert.equal(recover(f),"ESCORT_NATIVE_RECOVERY_PROVENANCE_MISMATCH");
+ assert.equal(f.counters.sample,0);
+ assert.equal(f.counters.warp,0);
+});
 test("real NPC warp target must be the same original native station",()=>{
  const f=fixture();f.ingress.targetPoint.x=99999;
  assert.equal(recover(f),"ESCORT_NATIVE_RECOVERY_PHYSICAL_WARP_MISMATCH");
