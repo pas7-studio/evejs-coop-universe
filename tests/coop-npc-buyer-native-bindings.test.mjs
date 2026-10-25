@@ -231,3 +231,14 @@ test("rejected A-Life material candidate emits no market seller event",()=>run(a
  await assert.rejects(f.tick(),/MATERIAL_SHORTAGE_STALE/);
  assert.equal(f.notifications.length,0);
 },{notify:true,stale:true}));
+
+
+test("fractional-cent NPC corporate wallet is not authorized for A-Life market claims",()=>run(async f=>{
+ await assert.rejects(f.tick(),/ALIFE_BUYER_NATIVE_CORPORATION_NOT_VERIFIED/);
+ assert.equal(f.claims,0);
+ assert.equal(f.tables.corporationRuntime[CKEY].wallet.divisions["1000"].balance,1000.004);
+},{buyerISK:1000.004}));
+test("valid decimal-cent NPC corporate wallet remains authorized for native purchase",()=>run(async f=>{
+ assert.equal((await f.tick()).status,"NPC_PLAYER_PURCHASE_SETTLED");
+ assert.equal(f.tables.corporationRuntime[CKEY].wallet.divisions["1000"].balance,975.05);
+},{buyerISK:1000.05}));
