@@ -62,7 +62,8 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
        previous.sellerID!==sellerID||previous.stationID!==request.stationID||
        previous.typeID!==request.typeID||previous.quantity!==quantity||
        previous.priceCents!==priceCents||previous.grossCents!==grossCents||
-       !nonneg(previous.taxCents)||
+       !nonneg(previous.taxCents)||previous.taxCents>grossCents||
+       !nonneg(previous.netCents)||
        previous.netCents!==grossCents-previous.taxCents||
        previous.taxPolicy!=="EVEJS_NATIVE_MARKET_RULES"||
        !pos(previous.itemID))
