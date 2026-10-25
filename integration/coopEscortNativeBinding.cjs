@@ -12,7 +12,7 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
  if(recordTerminal!==null&&typeof recordTerminal!=="function")
   throw Error("ESCORT_REPUTATION_SOURCE_INVALID");
  if(!runtime||typeof readNativeIncident!=="function"||
-  ["fundBeforeWarp","recordDelivery","finishAfterRaid","refundProvenLoss",
+  ["fundBeforeWarp","recordDelivery","finishAfterRaid","settlePeacefulFlight","refundProvenLoss",
    "readFlight","inspectRefundRecovery","refundWreckedFlight"].some(k=>typeof runtime[k]!=="function")||
   runtime.nativeFunds?.capabilities?.().nativeDurable!==true||
   runtime.nativeFunds?.capabilities?.().atomicDualCredit!==true)
@@ -36,6 +36,14 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
     return deny("NATIVE_TERMINAL_ROUTE_UNVERIFIED");
    try{return runtime.recordDelivery(args)}
    catch{return deny("NATIVE_TERMINAL_WRITE_UNCERTAIN_REPAIR_REQUIRED")}
+  },
+  settlePeacefulDelivery(manifestKey,scene){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+    return deny("NATIVE_MANIFEST_KEY_INVALID");
+   try{return runtime.settlePeacefulFlight(manifestKey,scene)}
+   catch{return deny("NATIVE_PEACEFUL_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
   },
   settleVerifiedNativeRaid(manifestKey){
    if(!enabled())return deny("DISABLED");
@@ -68,9 +76,12 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
    // Read existing real wallet terminal BEFORE any attempt to pay again.
    // This also lets reputation history recover after money COMMIT but before
    // its own fsync; history cannot itself create another wallet credit.
-   let paid;try{paid=runtime.nativeFunds.verifySettlement(contract)}
-   catch{return deny("NATIVE_TERMINAL_WALLET_UNAVAILABLE")}
+   let paid,refunded;try{
+    paid=runtime.nativeFunds.verifySettlement(contract);
+    refunded=runtime.nativeFunds.verifyRefund(contract);
+   }catch{return deny("NATIVE_SETTLEMENT_WALLET_PREFLIGHT_UNAVAILABLE")}
    if(paid?.status==="SETTLED"){
+    if(refunded?.status==="REFUNDED")return deny("NATIVE_SETTLEMENT_TERMINAL_MONEY_CONFLICT");
     if(paid.nativeDurable!==true||paid.contractID!==contract.contractID||
      paid.corporationID!==contract.corporationID||
      paid.amountISK!==contract.amountISK||
@@ -84,8 +95,9 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
     return {status:"ALREADY_NATIVE_SETTLED",contractID:contract.contractID,
      historyStatus:history?.status||"NATIVE_HISTORY_WRITE_UNAVAILABLE"};
    }
-   if(!["NOT_FOUND","NOT_SETTLED"].includes(paid?.status))
-    return deny("NATIVE_TERMINAL_WALLET_CONFLICT");
+   if(!["NOT_FOUND","NOT_SETTLED"].includes(paid?.status)||
+      !["NOT_FOUND","NOT_REFUNDED"].includes(refunded?.status))
+    return deny("NATIVE_SETTLEMENT_TERMINAL_MONEY_CONFLICT");
    let result;try{result=runtime.finishAfterRaid(contract)}
    catch{return deny("NATIVE_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
    if(result?.status==="SETTLED"&&recordTerminal){
@@ -94,6 +106,40 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
     return {...result,historyStatus:history?.status||"NATIVE_HISTORY_WRITE_UNAVAILABLE"};
    }
    return result;
+  },
+  // Recovery scans real FSYNCED flight journals, never a caller-supplied
+  // arbitrary contract or in-memory list. Each candidate independently
+  // verifies wallet + native combat + warehouse before any money mutation.
+  reconcilePendingDeliveries({systemID=null,maxTrips=32}={}){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY!=="1")
+    return deny("DISABLED");
+   if(systemID!==null&&!pos(systemID))
+    return deny("NATIVE_RECONCILE_SYSTEM_INVALID");
+   if(!Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>32)
+    return deny("NATIVE_RECONCILE_LIMIT_INVALID");
+   if(typeof runtime.listDeliveredFlights!=="function")
+    return deny("NATIVE_RECONCILE_FLIGHT_SOURCE_MISSING");
+   let flights;try{flights=runtime.listDeliveredFlights({systemID,maxTrips})}
+   catch{return deny("NATIVE_RECONCILE_FLIGHT_SCAN_UNAVAILABLE")}
+   if(flights?.status!=="READY"||!Array.isArray(flights.manifestKeys))
+    return deny(flights?.status||"NATIVE_RECONCILE_FLIGHT_SCAN_INVALID");
+   if(flights.manifestKeys.length>maxTrips)
+    return deny("NATIVE_RECONCILE_TOO_MANY_FLIGHTS");
+   let paid=0,pending=0,alreadyPaid=0,blocked=0;
+   const outcomes=[];
+   for(const key of flights.manifestKeys){
+    if(typeof key!=="string"||!/^\d+-\d+-\d+$/.test(key))
+     return deny("NATIVE_RECONCILE_INVALID_SOURCE_ID");
+    const result=this.settleVerifiedNativeRaid(key);
+    const status=result?.status||"NATIVE_SETTLEMENT_UNKNOWN";
+    outcomes.push({manifestKey:key,status});
+    if(status==="SETTLED")paid++;
+    else if(status==="ALREADY_NATIVE_SETTLED")alreadyPaid++;
+    else if(status==="NO_VERIFIED_NATIVE_RAID_TO_SETTLE")pending++;
+    else blocked++;
+   }
+   return {status:blocked?"NATIVE_RECONCILE_HAS_BLOCKERS":"NATIVE_RECONCILE_CHECKED",
+    paid,alreadyPaid,pending,blocked,outcomes};
   },
   refundNativeWreck:manifestKey=>{
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
@@ -139,9 +185,13 @@ const forwarding=Object.freeze({
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordDelivered:args=>enabled()?(installed?installed.recordDelivered(args):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ settlePeacefulDelivery:(key,scene)=>enabled()?(installed?installed.settlePeacefulDelivery(key,scene):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  refundNativeWreck:key=>enabled()?(installed?installed.refundNativeWreck(key):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ reconcilePendingDeliveries:options=>enabled()?(installed?installed.reconcilePendingDeliveries(options):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  readFlight:key=>enabled()?(installed?installed.readFlight(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED")
@@ -154,6 +204,12 @@ function installServerAuthority({runtime,readNativeIncident,recordTerminal=null}
  catch{return deny("ESCORT_NATIVE_BINDING_AUTHORITIES_REQUIRED")}
  return {status:"ESCORT_NATIVE_RUNTIME_BOUND"};
 }
+function reconcilePendingDeliveries(options){
+ if(!enabled()||process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY!=="1")
+  return deny("DISABLED");
+ return installed?installed.reconcilePendingDeliveries(options):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED");
+}
 function settlement(manifestKey){
  if(!enabled())return deny("DISABLED");
  return installed?installed.settleVerifiedNativeRaid(manifestKey):
@@ -162,4 +218,4 @@ function settlement(manifestKey){
 function inspect(){return {status:installed?"ESCORT_NATIVE_RUNTIME_BOUND":
  "ESCORT_NATIVE_RUNTIME_NOT_INSTALLED",enabled:enabled(),
  backend:installed?"IN_PROCESS_NATIVE_ONLY":null}}
-module.exports={makeBinding,routeGate,installServerAuthority,settlement,inspect};
+module.exports={makeBinding,routeGate,installServerAuthority,settlement,reconcilePendingDeliveries,inspect};

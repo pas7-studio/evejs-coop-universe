@@ -4,7 +4,7 @@
 const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm");
 const {execFileSync}=require("node:child_process");
 const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
-const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNativeDeliveryEvidence","coopAlifeNativeMiningWitness","coopAlifeNativeResupplyBridge","coopAlifeNews","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRescueNavigation","coopEscortRuntime","coopEscortTacticalGame","coopEscortVolunteers","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopNativeActivity","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateSettlement","coopNpcDestructionAttacker","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryOfflineDelivery","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMaterializer","coopNpcMemory","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopRuntimeProbe","coopSessionPresence","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
+const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNativeDeliveryEvidence","coopAlifeNativeMiningWitness","coopAlifeNativeResupplyBridge","coopAlifeNews","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRescueNavigation","coopEscortRuntime","coopEscortTacticalGame","coopEscortVolunteers","coopEscortWarpFence","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopNativeActivity","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateSettlement","coopNpcDestructionAttacker","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryOfflineDelivery","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMaterializer","coopNpcMemory","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopRuntimeProbe","coopSessionPresence","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
 // COOP-046: opt-in post-commit combat outcome witness for atomic ammo banks.
@@ -15,13 +15,25 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
+// COOP-048 native /jobs uses the existing authenticated Opportunity Board.
+names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
+// Stock in-game agent dialogue for jobs, no /jobs text needed.
+names.splice(names.indexOf("coopNpcJobBoard")+1,0,"coopNativeJobAgent");
+// Native opt-in EVEmail notification bridge for priced corporate offers.
+names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobNotifications");
+// Durable actor-agent source binding for ID-less native Accept button.
+names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelection");
+// Peaceful delivery uses the same native corporate escrow (feature OFF by default).
+names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 const specs=[
  {file:"server/src/services/mining/miningRuntime.js",patches:[]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
+   {anchor:'  "commands",',line:'  "jobs",',after:true},
    {anchor:'  "commandlist",',line:'  "alerts",',after:true},
-   {anchor:'  if (command === "motd") {',line:'  if (command === "events" || command === "alerts") { const result=require("../../space/coopWorldOpportunityBoard").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }'}
+   {anchor:'  if (command === "motd") {',line:'  if (command === "events" || command === "alerts") { const result=require("../../space/coopWorldOpportunityBoard").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }'},
+   {anchor:'  if (command === "motd") {',line:'  if (command === "jobs") { const result=require("../../space/coopNpcJobBoard").handleChat({session,argumentText}); return handledResult(chatHub,session,options,result.message); }'}
   ]},
  {"file":"server/src/space/modules/localCycleReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
@@ -134,6 +146,8 @@ const oldLines=[
  '  try { require("../coopNativeConsequences").noteNativeWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity, options, controller); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); }',
   "  \"events\",",
   "  \"alerts\",",
+  "  \"jobs\",",
+  "  if (command === \"jobs\") { const result=require(\"../../space/coopNpcJobBoard\").handleChat({session,argumentText}); return handledResult(chatHub,session,options,result.message); }",
   "  if (command === \"events\" || command === \"alerts\") { const result=require(\"../../space/coopWorldOpportunityBoard\").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }",
 ];
 // Spec-patch lines must be idempotent across installs: strip() drops them
@@ -327,8 +341,16 @@ function transform(source,spec,remove){
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("/space/combat/killmailTracker.js"))
   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
- if(spec.file==="server/src/services/agent/agentMgrService.js")
-  text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/services/agent/agentMgrService.js"){
+  // Remove job hooks first, then existing dialogue patch. Install in reverse.
+  if(remove){
+   text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
+   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
+  }else{
+   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
+  }
+ }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
   text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove);
  if(!remove)for(const patch of spec.patches){

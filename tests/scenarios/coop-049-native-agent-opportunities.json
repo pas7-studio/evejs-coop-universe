@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "feature": "COOP-049 Native Job Opportunities via Agent UI + EVEmail",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Pinned gameboys84/EveJS c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+    "Authorized real game client build 3396210",
+    "Operator-approved disposable clone of evejs-data",
+    "Two real accounts, active native ships, actual corporate agent in same solar system as live preparing NPC convoy",
+    "Existing paid Escort funding gates separately proved before enabling payouts",
+    "No remote GitHub Actions"
+  ],
+  "featureFlags": {
+    "discovery": [
+      "EVEJS_COOP_OPPORTUNITY_BOARD",
+      "EVEJS_COOP_OPPORTUNITY_MAIL",
+      "EVEJS_COOP_NATIVE_JOB_AGENT",
+      "EVEJS_COOP_NPC_JOBS"
+    ],
+    "finance": [
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT (DO NOT ENABLE UNTIL FULL FINANCE E2E)"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "JOB-UI-01",
+      "name": "Authentic live corporate offer appears",
+      "actions": [
+        "Observe real cargo/hauler/route/quote on native backend",
+        "Player opens Agents list and contacts real NPC agent of issuing corporation",
+        "Inspect EVE agent dialogue and briefing"
+      ],
+      "expected": "Agent describes same real convoy and quoted reward; never says already funded"
+    },
+    {
+      "id": "JOB-UI-02",
+      "name": "Native Accept buttons replace slash commands",
+      "actions": [
+        "Two pilots join stock native fleet and enter actual live system",
+        "Each opens agent conversation and presses native Accept",
+        "First may reconfirm after second opted in"
+      ],
+      "expected": "Original server-stored native two-pilot signed receipt; never grants immediate ISK"
+    },
+    {
+      "id": "JOB-UI-03",
+      "name": "Only genuine agents can offer",
+      "actions": [
+        "Contact real other-corporation agent",
+        "Contact a different-system agent",
+        "Contact agent with native mission already offered/active"
+      ],
+      "expected": "Unchanged normal missions, no cross-corporation fake offers"
+    },
+    {
+      "id": "JOB-UI-04",
+      "name": "No matching SDE station agent fallback",
+      "actions": [
+        "Prepare real convoy without matching real same-system corporate agent",
+        "Check local opted-in client's standard EVEmail"
+      ],
+      "expected": "In-game A-Life event mail remains available, clearly UNPAID; no false Agent ID"
+    },
+    {
+      "id": "JOB-UI-05",
+      "name": "Native quoted agent EVEmail",
+      "actions": [
+        "Opt in to local job notices",
+        "Generate real priced convoy from verified corporate native wallet",
+        "Open stock EVEmail and agent contact"
+      ],
+      "expected": "Accurate agent ID, system/station and actual nonreserved quote; no need to type /jobs"
+    },
+    {
+      "id": "JOB-UI-06",
+      "name": "Watch local/all/off and anti-spam",
+      "actions": [
+        "Opt out one character",
+        "Other watches local",
+        "Third distant watches all",
+        "Replay same quote and reboot"
+      ],
+      "expected": "Only eligible online recipients; at-most-one quote mail per character/source"
+    },
+    {
+      "id": "JOB-UI-07",
+      "name": "Lost EVEmail ACK",
+      "actions": [
+        "Inject lost native mail ACK on disposable test world",
+        "Replay quote",
+        "Restart server"
+      ],
+      "expected": "No duplicate sent mail; uncertain delivery requires operator review"
+    },
+    {
+      "id": "JOB-UI-08",
+      "name": "Native agent Accept without opening dialog",
+      "actions": [
+        "Try stale stock Accept after restart on the same bound agent"
+      ],
+      "expected": "Fail closed without randomly selecting a new convoy or stock mission"
+    },
+    {
+      "id": "JOB-UI-09",
+      "name": "Offer changed between View/Accept",
+      "actions": [
+        "Open agent's native quote",
+        "Deliver, expire or replace cargo before pressing Accept"
+      ],
+      "expected": "No silent selection switch, no ISK debit, explicit reopen or repair instruction"
+    },
+    {
+      "id": "JOB-UI-10",
+      "name": "Persistent actor-agent selection",
+      "actions": [
+        "Open offer as pilot A",
+        "Restart native service",
+        "Press Accept from old agent dialog",
+        "Try another character or another agent"
+      ],
+      "expected": "Exact originally selected source only; unique native character-agent binding survives restart"
+    },
+    {
+      "id": "JOB-UI-11",
+      "name": "Selection corrupt/rename crash",
+      "actions": [
+        "On disposable clone, corrupt selection JSON",
+        "Place an abandoned tmp file from simulated failed expired rotation",
+        "Attempt native Accept and reopen"
+      ],
+      "expected": "Fail closed / operator repair; no native wallet or mission writes"
+    },
+    {
+      "id": "JOB-UI-12",
+      "name": "Real convoy peacefully delivered",
+      "actions": [
+        "Both characters physically escort one true NPC hauler",
+        "Native cargo fully lands and is verified in station warehouse",
+        "Inspect corporate/player wallets before/after and after reconnect"
+      ],
+      "expected": "Existing escrow exactly-once payout, no pirate kill mandatory; this financial gate remains OFF until approved"
+    },
+    {
+      "id": "JOB-UI-13",
+      "name": "Reversible overlay and native protocol",
+      "actions": [
+        "Run patch --dry-run against exact pinned local checkout",
+        "Patch to disposable checkout, inspect AgentMgr / stock agent dialogue",
+        "Remove then compare hashes of original upstream files"
+      ],
+      "expected": "No drift, byte-exact removal, button Accept visible and functional inside actual EVE 24.01 client"
+    },
+    {
+      "id": "JOB-UI-14",
+      "name": "Legacy path unchanged",
+      "actions": [
+        "Run EVE native mission from different agent and direct /events legacy dev interface",
+        "Run normal mission acceptance/decline/completion",
+        "Run with all new job flags OFF"
+      ],
+      "expected": "No regression to native agent missions, original economy/legacy NPC events preserved"
+    },
+    {
+      "id": "JOB-UI-15",
+      "name": "UI player-language acceptance",
+      "actions": [
+        "Check in-game agent display and email in client's configured locale",
+        "Check long text, line breaks, actions, no missing localization keys"
+      ],
+      "expected": "Native UI actually renders; if client rejects custom strings fallback to truthful EVEmail and agent-native static dialogue only"
+    }
+  ]
+}

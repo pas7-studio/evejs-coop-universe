@@ -139,7 +139,13 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    }
    let receipt;try{receipt=sendNativeMail(characterID,{
     title:"New Eden: "+e.title,
-    body:e.summary+" | System "+e.systemID+" | /events info "+e.id+
+    body:process.env.EVEJS_COOP_NATIVE_JOB_AGENT==="1"?
+     e.summary+" | Native event in system "+e.systemID+
+     (e.stage==="PREPARING"?
+      " | An NPC convoy is preparing; this is NOT a paid offer. A separate "+
+      "in-game corporate agent EVEmail may follow only after a genuine native quote.":
+      " | Travel and respond using the actual EVE ship, overview and fleet controls."):
+     e.summary+" | System "+e.systemID+" | /events info "+e.id+
      " | /events interest "+e.id+
      (e.stage==="PREPARING"?" | /events volunteer "+e.id+" | /events info "+e.id+" (priced accept only after NPC quote)":"")+
      " | /events watch off",
@@ -471,6 +477,14 @@ function readNativeEvent(id){
  try{return instance().readEvent(id)}
  catch{return {status:"NATIVE_EVENT_SOURCE_UNAVAILABLE"}}
 }
+function listNativeEvents(filters){
+ try{return instance().list(filters)}
+ catch{return {status:"NATIVE_EVENT_SOURCE_UNAVAILABLE",events:[]}}
+}
+function readNativeWatch(characterID){
+ try{return instance().watch(characterID)}
+ catch{return {status:"NATIVE_WATCH_UNAVAILABLE"}}
+}
 function handleChat(x){return instance().handleChat(x)}
 function noteNativeRaid(scene,action){try{return instance().nativeRaid({scene,action})}
  catch{return {status:"OPPORTUNITY_RAID_UNAVAILABLE"}}}
@@ -488,5 +502,5 @@ function noteNativePreparingDeparted(scene,fleet,preparingEventID,trip){
  try{return instance().nativePreparingDeparted({scene,fleet,preparingEventID,trip})}
  catch{return {status:"PREPARING_DEPARTURE_WRITE_UNCERTAIN"}}
 }
-module.exports={createBoard,handleChat,readNativeEvent,noteNativeRaid,noteNativeConvoy,
+module.exports={createBoard,handleChat,readNativeEvent,listNativeEvents,readNativeWatch,noteNativeRaid,noteNativeConvoy,
  noteNativeConvoyPreparing,noteNativePreparingDeparted,noteNativeConvoyOutcome};

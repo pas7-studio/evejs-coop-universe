@@ -1,55 +1,73 @@
-# State — ALIFE stitch (economy loop), 2026-10-25 evening
+# State — ALIFE economy loop CLOSED, 2026-10-25 evening (session 2)
 
-## Deployed now (OVERLAY_OK, server healthy, 122 overlay modules current)
-- New `coopEconomyDestination.cjs`: fleets pick their own delivery station by **real expected ISK**
-  (`price × fillable volume` from live `GetOrders` of the system's own region). No station, ore type
-  or region is hardcoded. Pure ranking is tested (`tests/coop-economy-destination.test.mjs`, 12/12).
-- Wired into `coopNativeStationArrival.start()` behind `EVEJS_COOP_ECONOMY_DESTINATION=1`; emits
-  `living-economy-destination {status, stationID, chosenRevenue, filled, unfilled, top[]}`.
-- `observePreferredOre` + `living-economy-ore`: each ALIFE tick reports, per system, the ore a real
-  buyer actually pays for. **Live proof:** Perimeter/New Caldari → `17464 Scordite III-Grade`
-  @5203.7 ISK ×5000 at station **60014935** (New Caldari). The earlier "no buyer for 17464" is stale.
-- A stalled haul is no longer silent: `living-npc-station-route {fleetID,status,fleetState}` (2 min
-  throttle per fleet+status).
-- Patcher fix: spec-patch lines containing `coopMiningTrace` are pushed into `oldLines`, so installs
-  stay idempotent (`classifyFile` reports PATCHED instead of DRIFTED). **Still restore native files
-  from git before every install** — spec patches are single-shot (re-running without checkout
-  duplicates lines and corrupts `marketProxyService.js`).
+## Milestone: first real ore delivery by NPCs, no player involved
+`living-npc-station-delivered` at 19:40:10Z, fleet 1, **station 60014935, stacks 2,
+oreQuantity 30 597**, chosen by the resolver with `chosenRevenue 50 867 500 ISK`
+(filled 10 000 of 30 597). Chain proven end to end:
+mine (cargo on miners) → `living-hauler-loaded` → hold 45 s → resolver CHOSEN →
+**warp accepted** → physical arrival → warehouse deposit → fleet state `mining` again,
+miners refilled to 12 492 + 10 924 within 4 minutes. Loop repeats.
 
-## THE blocker, now measured (not guessed)
-`living-mining-fleet-state` (30 s) shows miners fitted and at the rock:
-- miner modules online with a real mining effect (typeID 17482 Strip Miner I, `miningEffects:1`)
-- belt full: 258 mineable entities, 66 670 425 units; active rock 45 233 remaining, 1.8–3.6 km away
-- **but** `lockedTargets: []`, `nativeCargoItems: 0`, `lastHauledVolumeM3: 0`, `state:"mining"`
+## Bugs found and FIXED this session (all pushed)
+1. `scripts/coop-native-station-arrival-patch.cjs` — the `loaded` branch fell through to
+   the native `haulereturn` transition immediately after `routeFromHaul`, so the state
+   machine never waited for the physical trip and `checkReturn` reported
+   `ROUTE_NOT_STARTED` forever (`haulereturn` with no trip never becomes terminal).
+   Now: stay `loaded` while the trip is in flight, resume mining only on
+   `DELIVERED`/`NO_CARGO`; `checkReturn` returns terminal `NO_ACTIVE_TRIP` for the
+   self-healing case.
+2. `integration/coopNativeStationArrival.cjs` — the director used
+   `space/runtime.warpToPoint(session, …)`, which a **sessionless durable hauler can
+   never satisfy**; every trip died with `WARP_COMMAND_FAILED`. Now uses
+   `npc/npcRuntime.warpToPoint(entityID, …)` (the one stock mining uses) and emits
+   `living-npc-station-warp-rejected {errorMsg, ackKeys}` instead of swallowing it.
+3. `scripts/coop-market-catalog-patch.cjs` — removing the hook on a **pristine**
+   `marketProxyService.js` threw, so after `git checkout` the installer refused to
+   install anything (`ANCHOR_MISMATCH`). Removal is now idempotent. This is why the
+   "always checkout first" advice sometimes bricked the install.
+4. Merge fallout: `coop-alife-order-authority.test.mjs` (stale `advanceNativeAmmoSupply()`
+   signature) and `coop-alife-native-resupply-wiring.test.mjs` (neighbour-pair assertion
+   conflicting with COOP-043's station-authority entries) — both updated to assert the
+   real module list / signatures.
+5. `integration/coopMiningTrace.cjs` wrote `at` (number) into the event, overwriting the
+   ISO timestamp of every `living-mining-blocker` row → now `atMs`.
+6. New diagnostics: `MINER_NOT_IN_SCENE_OR_WARPING` (showed miners were alive in `WARP`,
+   not missing) and per-module `active` / `activeTarget` in `living-mining-fleet-state`
+   (proved the modules really cycle).
 
-New trace `living-mining-blocker` (env `EVEJS_COOP_MINING_TRACE=1`) proves the native loop ticks in
-state `mining` with `activeAsteroidID: 0` and **never reaches any per-miner branch**
-(`NO_MINING_MODULE`, `NO_MINING_SNAPSHOT`, `TARGET_OUT_OF_RANGE`, `TARGET_LOCK_FAILED` all silent).
-Conclusion: in `tickMiningFleet` the loop
-`for (const minerEntityID of fleetRecord.minerEntityIDs) { const minerEntity = scene.getEntityByID(...); if (!minerEntity || ...) continue; }`
-skips **every** miner — the fleet record's `minerEntityIDs` are not resolvable in the scene the tick
-receives, while the same IDs resolve fine through `runtime.ensureScene()` in our observation.
+## Integrated from origin/main (27 commits, `4c315ba`)
+ALIFE-02 native resupply act (`coopAlifeNativeResupplyBridge`), COOP-043 station
+authority, COOP-044/045 industry + demand integrity, COOP-046 market policies,
+COOP-047 partial fills, COOP-048 player-market buyer, escort tactics. Note:
+`alifeOrderArbitrationEnabled()` now treats `EVEJS_COOP_ALIFE=1` as the master switch,
+so the live world runs with order arbitration on even though
+`EVEJS_COOP_NPC_ORDER_ARBITER` is unset. All the sub-features stay behind their own
+flags. The new resupply act is **OFF** here (`EVEJS_COOP_ALIFE_NATIVE_RESUPPLY_ACT`,
+`EVEJS_COOP_NPC_AMMO_SUPPLY`, `EVEJS_COOP_NPC_STRICT_AMMO` unset) — review note:
+`coopNpcAmmoSupply.tick(..., observeOnly)` sets its 180 s lease *before* the
+`observeOnly` return, so MONITOR_ONLY deliberately fences ammo-exhausted pirates out of
+patrols/raids; the only honest exit from that fence is the PLANNED intent from
+`coopAlifeEconomy`, so do not enable the act without the economy observer running.
 
-## Next step (single, concrete)
-Trace the skip itself: add `require("../../space/coopMiningTrace").note("MINER_NOT_IN_SCENE",
-{fleetID,systemID,minerID})` right after the `if (!minerEntity || ...) continue;` line in
-`tickMiningFleet`, then compare `scene.getEntityByID(minerEntityID)` against
-`spaceRuntime.ensureScene(systemID)`. Suspects, in order:
-1. fleet record restored with pre-restart entity IDs (durable restore/reuse path) while the scene holds
-   new ones → re-link or prune+respawn the fleet;
-2. the tick runs on a scene object whose `entities` map was rebuilt by materialization;
-3. `scene !== runtime.ensureScene(systemID)` (two scene instances).
-Fix must re-link native ships, never fabricate cargo or spawn substitute miners.
+## Next link of the loop: ore in the warehouse is not ISK yet
+`living-economy-destination` proves the money exists (`revenue 50 867 500`), but the
+delivered cargo is now warehouse stock, while `advanceNativeMarket()` only trades
+**native cargo on ships** (`listNativeCargoForEntity`) behind
+`EVEJS_COOP_NATIVE_NPC_MARKET=1` + `EVEJS_COOP_NPC_MARKET_SELL_TYPES`. Decide the
+settlement shape before enabling:
+- (a) sell the hauler's cargo at the station *before* the warehouse deposit, or
+- (b) teach the warehouse to hand stock to the native market trader and credit ISK.
+Prefer (b) if the depot already has a committed ledger, else (a) with a durable journal.
+Perimeter (30000144) still reports `HOLD_NO_BUYER` for its Veldspar — honest, not a bug.
 
-## Do not
-- Do not enable `EVEJS_COOP_NATIVE_NPC_MARKET=1` until a haul is actually paid (no cargo exists yet).
-- Do not hardcode station 60014935/60003724; they are only live examples.
-- Do not run the installer twice without `git checkout --` on `marketProxyService.js` and
-  `miningNpcOperations.js`.
+## Deploy loop (unchanged, but safer now)
+`git checkout -- marketProxyService.js miningNpcOperations.js` in
+`C:\Games\EveCoop\upstream-evejs` → `node scripts/patch-evejs-coop.cjs --code-path …` →
+`--check` = `OVERLAY_OK` (129 modules) → `docker build -t evejs-local .` →
+`docker compose -p evejs -f compose.yaml -f compose.coop-probe.yaml up -d`.
 
-## Commands
-- deploy: `node scripts/patch-evejs-coop.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code` →
-  `--check` = `OVERLAY_OK` → `docker build -t evejs-local .` → `docker compose -p evejs -f compose.yaml
-  -f compose.coop-probe.yaml up -d` (in `Code`).
-- telemetry: `/var/lib/evejs/coop-events.jsonl` in `evejs-server-1`; `docker cp` probe scripts to
-  `/tmp/ag` (dir is recreated with the container).
+## Watch
+- Mining still has a slow phase right after a restart (miners ~10 min to fill), but it
+  now recovers by itself after each delivery.
+- Pre-existing failures, unrelated: `coop-escort-station-predeparture-gate.test.mjs`
+  (2/7) and `coop-escort-flight-stage-c.test.mjs` (`ESCORT_PREPARING_SOURCE_UNAVAILABLE`).

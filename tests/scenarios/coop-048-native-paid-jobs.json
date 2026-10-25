@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "feature": "COOP-048-native-npc-job-market",
+  "status": "NOT_RUN",
+  "defaultOff": true,
+  "runner": "manual native EveJS pinned server + 2 real clients; disposable operator-approved volume snapshot",
+  "policies": [
+    "No GitHub Actions",
+    "Never reset evejs-data",
+    "Do not enable financial gates before operator-approved clone and local wallet backups",
+    "Real GameStore/better-sqlite3 worker and actual EVE client are mandatory for READY"
+  ],
+  "env": [
+    "EVEJS_COOP_OPPORTUNITY_BOARD",
+    "EVEJS_COOP_NPC_JOBS",
+    "EVEJS_COOP_ESCORT_CONTRACTS",
+    "EVEJS_COOP_ESCORT_ROUTE_GATE",
+    "EVEJS_COOP_NATIVE_ATOMIC_ROWS",
+    "EVEJS_COOP_NATIVE_ESCORT_WALLET",
+    "EVEJS_COOP_NATIVE_HAUL_MANIFEST",
+    "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT"
+  ],
+  "scenarios": [
+    {
+      "id": "JOB-01",
+      "title": "Native only board display",
+      "required": [
+        "real staged NPC hauler",
+        "corp and station matching native manifest",
+        "/jobs list in two clients",
+        "price label quotes only if authority installed"
+      ],
+      "expected": "only genuine current system event, no virtual reward"
+    },
+    {
+      "id": "JOB-02",
+      "title": "Real two-pilot priced accept",
+      "required": [
+        "2 authenticated real clients and ships same native EVE fleet",
+        "interest -> volunteer -> accept by both",
+        "immutable quote native issuer balance"
+      ],
+      "expected": "durable two-pilot signatures; no money at chat accept"
+    },
+    {
+      "id": "JOB-03",
+      "title": "Corporate escrow before first warp",
+      "required": [
+        "native corporate wallet before and after",
+        "exact immutable manifest IDs",
+        "GameStore SQLite escrow row",
+        "real native warp ACK"
+      ],
+      "expected": "corporate funds reserved once; no ship movement if reservation failed"
+    },
+    {
+      "id": "JOB-04",
+      "title": "Peaceful verified complete delivery pays",
+      "required": [
+        "zero native pirate incidents",
+        "real NPC hauler + all cargo delivered to station warehouse",
+        "native wallet receipts before and after",
+        "two clients relog"
+      ],
+      "expected": "one base fee split across two wallet rows, no pirate wreck prerequisite"
+    },
+    {
+      "id": "JOB-05",
+      "title": "Raid + peaceful base payout",
+      "required": [
+        "real pirate incident + pilot combat witness",
+        "hauler survives and delivers full manifest",
+        "no bonus escrow funded yet"
+      ],
+      "expected": "one base fee, no duplicate raid payout or free bonus"
+    },
+    {
+      "id": "JOB-06",
+      "title": "Damaged or lost cargo",
+      "required": [
+        "delete or destroy a disposable cargo stack BEFORE arrival",
+        "native missing warehouse proof"
+      ],
+      "expected": "no success wage, no completion state"
+    },
+    {
+      "id": "JOB-07",
+      "title": "Wrong station / ship / forged chat",
+      "required": [
+        "wrong station",
+        "different native hauler",
+        "nonmember client event ID",
+        "altered quote price and pilots"
+      ],
+      "expected": "blocked, no ISK writes"
+    },
+    {
+      "id": "JOB-08",
+      "title": "Simultaneous duplicate acceptance",
+      "required": [
+        "two client accept/reconnect race",
+        "same native convoy immutable source ID"
+      ],
+      "expected": "exactly one funded reservation; no double payout"
+    },
+    {
+      "id": "JOB-09",
+      "title": "Process crash around corporate debit",
+      "required": [
+        "disposable GameStore backup",
+        "inject failpoints before and after native corporate debit and fsync"
+      ],
+      "expected": "provably reserved once, unknown ACK quarantined"
+    },
+    {
+      "id": "JOB-10",
+      "title": "Process crash around peaceful payout",
+      "required": [
+        "failpoints before and after atomic two-character credit",
+        "restart worker and both clients",
+        "native wallet and escrow readback"
+      ],
+      "expected": "no duplicate player ISK, final settlement receipt matches"
+    },
+    {
+      "id": "JOB-11",
+      "title": "Refund vs settlement race",
+      "required": [
+        "durable native hauler wreck",
+        "no delivered cargo",
+        "concurrent native refund and payout attempts"
+      ],
+      "expected": "one terminal state, no double credit, no payout on destroyed cargo"
+    },
+    {
+      "id": "JOB-12",
+      "title": "Miner real rescue board (unpaid)",
+      "required": [
+        "real miner attacked in actual SDE belt",
+        "/jobs miner and /jobs info",
+        "real pirate NPC"
+      ],
+      "expected": "visible native rescue signal; conspicuously no quoted guard-shift payout"
+    },
+    {
+      "id": "JOB-13",
+      "title": "Guard shift wage not yet implemented",
+      "required": [
+        "actual SDE belt mining controller",
+        "ore growth and custody",
+        "real corporation ISK escrow"
+      ],
+      "expected": "BLOCKED: dedicated native miner-guard escrow, proof and payout worker not yet shipped"
+    },
+    {
+      "id": "JOB-14",
+      "title": "Solo paid escort not yet implemented",
+      "required": [
+        "single native character and fleet",
+        "funding and settlement identity"
+      ],
+      "expected": "BLOCKED: existing native escort wallet accepts exactly two beneficiaries"
+    },
+    {
+      "id": "JOB-15",
+      "title": "Mail, watch, offline and restart",
+      "required": [
+        "opt-in and opt-out client preferences",
+        "two real clients",
+        "reconnect and authoritative list"
+      ],
+      "expected": "no duplicate EVEmail; no fake jobs, funds, auto accept or private intel leak"
+    },
+    {
+      "id": "JOB-16",
+      "title": "Overlay and native worker acceptance",
+      "required": [
+        "pinned reversible installer --dry-run and --check",
+        "Node 22 tests against full repo",
+        "actual native GameStore/better-sqlite3",
+        "two-client Docker gameplay"
+      ],
+      "expected": "real evidence before flipping features ON"
+    }
+  ]
+}
