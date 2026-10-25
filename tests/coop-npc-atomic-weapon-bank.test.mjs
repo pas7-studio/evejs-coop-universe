@@ -19,8 +19,8 @@ function fixture(){
    ["modules"+SEP+"402"]:{moduleID:402,entityID:101,ownerID:900,typeID:123,categoryID:7,flagID:28}
   },
   npcCargo:{cargo:{
-   "501":{cargoID:501,entityID:101,moduleID:401,ownerID:900,typeID:35,categoryID:8,flagID:27,quantity:5},
-   "502":{cargoID:502,entityID:101,moduleID:402,ownerID:900,typeID:35,categoryID:8,flagID:28,quantity:5}
+   "501":{cargoID:501,entityID:101,moduleID:401,ownerID:900,typeID:35,categoryID:8,quantity:5},
+   "502":{cargoID:502,entityID:101,moduleID:402,ownerID:900,typeID:35,categoryID:8,quantity:5}
   }}
  };
  const entity={kind:"ship",nativeNpc:true,itemID:101,ownerID:900,
@@ -244,4 +244,33 @@ test("direct ammo debit is allowed only after authoritative missing-history proo
    database:{read(){throw Error("should not read");}}});
   assert.equal(misconfigured.status,"BANK_ATOMIC_DIRECT_DEBIT_FORBIDDEN");
  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test("pinned upstream loaded ammo cargo omits flagID but native moduleID is authoritative",()=>{
+ const f=fixture();try{
+  assert.equal(Object.hasOwn(f.state().npcCargo.cargo["501"],"flagID"),false);
+  assert.equal(Object.hasOwn(f.state().npcCargo.cargo["502"],"flagID"),false);
+  const r=fire(f);
+  assert.equal(r.success,true);
+  assert.equal(f.state().npcCargo.cargo["501"].quantity,4);
+  assert.equal(f.state().npcCargo.cargo["502"].quantity,4);
+ }finally{f.cleanup();}
+});
+test("native loaded-charge record with generic cargo flag 5 is supported",()=>{
+ const f=fixture();try{
+  f.state().npcCargo.cargo["501"].flagID=5;
+  f.state().npcCargo.cargo["502"].flagID=5;
+  assert.equal(fire(f).success,true);
+  assert.equal(f.state().npcCargo.cargo["501"].quantity,4);
+ }finally{f.cleanup();}
+});
+test("unexpected persisted ammo cargo flag is rejected for the whole bank without debit",()=>{
+ const f=fixture();try{
+  f.state().npcCargo.cargo["502"].flagID=777;
+  const r=fire(f);
+  assert.equal(r.success,false);
+  assert.equal(f.state().npcCargo.cargo["501"].quantity,5);
+  assert.equal(f.state().npcCargo.cargo["502"].quantity,5);
+  assert.equal(f.state().npcCargo.coopAmmoCycles_101,undefined);
+ }finally{f.cleanup();}
 });
