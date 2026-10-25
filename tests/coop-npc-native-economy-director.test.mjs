@@ -89,6 +89,19 @@ test("PAUSED native industry work counts toward supply instead of a second paid 
  assert.equal(d.tick(ctx).status,"SUFFICIENT_NATIVE_STOCK");
  assert.equal(f.installs,0);
 }));
+test("EveJS status 100 COMPLETED without physical output proof requires reconciliation",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:100,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.throws(()=>d.tick(ctx),/NATIVE_COMPLETED_JOB_RECONCILIATION_REQUIRED/);
+ assert.equal(f.installs,0);
+}));
+test("EveJS historical DELIVERED 101 or CANCELLED 102 cannot fabricate WIP stock",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:101,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.equal(d.tick(ctx).status,"PREPARED");
+}));
 test("native already-delivered job status 4 never permanently blocks replenishment",()=>run(f=>{
  const d=f.create(),old=f.observe.snapshot;
  f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:4,activityID:1,
