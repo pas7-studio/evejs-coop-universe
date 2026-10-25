@@ -895,6 +895,18 @@ function observeSession(session,ship){
         pendingTransit:result.filter(x=>x.pendingTransit).length
        });
       ensureCivilianOrders(runtime,npc);
+      // Optional voice for NPCs that are already physical in this scene. The
+      // module refuses to speak about a ship it cannot see, and throttles both
+      // per pilot and per system so Local never becomes spam.
+      if(process.env.EVEJS_COOP_NPC_CHATTER==="1"){try{
+        const chatter=runtime.__coopNpcChatter||(runtime.__coopNpcChatter=require("./coopNpcChatter")
+         .createChatter({send:(target,text)=>require("../services/chat/chatHub").sendSystemMessage(target,text),
+          observe:event=>require("./coopRuntimeProbe").observe("living-npc-chatter",null,null,event)}));
+        const spoke=chatter.speak({systemID,residents,
+         scene,sessions:require("../services/chat/sessionRegistry").getSessions()});
+        if(spoke.sent)require("./coopRuntimeProbe").observe("living-npc-chatter-delivered",null,null,
+         {spaceState:{systemID},...spoke});
+      }catch(error){console.warn("[CoopNpcChatter]",error.message);}}
       const pilotsByID=new Map(residents.map(p=>[p.id,p]));
       const presented=[];
       for(const link of result){
