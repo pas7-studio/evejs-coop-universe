@@ -48,13 +48,15 @@ function createOperations(options={}){
    !Number.isSafeInteger(maxIncidents)||maxIncidents<1||maxIncidents>1024||
    !Number.isSafeInteger(ttlMs)||ttlMs<60000||ttlMs>3600000)
   throw Error("INVALID_COOP_FLEET_OPERATIONS_CONFIG");
- const incidents=new Map(),roleIntents=new Map();
+ const incidents=new Map(),roleIntents=new Map(),resolved=new Map();
  const now=()=>{const n=Number(clock());return Number.isFinite(n)&&n>=0?n:0;};
  const key=(systemID,pirateID,targetID)=>[systemID,pirateID,targetID].join(":");
  function prune(at){
   for(const [k,inc] of incidents)if(inc.expiresAt<=at)incidents.delete(k);
   for(const [k,row] of roleIntents)if(row.expiresAt<=at||!incidents.has(row.incidentKey))
    roleIntents.delete(k);
+  for(const [k,row] of resolved)if(row.expiresAt<=at)resolved.delete(k);
+  while(resolved.size>maxIncidents)resolved.delete(resolved.keys().next().value);
   while(incidents.size>maxIncidents){
    const first=incidents.keys().next().value;incidents.delete(first);
   }
@@ -104,6 +106,30 @@ function createOperations(options={}){
   }
   prune(at);
   return {status:accepted?"RECORDED_NATIVE_ACTION":"NO_ELIGIBLE_NATIVE_ACTION",accepted};
+ }
+ function recordNativeWreck({systemID,npcID,wreckID}={}){
+  const system=id(systemID),victim=id(npcID),wreck=id(wreckID),at=now();
+  if(!system||!victim||!wreck)return {status:"INVALID_NATIVE_WRECK",resolved:0};
+  const row=getWreck(wreck);
+  // Wreck identity comes from the actual native sourceEntityID, NEVER
+  // the last ship targeted, a log message or a guessed killer.
+  if(!row||id(row.wreckID)!==wreck||id(row.systemID)!==system||
+   id(row.sourceEntityID)!==victim)
+   return {status:"NATIVE_WRECK_IDENTITY_MISMATCH",resolved:0};
+  prune(at);
+  let count=0;
+  for(const [k,inc] of incidents){
+   if(inc.systemID!==system||
+     (inc.pirateID!==victim&&inc.targetID!==victim))continue;
+   const outcome=inc.pirateID===victim?"PIRATE_DESTROYED":"CONVOY_SHIP_LOST";
+   resolved.set(k,{...inc,phase:outcome,wreckID:wreck,
+    resolvedAt:at,expiresAt:at+ttlMs});
+   incidents.delete(k);
+   count++;
+  }
+  prune(at);
+  return {status:count?"REAL_WRECK_RESOLVED_OPERATION":"NO_MATCHING_ACTIVE_OPERATION",
+   resolved:count};
  }
  function liveIncident(scene,incident){
   if(id(scene?.systemID||scene?.solarSystemID)!==incident.systemID)return null;
@@ -180,8 +206,16 @@ function createOperations(options={}){
      ". Two authenticated ships in one native fleet/system are required."};
    const ongoing=incidentsForScene(scene);
    if(command==="status"){
-    if(!ongoing.length)return {status:"NO_NATIVE_RAID",message:
-     "[Co-op] Fleet "+ctx.crewmates.length+"/2 ready. No verified native convoy raid here. Use /coopops convoy to inspect real mining cargo."};
+    if(!ongoing.length){
+     const recent=[...resolved.values()].filter(x=>x.systemID===ctx.systemID)
+      .sort((a,b)=>b.resolvedAt-a.resolvedAt)[0];
+     if(recent)return {status:"REAL_WRECK_OPERATION_RESOLVED",
+      message:"[Co-op] Confirmed native wreck #"+recent.wreckID+
+       ": "+recent.phase+" near convoy #"+recent.targetID+
+       ". Use native EVE salvage/loot if you can access the actual wreck."};
+     return {status:"NO_NATIVE_RAID",message:
+      "[Co-op] Fleet "+ctx.crewmates.length+"/2 ready. No verified native convoy raid here. Use /coopops convoy to inspect real mining cargo."};
+    }
     const lines=ongoing.slice(0,3).map(x=>
      x.phase+" pirate #"+x.pirateID+" → "+x.targetRole+" #"+x.targetID+
      " (real ore "+x.ore+", "+Math.round(distance(x.pirate.position,x.target.position)/1000)+" km)");
@@ -227,6 +261,7 @@ function createOperations(options={}){
      "[Co-op] No real convoy attack to organize here."};
     const role=tokens[1],roleKey=chosen.key+":"+ctx.characterID;
     roleIntents.set(roleKey,{role,characterID:ctx.characterID,
+     fleetID:id(ctx.fleet.fleetID),shipID:id(session._space.shipID),
      incidentKey:chosen.key,expiresAt:now()+ttlMs});
     prune(now());
     const others=ctx.crewmates.filter(x=>x.characterID!==ctx.characterID);
@@ -236,7 +271,8 @@ function createOperations(options={}){
       ". Coordinate a different role; the game still requires real ship actions.",chatHub);}catch(_){}
     }
     const assigned=[...roleIntents.values()].filter(x=>x.incidentKey===chosen.key&&
-     ctx.crewmates.some(m=>m.characterID===x.characterID));
+     x.fleetID===id(ctx.fleet.fleetID)&&
+     ctx.crewmates.some(m=>m.characterID===x.characterID&&m.shipID===x.shipID));
     const unique=new Set(assigned.map(x=>x.characterID));
     return {status:unique.size>=2&&new Set(assigned.map(x=>x.role)).size>=2
       ?"COMPLEMENTARY_ROLES_DECLARED":"ROLE_DECLARED",
@@ -254,9 +290,10 @@ function createOperations(options={}){
  function snapshot(){
   prune(now());
   return {incidents:[...incidents.values()].map(x=>({...x})),
-   roles:[...roleIntents.values()].map(x=>({...x}))};
+   roles:[...roleIntents.values()].map(x=>({...x})),
+   resolved:[...resolved.values()].map(x=>({...x}))};
  }
- return {recordNativeRaid,execute,incidentsForScene,snapshot};
+ return {recordNativeRaid,recordNativeWreck,execute,incidentsForScene,snapshot};
 }
 let singleton=null;
 function instance(){
@@ -264,5 +301,6 @@ function instance(){
  return singleton;
 }
 function recordNativeRaid(args){return instance().recordNativeRaid(args);}
+function recordNativeWreck(args){return instance().recordNativeWreck(args);}
 function execute(session,argumentText,chatHub){return instance().execute(session,argumentText,chatHub);}
-module.exports={createOperations,recordNativeRaid,execute,oreAmount};
+module.exports={createOperations,recordNativeRaid,recordNativeWreck,execute,oreAmount};
