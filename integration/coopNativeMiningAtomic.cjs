@@ -88,7 +88,7 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     // second ID source. The reserved counter is flushed by the GameStore atomic
     // adapter before the two-table transaction. Unused gaps are harmless.
     let reservedID=0;
-    if (!local) {
+    if (!local && quantity>0) {
       try {
         const issued=nativeStore.allocateCargoID({transient:false});
         if (!issued?.success || !positive(issued.data))
@@ -104,10 +104,12 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
         if (prior) {
           if (prior.fingerprint!==fingerprint || prior.status!=="COMMITTED")
             throw Error("ALIFE07_OPERATION_REPLAY_CONFLICT");
-          const priorCargo=tx.get("npcCargo","cargo");
-          if (!priorCargo || !priorCargo[String(prior.cargoID)] ||
-              Number(priorCargo[String(prior.cargoID)].quantity)!==Number(prior.nextCargo))
-            throw Error("ALIFE07_REPLAY_CARGO_MOVED_OR_DIVERGED");
+          if (Number(prior.quantity)>0) {
+            const priorCargo=tx.get("npcCargo","cargo");
+            if (!priorCargo || !priorCargo[String(prior.cargoID)] ||
+                Number(priorCargo[String(prior.cargoID)].quantity)!==Number(prior.nextCargo))
+              throw Error("ALIFE07_REPLAY_CARGO_MOVED_OR_DIVERGED");
+          }
           return {...prior,replayed:true};
         }
         if (Number(snapshot.remainingQuantity)!==before)
@@ -144,10 +146,11 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
             Number(original.quantity)!==Number(local.quantity) ||
             original.transient===true))
           throw Error("ALIFE07_CARGO_OWNER_OR_QUANTITY_CONFLICT");
-        const targetCargoID=original?cargoID:reservedID;
-        if (!positive(targetCargoID) || (!original && cargoRoot[String(targetCargoID)]))
+        const targetCargoID=quantity>0?(original?cargoID:reservedID):0;
+        if (quantity>0 && (!positive(targetCargoID) ||
+            (!original && cargoRoot[String(targetCargoID)])))
           throw Error("ALIFE07_CARGO_ID_COLLISION");
-        const nextCargo=(original?Number(original.quantity):0)+quantity;
+        const nextCargo=quantity>0?(original?Number(original.quantity):0)+quantity:0;
         if (!integer(nextCargo) || nextCargo>MAX_QTY)
           throw Error("ALIFE07_CARGO_OVERFLOW");
         const now=Number(cycleBoundaryMs);
@@ -166,7 +169,8 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
           quantity,normal,wasted,cycleBoundaryMs:now};
         tx.put("miningRuntimeState",rockKey,{
           ...(systemRow||{}),entities:{...(systemRow?.entities||{}),[String(rockID)]:nextRock}});
-        tx.put("npcCargo","cargo",{...cargoRoot,[String(targetCargoID)]:nextCargoRow});
+        if (quantity>0)
+          tx.put("npcCargo","cargo",{...cargoRoot,[String(targetCargoID)]:nextCargoRow});
         tx.put("miningRuntimeState",opKey,prepared);
         return prepared;
       });
@@ -179,12 +183,14 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     try {
       const source=gameStore.read("miningRuntimeState",
         "/systems/"+systemID+"/entities/"+rockID);
-      const cargo=nativeStore.listNativeCargoForEntity(shipID)
-        .filter(c=>Number(c?.cargoID)===Number(receipt.cargoID));
+      const cargo=receipt.quantity>0?nativeStore.listNativeCargoForEntity(shipID)
+        .filter(c=>Number(c?.cargoID)===Number(receipt.cargoID)):[];
+      const cargoValid=receipt.quantity===0 || (cargo.length===1 &&
+        Number(cargo[0].ownerID)===ownerID &&
+        Number(cargo[0].typeID)===oreTypeID &&
+        Number(cargo[0].quantity)===receipt.nextCargo);
       if (!source?.success || Number(source.data?.remainingQuantity)!==receipt.afterRock ||
-          Number(source.data?.yieldTypeID)!==oreTypeID || cargo.length!==1 ||
-          Number(cargo[0].ownerID)!==ownerID || Number(cargo[0].typeID)!==oreTypeID ||
-          Number(cargo[0].quantity)!==receipt.nextCargo)
+          Number(source.data?.yieldTypeID)!==oreTypeID || !cargoValid)
         return blocked(entity,"ALIFE07_POSTCOMMIT_SOURCE_READBACK_UNKNOWN");
 
       const currentScene=readState();
@@ -198,6 +204,7 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
       }
       if (!deltaResult?.success)
         return blocked(entity,"ALIFE07_POSTCOMMIT_SCENE_FAILED");
+      if (receipt.quantity===0) return {success:true,deltaResult,receipt};
       const updated=(Array.isArray(entity.nativeCargoItems)?entity.nativeCargoItems:[])
         .filter(c=>Number(c?.typeID)===oreTypeID && Number(c?.moduleID||0)===0);
       if (updated.length>1) return blocked(entity,"ALIFE07_POSTCOMMIT_DUPLICATE_LOCAL");
