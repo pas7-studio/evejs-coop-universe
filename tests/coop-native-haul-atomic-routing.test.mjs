@@ -44,6 +44,7 @@ function fixture(t,mode="COMMITTED"){
    return{status:"COMMITTED",quantity:13,volumeM3:1.3,cargoID:ore.cargoID};
  }};
  const opts={store,probe,atomicMover,depot:{},
+  database:{setTransientPath:()=>{},flushTableSync:()=>({success:true})},
   resolveItemByTypeID:id=>id===34?
     {typeID:34,categoryID:25,volume:0.1}:
     id===17480?{typeID:17480,capacity:1000}:null};
