@@ -45,7 +45,14 @@ function broadcast(scene, entity) {
 // can be landed without inventing movement.
 function release(entity, scene, now = Date.now()) {
   if (!entity || entity.mode !== "WARP" || entity.pendingWarp) return null;
-  const state = entity.warpState;
+  // A sessionless warp keeps its clock on `sessionlessWarpIngress`; the engine
+  // lands it on its own tick, but a scene that stops ticking leaves the ship in
+  // WARP forever and the mining loop skips it every second. The elapsed clock is
+  // the same evidence, so completing it here is not invented movement.
+  const ingress = entity.sessionlessWarpIngress && typeof entity.sessionlessWarpIngress === "object"
+    ? entity.sessionlessWarpIngress
+    : null;
+  const state = entity.warpState || ingress;
   if (!state) return null;
   const completeAt = Number(state.completeAtMs ?? state.travelCompleteAtMs);
   if (!Number.isFinite(completeAt) || now < completeAt) return null;
@@ -53,8 +60,9 @@ function release(entity, scene, now = Date.now()) {
   if (!landing) return null;
   stopAt(entity, landing);
   broadcast(scene, entity);
-  note(scene, entity, "WARP_COMPLETED", now);
-  return "WARP_COMPLETED";
+  const reason = ingress ? "WARP_INGRESS_COMPLETED" : "WARP_COMPLETED";
+  note(scene, entity, reason, now);
+  return reason;
 }
 
 module.exports = { release };
