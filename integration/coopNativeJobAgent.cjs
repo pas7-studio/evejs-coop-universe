@@ -41,7 +41,7 @@ function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
  function offers(agent){
   const now=clock();if(!Number.isSafeInteger(now)||now<=0)return [];
   let listing;
-  try{listing=listEvents({all:true,limit:20})}catch{return []}
+  try{listing=listEvents({all:false,systemID:agent.solarSystemID,limit:20})}catch{return []}
   if(listing?.status!=="READY"||!Array.isArray(listing.events)||
    listing.events.length>20)return [];
   const jobs=[];
