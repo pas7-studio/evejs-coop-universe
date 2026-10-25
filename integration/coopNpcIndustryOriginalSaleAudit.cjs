@@ -93,6 +93,14 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
    const receipts=read[0],beforeOrder=read[1];
    if(!Array.isArray(receipts)||receipts.length>maxFills)
     throw Error("LW04C3B_GAMESTORE_RECEIPTS_UNAVAILABLE_OR_OVER_BUDGET");
+   // Native receipt scans have no guaranteed row iteration order. Restore
+   // original decreasing remainingBefore order without editing the source
+   // array; subsequent contiguous conservation checks still reject gaps,
+   // duplicate fills and mixed whole/partial provenance.
+   const chronological=receipts.slice().sort((a,b)=>
+    (b?.remainingBefore??entry.quantity)-(a?.remainingBefore??entry.quantity)||
+    (a?.committedAt??0)-(b?.committedAt??0)||
+    (a?.fillID??0)-(b?.fillID??0));
    if(!beforeOrder||beforeOrder.operation_id!==operationID||
       num(beforeOrder.order_id)!==orderID||
       num(beforeOrder.owner_id)!==ownerID||
@@ -106,7 +114,7 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
     throw Error("LW04C3B_RUST_ORDER_SOURCE_CHANGED");
    const seenFill=new Set(),seenClaim=new Set(),reviewed=[];
    let remaining=entry.quantity,gross=0;
-   for(const row of receipts){
+   for(const row of chronological){
     const f=verifyReceipt(row,entry,orderID);
     if(seenFill.has(f.fillID)||f.claimKey&&seenClaim.has(f.claimKey))
      throw Error("LW04C3B_DUPLICATE_NATIVE_FILL");
