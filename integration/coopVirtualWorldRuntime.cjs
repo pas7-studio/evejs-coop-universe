@@ -230,7 +230,9 @@ function start(){
       require("./coopRuntimeProbe").observe("alife-native-salvage-market",
        null,null,{status:result.status,wreckItemID:result.wreckItemID,
         resultStatus:result.result?.status,priceCents:result.priceCents||null,
-        nativeRustAndGameStore:true,virtualISK:false});
+        nativeEscrowVerified:result.result?.nativeEscrowVerified===true,
+        corporationWalletCredited:result.result?.walletCredited===true,
+        virtualISK:false});
     }).catch(error=>console.warn("[CoopSalvageMarket] tick",error.message));
    });
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
