@@ -15,6 +15,16 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
   throw Error("NPC_REFINERY_DEPENDENCIES_REQUIRED");
  const busy=new Set();
  function filepath(id){return path.join(directory,id+".json");}
+ function acquire(id){
+  fsApi.mkdirSync(directory,{recursive:true});
+  return fsApi.openSync(filepath(id)+".lock","wx",0o600);
+ }
+ function release(id,fd){
+  if(fd===null||fd===undefined)return;
+  try{fsApi.closeSync(fd)}catch(_error){}
+  // If lock removal fails, leave it as a visible fail-closed blocker.
+  try{fsApi.unlinkSync(filepath(id)+".lock")}catch(_error){}
+ }
  function store(id,row){
   fsApi.mkdirSync(directory,{recursive:true});
   const dest=filepath(id),tmp=dest+`.tmp-${process.pid}-${Math.random().toString(16).slice(2)}`;
@@ -125,7 +135,9 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
   const id=plan.operationID;
   if(busy.has(id))return {status:"IN_PROGRESS",operationID:id};
   busy.add(id);
+  let guard;
   try{
+   try{guard=acquire(id)}catch(_error){return {status:"REFINERY_LOCKED_NEEDS_REVIEW",operationID:id}}
    const previous=load(id);
    if(previous){
     if(previous.phase===phases.COMMITTED)
@@ -143,14 +155,16 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
    return {status:"COMMITTED",operationID:id,outputs:safe(row.outputs),
      consumed:row.consumeQuantity,leftOvers:row.leftOvers};
   }catch(e){return {status:"NEEDS_OPERATOR_REPAIR",operationID:id,reason:String(e.message)}}
-  finally{busy.delete(id)}
+  finally{release(id,guard);busy.delete(id)}
  }
  function reconcile(oreItemID,originalQuantity,{authorize=false}={}){
   if(authorize!==true)return {status:"REPAIR_AUTHORIZATION_REQUIRED"};
   const item=positive(oreItemID),qty=positive(originalQuantity);
   if(!item||!qty)return {status:"INVALID_REQUEST"};
   const id=keyFor(item,qty);if(busy.has(id))return {status:"IN_PROGRESS"};busy.add(id);
+  let guard;
   try{
+   try{guard=acquire(id)}catch(_error){return {status:"REFINERY_LOCKED_NEEDS_REVIEW",operationID:id}}
    const row=load(id);if(!row)return {status:"RECEIPT_NOT_FOUND"};
    if(verifyCommitted(row)){
     if(row.phase!==phases.COMMITTED)store(id,{...row,phase:phases.COMMITTED,completedAt:clock()});
@@ -158,7 +172,7 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
    }
    return {status:"PENDING_OPERATOR_RECONCILIATION",operationID:id,phase:row.phase};
   }catch(e){return {status:"NEEDS_OPERATOR_REPAIR",reason:String(e.message),operationID:id}}
-  finally{busy.delete(id)}
+  finally{release(id,guard);busy.delete(id)}
  }
  return {preview:validate,refine,reconcile};
 }
