@@ -17,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null,deliveryEvidence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -211,6 +211,74 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   entity.targetPoint={...ingress.targetPoint};
   return {status:"ESCORT_ORIGINAL_NATIVE_INGRESS_RESTORED",
    manifestKey:b.manifestKey,haulerID:id};
+ }
+ // Rebuild ONLY the in-memory terminal delivery pointer after native
+ // materialization restored the same original WARP. Never create a warp or
+ // a new manifest; the original immutable ingress and native wallet must be
+ // verified independently, not inferred from a fleet's runtime flags.
+ function resumeNativeDelivery(scene,fleet,now){
+  if(!strictMotion()||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+   typeof nativeIngressSnapshot?.readDurable!=="function")
+   return pause("ESCORT_DELIVERY_RESUME_DISABLED");
+  if(fleet?.coopStationArrival||fleet?.coopEscortWarpOutcomeUncertain)
+   return pause("ESCORT_DELIVERY_RESUME_EXISTING_OR_UNCERTAIN_TRIP");
+  const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID),
+   ids=fleet?.haulerEntityIDs;
+  if(!systemID||!fleetID||pos(fleet?.systemID)!==systemID||
+   !Array.isArray(ids)||ids.length!==1||!pos(ids[0]))
+   return pause("ESCORT_DELIVERY_RESUME_FLEET_NOT_ORIGINAL");
+  const id=pos(ids[0]),ship=findShip(scene,id,systemID);
+  if(!ship||!ship.sessionlessWarpIngress||ship.mode!=="WARP"||
+   !vector(ship.position)||!Number.isSafeInteger(now))
+   return pause("ESCORT_DELIVERY_RESUME_NO_ACTIVE_PHYSICAL_WARP");
+  const proof=recoverNativeMotion(ship,now);
+  if(proof.status!=="ESCORT_NATIVE_RECOVERY_VERIFIED")
+   return pause("ESCORT_DELIVERY_RESUME_"+proof.status);
+  const b=proof.booking;
+  if(!b||b.fleetID!==fleetID||b.systemID!==systemID||
+   b.haulerID!==id||b.manifestKey!==proof.manifestKey||
+   b.stationID!==proof.stationID||b.corporationID!==proof.corporationID)
+   return pause("ESCORT_DELIVERY_RESUME_ORIGINAL_BOOKING_MISMATCH");
+  let cargo;try{cargo=store.listNativeCargoForEntity(id)}
+  catch{return pause("ESCORT_DELIVERY_RESUME_CARGO_UNAVAILABLE")}
+  if(!Array.isArray(cargo)||!cargo.length||
+   cargo.some(c=>c.entityID!==id||c.transient===true||
+    !pos(c.cargoID)||!pos(c.quantity)||pos(c.coopHaulFleetID)!==fleetID||
+    Number(c.moduleID||0)!==0))
+   return pause("ESCORT_DELIVERY_RESUME_CARGO_MISMATCH");
+  const cargoIDs=cargo.map(c=>pos(c.cargoID)).sort((a,b)=>a-b);
+  if(cargoIDs.length>1000||new Set(cargoIDs).size!==cargoIDs.length)
+   return pause("ESCORT_DELIVERY_RESUME_CARGO_AMBIGUOUS");
+  let snapshot;try{snapshot=nativeIngressSnapshot.readDurable({
+   manifestKey:b.manifestKey,contractID:b.contractID,systemID,fleetID,
+   haulerID:id,stationID:b.stationID,corporationID:b.corporationID,
+   cargoIDs})}
+  catch{return pause("ESCORT_DELIVERY_RESUME_SNAPSHOT_UNAVAILABLE")}
+  if(snapshot?.status!=="VERIFIED_NATIVE_INGRESS_SNAPSHOT")
+   return pause("ESCORT_DELIVERY_RESUME_ORIGINAL_SNAPSHOT_NOT_DURABLE");
+  const row=snapshot.row,ingress=ship.sessionlessWarpIngress;
+  if(!row||row.manifestKey!==b.manifestKey||
+   row.startTimeMs!==ingress.startTimeMs||
+   row.travelCompleteAtMs!==ingress.travelCompleteAtMs||
+   row.completeAtMs!==ingress.completeAtMs||
+   !vector(ingress.origin)||!vector(ingress.targetPoint)||
+   distance(row.origin,ingress.origin)>1||
+   distance(row.targetPoint,ingress.targetPoint)>1||
+   now>=row.travelCompleteAtMs||now<row.startTimeMs)
+   return pause("ESCORT_DELIVERY_RESUME_PHYSICAL_SNAPSHOT_MISMATCH");
+  const trip={stationID:b.stationID,corporationID:b.corporationID,
+   systemID,fleetID,startedAt:row.startTimeMs,
+   haulers:{[id]:{arrivedAt:0}},
+   manifestID:b.manifestKey,expectedCargoIDs:cargoIDs.slice(),
+   recoveredFromOriginalNativeIngress:true};
+  // This is an in-memory pointer to the *same* real cargo and contract.
+  // Do not rewrite the warp fence, alter a native ship, or debit an item.
+  fleet.coopStationArrival=trip;
+  return {status:"ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED",
+   manifestKey:b.manifestKey,haulerID:id,terminal:false};
  }
  // Only true confirmed NPC warps can be sampled. Never infer position from
  // timer, navigation commands, forecast points or player RPC.
@@ -772,7 +840,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     haulerIDs:Object.keys(trip.haulers).map(Number)});
    if(manifestVerified?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED")
     return pause(manifestVerified?.status||"MANIFEST_FULL_CARGO_UNVERIFIED");
-   alifeDeliveryWitness=require("./coopAlifeNativeDeliveryEvidence")
+   alifeDeliveryWitness=(deliveryEvidence||require("./coopAlifeNativeDeliveryEvidence"))
     .verifyFullNativeDelivery(trip,manifestVerified);
    if(alifeDeliveryWitness?.status!=="NATIVE_FULL_MANIFEST_WITNESSED")
     return pause(alifeDeliveryWitness?.reason||"ALIFE_NATIVE_DELIVERY_PROOF_UNVERIFIED");
@@ -783,6 +851,19 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   if(stackCount)probe.observe("living-npc-station-delivered",null,{spaceState:{systemID:trip.systemID}},
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
+  let terminalAttendanceStatus="NOT_REQUIRED";
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY==="1"){
+   // Persist authentic terminal presence BEFORE committing the final native
+   // delivery journal. The cargo must already be warehouse-reconciled and
+   // original full-manifest proof independently verified. An unavailable
+   // pilot cannot be granted a fictitious receipt after restart.
+   try{
+    const proof=escortGate?.recordTerminalAttendance?.(
+     trip.manifestID,scene,manifestVerified);
+    terminalAttendanceStatus=proof?.status||"TERMINAL_ATTENDANCE_NOT_WIRED";
+   }catch{terminalAttendanceStatus="TERMINAL_ATTENDANCE_UNCERTAIN_REPAIR_REQUIRED"}
+  }
   if(escortEnabled){
    const terminal={status:"DELIVERED",terminal:true,nativeFullManifestProof:manifestVerified};
    let written;try{written=escortGate.recordDelivered({
@@ -822,10 +903,11 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
    ...(trip.soldStacks?{soldStacks:trip.soldStacks,soldQuantity:trip.soldQuantity||0,
     soldISK:trip.soldISK||0,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"}:{}),
-   ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
+   ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE",
+    terminalAttendanceStatus}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,recover,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
+ return {start,tick,recover,resumeNativeDelivery,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
   oracle:destinationOracle};
 }
 let runtimeDirector;
@@ -916,6 +998,25 @@ function restoreNativeIngress(entity,record){
 function checkReturn(scene,fleet,now,director=null){
  const run=director||getRuntimeDirector();
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
+ // Recover before the predeparture retry branch: a crash must NEVER
+ // mistake the already-confirmed original NPC warp for a new departure.
+ if(process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY==="1"&&
+   !fleet?.coopStationArrival&&Array.isArray(fleet?.haulerEntityIDs)&&
+   fleet.haulerEntityIDs.length===1){
+  const id=pos(fleet.haulerEntityIDs[0]);
+  const live=id?scene?.getEntityByID?.(id):null;
+  if(live?.nativeNpc===true&&live.sessionlessWarpIngress){
+   if(typeof run.resumeNativeDelivery!=="function")
+    return pause("ESCORT_DELIVERY_RESUME_AUTHORITY_UNAVAILABLE");
+   let recovered;try{recovered=run.resumeNativeDelivery(scene,fleet,now)}
+   catch{return pause("ESCORT_DELIVERY_RESUME_UNCERTAIN_NEEDS_REPAIR")}
+   if(recovered?.status!=="ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED")
+    return pause(recovered?.status||"ESCORT_DELIVERY_RESUME_UNVERIFIED");
+   // A stale A-Life no-cargo hint cannot terminate a separately proven
+   // original, still-loaded native haul with signed cargo custody.
+   delete fleet.coopStationNoCargo;
+  }
+ }
  if(fleet?.coopStationNoCargo){delete fleet.coopStationNoCargo;return {status:"NO_CARGO",terminal:true};}
  if(process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"&&
     fleet?.coopEscortPredepartureEventID&&!fleet?.coopStationArrival){

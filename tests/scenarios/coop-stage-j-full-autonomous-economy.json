@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "feature": "Stage J P0 autonomous NPC salvage economy, corporate ISK and Rust recovery",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Preserve production evejs-data, run on disposable native SQLite GameStore clone",
+    "Pinned upstream EveJS c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+    "Both Rust pending and settlement extensions installed and compiled on authorized disposable market server",
+    "Native game telemetry enabled, two logged-in clients, authentic NPC salvage origin and physical station",
+    "All relevant feature flags remain OFF outside isolated QA"
+  ],
+  "scenarios": [
+    {
+      "id": "J-FULL-01",
+      "name": "NPC original physical haul and wreck",
+      "expected": "Real NPC cargo debit and original wreck item ID, no minted loot"
+    },
+    {
+      "id": "J-FULL-02",
+      "name": "Competing player RESCUE escrow",
+      "expected": "Escrow-reserved original manifest cannot be stolen by NPC salvage rival"
+    },
+    {
+      "id": "J-FULL-03",
+      "name": "NPC salvager approaches wreck",
+      "expected": "Native movement and combat priorities honored"
+    },
+    {
+      "id": "J-FULL-04",
+      "name": "NPC original pickup",
+      "expected": "Same original source cargo moves wreck to NPC native cargo in one transaction"
+    },
+    {
+      "id": "J-FULL-05",
+      "name": "NPC physically delivers station stock",
+      "expected": "Same original proof, native cargo removed, one native corporation item credited at station"
+    },
+    {
+      "id": "J-FULL-06",
+      "name": "No real Rust bid or ask",
+      "expected": "NPC holds original warehouse item, no market order, virtual income or guessed quote"
+    },
+    {
+      "id": "J-FULL-07",
+      "name": "Real nonseed station bid",
+      "expected": "NPC prices from same-station Rust native bid and places one pending/open corporate sell order"
+    },
+    {
+      "id": "J-FULL-08",
+      "name": "Genuine station ask, no bids",
+      "expected": "Bounded competitive asking price with minimum floor, never seed or mismatched station"
+    },
+    {
+      "id": "J-FULL-09",
+      "name": "Original salvage native market escrow",
+      "expected": "One same itemID moved warehouse to native escrow, one open Rust order, no mint"
+    },
+    {
+      "id": "J-FULL-10",
+      "name": "Actual docked player buys whole stack",
+      "expected": "Rust locks original claim, same item delivered to buyer, buyer debited once, NPC corp credited once, original marketEscrow deleted"
+    },
+    {
+      "id": "J-FULL-11",
+      "name": "Actual Rust finalized fill and NPC income",
+      "expected": "GetNpcSellClaim original fillID and buyer, GameStore npcMarketFills, corporate wallet, SOLD journal all agree"
+    },
+    {
+      "id": "J-FULL-12",
+      "name": "Duplicate listing from two A-Life ticks",
+      "expected": "Existing PREPARED/ESCROWED/LISTED/SOLD durable operation prevents another source order"
+    },
+    {
+      "id": "J-FULL-13",
+      "name": "Crash after PREPARED before Rust Reserve",
+      "expected": "Read-only Rust Get by operation ID, no blind Reserve or new item; unresolved without trusted order"
+    },
+    {
+      "id": "J-FULL-14",
+      "name": "Lost Reserve ACK after Rust pending",
+      "expected": "Recover same Rust order and original item to native escrow; no second Reserve"
+    },
+    {
+      "id": "J-FULL-15",
+      "name": "Crash after native escrow before Activate",
+      "expected": "Get Rust pending, same item escrow, idempotent activate with original operation ID"
+    },
+    {
+      "id": "J-FULL-16",
+      "name": "Lost Activate ACK",
+      "expected": "Read original Rust open order, seal LISTED, no second native debit"
+    },
+    {
+      "id": "J-FULL-17",
+      "name": "Crash after native buyer/corp wallet commit before Rust finalize",
+      "expected": "Rust settling + original native fill receipt finishes same Rust claim without second ISK transfer"
+    },
+    {
+      "id": "J-FULL-18",
+      "name": "Lost Rust finalize ACK after Rust filled",
+      "expected": "Read original Rust filled claim and seal SOLD, wallet changes exactly once"
+    },
+    {
+      "id": "J-FULL-19",
+      "name": "Stale, forged or duplicated original stock",
+      "expected": "No new Rust order or financial credit, game reports reconciliation block"
+    },
+    {
+      "id": "J-FULL-20",
+      "name": "Two buyers race same original order",
+      "expected": "One durable original buyer claim, one native item, one wallet transfer"
+    },
+    {
+      "id": "J-FULL-21",
+      "name": "Enemy attacks NPC while hauling",
+      "expected": "No station return or sales decision overrides higher priority native combat"
+    },
+    {
+      "id": "J-FULL-22",
+      "name": "Player relog and second client verifies item/wallet",
+      "expected": "Native itemStore and UI update, original sold NPC stock absent, real wallet balances and Rust fill visible"
+    },
+    {
+      "id": "J-FULL-23",
+      "name": "Disable all new market flags",
+      "expected": "Native salvage auto trade remains OFF; original EveJS market and existing features unaffected"
+    },
+    {
+      "id": "J-FULL-24",
+      "name": "Pinned overlay apply and revert",
+      "expected": "New native modules present once, upstream restored byte-identically; no touching persistent evejs-data"
+    },
+    {
+      "id": "J-FULL-25",
+      "name": "Seller tax and fees decision",
+      "expected": "Gross-only corporate sales explicitly disclosed; native tax separate gate before any net-profit acceptance"
+    }
+  ]
+}

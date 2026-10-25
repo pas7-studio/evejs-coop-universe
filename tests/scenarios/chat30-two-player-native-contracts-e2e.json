@@ -1,0 +1,23 @@
+{
+  "schema":"chat30-native-two-player-e2e-v1",
+  "upstreamPin":"c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "status":"NOT_RUN",
+  "runtime":"operator-approved disposable pinned EveJS, original GameStore, two real authenticated EVE clients",
+  "doNotTouch":["evejs-data", "market.sqlite", "production wallets", "client binaries"],
+  "requirements":["native physical itemStore readback", "native characters and corp wallet readback", "native contractRuntime readback", "durable receipt and fsync verification", "server/client visual evidence"],
+  "scenarios":[
+    {"id":"create_item_exchange", "status":"NOT_RUN", "proof":"A's exact native items are escrowed and issuer reward debit matches wallet change"},
+    {"id":"accept_item_exchange", "status":"NOT_RUN", "proof":"B receives exact physical items, A receives price, B receives reward, one contract FINISHED"},
+    {"id":"repeat_accept", "status":"NOT_RUN", "proof":"No second item delivery, price debit or reward payout after duplicate RPC or reconnect"},
+    {"id":"issue_courier", "status":"NOT_RUN", "proof":"Exact physical item IDs and sealed plastic wrap exist under original native issuer escrow"},
+    {"id":"accept_courier", "status":"NOT_RUN", "proof":"B's character wallet collateral debited once, package native ownership changes once"},
+    {"id":"courier_delivery", "status":"NOT_RUN", "proof":"B physically carries package to authentic destination; A receives contained items, B receives collateral+reward"},
+    {"id":"courier_failure", "status":"NOT_RUN", "proof":"Correct issuer refund/collateral with zero unauthorized B reward, no double source debit"},
+    {"id":"expiry_and_delete", "status":"NOT_RUN", "proof":"Expired offer cannot be accepted; legitimate issuer cancellation restores exact escrow items and ISK"},
+    {"id":"client_permissions", "status":"NOT_RUN", "proof":"Third party cannot close/fail courier; nonissuer cannot delete; unauthorized corp roles denied"},
+    {"id":"crash_after_item_debit", "status":"NOT_RUN", "proof":"PREPARED survives process death and blocks replay until manual original-store reconciliation"},
+    {"id":"crash_after_wallet_credit", "status":"NOT_RUN", "proof":"No second wallet credit, item copy, expired refund or unreviewed restart recovery"},
+    {"id":"auction_and_freelance", "status":"NOT_RUN", "proof":"Unsupported pinned endpoints reject without pseudo bid, free payout or misleading UI"},
+    {"id":"npc_jobs_regression", "status":"NOT_RUN", "proof":"Existing funded two-player NPC escort job, volunteer/refund and native corporate wallet receipts unchanged"}
+  ]
+}

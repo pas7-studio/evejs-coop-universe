@@ -7,6 +7,7 @@ const {createEscortContractSettlement}=require("./coopEscortContractSettlement")
 const {createPeacefulEscortSettlement}=require("./coopEscortPeacefulSettlement");
 const {createDepartureWitness}=require("./coopEscortDepartureWitness");
 const {createRouteWitness}=require("./coopEscortRouteWitness");
+const {createEscortTerminalAttendance}=require("./coopEscortTerminalAttendance");
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>x===b[i]);
@@ -48,6 +49,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   readManifest,verifyManifest,nativeFunds:funds});
  const departure=createDepartureWitness({root,io,clock});
  const routeWitness=createRouteWitness({root,io,clock});
+ const terminalWitness=createEscortTerminalAttendance({root,io,clock});
  function recordEscortDeparture(route,scene){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
@@ -104,9 +106,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   return routeWitness.sample({booking:f.booking,departure:p,scene,station,
    verifyNativeDuo});
  }
- const peaceful=createPeacefulEscortSettlement({readFlight:flight.read,
-  readNativeDelivery:flight.readNativeDelivery,nativeFunds:funds,
-  verifyService:(b,scene)=>{
+ function verifyLiveService(b,scene){
    const deny=()=>({status:"NO_NATIVE_ESCORT_SERVICE"});
    if(process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
     return deny();
@@ -149,7 +149,70 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    }
    return {status:"VERIFIED_NATIVE_ESCORT_SERVICE",characters:b.characters.slice(),
     fleetID:b.playerFleetID,haulerID:b.haulerID,systemID:b.systemID};
-  }});
+  }
+ function originalAttendanceProof(b){
+  const d=departure.readDurable(b.manifestKey,b);
+  if(d.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+   return blocked("PEACEFUL_REPLAY_ORIGINAL_DEPARTURE_NOT_DURABLE");
+  const r=routeWitness.verify(b,d);
+  if(r.status!=="VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE")
+   return blocked("PEACEFUL_REPLAY_ORIGINAL_ROUTE_NOT_DURABLE");
+  return {status:"READY",departure:d,route:r};
+ }
+ function verifyPeacefulService(b,scene){
+  // When immutable replay is enabled, EVEN the initial payout must use
+  // the same fsynced terminal attendance receipt. Otherwise a lost write
+  // ACK could be paid using a live scene and later be impossible to audit.
+  if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1")
+   return verifyLiveService(b,scene);
+  if(process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+   return blocked("PEACEFUL_REPLAY_STRICT_ROUTE_REQUIRED");
+  const proof=originalAttendanceProof(b);
+  if(proof.status!=="READY")return blocked("PEACEFUL_REPLAY_ORIGINAL_SERVICE_NOT_DURABLE");
+  const f=flight.read(b.manifestKey);
+  if(f.status!=="READY"||f.phase!=="DELIVERED")
+   return blocked("PEACEFUL_REPLAY_NOT_TERMINALLY_DELIVERED");
+  const term=terminalWitness.readDurable(b,proof.departure,proof.route,
+   f.delivery?.nativeFullManifestProof);
+  if(term.status!=="VERIFIED_NATIVE_ESCORT_TERMINAL_ATTENDANCE")
+   return blocked("PEACEFUL_REPLAY_TERMINAL_ATTENDANCE_NOT_DURABLE");
+  return {status:"VERIFIED_NATIVE_ESCORT_SERVICE",characters:b.characters.slice(),
+   fleetID:b.playerFleetID,haulerID:b.haulerID,systemID:b.systemID};
+ }
+ const peaceful=createPeacefulEscortSettlement({readFlight:flight.read,
+  readNativeDelivery:flight.readNativeDelivery,nativeFunds:funds,
+  verifyService:verifyPeacefulService});
+ function recordTerminalAttendance(manifestKey,scene,stock){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1"||
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
+   return blocked("DISABLED");
+  if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+   return blocked("TERMINAL_ATTENDANCE_MANIFEST_INVALID");
+  let f;try{f=flight.read(manifestKey)}
+  catch{return blocked("TERMINAL_ATTENDANCE_FLIGHT_UNAVAILABLE")}
+  if(f?.status!=="READY"||f.phase!=="FUNDED"||f.booking?.manifestKey!==manifestKey)
+   return blocked("TERMINAL_ATTENDANCE_FLIGHT_NOT_FUNDED");
+  let reserved;try{reserved=flight.readFunded(f.booking)}
+  catch{return blocked("TERMINAL_ATTENDANCE_ESCROW_UNAVAILABLE")}
+  if(reserved?.status!=="NATIVE_PREFUNDED_BOOKING_VERIFIED")
+   return blocked("TERMINAL_ATTENDANCE_ESCROW_NOT_RESERVED");
+  const b=f.booking, proof=originalAttendanceProof(b);
+  if(proof.status!=="READY")return proof;
+  let original;try{original=verifyManifest({key:manifestKey,
+   systemID:b.systemID,fleetID:b.fleetID,stationID:b.stationID,
+   corporationID:b.corporationID,haulerIDs:[b.haulerID]})}
+  catch{return blocked("TERMINAL_ATTENDANCE_MANIFEST_UNAVAILABLE")}
+  if(stock?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED"||
+   original?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED"||
+   stock.key!==manifestKey||original.key!==manifestKey||
+   !equal(stock.cargoIDs,original.cargoIDs)||
+   !equal(stock.haulerIDs,[b.haulerID])||
+   !equal(original.haulerIDs,[b.haulerID]))
+   return blocked("TERMINAL_ATTENDANCE_NATIVE_WAREHOUSE_UNVERIFIED");
+  return terminalWitness.record({booking:b,departure:proof.departure,
+   route:proof.route,stock:original,scene,verifyNativeDuo});
+ }
  const contracts=createEscortContractSettlement({root,io,clock,
   authorizeOffer:c=>{
    if(!ready())return blocked("DENIED_NATIVE_RUNTIME_DISABLED");
@@ -277,6 +340,34 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
   return contracts.refund(c.contractID);
  }
+ function reconcilePeacefulDeliveries({systemID=null,maxTrips=32}={}){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1"||
+   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+   return blocked("DISABLED");
+  if(systemID!==null&&!pos(systemID)||
+   !Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>32)
+   return blocked("PEACEFUL_REPLAY_SCAN_OPTIONS_INVALID");
+  let entries;try{entries=flight.listDelivered({systemID,maxTrips})}
+  catch{return blocked("PEACEFUL_REPLAY_FLIGHT_SCAN_UNAVAILABLE")}
+  if(entries?.status!=="READY"||!Array.isArray(entries.manifestKeys)||
+   entries.manifestKeys.length>maxTrips)
+   return blocked(entries?.status||"PEACEFUL_REPLAY_SCAN_INVALID");
+  const outcomes=[];let paid=0,alreadyPaid=0,pending=0,blockedCount=0;
+  for(const key of entries.manifestKeys){
+   if(typeof key!=="string"||!/^\d+-\d+-\d+$/.test(key))
+    return blocked("PEACEFUL_REPLAY_MANIFEST_INVALID");
+   const r=peaceful.settle(key,null),status=r?.status||"PEACEFUL_REPLAY_UNCERTAIN";
+   outcomes.push({manifestKey:key,status});
+   if(status==="NATIVE_PEACEFUL_ESCORT_PAID")paid++;
+   else if(status==="ALREADY_NATIVE_PAID")alreadyPaid++;
+   else if(["NATIVE_ESCORT_SERVICE_NOT_VERIFIED",
+     "NATIVE_ESCORT_SERVICE_PROOF_UNAVAILABLE"].includes(status))pending++;
+   else blockedCount++;
+  }
+  return {status:"NATIVE_PEACEFUL_REPLAY_CHECKED",paid,alreadyPaid,
+   pending,blocked:blockedCount,outcomes};
+ }
  function settlePeacefulFlight(manifestKey,scene){
   if(!ready())return blocked("DISABLED");
   return peaceful.settle(manifestKey,scene);
@@ -286,7 +377,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,readDurableEscortDeparture,recordEscortRouteSample,finishAfterRaid,settlePeacefulFlight,
+ return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,readDurableEscortDeparture,recordEscortRouteSample,recordTerminalAttendance,reconcilePeacefulDeliveries,finishAfterRaid,settlePeacefulFlight,
   refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
