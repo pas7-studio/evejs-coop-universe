@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 import {readFileSync} from "node:fs";
 const require=createRequire(import.meta.url);
-const {inspect}=require("../scripts/coop-market-inspect.cjs");
+const {inspect,DEFAULT_SYSTEMS}=require("../scripts/coop-market-inspect.cjs");
 function db({jita=100,perimeter=0,orders=0}={}){
  return {prepare(query){
   const statement={
@@ -20,24 +20,29 @@ function db({jita=100,perimeter=0,orders=0}={}){
   };return statement;}};
 }
 test("real stock present only in Jita diagnoses Perimeter as not locally stocked",()=>{
- const r=inspect(db(),{});assert.equal(r.status,"MARKET_STOCK_AVAILABLE");
+ const r=inspect(db(),{systems:[30000142,30000144]});assert.equal(r.status,"MARKET_STOCK_AVAILABLE");
  assert.equal(r.systems[0].status,"SELL_LIQUIDITY_PRESENT");
  assert.equal(r.systems[1].status,"NO_LOCAL_SELL_LIQUIDITY");
  assert.equal(r.globalSeedUnits,100);
  assert.equal(r.affordableSeedExamples[0].typeID,34);
 });
 test("entire selected geography has no live stock without inventing orders",()=>{
- const r=inspect(db({jita:0,perimeter:0}),{});
+ const r=inspect(db({jita:0,perimeter:0}),{systems:[30000142,30000144]});
  assert.equal(r.status,"NO_SELL_LIQUIDITY");assert.equal(r.stockedStations.length,0);
 });
 test("existing player orders still count as real liquidity without seeded stock",()=>{
- const r=inspect(db({jita:0,perimeter:0,orders:2}),{});
+ const r=inspect(db({jita:0,perimeter:0,orders:2}),{systems:[30000142,30000144]});
  assert.equal(r.status,"MARKET_STOCK_AVAILABLE");
  assert.equal(r.globalOpenSellOrders,2);
 });
 test("missing native market tables fail closed",()=>{
  const mock=db();mock.prepare=q=>({all:()=>[{name:"stations"}]});
  assert.equal(inspect(mock).status,"MARKET_SCHEMA_INCOMPLETE");
+});
+test("operator-first system is the actual Manifest AIR starter system",()=>{
+ assert.deepEqual(DEFAULT_SYSTEMS,[30100032,30000142,30000144]);
+ const ps=readFileSync(new URL("../scripts/Inspect-Coop-Market.ps1",import.meta.url),"utf8");
+ assert.match(ps,/30100032,30000142,30000144/);
 });
 test("host inspector is read-only and never requests rebuild or market mutations",()=>{
  const s=readFileSync(new URL("../scripts/Inspect-Coop-Market.ps1",import.meta.url),"utf8");
