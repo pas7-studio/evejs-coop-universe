@@ -1,10 +1,13 @@
 # EveJS LivingCoop — local progression V2 (2026-10-25)
 
+> **2026-10-26 current source of truth:** The deployment script `scripts/Deploy-Coop-RuntimeProbe.ps1` currently defaults to **100×**, not the historical V2 target 48×. Operator choices are 6, 12, 24, 48, or 100. The tables below are illustrative, not a claim about running server speed. Existing active queues require Chat 33 old-rate SP settlement, durable journal and verified backup **before any speed change**, including decreases.
+
+
 **Scope:** starter-to-specialist pacing for two friends on a PRIVATE, loopback-only EveJS server. **Source change prepared; not deployed, not live-client verified.** Native EveJS queue is the only authority for SP, prerequisites, characters and offline training. No free SP grants or fake clone/skill state.
 
 ## Decision
 
-The legacy LivingCoop override set native `EVEJS_SKILL_TRAINING_SPEED=6`. Change the default **for a newly deployed/rebased local co-op world only** to **48× Omega**. The operator can choose 6, 12, 24 or 48 with `-CoopSkillTrainingSpeed` on the normal explicit LivingCoop deployment. Omega remains backed by the existing native `EVEJS_OMEGA_LICENSE=true`. Non-LivingCoop and upstream defaults are untouched.
+The legacy LivingCoop override set native `EVEJS_SKILL_TRAINING_SPEED=6`. The **historical V2 design target** was **48× Omega** for new/rebased worlds. Current post-42 deployment source instead defaults to **100×**, and explicitly supports 6, 12, 24, 48 or 100 via `-CoopSkillTrainingSpeed`. Do not interpret a historical target as authorization to change a running world. Omega remains backed by the existing native `EVEJS_OMEGA_LICENSE=true`. Non-LivingCoop and upstream defaults are untouched.
 
 This is a deliberate starting profile, not a claim that a complete ship specialization always takes the listed time. Native prerequisites can involve **many distinct** ranked skills, missing skillbooks, ISK and equipment, and the EVE client may show cumulative queued time. The observed **one-year estimate must be investigated against effective runtime speed and the exact active queue** before calling it fixed.
 
