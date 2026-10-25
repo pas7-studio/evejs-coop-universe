@@ -45,7 +45,7 @@ function fixture({origin=true,control=true,corp=32}={}){
    details.ownerCorporationID===32,
   observeNativeControl:d=>{
    observed++;
-   return occupation?{status:"UNCONTESTED_NATIVE_ATTCKER",
+   return occupation?{status:"UNCONTESTED_NATIVE_ATTACKER",
     systemID:d.systemID,attackerFactionID:11,
     defenderFactionID:22,attackerCount:1,defenderCount:0,
     physicalProof:true}:
