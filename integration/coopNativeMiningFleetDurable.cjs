@@ -120,7 +120,7 @@ function registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAn
  return true;
 }
 function createService({db,store,nativeService,ensureState,spawn,register,
-  getFleets,log=()=>{}}={}){
+  getFleets,auditStartupCargo=null,log=()=>{}}={}){
  if(!db||typeof db.read!=="function"||typeof db.write!=="function"||
     typeof db.flushTableSync!=="function"||typeof db.flushTablesSync!=="function"||
     !store||!nativeService||typeof nativeService.materializeStoredNativeController!=="function"||
@@ -161,6 +161,8 @@ function createService({db,store,nativeService,ensureState,spawn,register,
    return {status:"BLOCKED",reason:"ALIFE08_INVALID_STARTUP",slots:[]};
   if(process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE!=="1")
    return {status:"BLOCKED",reason:"ALIFE08_NOT_ENABLED",slots:[]};
+  if(process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT==="1"&&typeof auditStartupCargo!=="function")
+   return {status:"BLOCKED",reason:"ALIFE13_STARTUP_AUDITOR_UNAVAILABLE",slots:[]};
   if(busy.has(systemID))return {status:"BLOCKED",reason:"ALIFE08_REENTRANT",slots:[]};
   busy.add(systemID);
   const reports=[];
@@ -209,6 +211,15 @@ function createService({db,store,nativeService,ensureState,spawn,register,
         minerIDs.length+haulerIDs.length>MAX_WING)
       throw Error("ALIFE08_ACTIVE_MANIFEST_INVALID");
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     // ALIFE-13: verify ALL original cargo transfers and historical manifests
+     // before restoring ANY physical hull or registering a mining state.
+     // Empty haulers are not proof that prior warehouse receipts completed.
+     if(process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT==="1"){
+      const audit=auditStartupCargo({systemID,fleetID:fleetIDForSlot(systemID,slot),
+       minerIDs:minerIDs.slice(),haulerIDs:haulerIDs.slice()});
+      if(audit?.status!=="OK")throw Error("ALIFE13_STARTUP_ORIGINAL_CARGO_UNRECONCILED:"+
+       String(audit?.reason||audit?.status||"UNKNOWN").slice(0,105));
+     }
      // Validate ALL native rows before materializing ANY physical ship.
      let restored=0;
      for(const id of [...minerIDs,...haulerIDs]){
@@ -238,8 +249,23 @@ function createService({db,store,nativeService,ensureState,spawn,register,
 }
 function start(args){
  const {scene,spawn,register,getFleets,ensureState,fleetCount}=args||{};
- return createService({db:require("../gameStore"),
-   store:require("./npc/nativeNpcStore"),
+ const db=require("../gameStore"),store=require("./npc/nativeNpcStore");
+ const enabled=process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT==="1";
+ if(enabled&&[
+  "EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC",
+  "EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION","EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY",
+  "EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_NPC_STATION_DELIVERY"
+ ].some(k=>process.env[k]!=="1"))
+  return {status:"BLOCKED",reason:"ALIFE13_REQUIRED_NATIVE_GATES_OFF",slots:[]};
+ let auditStartupCargo=null;
+ if(enabled){
+  try{auditStartupCargo=require("./coopAlifeStartupCargoAudit").createStartupCargoAuditor({
+   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
+   gameStore:db,store,items:require("../services/inventory/itemStore"),
+   getNativeEntity:store.getNativeEntity}).audit}
+  catch(error){return {status:"BLOCKED",reason:"ALIFE13_NATIVE_AUDITOR_INITIALIZATION_FAILED",slots:[]}}
+ }
+ return createService({db,store,auditStartupCargo,
    nativeService:require("./npc/nativeNpcService"),
    spawn,register,getFleets,ensureState,log:message=>console.warn("[ALIFE08]",message)
  }).start({scene,fleetCount});
