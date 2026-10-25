@@ -26,7 +26,8 @@ function fixture(options={}){
   isNpcCorporation:id=>id===1000035,
   getNativeEntity:id=>id===ship.itemID?nativeEntity:null,
   getScene:id=>id===scene.systemID?scene:null,store,items:{},
-  flush:t=>{flushed.push(t);return {success:options.flushFails!==t}},warpToPoint:(id,p)=>{warps.push({id,p});return {success:!options.warpFails}},
+  flush:t=>{flushed.push(t);return {success:options.flushFails!==t}},warpToPoint:(id,p)=>{warps.push({id,p});
+   return options.warpFails?{success:false,errorMsg:'WARP_REJECTED_BY_NATIVE'}:{success:true}},
   root:'/tmp/test-coop-warehouse',warehouse,clock:()=>time,
   probe:options.probe||{observe:()=>{}}});
  return {dir,scene,fleet,ship,point,station,warps,flushed,deposits,cargo, nativeEntity,
@@ -98,5 +99,21 @@ test('opt-in ALIFE trace names the exact station blocker once per contiguous blo
   quiet.station.corporationID=1200000;
   quiet.dir.start(quiet.scene,quiet.fleet,quiet.now());
   assert.equal(events.length,before,'no diagnostics without EVEJS_COOP_ALIFE_TRACE=1');
+ }finally{delete process.env.EVEJS_COOP_ALIFE_TRACE;}
+});
+test('native warp rejection keeps the engine reason instead of discarding it',()=>{
+ const f=fixture({warpFails:true});
+ const events=[];
+ const probe={observe:(name,_s,_sh,extra)=>events.push({name,extra})};
+ process.env.EVEJS_COOP_ALIFE_TRACE='1';
+ try{
+  const g=fixture({warpFails:true,probe});
+  assert.equal(g.dir.start(g.scene,g.fleet,g.now()).status,'WARP_COMMAND_FAILED');
+  const blocker=events.find(e=>e.name==='alife-blocker');
+  assert.equal(blocker.extra.status,'WARP_COMMAND_FAILED');
+  assert.equal(blocker.extra.reason,'WARP_REJECTED_BY_NATIVE');
+  assert.equal(blocker.extra.haulerID,980001);
+  assert.equal(f.dir.start(f.scene,f.fleet,f.now()).status,'WARP_COMMAND_FAILED');
+  assert.equal(f.fleet.coopStationArrival,undefined,'a rejected warp never records an arrival intent');
  }finally{delete process.env.EVEJS_COOP_ALIFE_TRACE;}
 });

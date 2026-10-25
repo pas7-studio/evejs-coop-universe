@@ -113,12 +113,19 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   fleet.coopStationArrival=result; // In-memory intent is never proof of inventory.
   for(const [index,id] of ships.entries()){
    const target={...destination.position,x:destination.position.x+750+index*100};
-   let ack;
+   let ack=null,warpError="";
    try{ack=warpToPoint(id,target,{forceImmediateStart:true,
     broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
-    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250)});}catch(_){ack=null;}
-   if(!truthy(ack)){delete fleet.coopStationArrival;
-    for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED",{systemID,fleetID,haulers:ships.length});}
+    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250)});}
+   catch(error){warpError=String(error?.message||error);}
+   if(!truthy(ack)){
+    delete fleet.coopStationArrival;
+    for(const raw of ships)arrivals.delete(raw);
+    // The native warp rejection reason is the only way to tell "busy",
+    // "already warping" and "not in scene" apart - never discard it.
+    return pause("WARP_COMMAND_FAILED",{systemID,fleetID,haulers:ships.length,haulerID:id,
+     reason:String(ack?.errorMsg||ack?.reason||warpError||"NO_ACK")});
+   }
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
   }
   probe.observe("living-npc-station-warp-requested",null,{spaceState:{systemID}},
