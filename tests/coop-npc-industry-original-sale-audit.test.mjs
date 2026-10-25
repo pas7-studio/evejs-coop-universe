@@ -37,7 +37,8 @@ function fixture(){
     const item=items.get(ITEM);item.quantity=q;item.stacksize=q},
   setBuyerWallet:r=>wallets.set(r.fillID,{verifiedNative:true,
    transactionID:r.fillID,ownerID:OWNER,buyerID:BUYER,orderID:ORDER,
-   buyerDebitCents:r.grossCents,corporateCreditCents:r.grossCents}),
+   buyerDebitCents:r.grossCents,corporateCreditCents:r.grossCents,
+   source:"ORIGINAL_CHARACTER_AND_CORPORATION_WALLET_JOURNALS"}),
  };
  let reads=0;
  const audit=createOriginalNpcSaleSettlementAudit({
