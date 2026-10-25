@@ -1,4 +1,6 @@
 # Delivery roadmap — agent-ready tasks
+
+> **P1 co-op gameplay (2026-10-25):** [Tactical combat, real shared logistics and living incident acceptance](COOP_P1_GAMEPLAY_PILLARS_20261025.md). First source-tested implementation differentiates interceptor/escort advice in genuine two-player native raids; real combat module effects, logistics settlement and durable event consequences are separate remaining slices.
 > **2026-10-25 native-mechanics discovery / parallel-agent checkpoint:**
 > [24-mechanic upstream-to-co-op gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md)
 > [First implementation: native item/courier contracts + LP Store standing gates](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md), source-tested and pending real two-client/escrow replay acceptance.
