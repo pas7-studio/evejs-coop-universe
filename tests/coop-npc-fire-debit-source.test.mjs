@@ -122,3 +122,21 @@ test("durable ammo cycle creates PREPARED before native debit and commits before
  assert.ok(settle>debit && cache>settle);
  assert.ok(segment.includes('process.env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
 });
+
+test("whole-bank journal preflight precedes any turret debit and missile launch",()=>{
+ const transformed=patch(source);
+ const turret=transformed.slice(transformed.indexOf("function executeTurretCycle("),
+  transformed.indexOf("\nfunction executeMissileCycle("));
+ const missile=transformed.slice(transformed.indexOf("function executeMissileCycle("),
+  transformed.indexOf("\nfunction trailingFunction("));
+ const turretBank=turret.indexOf('coopNpcAmmoDebitJournal").preflightBank(');
+ const firstTurretDebit=turret.indexOf("if (strictNativeStackDebit) {");
+ const missileBank=missile.indexOf('coopNpcAmmoDebitJournal").preflightBank(');
+ const firstMissileDebit=missile.indexOf("const chargeResults = []");
+ assert.ok(turretBank>=0&&firstTurretDebit>turretBank);
+ assert.ok(missileBank>=0&&firstMissileDebit>missileBank);
+ assert.equal((turret.match(/\.preflightBank\(/g)||[]).length,1);
+ assert.equal((missile.match(/\.preflightBank\(/g)||[]).length,1);
+ assert.ok(turret.includes('EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
+ assert.ok(missile.includes('EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE === "1"'));
+});
