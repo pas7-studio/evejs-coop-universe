@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -592,6 +592,14 @@ function advanceNativeRaids(){
    attack:(pirateID,targetID,options)=>npc.issueAttackOrder(pirateID,targetID,options)
   });
  }
+ if(process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&!huntPolicy) {
+  // Opt-in NPC-vs-NPC assessment only. Native stock raid eligibility remains
+  // authoritative; players can only count as potential defenders, not prey.
+  huntPolicy=require("./coopNpcHuntPolicy").createHuntPolicy({
+   file:process.env.EVEJS_COOP_NPC_INTEL_FILE||"/var/lib/evejs/coop-npc-intel.json",
+   onDecision:decision=>require("./coopRuntimeProbe").observe("living-npc-opportunity",null,null,decision)
+  });
+ }
  const roles=economy?.snapshot().pilots||{};
  for(const systemID of visitedSystems){
   const pirates=bridge.snapshot().filter(p=>p.systemID===systemID&&roles[p.pilotID]?.role==="pirate")
@@ -607,11 +615,35 @@ function advanceNativeRaids(){
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
   const actualPilots=world.snapshot().pilots;
-  const canAttack=({pirateID,targetID})=>raidPolicy.isAuthorizedStockMiningRaid({
-   systemID,attacker:scene.getEntityByID(pirateID),
-   target:scene.getEntityByID(targetID),links:activeLinks,
-   pilots:actualPilots,fleetShips
-  });
+  const canAttack=({pirateID,targetID})=>{
+   // The existing source-verified NPC combat gate ALWAYS runs first.
+   if(!raidPolicy.isAuthorizedStockMiningRaid({
+    systemID,attacker:scene.getEntityByID(pirateID),
+    target:scene.getEntityByID(targetID),links:activeLinks,
+    pilots:actualPilots,fleetShips
+   }))return false;
+   if(process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1")return true;
+   if(!huntPolicy)return false;
+   const pirateLink=activeLinks.find(x=>Number(x.entityID)===Number(pirateID));
+   const targetRole=fleetShips.find(x=>Number(x.id)===Number(targetID))?.role;
+   if(!pirateLink||!targetRole)return false;
+   const damage=require("./combat/damage");
+   const scramble=require("./modules/hostileModuleRuntime");
+   const decision=huntPolicy.assess({systemID,scene,pirateID,targetID,
+    targetRole,piratePilotID:pirateLink.pilotID,contacts:activeLinks,
+    getHealth:entity=>{
+     const maximum=damage.getEntityMaxHealthLayers(entity);
+     const actual=damage.getEntityCurrentHealthLayers(entity,maximum);
+     if(!maximum||!actual||![maximum.shield,maximum.armor,maximum.structure].some(x=>Number(x)>0))return NaN;
+     const armor=Number(maximum.armor)>0?Number(actual.armor)/Number(maximum.armor):1;
+     const structure=Number(maximum.structure)>0?
+       Number(actual.structure)/Number(maximum.structure):1;
+     return Math.min(armor,structure);
+    },
+    isScrambled:entity=>scramble.isEntityWarpScrambled(entity)
+   });
+   return decision.decision==="RAID";
+  };
   const result=raidDirector.tick({
    systemID,scene,pirates,fleetShips,canAttack,
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
