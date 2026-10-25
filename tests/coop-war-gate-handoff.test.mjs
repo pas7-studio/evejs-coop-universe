@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createWarGateHandoff}=require("../integration/coopWarGateHandoff.cjs");
@@ -14,8 +17,8 @@ const env=()=>({
  EVEJS_COOP_NATIVE_GATE_APPROACH:"1",EVEJS_COOP_NATIVE_GATE_TRANSFER:"1",
  EVEJS_COOP_ALIFE:"1"
 });
-function fixture(mode="success"){
- const ships=new Map([[101,new Set([501])],[202,new Set()]]);
+function fixture(mode="success",journalDir){
+ const ships=new Map([[101,new Set([501])],[202,new Set()],[303,new Set()]]);
  const ship={itemID:501,kind:"ship",nativeNpc:true,corporationID:31};
  const entity={entityID:501,systemID:101,corporationID:31,ownerID:31};
  const controller={entityID:501,systemID:101};
@@ -48,7 +51,7 @@ function fixture(mode="success"){
   listNativeCargoForEntity:()=>[{cargoID:901,entityID:501,quantity:10}]};
  let recoverCalls=0,moveCalls=0;
  const handoff=createWarGateHandoff({gameStore,identityRegistry,
-  env:env(),clock:()=>1234567,nativeStore,service:{},
+  env:env(),clock:()=>1234567,nativeStore,service:{},journalDir,
   sceneForSystem:systemID=>({systemID,
    getEntityByID:id=>ships.get(systemID).has(id)?ship:null}),
   getGate:()=>null,getController:()=>controller,isScrambled:()=>false,
@@ -58,13 +61,14 @@ function fixture(mode="success"){
     moveCalls++;
     if(mode==="preflight-refused")
      return {success:false,errorMsg:"NATIVE_PREFLIGHT_REJECTED"};
-    ships.get(101).delete(501);ships.get(202).add(501);
-    entity.systemID=202;controller.systemID=202;
+    const source=request.gate.sourceSystemID,destination=request.gate.destinationSystemID;
+    ships.get(source).delete(501);ships.get(destination).add(501);
+    entity.systemID=destination;controller.systemID=destination;
     if(mode==="throw-after-move")throw Error("native crash after physical move");
-    const result=args.registry.relocate(request.pilotID,101,501,202);
+    const result=args.registry.relocate(request.pilotID,source,501,destination);
     if(result.status!=="RELOCATED")
      return {success:false,errorMsg:"JSON_IDENTITY_RELOCATION_FAILED"};
-    return {success:true,entityID:501,systemID:202,
+    return {success:true,entityID:501,systemID:destination,
      verifiedSourceAbsent:true,verifiedDestinationPresent:true,
      preservedCargo:true,preservedModules:true};
    }
@@ -109,4 +113,63 @@ test("crash after native physical move cannot trigger duplicate retry",()=>{
 test("default-off gate refuses handoff even when all dependencies exist",()=>{
  const flags=env();flags.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER="0";
  assert.equal(require("../integration/coopWarGateHandoff.cjs").flag(flags),false);
+});
+
+test("normal verified terminal flight auto-retires without moving native ship",()=>{
+ const journalDir=fs.mkdtempSync(path.join(os.tmpdir(),"fw-transit-"));
+ try{
+  const f=fixture("success",journalDir);
+  assert.equal(f.handoff.transfer(f.request).success,true);
+  const before=f.db.get(FLEET_KEY).transfers["501"].transferID;
+  assert.equal(before,"fw:501:101:202:1");
+  const retired=f.handoff.retireCompleted({max:2});
+  assert.equal(retired.retired.length,1);
+  assert.equal(retired.retired[0].transferID,before);
+  assert.equal(f.handoff.retireCompleted({max:2}).retired.length,0);
+  assert.equal(f.db.get(FLEET_KEY).transferHistory.length,1);
+  assert.equal(f.db.get(FLEET_KEY).transfers["501"],undefined);
+  assert.equal(f.db.get(FLEET_KEY).ships["501"].systemID,202);
+ }finally{fs.rmSync(journalDir,{recursive:true,force:true})}
+});
+test("reassigned hull can cross a second verified adjacent border, preserving IDs",()=>{
+ const journalDir=fs.mkdtempSync(path.join(os.tmpdir(),"fw-transit-"));
+ try{
+  const f=fixture("success",journalDir);
+  assert.equal(f.handoff.transfer(f.request).success,true);
+  assert.equal(f.handoff.retireCompleted({max:1}).retired.length,1);
+  const fleet=f.db.get(FLEET_KEY),war=f.db.get(WAR_KEY),
+   treasury=f.db.get(TREASURY_KEY);
+  fleet.ships["501"].campaignID="c2";
+  war.campaigns.c2={state:"PREPARING",sourceSystemID:202,
+   targetSystemID:303,supplyReservationID:"res2"};
+  treasury.reservations.res2={status:"HELD",warID:"w1",
+   campaignID:"c2",factionID:11,cents:5000};
+  const request={...f.request,
+   gate:{sourceSystemID:202,destinationSystemID:303},
+   sourceScene:{systemID:202}};
+  assert.equal(f.handoff.transfer(request).success,true);
+  assert.equal(f.db.get(FLEET_KEY).ships["501"].entityID,501);
+  assert.equal(f.db.get(FLEET_KEY).ships["501"].systemID,303);
+  assert.equal(f.db.get(FLEET_KEY).transfers["501"].transferID,
+   "fw:501:202:303:2");
+  assert.equal(f.handoff.retireCompleted({max:1}).retired.length,1);
+  assert.deepEqual(f.db.get(FLEET_KEY).transferHistory.map(x=>x.transferID),
+   ["fw:501:101:202:1","fw:501:202:303:2"]);
+  assert.equal(f.db.get(FLEET_KEY).nextTransferSerial,3);
+  assert.equal(f.links["coop-pilot-001"].systemID,303);
+  assert.equal(f.ships.get(101).size+f.ships.get(202).size+
+   f.ships.get(303).size,1);
+ }finally{fs.rmSync(journalDir,{recursive:true,force:true})}
+});
+test("the same hull is quarantined when native gate journal is still present",()=>{
+ const journalDir=fs.mkdtempSync(path.join(os.tmpdir(),"fw-transit-"));
+ try{
+  const f=fixture("success",journalDir);
+  assert.equal(f.handoff.transfer(f.request).success,true);
+  fs.writeFileSync(path.join(journalDir,"coop-pilot-001.json"),"not yet reconciled");
+  const r=f.handoff.retireCompleted({max:1});
+  assert.equal(r.retired.length,0);
+  assert.equal(f.db.get(FLEET_KEY).transfers["501"].phase,"COMPLETE");
+  assert.equal(f.db.get(FLEET_KEY).transferHistory,undefined);
+ }finally{fs.rmSync(journalDir,{recursive:true,force:true})}
 });
