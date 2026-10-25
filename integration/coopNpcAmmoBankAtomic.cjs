@@ -240,6 +240,39 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
  }
  return {consume};
 }
+// A direct per-module/native legacy write must never bypass SQLite fences
+// that were minted by a previous atomic weapon-bank transaction.
+function verifyDirectDebit({entity,root,io=fs,database,env=process.env}={}){
+ const fail=status=>({allowed:false,status});
+ if(entity?.nativeNpc!==true||entity?.kind!=="ship")
+  return {allowed:true,status:"NON_NPC_UNCHANGED"};
+ const id=pos(entity?.itemID);
+ if(!id)return fail("BANK_DIRECT_IDENTITY_INVALID");
+ if(env.EVEJS_COOP_NPC_BANK_ATOMIC==="1")
+  return fail("BANK_ATOMIC_DIRECT_DEBIT_FORBIDDEN");
+ try{
+  const journalRoot=root||env.EVEJS_COOP_NPC_AMMO_DEBIT_ROOT||
+   "/var/lib/evejs/coop-npc-ammo-debits";
+  const receipt=inspectShip({root:journalRoot,entityID:id,io});
+  if(!receipt.ok)return fail("BANK_DIRECT_JOURNAL_UNSAFE");
+  if(receipt.receipt)return fail("BANK_DIRECT_RECEIPT_PRESENT");
+  const db=database||require("../gameStore");
+  if(typeof db?.read!=="function")return fail("BANK_DIRECT_NATIVE_STORE_UNAVAILABLE");
+  const fence=db.read("npcCargo","/coopAmmoCycles_"+String(id));
+  if(fence?.success===true)return fail("BANK_DIRECT_SQLITE_FENCE_PRESENT");
+  if(fence?.success!==false||fence.errorMsg!=="ENTRY_NOT_FOUND")
+   return fail("BANK_DIRECT_NATIVE_READ_UNSAFE");
+  return {allowed:true,status:"BANK_DIRECT_NO_ATOMIC_HISTORY"};
+ }catch(_){return fail("BANK_DIRECT_GUARD_UNSAFE");}
+}
+function guardDirectDebit({entity}={}){
+ if(entity?.nativeNpc!==true||entity?.kind!=="ship")
+  return {allowed:true,status:"NON_NPC_UNCHANGED"};
+ if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"&&
+  process.env.EVEJS_COOP_NPC_BANK_ATOMIC!=="1")
+  return {allowed:true,status:"LEGACY_UNCHANGED"};
+ return verifyDirectDebit({entity});
+}
 function consumeBank(args){
  if(!gate(process.env))
   return {success:false,errorMsg:"BANK_ATOMIC_FLAG_INCOMPLETE",stopReason:"ammo"};
@@ -253,4 +286,4 @@ function consumeBank(args){
    store,compatible}).consume(args);
  }catch(_){return {success:false,errorMsg:"BANK_ATOMIC_UNAVAILABLE",stopReason:"ammo"};}
 }
-module.exports={createAtomicAmmoBank,inspectShip,consumeBank,gate};
+module.exports={createAtomicAmmoBank,inspectShip,consumeBank,gate,verifyDirectDebit,guardDirectDebit};
