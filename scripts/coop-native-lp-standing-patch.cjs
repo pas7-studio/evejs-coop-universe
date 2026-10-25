@@ -15,6 +15,14 @@ function patch(source,file,remove=false){
   throw Error("UNSUPPORTED_COOP_LP_PATCH "+file);
  let text=String(source);
  const eol=text.includes("\r\n")?"\r\n":"\n";
+ const quantityAnchor='  const normalizedNumberOfOffers = normalizeStaticOfferQuantity(numberOfOffers, 1);';
+ const quantityAfter=[
+  quantityAnchor,
+  '  // Always bound native LP purchase batches, even without the standing flag.',
+  '  if (!Number.isSafeInteger(normalizedNumberOfOffers) || normalizedNumberOfOffers > 100)',
+  '    return { success: false, errorMsg: "INVALID_STATIC_OFFER_QUANTITY" };'
+ ].join(eol);
+ text=replace(text,quantityAnchor,quantityAfter,remove,"quantity");
  const rule='  if (normalizePositiveInteger(offer.akCost, 0) > 0) {';
  const insert=[
   '  if (process.env.EVEJS_COOP_LP_STANDING_REQUIREMENTS === "1") {',
@@ -28,6 +36,12 @@ function patch(source,file,remove=false){
   rule
  ].join(eol);
  text=replace(text,rule,insert,remove,"standing-gate");
+ const quantityError='  INVALID_STORE: "That LP store is not available.",';
+ const quantityErrorAfter=[
+  quantityError,
+  '  INVALID_STATIC_OFFER_QUANTITY: "An LP Store purchase is limited to 100 offers at a time.",'
+ ].join(eol);
+ text=replace(text,quantityError,quantityErrorAfter,remove,"quantity-error");
  const message='  OFFER_NOT_FOUND: "That offer is no longer available.",';
  const messages=[
   '  STANDING_REQUIREMENT_NOT_MET: "Your faction or corporation standing is too low for this offer.",',
