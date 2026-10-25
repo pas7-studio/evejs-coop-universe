@@ -22,6 +22,7 @@ const { evaluateContract } = require("./coopCourierDispatch" + EXT);
 const flightCore = require("./coopCourierFlight" + EXT);
 const driver = require("./coopCourierFlightDriver" + EXT);
 const bridge = require("./coopCourierNativeAccept" + EXT);
+const notices = require("./coopCourierNotices" + EXT);
 
 // Collateral is insurance, not a refusal reason: a courier takes a contract when
 // it actually holds the ISK. requireZeroCollateral stays the pure-core default
@@ -53,6 +54,7 @@ function createCourierDispatch(deps = {}) {
   const space = deps.space;
   const sceneForSystem = deps.sceneForSystem;
   const pilots = (Array.isArray(deps.pilots) ? deps.pilots : []).map(num).filter((id) => id > 0);
+  const sendMail = typeof deps.sendMail === "function" ? deps.sendMail : null;
   const now = typeof deps.now === "function" ? deps.now : () => Date.now();
   const log = typeof deps.log === "function" ? deps.log : () => {};
   const flights = new Map();
@@ -189,6 +191,44 @@ function createCourierDispatch(deps = {}) {
     return null;
   }
 
+  function stationName(stationID) {
+    try {
+      const station = worldData && typeof worldData.getStationByID === "function" ? worldData.getStationByID(stationID) : null;
+      return String(station && station.stationName || stationID);
+    } catch (_error) {
+      return String(stationID);
+    }
+  }
+
+  // The courier messages the issuer the same way a player would: a real native
+  // EVEmail from its own character. Nothing is invented - the text only carries
+  // real contract, station and hull facts.
+  function notify(kind, contract, identity) {
+    if (!contract || !identity) return null;
+    const characterID = num(identity.character.characterID);
+    const issuerID = num(contract.issuerID);
+    const built = notices.buildNotice(kind, {
+      pilotName: String(identity.character.characterName || "Courier"),
+      contractID: num(contract.contractID),
+      volumeM3: num(contract.volume),
+      fromStationName: stationName(num(contract.startStationID)),
+      toStationName: stationName(num(contract.endStationID)),
+      reward: num(contract.reward),
+    });
+    if (built.status !== "NOTICE") return built;
+    if (!sendMail || !(issuerID > 0) || !(characterID > 0)) {
+      log(`[CoopCourier] notice ${kind} not sent (no mail authority) for ${num(contract.contractID)}`);
+      return built;
+    }
+    try {
+      sendMail({ senderID: characterID, toCharacterIDs: [issuerID], title: built.subject, body: built.body });
+      log(`[CoopCourier] notice ${kind} mailed to ${issuerID} for ${num(contract.contractID)}`);
+    } catch (error) {
+      log(`[CoopCourier] notice ${kind} failed ${String(error && error.message || error)}`);
+    }
+    return built;
+  }
+
   // Reposition planning that also works when the ship is already in space: the
   // flight then starts at the warp step instead of a second undock.
   function planReposition(identity, target, systemID) {
@@ -210,6 +250,45 @@ function createCourierDispatch(deps = {}) {
       systemID: num(systemID),
       identity,
     };
+  }
+
+  // A contract that is already IN_PROGRESS with our courier as the acceptor has
+  // to be flown to the destination; without this the accepted cargo would sit in
+  // the hangar forever after a restart.
+  function resumeInProgress() {
+    if (!contracts || typeof contracts.listContractRecords !== "function") return;
+    for (const record of contracts.listContractRecords() || []) {
+      const contractID = num(record && record.contractID);
+      if (!(contractID > 0) || flights.has(contractID) || attempted.has(contractID)) continue;
+      if (num(record.type) !== 3 || num(record.status) !== 1) continue;
+      const pilotID = num(record.acceptorID);
+      if (!pilots.includes(pilotID)) continue;
+      const identity = identityFor(pilotID);
+      if (!identity) continue;
+      const pkg = itemRow(num(record.plasticWrapItemID));
+      if (!pkg || num(pkg.ownerID) !== pilotID) continue;
+      if (num(identity.character.stationID) !== num(record.startStationID)) {
+        if (!repositions.has(pilotID)) {
+          const move = planReposition(identity, num(record.startStationID), record.startSolarSystemID);
+          if (move) {
+            repositions.set(pilotID, move);
+            log(`[CoopCourier] courier ${pilotID} returning to origin ${move.destinationStationID} for contract ${contractID}`);
+          }
+        }
+        continue;
+      }
+      const planned = flightCore.createFlight({ contract: record, identity, nowMs: now() });
+      if (planned.status !== "FLIGHT_PLANNED") {
+        log(`[CoopCourier] contract ${contractID} resume ${planned.status} ${planned.reason || ""}`.trim());
+        continue;
+      }
+      flights.set(contractID, Object.assign({}, planned, {
+        systemID: num(record.startSolarSystemID),
+        identity,
+      }));
+      attempted.add(contractID);
+      log(`[CoopCourier] contract ${contractID} resumed in progress by ${pilotID}, flying to ${num(record.endStationID)}`);
+    }
   }
 
   function startFlights() {
@@ -289,6 +368,7 @@ function createCourierDispatch(deps = {}) {
       });
       flights.set(contractID, flight);
       log(`[CoopCourier] contract ${contractID} ACCEPTED by ${picked.identity.character.characterID}, flight planned`);
+      notify("accepted", record, picked.identity);
     }
   }
 
@@ -377,6 +457,7 @@ function createCourierDispatch(deps = {}) {
       });
       if (done.status === "COMPLETED") {
         log(`[CoopCourier] contract ${contractID} DELIVERED by ${flight.characterID}`);
+        notify("delivered", live, identity);
         flights.delete(contractID);
       } else {
         log(`[CoopCourier] contract ${contractID} complete ${done.status} ${done.reason || ""}`.trim());
@@ -425,11 +506,15 @@ function createCourierDispatch(deps = {}) {
       log(`[CoopCourier] ${label} ${flight.step} ${observed.status} ${observed.reason || ""}`.trim());
     } else {
       log(`[CoopCourier] ${label} ${flight.step} OK -> ${withEntity.step}`);
+      if (flight.step === "undock" && !flight.reposition) {
+        notify("departing", contracts.getContractRecord(contractID), identity);
+      }
     }
   }
 
   function tick() {
     startFlights();
+    resumeInProgress();
     for (const [contractID, flight] of [...flights]) {
       try {
         stepFlight(contractID, flight);

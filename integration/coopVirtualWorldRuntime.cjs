@@ -193,6 +193,8 @@ function start(){
     space:require("./runtime"),
     sceneForSystem:id=>require("./runtime").ensureScene(id,{refreshStargates:false}),
     pilots:String(process.env.EVEJS_COOP_COURIER_PILOTS||"140000100,140000101,140000102,140000103,140000104,140000105,140000106").split(","),
+    sendMail:mail=>require("../services/mail/mailState").sendMail({
+     senderID:mail.senderID,toCharacterIDs:mail.toCharacterIDs,saveSenderCopy:false,title:mail.title,body:mail.body}),
     log:console.log
    });
    courierDispatch.tick();
@@ -2352,9 +2354,26 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
   }
   return {status:"PENDING"};
  }
- const link=Object.values(identityRegistry?.snapshot()?.links||{})
+ // A stock mining-fleet hauler is a real persisted native ship, but it has no
+// coop-pilot identity. Its durable slot marker is a stable merchant identity, so
+// the same hull keeps one earned-ISK ledger across restarts and respawns.
+ function merchantIdentityFor(entityID,systemID){
+  let native=null;
+  try{native=require("./npc/nativeNpcStore").getNativeEntity(Number(entityID));}
+  catch(_error){return null;}
+  if(!native||Number(native.entityID)!==Number(entityID)||
+   Number(native.systemID)!==Number(systemID))return null;
+  const marker=/^coop-mining-(\d+)-(\d+)-hauler$/.exec(String(native.operatorKind||""));
+  if(!marker||Number(marker[1])!==Number(systemID))return null;
+  const slot=Number(marker[2]);
+  if(!Number.isSafeInteger(slot)||slot<1)return null;
+  return {pilotID:"coop-hauler-"+systemID+"-"+slot,entityID:Number(entityID),
+   systemID:Number(systemID)};
+ }
+ let link=Object.values(identityRegistry?.snapshot()?.links||{})
   .find(entry=>Number(entry.entityID)===Number(haulerID)&&
    Number(entry.systemID)===Number(systemID));
+ if(!link)link=merchantIdentityFor(haulerID,systemID);
  if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
  const trader=ensureMarketTrader();
  if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
@@ -2375,7 +2394,7 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
      if(settlements>=8||Date.now()-job.startedAt>30000)break;
      const result=await trader.execute({scene,pilotID:link.pilotID,
       entityID:Number(haulerID),stationID:Number(stationID),
-      side:"sell",typeID,buyTypes:[],sellTypes},
+      identity:link,side:"sell",typeID,buyTypes:[],sellTypes},
       {withinBatch:settlements>0});
      if(result.status!=="TRADE_SETTLED"){last=String(result.status||"UNKNOWN");break;}
      settlements++;
