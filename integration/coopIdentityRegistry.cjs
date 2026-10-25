@@ -31,8 +31,16 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
    fs.writeFileSync(fd,JSON.stringify(state));fs.fsyncSync(fd);
    fs.closeSync(fd);fd=null;
    fs.renameSync(tmp,file);
-   const dirfd=fs.openSync(dir,"r");
-   try{fs.fsyncSync(dirfd);}finally{fs.closeSync(dirfd);}
+   try{
+    const dirfd=fs.openSync(dir,"r");
+    try{fs.fsyncSync(dirfd);}finally{fs.closeSync(dirfd);}
+   }catch(error){
+    // Windows installations may reject directory fd fsync. Keep legacy
+    // non-war NPC registry working, but require strict durability for war.
+    if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"||
+     !["EINVAL","ENOTSUP","EISDIR","EPERM"].includes(error?.code))
+     throw error;
+   }
   }finally{if(fd!==null)fs.closeSync(fd);}
  };
  function get(id){
