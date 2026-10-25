@@ -744,6 +744,10 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   let stackCount=0,oreQuantity=0;
   for(const rawID of Object.keys(trip.haulers)){
    const id=Number(rawID),ship=findShip(scene,id,trip.systemID);
+   // A headless scene has no session ticker to land a warp. Without this the
+   // hauler stays in WARP forever, the trip silently times out and the whole
+   // haul is lost. Finish only a warp whose own clock already elapsed.
+   if(ship)require("./coopStuckWarpRecovery").release(ship,scene,now);
    if(!ship){
     // Missing in-scene ship is NOT loss evidence. Only the authoritative
     // native wreck/outcome journal can release existing corporate escrow.

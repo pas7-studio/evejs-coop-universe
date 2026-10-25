@@ -40,19 +40,21 @@ function broadcast(scene, entity) {
 }
 
 // Returns a short reason when the ship was healed, otherwise null. Never touches
-// a ship with a queued warp, and never touches a warp that is still in flight.
+// a ship with a queued warp, a warp that is still in flight, or a bare WARP mode
+// whose clock cannot be proven elapsed — only a real warp that already finished
+// can be landed without inventing movement.
 function release(entity, scene, now = Date.now()) {
   if (!entity || entity.mode !== "WARP" || entity.pendingWarp) return null;
   const state = entity.warpState;
-  const completeAt = Number(state?.completeAtMs ?? state?.travelCompleteAtMs);
-  if (state && Number.isFinite(completeAt) && now < completeAt) return null;
-  const landing = vec(state?.targetPoint) || vec(entity.targetPoint) || vec(entity.position);
+  if (!state) return null;
+  const completeAt = Number(state.completeAtMs ?? state.travelCompleteAtMs);
+  if (!Number.isFinite(completeAt) || now < completeAt) return null;
+  const landing = vec(state.targetPoint) || vec(entity.targetPoint) || vec(entity.position);
   if (!landing) return null;
-  const reason = state ? "WARP_COMPLETED" : "WARP_STATE_LOST";
   stopAt(entity, landing);
   broadcast(scene, entity);
-  note(scene, entity, reason, now);
-  return reason;
+  note(scene, entity, "WARP_COMPLETED", now);
+  return "WARP_COMPLETED";
 }
 
 module.exports = { release };

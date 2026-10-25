@@ -29,6 +29,10 @@ function buildCourierSession(character, stationID) {
     stationID: Number(stationID) || 0,
     _transitionState: null,
     isNpcCourier: true,
+    // Native transitions push their result through the session. An NPC has no
+    // client, so these are no-ops: without them the undock mutated real state
+    // and then threw "session.sendSessionChange is not a function".
+    sendSessionChange() { return undefined; },
   };
 }
 
@@ -87,12 +91,22 @@ function warp(ctx, flight, stationPosition) {
   }
   const entityID = Number(flight.entityID) || 0;
   if (!(entityID > 0)) return result(FAILED, { reason: "courier ship is not in space (no entity from undock)" });
+  const options = {
+    forceImmediateStart: true,
+    broadcastWarpStartToVisibleSessions: true,
+    ingressDurationMs: Number(ctx.warpIngressMs) || 30000,
+  };
   try {
-    const warped = ctx.space.warpToPoint(entityID, stationPosition, {
-      forceImmediateStart: true,
-      broadcastWarpStartToVisibleSessions: true,
-      ingressDurationMs: Number(ctx.warpIngressMs) || 30000,
-    });
+    // A courier has no session, so the session-less ingress is the honest call:
+    // space.warpToPoint expects a client session and silently did nothing here.
+    if (typeof ctx.space.startSessionlessWarpIngress === "function") {
+      const outcome = ctx.space.startSessionlessWarpIngress(entityID, stationPosition, options);
+      if (outcome === false || (outcome && outcome.success === false)) {
+        return result(FAILED, { reason: String(outcome && outcome.errorMsg || "sessionless warp refused") });
+      }
+      return result(OK, { entityID });
+    }
+    const warped = ctx.space.warpToPoint(entityID, stationPosition, options);
     return warped === false
       ? result(FAILED, { reason: "warpToPoint refused" })
       : result(OK, { entityID });

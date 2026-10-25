@@ -28,6 +28,7 @@ test('the courier identity object is not a registered client session',()=>{
  assert.equal(session.characterID,140000100);
  assert.equal(session.locationid,60015260);
  assert.equal(session.sendNotification,undefined);
+assert.equal(typeof session.sendSessionChange,'function');
  assert.equal(session.isNpcCourier,true);
  assert.equal(buildCourierSession({},1),null);
 });
