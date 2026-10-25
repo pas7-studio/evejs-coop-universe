@@ -757,11 +757,8 @@ async function observeAlifeEconomy(){
    const products=parseTargets(process.env.EVEJS_COOP_ALIFE_ECONOMY_PRODUCTS||"");
    alifeStationAuthority=createRuntimeStationAuthority({products,deps:{
     worldData,
-    corporationState:require("../services/corporation/corporationState"),
-    corporationRuntime:require("../services/corporation/corporationRuntimeState"),
     itemStore:require("../services/inventory/itemStore"),
     industryStatic:require("../services/industry/industryStaticData"),
-    industryRuntime:require("../services/industry/industryRuntimeState"),
     industryParity:require("../services/industry/industryParityHelpers"),
     gameStore:require("../gameStore"),
     marketClient:require("../services/market/marketDaemonClient").marketDaemonClient
