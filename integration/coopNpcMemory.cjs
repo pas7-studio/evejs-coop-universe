@@ -14,13 +14,34 @@ function createMemory({file,clock=()=>Date.now(),maxEvents=50000}={}){
  try{
   const saved=JSON.parse(fs.readFileSync(file,"utf8"));
   if(saved?.version!==1||!saved.events||!saved.relations||
-     Array.isArray(saved.events)||Array.isArray(saved.relations))throw Error("invalid saved NPC memory");
+     typeof saved.events!=="object"||typeof saved.relations!=="object"||
+     Array.isArray(saved.events)||Array.isArray(saved.relations)||
+     Object.values(saved.events).some(v=>v!==true)||
+     Object.entries(saved.relations).some(([key,value])=>
+      !/^coop-pilot-[0-9]{3,}:[0-9]+$/.test(key)||
+      !value||!validPilot(value.pilotID)||!validID(value.characterID)||
+      key!==value.pilotID+":"+Number(value.characterID)||
+      !Number.isInteger(value.score)||value.score< -100||value.score>100||
+      !Number.isSafeInteger(value.encounters)||value.encounters<1||
+      !Array.isArray(value.incidents)||value.incidents.length>6))
+     throw Error("invalid saved NPC memory");
   state=saved;
  }catch(error){if(error.code!=="ENOENT")throw error;}
- const persist=()=>{
+ const persist=(next)=>{
   fs.mkdirSync(path.dirname(file),{recursive:true});
   const tmp=file+".tmp-"+process.pid;
-  fs.writeFileSync(tmp,JSON.stringify(state));fs.renameSync(tmp,file);
+  let fd=null;
+  try{
+   fd=fs.openSync(tmp,"wx",0o600);
+   fs.writeFileSync(fd,JSON.stringify(next));
+   fs.fsyncSync(fd);
+   fs.closeSync(fd);fd=null;
+   fs.renameSync(tmp,file);
+   state=next;
+  }finally{
+   if(fd!==null)try{fs.closeSync(fd);}catch{}
+   try{fs.unlinkSync(tmp);}catch(error){if(error.code!=="ENOENT")throw error;}
+  }
  };
  function remember({eventID,pilotID,characterID,kind,systemID,occurredAt=clock()}={}){
   if(!eventPattern.test(String(eventID||""))||!validPilot(pilotID)||!validID(characterID)||
@@ -35,14 +56,9 @@ function createMemory({file,clock=()=>Date.now(),maxEvents=50000}={}){
    occurredAt,delta:DELTAS[kind]};
   const next={...prior,score:bounded(prior.score+row.delta),encounters:prior.encounters+1,
    lastKind:kind,lastEventAt:occurredAt,incidents:[...prior.incidents,row].slice(-6)};
-  state.events[id]=true;
-  state.relations[relationKey]=next;
-  try{persist();}catch(error){
-   delete state.events[id];
-   if(prior.encounters)state.relations[relationKey]=prior;
-   else delete state.relations[relationKey];
-   throw error;
-  }
+  const draft={version:1,events:{...state.events,[id]:true},
+   relations:{...state.relations,[relationKey]:next}};
+  persist(draft);
   return {status:"RECORDED",relation:structuredClone(next)};
  }
  function recall({pilotID,characterID}={}){
@@ -70,8 +86,21 @@ function noteVerified({eventID,characterID,systemID,kind,pilotIDs=[],entityIDs=[
   let saved;
   try{saved=JSON.parse(fs.readFileSync(regPath,"utf8"));}
   catch(error){if(error.code==="ENOENT")return {status:"NO_NAMED_NPC"};throw error;}
-  const allowed=new Set(Object.values(saved?.links||{}).filter(link=>
-    Number(link?.systemID)===Number(systemID)&&validPilot(link?.pilotID)));
+  if(!saved||(saved.version!==undefined&&saved.version!==1)||!saved.links||typeof saved.links!=="object"||
+    Array.isArray(saved.links)||!validID(systemID)||!validID(characterID)||
+    !eventPattern.test(String(eventID||""))||!Object.hasOwn(DELTAS,kind))
+   return {status:"INVALID_EVIDENCE_OR_REGISTRY"};
+  const allowed=Object.values(saved.links).filter(link=>
+    Number(link?.systemID)===Number(systemID)&&validPilot(link?.pilotID)&&validID(link?.entityID));
+  // A stale or corrupted duplicate identity must never credit two pilots.
+  const byPilot=new Map(),byEntity=new Map();
+  for(const link of allowed){
+   const entityID=Number(link.entityID);
+   if((byPilot.has(link.pilotID)&&byPilot.get(link.pilotID)!==entityID)||
+      (byEntity.has(entityID)&&byEntity.get(entityID)!==link.pilotID))
+    return {status:"AMBIGUOUS_NPC_IDENTITY"};
+   byPilot.set(link.pilotID,entityID);byEntity.set(entityID,link.pilotID);
+  }
   const match=new Set();
   for(const link of allowed){
    if(pilotIDs.includes(link.pilotID)||entityIDs.some(id=>Number(id)===Number(link.entityID)))

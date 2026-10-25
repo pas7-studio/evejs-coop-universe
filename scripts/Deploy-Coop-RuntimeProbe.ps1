@@ -29,6 +29,7 @@ param(
   [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
   [switch]$EnableConvoyOperations,
+  [switch]$EnableNativeJobAgents,
   [switch]$EnableFullHaulManifest,
 [switch]$Alife,
 [switch]$AlifeTrace,
@@ -49,6 +50,7 @@ if ($EnableDuoMissionSettlement -and -not $LivingCoop) { throw 'Duo settlement r
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
 if ($EnableConvoyOperations -and -not $LivingCoop) { throw 'Native convoy operations require -LivingCoop' }
+if ($EnableNativeJobAgents -and -not $LivingCoop) { throw 'Native NPC job agents require -LivingCoop' }
 if ($EnableFullHaulManifest -and (-not $LivingCoop -or -not $EnableNpcStationDelivery)) { throw 'Full native cargo manifest requires LivingCoop and station delivery' }
 if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
 if ($AlifeTrace -and -not $Alife) { throw '-AlifeTrace requires -Alife' }
@@ -144,6 +146,14 @@ $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
   }
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
 }
+# Discovery/agent dialogue only: no escort escrow or payouts enabled here.
+# No chat commands required for the player-facing native Agent + EVEmail flow.
+if ($EnableNativeJobAgents) {
+  $yamlLines += "      EVEJS_COOP_OPPORTUNITY_BOARD: '1'"
+  $yamlLines += "      EVEJS_COOP_OPPORTUNITY_MAIL: '1'"
+  $yamlLines += "      EVEJS_COOP_NATIVE_JOB_AGENT: '1'"
+  $yamlLines += "      EVEJS_COOP_NPC_JOBS: '1'"
+}
 if ($EnableMissionJoin) { $yamlLines += "      EVEJS_COOP_MISSION_JOIN: '1'" }
 if ($EnableDuoMissionSettlement) {
   $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '1'"
@@ -232,7 +242,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_FLEET_TRADE_SAFETY: '1'"
   # Objective sharing is safe; automatic second reward is not yet crash-atomic.
   # Keep native player-by-player turn-ins until durable multi-recipient settlement.
-  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '0'"
+  if (-not $EnableDuoMissionSettlement) { $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '0'" }
   # Closed-server progression uses the original EveJS account/skill authority.
   # This affects the actual skill queue and client estimates, not fake SP grants.
   $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '$CoopSkillTrainingSpeed'"

@@ -23,6 +23,8 @@ node --test \
  tests/coop-npc-atomic-sqlite-audit.test.mjs \
  tests/coop-npc-fire-debit-source.test.mjs \
  tests/coop-gamestore-atomic.test.mjs
+# Also verify the real scratch SQLite -> POSIX full-sync -> outcome path.
+node scripts/bench-coop-npc-atomic-outcome.cjs --iterations=5 --warmup=0 --barrels=2
 if [ "$#" -gt 1 ]; then
  echo "Expected zero or one explicit disposable Code directory" >&2
  exit 2

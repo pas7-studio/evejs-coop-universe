@@ -5,7 +5,8 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
-let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null;
+let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null;
+let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -52,7 +53,7 @@ function addNpcOrderBlocks(blockedIDs,systemID,owner){
 function npcPersonalGoals(){
  if(process.env.EVEJS_COOP_NPC_PERSONAL_GOALS!=="1"||
     process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1"||
-    process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
+    !alifeOrderArbitrationEnabled(process.env))return null;
  if(!personalGoals)personalGoals=require("./coopNpcPersonalGoals").createPersonalGoals({
   file:process.env.EVEJS_COOP_NPC_GOALS_FILE||"/var/lib/evejs/coop-npc-goals.json"
  });
@@ -63,6 +64,37 @@ function npcRealPoints(scene){
  return {gateCount:points.filter(p=>p.kind==="stargate").length,
   beltCount:points.filter(p=>p.kind==="asteroidBelt").length,
   stationCount:points.filter(p=>p.kind==="station").length};
+}
+function observeNativeMiningProof(){
+ if(!world||!visitedSystems.size)return;
+ const runtime=require("./runtime"),mining=require("../services/mining/miningNpcOperations"),
+  miningState=require("../services/mining/miningRuntimeState"),
+  store=require("./npc/nativeNpcStore"),probe=require("./coopRuntimeProbe");
+ if(!nativeMiningWitness)nativeMiningWitness=
+  require("./coopAlifeNativeMiningWitness").createNativeMiningWitness();
+ // Never create a scene for an observer: physical mining must already exist.
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,2)){
+  const scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;
+  if(!scene)continue;
+  const result=nativeMiningWitness.tick({
+   scene,fleets:mining.getMiningFleetsForSystem(systemID),
+   getNativeEntity:id=>store.getNativeEntity(id),
+   listNativeCargo:id=>store.listNativeCargoForEntity(id),
+   isMineableStaticEntity:miningState.isMineableStaticEntity,
+   getMineableState:(sc,id)=>miningState.getMineableState(sc,id)
+  });
+  if(result.status!=="OBSERVED"){
+   if(backgroundTicks%10===0)probe.observe("alife-native-mining-blocker",null,
+    {spaceState:{systemID}},{status:result.status,source:"NATIVE_MINING_READ_ONLY"});
+   continue;
+  }
+  for(const row of result.results){
+   if(row.status!=="NATIVE_MINING_ACTIVE_NO_YIELD_DELTA"||
+      backgroundTicks%10===0)
+    probe.observe("alife-native-mining-proof",null,
+     {spaceState:{systemID}},row);
+  }
+ }
 }
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
@@ -136,6 +168,18 @@ function start(){
  }
  timer=setInterval(()=>{
   backgroundTicks++;
+  // Read-only courier pass (COOP-024). It never mutates a contract: it only
+  // reports what the decision core thinks of the outstanding courier contracts,
+  // so the live wiring can be verified before anything is accepted.
+  if(process.env.EVEJS_COOP_COURIER_OBSERVE==="1")safeNpcPhase("courier-observe",()=>{
+   const {listContractRecords}=require("../services/contracts/contractRuntimeState");
+   const {evaluateContract}=require("./coopCourierDispatch");
+   for(const record of listContractRecords()){
+    if(Number(record&&record.type)!==3||Number(record&&record.status)!==0)continue;
+    const decision=evaluateContract(record,{sameSystemOnly:true},{walletIsk:0,hullCapacityM3:465000});
+    console.log(`[CoopCourier] contract ${record.contractID} volume ${record.volume} -> ${decision.status}`);
+   }
+  });
   safeNpcPhase("virtual-travel",()=>{
    // A real physical EveJS ship is pinned to its actual system.
    const pins={};
@@ -148,15 +192,32 @@ function start(){
   });
   if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
   safeNpcPhase("native-depot",syncNativeDeliveries);
+  // ALIFE-04: existing 30s tick only; original native mining rock locks,
+  // active module effects, and real nativeNpcStore cargo identity.
+  if(process.env.EVEJS_COOP_ALIFE==="1"&&
+   process.env.EVEJS_COOP_NATIVE_MINING==="1"&&
+   process.env.EVEJS_COOP_ALIFE_MINING_PROOF==="1")
+   safeNpcPhase("alife-native-mining-proof",observeNativeMiningProof);
   // COOP-042: one A-Life 30-second tick; READ ONLY, no extra scheduler.
   if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_ALIFE_ECONOMY==="1")
-   safeNpcPhase("alife-native-economy-observe",observeAlifeEconomy);
+   safeNpcPhase("alife-native-economy-observe",()=>{
+    void observeAlifeEconomy().catch(error=>console.warn("[CoopAlifeEconomy] observation",error.message));
+   });
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
-  safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
+  // Opt-in normal ammo orders flow from native A-Life decisions; survival
+  // still receives an immediate authoritative native retreat attempt.
+  if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled()){
+   safeNpcPhase("native-ammo-readiness",()=>
+    advanceNativeAmmoSupply({mode:"MONITOR_ONLY"}));
+   safeNpcPhase("native-ammo-survival",()=>
+    advanceNativeAmmoSupply({mode:"SURVIVAL"}));
+  }
+  else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
+  safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
   safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
@@ -169,6 +230,9 @@ function start(){
    safeNpcPhase("native-market-schedule",()=>{
     void advanceNativeMarket().catch(error=>console.warn("[CoopNativeMarket] tick",error.message));
    });
+  // Which ore really has a buyer here. Pure advice for the next haul.
+  if(process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1")
+   safeNpcPhase("economy-destination-ore",observeEconomyOre);
   safeNpcPhase("native-activity",observeNativeActivity);
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
    for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
@@ -431,10 +495,127 @@ function observeNativeAmmoConsumption(){
  }
 }
 // Source-verified native kill -> real surviving wreck -> same killer ship.
+// Stage J: one opt-in native competing salvage step on the EXISTING 30s
+// A-Life tick. Uses existing named NPC hulls, actual native movements and
+// one atomic original cargo debit; never spawns a rival or mints a stack.
+let salvageRivalDirector=null,salvageRivalStationDelivery=null;
+function advanceNativeSalvageRivals(){
+ if(process.env.EVEJS_COOP_ALIFE_SALVAGE_RIVALS!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
+  !identityRegistry||!bridge||!visitedSystems.size)return;
+ const fs=require("node:fs"),path=require("node:path");
+ const root=process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||
+  "/var/lib/evejs/coop-native-warehouse";
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  npc=require("./npc/npcRuntime"),controllers=require("./npc/npcRegistry"),
+  gameStore=require("../gameStore"),
+  items=require("../services/inventory/itemStore");
+ const atomic=gameStore.coopAtomicNativeRows;
+ if(typeof atomic?.transact!=="function")return;
+ if(!salvageRivalDirector)
+  salvageRivalDirector=require("./coopSalvageNpcRivals").createSalvageRivals({
+   atomic,
+   readCases:systemID=>{
+    const dir=path.join(root,"salvage-provenance");
+    let names;
+    try{names=fs.readdirSync(dir)}catch(e){
+     if(e?.code==="ENOENT")return [];
+     throw e;
+    }
+    if(names.length>256||names.some(n=>!/^[0-9]+-[0-9]+-[0-9]+[.]json$/.test(n)))
+     throw Error("SALVAGE_RIVAL_MANIFEST_DIRECTORY_UNTRUSTED");
+    const found=[];
+    for(const name of names){
+     const raw=fs.readFileSync(path.join(dir,name),"utf8");
+     if(raw.length>131072)throw Error("SALVAGE_RIVAL_WITNESS_TOO_LARGE");
+     const rec=JSON.parse(raw);
+     if(rec?.v!==1||rec.manifestKey!==name.slice(0,-5)||
+      !Array.isArray(rec.rows))throw Error("SALVAGE_RIVAL_WITNESS_INVALID");
+     if(rec.systemID===systemID)found.push(rec);
+    }
+    return found;
+   },
+   readEscrow:key=>{
+    const result=gameStore.read("corporationRuntime","/coopSalvageEscrows");
+    if(!result?.success)return {status:result?.errorMsg==="ENTRY_NOT_FOUND"?"NOT_FOUND":"UNKNOWN"};
+    const saved=result.data?.byContract?.["salvage-"+key];
+    return saved?{status:saved.status}:{status:"NOT_FOUND"};
+   },
+   getController:id=>controllers.getControllerByEntityID(id),
+   getNativeEntity:store.getNativeEntity,
+   getNativeWreck:store.getNativeWreck,
+   getNativeWreckItems:store.listNativeWreckItemsForWreck,
+   readCargo:store.listNativeCargoForEntity,
+   getUnitVolume:typeID=>Number(items.getItemMetadata(typeID)?.volume),
+   warp:(id,wreckID)=>npcNativeOrder("CIVILIAN",id,"salvage-warp",
+    ()=>npc.warpToEntity(id,wreckID),runtime.ensureScene(
+     store.getNativeEntity(id)?.systemID,{refreshStargates:false})?.systemID),
+   orbit:(id,wreckID,meters)=>npcNativeOrder("CIVILIAN",id,"salvage-orbit",
+    ()=>npc.orbit(id,wreckID,meters),runtime.ensureScene(
+     store.getNativeEntity(id)?.systemID,{refreshStargates:false})?.systemID)
+  });
+ if(!salvageRivalStationDelivery)
+  salvageRivalStationDelivery=require("./coopSalvageNpcStationDelivery")
+   .createNpcSalvageDelivery({
+    atomic,readNativeCargo:store.listNativeCargoForEntity,
+    readNativeItems:()=>Object.values(items.getAllItems()),
+    readRivalJournal:()=>{
+     const r=gameStore.read("corporationRuntime","/coopSalvageRivalMoves");
+     if(r?.errorMsg==="ENTRY_NOT_FOUND")
+      return {version:1,moves:{}};
+     if(!r?.success)throw Error("SALVAGE_RIVAL_JOURNAL_UNAVAILABLE");
+     return r.data;
+    },
+    readNativeEntity:store.getNativeEntity,
+    getController:id=>controllers.getControllerByEntityID(id),
+    getStation:id=>require("./worldData").getStationByID(id),
+    buildInventoryItem:items.buildInventoryItem,
+    warp:(id,stationID)=>npcNativeOrder("CIVILIAN",id,"rival-station-warp",
+     ()=>npc.warpToEntity(id,stationID)),
+    orbit:(id,stationID,meters)=>npcNativeOrder("CIVILIAN",id,"rival-station-orbit",
+     ()=>npc.orbit(id,stationID,meters))
+   });
+ const roles=world?.snapshot()?.pilots||[];
+ const links=[...bridge.snapshot(),...Object.values(
+  identityRegistry.snapshot()?.links||{})];
+ for(const systemID of visitedSystems){
+  const scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;
+  if(!scene)continue;
+  const blockedIDs=new Set();
+  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+  if(raidDirector)for(const id of raidDirector.activePirateIDs(sid=>
+   runtime.ensureScene(sid,{refreshStargates:false})))blockedIDs.add(id);
+  if(wreckRecoveryDirector)for(const id of wreckRecoveryDirector.activeIDs(systemID))
+   blockedIDs.add(id);
+  addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
+  const delivery=salvageRivalStationDelivery.tick({scene,
+   assignments:links,blockedIDs});
+  if(delivery.orders.length||delivery.deliveries.length)
+   require("./coopRuntimeProbe").observe("alife-salvage-rival-station",
+    null,{spaceState:{systemID}},{
+     status:delivery.status,orders:delivery.orders,
+     nativeStockDeliveries:delivery.deliveries,
+     nativeInventoryAtomic:true,iskGranted:false
+    });
+  // A cargo-occupied NPC returning to a station must not also receive
+  // a new wreck warp order from another A-Life director in this tick.
+  if(delivery.orders.length||delivery.deliveries.length)continue;
+  const result=salvageRivalDirector.tick({scene,assignments:links,roles,
+   blockedIDs});
+  if(result.orders.length||result.pickups.length)
+   require("./coopRuntimeProbe").observe("alife-salvage-competition",
+    null,{spaceState:{systemID}},{
+     status:result.status,nativeOrders:result.orders,
+     nativeCargoReceipts:result.pickups,
+     npcSpawned:false,iskGranted:false
+    });
+ }
+}
 function advanceNativeWreckRecovery(){
  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !identityRegistry||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry");
@@ -474,7 +655,7 @@ function advanceNativeWreckCustody(){
  if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   nativeMarketTickRunning||!identityRegistry||!bridge)return;
  const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
   controllers=require("./npc/npcRegistry");
@@ -558,7 +739,7 @@ function advanceNativeWreckCustody(){
 function advanceNativeLootStationDelivery(){
  if(process.env.EVEJS_COOP_NPC_LOOT_COMMERCE!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !identityRegistry||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   controllers=require("./npc/npcRegistry"),
@@ -729,43 +910,286 @@ function observeNativeActivity(){
   }catch(error){console.warn("[CoopNativeActivity] sample",systemID,error.message);}
  }
 }
-function observeAlifeEconomy(){
- if(!world||!identityRegistry||!visitedSystems.size){
-  if(backgroundTicks%10===0)require("./coopRuntimeProbe").observe(
-   "alife-economy-blocker",null,null,{reason:"NATIVE_ALIFE_WORLD_NOT_READY",
-    status:"BLOCKED",source:"NATIVE_ECONOMY_SENSOR"});
-  return;
- }
- const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore");
- const controllers=require("./npc/npcRegistry");
- const worldData=require("./worldData"),probe=require("./coopRuntimeProbe");
- if(!alifeEconomyObserver)alifeEconomyObserver=require("./coopAlifeEconomy")
-  .createAlifeEconomyObserver({emit:event=>probe.observe(event.event,null,
-    {spaceState:{systemID:event.systemID}},event)});
- const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
- const links=Object.values(identityRegistry.snapshot().links||{});
- for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4)){
-  const scene=native.ensureScene(systemID,{refreshStargates:false});
-  const snap=require("./coopAlifeEconomySensor").readEconomySnapshot({
-   systemID,scene,links,roles,
-   getController:id=>controllers.getControllerByEntityID(id),
-   getStation:id=>worldData.getStationByID(id),
-   getNativeEntity:id=>npcStore.getNativeEntity(id),
-   listNativeCargo:id=>npcStore.listNativeCargoForEntity(id),
-   inspectNativeAmmo:(entityID,pilotID)=>nativeAmmoSupply?.inspect({
-    scene,entityID,pilotID,assignments:links})||null,
-   // Factory/market snapshots must later be supplied by audited source readers.
-   readStationEconomy:()=>null
+async function observeAlifeEconomy(){
+ // COOP-043: still one existing 30-second A-Life tick, no competing timer.
+ if(alifeEconomyAuthorityBusy)return;
+ alifeEconomyAuthorityBusy=true;
+ try{
+  if(!world||!identityRegistry||!visitedSystems.size){
+   if(backgroundTicks%10===0)require("./coopRuntimeProbe").observe(
+    "alife-economy-blocker",null,null,{reason:"NATIVE_ALIFE_WORLD_NOT_READY",
+     status:"BLOCKED",source:"NATIVE_ECONOMY_SENSOR"});
+   return;
+  }
+  const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore");
+  const controllers=require("./npc/npcRegistry");
+  const worldData=require("./worldData"),probe=require("./coopRuntimeProbe");
+  if(!alifeEconomyObserver)alifeEconomyObserver=require("./coopAlifeEconomy")
+   .createAlifeEconomyObserver({emit:event=>probe.observe(event.event,null,
+     {spaceState:{systemID:event.systemID}},event)});
+  const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+  const links=Object.values(identityRegistry.snapshot().links||{});
+  const authorityEnabled=process.env.EVEJS_COOP_ALIFE_ECONOMY_AUTHORITY==="1";
+  if(authorityEnabled&&!alifeStationAuthority){
+   const {createRuntimeStationAuthority,parseTargets}=require("./coopAlifeStationAuthorityRuntime");
+   const products=parseTargets(process.env.EVEJS_COOP_ALIFE_ECONOMY_PRODUCTS||"");
+   alifeStationAuthority=createRuntimeStationAuthority({products,deps:{
+    worldData,
+    itemStore:require("../services/inventory/itemStore"),
+    industryStatic:require("../services/industry/industryStaticData"),
+    industryParity:require("../services/industry/industryParityHelpers"),
+    gameStore:require("../gameStore"),
+    marketClient:require("../services/market/marketDaemonClient").marketDaemonClient
+   }});
+  }
+  // Global read budget across all systems, not eight stations per system.
+  let remainingStations=8;
+  const stationEvidenceCache=new Map();
+  for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4)){
+   const scene=native.ensureScene(systemID,{refreshStargates:false});
+   const snap=require("./coopAlifeEconomySensor").readEconomySnapshot({
+    systemID,scene,links,roles,
+    getController:id=>controllers.getControllerByEntityID(id),
+    getStation:id=>worldData.getStationByID(id),
+    getNativeEntity:id=>npcStore.getNativeEntity(id),
+    listNativeCargo:id=>npcStore.listNativeCargoForEntity(id),
+    inspectNativeAmmo:(entityID,pilotID)=>nativeAmmoSupply?.inspect({
+     scene,entityID,pilotID,assignments:links})||null,
+    readStationEconomy:()=>null
+   });
+   if(authorityEnabled&&alifeStationAuthority&&snap.authoritativeNative===true){
+    // Bound to the pilot's actual native corporation; never broadcast another
+    // corporation's station stock to a trader or a player-owned ship.
+    const cache=stationEvidenceCache;
+    for(const pilot of snap.pilots){
+     if(pilot.role!=="trader"||!pilot.stationID||!pilot.ownerID)continue;
+     const key=pilot.ownerID+":"+pilot.stationID;
+     if(cache.has(key)){pilot.economy=cache.get(key);continue;}
+     if(remainingStations--<=0){pilot.economy={authoritativeNative:false,
+       reason:"NATIVE_ALIFE_STATION_BUDGET_EXCEEDED"};continue;}
+     const observed=await alifeStationAuthority.read({
+      ownerID:pilot.ownerID,stationID:pilot.stationID,systemID});
+     pilot.economy=observed;
+     cache.set(key,observed);
+    }
+   }
+   const decision=alifeEconomyObserver.tick(snap);
+   if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
+    safeNpcPhase("alife-native-resupply-act",()=>
+     advanceNativeAmmoSupply({mode:"PLANNED",systemIDFilter:systemID,decision}));
+   // COOP-049: exactly one existing A-Life authority may dispatch the
+   // opt-in native corporate buyer. Independent legacy market writers block it.
+   if(process.env.EVEJS_COOP_ALIFE_NATIVE_BUYER==="1"){
+    if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET==="1"||nativeMarketTickRunning){
+     probe.observe("alife-native-buyer-blocked",null,{spaceState:{systemID}},
+      {reason:"PARALLEL_NATIVE_MARKET_WRITER_ENABLED",status:"BLOCKED"});
+    }else{
+     if(!alifeBuyerRuntime)alifeBuyerRuntime=require("./coopAlifeNativeBuyerRuntime")
+      .createRuntimeAlifeBuyer({file:process.env.EVEJS_COOP_NPC_CORP_BUY_JOURNAL||
+       "/var/lib/evejs/coop-npc-corp-buy-journal.json"});
+     const purchased=await alifeBuyerRuntime.tick({snapshot:snap,decision,
+      registry:identityRegistry,world});
+     if(purchased.purchases?.length||purchased.status==="BLOCKED")
+      probe.observe("alife-native-buyer-result",null,{spaceState:{systemID}},
+       {status:purchased.status,purchases:purchased.purchases||[],
+        reason:purchased.reason||null});
+    }
+   }
+  }
+ }finally{alifeEconomyAuthorityBusy=false}
+}
+function lockedTargets(scene,ship){
+ try{return (scene?.getTargetsForEntity?.(ship)||[]).map(Number).slice(0,6);}
+ catch(error){return "UNAVAILABLE";}
+}
+function npcModuleSummary(ship){
+ try{
+  const equipment=require("./npc/npcEquipment");
+  const runtime=require("../services/mining/miningRuntime");
+  const fitting=require("../services/fitting/liveFittingState");
+  const items=equipment.getNpcFittedModuleItems(ship)||[];
+  return items.slice(0,10).map(item=>{
+   let miningEffects=0;
+   try{
+    miningEffects=(fitting.getTypeEffectRecords(Number(item?.typeID)||0)||[])
+     .filter(effect=>{try{return runtime.isMiningEffectRecord(effect,item);}catch(_error){return false;}}).length;
+   }catch(_error){miningEffects=-1;}
+   const online=typeof fitting.isModuleOnline==="function"?fitting.isModuleOnline(item):null;
+   return {typeID:Number(item?.typeID)||0,miningEffects,
+    online,flagID:Number(item?.flagID)||0,
+    // Does the native runtime really hold this module in an active cycle?
+    active:ship?.activeModuleEffects instanceof Map?
+     Boolean(ship.activeModuleEffects.get(Number(item?.itemID)||0)):null,
+    activeTarget:ship?.activeModuleEffects instanceof Map?
+     Number(ship.activeModuleEffects.get(Number(item?.itemID)||0)?.targetID)||0:0,
+    capacitor:Number.isFinite(ship?.capacitorCharge)?Math.round(ship.capacitorCharge):null,
+    hasState:Boolean(item?.moduleState&&typeof item.moduleState==="object"),
+    hasExplicit:typeof fitting.hasExplicitModuleOnlineState==="function"?
+     fitting.hasExplicitModuleOnlineState(item):null};
   });
-  alifeEconomyObserver.tick(snap);
+ }catch(error){return "UNAVAILABLE:"+String(error?.message||error).slice(0,40);}
+}
+function distanceBetween(left,right){
+ if(!left||!right)return null;
+ const keys=["x","y","z"];
+ if(!keys.every(key=>Number.isFinite(left[key])&&Number.isFinite(right[key])))return null;
+ return Math.round(Math.hypot(left.x-right.x,left.y-right.y,left.z-right.z));
+}
+function nearestBeltMeters(scene,position){
+ if(!position)return null;
+ let nearest=null;
+ for(const entity of scene?.staticEntities||[]){
+  if(entity?.kind!=="asteroidBelt"||!entity.position)continue;
+  const meters=distanceBetween(position,entity.position);
+  if(meters===null)continue;
+  if(nearest===null||meters<nearest)nearest=meters;
  }
+ return nearest;
+}
+function mineableSummary(scene,entityID){
+ try{
+  const state=require("../services/mining/miningRuntimeState").getMineableState(scene,entityID);
+  if(!state)return null;
+  return {yieldTypeID:Number(state.yieldTypeID)||0,
+   remaining:Number(state.remainingQuantity)||0,
+   unitVolume:Number(state.unitVolume)||0,
+   updatedAtMs:Number(state.updatedAtMs)||0};
+ }catch(error){return "UNAVAILABLE:"+String(error?.message||error).slice(0,40);}
+}
+function mineableBeltSummary(scene){
+ try{
+  const state=require("../services/mining/miningRuntimeState");
+  const entities=(scene?.staticEntities||[]).filter(entity=>{
+   try{return state.isMineableStaticEntity(entity);}catch(_error){return false;}
+  });
+  let withOre=0,totalRemaining=0;
+  for(const entity of entities.slice(0,400)){
+   const mineable=state.getMineableState(scene,Number(entity.itemID)||0);
+   const remaining=Number(mineable?.remainingQuantity)||0;
+   if(remaining>0){withOre++;totalRemaining+=remaining;}
+  }
+  return {entities:entities.length,withOre,totalRemaining};
+ }catch(error){return "UNAVAILABLE:"+String(error?.message||error).slice(0,40);}
+}
+function miningShipDetail(systemID,fleet){
+ try{
+  const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
+  const rocks=[];
+  const rockForShips=scene?.getEntityByID?.(Number(fleet?.activeAsteroidID));
+  const rockPosition=rockForShips?.position||null;
+  const ships=[...(fleet?.minerEntityIDs||[]),...(fleet?.haulerEntityIDs||[])].map(id=>{
+   const ship=scene?.getEntityByID?.(Number(id));
+   if(!ship)return {id:Number(id)||0,missing:true};
+   return {id:Number(id)||0,mode:String(ship.mode||""),
+    target:Number(ship.targetID)||0,stacks:(ship.nativeCargoItems||[]).length,
+    quantity:(ship.nativeCargoItems||[]).reduce((sum,item)=>sum+Math.max(0,Number(item.quantity)||0),0),
+    toRockMeters:distanceBetween(ship.position,rockPosition),
+    toBeltMeters:nearestBeltMeters(scene,ship.position),
+    targets:lockedTargets(scene,ship),
+    // Mining only starts when the hull really carries online mining modules.
+    modules:npcModuleSummary(ship)};
+  });
+  const rock=scene?.getEntityByID?.(Number(fleet?.activeAsteroidID));
+  if(rock)rocks.push({id:Number(rock.itemID)||0,typeID:Number(rock.typeID)||0,
+   quantity:Number(rock.quantity ?? rock.remainingQuantity ?? rock.oreQuantity)||0,
+   radius:Number(rock.radius)||0,
+   mineable:mineableSummary(scene,Number(rock.itemID)||0)});
+  const belt=mineableBeltSummary(scene);
+  return {ships,rocks,belt};
+ }catch(error){return {error:String(error?.message||error).slice(0,80)};}
+}
+function observeEconomyOre(){
+ if(!visitedSystems.size)return;
+ const arrival=require("./coopNativeStationArrival");
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4))
+  arrival.observePreferredOre({systemID,reason:"periodic"});
+ // Same process, same second: the real native mining records. Without this a
+ // stalled haul looks exactly like a fleet that is simply still mining.
+ try{
+  const mining=require("../services/mining/miningNpcOperations");
+  const probe=require("./coopRuntimeProbe");
+  for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4)){
+   const fleets=mining.getMiningFleetsForSystem(systemID)||[];
+   if(!fleets.length)continue;
+   probe.observe("living-mining-fleet-state",null,{spaceState:{systemID}},{
+    systemID,fleets:fleets.slice(0,6).map(fleet=>({
+     fleetID:Number(fleet?.fleetID)||0,state:String(fleet?.state||""),
+     miners:(fleet?.minerEntityIDs||[]).length,haulers:(fleet?.haulerEntityIDs||[]).length,
+     activeAsteroidID:Number(fleet?.activeAsteroidID)||0,
+     loadedUntilMs:Number(fleet?.loadedUntilMs)||0,
+     lastHauledVolumeM3:Number(fleet?.lastHauledVolumeM3)||0,
+     stationID:Number(fleet?.coopStationArrival?.stationID)||0,
+     noCargo:fleet?.coopStationNoCargo===true,
+     nextThinkAtMs:Number(fleet?.nextThinkAtMs)||0,now:Date.now(),
+     // Where mining really stops: an empty miner, a dead rock or a spent module.
+     shipDetail:miningShipDetail(systemID,fleet)
+    }))
+   });
+  }
+ }catch(error){console.warn("[CoopEconomyDestination] fleet state",error.message);}
 }
 function nativeMarketAllowlist(name){
  return [...new Set(String(process.env[name]||"").split(",").map(Number)
   .filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,20);
 }
-async function advanceNativeMarket(){
- if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
+// How the merchant prices its own stock: the best real bid first, then small
+// steps down every few minutes while nothing sells. Pure policy; the guarded
+// native trader still owns every mutation (order fill, cargo, ledger).
+let nativeSellPricing=null;
+function sellPricing(){
+ if(process.env.EVEJS_COOP_NPC_SELL_PRICING!=="1")return null;
+ if(!nativeSellPricing)nativeSellPricing=require("./coopNpcSellPricing").createSellPricing({
+  intervalMs:Math.max(30000,Math.min(3600000,
+   Number(process.env.EVEJS_COOP_NPC_SELL_STEP_INTERVAL_MS||120000))),
+  stepPct:Math.max(0.01,Math.min(0.5,
+   Number(process.env.EVEJS_COOP_NPC_SELL_STEP_PCT||0.05))),
+  minPct:Math.max(0.2,Math.min(0.99,
+   Number(process.env.EVEJS_COOP_NPC_SELL_FLOOR_PCT||0.55)))});
+ return nativeSellPricing;
+}
+// One durable guarded trader for the whole process: the arrival sale and the
+// normal market tick must share the same in-memory ledger, never a second copy.
+function ensureMarketTrader(){
+ if(nativeMarketTrader||nativeMarketBlocked)return nativeMarketTrader;
+ if(!identityRegistry||!world)return null;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+ const worldData=require("./worldData"),inventory=require("../services/inventory/itemTypeRegistry");
+ const controllers=require("./npc/npcRegistry");
+ const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+ const {createNpcMarketTrader}=require("./coopNativeNpcMarket");
+ const market=createNpcMarketTrader({
+  call:(method,params)=>marketClient.call(method,params),
+  store,registry:identityRegistry,getStation:id=>worldData.getStationByID(id),
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getController:id=>controllers.getControllerByEntityID(id),
+  resolveType:id=>inventory.resolveItemByTypeID(id),
+  root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
+  maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
+  maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
+  cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000))),
+  priceFloorFor:process.env.EVEJS_COOP_NPC_SELL_PRICING==="1"?
+   (typeID,bestBid,stationID)=>{
+    const pricing=sellPricing();
+    if(!pricing)return 0;
+    const key=Number(stationID)+":"+Number(typeID);
+    pricing.offer(key,bestBid);
+    const decision=pricing.decide({key,bestBid});
+    return decision.price||0;
+   }:null
+ });
+ // A pending RPC of unknown outcome can never be retried automatically.
+ const recovered=market.recover();
+ if(recovered.status==="NEEDS_OPERATOR_REPAIR"){
+  nativeMarketBlocked=true;
+  require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,null,recovered);
+  return null;
+ }
+ if(recovered.recovered)
+  require("./coopRuntimeProbe").observe("living-native-market-recovered",null,null,recovered);
+ nativeMarketTrader=market;
+ return market;
+}
+async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
   nativeMarketBlocked||nativeMarketTickRunning||
   !identityRegistry||!world||!visitedSystems.size)return;
  const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
@@ -777,35 +1201,12 @@ async function advanceNativeMarket(){
   const worldData=require("./worldData"),inventory=require("../services/inventory/itemTypeRegistry");
   const controllers=require("./npc/npcRegistry");
   const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
-  if(!nativeMarketTrader){
-   const {createNpcMarketTrader}=require("./coopNativeNpcMarket");
-   const market=createNpcMarketTrader({
-    call:(method,params)=>marketClient.call(method,params),
-    store,registry:identityRegistry,getStation:id=>worldData.getStationByID(id),
-    sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
-    getController:id=>controllers.getControllerByEntityID(id),
-    resolveType:id=>inventory.resolveItemByTypeID(id),
-    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||
-     "/var/lib/evejs/coop-native-market",
-    maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
-    maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
-    cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000)))
-   });
-   // A pending RPC of unknown outcome can never be retried automatically.
-   const recovered=market.recover();
-   if(recovered.status==="NEEDS_OPERATOR_REPAIR"){
-    nativeMarketBlocked=true;
-    require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,null,recovered);
-    return;
-   }
-   if(recovered.recovered)
-    require("./coopRuntimeProbe").observe("living-native-market-recovered",null,null,recovered);
-   nativeMarketTrader=market;
-  }
+  const market=ensureMarketTrader();
+  if(!market)return;
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
   const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
    process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
-   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+   alifeOrderArbitrationEnabled(process.env);
   if(rearmEnabled&&!nativeRearm)
    nativeRearm=require("./coopNpcNativeRearm").createNativeRearm({
     store,registry:identityRegistry,
@@ -909,6 +1310,11 @@ async function advanceNativeMarket(){
      });
      if(result.status==="TRADE_SETTLED"){
       completed++;
+      // A sale resets this stack's asking price for the next haul.
+      if(trade.side==="sell"){
+       const pricing=sellPricing();
+       if(pricing)pricing.noteSold(Number(station.itemID)+":"+Number(trade.typeID));
+      }
       require("./coopRuntimeProbe").observe(
        rearmingPirate&&trade.side==="buy"?
         "living-native-npc-ammo-purchased":
@@ -933,6 +1339,12 @@ async function advanceNativeMarket(){
          purchaseSettled:true,cargoID:result.cargoID});
       }
       break;
+     }
+     if(result.status==="PRICE_BELOW_FLOOR"){
+      require("./coopRuntimeProbe").observe("living-npc-sell-policy",null,
+       {spaceState:{systemID}},{...result,decision:"HOLD_UNTIL_FLOOR_STEPS_DOWN",
+        marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"});
+      continue;
      }
      if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
       "UNRESOLVED_MARKET_JOURNAL"].includes(result.status)){
@@ -999,10 +1411,10 @@ function advanceNativeCivilianOrders(){
 }
 // Physically stranded NPCs cannot invent ammo. Warping away from battle
 // uses a real unscrumbled native hull, with safe real station destination.
-function advanceNativeAmmoSupply(){
+function advanceNativeAmmoSupply({mode="LEGACY",systemIDFilter=null,decision=null}={}){
  if(process.env.EVEJS_COOP_NPC_AMMO_SUPPLY!=="1"||
   process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
-  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||
   !bridge||!identityRegistry||!world||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
   store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry"),
@@ -1027,16 +1439,38 @@ function advanceNativeAmmoSupply(){
  const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
  const assignments=bridge.snapshot().filter(x=>roles.get(x.pilotID)==="pirate");
  for(const systemID of visitedSystems){
+  if(systemIDFilter!==null&&Number(systemIDFilter)!==Number(systemID))continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const blockedIDs=new Set();
   if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
   if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
-  const result=nativeAmmoSupply.tick({scene,assignments,blockedIDs});
+  let chosen=assignments,selected=null;
+  if(mode==="SURVIVAL"||mode==="PLANNED"){
+   selected=require("./coopAlifeNativeResupplyBridge").selectAmmoResupply({
+    mode,systemID,assignments,decision,scene,
+    getController:id=>controllers.getControllerByEntityID(id),
+    inspectAmmo:args=>nativeAmmoSupply.inspect(args)});
+   if(selected.status!=="SELECTED"||selected.selected.length===0)continue;
+   chosen=selected.selected;
+  }
+  const result=nativeAmmoSupply.tick({scene,assignments:chosen,blockedIDs,
+   observeOnly:mode==="MONITOR_ONLY"});
   if(result.orders.length||result.events.length)
    require("./coopRuntimeProbe").observe("living-native-ammo-supply",null,
     {spaceState:{systemID}},{orders:result.orders,events:result.events,
-     nativeCargoSupplyOnly:true,cargoCredited:false});
+     nativeCargoSupplyOnly:true,cargoCredited:false,alifeMode:mode});
+  if(mode==="PLANNED"&&result.orders.length)
+   for(const order of result.orders){
+    const intent=selected.intents.get(order.pilotID);
+    if(!intent||Number(intent.entityID)!==Number(order.entityID))continue;
+    require("./coopRuntimeProbe").observe("alife-native-act-order",null,
+     {spaceState:{systemID}},{pilotID:order.pilotID,entityID:order.entityID,
+      stage:"RESUPPLY",intentID:intent.intentID,stationID:order.stationID,
+      nativeAction:order.action,proof:"NATIVE_ORDER_ACCEPTED",
+      nativeMutation:true,cargoCredited:false,iskCredited:false});
+   }
  }
+
 }
 function advanceNativeRaids(){
  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
@@ -1090,7 +1524,7 @@ function advanceNativeRaids(){
   // attack loop. Existing native stock mining raid legality still runs first.
   const squadEnabled=process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&
    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&
-   process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
+   alifeOrderArbitrationEnabled(process.env);
   if(squadEnabled&&!squadDirector)
    squadDirector=require("./coopNpcSquadDirector").createSquadDirector();
   const squads=squadEnabled?squadDirector:null;
@@ -1585,7 +2019,9 @@ function observeSession(session,ship){
       }
       // Stage J: use an already materialized REAL A-Life trader hull, never
        // manufacture a rival, an ISK reward or a virtual wreck item.
-       if(process.env.EVEJS_COOP_RESCUE_NPC_RIVALS==="1"){
+       if(process.env.EVEJS_COOP_RESCUE_NPC_RIVALS==="1"&&
+          process.env.EVEJS_COOP_ALIFE_SALVAGE_RIVALS!=="1"&&
+          alifeOrderArbitrationEnabled(process.env)){
         try{
          const nativeStore=require("./npc/nativeNpcStore");
          const npcRuntime=require("./npc/npcRuntime");
@@ -1642,7 +2078,7 @@ function observeSession(session,ship){
         }catch(error){console.warn("[CoopRescueRivals]",
          String(error?.message||error).slice(0,120))}
        }
-       const civilianActions=advanceNativeCivilianOrders();
+      const civilianActions=advanceNativeCivilianOrders();
       require("./coopRuntimeProbe").observe("virtual-world-materialization",session,ship,{
         civilianActions,
         assignments:result,sceneReady:Boolean(scene),
@@ -1842,4 +2278,75 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled};
+// Option A: the merchant sells at the station BEFORE the warehouse takes the
+// cargo. The native arrival tick is synchronous, so the first call starts the
+// market job and the arrival pauses until it settles, bounded by a hard
+// timeout: a hung RPC can never freeze a hauler or fake a sale.
+const arrivalSales=new Map();
+const saleNotes=new Map();
+// A sale that silently does not happen is indistinguishable from a bug, so every
+// skip reason is reported once per hauler and reason per five minutes.
+function noteSaleSkip(systemID,stationID,haulerID,reason){
+ const key=String(systemID)+":"+String(haulerID)+":"+String(reason);
+ const now=Date.now();
+ if(now-(saleNotes.get(key)||0)<300000)return;
+ saleNotes.set(key,now);
+ try{
+  require("./coopRuntimeProbe").observe("living-npc-sale-skipped",null,
+   {spaceState:{systemID:Number(systemID)||0}},
+   {stationID:Number(stationID)||0,haulerID:Number(haulerID)||0,
+    reason:String(reason||"").slice(0,80)});
+ }catch(_error){/* telemetry must never break a delivery */}
+}
+function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
+ if(process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL!=="1")return {status:"DISABLED"};
+ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1")return {status:"MARKET_OFF"};
+ const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
+ if(!sellTypes.length)return {status:"NO_SELL_TYPES"};
+ const key=Number(stationID)+":"+Number(haulerID);
+ const running=arrivalSales.get(key);
+ if(running){
+  if(running.settled)return running.settled;
+  if(Date.now()-running.startedAt>45000){
+   arrivalSales.delete(key);
+   noteSaleSkip(systemID,stationID,haulerID,"SALE_TIMEOUT");
+   return {status:"NOT_SOLD",reason:"SALE_TIMEOUT"};
+  }
+  return {status:"PENDING"};
+ }
+ const link=Object.values(identityRegistry?.snapshot()?.links||{})
+  .find(entry=>Number(entry.entityID)===Number(haulerID)&&
+   Number(entry.systemID)===Number(systemID));
+ if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
+ const trader=ensureMarketTrader();
+ if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
+ const wanted=[...new Set(sellTypes.filter(typeID=>
+  !types.length||types.map(Number).includes(Number(typeID))))];
+ if(!wanted.length){noteSaleSkip(systemID,stationID,haulerID,"NO_ALLOWED_ORE");return {status:"NOT_SOLD",reason:"NO_ALLOWED_ORE"};}
+ const job={startedAt:Date.now(),settled:null};
+ arrivalSales.set(key,job);
+ void (async()=>{
+  const sold=[];let last="NO_ELIGIBLE_STACK";
+  try{
+   const scene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
+   for(const typeID of wanted){
+    const result=await trader.execute({scene,pilotID:link.pilotID,
+     entityID:Number(haulerID),stationID:Number(stationID),
+     side:"sell",typeID,buyTypes:[],sellTypes});
+    if(result.status==="TRADE_SETTLED")
+     sold.push({typeID,quantity:result.quantity,price:result.price,
+      balance:result.balance});
+    else last=String(result.status||"UNKNOWN");
+   }
+  }catch(error){last="SALE_ERROR:"+String(error?.message||error).slice(0,60);}
+  job.settled=sold.length?
+   {status:"SOLD",sold:JSON.parse(JSON.stringify(sold)),lastStatus:last}:
+   {status:"NOT_SOLD",reason:last};
+ })().finally(()=>{
+  // Keep the settled result readable for the next arrival tick only.
+  const timer=setTimeout(()=>{if(arrivalSales.get(key)===job)arrivalSales.delete(key);},5000);
+  if(typeof timer?.unref==="function")timer.unref();
+ });
+ return {status:"PENDING"};
+}
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival};

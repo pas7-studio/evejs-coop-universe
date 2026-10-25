@@ -1,0 +1,386 @@
+{
+  "schemaVersion": 1,
+  "feature": "COOP-049 Native Job Opportunities via Agent UI + EVEmail",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Pinned gameboys84/EveJS c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+    "Authorized real game client build 3396210",
+    "Operator-approved disposable clone of evejs-data",
+    "Two real accounts, active native ships, actual corporate agent in same solar system as live preparing NPC convoy",
+    "Existing paid Escort funding gates separately proved before enabling payouts",
+    "No remote GitHub Actions"
+  ],
+  "featureFlags": {
+    "discovery": [
+      "EVEJS_COOP_OPPORTUNITY_BOARD",
+      "EVEJS_COOP_OPPORTUNITY_MAIL",
+      "EVEJS_COOP_NATIVE_JOB_AGENT",
+      "EVEJS_COOP_NPC_JOBS"
+    ],
+    "finance": [
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT (DO NOT ENABLE UNTIL FULL FINANCE E2E)"
+    ],
+    "experimentalStageI": [
+      "EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 (DISPOSABLE SNAPSHOT ONLY, default OFF)",
+      "EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=1 (real native physics callback required)",
+      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (authentic two pilots at source)",
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (only approved disposable wallet E2E)"
+    ],
+    "crashRecovery": [
+      "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 (EXPERIMENTAL/DEFAULT OFF, requires genuine active native ingress and all Stage I proof flags)",
+      "Never enable on live persistent data before 2-client crash/recovery validation"
+    ],
+    "nativeIngressSnapshot": [
+      "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT=1 (EXPERIMENTAL default-OFF; genuine physical ingress, original WARP_ACK and durable witness)",
+      "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 (required, read-only corporate escrow check)",
+      "All strict native Escort/warehouse/wallet flags required; ONLY use disposable 2-client GameStore E2E"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "JOB-UI-01",
+      "name": "Authentic live corporate offer appears",
+      "actions": [
+        "Observe real cargo/hauler/route/quote on native backend",
+        "Player opens Agents list and contacts real NPC agent of issuing corporation",
+        "Inspect EVE agent dialogue and briefing"
+      ],
+      "expected": "Agent describes same real convoy and quoted reward; never says already funded"
+    },
+    {
+      "id": "JOB-UI-02",
+      "name": "Native Accept buttons replace slash commands",
+      "actions": [
+        "Two pilots join stock native fleet and enter actual live system",
+        "Each opens agent conversation and presses native Accept",
+        "First may reconfirm after second opted in"
+      ],
+      "expected": "Original server-stored native two-pilot signed receipt; never grants immediate ISK"
+    },
+    {
+      "id": "JOB-UI-03",
+      "name": "Only genuine agents can offer",
+      "actions": [
+        "Contact real other-corporation agent",
+        "Contact a different-system agent",
+        "Contact agent with native mission already offered/active"
+      ],
+      "expected": "Unchanged normal missions, no cross-corporation fake offers"
+    },
+    {
+      "id": "JOB-UI-04",
+      "name": "No matching SDE station agent fallback",
+      "actions": [
+        "Prepare real convoy without matching real same-system corporate agent",
+        "Check local opted-in client's standard EVEmail"
+      ],
+      "expected": "In-game A-Life event mail remains available, clearly UNPAID; no false Agent ID"
+    },
+    {
+      "id": "JOB-UI-05",
+      "name": "Native quoted agent EVEmail",
+      "actions": [
+        "Opt in to local job notices",
+        "Generate real priced convoy from verified corporate native wallet",
+        "Open stock EVEmail and agent contact"
+      ],
+      "expected": "Accurate agent ID, system/station and actual nonreserved quote; no need to type /jobs"
+    },
+    {
+      "id": "JOB-UI-06",
+      "name": "Watch local/all/off and anti-spam",
+      "actions": [
+        "Opt out one character",
+        "Other watches local",
+        "Third distant watches all",
+        "Replay same quote and reboot"
+      ],
+      "expected": "Only eligible online recipients; at-most-one quote mail per character/source"
+    },
+    {
+      "id": "JOB-UI-07",
+      "name": "Lost EVEmail ACK",
+      "actions": [
+        "Inject lost native mail ACK on disposable test world",
+        "Replay quote",
+        "Restart server"
+      ],
+      "expected": "No duplicate sent mail; uncertain delivery requires operator review"
+    },
+    {
+      "id": "JOB-UI-08",
+      "name": "Native agent Accept without opening dialog",
+      "actions": [
+        "Try stale stock Accept after restart on the same bound agent"
+      ],
+      "expected": "Fail closed without randomly selecting a new convoy or stock mission"
+    },
+    {
+      "id": "JOB-UI-09",
+      "name": "Offer changed between View/Accept",
+      "actions": [
+        "Open agent's native quote",
+        "Deliver, expire or replace cargo before pressing Accept"
+      ],
+      "expected": "No silent selection switch, no ISK debit, explicit reopen or repair instruction"
+    },
+    {
+      "id": "JOB-UI-10",
+      "name": "Persistent actor-agent selection",
+      "actions": [
+        "Open offer as pilot A",
+        "Restart native service",
+        "Press Accept from old agent dialog",
+        "Try another character or another agent"
+      ],
+      "expected": "Exact originally selected source only; unique native character-agent binding survives restart"
+    },
+    {
+      "id": "JOB-UI-11",
+      "name": "Selection corrupt/rename crash",
+      "actions": [
+        "On disposable clone, corrupt selection JSON",
+        "Place an abandoned tmp file from simulated failed expired rotation",
+        "Attempt native Accept and reopen"
+      ],
+      "expected": "Fail closed / operator repair; no native wallet or mission writes"
+    },
+    {
+      "id": "JOB-UI-12",
+      "name": "Real convoy peacefully delivered",
+      "actions": [
+        "Both characters physically escort one true NPC hauler",
+        "Native cargo fully lands and is verified in station warehouse",
+        "Inspect corporate/player wallets before/after and after reconnect"
+      ],
+      "expected": "Existing escrow exactly-once payout, no pirate kill mandatory; this financial gate remains OFF until approved"
+    },
+    {
+      "id": "JOB-UI-13",
+      "name": "Reversible overlay and native protocol",
+      "actions": [
+        "Run patch --dry-run against exact pinned local checkout",
+        "Patch to disposable checkout, inspect AgentMgr / stock agent dialogue",
+        "Remove then compare hashes of original upstream files"
+      ],
+      "expected": "No drift, byte-exact removal, button Accept visible and functional inside actual EVE 24.01 client"
+    },
+    {
+      "id": "JOB-UI-14",
+      "name": "Legacy path unchanged",
+      "actions": [
+        "Run EVE native mission from different agent and direct /events legacy dev interface",
+        "Run normal mission acceptance/decline/completion",
+        "Run with all new job flags OFF"
+      ],
+      "expected": "No regression to native agent missions, original economy/legacy NPC events preserved"
+    },
+    {
+      "id": "JOB-UI-15",
+      "name": "UI player-language acceptance",
+      "actions": [
+        "Check in-game agent display and email in client's configured locale",
+        "Check long text, line breaks, actions, no missing localization keys"
+      ],
+      "expected": "Native UI actually renders; if client rejects custom strings fallback to truthful EVEmail and agent-native static dialogue only"
+    },
+    {
+      "id": "JOB-UI-16",
+      "name": "Paid peaceful escort requires real duo on-grid BEFORE escrow",
+      "actions": [
+        "Two authentic players accept the quoted job with stock agent buttons",
+        "Move one player's real ship farther than 150 km from original NPC hauler",
+        "Trigger actual native prewarp departure"
+      ],
+      "expected": "No funded native contract and no NPC warp: on-grid departure witness denied, no escrow debit"
+    },
+    {
+      "id": "JOB-UI-17",
+      "name": "Exactly one durable on-grid witness survives restart",
+      "actions": [
+        "Both ships position within 150 km of original NPC and join genuine fleet",
+        "Native source record is fsynced before corporate escrow and warp",
+        "Restart server after genuine warp",
+        "Verify native full cargo delivery with both original pilots at terminal"
+      ],
+      "expected": "No new source witness or second warp; settlement requires preserved original manifest-linked source witness AND original terminal attendance"
+    },
+    {
+      "id": "JOB-UI-18",
+      "name": "Source attendance witness corrupt/symlink/lost ACK",
+      "actions": [
+        "On operator-approved disposable data clone, corrupt witness journal",
+        "Replace witness with symlink/hardlink",
+        "Inject lost fsync ACK and repeat request"
+      ],
+      "expected": "No authorization to reserve, launch or pay from corrupt/linked/uncertain witness; human operator repair required"
+    },
+    {
+      "id": "JOB-UI-19",
+      "name": "Off-grid pilot rejected before native manifest or debit",
+      "actions": [
+        "Two distinct genuine pilots accept same corporate escort quote",
+        "Move one real ship beyond 150km of source NPC while preserving its paid acceptance",
+        "Attempt station convoy start; inspect original native manifest directory and GameStore escrow table"
+      ],
+      "expected": "Server denies ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID; no original native manifest prepared, no corporation ISK reserved and no warp command dispatched"
+    },
+    {
+      "id": "JOB-UI-20",
+      "name": "Two genuine players escort two observable midroute waypoints",
+      "actions": [
+        "Enable Stage I only on disposable EVEJS snapshot and real 2-client server",
+        "Accept original source-linked real NPC corporate quote via stock Agent UI with two different authenticated pilots",
+        "Observe native server tick while real hauler crosses 20-45% and 55-85% of the actual source-to-station vector with both ships within 10 km",
+        "Confirm full native cargo warehouse delivery, original two-pilot terminal presence, atomic native wallet settlement"
+      ],
+      "expected": "Exactly one original corporate escrow and two immutable unique stage receipts; route witness source validated with real scene positions; exactly one two-pilot native wallet settlement, no extra ISK"
+    },
+    {
+      "id": "JOB-UI-21",
+      "name": "AFK station camper cannot earn route-certified escort wage",
+      "actions": [
+        "Accept two-player job and sign original departure source witness",
+        "One player remains parked at target station while NPC leaves source",
+        "Observe genuine native NPC midroute tick positions",
+        "Complete physical warehouse cargo delivery"
+      ],
+      "expected": "At least one checkpoint missing; strict Stage I prevents peaceful wallet settlement; cargo delivery is still real and not rewritten"
+    },
+    {
+      "id": "JOB-UI-22",
+      "name": "Real player disconnect, ship swap or changed native fleet blocks checkpoint",
+      "actions": [
+        "Record one genuine transit checkpoint",
+        "Disconnect one participant, duplicate their session or change their real ship/fleet",
+        "Allow NPC to continue crossing second checkpoint"
+      ],
+      "expected": "Second stage NOT durably recorded; original signed pilot cannot be replaced from client input; no payout from invalid two-checkpoint claim"
+    },
+    {
+      "id": "JOB-UI-23",
+      "name": "Fast native warp without observable middle positions is NOT entitled to guessed payout",
+      "actions": [
+        "Use actual pinned NPC warp duration and destination with 2 EVE clients",
+        "Instrument number and positions of actual coopNativeStationArrival.tick callbacks",
+        "Observe whether 20-45% and 55-85% windows occur before terminal cargo delivery"
+      ],
+      "expected": "If either real midpoint cannot be sampled, strict Stage I reports missing evidence and refuses payout; disable Stage I until genuine movement tick integration verified, do not generate samples by timer"
+    },
+    {
+      "id": "JOB-UI-24",
+      "name": "Source-linked route checkpoint corrupted or crash ACK uncertain",
+      "actions": [
+        "On disposable operator clone persist first midroute witness",
+        "Inject lost file/directory fsync ACK, symlink/hardlink or corrupt checkpoint then restart",
+        "Resume original native trip and attempt terminal settlement"
+      ],
+      "expected": "No fabricated completion or blind rewrite; file+dir re-fsync required for immutable original receipts; corrupt/linked evidence blocks payout for operator repair"
+    },
+    {
+      "id": "JOB-UI-25",
+      "name": "Pinned real native movement callback emits two authoritative escort route checkpoints",
+      "actions": [
+        "Run pinned EveJS Docker with two genuinely distinct EVE clients on disposable world snapshot",
+        "Enable peaceful Escort, source witness, strict route witness, and native warp observer flags",
+        "Take actual NPC agent contract with two real ships and original accepted corporate price",
+        "Observe stock advanceSessionlessWarpIngress NPC scene position callbacks, actual six-beat ingress, exact two signed player positions near hauler at 20-45% and 55-85% route progress",
+        "Verify original two checkpoint journal files then full terminal warehouse cargo and genuine atomic GameStore wallet deltas"
+      ],
+      "expected": "Original stock NPC physical interpolation triggers exactly validated native observer samples, both same-authentic-fleet player ships progress with NPC within 10km, two durable route checkpoints exist and exactly one funded corporate two-player payout; no guessed or replayed positions",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-26",
+      "name": "Missing native observer or short route must not reserve corporate ISK",
+      "actions": [
+        "On disposable two-client native job enable strict route witness but disable native warp observer",
+        "Attempt paid original NPC convoy departure and inspect native cargo manifest and actual corporate wallet",
+        "Enable observer and change source-to-actual-station distance to less than 10km in a controlled fixture",
+        "Attempt paid convoy again"
+      ],
+      "expected": "ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED or ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS before manifest creation, original corporation escrow or warp; no stranded paid quote and no invented midpoint",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-27",
+      "name": "Restart while original NPC is still in real paid Escort warp",
+      "actions": [
+        "Use disposable world snapshot and 2 real authenticated EVE clients with all experimental Stage I flags and EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1",
+        "Accept original NPC corporate paid job, obtain original cargo manifest, genuine source duo witness and native WARP_ACK_CONFIRMED journal",
+        "Restart only the server while native NPC still has restorable sessionlessWarpIngress and unchanged cargo",
+        "Observe stock native NPC movement callback after restored SpaceScene tick"
+      ],
+      "expected": "Read-only resume matches original funded flight, WARP_ACK_CONFIRMED, preserved hauler cargo, original duo departure proof and unchanged physical ingress, continues sampling only physically observed midroute points; NO second escrow, warp or contract; missing observation fails closed",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-28",
+      "name": "Restart with prepared-only/unknown ACK or changed source evidence",
+      "actions": [
+        "On disposable crash-injection clone stop after WARP_PREPARED without durable native ACK, or replace cargo/ship/source receipt/target station",
+        "Enable recovery flag and run native NPC movement callback",
+        "Inspect original escrow reserve and native warp command count"
+      ],
+      "expected": "No reattachment and NO new movement, payments or warp dispatch from ambiguous ACK or mismatched provenance; manual repair required",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-29",
+      "name": "Restart after NPC ingress is finished or state absent",
+      "actions": [
+        "Finish the original native NPC warp before restarting",
+        "Restart server and leave recovery enabled, but do not fabricate sessionlessWarpIngress",
+        "Trigger normal station delivery tick with both real pilots and original warehouse"
+      ],
+      "expected": "Native recovery observer refuses to invent missing midroute observations. Existing cargo/warehouse may be independently valid, but strict Stage I does not award players absent two real checkpoints.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-30",
+      "name": "Real original NPC ingress after durable ACK survives a short native process crash",
+      "actions": [
+        "On a disposable original pinned EveJS world with 2 EVE clients enable Stage I, recovery and ingress-snapshot flags",
+        "Start a real paid corporate Escort from stock in-game Agent; verify source witness and exactly one genuine WARP_ACK_CONFIRMED",
+        "Confirm snapshot under original protected coop-native warehouse root records actual sessionlessWarpIngress and has fsynced file and parent",
+        "Kill the server during the 6-30s native ingress; restart within original remaining ingress time",
+        "Materialize original same native NPC with stored position matching its original physical source; measure true movement and wallet table"
+      ],
+      "expected": "Only the original verified NPC ingress is restored, no new warpToPoint, no new native corporate escrow reservation and no generated route evidence; any recovered checkpoint still requires two genuinely moving authenticated player ships",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-31",
+      "name": "Expired original ingress, missing ACK or mismatched persistent NPC state fails closed",
+      "actions": [
+        "Replay same original checkpoint with server restart after ingress expiry, or only a WARP_PREPARED journal",
+        "Change the persisted native NPC position, target station, cargo or original contract on controlled cloned fixture",
+        "Observe physical materialization and original wallet, mission, cargo journals"
+      ],
+      "expected": "No physical ingress is resurrected, no NPC teleport, no second reservation or reward, no invented mid-route points; operator repair rather than replay",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-32",
+      "name": "Pinned NPC materialization hook must survive controller initialization and reverse cleanly",
+      "actions": [
+        "Run Run-NativeJob-Tests.ps1 -CheckPinned against original pinned Code checkout",
+        "Install overlay on an offline clone, restart a persistent native NPC under snapshot opt-in, and inspect its real mode/ingress after controller initialization",
+        "Run reversible --remove and compare pinned original nativeNpcService.js byte-for-byte"
+      ],
+      "expected": "One source hook after controller/ambient state setup only; NPC original warp state preserves stock physical interpolation; exact pinned source restored after removal",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-33",
+      "name": "Corporate escrow survives snapshot storage failure with no invented proof",
+      "actions": [
+        "With disposable native GameStore inject fsync failure while writing immutable ingress snapshot after true ACK",
+        "Inspect returned ingressSnapshotStatus, native wallet deltas, physical NPC position and repeat attempts",
+        "Restart without a verified snapshot"
+      ],
+      "expected": "Only original pre-funded escrow exists; no second funding/warp on retry; snapshot failure cannot permit automatic ingress reconstruction or fictitious payout; requires manual resolution",
+      "status": "NOT_RUN"
+    }
+  ]
+}

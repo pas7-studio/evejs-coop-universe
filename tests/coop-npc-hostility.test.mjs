@@ -42,3 +42,11 @@ test("wrong system, non-native entity, player ship and spoofed controller reject
  assert.equal(validPair({...options(),targetController:{...tc,systemID:30000144}}),false);
  assert.equal(validPair({...options(),attackerController:{...ac,entityID:999}}),false);
 });
+
+test("CHAT18 native same-corporation NPCs cannot be enemies solely via virtual faction tags",()=>{
+ const bothNativeCorp={...options(),attacker:{...attacker,corporationID:1000111},
+  target:{...target,corporationID:1000111}};
+ assert.equal(validPair(bothNativeCorp),false);
+ assert.equal(validPair({...bothNativeCorp,target:{...bothNativeCorp.target,corporationID:1000222}}),true);
+ assert.equal(validPair({...bothNativeCorp,attackerController:{...ac,manualOrder:null}}),false);
+});

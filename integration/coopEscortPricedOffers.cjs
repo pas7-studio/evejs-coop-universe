@@ -238,7 +238,20 @@ function installServerAuthority(api){
  authority=api;return {status:"PRICED_ESCORT_NATIVE_AUTHORITY_INSTALLED"};
 }
 function offerFromNative(route){
- return authority?authority.quoteFromNative(route):fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
+ const result=authority?authority.quoteFromNative(route):
+  fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");
+ if(["NATIVE_QUOTE_DURABLY_PREPARED","NATIVE_QUOTE_READY"].includes(result?.status)&&
+  process.env.EVEJS_COOP_NATIVE_JOB_AGENT==="1"&&
+  process.env.EVEJS_COOP_OPPORTUNITY_MAIL==="1"){
+  // Also dispatch on a verified replay of the ORIGINAL persisted quote:
+  // the process may have crashed after storing it but before EVEmail dispatch.
+  // Mail has a durable per-character/event pre-send claim, so a recheck
+  // cannot send duplicates or create a fresh priced offer.
+  // Notification never changes price, cargo provenance or escrow.
+  try{require("./coopNativeJobNotifications").notifyNativeQuote(result.quote)}
+  catch{/* Native mail is optional; contract remains source of truth. */}
+ }
+ return result;
 }
 function readVisibleQuote(eventID){
  return authority?authority.readQuote(eventID):fail("PRICED_ESCORT_NATIVE_AUTHORITY_UNAVAILABLE");

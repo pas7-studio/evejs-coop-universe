@@ -12,7 +12,7 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
  if(recordTerminal!==null&&typeof recordTerminal!=="function")
   throw Error("ESCORT_REPUTATION_SOURCE_INVALID");
  if(!runtime||typeof readNativeIncident!=="function"||
-  ["fundBeforeWarp","recordDelivery","finishAfterRaid","refundProvenLoss",
+  ["fundBeforeWarp","recordDelivery","finishAfterRaid","settlePeacefulFlight","refundProvenLoss",
    "readFlight","inspectRefundRecovery","refundWreckedFlight"].some(k=>typeof runtime[k]!=="function")||
   runtime.nativeFunds?.capabilities?.().nativeDurable!==true||
   runtime.nativeFunds?.capabilities?.().atomicDualCredit!==true)
@@ -36,6 +36,48 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
     return deny("NATIVE_TERMINAL_ROUTE_UNVERIFIED");
    try{return runtime.recordDelivery(args)}
    catch{return deny("NATIVE_TERMINAL_WRITE_UNCERTAIN_REPAIR_REQUIRED")}
+  },
+  recordEscortDeparture(route,scene){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
+    return deny("DISABLED");
+   if(!route||typeof route.manifestKey!=="string"||
+    !/^\d+-\d+-\d+$/.test(route.manifestKey)||
+    ![route.systemID,route.fleetID,route.stationID,route.corporationID]
+     .every(pos)||!Array.isArray(route.haulerIDs)||
+    route.haulerIDs.length!==1||!pos(route.haulerIDs[0]))
+    return deny("DEPARTURE_ROUTE_INVALID");
+   if(typeof runtime.recordEscortDeparture!=="function")
+    return deny("DEPARTURE_WITNESS_PROVIDER_NOT_WIRED");
+   try{return runtime.recordEscortDeparture(route,scene)}
+   catch{return deny("DEPARTURE_WITNESS_UNCERTAIN_REPAIR_REQUIRED")}
+  },
+  readDurableEscortDeparture(manifestKey){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+    typeof runtime.readDurableEscortDeparture!=="function"||
+    typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+    return deny("ESCORT_RECOVERY_PROVENANCE_UNAVAILABLE");
+   try{return runtime.readDurableEscortDeparture(manifestKey)}
+   catch{return deny("ESCORT_RECOVERY_DURABLE_SOURCE_UNAVAILABLE")}
+  },
+  recordEscortRouteSample(manifestKey,scene,station){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+    process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey)||
+    typeof runtime.recordEscortRouteSample!=="function")
+    return deny("ROUTE_SAMPLE_AUTHORITY_NOT_WIRED");
+   try{return runtime.recordEscortRouteSample(manifestKey,scene,station)}
+   catch{return deny("ROUTE_SAMPLE_UNCERTAIN_REPAIR_REQUIRED")}
+  },
+  settlePeacefulDelivery(manifestKey,scene){
+   if(!enabled()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1")
+    return deny("DISABLED");
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
+    return deny("NATIVE_MANIFEST_KEY_INVALID");
+   try{return runtime.settlePeacefulFlight(manifestKey,scene)}
+   catch{return deny("NATIVE_PEACEFUL_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
   },
   settleVerifiedNativeRaid(manifestKey){
    if(!enabled())return deny("DISABLED");
@@ -70,10 +112,10 @@ function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
    // its own fsync; history cannot itself create another wallet credit.
    let paid,refunded;try{
     paid=runtime.nativeFunds.verifySettlement(contract);
-    refunded=runtime.nativeFunds.verifyRefund(contract)
-   }
-   catch{return deny("NATIVE_TERMINAL_WALLET_UNAVAILABLE")}
+    refunded=runtime.nativeFunds.verifyRefund(contract);
+   }catch{return deny("NATIVE_SETTLEMENT_WALLET_PREFLIGHT_UNAVAILABLE")}
    if(paid?.status==="SETTLED"){
+    if(refunded?.status==="REFUNDED")return deny("NATIVE_SETTLEMENT_TERMINAL_MONEY_CONFLICT");
     if(paid.nativeDurable!==true||paid.contractID!==contract.contractID||
      paid.corporationID!==contract.corporationID||
      paid.amountISK!==contract.amountISK||
@@ -177,13 +219,23 @@ const forwarding=Object.freeze({
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordDelivered:args=>enabled()?(installed?installed.recordDelivered(args):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ recordEscortDeparture:(route,scene)=>enabled()?(installed?installed.recordEscortDeparture(route,scene):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ readDurableEscortDeparture:key=>enabled()?
+  (installed?installed.readDurableEscortDeparture(key):
+   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ recordEscortRouteSample:(key,scene,station)=>enabled()?
+  (installed?installed.recordEscortRouteSample(key,scene,station):
+   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ settlePeacefulDelivery:(key,scene)=>enabled()?(installed?installed.settlePeacefulDelivery(key,scene):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  refundNativeWreck:key=>enabled()?(installed?installed.refundNativeWreck(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
- readFlight:key=>enabled()?(installed?installed.readFlight(key):
-  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  reconcilePendingDeliveries:options=>enabled()?(installed?installed.reconcilePendingDeliveries(options):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ readFlight:key=>enabled()?(installed?installed.readFlight(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED")
 });
 function routeGate(){return forwarding}

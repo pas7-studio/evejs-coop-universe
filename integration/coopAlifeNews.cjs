@@ -5,6 +5,7 @@
 const WATCH = new Map([
   ["living-native-market-trade", { kind: "trade", label: "ринкова угода" }],
   ["living-npc-station-delivered", { kind: "delivery", label: "руда на станції" }],
+  ["alife-native-delivery-settled", { kind: "native-settlement", label: "складський receipt" }],
   ["living-hauler-loaded", { kind: "haul", label: "завантажено hauler" }],
   ["living-native-mining-startup-slot", { kind: "fleet", label: "старт майнінг-флоту" }],
   ["living-pirate-raid", { kind: "raid", label: "рейд піратів" }],
@@ -42,6 +43,14 @@ const MEANINGFUL_FIELD = Object.freeze({
 });
 
 function isMeaningful(kind, item) {
+  if(kind==="native-settlement")return item?.status==="NATIVE_FULL_MANIFEST_WITNESSED"&&
+   item.proof==="WAREHOUSE_COMMITTED_AND_NATIVE_ITEMSTORE_VERIFIED"&&
+   item.nativeMutation===false&&item.iskCredited===false&&item.paidReward===false&&
+   Number.isSafeInteger(item.stacks)&&item.stacks>0&&
+   Number.isSafeInteger(item.quantity)&&item.quantity>0&&
+   Array.isArray(item.cargoIDs)&&item.cargoIDs.length===item.stacks&&
+   typeof item.eventID==="string"&&
+   item.eventID==="alife-native-delivery:"+item.manifestID;
   const field = MEANINGFUL_FIELD[kind];
   if (!field) return true;
   return Number(item && item[field]) > 0;
@@ -56,6 +65,8 @@ function describe(item) {
       (Number.isFinite(price) ? ` @${price}` : "");
   }
   if (kind === "delivery") return `склад: ${Number(item.stacks) || 0} стек(ів), ${Number(item.oreQuantity) || 0} м³`;
+  if (kind === "native-settlement")
+    return `підтверджено склад: ${item.stacks} стек(ів), ${item.quantity} од. (флот ${item.fleetID})`;
   if (kind === "haul") return `hauler ${Number(item.haulerID) || "?"} взяв ${Number(item.cargoQuantity) || 0} м³`;
   if (kind === "fleet") return `флот ${Number(item.fleetSlot) || 1}: ${Number(item.miners) || 0} мінер(ів)`;
   if (kind === "raid") return `${Number(item.pirates) || 0} пірат(ів) на полюванні`;

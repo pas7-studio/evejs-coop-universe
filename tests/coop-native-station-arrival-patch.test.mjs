@@ -44,7 +44,16 @@ for(const eol of ['\n','\r\n'])test('reversible physical-arrival hook in '+JSON.
  assert.equal(again,s); assert.match(next,/routeFromHaul/);assert.match(next,/checkReturn/);
  assert.match(next,/EVEJS_COOP_NPC_STATION_DELIVERY !== "1"/);
  assert.match(next,/options.durableHauler === true \? false : true/);
- assert.equal((next.match(/checkReturn/g)||[]).length,1);
+ assert.equal((next.match(/checkReturn\(scene, fleetRecord, now\)/g)||[]).length,2,
+  'both the loader and the return branch consult the physical trip director');
+ // The loader must not fall through to the native return-home transition while
+ // a real station trip is still in flight.
+ assert.match(next,/const delivered = settled\.terminal === true && \(settled\.status === "DELIVERED" \|\| settled\.status === "NO_CARGO"\);/);
 });
 test('wrong target remains untouched',()=>{const s=sample();assert.equal(patch(s,'server/src/space/random.js'),s)});
-test('drift without original hauler return branch aborts',()=>{assert.throws(()=>patch(sample().replace('    transient: true,','    transient: false,'),fileName),/ANCHOR_DRIFT/)});
+test('drift without the original hauler return branch aborts',()=>{
+ // The spawn transient flag is owned by the durable-fleet patch now, so drift is
+ // proven on a strict anchor: the native loaded handler must exist.
+ assert.throws(()=>patch(sample().replace('  if (fleetRecord.state === "loaded") {','  if (fleetRecord.state === "loading") {'),fileName),
+  /STATION_(LOADED|ARRIVAL_ANCHOR)_DRIFT/)});
+

@@ -1,53 +1,102 @@
-# state — evejs-coop (2026-10-25, session 2)
+# State — ALIFE economy loop CLOSED, 2026-10-25 evening (session 2)
 
-## Done
-- `npm ci` in `Code/server` OK. Overlay deployed via `-Action CoopStart` (19 patched statements, 59 modules CURRENT, 0 drift).
-- Local (non-upstream) suite: **518 pass / 0 fail / 16 skipped** (`EXIT=0`).
-- Isolated upstream suite (`Run-Isolated-Upstream-Tests.cjs`): 9/11 pass; see below.
+## Milestone: first real ore delivery by NPCs, no player involved
+`living-npc-station-delivered` at 19:40:10Z, fleet 1, **station 60014935, stacks 2,
+oreQuantity 30 597**, chosen by the resolver with `chosenRevenue 50 867 500 ISK`
+(filled 10 000 of 30 597). Chain proven end to end:
+mine (cargo on miners) → `living-hauler-loaded` → hold 45 s → resolver CHOSEN →
+**warp accepted** → physical arrival → warehouse deposit → fleet state `mining` again,
+miners refilled to 12 492 + 10 924 within 4 minutes. Loop repeats.
 
-## Fixes applied (uncommitted)
-- 44 `integration/<name>.js` stubs -> `./<name>.cjs` (Node CJS never resolves `.cjs`).
-- `core.autocrlf=false` + CRLF->LF (215 EOL-only repo files reverted; other agents' content edits kept).
-- `scripts/Diagnose-LivingWorld.ps1`: read-only script now sent as single LF string in base64
-  (`sh -s`), was CRLF-per-line -> `then\r` syntax error -> false "server not running".
-- `scripts/Diagnose-Coop-Telemetry.ps1`: same fix via `sh -c "echo <b64> | base64 -d | sh -s"`.
-- Tests updated to current behavior: Ukrainian messages (3 regexes), `notifyRaid(scene,actions,send)` scene fixture,
-  announce dedupe `UNCHANGED`, wreck fixture loot-quarantine anchor, `EVEJS_CODE_PATH`-loader path normalization
-  (`\\` vs `/`), telemetry-wiring regex for the base64 invocation.
-- `NODE_OPTIONS` must be cleared (VS Code js-debug bootloader breaks every `node`).
+## Bugs found and FIXED this session (all pushed)
+1. `scripts/coop-native-station-arrival-patch.cjs` — the `loaded` branch fell through to
+   the native `haulereturn` transition immediately after `routeFromHaul`, so the state
+   machine never waited for the physical trip and `checkReturn` reported
+   `ROUTE_NOT_STARTED` forever (`haulereturn` with no trip never becomes terminal).
+   Now: stay `loaded` while the trip is in flight, resume mining only on
+   `DELIVERED`/`NO_CARGO`; `checkReturn` returns terminal `NO_ACTIVE_TRIP` for the
+   self-healing case.
+2. `integration/coopNativeStationArrival.cjs` — the director used
+   `space/runtime.warpToPoint(session, …)`, which a **sessionless durable hauler can
+   never satisfy**; every trip died with `WARP_COMMAND_FAILED`. Now uses
+   `npc/npcRuntime.warpToPoint(entityID, …)` (the one stock mining uses) and emits
+   `living-npc-station-warp-rejected {errorMsg, ackKeys}` instead of swallowing it.
+3. `scripts/coop-market-catalog-patch.cjs` — removing the hook on a **pristine**
+   `marketProxyService.js` threw, so after `git checkout` the installer refused to
+   install anything (`ANCHOR_MISMATCH`). Removal is now idempotent. This is why the
+   "always checkout first" advice sometimes bricked the install.
+4. Merge fallout: `coop-alife-order-authority.test.mjs` (stale `advanceNativeAmmoSupply()`
+   signature) and `coop-alife-native-resupply-wiring.test.mjs` (neighbour-pair assertion
+   conflicting with COOP-043's station-authority entries) — both updated to assert the
+   real module list / signatures.
+5. `integration/coopMiningTrace.cjs` wrote `at` (number) into the event, overwriting the
+   ISO timestamp of every `living-mining-blocker` row → now `atMs`.
+6. New diagnostics: `MINER_NOT_IN_SCENE_OR_WARPING` (showed miners were alive in `WARP`,
+   not missing) and per-module `active` / `activeTarget` in `living-mining-fleet-state`
+   (proved the modules really cycle).
 
-Still failing (deep upstream scene contracts, not yet fixed):
-- `upstream-ship-prime-recipients` — `deliveredCount=0`.
-- `upstream-two-pilot-movement-and-reconnect` — `Cannot read properties of undefined (reading 'x')`.
+## Integrated from origin/main (27 commits, `4c315ba`)
+ALIFE-02 native resupply act (`coopAlifeNativeResupplyBridge`), COOP-043 station
+authority, COOP-044/045 industry + demand integrity, COOP-046 market policies,
+COOP-047 partial fills, COOP-048 player-market buyer, escort tactics. Note:
+`alifeOrderArbitrationEnabled()` now treats `EVEJS_COOP_ALIFE=1` as the master switch,
+so the live world runs with order arbitration on even though
+`EVEJS_COOP_NPC_ORDER_ARBITER` is unset. All the sub-features stay behind their own
+flags. The new resupply act is **OFF** here (`EVEJS_COOP_ALIFE_NATIVE_RESUPPLY_ACT`,
+`EVEJS_COOP_NPC_AMMO_SUPPLY`, `EVEJS_COOP_NPC_STRICT_AMMO` unset) — review note:
+`coopNpcAmmoSupply.tick(..., observeOnly)` sets its 180 s lease *before* the
+`observeOnly` return, so MONITOR_ONLY deliberately fences ammo-exhausted pirates out of
+patrols/raids; the only honest exit from that fence is the PLANNED intent from
+`coopAlifeEconomy`, so do not enable the act without the economy observer running.
 
-## Gameplay gates
-- Telemetry gate **PASS**: `EVENTS_FILE: PRESENT_READABLE`, `START_ENTERED_COUNT 1`, `BOOT_REQUESTED_COUNT 1`,
-  `NATIVE_TOPOLOGY_COUNT 1`; events show `living-world-topology` for Perimeter 30000144
-  (33 waypoints, 3 belts, 5 stations, 5 gates, HEADLESS_NATIVE_SCENE) and `living-native-industry` ACTIVE
-  (fleet 1: 2 miners + 1 hauler).
-- First `World -WorldSystemID 30000144` returned `AWAITING_INGAME_ARRIVAL` / no topology because the report
-  only looks 20 min back and the boot was older. Restarted `server` and re-ran World to re-emit boot events.
-- Client gates (login, two characters, Party) remain BLOCKED_CLIENT_UNAVAILABLE.
+## Next link of the loop: ore in the warehouse is not ISK yet
+`living-economy-destination` proves the money exists (`revenue 50 867 500`), but the
+delivered cargo is now warehouse stock, while `advanceNativeMarket()` only trades
+**native cargo on ships** (`listNativeCargoForEntity`) behind
+`EVEJS_COOP_NATIVE_NPC_MARKET=1` + `EVEJS_COOP_NPC_MARKET_SELL_TYPES`. Decide the
+settlement shape before enabling:
+- (a) sell the hauler's cargo at the station *before* the warehouse deposit, or
+- (b) teach the warehouse to hand stock to the native market trader and credit ISK.
+Prefer (b) if the depot already has a committed ledger, else (a) with a durable journal.
+Perimeter (30000144) still reports `HOLD_NO_BUYER` for its Veldspar — honest, not a bug.
 
-## Results (final, 2026-10-25)
-- Local suite (non-upstream): **518 pass / 0 fail / 16 skipped** (EXIT=0).
-- Isolated upstream: 9/11; still failing `upstream-ship-prime-recipients` (deliveredCount=0) and
-  `upstream-two-pilot-movement-and-reconnect`.
-- Telemetry gate: PASS. World gate: **PASS** — `World -WorldSystemID 30000144` returned
-  `READY_FOR_CLIENT_PLAYTEST`: 6 activity samples, 32 moved ships, oreGrowth 2, targeting 22,
-  8 physical NPC ships; combat damage event correlated (28.204 HP shield loss).
-- Party gate: `NO_ACTIVE_PILOT_EVIDENCE` -> BLOCKED_CLIENT_UNAVAILABLE (needs the human's client).
+## Deploy loop (unchanged, but safer now)
+`git checkout -- marketProxyService.js miningNpcOperations.js` in
+`C:\Games\EveCoop\upstream-evejs` → `node scripts/patch-evejs-coop.cjs --code-path …` →
+`--check` = `OVERLAY_OK` (129 modules) → `docker build -t evejs-local .` →
+`docker compose -p evejs -f compose.yaml -f compose.coop-probe.yaml up -d`.
 
-## Next
-- Operator step: authorized EVE client login, verify named NPC visible in space, then two characters
-  for Party. Nothing else on the server side is blocking.
+## Merchant pricing (added after the closed loop, OFF by default)
+`integration/coopNpcSellPricing.cjs` — pure policy, 10 tests: a stack starts at the best
+real bid on its station, the asking floor steps down `stepPct` every
+`stepIntervalMs` while unsold, hard floor `floorPct`, and a sale resets it. The guarded
+trader now (a) picks the **highest-priced** matching SEED order instead of the first
+row the daemon returned (real bug: a seller must take the best bid) and (b) refuses a
+bid below the policy floor with `PRICE_BELOW_FLOOR` (no `FillOrder`, cargo untouched).
+Telemetry `living-npc-sell-policy`. Flags: `EVEJS_COOP_NPC_SELL_PRICING`,
+`..._STEP_INTERVAL_MS=120000`, `..._STEP_PCT=0.05`, `..._FLOOR_PCT=0.55`.
 
-## 2026-10-25 (later) - NPC market gate
-- Disposable project `evejs-npcmkt-test` (own volume + ports) is isolated; live world untouched.
-- 6.1 negative control PASS (flag ON, empty allowlists -> 0 market events).
-- Counterparty found: type 1228 bought at station 60003724 @4605.77 in 30000145.
-- 6.2 sell checkpoint produced 0 events -> added opt-in `EVEJS_COOP_NPC_MARKET_TRACE=1`
-  diagnostic event `living-native-market-trace` (counters + first busy/station sample).
-  Awaiting the first trace to learn the real skip reason (role / busy / distance).
-- Suspected blocker: native haulers never approach a station (coopNativeIndustry keeps them
-  at the belt), while the gate demands <=10 km from a real scene station.
+## Patcher is finally re-installable (this was blocking every deploy)
+`classifyFile` treated "cannot REMOVE a hook from a pristine file" as drift, and the
+git-HEAD fallback died on `maxBuffer` for `runtime.js`, so after any `git checkout`
+the installer refused with `ANCHOR_MISMATCH`/`DRIFTED`. Now: removal is idempotent in
+`coop-market-catalog-patch`, classification falls back to `git show HEAD:Code/<file>`
+with a 64 MB buffer and reports PRISTINE/PATCHED/DRIFTED honestly. Result: 32 native
+files revert cleanly and reinstall to `OVERLAY_OK` with **147 overlay modules**.
+Helper command used: revert every spec file with `git checkout --` (32 paths).
+
+## Still open: delivered ore is warehouse stock, not a sellable stack
+`advanceNativeMarket()` only sees native cargo **on ships**, so ore delivered to the
+warehouse can never be sold. Two honest options, pick one before enabling
+`EVEJS_COOP_NATIVE_NPC_MARKET`:
+- (a) sell at the station **before** the warehouse deposit: the hauler is physically
+  within 10 km, cargo is real, the guarded trader settles into the NPC ledger, and only
+  the remainder is deposited;
+- (b) teach the warehouse to hand committed stock to the trader (needs its own journal).
+(a) is the smaller, more player-like change and needs no new storage semantics.
+
+## Watch
+- Mining still has a slow phase right after a restart (miners ~10 min to fill), but it
+  now recovers by itself after each delivery.
+- Pre-existing failures, unrelated: `coop-escort-station-predeparture-gate.test.mjs`
+  (2/7) and `coop-escort-flight-stage-c.test.mjs` (`ESCORT_PREPARING_SOURCE_UNAVAILABLE`).

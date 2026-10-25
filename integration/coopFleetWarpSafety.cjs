@@ -11,6 +11,23 @@ const vec=p=>p&&["x","y","z"].every(axis=>Number.isFinite(p[axis]));
 const system=s=>positive(s?._space?.systemID||
  s?.solarsystemid2||s?.solarsystemid);
 const char=s=>positive(s?.characterID);
+function inspectShipOwner(session,ship){
+ const characterID=char(session),shipID=positive(session?._space?.shipID);
+ if(!characterID||!shipID||!ship||positive(ship.itemID)!==shipID)
+  return {ok:false,reason:"INVALID_NATIVE_SHIP_IDENTITY"};
+ if(session.activeShipID!=null&&positive(session.activeShipID)!==shipID)
+  return {ok:false,reason:"ACTIVE_NATIVE_SHIP_MISMATCH"};
+ if(ship.session!=null&&ship.session!==session)
+  return {ok:false,reason:"NATIVE_SHIP_SESSION_OWNER_MISMATCH"};
+ let evidence=ship.session===session;
+ for(const field of ["ownerID","characterID","pilotCharacterID"]){
+  if(ship[field]==null)continue;
+  if(positive(ship[field])!==characterID)
+   return {ok:false,reason:"NATIVE_SHIP_CHARACTER_OWNER_MISMATCH",field};
+  evidence=true;
+ }
+ return {ok:true,verifiedOwnerFields:evidence};
+}
 // A live character or physical hull may have exactly one Ballpark-ready owner
 // in this authoritative scene. A stale reconnect must not issue fleet orders.
 function uniqueOwners(scene,commanderSession,followerSession,systemID){
@@ -31,6 +48,10 @@ function uniqueOwners(scene,commanderSession,followerSession,systemID){
    matches++;
   }
   if(matches!==1)return false;
+  // A scene entry alone cannot authenticate a stale ship after reconnect.
+  if(typeof scene.getShipEntityForSession!=="function"||
+     !inspectShipOwner(member,scene.getShipEntityForSession(member)).ok)
+   return false;
  }
  return true;
 }
@@ -51,6 +72,8 @@ function inspect({commanderSession,followerSession,spaceRuntime}={}){
     typeof scene.getShipEntityForSession!=="function"||
     typeof scene.sessions?.values!=="function")
   return {ok:false,reason:"NOT_SAME_NATIVE_SCENE"};
+ if(positive(scene.systemID)!==a)
+  return {ok:false,reason:"NATIVE_SCENE_SYSTEM_MISMATCH"};
  const joined=[...scene.sessions.values()];
  if(!joined.includes(commanderSession)||!joined.includes(followerSession))
   return {ok:false,reason:"SESSION_NOT_IN_SCENE"};
@@ -78,6 +101,10 @@ function inspect({commanderSession,followerSession,spaceRuntime}={}){
   leader.kind!=="ship"||ship.kind!=="ship"||
   !vec(leader.position)||!vec(ship.position))
   return {ok:false,reason:"PHYSICAL_SHIP_NOT_READY"};
+ const leaderOwner=inspectShipOwner(commanderSession,leader);
+ if(!leaderOwner.ok)return {ok:false,reason:leaderOwner.reason,actor:"COMMANDER"};
+ const followerOwner=inspectShipOwner(followerSession,ship);
+ if(!followerOwner.ok)return {ok:false,reason:followerOwner.reason,actor:"FOLLOWER"};
  // A ship already in warp cannot reliably accept another warp order.
  if(String(ship.mode||"").toUpperCase().includes("WARP")||
     ship.pendingWarp||ship.warpState)
@@ -141,4 +168,4 @@ function recordFollowerWarp({commanderSession,followerSession,spaceRuntime,
   return {status:"TELEMETRY_ERROR",arrivalVerified:false};
  }
 }
-module.exports={inspect,eligible,recordFollowerWarp,uniqueOwners};
+module.exports={inspect,eligible,recordFollowerWarp,uniqueOwners,inspectShipOwner};

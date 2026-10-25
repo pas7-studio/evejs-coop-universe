@@ -21,7 +21,7 @@ function fixture(){
  let cargo=[{cargoID:980200000005,entityID:ship.itemID,ownerID:100,
   moduleID:0,typeID:34,quantity:8,flagID:5,singleton:false}];
  let nextCargoID=980200000006,failFillOnly=false;
- let remainingBuy=100,remainingSell=100;
+ let remainingBuy=100,remainingSell=100,extraBuys=[];
  const buyID="9100000000000000123",sellID="9000000000000000444";
  let calls=[];
  const store={
@@ -46,15 +46,18 @@ function fixture(){
    if(moveDuringBook)ship.position.x=100000;
    return {sells:[{source:"seed",order_id:sellID,
    station_id:station.stationID,type_id:35,price:50,vol_remaining:remainingSell}],
-   buys:[{source:"seed",order_id:buyID,station_id:station.stationID,type_id:34,
+   buys:[...extraBuys,{source:"seed",order_id:buyID,station_id:station.stationID,type_id:34,
     price:100,vol_remaining:remainingBuy}]};}
   if(method==="FillOrder"){
    if(failRPC)throw Error("RPC_DISCONNECTED");
+   const acked=[...extraBuys,{order_id:buyID,price:100}]
+    .find(r=>String(r.order_id)===String(args.order_id));
+   const ackedPrice=acked?Number(acked.price):100;
    if(failFillOnly)return {order_id:args.order_id,filled_quantity:0,
-    station_id:station.stationID,type_id:34,price:100,bid:true};
+    station_id:station.stationID,type_id:34,price:ackedPrice,bid:true};
    remainingBuy-=args.fill_quantity;
    return {order_id:args.order_id,filled_quantity:args.fill_quantity,
-    station_id:station.stationID,type_id:34,price:100,bid:true};
+    station_id:station.stationID,type_id:34,price:ackedPrice,bid:true};
   }
   if(method==="AdjustSeedStock"){
    if(failRPC)throw Error("RPC_DISCONNECTED");
@@ -64,7 +67,7 @@ function fixture(){
   if(method==="RecordTrade")return {success:true};
   throw Error("Unexpected market RPC "+method);
  };
- const trader=()=>createNpcMarketTrader({root,call,store,registry,
+ const trader=(extra={})=>createNpcMarketTrader({root,call,store,registry,...extra,
   sceneForSystem:system=>system===scene.systemID?scene:null,
   getController:id=>id===ship.itemID?controller:null,
   getStation:id=>id===station.stationID?station:null,
@@ -74,7 +77,7 @@ function fixture(){
  const params=(side,typeID)=>({scene,pilotID,entityID:ship.itemID,
   stationID:station.stationID,side,typeID,buyTypes:[35],sellTypes:[34]});
  return {root,scene,ship,controller,registry,store,station,trader,params,
-  getCargo:()=>cargo,getCalls:()=>calls,advance:()=>{now+=30001},
+  getCargo:()=>cargo,getCalls:()=>calls,setExtraBuys:v=>{extraBuys=v},advance:()=>{now+=30001},
   setFailRPC:v=>{failRPC=v},setFailInventory:v=>{failInventory=v},
   setFailFill:v=>{failFillOnly=v},setFailGet:v=>{failGet=v},
   setMoveDuringBook:v=>{moveDuringBook=v},setCapacity:v=>{cargoCapacity=v},
@@ -283,4 +286,55 @@ test("crash writing purchase receipt after real market ACK resumes without new m
   assert.equal(receipt.source,"EVEJS_SEED_MARKET");
   assert.equal(x.trader().recover().status,"CLEAN");
  }finally{nativeFS.renameSync=rename;x.cleanup()}
+});
+
+test("the merchant sells to the best bid on the station, not to the first row",async()=>{
+ const x=fixture();try{
+  x.setExtraBuys([{source:"seed",order_id:"9100000000000000999",
+   station_id:x.station.stationID,type_id:34,price:300,vol_remaining:1}]);
+  const t=x.trader(),r=await t.execute(x.params("sell",34));
+  assert.equal(r.status,"TRADE_SETTLED");
+  assert.equal(r.price,300);
+  assert.equal(r.quantity,1);
+  assert.equal(r.balance,300);
+ }finally{x.cleanup()}
+});
+
+test("a bid below the merchant's own asking price is refused, cargo stays",async()=>{
+ const x=fixture();try{
+  x.setExtraBuys([{source:"seed",order_id:"9100000000000000998",
+   station_id:x.station.stationID,type_id:34,price:300,vol_remaining:5}]);
+  const t=x.trader({priceFloorFor:()=>500});
+  const r=await t.execute(x.params("sell",34));
+  assert.equal(r.status,"PRICE_BELOW_FLOOR");
+  assert.equal(r.bestBid,300);
+  assert.equal(r.floor,500);
+  assert.equal(x.getCargo().length,1,"nothing may leave the hull");
+  assert.equal(x.getCalls().some(c=>c.method==="FillOrder"),false,
+   "no market mutation below the floor");
+ }finally{x.cleanup()}
+});
+
+test("a rich buyer above the spending cap is still a valid counterparty for a sale",async()=>{
+ const x=fixture();try{
+  // maxPrice is what the NPC may SPEND. A high bid must never be skipped when
+  // the NPC is the seller, otherwise 100000 reads as "no buyer".
+  x.setExtraBuys([{source:"seed",order_id:"9100000000000000777",
+   station_id:x.station.stationID,type_id:34,price:5000,vol_remaining:2}]);
+  const t=x.trader({maxPrice:1000});
+  const r=await t.execute(x.params("sell",34));
+  assert.equal(r.status,"TRADE_SETTLED");
+  assert.equal(r.price,5000);
+  assert.equal(r.quantity,2);
+ }finally{x.cleanup()}
+});
+
+test("the spending cap still refuses an overpriced purchase",async()=>{
+ const x=fixture();try{
+  // The seeded sell order for type 35 costs 50 per unit, above the cap of 10.
+  const t=x.trader({maxPrice:10});
+  const r=await t.execute(x.params("buy",35));
+  assert.notEqual(r.status,"TRADE_SETTLED");
+  assert.equal(x.getCargo().some(c=>c.typeID===35),false,"no cargo may arrive above the cap");
+ }finally{x.cleanup()}
 });

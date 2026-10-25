@@ -237,7 +237,6 @@ function createEscortNativeFunds({atomicRows,isNpcCorporation,clock=()=>Date.now
     corporationID:c.corporationID,amountISK:c.amountISK};
   });
  }
-
  // A competing real NPC may irreversibly remove original salvage from
  // the rescue prize pool. Corporate RESCUE escrow is returned with a real
  // native custody witness, NOT a timeout or player-supplied cancellation.

@@ -59,3 +59,26 @@ For acceptance on a real EveJS server, verify original cargo decreases, a real s
 Creating true **independent NPC-owned market orders** is a separate feature. It needs a dedicated NPC market owner type and correct durable wallet reservation, sell escrow, owner-order expiry/cancellation, player settlement, taxes, trade-history and inventory delivery in both Rust market daemon and Node market proxy. Do not substitute `PlaceOrder` alone: it can make a visible but unfulfillable or unfunded order. Complete those upstream integration points, migrations and real player/NPC round-trip tests before enabling personal NPC market making.
 
 Repository owner policy: NO GitHub Actions or remote CI. Do not merge without explicit approval.
+
+## Merchant pricing: sell like a player, not like a dumper (OFF by default)
+
+`integration/coopNpcSellPricing.cjs` is pure policy with no market access. A stack
+starts at the **best real bid** on its station and, while it stays unsold, the asking
+floor steps **down** by a small percentage every interval until a hard floor. A sale
+resets the stack to the best bid, so every new haul starts from the top again. Mining
+never pauses for pricing: unsold stock simply accumulates and is reconsidered later.
+
+The guarded trader (`coopNativeNpcMarket`) now also picks the **highest-priced**
+matching SEED order instead of the first row the daemon returned, and refuses a bid
+below the policy floor with `PRICE_BELOW_FLOOR` (no `FillOrder`, cargo untouched).
+
+```ini
+EVEJS_COOP_NPC_SELL_PRICING=0
+EVEJS_COOP_NPC_SELL_STEP_INTERVAL_MS=120000
+EVEJS_COOP_NPC_SELL_STEP_PCT=0.05
+EVEJS_COOP_NPC_SELL_FLOOR_PCT=0.55
+```
+
+Telemetry: `living-npc-sell-policy {bestBid, floor, decision}` when a bid is refused,
+`living-native-market-trade` when it settles. These settings never create orders,
+never touch player escrow, and never credit EVEJS player wallets.
