@@ -211,7 +211,9 @@ function createPricedOffers({root,io=fs,clock=()=>Date.now(),readEvent,
   const r=readAccepted(eventID);if(r.status!=="DURABLE_TWO_PILOT_PAID_ACCEPTANCE")
    return fail("PAID_DUO_ACCEPTANCE_NOT_COMPLETE");
   const q=r.quote;
-  if(q.expiresAt<=clock())return fail("PAID_QUOTE_EXPIRED_BEFORE_NATIVE_ESCROW");
+  // Quote expiry is enforced at FIRST NATIVE RESERVE by the authoritative
+  // booking gate. After real funded departure, read-only offer provenance must
+  // still be verifiable for late physical delivery/settlement.
   if(q.systemID!==systemID||q.fleetID!==fleetID||
    q.stationID!==stationID||q.corporationID!==corporationID||
    q.haulerID!==haulerID||!same(q.cargoIDs,ids))
@@ -219,7 +221,8 @@ function createPricedOffers({root,io=fs,clock=()=>Date.now(),readEvent,
   return {status:"AUTHORIZED_NATIVE_ESCORT_BOOKING",
    eventID,contractID:q.contractID,manifestKey,systemID,fleetID,
    stationID,corporationID,haulerID,amountISK:q.amountISK,
-   characters:r.characters,playerFleetID:r.fleetID};
+   characters:r.characters,playerFleetID:r.fleetID,
+   quoteExpiresAt:q.expiresAt};
  }
  return {quoteFromNative,readQuote,accept,readAccepted,acceptedForManifest};
 }
