@@ -225,7 +225,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
     marketStock:stock,maxJobs:Math.min(maxActive,2)});
    if(p?.status!=="PLAN_READY"||!Array.isArray(p.jobs)||!p.jobs.length)return {status:"NO_NATIVE_FACTORY_JOB",blocked:p?.blocked||[]};
    const j=p.jobs[0];if(!safeInt(j.blueprintItemID)||!safeInt(j.productTypeID)||j.ownerID!==ownerID||
-     j.stationID!==stationID||!shortage[j.productTypeID]||j.outputQuantity>maxStock)
+     j.stationID!==stationID||!available.includes(j.productTypeID)||j.outputQuantity>maxStock)
      return halt("PLANNER_JOB_CONTEXT_INVALID");
    const operationID="npc-manufacture:"+crypto.randomUUID().replace(/-/g,"");
    state.entries[operationID]={operationID,phase:"PREPARED",ownerID,stationID,typeID:j.productTypeID,
