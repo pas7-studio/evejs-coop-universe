@@ -36,10 +36,10 @@ function listPinnedSceneShips(scene){
 function createNativeStructureControlWitness({sceneForSystem,
  listAllPhysicalShips,getNativeEntity,getController,
  getFactionForCorporation,
- getLivePlayerSessions=()=>[],getCharacterRecord=()=>null,
+ getLivePlayerSessions=()=>[],
  allowMilitiaPlayers=false,rangeM=RANGE}={}){
  if([sceneForSystem,listAllPhysicalShips,getNativeEntity,getController,
-  getFactionForCorporation,getLivePlayerSessions,getCharacterRecord]
+  getFactionForCorporation,getLivePlayerSessions]
   .some(fn=>typeof fn!=="function")||
   !Number.isSafeInteger(rangeM)||rangeM<5000||rangeM>50000)
   throw Error("FW_STRUCTURE_CONTROL_NATIVE_AUTHORITIES_REQUIRED");
@@ -120,14 +120,6 @@ function createNativeStructureControlWitness({sceneForSystem,
      scene.getShipEntityForSession(session)!==ship||
      Number(session._space?.shipID)!==id||
      ship.pendingWarp||ship.warpState||ship.isWarping){
-     defenderCount++;unaffiliatedPlayers++;continue;
-    }
-    let char;
-    try{char=getCharacterRecord(session.characterID)}
-    catch{return unknown("NATIVE_CHARACTER_RECORD_UNAVAILABLE")}
-    if(!char||typeof char!=="object"||
-     (POS(Number(char.characterID||char.charID))&&
-      Number(char.characterID||char.charID)!==session.characterID)){
      defenderCount++;unaffiliatedPlayers++;continue;
     }
     const enlistment=warState.enlistments[String(session.characterID)];
