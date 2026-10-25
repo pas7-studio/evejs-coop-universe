@@ -92,6 +92,15 @@ test("actual native successful departure retires PREPARING and links real trip",
  assert.equal(e.linkedTripID,trip.manifestID);
  assert.equal(f.board.list({all:true}).events.length,0);
 }));
+test("duplicate terminal departure after a lost ACK is idempotent",()=>fixture(f=>{
+ f.publish();
+ const trip={manifestID:"30000144-77-2200000",fleetID:77,systemID:30000144,
+  stationID:60001,startedAt:2200000,haulers:{"901":{arrivedAt:0}}};
+ const request={scene:f.scene,fleet:f.npcFleet,preparingEventID:f.eventID,trip};
+ assert.equal(f.board.nativePreparingDeparted(request).status,"NATIVE_PREPARING_EVENT_CLOSED");
+ assert.equal(f.board.nativePreparingDeparted(request).status,"NATIVE_PREPARING_EVENT_CLOSED");
+ assert.equal(f.board.readEvent(f.eventID).event.linkedTripID,trip.manifestID);
+}));
 test("forged departure without a matching real native hauler never retires alert",()=>fixture(f=>{
  f.publish();
  const bad={manifestID:"30000144-77-2200000",fleetID:77,systemID:30000144,
