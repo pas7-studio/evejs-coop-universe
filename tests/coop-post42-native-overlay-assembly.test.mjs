@@ -16,7 +16,7 @@ const nativeModules=[
 
 test("native installer copies every delivered coop source exactly once",()=>{
  const bundled=fs.readdirSync(path.join(root,"integration"))
-  .filter(n=>/^coop[A-Za-z0-9]+\\.cjs$/.test(n))
+  .filter(n=>/^coop[A-Za-z0-9]+\.cjs$/.test(n))
   .map(n=>n.slice(0,-4)).sort();
  assert.equal(new Set(installer.names).size,installer.names.length);
  assert.deepEqual(installer.names.slice().sort(),bundled);
