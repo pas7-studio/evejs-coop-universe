@@ -43,7 +43,38 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   return Math.max(0,distance(ship.position,point.position)-
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
- const arrivals=new Map();
+ const arrivals=new Map(),activeNativeEscortWarps=new Map();
+ const strictMotion=()=>escortEnabled&&
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER==="1";
+ // Only true confirmed NPC warps can be sampled. Never infer position from
+ // timer, navigation commands, forecast points or player RPC.
+ function noteNativeMotion(entity,now){
+  if(!strictMotion()||entity?.nativeNpc!==true||!pos(entity.itemID)||
+   !Number.isFinite(now)||!entity.sessionlessWarpIngress)
+   return pause("ESCORT_NATIVE_MOTION_DISABLED_OR_NOT_WARPING");
+  const active=activeNativeEscortWarps.get(Number(entity.itemID));
+  if(!active)return pause("ESCORT_NATIVE_MOTION_NOT_REGISTERED");
+  const trip=active.fleet?.coopStationArrival;
+  if(!trip||trip!==active.trip||trip.manifestID!==active.manifestKey||
+   trip.systemID!==active.systemID||trip.fleetID!==active.fleetID||
+   !Object.prototype.hasOwnProperty.call(trip.haulers,String(entity.itemID)))
+   return pause("ESCORT_NATIVE_MOTION_TRIP_NOT_ACTIVE");
+  let scene;try{scene=getScene(active.systemID)}
+  catch{return pause("ESCORT_NATIVE_MOTION_SCENE_UNAVAILABLE")}
+  if(scene?.systemID!==active.systemID||
+   scene.getEntityByID?.(Number(entity.itemID))!==entity)
+   return pause("ESCORT_NATIVE_MOTION_ENTITY_NOT_CURRENT");
+  const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
+  if(!point||point.corporationID!==trip.corporationID)
+   return pause("ESCORT_NATIVE_MOTION_STATION_CHANGED");
+  if(typeof escortGate?.recordEscortRouteSample!=="function")
+   return pause("ESCORT_NATIVE_MOTION_AUTHORITY_UNAVAILABLE");
+  try{return escortGate.recordEscortRouteSample(trip.manifestID,scene,point)}
+  catch{return pause("ESCORT_NATIVE_MOTION_SAMPLE_UNAVAILABLE")}
+ }
+
  const manifestEnabled=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST==="1";
  const escortEnabled=process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1";
  const durableWarpFence=escortEnabled&&process.env.EVEJS_COOP_ESCORT_WARP_FENCE==="1"?
@@ -239,10 +270,16 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   fleet.coopStationArrival=result; // In-memory intent is never proof of inventory.
   for(const [index,id] of ships.entries()){
    const target={...destination.position,x:destination.position.x+750+index*100};
+   // Experimental observer only: give real SpaceScene ticks time to capture
+   // two natural positions. No synthetic movement, timers or teleports.
+   const sceneBeat=Math.max(250,Math.min(5000,Number(scene._tickIntervalMs)||1000));
+   const realIngress=strictMotion()?
+    Math.min(30000,Math.max(6000,sceneBeat*6)):0;
    let ack;
    try{ack=warpToPoint(id,target,{forceImmediateStart:true,
     broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
-    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250)});}catch(_){ack=null;}
+    ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250,
+     realIngress)});}catch(_){ack=null;}
    if(!truthy(ack)){delete fleet.coopStationArrival;
     for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED");}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
@@ -254,6 +291,10 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    catch{return pause("ESCORT_WARP_ACK_JOURNAL_UNAVAILABLE")}
    if(committed?.status!=="DURABLE_WARP_ACK_CONFIRMED")
     return pause("ESCORT_"+(committed?.status||"WARP_ACK_UNVERIFIED"));
+  }
+  if(strictMotion()){
+   for(const id of ships)activeNativeEscortWarps.set(id,{
+    fleet,trip:result,manifestKey:result.manifestID,systemID,fleetID});
   }
   let preparingNoticeStatus="NOT_REQUIRED";
   if(escortEnabled){
@@ -326,7 +367,9 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      let refund;try{refund=escortGate.refundNativeWreck(trip.manifestID)}
      catch{refund={status:"NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED"}}
      if(refund?.status==="REFUNDED"){
-      for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
+      for(const raw of Object.keys(trip.haulers)){
+       arrivals.delete(Number(raw));activeNativeEscortWarps.delete(Number(raw));
+      }
       delete fleet.coopStationArrival;
       return {status:"ESCORT_NATIVE_HAULER_LOSS_REFUNDED",terminal:true,
        contractID:refund.contractID,
@@ -401,13 +444,15 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      {status:"ESCORT_SETTLEMENT_NOT_WIRED"})}
    catch{escortSettlement={status:"ESCORT_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED"}}
   }
-  for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
+  for(const raw of Object.keys(trip.haulers)){
+   arrivals.delete(Number(raw));activeNativeEscortWarps.delete(Number(raw));
+  }
   delete fleet.coopStationArrival;
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
    ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,verify:stableAt,warehouse:factory,manifest:manifestDirector};
+ return {start,tick,noteNativeMotion,verify:stableAt,warehouse:factory,manifest:manifestDirector};
 }
 let runtimeDirector;
 function getRuntimeDirector(){
@@ -441,6 +486,12 @@ function routeFromHaul(scene,fleet,runtime,now,ingressDurationMs){
  if(result.status==="NO_ORE_TO_DELIVER")fleet.coopStationNoCargo=true;
  return result;
 }
+function noteNativeMotion(entity,now){
+ // Never construct a runtime/scene during a native SpaceScene physics tick.
+ if(!runtimeDirector||process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER!=="1")
+  return pause("ESCORT_NATIVE_MOTION_NOT_INSTALLED");
+ return runtimeDirector.noteNativeMotion(entity,now);
+}
 function checkReturn(scene,fleet,now){
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
  if(fleet?.coopStationNoCargo){delete fleet.coopStationNoCargo;return {status:"NO_CARGO",terminal:true};}
@@ -450,4 +501,4 @@ function checkReturn(scene,fleet,now){
  }
  return getRuntimeDirector().tick(scene,fleet,now);
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn};
+module.exports={createStationArrival,routeFromHaul,checkReturn,noteNativeMotion};
