@@ -82,6 +82,8 @@ function createNativeStructureControlWitness({sceneForSystem,
     // in the same scene registered for this solar system.
     if(!POS(shipID)||session._space.initialStateSent!==true||
      Number(session.shipID||session.shipid||session.activeShipID)!==shipID||
+     !(scene.sessions instanceof Map)||
+     ![...scene.sessions.values()].includes(session)||
      typeof scene.getShipEntityForSession!=="function"||
      scene.getShipEntityForSession(session)?.itemID!==shipID||
      sessionsByShip.has(shipID))
@@ -114,20 +116,21 @@ function createNativeStructureControlWitness({sceneForSystem,
      session._space?.initialStateSent!==true||
      scene.getShipEntityForSession(session)!==ship||
      Number(session._space?.shipID)!==id||
-     session.characterID!==Number(session.characterID)||
      ship.pendingWarp||ship.warpState||ship.isWarping){
      defenderCount++;unaffiliatedPlayers++;continue;
     }
     let char;
     try{char=getCharacterRecord(session.characterID)}
     catch{return unknown("NATIVE_CHARACTER_RECORD_UNAVAILABLE")}
-    if(!char||Number(char.characterID||char.charID)!==session.characterID){
+    if(!char||typeof char!=="object"||
+     (Number(char.characterID||char.charID||session.characterID)!==session.characterID)||
+     (POS(Number(char.shipID))&&Number(char.shipID)!==id)){
      defenderCount++;unaffiliatedPlayers++;continue;
     }
     const enlistment=warState.enlistments[String(session.characterID)];
     if(enlistment?.status!=="ACTIVE"||
      enlistment.characterID!==session.characterID||
-     !POS(enlistment.factionID)){
+     !POS(enlistment.enlistedAt)||!POS(enlistment.factionID)){
      defenderCount++;unaffiliatedPlayers++;continue;
     }
     if(enlistment.factionID===attackerFactionID){
