@@ -930,6 +930,22 @@ function restoreNativeIngress(entity,record){
 function checkReturn(scene,fleet,now,director=null){
  const run=director||getRuntimeDirector();
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
+ // Recover before the predeparture retry branch: a crash must NEVER
+ // mistake the already-confirmed original NPC warp for a new departure.
+ if(process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY==="1"&&
+   !fleet?.coopStationArrival&&Array.isArray(fleet?.haulerEntityIDs)&&
+   fleet.haulerEntityIDs.length===1){
+  const id=pos(fleet.haulerEntityIDs[0]);
+  const live=id?scene?.getEntityByID?.(id):null;
+  if(live?.nativeNpc===true&&live.sessionlessWarpIngress){
+   if(typeof run.resumeNativeDelivery!=="function")
+    return pause("ESCORT_DELIVERY_RESUME_AUTHORITY_UNAVAILABLE");
+   let recovered;try{recovered=run.resumeNativeDelivery(scene,fleet,now)}
+   catch{return pause("ESCORT_DELIVERY_RESUME_UNCERTAIN_NEEDS_REPAIR")}
+   if(recovered?.status!=="ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED")
+    return pause(recovered?.status||"ESCORT_DELIVERY_RESUME_UNVERIFIED");
+  }
+ }
  if(fleet?.coopStationNoCargo){delete fleet.coopStationNoCargo;return {status:"NO_CARGO",terminal:true};}
  if(process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1"&&
     fleet?.coopEscortPredepartureEventID&&!fleet?.coopStationArrival){
