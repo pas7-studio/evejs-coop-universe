@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -136,6 +136,7 @@ function start(){
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
   safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
@@ -390,6 +391,24 @@ function advanceNativeGateApproach(){
      orders:evidence.orders,observations:evidence.observations,
      nativeTransferVerified:evidence.orders.some(o=>o.action==="VERIFIED_NATIVE_GATE_TRANSFER")
     });
+ }
+}
+// This does not infer hits, and it never edits native cargo. The strict native
+// reload policy is hooked separately into the pinned missile/local-cycle code.
+function observeNativeAmmoConsumption(){
+ if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  !identityRegistry||!visitedSystems.size)return;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+ if(!nativeAmmoWitness)nativeAmmoWitness=
+  require("./coopNpcAmmoWitness").createAmmoWitness({store});
+ const assignments=Object.values(identityRegistry.snapshot().links||{});
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const result=nativeAmmoWitness.sample({scene,assignments});
+  if(result.events.length)
+   require("./coopRuntimeProbe").observe("living-native-npc-ammo-debit",null,
+    {spaceState:{systemID}},{events:result.events,
+     status:"NATIVE_CARGO_DELTA_ONLY_NOT_AUTHORED_SHOT"});
  }
 }
 // Source-verified native kill -> real surviving wreck -> same killer ship.
