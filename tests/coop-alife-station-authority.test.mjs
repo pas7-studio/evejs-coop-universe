@@ -16,7 +16,7 @@ function fixture(){
  };
  const policy={getCorporation:id=>({corporationID:id,isNPC:true}),
   getCorporationRuntime:id=>({corporationID:id,wallet:{divisions:{"1000":{balance:state.wallet}}}}),
-  getStation:id=>({stationID:id,solarSystemID:SYS,regionID:REG}),
+  getStation:id=>id===S?({stationID:id,solarSystemID:SYS,regionID:REG}):null,
   getFacility:id=>({facilityID:id,solarSystemID:SYS,online:true,activities:{1:{}}}),
   listOwnedItems:()=>clone(state.items),listJobs:()=>clone(state.jobs),
   listEscrow:()=>clone(state.escrows),getEscrowItem:id=>clone(state.items.find(i=>i.itemID===id)||null),
