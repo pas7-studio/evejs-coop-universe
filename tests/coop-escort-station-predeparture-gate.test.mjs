@@ -5,7 +5,8 @@ const require=createRequire(import.meta.url);
 const {createStationArrival}=require("../integration/coopNativeStationArrival.cjs");
 const prior=Object.fromEntries([
  "EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_ROUTE_GATE",
- "EVEJS_COOP_OPPORTUNITY_BOARD","EVEJS_COOP_EVENT_VOLUNTEERS"
+ "EVEJS_COOP_OPPORTUNITY_BOARD","EVEJS_COOP_EVENT_VOLUNTEERS",
+ "EVEJS_COOP_ESCORT_PAID_ACCEPT"
 ].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(prior))process.env[k]="1";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false}={}){
@@ -19,12 +20,23 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
  const fleet={fleetID:77,systemID:30000144,haulerEntityIDs:[901]};
  const cargo=[{cargoID:5501,entityID:901,coopHaulFleetID:77,
   coopHaulFromMinerID:503,typeID:34,quantity:7,transient:false}];
- let pairApproved=volunteer,warpAccepted=warpOK;
+ let pairApproved=volunteer,paidApproved=volunteer,warpAccepted=warpOK;
  const board=require("../integration/coopWorldOpportunityBoard.cjs");
  const duo=require("../integration/coopEscortVolunteers.cjs");
  const oldPrepare=board.noteNativeConvoyPreparing;
  const oldDeparted=board.noteNativePreparingDeparted;
  const oldReceipt=duo.readVerifiedNativePair;
+ const priced=require("../integration/coopEscortPricedOffers.cjs");
+ const oldQuote=priced.offerFromNative,oldAccepted=priced.readNativeAccepted;
+ priced.offerFromNative=()=>({status:"NATIVE_QUOTE_READY"});
+ priced.readNativeAccepted=()=>paidApproved?{
+  status:"DURABLE_TWO_PILOT_PAID_ACCEPTANCE",
+  eventID:"convoy-30000144-77-5501",fleetID:33,
+  quote:{systemID:30000144,fleetID:77,stationID:60001,
+   corporationID:10001,haulerID:901},
+  characters:[701,702],amountISK:20000
+ }:{status:"NOT_FOUND"};
+
  board.noteNativeConvoyPreparing=()=>({status:"NATIVE_PREPARING_EVENT_READY",
   id:"convoy-30000144-77-5501"});
  board.noteNativePreparingDeparted=()=>{
@@ -56,8 +68,11 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   board.noteNativeConvoyPreparing=oldPrepare;
   board.noteNativePreparingDeparted=oldDeparted;
   duo.readVerifiedNativePair=oldReceipt;
+  priced.offerFromNative=oldQuote;
+  priced.readNativeAccepted=oldAccepted;
  };
- return {director,scene,fleet,counters,approve:()=>pairApproved=true,
+ return {director,scene,fleet,counters,volunteer:()=>pairApproved=true,
+  approve:()=>{pairApproved=true;paidApproved=true},
   blockWarp:()=>warpAccepted=false,close};
 }
 function run(fn,opts){const f=fixture(opts);try{fn(f)}finally{f.close()}}
@@ -68,6 +83,14 @@ test("real hauler stays before warp until two volunteers provide durable consent
  assert.equal(f.counters.manifest,0);
  assert.equal(f.counters.warp,0);
  assert.equal(f.fleet.coopEscortPredepartureEventID,"convoy-30000144-77-5501");
+}));
+test("volunteer is NOT priced contract acceptance or an ISK spending instruction",()=>run(f=>{
+ f.volunteer();
+ assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+  "ESCORT_AWAITING_TWO_PAID_ACCEPTANCES");
+ assert.equal(f.counters.funding,0);
+ assert.equal(f.counters.manifest,0);
+ assert.equal(f.counters.warp,0);
 }));
 test("only after explicit duo approval can native escrow and physical warp proceed",()=>run(f=>{
  f.director.start(f.scene,f.fleet,1000000);
@@ -104,10 +127,11 @@ test("no native wallet gate blocks route independent of voluntary consent",()=>r
   "ESCORT_ROUTE_GATE_UNAVAILABLE");
  assert.equal(f.counters.warp,0);
 },{volunteer:true,gate:false}));
-test("without new board feature the old optional escort route contract remains isolated",()=>{
+test("missing event board cannot bypass PAID EVE player acceptance",()=>{
  process.env.EVEJS_COOP_OPPORTUNITY_BOARD="0";
- try{run(f=>{assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"EN_ROUTE");
-  assert.equal(f.counters.funding,1);assert.equal(f.counters.warp,1)},
+ try{run(f=>{assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_DISCOVERY_AND_PAID_CONSENT_REQUIRED");
+  assert.equal(f.counters.funding,0);assert.equal(f.counters.warp,0)},
   {volunteer:false})}
  finally{process.env.EVEJS_COOP_OPPORTUNITY_BOARD="1"}
 });
