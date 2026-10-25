@@ -83,7 +83,7 @@ function createNotices({clock=()=>Date.now(),cooldownMs=300000,
   if(!options.length)return {status:"NO_ACTIONABLE_NATIVE_SHIP",sent:0};
   const chosen=options[0],npcID=pos(chosen.npc.itemID),now=clock();
   if(!Number.isFinite(now)||now<0)return {status:"CLOCK_INVALID",sent:0};
-  const key=[fleet,system,...characterIDs.slice().sort((a,b)=>a-b),npcID].join(":");
+  const key=[fleet,system,...characterIDs.slice().sort((a,b)=>a-b)].join(":");
   const previous=briefs.get(key);
   if(previous!==undefined&&now>=previous&&now-previous<120000)
    return {status:"COOLDOWN",sent:0};
