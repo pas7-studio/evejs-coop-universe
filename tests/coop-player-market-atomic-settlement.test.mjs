@@ -354,3 +354,80 @@ test("full multi-stack SELL transfers original item IDs and never allocates",()=
   assert.deepEqual(x.db,snapshot);
  }finally{cleanup()}
 });
+
+
+test("native keyed player wallet rows without redundant embedded IDs settle original P2P SELL",()=>{
+ const cleanup=flags();
+ try{
+  for(const remove of [["201","301"],["201"],["301"]]){
+   const x=fixture();
+   for(const id of remove)delete x.db.characters[id].characterID;
+   const original=structuredClone(x.db);
+   const settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+   const paid=settle.settle({
+    ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+   });
+   assert.equal(paid.phase,"GAMESTORE_COMMITTED");
+   assert.equal(x.commits,1);
+   assert.equal(x.db.characters["201"].balance,585.15);
+   assert.equal(x.db.characters["301"].balance,913.62);
+   assert.equal(x.db.items["800"].ownerID,301);
+   assert.equal(x.db.items["800"].locationID,60001234);
+   assert.equal(x.db.marketEscrow["23"],undefined);
+   assert.equal(settle.requireReceipt(ticket(),proof()).key,paid.key);
+   const committed=structuredClone(x.db);
+   assert.equal(settle.settle({
+    ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+   }).replayed,true);
+   assert.deepEqual(x.db,committed);
+   assert.equal(original.items["800"].ownerID,201);
+  }
+ }finally{cleanup()}
+});
+test("forged explicit original GameStore wallet character ID fails before P2P settlement",()=>{
+ const cleanup=flags();
+ try{
+  for(const change of [
+   x=>x.characters["201"].characterID=999,
+   x=>x.characters["301"].characterID=999,
+   x=>x.characters["201"].charID=999,
+   x=>x.characters["301"].charID=999
+  ]){
+   const x=fixture();
+   delete x.db.characters["201"].characterID;
+   delete x.db.characters["301"].characterID;
+   change(x.db);
+   const snapshot=structuredClone(x.db);
+   const settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+   assert.throws(()=>settle.settle({
+    ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800
+   }),/P2P_ATOMIC_CHARACTER_WALLET_AUTHORITY_MISSING/);
+   assert.equal(x.commits,0);
+   assert.deepEqual(x.db,snapshot);
+  }
+ }finally{cleanup()}
+});
+test("original keyed buyer and seller support partial P2P fill and receipt-only replay",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();
+  delete x.db.characters["201"].characterID;
+  delete x.db.characters["301"].characterID;
+  x.db.identityState.nextItemID=1990000990;
+  const proofPart=Object.freeze({...proof(),filledQuantity:3,volumeAfter:4});
+  const settle=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const paid=settle.settle({ticket:ticket(),proof:proofPart,tax:1,sourceItemID:800});
+  assert.equal(paid.itemID,1990000990);
+  assert.equal(x.db.items["800"].quantity,4);
+  assert.equal(x.db.items["1990000990"].quantity,3);
+  assert.equal(x.db.items["1990000990"].ownerID,301);
+  assert.equal(x.db.characters["301"].balance,962.98);
+  assert.equal(x.db.characters["201"].balance,536.02);
+  assert.equal(x.db.marketEscrow["23"].remainingQuantity,4);
+  const committed=structuredClone(x.db);
+  assert.equal(settle.settle({
+   ticket:ticket(),proof:proofPart,tax:1,sourceItemID:800
+  }).replayed,true);
+  assert.deepEqual(x.db,committed);
+ }finally{cleanup()}
+});
