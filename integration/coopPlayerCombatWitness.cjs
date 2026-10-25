@@ -86,8 +86,22 @@ function note(attackerEntity,targetEntity,appliedDamage){
        const owners=sessions.filter(s=>Number(s?.characterID)===receipt.characterID);
        if(owners.length===1){
         const scene=runtime.getSceneForSession(owners[0]);
-        require("./coopConvoyOperations").noteDamage(scene,receipt,
-         require("../services/fleets/fleetRuntime"));
+        const fleets=require("../services/fleets/fleetRuntime");
+        const incident=require("./coopConvoyOperations").noteDamage(scene,receipt,fleets);
+        if(incident.newlyConfirmedDuo||incident.newlyConfirmedWreck){
+         // An authentic native receipt authorizes this ONE informational
+         // message; no wallet, faction, cargo or NPC command is touched.
+         const message=incident.newlyConfirmedDuo
+          ?"[Living Universe] Підтверджено участь двох пілотів вашого флоту в бою з піратом біля конвою. Це ще НЕ доказ порятунку вантажу і НЕ виплата нагороди."
+          :"[Living Universe] Підтверджено знищення пірата та появу реального уламка. Стан конвою й вантажу перевіряється окремо; додаткових нагород немає.";
+         const chat=require("../services/chat/chatHub");
+         for(const other of sessions){
+          if(other?.socket?.destroyed===true||
+             !incident.duoFleetID||Number(fleets.getFleetForCharacter(other?.characterID)?.fleetID)!==incident.duoFleetID||
+             runtime.getSceneForSession(other)!==scene)continue;
+          try{chat.sendSystemMessage(other,message)}catch(_error){}
+         }
+        }
        }
       }catch(error){console.warn("[CoopConvoyOperations] damage",String(error?.message||error))}
     }
