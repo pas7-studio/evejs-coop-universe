@@ -480,3 +480,45 @@ test("original director rejects half-wired sale audit/authorization at construct
  assert.throws(()=>f.create({authorizeSoldOperator:()=>true}),
   /NPC_ECONOMY_NATIVE_AUTHORITIES_REQUIRED/);
 }));
+
+
+test("asynchronous original Rust sale audit holds the existing native station journal lock",async()=>{
+ let entered,release;
+ const started=new Promise(resolve=>{entered=resolve});
+ const held=new Promise(resolve=>{release=resolve});
+ const audit=async scope=>{entered();await held;return {
+  status:"ORIGINAL_FULL_SALE_ATTESTED",
+  operationID:scope.operationID,orderID:scope.orderID,
+  ownerID:scope.ownerID,stationID:scope.stationID,
+  quantity:100,soldQuantity:100,remainingQuantity:0,
+  revenueCents:120000,fillIDs:[910000000011],
+  readOnly:true,nativeMutation:false,
+  proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"}};
+ await runAuditedSold(async x=>{
+  const pending=x.director.confirmSoldOnce(x.request);
+  await started;
+  assert.equal(x.director.tick(x.params).status,"ECONOMY_LOCKED");
+  const other=x.f.create({saleAudit:{audit},authorizeSoldOperator:()=>true});
+  assert.equal((await other.confirmSoldOnce(x.request)).status,"ECONOMY_LOCKED");
+  release();
+  assert.equal((await pending).status,"SOLD");
+  assert.equal(x.director.inspect().entries[x.operationID].phase,"SOLD");
+ },{proofOverride:audit});
+});
+test("out-of-band change to original fsynced journal while auditing never commits SOLD",async()=>{
+ let fixtureRoot;
+ await runAuditedSold(async x=>{fixtureRoot=x.f.root;
+ const r=await x.director.confirmSoldOnce(x.request);
+ assert.equal(r.reason,"NATIVE_SOLD_JOURNAL_CHANGED_DURING_AUDIT");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:scope=>{
+ const file=path.join(fixtureRoot,"director.json");
+ const state=JSON.parse(fs.readFileSync(file,"utf8"));
+ state.entries[scope.operationID].priceCents=770;
+ fs.writeFileSync(file,JSON.stringify(state));
+ return{status:"ORIGINAL_FULL_SALE_ATTESTED",operationID:scope.operationID,
+  orderID:scope.orderID,ownerID:scope.ownerID,stationID:scope.stationID,
+  quantity:100,soldQuantity:100,remainingQuantity:0,revenueCents:120000,
+  fillIDs:[910000000001],readOnly:true,nativeMutation:false,
+  proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"};
+ }}));
