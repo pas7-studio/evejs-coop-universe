@@ -168,7 +168,16 @@ function start(){
   });
  }
  worldPhaseCoordinator=require("./coopLivingWorldPhaseCoordinator")
-  .createPhaseCoordinator({execute:safeNpcPhase});
+  .createPhaseCoordinator({execute:safeNpcPhase,onCycle:row=>{
+   // Bounded diagnostics only, not original EveJS actor/ISK/cargo authority.
+   // Under ordinary load emit once per ten 30-second ticks; unknown phases
+   // are surfaced immediately so an unreviewed extension is visible.
+   if(row.sequence%10!==0&&!row.unknownNames.length)return;
+   require("./coopRuntimeProbe").observe("living-world-phase-cycle",null,null,{
+    status:row.status,sequence:row.sequence,phaseCount:row.phaseCount,
+    groups:row.groups,unknownNames:row.unknownNames,
+    source:row.source,nativeSettlementVerified:false});
+  }});
  timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{
   backgroundTicks++;
   // Read-only courier pass (COOP-024). It never mutates a contract: it only
