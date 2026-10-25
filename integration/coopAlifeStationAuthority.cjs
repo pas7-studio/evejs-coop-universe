@@ -64,7 +64,7 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
    }
   }
   const jobsForStation=jobs.filter(j=>j?.ownerID===ownerID&&j?.stationID===stationID&&
-    NATIVE_OP.test(String(j.coopOperationID||""))&&[1,3].includes(j.status));
+    NATIVE_OP.test(String(j.coopOperationID||""))&&[1,2,3].includes(j.status));
   const uniqueJobs=new Set();
   for(const j of jobsForStation){
    if(!pos(j.jobID)||uniqueJobs.has(j.jobID)||!pos(j.productTypeID)||
