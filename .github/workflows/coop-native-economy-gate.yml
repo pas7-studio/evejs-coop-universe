@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feat/coop-049-alife-native-buyer-wiring-20261025
+      - feat/coop-055-native-market-notify-20261026
   pull_request:
     paths:
       - 'integration/**'
