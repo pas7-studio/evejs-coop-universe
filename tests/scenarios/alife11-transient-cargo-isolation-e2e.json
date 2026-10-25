@@ -1,0 +1,125 @@
+{
+  "schema": "evejs-coop/alife11-transient-native-cargo-isolation/v1",
+  "mode": "DISPOSABLE_WORLD_ONLY",
+  "status": "NOT_RUN",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "ALIFE11-01",
+      "title": "Two simultaneous transient NPCs and persistent miner",
+      "status": "NOT_RUN",
+      "steps": "Run one saved ALIFE-08 startup mining fleet next to at least two stock transient NPCs with native cargo",
+      "expected": "Original transient cargo IDs remain cache-only and never appear on durable npcCargo.cargo SQLite row",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-02",
+      "title": "Persistent atomic miner->hauler with active transientPaths",
+      "status": "NOT_RUN",
+      "steps": "Mine a real ALIFE-07 asteroid cycle, then run ALIFE-10 cargo reparent with transient NPC cargo present",
+      "expected": "ALIFE-11 transaction keeps same durable cargoID/owner/quantity and writes one receipt, other NPCs unaffected",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-03",
+      "title": "Kill process during WAL transaction",
+      "status": "NOT_RUN",
+      "steps": "Abort disposable server between native cargo root write and receipt write",
+      "expected": "Original miner cargo location and quantity unchanged; no partial receipt",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-04",
+      "title": "Kill process after commit, before cache rehydrate",
+      "status": "NOT_RUN",
+      "steps": "Crash after the original COMMIT then cold restart",
+      "expected": "Persistent cargo in hauler, exact receipt, zero resurrected transient stacks",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-05",
+      "title": "Transient IDs collide with durable IDs",
+      "status": "NOT_RUN",
+      "steps": "Inject competing transient allocator or force same cargoID in a disposable snapshot",
+      "expected": "Transaction fails closed before SQL, no overwrite, no duplicate goods",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-06",
+      "title": "Worker outbox race",
+      "status": "NOT_RUN",
+      "steps": "Leave in-flight SQLite worker outbox write or failed flush on npcCargo then request ALIFE-11 commit",
+      "expected": "Commit refuses if table not quiescent; no stale baseline or orphaned receipt",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-07",
+      "title": "Transient NPC respawn/despawn while mining operates",
+      "status": "NOT_RUN",
+      "steps": "Spawn/despawn unrelated transient NPC cargo around repeated stable miner-to-hauler transfers",
+      "expected": "No transient cargo leak to disk and no duplicate native source cargo after two cold restarts",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-08",
+      "title": "Physical station + warehouse",
+      "status": "NOT_RUN",
+      "steps": "Hauler warps to canonical NPC station after ALIFE-11 commit while transient NPCs still operate",
+      "expected": "Exactly one original warehouse item credit and original cargoID removed only after verified physical arrival",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE11-09",
+      "title": "Two players after two restarts",
+      "status": "NOT_RUN",
+      "steps": "Connect two client sessions through native haul and station delivery and restart disposable game server twice",
+      "expected": "Both clients observe one consistent pair of persistent ships, cargo receipt and station stock; no phantom ISK/items",
+      "evidence": [
+        "original native SQLite npcCargo cargo root and receipt",
+        "transientPaths and in-memory cache",
+        "original native ship and cargoID identity",
+        "cold-restart and two-player logs where applicable"
+      ]
+    }
+  ]
+}
