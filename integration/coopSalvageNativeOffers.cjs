@@ -10,7 +10,10 @@ function createSalvageOffers({readManifest,readWitness,readEvent,
   readOutcomes,isNpcCorporation,getWreckItems].some(f=>typeof f!=="function")||
   !pos(ratePerUnitISK)||!pos(maxRewardISK)||maxRewardISK>1000000000)
   throw Error("SALVAGE_NATIVE_OFFER_SOURCES_REQUIRED");
- function readOffer(manifestKey){
+ // The live wreck is required when publishing or accepting a NEW offer.
+ // Already funded contracts must use the durable original manifest/quote
+ // after stock moves out of the wreck into an authentic player cargo hold.
+ function readOffer(manifestKey,{allowStarted=false}={}){
   if(!/^\d+-\d+-\d+$/.test(String(manifestKey)))
    return deny("SALVAGE_OFFER_INVALID_KEY");
   let manifest,witness;
@@ -29,7 +32,7 @@ function createSalvageOffers({readManifest,readWitness,readEvent,
   let nativeWreckItems;try{nativeWreckItems=getWreckItems(r.wreckID)}
   catch{return deny("SALVAGE_OFFER_NATIVE_WRECK_UNAVAILABLE")}
   if(!Array.isArray(nativeWreckItems)||
-   r.rows.some(x=>nativeWreckItems.filter(w=>
+   !allowStarted&&r.rows.some(x=>nativeWreckItems.filter(w=>
     w.wreckItemID===x.wreckItemID&&w.wreckID===r.wreckID&&
     w.sourceCargoID===x.cargoID&&w.sourceKind==="cargo"&&
     w.typeID===x.typeID&&w.quantity===x.quantity).length!==1))
