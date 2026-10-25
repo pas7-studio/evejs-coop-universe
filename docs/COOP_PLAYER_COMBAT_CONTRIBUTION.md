@@ -1,6 +1,6 @@
 # COOP-PVE-CONTRIBUTION-001 — real player damage and native objective credit
 
-**Implementation status:** read-only witness, reversible pinned-source patch helper, causal report and focused tests are committed. **The native hook is NOT installed by the main overlay yet. Live NPC damage, native mission and two-client GUI evidence are NOT verified.**
+**Integration status (stacked PR atop PR #2):** the native witness, reversible pinned hook, causal report, tests, **transactional overlay installer, LivingCoop feature flag and Windows verifier registration** are committed. **Not merged, deployed or verified against live Docker or either game client.**
 
 ## Why this is a separate workstream
 
@@ -41,28 +41,26 @@ docker compose --project-directory 'C:\Games\EveCoop\upstream-evejs\Code' -f 'C:
   node .\scripts\coop-duo-contribution-report.cjs --window-minutes 120
 ```
 
-It enforces a current headless boot, mutual **two different physical** ship scene, matching system and ship identity at each native hit, and no intervening disconnect without a new scene proof. Hits must affect the **same real NPC entity**; optional confirmed physical wreck is separately correlated. The objective event must match those same two authenticated characters. It never includes raw character IDs in its JSON output.
+It enforces a current headless boot, mutual **two different physical** ship scene, matching system and ship identity at each native hit, and no intervening disconnect without a new scene proof. Hits must affect the **same real NPC entity**; optional confirmed physical wreck is separately correlated. The objective event must match those same two authenticated characters **in the same native system and within 30 minutes after the last correlated hit**. This timing is correlation, **not proof that a particular NPC kill completed the dungeon**. It never includes raw character IDs in its JSON output.
 
 Even `SERVER_TWO_PLAYER_DAMAGE_AND_MISSION_CREDIT` means **server-side proof only**. The report always keeps `actualGameplayVerified=false`, `clientRenderingVerified=false`, `missionRewardsVerified=false`. It never substitutes two sockets for two clients, claims which player killed the NPC, or says both looted.
 
-## Integration handoff (NOT deployed)
+## Transactional overlay integration (IMPLEMENTED IN STACKED BRANCH; NOT DEPLOYED)
 
 The source patch helper `scripts/coop-player-damage-native-patch.cjs` exports `patch(text, {remove})`. It refuses unknown or partial pinned source, is idempotent and reversible, and inserts one optional post-ledger hook. **It does not write to disk.**
 
-Once PR #2 is stable and the current native overlay maintainer approves:
+1. **Wired:** `scripts/patch-evejs-coop.cjs` adds exactly one `server/src/space/combat/killmailTracker.js` spec and applies the reversible helper **during the existing all-file preflight**. Failure rejects the install before writing. Undo invokes the same helper with `remove:true`.
+2. **Wired:** the installer copies `integration/coopPlayerCombatWitness.cjs` to `server/src/space/coopPlayerCombatWitness.js` with the other validated overlay modules. No parallel patcher or extra ad-hoc server changes.
+3. **Wired:** `scripts/Deploy-Coop-RuntimeProbe.ps1 -LivingCoop` adds `EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE=1`; ordinary modes keep it disabled. No new public network listener or persistent writer beyond the existing opt-in probe.
+4. **Wired:** `scripts/Verify-Local-Coop.ps1` includes the two native evidence suites and `tests/coop-player-damage-overlay-integration.test.mjs`. The integration test checks install/uninstall/idempotency and simulated native ledger fault isolation; it also runs full upstream patch parity when an authorized checkout is present.
+5. **NOT YET VERIFIED:** after PR #2 is stable and owner-authorized, run the project’s pinned read-only patch dry-run and existing local tests; then an approved deployment must verify that the native `noteDamage` path is actually called on real player-on-NPC hits. Resolve `BLOCKED_TELEMETRY` with `DiagnoseWorld` and prove two authorized clients, mission tracker, physical wreck and loot separately.
 
-1. Include this helper in the **existing transactional** `scripts/patch-evejs-coop.cjs` source-patch pipeline, targeting **only** `server/src/space/combat/killmailTracker.js`. Do not run an independent competing patcher or overwrite the operator's protected upstream tree.
-2. Copy `integration/coopPlayerCombatWitness.cjs` to existing deployed `server/src/space/coopPlayerCombatWitness.js` through the existing overlay module mapping. Its internal relative runtime imports expect that destination.
-3. Add `EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE=1` only to an explicitly selected LivingCoop run; default **OFF**. Preserve loopback-only networking and `evejs-data`.
-4. Run pinned source parse/patch/unpatch and negative tests; after an owner-approved deployment prove that the native `noteDamage` call is actually reached for player-on-NPC damage. This runtime path has **not** been live verified here.
-5. Resolve the known `BLOCKED_TELEMETRY` problem with `DiagnoseWorld` before using reports; then perform actual authorized two-client UI/mission/loot acceptance.
-
-**No GitHub Actions/CI, no deployment, no merge, no client modification, no fake events and no game-data mutation.** No overlap with open PR #2, #3, #4 or #5.
+**No GitHub Actions/CI, no deployment, no merge, no client modification, no fake events and no game-data mutation.** This is a **stacked PR based on PR #2's branch**; it deliberately adds changes to that branch's installer *only in its own independent child branch*, leaving PR #2 itself untouched.
 
 ## Tested locally
 
 ```powershell
-node --test tests/coop-player-combat-witness.test.mjs tests/coop-duo-contribution-report.test.mjs
+node --test tests/coop-player-combat-witness.test.mjs tests/coop-duo-contribution-report.test.mjs tests/coop-player-damage-overlay-integration.test.mjs
 ```
 
-**21/21 isolated tests passed on Node 22**. Includes native applied-damage validation, object identity, session ghosts/reconnects, wrong targets and systems, broken source anchor, reversible hook, split victims, stale boot, malformed events, missing second player, optional physical wreck and mission mismatch. These are **not** Docker/client acceptance tests.
+**The 21 original standalone tests previously passed on Node 22.** The stacked branch adds two regression cases about unrelated mission causality and seven integration tests for transactional native wiring. Run the full command above after checking out the stacked branch; do not treat native source or actual client deployment as validated by synthetic tests.
