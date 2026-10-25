@@ -66,7 +66,7 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
     s.factionID===w.attackerFactionID&&
     s.systemID===campaign.sourceSystemID&&pos(s.entityID)&&
     typeof s.pilotID==="string"&&/^coop-pilot-[0-9]{3,}$/.test(s.pilotID))
-    .slice(0,8);
+    .slice(0,8).map(s=>({...s,role:"patrol"}));
    if(!assignments.length)continue;
    const blocked=new Set();
    for(const a of assignments)try{
