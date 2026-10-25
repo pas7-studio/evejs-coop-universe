@@ -303,6 +303,15 @@ function createService({db,store,nativeService,ensureState,spawn,register,
   if(busy.has(systemID))return {status:"BLOCKED",reason:"ALIFE08_REENTRANT",slots:[]};
   busy.add(systemID);
   const reports=[];
+  // Runtime controller lookup is a native authority; when it is not present (for
+  // example in a plain unit-test host) the legacy scene-only rule is kept.
+  const runtimeControllerOf=(()=>{
+   try{
+    const registry=require("./npc/npcRegistry");
+    return typeof registry.getControllerByEntityID==="function"
+     ?registry.getControllerByEntityID:null;
+   }catch(_error){return null;}
+  })();
   try{
    for(let slot=1;slot<=fleetCount;slot++){
     const key=slotKey(systemID,slot);
@@ -374,9 +383,13 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      }
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      // Validate ALL native rows before materializing ANY physical ship.
+     // Some boot paths materialize a durable ship without registering a runtime
+     // controller; the native mining tick then prunes it from its own fleet
+     // record and that role silently stops working. Re-attach the controller.
      let restored=0;
      for(const id of [...minerIDs,...haulerIDs]){
-      if(scene.getEntityByID(id))continue;
+      const live=scene.getEntityByID(id);
+      if(live&&(!runtimeControllerOf||runtimeControllerOf(id)))continue;
       const out=nativeService.materializeStoredNativeController(scene,id,{broadcast:false});
       if(out?.success!==true||pos(scene.getEntityByID(id)?.itemID)!==id)
        throw Error("ALIFE08_NATIVE_RESTORE_FAILED:"+id);

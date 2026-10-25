@@ -214,6 +214,64 @@ function createCourierDispatch(deps = {}) {
     return movePackage(wrapID, stationID, STATION_HANGAR_FLAG);
   }
 
+  // Everything the issuer now owns at the destination station.
+  function itemsAtStation(ownerID, stationID) {
+    const rows = [];
+    const seen = new Set();
+    const walk = (value, depth) => {
+      if (!value || depth > 4 || rows.length > 200) return;
+      if (Array.isArray(value)) { for (const child of value) walk(child, depth + 1); return; }
+      if (typeof value !== "object") return;
+      if (value.itemID !== undefined && value.typeID !== undefined) {
+        const id = num(value.itemID);
+        if (!seen.has(id)) {
+          seen.add(id);
+          if (num(value.ownerID) === num(ownerID) && num(value.locationID) === num(stationID)) rows.push(value);
+        }
+        return;
+      }
+      for (const child of Object.values(value)) walk(child, depth + 1);
+    };
+    try {
+      let table = gameStore.read("items");
+      if (table && table.success !== false && table.data !== undefined) table = table.data;
+      if (typeof table === "string") table = JSON.parse(table);
+      walk(table, 0);
+    } catch (_error) {
+      return rows;
+    }
+    return rows;
+  }
+
+  // A player docked at the destination must see the delivered cargo without a
+  // relog: the native completion synced inventory to the courier identity, which
+  // has no client, so the issuer's live session is told here.
+  function pushDeliveredInventory(contract) {
+    try {
+      // Injected in tests; inside the server this is the live registry, which
+      // only the server process itself can see (a separate node process has its
+      // own empty registry, so a probe outside the process proves nothing).
+      const registry = deps.sessionRegistry || require("../services/chat/sessionRegistry");
+      const issuerID = num(contract && contract.issuerID);
+      const session = registry && typeof registry.findSessionByCharacterID === "function"
+        ? registry.findSessionByCharacterID(issuerID)
+        : null;
+      if (!session) return "no live issuer session";
+      const rows = itemsAtStation(issuerID, num(contract.endStationID));
+      if (!rows.length) return "nothing at the destination station";
+      const characterState = deps.characterState || require("../services/character/characterState");
+      if (!characterState || typeof characterState.emitItemsChangedBatchForSession !== "function") {
+        return "characterState cannot emit item changes";
+      }
+      characterState.emitItemsChangedBatchForSession(session, rows.map((row) => ({ item: row })), {
+        locationContext: null,
+      });
+      return "sent " + rows.length + " items";
+    } catch (error) {
+      return "failed: " + String(error && error.message || error);
+    }
+  }
+
   function characterRow(characterID) {
     try {
       if (!gameStore || typeof gameStore.read !== "function") return null;
@@ -613,6 +671,8 @@ function createCourierDispatch(deps = {}) {
       if (done.status === "COMPLETED") {
         const durationMs = historyStore.durationMs(String(contractID));
         log(`[CoopCourier] contract ${contractID} DELIVERED by ${flight.characterID} in ${notices.durationText(durationMs)}`);
+        const pushed = pushDeliveredInventory(live);
+        log(`[CoopCourier] contract ${contractID} issuer inventory: ${pushed}`);
         notify("delivered", live, identity, {
           durationMs,
           departedClockText: clockText(historyStore.departedAtMs(String(contractID))),
@@ -733,6 +793,9 @@ function createCourierDispatch(deps = {}) {
 
   return {
     tick,
+    // Exposed so the issuer-notification path can be tested without a flight.
+    pushIssuerInventory: (contract) => pushDeliveredInventory(contract),
+    itemsAtStation,
     flights: () => [...flights.values()],
     attempted: () => [...attempted],
     LIVE_POLICY,
