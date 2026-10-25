@@ -72,7 +72,22 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
        !nonneg(previous.netCents)||
        previous.netCents!==grossCents-previous.taxCents||
        previous.taxPolicy!=="EVEJS_NATIVE_MARKET_RULES"||
-       !pos(previous.itemID))
+       !pos(previous.itemID)||
+       // A replay is only proof of a settled purchase when the original
+       // native buyer debit and seller net credit conserve exact ISK cents.
+       // Current wallets may have changed since settlement; verify receipt
+       // pre/post witnesses, never charge or move the item again.
+       !nonneg(previous.buyerBeforeCents)||
+       !nonneg(previous.buyerAfterCents)||
+       !nonneg(previous.sellerBeforeCents)||
+       !nonneg(previous.sellerAfterCents)||
+       previous.buyerBeforeCents<grossCents||
+       previous.buyerAfterCents!==previous.buyerBeforeCents-grossCents||
+       !nonneg(previous.sellerBeforeCents+grossCents)||
+       previous.sellerAfterCents!==previous.sellerBeforeCents+previous.netCents||
+       previous.taxTransactionID!==(previous.taxCents>0?
+        fillID+100000000000000:null)||
+       !pos(previous.committedAt))
      throw Error("NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT");
     // A valid committed receipt remains valid if a later consumer used the
     // purchased goods. Never replay wallets or reissue a physical item.
