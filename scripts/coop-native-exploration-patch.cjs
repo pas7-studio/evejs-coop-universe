@@ -61,7 +61,9 @@ function patch(source,file,remove=false){
    '    const resultID = process.env.EVEJS_COOP_EXPEDITION_SCAN_PROOF === "1"',
    '      ? (require("../../space/coopNativeScanProof").authorize({',
    '          session,locationID,resultID:rawScanResultID,',
-   '          sites:signatureRuntime.listSystemSignatureSites(locationID),',
+   '          // Do not enumerate arbitrary systems from an untrusted client ID.',
+   '          sites:locationID === normalizeNumber(session && session._space && session._space.systemID,0)',
+   '            ? signatureRuntime.listSystemSignatureSites(locationID) : [],',
    '        }).siteID || 0)',
    '      : normalizeNumber(rawScanResultID, 0);'
   ]);
