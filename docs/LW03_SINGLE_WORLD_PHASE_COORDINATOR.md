@@ -29,7 +29,11 @@ call-sites in the same order and behind the same feature flags**.
 
 ## LW-03B: source-domain phase registry and telemetry
 
-The static groups describe execution domains, NOT safety permissions: the\n`faction` step advances virtual faction state and `native-market-schedule` can\ninitiate an original native market action. Counts are attempted dispatches only.\n\nThe pure `coopLivingWorldPhaseRegistry.cjs` now defines the stable ordering
+The static groups describe execution domains, NOT safety permissions: the
+`faction` step advances virtual faction state and `native-market-schedule` can
+initiate an original native market action. Counts are attempted dispatches only.
+
+The pure `coopLivingWorldPhaseRegistry.cjs` now defines the stable ordering
 and names of the 27 current phase call-sites in 9 contiguous domains:
 opportunities, world-state, alife-strategy, combat, salvage, movement,
 market, activity and reconciliation. Dynamic physical system
@@ -54,6 +58,11 @@ no-second-scheduler expectations remain intact.
 
 ## Acceptance
 
+Use `pwsh -File scripts/Run-LivingWorld-Phase-Gates.ps1` to run five Node
+regression suites without touching Docker or protected `evejs-data`. Nine
+physical gameplay acceptance scenarios remain explicitly `NOT_RUN` in
+`tests/scenarios/lw03-single-world-phase-e2e.json`.
+
 ```bash
 node --test tests/coop-living-world-phase-coordinator.test.mjs
 node --test tests/coop-installer-module-coverage.test.mjs
@@ -70,9 +79,9 @@ No changes to protected `evejs-data` are permitted for validation.
 
 ## Next dependent work
 
-1. LW-03B: split phase definitions into explicit bounded registry groups
-   without modifying native effect order; measure phase durations on a
-   disposable test world and add a nonfinancial diagnostic view.
+1. LW-03C: extract the remaining callback bodies into bounded adapters,
+   preserve their existing effect order, then measure real native phase
+   durations on a disposable test world.
 2. LW-04: introduce an opt-in native **MANUFACTURE -> COMPLETE_JOB ->
    LIST_OUTPUT** executor through existing `coopAlifeNativeEconomyAct` and
    native industry director; never enable the separate
