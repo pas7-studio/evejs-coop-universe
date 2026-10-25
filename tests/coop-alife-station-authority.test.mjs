@@ -62,14 +62,14 @@ test("material shortage is measured against native SDE quantity not virtual mine
  assert.equal(r.mineralStock,3);
 });
 test("native unfinished installed jobs count against replenishment and prevent duplicate job",async()=>{
- const f=fixture();f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
+ const f=fixture();f.state.items.find(i=>i.itemID===BPI).locationID=2003;f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
   productQuantity:90,blueprintID:BPI,activityID:1,status:1,
   coopOperationID:"npc-manufacture:"+"b".repeat(32)}];
  const r=await f.read();assert.equal(r.nativeActiveJobs,1);
  assert.equal(r.nativeReadyJobs,0);assert.equal(r.productShortage,10);
 });
 test("paused native job is reserved stock and never creates a second paid manufacturing intent",async()=>{
- const f=fixture();f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
+ const f=fixture();f.state.items.find(i=>i.itemID===BPI).locationID=2003;f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
   productQuantity:100,blueprintID:BPI,activityID:1,status:2,
   coopOperationID:"npc-manufacture:"+"c".repeat(32)}];
  const r=await f.read();
@@ -79,10 +79,34 @@ test("paused native job is reserved stock and never creates a second paid manufa
  assert.equal(r.productShortage,0);
 });
 test("real READY industry job takes precedence in native inventory authority",async()=>{
- const f=fixture();f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
+ const f=fixture();f.state.items.find(i=>i.itemID===BPI).locationID=2003;f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
   productQuantity:100,blueprintID:BPI,activityID:1,status:3,
   coopOperationID:"npc-manufacture:"+"b".repeat(32)}];
  const r=await f.read();assert.equal(r.nativeReadyJobs,1);assert.equal(r.productShortage,0);
+});
+test("READY job remains deliverable with installed BPO at location 2003 and no free original",async()=>{
+ const f=fixture();f.state.items.find(i=>i.itemID===BPI).locationID=2003;
+ f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
+  productQuantity:100,blueprintID:BPI,activityID:1,status:3,
+  coopOperationID:"npc-manufacture:"+"d".repeat(32)}];
+ const r=await f.read();assert.equal(r.authoritativeNative,true);
+ assert.equal(r.nativeReadyJobs,1);assert.equal(r.factoryOnline,false);
+ assert.equal(r.productShortage,0);
+});
+test("already-manufactured product can be listed even if its BPO was removed",async()=>{
+ const f=fixture();f.state.items=f.state.items.filter(i=>i.itemID!==BPI);
+ f.state.items.push({itemID:2002,typeID:T,ownerID:O,locationID:S,
+  flagID:4,quantity:20,stacksize:20,singleton:0,customInfo:"coop-industry:v1:200"});
+ const r=await f.read();assert.equal(r.authoritativeNative,true);
+ assert.equal(r.nativeOutputQty,20);assert.equal(r.factoryOnline,false);
+});
+test("READY job with no real installed BPO is rejected instead of phantom delivery",async()=>{
+ const f=fixture();f.state.items=f.state.items.filter(i=>i.itemID!==BPI);
+ f.state.jobs=[{jobID:11,ownerID:O,stationID:S,productTypeID:T,
+  productQuantity:100,blueprintID:BPI,activityID:1,status:3,
+  coopOperationID:"npc-manufacture:"+"e".repeat(32)}];
+ const r=await f.read();assert.equal(r.authoritativeNative,false);
+ assert.equal(r.reason,"NATIVE_ACTIVE_JOB_BLUEPRINT_CUSTODY_MISSING");
 });
 test("unlisted physical item manufactured by native job is discoverable but not minted",async()=>{
  const f=fixture();f.state.items.push({itemID:2001,typeID:T,ownerID:O,locationID:S,
