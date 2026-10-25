@@ -52,6 +52,32 @@ test("native source hook never calls warpToPoint, wallet or synthetic trajectory
  assert.ok(!HOOK.includes("amountISK"));
  assert.ok(!HOOK.includes("position="));
 });
+test("patched native materializer calls recovery AFTER original ambient controller setup",()=>{
+ const loaded={exports:{}},events=[];
+ const env={env:{EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT:"1"}};
+ new Function("module","require","process",patch(fixture))(loaded,k=>{
+  if(k!=="../coopNativeStationArrival")throw Error("unexpected import");
+  return {restoreNativeIngress:entity=>{
+   events.push({kind:entity.kind,previousMode:entity.mode});
+   entity.mode="WARP";
+  }};
+ },env);
+ const actual=loaded.exports.materializeNativeRuntimeEntity({},
+  {entityID:901},{},{});
+ assert.equal(actual.entity.mode,"WARP");
+ assert.deepEqual(events,[{kind:"ship",previousMode:"STOP"}]);
+});
+test("disabled flag leaves original native materializer idle state unchanged",()=>{
+ const loaded={exports:{}},events=[];
+ new Function("module","require","process",patch(fixture))(loaded,()=>{
+  events.push("unexpected native recovery call");
+  return {restoreNativeIngress:()=>{}};
+ },{env:{EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT:"0"}});
+ const actual=loaded.exports.materializeNativeRuntimeEntity({},
+  {entityID:901},{},{});
+ assert.equal(actual.entity.mode,"STOP");
+ assert.deepEqual(events,[]);
+});
 test("actual pinned 56k+ nativeNpcService source validates byte-exact patch",{
  skip:!source},()=>{
  assert.ok(source.length>20000);
