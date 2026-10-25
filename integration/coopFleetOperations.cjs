@@ -219,8 +219,15 @@ function createOperations(options={}){
     const lines=ongoing.slice(0,3).map(x=>
      x.phase+" pirate #"+x.pirateID+" → "+x.targetRole+" #"+x.targetID+
      " (real ore "+x.ore+", "+Math.round(distance(x.pirate.position,x.target.position)/1000)+" km)");
+    const fleetID=id(ctx.fleet.fleetID);
+    const roleSummaries=[...roleIntents.values()]
+     .filter(row=>row.incidentKey===ongoing[0].key&&row.fleetID===fleetID&&
+       ctx.crewmates.some(member=>member.characterID===row.characterID&&
+         member.shipID===row.shipID))
+     .slice(0,8).map(row=>"#"+row.characterID+"="+row.role);
     return {status:"LIVE_NATIVE_RAID",message:
      "[Co-op] Active native convoy incidents: "+lines.join("; ")+
+     (roleSummaries.length?" | Actual fleet role pledges: "+roleSummaries.join(", "):"")+
      ". Commander: /coopops focus <pirateID> and /coopops guard <haulerID>. Each pilot may choose /coopops role <role>."};
    }
    if(command==="convoy"){
@@ -240,9 +247,14 @@ function createOperations(options={}){
     if(!match)return {status:"NO_VERIFIED_INCIDENT_TARGET",
      message:"[Co-op] Target is not in a verified active NPC convoy incident."};
     const tag=command==="focus"?"1":"2";
-    if(ctx.fleets.setFleetTargetTag(session,targetID,tag)!==true)
+    const changed=ctx.fleets.setFleetTargetTag(session,targetID,tag)===true;
+    const currentTag=typeof ctx.fleets.getTargetTagForCharacter==="function"
+      ?ctx.fleets.getTargetTagForCharacter(ctx.characterID,targetID):null;
+    if(!changed&&currentTag!==tag)
      return {status:"NATIVE_COMMAND_PERMISSION_DENIED",
       message:"[Co-op] Only an authorized native EVE fleet commander can tag a target."};
+    if(!changed)return {status:"NATIVE_FLEET_TARGET_ALREADY_TAGGED",targetID,tag,
+     message:"[Co-op] Native fleet target #"+targetID+" already carries tag "+tag+"."};
     const label=command==="focus"?"INTERCEPT PIRATE":"PROTECT CONVOY";
     for(const member of ctx.crewmates)if(member.characterID!==ctx.characterID){
      try{send(member.session,"[Co-op] Fleet tag "+tag+" "+label+" #"+targetID+
