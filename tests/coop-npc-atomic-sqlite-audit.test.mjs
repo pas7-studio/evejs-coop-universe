@@ -81,12 +81,21 @@ test("audit never modifies SQLite rows, bank receipts, or unresolved lockfiles",
   assert.deepEqual(f.db.prepare('SELECT key,json FROM npcCargo ORDER BY key').all(),beforeSqlite);
  });
 });
-test("unexpected bank files and invalid native fence content are fail-closed",()=>{
+test("unexpected bank files are reported as unsafe",()=>{
  fixture(f=>{
   f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
   fs.writeFileSync(path.join(f.dir,"stray-suspicious-file"),"ignored");
   const report=f.audit();
   assert.equal(report.clean,false);
   assert.ok(report.warnings.some(s=>s.includes("UNKNOWN_FILE")));
+ });
+});
+
+test("malformed authoritative SQLite replay fence aborts audit fail-closed",()=>{
+ fixture(f=>{
+  f.db.prepare('INSERT INTO npcCargo(key,json) VALUES(?,?)').run(
+   "coopAmmoCycles_101",JSON.stringify({version:1,entityID:101,modules:{"401":"not-a-number"}}));
+  f.receipt(101,"COMMITTED",1000,[401]);
+  assert.throws(f.audit,/INVALID_NATIVE_FENCE/);
  });
 });
