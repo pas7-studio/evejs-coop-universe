@@ -1,7 +1,7 @@
 "use strict";
 // Native-only bridge to the COOP-032D/E/F transaction kernels. No auto scheduler.
-const {createNpcIndustryScopedProof}=require("./coopNpcIndustryGameStoreScope.cjs");
-const {createNpcIndustryReadyProof}=require("./coopNpcIndustryReady.cjs");
+const {createNpcIndustryScopedProof}=require("./coopNpcIndustryGameStoreScope"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {createNpcIndustryReadyProof}=require("./coopNpcIndustryReady"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 function createNativeIndustryBindings({gameStore,itemStore,resolveCanonicalQuote,
  verifyNativeQuote,verifyNativeOwner,verifyNativeOutput,verifyNativeIdFloor,
