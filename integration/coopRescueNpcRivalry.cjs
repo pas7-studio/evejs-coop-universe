@@ -5,9 +5,9 @@
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const vec=x=>x&&["x","y","z"].every(k=>Number.isFinite(x[k]));
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
-function createRescueRivalry({getWrecks,getWreckItems,atomicRows,
+function createRescueRivalry({getWrecks,getWreckItems,readVerifiedLoss,atomicRows,
  warpToEntity,orbit,readController,clock=()=>Date.now()}={}){
- if([getWrecks,getWreckItems,atomicRows,warpToEntity,orbit,
+ if([getWrecks,getWreckItems,readVerifiedLoss,atomicRows,warpToEntity,orbit,
   readController,clock].some(x=>typeof x!=="function"))
   throw Error("RESCUE_RIVAL_NATIVE_AUTHORITIES_REQUIRED");
  const nextAt=new Map();
@@ -21,12 +21,20 @@ function createRescueRivalry({getWrecks,getWreckItems,atomicRows,
    return {status:"RESCUE_RIVAL_SCENE_INVALID",orders:[]};
   const now=clock(),orders=[];
   if(!pos(now))return {status:"RESCUE_RIVAL_CLOCK_INVALID",orders};
-  let wrecks;try{wrecks=getWrecks()}
-  catch{return {status:"RESCUE_RIVAL_WRECK_SOURCE_UNAVAILABLE",orders}};
+  let wrecks,witness;try{
+   wrecks=getWrecks();witness=readVerifiedLoss();
+  }catch{return {status:"RESCUE_RIVAL_WRECK_SOURCE_UNAVAILABLE",orders}};
+  if(witness?.status!=="READY"||!Array.isArray(witness.outcomes))
+   return {status:"RESCUE_RIVAL_NATIVE_LOSS_UNAVAILABLE",orders};
   if(!Array.isArray(wrecks))return {status:"RESCUE_RIVAL_WRECK_SOURCE_UNAVAILABLE",orders};
   for(const wreck of wrecks.filter(w=>w.systemID===scene.systemID&&
     pos(w.wreckID)&&pos(w.sourceEntityID)&&w.transient!==true)
     .sort((a,b)=>a.wreckID-b.wreckID).slice(0,40)){
+   const losses=witness.outcomes.filter(x=>x.systemID===scene.systemID&&
+    x.targetID===wreck.sourceEntityID&&
+    x.status==="HAULER_NATIVE_LOSS_VERIFIED"&&
+    x.haulerNativeWreckID===wreck.wreckID);
+   if(losses.length!==1)continue;
    const physical=scene.getEntityByID(wreck.wreckID);
    if(physical?.nativeNpcWreck!==true||
     physical.itemID!==wreck.wreckID||!vec(physical.position))continue;
