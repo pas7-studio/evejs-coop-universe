@@ -709,7 +709,12 @@ function advanceNativeRaids(){
     Number(c?.moduleID||0)===0&&Number(c?.quantity)>0)):fleetShips;
   const squadState=squads?.observe({systemID,scene,
    pirates:activeLinks.filter(p=>p.role==="pirate"),
-   pilots:actualPilots,fleetShips:raidCandidates});
+   pilots:actualPilots,fleetShips:raidCandidates,
+   canAttack:({pirateID,targetID})=>raidPolicy.isAuthorizedStockMiningRaid({
+    systemID,attacker:scene.getEntityByID(pirateID),
+    target:scene.getEntityByID(targetID),links:activeLinks,
+    pilots:actualPilots,fleetShips:raidCandidates
+   })});
   if(squadState?.teams?.length&&backgroundTicks%10===0)
    require("./coopRuntimeProbe").observe("living-npc-scout-relay",null,
     {spaceState:{systemID}},{teams:squadState.teams});
