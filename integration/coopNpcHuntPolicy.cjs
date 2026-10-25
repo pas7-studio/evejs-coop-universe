@@ -54,6 +54,9 @@ function createHuntPolicy({file, clock = () => Date.now(),
         sharedIntel.recipientEntityID === attackerID &&
         sharedIntel.targetRole === targetRole && sharedIntel.systemID === system &&
         Number.isSafeInteger(sharedIntel.observedAt) &&
+        Number.isSafeInteger(sharedIntel.firstSeenAt) &&
+        sharedIntel.firstSeenAt <= sharedIntel.observedAt &&
+        clock() - sharedIntel.firstSeenAt >= 15000 &&
         clock() >= sharedIntel.observedAt &&
         clock() - sharedIntel.observedAt <= 60000 &&
         vec(sharedIntel.position) &&
@@ -64,8 +67,17 @@ function createHuntPolicy({file, clock = () => Date.now(),
         .filter(link => Number(link.entityID) === sourceID &&
           link.pilotID === sourcePilot && link.role === "pirate" &&
           Number(link.systemID) === system);
+      const recipientLinks = (Array.isArray(contacts) ? contacts : [])
+        .filter(link => Number(link.entityID) === attackerID &&
+          link.pilotID === piratePilotID && link.role === "pirate" &&
+          Number(link.systemID) === system);
+      const sameFaction = sourceLinks.length === 1 &&
+        recipientLinks.length === 1 &&
+        typeof sourceLinks[0].faction === "string" &&
+        sourceLinks[0].faction.length > 0 &&
+        sourceLinks[0].faction === recipientLinks[0].faction;
       const source = sourceID && scene.getEntityByID(sourceID);
-      if (sourceID !== attackerID && sourceLinks.length === 1 &&
+      if (sourceID !== attackerID && sameFaction &&
           source?.kind === "ship" && source.nativeNpc === true &&
           !source.session?.characterID && vec(source.position) &&
           range(source.position, prey.position) <= 180000) {
