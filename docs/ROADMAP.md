@@ -1,5 +1,17 @@
 # Delivery roadmap — agent-ready tasks
 
+> **P0 ALIFE-02 native execution integration:** [One-tick COOP-043 station authority + COOP-048 common NPC order bridge + guarded RESUPPLY native ACT](ALIFE_NATIVE_ACT_STAGE1.md). No second scheduler, no free ammo/ISK. Emergency retreat retained; shortage monitor excludes depleted NPCs from new raids even if market intent is unavailable. **43 physical E2E cases NOT_RUN**, flags OFF; full economy ACT/SETTLE remains pending.
+
+> **P0 COOP-047 — NPC ammo outcome downgrade/root-rotation safety:** [Persistent SQLite + fsynced journal outcome-mode latch](NPC_FIRE_OUTCOME_WITNESS_STAGE12.md). Implements fail-closed cross-attestation, enforces prior receipt history even if journal root moves, and includes real SQLite/FS disposable performance runner. **Manual Linux Node 22 tests and two-client NPC battle still REQUIRED; default OFF.**
+
+> **P0 COOP-046 — native NPC fire-outcome witness:** [Durable ammo debit -> turret/missile outcome, unresolved-cycle quarantine](NPC_FIRE_OUTCOME_WITNESS_STAGE12.md). Opt-in, source-level implemented, pinned overlay verified; full Linux Node + two-client gameplay acceptance PENDING. OFF by default.
+
+> **P0 COOP-045 — NPC SQLite atomic weapon-bank debit:** [Native ammo cargo and per-module replay fences committed in a single transaction](NPC_ATOMIC_WEAPON_BANK_STAGE11.md). **IMPLEMENTED_UNVERIFIED:** pinned source roundtrip + isolated JS smoke checked; real Node/SQLite crash tests and two-client combat still required. Stacked after COOP-044; default OFF.
+
+
+> **P0 COOP-044 — native NPC weapon-bank replay safety:** [Preflight every active weapon journal before spending any grouped barrel](NPC_WEAPON_BANK_RECOVERY_STAGE10.md). Source fixture and isolated V8 behavior checked; native bank-wide atomicity and live two-client/crash acceptance **still unverified**. Default OFF.
+
+
 > **P1 COOP-043 — native Community Fittings catalog:** [Source-vetted EFT imports and co-op fitting browser acceptance](COOP_COMMUNITY_FITTINGS_V1.md). Existing pinned EveJS supports a read-only community owner (1000282 / 600 fits); external sourcing and safe seeding are **NOT YET IMPLEMENTED**, two-client gameplay unverified.
 
 > **P0 local co-op pacing:** [Local progression V2 (48× new-world default, existing-queue migration fence, live speed diagnostics)](COOP_LOCAL_PROGRESSION_V2.md). Source-level only; do not retro-credit SP or claim the one-year client ETA is fixed until real client QA.

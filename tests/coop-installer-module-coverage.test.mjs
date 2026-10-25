@@ -21,14 +21,35 @@ function localModules() {
     .map((name) => name.replace(/\.cjs$/, ""));
 }
 
-test("the installer ships every integration module exactly once", () => {
+// Modules that genuinely must not be shipped: offline/one-shot helpers that are
+// executed as scripts, never required by a runtime overlay module. Anything
+// else in integration/ must appear in the overlay list, so "added a module but
+// forgot to ship it" stays a test failure instead of a silent deploy hole.
+const OFFLINE_ONLY = new Set([
+  "coopSkillGrant", // used by scripts/coop-grant-skills.cjs only
+  "coopNpcIndustryOfflineAtomic",
+  "coopNpcIndustryOfflineDelivery",
+  "coopNpcIndustryGameStoreScope",
+  "coopNpcIndustryNativeBindings",
+  "coopNpcIndustryReady",
+  "coopNpcEconomyScheduler",
+  "coopNpcNativeEconomyDirector",
+  "coopEscortContractSettlement",
+  "coopEscortNativeFunds",
+]);
+
+test("the installer names only real modules and ships every runtime module", () => {
   const shipped = shippedNames();
   const modules = localModules();
-  const missing = modules.filter((module) => !shipped.has(module));
-  assert.deepEqual(missing, [], "modules present in the repo but never copied into Code");
   for (const name of shipped) {
     assert.ok(modules.includes(name), `installer references a non-existent module: ${name}`);
   }
+  const unshipped = modules.filter((module) => !shipped.has(module) && !OFFLINE_ONLY.has(module));
+  assert.deepEqual(unshipped, [], "runtime modules present in integration/ but never copied into Code");
+  for (const name of OFFLINE_ONLY) {
+    assert.ok(modules.includes(name), `OFFLINE_ONLY lists a module that no longer exists: ${name}`);
+  }
+  assert.ok(shipped.size > 50, "the installer must ship the runtime overlay");
 });
 
 test("every extension-less require between integration modules is shipped", () => {

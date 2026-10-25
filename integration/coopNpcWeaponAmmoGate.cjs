@@ -1,73 +1,135 @@
 "use strict";
-// Authoritative, opt-in native NPC weapon activation gate.
-// It prevents a real fitted ammo-requiring gun from activating/remaining
-// active without a real compatible native module-bound cargo stack.
-// It NEVER consumes ammo, invents a firing event, alters damage, or grants ISK.
-const positive = x => Number.isSafeInteger(Number(x)) && Number(x)>0 ? Number(x) : null;
-const requiring = new Set(["missileLauncher","projectileTurret","hybridTurret","precursorTurret","laserTurret"]);
-function createAmmoGate({store,dogma,capability,env=process.env}={}){
- function check({entity,moduleItem,bankModuleIDs=[]}={}){
- const allowed=(status,details={})=>({allowed:true,status,...details});
- const refused=(status,details={})=>({allowed:false,status,...details});
- if(env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
-  entity?.nativeNpc!==true||entity?.kind!=="ship")
-  return allowed("DEFAULT_UNMODIFIED");
- if(moduleItem?.npcSyntheticHullWeapon===true)return allowed("SYNTHETIC_HULL_WEAPON");
- const entityID=positive(entity.itemID),moduleID=positive(moduleItem?.itemID);
- if(!entityID||!moduleID)return refused("INVALID_NATIVE_WEAPON");
- try{
-  const family=dogma.resolveWeaponFamily(moduleItem);
-  if(!requiring.has(family))return refused("UNKNOWN_NATIVE_WEAPON_FAMILY");
-  if(dogma.isChargeOptionalTurretWeapon(moduleItem)===true)
-   return allowed("CHARGE_OPTIONAL_WEAPON");
-  const native=store.getNativeEntity(entityID);
-  if(!native||Number(native.entityID)!==entityID||
-   !positive(native.ownerID)||Number(native.ownerID)!==Number(entity.ownerID)||
-   !positive(native.systemID)||
-   (positive(entity.systemID)&&Number(native.systemID)!==Number(entity.systemID)))
-   return refused("NATIVE_SHIP_CUSTODY_MISSING");
-  const ownerID=Number(native.ownerID);
-  const moduleRows=store.listNativeModulesForEntity(entityID);
-  const cargo=store.listNativeCargoForEntity(entityID);
-  if(!Array.isArray(moduleRows)||!Array.isArray(cargo))
-   return refused("NATIVE_MODULE_CARGO_UNAVAILABLE");
-  const grouped=Array.isArray(bankModuleIDs)&&bankModuleIDs.length>1?
-   [...new Set(bankModuleIDs.map(positive))]:[moduleID];
-  if(grouped.some(id=>!id)||grouped.length>16||!grouped.includes(moduleID))
-   return refused("NATIVE_BANK_MEMBERSHIP_INVALID");
-  for(const memberID of grouped){
-   const fitted=moduleRows.filter(m=>Number(m.moduleID)===memberID&&
-    Number(m.entityID)===entityID&&Number(m.ownerID)===ownerID&&
-    Number(m.categoryID)===7&&positive(m.flagID)&&
-    m.moduleState?.online!==false&&m.moduleState?.isOnline!==false);
-   if(fitted.length!==1)return refused("NATIVE_WEAPON_MODULE_NOT_VERIFIED",{memberID});
-   const charges=cargo.filter(row=>Number(row.moduleID)===memberID);
-   const valid=charges.filter(row=>Number(row.entityID)===entityID&&
-    Number(row.ownerID)===ownerID&&Number(row.categoryID)===8&&
-    // Native transient-scene cargo is still a REAL authoritative stack;
-    // unlike EveJS virtual reload reserve it has a source ID and quantity.
-    positive(row.cargoID)&&positive(row.typeID)&&
-    Number.isSafeInteger(Number(row.quantity))&&Number(row.quantity)>0&&
-    capability.isNpcChargeCompatibleWithModule(fitted[0],Number(row.typeID))===true);
-   if(valid.length!==1||charges.length!==1)
-    return refused("NATIVE_AMMO_EMPTY_OR_AMBIGUOUS",{memberID});
+// Strict NPC weapon activation gate: read authoritative native hull, fitted
+// modules and bound charge stacks. No inventory or damage mutations occur here.
+const positive = value => Number.isSafeInteger(Number(value)) && Number(value) > 0
+  ? Number(value) : null;
+const requiring = new Set([
+  "missileLauncher", "projectileTurret", "hybridTurret",
+  "precursorTurret", "laserTurret",
+]);
+
+function createAmmoGate({ store, dogma, capability, env = process.env } = {}) {
+  function check({ entity, moduleItem, bankModuleIDs = [] } = {}) {
+    const allowed = (status, details = {}) => ({ allowed: true, status, ...details });
+    const refused = (status, details = {}) => ({ allowed: false, status, ...details });
+    if (env.EVEJS_COOP_NPC_STRICT_AMMO !== "1" ||
+        entity?.nativeNpc !== true || entity?.kind !== "ship") {
+      return allowed("DEFAULT_UNMODIFIED");
+    }
+
+    // EveJS synthetic hull weapons are not fitted items and have no charge
+    // stacks. Do not pretend that they fired a normal ammo-consuming module.
+    if (moduleItem?.npcSyntheticHullWeapon === true) {
+      return allowed("SYNTHETIC_HULL_WEAPON");
+    }
+
+    const entityID = positive(entity?.itemID);
+    const moduleID = positive(moduleItem?.itemID);
+    if (!entityID || !moduleID) return refused("INVALID_NATIVE_WEAPON");
+
+    const selected = Array.isArray(bankModuleIDs) && bankModuleIDs.length
+      ? bankModuleIDs.map(positive) : [moduleID];
+    // Duplicate or malformed bank members cannot conceal a missing weapon.
+    if (selected.length > 16 || selected.some(id => !id) ||
+        new Set(selected).size !== selected.length ||
+        !selected.includes(moduleID)) {
+      return refused("NATIVE_BANK_MEMBERSHIP_INVALID");
+    }
+
+    try {
+      const native = store.getNativeEntity(entityID);
+      if (!native || Number(native.entityID) !== entityID ||
+          !positive(native.ownerID) || Number(native.ownerID) !== Number(entity.ownerID) ||
+          !positive(native.systemID) ||
+          (positive(entity.systemID) && Number(native.systemID) !== Number(entity.systemID))) {
+        return refused("NATIVE_SHIP_CUSTODY_MISSING");
+      }
+      const ownerID = Number(native.ownerID);
+      const moduleRows = store.listNativeModulesForEntity(entityID);
+      const cargo = store.listNativeCargoForEntity(entityID);
+      if (!Array.isArray(moduleRows) || !Array.isArray(cargo)) {
+        return refused("NATIVE_MODULE_CARGO_UNAVAILABLE");
+      }
+
+      let charged = 0;
+      let chargeOptional = 0;
+      for (const memberID of selected) {
+        const fitted = moduleRows.filter(row =>
+          Number(row?.moduleID) === memberID &&
+          Number(row?.entityID) === entityID &&
+          Number(row?.ownerID) === ownerID &&
+          Number(row?.categoryID) === 7 && positive(row?.typeID) &&
+          positive(row?.flagID) &&
+          row?.moduleState?.online !== false &&
+          row?.moduleState?.isOnline !== false);
+        if (fitted.length !== 1) {
+          return refused("NATIVE_WEAPON_MODULE_NOT_VERIFIED", { memberID });
+        }
+        const row = fitted[0];
+        if (memberID === moduleID &&
+            (positive(moduleItem.typeID) !== positive(row.typeID) ||
+             positive(moduleItem.flagID) !== positive(row.flagID) ||
+             (positive(moduleItem.ownerID) && positive(moduleItem.ownerID) !== ownerID))) {
+          return refused("NATIVE_WEAPON_MODULE_IDENTITY_MISMATCH", { memberID });
+        }
+
+        // Resolve charge policy for EACH independently fitted barrel. A
+        // charge-optional lead module must never exempt other bank members.
+        const member = memberID === moduleID ? moduleItem : {
+          ...row, itemID: row.moduleID,
+        };
+        const family = dogma.resolveWeaponFamily(member);
+        if (!requiring.has(family)) {
+          return refused("UNKNOWN_NATIVE_WEAPON_FAMILY", { memberID });
+        }
+        const isOptional = dogma.isChargeOptionalTurretWeapon(member) === true;
+        if (isOptional) {
+          if (family === "missileLauncher") {
+            return refused("NATIVE_OPTIONAL_MISSILE_UNSUPPORTED", { memberID });
+          }
+          chargeOptional += 1;
+          continue;
+        }
+
+        const charges = cargo.filter(charge => Number(charge?.moduleID) === memberID);
+        const valid = charges.filter(charge =>
+          Number(charge?.entityID) === entityID &&
+          Number(charge?.ownerID) === ownerID &&
+          Number(charge?.categoryID) === 8 &&
+          positive(charge?.cargoID) && positive(charge?.typeID) &&
+          Number.isSafeInteger(Number(charge.quantity)) && Number(charge.quantity) > 0 &&
+          capability.isNpcChargeCompatibleWithModule(row, Number(charge.typeID)) === true);
+        if (charges.length !== 1 || valid.length !== 1) {
+          return refused("NATIVE_AMMO_EMPTY_OR_AMBIGUOUS", { memberID });
+        }
+        charged += 1;
+      }
+      return charged === 0
+        ? allowed("CHARGE_OPTIONAL_WEAPON", { modules: selected.length })
+        : allowed("NATIVE_LOADED_AMMO_VERIFIED", {
+            modules: selected.length, charged, chargeOptional,
+          });
+    } catch (_error) {
+      return refused("NATIVE_AMMO_PROOF_UNAVAILABLE");
+    }
   }
-  return allowed("NATIVE_LOADED_AMMO_VERIFIED",{modules:grouped.length});
- }catch(_){
-  return refused("NATIVE_AMMO_PROOF_UNAVAILABLE");
- }
+  return { check };
 }
- return {check};
+
+function check(args = {}) {
+  if (process.env.EVEJS_COOP_NPC_STRICT_AMMO !== "1" ||
+      args?.entity?.nativeNpc !== true || args?.entity?.kind !== "ship") {
+    return { allowed: true, status: "DEFAULT_UNMODIFIED" };
+  }
+  try {
+    return createAmmoGate({
+      store: require("./npc/nativeNpcStore"),
+      dogma: require("./combat/weaponDogma"),
+      capability: require("./npc/npcCapabilityResolver"),
+    }).check(args);
+  } catch (_error) {
+    return { allowed: false, status: "NATIVE_AMMO_PROOF_UNAVAILABLE" };
+  }
 }
-function check(args={}){
- if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
-  args?.entity?.nativeNpc!==true||args?.entity?.kind!=="ship")
-  return {allowed:true,status:"DEFAULT_UNMODIFIED"};
- try{return createAmmoGate({
-  store:require("./npc/nativeNpcStore"),
-  dogma:require("./combat/weaponDogma"),
-  capability:require("./npc/npcCapabilityResolver")
- }).check(args);}
- catch(_){return {allowed:false,status:"NATIVE_AMMO_PROOF_UNAVAILABLE"};}
-}
-module.exports={check,createAmmoGate};
+
+module.exports = { check, createAmmoGate };
