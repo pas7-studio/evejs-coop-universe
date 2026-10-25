@@ -319,6 +319,21 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      ?registry.getControllerByEntityID:null;
    }catch(_error){return null;}
   })();
+  // The native mining tick prunes any ship it has no runtime controller for, so
+  // every ship this module vouches for must have one before the slot is declared
+  // healthy - freshly spawned ones included.
+  const ensureControllers=ids=>{
+   let attached=0;
+   for(const id of ids){
+    const live=scene.getEntityByID(id);
+    if(live&&(!runtimeControllerOf||runtimeControllerOf(id)))continue;
+    const out=nativeService.materializeStoredNativeController(scene,id,{broadcast:false});
+    if(out?.success!==true||pos(scene.getEntityByID(id)?.itemID)!==id)
+     throw Error("ALIFE08_NATIVE_CONTROLLER_FAILED:"+id);
+    attached++;
+   }
+   return attached;
+  };
   try{
    for(let slot=1;slot<=fleetCount;slot++){
     const key=slotKey(systemID,slot);
@@ -341,6 +356,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
      if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     ensureControllers([...minerIDs,...haulerIDs]);
      const active=saveSlot(db,key,{version:1,status:"ACTIVE",systemID,slot,
       fleetID:fleetIDForSlot(systemID,slot),
       minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor:born.data.originAnchor||null});
@@ -387,21 +403,14 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      if(healed){
       minerIDs=healed.minerEntityIDs;
       haulerIDs=healed.haulerEntityIDs;
+      ensureControllers([...minerIDs,...haulerIDs]);
      }
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      // Validate ALL native rows before materializing ANY physical ship.
      // Some boot paths materialize a durable ship without registering a runtime
      // controller; the native mining tick then prunes it from its own fleet
      // record and that role silently stops working. Re-attach the controller.
-     let restored=0;
-     for(const id of [...minerIDs,...haulerIDs]){
-      const live=scene.getEntityByID(id);
-      if(live&&(!runtimeControllerOf||runtimeControllerOf(id)))continue;
-      const out=nativeService.materializeStoredNativeController(scene,id,{broadcast:false});
-      if(out?.success!==true||pos(scene.getEntityByID(id)?.itemID)!==id)
-       throw Error("ALIFE08_NATIVE_RESTORE_FAILED:"+id);
-      restored++;
-     }
+     const restored=ensureControllers([...minerIDs,...haulerIDs]);
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:record.originAnchor||null});
