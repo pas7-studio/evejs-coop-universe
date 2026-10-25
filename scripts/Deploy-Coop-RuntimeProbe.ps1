@@ -18,6 +18,7 @@ param(
   [switch]$EnableFactionPatrols,
   [switch]$CoopCombat,
   [switch]$LivingCoop,
+  [switch]$EnableNativeCoopContracts,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -102,6 +103,12 @@ if ($LivingCoop) {
   # scripted NPC encounters (LivingCoop still uses autonomous native NPCs).
   $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+# ContractMgr is a stub in pinned EveJS; this opt-in routes it to the real
+# contractProxy with courier acceptor authorization. Keep OFF by default
+# until two-client escrow and crash-replay settlement validation.
+if ($EnableNativeCoopContracts) {
+  $yamlLines += "      EVEJS_COOP_NATIVE_CONTRACTS: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
