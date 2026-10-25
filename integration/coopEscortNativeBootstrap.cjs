@@ -200,6 +200,18 @@ function installNativeEscorts(){
     if(checked?.status!=="NATIVE_RECONCILE_CHECKED")
      console.warn("[CoopEscort] startup recovery:",checked?.status||"UNAVAILABLE");
   }
+  if(mount?.status==="ESCORT_NATIVE_RUNTIME_BOUND"&&
+     process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY==="1"){
+    // Offline service is a *fsynced original terminal duo receipt*, not an
+    // inference from a delivered cargo journal or elapsed time. Native wallet
+    // atomic idempotency remains the only authority for a player credit.
+    let checked;try{checked=require("./coopEscortNativeBinding")
+     .reconcilePeacefulDeliveries({maxTrips:32})}
+    catch{checked={status:"PEACEFUL_REPLAY_BOOTSTRAP_UNAVAILABLE"}}
+    if(checked?.status!=="NATIVE_PEACEFUL_REPLAY_CHECKED")
+     console.warn("[CoopEscort] peaceful payout replay:",
+      checked?.status||"UNAVAILABLE");
+  }
   lastState=mount;return mount;
  }catch{return {status:"ESCORT_NATIVE_BOOTSTRAP_UNAVAILABLE"}}
 }
