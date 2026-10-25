@@ -202,6 +202,16 @@
         "Inject lost fsync ACK and repeat request"
       ],
       "expected": "No authorization to reserve, launch or pay from corrupt/linked/uncertain witness; human operator repair required"
+    },
+    {
+      "id": "JOB-UI-19",
+      "name": "Off-grid pilot rejected before native manifest or debit",
+      "actions": [
+        "Two distinct genuine pilots accept same corporate escort quote",
+        "Move one real ship beyond 150km of source NPC while preserving its paid acceptance",
+        "Attempt station convoy start; inspect original native manifest directory and GameStore escrow table"
+      ],
+      "expected": "Server denies ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID; no original native manifest prepared, no corporation ISK reserved and no warp command dispatched"
     }
   ]
 }
