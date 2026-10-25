@@ -82,6 +82,13 @@ test("in-progress native industry quantity reduces shortage",()=>run(f=>{
  f.observe.snapshot=()=>({...snap(),jobs:[{jobID:970000000000077,status:1,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
  assert.equal(d.tick(ctx).status,"SUFFICIENT_NATIVE_STOCK");
 }));
+test("PAUSED native industry work counts toward supply instead of a second paid factory batch",()=>run(f=>{
+ const d=f.create(),old=f.observe.snapshot;
+ f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:2,activityID:1,
+  ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100}]});
+ assert.equal(d.tick(ctx).status,"SUFFICIENT_NATIVE_STOCK");
+ assert.equal(f.installs,0);
+}));
 test("native already-delivered job status 4 never permanently blocks replenishment",()=>run(f=>{
  const d=f.create(),old=f.observe.snapshot;
  f.observe.snapshot=()=>({...old(),jobs:[{jobID:970000000000099,status:4,activityID:1,
@@ -100,7 +107,7 @@ test("missing or invalid native job status/owner/location cannot authorize a job
  const d=f.create(),old=f.observe.snapshot;
  for(const bad of [
   {jobID:970000000000099,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100},
-  {jobID:970000000000099,status:2,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100},
+  {jobID:970000000000099,status:7,activityID:1,ownerID:OWNER,stationID:STATION,typeID:TYPE,quantity:100},
   {jobID:970000000000099,status:1,activityID:1,ownerID:OWNER+1,stationID:STATION,typeID:TYPE,quantity:100}
  ]){
   f.observe.snapshot=()=>({...old(),jobs:[bad]});
