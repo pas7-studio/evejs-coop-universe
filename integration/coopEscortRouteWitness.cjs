@@ -150,7 +150,8 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
   if(prev.status!=="ROUTE_CHECKPOINT_NOT_FOUND")return prev;
   const earlier=stage===2?readOne(b,p,1):null;
   if(stage===2&&earlier.status!=="VERIFIED_NATIVE_ROUTE_CHECKPOINT")
-   return denied("ROUTE_EARLIER_CHECKPOINT_REQUIRED");
+   return earlier.status==="ROUTE_CHECKPOINT_NOT_FOUND"?
+    denied("ROUTE_EARLIER_CHECKPOINT_REQUIRED"):earlier;
   if(stage===2&&!equal(earlier.row.destination,destination))
    return denied("ROUTE_DESTINATION_CHANGED");
   if(stage===2&&!fsyncStored(b.manifestKey,1))
