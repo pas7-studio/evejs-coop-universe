@@ -48,7 +48,7 @@ names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacef
 // COOP-055: strict, default-OFF native NPC motion-attested Escort.
 names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness","coopEscortRouteWitness");
 names.splice(names.indexOf("coopEscortRouteWitness")+1,0,"coopEscortNativeIngressSnapshot");
-const specs=[
+// Chat 36: opt-in Pochven Conduit Loop guard (native travel only).\nnames.splice(names.indexOf("coopNativeScanProof")+1,0,"coopPochvenConduit");\nconst specs=[
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
  {file:"server/src/services/npe/nesIntroService.js",patches:[]},
  {file:"server/src/services/account/tutorialSvcService.js",patches:[]},
@@ -206,7 +206,7 @@ function strip(source){
  return source.split("\n").filter(row=>!oldLines.includes(row.replace(/\r$/,""))).join("\n");
 }
 function transform(source,spec,remove){
- let text=strip(source);
+ let text=strip(source);\n if(spec.file==="server/src/space/transitions.js")\n  text=require("./coop-pochven-conduit-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/exploration/scanMgrService.js" ||
     spec.file==="server/src/services/ship/beyonceService.js")
   text=require("./coop-native-exploration-patch.cjs").patch(text,spec.file,remove);
