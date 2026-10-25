@@ -61,7 +61,9 @@ function npcOrderBridge(){
    ],
    sceneForSystem:id=>native.ensureScene(id,{refreshStargates:false}),
    getController:id=>controllers.getControllerByEntityID(id),
-   warShipClaim:process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"?
+   warShipClaim:process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
+    process.env.EVEJS_COOP_FACTION_WAR==="1"&&
+    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"?
     (link=>nativeWarFleetRegistry()?.claim(link)||"UNKNOWN"):null
   });
  }
