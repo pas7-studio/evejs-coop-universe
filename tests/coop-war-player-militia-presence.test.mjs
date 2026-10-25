@@ -109,10 +109,10 @@ test("attacker player and same-faction native NPC count separately",()=>{
  assert.equal(s.playerAttackers,1);
  assert.equal(s.attackerCount,2);
 });
-test("stale character record or missing ship record blocks eligibility",()=>{
+test("stale character ship cache cannot override verified live EveJS ship",()=>{
  const f=fixture();f.record.shipID=999;
- assert.equal(f.observe().status,"CONTESTED_NATIVE_OBJECTIVE");
- f.record.shipID=7001;
+ assert.equal(f.observe().status,"UNCONTESTED_NATIVE_ATTACKER");
+ // Actual live socket state still gates eligibility at observation time.
  f.account.socket.destroyed=true;
  assert.equal(f.observe().reason,"DUPLICATE_OR_INVALID_LIVE_CHARACTER");
 });
