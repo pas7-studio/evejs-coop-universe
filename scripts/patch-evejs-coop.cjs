@@ -14,6 +14,8 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
+// ALIFE-08: opt-in durable native miner/hauler identity; no virtual fleets.
+names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningFleetDurable");
 const specs=[
  {file:"server/src/services/mining/miningRuntime.js",patches:[]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
@@ -297,8 +299,12 @@ function transform(source,spec,remove){
     }
   }
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-native-mining-durable-patch.cjs").patch(text,true);
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-native-mining-durable-patch.cjs").patch(text,false);
  if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js")
   text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,remove);
  // ALIFE-05: existing native stock mining writer; store-before-hull commit when opt-in.
