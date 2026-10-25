@@ -24,9 +24,10 @@
       "EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY=1 (only after reconciled wallet E2E)"
     ],
     "experimentalStageI": [
-      "EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 (DISPOSABLE TWO-CLIENT TEST ONLY, default OFF)",
-      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (DISPOSABLE NATIVE WALLET ONLY)",
-      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (ORIGINAL PREWARP PARTICIPATION REQUIRED)"
+      "EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 (TEST SNAPSHOT ONLY, OFF default)",
+      "EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=1 (required, actual native movement after position update, OFF default)",
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (actual GameStore E2E only)",
+      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (real source on-grid proof required)"
     ]
   },
   "scenarios": [
@@ -269,6 +270,31 @@
         "Resume original native trip and attempt terminal settlement"
       ],
       "expected": "No fabricated completion or blind rewrite; file+dir re-fsync required for immutable original receipts; corrupt/linked evidence blocks payout for operator repair"
+    },
+    {
+      "id": "JOB-UI-25",
+      "name": "Pinned real native movement callback emits two authoritative escort route checkpoints",
+      "actions": [
+        "Run pinned EveJS Docker with two genuinely distinct EVE clients on disposable world snapshot",
+        "Enable peaceful Escort, source witness, strict route witness, and native warp observer flags",
+        "Take actual NPC agent contract with two real ships and original accepted corporate price",
+        "Observe stock advanceSessionlessWarpIngress NPC scene position callbacks, actual six-beat ingress, exact two signed player positions near hauler at 20-45% and 55-85% route progress",
+        "Verify original two checkpoint journal files then full terminal warehouse cargo and genuine atomic GameStore wallet deltas"
+      ],
+      "expected": "Original stock NPC physical interpolation triggers exactly validated native observer samples, both same-authentic-fleet player ships progress with NPC within 10km, two durable route checkpoints exist and exactly one funded corporate two-player payout; no guessed or replayed positions",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-26",
+      "name": "Missing native observer or short route must not reserve corporate ISK",
+      "actions": [
+        "On disposable two-client native job enable strict route witness but disable native warp observer",
+        "Attempt paid original NPC convoy departure and inspect native cargo manifest and actual corporate wallet",
+        "Enable observer and change source-to-actual-station distance to less than 10km in a controlled fixture",
+        "Attempt paid convoy again"
+      ],
+      "expected": "ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED or ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS before manifest creation, original corporation escrow or warp; no stranded paid quote and no invented midpoint",
+      "status": "NOT_RUN"
     }
   ]
 }
