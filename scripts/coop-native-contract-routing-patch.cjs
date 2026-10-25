@@ -37,9 +37,9 @@ const infoBlock=[
 function courierGuard(name){
  return [
   'function '+name+'(contract, session) {',
-  '  if (process.env.EVEJS_COOP_NATIVE_CONTRACTS === "1") {',
-  '    // Closing or failing a courier contract transfers real cargo/ISK.',
-  '    // Reject third-party requests, including unrelated fleet members.',
+  '  // Always protect actual native escrow, even when the UI alias is OFF.',
+  '  // Closing or failing a courier contract transfers real cargo/ISK.',
+  '  // Reject third-party requests, including unrelated fleet members.',
   '    const wallet = contract && contract.acceptorWallet;',
   '    const acceptorID = toPositiveInteger(contract && contract.acceptorID, 0);',
   '    const walletOwnerID = toPositiveInteger(wallet && wallet.ownerID, 0);',
@@ -47,8 +47,7 @@ function courierGuard(name){
   '      ? getSessionCorporationID(session) : getSessionCharacterID(session);',
   '    if (!acceptorID || !walletOwnerID || walletOwnerID !== acceptorID ||',
   '        callerID !== acceptorID)',
-  '      throwContractError("Only the original courier acceptor can settle this contract.");',
-  '  }'
+  '      throwContractError("Only the original courier acceptor can settle this contract.");'
  ].join("\n");
 }
 function patch(source,file,remove=false){
