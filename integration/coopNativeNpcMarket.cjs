@@ -4,7 +4,8 @@
 // All external market calls are journaled; ambiguous RPC failures halt the pilot.
 const fs=require("node:fs"),path=require("node:path");
 const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-const pilotName=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
+const pilotName=x=>typeof x==="string"&&
+ (/^coop-pilot-[0-9]{3,}$/.test(x)||/^coop-hauler-[0-9]+-[0-9]+$/.test(x));
 const amount=x=>Number.isFinite(Number(x))&&Number(x)>=0?Math.round(Number(x)*100)/100:null;
 const vec=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -160,11 +161,18 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
   return {status:pending.length?"NEEDS_OPERATOR_REPAIR":files.length?"RECOVERED":"CLEAN",recovered,pending};
  }
  function offer({scene,entityID,pilotID,stationID,side,typeID,
-  buyTypes=[],sellTypes=[],cargoID=null,verifyCargo=null}={}){
+  buyTypes=[],sellTypes=[],cargoID=null,verifyCargo=null,identity=null}={}){
   const id=pos(entityID),station=pos(stationID),type=pos(typeID);
   if(!id||!pilotName(pilotID)||!station||!type||
    !["buy","sell"].includes(side))return status("INVALID_TRADE");
-  const link=registry.snapshot().links?.[pilotID];
+  // A stock mining-fleet hauler is a real persisted native ship but has no
+  // coop-pilot identity. Its own durable slot marker is a legitimate merchant
+  // identity, so an explicit, caller-verified identity is accepted only when it
+  // names exactly this physical ship in this system.
+  const link=identity&&pos(identity.entityID)===id&&
+   Number(identity.systemID)===Number(scene?.systemID)&&
+   pilotName(identity.pilotID)?identity:
+   registry.snapshot().links?.[pilotID];
   const ship=scene?.getEntityByID?.(id);
   const st=getStation(station);
   // Static station rows use stationID, not necessarily itemID or a

@@ -388,3 +388,27 @@ test("a sale cap below one unit is refused at construction",()=>{
   assert.throws(()=>x.trader({maxSellQuantity:0}),/safety caps/);
  }finally{x.cleanup()}
 });
+
+test("a real durable mining hauler sells under its own stable slot ledger",async()=>{
+ const x=fixture();try{
+  // Stock startup haulers are persisted native ships with an operatorKind slot
+  // marker, not coop-pilot identities. The same hull must still own one ledger.
+  const identity={pilotID:"coop-hauler-30000142-1",entityID:x.ship.itemID,systemID:30000142};
+  const t=x.trader();
+  const r=await t.execute({...x.params("sell",34),pilotID:identity.pilotID,identity});
+  assert.equal(r.status,"TRADE_SETTLED");
+  assert.equal(r.balance,800);
+  assert.equal(t.snapshot().pilots["coop-hauler-30000142-1"].balance,800);
+  assert.equal(x.getCargo().length,0);
+ }finally{x.cleanup()}
+});
+
+test("an explicit identity for a different ship is rejected",async()=>{
+ const x=fixture();try{
+  const identity={pilotID:"coop-hauler-30000142-1",entityID:980000000999,systemID:30000142};
+  const t=x.trader();
+  const r=await t.execute({...x.params("sell",34),pilotID:identity.pilotID,identity});
+  assert.notEqual(r.status,"TRADE_SETTLED");
+  assert.equal(x.getCargo().length,1,"cargo must stay on the real ship");
+ }finally{x.cleanup()}
+});
