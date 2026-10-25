@@ -29,6 +29,7 @@ test('real native raid/wreck/source-debited loot for both is correlated, not cal
  assert.equal(r.missionProgressVerified,false);
  assert.equal(r.clientRenderingVerified,false);
  assert.equal(r.timeline.length,5);
+ assert.equal(r.timeline[0].at,t(5));
  assert.equal(JSON.stringify(r).includes('characterID'),false);
 });
 test('single looter does not qualify as both and missing loot never qualifies',()=>{
