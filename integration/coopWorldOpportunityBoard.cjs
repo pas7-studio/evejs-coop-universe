@@ -398,7 +398,20 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     "[Co-op Rescue] "+result.status+". No cargo or money granted."};
   }
   if(op==="history"||op==="reputation"){
-   return require("./coopEscortReputation").listNativeHistory(session);
+   const escorts=require("./coopEscortReputation").listNativeHistory(session);
+   const salvages=require("./coopSalvageGameMount").historyInGame(session);
+   if(salvages?.status!=="READY")return escorts;
+   const h=salvages.history||[];
+   const rep=salvages.reputation;
+   const lines=h.map(x=>x.contractID+" / "+x.outcome+
+    " / "+x.earnedISK+" ISK / +"+x.reputationPoints+" RESCUE rep");
+   const extra="[Co-op Salvage] Authenticated native RESCUE history: paid "+
+    rep.paidRescues+" | refunded "+rep.refundedRescues+
+    " | earned "+rep.earnedISK+" ISK | score "+rep.score+
+    (lines.length?"\\n"+lines.join("\\n"):"\\nNo verified rescue payments yet.");
+   if(escorts?.status==="READY")
+    return {...escorts,message:escorts.message+"\\n"+extra};
+   return {status:"READY",message:extra};
   }
   if(op==="accept"){
    if(process.env.EVEJS_COOP_ESCORT_PAID_ACCEPT!=="1")
