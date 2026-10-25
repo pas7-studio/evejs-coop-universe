@@ -184,7 +184,7 @@ function nativeOutcomeMatches(intent,actual){
      Number(actual.buyReceipt.stationID)!==Number(actual.stationID)||
      Number(actual.buyReceipt.typeID)!==Number(actual.typeID)||
      Number(actual.buyReceipt.quantity)!==Number(actual.quantity)||
-     !actual.marketOrderID)return false;
+     !/^[1-9][0-9]*$/.test(String(actual.marketOrderID||"")))return false;
   return true;
  }
  if(intent.stage==="RESUPPLY")
@@ -207,7 +207,7 @@ function reconcileNativeIntents(rows,{windowMs=600000,maxIntents=5000}={}){
  const outcomes=rows.map((r,i)=>({row:r,index:i,when:atMs(r)}))
   .filter(x=>x.row?.event==="living-native-market-trade"||
     x.row?.event==="living-npc-earned-rearm");
- const claimed=new Set(),results=[],counts={
+ const claimed=new Set(),claimedNativeReceipts=new Set(),results=[],counts={
   NATIVE_OUTCOME_OBSERVED:0,NO_AUTHORITATIVE_ACT_PROOF:0,
   INTENT_NOT_CONNECTED_TO_ACT:0,INVALID_INTENT_IDENTITY:0};
  for(const entry of intents){
@@ -223,11 +223,16 @@ function reconcileNativeIntents(rows,{windowMs=600000,maxIntents=5000}={}){
   else if(!RECONCILABLE_STAGES.has(intent.stage))
    status="INTENT_NOT_CONNECTED_TO_ACT";
   else{
-   const found=outcomes.find(o=>!claimed.has(o.index)&&o.when!==null&&
+   const receiptKey=o=>o.row.event==="living-native-market-trade"?
+    "market:"+o.row.marketOrderID+":"+o.row.cargoID:
+    "module:"+o.row.cargoID+":"+o.row.moduleID;
+   const found=outcomes.find(o=>!claimed.has(o.index)&&
+    !claimedNativeReceipts.has(receiptKey(o))&&o.when!==null&&
     o.when>=entry.when&&o.when-entry.when<=windowMs&&
     nativeOutcomeMatches(intent,o.row));
    if(found){
     claimed.add(found.index);
+    claimedNativeReceipts.add(receiptKey(found));
     status="NATIVE_OUTCOME_OBSERVED";
     proof={event:found.row.event,at:found.row.at,
      cargoID:Number(found.row.cargoID),entityID:Number(found.row.entityID),
