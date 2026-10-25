@@ -69,7 +69,7 @@ Run:
 pwsh -File scripts/Run-LW04C3B-Sale-Finance-Gates.ps1
 ```
 
-Author-authored source tests include 16 read-only sale audit, 13 manual
+Author-authored source tests include 18 read-only sale audit, 14 manual
 buyer admission and 10 original wallet witness cases, plus existing
 COOP-035/047 native settlement regression suites and three end-to-end
 source-model checks that run **actual COOP-035 atomic settlement source**
