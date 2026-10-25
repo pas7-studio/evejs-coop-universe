@@ -66,13 +66,17 @@ function assertZeroMoney(trade, service){
  }
 }
 function commitNative({trade,roots,activeShipIDs,readItems,writeItems,
- normalizeInventoryItem,buildInventoryItem,indexDeltaFromChanges,cloneValue}={}){
- if(typeof readItems!=='function'||typeof writeItems!=='function'||
+ normalizeInventoryItem,buildInventoryItem,indexDeltaFromChanges,cloneValue,readCharacters}={}){
+ if(typeof readItems!=='function'||typeof writeItems!=='function'||typeof readCharacters!=='function'||
     typeof normalizeInventoryItem!=='function'||typeof buildInventoryItem!=='function'||
     typeof indexDeltaFromChanges!=='function'||typeof cloneValue!=='function')
    return {success:false,errorMsg:'NATIVE_INVENTORY_UNAVAILABLE'};
  const original=readItems();
- const result=plan({trade,roots,items:original,activeShipIDs});
+ const characters=readCharacters();
+ if(!characters||!Array.isArray(trade?.traders)||!trade.traders.every(x=>characters[String(x)]&&id(characters[String(x)].shipID)))
+   return {success:false,errorMsg:'NATIVE_CHARACTER_STATE_UNAVAILABLE'};
+ const actualActive=[...activeShipIDs,...trade.traders.map(x=>characters[String(x)].shipID)];
+ const result=plan({trade,roots,items:original,activeShipIDs:actualActive});
  if(!result.ok)return {success:false,errorMsg:result.reason};
  const next={...original},changes=[];
  for(const change of result.changes){
