@@ -76,6 +76,13 @@ function createWarCasualtyLedger({gameStore,verifyNativeWreck,
      !pos(war.attackerFactionID)||!pos(war.defenderFactionID)||
      ![war.attackerFactionID,war.defenderFactionID].includes(victim.factionID))
      return {status:"BLOCKED",reason:"WAR_CASUALTY_NO_NATIVE_ASSAULT"};
+    // Even if a native engine accidentally assigns a second wreck ID
+    // to the same physical entity, the victim cannot die twice in this
+    // same war/campaign. A later independent campaign remains separate.
+    if(Object.values(state.byWreck).some(e=>
+      e.campaignID===victim.campaignID&&e.warID===victim.warID&&
+      e.entityID===entityID))
+     return {status:"BLOCKED",reason:"WAR_CASUALTY_VICTIM_ALREADY_RECORDED"};
     if(Object.values(state.byWreck).filter(e=>
       e.campaignID===victim.campaignID).length>=MAX_PER_CAMPAIGN)
      return {status:"BLOCKED",reason:"WAR_CASUALTY_CAMPAIGN_CAP"};
