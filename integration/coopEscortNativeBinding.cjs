@@ -8,7 +8,9 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 let installed=null;
 const deny=status=>({status});
 const enabled=()=>flags.every(k=>process.env[k]==="1");
-function makeBinding({runtime,readNativeIncident}={}){
+function makeBinding({runtime,readNativeIncident,recordTerminal=null}={}){
+ if(recordTerminal!==null&&typeof recordTerminal!=="function")
+  throw Error("ESCORT_REPUTATION_SOURCE_INVALID");
  if(!runtime||typeof readNativeIncident!=="function"||
   ["fundBeforeWarp","recordDelivery","finishAfterRaid","refundProvenLoss",
    "readFlight","inspectRefundRecovery","refundWreckedFlight"].some(k=>typeof runtime[k]!=="function")||
@@ -63,16 +65,28 @@ function makeBinding({runtime,readNativeIncident}={}){
     stationID:b.stationID,corporationID:b.corporationID,
     pirateID:i.pirateID,incidentKey:i.key,fleetDuoID:i.duoFleetID,
     characters:b.characters.slice(),amountISK:b.amountISK};
-   try{return runtime.finishAfterRaid(contract)}
+   let result;try{result=runtime.finishAfterRaid(contract)}
    catch{return deny("NATIVE_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED")}
+   if(result?.status==="SETTLED"&&recordTerminal){
+    let history;try{history=recordTerminal(contract.contractID)}
+    catch{history={status:"NATIVE_HISTORY_WRITE_UNAVAILABLE"}}
+    return {...result,historyStatus:history?.status||"NATIVE_HISTORY_WRITE_UNAVAILABLE"};
+   }
+   return result;
   },
   refundNativeWreck:manifestKey=>{
    if(!enabled()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
     return deny("DISABLED");
-   if(typeof manifestKey!=="string"||!/^d+-d+-d+$/.test(manifestKey))
+   if(typeof manifestKey!=="string"||!/^\d+-\d+-\d+$/.test(manifestKey))
     return deny("NATIVE_REFUND_MANIFEST_KEY_INVALID");
-   try{return runtime.refundWreckedFlight(manifestKey)}
+   let result;try{result=runtime.refundWreckedFlight(manifestKey)}
    catch{return deny("NATIVE_REFUND_OUTCOME_UNCERTAIN_REPAIR_REQUIRED")}
+   if(result?.status==="REFUNDED"&&recordTerminal){
+    let history;try{history=recordTerminal(result.contractID)}
+    catch{history={status:"NATIVE_HISTORY_WRITE_UNAVAILABLE"}}
+    return {...result,historyStatus:history?.status||"NATIVE_HISTORY_WRITE_UNAVAILABLE"};
+   }
+   return result;
   },
   readFlight:key=>runtime.readFlight(key),
   inspectRefundRecovery:id=>runtime.inspectRefundRecovery(id)
@@ -86,13 +100,15 @@ const forwarding=Object.freeze({
  settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  refundNativeWreck:key=>enabled()?(installed?installed.refundNativeWreck(key):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ readFlight:key=>enabled()?(installed?installed.readFlight(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED")
 });
 function routeGate(){return forwarding}
-function installServerAuthority({runtime,readNativeIncident}={}){
+function installServerAuthority({runtime,readNativeIncident,recordTerminal=null}={}){
  if(!enabled())return deny("DISABLED");
  if(installed)return deny("ESCORT_RUNTIME_ALREADY_BOUND");
- try{installed=makeBinding({runtime,readNativeIncident})}
+ try{installed=makeBinding({runtime,readNativeIncident,recordTerminal})}
  catch{return deny("ESCORT_NATIVE_BINDING_AUTHORITIES_REQUIRED")}
  return {status:"ESCORT_NATIVE_RUNTIME_BOUND"};
 }
