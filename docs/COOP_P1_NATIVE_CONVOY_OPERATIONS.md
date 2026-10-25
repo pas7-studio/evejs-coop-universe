@@ -38,6 +38,16 @@ The standard pinned `scripts/patch-evejs-coop.cjs` simply packages the new `inte
 
 ### Read-only owner-local checks
 
+After an owner-approved deployment, inspect the actual running world's **native durable incident journal** without stopping Docker, touching inventory or fabricating gameplay evidence:
+
+```powershell
+.\scripts\Inspect-Coop-ConvoyOperations.ps1
+```
+
+The script executes `createOperations().snapshot()` from the reviewed L2 source in the existing server container. It reports `APPROACH`, `UNDER_ATTACK`, verified player identities, `DUO_INTERVENED`, and the actual native wreck ID when present. A malformed or unreadable persistent file produces a **nonzero** inspection failure, not a false success. A healthy **empty** journal means no evidence of an operation yet, not a gameplay PASS.
+
+### Local source tests
+
 ```powershell
 node --test tests/coop-native-convoy-operations.test.mjs tests/coop-native-convoy-operations-wiring.test.mjs tests/coop-native-convoy-operations-overlay.test.mjs
 node scripts/patch-evejs-coop.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code --dry-run
