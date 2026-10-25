@@ -505,6 +505,7 @@ function createCourierDispatch(deps = {}) {
       character: identity.character,
       transitions,
       space,
+      sceneForSystem: typeof deps.sceneForSystem === "function" ? deps.sceneForSystem : null,
       warpIngressMs: 30000,
       arrivalConfirmed: flight.step === "arrive" ? arrival.ok : false,
     };

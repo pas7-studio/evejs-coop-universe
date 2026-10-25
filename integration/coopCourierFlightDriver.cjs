@@ -36,6 +36,22 @@ function buildCourierSession(character, stationID) {
   };
 }
 
+// The same identity object must survive undock -> warp -> dock: the native
+// undock attaches `_space` to it, and a dock built from a fresh object would
+// leave the undocked ship behind as a ghost in the scene. `stationID` is the
+// only thing that changes: origin while docked, 0 while in space.
+function sessionFor(ctx, stationID) {
+  const live = ctx && ctx.session;
+  const locationID = Number(stationID) || 0;
+  if (live && Number(live.characterID) > 0) {
+    live.locationid = locationID;
+    live.stationID = locationID;
+    if (live._transitionState === undefined) live._transitionState = null;
+    return live;
+  }
+  return buildCourierSession(ctx && ctx.character, locationID);
+}
+
 // A driver is only usable when every native capability it needs is present.
 // Nothing is attempted otherwise, so a half-wired server cannot strand a
 // contract in progress.
@@ -63,7 +79,7 @@ function undock(ctx, flight) {
       originStationID: Number(flight.originStationID) || 0,
     });
   }
-  const session = buildCourierSession(ctx.character, flight.originStationID);
+  const session = sessionFor(ctx, flight.originStationID);
   if (!session) return result("REFUSED", { reason: "courier character is not usable" });
   let outcome;
   try {
@@ -83,6 +99,24 @@ function undock(ctx, flight) {
 
 // One native warp to the destination station position. The station position is
 // supplied by the caller from real station data, never invented here.
+function resolveScene(ctx, flight) {
+  if (typeof ctx.sceneForSystem === "function") {
+    try {
+      const scene = ctx.sceneForSystem(Number(flight.systemID) || 0);
+      if (scene) return scene;
+    } catch (_error) {
+      /* a missing scene is reported by the warp itself */
+    }
+  }
+  return ctx.scene || null;
+}
+
+function resolveShipEntity(scene, entityID) {
+  const id = Number(entityID) || 0;
+  if (!(id > 0) || !scene || typeof scene.getEntityByID !== "function") return null;
+  return scene.getEntityByID(id) || null;
+}
+
 function warp(ctx, flight, stationPosition) {
   const ready = preflight(ctx);
   if (ready.status !== "READY") return result("NOT_READY", { missing: ready.missing });
@@ -97,18 +131,31 @@ function warp(ctx, flight, stationPosition) {
     ingressDurationMs: Number(ctx.warpIngressMs) || 30000,
   };
   try {
-    // A courier has no session, so the session-less ingress is the honest call:
-    // space.warpToPoint expects a client session and silently did nothing here.
+    // A courier has no session, so the session-less ingress is the honest call.
+    // The module-level runtime facade takes (systemID, entity, point, options);
+    // the scene form takes (entity, point, options). Resolving the real scene is
+    // what makes the just-undocked ship visible at all.
+    const scene = resolveScene(ctx, flight);
+    const shipEntity = resolveShipEntity(scene, entityID);
     let firstFailure = null;
-    if (typeof ctx.space.startSessionlessWarpIngress === "function") {
-      const outcome = ctx.space.startSessionlessWarpIngress(entityID, stationPosition, options);
+    if (scene && typeof scene.startSessionlessWarpIngress === "function") {
+      const outcome = scene.startSessionlessWarpIngress(shipEntity || entityID, stationPosition, options);
+      if (outcome !== false && !(outcome && outcome.success === false)) return result(OK, { entityID });
+      firstFailure = String(outcome && outcome.errorMsg || "sessionless warp refused");
+    } else if (typeof ctx.space.startSessionlessWarpIngress === "function") {
+      const outcome = ctx.space.startSessionlessWarpIngress(
+        Number(flight.systemID) || 0,
+        shipEntity || entityID,
+        stationPosition,
+        options,
+      );
       if (outcome !== false && !(outcome && outcome.success === false)) return result(OK, { entityID });
       firstFailure = String(outcome && outcome.errorMsg || "sessionless warp refused");
     }
     // The session-less ingress can miss an entity that was just created by a
     // real undock. The session form is the stock client call, so retry with the
     // courier identity before giving up.
-    const session = buildCourierSession(ctx.character, flight.originStationID);
+    const session = sessionFor(ctx, 0);
     if (session && typeof ctx.space.warpToPoint === "function") {
       const warped = ctx.space.warpToPoint(session, stationPosition, options);
       if (warped !== false && !(warped && warped.success === false)) return result(OK, { entityID });
@@ -123,7 +170,8 @@ function warp(ctx, flight, stationPosition) {
 function dock(ctx, flight) {
   const ready = preflight(ctx);
   if (ready.status !== "READY") return result("NOT_READY", { missing: ready.missing });
-  const session = buildCourierSession(ctx.character, flight.destinationStationID);
+  // In space: a station id here would make dockSession answer ALREADY_DOCKED.
+  const session = sessionFor(ctx, 0);
   if (!session) return result("REFUSED", { reason: "courier character is not usable" });
   let outcome;
   try {

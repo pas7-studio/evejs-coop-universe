@@ -2338,7 +2338,7 @@ function noteSaleSkip(systemID,stationID,haulerID,reason){
     reason:String(reason||"").slice(0,80)});
  }catch(_error){/* telemetry must never break a delivery */}
 }
-function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
+function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  if(process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL!=="1")return {status:"DISABLED"};
  if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1")return {status:"MARKET_OFF"};
  const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
@@ -2380,7 +2380,7 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  let link=Object.values(identityRegistry?.snapshot()?.links||{})
   .find(entry=>Number(entry.entityID)===Number(haulerID)&&
    Number(entry.systemID)===Number(systemID));
- if(!link)link=adoptMerchant(require("./runtime").ensureScene(Number(systemID),
+ if(!link)link=adoptMerchant(scene||require("./runtime").ensureScene(Number(systemID),
   {refreshStargates:false}),haulerID,systemID);
  if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
  const trader=ensureMarketTrader();
