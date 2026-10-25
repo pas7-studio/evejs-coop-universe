@@ -61,17 +61,20 @@ function npcOrderBridge(){
    ],
    sceneForSystem:id=>native.ensureScene(id,{refreshStargates:false}),
    getController:id=>controllers.getControllerByEntityID(id),
-   warShipClaim:process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
+   // Dynamic callback prevents enabling WAR after the bridge was created
+   // without its registry guard. Disabled war never grants WAR orders.
+   warShipClaim:link=>(
+    process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
     process.env.EVEJS_COOP_FACTION_WAR==="1"&&
-    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"?
-    (link=>nativeWarFleetRegistry()?.claim(link)||"UNKNOWN"):null
+    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1")?
+    (nativeWarFleetRegistry()?.claim(link)||"UNKNOWN"):"UNASSIGNED"
   });
  }
  return nativeOrderBridge;
 }
 function npcNativeOrder(owner,entityID,action,execute,systemID){
  const guard=npcOrderBridge();
- if(!guard)return execute();
+ if(!guard)return owner==="WAR"?{success:false,errorMsg:"COOP_NPC_ORDER_WAR_ARBITER_REQUIRED"}:execute();
  return guard.issue({owner,entityID,action,execute,systemID});
 }
 function addNpcOrderBlocks(blockedIDs,systemID,owner){
