@@ -98,8 +98,11 @@ function createOriginalNpcIndustryBuyerSettlement({
    // second claim to repair it. Retain an operator hold until real sources
    // are reconciled. This is NOT another GameStore writer.
    const result=await saleAudit.audit({ownerID,stationID,operationID,orderID});
-   const verified=result?.status==="ORIGINAL_FULL_SALE_ATTESTED"||
-    result?.status==="ORIGINAL_PARTIAL_SALE_ATTESTED";
+   const verified=mode==="whole"?
+    result?.status==="ORIGINAL_FULL_SALE_ATTESTED"&&
+     result.remainingQuantity===0:
+    ["ORIGINAL_FULL_SALE_ATTESTED",
+     "ORIGINAL_PARTIAL_SALE_ATTESTED"].includes(result?.status);
    if(!verified||!result.fillIDs?.includes(native.fillID)){
     repair.add(lock);
     return reject("LW04C3B_PAYMENT_COMMITTED_AUDIT_REQUIRED",operationID);
