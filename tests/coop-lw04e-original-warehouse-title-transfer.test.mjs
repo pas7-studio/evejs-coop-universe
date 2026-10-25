@@ -23,7 +23,8 @@ function fixture({env=FLAGS,throwAfterCommit=false}={}){
  put("corporationRuntime","corporations"+SEP+SOURCE,corp(SOURCE,100));
  put("corporationRuntime","corporations"+SEP+FACTORY,corp(FACTORY,40));
  const grant={phase:"COMPLETED",cargoID:CARGO,ownerID:SOURCE,
-  stationID:STATION,typeID:TYPE,quantity:QTY,oreItemID:ITEM,before:0,after:50};
+  stationID:STATION,typeID:TYPE,quantity:QTY,oreItemID:ITEM,before:0,after:50,
+  sourceCustomInfo:"coop-warehouse:v1:cargo:"+CARGO,completedAt:1000};
  let priceCents=1250,authorized=true,poisoned=false,commits=0,attempts=0;
  const authority={mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>poisoned,
   transact:(included,fn)=>{
