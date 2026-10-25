@@ -139,7 +139,7 @@ test("stock EveJS direct fleet gift checks native preflight before any ISK/item 
   _parseManifest:()=>({tradeContainerID:trade.tradeContainerID,
    money:trade.moneyOffers.slice(),tradeItems:new Set([70001])}),
   _listTradeItems:()=>[root],
-  _getParticipantSession:()=>f.bob,
+  _getParticipantSession:()=>f.alice,
   _collectContainedItems:()=>[],
   _buildOfferManifestPayload:()=>({items:[70001]}),
   _buildTradeItemsSetPayload:()=>({items:[70001]}),
