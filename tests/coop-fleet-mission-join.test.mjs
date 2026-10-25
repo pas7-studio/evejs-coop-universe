@@ -22,6 +22,7 @@ function fixture(){
    getFleetForCharacter:id=>fleet.members.has(id)?fleet:null,
    getMemberRecord:(f,id)=>f.members.get(id)||null},
   getMissionRecord:(id,agent)=>agent===agentID?missions.get(id)||null:null,
+  getDockedLocationID:s=>s.structureid||s.stationid,
   getClientMissionRecord:rec=>rec&&rec.contentID===2391?
    {missionID:2391,missionKind:"encounter",killMission:{dungeonID:74}}:null,
   isMissionOfferAllowedForAgent:()=>allowed,
@@ -112,8 +113,8 @@ test("other player's fleet cannot be impersonated by reusing an agent",()=>{
 });
 test("wrong native station, undocked or remote wingman must request own native offer",()=>{
  for(const change of [
-  s=>s.peer.stationid=60000011,s=>s.peer.locationid=30000142,
-  s=>s.leader.stationid=60000012,s=>s.leader.locationid=30000142
+  s=>s.peer.stationid=60000011,s=>s.peer.structureid=30000142,
+  s=>s.leader.stationid=60000012,s=>s.leader.structureid=30000142
  ]){
   const f=fixture();change(f);
   assert.equal(offer(f.params).status,"NOT_TWO_AUTHENTIC_DOCKED_PLAYERS");
