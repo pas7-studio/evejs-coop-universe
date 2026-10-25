@@ -42,3 +42,17 @@ test('rejects stale pin and duplicate managed signatures',()=>{
  assert.throws(()=>propose({_meta:{nextFittingID:1},owners:{}},{...catalog,sdePin:'other'}),/BAD_CATALOG_OR_PIN/);
  assert.throws(()=>propose({_meta:{nextFittingID:1},owners:{}},{...catalog,records:[...catalog.records,...catalog.records]}),/DUPLICATE_INCOMING_SIGNATURE/);
 });
+
+test('permissioned EFT is preferred over public killmail on same hull',()=>{
+ const {parseEft}=require('../scripts/coop-community-fit-eft.cjs');
+ const {merge}=require('../scripts/coop-community-fit-merge.cjs');
+ const eft='[Merlin, [PVE] Test]\nDamage Control I\n\nShield Booster I\n\nLight Missile Launcher I\n';
+ const extended={types:new Map([...sde.types,[13,{published:true,groupID:2,name:{en:'Damage Control I'}}],[14,{published:true,groupID:2,name:{en:'Shield Booster I'}}],[15,{published:true,groupID:2,name:{en:'Light Missile Launcher I'}}]]),groups:sde.groups,ships:[hull]};
+ extended.types.get(600).name={en:'Merlin'};
+ const fit=parseEft(eft,extended,{sourceURL:'https://example.org/fit',author:'Public Author',permission:'author-approved'});
+ const curated=buildCatalog([hull],[fit],extended,3);
+ const field=buildCatalog([hull],[candidate],extended,3);
+ const output=merge(extended,[field,curated],3);
+ assert.equal(output.records.length,2);assert.equal(output.records[0].provenance.kind,'permissioned-eft');
+ assert.equal(output.summary.withAtLeast3,0);
+});
