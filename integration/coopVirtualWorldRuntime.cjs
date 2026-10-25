@@ -5,7 +5,7 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
-let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null;
+let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -176,9 +176,26 @@ function start(){
    const {evaluateContract}=require("./coopCourierDispatch");
    for(const record of listContractRecords()){
     if(Number(record&&record.type)!==3||Number(record&&record.status)!==0)continue;
-    const decision=evaluateContract(record,{sameSystemOnly:true},{walletIsk:0,hullCapacityM3:465000});
+    const decision=evaluateContract(record,{sameSystemOnly:true,requireZeroCollateral:false},{walletIsk:0,hullCapacityM3:465000});
     console.log(`[CoopCourier] contract ${record.contractID} volume ${record.volume} -> ${decision.status}`);
    }
+  });
+  // Real courier dispatch (COOP-024). Opt-in and default OFF: it accepts the
+  // owner's genuine native courier contract with a seeded courier character,
+  // flies it natively and completes it. Observe above stays read-only.
+  if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")safeNpcPhase("courier-dispatch",()=>{
+   if(!courierDispatch)courierDispatch=require("./coopCourierRuntime").createCourierDispatch({
+    contracts:require("../services/contracts/contractRuntimeState"),
+    gameStore:require("../gameStore"),
+    itemStore:require("../services/inventory/itemStore"),
+    worldData:require("./worldData"),
+    transitions:require("./transitions"),
+    space:require("./runtime"),
+    sceneForSystem:id=>require("./runtime").ensureScene(id,{refreshStargates:false}),
+    pilots:String(process.env.EVEJS_COOP_COURIER_PILOTS||"140000100,140000101,140000102,140000103,140000104,140000105,140000106").split(","),
+    log:console.log
+   });
+   courierDispatch.tick();
   });
   safeNpcPhase("virtual-travel",()=>{
    // A real physical EveJS ship is pinned to its actual system.
