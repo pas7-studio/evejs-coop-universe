@@ -30,6 +30,7 @@ function transferCargo(scene,fleet,miner,options={}){
   if(strict){
    if(process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC!=="1"){
     miner.coopHaulCargoNeedsOperatorRepair="ALIFE10_ATOMIC_TRANSFER_FLAG_REQUIRED";
+    miner.coopMiningCargoNeedsOperatorRepair="ALIFE10_ATOMIC_TRANSFER_FLAG_REQUIRED";
     fleet.coopHaulCargoNeedsOperatorRepair="ALIFE10_ATOMIC_TRANSFER_FLAG_REQUIRED";
     return 0;
    }
@@ -38,6 +39,10 @@ function transferCargo(scene,fleet,miner,options={}){
    for(const item of items){
     const outcome=atomic.transfer({scene,fleet,miner,hauler,cargoID:Number(item.cargoID)});
     if(outcome?.status!=="COMMITTED"){
+     const reason=String(outcome?.reason||outcome?.status||"ALIFE10_UNKNOWN");
+     miner.coopHaulCargoNeedsOperatorRepair=reason;
+     miner.coopMiningCargoNeedsOperatorRepair=reason;
+     fleet.coopHaulCargoNeedsOperatorRepair=reason;
      probe.observe("living-hauler-atomic-cargo-blocked",null,
       {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
       {fleetID:fleet.fleetID,cargoID:item.cargoID,reason:String(outcome?.reason||outcome?.status||"UNKNOWN")});
@@ -84,7 +89,16 @@ function transferCargo(scene,fleet,miner,options={}){
      stacks:moved,cargoQuantity:quantity,volumeM3:volume});
   }
   return volume;
- }catch(error){console.warn("[CoopHaul] transfer",error.message);return 0;}
+ }catch(error){
+  if(process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"&&
+     miner?.transient!==true&&typeof fleet?.startupKey==="string"){
+   const reason="ALIFE10_NATIVE_TRANSFER_OUTCOME_UNKNOWN";
+   miner.coopHaulCargoNeedsOperatorRepair=reason;
+   miner.coopMiningCargoNeedsOperatorRepair=reason;
+   fleet.coopHaulCargoNeedsOperatorRepair=reason;
+  }
+  console.warn("[CoopHaul] transfer",error.message);return 0;
+ }
 }
 function unloadCargo(scene,fleet,options={}){
  try{
