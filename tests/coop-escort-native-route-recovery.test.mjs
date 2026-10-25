@@ -48,7 +48,7 @@ function fixture(){
    characters:[701,702],shipIDs:[1701,1702]},
   sampleResult:"ROUTE_NOT_AT_CHECKPOINT",
   snapshot:{status:"VERIFIED_NATIVE_INGRESS_SNAPSHOT",
-   row:{origin:{x:0,y:0,z:0},targetPoint:{x:100750,y:0,z:0},
+   row:{manifestKey:KEY,origin:{x:0,y:0,z:0},targetPoint:{x:100750,y:0,z:0},
     startTimeMs:1000000,travelCompleteAtMs:1007000,completeAtMs:1007250}},
   snapshotReads:0,
   counters:{sample:0,warp:0,fund:0,inspect:0,source:0,departure:0,read:0}};
