@@ -6,7 +6,10 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 // In the overlay these ship as .js; direct Node tests use the .cjs copies.
 const load=name=>{try{return require("./"+name)}catch(e){
- if(e?.code!=="MODULE_NOT_FOUND")throw e;
+ // A missing transitive dependency in an installed .js sibling is a real
+ // error, never an excuse to load an older source-checkout .cjs fallback.
+ if(e?.code!=="MODULE_NOT_FOUND"||
+    !String(e.message).includes("Cannot find module './"+name+"'"))throw e;
  return require("./"+name+".cjs");
 }};
 const {createManifest}=load("coopNativeHaulManifest");
@@ -110,9 +113,16 @@ function createStartupCargoAuditor({root,gameStore,store,items,getNativeEntity,i
    const seen=new Set();
    for(const [key,t] of Object.entries(table)){
     if(!key.startsWith("coopNativeHaulTransfer:"))continue;
-    // Include partially corrupt records referencing the requested fleet.
-    if(t?.fleetID!==fleetID&&t?.systemID!==systemID)continue;
+    // Scope original receipts to THIS fleet, not all fleets sharing this
+    // star system. A foreign fleet in the same system is unrelated and must
+    // never quarantine an otherwise sound independent hauling chain.
+    //
+    // Fail closed when a record lies about fleet identity but still points
+    // at our original miner/hauler, current cargo ID or historic manifest.
     const id=Number(key.slice("coopNativeHaulTransfer:".length));
+    if(t?.fleetID!==fleetID&&!minerIDs.includes(t?.minerID)&&
+       !haulerIDs.includes(t?.haulerID)&&
+       !actual.has(id)&&!manifests.has(id))continue;
     if(!positive(id)||!t||t.version!==1||t.status!=="COMMITTED"||
        t.cargoID!==id||t.systemID!==systemID||t.fleetID!==fleetID||
        !minerIDs.includes(t.minerID)||!haulerIDs.includes(t.haulerID)||
@@ -176,7 +186,13 @@ function createStartupCargoAuditor({root,gameStore,store,items,getNativeEntity,i
     if(!/^[1-9]\d*\.json$/.test(filename))continue;
     const id=Number(filename.slice(0,-5));
     const receipt=readReceipt(id);
-    if(receipt&&(receipt.fleetID===fleetID||receipt.systemID===systemID)&&
+    // An independent fleet may settle warehouse stock in the same solar
+    // system. Only our fleet, its hauler, its manifest or our physical cargo
+    // can designate a missing receipt as OUR orphan. Retain fail-closed
+    // behavior for a forged fleetID on our known original hauler.
+    if(receipt&&(receipt.fleetID===fleetID||
+       haulerIDs.includes(receipt.haulerID)||
+       manifests.has(id)||actual.has(id))&&
        !seen.has(id))return fail("ALIFE13_ORPHAN_WAREHOUSE_RECEIPT",id);
    }
    for(const [id] of manifests)if(!seen.has(id))
