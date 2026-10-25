@@ -79,8 +79,10 @@ function settle(input) {
   const key = "alife06-"+systemID+"-"+rockID+"-"+shipID;
   const file = path.join(root,key+".json");
   const rockKey = systemID+":"+rockID, shipKey = systemID+":"+shipID;
+  // In-flight source or hull is a transient conflict, NOT a damaged
+  // transaction. Do not persist an operator-repair latch on the other NPC.
   if (inflight.has(key)||inflightRocks.has(rockKey)||inflightShips.has(shipKey))
-    return fail(entity,"ALIFE06_CYCLE_REENTRANT");
+    return {success:false,stopReason:"cargo",reason:"ALIFE06_CYCLE_REENTRANT"};
   inflight.add(key);inflightRocks.add(rockKey);inflightShips.add(shipKey);
   let prior, record;
   try {
