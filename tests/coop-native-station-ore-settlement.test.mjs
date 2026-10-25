@@ -115,3 +115,74 @@ test("changed provenance cannot reuse previously settled cargoID", () => {
     assert.equal(f.grants(), 1);
   } finally { f.cleanup(); }
 });
+
+
+test("strict native station grant persists one actual ore itemID and cargo marker",()=>{
+ const prev=process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF;
+ process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF="1";
+ const f=fixture();
+ try{
+  let call=0;
+  f.inventory.grantItemToOwnerLocation=(_owner,_station,_flag,type,qty,opt)=>{
+   call++;
+   assert.equal(opt.customInfo,"coop-warehouse:v1:cargo:777");
+   assert.equal(opt.singleton,0);
+   f.rows.push({itemID:1900000777,ownerID:1000001,locationID:60000111,
+    flagID:4,quantity:qty,stacksize:qty,typeID:type.typeID,
+    singleton:0,customInfo:opt.customInfo});
+   return {success:true,data:{quantity:qty,items:[f.rows.at(-1)]}};
+  };
+  const result=f.create().settle(777,60000111);
+  assert.equal(result.status,"STATION_STOCK_SETTLED");
+  assert.equal(result.oreItemID,1900000777);
+  assert.equal(result.sourceCustomInfo,"coop-warehouse:v1:cargo:777");
+  const saved=f.create().snapshot().entries["777"];
+  assert.equal(saved.phase,"COMPLETED");
+  assert.equal(saved.oreItemID,1900000777);
+  assert.equal(f.create().settle(777,60000111).status,"ALREADY_SETTLED");
+  assert.equal(call,1);
+ }finally{
+  f.cleanup();
+  if(prev===undefined)delete process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF;
+  else process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF=prev;
+ }
+});
+test("native grant that silently merges or ignores item provenance stays ambiguous after restart",()=>{
+ const prev=process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF;
+ process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF="1";
+ const f=fixture();
+ try{
+  let calls=0;
+  f.inventory.grantItemToOwnerLocation=(_a,_b,_c,_d,q,opts)=>{
+   calls++;
+   assert.equal(opts.customInfo,"coop-warehouse:v1:cargo:777");
+   f.rows[0].stacksize+=q; // native merge: no unique itemID
+   return {success:true,data:{quantity:q}};
+  };
+  assert.equal(f.create().settle(777,60000111).status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(f.create().snapshot().entries["777"].phase,"GRANT_OUTCOME_UNKNOWN");
+  assert.equal(f.create().settle(777,60000111).status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(calls,1);
+ }finally{
+  f.cleanup();
+  if(prev===undefined)delete process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF;
+  else process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF=prev;
+ }
+});
+test("strict original station grant refuses cargo marker already present before mutation",()=>{
+ const prev=process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF;
+ process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF="1";
+ const f=fixture();
+ try{
+  f.rows.push({itemID:1900000777,ownerID:1000001,locationID:60000111,
+   typeID:34,flagID:4,singleton:0,quantity:50,stacksize:50,
+   customInfo:"coop-warehouse:v1:cargo:777"});
+  assert.equal(f.create().settle(777,60000111).status,
+   "WAREHOUSE_ORIGINAL_SOURCE_ALREADY_PRESENT");
+  assert.equal(f.grants(),0);
+ }finally{
+  f.cleanup();
+  if(prev===undefined)delete process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF;
+  else process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF=prev;
+ }
+});
