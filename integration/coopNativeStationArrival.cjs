@@ -6,7 +6,20 @@ const pos = value => Number.isSafeInteger(Number(value)) && Number(value)>0 ? Nu
 const vector = value => value && ["x","y","z"].every(k => typeof value[k]==="number" && Number.isFinite(value[k]));
 const distance = (a,b) => Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const truthy = result => result===true || (result && result.success===true);
-const pause = status => ({status,terminal:false});
+// ALIFE-1 "blockers are data": a gate that returns a status without saying why
+// is indistinguishable from a feature that does nothing. Diagnostics are opt-in
+// and emit one event per contiguous blocker, never per tick.
+let probeSink=null,lastBlockedStatus="";
+const pause = (status,extra={}) => {
+ if(probeSink&&process.env.EVEJS_COOP_ALIFE_TRACE==="1"&&status!==lastBlockedStatus){
+  lastBlockedStatus=status;
+  try{probeSink.observe("alife-blocker",null,
+   {spaceState:{systemID:Number(extra?.systemID)||0}},
+   {module:"station-arrival",status,...extra});}catch(_){/* diagnostics never break the gate */}
+ }
+ return {status,terminal:false};
+};
+const clearBlocked = () => { lastBlockedStatus=""; };
 const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
@@ -17,6 +30,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
     !store||!items||typeof flush!=="function"||typeof warpToPoint!=="function"||!root)
   throw Error("STATION_ARRIVAL_DEPENDENCIES_REQUIRED");
+ probeSink=probe;
  const isValidStation=(scene, station, systemID) => {
   const id=pos(station?.stationID),corp=pos(station?.corporationID||station?.ownerID);
   if(!id||!corp||Number(station.solarSystemID)!==systemID||
@@ -59,22 +73,41 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  function start(scene,fleet,now=clock(),options={}){
   const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID);
   if(!systemID||systemID!==pos(fleet?.systemID)||!fleetID||!Array.isArray(fleet.haulerEntityIDs)||
-     !fleet.haulerEntityIDs.length)return pause("INVALID_FLEET");
-  if(fleet.coopStationArrival)return pause("ROUTE_ALREADY_ACTIVE");
+     !fleet.haulerEntityIDs.length)
+   return pause("INVALID_FLEET",{systemID,fleetID,haulers:Array.isArray(fleet?.haulerEntityIDs)?fleet.haulerEntityIDs.length:0});
+  if(fleet.coopStationArrival)return pause("ROUTE_ALREADY_ACTIVE",{systemID,fleetID});
   const ships=fleet.haulerEntityIDs.map(pos).filter(Boolean);
-  if(ships.length!==fleet.haulerEntityIDs.length||new Set(ships).size!==ships.length)return pause("INVALID_HAULERS");
-  if(ships.some(id=>!findShip(scene,id,systemID)))return pause("HAULER_NOT_DURABLE");
+  if(ships.length!==fleet.haulerEntityIDs.length||new Set(ships).size!==ships.length)
+   return pause("INVALID_HAULERS",{systemID,fleetID,haulers:fleet.haulerEntityIDs.length});
+  if(ships.some(id=>!findShip(scene,id,systemID)))
+   return pause("HAULER_NOT_DURABLE",{systemID,fleetID,haulers:ships.length});
   const candidates=(getStations(systemID)||[])
     .map(s=>isValidStation(scene,s,systemID)).filter(Boolean)
     .sort((a,b)=>a.stationID-b.stationID);
-  if(!candidates.length)return pause("NO_NATIVE_NPC_STATION");
+  if(!candidates.length){
+   // Name every reason a station was rejected instead of failing silently.
+   const all=getStations(systemID)||[];
+   const stationSample=all.slice(0,3).map(s=>{
+    const id=pos(s?.stationID),corp=pos(s?.corporationID||s?.ownerID);
+    const canonical=getStation(id);
+    return {stationID:id,corporationID:corp,
+     npcCorp:corp?isNpcCorporation(corp)===true:false,
+     knownCorp:corp?Boolean(getCorporation(corp)):false,
+     canonical:Boolean(canonical),
+     canonicalCorpMatch:Boolean(canonical)&&Number(canonical?.corporationID||canonical?.ownerID)===corp,
+     inScene:(scene?.staticEntities||[]).some(e=>e.kind==="station"&&Number(e.itemID)===id)};
+   });
+   return pause("NO_NATIVE_NPC_STATION",{systemID,fleetID,stationCount:all.length,stationSample});
+  }
   const destination=candidates[0];
   const cargo=ships.flatMap(id=>(store.listNativeCargoForEntity(id)||[]).filter(row=>
    pos(row.cargoID)&&pos(row.typeID)&&pos(row.quantity)&&Number(row.coopHaulFleetID)===fleetID));
-  if(cargo.some(row=>row.transient===true))return pause("CARGO_NOT_DURABLE");
+  if(cargo.some(row=>row.transient===true))
+   return pause("CARGO_NOT_DURABLE",{systemID,fleetID,stacks:cargo.length});
   if(!cargo.length)return {status:"NO_ORE_TO_DELIVER",terminal:true};
   // Flush existing physical NPC entities and native cargo before moving.
-  for(const name of ["npcEntities","npcCargo"]){if(!flush(name)?.success)return pause("PERSISTENCE_UNCERTAIN");}
+  for(const name of ["npcEntities","npcCargo"]){if(!flush(name)?.success)
+   return pause("PERSISTENCE_UNCERTAIN",{systemID,fleetID,table:name});}
   const result={stationID:destination.stationID,corporationID:destination.corporationID,
    systemID,fleetID,startedAt:now,haulers:Object.fromEntries(ships.map(id=>[id,{arrivedAt:0}]))};
   fleet.coopStationArrival=result; // In-memory intent is never proof of inventory.
@@ -85,25 +118,28 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
     ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250)});}catch(_){ack=null;}
    if(!truthy(ack)){delete fleet.coopStationArrival;
-    for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED");}
+    for(const raw of ships)arrivals.delete(raw);return pause("WARP_COMMAND_FAILED",{systemID,fleetID,haulers:ships.length});}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
   }
   probe.observe("living-npc-station-warp-requested",null,{spaceState:{systemID}},
    {fleetID,stationID:destination.stationID,haulers:ships.length});
+  clearBlocked();
   return {status:"EN_ROUTE",terminal:false,stationID:destination.stationID};
  }
  function tick(scene,fleet,now=clock()){
   const trip=fleet?.coopStationArrival;
   if(!trip)return pause("ROUTE_NOT_STARTED");
   if(Number(scene?.systemID)!==trip.systemID||Number(fleet?.fleetID)!==trip.fleetID)
-   return pause("FLEET_MISMATCH");
-  if(now-trip.startedAt>DEADLINE_MS)return pause("ARRIVAL_TIMED_OUT_REPAIR_REQUIRED");
+   return pause("FLEET_MISMATCH",{systemID:trip.systemID,fleetID:trip.fleetID});
+  if(now-trip.startedAt>DEADLINE_MS)
+   return pause("ARRIVAL_TIMED_OUT_REPAIR_REQUIRED",{systemID:trip.systemID,fleetID:trip.fleetID,stationID:trip.stationID});
   const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
-  if(!point||point.corporationID!==trip.corporationID)return pause("STATION_IDENTITY_CHANGED");
+  if(!point||point.corporationID!==trip.corporationID)
+   return pause("STATION_IDENTITY_CHANGED",{systemID:trip.systemID,fleetID:trip.fleetID,stationID:trip.stationID});
   let stackCount=0,oreQuantity=0;
   for(const rawID of Object.keys(trip.haulers)){
    const id=Number(rawID),ship=findShip(scene,id,trip.systemID);
-   if(!ship)return pause("HAULER_LOST_OR_NOT_DURABLE");
+   if(!ship)return pause("HAULER_LOST_OR_NOT_DURABLE",{systemID:trip.systemID,fleetID:trip.fleetID,haulerID:id});
    const arrival=trip.haulers[id];
    if(!stableAt(ship,point)){arrival.arrivedAt=0;
     arrivals.set(id,{fleetID:trip.fleetID,stationID:trip.stationID,arrivedAt:0});
@@ -135,6 +171,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
+  clearBlocked();
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity};
  }
  return {start,tick,verify:stableAt,warehouse:factory};
