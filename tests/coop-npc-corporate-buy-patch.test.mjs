@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {patch}=require("../scripts/coop-npc-corporate-buy-patch.cjs");
-const {patch:guard}=require("../scripts/coop-npc-market-buy-safety-patch.cjs");
+const {patch:guard,LINE}=require("../scripts/coop-npc-market-buy-safety-patch.cjs");
 const ANCHOR='    const tradedQuantity = Math.min(remainingQuantity, availableQuantity);';
 const SRC="async function marketProxy(){\n  for (const sellOrder of orders) {\n"+ANCHOR+"\n  }\n}\n";
 for(const eol of ["LF","CRLF"]){
@@ -27,6 +27,17 @@ test("patch refuses unguarded upstream market code",()=>{
 });
 test("second application does not duplicate the settlement branch",()=>{
  const once=patch(guard(SRC));assert.equal(patch(once),once);
+});
+test("repeated central install never appends COOP-034 after COOP-035",()=>{
+ const original=guard(SRC),native=patch(original);
+ assert.equal(guard(native),native);
+ const removed=patch(native,{remove:true});
+ assert.equal(guard(removed,{remove:true}),SRC);
+});
+test("mixed old and new NPC buy guards fail closed rather than suppressing buying",()=>{
+ const original=patch(guard(SRC));
+ const mixed=original.replace(ANCHOR,LINE+"\n"+ANCHOR);
+ assert.throws(()=>guard(mixed),/MIXED_COOP034_COOP035/);
 });
 test("guard rejects all not-PURCHASED results without stock seller fallback",()=>{
  const modified=patch(guard(SRC));
