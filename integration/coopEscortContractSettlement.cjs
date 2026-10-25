@@ -13,7 +13,7 @@ const keyOK = x => typeof x === "string" && /^escort-[a-zA-Z0-9-]{1,48}$/.test(x
 const manifestOK = x => typeof x === "string" && /^[0-9]+-[0-9]+-[0-9]+$/.test(x);
 const isErr = (e,code) => e && e.code === code;
 function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authorizeOffer,
- readManifest,verifyManifest,readIncidents,readOutcomes,readNativeDelivery,nativeFunds}={}) {
+ readManifest,verifyManifest,readIncidents,readOutcomes,readNativeDelivery,nativeFunds,readPrefunded=null}={}) {
  if(typeof root!=="string" || !path.isAbsolute(root) ||
   [authorizeOffer,readManifest,verifyManifest,readIncidents,readOutcomes,
    readNativeDelivery].some(fn=>typeof fn!=="function") ||
@@ -166,6 +166,38 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    release();return {status:"FUNDED",contractID};
   });
  }
+ // Pre-warp money was already reserved by the trusted escort flight gate.
+ // Bind it to the later real pirate incident; DO NOT debit a second time.
+ function attachPrefunded(contractID){
+  if(process.env.EVEJS_COOP_ESCORT_CONTRACTS!=="1")return status("DISABLED");
+  if(!keyOK(contractID))return status("CONTRACT_ID_INVALID");
+  if(typeof readPrefunded!=="function")return status("PREFUNDED_GATE_UNAVAILABLE");
+  return guarded(contractID,release=>{
+   const current=read(contractID);
+   if(current.status!=="READY"){release();return current}
+   if(current.phase!=="OFFERED"){release();return status("CONTRACT_FUNDING_NOT_REPLAYABLE")}
+   if(!capabilities()){release();return status("ATOMIC_NATIVE_WALLET_PROVIDER_UNAVAILABLE")}
+   const c=current.contract;
+   let flight;try{flight=readPrefunded(c)}catch{
+    release();return status("PREFUNDED_BOOKING_UNAVAILABLE")}
+   if(flight?.status!=="NATIVE_PREFUNDED_BOOKING_VERIFIED"||
+     flight.contractID!==c.contractID){
+    release();return status("PREFUNDED_BOOKING_NOT_VERIFIED");
+   }
+   let receipt;try{receipt=nativeFunds.verifyReservation(c)}catch{
+    release();return status("PREFUNDED_ESCROW_UNAVAILABLE")}
+   if(!fundedReceipt(c,receipt)){
+    release();return status("PREFUNDED_ESCROW_NOT_VERIFIED");
+   }
+   if(!append(file(contractID),{v:1,contractID,phase:"FUNDING_PREPARED",at:clock()}))
+    return status("PREFUNDED_JOURNAL_UNCERTAIN");
+   // After PREPARED, never call reserveAtomic; both events only acknowledge
+   // the existing independently verified native escrow.
+   if(!append(file(contractID),{v:1,contractID,phase:"FUNDED",at:clock()}))
+    return status("PREFUNDED_COMMIT_JOURNAL_UNCERTAIN");
+   release();return {status:"FUNDED",contractID,prefunded:true};
+  });
+ }
  function proof(c){
   let m,p,incident,outcome,delivery,reservation;
   try{
@@ -244,6 +276,6 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    release();return {status:"SETTLED",contractID,credits:paid.credits};
   });
  }
- return {create,fund,settle,read,proof};
+ return {create,fund,attachPrefunded,settle,read,proof};
 }
 module.exports={createEscortContractSettlement};
