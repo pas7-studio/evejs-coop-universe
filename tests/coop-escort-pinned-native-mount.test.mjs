@@ -59,7 +59,8 @@ function fixture(fn){
    manifestKey:trip.manifestKey,systemID:trip.systemID,
    fleetID:trip.fleetID,stationID:trip.stationID,corporationID:trip.corporationID,
    haulerID:trip.haulerIDs[0],contractID:"escort-native-001",
-   playerFleetID:33,characters:[701,702],amountISK:spoofPrice?999999:20000}),
+   playerFleetID:33,characters:[701,702],amountISK:spoofPrice?999999:20000,
+   quoteExpiresAt:8000000}),
   readPilotConsent:()=>verifiedConsent?{
    status:"DURABLE_TWO_PILOT_CONSENT",manifestKey,
    contractID:"escort-native-001",haulerID:901,
