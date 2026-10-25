@@ -14,9 +14,11 @@ function allowedFactionIDs(env){
 }
 function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCorporation,
  getFaction,getCharacter,getDockedLocationID,getDockedLocationKind,
- getEffectiveStanding,makeStore,clock=()=>Date.now(),env=process.env}={}){
+ getEffectiveStanding,makeStore,getFrontlineStatus=()=>null,
+ clock=()=>Date.now(),env=process.env}={}){
  if([getAgent,getMission,getSessions,getFactionForCorporation,getFaction,getCharacter,
-  getDockedLocationID,getDockedLocationKind,getEffectiveStanding,makeStore,clock]
+  getDockedLocationID,getDockedLocationKind,getEffectiveStanding,
+  makeStore,getFrontlineStatus,clock]
   .some(x=>typeof x!=="function"))throw Error("FW_AGENT_NATIVE_AUTHORITIES_REQUIRED");
  const enabled=()=>env.EVEJS_COOP_FACTION_WAR==="1"&&
   env.EVEJS_COOP_FACTION_MILITIA_AGENT==="1"&&
@@ -75,7 +77,8 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
   if(!Number.isSafeInteger(now)||now<=0)return reply("[Militia] Clock unavailable.");
   const name=ctx.factionName||"the faction";
   if(actionID===null||actionID===undefined||Number(actionID)===1||Number(actionID)===2){
-   if(same)return reply("[Militia] You serve "+name+". This is military service, NOT a native corporation transfer. The stock Decline button ends your militia service and starts a 24-hour cooldown.",[[9,9],[1,1]]);
+   if(same)return reply("[Militia] You serve "+name+". This is military service, NOT a native corporation transfer. The stock Decline button ends your militia service and starts a 24-hour cooldown. "+
+    frontline(ctx),[[9,9],[1,1]]);
    if(active)return reply("[Militia] You already serve another faction. Leave your current militia with its own authorized agent first.",[[1,1]]);
    if(existing?.cooldownUntil>now)return reply("[Militia] Re-enlistment cooldown is active. No change made.",[[1,1]]);
    if(ctx.standing<0)return reply("[Militia] Faction standing must be at least 0 to enlist. Current: "+ctx.standing+".",[[1,1]]);
@@ -103,11 +106,23 @@ function createFactionWarAgent({getAgent,getMission,getSessions,getFactionForCor
   }
   return reply("[Militia] Unsupported agent action. No military status changed.",[[1,1]]);
  }
+ function frontline(ctx){
+  if(env.EVEJS_COOP_FACTION_WAR_PLAYER_CAPTURE!=="1")
+   return "";
+  try{
+   const result=getFrontlineStatus({
+    characterID:ctx.characterID,factionID:ctx.factionID});
+   return result?.status==="OBSERVED"&&
+    typeof result.text==="string"?
+    result.text.replace(/[<>\\x00-\\x1f]/g," ").slice(0,600):"";
+  }catch{return ""}
+ }
  function briefing({session,agentID}={}){
   const ctx=context(session,agentID);if(!ctx)return null;
   return {ContentID:null,"Mission Title ID":"Faction Militia",
    "Mission Briefing ID":"Native faction service desk for "+ctx.factionName+
-    ". Enlistment affects only server-managed militia service; no native corporation membership or ISK reward.",
+    ". Enlistment affects only server-managed militia service; no native corporation membership or ISK reward. "+
+    frontline(ctx),
    "Mission Keywords":{},"Mission Image":null,"Decline Time":null,
    "Expiration Time":null,"AcceptTimestamp":null,"Mission ID":null};
  }
@@ -135,6 +150,9 @@ function native(){
    getDockedLocationID:locations.getDockedLocationID,
    getDockedLocationKind:locations.getDockedLocationKind,
    getEffectiveStanding:standing.getCharacterEffectiveStanding,
+   getFrontlineStatus:details=>
+    require("./coopWarMilitiaIntel").createWarMilitiaIntel({
+     gameStore:nativeStore}).read(details),
    makeStore:proofs=>createStore({gameStore:nativeStore,proofs})});
  }
  return singleton;
