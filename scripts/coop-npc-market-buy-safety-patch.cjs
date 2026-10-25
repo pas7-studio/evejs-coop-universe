@@ -14,7 +14,10 @@ function patch(source,{remove=false}={}){
  }else{
   // The COOP-035 guarded corporate purchase branch replaces COOP-034.
   // A repeated central install must not append an unconditional skip after it.
-  if(text.includes("COOP-035 native NPC corporate seller branch"))return source;
+  if(text.includes("COOP-035 native NPC corporate seller branch")){
+   if(text.includes(LINE))throw Error("NPC_BUY_GUARD_MIXED_COOP034_COOP035");
+   return source;
+  }
   if(text.includes(LINE))throw Error("NPC_BUY_GUARD_ALREADY_PATCHED");
   if(text.split(ANCHOR).length!==2)throw Error("NPC_BUY_GUARD_UPSTREAM_ANCHOR_MISMATCH");
   text=text.replace(ANCHOR,LINE+"\n"+ANCHOR);
