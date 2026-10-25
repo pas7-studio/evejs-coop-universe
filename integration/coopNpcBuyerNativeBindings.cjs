@@ -1,8 +1,8 @@
 "use strict";
 // COOP-049: native read/adapt only; delegates every paid write to COOP-048.
 // No NPC session impersonation, virtual wallet, synthetic cargo, or new timer.
-const {createNpcCorporateBuyer}=require("./coopNpcCorporateBuyerAtomic.cjs");
-const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator.cjs");
+const {createNpcCorporateBuyer}=require("./coopNpcCorporateBuyerAtomic"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const count=x=>Number.isSafeInteger(x)&&x>=0;
 const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
