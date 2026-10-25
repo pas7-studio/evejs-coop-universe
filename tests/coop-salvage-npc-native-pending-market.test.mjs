@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 const require=createRequire(import.meta.url);
 const {createSalvagePendingMarket}=require("../integration/coopSalvageNpcPendingMarket.cjs");
 const {ESCROW_BASE}=require("../integration/coopNpcPendingMarketEscrow.cjs");
@@ -169,3 +172,30 @@ test("default OFF rejects without invoking native GameStore or Rust",async()=>fi
 process.on("exit",()=>env.forEach((k,i)=>{
  if(before[i]===undefined)delete process.env[k];else process.env[k]=before[i];
 }));
+
+
+test("salvage pending-market loads the real local .cjs escrow sibling",()=>{
+ assert.equal(typeof createSalvagePendingMarket,"function");
+ assert.equal(ESCROW_BASE,9200000000);
+});
+test("deployed JS-only salvage market resolves the native escrow sibling",t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"salvage-market-overlay-"));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const original=fs.readFileSync(new URL("../integration/coopSalvageNpcPendingMarket.cjs",import.meta.url),"utf8");
+ fs.writeFileSync(path.join(root,"coopSalvageNpcPendingMarket.js"),original);
+ fs.writeFileSync(path.join(root,"coopNpcPendingMarketEscrow.js"),
+  "module.exports={ESCROW_BASE:9200000000};");
+ const native=createRequire(path.join(root,"index.cjs"))("./coopSalvageNpcPendingMarket.js");
+ assert.equal(typeof native.createSalvagePendingMarket,"function");
+ assert.equal(fs.existsSync(path.join(root,"coopNpcPendingMarketEscrow.cjs")),false);
+});
+test("broken deployed escrow transitive import is not swallowed by source fallback",t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"salvage-market-overlay-broken-"));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const original=fs.readFileSync(new URL("../integration/coopSalvageNpcPendingMarket.cjs",import.meta.url),"utf8");
+ fs.writeFileSync(path.join(root,"coopSalvageNpcPendingMarket.js"),original);
+ fs.writeFileSync(path.join(root,"coopNpcPendingMarketEscrow.js"),
+  "require('./real-missing-salvage-escrow-implementation');");
+ assert.throws(()=>createRequire(path.join(root,"index.cjs"))("./coopSalvageNpcPendingMarket.js"),
+  /real-missing-salvage-escrow-implementation/);
+});
