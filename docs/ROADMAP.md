@@ -1,5 +1,11 @@
 # Delivery roadmap — agent-ready tasks
 
+> **P0 COOP-045 — NPC SQLite atomic weapon-bank debit:** [Native ammo cargo and per-module replay fences committed in a single transaction](NPC_ATOMIC_WEAPON_BANK_STAGE11.md). **IMPLEMENTED_UNVERIFIED:** pinned source roundtrip + isolated JS smoke checked; real Node/SQLite crash tests and two-client combat still required. Stacked after COOP-044; default OFF.
+
+
+> **P0 COOP-044 — native NPC weapon-bank replay safety:** [Preflight every active weapon journal before spending any grouped barrel](NPC_WEAPON_BANK_RECOVERY_STAGE10.md). Source fixture and isolated V8 behavior checked; native bank-wide atomicity and live two-client/crash acceptance **still unverified**. Default OFF.
+
+
 > **P1 COOP-043 — native Community Fittings catalog:** [Source-vetted EFT imports and co-op fitting browser acceptance](COOP_COMMUNITY_FITTINGS_V1.md). Existing pinned EveJS supports a read-only community owner (1000282 / 600 fits); external sourcing and safe seeding are **NOT YET IMPLEMENTED**, two-client gameplay unverified.
 
 > **P0 local co-op pacing:** [Local progression V2 (48× new-world default, existing-queue migration fence, live speed diagnostics)](COOP_LOCAL_PROGRESSION_V2.md). Source-level only; do not retro-credit SP or claim the one-year client ETA is fixed until real client QA.
