@@ -1,8 +1,8 @@
 "use strict";
-// P0: native GameStore atomic single-stack FULL and PARTIAL SELL settlement.
+// P0: native GameStore atomic multi-stack FULL and PARTIAL SELL settlement.
 // No parallel inventory, wallet, or market; all effects via the pinned
 // GameStore coopAtomicNativeRows.transact(...) with one durable SQLite COMMIT.
-// Multi-stack and pre-funded BUY matches deliberately fail closed.
+// Pre-funded BUY and linked cross-orders deliberately fail closed.
 const TABLES=Object.freeze(["characters","items","marketEscrow","identityState","playerMarketFills"]);
 const pos=n=>typeof n==="number"&&Number.isSafeInteger(n)&&n>0;
 const safe=n=>typeof n==="number"&&Number.isSafeInteger(n)&&n>=0;
@@ -13,6 +13,39 @@ const cents=n=>{
 };
 const isk=n=>n/100;
 const ITEM_FLOOR=1990000000;
+const MAX_STACKS=10000;
+function sourceIDs({sourceItemID,sourceItemIDs}){
+ const ids=sourceItemIDs===undefined?[sourceItemID]:sourceItemIDs;
+ if(!Array.isArray(ids)||ids.length===0||ids.length>MAX_STACKS||
+    ids.some(id=>!pos(id))||new Set(ids).size!==ids.length)
+  throw Error("P2P_ATOMIC_ORIGINAL_SOURCE_SET_INVALID");
+ const sorted=[...ids].sort((a,b)=>a-b);
+ if(sourceItemID!==undefined&&sourceItemID!==sorted[0])
+  throw Error("P2P_ATOMIC_SOURCE_IDENTITY_MISMATCH");
+ return sorted;
+}
+function receiptDeliveries(record){
+ if(Array.isArray(record.deliveries))return record.deliveries;
+ if(pos(record.itemID)&&pos(record.sourceItemID)&&
+    pos(record.quantity))return [{sourceItemID:record.sourceItemID,
+       itemID:record.itemID,quantity:record.quantity}];
+ return null;
+}
+function checkDeliveries(record,expectedSources,expectedQuantity){
+ const deliveries=receiptDeliveries(record);
+ if(!Array.isArray(deliveries)||deliveries.length<1||
+    deliveries.length>expectedSources.length)return false;
+ const sources=new Set(expectedSources),seen=new Set(),dest=new Set();
+ let sum=0;
+ for(const d of deliveries){
+  if(!pos(d?.sourceItemID)||!sources.has(d.sourceItemID)||
+     seen.has(d.sourceItemID)||!pos(d.itemID)||dest.has(d.itemID)||
+     !pos(d.quantity)||!Number.isSafeInteger(sum+d.quantity))return false;
+  seen.add(d.sourceItemID);dest.add(d.itemID);sum+=d.quantity;
+ }
+ return sum===expectedQuantity&&
+  expectedSources.every(x=>seen.has(x)||record.volumeAfter>0);
+}
 const receiptKey=t=>"p2p:"+t.orderID+":"+t.cycle;
 function checkTicket(ticket,proof){
  if(!ticket||!proof||!Object.isFrozen(proof)||ticket.orderID!==proof.orderID||
@@ -44,11 +77,12 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
    process.env.EVEJS_COOP_PLAYER_MARKET_SETTLEMENT_FENCE==="1"&&
    process.env.EVEJS_COOP_RUST_P2P_CLAIM==="1";
  }
- function settle({ticket,proof,tax,sourceItemID}={}){
+ function settle({ticket,proof,tax,sourceItemID,sourceItemIDs}={}){
   if(!enabled())throw Error("P2P_ATOMIC_FLAGS_DISABLED");
   const gross=checkTicket(ticket,proof),taxCents=cents(tax);
-  if(taxCents===null||taxCents>gross||!pos(sourceItemID))
+  if(taxCents===null||taxCents>gross)
    throw Error("P2P_ATOMIC_TAX_OR_SOURCE_INVALID");
+  const origins=sourceIDs({sourceItemID,sourceItemIDs});
   const buyer=proof.counterpartyID,seller=proof.ownerID,key=receiptKey(ticket);
   return gameStore.transact(TABLES,tx=>{
    const existing=tx.get("playerMarketFills",key);
@@ -56,7 +90,10 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
     if(existing.phase!=="GAMESTORE_COMMITTED"||existing.key!==key||
        existing.orderID!==ticket.orderID||existing.cycle!==ticket.cycle||
        existing.buyerID!==buyer||existing.sellerID!==seller||
-       existing.sourceItemID!==sourceItemID||!pos(existing.itemID)||
+       existing.sourceItemID!==origins[0]||!pos(existing.itemID)||
+       !checkDeliveries(existing,origins,proof.filledQuantity)||
+       (existing.sourceItemIDs!==undefined&&
+        JSON.stringify(existing.sourceItemIDs)!==JSON.stringify(origins))||
        existing.quantity!==proof.filledQuantity||
        existing.volumeBefore!==proof.volumeBefore||
        existing.volumeAfter!==proof.volumeAfter||
@@ -79,17 +116,25 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
       escrow.remainingQuantity!==proof.volumeBefore||
       escrow.escrowLocationID!==proof.sellerSourceLocationID)
     throw Error("P2P_ATOMIC_ESCROW_UNVERIFIED");
-   const stacks=tx.scan("items").filter(({value})=>
+   const allItems=tx.scan("items");
+   const stacks=allItems.filter(({value})=>
     value?.ownerID===seller&&value.locationID===proof.sellerSourceLocationID&&
-    value.flagID===4);
-   if(stacks.length!==1||stacks[0].key!==String(sourceItemID))
-    throw Error("P2P_ATOMIC_SINGLE_PHYSICAL_STACK_REQUIRED");
-   const {value:item}=stacks[0];
-   if(item.itemID!==sourceItemID||item.typeID!==proof.typeID||
-      item.singleton!==0||item.quantity!==proof.volumeBefore||
-      item.stacksize!==proof.volumeBefore||
-      !pos(item.itemID)||!pos(item.categoryID))
-    throw Error("P2P_ATOMIC_ORIGINAL_ITEM_MISMATCH");
+    value.flagID===4).sort((a,b)=>a.value.itemID-b.value.itemID);
+   if(stacks.length!==origins.length||
+      stacks.some((e,i)=>e.key!==String(origins[i])))
+    throw Error("P2P_ATOMIC_PHYSICAL_ESCROW_SET_UNVERIFIED");
+   let originalQuantity=0;
+   for(const {key:stackKey,value:item} of stacks){
+    if(!pos(item?.itemID)||String(item.itemID)!==stackKey||
+       item.typeID!==proof.typeID||item.singleton!==0||
+       !pos(item.quantity)||item.quantity!==item.stacksize||
+       !pos(item.categoryID)||
+       !Number.isSafeInteger(originalQuantity+item.quantity))
+     throw Error("P2P_ATOMIC_ORIGINAL_STACK_CUSTODY_INVALID");
+    originalQuantity+=item.quantity;
+   }
+   if(originalQuantity!==proof.volumeBefore)
+    throw Error("P2P_ATOMIC_ESCROW_PHYSICAL_QUANTITY_MISMATCH");
    const buyerRow=tx.get("characters",String(buyer)),
     sellerRow=tx.get("characters",String(seller));
    if(!buyerRow||!sellerRow||
@@ -145,44 +190,66 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
      clientID:buyer,journalRefID:ids[1]},
      ...sellerRow.marketTransactions].slice(0,2000)};
    const partial=proof.volumeAfter>0;
-   let buyerItemID=sourceItemID;
-   if(partial){
+   let remaining=proof.filledQuantity,splitRequired=false;
+   const consume=[];
+   for(const {value:item} of stacks){
+    if(remaining===0)break;
+    const take=Math.min(item.quantity,remaining);
+    if(take<item.quantity)splitRequired=true;
+    consume.push({item,take});
+    remaining-=take;
+   }
+   if(remaining!==0)throw Error("P2P_ATOMIC_SOURCE_CONSUMPTION_MISMATCH");
+   let nextItemID=null;
+   if(splitRequired){
     const counter=tx.get("identityState","nextItemID");
     if(!pos(counter)||counter<ITEM_FLOOR)
      throw Error("P2P_ATOMIC_NATIVE_ITEM_ALLOCATOR_MISSING");
     let maxID=ITEM_FLOOR-1;
-    for(const entry of tx.scan("items")){
-     if(!pos(entry.value?.itemID)||String(entry.value.itemID)!==entry.key)
+    for(const row of allItems){
+     if(!pos(row.value?.itemID)||String(row.value.itemID)!==row.key)
       throw Error("P2P_ATOMIC_ITEM_IDENTITY_INDEX_UNSAFE");
-     maxID=Math.max(maxID,entry.value.itemID);
+     maxID=Math.max(maxID,row.value.itemID);
     }
-    buyerItemID=Math.max(counter,maxID+1,ITEM_FLOOR);
-    if(!pos(buyerItemID)||!pos(buyerItemID+1)||
-       tx.get("items",String(buyerItemID))!==null)
+    nextItemID=Math.max(counter,maxID+1,ITEM_FLOOR);
+    if(!pos(nextItemID)||!pos(nextItemID+1)||
+       tx.get("items",String(nextItemID))!==null)
      throw Error("P2P_ATOMIC_NATIVE_ITEM_ID_EXHAUSTED");
    }
-   const moved={...item,itemID:buyerItemID,ownerID:buyer,
-    locationID:proof.stationID,flagID:4,
-    quantity:proof.filledQuantity,stacksize:proof.filledQuantity};
-   const sourceRest={...item,quantity:proof.volumeAfter,
-    stacksize:proof.volumeAfter};
+   const deliveries=[];
+   for(const {item,take} of consume){
+    const split=take<item.quantity;
+    const buyerItemID=split?nextItemID:item.itemID;
+    const moved={...item,itemID:buyerItemID,ownerID:buyer,
+     locationID:proof.stationID,flagID:4,
+     quantity:take,stacksize:take};
+    if(split){
+     tx.put("items",String(item.itemID),{
+      ...item,quantity:item.quantity-take,stacksize:item.quantity-take
+     });
+     tx.put("items",String(buyerItemID),moved);
+    }else{
+     tx.put("items",String(item.itemID),moved);
+    }
+    deliveries.push(Object.freeze({sourceItemID:item.itemID,
+     itemID:buyerItemID,quantity:take}));
+   }
+   if(splitRequired)tx.put("identityState","nextItemID",nextItemID+1);
+   let deliveredTotal=0;
+   for(const entry of deliveries)deliveredTotal+=entry.quantity;
+   if(deliveredTotal!==proof.filledQuantity)
+    throw Error("P2P_ATOMIC_DELIVERY_CONSERVATION_FAILED");
    const result={key,phase:"GAMESTORE_COMMITTED",orderID:ticket.orderID,
     cycle:ticket.cycle,buyerID:buyer,sellerID:seller,
     stationID:proof.stationID,typeID:proof.typeID,
-    itemID:buyerItemID,sourceItemID,partial,
+    itemID:deliveries[0].itemID,sourceItemID:origins[0],
+    sourceItemIDs:origins,deliveries,partial,
     volumeBefore:proof.volumeBefore,volumeAfter:proof.volumeAfter,
     quantity:proof.filledQuantity,priceCents:proof.priceCents,
     grossCents:gross,taxCents,
     buyerBeforeCents:buyerBefore,buyerAfterCents:buyerAfter,
     sellerBeforeCents:sellerBefore,sellerAfterCents:sellerAfter,
     committedAt:at};
-   if(partial){
-    tx.put("items",String(sourceItemID),sourceRest);
-    tx.put("items",String(buyerItemID),moved);
-    tx.put("identityState","nextItemID",buyerItemID+1);
-   }else{
-    tx.put("items",String(sourceItemID),moved);
-   }
    tx.put("characters",String(buyer),buyerNext);
    tx.put("characters",String(seller),sellerNext);
    if(partial){
@@ -210,6 +277,9 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
        receipt.volumeAfter!==proof.volumeAfter||
        receipt.partial!==(proof.volumeAfter>0)||
        !pos(receipt.itemID)||!pos(receipt.sourceItemID)||
+       !checkDeliveries(receipt,
+        receipt.sourceItemIDs??[receipt.sourceItemID],
+        proof.filledQuantity)||
       receipt.priceCents!==proof.priceCents||
       receipt.grossCents!==proof.priceCents*proof.filledQuantity||
       !safe(receipt.taxCents)||
