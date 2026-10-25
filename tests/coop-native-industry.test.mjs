@@ -35,7 +35,9 @@ test("miner native ore physically moves into hauler, can drop on kill and unload
  const hauler={itemID:201,kind:"ship",ownerID:2,transient:true,nativeCargoItems:[]};
  const scene={getEntityByID:id=>id===101?miner:id===201?hauler:null};
  const fleet={fleetID:9,systemID:30000142,haulerEntityIDs:[201]};
- const dependencies={store,probe:{observe:(event)=>events.push(event)}};
+ const dependencies={store,probe:{observe:(event)=>events.push(event)},
+  // Two-phase custody is tested with real files in coop-native-depot-custody.
+  depot:{prepare:()=>({status:"PREPARED"}),commit:()=>({status:"COMMITTED"})}};
  assert.equal(transferCargo(scene,fleet,miner,dependencies),1.2);
  assert.equal(store.listNativeCargoForEntity(101).length,0);
  assert.equal(store.listNativeCargoForEntity(201)[0].quantity,120);
