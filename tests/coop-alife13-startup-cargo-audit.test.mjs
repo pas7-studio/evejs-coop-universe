@@ -32,8 +32,8 @@ function fixture(t,{two=false}={}){
  const db={read(table,key){assert.equal(table,"npcCargo");assert.equal(key,"/");
   return {success:true,data:{cargo,...transfers}}}};
  const store={listNativeCargoForEntity:id=>id===HAULER?[...observed.values()]:[]};
- const actors=new Map([[MINER,{entityID:MINER,systemID:SYSTEM,transient:false}],
-  [HAULER,{entityID:HAULER,systemID:SYSTEM,transient:false}]]);
+ const actors=new Map([[MINER,{entityID:MINER,ownerID:CORP,systemID:SYSTEM,transient:false}],
+  [HAULER,{entityID:HAULER,ownerID:CORP,systemID:SYSTEM,transient:false}]]);
  const getNativeEntity=id=>actors.get(id)||null;
  const items={findWarehouseItem:({cargoID})=>stock.get(cargoID)||null};
  const manifest=createManifest({root,store,items,getNativeEntity,clock:()=>START});
@@ -144,4 +144,19 @@ test("runtime calls ALIFE-13 before physical materialization and never adds a ti
  assert.match(source,/ALIFE13_STARTUP_ORIGINAL_CARGO_UNRECONCILED/);
  assert.match(source,/EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT/);
  assert.doesNotMatch(source,/setInterval\s*\(/);
+});
+
+test("orphan warehouse receipt without original transfer is quarantined",t=>{
+ const f=fixture(t);
+ const id=980211911;
+ fs.writeFileSync(path.join(f.root,"receipts",id+".json"),JSON.stringify({
+  version:1,phase:"COMMITTED",cargoID:id,haulerID:HAULER,
+  fleetID:FLEET,systemID:SYSTEM,stationID:STATION,corporationID:CORP,
+  typeID:34,quantity:5,itemID:123456}));
+ assert.equal(f.run().reason,"ALIFE13_ORPHAN_WAREHOUSE_RECEIPT");
+});
+test("original transfer receipt cannot claim a foreign durable owner",t=>{
+ const f=fixture(t);
+ f.actors.get(HAULER).ownerID++;
+ assert.equal(f.run().reason,"ALIFE13_TRANSFER_ACTOR_OWNER_CONFLICT");
 });
