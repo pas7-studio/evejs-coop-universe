@@ -1,0 +1,164 @@
+{
+  "schema": "evejs-coop/alife08-durable-native-mining-e2e/v1",
+  "status": "NOT_RUN",
+  "mode": "DISPOSABLE_WORLD_ONLY",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "ALIFE08-01",
+      "title": "First persistent startup spawn",
+      "status": "NOT_RUN",
+      "steps": "Start disposable EveJS world with ALIFE-08 flag, no mining slot witness and real asteroid belt",
+      "expected": "Native original miner and hauler materialized; persistent native entity/controller/module rows and ACTIVE witness; no duplicate ship ID",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-02",
+      "title": "Second handleSceneCreated in same process",
+      "status": "NOT_RUN",
+      "steps": "Trigger original scene callback a second time",
+      "expected": "Same two shipID values and exactly one fleet runtime record",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-03",
+      "title": "Restart before any ore mined",
+      "status": "NOT_RUN",
+      "steps": "Cold-restart disposable world after ACTIVE slot witness flush",
+      "expected": "Same miner/hauler IDs restored; no new native allocator calls or extra fleet",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-04",
+      "title": "Restart after atomic ore commit",
+      "status": "NOT_RUN",
+      "steps": "Mine one native asteroid cycle with ALIFE-07 flag and stop server",
+      "expected": "After restart same cargoID, ownerID, ore quantity, asteroid source and one receipt",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-05",
+      "title": "Restart after hauler pickup",
+      "status": "NOT_RUN",
+      "steps": "Transfer source cargoID to native hauler, stop server",
+      "expected": "Same original cargoID survives in hauler; miner no longer holds original stack",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-06",
+      "title": "Restart after native warehouse COMMITTED",
+      "status": "NOT_RUN",
+      "steps": "Unload hauler via existing #110 warehouse and restart twice",
+      "expected": "Exactly one real warehouse credit; original source and cargo trail conserved",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-07",
+      "title": "Crash after slot PREPARING",
+      "status": "NOT_RUN",
+      "steps": "Kill disposable server after durable witness before first native spawn",
+      "expected": "Startup blocks slot NEEDS_OPERATOR_REPAIR; does not retry spawn",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-08",
+      "title": "Crash between miner/hauler spawn",
+      "status": "NOT_RUN",
+      "steps": "Kill after native miner stored but before hauler controller stored",
+      "expected": "No automatic duplicate miner/hauler spawn after restart; original ID quarantined",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-09",
+      "title": "Crash after ACTIVE but before createFleetRecord",
+      "status": "NOT_RUN",
+      "steps": "Terminate after ACTIVE manifest flush but before registry linkage",
+      "expected": "Reconcile existing native IDs and register one real fleet, no new spawn",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-10",
+      "title": "Destroyed NPC / wreck in active slot",
+      "status": "NOT_RUN",
+      "steps": "Kill a persistent native miner or hauler in disposable system",
+      "expected": "Native destruction preserved; no replacement on next startup until explicit destruction policy",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-11",
+      "title": "Two clients observe recovered fleet",
+      "status": "NOT_RUN",
+      "steps": "Connect two authorized clients after restart",
+      "expected": "Both clients observe same original physical ship IDs; no invisible duplicate NPCs",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    },
+    {
+      "id": "ALIFE08-12",
+      "title": "Two-process and write-failure defense",
+      "status": "NOT_RUN",
+      "steps": "Simulate stale GameStore cache and failed manifest write, then verify receipts",
+      "expected": "No fresh actor grant, no duplicate ore/cargo; flag remains OFF on live evejs-data",
+      "requiredEvidence": [
+        "native itemID and stored ownerID",
+        "native controller/module records",
+        "before/after native SQLite snapshot",
+        "two-client gameplay logs where applicable"
+      ]
+    }
+  ]
+}
