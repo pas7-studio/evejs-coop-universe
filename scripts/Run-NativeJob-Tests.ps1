@@ -27,6 +27,8 @@ try {
     'tests/coop-escort-priced-mail-replay.test.mjs',
     'tests/coop-escort-restart-duo-authority.test.mjs',
     'tests/coop-escort-peaceful-settlement.test.mjs',
+    'tests/coop-escort-terminal-attendance.test.mjs',
+    'tests/coop-escort-peaceful-durable-replay.test.mjs',
     'tests/coop-escort-refund-manifest.test.mjs',
     'tests/coop-escort-departure-witness.test.mjs',
     'tests/coop-escort-route-witness.test.mjs',
