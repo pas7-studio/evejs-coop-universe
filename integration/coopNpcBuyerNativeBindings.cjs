@@ -5,6 +5,8 @@ const {createNpcCorporateBuyer}=require("./coopNpcCorporateBuyerAtomic"+(typeof 
 const {createNpcBuyerCoordinator}=require("./coopNpcBuyerCoordinator"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {verifyNativeBookAsk,normalizeNativeOrderForCoordinator}=require("./coopNpcRustOrderAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const {createNativeNpcSellerTaxQuote}=require("./coopNpcSellerTaxAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {auditNativeNpcBuyerRecovery}=require("./coopNpcBuyerRecoveryAudit"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const fs=require("node:fs");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const count=x=>Number.isSafeInteger(x)&&x>=0;
 const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
@@ -169,7 +171,36 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
    await marketClient.call("GetOrder",{order_id:String(id)})),
   buyer,clock,env
  });
- return Object.freeze({tick:args=>coordinator.tick(args),inspect:()=>coordinator.inspect(),
+ async function audit(){
+  // No mutations. A read-only GameStore snapshot and Rust inspection must
+  // agree before an operator handles a stale .lock / PREPARED journal.
+  return auditNativeNpcBuyerRecovery({
+   journal:coordinator.inspect(),
+   lockPresent:fs.existsSync(file+".lock"),
+   inspectRustClaim:async claimKey=>{
+    try{return await marketClient.call("GetNpcCorpPlayerClaim",{
+     claim_key:claimKey})}
+    catch(error){
+     // This is the pinned Rust explicit not-found response; transport errors
+     // are NOT interpreted as absent durable claims.
+     if(/NPC corporate player claim missing/.test(String(error?.message||"")))
+      return null;
+     throw error;
+    }
+   },
+   listGameStoreReceipts:async claimKey=>{
+    const result=gameStore.coopAtomicNativeRows.transact(
+     ["npcMarketFills"],tx=>tx.scan("npcMarketFills")
+      .filter(({value})=>value?.claimKey===claimKey)
+      .map(({value})=>value));
+    const rows=result?.result??result;
+    if(!Array.isArray(rows))throw Error("NPC_BUY_RECEIPT_READ_INVALID");
+    return rows;
+   }
+  });
+ }
+ return Object.freeze({tick:args=>coordinator.tick(args),
+  inspect:()=>coordinator.inspect(),audit,
   mode:"ALIFE_NATIVE_RUST_GAMESTORE_BUYER",supportsLiveRuntime:false});
 }
 module.exports={createNativeNpcBuyerBindings};
