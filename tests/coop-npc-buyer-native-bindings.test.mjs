@@ -14,7 +14,7 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop049-binding-"));
  const file=path.join(dir,"buyer-journal.json");
  const tables={
-  corporations:{"records\u001f"+OWNER:{corporationID:OWNER,isNPC:true}},
+  corporations:{["records\u001f"+OWNER]:{corporationID:OWNER,isNPC:true}},
   corporationRuntime:{[CKEY]:{corporationID:OWNER,wallet:{divisions:{"1000":{
    balance:buyerISK,journal:[],transactions:[]}}}}},
   characters:{[SELLER]:{characterID:SELLER,balance:100,walletJournal:[],marketTransactions:[]}},
