@@ -65,6 +65,19 @@ function assertBound(tx,proof,amounts){
   throw Error("P2P_BUY_PAY_ORIGINAL_NATIVE_RESERVE_RECEIPT_MISSING");
  return {escrow,reserve};
 }
+function preflightOriginal({order,bookRow,escrow,sellerCharacterID,
+ fillableQuantity,price,sourceItem,sourceStationID}={}){
+ if(!sourceItem||sourceItem.singleton!==0||
+    sourceItem.quantity!==fillableQuantity||
+    sourceItem.stacksize!==fillableQuantity)
+  throw Error("P2P_BUY_PAY_FULL_DIRECT_SELLER_STACK_REQUIRED");
+ const ext=__filename.endsWith(".cjs")?".cjs":"";
+ const {checkBuyMatch}=require("./coopPlayerMarketFill"+ext);
+ const proof=checkBuyMatch({order,bookRow,escrow,sellerCharacterID,
+  fillableQuantity,price,sourceItem,sourceStationID,hangarFlag:4});
+ active().preflight({proof,sourceItemID:sourceItem.itemID});
+ return proof;
+}
 function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
  if(typeof gameStore?.transact!=="function"||typeof clock!=="function")
   throw Error("P2P_BUY_PAY_NATIVE_GAMESTORE_REQUIRED");
@@ -257,7 +270,7 @@ function active(){
  });
  return current;
 }
-module.exports={createBuySettlement,
+module.exports={createBuySettlement,preflightOriginal,
  preflight:args=>active().preflight(args),
  settle:args=>active().settle(args),
  requireReceipt:(ticket,proof)=>active().requireReceipt(ticket,proof)};
