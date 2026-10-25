@@ -147,4 +147,29 @@ function createWarStructureCombatProof({gameStore,getNativeKillmail,
  }
  return Object.freeze({noteFromNativeKillmail,verifyNativeCombatDestruction});
 }
-module.exports={KEY,empty,validate,createWarStructureCombatProof};
+// The pinned stock killmailTracker calls only this opt-in native server
+// entrypoint AFTER its real `createKillmailRecord` commits. No admin
+// command, game chat, player RPC or simulated damage can invoke it.
+let runtimeSingleton=null;
+function native(){
+ if(!runtimeSingleton){
+  runtimeSingleton=createWarStructureCombatProof({
+   gameStore:require("../gameStore"),
+   getNativeKillmail:id=>
+    require("../services/killmail/killmailState").getKillmailRecord(id),
+   getNativeStructure:id=>
+    require("../services/structure/structureState").getStructureByID(id),
+   getFactionForCorporation:id=>
+    require("../services/faction/factionState").getFactionIDForCorporation(id)
+  });
+ }
+ return runtimeSingleton;
+}
+function noteNativeStructureKill(payload){
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_OBJECTIVES!=="1")
+  return {status:"DISABLED"};
+ return native().noteFromNativeKillmail(payload);
+}
+module.exports={KEY,empty,validate,createWarStructureCombatProof,
+ noteNativeStructureKill};
+
