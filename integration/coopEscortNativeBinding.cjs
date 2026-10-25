@@ -74,6 +74,8 @@ const forwarding=Object.freeze({
  fundBeforeWarp:route=>enabled()?(installed?installed.fundBeforeWarp(route):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
  recordDelivered:args=>enabled()?(installed?installed.recordDelivered(args):
+  deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED"),
+ settleVerifiedNativeRaid:key=>enabled()?(installed?installed.settleVerifiedNativeRaid(key):
   deny("ESCORT_NATIVE_RUNTIME_NOT_INSTALLED")):deny("DISABLED")
 });
 function routeGate(){return forwarding}
