@@ -19,15 +19,22 @@ node --test tests/coop-reliability-gates.test.mjs
 ```
 
 The script records the exact checked-out **project SHA**, the pinned
-**upstream SHA**, and the actual running **Docker image ID**. These
+**upstream SHA**, the running **Docker image ID and container start time**,
+and verifies the **actual running server** mounts named `evejs-data` at `/var/lib/evejs`. These
 identifiers are evidence labels, NOT proof that the running overlay was
 built from that project commit: confirm the installed overlay revision
 before cross-revision certification. Raw event logs stay in memory;
 `test-results/coop-reliability-*.json` contains only redacted summary
 statuses and counts. Any non-PASS gate exits 2. Missing telemetry is
 `BLOCKED_TELEMETRY`; run `DiagnoseWorld` and do not rebuild just to make
-telemetry appear. A 10k-line read cap means unusually busy servers might
-need a higher explicit evidence window/controlled collection.
+telemetry appear. A 10k-line tail limit could otherwise lose the original headless boot
+marker on a busy server. The read-only runner therefore retrieves the latest
+**actual event-file** boot record separately, followed by the activity tail. A boot marker is
+allowed to be older than the 30-minute activity window but MUST be after
+the actual Docker process start; if the marker is still absent, the gate remains BLOCKED
+until native evidence from the correct boot is obtained. No made-up marker.
+The report also rejects stale events from previous container processes,
+replayed shared scenes and duplicate native ship IDs.
 
 ## Five independent gates
 
@@ -81,7 +88,7 @@ The actual export must contain **two or more real characters**. For the
 after snapshot, actual `containerStartedAt` must be after the before
 snapshot capture. Compare only a planned idle restart with no gameplay
 or transactions in between. A DB exporter, an operator-approved restart,
-and proof of the preserved named volume are separate prerequisites; this
+and proof of the preserved named volume at both snapshots are separate prerequisites; this
 gate does **not** perform or authorize them.
 
 `ledger.json`: `{source, projectSha, upstreamSha, entries}` with one
@@ -112,3 +119,18 @@ prints player identifiers. Do not mark an unavailable capability PASS.
 4. Some exact gameplay functions may still be unimplemented in adjacent work. Never change its source to force the gate green. Fix the functionality and retest.
 
 No CI, no merge, no deploy or persistent-volume modification is part of this QA patch.
+
+## QA review follow-up (2026-10-25)
+
+- The initial prototype incorrectly required a headless startup event in the
+  *last 30 minutes*. The corrected gate accepts an older boot record from
+  the **same** running container process and checks fresh activity separately.
+- The runner now reads `.State.StartedAt` and the actual `.Mounts` array using
+  read-only Docker inspect. Both are requirements, not simulated flags.
+- `Party` rejects two character IDs sharing one ship, a scene from a prior
+  native boot, prior-container events, and a mismatch between scene pilots and
+  an operator's claimed client/snapshot identities.
+- Ledger checks reject zero-value entries and purported transfers between
+  only one account. **They do not prove the native DB export is complete.**
+- Live host and GUI checks remain pending: the test runner cannot SSH to the
+  user's Windows machine and cannot safely claim a Docker/world/client PASS.
