@@ -134,13 +134,28 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     quantity:x.quantity})).sort((a,b)=>a.sourceCargoID-b.sourceCargoID);
   }
   const first=Math.min(...expected.map(x=>x.sourceCargoID));
-  const quotedISK=prior?prior.contract.amountISK:amountISK;
+  let loyaltyBonusPct=prior?.loyaltyBonusPct||0;
+  if(!prior){
+   // Verified PAID native rescue history affects what THIS NPC corp is
+   // willing to OFFER. The NPC still must reserve all the real ISK.
+   const h1=history({characterID:b.characters[0],limit:50});
+   const h2=history({characterID:b.characters[1],limit:50});
+   if(h1.status!=="READY"||h2.status!=="READY")
+    return deny("RESCUE_CORPORATE_REPUTATION_UNAVAILABLE");
+   const repeat=ids=>ids.history.filter(x=>x.corporationID===
+    b.corporationID&&x.outcome==="PAID").length;
+   const completed=Math.min(repeat(h1),repeat(h2));
+   loyaltyBonusPct=completed>=20?20:completed>=5?10:0;
+  }
+  const quotedISK=prior?prior.contract.amountISK:
+   Math.min(1000000000,Math.max(2,
+    2*Math.round(amountISK*(100+loyaltyBonusPct)/200)));
   const contract={contractID:persistedID,
    manifestKey:b.systemID+"-"+wreckID+"-"+first,
    corporationID:b.corporationID,
    amountISK:quotedISK,characters:b.characters.slice()};
   const quote={status:"READY",eventID,wreckID,
-   stationID:b.stationID,systemID:b.systemID,
+   stationID:b.stationID,systemID:b.systemID,loyaltyBonusPct,
    contract,expected,
    originalManifestKey:b.manifestKey};
   if(prior){
