@@ -20,6 +20,7 @@ param(
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
+  [switch]$EnableP1Operations,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -115,6 +116,11 @@ if ($EnableNativeCoopContracts) {
 # Opt in only after confirming offers/standing data on the two real characters.
 if ($EnableNativeLpStandings) {
   $yamlLines += "      EVEJS_COOP_LP_STANDING_REQUIREMENTS: '1'"
+}
+# Native convoy attack/escort operations; only real EveJS fleet tags and cargo.
+# Explicitly OFF in LivingCoop until 2-client UAT is accepted.
+if ($EnableP1Operations) {
+  $yamlLines += "      EVEJS_COOP_P1_OPERATIONS: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
