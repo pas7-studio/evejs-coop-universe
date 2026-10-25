@@ -23,7 +23,7 @@ function fixture({env=FLAGS,settleThrows=false,auditBroken=false}={}){
  const order={operation_id:OP,order_id:String(ORDER),owner_id:OWNER,
   station_id:STATION,type_id:TYPE,source_item_id:String(ITEM),
   source:"coop-npc",state:"open",vol_remaining:100,is_corp:true,bid:false};
- let wholeCalls=0,partialCalls=0,session=true,fillID=70001;
+ let wholeCalls=0,partialCalls=0,session=true,claimAuthorized=true,fillID=70001;
  const native=async ({identity})=>{
   if(settleThrows)throw Error("RUST_FINALIZE_ACK_LOST");
   order.vol_remaining-=identity.quantity;
@@ -54,9 +54,13 @@ function fixture({env=FLAGS,settleThrows=false,auditBroken=false}={}){
   director:{inspect:()=>structuredClone(journal)},
   whole,partial,saleAudit,getOriginalItem:()=>item,
   getOriginalEscrow:()=>escrow,getRustOrder:async()=>structuredClone(order),
-  verifyAuthenticatedBuyer:()=>session,env});
+  verifyAuthenticatedBuyer:()=>session,
+  verifyNativePartialClaimKey:({claimKey,buyerID,orderID,quantity})=>
+   claimAuthorized&&claimKey===CLAIM&&buyerID===BUYER&&orderID===ORDER&&quantity===20,
+  env});
  return {bridge,args,e,journal,item,escrow,order,
-  setSession:v=>{session=v},get wholeCalls(){return wholeCalls},
+  setSession:v=>{session=v},setClaimAuthorization:v=>{claimAuthorized=v},
+  get wholeCalls(){return wholeCalls},
   get partialCalls(){return partialCalls}};
 }
 test("whole original corporate source settlement delegates exactly once",async()=>{
@@ -128,6 +132,13 @@ test("partial requires source-issued nonce claimKey, not buyer invented ID",asyn
  const f=fixture();
  assert.equal((await f.bridge.purchase({...f.args,mode:"partial",quantity:20,
   claimKey:"fake"})).reason,"LW04C3B_REQUEST_INVALID");
+ assert.equal(f.partialCalls,0);
+});
+test("a syntactically valid but unapproved partial claimKey never reaches Rust",async()=>{
+ const f=fixture();f.setClaimAuthorization(false);
+ const r=await f.bridge.purchase({...f.args,mode:"partial",quantity:20,
+  claimKey:CLAIM});
+ assert.equal(r.reason,"LW04C3B_PARTIAL_CLAIM_BINDING_UNVERIFIED");
  assert.equal(f.partialCalls,0);
 });
 test("manual source settlement OFF by default and incompatible with A-Life ACT",async()=>{
