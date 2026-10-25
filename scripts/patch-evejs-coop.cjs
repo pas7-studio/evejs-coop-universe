@@ -109,10 +109,12 @@ function transform(source,spec,remove){
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-native-trade-custody-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/inventory/itemStore.js"&&!remove)
+  text=require("./coop-native-refinery-item-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/services/inventory/itemStore.js")
   text=require("./coop-native-warehouse-item-patch.cjs").patch(text,spec.file,remove);
- if(spec.file==="server/src/services/inventory/itemStore.js")
-  text=require("./coop-native-refinery-item-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/inventory/itemStore.js"&&remove)
+  text=require("./coop-native-refinery-item-patch.cjs").patch(text,spec.file,true);
  if(spec.file.endsWith("nativeNpcStore.js")){
   // Persistent IDs must never reuse an ID handed out earlier in the
   // current process for a transient NPC fleet. Both allocation paths
