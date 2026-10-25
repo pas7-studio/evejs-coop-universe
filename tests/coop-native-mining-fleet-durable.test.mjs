@@ -43,9 +43,13 @@ function fixture(t,shared=null){
   const fleet={startupKey:SYSTEM+":"+slot,fleetID:SYSTEM*32+slot,...data};
   fleets.push(fleet);return fleet;
  };
- function spawn(slot){
+ function spawn(slot,wing={}){
   spawnCalls++;
-  const miners=[71001+(slot-1)*10],haulers=[71002+(slot-1)*10];
+  const miners=[],haulers=[];
+  if(wing.miners===undefined)miners.push(71001+(slot-1)*10);
+  else for(let i=0;i<Number(wing.miners);i++)miners.push(73000+spawnCalls*10+i);
+  if(wing.haulers===undefined)haulers.push(71002+(slot-1)*10);
+  else for(let i=0;i<Number(wing.haulers);i++)haulers.push(73100+spawnCalls*10+i);
   for(const [role,ids] of [["miner",miners],["hauler",haulers]]){
    for(const id of ids){
     const marker=roleMarker(SYSTEM,slot,role);
@@ -300,4 +304,53 @@ test("a stale runtime fleet whose ships are gone is re-pointed instead of blocki
  assert.equal(r.status,"OK");
  assert.deepEqual(f.getFleets()[0].minerEntityIDs,[71001]);
  assert.deepEqual(f.getFleets()[0].haulerEntityIDs,[71002]);
+});
+
+function partialSlotFixture(t){
+ const f=fixture(t);
+ const old=process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+ process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE="1";
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+  else process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=old;});
+ const put=(id,role)=>{
+  const marker=roleMarker(SYSTEM,1,role);
+  f.world.entities.set(id,{entityID:id,systemID:SYSTEM,ownerID:950,
+   operatorKind:marker,nativeNpc:true,transient:false});
+  f.world.controllers.set(id,{entityID:id,systemID:SYSTEM,operatorKind:marker,
+   profileID:"npc-mining",transient:false,startupRuleID:null});
+  f.getPhysical().set(id,{kind:"ship",nativeNpc:true,itemID:id,ownerID:950});
+ };
+ put(71001,"miner");put(71002,"hauler");
+ f.world.slots.set(slotKey(SYSTEM,1),{version:1,status:"ACTIVE",systemID:SYSTEM,slot:1,
+  fleetID:SYSTEM*32+1,minerEntityIDs:[71001],haulerEntityIDs:[71002]});
+ // The miner hull disappeared; the hauler is still a real durable ship.
+ f.world.entities.delete(71001);f.world.controllers.delete(71001);
+ f.getPhysical().delete(71001);
+ return f;
+}
+test("a slot that lost only its miners keeps the surviving hauler and allocates only what is missing",t=>{
+ const f=partialSlotFixture(t);
+ f.world.cargo.set(9001,{cargoID:9001,entityID:71002,quantity:500,ownerID:950});
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.equal(r.slots[0].repaired,true);
+ assert.equal(r.slots[0].haulerIDs[0],71002,"the surviving hauler is kept, not replaced");
+ assert.notEqual(r.slots[0].minerIDs[0],71001);
+ assert.equal(r.slots[0].minerIDs.length,1);
+ assert.equal(f.getSpawnCalls(),1);
+ const witness=f.world.slots.get(slotKey(SYSTEM,1));
+ assert.deepEqual(witness.haulerEntityIDs,[71002]);
+ assert.deepEqual(witness.minerEntityIDs,r.slots[0].minerIDs);
+ assert.deepEqual(witness.replacedEntityIDs,[71001]);
+ assert.ok(witness.repairedAtMs>0);
+ assert.equal(f.world.cargo.get(9001).quantity,500,"surviving cargo is untouched");
+});
+test("a missing ship that still holds cargo is never replaced by a fresh hull",t=>{
+ const f=partialSlotFixture(t);
+ f.world.cargo.set(9002,{cargoID:9002,entityID:71001,quantity:300,ownerID:950});
+ const r=f.start();
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.match(r.slots[0].reason,/ALIFE08_MISSING_SHIP_HOLDS_CUSTODY/);
+ assert.equal(f.getSpawnCalls(),0);
+ assert.equal(f.world.cargo.get(9002).quantity,300);
 });

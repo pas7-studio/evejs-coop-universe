@@ -106,6 +106,59 @@ function createCourierDispatch(deps = {}) {
     }
   }
 
+  // EveJS's native acceptCourier leaves the package in the courier's hangar at
+  // the origin station, and completion requires it at the destination station.
+  // So a courier must really load it into the hull and really hand it over:
+  // both are ordinary inventory moves, never a flag flip.
+  const CARGO_HOLD_FLAG = 5;
+  const STATION_HANGAR_FLAG = 4;
+
+  function movePackage(wrapID, locationID, flagID) {
+    if (!itemStore || typeof itemStore.moveItemToLocation !== "function") {
+      return { ok: false, detail: "itemStore.moveItemToLocation is unavailable" };
+    }
+    try {
+      const moved = itemStore.moveItemToLocation(wrapID, locationID, flagID, null);
+      if (moved && moved.success === false) {
+        return { ok: false, detail: String(moved.errorMsg || "item move refused") };
+      }
+      return { ok: true, detail: "" };
+    } catch (error) {
+      return { ok: false, detail: String(error && error.message || error) };
+    }
+  }
+
+  // Loads the contract package from the origin hangar into the courier's cargo
+  // hold, so the ship does not fly empty.
+  function loadPackageIntoShip(contract, identity) {
+    const wrapID = num(contract && contract.plasticWrapItemID);
+    const shipID = num(identity && identity.ship && identity.ship.itemID);
+    if (!(wrapID > 0) || !(shipID > 0)) return { ok: false, detail: "no package or hull" };
+    const row = itemRow(wrapID);
+    if (!row) return { ok: false, detail: "package " + wrapID + " not found" };
+    if (num(row.locationID) === shipID) return { ok: true, detail: "already loaded" };
+    if (num(row.locationID) !== num(contract.startStationID)) {
+      return { ok: false, detail: "package is not at the origin station" };
+    }
+    return movePackage(wrapID, shipID, CARGO_HOLD_FLAG);
+  }
+
+  // Hands the package over at the destination station. completeContract only
+  // accepts a package that really sits there.
+  function unloadPackageAtStation(contract, identity) {
+    const wrapID = num(contract && contract.plasticWrapItemID);
+    const stationID = num(contract && contract.endStationID);
+    const shipID = num(identity && identity.ship && identity.ship.itemID);
+    if (!(wrapID > 0) || !(stationID > 0)) return { ok: false, detail: "no package or station" };
+    const row = itemRow(wrapID);
+    if (!row) return { ok: false, detail: "package " + wrapID + " not found" };
+    if (num(row.locationID) === stationID) return { ok: true, detail: "already at destination" };
+    if (shipID > 0 && num(row.locationID) !== shipID) {
+      return { ok: false, detail: "package is neither in the hull nor at the destination" };
+    }
+    return movePackage(wrapID, stationID, STATION_HANGAR_FLAG);
+  }
+
   function characterRow(characterID) {
     try {
       if (!gameStore || typeof gameStore.read !== "function") return null;
@@ -501,6 +554,16 @@ function createCourierDispatch(deps = {}) {
     }
     const identity = identityFor(num(flight.characterID));
     if (!identity) return;
+    // A courier that flies empty can never complete, so the real package is
+    // loaded into the hull before the undock and handed over after the dock.
+    if (flight.step === "undock" && !flight.reposition) {
+      const loaded = loadPackageIntoShip(contracts.getContractRecord(contractID), identity);
+      if (!loaded.ok) {
+        log(`[CoopCourier] contract ${contractID} package not loaded: ${loaded.detail}`);
+        return;
+      }
+      if (loaded.detail === "already loaded") log(`[CoopCourier] contract ${contractID} package already in the hull`);
+    }
     const target = stationPosition(num(flight.destinationStationID));
     const arrival = flight.step === "arrive" ? arrivalCheck(flight) : { ok: false, detail: "" };
     const ctx = {
@@ -526,6 +589,14 @@ function createCourierDispatch(deps = {}) {
       return;
     }
     const observed = driver.runStep(ctx, flight, target);
+    if (flight.step === "dock" && observed.status === driver.OK && !flight.reposition) {
+      const handedOver = unloadPackageAtStation(contracts.getContractRecord(contractID), identity);
+      log(
+        handedOver.ok
+          ? `[CoopCourier] contract ${contractID} package handed over at ${num(flight.destinationStationID)}`
+          : `[CoopCourier] contract ${contractID} package not handed over: ${handedOver.detail}`,
+      );
+    }
     const token = flightCore.stepToken(flight);
     const next = flightCore.advanceFlight(flight, observed.status, now(), token);
     const withEntity = Object.assign({}, next, {

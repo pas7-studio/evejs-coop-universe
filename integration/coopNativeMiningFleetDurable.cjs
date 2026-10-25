@@ -87,19 +87,67 @@ function archiveSlot(db,key,record){
   throw Error("ALIFE08_SLOT_ARCHIVE_FLUSH_FAILED");
  return true;
 }
-// A runtime fleet record can outlive its physical ships. If NONE of its listed
-// ships still exist as a durable row or a physical entity, it is a stale shell:
-// point it at the ships that really exist instead of refusing that slot forever.
-// A record that still owns a real ship is never touched.
+// A runtime fleet record can outlive some or all of its physical ships. Any
+// listed ship that is NOT the survivor set and no longer exists (no durable row,
+// no physical entity) is simply stale: re-point the record at the ships that
+// really exist. A record that still owns a live foreign ship is never touched.
 function adoptStaleRuntimeFleet({scene,store,fleet,key,minerIDs,haulerIDs}){
  const listed=[...(fleet.minerEntityIDs||[]),...(fleet.haulerEntityIDs||[])]
   .map(pos).filter(Boolean);
- if(!listed.length)return false;
- if(listed.some(id=>store.getNativeEntity(id)||scene.getEntityByID(id)))return false;
+ const target=new Set([...minerIDs,...haulerIDs]);
+ const foreign=listed.filter(id=>!target.has(id));
+ if(!foreign.length)return false;
+ if(foreign.some(id=>store.getNativeEntity(id)||scene.getEntityByID(id)))return false;
  fleet.startupKey=key;
  fleet.minerEntityIDs=[...minerIDs];
  fleet.haulerEntityIDs=[...haulerIDs];
  return true;
+}
+// A slot can lose SOME ships while the rest survive (a hull that was never
+// durable, or a failed restore). The survivors keep their cargo and custody, so
+// the slot must not be re-seeded wholesale and must not stay blocked forever:
+// only the provably missing roles are allocated again, and the witness is merged.
+// A missing ID that still owns cargo or modules is never replaced.
+function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,minerIDs,haulerIDs}){
+ if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1")return null;
+ const aliveMin=minerIDs.filter(id=>store.getNativeEntity(id)||scene.getEntityByID(id));
+ const aliveHau=haulerIDs.filter(id=>store.getNativeEntity(id)||scene.getEntityByID(id));
+ const missingMin=minerIDs.length-aliveMin.length;
+ const missingHau=haulerIDs.length-aliveHau.length;
+ if(!missingMin&&!missingHau)return null;
+ for(const id of [...minerIDs,...haulerIDs]){
+  if(aliveMin.includes(id)||aliveHau.includes(id))continue;
+  const cargo=store.listNativeCargoForEntity(id);
+  if(!Array.isArray(cargo))throw Error("ALIFE08_CARGO_LIST_UNAVAILABLE");
+  if(cargo.length)throw Error("ALIFE08_MISSING_SHIP_HOLDS_CUSTODY:"+id);
+  const modules=store.listNativeModulesForEntity(id);
+  if(!Array.isArray(modules))throw Error("ALIFE08_MODULE_LIST_UNAVAILABLE");
+  if(modules.length)throw Error("ALIFE08_MISSING_SHIP_HOLDS_MODULES:"+id);
+ }
+ const born=spawn(slot,{miners:missingMin,haulers:missingHau});
+ if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
+     born.data.haulerSpawnResult?.data?.partialFailure)
+  throw Error("ALIFE08_PARTIAL_NATIVE_SPAWN");
+ const newMin=ids(born.data.minerEntityIDs||[]),newHau=ids(born.data.haulerEntityIDs||[]);
+ if(!newMin||!newHau||newMin.length!==missingMin||newHau.length!==missingHau)
+  throw Error("ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH");
+ const merged={minerEntityIDs:[...aliveMin,...newMin],haulerEntityIDs:[...aliveHau,...newHau]};
+ if(merged.minerEntityIDs.length+merged.haulerEntityIDs.length>MAX_WING)
+  throw Error("ALIFE08_REPAIR_WING_TOO_LARGE");
+ const found=markers(store,systemID,slot);
+ const sameSet=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x));
+ if(found.invalid.length||!sameSet(found.miners,merged.minerEntityIDs)||
+     !sameSet(found.haulers,merged.haulerEntityIDs))
+  throw Error("ALIFE08_REPAIR_MARKER_MISMATCH");
+ const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
+ if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
+ const previous=readSlot(db,key)||{};
+ saveSlot(db,key,{...previous,version:1,status:"ACTIVE",systemID,slot,
+  fleetID:previous.fleetID||fleetIDForSlot(systemID,slot),
+  minerEntityIDs:merged.minerEntityIDs,haulerEntityIDs:merged.haulerEntityIDs,
+  repairedAtMs:Date.now(),replacedEntityIDs:[...minerIDs,...haulerIDs].filter(id=>
+   !merged.minerEntityIDs.includes(id)&&!merged.haulerEntityIDs.includes(id))});
+ return merged;
 }
 function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
  const expected=[...minerIDs,...haulerIDs];
@@ -257,7 +305,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason:"NONACTIVE_OR_INVALID_SLOT_WITNESS"}));
       continue;
      }
-     const minerIDs=ids(record.minerEntityIDs),haulerIDs=ids(record.haulerEntityIDs);
+     let minerIDs=ids(record.minerEntityIDs),haulerIDs=ids(record.haulerEntityIDs);
      if(!minerIDs||!minerIDs.length||!haulerIDs||
         minerIDs.length+haulerIDs.length>MAX_WING)
       throw Error("ALIFE08_ACTIVE_MANIFEST_INVALID");
@@ -268,6 +316,13 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       log("ALIFE08 slot "+key+" witness archived as abandoned; seeding again");
       reports.push({...seedSlot(),reseededFrom:"ABANDONED_WITNESS"});
       continue;
+     }
+     // A slot that lost only some ships keeps the survivors and their cargo.
+     const healed=repairPartialSlot({scene,store,systemID,slot,key,db,spawn,
+      minerIDs,haulerIDs});
+     if(healed){
+      minerIDs=healed.minerEntityIDs;
+      haulerIDs=healed.haulerEntityIDs;
      }
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      // Validate ALL native rows before materializing ANY physical ship.
@@ -284,7 +339,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       originAnchor:record.originAnchor||null});
      const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
-      minerIDs,haulerIDs,restored,pendingStationCargo}));
+      minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed}));
     }catch(error){
      const reason=String(error?.message||error).slice(0,160);
      reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason}));
