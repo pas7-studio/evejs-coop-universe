@@ -43,6 +43,9 @@ function fixture(fn){
   readVerifiedLoss:()=>loss?{status:"READY",outcomes:[{
    systemID:30000144,targetID:901,status:"HAULER_NATIVE_LOSS_VERIFIED",
    haulerNativeWreckID:8001}]}:{status:"READY",outcomes:[]},
+  readVerifiedLoss:()=>loss?{status:"READY",outcomes:[{
+   systemID:30000144,targetID:901,status:"HAULER_NATIVE_LOSS_VERIFIED",
+   haulerNativeWreckID:8001}]}:{status:"READY",outcomes:[]},
   atomicRows:atomic,clock:()=>time,
   warpToEntity:()=>{warp++;return {success:true}},
   orbit:()=>{orbit++;return {success:true}},
