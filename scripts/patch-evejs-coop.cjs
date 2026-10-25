@@ -59,6 +59,10 @@ names.push(
 // LW-04B: original A-Life native admission without live financial bindings.
 names.splice(names.indexOf("coopAlifeNativeBuyerRuntime")+1,0,
  "coopAlifeNativeManufacturingRuntime");
+// LW-04C: original GameStore/ItemStore/Rust read-only manufacturing
+// recovery witness; does NOT turn manual industry bindings into live writers.
+names.splice(names.indexOf("coopNpcIndustryNativeBindings")+1,0,
+ "coopNpcIndustryRecoveryFence");
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
