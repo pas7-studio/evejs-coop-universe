@@ -32,13 +32,14 @@ The standard pinned `scripts/patch-evejs-coop.cjs` simply packages the new `inte
 ## Evidence
 
 - `tests/coop-native-convoy-operations.test.mjs`: 12 deterministic source-level incident scenarios passed under isolated JS/V8 with in-memory fsync-compatible storage (real approach ≠ attack; exact attack; two independent damage receipts; dupe prevention; different fleet/ghost; impersonated NPC; physical wreck; missing wreck; wrong system/victim; replay after restart; torn journal; no native asset mutation).
-- `tests/coop-native-convoy-operations-overlay.test.mjs`: permanent Node contract tests ensuring registered L2 packaging, default-OFF activation, actual native raid source wiring and native damage telemetry provenance. Full Node `--test`, real deployed Docker, and two authenticated clients are **not yet proven** by this review.
+- `tests/coop-native-convoy-operations-wiring.test.mjs`: **4/4 isolated JS/V8 integration scenarios PASS** using the committed `coopWorldSignals.cjs` and `coopPlayerCombatWitness.cjs` source under stubbed native session/scene dependencies: one durable-incident call for two notified pilots, default-OFF behavior, one trusted native damage witness producing a single two-player message, and no incident on failed telemetry.
+- `tests/coop-native-convoy-operations-overlay.test.mjs`: permanent Node contract tests ensuring registered L2 packaging, default-OFF activation, actual native raid source wiring and native damage telemetry provenance. Full official Node `--test`, real deployed Docker, and two authenticated clients are **not yet proven** by this review.
 - No assertion that a player's ship rendered the announcement on-screen, or that any actual cargo delivery/ISK/market value changed.
 
 ### Read-only owner-local checks
 
 ```powershell
-node --test tests/coop-native-convoy-operations.test.mjs tests/coop-native-convoy-operations-overlay.test.mjs
+node --test tests/coop-native-convoy-operations.test.mjs tests/coop-native-convoy-operations-wiring.test.mjs tests/coop-native-convoy-operations-overlay.test.mjs
 node scripts/patch-evejs-coop.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code --dry-run
 node scripts/patch-evejs-coop.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code --check
 ```
