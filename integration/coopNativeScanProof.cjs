@@ -14,6 +14,10 @@ const normalizeTargetID=value=>
 const currentSystem=session=>numberID(session&&
  ((session._space&&session._space.systemID)||session.solarsystemid2||session.solarsystemid));
 const charID=session=>numberID(session&&(session.characterID||session.charid));
+// Mirrors the stock scanMgrService.getSessionShipID fallback order.
+const shipID=session=>numberID(session&&
+ (session.shipID||session.shipid||session.activeShipID||
+  (session._space&&session._space.shipID)));
 function keyValData(row){
  if(!row||row.type!=="object"||row.name!=="util.KeyVal"||
    !row.args||row.args.type!=="dict"||!Array.isArray(row.args.entries))
@@ -33,7 +37,7 @@ function record({session,scanResult,origin,sites,nowMs=Date.now()}={}){
  if(!characterID||!systemID||!origin||
    numberID(origin.characterID)!==characterID||
    numberID(origin.systemID)!==systemID||
-   !session._space||!numberID(session._space.shipID)||
+   !session._space||!shipID(session)||
    !Number.isFinite(timestamp)||timestamp<0||
    !Array.isArray(scanResult&&scanResult.results))
   return {status:"INVALID_NATIVE_SCAN_ORIGIN",count:0};
@@ -64,7 +68,7 @@ function authorize({session,locationID,resultID,sites,nowMs=Date.now()}={}){
  const characterID=charID(session),systemID=currentSystem(session);
  const requestedSystem=numberID(locationID),timestamp=Number(nowMs);
  if(!characterID||!systemID||requestedSystem!==systemID||
-   !session._space||!numberID(session._space.shipID)||
+   !session._space||!shipID(session)||
    !Number.isFinite(timestamp)||timestamp<0)
   return {ok:false,reason:"INVALID_SESSION_OR_SYSTEM"};
  const proof=session._coopNativeScanProof;
