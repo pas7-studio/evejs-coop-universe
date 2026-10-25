@@ -1,0 +1,84 @@
+name: COOP Native Economy Integrity
+on:
+  push:
+    branches:
+      - feat/coop-049-alife-native-buyer-wiring-20261025
+  pull_request:
+    paths:
+      - 'integration/**'
+      - 'tests/**'
+      - 'rust/**'
+      - 'scripts/**'
+      - '.github/workflows/coop-native-economy-gate.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coop-native-economy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-native-sqlite:
+    name: Node real SQLite / native contract tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify real Node SQLite and all COOP A-Life regressions
+        shell: pwsh
+        run: ./scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests
+      - name: Upload test output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-economy-node-test-log
+          path: ${{ runner.temp }}/evejs-alife-economy-gates/
+          if-no-files-found: ignore
+
+  rust-disposable-upstream:
+    name: Compile pinned Rust market protocol on isolated upstream checkout
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout EveJS COOP overlay (current PR)
+        uses: actions/checkout@v4
+      - name: Checkout pinned public upstream into disposable directory
+        uses: actions/checkout@v4
+        with:
+          repository: gameboys84/EveJS
+          ref: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+          path: isolated-upstream
+          persist-credentials: false
+      - name: Assert exact upstream pin
+        run: |
+          test "$(git -C isolated-upstream rev-parse HEAD)" = "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f"
+          test -f isolated-upstream/Code/compose.yaml
+      - name: Apply sequential reversible native Rust overlays (disposable only)
+        run: |
+          set -euo pipefail
+          node scripts/coop-rust-npc-pending-patch.cjs --code-path isolated-upstream/Code
+          node scripts/coop-rust-npc-settlement-patch.cjs --code-path isolated-upstream/Code
+          node scripts/coop-rust-npc-partial-patch.cjs --code-path isolated-upstream/Code
+          node scripts/coop-rust-npc-corp-buy-patch.cjs --code-path isolated-upstream/Code
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Compile and test real pinned Rust market daemon
+        working-directory: isolated-upstream/Code/externalservices/market-server
+        run: cargo test --locked --all-targets
+      - name: Verify exact Rust overlay can remove in reverse order
+        if: success()
+        run: |
+          set -euo pipefail
+          node scripts/coop-rust-npc-corp-buy-patch.cjs --code-path isolated-upstream/Code --remove
+          node scripts/coop-rust-npc-partial-patch.cjs --code-path isolated-upstream/Code --remove
+          node scripts/coop-rust-npc-settlement-patch.cjs --code-path isolated-upstream/Code --remove
+          node scripts/coop-rust-npc-pending-patch.cjs --code-path isolated-upstream/Code --remove
+          git -C isolated-upstream diff --exit-code -- Code/externalservices/market-server/src/state.rs Code/externalservices/market-server/src/rpc.rs
+
+# This workflow is an isolated compile/unit gate. It does NOT start the
+# real game, write a protected market DB, perform two-client E2E,
+# deploy a server, or modify the user's evejs-data volume.
