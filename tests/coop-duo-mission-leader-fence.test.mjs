@@ -107,7 +107,7 @@ test("P0 leader's native completion alone never awards peer if followup is inter
 })));
 test("P0 leader native action failed without removing mission: peer payout remains blocked",()=>flags(()=>withFiles(({leader,peer})=>{
  const f=fixture(),ticket=prepare({...f.opts,leaderFencePath:leader});
- assert.equal(f.finishTicket(ticket,peer).status,"LEADER_NATIVE_MISSION_NOT_COMPLETED");
+ assert.equal(f.finishTicket(ticket,peer).status,"LEADER_NATIVE_RESULT_NOT_ACKNOWLEDGED");
  assert.deepEqual(events(leader).map(x=>x.state),["PREPARED"]);
  assert.equal(f.paid.length,0);
  assert.equal(fs.existsSync(peer),false);
