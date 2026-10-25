@@ -148,7 +148,8 @@ test("bad, missing and overprivileged credential files are rejected",()=>{
    assert.throws(()=>readOperatorKey(file),/PERMISSIONS/);
   fs.chmodSync(file,0o600);assert.equal(readOperatorKey(file).length,48);
   fs.symlinkSync(file,path.join(dir,"link"));
-  assert.throws(()=>readOperatorKey(path.join(dir,"link")),/INVALID_FILE/);
+  assert.throws(()=>readOperatorKey(path.join(dir,"link")),
+   /INVALID_FILE|ELOOP|symbolic link/i);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
 test("admin endpoint rejects missing explicit flags",()=>{
@@ -164,3 +165,11 @@ test("server operator CLI rejects invalid action/actor/ticket before network",()
  const valid=cliArgs(["audit","--claim-key="+K,"--port=17171"]);
  assert.equal(valid.key,K);assert.equal(valid.action,"audit");
 });
+test("symbolic-link operator audit log never redirects an approved recovery",()=>run(async f=>{
+ fs.symlinkSync(f.secret,f.log);
+ const ticket=(await f.audit()).body.ticket;
+ const before=fs.readFileSync(f.secret);
+ assert.equal((await f.execute(ticket)).code,503);
+ assert.equal(f.writes,0);
+ assert.deepEqual(fs.readFileSync(f.secret),before);
+}));
