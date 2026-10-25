@@ -7,7 +7,13 @@ function parseTargets(json){
  let values;try{values=JSON.parse(json)}catch{throw Error("ALIFE_ECONOMY_PRODUCTS_INVALID")}
  if(!Array.isArray(values)||values.length<1||values.length>8)
   throw Error("ALIFE_ECONOMY_PRODUCTS_INVALID");
- return values.map(p=>({typeID:p?.typeID,targetStock:p?.targetStock}));
+ const ids=new Set();
+ return values.map(p=>{
+  if(!Number.isSafeInteger(p?.typeID)||p.typeID<=0||
+     !Number.isSafeInteger(p?.targetStock)||p.targetStock<0||
+     p.targetStock>50000||ids.has(p.typeID))throw Error("ALIFE_ECONOMY_PRODUCTS_INVALID");
+  ids.add(p.typeID);return{typeID:p.typeID,targetStock:p.targetStock};
+ });
 }
 function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps,rpcTimeoutMs=5000}={}){
  if(!Array.isArray(products)||!deps||!Number.isSafeInteger(rpcTimeoutMs)||
