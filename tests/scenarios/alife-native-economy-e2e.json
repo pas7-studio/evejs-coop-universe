@@ -541,16 +541,19 @@
       "steps": [
         "Read station item mutation version and wallet",
         "Change a physical item or corporate wallet while delayed GetOrders completes",
-        "Run next A-Life observation"
+        "Run next A-Life observation",
+        "Repeat with a direct native GameStore item transfer that leaves the itemStore mutation version unchanged"
       ],
       "expected": [
         "Stale station snapshot is rejected",
-        "No manufacturing or market ACT command is issued"
+        "No manufacturing or market ACT command is issued",
+        "Canonical owned item rows also differ and the station authority rejects the stale snapshot"
       ],
       "requiredEvidence": [
         "itemStore mutation version before and after",
         "wallet snapshots",
-        "station authority error"
+        "station authority error",
+        "canonical owned itemIDs, location, quantity and owner before and after"
       ],
       "destructive": false
     },
