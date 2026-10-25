@@ -25,8 +25,15 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
   if(!keyOK(manifestKey)||!identity(booking)||
    booking.manifestKey!==manifestKey)return deny("DEPARTURE_IDENTITY_INVALID");
   let raw;
-  try{raw=io.readFileSync(filename(manifestKey),"utf8")}
-  catch(e){return deny(e?.code==="ENOENT"?"DEPARTURE_NOT_RECORDED":
+  const target=filename(manifestKey);
+  try{
+   // Never follow attacker/operator-created symlinks or device files into
+   // unrelated native journals when recovering original on-grid evidence.
+   const stat=io.lstatSync(target);
+   if(!stat?.isFile()||stat.isSymbolicLink()||stat.nlink!==1)
+    return deny("DEPARTURE_NONREGULAR_OR_LINKED_JOURNAL");
+   raw=io.readFileSync(target,"utf8");
+  }catch(e){return deny(e?.code==="ENOENT"?"DEPARTURE_NOT_RECORDED":
    "DEPARTURE_READ_UNAVAILABLE")}
   if(typeof raw!=="string"||Buffer.byteLength(raw)>2048||!raw.endsWith("\n"))
    return deny("DEPARTURE_RECORD_CORRUPT");
