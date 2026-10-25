@@ -1,6 +1,22 @@
 # Upstream provenance and compatibility register
 
-As of 2026-10-24. Links/documentation inspected; **no local executable test has been performed**.
+As of 2026-10-25. Links/documentation inspected; **no local executable test has been performed**.
+
+## Pinned revisions (the only place a pin may be declared)
+
+The installer `scripts/patch-evejs-coop.cjs` refuses to run on any other
+revision. A pin change is only valid when this table and the installer `PIN`
+change in the same commit — `tests/coop-overlay-drift-check.test.mjs` fails if
+they disagree. See [DEVELOPMENT_DOCTRINE.md](DEVELOPMENT_DOCTRINE.md) §5 for the
+upgrade runbook.
+
+| Upstream | SHA | Pinned since | Notes |
+| --- | --- | --- | --- |
+| [gameboys84/EveJS](https://github.com/gameboys84/EveJS) | `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` | 2026-10-24 | 19 native files / 22 hooks / 59 overlay modules; not yet upgraded once |
+
+When a new SHA is adopted, add a row (old → new) with the re-anchor work done and
+the evidence file `docs/evidence/overlay-<sha>.md`. Never delete old rows.
+
 
 | Component | Repository | Important caveats |
 | --- | --- | --- |

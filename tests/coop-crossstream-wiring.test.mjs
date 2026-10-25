@@ -11,7 +11,7 @@ const hook=require("../scripts/coop-player-damage-native-patch.cjs");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 test("combat witness is copied into the same authoritative space module directory",()=>{
   const code=read("scripts/patch-evejs-coop.cjs");
-  assert.match(code,/"coopPlayerCombatWitness"\]/);
+  assert.match(code,/"coopPlayerCombatWitness"/);
   assert.match(code,/space\/combat\/killmailTracker\.js/);
   const spec=installer.specs.find(s=>s.file==="server/src/space/combat/killmailTracker.js");
   assert.ok(spec);
@@ -38,10 +38,16 @@ test("pinned native hook is exactly reversible through transactional installer t
 });
 test("cross-stream QA is connected to local manual verifier, never remote CI",()=>{
   const verifier=read("scripts/Verify-Local-Coop.ps1");
+  // The verifier discovers tests/*.test.mjs instead of keeping a hand-written
+  // list, so a new test can never be silently skipped. Assert the discovery
+  // mechanism and that each required test really exists on disk.
+  assert.match(verifier,/Get-ChildItem[^\r\n]*-Filter '\*\.test\.mjs'/);
+  assert.match(verifier,/-notlike 'upstream-\*'/);
+  assert.doesNotMatch(verifier,/GitHub Actions|Actions workflow|workflow-runs/);
   for(const name of ["coop-native-snapshot","coop-reliability-gates","coop-actionable-intel",
     "coop-raid-beacon","coop-pve-chain","coop-player-combat-witness","coop-duo-contribution-report",
     "coop-crossstream-wiring","coop-runtime-probe-ack"])
-    assert.ok(verifier.includes("tests/"+name+".test.mjs"),name);
+    assert.ok(fs.existsSync(path.join(root,"tests",name+".test.mjs")),name);
   const config=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
   assert.match(config,/EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'/);
   assert.match(read("integration/coopWorldSignals.cjs"),/notifyRaid/);

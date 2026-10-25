@@ -239,6 +239,11 @@ try {
   }
   & $installer -CodePath $code -Remove:$Remove
   if ($LASTEXITCODE -ne 0) { throw 'Co-op overlay installation failed' }
+  if (-not $Remove) {
+    # A stale or partially deployed module must never reach a Docker image.
+    & $installer -CodePath $code -Check
+    if ($LASTEXITCODE -ne 0) { throw 'Deployed overlay does not match this repository (run with -Check for details); refusing to build.' }
+  }
   if ($Remove -and (Test-Path -LiteralPath $override)) {
     Remove-Item -LiteralPath $override -Force
   }

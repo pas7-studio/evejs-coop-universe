@@ -11,15 +11,26 @@ This is a release checklist, **not** a declaration of readiness. Snapshot on 202
 
 ## Automated, pending green run
 
-Our Actions workflow pins Node.js 22 and upstream source commit `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. It clones this snapshot, installs `Code/server` dependencies, and runs registry, two-observer, movement, owner-damage and target-kill tests.
+There is **no CI**. The owner removed every GitHub Actions workflow on
+2026-10-24 and forbids remote automation; do not restore one. The equivalent
+gate is local and manual:
 
-The connector's commit workflow-runs lookup only lists PR-triggered runs, so an empty response for our commits **does not establish** whether push-triggered CI ran or passed. A green run must be confirmed directly from [Actions](https://github.com/pas7-studio/evejs-coop-universe/actions).
+```powershell
+.\scripts\Verify-Local-Coop.ps1
+```
+
+It runs the local overlay suite (auto-discovered from `tests/*.test.mjs`) plus
+the isolated upstream contracts with Node.js 22 against upstream
+`c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`; the overlay installer refuses any
+other revision. The evidence is the recorded `report.json` and
+`backend-regressions.log`, **not** an Actions URL. A green local run is still
+not gameplay proof — see [GAMEPLAY_TESTING.md](GAMEPLAY_TESTING.md).
 
 ## Blocking milestones
 
 | Gate | Required evidence | State |
 | --- | --- | --- |
-| G0 Static build and tests | Link to successful Actions run | UNKNOWN |
+| G0 Static build and local tests | Green local verifier log with the recorded upstream SHA | NOT RECORDED FOR THIS REVISION |
 | G1 Local backend | Healthy server, market, restart persistence logs | NOT TESTED |
 | G2 Two clients | Simultaneous real authorized logins with separate accounts | NOT TESTED |
 | G3 Shared grid | Two ships and synchronized movement/combat events | NOT TESTED |

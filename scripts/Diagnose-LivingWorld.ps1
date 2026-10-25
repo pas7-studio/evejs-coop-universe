@@ -83,9 +83,31 @@ fi
 '@
 
 Write-Host '[DIAGNOSE] Inspecting effective running server; no container or game-data changes will be made.'
-$readOnlyCheck -split '\r?\n' | & docker compose @argsList exec -T server sh -s
+# Feed the script as ONE LF-only, base64-encoded string. Piping an array made
+# PowerShell write CRLF per element (`then\r`), and raw stdin gets truncated on
+# some Windows/Docker combinations. base64 survives both.
+$readOnlyCheck = ($readOnlyCheck -replace "`r`n", "`n") -replace "`r", "`n"
+$encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($readOnlyCheck))
+& docker compose @argsList exec -T server sh -c "echo $encoded | base64 -d | sh -s"
 if ($LASTEXITCODE -ne 0) {
     throw 'Cannot inspect the running EveJS server container; check its state with -Action Status'
+}
+
+Write-Host '[DIAGNOSE] Overlay state vs this repository (read-only):'
+$patcher = Join-Path $PSScriptRoot 'patch-evejs-coop.cjs'
+if (Test-Path -LiteralPath $patcher -PathType Leaf) {
+  $nodeCli = Get-Command node -ErrorAction SilentlyContinue
+  if ($nodeCli) {
+    $overlayCheck = @(& $nodeCli.Source $patcher --code-path $CodePath --check 2>&1)
+    $overlayCheck | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning 'Overlay drift or wrong pin detected. Do not infer "no NPCs" from gameplay until this is explained; see docs/DEVELOPMENT_DOCTRINE.md section 6.'
+    }
+  } else {
+    Write-Warning 'Node.js not found; overlay drift check skipped'
+  }
+} else {
+  Write-Warning "Missing overlay check engine: $patcher"
 }
 
 Write-Host '[DIAGNOSE] Recent relevant startup/telemetry warnings (redact before sharing):'

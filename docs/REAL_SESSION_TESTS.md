@@ -10,7 +10,7 @@ $env:EVEJS_CODE_PATH='C:\Games\EveCoop\upstream-evejs\Code'
 node --test .\tests\upstream-session-registry.test.mjs
 ```
 
-CI fetches pinned upstream commit `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`. Local runs use the checkout you downloaded, which may be a different version. Record `git -C C:\Games\EveCoop\upstream-evejs rev-parse HEAD` with test output.
+There is no CI. Local runs use the checkout you downloaded; the overlay installer refuses any revision other than the pin, so an unpinned tree fails loudly instead of producing a misleading pass. Record `git -C C:\Games\EveCoop\upstream-evejs rev-parse HEAD` with test output.
 
 Covered: two distinct character sessions in the registry, disconnect/unregister isolation, duplicate character preferred-session selection, and character reindex behavior.
 
