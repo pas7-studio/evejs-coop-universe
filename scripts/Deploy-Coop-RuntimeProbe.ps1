@@ -23,8 +23,10 @@ param(
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
   [switch]$EnableMarketCatalog,
+  [switch]$EnableMissionJoin,
   [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
+  [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
 [switch]$Alife,
 [switch]$AlifeTrace,
@@ -40,6 +42,8 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
     throw "$Name must be between $Min and $Max"
   }
 }
+if ($EnableMissionJoin -and -not $LivingCoop) { throw 'Native mission join requires -LivingCoop' }
+if ($EnableDuoMissionSettlement -and -not $LivingCoop) { throw 'Duo settlement requires -LivingCoop' }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
 if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
@@ -132,6 +136,11 @@ if ($LivingCoop) {
 $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
 $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+if ($EnableMissionJoin) { $yamlLines += "      EVEJS_COOP_MISSION_JOIN: '1'" }
+if ($EnableDuoMissionSettlement) {
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_LEADER_FENCE: '1'"
 }
 # Co-op atomic trade remains OFF unless explicitly requested on an approved LivingCoop deploy.
 if ($EnableAtomicCoopTrade) {
