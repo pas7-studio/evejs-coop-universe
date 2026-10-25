@@ -23,9 +23,10 @@ const pilot1={characterID:101,_space:{shipID:9001,systemID:30000144,initialState
 const pilot2={characterID:102,_space:{shipID:9002,systemID:30000144,initialStateSent:true}};
 scene.sessions.set(101,pilot1);
 scene.sessions.set(102,pilot2);
-const nativeFleet={fleetID:990001,members:new Map([[101,{}],[102,{}]])};
+const nativeFleet={fleetID:990001,members:new Map([[101,{job:2,role:1}],[102,{job:0,role:4}]])};
 const tags=[],messages=[],currentTags=new Map();
-const fleetRuntime={getFleetForCharacter:id=>nativeFleet.members.has(id)?nativeFleet:null,
+const fleetRuntime={FLEET:{FLEET_JOB_CREATOR:2,FLEET_CMDR_ROLES:[1,2,3]},
+ getFleetForCharacter:id=>nativeFleet.members.has(id)?nativeFleet:null,
  getMemberRecord:(f,id)=>f.members.get(id)||null,
  setFleetTargetTag:(session,entityID,tag)=>{
   if(session!==pilot1||currentTags.get(entityID)===tag)return false; // native no-op is false
@@ -80,6 +81,8 @@ test("native commander marks attacker (tag 1) and escort target (tag 2) for whol
 });
 test("non-commanders, outsiders and unrelated native ships can't turn operations into a GM attack",()=>{
  assert.equal(ops.execute(pilot2,"focus 6001").status,"NATIVE_COMMAND_PERMISSION_DENIED");
+ assert.equal(ops.execute(pilot2,"guard 6101").status,"NATIVE_COMMAND_PERMISSION_DENIED",
+  "existing native tag must not disguise an unauthorized caller");
  assert.equal(ops.execute(pilot1,"focus 9002").status,"NO_VERIFIED_INCIDENT_TARGET");
  assert.equal(ops.execute(pilot1,"guard 6001").status,"NO_VERIFIED_INCIDENT_TARGET");
  assert.equal(ops.execute(pilot1,"focus ???").status,"INVALID_TARGET");
