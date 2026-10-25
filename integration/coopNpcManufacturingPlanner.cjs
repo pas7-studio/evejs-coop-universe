@@ -28,6 +28,15 @@ function createPlanner(deps={}){
   const all=deps.listOwnerItems(owner);
   if(!Array.isArray(all))return{status:'NATIVE_ITEMS_UNAVAILABLE',jobs:[]};
   const owned=all.filter(i=>pos(i?.ownerID)===owner&&pos(i?.locationID)===station&&[4,115].includes(Number(i.flagID)));
+  // Never turn invalid or duplicate native inventory records into zero stock.
+  // In particular a negative mineral stack must not become another free batch.
+  const ids=new Set();
+  for(const item of owned){
+   const q=count(item.quantity??item.stacksize??(Number(item.singleton)===1?1:undefined));
+   if(!pos(item.itemID)||!pos(item.typeID)||q===null||ids.has(item.itemID))
+    return{status:'NATIVE_ITEM_PROVENANCE_UNVERIFIED',jobs:[]};
+   ids.add(item.itemID);
+  }
   const bpState=deps.getBlueprintStates();
   if(!bpState||typeof bpState!=='object'||!bpState.records)return{status:'BLUEPRINT_STATE_UNAVAILABLE',jobs:[]};
   const installed=deps.listJobs(owner);
