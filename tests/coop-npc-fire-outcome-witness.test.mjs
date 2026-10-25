@@ -160,3 +160,25 @@ test("attested legitimate turret miss permits next durable native debit boundary
   }
  });
 });
+
+test("forged incomplete outcome cannot unblock a bank even when kind and boundary match",()=>{
+ fixture(f=>{
+  const prior=process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS="1";
+  try{
+   let calls=0;
+   const bank=createAtomicAmmoBank({root:f.root,
+    atomicRows:{transact(){calls++;throw Error("FORGED_OUTCOME_MUST_BE_BLOCKED");}},
+    store:{listNativeCargoForEntity:()=>[]},compatible:()=>true});
+   const result=bank.consume({entity,whenMs:1100,
+    entries:[{moduleItem:{itemID:401,typeID:123,flagID:27},
+     chargeItem:{itemID:501,typeID:35,quantity:4}}]});
+   assert.equal(result.success,false);
+   assert.equal(calls,0);
+   assert.equal(fs.existsSync(f.file+".lock"),false);
+  }finally{
+   if(prior===undefined)delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+   else process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=prior;
+  }
+ },{outcome:{kind:"TURRET_RESOLVED",boundaryMs:1000}});
+});
