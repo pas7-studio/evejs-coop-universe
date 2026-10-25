@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null;
+let warFleetRegistry=null,warBattleDirector=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -49,6 +49,37 @@ function nativeWarFleetRegistry(){
  }
  return warFleetRegistry;
 }
+function advanceNativeWarCombat(){
+ const api=require("./coopWarCombatAuthority");
+ if(!api.combatEnabled()||!api.ammoEnabled()||!visitedSystems.size)return;
+ const guard=npcOrderBridge();
+ if(!guard||!nativeWarFleetRegistry())return;
+ const runtime=require("./runtime");
+ if(!warBattleDirector){
+  const npc=require("./npc/npcRuntime");
+  const authority=api.createWarCombatAuthority({
+   gameStore:require("../gameStore"),
+   getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
+   getNativeEntity:id=>require("./npc/nativeNpcStore").getNativeEntity(id),
+   getFactionForCorporation:id=>
+    require("../services/faction/factionState").getFactionIDForCorporation(id)
+  });
+  warBattleDirector=require("./coopWarBattleDirector").createWarBattleDirector({
+   authority,bridge:guard,
+   sceneForSystem:id=>runtime.scenes instanceof Map?runtime.scenes.get(id):null,
+   issueNativeAttack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
+   isAmmoDepleted:(sys,id)=>nativeAmmoSupply?.activeIDs(sys)?.has(id)===true,
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
+  });
+ }
+ const result=warBattleDirector.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ if(result.orders.length)require("./coopRuntimeProbe").observe(
+  "living-native-war-attack-orders",null,null,{
+   status:result.status,orders:result.orders,
+   evidence:"ACK_ONLY_NOT_DAMAGE_OR_KILL"
+  });
+}
+// One existing A-Life 30-second scheduler, no faction-war timer.
 function npcOrderBridge(){
  if(!alifeOrderArbitrationEnabled(process.env))return null;
  if(!nativeOrderBridge){
@@ -265,6 +296,7 @@ function start(){
   else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
