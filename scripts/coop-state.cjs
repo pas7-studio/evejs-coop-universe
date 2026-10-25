@@ -34,7 +34,8 @@ const SENSITIVE_PATTERNS = [
   [/\b(?:(?!127\.0\.0\.1|0\.0\.0\.0|255\.255\.255\.255)\d{1,3}\.){3}\d{1,3}\b/g, "<ip>"],
   [/\b(?![0-9a-f]{40}\b)[A-Za-z0-9+/=_-]{40,}\b/g, "<token>"],
   [/("(?:characterName|ownerName|corporationName|allianceName|pilotName)"\s*:\s*")[^"]*(")/g, "$1PILOT_A$2"],
-  [/\b(?:Bearer|token|password|secret)\s*[:=]\s*\S+/gi, "<secret>"]
+  [/\b(?:Bearer|token|password|secret)\s*[:=]\s*\S+/gi, "<secret>"],
+  [/Listener:\s*\S+/g, "Listener: <pilot>"]
 ];
 function redact(value, names = []) {
   let text = typeof value === "string" ? value : JSON.stringify(value);
@@ -50,6 +51,7 @@ function leaks(text) {
   if (/\b(?:(?!127\.0\.0\.1)\d{1,3}\.){3}\d{1,3}\b/.test(text)) found.push("public-ip");
   if (/\b(?![0-9a-f]{40}\b)[A-Za-z0-9+/=_-]{40,}\b/.test(text)) found.push("long-token");
   if (/(?:Bearer|password|secret)\s*[:=]\s*\S+/i.test(text)) found.push("credential");
+  if (/Listener:\s*(?!<pilot>)\S+/.test(text)) found.push("pilot-name");
   return found;
 }
 
@@ -76,20 +78,34 @@ function summarizeEvents(rows) {
     truncatedTypes: Math.max(0, ranked.length - budgets.eventTypes)
   };
 }
-const CLIENT_KEYWORDS = /(undock|dock|warp|jump|target|lock|module|damage|destroyed|wreck|loot|cargo|ore|fleet|disconnect|reconnect|error|exception)/i;
+// English and Russian clients both appear here; the localized client writes
+// Cyrillic action lines ("Выход из дока" = undock).
+const CLIENT_KEYWORDS = /(undock|dock|warp|jump|target|lock|module|damage|destroyed|wreck|loot|cargo|ore|fleet|disconnect|reconnect|error|exception|выход из дока|стыков|пристык|варп|прыж|захват|урон|поврежд|обломк|добыч|груз|руд[аы]|флот)/i;
+// The gamelog header carries the pilot name; it is never published.
+const LISTENER = /Listener:\s*\S+/g;
+// EVE names gamelogs 20261025_125742_<characterID>.txt; the numeric id is
+// identifying, so it is masked while the timestamp stays useful.
+function maskLogName(name) {
+  return String(name || "unknown").replace(/_(\d{6,})(\.txt)$/i, "_<charid>$2");
+}
 function summarizeClientLogs(files, names = []) {
   const list = Array.isArray(files) ? files : [];
   return list.map(file => {
-    const lines = Array.isArray(file.lines) ? file.lines : [];
+    const lines = Array.isArray(file.lines_sample) ? file.lines_sample
+      : Array.isArray(file.lines) ? file.lines : [];
     const interesting = lines
-      .filter(line => CLIENT_KEYWORDS.test(line))
+      .filter(line => CLIENT_KEYWORDS.test(line) || /\((error|warning|question)\)/i.test(line))
       .slice(-budgets.clientTailLines)
-      .map(line => redact(line, names).slice(0, 240));
+      .map(line => redact(line, names).replace(LISTENER, "Listener: <pilot>").slice(0, 240));
+    // A localized client may match no keyword at all; keep a short raw tail so
+    // the run still leaves evidence, redacted the same way.
+    const tail = interesting.length ? interesting : lines.slice(-3)
+      .map(line => redact(line, names).replace(LISTENER, "Listener: <pilot>").slice(0, 240));
     return {
-      name: redact(String(file.name || "unknown"), names),
+      name: maskLogName(redact(String(file.name || "unknown"), names)),
       bytes: Number(file.bytes) || 0,
       lines: Number(file.lines) || lines.length,
-      tail: interesting
+      tail
     };
   });
 }
