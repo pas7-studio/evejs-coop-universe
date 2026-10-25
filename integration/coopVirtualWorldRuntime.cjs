@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -41,6 +41,21 @@ function addNpcOrderBlocks(blockedIDs,systemID,owner){
  const guard=npcOrderBridge();
  if(guard)for(const id of guard.blocksForSystem(systemID,owner))blockedIDs.add(id);
  return blockedIDs;
+}
+// Personal intentions affect only NPC routes; no native funds, kills or cargo.
+function npcPersonalGoals(){
+ if(process.env.EVEJS_COOP_NPC_PERSONAL_GOALS!=="1"||
+    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1")return null;
+ if(!personalGoals)personalGoals=require("./coopNpcPersonalGoals").createPersonalGoals({
+  file:process.env.EVEJS_COOP_NPC_GOALS_FILE||"/var/lib/evejs/coop-npc-goals.json"
+ });
+ return personalGoals;
+}
+function npcRealPoints(scene){
+ const points=require("./coopNpcTopology").waypoints(scene);
+ return {gateCount:points.filter(p=>p.kind==="stargate").length,
+  beltCount:points.filter(p=>p.kind==="asteroidBelt").length,
+  stationCount:points.filter(p=>p.kind==="station").length};
 }
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
@@ -612,7 +627,30 @@ function advanceNativeCivilianOrders(){
  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
  for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
   addNpcOrderBlocks(blockedIDs,sys,"CIVILIAN");
- const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{},{blockedIDs});
+ const roles=economy?.snapshot().pilots||{};
+ const goals=npcPersonalGoals(),routeOverrides={};
+ if(goals){
+  const snapshots=goals.snapshot().pilots;
+  const runtime=require("./runtime");
+  for(const pilot of assignments){
+   if(roles[pilot.pilotID]?.role!=="pirate")continue;
+   const scene=runtime.ensureScene(pilot.systemID,{refreshStargates:false});
+   const ship=scene?.getEntityByID?.(Number(pilot.entityID));
+   if(ship?.nativeNpc!==true||ship.kind!=="ship"||ship.session?.characterID)continue;
+   if(!snapshots[pilot.pilotID]||snapshots[pilot.pilotID].systemID!==Number(pilot.systemID))
+    goals.decide({pilotID:pilot.pilotID,systemID:pilot.systemID,...npcRealPoints(scene)});
+   const role=goals.routeRole({pilotID:pilot.pilotID,systemID:pilot.systemID});
+   if(role)routeOverrides[pilot.pilotID]=role;
+  }
+ }
+ const orders=civilianOrders.tick(assignments,roles,{blockedIDs,routeOverrides});
+ if(goals)for(const order of orders){
+  if(!routeOverrides[order.pilotID])continue;
+  try{goals.observeNativeOrder({pilotID:order.pilotID,
+    systemID:assignments.find(a=>a.pilotID===order.pilotID)?.systemID,
+    entityID:order.entityID,targetID:order.targetID,action:order.action});
+  }catch(error){console.warn("[CoopNpcGoals] native route evidence",error.message);}
+ }
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
 }
@@ -653,6 +691,7 @@ function advanceNativeRaids(){
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
   const actualPilots=world.snapshot().pilots;
+  const assessments=new Map();
   const canAttack=({pirateID,targetID})=>{
    // The existing source-verified NPC combat gate ALWAYS runs first.
    if(!raidPolicy.isAuthorizedStockMiningRaid({
@@ -680,6 +719,9 @@ function advanceNativeRaids(){
     },
     isScrambled:entity=>scramble.isEntityWarpScrambled(entity)
    });
+   const seen=assessments.get(Number(pirateID))||[];
+   seen.push(decision.decision);
+   assessments.set(Number(pirateID),seen);
    return decision.decision==="RAID";
   };
   const result=raidDirector.tick({
@@ -687,6 +729,28 @@ function advanceNativeRaids(){
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
    getController:id=>controllers.getControllerByEntityID(id)
   });
+  const goals=npcPersonalGoals();
+  if(goals){
+   const points=npcRealPoints(scene),active=new Set(result.actions.map(a=>Number(a.pirateID)));
+   const leased=raidDirector.activePirateIDs(sys=>
+    runtime.ensureScene(sys,{refreshStargates:false}));
+   for(const rawID of pirates){
+    const id=Number(rawID),link=activeLinks.find(a=>Number(a.entityID)===id);
+    const ship=scene.getEntityByID(id);
+    if(!link||!ship||ship.nativeNpc!==true||ship.session?.characterID)continue;
+    const decisions=assessments.get(id)||[];
+    const assessment=decisions.includes("RETREAT")?"RETREAT":
+      (active.has(id)||leased.has(id))?"RAID":
+      decisions.includes("WORK")?"WORK":
+      decisions.includes("RAID")?"RAID":"SCOUT";
+    const planned=goals.decide({pilotID:link.pilotID,systemID,assessment,
+      verifiedRaid:active.has(id)||leased.has(id),...points});
+    if(planned.status==="PLANNED")
+     require("./coopRuntimeProbe").observe("living-npc-personal-goal",null,
+      {spaceState:{systemID}},{pilotID:link.pilotID,intent:planned.intent,
+       reason:planned.reason,verifiedRaid:active.has(id)||leased.has(id)});
+   }
+  }
   if(result.actions.length){
    // Only a successful native ATTACK order against another named NPC
    // is faction tension evidence. Warp approaches aren't battles.
