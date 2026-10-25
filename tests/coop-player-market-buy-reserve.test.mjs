@@ -180,3 +180,51 @@ test("all existing open BUY orders must bind exact original native reserve recei
   /UNVERIFIED_EXISTING_RUST_ORDER/);
  }finally{reset()}
 });
+
+
+test("pinned EveJS keyed character BUY reserve debits native wallet once and binds same order",()=>{
+ const reset=flags();try{
+  const x=fixture();delete x.db.characters["201"].characterID;
+  const s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+  const first=s.begin(quote());
+  assert.equal(first.phase,"RESERVED");
+  assert.equal(first.buyerID,201);
+  assert.equal(x.db.characters["201"].balance,911.94);
+  assert.equal(x.commits,1);
+  const bound=s.bind(first,order());
+  assert.equal(bound.phase,"BOUND");
+  assert.equal(bound.orderID,"23");
+  assert.equal(x.db.marketEscrow["23"].escrowAmount,86.38);
+  assert.equal(x.db.characters["201"].walletJournal.length,3);
+  const snapshot=structuredClone(x.db);
+  assert.equal(s.bind(first,order()).replayed,true);
+  assert.deepEqual(x.db,snapshot);
+ }finally{reset()}
+});
+test("explicit native buyer identity mismatch cannot reserve or debit player ISK",()=>{
+ const reset=flags();try{
+  for(const change of [
+   x=>x.characters["201"].characterID=999,
+   x=>x.characters["201"].charID=999
+  ]){
+   const x=fixture();delete x.db.characters["201"].characterID;
+   change(x.db);const before=structuredClone(x.db);
+   const s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+   assert.throws(()=>s.begin(quote()),/P2P_BUY_RESERVE_WALLET_AUTHORITY_UNAVAILABLE/);
+   assert.equal(x.commits,0);
+   assert.deepEqual(x.db,before);
+  }
+ }finally{reset()}
+});
+test("original keyed native BUY reserve still rejects wallet without journal authority",()=>{
+ const reset=flags();try{
+  for(const field of ["walletJournal","marketTransactions"]){
+   const x=fixture();delete x.db.characters["201"].characterID;
+   delete x.db.characters["201"][field];
+   const before=structuredClone(x.db);
+   const s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+   assert.throws(()=>s.begin(quote()),/P2P_BUY_RESERVE_WALLET_AUTHORITY_UNAVAILABLE/);
+   assert.equal(x.commits,0);assert.deepEqual(x.db,before);
+  }
+ }finally{reset()}
+});
