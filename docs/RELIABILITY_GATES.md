@@ -253,3 +253,17 @@ EVEJS client can yet execute both gifts. No deployment, restart, or source
 changes to the parallel gameplay implementation are performed here.
 
 **Native singleton accounting (2026-10-25):** The pinned upstream `itemStore.js` stores `singleton:1` with `quantity:-1` (and `singleton:2` with `quantity:-2`), while each has `stacksize:1`. The exporter normalizes these to one real item instance. Negative quantity without the corresponding native singleton marker remains invalid. This corrects a prior false-failure risk for every valid ship snapshot; see the dedicated regression tests.
+
+## Fresh physical NPC reconciliation (2026-10-25)
+
+In addition to reusing the *actual* process boot/topology anchors, the World gate now
+requires current (within five minutes) native `living-native-industry` and
+`virtual-world-materialization` observations for the **same** solar system
+that supplies fresh physical movement and interaction samples. The latest
+industry event must still show a real miner and hauler; the latest named
+materialization must include a valid physically assigned co-op NPC identity.
+A subsequent empty fleet or empty named-NPC refresh revokes readiness even
+when an older startup snapshot was positive. This is intentionally stricter
+than a healthy TCP service and does not modify any NPC state. The existing
+headless reconciler normally refreshes native scenes about every two minutes;
+if it does not, World remains BLOCKED until a true native refresh occurs.
