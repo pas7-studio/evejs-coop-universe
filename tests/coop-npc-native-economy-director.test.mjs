@@ -151,13 +151,13 @@ test("lost install acknowledgment persists and never double-charges after restar
  const old=f.native.installOnce;f.native.installOnce=(...a)=>{old(...a);throw Error("LOST_INSTALL_ACK")};
  assert.throws(()=>d.tick(ctx),/LOST_INSTALL_ACK/);assert.equal(f.balance,990);
  f.native.installOnce=old;
- assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");assert.equal(f.installs,1);
+ assert.equal(f.create().tick(ctx).reason,"NATIVE_RECOVERY_CONTEXT_UNVERIFIED");assert.equal(f.installs,1);
 }));
 test("lost delivery acknowledgment prevents second native item issuance",()=>run(f=>{
  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);
  const old=f.native.deliverOnce;f.native.deliverOnce=(...a)=>{old(...a);throw Error("LOST_DELIVERY_ACK")};
  assert.throws(()=>d.tick(ctx),/LOST_DELIVERY_ACK/);
- assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");
+ assert.equal(f.create().tick(ctx).reason,"NATIVE_RECOVERY_CONTEXT_UNVERIFIED");
 }));
 test("duplicated market transaction receipts cannot declare a completed sale",()=>run(f=>{
  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);d.tick(ctx);
@@ -184,7 +184,7 @@ test("replayed demand receipts block auto manufacturing",()=>run(f=>{
 test("missing native debit receipt fences job after install",()=>run(f=>{
  const d=f.create();d.tick(ctx);f.native.getIndustryDebit=()=>null;
  assert.equal(d.tick(ctx).reason,"NATIVE_INDUSTRY_ISK_DEBIT_UNVERIFIED");
- assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");
+ assert.equal(f.create().tick(ctx).reason,"NATIVE_RECOVERY_CONTEXT_UNVERIFIED");
 }));
 test("missing native market wallet credit prevents phantom profit",()=>run(f=>{
  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);d.tick(ctx);
@@ -307,6 +307,8 @@ test("a lost delivery ACK recovers the exact produced item, then lists it once",
  f.native.deliverOnce=id=>{
   const r=deliver(id),item=f.native.getItem(r.itemID);
   Object.assign(item,{flagID:4,stacksize:r.quantity,singleton:0});
+  // Recover only on the complete original GameStore custody receipt.
+  Object.assign(job.coopDelivery,{operationID:id,typeID:TYPE});
   throw Error("LOST_NATIVE_DELIVERY_ACK");
  };
  assert.throws(()=>d.tick(ctx),/LOST_NATIVE_DELIVERY_ACK/);
