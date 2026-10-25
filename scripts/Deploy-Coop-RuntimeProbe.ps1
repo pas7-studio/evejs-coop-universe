@@ -24,6 +24,7 @@ param(
   [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableNpcStationDelivery,
+  [switch]$EnableFullHaulManifest,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -38,6 +39,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
 }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
+if ($EnableFullHaulManifest -and (-not $LivingCoop -or -not $EnableNpcStationDelivery)) { throw 'Full native cargo manifest requires -LivingCoop -EnableNpcStationDelivery' }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -174,6 +176,9 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
   if ($EnableNpcStationDelivery) {
     $yamlLines += "      EVEJS_COOP_NPC_STATION_DELIVERY: '1'"
+    if ($EnableFullHaulManifest) {
+      $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_MANIFEST: '1'"
+    }
     $yamlLines += "      EVEJS_COOP_NPC_WAREHOUSE_DIR: '/var/lib/evejs/coop-native-warehouse'"
   }
   $yamlLines += "      EVEJS_COOP_DEPOT_FILE: '/var/lib/evejs/coop-native-depot.json'"
