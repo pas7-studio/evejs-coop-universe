@@ -50,7 +50,7 @@ test("opening a native SDE corporate agent shows live NPC hauling work with stoc
  const f=fixture(),r=f.start();
  assert.equal(r.data.actions[0][0],3);
  assert.match(r.data.agentSays[0],/600,000 ISK TOTAL/);
- assert.match(r.data.agentSays[0],/QUOTE/);
+ assert.match(r.data.agentSays[0],/Quoted amount/);
  assert.equal(f.called.length,0);
 });
 test("stock agent not matching real corporation retains normal missions",()=>{
