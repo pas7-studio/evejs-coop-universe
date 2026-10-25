@@ -57,7 +57,7 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
         typeof commitScene!=="function" || typeof readState!=="function")
       return blocked(entity,"ALIFE07_YIELD_INVALID");
     const snapshot=readState();
-    if (!snapshot || Number(snapshot.remainingQuantity)!==before ||
+    if (!snapshot || ![before,before-consumed].includes(Number(snapshot.remainingQuantity)) ||
         Number(snapshot.yieldTypeID)!==oreTypeID)
       return blocked(entity,"ALIFE07_SCENE_PREIMAGE_CONFLICT");
     const type=resolveType(oreTypeID);
@@ -110,6 +110,8 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
             throw Error("ALIFE07_REPLAY_CARGO_MOVED_OR_DIVERGED");
           return {...prior,replayed:true};
         }
+        if (Number(snapshot.remainingQuantity)!==before)
+          throw Error("ALIFE07_NONREPLAY_SCENE_STALE");
         const rockKey="systems"+SEP+systemID;
         const systemRow=tx.get("miningRuntimeState",rockKey);
         if (systemRow!==null &&
