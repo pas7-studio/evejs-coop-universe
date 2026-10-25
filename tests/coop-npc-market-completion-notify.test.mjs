@@ -39,6 +39,8 @@ function fixture({offline=false,badRust=false,badOrder=false,
  const events=[],calls=[],marketR=rust(),marketO=order();
  if(badRust)marketR.history_recorded=false;
  if(badOrder)marketO.owner_id="90000002";
+ const observerEvents=[],observer={characterID:SELLER+1,
+  sendNotification:(name,target,args)=>observerEvents.push({name,target,args})};
  const session={characterID:SELLER,sendNotification:(name,target,args)=>{
   if(sendFails)throw Error("CLIENT_DISCONNECTED");
   events.push({name,target,args});
@@ -51,7 +53,7 @@ function fixture({offline=false,badRust=false,badOrder=false,
    if(method==="GetNpcCorpPlayerClaim")return marketR;
    if(method==="GetOrder")return marketO;
    throw Error("NON_NATIVE_METHOD");}},
-  sessions:{getSessions:()=>offline?[]:[session]},
+  sessions:{getSessions:()=>offline?[]:[session,observer]},
   helpers:{buildList:items=>({type:"list",items}),
    buildKeyVal:entries=>({type:"object",name:"util.KeyVal",
     args:{type:"dict",entries}}),
@@ -71,7 +73,7 @@ function fixture({offline=false,badRust=false,badOrder=false,
   'SELECT json FROM "npcMarketFills" WHERE key=?')
   .get("corp-buy\u001f"+FILL).json);
  const notify=()=>notifier.notifyCommitted({claimKey:KEY,fillID:FILL});
- return {notify,read,events,calls,session,dependencies,
+ return {notify,read,events,observerEvents,calls,session,dependencies,
   get accountChanges(){return accountChanges},
   close:()=>db.close()};
 }
@@ -191,4 +193,11 @@ test("negative seller proceeds or tax exceeding gross never produces notificatio
  });
  assert.equal((await f.notify()).reason,"GAMESTORE_RECEIPT_INVALID");
  assert.equal(f.events.length,0);
+}));
+
+test("two co-op clients: only actual market seller receives Filled/wallet notifications",()=>run(async f=>{
+ const result=await f.notify();
+ assert.equal(result.status,"NOTIFIED");
+ assert.deepEqual(f.events.map(e=>e.name),["OnOwnOrdersChanged","OnAccountChange"]);
+ assert.deepEqual(f.observerEvents,[]);
 }));
