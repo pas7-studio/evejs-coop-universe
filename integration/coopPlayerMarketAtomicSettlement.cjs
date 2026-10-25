@@ -33,14 +33,26 @@ function receiptDeliveries(record){
 }
 function checkDeliveries(record,expectedSources,expectedQuantity){
  const deliveries=receiptDeliveries(record);
- if(!Array.isArray(deliveries)||deliveries.length<1||
-    deliveries.length>expectedSources.length)return false;
+ if(!Array.isArray(expectedSources)||expectedSources.length===0||
+    expectedSources.length>MAX_STACKS||
+    expectedSources.some((x,i)=>!pos(x)||
+      (i>0&&x<=expectedSources[i-1]))||
+    !Array.isArray(deliveries)||deliveries.length<1||
+    deliveries.length>expectedSources.length||
+    deliveries[0].itemID!==record.itemID||
+    expectedSources[0]!==record.sourceItemID)return false;
  const sources=new Set(expectedSources),seen=new Set(),dest=new Set();
  let sum=0;
  for(const d of deliveries){
   if(!pos(d?.sourceItemID)||!sources.has(d.sourceItemID)||
      seen.has(d.sourceItemID)||!pos(d.itemID)||dest.has(d.itemID)||
      !pos(d.quantity)||!Number.isSafeInteger(sum+d.quantity))return false;
+  if(d.sourceBefore!==undefined||d.sourceAfter!==undefined){
+   if(!pos(d.sourceBefore)||!safe(d.sourceAfter)||
+      d.sourceBefore-d.quantity!==d.sourceAfter||
+      (d.sourceAfter===0)!==(d.itemID===d.sourceItemID))
+    return false;
+  }
   seen.add(d.sourceItemID);dest.add(d.itemID);sum+=d.quantity;
  }
  return sum===expectedQuantity&&
@@ -232,7 +244,8 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
      tx.put("items",String(item.itemID),moved);
     }
     deliveries.push(Object.freeze({sourceItemID:item.itemID,
-     itemID:buyerItemID,quantity:take}));
+     itemID:buyerItemID,quantity:take,
+     sourceBefore:item.quantity,sourceAfter:item.quantity-take}));
    }
    if(splitRequired)tx.put("identityState","nextItemID",nextItemID+1);
    let deliveredTotal=0;
