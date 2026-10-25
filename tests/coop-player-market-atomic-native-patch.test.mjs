@@ -8,6 +8,7 @@ const buyProof='    const coopPlayerBuyProof = !isSeedBuyOrder && process.env.EV
 function original(eol="\n"){
  return [
   'async function matchSellOrdersForBuyer({}={}) {',
+  '  const typeLabel = getMarketTypeLabel(typeID);',
   '  for(const sellOrder of []) {',
   '    try {',
   '        purchaseCounterpartyID = sellerCharacterID;',
@@ -19,6 +20,7 @@ function original(eol="\n"){
   '  }',
   '}',
   'async function matchBuyOrdersForSeller({}={}) {',
+  '  let remainingQuantity = normalizePositiveInteger(requestedQuantity, 0);',
   '  for(const buyOrder of []) {',
   '    const isSeedBuyOrder=false;',
   buyProof,
@@ -37,6 +39,8 @@ for(const eol of ["\n","\r\n"])test("single-stack atomic native market hook reve
  assert.doesNotThrow(()=>new Function(first));
  assert.equal((first.match(/P2P_ATOMIC_FULL_SINGLE_SELL_ORDER_REQUIRED/g)||[]).length,1);
  assert.match(first,/P2P_ATOMIC_PREPAID_BUY_RESERVE_NOT_YET_PROVEN/);
+ assert.match(first,/P2P_ATOMIC_ALL_NATIVE_FLAGS_REQUIRED/);
+ assert.match(first,/P2P_ATOMIC_REQUIRED_WITH_RUST_CLAIMS/);
  assert.match(first,/coopPlayerMarketAtomicRuntime/);
 });
 test("missing original Rust claim or buyer source proof refuses stale patch",()=>{
