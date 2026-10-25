@@ -20,6 +20,7 @@ param(
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
+  [switch]$EnableAtomicCoopTrade,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -32,6 +33,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
   }
 }
 Assert-Range 'NpcCount' $NpcCount 1 3
+if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
 Assert-Range 'VirtualPopulation' $VirtualPopulation 1 100
@@ -104,6 +106,11 @@ if ($LivingCoop) {
   # scripted NPC encounters (LivingCoop still uses autonomous native NPCs).
   $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+# Opt-in only: item/ship trade uses one native items table write; ISK offers
+# are rejected before stock EveJS wallet operations until cross-table safety.
+if ($EnableAtomicCoopTrade) {
+  $yamlLines += "      EVEJS_COOP_ATOMIC_TRADE: '1'"
 }
 # ContractMgr is a stub in pinned EveJS; this opt-in routes it to the real
 # contractProxy with courier acceptor authorization. Keep OFF by default
