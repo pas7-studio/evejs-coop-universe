@@ -190,6 +190,11 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
   return contracts.refund(c.contractID);
  }
+ function listDeliveredFlights(options){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY!=="1")
+   return blocked("DISABLED");
+  return flight.listDelivered(options);
+ }
  function settlePeacefulFlight(manifestKey,scene){
   if(!ready())return blocked("DISABLED");
   return peaceful.settle(manifestKey,scene);
@@ -199,7 +204,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,settlePeacefulFlight,
+ return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,settlePeacefulFlight,listDeliveredFlights,
   refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
