@@ -70,7 +70,12 @@ function patch(source,{remove=false}={}){
  // the strict atomic flag until that proof and split-stack path exist.
  const proofLine='    const coopPlayerBuyProof = !isSeedBuyOrder && process.env.EVEJS_COOP_PLAYER_MARKET_FILL_GUARD === "1" ? require("../../space/coopPlayerMarketFill").checkBuyMatch({order:playerBuyOrder,bookRow:buyOrder,escrow:getEscrowRecord(buyOrder && buyOrder.order_id),sellerCharacterID,fillableQuantity,price:orderPrice,sourceItem:sourceOrderId?null:findItemById(sourceItemID),sourceOrder:sourceOrderId && normalizeOrderId(sourceOrderId)!=="0" ? await fetchOrderById(sourceOrderId) : null,sourceEscrow:sourceOrderId?getEscrowRecord(sourceOrderId):null,sourceItems:sourceOrderId?listEscrowItemsForOrder(sourceOrderId,sellerCharacterID):null,sourceStationID:stationID,hangarFlag:ITEM_FLAGS.HANGAR}) : null;';
  inject(buy,end,proofLine,
-  '    if ('+atomic+' && !isSeedBuyOrder) throw Error("P2P_ATOMIC_PREPAID_BUY_RESERVE_NOT_YET_PROVEN");',
+  '    if ('+atomic+' && !isSeedBuyOrder) {\n'+
+  '      if(process.env.EVEJS_COOP_PLAYER_MARKET_BUY_RESERVE !== "1") throw Error("P2P_ATOMIC_PREPAID_BUY_RESERVE_NOT_YET_PROVEN");\n'+
+  '      if(sourceOrderId && normalizeOrderId(sourceOrderId)!=="0") throw Error("P2P_BUY_PAY_LINKED_ORDER_CROSSING_UNSUPPORTED");\n'+
+  '      const physical=findItemById(sourceItemID);\n'+
+  '      require("../../space/coopPlayerMarketBuySettlement").preflightOriginal({order:playerBuyOrder,bookRow:buyOrder,escrow:getEscrowRecord(buyOrder && buyOrder.order_id),sellerCharacterID,fillableQuantity,price:orderPrice,sourceItem:physical,sourceStationID:stationID});\n'+
+  '    }',
   {before:true});
  return text;
 }
