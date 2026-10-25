@@ -43,10 +43,21 @@ function verify({scene,wreck,characterID,wreckItemID,destinationLocationID,sourc
   Number(nativeWreck.launcherID)!==Number(wreck.sourceEntityID))
   return {status:"NO_PHYSICAL_NATIVE_WRECK"};
  const sessions=Array.from(scene.sessions?.values?.()||[]);
- const matching=sessions.filter(s=>Number(s?.characterID)===character&&
-  positive(s?._space?.shipID)&&
-  Number(s?._space?.systemID)===systemID&&
-  scene.getEntityByID(Number(s._space.shipID))?.kind==="ship");
+ // A stale scene membership is not an authenticated *active* looter.
+ // Match EveJS co-op shared-scene admission: a completed Ballpark handshake,
+ // a still-connected session and its exact current physical ship.
+ const matching=sessions.filter(s=>{
+  const shipID=positive(s?._space?.shipID);
+  if(Number(s?.characterID)!==character||!shipID||
+   Number(s?._space?.systemID)!==systemID||
+   s?._space?.initialStateSent!==true||s?.socket?.destroyed===true)
+   return false;
+  const liveShip=scene.getEntityByID(shipID);
+  if(liveShip?.kind!=="ship"||positive(liveShip.itemID)!==shipID)
+   return false;
+  const pilotID=positive(liveShip.pilotCharacterID??liveShip.characterID);
+  return !pilotID||pilotID===character;
+ });
  if(matching.length!==1)return {status:"NO_UNIQUE_AUTHENTICATED_SPACE_LOOTER"};
  return {
   status:"VERIFIED_NATIVE_LOOT_PICKUP",systemID,wreckID,
@@ -75,12 +86,23 @@ function note(args){
  }
  if(result.status==="VERIFIED_NATIVE_LOOT_PICKUP"||
   result.status==="NATIVE_LOOT_SOURCE_NOT_REMOVED"||
-  result.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED")
-  require("./coopRuntimeProbe").observe("living-native-loot-pickup",null,
-   {spaceState:{systemID:args?.scene?.systemID}},{...result,
-    ...(result.status!=="VERIFIED_NATIVE_LOOT_PICKUP"?{
-     wreckID:positive(args?.wreck?.wreckID),
-     wreckItemID:positive(args?.wreckItemID)}:{})});
+  result.status==="NATIVE_LOOT_SOURCE_NOT_DECREMENTED"){
+  let recorded=false;
+  try{
+   recorded=require("./coopRuntimeProbe").observe("living-native-loot-pickup",null,
+    {spaceState:{systemID:args?.scene?.systemID}},{...result,
+     ...(result.status!=="VERIFIED_NATIVE_LOOT_PICKUP"?{
+      wreckID:positive(args?.wreck?.wreckID),
+      wreckItemID:positive(args?.wreckItemID)}:{})})===true;
+  }catch(error){
+   // Reporting must never turn an already-committed native transfer into
+   // an exception that could make the client retry and double-loot.
+   console.warn("[CoopNativeLoot] telemetry",String(error?.code||"UNAVAILABLE"));
+  }
+  if(!recorded&&result.status==="VERIFIED_NATIVE_LOOT_PICKUP")
+   return {...result,status:"TELEMETRY_NOT_RECORDED",
+    nativeTransferVerified:true};
+ }
  return result;
 }
 module.exports={verify,note};

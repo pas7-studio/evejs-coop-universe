@@ -7,8 +7,9 @@ const {summarize}=require("../scripts/coop-world-report.cjs");
 const systemID=30000144,characterID=51001,wreckItemID=82001;
 const wreck={wreckID:91001,sourceEntityID:12001,systemID};
 const nativeWreck={itemID:wreck.wreckID,nativeNpcWreck:true,launcherID:12001};
-const pilotShip={itemID:77001,kind:"ship"};
-const session={characterID,clientID:44001,_space:{shipID:77001,systemID}};
+const pilotShip={itemID:77001,kind:"ship",pilotCharacterID:characterID};
+const session={characterID,clientID:44001,socket:{destroyed:false},
+ _space:{shipID:77001,systemID,initialStateSent:true}};
 const scene={systemID,sessions:new Map([[1,session]]),
  getEntityByID:id=>id===wreck.wreckID?nativeWreck:id===77001?pilotShip:null};
 const sourceBefore={wreckID:wreck.wreckID,wreckItemID,typeID:34,quantity:6};

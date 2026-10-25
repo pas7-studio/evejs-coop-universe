@@ -89,6 +89,15 @@ function tick(){
     lastSceneObservation.set(systemID,time);
     require("./coopDuoPresence").observe(owner.session,owner.ship,signature==="waiting"?"party-waiting":"party-grid-refresh");
    }
+   // On the regular 4-second native-scene tick, give real fleet mates
+   // occasional actionable location intel. The notice only refers to an
+   // existing physical NPC: it never commands warp/attack or spawns a mission.
+   if(party&&nativeFleet?.ok&&process.env.EVEJS_COOP_FLEET_BRIEF==="1"){
+    try{
+     if(!notices)notices=require("./coopPartyNotices").createNotices();
+     notices.brief({scene,party,systemID,fleetID:nativeFleet.fleetID});
+    }catch(error){console.warn("[CoopDuoCoordinator] fleet brief",error.message);}
+   }
    if(party){
     const chosen=party.pilots[0];
     const record=registered.get(chosen.characterID)?.ship||
