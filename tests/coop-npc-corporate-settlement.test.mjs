@@ -127,3 +127,37 @@ test("different buyer cannot replay Rust-claimed escrow settlement",()=>run(asyn
    /CLAIM_NOT_CANONICAL/);
  assert.deepEqual(f.data,initial);
 }));
+
+
+test("forged incomplete native-fill receipt cannot finalize Rust without wallet or item debit",()=>run(async f=>{
+ const partial={phase:"NATIVE_COMMITTED",fillID:1234567,buyerID:buyer,
+  itemID:x.itemID,grossCents:120000,ownerID:x.ownerID,
+  operationID:OP};
+ f.data.npcMarketFills[f.fillKey]=partial;
+ const snapshot=structuredClone(f.data);
+ await assert.rejects(
+  f.bridge.purchaseOnce({buyerID:buyer,identity:x,maxPriceCents:1200}),
+  /NPC_CORPORATE_FILL_REPLAY_CONFLICT/);
+ assert.deepEqual(f.data,snapshot);
+ assert.equal(f.data.items[x.itemID].ownerID,x.ownerID);
+ assert.equal(f.finalizes,0);
+}));
+test("replayed factory sale requires exact immutable original custody and finance receipt",()=>run(async f=>{
+ await f.bridge.purchaseOnce({buyerID:buyer,identity:x,maxPriceCents:1200});
+ const clean=structuredClone(f.data.npcMarketFills[f.fillKey]);
+ for(const bad of [
+  {stationID:x.stationID+1},{orderID:x.orderID+1},{typeID:x.typeID+1},
+  {quantity:x.quantity+1},{priceCents:1199},{coopSource:"NATIVE_SALVAGE"},
+  {buyerBeforeCents:0},{buyerAfterCents:50},{corpAfterCents:9999},
+  {committedAt:0}
+ ]){
+  f.data.npcMarketFills[f.fillKey]={...clean,...bad};
+  await assert.rejects(
+   f.bridge.purchaseOnce({buyerID:buyer,identity:x,maxPriceCents:1200}),
+   /NPC_CORPORATE_FILL_REPLAY_CONFLICT/);
+ }
+ f.data.npcMarketFills[f.fillKey]=clean;
+ const before=structuredClone(f.data);
+ assert.equal((await f.bridge.purchaseOnce({buyerID:buyer,identity:x,maxPriceCents:1200})).status,"PURCHASED");
+ assert.deepEqual(f.data,before);
+}));
