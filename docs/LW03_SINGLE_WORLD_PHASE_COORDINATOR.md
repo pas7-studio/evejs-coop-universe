@@ -1,0 +1,57 @@
+# LW-03A — One ordered Living World phase coordinator
+
+Status: **SOURCE IMPLEMENTED, original EveJS gameplay NOT_RUN**. This is the
+first low-risk extraction from the monolithic Living World runtime; not the
+full LW-03 orchestration or LW-04 native factory ACT integration.
+
+## Integration
+
+The existing `coopVirtualWorldRuntime.cjs` remains the **sole owner** of the
+30-second world interval. It now uses
+`coopLivingWorldPhaseCoordinator.cjs` to dispatch its **27 named phase
+call-sites in the same order and behind the same feature flags**.
+
+- The original `safeNpcPhase` remains the per-phase error boundary, including
+  its existing `coopRuntimeProbe` failure event and continue-on-fault behavior.
+- The existing read-only 5-second combat observation interval is not moved.
+- Native mining, hauling, combat, refinery, BPO, market, Rust, contract, ISK,
+  inventory and pilot control execution are not redirected or replaced.
+- The coordinator adds **no timer**, journal, wallet, state file, retry, lock
+  migration, materialized NPC or native writer.
+- A synchronous recursive tick is skipped; a promise-returning entire tick
+  is rejected to prevent silently releasing the clock lease early.
+- Individual asynchronous native phases retain their original
+  single-flight/outcome protections. This coordinator **does not** assert that
+  a dispatched asynchronous operation succeeded or settled.
+- Phase history is a bounded, read-only **diagnostic snapshot**; every actual
+  phase still executes, including more than 128 per-system reconcile calls.
+- The optional `livingWorldPhases()` export returns only status, sequence,
+  phase names and timing. It cannot command a ship or settle ISK.
+
+## Acceptance
+
+```bash
+node --test tests/coop-living-world-phase-coordinator.test.mjs
+node --test tests/coop-installer-module-coverage.test.mjs
+```
+
+The test verifies exact order for 27 named call-sites, no additional timer,
+reentry, faults, diagnostics and async boundary. This source-only check is
+**not** native Node/SQLite+Rust or physical game acceptance.
+
+Original EveJS manual gates remain NOT_RUN: 30-second phases with flags OFF,
+the same physical ship order priority during optional A-Life mode, native
+market/cargo conservation, one read-only combat sampler and cold restart.
+No changes to protected `evejs-data` are permitted for validation.
+
+## Next dependent work
+
+1. LW-03B: split phase definitions into explicit bounded registry groups
+   without modifying native effect order; measure phase durations on a
+   disposable test world and add a nonfinancial diagnostic view.
+2. LW-04: introduce an opt-in native **MANUFACTURE -> COMPLETE_JOB ->
+   LIST_OUTPUT** executor through existing `coopAlifeNativeEconomyAct` and
+   native industry director; never enable the separate
+   `coopNpcEconomyScheduler` timer in unified mode.
+3. LW-05: read-only projection of source-backed opportunities for native
+   agent dialogue and EVEmail, without parallel escrow/wallet state.
