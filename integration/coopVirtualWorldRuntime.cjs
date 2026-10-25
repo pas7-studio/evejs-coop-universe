@@ -218,6 +218,21 @@ function start(){
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
+  // Source-backed market decisions share this tick and never start a second
+  // scheduler. Awaiting Rust does not stall NPC physics or fleet movement.
+  if(process.env.EVEJS_COOP_ALIFE_SALVAGE_MARKET==="1")
+   safeNpcPhase("native-salvage-market",()=>{
+    void require("./coopAlifeSalvageMarketRuntime").advance({
+     systems:()=>new Set(visitedSystems)
+    }).then(result=>{
+     if(result?.status==="ALIFE_SALVAGE_MARKET_ATTEMPT"||
+      result?.status==="ALIFE_SALVAGE_MARKET_RECOVERY")
+      require("./coopRuntimeProbe").observe("alife-native-salvage-market",
+       null,null,{status:result.status,wreckItemID:result.wreckItemID,
+        resultStatus:result.result?.status,priceCents:result.priceCents||null,
+        nativeRustAndGameStore:true,virtualISK:false});
+    }).catch(error=>console.warn("[CoopSalvageMarket] tick",error.message));
+   });
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
   safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
