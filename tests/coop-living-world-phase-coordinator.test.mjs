@@ -162,8 +162,8 @@ test("LW-03B static catalog defines all 27 original phases exactly once",()=>{
  assert.equal(c.phases.length,27);
  assert.deepEqual(c.phases.map(x=>x.name),[...phaseNames]);
  assert.equal(new Set(c.phases.map(x=>x.name)).size,27);
- assert.deepEqual(c.groupOrder,["opportunities","world-state","alife-perception",
-  "combat","salvage","movement","market-observation","activity","reconciliation"]);
+ assert.deepEqual(c.groupOrder,["opportunities","world-state","alife-strategy",
+  "combat","salvage","movement","market","activity","reconciliation"]);
  assert.equal(c.phases.every(x=>x.mode==="EXISTING_NATIVE_OWNER_ONLY"),true);
 });
 test("only real original systemIDs classify as dynamic reconciliation",()=>{
@@ -183,8 +183,8 @@ test("each existing domain is observable without a parallel native executor",()=
  assert.equal(outcome.phaseCount,9);
  const snap=f.coordinator.snapshot().last;
  assert.deepEqual(snap.groups,Object.fromEntries([
-  "opportunities","world-state","alife-perception","combat","salvage",
-  "movement","market-observation","activity","reconciliation"
+  "opportunities","world-state","alife-strategy","combat","salvage",
+  "movement","market","activity","reconciliation"
  ].map(x=>[x,1])));
  assert.equal(snap.unknownNames.length,0);
  assert.equal(snap.source,"DISPATCH_ATTEMPTS_NOT_NATIVE_SETTLEMENT");
