@@ -57,6 +57,18 @@ P0 code review found that the prior peaceful Escort fee checked both ships only 
 
 **Operational requirement:** `EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1` is required **in addition to** `EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1`. Both remain OFF until disposable native two-client + real GameStore wallet E2E. The new source witness **does not** permit a second funded trip on lost warp ACK, and no free ISK is created.
 
+## COOP-054 — Stage I native route attendance (new, experimental)
+
+The strict optional `EVEJS_COOP_ESCORT_ROUTE_WITNESS=1` adds two authoritative native position checkpoints between **verified source** and **verified warehouse terminal**. The original Stage H departure receipt includes physical NPC source coordinates. `coopNativeStationArrival.tick` invokes only a trusted Stage E sampler for the original active **FUNDED** flight and same authenticated two-player native fleet. The sampler records two immutable file+directory-fsynced positions at 20–45% and 55–85% of source-to-station distance, at least 500 ms apart, with both original player ships within **10 km** of the real NPC at each checkpoint. The independent original terminal/escrow check verifies *both* immutable receipts before peaceful payout. Default flag **OFF**; Stage H source and terminal attendance remain active and unchanged when it is OFF.
+
+The midroute witness is **not continuous escort history**; tests must verify real native warp exposes both windows. With current possible ~250ms warp ingress, a tick-only observer might not see enough positions. Do **not** enable strict Stage I money gating in a live world until two-client local tracing confirms observable true intermediate native position samples. If insufficient, add a native movement projection hook rather than fabricate timing-based evidence. A real NPC can still deliver cargo while an ineligible escort is not paid.
+
+- `integration/coopEscortRouteWitness.cjs` and runtime/binding/station adapters committed on PR #117; installer and Windows test runner registered.
+- `tests/coop-escort-route-witness.test.mjs`: **20/20 source-executed V8 PASS** (AFK origin/destination, native duo/fleet, restart, wrong original ship, corruption, symlink/hardlink, lost fsync and strict OFF).
+- `tests/coop-escort-route-attendance-gate.test.mjs`: **12/12 source-executed V8 PASS** (including Stage I strict gate).
+- `tests/coop-escort-station-predeparture-gate.test.mjs`: **17/17 source-executed V8 PASS**, including real trusted station-tick observer dispatch.
+- Full Node test suite, actual native two-client warp, GameStore SQLite and persistent wallet delta remain **NOT_RUN**. See `docs/COOP_ESCORT_STAGE_I_ROUTE_ATTENDANCE.md`.
+
 ## P0 gate before any financial rollout
 
 - On operator-approved disposable EVEJS data clone run `scripts/Run-NativeJob-Tests.ps1 -CheckPinned` plus full original repo baseline.
