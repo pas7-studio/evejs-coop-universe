@@ -124,7 +124,10 @@ function adoptStaleRuntimeFleet({scene,store,fleet,key,minerIDs,haulerIDs}){
  const target=new Set([...minerIDs,...haulerIDs]);
  const foreign=listed.filter(id=>!target.has(id));
  if(!foreign.length)return false;
- if(foreign.some(id=>store.getNativeEntity(id)||scene.getEntityByID(id)))return false;
+ // Only a foreign ship that is PHYSICALLY here can be a real occupant. A durable
+ // row whose hull is not in the scene is a leftover, never a reason to keep the
+ // slot blocked forever; it is left untouched, just unmanaged.
+ if(foreign.some(id=>scene.getEntityByID(id)))return false;
  fleet.startupKey=key;
  fleet.minerEntityIDs=[...minerIDs];
  fleet.haulerEntityIDs=[...haulerIDs];
@@ -382,6 +385,12 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason}));
      log("ALIFE08 slot "+key+" blocked: "+reason);
     }
+   }
+   for(const report of reports){
+    const detail=["miners="+(report.minerIDs||[]).length,"haulers="+(report.haulerIDs||[]).length,
+     report.reseededFrom||"",report.repaired?"repaired":"",report.reason||""]
+     .filter(Boolean).join(" ");
+    log("ALIFE08 slot "+systemID+"-"+report.slot+" -> "+report.status+" "+detail);
    }
    return {status:reports.some(x=>x.status==="NEEDS_OPERATOR_REPAIR")?
     "NEEDS_OPERATOR_REPAIR":"OK",systemID,slots:reports};

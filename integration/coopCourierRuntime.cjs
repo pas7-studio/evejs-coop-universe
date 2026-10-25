@@ -703,6 +703,9 @@ function createCourierDispatch(deps = {}) {
     // courier is repaired to the origin, so the next tick re-plans a real leg.
     if (!flight.reposition && withEntity.step === "failed") {
       flights.delete(contractID);
+      // The resume scan refuses contracts it already planned once, so clearing
+      // the leg alone would strand the courier at the origin forever.
+      attempted.delete(contractID);
       log(`[CoopCourier] contract ${contractID} leg failed at ${flight.step}, will re-plan from the origin`);
     }
   }
