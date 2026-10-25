@@ -114,6 +114,9 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
      let ok=false;try{ok=verifyRelease({...priorShip,proofID:command.proofID})===true}catch{}
      if(!ok)return {status:"BLOCKED",reason:"NATIVE_RELEASE_UNVERIFIED"};
      delete s.ships[id];
+     // Finished/aborted transfer provenance remains in the processed event
+     // receipts, but cannot dangle after this ship leaves the war fleet.
+     if(s.transfers?.[id])delete s.transfers[id];
      receipt={type:"RELEASE",entityID:priorShip.entityID,fleetID:priorShip.fleetID};
     }
     const at=clock();
