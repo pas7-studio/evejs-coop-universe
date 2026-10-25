@@ -22,8 +22,9 @@ function patch(text,{remove=false}={}){
   if(count(text,hook)>1)throw Error("ESCORT_NPC_RESTORE_DUPLICATE_HOOK");
   return count(text,hook)===1?text.replace(newline+hook,""):text;
  }
+ if(count(text,hook)>1)throw Error("ESCORT_NPC_RESTORE_DUPLICATE_HOOK");
  if(count(text,hook)===1)return text;
- if(count(text,hook)>1||count(text,anchor)!==1)
+ if(count(text,anchor)!==1)
   throw Error("ESCORT_NPC_RESTORE_PINNED_ANCHOR_MISMATCH");
  return text.replace(anchor,anchor+newline+hook);
 }
