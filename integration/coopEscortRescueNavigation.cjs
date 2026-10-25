@@ -5,9 +5,10 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const finite=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 function createRescueNavigation({readEvent,readFlight,readManifest,
  readOutcomes,getWreck,getWreckItems,getScene,warpPlayer,followPlayer,
- readVolunteer,clock=()=>Date.now()}={}){
+ readVolunteer,readSalvageProof=null,clock=()=>Date.now()}={}){
  if([readEvent,readFlight,readManifest,readOutcomes,getWreck,getWreckItems,
-  getScene,warpPlayer,followPlayer,readVolunteer,clock].some(x=>typeof x!=="function"))
+  getScene,warpPlayer,followPlayer,readVolunteer,clock].some(x=>typeof x!=="function")||
+  (readSalvageProof!==null&&typeof readSalvageProof!=="function"))
   throw Error("ESCORT_RESCUE_AUTHORITIES_REQUIRED");
  const cooldown=new Map();
  function navigate(session,eventID){
@@ -71,6 +72,19 @@ function createRescueNavigation({readEvent,readFlight,readManifest,
    m.cargo.some(c=>c.cargoID===x.sourceCargoID&&c.typeID===x.typeID&&
     pos(x.quantity)&&x.quantity<=c.quantity));
   if(!surviving.length)return {status:"RESCUE_NO_PROVEN_ORIGINAL_CARGO"};
+  // A wreck's raw sourceCargoID alone is insufficient: demand an
+  // independently fsynced original-manifest source-to-wreck witness.
+  if(readSalvageProof){
+   let witness;try{witness=readSalvageProof(e.linkedTripID)}
+   catch{return {status:"RESCUE_SALVAGE_WITNESS_UNAVAILABLE"}}
+   if(witness?.status!=="SALVAGE_ORIGIN_VERIFIED"||
+    witness.wreckID!==loss.haulerNativeWreckID||
+    !Array.isArray(witness.rows)||surviving.some(item=>
+     !witness.rows.some(row=>row.cargoID===item.sourceCargoID&&
+      row.wreckItemID===item.wreckItemID&&row.typeID===item.typeID&&
+      row.quantity===item.quantity)))
+    return {status:"RESCUE_SALVAGE_WITNESS_NOT_VERIFIED"};
+  }
   if(new Set(surviving.map(x=>x.sourceCargoID)).size!==surviving.length||
    new Set(surviving.map(x=>x.wreckItemID)).size!==surviving.length)
    return {status:"RESCUE_WRECK_CONTENTS_AMBIGUOUS"};
@@ -132,7 +146,19 @@ function rescueInGame(session,eventID){
     getScene:s=>runtime.getSceneForSession(s),
     warpPlayer:(s,point,opts)=>runtime.warpToPoint(s,point,opts),
     followPlayer:(s,wreckID,range)=>runtime.followBall(s,wreckID,range),
-    readVolunteer:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id)
+    readVolunteer:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id),
+    readSalvageProof:key=>require("./coopSalvageProvenance")
+     .createSalvageLedger({
+      root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||
+       "/var/lib/evejs/coop-native-warehouse",
+      readManifest:id=>manifest.read(id),
+      getWreck:store.getNativeWreck,
+      getWreckItems:store.listNativeWreckItemsForWreck,
+      readOriginalCargo:id=>store.listNativeEntities().some(e=>
+       store.listNativeCargoForEntity(e.entityID).some(x=>x.cargoID===id)),
+      readWarehouseItem:id=>require("../services/inventory/itemStore")
+       .findWarehouseItem({marker:"coop-warehouse:v1:cargo:"+id})
+     }).verify(key)
    });
   }
   return singleton.navigate(session,eventID);
