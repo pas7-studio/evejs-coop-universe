@@ -22,7 +22,10 @@ function fixture(){
    (o[a]??={})[b]=v;
   else o[key]=v;
  }return o;};
- const sqliteStore={coopAtomicNativeRows:createSqliteAdapter(()=>db),loadTableObject:load};
+ let ambiguousCommit=false;
+ const sqliteDb={exec(sql){db.exec(sql);if(sql==="COMMIT"&&ambiguousCommit)throw Error("SIMULATED_LOST_COMMIT_ACK");},
+   prepare(sql){return db.prepare(sql);}};
+ const sqliteStore={coopAtomicNativeRows:createSqliteAdapter(()=>sqliteDb),loadTableObject:load};
  const cache=Object.fromEntries(names.map(t=>[t,load(t)])),dirty=new Set(),fullDirty=new Set(),
   flushTimers={},inFlightFlushes=new Map(),transientPaths={},dirtyRowKeys={};
  const baselines={};
@@ -40,7 +43,8 @@ function fixture(){
    if(badInvalidation)return false;inventory.ids=Object.keys(cache.items);inventory.rebuilds++;return true;},
   fatal:e=>fatal.push(e.message)
  });
- return {db,put,cache,bridge,dirty,inFlightFlushes,transientPaths,baselines,events,inventory,fatal,
+ return {db,put,cache,bridge,sqliteStore,dirty,inFlightFlushes,transientPaths,baselines,events,inventory,fatal,
+  setCommitFault:v=>ambiguousCommit=v,
   setBadFlush:v=>badFlush=v,setBadReload:v=>badReload=v,setBadInvalidation:v=>badInvalidation=v,
   snapshot:()=>Object.fromEntries(names.map(t=>[t,db.prepare('SELECT key,json FROM "'+t+'" ORDER BY key').all()])),
   close(){db.close();fs.rmSync(dir,{recursive:true,force:true})}};
@@ -136,3 +140,22 @@ test("nested cache reconciliation preserves long-lived references",()=>{
  reconcileObject(root,{a:[{x:9}],b:{q:3}});
  assert.equal(root.a,arr);assert.deepEqual(root,{a:[{x:9}],b:{q:3}});
 });
+
+test("ambiguous COMMIT after durable write poisons runtime and never serves a stale cache",()=>run(f=>{
+ f.setCommitFault(true);
+ assert.throws(()=>f.bridge.transact(tables,install),/COMMITTED_BUT_CACHE_UNSAFE/);
+ assert.deepEqual(f.fatal,["NATIVE_SQLITE_COMMIT_OUTCOME_UNKNOWN"]);
+ assert.equal(f.bridge.isPoisoned(),true);
+ assert.equal(JSON.parse(f.db.prepare('SELECT json FROM "items" WHERE key=?').get("92").json).quantity,5);
+ assert.equal(f.cache.items["92"].quantity,10);
+ assert.throws(()=>f.bridge.transact(tables,install),/POISONED/);
+}));
+test("GameStore claims SQLite writer exactly once; direct bypass is refused",()=>run(f=>{
+ assert.throws(()=>f.sqliteStore.coopAtomicNativeRows.claimTransactor(),/WRITER_ALREADY_CLAIMED/);
+}));
+test("SQLite writer refuses mutations with atomic feature disabled",()=>run(f=>{
+ const direct=createSqliteAdapter(()=>f.db).claimTransactor(),before=f.snapshot();
+ delete process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
+ assert.throws(()=>direct.transact(["items"],tx=>tx.del("items","92")),/NATIVE_SQLITE_ATOMIC_DISABLED/);
+ assert.deepEqual(f.snapshot(),before);
+}));
