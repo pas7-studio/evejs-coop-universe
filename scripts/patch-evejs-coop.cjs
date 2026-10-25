@@ -115,6 +115,8 @@ function transform(source,spec,remove){
   text=require("./coop-native-exploration-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js")
   text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/market/marketProxyService.js")
+  text=require("./coop-npc-market-buy-safety-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
