@@ -155,7 +155,7 @@ function createStartupCargoAuditor({root,gameStore,store,items,getNativeEntity,i
    if(!Array.isArray(receipts)||receipts.length>5000)
     return fail("ALIFE13_WAREHOUSE_DIRECTORY_UNTRUSTED");
    for(const filename of receipts){
-    if(!/^[1-9]\\d*\\.json$/.test(filename))continue;
+    if(!/^[1-9]\d*\.json$/.test(filename))continue;
     const id=Number(filename.slice(0,-5));
     const receipt=readReceipt(id);
     if(receipt&&(receipt.fleetID===fleetID||receipt.systemID===systemID)&&
