@@ -330,3 +330,37 @@ that.
 Not yet wired: the native driver that performs `undock`/`warp`/`dock` on a real
 entity owned by the courier character, and the acceptance test that proves the
 package really moves.
+
+## Handoff: the exact next piece (native driver)
+
+Everything up to the native calls is written and tested:
+
+| Piece | File | State |
+| --- | --- | --- |
+| Eligibility, hull, route, piracy windows, quotes | `integration/coopCourierDispatch.cjs` | 16 tests |
+| Identity gate (character, funds, ship, station) | same file, `evaluateCourierIdentity` | tested |
+| Accept/fly/complete chain | same file, `planSettlement` | tested |
+| Session-less accept/complete bridge | `integration/coopCourierNativeAccept.cjs` | 8 tests |
+| Flight state machine + concurrency cap | `integration/coopCourierFlight.cjs` | 5 tests |
+| Seeded courier characters | `scripts/seed-courier-pilots.cjs` | 7 pilots live |
+
+The missing piece is the native driver, and two concrete facts decide its shape:
+
+1. `server/src/space/transitions.js` exposes only `undockSession(session, ...)`
+   and `dockSession(session, stationID)` - both session-driven, so a seeded
+   courier cannot use them without inventing a session (rejected by decision).
+2. `server/src/space/npc/nativeNpcService.js` accepts
+   `ownerID: ownerIDOverride || identity.ownerID`, i.e. a native NPC ship **can**
+   be owned by a character ID.
+
+So the driver must spawn the courier's hull through `nativeNpcService` with
+`ownerIDOverride = courierCharacterID`, warp it with the existing warp helper,
+and dock it through the NPC-side arrival path (not `coopNativeStationArrival`,
+which filters by live client sessions).
+
+Before writing it: confirm on a live server that an entity spawned with a
+character `ownerIDOverride` is accepted by the native docking path and that the
+package item actually follows the ship. That is a live experiment, not a unit
+test, and it must be done in a fresh session with the owner watching - a blind
+change here touches ship ownership and could strand the owner's contract with
+collateral escrowed.
