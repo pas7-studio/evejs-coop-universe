@@ -11,11 +11,13 @@ const prior=Object.fromEntries([
 for(const k of Object.keys(prior))process.env[k]="1";
 const previousPeace=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
 const previousWitness=process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
+const previousRoute=process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS;
 process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
 process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false,
  sourceDispatched=false,ackDurable=true,witnessValid=true,sourcePilotAway=false}={}){
- const counters={funding:0,warp:0,manifest:0,closures:0,witness:0};
+ const counters={funding:0,warp:0,manifest:0,closures:0,witness:0,routeSamples:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
   position:{x:0,y:0,z:0},radius:100,mode:"STOP"};
@@ -84,6 +86,8 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
   manifest:{prepare:()=>{counters.manifest++;return {status:"MANIFEST_DURABLY_PREPARED",
    key:"30000144-77-1000000",cargoIDs:[5501]}}},
   escortGate:gate?{
+   recordEscortRouteSample:()=>{counters.routeSamples++;
+    return {status:"ROUTE_NOT_AT_CHECKPOINT"}},
    recordEscortDeparture:()=>{counters.witness++;return {status:witnessValid?
     "DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS":
     "DEPARTURE_PLAYER_NOT_ON_CONVOY_GRID"}},
@@ -242,6 +246,25 @@ test("valid native departure witness is required before paid peaceful warp",()=>
   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
  }
 });
+test("Stage I observer uses real native station tick and never player commands",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,"EN_ROUTE");
+  assert.equal(f.counters.routeSamples,0);
+  assert.equal(f.director.tick(f.scene,f.fleet,1001000).status,
+   "AWAITING_PHYSICAL_ARRIVAL");
+  assert.equal(f.counters.routeSamples,1);
+  assert.equal(f.counters.funding,1);
+  assert.equal(f.counters.warp,1);
+ })}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+ }
+});
 test("paid escort cannot start unless durable warp fence is explicitly enabled",()=>{
  process.env.EVEJS_COOP_ESCORT_WARP_FENCE="0";
  try{run(f=>{
@@ -270,4 +293,6 @@ process.on("exit",()=>{for(const [k,v] of Object.entries(prior))
  else process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=previousPeace;
  if(previousWitness===undefined)delete process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
  else process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=previousWitness;
+ if(previousRoute===undefined)delete process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS;
+ else process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS=previousRoute;
 });
