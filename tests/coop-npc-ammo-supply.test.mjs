@@ -153,3 +153,18 @@ test("order arbiter block and failed warp do not claim physical travel",()=>{
  f.advance(30001);
  assert.equal(f.tick({blockedIDs:new Set([101])}).orders.length,0);
 });
+
+test("unverified native fitting never cancels a previously proven ammo shortage",()=>{
+ const f=fixture();f.tick();
+ assert.equal(f.director.activeIDs(SID).has(101),true);
+ f.modules.splice(0);
+ assert.equal(f.inspect().status,"NATIVE_FITTING_NOT_VERIFIED");
+ assert.equal(f.tick().orders.length,0);
+ assert.equal(f.director.activeIDs(SID).has(101),true);
+ f.modules.push({moduleID:401,entityID:101,ownerID:777,
+  categoryID:7,typeID:12000,flagID:27});
+ f.cargo.push({cargoID:502,entityID:101,ownerID:777,
+  moduleID:401,categoryID:8,typeID:35,quantity:8});
+ assert.equal(f.tick().events[0].kind,"npc-ammo-resupplied");
+ assert.equal(f.director.activeIDs(SID).size,0);
+});
