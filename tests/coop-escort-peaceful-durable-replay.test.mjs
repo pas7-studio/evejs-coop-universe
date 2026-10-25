@@ -138,8 +138,9 @@ test("reconciliation reads only native fsynced flight scan, never supplied playe
 });
 test("original fully verified manifest is required before terminal proof record",()=>{
  const f=fixture({delivery:false});
- assert.equal(f.runtime.recordTerminalAttendance(key,null,f.stock).status,
-  "TERMINAL_ATTENDANCE_FLIGHT_NOT_FUNDED");
+ const forged={...f.stock,cargoIDs:[5501,9999]};
+ assert.equal(f.runtime.recordTerminalAttendance(key,null,forged).status,
+  "TERMINAL_ATTENDANCE_NATIVE_WAREHOUSE_UNVERIFIED");
  assert.equal(f.recorded(),0);
 });
 test("trust-bound terminal recorder runs only with original FUNDED manifest and live original escrow",()=>{
