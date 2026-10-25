@@ -39,7 +39,7 @@ Original native seller/goods and wallet notifications occur **after** successful
 
 ## Source-level checks, not live claims
 
-- 7/7 original native GameStore BUY-funded seller settlement tests: full stack; two paid original Rust fill cycles (7 = 3+4); no second buyer wallet debit; no over-spend of original reserve; rollback on malformed escrow/reserve/item; replay, strict flags.
+- 9/9 original native GameStore BUY-funded seller settlement tests: full stack; two paid original Rust fill cycles (7 = 3+4); no second buyer wallet debit; no over-spend of original reserve; rollback on malformed escrow/reserve/item; replay, strict flags; keyed-only original GameStore wallet identity and explicit forged embedded-ID rejection (compatible with merged PR #240).
 - 5/5 Rust/GameStore/journal payout runtime checks: verified claim, atomic commit, finalize locked, durable receipt, journal and release in order; unknown-commit and replay refusal.
 - 4/4 source hook reversibility tests, **7/7 previous SELL runtime tests** unchanged.
 - Full pinned `marketProxyService.js` with existing NPC/catalog/Sell escrow/player Rust, BUY reserve and new BUY payout: V8 parse, repeated application and byte-exact reversal for LF and CRLF **PASS**.
