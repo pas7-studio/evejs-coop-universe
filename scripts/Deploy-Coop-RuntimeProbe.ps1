@@ -101,6 +101,7 @@ if ($LivingCoop) {
   # Enable actual two-player presence and opt-in on-grid notice without
   # scripted NPC encounters (LivingCoop still uses autonomous native NPCs).
   $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
