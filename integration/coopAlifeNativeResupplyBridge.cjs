@@ -30,15 +30,18 @@ function selectAmmoResupply({mode,systemID,assignments,decision,scene,
   if(decision?.status!=="OBSERVED"||
    Number(decision.systemID)!==Number(systemID)||
    !Number.isSafeInteger(decision.observedAt)||now<decision.observedAt||
-   now-decision.observedAt>maxAgeMs||!Array.isArray(decision.intents))
+   now-decision.observedAt>maxAgeMs||decision.proof!=="NATIVE_OBSERVATIONS_ONLY"||
+   !Array.isArray(decision.intents)||decision.intents.length>32)
    return deny("ALIFE_RESUPPLY_DECISION_STALE_OR_UNVERIFIED");
   for(const intent of decision.intents){
    if(intent?.stage!=="RESUPPLY")continue;
    if(!named(intent.pilotID)||!pos(intent.entityID)||
+    !pos(intent.stationID)||intent.role!=="pirate"||
     Number(intent.systemID)!==Number(systemID)||
     intent.provenance!=="NATIVE_READ_ONLY"||intent.nativeMutation!==false||
     intent.reason!=="NATIVE_WEAPON_AMMO_EXHAUSTED"||
-    typeof intent.intentID!=="string"||intent.intentID.length<5)
+    intent.intentID!==String(systemID)+":"+decision.observedAt+":"+
+     intent.entityID+":RESUPPLY")
     return deny("ALIFE_RESUPPLY_INTENT_CORRUPT");
    if(intents.has(intent.pilotID))
     return deny("ALIFE_RESUPPLY_DUPLICATED_INTENT");
@@ -67,7 +70,8 @@ function selectAmmoResupply({mode,systemID,assignments,decision,scene,
   if(mode==="SURVIVAL"){
    const threat=Number(controller.currentTargetID)>0||
     controller.manualOrder?.type==="attack"||
-    Number(ship.hpRatio)>=0&&Number(ship.hpRatio)<0.5||
+    (typeof ship.hpRatio==="number"&&Number.isFinite(ship.hpRatio)&&
+     ship.hpRatio>=0&&ship.hpRatio<0.5)||
     (Number(controller.lastAggressorID)>0&&
      Number.isFinite(controller.lastAggressedAtMs)&&
      now>=controller.lastAggressedAtMs&&now-controller.lastAggressedAtMs<120000);
