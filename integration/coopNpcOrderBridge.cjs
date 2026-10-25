@@ -25,12 +25,15 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController}
     (Number(x.entityID)!==Number(link.entityID)||Number(x.systemID)!==Number(link.systemID))))return null;
   return {pilotID:link.pilotID,entityID:Number(link.entityID),systemID:Number(link.systemID)};
  }
- function verify(link){
+ function verify(link,owner){
   const scene=sceneForSystem(link.systemID);
   if(Number(scene?.systemID)!==link.systemID)return false;
   const entity=scene?.getEntityByID?.(link.entityID);
   if(entity?.kind!=="ship"||entity.nativeNpc!==true||entity.session?.characterID)return false;
   const controller=getController(link.entityID);
+  if(["PATROL","CIVILIAN","GATE"].includes(owner)&&
+    (Number(controller?.currentTargetID)>0 || controller?.manualOrder?.type==="attack"))
+   return false;
   return Number(controller?.entityID)===link.entityID &&
    Number(controller?.systemID)===link.systemID &&
    uniqueAssignment(link.entityID,link.systemID)?.pilotID===link.pilotID;
@@ -38,7 +41,7 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController}
  function issue({entityID,systemID,owner,action,execute,holdMs}={}){
   const link=uniqueAssignment(entityID,systemID);
   if(!link)return {success:false,errorMsg:"COOP_NPC_ORDER_IDENTITY_UNVERIFIED"};
-  return arbiter.issue({...link,owner,action,execute,holdMs,verify:()=>verify(link)});
+  return arbiter.issue({...link,owner,action,execute,holdMs,verify:()=>verify(link,owner)});
  }
  function blocked({entityID,systemID,owner}={}){
   const link=uniqueAssignment(entityID,systemID);
