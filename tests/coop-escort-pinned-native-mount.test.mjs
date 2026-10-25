@@ -104,7 +104,7 @@ test("disconnected duplicate or ghost character session cannot approve native fu
 test("expired native NPC quote cannot debit a corporation even with two pilots",()=>fixture(f=>{
  f.consent();f.setTime(8000001);
  assert.equal(f.mount().runtime.fundBeforeWarp(route).status,"FLIGHT_BOOKING_NOT_AUTHORIZED");
- assert.equal(f.db().corporationRuntime["corporations\\u001f10001"].wallet.divisions["1000"].balance,50000);
+ assert.equal(f.db().corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,50000);
 }));
 test("native escrow adapter requires the genuine server-internal atomic ownership mode",()=>fixture(f=>{
  assert.throws(()=>createNativeMount({root:f.root}),/ESCORT_PINNED_NATIVE_PROVIDER_AUTHORITIES_REQUIRED/);
