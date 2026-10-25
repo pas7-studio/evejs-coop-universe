@@ -3,7 +3,7 @@
 const inventoryPath='server/src/services/inventory/itemStore.js';
 const tradePath='server/src/services/trade/tradeMgrService.js';
 const invAnchor='  writeItemCustomInfo,';
-const invHook='  transferCoopManifestAtomically: (trade,roots,active) => require("../../space/coopNativeTradeAtomic").commitNative({trade,roots,activeShipIDs:active,readItems,writeItems,normalizeInventoryItem,buildInventoryItem,indexDeltaFromChanges,cloneValue,readCharacters}),';
+const invHook='  transferCoopManifestAtomically: (trade,roots,active) => require("../../space/coopNativeTradeAtomic").commitNative({trade,roots,activeShipIDs:active,readItems,writeItems,normalizeInventoryItem,buildInventoryItem,indexDeltaFromChanges,cloneValue,readCharacters,flushItems:()=>repo.flushTableSync(ITEMS_TABLE)}),';
 const moneyAnchor='    const moneyTransferResult = this._completeMoneyTransfer(trade);';
 const moneyHook='    if (process.env.EVEJS_COOP_ATOMIC_TRADE === "1") require("../../space/coopNativeTradeAtomic").assertZeroMoney(trade,this);';
 const tradeOld='    const itemTransferResult = this._completeItemTransfers(trade);';
