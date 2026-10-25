@@ -1,6 +1,6 @@
 # COOP-043 — Native Community Fittings for EveJS Co-op
 
-**Status:** DESIGN / NOT IMPLEMENTED / NO GAME DATA MUTATED.
+**Status:** IMPLEMENTED + RUN LOCALLY (real dogma validation, live public harvest, stopped-world staging apply/rollback, native payload probe). **Client (in-game) acceptance and the live-world install are pending the human tester's own clicks and owner approval** — see [COOP_COMMUNITY_FITTINGS_RUN.md](COOP_COMMUNITY_FITTINGS_RUN.md).
 **Priority:** P1 gameplay usability (native source verification is complete; client acceptance is not).
 **Scope:** Both co-op pilots see the same useful, attributable, compatible ship fittings in the existing native EVE fitting browser.
 
