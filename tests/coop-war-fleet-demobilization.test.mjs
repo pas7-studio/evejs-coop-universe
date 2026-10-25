@@ -74,7 +74,7 @@ test("stale campaign revision or active war assault blocks demobilization",()=>{
  const f=fixture();
  assert.equal(f.registry.execute({...f.old,campaignRevision:6}).reason,
   "WAR_CAMPAIGN_NOT_TERMINAL");
- f.war.campaigns.c1.state="ASSAULT";
+ f.db.get(WAR_KEY).campaigns.c1.state="ASSAULT";
  assert.equal(f.registry.execute(f.old).reason,"WAR_CAMPAIGN_NOT_TERMINAL");
  assert.equal(f.ships["501"].entityID,501);
 });
@@ -91,14 +91,15 @@ test("pending or terminal-but-not-retired native transfer never releases",()=>{
  const f=fixture();
  f.db.get(KEY).transfers={"501":{transferID:"fw:501:101:202:1",
   entityID:501,pilotID:"coop-pilot-001",warID:"w1",campaignID:"c1",
-  phase:"COMPLETE",sourceSystemID:101,destinationSystemID:202}};
+  phase:"COMPLETE",sourceSystemID:101,destinationSystemID:202,
+  modulesHash:"a".repeat(64),cargoHash:"b".repeat(64)}};
  assert.equal(f.registry.execute(f.old).reason,"WAR_DEMOB_TRANSFER_NOT_RETIRED");
  assert.equal(f.ships["501"].entityID,501);
 });
 test("CANCELLED is legal only after its actual native war ended",()=>{
- const f=fixture();f.war.campaigns.c1.state="CANCELLED";
+ const f=fixture();f.db.get(WAR_KEY).campaigns.c1.state="CANCELLED";
  assert.equal(f.registry.execute(f.old).reason,"WAR_CAMPAIGN_NOT_TERMINAL");
- f.war.wars.w1.state="ENDED";
+ f.db.get(WAR_KEY).wars.w1.state="ENDED";
  assert.equal(f.registry.execute(f.old).status,"APPLIED");
 });
 test("wrong fleet identity and missing default-off feature gate deny mutation",()=>{
