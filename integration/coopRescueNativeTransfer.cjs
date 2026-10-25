@@ -27,7 +27,7 @@ function createNativeRescueTransfer({atomicRows,readWreck,getMetadata,
    return {success:false,errorMsg:"COOP_RESCUE_WRECK_UNVERIFIED"};
   let result;
   try{
-   result=atomicRows(["npcWreckItems","items","identityState","characters"],tx=>{
+   result=atomicRows(["npcWreckItems","npcCargo","items","identityState","characters"],tx=>{
     const chr=tx.get("characters",String(characterID));
     if(!isObject(chr))fail("CHARACTER_NOT_FOUND");
     const dest=tx.get("items",String(destinationLocationID));
@@ -41,10 +41,14 @@ function createNativeRescueTransfer({atomicRows,readWreck,getMetadata,
     const item=root[String(wreckItemID)];
     if(!isObject(item)||item.wreckItemID!==wreckItemID||
      item.wreckID!==wreckID||item.sourceKind!=="cargo"||
-     !pos(item.sourceCargoID)||!pos(item.typeID)||
+     !pos(item.sourceCargoID)||!pos(item.sourceOriginalQuantity)||
+     !pos(item.typeID)||
      !pos(item.quantity)||item.singleton===true||
      !Number.isSafeInteger(item.quantity)||item.transient===true)
      fail("ORIGINAL_CARGO_NOT_VERIFIED");
+    const originalCargo=tx.get("npcCargo","cargo");
+    if(!isObject(originalCargo)||originalCargo[String(item.sourceCargoID)])
+     fail("ORIGINAL_HAULER_CARGO_STILL_EXISTS");
     const amount=quantity===null?item.quantity:quantity;
     if(!pos(amount)||amount>item.quantity||amount>2147483647)
      fail("QUANTITY_INVALID");
@@ -57,7 +61,12 @@ function createNativeRescueTransfer({atomicRows,readWreck,getMetadata,
      fail("GLOBAL_ITEM_ID_NOT_AVAILABLE");
     const priorSame=tx.scan("items").filter(x=>
       x.value?.customInfo===token(wreckID,wreckItemID,item.sourceCargoID));
-    if(priorSame.length)fail("SOURCE_PREVIOUSLY_CREDITED");
+    const credited=priorSame.reduce((n,x)=>n+(pos(x.value?.quantity)?
+      x.value.quantity:0),0);
+    // Full and PARTIAL salvage are both supported, with immutable source
+    // conservation. Any unaccounted cargo or restored source blocks.
+    if(credited+item.quantity!==item.sourceOriginalQuantity)
+     fail("SOURCE_QUANTITY_CONSERVATION_FAILED");
     // Keep client-compatible unique item schema and source marker.
     const granted={itemID:id,ownerID:characterID,
      locationID:destinationLocationID,flagID:5,
