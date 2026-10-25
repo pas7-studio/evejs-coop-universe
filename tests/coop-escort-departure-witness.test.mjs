@@ -99,6 +99,14 @@ test("lost fsync acknowledgement fails closed, never reports witnessed departure
  assert.equal(w.record(booking(),f.scene,f.verifier).status,
   "DEPARTURE_WRITE_UNCERTAIN_NEEDS_REPAIR");
 }));
+test("existing departure receipt with lost replay fsync ACK cannot authorize another warp",()=>use(f=>{
+ assert.equal(f.create().record(booking(),f.scene,f.verifier).status,
+  "DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS");
+ const io={...fs,fsyncSync(){throw Error("LOST_REPLAY_ACK")}};
+ const replay=createDepartureWitness({root:f.root,io,clock:()=>now});
+ assert.equal(replay.record(booking(),f.scene,f.verifier).status,
+  "DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR");
+}));
 test("financial attendance flag OFF prevents native witness creation",()=>use(f=>{
  process.env[FLAG]="0";
  try{assert.equal(f.create().record(booking(),f.scene,f.verifier).status,"DISABLED")}
