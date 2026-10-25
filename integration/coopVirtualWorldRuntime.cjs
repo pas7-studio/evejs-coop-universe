@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -137,6 +137,7 @@ function start(){
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
+  safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
   safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
@@ -417,11 +418,91 @@ function advanceNativeWreckRecovery(){
     runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
   addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
   const result=wreckRecoveryDirector.tick({systemID,scene,claims,assignments,store,
-   getController:id=>controllers.getControllerByEntityID(id),blockedIDs});
+   getController:id=>controllers.getControllerByEntityID(id),blockedIDs,
+   pickupDistance:process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"?2500:0});
   if(result.orders.length||result.inspections.length)
    require("./coopRuntimeProbe").observe("living-npc-postraid-wreck-recovery",null,
     {spaceState:{systemID}},{orders:result.orders,inspections:result.inspections,
      transferStatus:"NOT_IMPLEMENTED_NO_NATIVE_ATOMIC_CUSTODY"});
+ }
+}
+// Native source-first wreck debit -> native cargo credit. This phase is
+// separate from mere wreck inspection and disabled by default.
+function advanceNativeWreckCustody(){
+ if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
+  process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
+  process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  nativeMarketTickRunning||!identityRegistry||!bridge)return;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  controllers=require("./npc/npcRegistry");
+ if(!wreckCustody)wreckCustody=require("./coopNpcWreckCustody").createWreckCustody({
+  store,sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  resolveType:id=>require("../services/inventory/itemTypeRegistry").resolveItemByTypeID(id),
+  root:process.env.EVEJS_COOP_NPC_WRECK_CUSTODY_ROOT||
+   "/var/lib/evejs/coop-npc-wreck-custody"
+ });
+ const recovered=wreckCustody.recover();
+ if(recovered.status!=="CLEAN"){
+  require("./coopRuntimeProbe").observe("living-npc-wreck-custody-blocked",
+   null,null,{status:recovered.status,
+    pending:recovered.pending?.slice(0,5)});
+  return;
+ }
+ const claims=require("./coopNpcWreckClaims").getWreckClaims();
+ const byPilot=new Map();
+ for(const row of [...bridge.snapshot(),
+  ...Object.values(identityRegistry.snapshot().links||{})]){
+  if(!row?.pilotID||!Number.isSafeInteger(Number(row.entityID)))continue;
+  const key=String(row.pilotID)+":"+String(row.entityID)+":"+String(row.systemID);
+  byPilot.set(key,row);
+ }
+ const assignments=[...byPilot.values()];
+ let count=0;
+ for(const systemID of visitedSystems){
+  if(count>=2)break;
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  for(const claim of claims.active(systemID)){
+   if(count>=2)break;
+   const ship=scene.getEntityByID(claim.attackerEntityID),
+    wreck=scene.getEntityByID(claim.wreckID);
+   if(ship?.kind!=="ship"||ship.nativeNpc!==true||
+    wreck?.nativeNpcWreck!==true||!ship.position||!wreck.position||
+    !["x","y","z"].every(k=>Number.isFinite(ship.position[k])&&
+     Number.isFinite(wreck.position[k]))||
+    Math.hypot(ship.position.x-wreck.position.x,
+     ship.position.y-wreck.position.y,
+     ship.position.z-wreck.position.z)>2500)continue;
+   if(tacticsDirector?.activeIDs().has(Number(claim.attackerEntityID))||
+    gateTravelDirector?.activeIDs().has(Number(claim.attackerEntityID))||
+    raidDirector?.activePirateIDs(sys=>runtime.ensureScene(sys,{refreshStargates:false}))
+     .has(Number(claim.attackerEntityID)))continue;
+   const items=store.listNativeWreckItemsForWreck(claim.wreckID);
+   if(!Array.isArray(items))continue;
+   for(const item of items.slice(0,2)){
+    if(count>=2)break;
+    const result=wreckCustody.transfer({claim,scene,
+     entityID:Number(claim.attackerEntityID),
+     wreckItemID:Number(item.wreckItemID),assignments,
+     getController:id=>controllers.getControllerByEntityID(id),
+     canLoot:({wreck,native})=>
+      Number(wreck.ownerID)>0&&Number(wreck.ownerID)===Number(native.ownerID)||
+      Number(wreck.lootRightCorpID)>0&&
+       Number(wreck.lootRightCorpID)===Number(native.corporationID)&&
+       Number(native.corporationID)>0});
+    if(result.status==="NATIVE_WRECK_CARGO_SETTLED"){
+     count++;
+     require("./coopRuntimeProbe").observe("living-npc-wreck-cargo-settled",null,
+      {spaceState:{systemID}},result);
+    }else if(!["NATIVE_LOOT_RIGHTS_NOT_VERIFIED","INVALID_NATIVE_CUSTODY_PROOF",
+     "NATIVE_WRECK_OR_SHIP_UNVERIFIED","NATIVE_COMBAT_ORDER_ACTIVE",
+     "NATIVE_CARGO_FULL","ALREADY_SETTLED"].includes(result.status)){
+     require("./coopRuntimeProbe").observe("living-npc-wreck-custody-refused",null,
+      {spaceState:{systemID}},{status:result.status,
+       wreckID:claim.wreckID,itemID:item.wreckItemID});
+    }
+   }
+  }
  }
 }
 function advanceNativePatrolRoutes(){
