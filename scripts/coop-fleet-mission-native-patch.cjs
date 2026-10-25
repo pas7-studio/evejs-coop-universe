@@ -106,6 +106,30 @@ function patch(source,file,remove=false){
    text=text.replace(functionAnchor,nativeMethod+functionAnchor);
    text=text.replace(exportedAnchor,exportedLine+eol+exportedAnchor);
   }
+ }else if(file.endsWith("/agent/missionRuntimeState.js")){
+  // EveJS normalizes persisted mission records on EVERY read. Unknown
+  // fields are discarded; explicitly preserve the validated shared
+  // native dungeon receipt or progress disappears after a reconnect.
+  const anchor='    gmCompleted: toBoolean(record.gmCompleted, false),';
+  const extra=lines([
+   '    coopSharedDungeon: record.coopSharedDungeon &&',
+   '      toPositiveInteger(record.coopSharedDungeon.sourceInstanceID, 0) > 0 &&',
+   '      toPositiveInteger(record.coopSharedDungeon.ownerID, 0) > 0 &&',
+   '      toPositiveInteger(record.coopSharedDungeon.agentID, 0) === normalizedAgentID &&',
+   '      String(record.coopSharedDungeon.contentID) === String(contentID) &&',
+   '      normalizeText(record.coopSharedDungeon.missionTemplateID, "") === missionTemplateID',
+   '        ? {',
+   '            sourceInstanceID: toPositiveInteger(record.coopSharedDungeon.sourceInstanceID, 0),',
+   '            ownerID: toPositiveInteger(record.coopSharedDungeon.ownerID, 0),',
+   '            agentID: normalizedAgentID, contentID, missionTemplateID,',
+   '          } : null,',
+   ''
+  ].join("\n"));
+  const hasExtra=text.includes(extra),countAnchor=count(text,anchor);
+  if(countAnchor!==1||count(text,extra)>1)
+   throw Error("UNKNOWN_OR_PARTIAL_NATIVE_MISSION_STATE_SOURCE");
+  if(remove&&hasExtra)text=text.replace(extra,"");
+  if(!remove&&!hasExtra)text=text.replace(anchor,anchor+eol+extra.slice(0,-eol.length));
  }else if(file.endsWith("/dungeon/dungeonUniverseSiteService.js")){
   const old=lines([
    '      return agentMissionRuntime.syncMissionRecordForDungeonInstance(instance, {',
