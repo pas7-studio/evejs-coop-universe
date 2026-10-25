@@ -14,8 +14,8 @@ function sequence(){
   {characterID:2,shipID:102,shipExists:true}]}),
  event(8,'living-pirate-raid',{actions:[{action:'attack',pirateID:77,targetID:88,targetRole:'hauler'}]}),
  event(15,'living-native-wreck-evidence',{status:'PHYSICAL_NATIVE_WRECK_VERIFIED',victimEntityID:77,wreckID:99,lootStatus:'ITEMS_STORED',storedItemCount:2}),
- event(17,'living-native-loot-pickup',{status:'VERIFIED_NATIVE_LOOT_PICKUP',sourceEntityID:77,wreckID:99,wreckItemID:901,characterID:1,shipID:101,quantity:3}),
- event(18,'living-native-loot-pickup',{status:'VERIFIED_NATIVE_LOOT_PICKUP',sourceEntityID:77,wreckID:99,wreckItemID:902,characterID:2,shipID:102,quantity:2})
+ event(17,'living-native-loot-pickup',{status:'VERIFIED_NATIVE_LOOT_PICKUP',sourceEntityID:77,wreckID:99,wreckItemID:901,characterID:1,shipID:101,quantity:3,remainingQuantity:0,typeID:34,destinationLocationID:101,evidence:'NATIVE_GRANT_SUCCESS_PLUS_PHYSICAL_WRECK_AND_POST_TRANSFER_SOURCE_STORE'}),
+ event(18,'living-native-loot-pickup',{status:'VERIFIED_NATIVE_LOOT_PICKUP',sourceEntityID:77,wreckID:99,wreckItemID:902,characterID:2,shipID:102,quantity:2,remainingQuantity:0,typeID:35,destinationLocationID:102,evidence:'NATIVE_GRANT_SUCCESS_PLUS_PHYSICAL_WRECK_AND_POST_TRANSFER_SOURCE_STORE'})
  ];
 }
 const report=(events,minutes=120)=>summarize(events.map(e=>JSON.stringify(e)).join('\n'),{now,minutes});
