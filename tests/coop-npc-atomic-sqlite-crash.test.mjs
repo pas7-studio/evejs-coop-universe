@@ -23,7 +23,7 @@ function seed(db){
  const cargo={};
  for(const [cargoID,moduleID,flagID] of [[501,401,27],[502,402,28]])
   cargo[cargoID]={cargoID,entityID:101,moduleID,ownerID:900,
-   typeID:35,categoryID:8,flagID,quantity:5};
+   typeID:35,categoryID:8,quantity:5};
  put("npcCargo","cargo",cargo);
 }
 function openAdapter(db){
