@@ -228,3 +228,83 @@ test("original keyed native BUY reserve still rejects wallet without journal aut
   }
  }finally{reset()}
 });
+
+
+test("original BUY reserve cannot bind a corrupt paid witness after Rust ACK",()=>{
+ const reset=flags();try{
+  const invalid=[
+   r=>{r.buyerAfterCents=r.buyerBeforeCents},
+   r=>{r.buyerBeforeCents=-1;r.buyerAfterCents=-8807},
+   r=>{delete r.journalIDs},
+   r=>{r.journalIDs=[1,2,3]},
+   r=>{r.createdAt=0},
+   r=>{r.reservedCents-=1},
+   r=>{r.key="buy-reserve:foreign"}
+  ];
+  for(const corrupt of invalid){
+   const x=fixture(),s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+   const pending=s.begin(quote());
+   corrupt(x.db.playerMarketFills[pending.key]);
+   const before=structuredClone(x.db),count=x.commits;
+   assert.throws(()=>s.bind(pending,order()),/P2P_BUY_RESERVE_COMMITTED_DEBIT_NOT_FOUND/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,count);
+   assert.equal(x.db.marketEscrow["23"],undefined);
+  }
+ }finally{reset()}
+});
+test("open native Rust BUY order cannot rely on a corrupted bound debit receipt",()=>{
+ const reset=flags();try{
+  const corrupt=[
+   r=>{r.buyerAfterCents=r.buyerBeforeCents},
+   r=>{r.buyerBeforeCents=-1;r.buyerAfterCents=-8807},
+   r=>{delete r.journalIDs},
+   r=>{r.journalIDs=[1,2,3]},
+   r=>{r.createdAt=0},
+   r=>{r.key="buy-reserve:foreign"}
+  ];
+  for(const change of corrupt){
+   const x=fixture(),s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+   s.bind(s.begin(quote()),order());
+   change(x.db.playerMarketFills["buy-reserve:"+id]);
+   const before=structuredClone(x.db),count=x.commits;
+   assert.throws(()=>s.assertExisting([order()],201),/P2P_BUY_RESERVE_LEGACY_OR_UNFUNDED_BUY_ORDER/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,count);
+  }
+ }finally{reset()}
+});
+test("already-bound replay does not accept forged original Rust BUY escrow identity",()=>{
+ const reset=flags();try{
+  for(const mutate of [
+   e=>{e.ownerId=202},
+   e=>{e.stationId=60000001},
+   e=>{e.typeId=35},
+   e=>{e.remainingQuantity=6},
+   e=>{e.price=11.34},
+   e=>{e.coopReserveReceiptKey="buy-reserve:other"}
+  ]){
+   const x=fixture(),s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+   const pending=s.begin(quote());s.bind(pending,order());
+   mutate(x.db.marketEscrow["23"]);
+   const before=structuredClone(x.db),count=x.commits;
+   assert.throws(()=>s.bind(pending,order()),/P2P_BUY_RESERVE_ESCROW_RECEIPT_MISMATCH/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,count);
+  }
+ }finally{reset()}
+});
+test("valid original BUY reserve still binds, verifies and replays without second wallet debit",()=>{
+ const reset=flags();try{
+  const x=fixture();delete x.db.characters["201"].characterID;
+  const s=createBuyReserve({gameStore:x.gameStore,makeID:()=>id,clock:()=>123456});
+  const pending=s.begin(quote());
+  const bound=s.bind(pending,order());
+  assert.equal(bound.phase,"BOUND");
+  assert.equal(s.assertExisting([order()],201),true);
+  const saved=structuredClone(x.db);
+  assert.equal(s.bind(pending,order()).replayed,true);
+  assert.deepEqual(x.db,saved);
+  assert.equal(x.db.characters["201"].balance,911.94);
+ }finally{reset()}
+});

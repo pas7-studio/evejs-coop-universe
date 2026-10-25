@@ -14,6 +14,36 @@ const toCents=n=>{
 };
 const isk=n=>n/100;
 const keyFor=operationID=>"buy-reserve:"+operationID;
+// Original reserve is an immutable native wallet debit witness, not an
+// escrow authorization merely because its operation ID and amount match.
+// Verify its persisted exact-cent arithmetic before binding/reusing a BUY.
+function validDebitReceipt(r){
+ if(!r||r.kind!=="P2P_BUY_RESERVE"||
+    !["RESERVED","BOUND"].includes(r.phase)||
+    typeof r.operationID!=="string"||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.operationID)||
+    r.key!==keyFor(r.operationID)||
+    !positive(r.buyerID)||!positive(r.stationID)||!positive(r.typeID)||
+    !positive(r.quantity)||!positive(r.minVolume)||
+    r.minVolume>r.quantity||!positive(r.durationDays)||
+    !natural(r.orderRange)||!positive(r.priceCents)||
+    !natural(r.brokerCents)||!natural(r.sccCents)||
+    !positive(r.reservedCents)||!positive(r.totalCents)||
+    r.reservedCents!==r.priceCents*r.quantity||
+    !natural(r.reservedCents+r.brokerCents+r.sccCents)||
+    r.totalCents!==r.reservedCents+r.brokerCents+r.sccCents||
+    !natural(r.buyerBeforeCents)||!natural(r.buyerAfterCents)||
+    r.buyerBeforeCents<r.totalCents||
+    r.buyerAfterCents!==r.buyerBeforeCents-r.totalCents||
+    !Array.isArray(r.journalIDs)||r.journalIDs.length!==3||
+    !positive(r.journalIDs[0])||r.journalIDs[0]<5000000000000000||
+    r.journalIDs.some((v,i)=>!positive(v)||
+      (i>0&&v!==r.journalIDs[0]+i))||
+    !positive(r.createdAt)||
+    (r.phase==="RESERVED"&&r.orderID!==null)||
+    (r.phase==="BOUND"&&!orderID(r.orderID)))return false;
+ return true;
+}
 function requireQuote(quote){
  if(!quote||!positive(quote.buyerID)||!positive(quote.stationID)||
     !positive(quote.typeID)||!positive(quote.quantity)||
@@ -150,7 +180,12 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
    throw Error("P2P_BUY_RESERVE_RUST_ORDER_NOT_VERIFIED");
   return gameStore.transact(["playerMarketFills","marketEscrow"],tx=>{
    const original=tx.get("playerMarketFills",receipt.key);
-   if(!original||original.kind!=="P2P_BUY_RESERVE"||
+   if(!validDebitReceipt(receipt)||!validDebitReceipt(original)||
+      original.kind!=="P2P_BUY_RESERVE"||
+      original.buyerBeforeCents!==receipt.buyerBeforeCents||
+      original.buyerAfterCents!==receipt.buyerAfterCents||
+      original.createdAt!==receipt.createdAt||
+      JSON.stringify(original.journalIDs)!==JSON.stringify(receipt.journalIDs)||
       original.operationID!==receipt.operationID||
       original.buyerID!==receipt.buyerID||
       original.stationID!==receipt.stationID||
@@ -168,7 +203,15 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
    if(original.phase==="BOUND"){
     if(original.orderID!==id)throw Error("P2P_BUY_RESERVE_BOUND_TO_OTHER_ORDER");
     const escrow=tx.get("marketEscrow",id);
-    if(!escrow||escrow.coopReserveOperationID!==original.operationID||
+    if(!escrow||escrow.orderId!==id||
+       escrow.ownerId!==original.buyerID||escrow.isCorp!==false||
+       escrow.escrowType!=="buy"||
+       escrow.stationId!==original.stationID||
+       escrow.typeId!==original.typeID||
+       escrow.remainingQuantity!==original.quantity||
+       toCents(escrow.price)!==original.priceCents||
+       escrow.coopReserveOperationID!==original.operationID||
+       escrow.coopReserveReceiptKey!==original.key||
        toCents(escrow.escrowAmount)!==original.reservedCents)
      throw Error("P2P_BUY_RESERVE_ESCROW_RECEIPT_MISMATCH");
     return {...original,replayed:true};
@@ -215,10 +258,11 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
        escrow.isCorp!==false||escrow.escrowType!=="buy"||
        escrow.stationId!==order.row.station_id||
        escrow.typeId!==order.row.type_id||
-       !receipt||receipt.kind!=="P2P_BUY_RESERVE"||
+       !validDebitReceipt(receipt)||
        receipt.phase!=="BOUND"||receipt.orderID!==id||
        receipt.buyerID!==buyerID||
        receipt.operationID!==escrow.coopReserveOperationID||
+       escrow.coopReserveReceiptKey!==receipt.key||
        toCents(escrow.price)!==receipt.priceCents||
        toCents(order.row.price)!==receipt.priceCents||
        escrow.remainingQuantity!==order.row.vol_remaining||
