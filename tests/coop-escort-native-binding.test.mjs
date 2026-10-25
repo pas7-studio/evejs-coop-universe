@@ -32,6 +32,7 @@ function fixture(options={}){
   fundBeforeWarp:x=>{reserves++;return {status:"FUNDED_BEFORE_WARP",contractID:booking.contractID,manifestKey:x.manifestKey}},
   recordDelivery:x=>{deliveryCalls++;return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey:x.manifestKey}},
   finishAfterRaid:c=>{payments++;return {status:"SETTLED",contractID:c.contractID}},
+  settlePeacefulFlight:(_key,_scene)=>{payments++;return {status:"NATIVE_PEACEFUL_ESCORT_PAID",contractID:booking.contractID}},
   refundProvenLoss:()=>({status:"REFUNDED"}),
   refundWreckedFlight:()=>({status:"REFUNDED",contractID:booking.contractID,amountISK:20000}),
   readFlight:k=>({status:"READY",phase:options.notDelivered?"FUNDED":"DELIVERED",booking}),
@@ -81,6 +82,26 @@ test("late pirate after delivery is paid by durable journal replay exactly once"
   systemID:30000144,maxTrips:4});
  assert.equal(replay.alreadyPaid,1);
  assert.equal(f.counts().payments,1);
+});
+test("late pirate witness after already-paid peaceful escort cannot credit player twice",()=>{
+ const f=fixture(),b=makeBinding(f);
+ f.runtime.settlePeacefulFlight(key,{systemID:30000144});
+ assert.equal(f.counts().payments,1);
+ f.incidents.push({systemID:30000144,targetID:901,targetRole:"hauler",
+  status:"PIRATE_WRECK_CONFIRMED",closed:true,pirateID:1001,nativeWreckID:2001,
+  duoFleetID:44,characters:[701,702],key:"30000144:1001:901"});
+ const result=b.reconcilePendingDeliveries({systemID:30000144,maxTrips:4});
+ assert.equal(result.outcomes[0].status,"ALREADY_NATIVE_SETTLED");
+ assert.equal(f.counts().payments,1);
+});
+test("separate peaceful arrival entrypoint stays off without explicit flag",()=>{
+ const f=fixture(),b=makeBinding(f);
+ const before=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
+ delete process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
+ try{assert.equal(b.settlePeacefulDelivery(key,{systemID:30000144}).status,"DISABLED");
+ assert.equal(f.counts().payments,0)}
+ finally{if(before===undefined)delete process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT;
+  else process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=before}
 });
 test("native settlement recovery stays disabled without separate opt-in flag",()=>{
  const f=fixture(),b=makeBinding(f);
