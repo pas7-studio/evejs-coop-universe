@@ -121,6 +121,17 @@ test("two independent partial fills conserve remaining stock and credited ISK",a
  assert.equal(r.soldQuantity,50);assert.equal(r.remainingQuantity,50);
  assert.equal(r.revenueCents,62500);
 });
+test("unordered GameStore partial receipt scan is reconstructed by original remainingBefore",async()=>{
+ const f=fixture(),a=partialReceipt(),b=partialReceipt({
+ key:KEY2,fillID:2345002,quantity:30,remainingBefore:80,
+ buyerItemID:1990000302,at:2000});
+ addPartial(f,a);addPartial(f,b);
+ f.receipts([b,a]);
+ const r=await f.audit({ownerID:OWNER,stationID:STATION,operationID:OP,orderID:ORDER});
+ assert.equal(r.status,"ORIGINAL_PARTIAL_SALE_ATTESTED");
+ assert.equal(r.revenueCents,62500);
+ assert.deepEqual(r.fillIDs,[a.fillID,b.fillID]);
+});
 test("terminal native partial fill requires Rust closed and zero escrow",async()=>{
  const f=fixture(),a=partialReceipt(),b=partialReceipt({
  key:KEY2,fillID:2345002,quantity:80,remainingBefore:80,
