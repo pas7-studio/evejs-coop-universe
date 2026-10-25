@@ -27,7 +27,7 @@ function createOriginalNpcSaleSettlementAudit({director,listNativeReceipts,
   const entry=journal.entries[operationID];
   if(!entry||entry.operationID!==operationID||
      entry.ownerID!==ownerID||entry.stationID!==stationID||
-     entry.orderID!==orderID||!POS(entry.itemID)||
+     entry.orderID!==orderID||!POS(entry.jobID)||!POS(entry.itemID)||
      !POS(entry.typeID)||!POS(entry.quantity)||
      !["LISTED","SOLD"].includes(entry.phase))
    throw Error("LW04C3B_PRODUCER_OPERATION_UNVERIFIED");
