@@ -31,7 +31,10 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   finally{if(fd!==null&&fd!==undefined)fs.closeSync(fd);try{fs.unlinkSync(tmp)}catch(e){if(e.code!=="ENOENT")throw e}}}
  function exclusive(fn){fs.mkdirSync(path.dirname(file),{recursive:true});let fd;
   try{fd=fs.openSync(lock,"wx",0o600)}catch{return {status:"ECONOMY_LOCKED"}};
-  try{return fn()}finally{fs.closeSync(fd);try{fs.unlinkSync(lock)}catch{}}}
+  const release=()=>{fs.closeSync(fd);try{fs.unlinkSync(lock)}catch{}};
+  try{const result=fn();if(result&&typeof result.then==="function")return result.finally(release);
+   release();return result;
+  }catch(error){release();throw error;}}
  function halt(reason,operationID){return {status:"BLOCKED",reason,operationID}}
  function validateContext(ownerID,stationID){if(!safeInt(ownerID)||!safeInt(stationID))return false;
   const o=observe.getOwner(ownerID),s=observe.getStation(stationID);
@@ -119,7 +122,8 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
       item.quantity!==e.quantity||item.customInfo!=="coop-industry:v1:"+e.jobID)
       return halt("NATIVE_OUTPUT_NO_LONGER_AVAILABLE",id);
    e.phase="LIST_UNKNOWN";save(state);
-   const r=market.listOnce({operationID:id,ownerID,stationID,itemID:e.itemID,typeID:e.typeID,quantity:e.quantity});
+   const rpc=market.listOnce({operationID:id,ownerID,stationID,itemID:e.itemID,typeID:e.typeID,quantity:e.quantity});
+   const verified=r=>{
    const order=r?.orderID?market.getOrder(r.orderID):null;
    if(r?.status!=="LISTED"||!safeInt(r.orderID)||!order||order.orderID!==r.orderID||
       order.ownerID!==ownerID||order.stationID!==stationID||order.typeID!==e.typeID||
@@ -128,6 +132,8 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    e.phase="LISTED";e.orderID=r.orderID;e.priceCents=cents(order.price);
    if(e.priceCents===null)return halt("NATIVE_MARKET_PRICE_INVALID",id);
    save(state);return {status:"LISTED",operationID:id,orderID:e.orderID};
+   };
+   return rpc&&typeof rpc.then==="function"?rpc.then(verified):verified(rpc);
   }
   if(e.phase==="LISTED"){
    const order=market.getOrder(e.orderID),sales=market.getSaleEvidence(e.orderID);
