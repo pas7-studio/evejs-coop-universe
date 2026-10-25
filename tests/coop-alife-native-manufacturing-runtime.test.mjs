@@ -33,7 +33,11 @@ function fixture({env=FLAGS,live=true,now=100010}={}){
  const registry={snapshot:()=>({links:{[PILOT]:{pilotID:PILOT,
   entityID:ENTITY,systemID:SYSTEM}}})};
  const calls=[],director={mode:"NATIVE_AUTHORITIES_ONLY",
-  supportsLiveRuntime:live,tick:async ctx=>{calls.push(ctx);return {status:"PREPARED",
+  supportsLiveRuntime:live,auditBeforeTick:async scope=>({
+   status:"READY",ownerID:scope.ownerID,stationID:scope.stationID,
+   readOnly:true,nativeMutation:false,
+   proof:"ORIGINAL_DIRECTOR_JOURNAL_AND_NATIVE_RECEIPTS_READ_ONLY"
+  }),tick:async ctx=>{calls.push(ctx);return {status:"PREPARED",
    operationID:"npc-manufacture:0123456789abcdef0123456789abcdef"}}};
  const onResult=[];
  const runtime=createRuntimeAlifeManufacturing({env,clock:()=>now,
