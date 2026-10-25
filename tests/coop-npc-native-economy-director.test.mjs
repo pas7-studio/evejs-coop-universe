@@ -219,3 +219,53 @@ test("lost Rust market RPC acknowledgment cannot list the same item twice",async
  }finally{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY;
   else process.env.EVEJS_COOP_NATIVE_NPC_ECONOMY=old;f.close()}
 });
+
+test("installed native PAUSED job waits without second charge then resumes",()=>run(f=>{
+ const d=f.create();assert.equal(d.tick(ctx).status,"PREPARED");
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ const first=f.native.getJob;f.native.getJob=id=>({...first(id),status:2});
+ assert.equal(d.tick(ctx).status,"WAITING_FOR_NATIVE_RESUME");
+ assert.equal(f.balance,990);assert.equal(f.installs,1);
+ f.native.getJob=first;
+ assert.equal(d.tick(ctx).status,"WAITING_FOR_NATIVE_TIMER");
+ f.setElapsed(true);assert.equal(d.tick(ctx).status,"READY");
+ assert.equal(f.installs,1);
+}));
+test("an unsold order never blocks a different verified product shortage",()=>run(f=>{
+ const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);assert.equal(d.tick(ctx).status,"LISTED");
+ assert.equal(d.tick(ctx).status,"LISTED_AWAITING_BUYER");
+ const OTHER=218;
+ const previous=f.observe.snapshot;
+ f.observe.snapshot=()=>({...previous(),targets:{[TYPE]:100,[OTHER]:100}});
+ let planned=null;
+ f.planner.plan=args=>{planned=args;return {status:"PLAN_READY",jobs:[{
+   ownerID:OWNER,stationID:STATION,facilityID:STATION,
+   blueprintItemID:BPO,productTypeID:OTHER,outputQuantity:100
+ }]}};
+ const created=d.tick({...ctx,productTypeIDs:[TYPE,OTHER]});
+ assert.equal(created.status,"PREPARED");
+ assert.equal(created.productTypeID,OTHER);
+ assert.deepEqual(planned.productTypeIDs,[OTHER]);
+ assert.equal(f.listings,1);
+}));
+test("verified market fills and NPC purchases never double count as consumption",()=>run(f=>{
+ const snap=f.observe.snapshot;
+ f.observe.snapshot=()=>({...snap(),demandReceipts:[
+  {receiptID:"market:1",source:"NATIVE_MARKET_FILL",typeID:TYPE,quantity:60,
+   authoritativeNative:true,ownerID:OWNER,stationID:STATION,at:1000000},
+  {receiptID:"purchase:1",source:"NATIVE_NPC_PURCHASE",typeID:TYPE,quantity:60,
+   authoritativeNative:true,ownerID:OWNER,stationID:STATION,at:1000000}
+ ]});
+ assert.equal(f.create().tick(ctx).shortage,100);
+}));
+test("same native ammo debit under multiple receipt IDs blocks double demand",()=>run(f=>{
+ const snap=f.observe.snapshot;
+ f.observe.snapshot=()=>({...snap(),demandReceipts:[1,2].map(i=>({
+  receiptID:"ammo:"+i,consumptionID:"native-ammo-debit-7",
+  source:"NATIVE_WEAPON_CONSUMPTION",typeID:TYPE,quantity:20,
+  authoritativeNative:true,ownerID:OWNER,stationID:STATION,at:1000000
+ }))});
+ assert.throws(()=>f.create().tick(ctx),/NATIVE_DEMAND_CONSUMPTION_REPLAYED/);
+ assert.equal(f.installs,0);
+}));
