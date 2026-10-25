@@ -45,6 +45,12 @@ function createBroadcaster({
    position(item.pirate.position) && position(item.target.position))
    .sort((a, b) => Number(b.action === "attack") - Number(a.action === "attack"));
   if (!valid.length) return {sent: 0, status: "NO_VERIFIED_NATIVE_ACTION"};
+  // A native order accepted by the real raid director is a real incident,
+  // even if nobody is online to receive a Local message. Optional and safe.
+  if(process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1") for(const action of valid){
+   try{require("./coopConvoyOperations").noteRaid(scene,action)}
+   catch(error){console.warn("[CoopConvoyOperations] raid",String(error?.message||error))}
+  }
   // A real attack supersedes an earlier approach for the same pair.
   const attackingPairs = new Set(valid.filter(item => item.action === "attack")
    .map(item => item.pirateID + ":" + item.targetID));
