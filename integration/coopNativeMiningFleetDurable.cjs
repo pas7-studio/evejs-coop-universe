@@ -12,6 +12,12 @@ const busy=new Set();
 const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):0;
 const clone=x=>JSON.parse(JSON.stringify(x));
 function slotKey(systemID,slot){return systemID+"-"+slot;}
+// Stable across restarts, disjoint by system and slot; no virtual ship ID.
+function fleetIDForSlot(systemID,slot){
+ const id=Number(systemID)*32+Number(slot);
+ return pos(systemID)&&Number.isSafeInteger(Number(slot))&&slot>=1&&slot<=MAX_SLOTS&&
+   Number.isSafeInteger(id)&&id>0?id:0;
+}
 function roleMarker(systemID,slot,role){
  return "coop-mining-"+systemID+"-"+slot+"-"+role;
 }
@@ -93,10 +99,15 @@ function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
 function registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAnchor}){
  const existing=getFleets();
  const key=scene.systemID+":"+slot;
- const conflicts=existing.filter(x=>x.startupKey===key);
+ const stableFleetID=fleetIDForSlot(scene.systemID,slot);
+ if(!stableFleetID)throw Error("ALIFE09_INVALID_STABLE_FLEET_ID");
+ const conflicts=existing.filter(x=>x.startupKey===key||
+   Number(x.fleetID)===stableFleetID);
  if(conflicts.length>1)throw Error("ALIFE08_DUPLICATED_RUNTIME_SLOT");
  if(conflicts.length){
   const fleet=conflicts[0];
+  if(fleet.startupKey!==key||Number(fleet.fleetID)!==stableFleetID)
+    throw Error("ALIFE09_RUNTIME_FLEET_ID_CONFLICT");
   const a=ids(fleet.minerEntityIDs),b=ids(fleet.haulerEntityIDs);
   if(!a||!b||JSON.stringify(a)!==JSON.stringify(minerIDs)||
      JSON.stringify(b)!==JSON.stringify(haulerIDs))
@@ -104,7 +115,7 @@ function registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAn
   return false;
  }
  const answer=register(slot,{minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor});
- if(!answer||String(answer.startupKey)!==key)
+ if(!answer||String(answer.startupKey)!==key||Number(answer.fleetID)!==stableFleetID)
    throw Error("ALIFE08_NATIVE_FLEET_REGISTRATION_UNKNOWN");
  return true;
 }
@@ -118,7 +129,8 @@ function createService({db,store,nativeService,ensureState,spawn,register,
   throw Error("ALIFE08_AUTHORITIES_REQUIRED");
  function start({scene,fleetCount}={}){
   const systemID=pos(scene?.systemID);
-  if(!systemID||typeof scene.getEntityByID!=="function"||
+  if(!systemID||!fleetIDForSlot(systemID,1)||
+     typeof scene.getEntityByID!=="function"||
      !Number.isSafeInteger(fleetCount)||fleetCount<0||fleetCount>MAX_SLOTS)
    return {status:"BLOCKED",reason:"ALIFE08_INVALID_STARTUP",slots:[]};
   if(process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE!=="1")
@@ -154,13 +166,15 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
       verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
       const active=saveSlot(db,key,{version:1,status:"ACTIVE",systemID,slot,
+       fleetID:fleetIDForSlot(systemID,slot),
        minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor:born.data.originAnchor||null});
       registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAnchor:active.originAnchor});
       reports.push(result("SPAWNED",slot,{minerIDs,haulerIDs}));
       continue;
      }
      if(record.version!==1||record.status!=="ACTIVE"||
-        pos(record.systemID)!==systemID||pos(record.slot)!==slot){
+        pos(record.systemID)!==systemID||pos(record.slot)!==slot||
+        Number(record.fleetID)!==fleetIDForSlot(systemID,slot)){
       reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason:"NONACTIVE_OR_INVALID_SLOT_WITNESS"}));
       continue;
      }
@@ -203,4 +217,4 @@ function start(args){
    spawn,register,getFleets,ensureState,log:message=>console.warn("[ALIFE08]",message)
  }).start({scene,fleetCount});
 }
-module.exports={createService,start,roleMarker,slotKey};
+module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot};
