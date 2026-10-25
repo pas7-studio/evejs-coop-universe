@@ -21,8 +21,8 @@ function fixture(t,mode="COMMITTED"){
   startupKey:"30000142:1",haulerEntityIDs:[9002]};
  const ops=[];
  const store={
-  listNativeCargoForEntity:id=>id===9001?[ore]:[],
-  upsertNativeCargo(){ops.push("LEGACY_WRITE");return{success:true}},
+  listNativeCargoForEntity:id=>Number(ore.entityID)===id?[ore]:[],
+  upsertNativeCargo(next){Object.assign(ore,next);ops.push("LEGACY_WRITE");return{success:true}},
   buildNativeCargoItems(){return[]},
  };
  const probe={observe:event=>ops.push(event)};
