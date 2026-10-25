@@ -105,12 +105,11 @@ function createOriginalWarehouseTitleTransfer({
       !Number.isSafeInteger(quote.priceCents)||
       quote.priceCents>100000000000)
     return blocked("LW04E_ORIGINAL_CORPORATE_PRICE_UNVERIFIED",operationID);
-   const preItem=itemStore.findItemById(oreItemID);
-   // Strict v1 only works for a unique, unmerged credited ore stack.
-   // The ALIFE-09 grant can merge with other inventory; when that happens
-   // an independent split/ownership proof is needed, not guessing an ID.
-   if(!ownedOriginal(preItem,sourceOwnerID,stationID,typeID,quantity,cargoID))
-    return blocked("LW04E_NATIVE_UNMERGED_SOURCE_ITEM_UNVERIFIED",operationID);
+   // The preimage is checked INSIDE the native GameStore transaction.
+   // An already committed transfer has changed the owner and may already
+   // have been refined; a preflight against the OLD owner would incorrectly
+   // deny idempotent replay after restart. Never pre-read as a substitute
+   // for transactional source CAS.
    const now=clock();
    if(!POS(now))return blocked("LW04E_ORIGINAL_CLOCK_UNVERIFIED",operationID);
    issuedNativeWrite=true;
