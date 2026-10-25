@@ -20,6 +20,7 @@ const source=[
  '}',
  'function destroyNativeNpcEntityWithWreck(){',
  ' const normalizedSystemID=30000142,entityID=12,wreckRecord={wreckID:9001},shipEntity=null,options=null,controller=null,scene=null;',
+ '  const itemType = resolveItemByTypeID(wreckItemRecord.typeID) || {};',
  '  try {',
  '    const dungeonUniverseSiteService = require(path.join("a","b"));',
  '  } catch(error) {}',

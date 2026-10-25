@@ -79,14 +79,23 @@ test("pirate resumes after real warp arrival and attacks instead of waiting eigh
 });
 test("real NPC raid informs only local ready pilots using existing server chat",()=>{
  const {notifyRaid}=require("../integration/coopWorldSignals.cjs");
- const ready={characterID:1,_space:{initialStateSent:true}},notReady={characterID:2,_space:{initialStateSent:false}};
+ const ship=(itemID,x)=>({itemID,kind:"ship",itemName:"Native Ship",position:{x,y:0,z:0}});
+ const playerShip=ship(101,300000);
+ const scene={
+  systemID:30000142,
+  sessions:new Map([
+   [1,{characterID:1,_space:{shipID:101,systemID:30000142,initialStateSent:true},socket:{destroyed:false}}],
+   [2,{characterID:2,_space:{shipID:102,systemID:30000142,initialStateSent:false},socket:{destroyed:false}}]
+  ]),
+  staticEntities:[{itemID:44,kind:"asteroidBelt",itemName:"Broken Comet Belt",position:{x:300000,y:0,z:0}}],
+  getEntityByID:id=>({901:ship(901,290000),202:ship(202,306000),101:playerShip,102:playerShip})[id]||null
+ };
  const seen=[];
- const result=notifyRaid({sessions:new Map([[1,ready],[2,notReady]])},
-  [{action:"attack",targetRole:"hauler",targetID:202}],
+ const result=notifyRaid(scene,[{action:"attack",pirateID:901,targetID:202,targetRole:"hauler"}],
   (session,msg)=>seen.push([session.characterID,msg]));
  assert.equal(result.sent,1);
  assert.equal(seen[0][0],1);
- assert.match(seen[0][1],/ore transport/);
+ assert.match(seen[0][1],/транспорт з рудою/);
 });
 
 test("native mining identity never binds to static entity or another player ship",()=>{
