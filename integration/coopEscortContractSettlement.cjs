@@ -247,7 +247,7 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    y.quantity===x.quantity&&y.typeID===x.typeID&&
    y.stationID===c.stationID&&y.ownerID===c.corporationID&&positive(y.itemID)).length===1))
    return status("ESCORT_NATIVE_CARGO_OUTCOME_MISMATCH");
-  return {status:"NATIVE_ESCORT_EVIDENCE_VERIFIED",contractID:c.contractID};
+  return {status:"NATIVE_ESCORT_EVIDENCE_VERIFIED",contractID:c.contractID,nativeWreckID:i.nativeWreckID};
  }
  function settle(contractID){
   if(process.env.EVEJS_COOP_ESCORT_CONTRACTS!=="1")return status("DISABLED");
