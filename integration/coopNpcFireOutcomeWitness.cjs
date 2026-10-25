@@ -54,14 +54,13 @@ function createFireOutcomeWitness({root,io=fs,clock=()=>Date.now()}={}){
   if(!existing.ok||existing.status!=="COMMITTED"||
      existing.receipt?.boundaryMs!==whenMs)
    return fail("BANK_OUTCOME_UNCOMMITTED");
+  if(existing.receipt.outcome)return fail("BANK_OUTCOME_ALREADY_PRESENT");
   const file=path.join(root,"bank-ships",String(entityID)+".json");
   const lock=file+".lock",dir=path.dirname(file);
-  let locked=false;
   try{
    // Same exclusive writer-lock name as prepare(), so a new cycle can
    // never overwrite an in-flight outcome witness.
    const fd=io.openSync(lock,"wx",0o600);
-   locked=true;
    try{
     io.writeFileSync(fd,JSON.stringify({version:1,entityID,nonce:existing.receipt.nonce,
       purpose:"OUTCOME",pid:process.pid}));
@@ -78,13 +77,11 @@ function createFireOutcomeWitness({root,io=fs,clock=()=>Date.now()}={}){
    if(!Number.isFinite(outcome.observedAtMs)||outcome.observedAtMs<=0)
     return fail("BANK_OUTCOME_CLOCK_UNSAFE");
    write(io,file,{...current,outcome});
-   io.unlinkSync(lock);sync(io,dir);locked=false;
+   io.unlinkSync(lock);sync(io,dir);
    return {ok:true,status:"BANK_OUTCOME_RECORDED",outcome};
-  }catch(_){return fail("BANK_OUTCOME_PERSISTENCE_UNSAFE");}
-  finally{
-   // Intentionally leave any uncertain lock in place. Removing it here
-   // would allow an ambiguous previous cycle to masquerade as complete.
-   if(locked){}
+  }catch(_){
+   // Never remove an uncertain lock. It is the durable quarantine fence.
+   return fail("BANK_OUTCOME_PERSISTENCE_UNSAFE");
   }
  }
  return {record};
