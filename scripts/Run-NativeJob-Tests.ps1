@@ -18,6 +18,10 @@ try {
     'tests/coop-native-job-notifications.test.mjs',
     'tests/coop-escort-priced-mail-replay.test.mjs',
     'tests/coop-escort-restart-duo-authority.test.mjs',
+    'tests/coop-escort-native-binding.test.mjs',
+    'tests/coop-escort-durable-flight-recovery.test.mjs',
+    'tests/coop-escort-durable-warp-fence.test.mjs',
+    'tests/coop-escort-station-predeparture-gate.test.mjs',
     'tests/coop-escort-peaceful-settlement.test.mjs',
     'tests/coop-escort-refund-manifest.test.mjs'
   )
