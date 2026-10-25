@@ -101,7 +101,7 @@ test("partially sold Rust order cannot be re-bought as whole stack",async()=>{
 test("Rust SETTLING order refuses any new buyer before original source repair",async()=>{
  const f=fixture();f.order.state="settling";
  assert.equal((await f.bridge.purchase({...f.args,mode:"partial",
-  quantity:10,claimKey:CLAIM})).reason,
+  quantity:20,claimKey:CLAIM})).reason,
   "LW04C3B_RUST_ORIGINAL_OPEN_ORDER_UNVERIFIED");
  assert.equal(f.partialCalls,0);
 });
