@@ -231,7 +231,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   if(existing.status!=="READY"||!n)return {status:"PREPARING_EVENT_NOT_VERIFIED"};
   const e=existing.event;
   if(e.type!=="CONVOY"||e.stage!=="PREPARING"||
-   e.phase!=="ACTIVE"||e.systemID!==scene?.systemID||
+   !["ACTIVE","RESOLVED"].includes(e.phase)||e.systemID!==scene?.systemID||
    !trip?.haulers||Object.keys(trip.haulers).length!==1||
    e.entityID!==Number(Object.keys(trip.haulers)[0])||
    e.entityID!==fleet?.haulerEntityIDs?.[0]||
@@ -240,6 +240,10 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    trip?.systemID!==scene?.systemID||
    !POS(trip?.startedAt)||!POS(trip?.stationID))
    return {status:"PREPARING_DEPARTURE_PROVENANCE_MISMATCH"};
+  if(e.phase==="RESOLVED")
+   return e.outcome==="DEPARTED"&&e.linkedTripID===trip.manifestID?
+    {status:"NATIVE_PREPARING_EVENT_CLOSED",id:preparingEventID}:
+    {status:"PREPARING_DEPARTURE_TERMINAL_CONFLICT"};
   // This flag comes only after the native warpToPoint accepted a real warp.
   const closed={...e,phase:"RESOLVED",outcome:"DEPARTED",
    endedAt:n,linkedTripID:trip.manifestID||null};
