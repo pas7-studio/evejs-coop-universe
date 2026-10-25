@@ -394,3 +394,36 @@ test("canonical zero-cost manufacturing quote is allowed to reach original atomi
  assert.equal(d.tick(ctx).status,"INSTALLED");
  assert.equal(f.installs,1);
 }));
+
+
+test("completed NPC manufacturing cannot become SOLD for a different original native Rust sell order",()=>run(f=>{
+ const d=f.create();
+ assert.equal(d.tick(ctx).status,"PREPARED");
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ f.setElapsed(true);
+ assert.equal(d.tick(ctx).status,"READY");
+ assert.equal(d.tick(ctx).status,"DELIVERED");
+ assert.equal(d.tick(ctx).status,"LISTED");
+ f.sell(100);
+ const original=f.market.getOrder;
+ for(const drift of [
+  {stationID:STATION+1},
+  {typeID:TYPE+1},
+  {sourceItemID:1990000201},
+  {originalQuantity:101},
+  {price:12.01},
+  {price:0.004},
+  {price:"12"}
+ ]){
+  f.market.getOrder=id=>({...original(id),...drift});
+  const result=d.tick(ctx);
+  assert.equal(result.status,"BLOCKED",JSON.stringify(drift));
+  assert.equal(result.reason,"NATIVE_SALE_ORIGINAL_ORDER_CUSTODY_DRIFT");
+  assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+ }
+ f.market.getOrder=original;
+ const completed=d.tick(ctx);
+ assert.equal(completed.status,"SOLD");
+ assert.equal(completed.revenueCents,120000);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"SOLD");
+}));
