@@ -64,3 +64,22 @@ EVEJS_COOP_ESCORT_REFUNDS=1 (only after full loss proof acceptance)
 EVEJS_COOP_ESCORT_REPUTATION=1
 
 The amount is an operator-set reward policy funded by the existing native NPC corporation wallet, not a free money mint.
+
+
+## Follow-up P0 patch: actual loss BEFORE delivery
+
+Initial Stage A contract materialization used to happen in successful delivery/settlement. If an NPC hauler was genuinely destroyed midflight, the reserved corporate wallet could have no Stage A contract to refund at all. This branch now contains:
+
+- Stage C flight booking persists the ORIGINAL independently verified EVE player fleetID with the two accepted player characters and real immutable NPC manifest. Older receipts lacking original fleet proof fail closed/manual repair.
+- coopEscortRuntime.refundWreckedFlight(manifestKey) reads the original durable FUNDED route and the one matching actual native hauler wreck from the authoritative outcome journal. It reconstructs Stage A only from the immutable prewarp contract/price, true incident pirate identity, original native EVE duo and independent loss evidence; attaches the PREEXISTING native escrow without a second reserve, and invokes Stage A proof-gated atomic corporate refund. No real loss means no contract creation or refund.
+- The native binding exposes refundNativeWreck() only behind the independent EVEJS_COOP_ESCORT_REFUNDS=1 flag. Actual native station tick may invoke it when the physical NPC hauler is absent, but MISSING SCENE ENTITY ALONE NEVER AUTHORIZES MONEY: only the real durable physical wreck can yield REFUNDED. Successful full refund produces an honest terminal loss result with earnedPlayerISK=0.
+- Crucial anti-inflation check in coopEscortNativeBootstrap.verifiedHaulerLoss: the real outcome journal must show a unique total loss with no recorded delivered stock, PLUS the original immutable native manifest must match, EVERY original cargoID must have NO durable warehouse receipt in ANY phase, and findWarehouseItem must independently report NO actual native itemStore stock. Missing/corrupt authority, an in-flight/committed receipt or source-linked inventory block automatic refund for manual reconciliation.
+
+Additional isolated source checks in this turn:
+- 9/9 true Stage A/B/C + native corporate wallet V8 checks on the committed runtime path, including original 50,000→30,000 reserve, authentic wreck refund 30,000→50,000, two zero-player credits, durable REFUNDED and duplicate block.
+- 10/10 combined native station checks: two individual consent phases, real warp only after approval, disappearance alone no refund, real source-approved wreck terminal, never repeat ISK/warp.
+- 10/10 independent original-manifest/warehouse-receipt/native-stock refund safety checks PASS.
+- 15/15 latest modified integration/installer/test source file syntax checks PASS.
+- New standard Node full-path refund tests and station branch tests committed but official full Node runner not executed; this is NOT two-client gameplay PASS.
+
+REMAINING REAL BLOCKERS: persistent reconciliation for unknown warp ACK after process restart, authoritative retry of payout if pirate wreck arrives after station delivery, proper GameStore/SQLite worker tests, real stock controller rescue/tactics wiring, real two-client wallet and notifications, and pinned installer dry-run/rollback. No changes to actual evejs-data or running world.
