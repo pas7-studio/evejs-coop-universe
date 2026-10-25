@@ -11,6 +11,29 @@ const vec=p=>p&&["x","y","z"].every(axis=>Number.isFinite(p[axis]));
 const system=s=>positive(s?._space?.systemID||
  s?.solarsystemid2||s?.solarsystemid);
 const char=s=>positive(s?.characterID);
+// A live character or physical hull may have exactly one Ballpark-ready owner
+// in this authoritative scene. A stale reconnect must not issue fleet orders.
+function uniqueOwners(scene,commanderSession,followerSession,systemID){
+ if(typeof scene?.sessions?.values!=="function")return false;
+ const members=[commanderSession,followerSession];
+ for(const member of members){
+  const characterID=positive(member?.characterID);
+  const shipID=positive(member?._space?.shipID);
+  if(!characterID||!shipID)return false;
+  let matches=0;
+  for(const session of scene.sessions.values()){
+   if(session?.socket?.destroyed===true||
+      session?._space?.initialStateSent!==true)continue;
+   if(positive(session?.characterID)!==characterID&&
+      positive(session?._space?.shipID)!==shipID)continue;
+   // A different-system session retained in this scene is ambiguous, too.
+   if(session!==member||positive(session?._space?.systemID)!==systemID)return false;
+   matches++;
+  }
+  if(matches!==1)return false;
+ }
+ return true;
+}
 function inspect({commanderSession,followerSession,spaceRuntime}={}){
  const commander=char(commanderSession),follower=char(followerSession);
  if(!commander||!follower||commander===follower)
@@ -31,6 +54,8 @@ function inspect({commanderSession,followerSession,spaceRuntime}={}){
  const joined=[...scene.sessions.values()];
  if(!joined.includes(commanderSession)||!joined.includes(followerSession))
   return {ok:false,reason:"SESSION_NOT_IN_SCENE"};
+ if(!uniqueOwners(scene,commanderSession,followerSession,a))
+  return {ok:false,reason:"STALE_OR_DUPLICATE_NATIVE_OWNER"};
  if(commanderSession?._space?.initialStateSent!==true||
     followerSession?._space?.initialStateSent!==true)
   return {ok:false,reason:"SPACE_NOT_READY"};
@@ -113,4 +138,4 @@ function recordFollowerWarp({commanderSession,followerSession,spaceRuntime,
   return {status:"TELEMETRY_ERROR",arrivalVerified:false};
  }
 }
-module.exports={inspect,eligible,recordFollowerWarp};
+module.exports={inspect,eligible,recordFollowerWarp,uniqueOwners};

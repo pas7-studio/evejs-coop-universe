@@ -9,17 +9,20 @@ const position = value => Boolean(value) && ["x", "y", "z"].every(axis =>
  typeof value[axis] === "number" && Number.isFinite(value[axis]));
 const clean = text => String(text || "").replace(/[<>\x00-\x1f\x7f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 64);
 const ACTIONS = new Set(["attack", "warp-to-hauler"]);
+const duoTactics = require("./coopDuoRaidTactics");
 
 function createBroadcaster({
  send = (session, message) => require("../services/chat/chatHub").sendSystemMessage(session, message),
  locate = (scene, target) => require("./coopSystemIntel").nearest(scene, target),
  clock = () => Date.now(),
  cooldownMs = 240000,
- maxEntries = 1024
+ maxEntries = 1024,
+ resolveFleetRuntime = () => require("../services/fleets/fleetRuntime")
 } = {}) {
  if (typeof send !== "function" || typeof locate !== "function" || typeof clock !== "function" ||
   !Number.isSafeInteger(cooldownMs) || cooldownMs < 1000 ||
-  !Number.isSafeInteger(maxEntries) || maxEntries < 1) throw Error("invalid raid beacon options");
+  !Number.isSafeInteger(maxEntries) || maxEntries < 1 ||
+  typeof resolveFleetRuntime !== "function") throw Error("invalid raid beacon options");
  const last = new Map();
  function notifyRaid(scene, actions = []) {
   if (!scene?.sessions || typeof scene.sessions.values !== "function" ||
@@ -47,6 +50,11 @@ function createBroadcaster({
    .map(item => item.pirateID + ":" + item.targetID));
   const currentSystem = positive(scene.systemID || scene.solarSystemID);
   let sent = 0, ready = 0;
+  // Compute native fleet authorization once per verified raid pair, never
+  // from client-supplied party names or a virtual co-op fleet.
+  let fleetRuntime = null;
+  try { fleetRuntime = resolveFleetRuntime(); } catch (_error) { /* stock solo fallback */ }
+  const duoByPair = new Map();
   const seenCharacters = new Set();
   for (const session of scene.sessions.values()) {
    const characterID = positive(session?.characterID);
@@ -74,9 +82,20 @@ function createBroadcaster({
      console.warn("[CoopWorldSignals] Location lookup", error.message);
     }
     const victim = action.targetRole === "hauler" ? "транспорт з рудою" : "шахтарський корабель";
+    const pairKey = action.pirateID + ":" + action.targetID;
+    if (!duoByPair.has(pairKey))
+     duoByPair.set(pairKey, duoTactics.plan({
+      scene,raid:action,fleetRuntime
+     }));
+    const assignment = duoByPair.get(pairKey).roles.get(characterID);
+    const tactic = assignment?.role === "intercept"
+     ? " Ваша роль у флоті: ПЕРЕХОПЛЕННЯ — зблизьтесь із піратом, утримуйте його увагу та прикривайте напарника."
+     : assignment?.role === "escort"
+     ? " Ваша роль у флоті: ЕСКОРТ — тримайтесь біля конвою, захищайте його й підтримуйте напарника."
+     : "";
     const message = action.action === "attack"
-     ? "[Living Universe] Пірат атакує " + victim + " " + location + ". Можна захистити конвой або втрутитися в сутичку разом із флотом."
-     : "[Living Universe] Пірат здійснює варп до " + (action.targetRole === "hauler" ? "рудовозу" : "шахтаря") + " " + location + ". Це лише наближення, не підтверджений бій; можна підготувати перехоплення чи захист.";
+     ? "[Living Universe] Пірат атакує " + victim + " " + location + ". Можна захистити конвой або втрутитися в сутичку разом із флотом." + tactic
+     : "[Living Universe] Пірат здійснює варп до " + (action.targetRole === "hauler" ? "рудовозу" : "шахтаря") + " " + location + ". Це лише наближення, не підтверджений бій; можна підготувати перехоплення чи захист." + tactic;
     try {
      send(session, message);
      last.delete(key);
