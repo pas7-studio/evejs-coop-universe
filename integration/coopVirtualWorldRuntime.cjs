@@ -1057,6 +1057,9 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     });
     require("./coopRuntimeProbe").observe("living-native-stock-fleet-wreck-evidence",
      null,{spaceState:{systemID}},proof);
+    if(proof.status==="PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED"&&
+       process.env.EVEJS_COOP_P1_OPERATIONS==="1")
+     safeNpcPhase("p1-stock-convoy-wreck",()=>require("./coopFleetOperations").recordNativeWreck({systemID,npcID,wreckID}));
    }
    return;
   }
@@ -1078,6 +1081,8 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     {spaceState:{systemID}},proof);
    return;
   }
+  if(process.env.EVEJS_COOP_P1_OPERATIONS==="1")
+   safeNpcPhase("p1-named-npc-wreck",()=>require("./coopFleetOperations").recordNativeWreck({systemID,npcID,wreckID}));
   // The ship is already removed from the EveJS scene at this point,
   // but its authoritative source object is still held by the wreck
   // service. Capture a missed final HP delta only against a fresh
