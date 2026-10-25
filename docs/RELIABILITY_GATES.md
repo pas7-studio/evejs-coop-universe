@@ -37,7 +37,7 @@ need a higher explicit evidence window/controlled collection.
 | Party | Two current distinct native pilots in the same fresh reciprocal-visibility scene | Raw TCP sockets, stale/disconnected pilots, scene without both ships |
 | Persistence | Two native authoritative snapshots of **at least two** characters, same `evejs-data` volume/image, independently evidenced restart between capture timestamps, identical ship/ISK/items | No native exporter, unsanctioned restart, duplicated item/ship ID, lost/crafted ISK or cargo |
 | Economy | Native authoritative entry export with unique entry IDs and reward keys, exact integer double-entry transfer sums, explicit positive mint/negative burn | No ledger, repeated reward, repeated entry, unbalanced transfer, invalid money values |
-| Client | Operator-confirmed **lawful** two-client login, undock, NPC interaction, mutual visibility, fleet warp, combat/loot, reconnect on the exact tested SHA/image | Missing legal client, real gameplay not observed, wrong client identities, stale/reused attestation |
+| Client | Operator-confirmed **lawful** two-client login, undock, NPC interaction, mutual visibility, accepted fleet invitation/warp, shared combat/loot, actual item/ship gifts, shared quest credit, reconnect with the same ship and unaffected second pilot on the exact tested SHA/image | Missing legal client, real gameplay not observed, wrong client identities, stale/reused attestation |
 
 No QA implementation pretends to observe a proprietary client. `PASS_SERVER`,
 `PASS_SNAPSHOT`, `PASS_LEDGER` and `PASS_OPERATOR_ATTESTED` retain distinct
@@ -97,7 +97,9 @@ that an exported ledger is complete. Validate external source provenance.
 authorizedClient:true,recordedAt,characterIds:[idA,idB],observations}`.
 `observations` must contain actual operator-verified `true` for:
 `loginA`, `loginB`, `undockA`, `undockB`, `npcVisible`,
-`mutualVisibility`, `fleetWarp`, `combatOrLoot`, `reconnect`.
+`mutualVisibility`, `fleetInviteAccepted`, `fleetWarp`, `sharedCombat`,
+`sharedLoot`, `itemGift`, `shipGift`, `sharedQuestCredit`,
+`reconnectRetainsShip`, `secondPilotSurvivesDisconnect`.
 The two identities must differ; the attestation must be at most 30
 minutes old and match the tested SHA/image. The generated report never
 prints player identifiers. Do not mark an unavailable capability PASS.
