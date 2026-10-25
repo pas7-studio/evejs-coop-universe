@@ -21,6 +21,7 @@ param(
   [int]$PerHull = 5,
   [int]$WorkbenchPages = 120,
   [int]$FieldPages = 3,
+  [int]$FieldTarget = 3,
   [int]$MaxFits = 2000,
   [int]$Concurrency = 3,
   [int]$Spacing = 150,
@@ -36,6 +37,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 if ($PerHull -lt 3 -or $PerHull -gt 5) { throw 'PerHull must be 3..5.' }
 if ($FieldPages -lt 0 -or $FieldPages -gt 6) { throw 'FieldPages must be 0..6 (0 = public killmail fallback disabled).' }
+if ($FieldTarget -lt 3 -or $FieldTarget -gt 5) { throw 'FieldTarget must be 3..5 (per-hull target for the killmail fallback).' }
 if ($MaxFits -lt 100 -or $MaxFits -gt 10000) { throw 'MaxFits must be 100..10000.' }
 if (-not (Test-Path -LiteralPath (Join-Path $SdePath 'types.jsonl')) -or -not (Test-Path -LiteralPath (Join-Path $SdePath 'groups.jsonl'))) {
   throw 'SDE root must contain types.jsonl and groups.jsonl from the PINNED EveJS game data. Locate the real SDE snapshot; do not substitute a live EVE SDE.'
@@ -68,7 +70,7 @@ if ($Action -eq 'Collect') {
   try {
     Invoke-Node -Arguments $wbArgs
     $first = Get-Content -Raw -LiteralPath $wb | ConvertFrom-Json
-    $need = @($first.coverage | Where-Object { $_.variants -lt 3 -and $_.fittable -ne $false } | ForEach-Object { $_.shipName })
+    $need = @($first.coverage | Where-Object { $_.variants -lt $FieldTarget -and $_.fittable -ne $false } | ForEach-Object { $_.shipName })
     $inputs += $wb
     $workbenchSucceeded = $true
   } catch {

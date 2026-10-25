@@ -53,7 +53,9 @@ Full-library pass (all fittable hulls of the pinned SDE, no killmail fallback):
 .\scripts\Run-CommunityFittings.ps1 -Action Collect -SdePath '<VERIFIED-SDE-DIR>' -OutputRoot '<EXTERNAL-TEMP-DIR>\coop043-full' -WorkbenchPages 387 -FieldPages 0 -PerHull 5 -MaxFits 7000
 ```
 
-`-FieldPages 0` disables the zKillboard/ESI fallback (it is very slow: 1 request/second plus one ESI call per killmail). Run it as a second pass with `-FieldPages 2..3` only when `coverage-report.json` still lists hulls below 3 fits.
+`-FieldPages 0` disables the zKillboard/ESI fallback (it is very slow: 1 request/second plus one ESI call per killmail). Run it as a second pass with `-FieldPages 2..6` when `coverage-report.json` still lists hulls below target, and use `-FieldTarget 5` to top up hulls that already have 3-4 fits.
+
+Known ceiling: the public pool is finite. Hulls such as rare special editions have no public fittings at all, and a deeper zKillboard pass returned the same records with zero new API failures. Never copy a donor fit from another hull to fill a gap.
 
 ### `coverage-report.json`
 
