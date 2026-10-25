@@ -31,6 +31,9 @@ jobs:
           node --check integration/coopWarRecoveryConsole.cjs
           node --check integration/coopWarRecoverySocket.cjs
           node --check integration/coopWarGateHandoff.cjs
+          node --check integration/coopWarDemobilizer.cjs
+          node --check integration/coopWarFleetRegistry.cjs
+          node --check integration/coopVirtualWorldRuntime.cjs
           node --check scripts/coop-war-recovery-cli.cjs
       - name: Native handoff and protected recovery tests
         run: |
@@ -39,4 +42,6 @@ jobs:
             tests/coop-war-recovery-console.test.mjs \
             tests/coop-war-recovery-socket.test.mjs \
             tests/coop-war-fleet-registry.test.mjs \
-            tests/coop-war-gate-staging.test.mjs
+            tests/coop-war-gate-staging.test.mjs \
+            tests/coop-war-demobilizer.test.mjs \
+            tests/coop-war-fleet-demobilization.test.mjs
