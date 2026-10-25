@@ -2,16 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createStationArrival}=require("../integration/coopNativeStationArrival.cjs");
+const {createStationArrival,checkReturn}=require("../integration/coopNativeStationArrival.cjs");
 const FLAGS=["EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_ESCORT_WARP_FENCE","EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT",
  "EVEJS_COOP_ESCORT_ROUTE_WITNESS","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS",
  "EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER",
  "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY",
- "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT"];
+ "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT",
+ "EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY","EVEJS_COOP_NPC_STATION_DELIVERY"];
 const saved=Object.fromEntries(FLAGS.map(k=>[k,process.env[k]]));
 for(const key of FLAGS)process.env[key]="1";
 process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY="0";
+process.env.EVEJS_COOP_NPC_STATION_DELIVERY="1";
 const KEY="30000144-77-1000000",CONTRACT="escort-30000144-77-5501";
 function fixture(){
  const station={stationID:60001,corporationID:10001,solarSystemID:30000144};
@@ -33,6 +36,8 @@ function fixture(){
  const cargo=[{cargoID:5501,entityID:901,coopHaulFleetID:77,
   coopHaulFromMinerID:503,moduleID:0,quantity:7,typeID:34,transient:false}];
  const state={station,physicalStation,ingress,npc,scene,booking,entry,cargo,
+  fleet:{fleetID:77,systemID:30000144,haulerEntityIDs:[901],
+   coopEscortPredepartureEventID:"original-native-agent-contract"},
   native:{entityID:901,systemID:30000144,transient:false},
   source:{status:"WARP_SOURCE_ALREADY_DISPATCHED",manifestKey:KEY,
    phase:"WARP_ACK_CONFIRMED"},
@@ -43,10 +48,11 @@ function fixture(){
    characters:[701,702],shipIDs:[1701,1702]},
   sampleResult:"ROUTE_NOT_AT_CHECKPOINT",
   snapshot:{status:"VERIFIED_NATIVE_INGRESS_SNAPSHOT",
-   row:{origin:{x:0,y:0,z:0},targetPoint:{x:100750,y:0,z:0},
+   row:{manifestKey:KEY,origin:{x:0,y:0,z:0},targetPoint:{x:100750,y:0,z:0},
     startTimeMs:1000000,travelCompleteAtMs:1007000,completeAtMs:1007250}},
-  snapshotReads:0,
-  counters:{sample:0,warp:0,fund:0,inspect:0,source:0,departure:0,read:0}};
+  snapshotReads:0,manifestValid:true,
+  counters:{sample:0,warp:0,fund:0,inspect:0,source:0,departure:0,read:0,
+   deposits:0,delivered:0,settled:0}};
  const gate={
   inspectSource:()=>{state.counters.source++;return state.source},
   inspect:()=>{state.counters.inspect++;return state.fence},
@@ -59,13 +65,25 @@ function fixture(){
   recordEscortRouteSample:()=>{state.counters.sample++;
    return {status:state.sampleResult}},
   fundBeforeWarp:()=>{state.counters.fund++;throw Error("REPLAY MUST NEVER FUND")},
-  recordDelivered:()=>({status:"NOT_ALLOWED"})
+  recordDelivered:args=>{state.counters.delivered++;
+   return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey:args.manifestKey}},
+  settlePeacefulDelivery:()=>{state.counters.settled++;return {status:"SETTLED"}}
  };
  const director=createStationArrival({
   getStations:()=>[station],getStation:()=>station,getCorporation:()=>({corporationID:10001}),
   isNpcCorporation:()=>true,getNativeEntity:()=>state.native,getScene:()=>scene,
-  store:{listNativeCargoForEntity:()=>state.cargo},items:{},warehouse:{deposit:()=>({status:"DISABLED"})},
-  manifest:{prepare:()=>{throw Error("REPLAY MUST NEVER CREATE MANIFEST")}},
+  store:{listNativeCargoForEntity:()=>state.cargo},items:{},
+  warehouse:{deposit:({cargoID})=>{state.counters.deposits++;
+   const i=state.cargo.findIndex(row=>row.cargoID===cargoID);
+   if(i<0)return {status:"NOT_FOUND"};
+   state.cargo.splice(i,1);
+   return {status:"COMMITTED"}}},
+  manifest:{prepare:()=>{throw Error("REPLAY MUST NEVER CREATE MANIFEST")},
+   verify:()=>state.manifestValid?
+    {status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED"}:
+    {status:"MANIFEST_FULL_CARGO_UNVERIFIED"}},
+  deliveryEvidence:{verifyFullNativeDelivery:()=>({
+   status:"NATIVE_FULL_MANIFEST_WITNESSED",stacks:1,quantity:7})},
   flush:()=>{throw Error("REPLAY MUST NEVER FLUSH")},
   warpToPoint:()=>{state.counters.warp++;throw Error("REPLAY MUST NEVER WARP")},
   root:"/tmp/native-recovery-guard",clock:()=>1002000,
@@ -74,7 +92,9 @@ function fixture(){
   probe:{observe:()=>{}}
  });
  return {...state,director,escort,setSampleResult:value=>{state.sampleResult=value},
-  setSnapshot:value=>{state.snapshot=value},snapshotCount:()=>state.snapshotReads};
+  setSnapshot:value=>{state.snapshot=value},
+  setManifestValid:value=>{state.manifestValid=value},
+  snapshotCount:()=>state.snapshotReads};
 }
 function recover(f,now=1002000){return f.director.noteNativeMotion(f.npc,now).status}
 test("genuine current native NPC warp reattaches observer using confirmed durable originals",()=>{
@@ -274,6 +294,132 @@ test("feature OFF prevents loading or inspecting stored warp state",()=>{
   "ESCORT_INGRESS_RESTORE_DISABLED");
  assert.equal(f.snapshotCount(),0);
 });
+function withDelivery(fn){
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="1";
+ process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY="1";
+ try{fn(fixture())}
+ finally{
+  process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+  process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY="0";
+ }
+}
+test("crash-recovered NPC trip uses only original escrow, cargo and signed source",()=>withDelivery(f=>{
+ const x=f.director.resumeNativeDelivery(f.scene,f.fleet,1002000);
+ assert.equal(x.status,"ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED");
+ assert.equal(f.fleet.coopStationArrival.manifestID,KEY);
+ assert.equal(f.fleet.coopStationArrival.startedAt,1000000);
+ assert.deepEqual(f.fleet.coopStationArrival.expectedCargoIDs,[5501]);
+ assert.equal(f.fleet.coopStationArrival.recoveredFromOriginalNativeIngress,true);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
+test("trusted checkReturn recovers transit before any predeparture retry",()=>withDelivery(f=>{
+ const x=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(x.status,"AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.fleet.coopStationArrival.manifestID,KEY);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
+test("subsequent terminal tick uses identical recovered route, never new funding",()=>withDelivery(f=>{
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ const reads=f.counters.read,trip=f.fleet.coopStationArrival;
+ assert.equal(checkReturn(f.scene,f.fleet,1003000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.counters.read,reads);
+ assert.equal(f.fleet.coopStationArrival,trip);
+ assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("original NPC mining fleet ID must match recovered contract",()=>withDelivery(f=>{
+ f.fleet.fleetID=88;
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ORIGINAL_BOOKING_MISMATCH");
+ assert.equal(f.fleet.coopStationArrival,undefined);
+}));
+test("unsynced or absent original snapshot forbids resumed delivery",()=>withDelivery(f=>{
+ f.setSnapshot({status:"INGRESS_SNAPSHOT_FSYNC_UNCERTAIN"});
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ORIGINAL_SNAPSHOT_NOT_DURABLE");
+ assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("foreign native ingress destination cannot redirect convoy terminal",()=>withDelivery(f=>{
+ f.ingress.targetPoint.x=250000;
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_PHYSICAL_WARP_MISMATCH");
+ assert.equal(f.fleet.coopStationArrival,undefined);
+}));
+test("prepared-only ACK and already delivered original flight never resume",()=>withDelivery(f=>{
+ f.source.phase="WARP_PREPARED";
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+ const x=fixture();x.flight.phase="DELIVERED";
+ assert.equal(x.director.resumeNativeDelivery(x.scene,x.fleet,1002000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_PROVENANCE_MISMATCH");
+ assert.equal(x.fleet.coopStationArrival,undefined);
+}));
+test("expired real native warp cannot create time-rewound delivery",()=>withDelivery(f=>{
+ assert.equal(f.director.resumeNativeDelivery(f.scene,f.fleet,1009000).status,
+  "ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_NOT_ACTIVE_INGRESS");
+ assert.equal(f.counters.warp,0);
+}));
+test("default OFF preserves old NO_ACTIVE_TRIP and never reads wallet",()=>{
+ const f=fixture();delete f.fleet.coopEscortPredepartureEventID;
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,"NO_ACTIVE_TRIP");
+ assert.equal(f.counters.read,0);assert.equal(f.counters.warp,0);
+});
+test("unverified in-progress ingress blocks duplicate predeparture instead of calling start",()=>withDelivery(f=>{
+ f.source.phase="WARP_PREPARED";
+ const r=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(r.status,"ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+ assert.equal(r.terminal,false);assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("post-crash original physical arrival uses native warehouse then one terminal settlement",()=>withDelivery(f=>{
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ f.npc.sessionlessWarpIngress=null;f.npc.mode="STOP";
+ f.npc.position={x:100750,y:0,z:0};
+ assert.equal(checkReturn(f.scene,f.fleet,1010500,f.director).status,
+  "ARRIVAL_DWELL_PENDING");
+ const delivered=checkReturn(f.scene,f.fleet,1013500,f.director);
+ assert.equal(delivered.status,"DELIVERED");
+ assert.equal(delivered.escortSettlementStatus,"SETTLED");
+ assert.equal(delivered.nativeFullManifestProof.status,
+  "FULL_NATIVE_CARGO_DELIVERY_VERIFIED");
+ assert.equal(f.counters.deposits,1);
+ assert.equal(f.counters.delivered,1);
+ assert.equal(f.counters.settled,1);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+ assert.equal(f.fleet.coopStationArrival,undefined);
+}));
+test("invalid full native cargo proof blocks terminal money after recovered arrival",()=>withDelivery(f=>{
+ assert.equal(checkReturn(f.scene,f.fleet,1002000,f.director).status,
+  "AWAITING_PHYSICAL_ARRIVAL");
+ f.npc.sessionlessWarpIngress=null;f.npc.mode="STOP";
+ f.npc.position={x:100750,y:0,z:0};f.setManifestValid(false);
+ assert.equal(checkReturn(f.scene,f.fleet,1010500,f.director).status,
+  "ARRIVAL_DWELL_PENDING");
+ assert.equal(checkReturn(f.scene,f.fleet,1013500,f.director).status,
+  "MANIFEST_FULL_CARGO_UNVERIFIED");
+ assert.equal(f.counters.delivered,0);
+ assert.equal(f.counters.settled,0);
+ assert.equal(f.counters.fund,0);
+ assert.equal(f.counters.warp,0);
+}));
+test("stale A-Life no-cargo hint cannot end a separately verified original haul",()=>withDelivery(f=>{
+ f.fleet.coopStationNoCargo=true;
+ const result=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(result.status,"AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.fleet.coopStationNoCargo,undefined);
+ assert.equal(f.fleet.coopStationArrival.manifestID,KEY);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
+test("only a previously proven original warp may clear a stale A-Life hint",()=>withDelivery(f=>{
+ f.fleet.coopStationNoCargo=true;
+ f.source.phase="WARP_PREPARED";
+ const result=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(result.status,"ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+ assert.equal(f.fleet.coopStationNoCargo,true);
+ assert.equal(f.fleet.coopStationArrival,undefined);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
 process.on("exit",()=>{for(const [k,v] of Object.entries(saved)){
  if(v===undefined)delete process.env[k];else process.env[k]=v;
 }});
