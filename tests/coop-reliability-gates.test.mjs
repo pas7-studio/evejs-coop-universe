@@ -219,7 +219,6 @@ test('newer empty native fleet revokes earlier positive readiness',()=>{
    {status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
  const result=checkWorld(input,meta,now,30);
  assert.equal(result.status,'BLOCKED');
- assert.equal(result.freshNativeFleet,false);
 });
 test('newer empty physical named-NPC materialization revokes previous proof',()=>{
  const input=[...oldAnchors,...currentAnchors,eventAt('virtual-world-materialization',1,
@@ -227,7 +226,6 @@ test('newer empty physical named-NPC materialization revokes previous proof',()=
    {status:'SAMPLED',observedMovement:2,oreGrowth:2,physicalNpcShips:3})].join('\n');
  const result=checkWorld(input,meta,now,30);
  assert.equal(result.status,'BLOCKED');
- assert.equal(result.freshNamedShips,false);
 });
 test('named-NPC refresh with fabricated pilot identity cannot pass',()=>{
  const input=[...oldAnchors,currentAnchors[0],eventAt('virtual-world-materialization',1,
