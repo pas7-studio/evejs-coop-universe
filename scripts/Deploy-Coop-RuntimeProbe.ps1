@@ -160,6 +160,8 @@ if ($LivingCoop) {
   # Share only verified combat dungeon objectives witnessed by both real fleet ships.
   $yamlLines += "      EVEJS_COOP_FLEET_MISSION_SHARE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_WEAPON_EVIDENCE: '1'"
+  # Passive, pinned EveJS applied player damage proof; no impact on native damage or loot.
+  $yamlLines += "      EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_EVIDENCE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_QUARANTINE: '1'"
   $yamlLines += "      EVEJS_COOP_NATIVE_LOOT_QUARANTINE_FILE: '/var/lib/evejs/coop-native-loot-quarantine.json'"
