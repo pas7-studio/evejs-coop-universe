@@ -374,11 +374,11 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   if(op==="salvage"){
    const action=String(tokens[0]||"").toUpperCase();
    const eventID=tokens[1],cargoID=Number(tokens[2]);
-   if(!["OFFER","ACCEPT","PICKUP","DELIVER"].includes(action)||
+   if(!["OFFER","ACCEPT","PICKUP","DELIVER","REFUND"].includes(action)||
     !/^convoy-\d+-\d+-\d+$/.test(String(eventID))||
     !Number.isSafeInteger(cargoID)||cargoID<=0)
     return {status:"SALVAGE_HELP",
-     message:"[Co-op Salvage] /events salvage offer|accept|pickup|deliver <event-id> <cargo-id>"};
+     message:"[Co-op Salvage] /events salvage offer|accept|pickup|deliver|refund <event-id> <cargo-id>"};
    const result=require("./coopSalvageGameMount")
     .commandInGame(session,eventID,cargoID,action);
    return {status:result.status,message:
