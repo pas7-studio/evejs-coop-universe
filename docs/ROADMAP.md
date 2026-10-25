@@ -1,6 +1,7 @@
 # Delivery roadmap — agent-ready tasks
 > **2026-10-25 native-mechanics discovery / parallel-agent checkpoint:**
 > [24-mechanic upstream-to-co-op gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md)
+> [First implementation: native item/courier contracts + LP Store standing gates](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md), source-tested and pending real two-client/escrow replay acceptance.
 > and [current P0 progress, blockers and agent ownership handoff](COOP_PARALLEL_AGENT_HANDOFF_20261025.md).
 > These are source-level findings and acceptance requirements, **not** claims
 > of completed two-client gameplay. The duplicate mission-helper call was tested as idempotent against pinned source; consolidate it and still run full overlay preflight before deployment.

@@ -26,6 +26,18 @@ This document is a shared **source-of-truth progress note** so simultaneous agen
 
 **Current LivingCoop switches (source observation only):** `EVEJS_COOP_FLEET_TRADE_SAFETY='1'`; `EVEJS_COOP_FLEET_MISSION_TURNIN='0'`; `EVEJS_COOP_FLEET_MISSION_SHARE='1'`; `EVEJS_SKILL_TRAINING_SPEED='6'`; `EVEJS_OMEGA_LICENSE='true'`; `EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER='0.35'`. A YAML line is NOT proof the resulting scene or skill queue ran. Apply through existing opt-in deployment script only with authorization.
 
+## Delivery update — native contracts and LP Store, source-tested 2026-10-25
+
+Full evidence / test procedure: [COOP_NATIVE_CONTRACTS_LP_STORE_V1.md](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md).
+
+- Source code **COMMITTED**: reversible `contractMgr` → `contractProxy` opt-in routing (reuses real item exchange and courier escrow, not a duplicate contract database), while direct original stub behavior remains if disabled.
+- Native courier settlement actor checked **always under the co-op overlay**, regardless of optional routing flag: mismatched actual acceptor character/corp wallet cannot call Complete or Fail.
+- Native LP Store already had real LP+ISK+required-items debit and physical item grant. Added opt-in `requiredStandings` check using stock `standingRuntime.getCharacterEffectiveStanding` **before any purchase debit**, plus always-on safe 100-offer purchase batch limit.
+- Config switches: `-EnableNativeCoopContracts` and `-EnableNativeLpStandings` in `scripts/Deploy-Coop-RuntimeProbe.ps1`. Both **OFF by default**, including LivingCoop.
+- Regressions checked manually via isolated V8 evaluation against all four pinned upstream source files: source parses, second patch application no-op, byte-exact revert, native courier other-character denied, LP standing denial and unsafe bulk quantity. Automated Node `tests/coop-native-contracts-lp-integration.test.mjs` and `tests/coop-native-lp-standings.test.mjs` committed and registered in verification runner, **not yet run against actual user machine**.
+- **NOT COMPLETE:** Two real client RPCs, full contract escrow creation/acceptance/delivery, force-crash consistency and corporate wallet role gating. Never mark P0 finance DONE until persistent wallet/item/record consistency is proven. Users' current `evejs-data` untouched.
+- Agent ownership: commerce agent takes 2-player contract validation + crash-atomic persistence; faction agent takes LP offer list/purchase + per-character actual standing/LP traces; other agents can work exploration independently.
+
 ## SOURCE-VERIFIED high-value discoveries to avoid unnecessary rewrites
 
 See full [24-mechanic native gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md).
