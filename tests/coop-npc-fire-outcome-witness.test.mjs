@@ -124,3 +124,39 @@ test("witness mode remains OFF without all native SQLite safety flags",()=>{
  EVEJS_COOP_NPC_BANK_ATOMIC:"1",EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",
  EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS:"1"}),true);
 });
+
+test("attested legitimate turret miss permits next durable native debit boundary",()=>{
+ fixture(f=>{
+  assert.equal(f.record({entity,whenMs:1000,kind:"TURRET_RESOLVED",hit:false}).ok,true);
+  const prior=process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+  process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS="1";
+  try{
+   const SEP="\u001f";
+   let state={
+    npcEntities:{["entities"+SEP+"101"]:{entityID:101,ownerID:900,systemID:30000144}},
+    npcModules:{["modules"+SEP+"401"]:{moduleID:401,entityID:101,ownerID:900,typeID:123,categoryID:7,flagID:27}},
+    npcCargo:{cargo:{"501":{cargoID:501,entityID:101,moduleID:401,ownerID:900,typeID:35,categoryID:8,quantity:4}},
+     coopAmmoCycles_101:{version:1,entityID:101,modules:{"401":1000}}}
+   };
+   let transactions=0;
+   const tx={get(t,k){return state[t][k]??null;},
+    put(t,k,value){state[t][k]=structuredClone(value);}};
+   const bank=createAtomicAmmoBank({root:f.root,
+    atomicRows:{transact(tables,fn){transactions++;return fn(tx);}},
+    store:{listNativeCargoForEntity:()=>Object.values(state.npcCargo.cargo)},
+    compatible:()=>true,clock:()=>3000});
+   const native={...entity,nativeCargoItems:[{itemID:501,typeID:35,moduleID:401,quantity:4,stacksize:4}]};
+   const result=bank.consume({entity:native,whenMs:1100,
+    entries:[{moduleItem:{itemID:401,flagID:27,typeID:123},
+     chargeItem:{itemID:501,typeID:35,quantity:4}}]});
+   assert.equal(result.success,true);
+   assert.equal(transactions,1);
+   assert.equal(state.npcCargo.cargo["501"].quantity,3);
+   assert.equal(state.npcCargo.coopAmmoCycles_101.modules["401"],1100);
+   assert.equal(f.inspect().status,"COMMITTED");
+  }finally{
+   if(prior===undefined)delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
+   else process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS=prior;
+  }
+ });
+});
