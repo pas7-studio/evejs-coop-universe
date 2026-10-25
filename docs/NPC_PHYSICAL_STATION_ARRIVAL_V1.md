@@ -1,6 +1,6 @@
 # COOP-030B — Physical NPC hauler return to station and warehouse custody
 
-**State:** opt-in source integration; not deployed or proved with real Docker / clients. Depends on PR #34's `coopNativeWarehouse.cjs` and tagged native itemStore hook. Use the stacked PR as base, do not separately merge this while #34 is unmerged.
+**State:** opt-in source integration; not deployed or proved with real Docker / clients. Depends on PR #34's `coopNativeWarehouse.cjs` and tagged native itemStore hook, now present in `main` following global merge PR #38. This branch was ported onto that merged `main` and does not override its newer market, fleet, industry or deployment changes.
 
 ## Previously broken behavior (source-verified)
 
@@ -41,3 +41,6 @@ Tests: exact matching SDE station and corp, valid native ship identity, transien
 5. After safe delivery, link subsequent NPC refinery, T1 ammo production, real market wallet/hangar acceptance to these native assets. Never claim the virtual depot receipt already closes that loop.
 
 **Safety:** This PR never rebuilds/restarts Docker, touches `evejs-data`, seeds market inventory or credits ISK. It modifies only repo source/tests/docs with an explicit default-OFF runtime feature flag.
+## Legacy stage-2 settlement overlap
+
+`integration/coopNativeStationOreSettlement.cjs` is an independent, manually invoked path that can grant a station stock item **from a committed virtual depot receipt**. The new physical-arrival path does not call `coopNativeDepot.commit()`, so it does not create those receipts. Never manually invoke the old stage-2 settlement for any cargoID already handled by `coopNativeWarehouse`: those represent alternative credit pathways and could otherwise double-produce station items. A future unified item provenance index should reject cross-workflow reuse before permitting automation.
