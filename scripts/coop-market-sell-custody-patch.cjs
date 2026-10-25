@@ -45,8 +45,14 @@ function patch(source,{remove=false}={}){
   "    moveEscrowItemsBackToSeller(orderID, ownerID, stationID);"
  ],'    const coopSellProof = '+flag+' ? '+proof("order","getEscrowRecord(orderID)","listEscrowItemsForOrder(orderID,ownerID)")+' : null;',
  '    if (coopSellProof) '+restored("orderID","ownerID")+';');
+ // Preserve the existing buy-custody hook + CancelOrder adjacency.
+ // Otherwise the previous patcher treats reapplication as a missing hook.
+ const nativeBuyHook='      if (process.env.EVEJS_COOP_MARKET_CANCEL_CUSTODY === "1" && normalizeBoolean(orderRow && orderRow.bid)) require("../../space/coopMarketCancelCustody").assertMatchingBuyEscrow({order:order,escrow:getEscrowRecord(orderID)});';
+ const cancellationBody=text.slice(text.indexOf(cancel),text.indexOf(modify));
+ const cancelAnchor=cancellationBody.includes(nativeBuyHook)?
+  nativeBuyHook:'      const cancelResponse = await marketDaemonClient.call("CancelOrder", {';
  wrap(cancel,modify,[
-  '      const cancelResponse = await marketDaemonClient.call("CancelOrder", {'
+  cancelAnchor
  ],'      const coopSellProof = '+flag+' && !normalizeBoolean(orderRow && orderRow.bid) ? '+proof("order","getEscrowRecord(orderID)","listEscrowItemsForOrder(orderID,normalizePositiveInteger(order && order.owner_id,0))")+' : null;',"");
  wrap(cancel,modify,[
   "        moveEscrowItemsBackToSeller(",
