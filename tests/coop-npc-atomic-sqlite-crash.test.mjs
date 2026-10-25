@@ -71,7 +71,11 @@ function child(root,at){
  // Kill the real Linux process at the exact code boundary. The test parent
  // must not kill a production game server or touch any existing data directory.
  const result=tryFire(root,db,phase=>{
-  if(phase===at)process.kill(process.pid,"SIGKILL");
+  const logicalPhase=at.startsWith("exit-")?at.slice(5):at;
+  if(phase===logicalPhase){
+   if(at.startsWith("exit-"))process.exit(77);
+   process.kill(process.pid,"SIGKILL");
+  }
  });
  db.close();
  process.stderr.write("TEST_CHILD_NOT_KILLED:"+result.errorMsg);
@@ -84,7 +88,9 @@ function check(at,expected){
  try{
   const run=spawnSync(process.execPath,[fileURLToPath(import.meta.url),"--child",root,at],
    {timeout:10000,encoding:"utf8",env:{...process.env}});
-  assert.equal(run.signal,"SIGKILL",run.stderr||String(run.error));
+  if(at.startsWith("exit-"))
+   assert.equal(run.status,77,run.stderr||String(run.error));
+  else assert.equal(run.signal,"SIGKILL",run.stderr||String(run.error));
   db=new DatabaseSync(path.join(root,"native.sqlite"));
   const cargo=loadCargo(db);
   assert.equal(cargo["501"].quantity,expected);
@@ -108,3 +114,10 @@ test("Linux SIGKILL after fsynced PREPARED leaves all native ammo unspent and bl
 test("Linux SIGKILL after SQLite COMMIT keeps all ammo spent, with retry blocked by PREPARED",{
  skip:process.platform!=="linux"
 },()=>check("after-sqlite-commit",4));
+
+test("cross-platform abrupt exit after fsynced PREPARED does not debit native SQLite",()=>{
+ check("exit-after-prepared",5);
+});
+test("cross-platform abrupt exit after SQLite COMMIT preserves all debits but quarantines retry",()=>{
+ check("exit-after-sqlite-commit",4);
+});
