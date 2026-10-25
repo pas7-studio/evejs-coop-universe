@@ -88,5 +88,11 @@ if ($LASTEXITCODE -ne 0) {
         $matchesFound | ForEach-Object { Write-Host $_.Line }
     }
 }
+# Deep runtime provenance audit is also read-only and pinpoints stale image,
+# missing startup hook, unset event path and persisted-world restore failures.
+$telemetryAudit = Join-Path $PSScriptRoot 'Diagnose-Coop-Telemetry.ps1'
+if (Test-Path -LiteralPath $telemetryAudit -PathType Leaf) {
+    & $telemetryAudit -CodePath $CodePath
+}
 Write-Host '[DIAGNOSE] Next: consult docs/GAMEPLAY_TESTING.md Phase 1. Missing event file = BLOCKED_TELEMETRY, not missing-client proof.'
 Write-Warning 'Do not share unredacted logs or run npm audit in place of gameplay verification.'
