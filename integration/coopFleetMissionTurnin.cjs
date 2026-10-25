@@ -210,6 +210,15 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
  const peerMission=missionRuntime.getMissionRecord(peerID,agent);
  if(!equivalent(leaderMission,peerMission))
   return {ok:false,reason:"NATIVE_MISSIONS_NOT_BOTH_COMPLETED"};
+ if(process.env.EVEJS_COOP_MISSION_INSTANCE_LINK==="1"){
+  const provenance=require("./coopMissionInstanceProvenance");
+  const link=provenance.verify({ownerID:leader,peerID,agentID:agent,
+   leaderMission,peerMission});
+  if(!link.ok)return {ok:false,reason:link.status};
+  if(!provenance.nativeSharedObjectiveMatches({ownerID:leader,
+   agentID:agent,leaderMission,peerMission}))
+   return {ok:false,reason:"PEER_NATIVE_SHARED_OBJECTIVE_NOT_PROVED"};
+ }
  const ticket={ok:true,reason:"NATIVE_SHARED_TURNIN_READY",
   fleetID:member.fleetID,leader,peerID,agentID:agent,
   actionID:action,station,leaderMission:{...leaderMission},
@@ -257,6 +266,17 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
  if(!equivalent(ticket.peerMission,second)||
   str(second.missionSequence)!==str(ticket.peerMission.missionSequence))
   return {status:"PEER_NATIVE_OBJECTIVE_NOT_READY"};
+ if(process.env.EVEJS_COOP_MISSION_INSTANCE_LINK==="1"){
+  const provenance=require("./coopMissionInstanceProvenance");
+  const link=provenance.verify({ownerID:ticket.leader,
+   peerID:ticket.peerID,agentID:ticket.agentID,
+   leaderMission:ticket.leaderMission,peerMission:second});
+  if(!link.ok)return {status:link.status};
+  if(!provenance.nativeSharedObjectiveMatches({
+   ownerID:ticket.leader,agentID:ticket.agentID,
+   leaderMission:ticket.leaderMission,peerMission:second}))
+   return {status:"PEER_NATIVE_SHARED_OBJECTIVE_NOT_PROVED"};
+ }
  // The old native DoAction remains the ONLY reward/standing authority.
  // This durable intent is required only for explicitly opted-in automated
  // two-recipient turn-in; by default this gameplay feature stays OFF.

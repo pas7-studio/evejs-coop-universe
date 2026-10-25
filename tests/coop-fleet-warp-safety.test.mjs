@@ -79,3 +79,26 @@ test("commander and follower cannot refer to the same character or ship",()=>{
  x.follower.characterID=5002;x.follower._space.shipID=10001;
  assert.equal(inspect(x.inputs).reason,"SHIP_ID_MISSING_OR_SHARED");
 });
+
+test("a correct native ship owner is allowed but a foreign owner is not",()=>{
+ const x=fixture();x.leader.ownerID=5001;x.wingman.ownerID=5002;
+ assert.equal(inspect(x.inputs).ok,true);
+ x.leader.ownerID=9009;
+ assert.equal(inspect(x.inputs).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
+ x.leader.ownerID=5001;x.wingman.pilotCharacterID=9009;
+ assert.equal(inspect(x.inputs).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
+});
+test("stale native ship session cannot command another character on reconnect",()=>{
+ const x=fixture();x.leader.session=x.commander;x.wingman.session=x.follower;
+ assert.equal(inspect(x.inputs).ok,true);
+ x.wingman.session={...x.follower,_space:{...x.follower._space}};
+ assert.equal(inspect(x.inputs).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
+});
+test("scene ID cannot differ from both hydrated players during fleet warp",()=>{
+ const x=fixture();x.scene.systemID=30000144;
+ assert.equal(inspect(x.inputs).reason,"NATIVE_SCENE_SYSTEM_MISMATCH");
+});
+test("a changed active ship cannot borrow a stale Ballpark shipID",()=>{
+ const x=fixture();x.commander.activeShipID=10003;
+ assert.equal(inspect(x.inputs).reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
+});

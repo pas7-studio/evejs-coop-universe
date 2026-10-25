@@ -1,0 +1,126 @@
+# COOP-048 — Native NPC Job Market V1: paid escort, miner protection and real work
+
+Date: 2026-10-25. **SOURCE IMPLEMENTED / NOT LIVE VERIFIED.** The first /jobs discovery adapter and a default-OFF peaceful native two-player escort settlement path now exist on this branch. Miner guard paid shift, solo escrow, native Docker/SQLite and two real client E2E are NOT implemented/verified; no populated world data changed.
+
+## Delivered in source (COOP-048 branch)
+
+- `integration/coopNpcJobBoard.cjs` routes `/jobs list|all|escort|miner|rescue|info|interest|volunteer|accept|active|history|watch` to the SAME native `coopWorldOpportunityBoard` verified RAID/CONVOY IDs and existing `coopEscortPricedOffers` authorities. `/jobs accept` cannot invent a priced offer, create escrow or override a fleet; paid acceptance still requires original two real pilots. Real miner pirate-attacks appear only as **UNPAID miner rescue**, not as a paid guard shift.
+- `integration/coopWorldOpportunityBoard.cjs` exports read-only `listNativeEvents` so jobs never duplicate the source event store. `scripts/patch-evejs-coop.cjs` adds the `/jobs` pinned chat hook and both new CJS modules to the reversible overlay. New job flag `EVEJS_COOP_NPC_JOBS=1` defaults OFF.
+- `integration/coopEscortPeacefulSettlement.cjs`, `coopEscortRuntime`, `coopEscortNativeBinding` and `coopNativeStationArrival` support a separately enabled `EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1` route at true native terminal delivery. No pirate wreck required. Uses existing **two-pilot** corporate reservation and native GameStore two-credit atomic wallet transaction; full original source manifest and native warehouse proof are rechecked. Before payout, original verified duo fleet and both live character ships must be within 150 km of the native hauler. An unknown settlement ACK is checked against the durable native wallet receipt; ambiguities fail closed.
+- Fixed pre-existing native `refundNativeWreck` manifest validation (`/^\\d+-\\d+-\\d+$/`); previously a legitimate numeric manifest was rejected. Financial refunds still require native irreversible-loss proof and default-OFF flag.
+- This is a **strict arrival-time service witness only**, not yet a full durable presence/time-contribution history. If one pilot disconnected or docked before terminal unloading, settlement can block for operator reconciliation. Real two-client QA must prove payout, recovery and no gameplay exploits before enabling this financial flag. The prior pirate-wreck settlement remains the default with the flag OFF; no bonuses are manufactured.
+- `tests/coop-npc-job-board.test.mjs` (20 tests), `tests/coop-escort-peaceful-settlement.test.mjs` (19 tests), `tests/coop-escort-refund-manifest.test.mjs` (3 tests) and `tests/scenarios/coop-048-native-paid-jobs.json` (16 **NOT_RUN** manual acceptance scenarios) are committed. 40/40 non-filesystem source-executed V8 cases PASSED; 2 native-file assertion cases were not run in that V8 harness. All ten changed JS files syntax-checked, and synthetic pinned chat patch insert/reinsert/remove round-trip checked. **Full Node runner, native better-sqlite3, Docker and real client tests remain unrun.** Do not label those PASS.
+- Explicit deployment preconditions: operator-approved disposable world/backup; pinned overlay `--dry-run` and reversible `--check`, local `node --test tests/coop-npc-job-board.test.mjs tests/coop-escort-peaceful-settlement.test.mjs tests/coop-escort-refund-manifest.test.mjs`, full `scripts/coop-test-baseline.cjs`, native GameStore worker, dual client wallet receipts, logout/restart replay and conflict resolution against open Escort Stage H PR #96. Never run GitHub Actions or reset `evejs-data`.
+
+**Local command examples once the opt-in board is installed:** `/jobs`, `/jobs escort`, `/jobs miner`, `/jobs info convoy-<system>-<fleet>-<cargo>`, `/jobs interest <id>`, `/jobs volunteer <id>`, `/jobs accept <id>`, `/jobs active`. A quote is displayed as **NOT RESERVED** until the true prewarp corporate funds transaction.
+
+## Product contract
+
+Capsuleers can discover **actual funded work** from physically active NPC corporations, accept it as 1 pilot or a real 2-pilot fleet, do the work in EveJS and receive **native wallet ISK exactly once**. An authentic work opportunity is not the same thing as an AI-generated story or a chat interest. If the world has no actual eligible NPC activity or the issuer lacks ISK, show no payable job instead of manufacturing a fake one.
+
+An uncomplicated convoy delivery MUST pay the advertised base reward even when no pirate appears. Combat and rescuing survivors are optional risk/bonus outcomes, NEVER prerequisites to the base escort fee. The current Stage A/B/C/E paid escort path still requires a pirate wreck and two pilots; it must be extended without bypassing its original safety checks.
+
+All figures below are **initial balancing examples**, not actual verified EveJS prices or economic promises.
+
+## Player experience (stock UI fallback, not implemented commands)
+
+- `/jobs` or `/jobs list`: up to 8 local real opportunities, with source, type, station/system, duration, open slots, and **estimated** reward; `/jobs all`, `/jobs type escort|guard|courier|rescue`.
+- `/jobs info <jobID>`: exact objective, route, issuer, cargo/value class, eligible pilots, danger, deadline, reward for 1/2 pilots, participation requirements, cancellation terms; only reveal navigation data that is actually known to the character.
+- `/jobs accept <jobID>`: verified logged-in live character, valid ship, actual system/route/stock, eligibility and (if duo) real fleet / other pilot consent. Underlying native corporation atomically reserves full fee **before any departure**. Only `FUNDED` is a guaranteed payout, conditional on native completion.
+- `/jobs active`, `/jobs abandon <jobID>`, `/jobs history`, `/jobs watch local|all|off`: actual state, limited opt-in alerts, receipts and genuine ledger history. Do not overwrite the existing `/events` alerts; both use one canonical native source identity.
+- Prefer stock EVE contracts/agent UI **only if pinned client RPC supports it**. Slash commands and native EVEmail are the truthful default; no invented GUI panels or client hooks.
+
+Example player-facing **fictional** listing (not generated by the game today):
+
+```text
+[Jobs] #ST-713 | MINER_GUARD | Perimeter / Belt II
+  Native corporation | 12 min shift | 1-2 pilots | 320,000 ISK pool
+  Conditions: remain on-scene, protect native miner, real ore delivered
+  Status: OFFERED (NOT YET RESERVED) | /jobs info ST-713
+
+[Jobs] #TR-109 | TRADE_ESCORT | Station A -> Station B
+  Native hauler / manifest | 1 system | 2 pilots | 600,000 ISK pool
+  Base delivery: 600,000 ISK | verified raid bonus: optional
+  Status: OFFERED (NOT YET RESERVED) | /jobs info TR-109
+```
+
+### Work types, V1 and follow-up
+
+| Stage | Job type | Real authoritative trigger | Completion proof | Reward |
+| --- | --- | --- | --- | --- |
+| P0 | TRADE_ESCORT | Actual staged native cargo manifest + named hauler + corporation/station + destination | Actual NPC ship survives & entire original native cargo arrives in expected station warehouse | Base fee, independent of pirate spawn |
+| P0 | MINER_GUARD | Real miner fleet mining an actual SDE belt, valid mining hold/need for cover, real paying corporation | Bounded on-scene player presence + native mining cycles and delivered ore/ship survival | Earned time/safe ore milestones, prorated by actual verified service; no AFK-only fee |
+| P0 | RAID_REINFORCEMENT | Already verified native attack on hauler/miner, plus genuinely paying issuer and reservation | Native combat effect / rescue outcome attributable to enrolled player and target fate | Agreed emergency service fee (not kill-text grant) |
+| P1 | COURIER | Existing actual native COURIER contract + real custody/reward escrow | Stock native acceptance, package at destination, real owner | Native contract escrow, no parallel pay ledger |
+| P1 | SALVAGE_RESCUE | Real native wreck, surviving cargo custody and actual recovery demand | Recover exact real item IDs and deliver to real native itemStore | Paid only for verified recovery, no free items |
+| P1 | ORE_SUPPLY / MANUFACTURING | Real station shortage, material reservation, native refinery or installed industry job | Source ore consumed; actual item/blueprint job output delivered | Native invoice/stock purchase settled by corporation |
+| P2 | PATROL / EXPLORATION | Valid corp patrol route / scanner discovery with permissions | Native route dwell, discovery receipt and optional lawful encounter | Corporate mission budget, independent of invented kills |
+| P2 | MULTI_SYSTEM_CONVOY | Actual stargate navigation / native item continuity / stock destination | Exact physical ship and cargo through every gate and at receiver | Route-risk fee; blocked until native intersystem transit E2E passes |
+
+## NPC demand and appearance policy
+
+An internal `NativeJobDemandDispatcher` only reads **committed** native signals: real preparing convoy manifests, actual miner ship/belt/mining controller, native market buy/order shortfall, manufacturing material demand, named hauler wreck. Each economic need produces at most one immutable `sourceKey` and bounded offer TTL. It never spawns an NPC ship or mints materials to make an offer. Recheck real ship, manifest, station and issuer wallet before display and acceptance. Expired/ineligible opportunities vanish from browse results but are retained in auditable history.
+
+Refresh visible offers on a configurable bounded read-only poll (proposed 2-5 min), and on authoritative native signal; don't promise a minimum number when the world is idle. Control concurrency per system/corporation, budgets, notification cooldowns and geography; prevent repeated failed jobs from regenerating artificial demand.
+
+The UI must distinguish **ESTIMATED** (issuer balance/eligibility checked), **ACCEPTING** (not funded), **FUNDED/ACTIVE** (native reserve receipt confirmed), **EXPIRED**, **FAILED**, **PAID** and **REFUNDED**. NEVER call an `INTERESTED` event `ACCEPTED`, or an unreserved quote `GUARANTEED`.
+
+## Economics: finite ISK, transparent payouts
+
+- Offer quote from observed native conditions, not hard-coded grants: `fee = baseTravelLabor + riskPremium + cargoValueAtRisk * boundedRiskRate + urgencyPremium`; for miners, `rate * verifiedShiftTime + actualOreMilestoneFee`. All components are bounded, finite, integer ISK; cap by available corporation budget and game economy wage index. Risk can decrease the chance of survival; it must not automatically spawn a scripted pirate to justify wages.
+- Proposed initial manual tuning: trade escort 300k-3m ISK, miner guard 150k-700k ISK / 10-15 min, courier 100k-2m, rescue 250k-2.5m. These are design-only defaults to calibrate against actual native wallet balances, ship replacement and player progression. No fixed reward if payee corporation lacks funds.
+- Atomic corporate escrow reserved before departure/shift start; one unique native `jobID + issuerID + sourceKey`. Payment is a transfer from that reservation to real character wallets, NOT wallet addition from nothing. The issuer's held escrow cannot be spent again. No separate hidden payout if the stock native contract engine already pays.
+- 1 pilot receives all earned base fee; 2 explicit fleet participants split a defined pool by agreed fixed shares (initially 50/50); never double the reward when the second pilot joins. Character participation must be verified and defined before funding.
+- Safe arrival pays base fee with zero pirate encounters. Raid bonuses require independent native attack/outcome proof and separate reserved premium; a raid can be ignored without causing invented claims.
+- Failed convoy: no automatic success payout, verify real insurance/refund terms; only return unearned reserved funds to issuer after durable proof of nonpayment and terminal loss. Partial miner shift: pay only independently verified completed milestones; no reward for idle proximity. Any uncertain native wallet ACK, crash, item custody or journal corruption => quarantine/NEEDS_OPERATOR_REPAIR, never blindly retry or force refund.
+- Do not use payout for killing an owned target, friendly-fire fraud, throwaway NPC respawns, rapidly reaccepting the same manifest, or client-reported ore/ship locations. SDE/Crimewatch and reputation penalties remain native.
+
+## Authoritative model and state machine
+
+Offer identity is immutable: `jobID`, `sourceKey`, `sourceType`, `issuerCorporationID`, `systemID`, `sourceEntityID`, `targetStationID` (if applicable), `manifestKey` or `miningShiftID`, `nativeShipIDs`, `nativeCargoIDs`, `feeISK`, `bonusCapISK`, `participantLimit`, `expiresAt`, `termsHash`, `serverVersion`.
+
+`SOURCE_VERIFIED -> QUOTED -> OFFERED -> ACCEPTING -> RESERVED -> ACTIVE -> COMPLETED/FAILED/CANCELLED -> PAID/REFUNDED/NEEDS_OPERATOR_REPAIR`.
+
+Only a native issuer/provider can create and price; only an authenticated online pilot may opt in; only trusted server flow writes native reservation; only native movement/mining/cargo/market/combat authorities mark work progress; only native wallet authority settles. Replay exact duplicate returns the stored receipt, but altered terms, alternate pilot or competing reserve fails closed. A job should not become unavailable to other players until reserved (or short-lived acceptance lock), with server-owned CAS to prevent concurrent accept.
+
+Lifecycle events on existing Opportunity Board and optional native EVEmail: OPEN, CLAIMED, DEPARTED/SHIFT_STARTED, ATTACKED, DELIVERED/SHIFT_DONE, PAID, FAILED, REFUNDED. No private locations or omniscience; one alert per transition, watcher local/all/off respected.
+
+## Existing code to reuse; specific blockers to fix
+
+- `integration/coopWorldOpportunityBoard.cjs` provides genuine RAID/CONVOY event IDs and `/events`; `/events interest` is not paid acceptance. `/events accept` already delegates to `coopEscortPricedOffers`, whose code expects two authentic fleet pilots and an unexpired native corporation quote. **Do not create an untrusted second acceptance API.**
+- `integration/coopEscortPricedOffers.cjs` quotes a verified preparing convoy and records two signatures, **but only prewarp funds separately** via `coopEscortFlightGate`; listing an offer cannot imply the money was reserved.
+- `integration/coopEscortRuntime.cjs` / `coopEscortNativeBinding.cjs` and settlement proof currently require the unique real pirate wreck + exact two pilots. P0 must introduce secure NO_RAID_DELIVERY success proof and optional separately-funded raid premium, then a native one-/two-pilot participant record, without relaxing manifest / warehouse / character checks.
+- `integration/coopConvoyOperations.cjs` validates real miner and hauler incidents, **not paid work**. Mining shifts need real active miner controller, ore transfer and protected presence evidence; cannot pay merely on a timer or the absence of combat.
+- Use the native COURIER contract proxy for courier work when its wallet/item crash-atomicity gate passes (see `docs/COOP_NATIVE_CONTRACTS_LP_STORE_V1.md`).
+- PR #96 Escort Stage H is OPEN/DRAFT; reconcile its durable warp fence, delayed settlement, exact-once receipts and manual crash repair before touching the same files. Open #84 for player-facing orders/rescue and #85 for reputation; avoid competing overlapping patches.
+
+## Implementation ownership / deliverable slices
+
+**Slice A (P0; ship first):** native job browse and deterministic issuer/source identity, accurate `/jobs` read-only views, no promises of funded jobs without receipts. Extend existing board; do not create a second event namespace with the same native convoy. Isolated tests for dedup, visibility, forged IDs, offline clients, expiry and disabled flags.
+
+**Slice B (P0):** real single/duo explicit accept and wallet escrow; peaceful merchant convoy success with full native cargo/warehouse proof pays exactly once; full cancellation/refund recovery. Add tests on the *actual* pinned native GameStore/better-sqlite3 worker and two clients. Reconcile Stage H first. The single pilot path must never be implemented as a synthetic second-character receipt.
+
+**Slice C (P0):** real miner guard shifts with active physical native miner, real mining/ore milestones, contribution witness, early abandonment and proportionate settlement. Make tests reject fake ore, no player presence, empty belt and auto-respawn farms.
+
+**Slice D (P1):** emergency reinforcement and optional genuine pirate bonus, salvage/courier job bindings; clear native mail and co-op routing. Then history/reputation and prices with finite budgets.
+
+**Slice E (P2):** NPC corp worker schedules, longer route chains, faction jobs, career progression/standing, and local availability tuning driven by actual demand. Avoid dynamic narrative AI acting as trusted financial authority.
+
+## Local test matrix (no GitHub Actions / no remote CI)
+
+1. Disabled => no paid jobs nor new native game mutations; old `/events` unchanged.
+2. Genuine staged cargo + NPC + station => one offer, persisted through restart; identical signal does not respawn it; malformed/fake ship/cargo/system/station => none.
+3. Native issuer wallet insufficient => no funded acceptance/departure; simultaneous accept attempts => exactly one assignment/reservation.
+4. Solo authenticated pilot acceptance, genuine two-pilot fleet acceptance, third party, disconnected peer, swapped ship, hostile fleet, forged session and duplicate RPC: only authorized roster accepted; no money moved by listing/interest.
+5. **Peaceful convoy** (zero pirate spawns) with intact genuine cargo -> a single base fee paid to correct character(s), source escrow debited once.
+6. Real pirate raid and surviving delivery => same base fee once, bonus at most once with independently verified combat/raid receipt; no damage/wreck => no bonus.
+7. Hauler destroyed, missing warehouse stack, wrong station, cargo changed after quote, participant absent: never report success or grant ISK.
+8. Miner shift in real SDE belt: physically mined ore/delivered custody + verified coverage -> proportional pay; idle waiting, zero cycles, teleport, offline ship, forged quantity => zero pay; shared shift splits one pool.
+9. Replay and kill process at every state edge: before reserve, during corporate debit, after wallet ACK lost, after delivery append, during settlement, during refund. Ledger conservation `corporation delta + player credits + held escrow delta = 0` at each stable terminal state. Unknown states require operator repair.
+10. Client proof: two distinct real EVE sessions see available offer, manually accept, follow actual NPCs, observe native wallet journal before/after, same shared contract outcome after relog and service restart; no phantom GUI or simulated wallet.
+11. Test optional native EVEmail filtering local/all/off, notification dedup, no disclosure of private location, expiry and no unsolicited spam; verify `--dry-run` and reversible pinned overlay roundtrip.
+12. Never mutate populated `evejs-data` without operator-approved disposable clone/backup; run Node local tests and pinned GameStore verification, **not GitHub Actions**.
+
+## Acceptance / release definition
+
+P0 is done only when a user can **actually find**, **accept**, **complete** and **get paid** for at least one peaceful merchant convoy AND one real mining guard shift on the local server, with the real two-client co-op flow also demonstrated. Source-only tests, fake wallet mocks, a created PR, an event mail, or a successful Docker boot are not completion. Keep new financial paths OFF until gates pass.

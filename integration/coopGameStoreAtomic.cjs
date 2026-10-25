@@ -3,7 +3,7 @@
  * COOP-032D. In-process native SQLite/GameStore atomic row bridge.
  * Infrastructure only, never exports supportsAtomicInstall/Delivery.
  */
-const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","npcEntities","npcModules","npcCargo"]);
+const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","npcEntities","npcModules","npcCargo","miningRuntimeState","npcWreckItems","npcWrecks"]);
 const SEP="\u001f",hasOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function assertTables(names){
  if(!Array.isArray(names)||names.length<1||names.length>ALLOWED.size||
@@ -26,6 +26,20 @@ function createSqliteAdapter(getDb){
   assertTables(tables);
   if(typeof mutation!=="function"||inside)throw Error("INVALID_OR_REENTRANT_ATOMIC_MUTATION");
   const db=getDb();if(!db||typeof db.exec!=="function"||typeof db.prepare!=="function")throw Error("NATIVE_SQLITE_UNAVAILABLE");
+  const mining=tables.includes("miningRuntimeState");
+  const hauling=tables.includes("npcCargo") &&
+    process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC==="1";
+  if(mining||hauling){
+    if(mining&&process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
+      throw Error("ALIFE07_MINING_ATOMIC_DISABLED");
+    // Both the asteroid debit and the original cargo reparent/receipt must
+    // survive a process crash: FULL is set BEFORE BEGIN IMMEDIATE.
+    db.exec("PRAGMA synchronous = FULL");
+    const pragma=db.prepare("PRAGMA synchronous").get();
+    if(!pragma || Number(pragma.synchronous)!==2)
+      throw Error(mining?"ALIFE07_SQLITE_DURABILITY_NOT_FULL":
+        "ALIFE10_SQLITE_DURABILITY_NOT_FULL");
+  }
   const scope=new Set(tables),changed=new Map();
   const tbl=t=>{if(!scope.has(t))throw Error("UNDECLARED_NATIVE_TABLE");return '"'+t+'"';};
   let begun=false;inside=true;
@@ -83,21 +97,43 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
   if(busy)throw Error("NATIVE_GAMESTORE_ATOMIC_REENTRANT");
   if(typeof mutation!=="function")throw Error("NATIVE_ATOMIC_MUTATION_REQUIRED");
   busy=true;let committed=false;
+  let cargoWitness=null;
+  const mixedMode=tables.length===1&&tables[0]==="npcCargo"&&
+    process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC==="1"&&
+    process.env.EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION==="1";
+  const isolation=mixedMode?require("./coopNativeCargoTransientIsolation"):null;
   try{
    ensureSqliteReady();
    for(const t of tables){
     if(!ensureCached(t))throw Error("NATIVE_GAMESTORE_TABLE_UNAVAILABLE:"+t);
-    if(transientPaths[t]?.size)throw Error("NATIVE_TRANSIENT_STATE_UNSAFE:"+t);
+    const activeTransient=Boolean(transientPaths[t]?.size);
+    if(activeTransient&&!mixedMode)
+      throw Error("NATIVE_TRANSIENT_STATE_UNSAFE:"+t);
     const result=flushTableSync(t,{log:false});
     if(!result?.success||dirty.has(t)||inFlightFlushes.has(t)||flushTimers[t])
       throw Error("NATIVE_GAMESTORE_PERSISTENCE_NOT_QUIESCENT:"+t);
+    // No in-flight async worker or dirty write is allowed. Read the durable
+    // source AFTER flush, then verify every transient cargo row is omitted.
+    if(activeTransient){
+      cargoWitness=isolation.capture({paths:transientPaths[t],
+        live:cache[t],durable:sqliteStore.loadTableObject(t)});
+    }
    }
    if(tables.includes("items")&&invalidateNativeItems("probe")!==true)
      throw Error("NATIVE_INVENTORY_INDEX_INVALIDATOR_UNAVAILABLE");
-   const result=sqliteWriter.transact(tables,mutation);
+   const result=sqliteWriter.transact(tables,cargoWitness?
+     tx=>{
+      const guarded=isolation.guardMutation(tx,cargoWitness);
+      const returned=mutation(guarded);
+      guarded.assertTransferComplete();
+      return returned;
+     }:mutation);
    committed=true;
    for(const t of tables){
-    const snapshot=sqliteStore.loadTableObject(t),current=cache[t];
+    const persisted=sqliteStore.loadTableObject(t),current=cache[t];
+    const snapshot=cargoWitness&&t==="npcCargo"?
+      isolation.rehydrate({persisted,live:current,paths:transientPaths[t],
+        witness:cargoWitness}):persisted;
     if(!current||typeof current!=="object"||!snapshot||typeof snapshot!=="object")
       throw Error("NATIVE_CACHE_SNAPSHOT_INVALID:"+t);
     // characterState caches a normalized record by raw child object identity.

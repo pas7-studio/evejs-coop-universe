@@ -4,35 +4,55 @@
 const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm");
 const {execFileSync}=require("node:child_process");
 const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
-const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNews","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRuntime","coopEscortVolunteers","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopNativeActivity","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateSettlement","coopNpcDestructionAttacker","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryOfflineDelivery","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMaterializer","coopNpcMemory","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopRuntimeProbe","coopSessionPresence","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
+const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNativeBuyerDispatch","coopAlifeNativeBuyerRuntime","coopAlifeNativeDeliveryEvidence","coopAlifeNativeMiningWitness","coopAlifeNativeResupplyBridge","coopAlifeNews","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRescueNavigation","coopEscortRuntime","coopEscortTacticalGame","coopEscortVolunteers","coopEscortWarpFence","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopNativeActivity","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcBuyerNativeBindings","coopNpcBuyerRecoveryAudit","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateSettlement","coopNpcDestructionAttacker","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryOfflineDelivery","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMaterializer","coopNpcMemory","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcRustOrderAuthority","coopNpcSellPricing","coopNpcSellerTaxAuthority","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopRuntimeProbe","coopSessionPresence","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
 // COOP-046: opt-in post-commit combat outcome witness for atomic ammo banks.
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
-
-const nativeEconomyModules=[
- "coopAlifeNativeBuyerDispatch","coopAlifeNativeBuyerRuntime",
- "coopAlifeNativeEconomyAct","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopNpcBuyerNativeBindings",
- "coopNpcRustOrderAuthority","coopNpcSellerTaxAuthority",
- "coopNpcBuyerRecoveryAudit",
- "coopNpcBuyerCoordinator","coopNpcCorporateBuyerAtomic",
- "coopNpcMarketPolicy","coopNpcDemandAuthority",
- "coopNpcNativeEconomyDirector","coopNpcPartialFillAtomic"
-];
-for(const name of nativeEconomyModules){
- if(names.includes(name))throw Error("COOP049_DUPLICATE_NATIVE_MODULE:"+name);
- names.push(name);
-}
-
+names.splice(names.indexOf("coopNpcFireOutcomeWitness")+1,0,"coopEconomyDestination");
+names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
+// Stage J native salvage: preserve all currently deployed A-Life/industry modules.
+names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
+// Stage J: ship the already-used physical rival warehouse module and the
+// existing native pending-order dependency together with opt-in salvage seller.
+names.splice(names.indexOf("coopSalvageNpcRivals")+1,0,
+ "coopSalvageNpcStationDelivery","coopNpcPendingMarketEscrow","coopSalvageNpcPendingMarket");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConservation");
+names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
+// ALIFE-08 durable native miner/hauler identity (opt-in).
+names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetDurable");
+// ALIFE-10 strict native miner->hauler original cargoID atomic handoff.
+names.splice(names.indexOf("coopNativeHaulCargo")+1,0,"coopNativeHaulTransferAtomic");
+// ALIFE-11 cargo transient shadow restricted to original atomic miner-to-hauler mode.
+names.splice(names.indexOf("coopNativeHaulTransferAtomic")+1,0,"coopNativeCargoTransientIsolation");
+// COOP-048 native /jobs uses the existing authenticated Opportunity Board.
+names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
+// Stock in-game agent dialogue for jobs, no /jobs text needed.
+names.splice(names.indexOf("coopNpcJobBoard")+1,0,"coopNativeJobAgent");
+// Native opt-in EVEmail notification bridge for priced corporate offers.
+names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobNotifications");
+// Durable actor-agent source binding for ID-less native Accept button.
+names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelection");
+// Peaceful delivery uses the same native corporate escrow (feature OFF by default).
+names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
+// COOP-055: strict, default-OFF native NPC motion-attested Escort.
+names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness","coopEscortRouteWitness");
+names.splice(names.indexOf("coopEscortRouteWitness")+1,0,"coopEscortNativeIngressSnapshot");
 const specs=[
+ {file:"server/src/services/mining/miningRuntime.js",patches:[]},
+ {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
+   {anchor:'  "commands",',line:'  "jobs",',after:true},
    {anchor:'  "commandlist",',line:'  "alerts",',after:true},
-   {anchor:'  if (command === "motd") {',line:'  if (command === "events" || command === "alerts") { const result=require("../../space/coopWorldOpportunityBoard").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }'}
+   {anchor:'  if (command === "motd") {',line:'  if (command === "events" || command === "alerts") { const result=require("../../space/coopWorldOpportunityBoard").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }'},
+   {anchor:'  if (command === "motd") {',line:'  if (command === "jobs") { const result=require("../../space/coopNpcJobBoard").handleChat({session,argumentText}); return handledResult(chatHub,session,options,result.message); }'}
   ]},
  {"file":"server/src/space/modules/localCycleReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {file:"server/src/space/runtime.js",patches:[]},
+ {file:"server/src/space/movement/warp/movementWarpState.js",patches:[]},
+ {file:"server/src/space/npc/nativeNpcService.js",patches:[]},
  {file:"server/index.js",patches:[]},
  {file:"server/src/gameStore/index.js",patches:[]},
  {file:"server/src/gameStore/sqliteStore.js",patches:[]},
@@ -74,6 +94,20 @@ const specs=[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
  ]},
  {file:"server/src/services/mining/miningNpcOperations.js",patches:[
+  // Why a "mining" fleet can produce nothing: the stock loop `continue`s
+  // silently at each of these points. Trace-only, nothing destructive.
+  {anchor:"    if (miningModules.length <= 0) {",after:true,
+   line:'      require("../../space/coopMiningTrace").note("NO_MINING_MODULE",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0)});'},
+  {anchor:"    if (!primarySnapshot) {",after:true,
+   line:'      require("../../space/coopMiningTrace").note("NO_MINING_SNAPSHOT",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),moduleTypeID:toInt(miningModules[0].moduleItem&&miningModules[0].moduleItem.typeID,0)});'},
+  {anchor:"    if (distanceToTarget > engagementRangeMeters) {",after:true,
+   line:'      require("../../space/coopMiningTrace").note("TARGET_OUT_OF_RANGE",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),distanceMeters:Math.round(distanceToTarget),engagementMeters:Math.round(engagementRangeMeters)});'},
+  {anchor:"    if (!targetLockResult || targetLockResult.success !== true) {",after:true,
+   line:'      require("../../space/coopMiningTrace").note("TARGET_LOCK_FAILED",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),errorMsg:String((targetLockResult&&targetLockResult.errorMsg)||"NONE")});'},
+   {anchor:"    if (!minerEntity || minerEntity.mode === \"WARP\" || minerEntity.pendingWarp) {",after:true,
+   line:'      require("../../space/coopMiningTrace").note("MINER_NOT_IN_SCENE_OR_WARPING",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntityID,0),found:Boolean(minerEntity),mode:String((minerEntity&&minerEntity.mode)||""),pendingWarp:Boolean(minerEntity&&minerEntity.pendingWarp)});'},
+  {anchor:"  fleetRecord.nextThinkAtMs = now + thinkIntervalMs;",after:true,
+    line:'  require("../../space/coopMiningTrace").note("TICK_"+String(fleetRecord.state||"unknown"),{fleetID:toInt(fleetRecord.fleetID,0),systemID:toInt(scene.systemID,0),activeAsteroidID:toInt(fleetRecord.activeAsteroidID,0)});'},
   {anchor:'  if (startupSceneSeedSet.has(startupKey)) {',line:'  if (process.env.EVEJS_COOP_CONVOY_RENEWAL === "1") { const renewal = require("../../space/coopNativeConvoyRenewal").inspect({scene,systemID:scene.systemID,slotCount:resolveStartupFleetCount(),seeded:startupSceneSeedSet.has(startupKey),fleets:getMiningFleetsForSystem(scene.systemID)}); if (!renewal.allowed) return; if (renewal.renewal) startupSceneSeedSet.delete(startupKey); }'},
   {anchor:'  const responsePlan = resolveResponsePlan(scene, fleetRecord, aggressorEntity, {',
    line:'  if (process.env.EVEJS_COOP_PLAYER_CONSEQUENCES === "1") { try { require("../../space/coopNativeConsequences").noteMiningAggression(scene, fleetRecord, aggressorEntity, aggressionEventAtMs); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); } }'}
@@ -127,8 +161,14 @@ const oldLines=[
  '  try { require("../coopNativeConsequences").noteNativeWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity, options, controller); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); }',
   "  \"events\",",
   "  \"alerts\",",
+  "  \"jobs\",",
+  "  if (command === \"jobs\") { const result=require(\"../../space/coopNpcJobBoard\").handleChat({session,argumentText}); return handledResult(chatHub,session,options,result.message); }",
   "  if (command === \"events\" || command === \"alerts\") { const result=require(\"../../space/coopWorldOpportunityBoard\").handleChat({session,command,argumentText}); return handledResult(chatHub,session,options,result.message); }",
 ];
+// Spec-patch lines must be idempotent across installs: strip() drops them
+// before re-applying, exactly like the legacy migrated lines above.
+for(const spec of specs)for(const patch of spec.patches)
+ if(String(patch.line).includes("coopMiningTrace"))oldLines.push(patch.line);
 const lootOld='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID);';
 const lootNew='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });';
 const slimBroadcastOld='    scene.sendSlimItemChangesToAllSessions([entity]);';
@@ -155,6 +195,10 @@ function transform(source,spec,remove){
  }
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
+  text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/space/npc/nativeNpcService.js")
+  text=require("./coop-escort-ingress-materialize-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
@@ -221,6 +265,10 @@ function transform(source,spec,remove){
  if(spec.file.endsWith("miningNpcOperations.js")&&
     text.includes('require("../../space/coopNativeStationArrival")'))
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,true);
+ // Detach ALIFE-09 stable-ID shim before ALIFE-08 validates its pinned bootCall.
+ if(spec.file.endsWith("miningNpcOperations.js")&&
+    text.includes('coopDurableFleetID:Number(scene.systemID)*32+Number(slot),'))
+  text=require("./coop-native-mining-stable-fleet-id-patch.cjs").patch(text,true);
  if(spec.file.endsWith("miningNpcOperations.js")){
   // Replace the vanilla "miner ore disappears during hauling" path with
   // a real native cargo reparent to a live hauler ship. Keep fallback.
@@ -287,10 +335,26 @@ function transform(source,spec,remove){
     }
   }
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-native-mining-durable-patch.cjs").patch(text,true);
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
- if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
-  text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove){
+  text=require("./coop-native-mining-durable-patch.cjs").patch(text,false);
+  text=require("./coop-native-mining-stable-fleet-id-patch.cjs").patch(text,false);
+ }
+ if(spec.file==="server/src/services/mining/miningRuntime.js" || spec.file==="server/src/services/mining/miningRuntimeState.js"){
+  if(remove){
+   text=require("./coop-native-mining-atomic-source-patch.cjs").patch(text,spec.file,true);
+   text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,true);
+  }else{
+   text=require("./coop-native-mining-cycle-conservation-patch.cjs").patch(text,spec.file,false);
+   text=require("./coop-native-mining-atomic-source-patch.cjs").patch(text,spec.file,false);
+  }
+ }
+ // ALIFE-05: existing native stock mining writer; store-before-hull commit when opt-in.
+ if(spec.file.endsWith("miningNpcOperations.js"))
+  text=require("./coop-native-mining-cargo-integrity-patch.cjs").patchMiningCargo(text,remove);
  if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("agent/missionRuntimeState.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
   text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/agent/agentMissionRuntime.js")
@@ -304,14 +368,26 @@ function transform(source,spec,remove){
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("/space/combat/killmailTracker.js"))
   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
- if(spec.file==="server/src/services/agent/agentMgrService.js")
-  text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/services/agent/agentMgrService.js"){
+  // Remove job hooks first, then existing dialogue patch. Install in reverse.
+  if(remove){
+   text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
+   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
+  }else{
+   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
+  }
+ }
+ if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
+  text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove);
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
   if(count(text,anchor)!==1)throw Error("Unknown or duplicate source anchor: "+spec.file+" "+patch.anchor);
   text=text.replace(anchor,patch.after?anchor+eol+patch.line:patch.line+eol+anchor);
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/gameStore/index.js"||spec.file==="server/src/gameStore/sqliteStore.js"||spec.file==="server/src/services/inventory/itemStore.js")
   text=require("./coop-gamestore-atomic-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
@@ -321,6 +397,32 @@ function transform(source,spec,remove){
  new vm.Script(text,{filename:spec.file});
  return text;
 }
+// All sources are preflighted before the first write. Restore the failed
+// item too: writeFileSync may have already truncated its destination.
+function executePlan(changed,ops=fs){
+ const attempted=[];
+ try{
+  for(const item of changed){
+   attempted.push(item);
+   if(item.after===null)ops.unlinkSync(item.file);
+   else ops.writeFileSync(item.file,item.after,"utf8");
+  }
+ }catch(error){
+  const rollbackFailures=[];
+  for(const item of attempted.reverse()){
+   try{
+    if(item.before===null){if(ops.existsSync(item.file))ops.unlinkSync(item.file);}
+    else ops.writeFileSync(item.file,item.before,"utf8");
+   }catch(rollbackError){
+    rollbackFailures.push(item.file);
+    console.error("Source rollback failed:",item.file,rollbackError.message);
+   }
+  }
+  if(rollbackFailures.length)
+   throw Error("Overlay rollback incomplete: "+rollbackFailures.join(", "),{cause:error});
+  throw error;
+ }
+}
 function run({codePath,remove=false,dryRun=false}){
  const project=path.resolve(__dirname,".."),code=path.resolve(codePath);
  if(!fs.existsSync(path.join(code,"compose.yaml")))throw Error("Missing EveJS compose.yaml: "+code);
@@ -329,6 +431,9 @@ function run({codePath,remove=false,dryRun=false}){
  const plan=[];
  for(const spec of specs){
   const file=path.join(code,spec.file),before=fs.readFileSync(file,"utf8");
+  const sourceState=classifyFile(before,spec,code);
+  if(sourceState!=="PRISTINE"&&sourceState!=="PATCHED")
+   throw Error("Refusing to modify drifted native source: "+spec.file+" ("+sourceState+")");
   plan.push({file,before,after:transform(before,spec,remove)});
  }
  for(const name of names){
@@ -338,34 +443,39 @@ function run({codePath,remove=false,dryRun=false}){
    const after=fs.readFileSync(src,"utf8");
    new vm.Script(after,{filename:src});
    plan.push({file,before:fs.existsSync(file)?fs.readFileSync(file,"utf8"):null,after});
-  }else if(fs.existsSync(file))plan.push({file,before:fs.readFileSync(file,"utf8"),after:null});
- }
- const changed=plan.filter(p=>p.before!==p.after);
- if(!dryRun){
-  const done=[];
-  try{
-   for(const item of changed){
-    if(item.after===null)fs.unlinkSync(item.file);
-    else fs.writeFileSync(item.file,item.after,"utf8");
-    done.push(item);
-   }
-  }catch(error){
-   for(const item of done.reverse()){
-    try{if(item.before===null)fs.unlinkSync(item.file);else fs.writeFileSync(item.file,item.before,"utf8");}
-    catch(err){console.error("Source rollback failed:",item.file,err.message);}
-   }
-   throw error;
+  }else if(fs.existsSync(file)){
+   const before=fs.readFileSync(file,"utf8");
+   if(before!==fs.readFileSync(src,"utf8"))
+    throw Error("Refusing to remove drifted overlay module: "+name);
+   plan.push({file,before,after:null});
   }
  }
+ const changed=plan.filter(p=>p.before!==p.after);
+ if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};
 }
-function classifyFile(text,spec){
+function classifyFile(text,spec,code){
  try{
   const pristine=transform(text,spec,true);
   if(pristine!==text)return transform(pristine,spec,false)===text?"PATCHED":"DRIFTED";
   transform(text,spec,false);
   return spec.patches.some(p=>text.includes(p.line))?"DRIFTED":"PRISTINE";
- }catch(_error){return "ANCHOR_MISMATCH";}
+ }catch(_error){
+  // Chained patch modules legitimately refuse to REMOVE a hook that a pristine
+  // file never had. Falling back to git HEAD tells the truth: a file identical
+  // to HEAD is pristine, and a HEAD that our patches reproduce exactly is
+  // patched. Only a real mismatch is drift.
+  try{
+   const repoRoot=path.dirname(code);
+   const rel=path.relative(repoRoot,code).split(path.sep).join("/");
+   const head=execFileSync("git",["-C",repoRoot,"show",
+    "HEAD:"+(rel?rel+"/":"")+spec.file],
+    {encoding:"utf8",maxBuffer:64*1024*1024});
+   if(head===text)return "PRISTINE";
+   try{if(transform(head,spec,false)===text)return "PATCHED";}catch(_readd){}
+   return "DRIFTED";
+  }catch(_head){return "ANCHOR_MISMATCH";}
+ }
 }
 function check({codePath}){
  const project=path.resolve(__dirname,".."),code=path.resolve(codePath);
@@ -375,14 +485,15 @@ function check({codePath}){
  const problems=[],files=[],modules=[];
  for(const spec of specs){
   const file=path.join(code,spec.file);
-  const state=fs.existsSync(file)?classifyFile(fs.readFileSync(file,"utf8"),spec):"MISSING";
+  const state=fs.existsSync(file)?classifyFile(fs.readFileSync(file,"utf8"),spec,code):"MISSING";
   files.push({file:spec.file,state});
   if(state!=="PRISTINE"&&state!=="PATCHED")problems.push({target:spec.file,kind:"native-source",state});
  }
  for(const name of names){
   const deployed=path.join(code,"server/src/space",name+".js");
-  const expected=fs.readFileSync(path.join(project,"integration",name+".cjs"),"utf8");
-  const state=!fs.existsSync(deployed)?"MISSING":fs.readFileSync(deployed,"utf8")===expected?"CURRENT":"STALE";
+  const source=path.join(project,"integration",name+".cjs");
+  const state=!fs.existsSync(source)?"SOURCE_MISSING":!fs.existsSync(deployed)?"MISSING":
+   fs.readFileSync(deployed,"utf8")===fs.readFileSync(source,"utf8")?"CURRENT":"STALE";
   modules.push({name,state});
   if(state!=="CURRENT")problems.push({target:"server/src/space/"+name+".js",kind:"overlay-module",state});
  }
@@ -415,4 +526,4 @@ if(require.main===module){
   }else console.log(JSON.stringify(result,null,2));
  }catch(error){console.error("[COOP PATCH ERROR]",error.message);process.exitCode=1;}
 }
-module.exports={run,check,classifyFile,transform,strip,specs,PIN};
+module.exports={run,check,executePlan,classifyFile,transform,strip,specs,names,PIN};

@@ -16,6 +16,7 @@ test("A-Life economy is inside existing 30-second world tick and has no competin
  const observer=runtime.indexOf('safeNpcPhase("alife-native-economy-observe"',tick);
  const nativeMarket=runtime.indexOf('safeNpcPhase("native-market-schedule"',tick);
  assert.ok(tick>=0&&nativeDepot>tick&&observer>nativeDepot&&nativeMarket>observer);
+ assert.match(runtime,/observeAlifeEconomy\(\)\.catch\(/);
  assert.doesNotMatch(brain,/setInterval|setTimeout|marketDaemonClient|issue\(/);
  assert.doesNotMatch(sensor,/setInterval|setTimeout|marketDaemonClient|\\.transact\(/);
 });

@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "feature": "Stage J P0 Native Salvage vs RESCUE Escrow Atomic Arbitration",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Authorized throwaway copy of persistent evejs-data; never modify live world",
+    "Pinned EveJS c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+    "Real original NPC hauler death, source-tagged wreck, two authenticated characters and native NPC rival with stock loot rights",
+    "Manual local Node baseline and overlay --dry-run; no GitHub Actions"
+  ],
+  "scenarios": [
+    {
+      "id": "SALVAGE-RACE-01",
+      "name": "NPC first, stale player quote",
+      "actions": [
+        "Present original real wreck to both pilot and NPC",
+        "After signed pair quote but before reserve's SQLite transaction allow rival's atomic pickup",
+        "Attempt corporation escrow reserve"
+      ],
+      "expected": "NPC cargo credited once, exact wreck row gone, no player escrow debited, no paid contract"
+    },
+    {
+      "id": "SALVAGE-RACE-02",
+      "name": "Player escrow first, stale NPC preflight",
+      "actions": [
+        "Two real pilots accept and atomically reserve from genuine wallet",
+        "Allow rival to rely on stale NOT_FOUND escrow preflight and attempt native pickup"
+      ],
+      "expected": "Rival pickup denied within GameStore transaction; original native wreck row remains; only one corporate debit"
+    },
+    {
+      "id": "SALVAGE-RACE-03",
+      "name": "Genuine unfunded rival recovery",
+      "actions": [
+        "Make original native wreck available with no escrow or player receipt",
+        "Allow legal same-corporation rival to physically approach and collect"
+      ],
+      "expected": "One atomic wreck debit and native NPC cargo credit plus rival receipt; no player ISK payout"
+    },
+    {
+      "id": "SALVAGE-RACE-04",
+      "name": "Reject forged restored wreck",
+      "actions": [
+        "On disposable copy only, simulate an already durable rival pickup receipt with a subsequently restored apparent original wreck row",
+        "Attempt new player escrow reserve"
+      ],
+      "expected": "No new escrow or funds debited; receipt takes precedence over apparent stock"
+    },
+    {
+      "id": "SALVAGE-RACE-05",
+      "name": "Crash before commit",
+      "actions": [
+        "Inject crash before SQLite COMMIT for one of two competing paths",
+        "Restart from same native persisted GameStore"
+      ],
+      "expected": "No partial item/wallet movement; one original custodian and no duplicated ISK"
+    },
+    {
+      "id": "SALVAGE-RACE-06",
+      "name": "ACK lost after commit",
+      "actions": [
+        "Inject lost ACK immediately after SQLite COMMIT for reserve or rival pickup",
+        "Re-open same signed contract and replay via server",
+        "Inspect native GameStore escrow, wreck, NPC cargo and receipt"
+      ],
+      "expected": "Committed outcome reconciles from durable rows; no second escrow or item creation"
+    },
+    {
+      "id": "SALVAGE-RACE-07",
+      "name": "Funded RESCUE full delivery",
+      "actions": [
+        "Ensure player-funded path wins",
+        "Two independent pilots fly to wreck, carry original item, physically dock and deliver",
+        "Verify final payout and replay after reconnect"
+      ],
+      "expected": "One original item in corporation warehouse and exactly one wallet credit per pilot"
+    },
+    {
+      "id": "SALVAGE-RACE-08",
+      "name": "Terminal or corrupt escrow",
+      "actions": [
+        "Present REFUNDED or malformed existing escrow records",
+        "Attempt automatic NPC rival salvage on otherwise available original wreck"
+      ],
+      "expected": "No rival pickup; source stays reserved for operator reconciliation"
+    },
+    {
+      "id": "SALVAGE-RACE-09",
+      "name": "Safety default OFF",
+      "actions": [
+        "Keep ALIFE rival and native transaction flags unset on pinned world",
+        "Observe A-Life normal scheduler"
+      ],
+      "expected": "No new rival native pickup or ISK mutation"
+    },
+    {
+      "id": "SALVAGE-RACE-10",
+      "name": "Post-delivery NPC stock turnover",
+      "actions": [
+        "Complete a paid RESCUE with real delivery and one settlement",
+        "Allow legal NPC trade or consumption of stocked item",
+        "Reconnect and inspect player history"
+      ],
+      "expected": "Paid rescue and earned reputation remain backed by durable settlement proof; no new ISK"
+    },
+    {
+      "id": "SALVAGE-RACE-11",
+      "name": "Original cargo type changes between preflight and COMMIT",
+      "actions": [
+        "On a disposable native GameStore copy, stage a legal original wreck that passes NPC rival preflight",
+        "Before rival SQLite COMMIT replace original wreck sourceKind with non-cargo loot",
+        "Attempt the native rival pickup"
+      ],
+      "expected": "Fail closed inside native transaction, no NPC cargo credit, no original source debit, no ISK"
+    }
+  ]
+}

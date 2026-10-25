@@ -4,6 +4,9 @@
 const {createEscortNativeFunds}=require("./coopEscortNativeFunds");
 const {createEscortFlightGate}=require("./coopEscortFlightGate");
 const {createEscortContractSettlement}=require("./coopEscortContractSettlement");
+const {createPeacefulEscortSettlement}=require("./coopEscortPeacefulSettlement");
+const {createDepartureWitness}=require("./coopEscortDepartureWitness");
+const {createRouteWitness}=require("./coopEscortRouteWitness");
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>x===b[i]);
@@ -43,6 +46,110 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
  };
  const flight=createEscortFlightGate({root,io,clock,authorizeBooking:booking,
   readManifest,verifyManifest,nativeFunds:funds});
+ const departure=createDepartureWitness({root,io,clock});
+ const routeWitness=createRouteWitness({root,io,clock});
+ function recordEscortDeparture(route,scene){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
+   return blocked("DISABLED");
+  // Native quote + real manifest + signed duo and active player fleet are
+  // verified BEFORE corporate escrow; failed on-grid proof cannot fund NPC warp.
+  let source;try{source=booking(route)}
+  catch{return blocked("DEPARTURE_BOOKING_UNAVAILABLE")}
+  if(source?.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING")
+   return blocked("DEPARTURE_BOOKING_NOT_AUTHORIZED");
+  return departure.record({
+   ...source,manifestKey:route.manifestKey},scene,verifyNativeDuo);
+ }
+
+ function readDurableEscortDeparture(manifestKey){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1")
+   return blocked("DISABLED");
+  let current;try{current=flight.read(manifestKey)}
+  catch{return blocked("ESCORT_RECOVERY_FLIGHT_UNAVAILABLE")}
+  if(current?.status!=="READY"||current.phase!=="FUNDED"||
+   current.booking?.manifestKey!==manifestKey)
+   return blocked("ESCORT_RECOVERY_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  // A file journal can still say FUNDED after another terminal wallet
+  // process committed a refund or payout. Re-read original native escrow.
+  let reserve;try{reserve=flight.readFunded(current.booking)}
+  catch{return blocked("ESCORT_RECOVERY_NATIVE_RESERVATION_UNAVAILABLE")}
+  if(reserve?.status!=="NATIVE_PREFUNDED_BOOKING_VERIFIED")
+   return blocked("ESCORT_RECOVERY_NATIVE_RESERVATION_NOT_VERIFIED");
+  const proof=departure.readDurable(manifestKey,current.booking);
+  if(proof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+   return blocked("ESCORT_RECOVERY_"+proof.status);
+  return proof;
+ }
+ function recordEscortRouteSample(manifestKey,scene,station){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+   return blocked("DISABLED");
+  let f;try{f=flight.read(manifestKey)}
+  catch{return blocked("ROUTE_FLIGHT_UNAVAILABLE")}
+  if(f?.status!=="READY"||f.phase!=="FUNDED"||!f.booking||
+   f.booking.manifestKey!==manifestKey)
+   return blocked("ROUTE_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  let reserve;try{reserve=flight.readFunded(f.booking)}
+  catch{return blocked("ROUTE_NATIVE_RESERVATION_UNAVAILABLE")}
+  if(reserve?.status!=="NATIVE_PREFUNDED_BOOKING_VERIFIED")
+   return blocked("ROUTE_NATIVE_RESERVATION_NOT_VERIFIED");
+  const p=departure.read(manifestKey,f.booking);
+  if(p.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+   return blocked("ROUTE_DEPARTURE_NOT_VERIFIED");
+  return routeWitness.sample({booking:f.booking,departure:p,scene,station,
+   verifyNativeDuo});
+ }
+ const peaceful=createPeacefulEscortSettlement({readFlight:flight.read,
+  readNativeDelivery:flight.readNativeDelivery,nativeFunds:funds,
+  verifyService:(b,scene)=>{
+   const deny=()=>({status:"NO_NATIVE_ESCORT_SERVICE"});
+   if(process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
+    return deny();
+   // The terminal on-grid check is INSUFFICIENT: a pilot could camp at the
+   // destination and collect funds without escorting the NPC's departure.
+   // Require a durable distinct pre-warp two-pilot source witness as well.
+   const departureProof=departure.read(b.manifestKey,b);
+   if(departureProof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+    return deny();
+   if(process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
+    routeWitness.verify(b,departureProof).status!==
+     "VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE")return deny();
+
+   if(scene?.systemID!==b.systemID||
+    typeof scene.getEntityByID!=="function"||
+    typeof scene.sessions?.values!=="function")return deny();
+   let duo;try{duo=verifyNativeDuo({
+    systemID:b.systemID,stationID:b.stationID,corporationID:b.corporationID,
+    fleetID:b.playerFleetID,manifestKey:b.manifestKey,
+    contractID:b.contractID,haulerID:b.haulerID,characters:b.characters.slice()});
+   }catch{return deny()}
+   if(duo?.status!=="VERIFIED_NATIVE_DUO_FLEET"||
+    duo.fleetID!==b.playerFleetID||!equal(duo.characters,b.characters))return deny();
+   const hauler=scene.getEntityByID(b.haulerID);
+   const validPosition=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
+   if(hauler?.kind!=="ship"||hauler.nativeNpc!==true||
+    hauler.itemID!==b.haulerID||!validPosition(hauler.position))return deny();
+   for(const characterID of b.characters){
+    const sessions=[...scene.sessions.values()].filter(x=>
+     x?.characterID===characterID&&x?.socket?.destroyed!==true&&
+     x?._space?.initialStateSent===true&&
+     x._space.systemID===b.systemID&&pos(x._space.shipID));
+    if(sessions.length!==1)return deny();
+    const player=scene.getEntityByID(sessions[0]._space.shipID);
+    if(player?.kind!=="ship"||player.nativeNpc===true||
+     player.itemID!==sessions[0]._space.shipID||!validPosition(player.position)||
+     Math.hypot(player.position.x-hauler.position.x,
+      player.position.y-hauler.position.y,
+      player.position.z-hauler.position.z)>150000)return deny();
+   }
+   return {status:"VERIFIED_NATIVE_ESCORT_SERVICE",characters:b.characters.slice(),
+    fleetID:b.playerFleetID,haulerID:b.haulerID,systemID:b.systemID};
+  }});
  const contracts=createEscortContractSettlement({root,io,clock,
   authorizeOffer:c=>{
    if(!ready())return blocked("DENIED_NATIVE_RUNTIME_DISABLED");
@@ -66,7 +173,22 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   readNativeFailure,nativeFunds:funds,
   readPrefunded:c=>flight.readFunded(c)});
  function fundBeforeWarp(route){
-  return ready()?flight.fundBeforeWarp(route):blocked("DISABLED");
+  if(!ready())return blocked("DISABLED");
+  if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"){
+   if(process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
+    return blocked("ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
+   // Even a different trusted server-internal caller cannot fund a peaceful
+   // convoy without the same source-linked, fsynced two-pilot departure proof.
+   let offer;try{offer=booking(route)}
+   catch{return blocked("ESCORT_DEPARTURE_BOOKING_UNAVAILABLE")}
+   if(offer?.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING")
+    return blocked("ESCORT_DEPARTURE_BOOKING_NOT_AUTHORIZED");
+   const proof=departure.read(route?.manifestKey,{
+    ...offer,manifestKey:route?.manifestKey});
+   if(proof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+    return blocked("ESCORT_"+proof.status);
+  }
+  return flight.fundBeforeWarp(route);
  }
  function recordDelivery(args){
   return ready()?flight.recordDelivered(args):blocked("DISABLED");
@@ -155,12 +277,16 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
   return contracts.refund(c.contractID);
  }
+ function settlePeacefulFlight(manifestKey,scene){
+  if(!ready())return blocked("DISABLED");
+  return peaceful.settle(manifestKey,scene);
+ }
  function refundProvenLoss(contractID){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,
+ return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,readDurableEscortDeparture,recordEscortRouteSample,finishAfterRaid,settlePeacefulFlight,
   refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});

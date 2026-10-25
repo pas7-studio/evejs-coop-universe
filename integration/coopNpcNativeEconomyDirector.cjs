@@ -7,7 +7,8 @@ const STATES=new Set(["PREPARED","INSTALL_UNKNOWN","INSTALLED","READY","DELIVERY
 const safeInt=x=>Number.isSafeInteger(x)&&x>0;
 const cents=x=>Number.isFinite(x)&&x>=0&&x<=1e12&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 const copy=x=>JSON.parse(JSON.stringify(x));
-const {calculateNativeDemand}=require("./coopNpcDemandAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+const {calculateNativeDemand}=require("./coopNpcDemandAuthority.cjs");
+const {reconcileUnknown}=require("./coopNpcEconomyUnknownRecovery.cjs");
 const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
 const closed=x=>x==="SOLD";
 function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
@@ -94,7 +95,13 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
  }
  function stepEntry(state,e,ownerID,stationID){const id=e.operationID;
   if(e.ownerID!==ownerID||e.stationID!==stationID)return halt("OPERATION_STATION_IDENTITY_MISMATCH",id);
-  if(["INSTALL_UNKNOWN","DELIVERY_UNKNOWN","LIST_UNKNOWN","REPAIR_REQUIRED"].includes(e.phase))return halt("OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION",id);
+  if(["INSTALL_UNKNOWN","DELIVERY_UNKNOWN"].includes(e.phase)){
+   const recovered=reconcileUnknown({entry:e,native});
+   if(!recovered.ok)return halt(recovered.reason,id);
+   Object.assign(e,recovered.patch);save(state);
+   return {status:recovered.status,operationID:id,...recovered.patch};
+  }
+  if(["LIST_UNKNOWN","REPAIR_REQUIRED"].includes(e.phase))return halt("OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION",id);
   const job=()=>native.getJob(id);
   if(e.phase==="PREPARED"){
    const q=native.quote(e.plan);
@@ -189,9 +196,13 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    const state=load(),active=Object.values(state.entries).filter(e=>!closed(e.phase)&&
      e.ownerID===ownerID&&e.stationID===stationID);
    // Unknown native writes must never be bypassed by subsequent installs.
-   const unsafe=active.find(e=>["INSTALL_UNKNOWN","DELIVERY_UNKNOWN","LIST_UNKNOWN",
-     "REPAIR_REQUIRED"].includes(e.phase));
+   const unsafe=active.find(e=>["LIST_UNKNOWN","REPAIR_REQUIRED"].includes(e.phase));
    if(unsafe)return halt("OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION",unsafe.operationID);
+   // Native receipts are inspected read-only before any other station action.
+   // Never repeat a paid install or a delivered inventory grant after lost ACK.
+   const recoverable=active.filter(e=>["INSTALL_UNKNOWN","DELIVERY_UNKNOWN"].includes(e.phase))
+    .sort((a,b)=>a.createdAt-b.createdAt||a.operationID.localeCompare(b.operationID));
+   if(recoverable.length)return stepEntry(state,recoverable[0],ownerID,stationID);
    const working=active.filter(e=>e.phase!=="LISTED")
     .sort((a,b)=>a.createdAt-b.createdAt||a.operationID.localeCompare(b.operationID));
    if(working.length)return stepEntry(state,working[0],ownerID,stationID);

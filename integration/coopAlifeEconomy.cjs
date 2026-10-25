@@ -103,10 +103,10 @@ function decideNativeEconomy(snapshot,{maxIntents=12,now=Date.now(),maxAgeMs=120
    return{stage:"MANUFACTURE",reason:"VERIFIED_SHORTAGE_AND_NATIVE_INPUTS",
       stationID:station.stationID,resource:"station:"+station.stationID+":job"};
   }
-  if(e.productShortage>0&&e.nativeActiveJobs<2&&e.materialShortage>0&&e.nativeOreToRefine>0)
+  if(e.materialShortage>0&&e.nativeOreToRefine>0)
    return{stage:"REFINE",reason:"NATIVE_ORE_AVAILABLE_FOR_MINERAL_SHORTAGE",
       stationID:station.stationID,resource:"station:"+station.stationID+":refine"};
-  if(e.productShortage>0&&e.nativeActiveJobs<2&&e.materialShortage>0){
+  if(e.materialShortage>0){
    if(positive(p.ownerID)&&e.walletCents===0)
     return{stage:"IDLE",reason:"NPC_CORPORATION_FUNDS_UNVERIFIED_OR_EMPTY"};
    return{stage:"BUY_SUPPLIES",reason:"MATERIAL_DEFICIT_REQUIRES_REAL_MARKET_PURCHASE",

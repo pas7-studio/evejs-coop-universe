@@ -173,14 +173,7 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
     const mineralStock=(quote||[]).reduce((sum,m)=>sum+(before.stock.get(m.typeID)||0),0);
     if(![pending,materialShortage,mineralStock,unlisted].every(count))
      throw Error("NATIVE_AUTHORITY_QUANTITY_OVERFLOW");
-    // Exact SDE recipe quantities minus verified corporate hangar stock.
-    // Never infer a tradable item from aggregate "materialShortage".
-    const materialNeeds=(quote||[]).map(m=>({
-     typeID:m.typeID,required:m.quantity,available:before.stock.get(m.typeID)||0,
-     shortage:Math.max(0,m.quantity-(before.stock.get(m.typeID)||0))
-    })).filter(m=>m.shortage>0).sort((a,b)=>b.shortage-a.shortage||a.typeID-b.typeID);
     rows.push({typeID:p.typeID,targetStock:p.targetStock,listed,inHangar,pending,
-     materialNeeds,
      productShortage:Math.max(0,p.targetStock-inHangar-listed-pending),
      materialShortage,mineralStock,nativeOutputQty:unlisted,
      nativeReadyJobs:active.filter(j=>j.status===3).length,
@@ -206,7 +199,6 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
    return {authoritativeNative:true,source:"GAMESTORE_ITEMSTORE_SDE_RUST",
     ownerID,stationID,systemID,observedAt:end,walletCents:after.walletCents,
     productTypeID:selected.typeID,productShortage:selected.productShortage,
-    materialNeeds:selected.materialNeeds,
     oreAtStation,mineralStock:selected.mineralStock,materialShortage:selected.materialShortage,
     nativeOreToRefine:oreAtStation,nativeOutputQty:selected.nativeOutputQty,
     nativeReadyJobs:selected.nativeReadyJobs,nativeActiveJobs:selected.nativeActiveJobs,

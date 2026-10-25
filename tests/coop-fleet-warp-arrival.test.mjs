@@ -94,3 +94,23 @@ test("no false landing with unknown physical destination",()=>{
  f.tick();assert.equal(f.events.length,0);
  f.advance(180000);f.tick();assert.equal(f.events[0].reason,"NATIVE_ARRIVAL_TIMEOUT");
 });
+
+test("native physical warp landing fails if follower owner changes during warp",()=>{
+ const f=fixture();f.leader.ownerID=1001;f.wingman.ownerID=1002;
+ assert.equal(f.tracker.track(f.input).status,"TRACKING_NATIVE_FLEET_FOLLOWER");
+ f.wingman.ownerID=9999;
+ f.advance(20000);f.wingman.mode="STOP";f.leader.mode="STOP";
+ f.wingman.position.x=900000;f.leader.position.x=900000;
+ f.tick();
+ assert.equal(f.events[0].reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
+ assert.equal(f.events[0].arrivalVerified,false);
+});
+test("native physical warp landing fails if commander owns the wrong ship",()=>{
+ const f=fixture();f.leader.ownerID=1001;f.wingman.ownerID=1002;
+ f.tracker.track(f.input);f.leader.ownerID=1002;
+ f.advance(20000);f.wingman.mode="STOP";f.leader.mode="STOP";
+ f.wingman.position.x=900000;f.leader.position.x=900000;
+ f.tick();
+ assert.equal(f.events[0].reason,"STALE_OR_DUPLICATE_NATIVE_OWNER");
+ assert.equal(f.events[0].arrivalVerified,false);
+});

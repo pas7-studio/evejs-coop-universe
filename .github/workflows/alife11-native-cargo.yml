@@ -1,0 +1,31 @@
+name: ALIFE-11 Mixed Native Cargo Integrity
+on:
+  push:
+    branches:
+      - feat/alife-11-mixed-native-cargo-main-20261026
+  pull_request:
+    paths:
+      - 'integration/coopNativeCargoTransientIsolation.cjs'
+      - 'integration/coopGameStoreAtomic.cjs'
+      - 'tests/coop-native-cargo-transient-isolation.test.mjs'
+      - '.github/workflows/alife11-native-cargo.yml'
+jobs:
+  native-cargo-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: SQLite transient cargo and atomic GameStore regressions
+        run: |
+          node --version
+          node --test \
+            tests/coop-native-cargo-transient-isolation.test.mjs \
+            tests/coop-gamestore-atomic.test.mjs \
+            tests/coop-native-haul-transfer-atomic.test.mjs \
+            tests/coop-native-haul-transfer-sqlite.test.mjs \
+            tests/coop-native-haul-atomic-routing.test.mjs

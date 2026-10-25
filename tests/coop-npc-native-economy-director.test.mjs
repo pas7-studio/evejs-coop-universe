@@ -269,3 +269,49 @@ test("same native ammo debit under multiple receipt IDs blocks double demand",()
  assert.throws(()=>f.create().tick(ctx),/NATIVE_DEMAND_CONSUMPTION_REPLAYED/);
  assert.equal(f.installs,0);
 }));
+
+test("a lost install ACK reconciles an exact paid native job after restart without another debit",()=>run(f=>{
+ f.planner.plan=()=>({status:"PLAN_READY",jobs:[{ownerID:OWNER,stationID:STATION,
+  facilityID:STATION,blueprintItemID:BPO,productTypeID:TYPE,outputQuantity:100,runs:1}]});
+ const d=f.create();assert.equal(d.tick(ctx).status,"PREPARED");
+ const install=f.native.installOnce;
+ f.native.installOnce=(plan,quote,id)=>{
+  const result=install(plan,quote,id);
+  Object.assign(f.native.getJob(id),{stationID:STATION,facilityID:STATION,
+   activityID:1,runs:1,outputLocationID:STATION,outputFlagID:4,
+   totalCost:quote.totalCost,coopQuoteSignature:JSON.stringify(quote)});
+  throw Error("LOST_NATIVE_INSTALL_ACK");
+ };
+ const debit=f.native.getIndustryDebit;
+ f.native.getIndustryDebit=id=>({...debit(id),transactionID:id});
+ assert.throws(()=>d.tick(ctx),/LOST_NATIVE_INSTALL_ACK/);
+ assert.equal(f.balance,990);
+ const restarted=f.create();
+ assert.equal(restarted.tick(ctx).status,"RECOVERED_INSTALLED");
+ assert.equal(f.installs,1);
+ assert.equal(restarted.tick(ctx).status,"WAITING_FOR_NATIVE_TIMER");
+ assert.equal(f.balance,990);
+}));
+test("a lost delivery ACK recovers the exact produced item, then lists it once",()=>run(f=>{
+ f.planner.plan=()=>({status:"PLAN_READY",jobs:[{ownerID:OWNER,stationID:STATION,
+  facilityID:STATION,blueprintItemID:BPO,productTypeID:TYPE,outputQuantity:100,runs:1}]});
+ const d=f.create();d.tick(ctx);d.tick(ctx);
+ const job=f.native.getJob();
+ Object.assign(job,{stationID:STATION,facilityID:STATION,activityID:1,
+  runs:1,outputLocationID:STATION,outputFlagID:4});
+ const originalDebit=f.native.getIndustryDebit;
+ f.native.getIndustryDebit=id=>({...originalDebit(id),transactionID:id});
+ f.setElapsed(true);assert.equal(d.tick(ctx).status,"READY");
+ const deliver=f.native.deliverOnce;
+ f.native.deliverOnce=id=>{
+  const r=deliver(id),item=f.native.getItem(r.itemID);
+  Object.assign(item,{flagID:4,stacksize:r.quantity,singleton:0});
+  throw Error("LOST_NATIVE_DELIVERY_ACK");
+ };
+ assert.throws(()=>d.tick(ctx),/LOST_NATIVE_DELIVERY_ACK/);
+ const restarted=f.create();
+ assert.equal(restarted.tick(ctx).status,"RECOVERED_DELIVERED");
+ assert.equal(restarted.tick(ctx).status,"LISTED");
+ assert.equal(f.listings,1);
+ assert.equal(f.installs,1);
+}));

@@ -12,7 +12,7 @@ if ([string]::IsNullOrWhiteSpace($ReportDir)) {
 }
 New-Item -ItemType Directory -Force -Path $ReportDir | Out-Null
 $manifestPath = Join-Path $root "tests/scenarios/alife-native-economy-e2e.json"
-if (-not (Test-Path $manifestPath)) { throw "Missing native A-Life acceptance manifest" }
+if (-not (Test-Path $manifestPath)) { throw "Missing 22-scenario ALIFE acceptance manifest" }
 $manifest = Get-Content -Raw -Path $manifestPath | ConvertFrom-Json
 if ($manifest.schema -ne "coop-alife-economy-acceptance/v1" -or $manifest.scenarios.Count -lt 20) {
   throw "Invalid ALIFE native economy test manifest"
@@ -66,20 +66,34 @@ if ($npcBuyer.schema -ne "coop-048-native-npc-player-buy/v1" -or $npcBuyer.scena
 if (@($npcBuyer.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Do not claim NPC buyer gameplay success without native Rust/GameStore evidence"
 }
+$integrationManifestPath = Join-Path $root "tests/scenarios/alife-native-authority-integration.json"
+if (-not (Test-Path $integrationManifestPath)) { throw "Missing 8-scenario A-Life integration acceptance manifest" }
+$integration = Get-Content -Raw -Path $integrationManifestPath | ConvertFrom-Json
+if ($integration.schema -ne "evejs-coop/alife-integration-acceptance/v1" -or $integration.scenarios.Count -ne 8) {
+  throw "Invalid A-Life integration acceptance manifest"
+}
+if (@($integration.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Never mark live A-Life gameplay accepted from an isolated test run"
+}
+$actManifestPath = Join-Path $root "tests/scenarios/alife-native-resupply-act-e2e.json"
+if (-not (Test-Path $actManifestPath)) { throw "Missing native A-Life RESUPPLY ACT acceptance manifest" }
+$actManifest = Get-Content -Raw -Path $actManifestPath | ConvertFrom-Json
+if ($actManifest.schema -ne "evejs-coop/alife-native-resupply-act-acceptance/v1" -or $actManifest.scenarios.Count -ne 7) {
+ throw "Invalid native RESUPPLY ACT scenarios"
+}
+if (@($actManifest.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+ throw "Never claim live native resupply ACT from source-only tests"
+}
 $buyer49Manifest = Join-Path $root "tests/scenarios/coop-049-alife-native-buyer-e2e.json"
-if (-not (Test-Path $buyer49Manifest)) { throw "Missing ALife native buyer acceptance scenarios" }
+if (-not (Test-Path $buyer49Manifest)) { throw "Missing A-Life native buyer acceptance scenarios" }
 $buyer49 = Get-Content -Raw -Path $buyer49Manifest | ConvertFrom-Json
 if ($buyer49.schema -ne "coop-049-alife-native-buyer-v1" -or $buyer49.scenarios.Count -lt 11) {
-  throw "Invalid ALife native buyer acceptance manifest"
+  throw "Invalid A-Life native buyer acceptance manifest"
 }
 if (@($buyer49.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
-  throw "Do not claim native ALife buyer gameplay E2E without receipts"
+  throw "Do not claim native A-Life buyer E2E without physical receipts"
 }
 $files = @(
-  "tests/coop-alife-station-authority.test.mjs",
-  "tests/coop-alife-station-owner-isolation.test.mjs",
-  "tests/coop-alife-station-runtime.test.mjs",
-  "tests/coop-alife-station-wiring.test.mjs",
   "tests/coop-alife-native-buyer-dispatch.test.mjs",
   "tests/coop-alife-native-buyer-runtime.test.mjs",
   "tests/coop-npc-buyer-native-bindings.test.mjs",
@@ -101,11 +115,23 @@ $files = @(
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
   "tests/coop-alife-economy-wiring.test.mjs",
+  "tests/coop-alife-station-authority.test.mjs",
+  "tests/coop-alife-station-runtime.test.mjs",
+  "tests/coop-alife-station-owner-isolation.test.mjs",
+  "tests/coop-alife-station-wiring.test.mjs",
   "tests/coop-npc-manufacturing.test.mjs",
-  "tests/coop-npc-native-economy-director.test.mjs"
+  "tests/coop-npc-native-economy-director.test.mjs",
+  "tests/coop-alife-order-authority.test.mjs",
+  "tests/coop-alife-native-intent-reconciliation.test.mjs",
+  "tests/coop-alife-integration-acceptance.test.mjs",
+  "tests/coop-alife-native-resupply-act.test.mjs",
+  "tests/coop-alife-native-resupply-wiring.test.mjs",
+  "tests/coop-npc-ammo-supply.test.mjs",
+  "tests/coop-alife-native-resupply-acceptance.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
+    "tests/coop-npc-native-economy-director.test.mjs",
     "tests/coop-npc-native-bindings.test.mjs",
     "tests/coop-npc-economy-scheduler.test.mjs"
   )
@@ -120,6 +146,7 @@ try {
   & $node.Source --test @files *> $log
   $code = $LASTEXITCODE
 } finally { Pop-Location }
+
 if ($code -ne 0) {
   Write-Host "=== NATIVE ECONOMY TEST FAILURE CONTEXT ==="
   $failures = @(Select-String -Path $log -Pattern '^not ok [0-9]+' -Context 2,25)
@@ -135,7 +162,7 @@ if ($code -ne 0) {
 }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $buyer49.scenarios.Count))
-Write-Host ("Evidence checklist: " + $manifestPath)
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $integration.scenarios.Count + $actManifest.scenarios.Count + $buyer49.scenarios.Count))
+Write-Host ("Evidence checklists: " + $manifestPath + " ; " + $integrationManifestPath + " ; " + $actManifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."

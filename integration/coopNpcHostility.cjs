@@ -11,6 +11,9 @@ function validPair({attacker,target,attackerController,targetController,links=[]
   attacker?.kind!=="ship"||target?.kind!=="ship"||
   attacker.nativeNpc!==true||target.nativeNpc!==true||
   !attackerController||!targetController)return false;
+ // Virtual faction tags never override the actual native corporation.
+ const attackerCorp=positive(attacker.corporationID),targetCorp=positive(target.corporationID);
+ if(attackerCorp&&targetCorp&&attackerCorp===targetCorp)return false;
  const sourceSystem=positive(attackerController.systemID),targetSystem=positive(targetController.systemID);
  if(!sourceSystem||sourceSystem!==targetSystem||
   Number(attackerController.entityID)!==attackerID||

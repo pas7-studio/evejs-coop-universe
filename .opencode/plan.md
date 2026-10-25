@@ -1,44 +1,68 @@
-# plan ג€” world liveliness (owner asked for all five)
+# NPC courier dispatch ג€” working plan (COOP-024)
 
-## Live now (config only, applied via Deploy-Coop-RuntimeProbe -LivingCoop)
-1. Population/route: `-VirtualPopulation 100 -VirtualRouteSystems '30100032,30000144,30000142,30000145'`
-   `-VirtualTravelSeconds 60 -MaterializeLimit 14`.
-3. `-EnableFactionPatrols` (demand for patrols; watch `virtual-faction-patrol` status change from NO_DEMAND).
-5. Convoy tempo: `EVEJS_COOP_HAULER_HOLD_MS` 120000 -> 45000 in the deploy script.
+Design: `docs/NPC_COURIER_CONTRACTS.md`. Status: phase 1 only (pure core).
 
-Verify after deploy: `virtual-world-presence.residentCount` per system,
-`living-native-materialization-attempt.requestedSpawns`,
-`living-native-activity.physicalNpcShips/observedMovement`,
-`living-native-industry.status=ACTIVE` in Perimeter,
-`virtual-faction-patrol` no longer NO_DEMAND.
+## Done
+- `integration/coopCourierDispatch.cjs` ג€” evaluateContract / selectHull /
+  planRoute / piracyOpportunity, no mutation.
+- `tests/coop-courier-dispatch.test.mjs` ג€” 11 passing cases.
+- ROADMAP COOP-024 (PARTIAL), design doc.
 
-## 2. NPC chatter in local chat (code, next)
-- L2 module `integration/coopNpcChatter.cjs`: picks a resident that already has a physical
-  native ship in the scene, builds one role-appropriate line (miner/hauler/pirate/patrol),
-  respects per-system cooldown and a hard cap per minute.
-- One L1 hook in the world tick path, `EVEJS_COOP_NPC_CHATTER=1`, default OFF.
-- Delivery through existing `chatHub` local channel; never invent ships, kills or ISK.
-- Tests: cooldown, cap, role text, no message when no physical ship, no message for other systems.
-- Wire the flag in `Deploy-Coop-RuntimeProbe.ps1` next to `EVEJS_COOP_AGENT_DIALOGUE`.
+## Next (needs owner go/no-go because it mutates state)
+1. Read-only discovery pass: log what the live server sees for the owner's
+   real contract (`REFUSED_*` / `NEEDS_GATE_TRAVEL` / `ELIGIBLE`), no writes.
+   Cheapest proof that the record shape assumptions are right.
+2. Session-less native accept adapter: mirror `acceptCourier` with explicit
+   owner/wallet refs, only for a durable registered NPC, halt + journal on any
+   ambiguous result.
+3. Same-system flight: undock, warp, dock, `completeCourierContract` with the
+   NPC as acceptor.
+4. Only then: gate travel, then piracy with a real native attack order.
 
-## 4. Native NPC market (separate gate, NOT enabled by default)
-Per `docs/NATIVE_NPC_MARKET.md`: only real seeded-market stock, exact native cargo,
-NPC's own earned-ISK ledger, empty allowlist means no trades, ambiguous RPC halts trading.
-- Needs a disposable live server first (owner-verified), never the main world.
-- Do not enable in `-LivingCoop` until that gate passes and the owner confirms.
+## Open questions for the owner
+- Which hull counts as "large" for him: Bestower-class industrial (~4.8k m3)
+  or a freighter (~435k m3)? Freighter is a much slower target and a bigger
+  loss when interdicted.
+- Collateral: does he want NPC couriers to accept collateral-bearing
+  contracts (NPC must hold real ISK) or reward-only?
+- Is a destroyed courier allowed to lose the package permanently (native
+  failure) or must the package always survive?
 
-### Disposable-world runbook (not yet executed)
-1. Separate compose project name and separate volumes so the live world is untouched:
-   `docker compose -p evejs-npcmkt-test -f compose.yaml -f compose.coop-probe.yaml up -d --build`
-   with `EVEJS_COOP_NATIVE_NPC_MARKET=1`, `EVEJS_COOP_NPC_MARKET_SELL_TYPES=<seeded ore typeIDs>`,
-   `EVEJS_COOP_NPC_MARKET_BUY_TYPES=<seeded typeIDs>`, `MAX_QTY=1`, `MAX_PRICE=1000`.
-2. Only type IDs that the target station's region really buys (`source="seed"`) in that seed.
-3. Expected evidence: `living-native-npc-market` probe events only after an NPC with real cargo
-   sells; buys only from earned ISK; no duplicate fill after restart; `RPC_OUTCOME_UNKNOWN`
-   stops trading instead of retrying.
-4. Tear down the test project and volumes afterwards; never copy its DB into the live world.
+## 2026-10-26 handoff (context limit reached)
 
-## Evidence to report (no claims without these)
-- Server events listed above, `-Action World -WorldSystemID 30100032`,
-  `-Action Party` after the owner logs in, and a human-visible screenshot of an NPC in the
-  owner's system.
+Done and committed: dispatch core, identity gate, settlement chain, session-less
+accept/complete bridge, flight state machine, 7 seeded courier characters
+(140000100-140000106, Charon in Jita with 465000 m3).
+
+Next, in a fresh session:
+1. Live experiment: spawn a native NPC ship with
+   `ownerIDOverride = 140000100` via nativeNpcService, warp it to 60015262,
+   dock through the NPC arrival path, and check the package item follows.
+2. Only if that passes: wire the driver, enable EVEJS_COOP_COURIER_DISPATCH for
+   one contract (the owner's 980000000), watch accept -> fly -> complete.
+3. Keep the concurrency cap at 3 and every env gate OFF by default.
+
+## 2026-10-26 (owner said "דמעמגטי") - the last piece, precisely
+
+The modules are ready and tested (49 tests) but the server never calls them.
+Nothing has been flown, and no contract has been touched.
+
+Hook point identified: `integration/coopVirtualWorldRuntime.cjs`, inside
+`start()` there is `timer=setInterval(() => { ... safeNpcPhase("virtual-travel",
+...) ... })`. A courier phase belongs there, wrapped in `safeNpcPhase` and gated
+by `EVEJS_COOP_COURIER_DISPATCH === "1"` (default OFF).
+
+What that phase must do, in order, with no shortcuts:
+1. `contractRuntimeState.listContractRecords()` -> outstanding courier contracts
+   (`type === 3`, `status === 0`, `acceptorID === 0`).
+2. Pick an idle seeded courier (140000100-140000106) whose character station and
+   hangar ship match the contract origin; refuse otherwise.
+3. `coopCourierNativeAccept.accept(...)` with the live runtime; on AMBIGUOUS stop
+   and journal, never retry.
+4. Drive `coopCourierFlight` + `coopCourierFlightDriver` one step per tick
+   (undock -> warp -> arrive -> dock), cap 3 concurrent.
+5. `coopCourierNativeAccept.complete(...)` only when the package is at the
+   destination.
+
+Verification for each step: telemetry events plus the client's contract window.
+Until that exists, the honest status is: implemented, never flown.

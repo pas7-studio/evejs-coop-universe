@@ -188,6 +188,18 @@ function installNativeEscorts(){
     contract,readManifest:manifest.read,readWarehouseReceipt:warehouseReceipt,
     findWarehouseItem:request=>items.findWarehouseItem(request)})
   });
+  if(mount?.status==="ESCORT_NATIVE_RUNTIME_BOUND"&&
+     process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY==="1"){
+    // This is the same already-authorized native writer, after GameStore
+    // startup and original journal readers are available. Results never
+    // infer a kill or cash payment from elapsed time.
+    let checked;
+    try{checked=require("./coopEscortNativeBinding")
+     .reconcilePendingDeliveries({maxTrips:32})}
+    catch{checked={status:"NATIVE_RECONCILE_BOOTSTRAP_UNAVAILABLE"}}
+    if(checked?.status!=="NATIVE_RECONCILE_CHECKED")
+     console.warn("[CoopEscort] startup recovery:",checked?.status||"UNAVAILABLE");
+  }
   lastState=mount;return mount;
  }catch{return {status:"ESCORT_NATIVE_BOOTSTRAP_UNAVAILABLE"}}
 }

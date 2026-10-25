@@ -1,0 +1,86 @@
+{
+  "schema": "evejs-coop/alife09-native-station-restart/v1",
+  "status": "NOT_RUN",
+  "mode": "DISPOSABLE_WORLD_ONLY",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "ALIFE09-01",
+      "title": "Overlay pin / reinstall / removal",
+      "status": "NOT_RUN",
+      "steps": "Run ALIFE-09 read-only full pinned source verifier LF and CRLF then dry-run installer twice and reverse",
+      "expected": "No SOURCE_DRIFT, both installs byte-identical, full rollback byte-identical",
+      "requiredEvidence": [
+        "real systemID and fleetID",
+        "real native miner/hauler ship IDs",
+        "source/cargo/warehouse receipts",
+        "crash/restart and both clients' logs"
+      ]
+    },
+    {
+      "id": "ALIFE09-02",
+      "title": "Native mine and durable fleet",
+      "status": "NOT_RUN",
+      "steps": "Spawn one persistent original NPC miner and one original NPC hauler in disposable EveJS system",
+      "expected": "The two ships retain original itemIDs and one deterministic fleetID derived from system+slot",
+      "requiredEvidence": [
+        "real systemID and fleetID",
+        "real native miner/hauler ship IDs",
+        "source/cargo/warehouse receipts",
+        "crash/restart and both clients' logs"
+      ]
+    },
+    {
+      "id": "ALIFE09-03",
+      "title": "Real cargo hauler handoff",
+      "status": "NOT_RUN",
+      "steps": "Mine source with ALIFE-07 atomic debit; transfer original cargoID to original persistent hauler",
+      "expected": "Asteroid depleted once, cargo not duplicated, hauler retains cargoID, coopHaulFleetID equals durable fleet manifest fleetID",
+      "requiredEvidence": [
+        "real systemID and fleetID",
+        "real native miner/hauler ship IDs",
+        "source/cargo/warehouse receipts",
+        "crash/restart and both clients' logs"
+      ]
+    },
+    {
+      "id": "ALIFE09-04",
+      "title": "Crash and cold restart after handoff",
+      "status": "NOT_RUN",
+      "steps": "Stop disposable server after original cargo transfer but before station arrival",
+      "expected": "Startup restores same native miner/hauler IDs, same fleetID, one original cargo stack and no new cargo grant",
+      "requiredEvidence": [
+        "real systemID and fleetID",
+        "real native miner/hauler ship IDs",
+        "source/cargo/warehouse receipts",
+        "crash/restart and both clients' logs"
+      ]
+    },
+    {
+      "id": "ALIFE09-05",
+      "title": "Physical station unload after restart",
+      "status": "NOT_RUN",
+      "steps": "Resume a real ship warp to an NPC station and verify arrival dwell, then let station warehouse commit",
+      "expected": "One authoritative station warehouse item credit and COMMITTED receipt; cargoID removed from NPC hauler exactly once",
+      "requiredEvidence": [
+        "real systemID and fleetID",
+        "real native miner/hauler ship IDs",
+        "source/cargo/warehouse receipts",
+        "crash/restart and both clients' logs"
+      ]
+    },
+    {
+      "id": "ALIFE09-06",
+      "title": "Two-client and repeated restart proof",
+      "status": "NOT_RUN",
+      "steps": "Observe the same fleet and station trade with two connected co-op clients, restart again",
+      "expected": "Both clients see same two NPC hull IDs; one source debit/receipt/warehouse credit; no duplicate fleet, order or ISK",
+      "requiredEvidence": [
+        "real systemID and fleetID",
+        "real native miner/hauler ship IDs",
+        "source/cargo/warehouse receipts",
+        "crash/restart and both clients' logs"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+{
+  "schema": "evejs-coop/alife10-atomic-native-haul-e2e/v1",
+  "mode": "DISPOSABLE_WORLD_ONLY",
+  "status": "NOT_RUN",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "ALIFE10-01",
+      "title": "Ore source to persistent miner",
+      "status": "NOT_RUN",
+      "steps": "Start disposable world and run one ALIFE-07 original native asteroid cycle with one persistent ALIFE-08 miner",
+      "expected": "One original ore debit and one native miner cargoID; no virtual ore",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-02",
+      "title": "Atomic miner → hauler",
+      "status": "NOT_RUN",
+      "steps": "With strict ALIFE-10 flag, finish real mining haul cycle",
+      "expected": "Same original cargoID now belongs to persistent native hauler; one COOP haul receipt and old miner no longer owns cargo",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-03",
+      "title": "Cold restart after cargo commit",
+      "status": "NOT_RUN",
+      "steps": "Stop disposable server after original npcCargo transfer COMMITTED and cold restart",
+      "expected": "Same fleetID, ship IDs and cargoID, exact 1:1 cargo custody, receipt unchanged",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-04",
+      "title": "Crash before BEGIN IMMEDIATE",
+      "status": "NOT_RUN",
+      "steps": "Abort original game process before a SQLite haul transaction",
+      "expected": "Source cargo remains in miner and no haul transfer receipt exists",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-05",
+      "title": "Crash during transaction before COMMIT",
+      "status": "NOT_RUN",
+      "steps": "Force a deterministic storage fault between source UPSERT and receipt write in disposable database",
+      "expected": "Both changes rolled back; original cargo row remains with source miner",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-06",
+      "title": "Crash after COMMIT and before scene update",
+      "status": "NOT_RUN",
+      "steps": "Kill after SQLite commit but before in-memory miner and hauler cargo reconciliation",
+      "expected": "After cold restart one original hauler cargoID and one immutable original transfer receipt, no second transfer",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-07",
+      "title": "Unrelated transient cargo",
+      "status": "NOT_RUN",
+      "steps": "Spawn an independent transient native NPC carrying cargo while persistent mining fleet is active",
+      "expected": "Strict adapter fails closed if GameStore transient paths make npcCargo atomic snapshot unsafe; no silent transient cargo persistence",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-08",
+      "title": "Physical station warp and warehouse",
+      "status": "NOT_RUN",
+      "steps": "Warp original durable hauler to canonical NPC station; verify dwell and COMMITTED warehouse receipt",
+      "expected": "Exactly one native itemStore credit, one cargo removal, fleetID and cargoID match source; repeat delivery no duplicate",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    },
+    {
+      "id": "ALIFE10-09",
+      "title": "Two co-op clients and second cold restart",
+      "status": "NOT_RUN",
+      "steps": "Connect both players after delivery and restart disposable server again",
+      "expected": "Both see same fleet IDs, asteroid depletion and warehouse stock, no duplicate item, ISK or NPC",
+      "requiredEvidence": [
+        "original source and cargo SQL rows",
+        "same original cargoID and stable fleetID",
+        "SQLite haul receipt",
+        "native station physical arrival / itemStore credit",
+        "two-client logs when applicable"
+      ]
+    }
+  ]
+}

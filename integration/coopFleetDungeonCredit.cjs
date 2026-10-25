@@ -58,6 +58,13 @@ function observe({instance,missionRuntime,fleetRuntime,spaceRuntime,
  if(missionRuntime.isSessionInActiveMissionDungeon(leader,original)!==true||
   missionRuntime.isSessionInActiveMissionDungeon(wingman,original)!==true)
   return {status:"BOTH_SHIPS_NOT_AT_COMPLETED_DUNGEON"};
+ if(process.env.EVEJS_COOP_MISSION_INSTANCE_LINK==="1"){
+  const link=require("./coopMissionInstanceProvenance").verify({
+   ownerID:owner,peerID:peer,agentID:agent,leaderMission:original,
+   peerMission:other,sourceInstanceID:source
+  });
+  if(!link.ok)return {status:link.status};
+ }
  if(other.objectiveCompleted===true)
   return {status:"PEER_ALREADY_NATIVE_COMPLETED"};
  const result=missionRuntime.shareCoopDungeonObjective(

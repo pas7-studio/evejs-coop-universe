@@ -13,7 +13,7 @@ const total=(price,qty)=>Math.round(price*qty*100)/100;
 const status=e=>({status:e});
 function createNpcMarketTrader({call,store,registry,getStation,resolveType,sceneForSystem,getController,
  root="/var/lib/evejs/coop-native-market",clock=()=>Date.now(),
- maxQuantity=10,maxPrice=1000000,cooldownMs=300000}={}){
+ maxQuantity=10,maxPrice=1000000,cooldownMs=300000,priceFloorFor=null}={}){
  if(typeof call!=="function"||typeof sceneForSystem!=="function"||typeof getController!=="function"||
   !store||typeof registry?.snapshot!=="function"||
   typeof getStation!=="function"||typeof resolveType!=="function"||
@@ -21,7 +21,8 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    "removeNativeCargo","allocateCargoID","buildNativeCargoItems"].every(k=>typeof store[k]==="function")||
   !Number.isSafeInteger(maxQuantity)||maxQuantity<1||maxQuantity>100||
   !Number.isFinite(maxPrice)||maxPrice<=0||
-  !Number.isSafeInteger(cooldownMs)||cooldownMs<30000)
+  !Number.isSafeInteger(cooldownMs)||cooldownMs<30000||
+  (priceFloorFor!==null&&typeof priceFloorFor!=="function"))
   throw Error("invalid native NPC market dependencies or safety caps");
  const ledgerFile=path.join(root,"ledger.json"),active=new Set();
  let ledger;
@@ -239,12 +240,30 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     return status("MARKET_PREFLIGHT_STALE");
    pre.stock=current.stock;pre.native=current.native;
    const rows=pre.side==="sell"?book?.buys:book?.sells;
-   const row=(Array.isArray(rows)?rows:[]).find(x=>
+   // A seller takes the BEST price on the station, not whatever row the
+   // daemon happened to return first. Deepest volume breaks a tie.
+   // `maxPrice` is a SPENDING cap: it must never refuse a higher bid when the
+   // NPC is the seller, or a rich buyer would look like "no counterparty".
+   const candidates=(Array.isArray(rows)?rows:[]).filter(x=>
     x.source==="seed"&&Number(x.station_id)===pre.stationID&&
     Number(x.type_id)===pre.typeID&&
     Number(x.vol_remaining)>=1&&Number(x.price)>0&&
-    Number(x.price)<=maxPrice&&/^[0-9]+$/.test(String(x.order_id||"")));
+    (pre.side==="sell"||Number(x.price)<=maxPrice)&&
+    /^[0-9]+$/.test(String(x.order_id||"")))
+    .sort((left,right)=>Number(right.price)-Number(left.price)||
+     Number(right.vol_remaining)-Number(left.vol_remaining));
+   const row=candidates[0];
    if(!row)return status("NO_SEEDED_COUNTERPARTY");
+   // The merchant's own asking price: while a stack stays unsold the floor
+   // steps down, but a bid below it is never accepted just to make a sale.
+   if(pre.side==="sell"&&typeof priceFloorFor==="function"){
+    let floor=0;
+    try{floor=Number(priceFloorFor(pre.typeID,Number(row.price),pre.stationID));}
+    catch(_error){floor=0;}
+    if(Number.isFinite(floor)&&floor>0&&Number(row.price)<floor)
+     return {status:"PRICE_BELOW_FLOOR",typeID:pre.typeID,stationID:pre.stationID,
+      pilotID:pre.pilotID,bestBid:Number(row.price),floor:Math.round(floor*100)/100};
+   }
    const price=amount(row.price),maxOrder=Math.min(maxQuantity,Number(row.vol_remaining));
    if(price===null||price<=0||maxOrder<1)return status("INVALID_SEEDED_ORDER");
    let quantity,cargo=null,newCargo=null,allocated=null;
