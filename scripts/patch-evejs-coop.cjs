@@ -55,6 +55,9 @@ names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 names.push(
  "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
 );
+// Late native module reconciliation after parallel merges: copy-only.
+// Keep NPE and Living World behavior behind their existing native hooks.
+names.push("coopNpeSafety", "coopLivingAgentRuntime");
 // Chats 25/32/39: original native source hooks; all feature flags stay OFF.
 const ORE_PATCH_PATHS=new Set([
  "server/src/services/inventory/itemStore.js",
