@@ -27,8 +27,24 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
    .some(x=>typeof x!=="function")||
   typeof nativeTransferFactory!=="function"||
   !service||!nativeStore)throw Error("WAR_NATIVE_TRANSFER_AUTHORITIES_REQUIRED");
+ // Only an absent original native journal permits a later hop. Any
+ // orphan temp, symlink, unreadable directory or pending other transfer
+ // makes this a repair case; it is NEVER interpreted as success.
+ function journalClosed({pilotID}={}){
+  if(!/^coop-pilot-[0-9]{3,}$/.test(String(pilotID)))return false;
+  const fs=require("node:fs");
+  try{
+   const st=fs.lstatSync(journalDir);
+   if(!st.isDirectory()||st.isSymbolicLink())return false;
+   const names=fs.readdirSync(journalDir);
+   if(names.length>500||
+    names.some(n=>!/^coop-pilot-[0-9]{3,}\\.json$/.test(n)))return false;
+   return !names.includes(pilotID+".json");
+  }catch{return false}
+ }
  const ledger=createWarTransferLedger({
-  gameStore,identityRegistry,sceneForSystem,nativeStore,getController,clock,env
+  gameStore,identityRegistry,sceneForSystem,nativeStore,getController,clock,env,
+  verifyJournalClosed:journalClosed
  });
  let active=null;
  const facade={
@@ -87,11 +103,27 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
    sourceScene?.systemID!==from||ship?.itemID!==entityID||
    controller?.entityID!==entityID)
    return {success:false,errorMsg:"WAR_HANDOFF_INVALID_REQUEST"};
-  const transferID="fw:"+entityID+":"+from+":"+to;
-  const start=ledger.begin({transferID,entityID,
+  // Old terminal handoff is archived only after a fresh, fully
+  // consistent source/destination/pilot/cargo/journal witness.
+  const previous=ledger.witness(entityID);
+  if(previous.status==="VERIFIED"&&
+   previous.action==="CLEANUP_JOURNAL"){
+   if(previous.physicalSystemID!==from)
+    return {success:false,errorMsg:"WAR_HANDOFF_OLD_DESTINATION_MISMATCH"};
+   const retired=ledger.retire({
+    entityID,transferID:previous.transferID});
+   if(retired.status!=="RETIRED")
+    return {success:false,errorMsg:retired.reason||
+     "WAR_HANDOFF_PREVIOUS_TRANSFER_NOT_RETIRED"};
+  }else if(previous.status!=="NO_ACTIVE_TRANSFER")
+   return {success:false,errorMsg:"WAR_HANDOFF_PREVIOUS_STATE_UNVERIFIED"};
+  const start=ledger.begin({entityID,
    sourceSystemID:from,destinationSystemID:to});
   if(start.status!=="PREPARED")
    return {success:false,errorMsg:start.reason||"WAR_HANDOFF_PREPARE_FAILED"};
+  const transferID=start.transferID;
+  if(typeof transferID!=="string")
+   return {success:false,errorMsg:"WAR_HANDOFF_TRANSFER_ID_MISSING"};
   active={transferID,entityID,sourceSystemID:from,
    destinationSystemID:to,pilotID};
   let answer;
