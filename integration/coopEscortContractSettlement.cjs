@@ -209,7 +209,13 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    incident=readIncidents();outcome=readOutcomes();
    delivery=readNativeDelivery(c);reservation=nativeFunds.verifyReservation(c);
   }catch{return status("ESCORT_PROOF_AUTHORITY_UNAVAILABLE")}
-  if(!fundedReceipt(c,reservation))return status("NATIVE_RESERVED_FUNDS_NOT_VERIFIED");
+  if(!fundedReceipt(c,reservation)){
+   // A paid contract has consumed escrow, so rechecking evidence for an
+   // audit/reputation entry MUST verify actual two native wallet credits.
+   // This path NEVER authorizes another settlement or a refund.
+   let paid;try{paid=nativeFunds.verifySettlement(c)}catch{}
+   if(!paidReceipt(c,paid))return status("NATIVE_RESERVED_FUNDS_NOT_VERIFIED");
+  }
   if(m?.status!=="READY"||m.record?.key!==c.manifestKey||
    m.record.systemID!==c.systemID||m.record.fleetID!==c.fleetID||
    m.record.stationID!==c.stationID||m.record.corporationID!==c.corporationID||
