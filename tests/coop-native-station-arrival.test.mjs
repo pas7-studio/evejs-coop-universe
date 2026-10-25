@@ -6,7 +6,11 @@ const require=createRequire(import.meta.url);
 const path=require('node:path');
 const source=fs.readFileSync(new URL('../integration/coopNativeStationArrival.cjs',import.meta.url),'utf8');
 const compiled={exports:{}};
-new Function('require','module','exports',source)(id=>id==='./coopNativeWarehouse'?{createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}}:require(id),compiled,compiled.exports);
+new Function('require','module','exports',source)(id=>{
+ if(id==='./coopNativeWarehouse')return {createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}};
+ if(id==='./coopEconomyDestination')return require('../integration/coopEconomyDestination.cjs');
+ return require(id);
+},compiled,compiled.exports);
 const {createStationArrival}=compiled.exports;
 function fixture(options={}){
  let time=1_000_000;

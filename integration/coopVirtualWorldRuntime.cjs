@@ -180,6 +180,9 @@ function start(){
    safeNpcPhase("native-market-schedule",()=>{
     void advanceNativeMarket().catch(error=>console.warn("[CoopNativeMarket] tick",error.message));
    });
+  // Which ore really has a buyer here. Pure advice for the next haul.
+  if(process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1")
+   safeNpcPhase("economy-destination-ore",observeEconomyOre);
   safeNpcPhase("native-activity",observeNativeActivity);
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
    for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
@@ -809,6 +812,130 @@ async function observeAlifeEconomy(){
      advanceNativeAmmoSupply({mode:"PLANNED",systemIDFilter:systemID,decision}));
   }
  }finally{alifeEconomyAuthorityBusy=false}
+}
+function lockedTargets(scene,ship){
+ try{return (scene?.getTargetsForEntity?.(ship)||[]).map(Number).slice(0,6);}
+ catch(error){return "UNAVAILABLE";}
+}
+function npcModuleSummary(ship){
+ try{
+  const equipment=require("./npc/npcEquipment");
+  const runtime=require("../services/mining/miningRuntime");
+  const fitting=require("../services/fitting/liveFittingState");
+  const items=equipment.getNpcFittedModuleItems(ship)||[];
+  return items.slice(0,10).map(item=>{
+   let miningEffects=0;
+   try{
+    miningEffects=(fitting.getTypeEffectRecords(Number(item?.typeID)||0)||[])
+     .filter(effect=>{try{return runtime.isMiningEffectRecord(effect,item);}catch(_error){return false;}}).length;
+   }catch(_error){miningEffects=-1;}
+   const online=typeof fitting.isModuleOnline==="function"?fitting.isModuleOnline(item):null;
+   return {typeID:Number(item?.typeID)||0,miningEffects,
+    online,flagID:Number(item?.flagID)||0,
+    hasState:Boolean(item?.moduleState&&typeof item.moduleState==="object"),
+    hasExplicit:typeof fitting.hasExplicitModuleOnlineState==="function"?
+     fitting.hasExplicitModuleOnlineState(item):null};
+  });
+ }catch(error){return "UNAVAILABLE:"+String(error?.message||error).slice(0,40);}
+}
+function distanceBetween(left,right){
+ if(!left||!right)return null;
+ const keys=["x","y","z"];
+ if(!keys.every(key=>Number.isFinite(left[key])&&Number.isFinite(right[key])))return null;
+ return Math.round(Math.hypot(left.x-right.x,left.y-right.y,left.z-right.z));
+}
+function nearestBeltMeters(scene,position){
+ if(!position)return null;
+ let nearest=null;
+ for(const entity of scene?.staticEntities||[]){
+  if(entity?.kind!=="asteroidBelt"||!entity.position)continue;
+  const meters=distanceBetween(position,entity.position);
+  if(meters===null)continue;
+  if(nearest===null||meters<nearest)nearest=meters;
+ }
+ return nearest;
+}
+function mineableSummary(scene,entityID){
+ try{
+  const state=require("../services/mining/miningRuntimeState").getMineableState(scene,entityID);
+  if(!state)return null;
+  return {yieldTypeID:Number(state.yieldTypeID)||0,
+   remaining:Number(state.remainingQuantity)||0,
+   unitVolume:Number(state.unitVolume)||0,
+   updatedAtMs:Number(state.updatedAtMs)||0};
+ }catch(error){return "UNAVAILABLE:"+String(error?.message||error).slice(0,40);}
+}
+function mineableBeltSummary(scene){
+ try{
+  const state=require("../services/mining/miningRuntimeState");
+  const entities=(scene?.staticEntities||[]).filter(entity=>{
+   try{return state.isMineableStaticEntity(entity);}catch(_error){return false;}
+  });
+  let withOre=0,totalRemaining=0;
+  for(const entity of entities.slice(0,400)){
+   const mineable=state.getMineableState(scene,Number(entity.itemID)||0);
+   const remaining=Number(mineable?.remainingQuantity)||0;
+   if(remaining>0){withOre++;totalRemaining+=remaining;}
+  }
+  return {entities:entities.length,withOre,totalRemaining};
+ }catch(error){return "UNAVAILABLE:"+String(error?.message||error).slice(0,40);}
+}
+function miningShipDetail(systemID,fleet){
+ try{
+  const scene=require("./runtime").ensureScene(systemID,{refreshStargates:false});
+  const rocks=[];
+  const rockForShips=scene?.getEntityByID?.(Number(fleet?.activeAsteroidID));
+  const rockPosition=rockForShips?.position||null;
+  const ships=[...(fleet?.minerEntityIDs||[]),...(fleet?.haulerEntityIDs||[])].map(id=>{
+   const ship=scene?.getEntityByID?.(Number(id));
+   if(!ship)return {id:Number(id)||0,missing:true};
+   return {id:Number(id)||0,mode:String(ship.mode||""),
+    target:Number(ship.targetID)||0,stacks:(ship.nativeCargoItems||[]).length,
+    quantity:(ship.nativeCargoItems||[]).reduce((sum,item)=>sum+Math.max(0,Number(item.quantity)||0),0),
+    toRockMeters:distanceBetween(ship.position,rockPosition),
+    toBeltMeters:nearestBeltMeters(scene,ship.position),
+    targets:lockedTargets(scene,ship),
+    // Mining only starts when the hull really carries online mining modules.
+    modules:npcModuleSummary(ship)};
+  });
+  const rock=scene?.getEntityByID?.(Number(fleet?.activeAsteroidID));
+  if(rock)rocks.push({id:Number(rock.itemID)||0,typeID:Number(rock.typeID)||0,
+   quantity:Number(rock.quantity ?? rock.remainingQuantity ?? rock.oreQuantity)||0,
+   radius:Number(rock.radius)||0,
+   mineable:mineableSummary(scene,Number(rock.itemID)||0)});
+  const belt=mineableBeltSummary(scene);
+  return {ships,rocks,belt};
+ }catch(error){return {error:String(error?.message||error).slice(0,80)};}
+}
+function observeEconomyOre(){
+ if(!visitedSystems.size)return;
+ const arrival=require("./coopNativeStationArrival");
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4))
+  arrival.observePreferredOre({systemID,reason:"periodic"});
+ // Same process, same second: the real native mining records. Without this a
+ // stalled haul looks exactly like a fleet that is simply still mining.
+ try{
+  const mining=require("../services/mining/miningNpcOperations");
+  const probe=require("./coopRuntimeProbe");
+  for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,4)){
+   const fleets=mining.getMiningFleetsForSystem(systemID)||[];
+   if(!fleets.length)continue;
+   probe.observe("living-mining-fleet-state",null,{spaceState:{systemID}},{
+    systemID,fleets:fleets.slice(0,6).map(fleet=>({
+     fleetID:Number(fleet?.fleetID)||0,state:String(fleet?.state||""),
+     miners:(fleet?.minerEntityIDs||[]).length,haulers:(fleet?.haulerEntityIDs||[]).length,
+     activeAsteroidID:Number(fleet?.activeAsteroidID)||0,
+     loadedUntilMs:Number(fleet?.loadedUntilMs)||0,
+     lastHauledVolumeM3:Number(fleet?.lastHauledVolumeM3)||0,
+     stationID:Number(fleet?.coopStationArrival?.stationID)||0,
+     noCargo:fleet?.coopStationNoCargo===true,
+     nextThinkAtMs:Number(fleet?.nextThinkAtMs)||0,now:Date.now(),
+     // Where mining really stops: an empty miner, a dead rock or a spent module.
+     shipDetail:miningShipDetail(systemID,fleet)
+    }))
+   });
+  }
+ }catch(error){console.warn("[CoopEconomyDestination] fleet state",error.message);}
 }
 function nativeMarketAllowlist(name){
  return [...new Set(String(process.env[name]||"").split(",").map(Number)
@@ -1475,9 +1602,6 @@ function observeSession(session,ship){
             const nativeScene=runtime.ensureScene(system,{refreshStargates:false});
             const anchor=require("./coopNpcTopology").anchorOptionsForRole(nativeScene,pilot.role);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
-            const hostile=pilot.role==="pirate";
-            // Colour follows the real owner faction: civilians spawn as ORE /
-            // CONCORD hulls, only pirates from the hostile pool.
             const pool=require("./coopNpcSpawnPools").spawnPoolForRole(pilot.role,
              {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"});
             return npc.spawnBatchInSystem(system,{
@@ -1485,11 +1609,10 @@ function observeSession(session,ship){
               transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
               broadcast:true,
               ...pool,
-              // Pirates retain native EveJS aggression. Civilians and ordinary
-              // guards move and work without automatically attacking players.
-              ...(hostile?{}:{behaviorOverrides:{
-                autoAggro:false,autoActivateWeapons:false,targetPreference:"none"
-              }})
+              // Pirates actively hunt players and rival NPCs; civilians and
+              // ordinary guards move and work without attacking a capsuleer.
+              ...require("./coopNpcSpawnPools").behaviorOverridesForRole(pilot.role,
+               {enabled:process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"})
             });
           }
         });
@@ -1602,6 +1725,32 @@ function observeSession(session,ship){
           presented.push({pilotID:link.pilotID,...change});
       }
       if(presented.length)require("./coopRuntimeProbe").observe("virtual-world-identity-projected",session,ship,{presented});
+      // A reused durable pirate keeps the controller it was born with, so the
+      // new aggression policy above only reaches fresh spawns. Push the same
+      // target classes onto the live controller, otherwise a pirate that was
+      // already linked still ignores a capsuleer parked next to it.
+      if(process.env.EVEJS_COOP_NPC_ROLE_POOLS==="1"){
+        const aggression=require("./coopNpcSpawnPools")
+          .behaviorOverridesForRole("pirate",{enabled:true}).behaviorOverrides;
+        for(const link of result){
+          if(!link.entityID||pilotsByID.get(link.pilotID)?.role!=="pirate")continue;
+          try{
+            const behavior=require("./npc/npcBehaviorLoop");
+            const controller=require("./npc/npcRegistry").getControllerByEntityID(link.entityID);
+            if(!controller)continue;
+            const current=controller.behaviorOverrides||{};
+            if(Array.isArray(current.autoAggroTargetClasses)&&
+               current.autoAggroTargetClasses.includes("player")&&current.autoAggro===true)continue;
+            const applied=behavior.setBehaviorOverrides(link.entityID,{...current,...aggression});
+            if(applied?.success)
+              require("./coopRuntimeProbe").observe("living-pirate-aggression",session,ship,{
+                pilotID:link.pilotID,entityID:link.entityID,
+                previousClasses:Array.isArray(current.autoAggroTargetClasses)
+                  ?current.autoAggroTargetClasses:null
+              });
+          }catch(_error){/* controller index is optional during startup */}
+        }
+      }
       for(const entry of result){
         if(!entry.entityID||observedNpcIDs.has(entry.entityID))continue;
         const npcID=entry.entityID;

@@ -31,6 +31,22 @@ function trim(text, limit) {
   return value.length <= limit ? value : value.slice(0, Math.max(0, limit - 1)) + "…";
 }
 
+// A digest line is only worth sending when it reports a real quantity. The
+// raid/combat emitters publish their attempt even when nothing happened
+// (0 pirates, 0 HP), which produced "[ALIFE] ... 0 пірат(ів) ... 0 HP" noise.
+const MEANINGFUL_FIELD = Object.freeze({
+  raid: "pirates",
+  combat: "damage",
+  haul: "cargoQuantity",
+  delivery: "oreQuantity",
+});
+
+function isMeaningful(kind, item) {
+  const field = MEANINGFUL_FIELD[kind];
+  if (!field) return true;
+  return Number(item && item[field]) > 0;
+}
+
 function describe(item) {
   const kind = item.kind;
   if (kind === "trade") {
@@ -45,7 +61,14 @@ function describe(item) {
   if (kind === "raid") return `${Number(item.pirates) || 0} пірат(ів) на полюванні`;
   if (kind === "combat") return `пошкодження ${Math.round(Number(item.damage) || 0)} HP`;
   if (kind === "economy-intent") return `NPC ${trim(item.pilotID || "?", 20)} планує ${trim(item.stage || "?", 18)} (ще не виконано)`;
-  if (kind === "blocker") return `${item.module || "?", item.pilotID || "NPC"}: ${item.reason || item.status || "?"}`;
+  // `module` names the failing stage; the pilot is optional context. The old
+  // template used `${a, b}` (comma operator) and printed only the pilot, so
+  // every blocker line read "NPC: <reason>" and the stage was lost.
+  if (kind === "blocker") {
+    const stage = `${item.module || "?"}`;
+    const pilot = item.pilotID ? ` (${trim(item.pilotID, 20)})` : "";
+    return `${stage}${pilot}: ${item.reason || item.status || "?"}`;
+  }
   return "";
 }
 
@@ -62,6 +85,7 @@ function createNews({ clock = () => Date.now(), windowMs = 300000, maxItems = 6,
     const systemID = Number(extra.systemID || extra.spaceState?.systemID || 0);
     if (!Number.isSafeInteger(systemID) || systemID <= 0) return false;
     const list = pending.get(systemID) || [];
+    if (!isMeaningful(spec.kind, extra)) return false;
     const line = describe({ kind: spec.kind, ...extra });
     if (!line) return false;
     list.push({ at: clock(), kind: spec.kind, line });
@@ -99,4 +123,4 @@ function createNews({ clock = () => Date.now(), windowMs = 300000, maxItems = 6,
   return { record, digest, markSent, pendingFor: (systemID) => (pending.get(Number(systemID)) || []).length };
 }
 
-module.exports = { createNews, systemLabel, describe, WATCH, SYSTEM_NAMES };
+module.exports = { createNews, systemLabel, describe, isMeaningful, WATCH, SYSTEM_NAMES };
