@@ -62,6 +62,22 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    ...source,manifestKey:route.manifestKey},scene,verifyNativeDuo);
  }
 
+ function readDurableEscortDeparture(manifestKey){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1")
+   return blocked("DISABLED");
+  let current;try{current=flight.read(manifestKey)}
+  catch{return blocked("ESCORT_RECOVERY_FLIGHT_UNAVAILABLE")}
+  if(current?.status!=="READY"||current.phase!=="FUNDED"||
+   current.booking?.manifestKey!==manifestKey)
+   return blocked("ESCORT_RECOVERY_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  const proof=departure.readDurable(manifestKey,current.booking);
+  if(proof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+   return blocked("ESCORT_RECOVERY_"+proof.status);
+  return proof;
+ }
  function recordEscortRouteSample(manifestKey,scene,station){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
@@ -260,7 +276,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,recordEscortRouteSample,finishAfterRaid,settlePeacefulFlight,
+ return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,readDurableEscortDeparture,recordEscortRouteSample,finishAfterRaid,settlePeacefulFlight,
   refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
