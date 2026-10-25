@@ -1,5 +1,7 @@
 # Delivery roadmap — agent-ready tasks
 
+> **P0 ALIFE-INTEGRATION-01 — reuse the existing native A-Life directors:** [Unified authority gate and read-only native ACT evidence reconciliation](ALIFE_NATIVE_DIRECTOR_INTEGRATION_20261025.md). Fixes 7 legacy-only order guards; matching native market/rearm receipts no longer masquerade as intents. 22+8 manual E2E scenarios remain **NOT_RUN**; COOP-043 still owns the market/industry snapshot. No live flags, Docker or CI changes.
+
 > **P0 COOP-046 — native NPC fire-outcome witness:** [Durable ammo debit -> turret/missile outcome, unresolved-cycle quarantine](NPC_FIRE_OUTCOME_WITNESS_STAGE12.md). Opt-in, source-level implemented, pinned overlay verified; full Linux Node + two-client gameplay acceptance PENDING. OFF by default.
 
 > **P0 COOP-045 — NPC SQLite atomic weapon-bank debit:** [Native ammo cargo and per-module replay fences committed in a single transaction](NPC_ATOMIC_WEAPON_BANK_STAGE11.md). **IMPLEMENTED_UNVERIFIED:** pinned source roundtrip + isolated JS smoke checked; real Node/SQLite crash tests and two-client combat still required. Stacked after COOP-044; default OFF.
