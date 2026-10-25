@@ -403,6 +403,23 @@ test("invalid full native cargo proof blocks terminal money after recovered arri
  assert.equal(f.counters.fund,0);
  assert.equal(f.counters.warp,0);
 }));
+test("stale A-Life no-cargo hint cannot end a separately verified original haul",()=>withDelivery(f=>{
+ f.fleet.coopStationNoCargo=true;
+ const result=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(result.status,"AWAITING_PHYSICAL_ARRIVAL");
+ assert.equal(f.fleet.coopStationNoCargo,undefined);
+ assert.equal(f.fleet.coopStationArrival.manifestID,KEY);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
+test("only a previously proven original warp may clear a stale A-Life hint",()=>withDelivery(f=>{
+ f.fleet.coopStationNoCargo=true;
+ f.source.phase="WARP_PREPARED";
+ const result=checkReturn(f.scene,f.fleet,1002000,f.director);
+ assert.equal(result.status,"ESCORT_DELIVERY_RESUME_ESCORT_NATIVE_RECOVERY_WARP_NOT_CONFIRMED");
+ assert.equal(f.fleet.coopStationNoCargo,true);
+ assert.equal(f.fleet.coopStationArrival,undefined);
+ assert.equal(f.counters.fund,0);assert.equal(f.counters.warp,0);
+}));
 process.on("exit",()=>{for(const [k,v] of Object.entries(saved)){
  if(v===undefined)delete process.env[k];else process.env[k]=v;
 }});
