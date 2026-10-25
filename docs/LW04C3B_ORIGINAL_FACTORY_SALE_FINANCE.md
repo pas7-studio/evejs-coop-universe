@@ -71,7 +71,10 @@ pwsh -File scripts/Run-LW04C3B-Sale-Finance-Gates.ps1
 
 Author-authored source tests include 16 read-only sale audit, 13 manual
 buyer admission and 10 original wallet witness cases, plus existing
-COOP-035/047 native settlement regression suites. Exact-source isolated
+COOP-035/047 native settlement regression suites and three end-to-end
+source-model checks that run **actual COOP-035 atomic settlement source**
+followed by the new Rust/ItemStore/wallet audit. All of these are
+disposable in-memory GameStore fixtures, NOT real SQLite/Rust E2E. Exact-source isolated
 V8 tests are not actual repo Node/SQLite/Rust gameplay execution.
 
 All 14 physical native acceptance scenarios in
