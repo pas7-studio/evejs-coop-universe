@@ -49,14 +49,14 @@ test("loose ammo in cargo is not permission to fire before native reload",()=>{
  const f=fixture();f.cargo[0].moduleID=0;
  assert.equal(f.check().allowed,false);
 });
-test("zero, fractional, negative and transient charge stacks cannot fire",()=>{
+test("zero, fractional and negative charge stacks cannot fire",()=>{
  const f=fixture();
  for(const quantity of [0,-1,1.5,NaN]){
   f.cargo[0].quantity=quantity;
   assert.equal(f.check().allowed,false);
  }
- f.cargo[0].quantity=2;f.cargo[0].transient=true;
- assert.equal(f.check().allowed,false);
+ f.cargo[0].quantity=2;
+ assert.equal(f.check().allowed,true);
 });
 test("wrong type or owner cannot spoof loaded native weapon ammo",()=>{
  const f=fixture();f.compatible(false);
@@ -116,4 +116,12 @@ test("non-matching persisted system and wrong ship entity identity fail closed",
  assert.equal(f.check().status,"NATIVE_SHIP_CUSTODY_MISSING");
  f.entity.systemID=SYSTEM;f.native.entityID=999;
  assert.equal(f.check().allowed,false);
+});
+
+test("real source-backed transient NPC ammo is not mistaken for a virtual reserve",()=>{
+ const f=fixture();
+ f.cargo[0].transient=true;
+ assert.equal(f.check().status,"NATIVE_LOADED_AMMO_VERIFIED");
+ f.cargo.splice(0);
+ assert.equal(f.check().status,"NATIVE_AMMO_EMPTY_OR_AMBIGUOUS");
 });
