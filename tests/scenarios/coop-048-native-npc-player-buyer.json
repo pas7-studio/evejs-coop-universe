@@ -1,0 +1,199 @@
+{
+  "schema": "coop-048-native-npc-player-buy/v1",
+  "upstream": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "doNotModifyVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "COOP048-001",
+      "title": "NPC corporation buys a genuine player sell order",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Use isolated pinned EveJS, one NPC corporation wallet and physical station stock target",
+        "Player places a non-seed sell order for one verified stack of 20 units",
+        "Use the durable NPC buyer coordinator to claim the entire Rust remainder and settle"
+      ],
+      "expected": [
+        "Rust player source locked then FILLED",
+        "Physical item changes owner from player to buyer corporation and remains quantity 20",
+        "NPC corporate wallet debit equals player seller wallet credit",
+        "GameStore five-table fill receipt references same Rust claimKey/fillID"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-002",
+      "title": "Player and NPC buyer race for same market order",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Use two authenticated player clients and one NPC corporate buyer on same sell order",
+        "Race native Rust claim against normal player FillOrder",
+        "Inspect Rust, GameStore and cash ledgers"
+      ],
+      "expected": [
+        "Only one writer wins and other cannot double-spend",
+        "No double item transfer or negative escrow",
+        "Claimed Rust order is hidden from new matching attempts"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-003",
+      "title": "NPC wallet lacks money or reserve",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Create verified full stack sell order",
+        "Set corporation cash to less than purchase cost plus protected reserve",
+        "Attempt NPC purchase"
+      ],
+      "expected": [
+        "No native wallet debit or player credit",
+        "Rust claim may remain SETTLING but is never falsely finalized",
+        "No free ISK or manufactured item"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-004",
+      "title": "Lost Rust claim ACK",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Write durable PREPARED native intent with claimKey",
+        "Commit Rust market order SETTLING and drop claim response",
+        "Restart market and coordinator; retry original claimKey"
+      ],
+      "expected": [
+        "Exactly one Rust claim/fillID",
+        "Same operation resumes without a new key",
+        "No extra wallet transfer"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-005",
+      "title": "Lost Rust finalize ACK after GameStore commit",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Complete physical item and ISK transfer in native GameStore",
+        "Rust finalize succeeds but network ACK is lost",
+        "Restart both services and retry durable claimKey"
+      ],
+      "expected": [
+        "GameStore receipt prevents second debit or item move",
+        "Rust order remains FILLED with zero remaining",
+        "No duplicate journal entries or conflicting claims"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-006",
+      "title": "Multiple player escrow item rows",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Place player sell order represented by multiple escrow stacks",
+        "Attempt the strict single-stack native NPC buyer path"
+      ],
+      "expected": [
+        "Purchase fails closed; no speculative item aggregation",
+        "GameStore owner/ISK rows unchanged",
+        "Rust state remains safely quarantined for operator recovery"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-007",
+      "title": "Corrupt persistent coordinator journal",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Create an uncommitted NPC buy attempt on disposable server",
+        "Corrupt the dedicated purchase journal after Rust claim",
+        "Restart A-Life and process market tick"
+      ],
+      "expected": [
+        "No automatic alternate claim key",
+        "No double purchase or second wallet debit",
+        "Station reports explicit journal corruption blocker"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    },
+    {
+      "id": "COOP048-008",
+      "title": "Native demand re-evaluates after real NPC purchase",
+      "mode": "ISOLATED_LOCAL_E2E",
+      "status": "NOT_RUN",
+      "steps": [
+        "Player sells ammo to NPC corporation; save all Rust and GameStore receipts",
+        "A-Life verifies incoming physical goods at buyer corporation station",
+        "Advance manufacturing planner and ammo-consumption loop"
+      ],
+      "expected": [
+        "Bought stock decreases native manufacturing shortage",
+        "Purchase itself does not create artificial consumption demand",
+        "Actual weapon ammo debit later generates one bounded replenishment requirement"
+      ],
+      "requiredEvidence": [
+        "Rust orderID/claimKey/fillID and states",
+        "GameStore original itemID and custody",
+        "player wallet journal before/after",
+        "corporation wallet division 1000 before/after",
+        "marketEscrow and native receipt rows"
+      ],
+      "requiresDisposableData": true
+    }
+  ]
+}

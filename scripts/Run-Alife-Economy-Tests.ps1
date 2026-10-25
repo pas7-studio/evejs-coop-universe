@@ -57,7 +57,38 @@ if ($partial.schema -ne "coop-047-native-partial-market/v1" -or $partial.scenari
 if (@($partial.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Do not mark native Rust/GameStore E2E PASS without physical evidence"
 }
+$npcBuyerManifest = Join-Path $root "tests/scenarios/coop-048-native-npc-player-buyer.json"
+if (-not (Test-Path $npcBuyerManifest)) { throw "Missing native NPC buyer acceptance scenarios" }
+$npcBuyer = Get-Content -Raw -Path $npcBuyerManifest | ConvertFrom-Json
+if ($npcBuyer.schema -ne "coop-048-native-npc-player-buy/v1" -or $npcBuyer.scenarios.Count -lt 8) {
+  throw "Invalid native NPC corporate buyer acceptance manifest"
+}
+if (@($npcBuyer.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not claim NPC buyer gameplay success without native Rust/GameStore evidence"
+}
+$integrationManifestPath = Join-Path $root "tests/scenarios/alife-native-authority-integration.json"
+if (-not (Test-Path $integrationManifestPath)) { throw "Missing 8-scenario A-Life integration acceptance manifest" }
+$integration = Get-Content -Raw -Path $integrationManifestPath | ConvertFrom-Json
+if ($integration.schema -ne "evejs-coop/alife-integration-acceptance/v1" -or $integration.scenarios.Count -ne 8) {
+  throw "Invalid A-Life integration acceptance manifest"
+}
+if (@($integration.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Never mark live A-Life gameplay accepted from an isolated test run"
+}
+$actManifestPath = Join-Path $root "tests/scenarios/alife-native-resupply-act-e2e.json"
+if (-not (Test-Path $actManifestPath)) { throw "Missing native A-Life RESUPPLY ACT acceptance manifest" }
+$actManifest = Get-Content -Raw -Path $actManifestPath | ConvertFrom-Json
+if ($actManifest.schema -ne "evejs-coop/alife-native-resupply-act-acceptance/v1" -or $actManifest.scenarios.Count -ne 7) {
+ throw "Invalid native RESUPPLY ACT scenarios"
+}
+if (@($actManifest.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+ throw "Never claim live native resupply ACT from source-only tests"
+}
 $files = @(
+  "tests/coop-npc-corp-buyer.test.mjs",
+  "tests/coop-npc-buyer-coordinator.test.mjs",
+  "tests/coop-npc-corp-buyer-real-sqlite.test.mjs",
+  "tests/coop-rust-npc-corp-buy-patch.test.mjs",
   "tests/coop-npc-partial-fill-atomic.test.mjs",
   "tests/coop-npc-partial-real-sqlite.test.mjs",
   "tests/coop-rust-npc-partial-patch.test.mjs",
@@ -72,7 +103,14 @@ $files = @(
   "tests/coop-alife-station-owner-isolation.test.mjs",
   "tests/coop-alife-station-wiring.test.mjs",
   "tests/coop-npc-manufacturing.test.mjs",
-  "tests/coop-npc-native-economy-director.test.mjs"
+  "tests/coop-npc-native-economy-director.test.mjs",
+  "tests/coop-alife-order-authority.test.mjs",
+  "tests/coop-alife-native-intent-reconciliation.test.mjs",
+  "tests/coop-alife-integration-acceptance.test.mjs",
+  "tests/coop-alife-native-resupply-act.test.mjs",
+  "tests/coop-alife-native-resupply-wiring.test.mjs",
+  "tests/coop-npc-ammo-supply.test.mjs",
+  "tests/coop-alife-native-resupply-acceptance.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
@@ -93,7 +131,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count))
-Write-Host ("Evidence checklist: " + $manifestPath)
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $integration.scenarios.Count + $actManifest.scenarios.Count))
+Write-Host ("Evidence checklists: " + $manifestPath + " ; " + $integrationManifestPath + " ; " + $actManifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."

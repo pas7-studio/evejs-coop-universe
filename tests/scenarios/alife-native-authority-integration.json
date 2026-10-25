@@ -1,0 +1,178 @@
+{
+  "schema": "evejs-coop/alife-integration-acceptance/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "requires": [
+    "authorized two-client runtime for visual steps",
+    "verified physical native NPC scene",
+    "native GameStore+Rust market worker",
+    "matching persistent journals"
+  ],
+  "scenarios": [
+    {
+      "id": "ALIFE-INT-001",
+      "title": "Master A-Life order authority, separate legacy arbiter flag OFF",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Start disposable pinned server with EVEJS_COOP_ALIFE=1, all unrelated behavior flags OFF",
+        "Use a verified named native pilot and activate optional personal goals while legacy arbiter flag stays OFF",
+        "Observe original native world tick and effective order lease"
+      ],
+      "expected": [
+        "Shared native order bridge used when an opted-in director issues a command",
+        "No automatic raids, markets, cargo or rewards from the master flag"
+      ],
+      "requiredEvidence": [
+        "actual pilotID/entityID controller order",
+        "probe record and lease state"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-002",
+      "title": "Two native directors compete for the same NPC",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Create an eligible native pirate and trigger a RAID order",
+        "Within the same tick request a conflicting CIVILIAN or PATROL order",
+        "Request emergency TACTICS response"
+      ],
+      "expected": [
+        "Lower-priority order cannot replace the active RAID lease",
+        "Approved survival TACTICS preempts only through existing authoritative arbiter"
+      ],
+      "requiredEvidence": [
+        "native controller history before/after",
+        "arbiter lease and denial reasons"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-003",
+      "title": "NPC ammunition shortage and native retreat/rearm",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Equip native NPC with finite authoritative ammo and verified module",
+        "Consume last charge in actual native combat and sample ammo shortage",
+        "Observe retreat, station approach, earned-ISK purchase and fitted charge"
+      ],
+      "expected": [
+        "No free ammunition or double-spend",
+        "Only physically bought and fitted charge counts as RESUPPLY outcome"
+      ],
+      "requiredEvidence": [
+        "SQLite cargo before/after",
+        "native module and charge ID",
+        "market receipt and station proof"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-004",
+      "title": "Native trade is not A-Life intent completion",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Trigger A-Life BUY_SUPPLIES for a real trader",
+        "Disable native market RPC, then re-enable and execute one actual order",
+        "Run scripts/alife-audit.cjs --reconcile against append-only event file"
+      ],
+      "expected": [
+        "Blocked or missing RPC never appears as a settled trade",
+        "Proof is counted only with exact matching real NPC, station, cargo and buy receipt"
+      ],
+      "requiredEvidence": [
+        "alife-economy-intent event",
+        "native TRADE_SETTLED receipt and full cargo provenance"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-005",
+      "title": "One native market receipt replayed after server restart",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Make one legitimate native buy with a persistent cargo receipt",
+        "Restart disposable server retaining saved world and log",
+        "Replay duplicated log lines and run read-only reconciliation"
+      ],
+      "expected": [
+        "Same cargo and market order receipt cannot match two A-Life intents",
+        "No extra native wallet or cargo credit"
+      ],
+      "requiredEvidence": [
+        "same marketOrderID/cargoID across restart",
+        "wallet and cargo before/after"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-006",
+      "title": "Haul, refine and manufacture remain unverified until authoritative settling",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Mine ore into actual NPC hull and transfer to native hauler",
+        "Reach physically verified station and settle source cargo to warehouse/refinery",
+        "Only then create actual native industry job and sell output via native market"
+      ],
+      "expected": [
+        "No observer plan is counted as real delivery/job/sale",
+        "Every stage has original cargoID, settlement and job/order receipts"
+      ],
+      "requiredEvidence": [
+        "mining controller target and cargo growth",
+        "warehouse/refinery receipts",
+        "jobID and orderID",
+        "item/ISK conservation"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-007",
+      "title": "Native raid/escort events visible to two real connected clients",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Connect two authorized co-op clients to the same real system",
+        "Observe independent NPC pirate and convoy action accepted by native engine",
+        "Read /events or Local signal and voluntarily join a fleet"
+      ],
+      "expected": [
+        "Both clients see the same physical NPC and event without extra NPC spawns",
+        "Alerts are grounded in native accepted orders, not fabricated kill claims"
+      ],
+      "requiredEvidence": [
+        "client-side screenshots and timestamps",
+        "server scene identity and native orders",
+        "event ID and opt-in evidence"
+      ]
+    },
+    {
+      "id": "ALIFE-INT-008",
+      "title": "Crash during uncertain native trade or combat",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Trigger native market RPC or NPC ammo debit with controlled fault in disposable world",
+        "Restart with all journal and SQLite state preserved",
+        "Attempt same NPC activity and inspect repair status"
+      ],
+      "expected": [
+        "Ambiguous outcome never retries a wallet/cargo debit automatically",
+        "No missing journal is treated as permission to mint or refire"
+      ],
+      "requiredEvidence": [
+        "before/after SQLite snapshot",
+        "journal phases and lock files",
+        "read-only audit output"
+      ]
+    }
+  ]
+}

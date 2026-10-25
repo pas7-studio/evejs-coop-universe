@@ -308,15 +308,28 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   // No cargo remaining is evidence of completion only if at least one
   // previously committed source receipt exists in this trip.
-  if(!stackCount&&!trip.completedStackCount)return pause("EMPTY_DELIVERY_NOT_PROVEN");
+  // With a durable full native manifest, a crash/failed notification may
+  // follow the LAST committed warehouse debit but precede this in-memory
+  // counter update. The cargo is then correctly empty on the next tick.
+  // The *full* manifest proof, NOT an empty hull, must decide completion.
+  if(!stackCount&&!trip.completedStackCount&&!manifestDirector)
+   return pause("EMPTY_DELIVERY_NOT_PROVEN");
   trip.completedStackCount=(trip.completedStackCount||0)+stackCount;
-  let manifestVerified=null;
+  let manifestVerified=null,alifeDeliveryWitness=null;
   if(manifestDirector){
    manifestVerified=manifestDirector.verify({key:trip.manifestID,systemID:trip.systemID,
     fleetID:trip.fleetID,stationID:trip.stationID,corporationID:trip.corporationID,
     haulerIDs:Object.keys(trip.haulers).map(Number)});
    if(manifestVerified?.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED")
     return pause(manifestVerified?.status||"MANIFEST_FULL_CARGO_UNVERIFIED");
+   alifeDeliveryWitness=require("./coopAlifeNativeDeliveryEvidence")
+    .verifyFullNativeDelivery(trip,manifestVerified);
+   if(alifeDeliveryWitness?.status!=="NATIVE_FULL_MANIFEST_WITNESSED")
+    return pause(alifeDeliveryWitness?.reason||"ALIFE_NATIVE_DELIVERY_PROOF_UNVERIFIED");
+   // Reconcile ALL committed cargo stacks rather than just stacks observed
+   // on this tick. Never synthesize inventory or a new warehouse receipt.
+   stackCount=alifeDeliveryWitness.stacks;
+   oreQuantity=alifeDeliveryWitness.quantity;
   }
   if(stackCount)probe.observe("living-npc-station-delivered",null,{spaceState:{systemID:trip.systemID}},
    {fleetID:trip.fleetID,stationID:trip.stationID,stacks:stackCount,oreQuantity});
@@ -341,6 +354,13 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     {status:"ESCORT_SETTLEMENT_NOT_WIRED"}}
    catch{escortSettlement={status:"ESCORT_SETTLEMENT_UNCERTAIN_REPAIR_REQUIRED"}}
   }
+  // A-Life SETTLE is a read-only observation of the native warehouse's
+  // already-COMMITTED manifest. Failure to append telemetry cannot re-debit
+  // items, trigger a repeat settlement or block physical cargo ownership.
+  if(alifeDeliveryWitness){try{
+   probe.observe("alife-native-delivery-settled",null,
+    {spaceState:{systemID:trip.systemID}},alifeDeliveryWitness);
+  }catch(error){console.warn("[CoopALifeDelivery] telemetry",String(error?.message||error).slice(0,80));}}
   for(const raw of Object.keys(trip.haulers))arrivals.delete(Number(raw));
   delete fleet.coopStationArrival;
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,

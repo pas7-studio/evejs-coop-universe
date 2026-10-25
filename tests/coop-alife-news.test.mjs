@@ -81,3 +81,31 @@ test("duplicate identical lines are collapsed, and the text is bounded", () => {
   assert.equal(describe({ kind: "blocker", module: "station-arrival", status: "WARP_COMMAND_FAILED" }),
     "station-arrival: WARP_COMMAND_FAILED");
 });
+
+test("real full native warehouse manifest creates client-visible A-Life news",()=>{
+ const {instance}=news();
+ const delivery={systemID:30000144,kind:"native-settlement",status:"NATIVE_FULL_MANIFEST_WITNESSED",
+  proof:"WAREHOUSE_COMMITTED_AND_NATIVE_ITEMSTORE_VERIFIED",
+  nativeMutation:false,iskCredited:false,paidReward:false,
+  fleetID:77,manifestID:"30000144-77-100000",
+  eventID:"alife-native-delivery:30000144-77-100000",
+  cargoIDs:[501,502],stacks:2,quantity:120};
+ assert.equal(instance.record("alife-native-delivery-settled",delivery),true);
+ const digest=instance.digest(30000144);
+ assert.match(digest.text,/підтверджено склад: 2 стек/);
+ assert.match(digest.text,/120 од./);
+ assert.equal(digest.items,1);
+});
+test("incomplete or misleading native warehouse events never generate settlement news",()=>{
+ const {instance}=news();
+ const valid={systemID:30000144,status:"NATIVE_FULL_MANIFEST_WITNESSED",
+  proof:"WAREHOUSE_COMMITTED_AND_NATIVE_ITEMSTORE_VERIFIED",nativeMutation:false,
+  iskCredited:false,paidReward:false,manifestID:"30000144-77-100000",
+  eventID:"alife-native-delivery:30000144-77-100000",cargoIDs:[501],stacks:1,quantity:100};
+ for(const override of [{status:"PREPARED"},{proof:"NATIVE_READ_ONLY"},{nativeMutation:true},
+  {iskCredited:true},{paidReward:true},{stacks:0},{quantity:0},
+  {cargoIDs:[]},{eventID:"fake"}]){
+  assert.equal(instance.record("alife-native-delivery-settled",{...valid,...override}),false);
+ }
+ assert.equal(instance.pendingFor(30000144),0);
+});
