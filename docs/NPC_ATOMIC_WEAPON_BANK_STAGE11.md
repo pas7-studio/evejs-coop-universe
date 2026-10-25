@@ -45,6 +45,9 @@ All remain OFF for the actual running server. Do not use or reset the owner's ex
 
 - node scripts/audit-npc-ammo-debits.cjs /path/to/disposable/root
 - node scripts/audit-npc-ammo-banks.cjs /path/to/disposable/root
+- node scripts/audit-npc-atomic-sqlite.cjs /path/to/persistent/root /path/to/actual/gamestore.sqlite
+
+The SQLite cross-audit is strictly read-only and reports `MATCH_COMMITTED`, `NEEDS_RECONCILIATION`, `COMMIT_MISMATCH`, `NATIVE_FENCE_WITHOUT_JOURNAL`, `JOURNAL_WITHOUT_NATIVE_FENCE` and invalid metadata. It does not infer refunds or delete unresolved locks. Use a real matching journal root and SQLite snapshot; comparing two unrelated/empty stores cannot establish gameplay correctness.
 
 Preserve the original SQLite file, receipts, locks and relevant logs before any reconciliation. These scripts never clear locks or issue refunds.
 
@@ -52,11 +55,12 @@ Preserve the original SQLite file, receipts, locks and relevant logs before any 
 
 - Full pinned upstream space/runtime.js (1,205,085 characters) transformed; patched JavaScript syntax parsed; idempotent apply and byte-for-byte remove passed. Both turret and missile paths invoke atomic bank debit before their old effect paths.
 - Isolated V8 mock SQLite and POSIX filesystem check: two bank cargo rows moved 5 to 4 together; both module replay fences persisted; repeated same boundary denied without another transaction.
-- Committed **18** atomic-bank behavior tests, **2** Linux `SIGKILL` plus **2** cross-platform abnormal-process-exit tests backed by `node:sqlite`, **1** added GameStore/SQLite bridge integration case and **2** source-transform regression tests (25 newly added cases in this PR). A safe Windows runner is `scripts/Test-Coop-NpcAmmoAtomic.ps1`. These committed Node tests have **not** been executed in a checkout with the full Node runner. Live native EveJS and two-client combat are unverified.
+- In a scratch Node 22 SQLite database, ran six local smoke cases against the read-only cross-audit: matching committed receipt, PREPARED with lock, native fence without journal, journal without fence, mismatched boundary and no audit mutation. **These were isolated manual smoke checks, not an execution of the committed repository test suite.**
+- Committed **18** atomic-bank behavior tests, **2** Linux `SIGKILL` plus **2** cross-platform abnormal-process-exit tests backed by `node:sqlite`, **1** added GameStore/SQLite bridge integration case and **2** source-transform regression tests and **8** read-only native SQLite cross-audit tests (33 newly added cases in this PR). A safe Windows runner is `scripts/Test-Coop-NpcAmmoAtomic.ps1`. These committed Node tests have **not** been executed in a checkout with the full Node runner. Live native EveJS and two-client combat are unverified.
 
 ## Merge and live acceptance gates
 
-1. Run `scripts/Test-Coop-NpcAmmoAtomic.ps1` in Windows PowerShell, or the equivalent `node --test` list on Linux. Then run the complete local Node 22 test suite on a disposable checkout, including node:sqlite. The SIGKILL tests run only on Linux; on Windows they are skipped, but both cross-platform child-process exit/restart tests still run.
+1. Run `scripts/Test-Coop-NpcAmmoAtomic.ps1` in Windows PowerShell, or the equivalent `node --test` list on Linux. Then run the complete local Node 22 test suite on a disposable checkout, including node:sqlite. The SIGKILL tests run only on Linux; on Windows they are skipped, but both cross-platform child-process exit/restart tests and all SQLite cross-audit tests still run.
 2. Native crash injection before debit, between journal PREPARED and SQL COMMIT, immediately after COMMIT and before missile spawn; verify real durable row IDs on restart.
 3. Pinned overlay dry-run, check and exact remove on a disposable upstream checkout.
 4. Throughput and lock contention/load testing: this path flushes three native tables, rewrites an npcCargo.cargo JSON blob and performs several fsyncs per bank.
