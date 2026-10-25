@@ -11,6 +11,7 @@ const {KEY:WAR_KEY}=require("./coopFactionWarStore"+
 const {validateState:validateWar}=require("./coopFactionWarCore"+
  (__filename.endsWith(".js")?"":".cjs"));
 const KEY="coop-faction-war\u001fstructure-killmail-v1",POS=x=>Number.isSafeInteger(x)&&x>0;
+const DAMAGE=x=>typeof x==="number"&&Number.isFinite(x)&&x>0;
 const empty=()=>({version:1,byStructure:{},byKillID:{}});
 function validate(s){
  if(!s||s.version!==1||!s.byStructure||typeof s.byStructure!=="object"||
@@ -25,7 +26,7 @@ function validate(s){
    !POS(x.systemID)||!POS(x.ownerCorporationID)||
    !POS(x.attackerCorporationID)||!POS(x.attackerFactionID)||
    !POS(x.typeID)||!POS(x.destroyedAt)||!POS(x.recordedAt)||
-   !POS(x.damageTaken)||!POS(x.finalDamageDone)||
+   !DAMAGE(x.damageTaken)||!DAMAGE(x.finalDamageDone)||
    x.proofID!=="structure-kill:"+x.killID)
    throw Error("WAR_NATIVE_STRUCTURE_COMBAT_RECEIPT_CORRUPT");
  }
