@@ -35,7 +35,7 @@ function patch(source,file,remove=false){
  '      const settled = require("../../space/coopNativeStationArrival").checkReturn(scene, fleetRecord, now);'+eol+
  '      const delivered = settled.terminal === true && (settled.status === "DELIVERED" || settled.status === "NO_CARGO");'+eol+
  '      if (!delivered) { fleetRecord.nextThinkAtMs = now + 1000; return; }'+eol+
- '      require("../../space/coopRuntimeProbe").observe("living-native-haul-delivered", null, { spaceState: { systemID: scene.systemID } }, { fleetID: toInt(fleetRecord.fleetID, 0), status: String((delivered && delivered.status) || ""), stationID: toInt(delivered && delivered.stationID, 0) });'+eol+
+ '      require("../../space/coopRuntimeProbe").observe("living-native-haul-delivered", null, { spaceState: { systemID: scene.systemID } }, { fleetID: toInt(fleetRecord.fleetID, 0), status: String((settled && settled.status) || ""), stationID: toInt(settled && settled.stationID, 0) });'+eol+
  '      fleetRecord.haulerNextArrivalAtMs = now + getHaulerRepeatDelayMs();'+eol+
  '      fleetRecord.state = "mining";'+eol+
  '      fleetRecord.haulerReturnAtMs = 0;'+eol+
