@@ -207,9 +207,11 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
     const actual=rows.filter(x=>Number(x.cargoID)===row.cargoID);
     if(row.nextQuantity===0?actual.length!==0:
       actual.length!==1||Number(actual[0].quantity)!==row.nextQuantity||
+       Number(actual[0].entityID)!==entityID||
        Number(actual[0].ownerID)!==ownerID||
        Number(actual[0].moduleID)!==row.moduleID||
-       Number(actual[0].typeID)!==row.typeID)
+       Number(actual[0].typeID)!==row.typeID||
+       Number(actual[0].flagID)!==expected.find(x=>x.moduleID===row.moduleID)?.flagID)
      return fail("BANK_ATOMIC_READBACK_MISMATCH");
    }
    settle(io,token);
