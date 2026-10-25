@@ -34,3 +34,14 @@ test('zero-quantity stack cannot become a fake extra item',()=>{
   assert.throws(()=>quantity({quantity:0,stacksize:0}),/zero quantity/);
   assert.equal(quantity({quantity:0,stacksize:0,singleton:1}),'1');
 });
+
+test('real node - stdin execution invokes exporter instead of silently exiting',()=>{
+  const {spawnSync}=require('node:child_process');
+  const fs=require('node:fs'),path=require('node:path');
+  const script=fs.readFileSync(path.join(import.meta.dirname,'../scripts/coop-native-snapshot.cjs'),'utf8');
+  const m=Buffer.from(JSON.stringify(meta)).toString('base64');
+  const out=spawnSync(process.execPath,['-','--meta-base64',m,'--characters','101,102'],{input:script,encoding:'utf8'});
+  assert.equal(out.status,2);
+  assert.match(out.stderr,/\[NATIVE_SNAPSHOT_BLOCKED\]/);
+  assert.match(out.stderr,/SQLite DB missing/);
+});
