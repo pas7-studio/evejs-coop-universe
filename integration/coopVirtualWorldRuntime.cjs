@@ -485,6 +485,13 @@ function advanceNativeWreckCustody(){
      entityID:Number(claim.attackerEntityID),
      wreckItemID:Number(item.wreckItemID),assignments,
      getController:id=>controllers.getControllerByEntityID(id),
+     verifyClaim:({claim:presented})=>
+      claims.active(systemID).some(saved=>
+       Number(saved.wreckID)===Number(presented.wreckID)&&
+       Number(saved.sourceEntityID)===Number(presented.sourceEntityID)&&
+       Number(saved.attackerEntityID)===Number(presented.attackerEntityID)&&
+       saved.attackerPilotID===presented.attackerPilotID&&
+       Number(saved.at)===Number(presented.at)),
      canLoot:({wreck,native})=>
       Number(wreck.ownerID)>0&&Number(wreck.ownerID)===Number(native.ownerID)||
       Number(wreck.lootRightCorpID)>0&&
