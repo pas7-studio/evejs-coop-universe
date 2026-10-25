@@ -3,6 +3,7 @@
 > [24-mechanic upstream-to-co-op gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md)
 > [First implementation: native item/courier contracts + LP Store standing gates](COOP_NATIVE_CONTRACTS_LP_STORE_V1.md), source-tested and pending real two-client/escrow replay acceptance.
 > [Native exploration + shared bookmarks / wormhole two-player acceptance](COOP_EXPLORATION_NATIVE_GAP_20261025.md) — source audit, live unverified; coordinate any beyonce changes with fleet-warp owner.
+> [New native exploration implementation: verified scan receipts + permissioned immediate fleet bookmarks](COOP_NATIVE_EXPLORATION_IMPLEMENTATION_20261025.md) — source/logic-tested in a separate post-merge PR, two-client acceptance still pending.
 > and [current P0 progress, blockers and agent ownership handoff](COOP_PARALLEL_AGENT_HANDOFF_20261025.md).
 > These are source-level findings and acceptance requirements, **not** claims
 > of completed two-client gameplay. The duplicate mission-helper call was tested as idempotent against pinned source; consolidate it and still run full overlay preflight before deployment.
