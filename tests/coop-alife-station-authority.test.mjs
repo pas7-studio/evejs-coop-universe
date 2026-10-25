@@ -191,3 +191,12 @@ test("direct GameStore item transfer during Rust read invalidates the snapshot w
  assert.equal(r.reason,"NATIVE_STATION_AUTHORITY_CHANGED_DURING_READ");
  assert.equal(f.state.version,originalVersion);
 });
+
+test("native SDE exposes exact materialTypeID/required/available/shortage for a funded corporate buyer",async()=>{
+ const f=fixture();
+ f.state.items.find(i=>i.typeID===M).quantity=3;
+ const r=await f.read();
+ assert.equal(r.authoritativeNative,true);
+ assert.deepEqual(r.materialNeeds,[{typeID:M,required:10,available:3,shortage:7}]);
+ assert.deepEqual(r.products[0].materialNeeds,[{typeID:M,required:10,available:3,shortage:7}]);
+});
