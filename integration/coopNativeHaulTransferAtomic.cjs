@@ -14,6 +14,10 @@ const mark=(actor,reason)=>{if(actor&&typeof actor==="object"){
 }};
 const failed=(miner,hauler,fleet,reason)=>{
  for(const actor of [miner,hauler,fleet])mark(actor,reason);
+ // ALIFE-07 recognizes this native mining guard. Do not mine more ore into a
+ // stranded ship while its original hauling custody is unresolved.
+ if(miner&&typeof miner==="object")
+  miner.coopMiningCargoNeedsOperatorRepair=reason;
  return {status:"NEEDS_OPERATOR_REPAIR",reason,quantity:0,volumeM3:0};
 };
 function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date.now()}={}){
