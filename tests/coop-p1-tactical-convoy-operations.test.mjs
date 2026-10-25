@@ -24,13 +24,15 @@ const pilot2={characterID:102,_space:{shipID:9002,systemID:30000144,initialState
 scene.sessions.set(101,pilot1);
 scene.sessions.set(102,pilot2);
 const nativeFleet={fleetID:990001,members:new Map([[101,{}],[102,{}]])};
-const tags=[],messages=[];
+const tags=[],messages=[],currentTags=new Map();
 const fleetRuntime={getFleetForCharacter:id=>nativeFleet.members.has(id)?nativeFleet:null,
  getMemberRecord:(f,id)=>f.members.get(id)||null,
  setFleetTargetTag:(session,entityID,tag)=>{
-  if(session!==pilot1)return false; // real commander permission
+  if(session!==pilot1||currentTags.get(entityID)===tag)return false; // native no-op is false
+  currentTags.set(entityID,tag);
   tags.push({entityID,tag});return true;
- }};
+ },
+ getTargetTagForCharacter:(_,entityID)=>currentTags.get(entityID)||null};
 const nativeFleets=[{systemID:30000144,minerEntityIDs:[6102],haulerEntityIDs:[6101]}];
 const cargo=new Map([[6101,[{typeID:123,quantity:53,moduleID:0}]],
  [6102,[{typeID:123,quantity:12,moduleID:0}]]]);
@@ -72,6 +74,8 @@ test("native commander marks attacker (tag 1) and escort target (tag 2) for whol
  assert.equal(a.status,"NATIVE_FLEET_TARGET_TAG_SET");
  assert.equal(b.status,"NATIVE_FLEET_TARGET_TAG_SET");
  assert.deepEqual(tags,[{entityID:6001,tag:"1"},{entityID:6101,tag:"2"}]);
+ assert.equal(ops.execute(pilot1,"focus 6001").status,"NATIVE_FLEET_TARGET_ALREADY_TAGGED");
+ assert.equal(tags.length,2,"native idempotent target tags must not rebroadcast");
  assert.equal(messages.filter(x=>x[0]===102).length,2);
 });
 test("non-commanders, outsiders and unrelated native ships can't turn operations into a GM attack",()=>{
@@ -90,6 +94,9 @@ test("different verified crew commitments have distinct play roles, but no fabri
  assert.equal(ops.execute(pilot2,"role salvage 6001").status,"COMPLEMENTARY_ROLES_DECLARED");
  assert.equal(ops.execute(pilot2,"role unknown").status,"INVALID_ROLE");
  assert.equal(ops.snapshot().roles.length,2);
+ const roster=ops.execute(pilot1,"status").message;
+ assert.match(roster,/#101=intercept/);
+ assert.match(roster,/#102=salvage/);
  assert.equal(tags.length,2,"roles must not auto-tag or fire weapons");
 });
 test("only real saved EveJS wreck from exact NPC source closes a live event",()=>{
