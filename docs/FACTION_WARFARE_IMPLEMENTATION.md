@@ -316,6 +316,88 @@ a simultaneous player warp and combat conflict, restart with a
 staged ship, and a database crash during pending warp. No real
 cross-system movement is accepted for FW-007A yet.
 
+## FW-007B — physical military gate transfer with durable quarantine
+
+**Experimental, opt-in.** This slice integrates the existing pinned
+`coopNativeGateTransfer` physical EveJS ship dematerialize/materialize
+with military custody. The world, native NPC entity/controller data,
+`coopIdentityRegistry` JSON file and `coopWarFleetRegistry` SQL row
+are **different durability authorities**, not one ACID transaction.
+The implementation uses a proof-backed, fail-closed handoff saga.
+Do not describe it as cross-store atomic.
+
+- `coopWarTransferLedger.cjs` records `PREPARED` in the same native
+  SQLite `corporationRuntime` fleet row **before** the first native scene
+  movement. It verifies original physical ship, unique pilot link, native
+  controller, exact campaign, active attacker war and real held ISK budget.
+  Loaded native module/cargo rows are hashed for identity/quantity drift.
+- The original `coopNativeGateTransfer` verifies reciprocal stargates
+  and true 2.5 km jump-range proximity, then performs actual native
+  dematerialization and rematerialization with unchanged `entityID`,
+  fitted modules and cargo; it keeps its **separate fsynced intent
+  journal**. It has not been replaced with a virtual system relocation.
+- The injected `registry.relocate()` facade first verifies destination
+  native scene and module/cargo fingerprints, commits the fleet row and
+  marks `NATIVE_COMMITTED` in native SQL. Then the original
+  `coopIdentityRegistry.relocate` durably fsyncs the JSON pilot link.
+  Finally `FINISH` verifies all authorities and marks `COMPLETE`.
+- A genuine native rollback may mark `ABORTED` only after a physical
+  source, original cargo fingerprints and source pilot identity are
+  positively verified. An uncertain result leaves the ship's transfer
+  unresolved and prevents automatic replay or reassignment.
+- The native NPC Order Arbiter blocks normal war/other orders while
+  a transfer is `PREPARED` or `NATIVE_COMMITTED`. Native gate
+  staging uses `WAR` order ownership and only reports
+  `VERIFIED_NATIVE_GATE_TRANSFER` after the exact native transfer
+  and durable authorities have all acknowledged.
+- Both native transfer journals and the NPC identity JSON file now
+  fsync the temp file and containing directory; unexpected temporary
+  files are considered recovery blockers, not a clean boot.
+- The startup handoff audit runs BEFORE identity pruning/materialization.
+  It refuses incomplete SQL transfers, mismatched completed native
+  entity/controller/cargo/pilot records and orphan low-level journal
+  files. **No automatic speculative recovery** is attempted before
+  physical scenes are known to be restored.
+
+**Additional opt-in flag:** `EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER=1`,
+requiring `EVEJS_COOP_FACTION_WAR_GATE_APPROACH=1`,
+`EVEJS_COOP_FACTION_WAR=1`,
+`EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_WAR_TREASURY=1`,
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`,
+`EVEJS_COOP_DURABLE_NPC_SHIPS=1`,
+`EVEJS_COOP_NATIVE_GATE_APPROACH=1`,
+`EVEJS_COOP_NATIVE_GATE_TRANSFER=1`, plus existing A-Life/Order
+Arbiter and virtual-world runtime opt-ins. All default OFF.
+Dedicated native journal directory:
+`EVEJS_COOP_WAR_TRANSFER_JOURNAL_DIR` (default
+`/var/lib/evejs/coop-war-native-transfers`); preserve this volume
+between restarts.
+
+**Hard limitations requiring independent local validation:** physical
+native scene transfer and SQLite/JSON cannot commit in one transaction.
+An operator recovery tool/UI to resolve ambiguous native transitions
+is **not yet provided**, so an ambiguous restart intentionally blocks
+the wartime handoff and may require manual repair. Persisted wrecked
+hulls after combat also require explicit war-fleet release before
+unrestricted startup auditing. Native transfer requires real durable
+ship provisioning, real SDE reciprocal gate, original cargo/fitting
+identity and a still-open approved war campaign. No new ships,
+station supplies, fabricated inventory, kill credit or conquest.
+
+**QA for future agents:** `node --test
+tests/coop-war-transfer-ledger.test.mjs
+tests/coop-war-gate-handoff.test.mjs
+tests/coop-war-gate-staging.test.mjs
+tests/coop-war-fleet-registry.test.mjs`, then pinned overlay
+install/uninstall, SQLite `synchronous=FULL` fault injection before
+and after native materialization, file fsync/restart and
+2-client cross-system observation of one intact NPC hull. Test
+separately all intermediate crash points: PREPARED, source
+dematerialized, destination entity written, destination materialized,
+native SQL moved, JSON identity moved, COMPLETE, and cleanup.
+No claim of successful live testing until these gates pass.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
