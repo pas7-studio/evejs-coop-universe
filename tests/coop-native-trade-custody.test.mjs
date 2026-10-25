@@ -177,3 +177,35 @@ test("P0 recovery adapter validates whole batch before native items write",()=>{
   fromLocationID:BASE+1,locationID:60003760,flagID:4,typeID:34,stacksize:10}]});
  assert.equal(invalid.success,false);assert.equal(writes,0);
 });
+
+test("P0 matching durable STAGED journal and authoritative root allow final native transfer",()=>{
+ const f=fixture(),c=f.make();stage(f,c);
+ f.service._listTradeItems=()=>[f.items["501"]];
+ assert.deepEqual(c.beforeComplete(f.service,f.trade),{ok:true,roots:1});
+});
+test("P0 hidden extra trade root without matching durable custody blocks settlement",()=>{
+ const f=fixture(),c=f.make();stage(f,c);
+ const unknown={itemID:990,typeID:34,ownerID:22,locationID:BASE+1,
+  flagID:4,stacksize:3};
+ f.service._listTradeItems=()=>[f.items["501"],unknown];
+ assert.throws(()=>c.beforeComplete(f.service,f.trade),
+  /NATIVE_TRADE_PRECOMMIT_CUSTODY_CHANGED/);
+ assert.throws(()=>c.assertReady(f.service),/CUSTODY_BLOCKED/);
+});
+test("P0 changed native root owner/quantity/placement cannot be settled",()=>{
+ for(const patch of [{ownerID:22},{stacksize:9},{locationID:60003760}]){
+  const f=fixture(),c=f.make();stage(f,c);
+  f.service._listTradeItems=()=>[f.items["501"]];
+  Object.assign(f.items["501"],patch);
+  assert.throws(()=>c.beforeComplete(f.service,f.trade),
+   /NATIVE_TRADE_PRECOMMIT_CUSTODY_CHANGED/);
+ }
+});
+test("P0 missing STAGED write does not permit native completion even if moved",()=>{
+ const f=fixture(),c=f.make();c.start(f.service,f.inventory);
+ c.beforeStage(f.service,f.trade,f.session,f.item,f.origin,null);
+ f.item.locationID=BASE+1;
+ f.service._listTradeItems=()=>[f.items["501"]];
+ assert.throws(()=>c.beforeComplete(f.service,f.trade),
+  /NATIVE_TRADE_PRECOMMIT_CUSTODY_CHANGED/);
+});
