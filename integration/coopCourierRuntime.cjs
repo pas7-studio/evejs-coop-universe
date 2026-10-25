@@ -352,14 +352,28 @@ function createCourierDispatch(deps = {}) {
       const pkg = itemRow(num(record.plasticWrapItemID));
       if (!pkg || num(pkg.ownerID) !== pilotID) continue;
       if (num(identity.character.stationID) !== num(record.startStationID)) {
-        if (!repositions.has(pilotID)) {
-          const move = planReposition(identity, num(record.startStationID), record.startSolarSystemID);
-          if (move) {
-            repositions.set(pilotID, move);
-            log(`[CoopCourier] courier ${pilotID} returning to origin ${move.destinationStationID} for contract ${contractID}`);
+        // The character row can lag behind the real hull after a recovery. The
+        // hull is the physical truth: if it sits in the origin station hangar,
+        // the courier is docked there and the row is repaired, not repositioned.
+        const hull = identity.ship || {};
+        const hullDockedAtOrigin =
+          num(hull.locationID) === num(record.startStationID) && num(hull.flagID) === 4;
+        if (!hullDockedAtOrigin) {
+          if (!repositions.has(pilotID)) {
+            const move = planReposition(identity, num(record.startStationID), record.startSolarSystemID);
+            if (move) {
+              repositions.set(pilotID, move);
+              log(`[CoopCourier] courier ${pilotID} returning to origin ${move.destinationStationID} for contract ${contractID}`);
+            }
           }
+          continue;
         }
-        continue;
+        const repaired = Object.assign({}, identity.character, { stationID: num(record.startStationID) });
+        delete repaired.characterID;
+        gameStore.write("characters", String(pilotID), repaired);
+        if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("characters");
+        identity.character.stationID = num(record.startStationID);
+        log(`[CoopCourier] courier ${pilotID} hull is docked at origin ${num(record.startStationID)}, station record repaired`);
       }
       const planned = flightCore.createFlight({ contract: record, identity, nowMs: now() });
       if (planned.status !== "FLIGHT_PLANNED") {

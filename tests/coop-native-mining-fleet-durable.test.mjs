@@ -354,3 +354,17 @@ test("a missing ship that still holds cargo is never replaced by a fresh hull",t
  assert.equal(f.getSpawnCalls(),0);
  assert.equal(f.world.cargo.get(9002).quantity,300);
 });
+
+test("fitted items left by a vanished hull are archived, and the slot is still repaired",t=>{
+ const f=partialSlotFixture(t);
+ // The miner row is gone but its fitted module rows survived.
+ f.world.modules.set(8801,{moduleID:8801,entityID:71001,typeID:17482,ownerID:950});
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.equal(r.slots[0].repaired,true);
+ const witness=f.world.slots.get(slotKey(SYSTEM,1));
+ assert.equal(witness.archivedModules,1);
+ const archived=[...f.world.slots.keys()].filter(k=>k.includes("-modules-71001-"));
+ assert.equal(archived.length,1,"the orphaned fitting is archived, never dropped");
+ assert.deepEqual(f.world.slots.get(archived[0])[0].moduleID,8801);
+});

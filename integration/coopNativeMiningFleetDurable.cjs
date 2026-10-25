@@ -115,6 +115,7 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,minerIDs,haul
  const missingMin=minerIDs.length-aliveMin.length;
  const missingHau=haulerIDs.length-aliveHau.length;
  if(!missingMin&&!missingHau)return null;
+ let archivedModules=0;
  for(const id of [...minerIDs,...haulerIDs]){
   if(aliveMin.includes(id)||aliveHau.includes(id))continue;
   const cargo=store.listNativeCargoForEntity(id);
@@ -122,7 +123,16 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,minerIDs,haul
   if(cargo.length)throw Error("ALIFE08_MISSING_SHIP_HOLDS_CUSTODY:"+id);
   const modules=store.listNativeModulesForEntity(id);
   if(!Array.isArray(modules))throw Error("ALIFE08_MODULE_LIST_UNAVAILABLE");
-  if(modules.length)throw Error("ALIFE08_MISSING_SHIP_HOLDS_MODULES:"+id);
+  if(modules.length){
+   // A vanished hull can leave fitted items behind. They are unreachable now, so
+   // they are archived verbatim instead of being deleted or silently dropped.
+   if(db.write("npcEntities","/coopMiningFleetSlotsArchive/"+key+"-modules-"+id+"-"+Date.now(),
+     modules)?.success!==true)
+    throw Error("ALIFE08_ORPHAN_MODULE_ARCHIVE_FAILED:"+id);
+   if(db.flushTableSync("npcEntities",{log:false})?.success!==true)
+    throw Error("ALIFE08_ORPHAN_MODULE_ARCHIVE_FLUSH_FAILED:"+id);
+   archivedModules+=modules.length;
+  }
  }
  const born=spawn(slot,{miners:missingMin,haulers:missingHau});
  if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
@@ -145,7 +155,8 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,minerIDs,haul
  saveSlot(db,key,{...previous,version:1,status:"ACTIVE",systemID,slot,
   fleetID:previous.fleetID||fleetIDForSlot(systemID,slot),
   minerEntityIDs:merged.minerEntityIDs,haulerEntityIDs:merged.haulerEntityIDs,
-  repairedAtMs:Date.now(),replacedEntityIDs:[...minerIDs,...haulerIDs].filter(id=>
+  repairedAtMs:Date.now(),archivedModules,
+  replacedEntityIDs:[...minerIDs,...haulerIDs].filter(id=>
    !merged.minerEntityIDs.includes(id)&&!merged.haulerEntityIDs.includes(id))});
  return merged;
 }
