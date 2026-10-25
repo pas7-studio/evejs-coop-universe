@@ -124,6 +124,34 @@ test("existing departure receipt with lost replay fsync ACK cannot authorize ano
  assert.equal(replay.record(booking(),f.scene,f.verifier).status,
   "DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR");
 }));
+test("readDurable recovers original source evidence after restart with no new pilot or ISK authority",()=>use(f=>{
+ const original=f.create();
+ assert.equal(original.record(booking(),f.scene,f.verifier).status,
+  "DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS");
+ const recovered=f.create().readDurable(manifestKey,booking());
+ assert.equal(recovered.status,"VERIFIED_NATIVE_ESCORT_DEPARTURE");
+ assert.deepEqual(recovered.shipIDs,[7001,7002]);
+ assert.deepEqual(recovered.origin,{x:1000,y:0,z:0});
+}));
+test("readDurable denies lost receipt or directory fsync ACK after crash",()=>use(f=>{
+ f.create().record(booking(),f.scene,f.verifier);
+ const io={...fs,fsyncSync(){throw Error("LOST_ACK")}};
+ const watcher=createDepartureWitness({root:f.root,io,clock:()=>now});
+ assert.equal(watcher.readDurable(manifestKey,booking()).status,
+  "DEPARTURE_REPLAY_FSYNC_UNCERTAIN_NEEDS_REPAIR");
+ assert.equal(f.create().read(manifestKey,booking()).status,
+  "VERIFIED_NATIVE_ESCORT_DEPARTURE");
+}));
+test("readDurable refuses corrupted source receipt and changed funded quote",()=>use(f=>{
+ f.create().record(booking(),f.scene,f.verifier);
+ const watcher=f.create();
+ assert.equal(watcher.readDurable(manifestKey,{...booking(),amountISK:620000}).status,
+  "DEPARTURE_RECORD_CORRUPT_OR_SOURCE_CHANGED");
+ const file=path.join(f.root,"escort-departure-witness",manifestKey+".json");
+ fs.writeFileSync(file,"{corrupted\\n");
+ assert.equal(watcher.readDurable(manifestKey,booking()).status,
+  "DEPARTURE_RECORD_CORRUPT");
+}));
 test("financial attendance flag OFF prevents native witness creation",()=>use(f=>{
  process.env[FLAG]="0";
  try{assert.equal(f.create().record(booking(),f.scene,f.verifier).status,"DISABLED")}
