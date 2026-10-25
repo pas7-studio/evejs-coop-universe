@@ -7,9 +7,11 @@ const require=createRequire(import.meta.url);
 const src=fs.readFileSync(new URL("../integration/coopEscortRuntime.cjs",import.meta.url),"utf8");
 const FLAGS=["EVEJS_COOP_ESCORT_CONTRACTS","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_ESCORT_WALLET",
- "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS"];
+ "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS",
+ "EVEJS_COOP_ESCORT_ROUTE_WITNESS"];
 const old=Object.fromEntries(FLAGS.map(k=>[k,process.env[k]]));
 for(const k of FLAGS)process.env[k]="1";
+process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
 const route={manifestKey:"30000144-77-123",systemID:30000144,
  fleetID:77,stationID:60000001,corporationID:1000152,haulerIDs:[901],
  cargoIDs:[123]};
@@ -18,14 +20,14 @@ const offer={status:"AUTHORIZED_NATIVE_ESCORT_BOOKING",manifestKey:route.manifes
  stationID:60000001,corporationID:1000152,haulerID:901,
  playerFleetID:44,characters:[701,702],amountISK:600000};
 function fixture({authorized=true,validDuo=true}={}){
- const state={recorded:false,reserves:0,preflight:0,delivery:0};
+ const state={recorded:false,reserves:0,preflight:0,delivery:0,routeSamples:0,routeValid:false};
  let verifyService=()=>({status:"NOT_WIRED"});
  const requires={
   "./coopEscortNativeFunds":{createEscortNativeFunds:()=>({})},
   "./coopEscortFlightGate":{createEscortFlightGate:()=>({
    fundBeforeWarp:()=>{state.reserves++;return {status:"FUNDED_BEFORE_WARP"}},
    recordDelivered:()=>({status:"DURABLE_NATIVE_DELIVERY_RECORDED"}),
-   read:()=>({status:"READY",phase:"FUNDED"}),
+   read:()=>({status:"READY",phase:"FUNDED",booking:offer}),
    readFunded:()=>({status:"NATIVE_PREFUNDED_BOOKING_VERIFIED"}),
    readNativeDelivery:()=>({status:"NOT_DELIVERED"}),
    readNativeDeliveryForAudit:()=>({status:"NOT_DELIVERED"}),
@@ -41,8 +43,14 @@ function fixture({authorized=true,validDuo=true}={}){
    return {settle:()=>({status:"NO_PAYOUT_EXECUTED"})}}},
   "./coopEscortDepartureWitness":{createDepartureWitness:()=>({
    record:()=>{state.recorded=true;return {status:"DURABLE_NATIVE_ESCORT_DEPARTURE_WITNESS"}},
-   read:()=>state.recorded?{status:"VERIFIED_NATIVE_ESCORT_DEPARTURE"}:
-    {status:"DEPARTURE_NOT_RECORDED"}})}
+   read:()=>state.recorded?{status:"VERIFIED_NATIVE_ESCORT_DEPARTURE",
+    manifestKey:route.manifestKey,contractID:offer.contractID,
+    at:10000,characters:[701,702],shipIDs:[7001,7002],origin:{x:0,y:0,z:0}}:
+    {status:"DEPARTURE_NOT_RECORDED"}}),
+  "./coopEscortRouteWitness":{createRouteWitness:()=>({
+   sample:()=>{state.routeSamples++;return {status:"NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED",stage:1}},
+   verify:()=>({status:state.routeValid?"VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE":
+    "ROUTE_CHECKPOINT_NOT_FOUND"})})}}
  };
  const mod={exports:{}};
  vm.runInNewContext(src,{require:name=>{
@@ -131,6 +139,30 @@ test("real departure alone is insufficient if a player abandons final convoy",()
  const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
  f.ships.get(7002).position={x:400000,y:0,z:0};
  assert.equal(f.verifyService().status,"NO_NATIVE_ESCORT_SERVICE");
+});
+test("strict Stage I flag makes midroute evidence mandatory for peaceful payout",()=>{
+ const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{assert.equal(f.verifyService().status,"NO_NATIVE_ESCORT_SERVICE");
+ assert.equal(f.state.routeSamples,0)}
+ finally{process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0"}
+});
+test("two real native midroute checkpoints can enable the terminal peaceful service gate",()=>{
+ const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{assert.equal(f.runtime.recordEscortRouteSample(route.manifestKey,f.scene,
+  {stationID:route.stationID,corporationID:route.corporationID}).status,
+   "NATIVE_ROUTE_CHECKPOINT_DURABLY_RECORDED");
+ assert.equal(f.state.routeSamples,1);
+ f.state.routeValid=true;
+ assert.equal(f.verifyService().status,"VERIFIED_NATIVE_ESCORT_SERVICE")}
+ finally{process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0"}
+});
+test("direct route sampling with Stage I disabled cannot write fake participation",()=>{
+ const f=fixture();
+ assert.equal(f.runtime.recordEscortRouteSample(route.manifestKey,f.scene,
+  {stationID:route.stationID}).status,"DISABLED");
+ assert.equal(f.state.routeSamples,0);
 });
 process.on("exit",()=>{for(const [k,v] of Object.entries(old))
  if(v===undefined)delete process.env[k];else process.env[k]=v});
