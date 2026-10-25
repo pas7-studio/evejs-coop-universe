@@ -178,3 +178,89 @@ test("other agent categories and unrelated mission actions are not auto-turned i
  f.missionOptions.actionID=6;f.missionRecords.get(102).objectiveMode="transport";
  assert.equal(prepare(f.missionOptions).ok,false);
 });
+
+
+test("P0 durable native wingman turn-in records PREPARED then AWARDED",()=>{
+ const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop-mission-safe-"));
+ const file=path.join(dir,"settlement.jsonl");
+ const old=process.env.EVEJS_COOP_FLEET_MISSION_TURNIN;
+ try{
+  process.env.EVEJS_COOP_FLEET_MISSION_TURNIN="1";
+  const f=fixture(),ticket=prepare(f.missionOptions);
+  assert.equal(f.missionRuntime.doAgentAction(101,50,6).success,true);
+  const result=finish({ticket,missionRuntime:f.missionRuntime,
+   fleetRuntime:f.fleetRuntime,getDockedLocationID:f.getDockedLocationID,
+   journalPath:file});
+  assert.equal(result.status,"TWO_NATIVE_MISSIONS_COMPLETED");
+  assert.deepEqual(f.completed,[101,102]);
+  const events=fs.readFileSync(file,"utf8").trim().split("\n").map(JSON.parse);
+  assert.deepEqual(events.map(e=>e.state),["PREPARED","AWARDED"]);
+  assert.equal(events[0].key,events[1].key);
+  assert.equal(f.missionRecords.size,0);
+ }finally{
+  if(old===undefined)delete process.env.EVEJS_COOP_FLEET_MISSION_TURNIN;
+  else process.env.EVEJS_COOP_FLEET_MISSION_TURNIN=old;
+  fs.rmSync(dir,{force:true,recursive:true});
+ }
+});
+test("P0 no durable precommit means no wingman mission reward call",()=>{
+ const old=process.env.EVEJS_COOP_FLEET_MISSION_TURNIN;
+ try{
+  process.env.EVEJS_COOP_FLEET_MISSION_TURNIN="1";
+  const f=fixture(),ticket=prepare(f.missionOptions);
+  f.missionRuntime.doAgentAction(101,50,6);
+  const result=finish({ticket,missionRuntime:f.missionRuntime,
+   fleetRuntime:f.fleetRuntime,getDockedLocationID:f.getDockedLocationID,
+   journalPath:"relative-not-authoritative.jsonl"});
+  assert.equal(result.status,"SETTLEMENT_JOURNAL_WRITE_FAILED");
+  assert.deepEqual(f.completed,[101]);
+  assert.equal(f.missionRecords.has(102),true);
+ }finally{
+  if(old===undefined)delete process.env.EVEJS_COOP_FLEET_MISSION_TURNIN;
+  else process.env.EVEJS_COOP_FLEET_MISSION_TURNIN=old;
+ }
+});
+test("P0 ambiguous native payout after crash cannot be automatically retried",()=>{
+ const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop-mission-ambiguous-"));
+ const file=path.join(dir,"settlement.jsonl");
+ const old=process.env.EVEJS_COOP_FLEET_MISSION_TURNIN;
+ try{
+  process.env.EVEJS_COOP_FLEET_MISSION_TURNIN="1";
+  const f=fixture(),ticket=prepare(f.missionOptions);
+  f.missionRuntime.doAgentAction(101,50,6);
+  let calls=0;
+  const original=f.missionRuntime.doAgentAction;
+  f.missionRuntime.doAgentAction=(...args)=>{calls++;throw Error("native side effect uncertain")};
+  const attempt=finish({ticket,missionRuntime:f.missionRuntime,
+   fleetRuntime:f.fleetRuntime,getDockedLocationID:f.getDockedLocationID,journalPath:file});
+  assert.equal(attempt.status,"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION");
+  f.missionRuntime.doAgentAction=(...args)=>{calls++;return original(...args)};
+  const retry=finish({ticket,missionRuntime:f.missionRuntime,
+   fleetRuntime:f.fleetRuntime,getDockedLocationID:f.getDockedLocationID,journalPath:file});
+  assert.equal(retry.status,"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION");
+  assert.equal(calls,1);
+  assert.equal(f.missionRecords.has(102),true);
+  const log=fs.readFileSync(file,"utf8");
+  assert.match(log,/"PREPARED"/);
+  assert.match(log,/"UNKNOWN"/);
+ }finally{
+  if(old===undefined)delete process.env.EVEJS_COOP_FLEET_MISSION_TURNIN;
+  else process.env.EVEJS_COOP_FLEET_MISSION_TURNIN=old;
+  fs.rmSync(dir,{recursive:true,force:true});
+ }
+});
+test("P0 an interrupted PREPARED journal remains blocked on next process start",()=>{
+ const fs=require("node:fs"),os=require("node:os"),path=require("node:path");
+ const {beginPeerSettlement}=require("../integration/coopFleetMissionTurnin.cjs");
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop-mission-reboot-"));
+ const file=path.join(dir,"settlement.jsonl");
+ try{
+  const f=fixture(),ticket=prepare(f.missionOptions);
+  assert.equal(beginPeerSettlement(ticket,file).status,"READY");
+  assert.equal(beginPeerSettlement(ticket,file).status,"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION");
+  fs.appendFileSync(file,"{partial");
+  assert.equal(beginPeerSettlement(ticket,file).status,"JOURNAL_CORRUPTED");
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
