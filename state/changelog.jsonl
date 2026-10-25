@@ -1,0 +1,3 @@
+{"at":"2026-10-25T12:44:03.295Z","runId":"20261025-124403","rev":"11d60758","note":"state bundle introduced; doctrine + drift check landed","next":"rehearse an upstream SHA upgrade in a throwaway worktree","tests":"523p/2f","overlay":"OVERLAY_OK"}
+{"at":"2026-10-25T12:46:35.061Z","runId":"20261025-124635","rev":"11d60758","note":"session state bundle + agent entry point; local suite green","next":"rehearse an upstream SHA upgrade in a throwaway worktree","tests":"525p/0f","overlay":"OVERLAY_OK"}
+{"at":"2026-10-25T12:48:23.122Z","runId":"20261025-124823","rev":"5f1a75ea","note":"state bundle + agent entry point committed; suite green","next":"rehearse an upstream SHA upgrade in a throwaway worktree","tests":"525p/0f","overlay":"OVERLAY_OK"}

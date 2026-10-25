@@ -1,0 +1,69 @@
+{
+  "updatedAt": "2026-10-25T12:48:23.122Z",
+  "runId": "20261025-124823",
+  "projectRev": "5f1a75ea38150dc568af83cfff4c74039ab06f1e",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "note": "state bundle + agent entry point committed; suite green",
+  "next": "rehearse an upstream SHA upgrade in a throwaway worktree",
+  "tests": {
+    "status": "BASELINE_MATCH",
+    "totals": {
+      "files": 79,
+      "pass": 525,
+      "fail": 0,
+      "skipped": 16,
+      "crashed": 0
+    },
+    "newFailures": []
+  },
+  "overlay": {
+    "status": "OVERLAY_OK",
+    "counts": {
+      "pristine": 0,
+      "patched": 19,
+      "drifted": 0,
+      "anchorMismatch": 0,
+      "missing": 0,
+      "moduleCurrent": 59,
+      "moduleStale": 0,
+      "moduleMissing": 0
+    },
+    "problems": []
+  },
+  "server": {
+    "rows": 234,
+    "firstAt": "2026-10-25T12:31:47.927Z",
+    "lastAt": "2026-10-25T12:48:18.401Z",
+    "types": {
+      "living-native-activity": 60,
+      "living-native-combat-damage": 26,
+      "living-world-topology": 18,
+      "living-native-industry": 18,
+      "living-native-materialization-attempt": 18,
+      "virtual-world-materialization": 18,
+      "virtual-faction-patrol": 18,
+      "virtual-world-presence": 18,
+      "living-npc-tactical-event": 9,
+      "virtual-world-identity-projected": 4,
+      "living-native-system-site-readiness": 4,
+      "living-headless-boot-system": 4,
+      "living-pirate-raid": 4,
+      "living-startup-entered": 2,
+      "living-headless-boot-requested": 2
+    },
+    "truncatedTypes": 8,
+    "error": null
+  },
+  "client": [],
+  "gates": {
+    "telemetry": "events 234",
+    "client": "BLOCKED_CLIENT_UNAVAILABLE (no gamelogs on this machine)"
+  },
+  "ledgerSummary": {
+    "total": 13,
+    "done": 0,
+    "partial": 2,
+    "blocked": 7,
+    "todo": 4
+  }
+}

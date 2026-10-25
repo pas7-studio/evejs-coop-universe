@@ -1,0 +1,89 @@
+{
+  "generatedFrom": "docs/ROADMAP.md",
+  "tasks": [
+    {
+      "id": "COOP-001",
+      "title": "reproducible upstream inventory",
+      "status": "TODO",
+      "evidence": []
+    },
+    {
+      "id": "COOP-002",
+      "title": "local-only backend bootstrap",
+      "status": "PARTIAL: healthy services verified on cc5ce83; restart persistence not yet evidenced",
+      "evidence": []
+    },
+    {
+      "id": "COOP-003",
+      "title": "X-Eve compatibility gate",
+      "status": "BLOCKED: exact approved baseline",
+      "evidence": []
+    },
+    {
+      "id": "COOP-004",
+      "title": "legal / license assessment",
+      "status": "TODO",
+      "evidence": []
+    },
+    {
+      "id": "COOP-010",
+      "title": "networking source audit",
+      "status": "TODO",
+      "evidence": [
+        "docs/evidence/COOP-010-013.md"
+      ]
+    },
+    {
+      "id": "COOP-011",
+      "title": "private-VPN transport laboratory",
+      "status": "TODO",
+      "evidence": []
+    },
+    {
+      "id": "COOP-012",
+      "title": "configurable listeners and endpoint advertisement",
+      "status": "BLOCKED: COOP-004, COOP-010",
+      "evidence": []
+    },
+    {
+      "id": "COOP-013",
+      "title": "independent sessions and shared world",
+      "status": "BLOCKED: COOP-004, COOP-010, COOP-012",
+      "evidence": []
+    },
+    {
+      "id": "COOP-014",
+      "title": "co-op gateway security hardening",
+      "status": "BLOCKED: COOP-004, COOP-012",
+      "evidence": []
+    },
+    {
+      "id": "COOP-020",
+      "title": "two-player gameplay matrix",
+      "status": "BLOCKED: COOP-013",
+      "evidence": [
+        "docs/evidence/COOP-020-SCENE.md"
+      ]
+    },
+    {
+      "id": "COOP-021",
+      "title": "Living Universe behavioral audit",
+      "status": "BLOCKED_PHYSICAL_WORLD; headless telemetry PASS on a087167",
+      "evidence": [
+        "docs/evidence/COOP-021-MOVEMENT-COMBAT.md"
+      ]
+    },
+    {
+      "id": "COOP-022",
+      "title": "NPC fleet/corp co-op design",
+      "status": "BLOCKED: COOP-020, COOP-021",
+      "evidence": []
+    },
+    {
+      "id": "COOP-023",
+      "title": "overlay engineering doctrine and upgrade safety",
+      "status": "PARTIAL: doctrine + read-only drift check landed 2026-10-25; first real upstream SHA upgrade not yet rehearsed",
+      "evidence": []
+    }
+  ]
+}
