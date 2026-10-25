@@ -20,8 +20,12 @@ const gate=env=>env.EVEJS_COOP_NPC_STRICT_AMMO==="1"&&
 function journalFile(root,entityID){return path.join(root,"bank-ships",String(entityID)+".json");}
 function readReceipt(file,io=fs){
  let raw;
- try{raw=io.readFileSync(file,"utf8");}
- catch(e){if(e.code==="ENOENT")return null;throw e;}
+ try{
+  const st=io.lstatSync(file);
+  if(st.isSymbolicLink()||!st.isFile()||st.size>maxReceiptBytes)
+   throw Error("UNSAFE_BANK_RECEIPT_FILE");
+  raw=io.readFileSync(file,"utf8");
+ }catch(e){if(e.code==="ENOENT")return null;throw e;}
  if(typeof raw!=="string"||raw.length>maxReceiptBytes)throw Error("BANK_RECEIPT_SIZE_INVALID");
  const v=JSON.parse(raw);
  if(v?.version!==1||!["PREPARED","COMMITTED"].includes(v.phase)||
