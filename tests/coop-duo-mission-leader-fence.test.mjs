@@ -53,8 +53,10 @@ function fixture(){
  const getDockedLocationID=()=>60000011;
  const opts={session:alice,agentID:50,actionID:6,fleetRuntime,
   missionRuntime:runtime,sessions:[alice,bob],getDockedLocationID};
- const completeLeader=()=>runtime.doAgentAction(101,50,6);
+ let leaderResult=null;
+ const completeLeader=()=>{leaderResult=runtime.doAgentAction(101,50,6);return leaderResult};
  const finishTicket=(ticket,file)=>finish({ticket,missionRuntime:runtime,
+  leaderActionResult:leaderResult,
   fleetRuntime,getDockedLocationID,journalPath:file});
  return {opts,paid,missions,completeLeader,finishTicket,
   runtime,fleet,alice,bob};
@@ -171,3 +173,13 @@ test("P0 enabling leader fence without existing peer fence prevents all leader s
   else process.env.EVEJS_COOP_FLEET_MISSION_TURNIN=oldPeer;
  }
 }));
+
+test("P0 no acknowledged leader native result means no automatic peer payout even if state vanished",()=>flags(()=>withFiles(({leader,peer})=>{
+ const f=fixture(),ticket=prepare({...f.opts,leaderFencePath:leader});
+ f.missions.delete(101);
+ const r=f.finishTicket(ticket,peer);
+ assert.equal(r.status,"LEADER_NATIVE_RESULT_NOT_ACKNOWLEDGED");
+ assert.deepEqual(events(leader).map(x=>x.state),["PREPARED"]);
+ assert.equal(fs.existsSync(peer),false);
+ assert.deepEqual(f.paid,[]);
+})));
