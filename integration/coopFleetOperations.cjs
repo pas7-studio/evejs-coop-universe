@@ -151,7 +151,10 @@ function createOperations(options={}){
   const out=[];
   for(const [k,inc] of incidents){
    const live=liveIncident(scene,inc);
-   if(!live){incidents.delete(k);continue;}
+   // A native wreck is emitted after the ship disappears. Keep the
+   // short-lived incident for the verified wreck callback, but never
+   // display a missing ship as an active battle.
+   if(!live)continue;
    out.push(live);
   }
   return out.sort((a,b)=>Number(b.phase==="UNDER_ATTACK")-Number(a.phase==="UNDER_ATTACK")||
