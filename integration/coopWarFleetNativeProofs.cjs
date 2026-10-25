@@ -28,7 +28,11 @@ function createWarFleetNativeProofs({sceneForSystem,getController,getNativeEntit
    if(!Array.isArray(all)||all.length>10000)return null;
    const matches=all.filter(x=>x?.pilotID===details.pilotID||
     x?.entityID===details.entityID);
-   if(matches.length!==1||matches[0].pilotID!==details.pilotID||
+   // Both the persisted identity registry and the virtual-world bridge
+   // may report the very same native link. Exact duplicates are fine;
+   // conflicting ship / pilot / system associations are never fine.
+   const unique=new Set(matches.map(x=>x.pilotID+":"+x.entityID+":"+x.systemID));
+   if(unique.size!==1||matches[0].pilotID!==details.pilotID||
     matches[0].entityID!==details.entityID||
     matches[0].systemID!==details.systemID)return null;
    return {ship,record,controller};
