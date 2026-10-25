@@ -15,7 +15,7 @@ $body=[IO.File]::ReadAllText($jsPath,[Text.Encoding]::UTF8)
 # node -e is not a regular CJS entrypoint: execute the read-only inspect explicitly.
 $body += "`nconsole.log(JSON.stringify(run({systems:process.argv[2].split(',').map(Number)}),null,2));"
 $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($body))
-$runner='eval(Buffer.from(process.argv[1],"base64").toString("utf8"))'
+$runner='eval(Buffer.from(process.argv[1],String.fromCharCode(98,97,115,101,54,52)).toString())'
 Write-Host '[COOP MARKET] Reading current SQLite market stock; no seed/rebuild/write/restart.'
 & docker compose -f $compose exec -T server node -e $runner $encoded $SolarSystems
 if ($LASTEXITCODE -ne 0) {throw "Market inspection failed, docker exit code $LASTEXITCODE"}
