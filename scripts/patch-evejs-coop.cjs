@@ -48,7 +48,8 @@ names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacef
 // COOP-055: strict, default-OFF native NPC motion-attested Escort.
 names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness","coopEscortRouteWitness");
 names.splice(names.indexOf("coopEscortRouteWitness")+1,0,"coopEscortNativeIngressSnapshot");
-// Chat 36: opt-in Pochven Conduit Loop guard (native travel only).\nnames.splice(names.indexOf("coopNativeScanProof")+1,0,"coopPochvenConduit");
+// Chat 36: opt-in Pochven Conduit Loop guard (native travel only).
+names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopPochvenConduit");
 // CH23: native two-pilot wormhole mass/transition fence; default OFF.
 names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 const specs=[
