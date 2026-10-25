@@ -65,7 +65,13 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
      throw Error("P2P_BUY_RESERVE_UNRESOLVED_OPERATION_FOR_BUYER");
    }
    const wallet=tx.get("characters",String(q.buyerID));
-   if(!wallet||Number(wallet.characterID??wallet.charID)!==q.buyerID||
+   // Pinned EveJS addresses original character wallet rows by the
+   // GameStore key. An embedded characterID is optional, but any explicit
+   // ID must match the authenticated original buyer before debiting ISK.
+   const embeddedID=wallet?.characterID??wallet?.charID;
+   if(!wallet||
+      (embeddedID!==undefined&&embeddedID!==null&&
+       Number(embeddedID)!==q.buyerID)||
       !Array.isArray(wallet.walletJournal)||
       !Array.isArray(wallet.marketTransactions))
     throw Error("P2P_BUY_RESERVE_WALLET_AUTHORITY_UNAVAILABLE");
