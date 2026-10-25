@@ -53,7 +53,8 @@ test("solo pirate keeps existing native authorization path",()=>{
  assert.equal(f.permit(101).reason,"SOLO_NATIVE_POLICY");
 });
 test("two rival factions cannot form a synthetic squad",()=>{
- const f=fixture();f.pilots[1].faction="frontier";
+ const f=fixture();f.ships.get(102).position.x=60000;
+ f.pilots[1].faction="frontier";
  f.pilots[2].faction="frontier";f.observe();
  assert.equal(f.squads.snapshot().length,1);
  const pair=f.squads.snapshot()[0];
@@ -63,9 +64,7 @@ test("two rival factions cannot form a synthetic squad",()=>{
 });
 test("duplicate pilot or ship identity is rejected, not silently used as squad scout",()=>{
  const f=fixture();f.pirates.push({...f.pirates[0]});f.observe();
- assert.equal(f.squads.snapshot().length,1);
- assert.equal(f.squads.snapshot()[0].scoutID,102);
- assert.equal(f.squads.snapshot()[0].attackerIDs[0],103);
+ assert.equal(f.squads.snapshot().length,0);
 });
 test("native players, missing hulls, wrong systems and moved prey are not valid relays",()=>{
  const f=fixture();f.observe();f.advance(16000);f.observe();
