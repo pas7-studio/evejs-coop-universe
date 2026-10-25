@@ -66,6 +66,35 @@ Perimeter (30000144) still reports `HOLD_NO_BUYER` for its Veldspar — honest, 
 `--check` = `OVERLAY_OK` (129 modules) → `docker build -t evejs-local .` →
 `docker compose -p evejs -f compose.yaml -f compose.coop-probe.yaml up -d`.
 
+## Merchant pricing (added after the closed loop, OFF by default)
+`integration/coopNpcSellPricing.cjs` — pure policy, 10 tests: a stack starts at the best
+real bid on its station, the asking floor steps down `stepPct` every
+`stepIntervalMs` while unsold, hard floor `floorPct`, and a sale resets it. The guarded
+trader now (a) picks the **highest-priced** matching SEED order instead of the first
+row the daemon returned (real bug: a seller must take the best bid) and (b) refuses a
+bid below the policy floor with `PRICE_BELOW_FLOOR` (no `FillOrder`, cargo untouched).
+Telemetry `living-npc-sell-policy`. Flags: `EVEJS_COOP_NPC_SELL_PRICING`,
+`..._STEP_INTERVAL_MS=120000`, `..._STEP_PCT=0.05`, `..._FLOOR_PCT=0.55`.
+
+## Patcher is finally re-installable (this was blocking every deploy)
+`classifyFile` treated "cannot REMOVE a hook from a pristine file" as drift, and the
+git-HEAD fallback died on `maxBuffer` for `runtime.js`, so after any `git checkout`
+the installer refused with `ANCHOR_MISMATCH`/`DRIFTED`. Now: removal is idempotent in
+`coop-market-catalog-patch`, classification falls back to `git show HEAD:Code/<file>`
+with a 64 MB buffer and reports PRISTINE/PATCHED/DRIFTED honestly. Result: 32 native
+files revert cleanly and reinstall to `OVERLAY_OK` with **147 overlay modules**.
+Helper command used: revert every spec file with `git checkout --` (32 paths).
+
+## Still open: delivered ore is warehouse stock, not a sellable stack
+`advanceNativeMarket()` only sees native cargo **on ships**, so ore delivered to the
+warehouse can never be sold. Two honest options, pick one before enabling
+`EVEJS_COOP_NATIVE_NPC_MARKET`:
+- (a) sell at the station **before** the warehouse deposit: the hauler is physically
+  within 10 km, cargo is real, the guarded trader settles into the NPC ledger, and only
+  the remainder is deposited;
+- (b) teach the warehouse to hand committed stock to the trader (needs its own journal).
+(a) is the smaller, more player-like change and needs no new storage semantics.
+
 ## Watch
 - Mining still has a slow phase right after a restart (miners ~10 min to fill), but it
   now recovers by itself after each delivery.

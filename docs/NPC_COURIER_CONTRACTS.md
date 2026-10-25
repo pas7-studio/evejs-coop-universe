@@ -113,6 +113,22 @@ present, and no fake destruction events.
 5. No player-facing claim of success without a captured live run.
 6. Default OFF; every phase has its own env gate.
 
+## Correction (2026-10-25): runtime state is SQLite, contracts do persist
+
+An earlier version of this section claimed contracts were cache-only and lost on
+restart. That was wrong, and the mistake was reading the seed directory:
+`gameStore/data/*.json` is the seeded input, while live runtime state lives in
+`/var/lib/evejs/gameStore/gamestore.sqlite` (+ WAL). The `contractRuntime`
+table there held the owner's real contract after several container recreations.
+
+Verified on the owner's own contract `980000000`: `type 3` (courier),
+`status 0` (outstanding), `acceptorID 0`, volume 29 500 m3, reward 30 000 ISK,
+collateral 300 000 ISK, package `plasticWrapItemID 9988400000874` still owned by
+the issuer at the origin station. So nothing was carrying it - the record is
+simply outstanding, exactly as expected with no courier implemented.
+
+Lesson for future sessions: query `gamestore.sqlite`, not `gameStore/data`.
+
 ## Pricing: what the issuer sees before creating the contract
 
 The owner's question is the right one - a courier contract cannot be priced by
@@ -126,10 +142,11 @@ total = hullMultiplier x (base + volumeM3 x iskPerM3 + jumps x iskPerJump
                           + collateral x collateralPremiumRate)
 ```
 
-Defaults: `base` 50 000, `iskPerM3` 120, `iskPerJump` 25 000,
-`collateralPremiumRate` 0.02, `hullMultiplier` industrial 1.0 /
-freighter 1.6. Freighters cost more because they are slower and the loss is
-larger. The collateral premium is the insurance part: it is what the courier
+Defaults (owner-tuned): `base` 5 000, `iskPerM3` 25, `iskPerJump` 5 000,
+`collateralPremiumRate` 0.015, `hullMultiplier` industrial 1.0 /
+freighter 1.6. The base is deliberately tiny; the volume, distance and the
+insurance premium are what decide the price. Freighters cost more because they
+are slower and the loss is larger. The collateral premium is the insurance part: it is what the courier
 charges for risking its own ISK.
 
 Print the table before creating anything:
@@ -139,8 +156,10 @@ node scripts/Get-CourierRateTable.cjs
 node scripts/Get-CourierRateTable.cjs --volume 5000 --jumps 2 --collateral 5000000 --hull freighter
 ```
 
-That gives real numbers today, without any NPC involvement. Example: 5 000 m3,
-2 jumps, 5 M ISK collateral, freighter = 1 280 000 ISK.
+Every rate knob is a flag, so the price can be tuned without touching code:
+`--base`, `--per-m3`, `--per-jump`, `--premium`. Example with the defaults:
+5 000 m3, 2 jumps, 5 M ISK collateral, freighter = 344 000 ISK
+(5 000 base + 125 000 volume + 10 000 distance + 75 000 insurance, x1.6 hull).
 
 Honest limits: this is a **service price**, not a market clearing price. It is
 not yet visible in the game client - surfacing it (a station billboard, an NPC

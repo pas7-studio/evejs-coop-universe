@@ -3,7 +3,7 @@
  * COOP-032D. In-process native SQLite/GameStore atomic row bridge.
  * Infrastructure only, never exports supportsAtomicInstall/Delivery.
  */
-const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","npcEntities","npcModules","npcCargo","npcWreckItems","npcWrecks"]);
+const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","npcEntities","npcModules","npcCargo","miningRuntimeState","npcWreckItems","npcWrecks"]);
 const SEP="\u001f",hasOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function assertTables(names){
  if(!Array.isArray(names)||names.length<1||names.length>ALLOWED.size||
@@ -26,6 +26,14 @@ function createSqliteAdapter(getDb){
   assertTables(tables);
   if(typeof mutation!=="function"||inside)throw Error("INVALID_OR_REENTRANT_ATOMIC_MUTATION");
   const db=getDb();if(!db||typeof db.exec!=="function"||typeof db.prepare!=="function")throw Error("NATIVE_SQLITE_UNAVAILABLE");
+  if(tables.includes("miningRuntimeState")) {
+    if(process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
+      throw Error("ALIFE07_MINING_ATOMIC_DISABLED");
+    db.exec("PRAGMA synchronous = FULL");
+    const pragma=db.prepare("PRAGMA synchronous").get();
+    if(!pragma || Number(pragma.synchronous)!==2)
+      throw Error("ALIFE07_SQLITE_DURABILITY_NOT_FULL");
+  }
   const scope=new Set(tables),changed=new Map();
   const tbl=t=>{if(!scope.has(t))throw Error("UNDECLARED_NATIVE_TABLE");return '"'+t+'"';};
   let begun=false;inside=true;

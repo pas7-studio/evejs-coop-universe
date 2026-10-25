@@ -30,7 +30,8 @@ test("native complete pickup requires authenticated physical player and depleted
 test("partial native pickup requires exact remaining source quantity",()=>{
  const b={...base(),requestedQuantity:2,
   sourceAfter:{...sourceBefore,quantity:4},
-  grantResult:{...base().grantResult,data:{...base().grantResult.data,quantity:2}}};
+  grantResult:{...base().grantResult,data:{...base().grantResult.data,
+   quantity:2,changes:[{item:{...base().grantResult.data.changes[0].item,quantity:2}}]}}};
  const v=verify(b);
  assert.equal(v.status,"VERIFIED_NATIVE_LOOT_PICKUP");
  assert.equal(v.remainingQuantity,4);

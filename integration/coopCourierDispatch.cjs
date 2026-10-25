@@ -212,10 +212,10 @@ function piracyOpportunity(route, policy, seed) {
 // (scripts/Get-CourierRateTable.cjs). It is a service price, not a market
 // clearing price, and it never moves ISK by itself.
 const DEFAULT_QUOTE_POLICY = Object.freeze({
-  baseIsk: 50000,
-  iskPerM3: 120,
-  iskPerJump: 25000,
-  collateralPremiumRate: 0.02,
+  baseIsk: 5000,
+  iskPerM3: 25,
+  iskPerJump: 5000,
+  collateralPremiumRate: 0.015,
   hullMultiplier: Object.freeze({ industrial: 1, freighter: 1.6 }),
 });
 

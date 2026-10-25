@@ -96,6 +96,35 @@ function resolveAuthenticatedPlayerID(scene,aggressor){
    (String(aggressor?.kind)==="drone"&&positive(aggressor?.ownerID)===positive(session.characterID))));
  return positive(session?.characterID);
 }
+// Financial or standings consequences need the same native account, active
+// hull and global session authority as co-op admission. Never trust an NPC
+// pilotCharacterID, caller-supplied killerCharacterID or stale drone owner.
+function resolveVerifiedPlayerID(scene,attacker){
+ const actorID=positive(attacker?.itemID),systemID=positive(scene?.systemID);
+ if(!actorID||!systemID||attacker?.nativeNpc===true||
+  !["ship","drone"].includes(attacker?.kind)||
+  scene?.getEntityByID?.(actorID)!==attacker||
+  typeof scene?.sessions?.values!=="function")return null;
+ const presence=require("./coopSessionPresence");
+ let authority;
+ try{authority=presence.nativeAuthority();}catch{return null;}
+ const matches=[];
+ for(const session of scene.sessions.values()){
+  const characterID=positive(session?.characterID),shipID=positive(session?._space?.shipID);
+  if(!characterID||!shipID||positive(session?._space?.systemID)!==systemID||
+   session?._space?.initialStateSent!==true||!session?.socket||
+   session.socket.destroyed===true)continue;
+  const physicalShip=scene.getEntityByID(shipID);
+  if(physicalShip?.kind!=="ship"||
+   (attacker.kind==="ship"?(shipID!==actorID||physicalShip!==attacker):
+    (positive(attacker.ownerID)!==characterID||
+     ![attacker.controllerID,attacker.launcherID,attacker.sourceShipID]
+      .some(id=>positive(id)===shipID))))continue;
+  if(presence.admission(session,physicalShip,()=>scene,authority).status===
+   "ADMITTED_NATIVE_SESSION")matches.push(characterID);
+ }
+ return matches.length===1?matches[0]:null;
+}
 function informPlayer(scene,characterID,message){
  try{
   const session=Array.from(scene?.sessions?.values?.()||[])
@@ -109,7 +138,7 @@ function noteMiningAggression(scene,fleet,aggressor,occurredAt){
   const resolved=require("../services/mining/miningNpcStandings");
   // NPCs may carry synthetic pilotCharacterIDs. Only a verifiable player
   // session (or their owned drone) may receive a real standing penalty.
-  const characterID=resolveAuthenticatedPlayerID(scene,aggressor);
+  const characterID=resolveVerifiedPlayerID(scene,aggressor);
   if(!characterID)return {status:"IGNORED_NONPLAYER"};
   const victim=(fleet.minerEntityIDs||[]).concat(fleet.haulerEntityIDs||[])
    .map(id=>scene?.getEntityByID(id)).find(Boolean);
@@ -137,12 +166,25 @@ function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null)
  try{
   // ownerCharacterID in EveJS wreck options may denote the *victim*.
   // Never reward a kill without an authenticated, attributable attacker.
-  const proposed=positive(options.killerCharacterID||options.attackerEntity?.session?.characterID);
-  if(!proposed)return {status:"IGNORED_UNATTRIBUTED"};
+  // Both the native wreck and its explicit final attacker must exist in
+  // this scene. A killerCharacterID hint is NOT proof of a kill.
   const liveScene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
-  const characterID=Array.from(liveScene?.sessions?.values?.()||[])
-   .some(x=>positive(x?.characterID)===proposed)?proposed:null;
-  if(!characterID)return {status:"IGNORED_UNAUTHENTICATED"};
+  const nativeWreck=require("./npc/nativeNpcStore").getNativeWreck(wreckID);
+  const physicalWreck=liveScene?.getEntityByID?.(Number(wreckID));
+  if(ship?.kind!=="ship"||ship?.nativeNpc!==true||
+   Number(ship.itemID)!==Number(npcID)||
+   Number(nativeWreck?.systemID)!==Number(systemID)||
+   Number(nativeWreck?.sourceEntityID)!==Number(npcID)||
+   Number(nativeWreck?.launcherID)!==Number(npcID)||
+   physicalWreck?.nativeNpcWreck!==true||
+   Number(physicalWreck.itemID)!==Number(wreckID)||
+   Number(physicalWreck.launcherID)!==Number(npcID))
+   return {status:"IGNORED_UNVERIFIED_NATIVE_WRECK"};
+  const characterID=resolveVerifiedPlayerID(liveScene,options.attackerEntity);
+  if(!characterID)return {status:"IGNORED_UNATTRIBUTED"};
+  if(positive(options.killerCharacterID)&&
+   positive(options.killerCharacterID)!==characterID)
+   return {status:"IGNORED_ATTACKER_IDENTITY_MISMATCH"};
   const regPath=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   let saved;
   try{saved=JSON.parse(fs.readFileSync(regPath,"utf8"));}catch(e){if(e.code==="ENOENT")return {status:"UNLINKED"};throw e;}
@@ -162,30 +204,10 @@ function noteNativeWreck(systemID,npcID,wreckID,ship,options={},controller=null)
   if(outcome.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
    {spaceState:{systemID}},
    {characterID,ownerID,kind:"pirateKill",rawChange:-0.12,pilotID:link.pilotID});
-  // Give standing with the *real* mining corporation only when native
-  // combat evidence proves this pirate was targeting one of its ships.
-  const targetID=positive(controller?.currentTargetID||controller?.preferredTargetID);
-  if(targetID){
-   const mining=require("../services/mining/miningNpcOperations");
-   const runtime=require("./runtime");
-   const scene=runtime.ensureScene(Number(systemID),{refreshStargates:false});
-   const fleet=(mining.getMiningFleetsForSystem(Number(systemID))||[]).find(f=>
-    [...(f.minerEntityIDs||[]),...(f.haulerEntityIDs||[])].some(id=>Number(id)===targetID));
-   const miner=scene?.getEntityByID(targetID);
-   if(fleet&&miner){
-    const minerOwnerID=positive(miner.factionID)||positive(miner.corporationID)||positive(miner.ownerID);
-    const defended=getNative().onMinerDefense({characterID,ownerID:minerOwnerID,systemID,wreckID});
-    if(defended.status==="APPLIED"||(defended.status==="DUPLICATE"&&defended.event?.status==="APPLIED"))require("./coopNpcMemory").noteVerified({
-     eventID:defended.event.key,characterID,systemID,kind:"defense",entityIDs:[targetID]
-    });
-    if(defended.status==="APPLIED")informPlayer(scene,characterID,
-     "[Living Universe] Mining convoy protected. Its faction now trusts you more.");
-    if(defended.status==="APPLIED")require("./coopRuntimeProbe").observe("living-player-consequence",null,
-     {spaceState:{systemID}},
-     {characterID,ownerID:minerOwnerID,kind:"defense",rawChange:0.18,pilotID:link.pilotID});
-   }
-  }
+  // An NPC controller's last target is not proof of active defense.
+  // Native combat evidence must be supplied via an explicit verified hook
+  // before onMinerDefense is authorized; suppress the legacy inferred grant.
   return outcome;
  }catch(error){console.warn("[CoopConsequences] Native NPC wreck",error.message);return {status:"ERROR"};}
 }
-module.exports={createConsequences,resolveAuthenticatedPlayerID,noteMiningAggression,noteNativeWreck};
+module.exports={createConsequences,resolveAuthenticatedPlayerID,resolveVerifiedPlayerID,noteMiningAggression,noteNativeWreck};
