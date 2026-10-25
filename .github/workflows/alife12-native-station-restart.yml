@@ -8,9 +8,11 @@ on:
     branches: [main]
     paths:
       - 'integration/coopNativeStationTripJournal.cjs'
+      - 'integration/coopAlifeStartupCargoAudit.cjs'
       - 'integration/coopNativeStationArrival.cjs'
       - 'integration/coopNativeMiningFleetDurable.cjs'
       - 'tests/coop-alife12-*'
+      - 'tests/coop-alife13-*'
       - 'tests/coop-native-mining-fleet-durable.test.mjs'
       - '.github/workflows/alife12-native-station-restart.yml'
 jobs:
@@ -30,6 +32,7 @@ jobs:
           node --test \
             tests/coop-alife12-station-trip-journal.test.mjs \
             tests/coop-alife12-station-trip-recovery.test.mjs \
+            tests/coop-alife13-startup-cargo-audit.test.mjs \
             tests/coop-native-mining-fleet-durable.test.mjs \
             tests/coop-native-haul-manifest.test.mjs \
             tests/coop-native-haul-manifest-station.test.mjs \
