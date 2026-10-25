@@ -46,10 +46,34 @@ function note(scene,victim,options,wreck){
  try{
   const file=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   const saved=JSON.parse(fs.readFileSync(file,"utf8"));
-  const proof=verify({scene,victim,options,wreck,links:Object.values(saved?.links||{})});
+  const links=Object.values(saved?.links||{});
+  let proof=verify({scene,victim,options,wreck,links});
+  if(proof.status==="VICTIM_NOT_NAMED"&&
+   process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"){
+   const fleets=require("../services/mining/miningNpcOperations")
+    .getMiningFleetsForSystem(Number(scene?.systemID));
+   const ext=__filename.endsWith(".cjs")?".cjs":"";
+   proof=require("./coopNpcStockWreckProof"+ext).verifyStockKill({
+    scene,victim,options,wreck,links,fleets
+   });
+  }
   if(proof.status!=="VICTIM_NOT_NAMED"&&proof.status!=="INVALID_NATIVE_DESTRUCTION")
    require("./coopRuntimeProbe").observe("living-native-destruction-attacker",null,
     {spaceState:{systemID:proof.systemID}},proof);
+  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"&&
+   proof.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"){
+   try{
+    const ext=__filename.endsWith(".cjs")?".cjs":"";
+    const received=require("./coopNpcWreckClaims"+ext).getWreckClaims().record({proof,wreck});
+    if(received.status!=="KILL_PROOF_RECORDED"&&
+       received.status!=="ALREADY_RECORDED")
+     console.warn("[CoopNpcWreck] unclaimed native destruction",received.status);
+   }catch(error){
+    // Authoritative wreck creation already happened; never turn telemetry
+    // failure into a retry of native destruction or a fabricated new wreck.
+    console.warn("[CoopNpcWreck] durable claim recording failed",String(error?.message||"UNAVAILABLE"));
+   }
+  }
   return proof;
  }catch(error){
   if(error.code!=="ENOENT")console.warn("[CoopNpcDestructionAttacker] evidence",error.message);

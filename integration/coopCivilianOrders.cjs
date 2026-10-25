@@ -8,7 +8,11 @@ const valid=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinite
 function routeForRole(scene,role){
  const all=waypoints(scene);
  const select=kinds=>all.filter(w=>kinds.includes(w.kind));
+ const prefer=kinds=>kinds.flatMap(kind=>all.filter(w=>w.kind===kind));
  switch(role){
+  case "scout":return prefer(["stargate","asteroidBelt","station"]).slice(0,6);
+  case "watch":return prefer(["asteroidBelt","stargate"]).slice(0,6);
+  case "lay-low":return select(["station"]).slice(0,4);
   case "miner":return select(["asteroidBelt"]).concat(select(["station"])).slice(0,4);
   case "hauler":return [select(["asteroidBelt"])[0],select(["station"])[0],select(["stargate"])[0]].filter(Boolean);
   case "trader":return select(["station","stargate"]).slice(0,6);
@@ -34,10 +38,19 @@ function createCivilianOrders({sceneForSystem,warp,orbit,clock=()=>Date.now(),dw
      if(Number(controller?.currentTargetID)>0)continue;
    }catch{} 
 
-   const role=String(roles[assignment.pilotID]?.role||"patrol");
+   // Only native movement intentions override navigation routing.
+   // Never overwrite the pilot's economic role or native fleet membership.
+   const requested=options.routeOverrides?.[assignment.pilotID];
+   const role=["scout","watch","lay-low"].includes(requested)?requested:
+     String(roles[assignment.pilotID]?.role||"patrol");
    const route=routeForRole(scene,role);
    if(!route.length)continue;
    const key=system+":"+id,previous=history.get(key)||{index:0,nextAt:0};
+   if(previous.routeRole!==role){
+    previous.index=0;
+    if(previous.routeRole!==undefined)previous.nextAt=Math.min(previous.nextAt,clock());
+    previous.routeRole=role;
+   }
    if(clock()<previous.nextAt||String(ship.mode||"").toUpperCase().includes("WARP")||!valid(ship.position))continue;
    const target=route[previous.index%route.length];
    if(!target)continue;
