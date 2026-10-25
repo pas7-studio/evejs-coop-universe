@@ -216,10 +216,17 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    if(!Number.isSafeInteger(order.remainingQuantity)||order.remainingQuantity<0||
       order.remainingQuantity>e.quantity)return halt("NATIVE_SALE_REMAINING_INVALID",id);
    const filled=sales.reduce((sum,x)=>{
+    const unitCents=saleCents(x?.price);
+    // A native ASK cannot legitimately settle BELOW its original listed
+    // minimum price; a better buyer bid may pay above the ask.
+    // Also reject products beyond the safe integer-cent ledger range.
+    const expected=unitCents===null?null:unitCents*x.quantity;
     if(!x||x.orderID!==e.orderID||x.ownerID!==ownerID||x.typeID!==e.typeID||
-       !safeInt(x.quantity)||!safeInt(x.transactionID)||saleCents(x.price)===null||x.nativeWalletSettled!==true)
+       !safeInt(x.quantity)||!safeInt(x.transactionID)||unitCents===null||
+       unitCents<e.priceCents||!Number.isSafeInteger(expected)||expected<=0||
+       x.nativeWalletSettled!==true)
        throw Error("NATIVE_SALE_LEDGER_INVALID");
-    const wallet=market.getWalletEntry(x.transactionID),expected=saleCents(x.price)*x.quantity;
+    const wallet=market.getWalletEntry(x.transactionID);
     if(!wallet||wallet.verifiedNative!==true||wallet.transactionID!==x.transactionID||
        wallet.ownerID!==ownerID||wallet.orderID!==e.orderID||wallet.amountCents!==expected)
        throw Error("NATIVE_SALE_WALLET_NOT_SETTLED");
