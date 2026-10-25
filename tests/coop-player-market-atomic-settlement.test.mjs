@@ -90,11 +90,11 @@ test("missing funds and mismatched escrow rollback without moving any item or wa
  }
  }finally{cleanup()}
 });
-test("partial, BUY, wrong cycle or forged item are refused before any transaction",()=>{
+test("invalid partial proof, BUY, wrong cycle or forged item are refused before any transaction",()=>{
  const cleanup=flags();try{
  const x=fixture(),s=createAtomicSell({gameStore:x.gameStore});
  for(const arg of [
-  {proof:Object.freeze({...proof(),volumeAfter:1,filledQuantity:6})},
+  {proof:Object.freeze({...proof(),volumeAfter:2,filledQuantity:6})},
   {proof:Object.freeze({...proof(),bid:true})},
   {ticket:{orderID:"23",cycle:0}},
   {ticket:{orderID:"24",cycle:1}},
@@ -124,4 +124,91 @@ test("explicit flags default OFF; no writes or implicit migrations",()=>{
   assert.throws(()=>s.settle({ticket:ticket(),proof:proof(),tax:1.23,sourceItemID:800}),
    /FLAGS_DISABLED/);assert.equal(x.commits,0);
  }finally{flagKeys.forEach((k,i)=>original[i]===undefined?delete process.env[k]:process.env[k]=original[i])}
+});
+
+
+test("partial native player SELL conserves exact items, wallets, escrow and item allocator",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();
+  x.db.identityState.nextItemID=1990000900;
+  const s=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const part=Object.freeze({...proof(),filledQuantity:3,volumeAfter:4});
+  const p=s.settle({ticket:ticket(),proof:part,tax:1.00,sourceItemID:800});
+  assert.equal(x.commits,1);
+  assert.equal(p.itemID,1990000900);
+  assert.equal(p.sourceItemID,800);
+  assert.equal(p.partial,true);
+  assert.equal(p.volumeBefore,7);
+  assert.equal(p.volumeAfter,4);
+  assert.equal(x.db.items["800"].ownerID,201);
+  assert.equal(x.db.items["800"].quantity,4);
+  assert.equal(x.db.items["800"].stacksize,4);
+  assert.equal(x.db.items["1990000900"].ownerID,301);
+  assert.equal(x.db.items["1990000900"].quantity,3);
+  assert.equal(x.db.items["1990000900"].locationID,60001234);
+  assert.equal(x.db.identityState.nextItemID,1990000901);
+  assert.equal(x.db.marketEscrow["23"].remainingQuantity,4);
+  assert.equal(x.db.characters["301"].balance,962.98);
+  assert.equal(x.db.characters["201"].balance,536.02);
+  assert.equal(s.requireReceipt(ticket(),part).itemID,1990000900);
+  const witness=structuredClone(x.db);
+  const again=s.settle({ticket:ticket(),proof:part,tax:1.00,sourceItemID:800});
+  assert.equal(again.replayed,true);
+  assert.deepEqual(x.db,witness);
+ }finally{cleanup()}
+});
+test("two distinct Rust cycles close 7-unit SELL as 3 + 4 without mint or duplicate debit",()=>{
+ const cleanup=flags();
+ try{
+  const x=fixture();
+  x.db.identityState.nextItemID=1990000950;
+  const s=createAtomicSell({gameStore:x.gameStore,clock:()=>123456});
+  const part=Object.freeze({...proof(),filledQuantity:3,volumeAfter:4});
+  const first=s.settle({ticket:ticket(),proof:part,tax:1,sourceItemID:800});
+  const last=Object.freeze({...proof(),volumeBefore:4,filledQuantity:4,volumeAfter:0});
+  const secondTicket=Object.freeze({...ticket(),cycle:2});
+  const final=s.settle({ticket:secondTicket,proof:last,tax:1,sourceItemID:800});
+  assert.equal(first.partial,true);
+  assert.equal(final.partial,false);
+  assert.equal(final.itemID,800);
+  assert.equal(x.db.items["800"].ownerID,301);
+  assert.equal(x.db.items["800"].quantity,4);
+  assert.equal(x.db.items["1990000950"].quantity,3);
+  assert.equal(x.db.items["1990000950"].ownerID,301);
+  assert.equal(x.db.items["800"].quantity+x.db.items["1990000950"].quantity,7);
+  assert.equal(x.db.marketEscrow["23"],undefined);
+  assert.equal(x.db.identityState.nextItemID,1990000951);
+  assert.equal(x.db.characters["301"].balance,913.62);
+  assert.equal(x.db.characters["201"].balance,584.38);
+  assert.equal(Object.keys(x.db.playerMarketFills).length,2);
+  const snapshot=structuredClone(x.db);
+  assert.equal(s.settle({ticket:secondTicket,proof:last,tax:1,sourceItemID:800}).replayed,true);
+  assert.deepEqual(x.db,snapshot);
+ }finally{cleanup()}
+});
+test("partial SELL rejects missing native allocator, occupied ID, foreign stack and stale escrow",()=>{
+ const cleanup=flags();
+ try{
+  const part=Object.freeze({...proof(),filledQuantity:3,volumeAfter:4});
+  const changes=[
+    x=>delete x.identityState.nextItemID,
+    x=>x.identityState.nextItemID=7,
+    x=>x.identityState.nextItemID=Number.MAX_SAFE_INTEGER,
+    x=>x.items["800"].stacksize=6,
+    x=>x.marketEscrow["23"].remainingQuantity=6,
+    x=>{x.items["801"]={...x.items["800"],itemID:801}},
+    x=>{x.items["1990000900"]={...x.items["800"],itemID:1990000900}},
+    x=>{x.items["wrong"]={...x.items["800"],itemID:812}}
+  ];
+  for(const change of changes){
+   const x=fixture();
+   x.db.identityState.nextItemID=1990000900;
+   change(x.db);const before=structuredClone(x.db);
+   const s=createAtomicSell({gameStore:x.gameStore});
+   assert.throws(()=>s.settle({ticket:ticket(),proof:part,tax:1,sourceItemID:800}),/P2P_ATOMIC_/);
+   assert.equal(x.commits,0);
+   assert.deepEqual(x.db,before);
+  }
+ }finally{cleanup()}
 });
