@@ -66,10 +66,17 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
   // Verify persisted native controller, ship, cargo and pilot location first.
   const audit=ledger.auditPersisted();
   if(audit.status!=="CLEAN")return audit;
-  const recovered=nativeTransfer.recoverPending();
-  return recovered.status==="NEEDS_OPERATOR_REPAIR"?
-   {status:"NEEDS_OPERATOR_REPAIR",pending:recovered.pending}:
-   {status:"CLEAN",nativeRecovery:recovered};
+  // On startup the physical scenes may not yet have been restored.
+  // Running stock rollback here could remove a correctly committed
+  // destination hull. Audit the fsynced journal without mutating it.
+  // Operator recovery must separately reconcile scene/SQL/JSON first.
+  let names=[];
+  try{names=require("node:fs").readdirSync(journalDir)}
+  catch(e){if(e?.code!=="ENOENT")
+   return {status:"NEEDS_OPERATOR_REPAIR",problems:["TRANSFER_JOURNAL_NOT_READABLE"]}}
+  if(names.length)return {status:"NEEDS_OPERATOR_REPAIR",
+   problems:["UNRESOLVED_NATIVE_TRANSFER_FILES"],count:names.length};
+  return {status:"CLEAN"};
  }
  function transfer({pilotID,entityID,gate,sourceScene,ship,controller}={}){
   if(!flag(env))return {success:false,errorMsg:"WAR_HANDOFF_DISABLED"};
