@@ -73,7 +73,8 @@ function fixture(){
   ingressSnapshot:{readDurable:()=>{state.snapshotReads++;return state.snapshot}},
   probe:{observe:()=>{}}
  });
- return {...state,director,escort,setSampleResult:value=>{state.sampleResult=value}};
+ return {...state,director,escort,setSampleResult:value=>{state.sampleResult=value},
+  setSnapshot:value=>{state.snapshot=value},snapshotCount:()=>state.snapshotReads};
 }
 function recover(f,now=1002000){return f.director.noteNativeMotion(f.npc,now).status}
 test("genuine current native NPC warp reattaches observer using confirmed durable originals",()=>{
@@ -222,11 +223,11 @@ test("a second native materialization cannot replay an existing ingress",()=>phy
   "ESCORT_ORIGINAL_NATIVE_INGRESS_RESTORED");
  assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
   "ESCORT_INGRESS_RESTORE_NOT_FRESH_ENTITY");
- assert.equal(f.snapshotReads,1);
+ assert.equal(f.snapshotCount(),1);
  assert.equal(f.counters.warp,0);
 }));
 test("snapshot corruption, partial write, or missing original fsync does not resurrect a ship",()=>physicalRestoreScenario((f,stored)=>{
- f.snapshot={status:"INGRESS_SNAPSHOT_FSYNC_UNCERTAIN"};
+ f.setSnapshot({status:"INGRESS_SNAPSHOT_FSYNC_UNCERTAIN"});
  assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
   "ESCORT_INGRESS_RESTORE_SNAPSHOT_NOT_DURABLE");
  assert.equal(f.npc.sessionlessWarpIngress,null);
@@ -249,7 +250,7 @@ test("no original WARP_ACK_CONFIRMED means no physical restoration",()=>physical
  f.source.phase="WARP_PREPARED";
  assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
   "ESCORT_INGRESS_RESTORE_ACK_NOT_CONFIRMED");
- assert.equal(f.snapshotReads,0);
+ assert.equal(f.snapshotCount(),0);
  assert.equal(f.npc.sessionlessWarpIngress,null);
 }));
 test("spent wallet or changed original contract denies restore before setting WARP",()=>physicalRestoreScenario((f,stored)=>{
@@ -271,7 +272,7 @@ test("feature OFF prevents loading or inspecting stored warp state",()=>{
  f.npc.sessionlessWarpIngress=null;
  assert.equal(f.director.restoreNativeIngress(f.npc,{entityID:901}).status,
   "ESCORT_INGRESS_RESTORE_DISABLED");
- assert.equal(f.snapshotReads,0);
+ assert.equal(f.snapshotCount(),0);
 });
 process.on("exit",()=>{for(const [k,v] of Object.entries(saved)){
  if(v===undefined)delete process.env[k];else process.env[k]=v;
