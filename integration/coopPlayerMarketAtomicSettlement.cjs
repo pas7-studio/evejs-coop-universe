@@ -58,6 +58,20 @@ function checkDeliveries(record,expectedSources,expectedQuantity){
  return sum===expectedQuantity&&
   expectedSources.every(x=>seen.has(x)||record.volumeAfter>0);
 }
+// The receipt is the final release gate after original SQLite COMMIT.
+// Preserve all wallet and fee arithmetic as finite, nonnegative integer
+// cents; a merely conserving negative balance is not proof of payment.
+function validPaidReceipt(r,gross){
+ if(!r||!pos(gross)||!safe(r.taxCents)||r.taxCents>gross||
+    !safe(r.buyerBeforeCents)||!safe(r.buyerAfterCents)||
+    !safe(r.sellerBeforeCents)||!safe(r.sellerAfterCents)||
+    r.buyerBeforeCents<gross||
+    r.buyerAfterCents!==r.buyerBeforeCents-gross||
+    !safe(r.sellerBeforeCents+gross)||
+    r.sellerAfterCents!==r.sellerBeforeCents+gross-r.taxCents||
+    !pos(r.committedAt))return false;
+ return true;
+}
 const receiptKey=t=>"p2p:"+t.orderID+":"+t.cycle;
 function checkTicket(ticket,proof){
  if(!ticket||!proof||!Object.isFrozen(proof)||ticket.orderID!==proof.orderID||
@@ -113,8 +127,7 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
        existing.stationID!==proof.stationID||existing.typeID!==proof.typeID||
        existing.priceCents!==proof.priceCents||existing.taxCents!==taxCents||
        existing.grossCents!==gross||
-       existing.buyerBeforeCents-existing.buyerAfterCents!==gross||
-       existing.sellerAfterCents-existing.sellerBeforeCents!==gross-taxCents)
+       !validPaidReceipt(existing,gross))
      throw Error("P2P_ATOMIC_COMMITTED_RECEIPT_REPLAY_CONFLICT");
     // A player may already have sold/used their received item. Never
     // require it to remain in the hangar and never replay wallet movement.
@@ -296,16 +309,15 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
        receipt.volumeBefore!==proof.volumeBefore||
        receipt.volumeAfter!==proof.volumeAfter||
        receipt.partial!==(proof.volumeAfter>0)||
+       receipt.stationID!==proof.stationID||
+       receipt.typeID!==proof.typeID||
        !pos(receipt.itemID)||!pos(receipt.sourceItemID)||
        !checkDeliveries(receipt,
         receipt.sourceItemIDs??[receipt.sourceItemID],
         proof.filledQuantity)||
       receipt.priceCents!==proof.priceCents||
       receipt.grossCents!==proof.priceCents*proof.filledQuantity||
-      !safe(receipt.taxCents)||
-      receipt.buyerBeforeCents-receipt.buyerAfterCents!==receipt.grossCents||
-      receipt.sellerAfterCents-receipt.sellerBeforeCents!==
-       receipt.grossCents-receipt.taxCents)
+      !validPaidReceipt(receipt,receipt.grossCents))
     throw Error("P2P_ATOMIC_DURABLE_NATIVE_RECEIPT_REQUIRED");
    return receipt;
   });
