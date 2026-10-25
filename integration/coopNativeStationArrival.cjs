@@ -302,6 +302,14 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    (process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER!=="1"||
     typeof escortGate?.recordEscortRouteSample!=="function"))
    return pause("ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED");
+  if(process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT==="1"&&
+   (!strictMotion()||
+    process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+    typeof durableWarpFence?.inspect!=="function"||
+    typeof escortGate?.readDurableEscortDeparture!=="function"||
+    !nativeIngressSnapshot||
+    typeof nativeIngressSnapshot.record!=="function"))
+   return pause("ESCORT_NATIVE_INGRESS_SNAPSHOT_AUTHORITIES_REQUIRED");
   if(escortEnabled&&(!manifestEnabled||
     typeof escortGate?.fundBeforeWarp!=="function"||
     typeof escortGate?.recordDelivered!=="function"))
