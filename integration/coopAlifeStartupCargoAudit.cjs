@@ -82,6 +82,24 @@ function createStartupCargoAuditor({root,gameStore,store,items,getNativeEntity,i
        m.haulerIDs.length!==haulerIDs.length||
        m.haulerIDs.some(x=>!haulerIDs.includes(x)))
      return fail("ALIFE13_MANIFEST_FLEET_MISMATCH");
+    // Even a finished historical manifest must prove the original real warp.
+    // ALIFE-12 recover() can legitimately skip a fully delivered history row,
+    // so this startup-wide gate checks its immutable ACK independently.
+    const ackFile=path.join(root,"trip-departure-acks",key+".json");
+    let ackBytes;
+    try{ackBytes=io.readFileSync(ackFile,"utf8")}
+    catch{return fail("ALIFE13_ORIGINAL_WARP_ACK_MISSING")}
+    if(typeof ackBytes!=="string"||Buffer.byteLength(ackBytes)>256*1024)
+     return fail("ALIFE13_WARP_ACK_UNTRUSTED");
+    const ack=JSON.parse(ackBytes);
+    if(ack?.version!==1||ack.status!=="WARP_ACK_CONFIRMED"||
+       ack.manifestKey!==key||ack.manifestHash!==sha(m)||
+       ack.systemID!==systemID||ack.fleetID!==fleetID||
+       ack.stationID!==m.stationID||ack.corporationID!==m.corporationID||
+       ack.startedAt!==m.startedAt||!positive(ack.confirmedAt)||
+       JSON.stringify(ack.haulerIDs)!==JSON.stringify(m.haulerIDs)||
+       JSON.stringify(ack.cargoIDs)!==JSON.stringify(m.cargo.map(x=>x.cargoID)))
+     return fail("ALIFE13_ORIGINAL_WARP_ACK_CHANGED");
     for(const row of m.cargo){
      if(!minerIDs.includes(row.fromMinerID)||manifests.has(row.cargoID))
       return fail("ALIFE13_MANIFEST_SOURCE_DUPLICATED",row.cargoID);
