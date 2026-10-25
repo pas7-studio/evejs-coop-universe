@@ -12,10 +12,24 @@ function patch(source,file,remove=false){
  let text=source;
  const durableOld="    transient: true,";
  const durableNew='    transient: options.durableHauler === true ? false : true,';
+ // ALIFE-08 owns persistent startup miners and haulers. Preserve its native
+ // branch and add physical station-hauler durability as a separate OR gate.
+ // On removal restore ALIFE-08's expression byte-exact, not vanilla transient.
+ const alife08Old='    transient: options.coopDurableNative === true && process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE === "1" ? false : true,';
+ const alife08New='    transient: options.durableHauler === true || (options.coopDurableNative === true && process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE === "1") ? false : true,';
  const wingA=text.indexOf("function spawnFleetWing(");
  const wingB=text.indexOf("function resolveSessionScene(",wingA);
  if(wingA<0||wingB<0)throw Error("STATION_WING_DRIFT");
- text=text.slice(0,wingA)+once(text.slice(wingA,wingB),durableOld,durableNew)+text.slice(wingB);
+ const wing=text.slice(wingA,wingB);
+ const withAlife08=remove?wing.includes(alife08New):wing.includes(alife08Old);
+ const from=withAlife08?alife08Old:durableOld;
+ const to=withAlife08?alife08New:durableNew;
+ // Never fall back to vanilla when the coexisting patch is partially applied.
+ if(remove&&wing.includes(alife08Old)&&!withAlife08)
+   throw Error("STATION_ALIFE08_COEXISTENCE_TORN");
+ if(!remove&&wing.includes(alife08New))
+   throw Error("STATION_ALIFE08_COEXISTENCE_TORN");
+ text=text.slice(0,wingA)+once(wing,from,to)+text.slice(wingB);
  const haulerCall='      originAnchor,'+eol+'      warpIn: false,';
  const haulerNew='      originAnchor,'+eol+'      durableHauler: process.env.EVEJS_COOP_NPC_STATION_DELIVERY === "1",'+eol+'      warpIn: false,';
  const spawnA=text.indexOf("function spawnMiningFleetInternal(");

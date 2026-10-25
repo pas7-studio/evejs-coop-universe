@@ -40,7 +40,7 @@ function fixture(t,shared=null){
  }};
  const register=(slot,data)=>{
   if(registerFails)throw Error("SIMULATED_REGISTER_CRASH");
-  const fleet={startupKey:SYSTEM+":"+slot,...data};
+  const fleet={startupKey:SYSTEM+":"+slot,fleetID:SYSTEM*32+slot,...data};
   fleets.push(fleet);return fleet;
  };
  function spawn(slot){
@@ -81,6 +81,7 @@ test("first startup uses two original persistent NPC identities and records dura
  assert.deepEqual(f.world.slots.get(slotKey(SYSTEM,1)).minerEntityIDs,[71001]);
  assert.deepEqual(f.world.slots.get(slotKey(SYSTEM,1)).haulerEntityIDs,[71002]);
  assert.equal(f.world.slots.get(slotKey(SYSTEM,1)).status,"ACTIVE");
+ assert.equal(f.world.slots.get(slotKey(SYSTEM,1)).fleetID,SYSTEM*32+1);
  assert.equal(f.getFleets()[0].startupKey,SYSTEM+":1");
 });
 test("same process repeated scene callback does not respawn or register a duplicate fleet",t=>{
@@ -167,4 +168,33 @@ test("invalid scene and oversized startup count fail closed",t=>{
  const f=fixture(t);
  assert.equal(f.start(17).reason,"ALIFE08_INVALID_STARTUP");
  assert.equal(f.getSpawnCalls(),0);
+});
+
+test("legacy ACTIVE slot without fleetID refuses to relink haul receipts",t=>{
+ const original=fixture(t);assert.equal(original.start().status,"OK");
+ const witness=original.world.slots.get(slotKey(SYSTEM,1));delete witness.fleetID;
+ const restarted=fixture(t,original.world),outcome=restarted.start();
+ assert.equal(outcome.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(restarted.getSpawnCalls(),0);
+ assert.equal(restarted.getRestores(),0);
+});
+test("tampered durable fleetID is quarantined without new NPC spawn",t=>{
+ const original=fixture(t);assert.equal(original.start().status,"OK");
+ original.world.slots.get(slotKey(SYSTEM,1)).fleetID=42;
+ const restarted=fixture(t,original.world),outcome=restarted.start();
+ assert.equal(outcome.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(restarted.getSpawnCalls(),0);
+ assert.equal(restarted.getRestores(),0);
+});
+test("native cargo haul tag matches same fleetID after physical hauler restore",t=>{
+ const original=fixture(t);assert.equal(original.start().status,"OK");
+ const cargoID=980200012345,stableID=SYSTEM*32+1;
+ original.world.cargo.set(cargoID,{cargoID,entityID:71002,ownerID:950,typeID:34,
+   quantity:9,transient:false,coopHaulFleetID:stableID,coopHaulFromMinerID:71001});
+ const reboot=fixture(t,original.world),outcome=reboot.start();
+ assert.equal(outcome.status,"OK");
+ assert.equal(reboot.getFleets()[0].fleetID,stableID);
+ assert.equal(reboot.world.cargo.get(cargoID).coopHaulFleetID,stableID);
+ assert.equal(reboot.world.cargo.get(cargoID).quantity,9);
+ assert.equal(reboot.getSpawnCalls(),0);
 });
