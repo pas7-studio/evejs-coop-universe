@@ -45,7 +45,7 @@ and are **not paid or minted again** during settlement.
 ## Test evidence and remaining blocker
 
 Local Node 22 `node --test tests/coop-npc-industry-offline-delivery.test.mjs`:
-**19/19 PASS** using disposable, file-backed `node:sqlite`.
+**20/20 PASS** using disposable, file-backed `node:sqlite`.
 Six injected crash windows roll back all four tables byte-for-byte;
 other cases cover readiness, time, BPO custody, output authority, invalid
 native ID state, duplicate operation, receipt corruption and replay.
