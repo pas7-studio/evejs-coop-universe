@@ -100,6 +100,8 @@ function createLivingWorldNativeChainProof({
        title.buyerOwnerID!==ownerID||title.stationID!==stationID||
        title.typeID!==oreTypeID||title.quantity!==ore.quantity||
        title.itemID!==oreItemID||
+       ore.oreItemID!==oreItemID||
+       ore.sourceCustomInfo!=="coop-warehouse:v1:cargo:"+cargoID||
        title.sourceCustomInfo!=="coop-warehouse:v1:cargo:"+cargoID||
        !POS(title.priceCents)||title.sellerAfterCents-title.sellerBeforeCents!==title.priceCents||
        title.buyerBeforeCents-title.buyerAfterCents!==title.priceCents||
