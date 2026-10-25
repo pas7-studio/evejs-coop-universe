@@ -90,7 +90,7 @@ function suggestNativeAskPrice({ownerID,stationID,typeID,now,previousPriceCents,
  const marketTarget=Math.round(medianPrice*(10000+scarcity)/10000);
  const floor=Math.max(minPriceCents,unitCostCents+feesCents+minMarginCents);
  if(!money(floor)||floor>maxPriceCents)return reject("NPC_PRICE_NOT_PROFITABLE");
- const step=Math.max(1,Math.floor(previousPriceCents*maxChangeBps/10000));
+ const step=Math.floor(previousPriceCents*maxChangeBps/10000);
  const low=Math.max(minPriceCents,previousPriceCents-step);
  const high=Math.min(maxPriceCents,previousPriceCents+step);
  if(floor>high)return reject("NPC_PRICE_MARGIN_EXCEEDS_SAFE_CHANGE");
