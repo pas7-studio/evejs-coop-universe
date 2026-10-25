@@ -37,6 +37,7 @@ names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelectio
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 // COOP-055: strict, default-OFF native NPC motion-attested Escort.
 names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness","coopEscortRouteWitness");
+names.splice(names.indexOf("coopEscortRouteWitness")+1,0,"coopEscortNativeIngressSnapshot");
 const specs=[
  {file:"server/src/services/mining/miningRuntime.js",patches:[]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
@@ -51,6 +52,7 @@ const specs=[
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {file:"server/src/space/runtime.js",patches:[]},
  {file:"server/src/space/movement/warp/movementWarpState.js",patches:[]},
+ {file:"server/src/space/npc/nativeNpcService.js",patches:[]},
  {file:"server/index.js",patches:[]},
  {file:"server/src/gameStore/index.js",patches:[]},
  {file:"server/src/gameStore/sqliteStore.js",patches:[]},
@@ -195,6 +197,8 @@ function transform(source,spec,remove){
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
   text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/space/npc/nativeNpcService.js")
+  text=require("./coop-escort-ingress-materialize-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")

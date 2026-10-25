@@ -17,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -57,7 +57,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  // Crash-recovery is read-only provenance reconstruction, never a rewarp.
  // Source comes from the protected original cargo, fsynced WARP_ACK, funded
  // flight, signed departure, and the NPC's *current* native ingress state.
- function recoverNativeMotion(entity,now){
+ function recoverNativeMotion(entity,now,proposedIngress=null){
   if(!strictMotion()||
    process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
    typeof durableWarpFence?.inspectSource!=="function"||
@@ -65,7 +65,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    typeof escortGate?.readFlight!=="function"||
    typeof escortGate?.readDurableEscortDeparture!=="function")
    return pause("ESCORT_NATIVE_RECOVERY_DISABLED");
-  const id=Number(entity?.itemID),ingress=entity?.sessionlessWarpIngress;
+  const id=Number(entity?.itemID),ingress=proposedIngress||entity?.sessionlessWarpIngress;
   if(!pos(id)||entity?.kind!=="ship"||entity.nativeNpc!==true||
    entity.transient===true||!vector(entity.position)||
    !vector(ingress?.origin)||!vector(ingress?.targetPoint)||
@@ -140,6 +140,78 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    booking:b,origin:{...departure.origin},
    destination:{...station.position}};
  }
+ function restoreNativeIngress(entity,stored){
+  // Called ONLY from pinned nativeNpcService materialization AFTER original
+  // entity is reconstructed and registered in the same real SpaceScene.
+  if(!strictMotion()||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT!=="1"||
+   !nativeIngressSnapshot||typeof nativeIngressSnapshot.readDurable!=="function")
+   return pause("ESCORT_INGRESS_RESTORE_DISABLED");
+  if(!entity||entity.sessionlessWarpIngress||entity.kind!=="ship"||
+   entity.nativeNpc!==true||entity.transient===true||
+   !vector(entity.position)||!stored||
+   pos(stored.entityID)!==pos(entity.itemID)||
+   stored.transient===true)
+   return pause("ESCORT_INGRESS_RESTORE_NOT_FRESH_ENTITY");
+  const now=clock(),id=pos(entity.itemID);
+  let cargo;try{cargo=store.listNativeCargoForEntity(id)}
+  catch{return pause("ESCORT_INGRESS_RESTORE_CARGO_UNAVAILABLE")}
+  if(!Array.isArray(cargo)||!cargo.length||
+   cargo.some(x=>!pos(x?.cargoID)||!pos(x.coopHaulFleetID)||
+    x.entityID!==id||x.transient===true||!pos(x.quantity)||
+    Number(x.moduleID||0)!==0))
+   return pause("ESCORT_INGRESS_RESTORE_CARGO_INVALID");
+  const fleetID=pos(cargo[0].coopHaulFleetID);
+  if(cargo.some(x=>x.coopHaulFleetID!==fleetID))
+   return pause("ESCORT_INGRESS_RESTORE_CARGO_FLEET_CONFLICT");
+  const ids=cargo.map(x=>x.cargoID).sort((a,b)=>a-b);
+  if(ids.length>1000||new Set(ids).size!==ids.length)
+   return pause("ESCORT_INGRESS_RESTORE_CARGO_AMBIGUOUS");
+  let source;try{source=durableWarpFence?.inspectSource({
+   systemID:pos(stored.systemID),fleetID,haulerID:id,cargoIDs:ids})}
+  catch{return pause("ESCORT_INGRESS_RESTORE_WARP_SOURCE_UNAVAILABLE")}
+  if(source?.status!=="WARP_SOURCE_ALREADY_DISPATCHED"||
+   source.phase!=="WARP_ACK_CONFIRMED")
+   return pause("ESCORT_INGRESS_RESTORE_ACK_NOT_CONFIRMED");
+  let flight;try{flight=escortGate?.readFlight?.(source.manifestKey)}
+  catch{return pause("ESCORT_INGRESS_RESTORE_FLIGHT_UNAVAILABLE")}
+  const b=flight?.booking;
+  if(flight?.status!=="READY"||flight.phase!=="FUNDED"||
+   !b||b.manifestKey!==source.manifestKey||
+   b.systemID!==pos(stored.systemID)||b.fleetID!==fleetID||
+   b.haulerID!==id)return pause("ESCORT_INGRESS_RESTORE_FLIGHT_INVALID");
+  let snap;try{snap=nativeIngressSnapshot.readDurable({
+   manifestKey:b.manifestKey,contractID:b.contractID,
+   systemID:b.systemID,fleetID:b.fleetID,haulerID:b.haulerID,
+   stationID:b.stationID,corporationID:b.corporationID,cargoIDs:ids})}
+  catch{return pause("ESCORT_INGRESS_RESTORE_SNAPSHOT_UNAVAILABLE")}
+  if(snap?.status!=="VERIFIED_NATIVE_INGRESS_SNAPSHOT")
+   return pause("ESCORT_INGRESS_RESTORE_SNAPSHOT_NOT_DURABLE");
+  const row=snap.row;
+  if(!vector(stored.position)||distance(stored.position,row.origin)>1||
+   distance(entity.position,row.origin)>1||
+   !Number.isSafeInteger(now)||now<=row.startTimeMs||
+   now>=row.travelCompleteAtMs-500)
+   return pause("ESCORT_INGRESS_RESTORE_POSITION_OR_TIME_MISMATCH");
+  const ingress={startTimeMs:row.startTimeMs,
+   travelCompleteAtMs:row.travelCompleteAtMs,
+   completeAtMs:row.completeAtMs,
+   durationMs:row.travelCompleteAtMs-row.startTimeMs,
+   completionHoldMs:row.completeAtMs-row.travelCompleteAtMs,
+   lastUpdateAtMs:now,
+   origin:{...row.origin},targetPoint:{...row.targetPoint}};
+  const verified=recoverNativeMotion(entity,now,ingress);
+  if(verified.status!=="ESCORT_NATIVE_RECOVERY_VERIFIED")
+   return pause("ESCORT_INGRESS_RESTORE_"+verified.status);
+  // This resumes ONLY the original physical interpolation; no call to
+  // warpToPoint, wallet funding, manifest or cargo authority.
+  entity.sessionlessWarpIngress=ingress;
+  entity.mode="WARP";
+  entity.targetPoint={...ingress.targetPoint};
+  return {status:"ESCORT_ORIGINAL_NATIVE_INGRESS_RESTORED",
+   manifestKey:b.manifestKey,haulerID:id};
+ }
  // Only true confirmed NPC warps can be sampled. Never infer position from
  // timer, navigation commands, forecast points or player RPC.
  function noteNativeMotion(entity,now){
@@ -196,6 +268,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   catch{return pause("ESCORT_NATIVE_MOTION_SAMPLE_UNAVAILABLE")}
  }
 
+ const nativeIngressSnapshot=process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT==="1"?
+  (ingressSnapshot||require("./coopEscortNativeIngressSnapshot").createNativeIngressSnapshot({root,clock})):null;
  const manifestEnabled=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST==="1";
  const escortEnabled=process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1";
  const durableWarpFence=escortEnabled&&process.env.EVEJS_COOP_ESCORT_WARP_FENCE==="1"?
@@ -228,6 +302,14 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    (process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER!=="1"||
     typeof escortGate?.recordEscortRouteSample!=="function"))
    return pause("ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED");
+  if(process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT==="1"&&
+   (!strictMotion()||
+    process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+    typeof durableWarpFence?.inspect!=="function"||
+    typeof escortGate?.readDurableEscortDeparture!=="function"||
+    !nativeIngressSnapshot||
+    typeof nativeIngressSnapshot.record!=="function"))
+   return pause("ESCORT_NATIVE_INGRESS_SNAPSHOT_AUTHORITIES_REQUIRED");
   if(escortEnabled&&(!manifestEnabled||
     typeof escortGate?.fundBeforeWarp!=="function"||
     typeof escortGate?.recordDelivered!=="function"))
@@ -384,6 +466,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    if(manifestProof?.status!=="MANIFEST_DURABLY_PREPARED")
     return pause(manifestProof?.status||"MANIFEST_PREPARE_UNAVAILABLE");
   }
+  let fundedEscortContractID=null;
   if(escortEnabled){
    if(!manifestProof?.key)return pause("ESCORT_PREWARP_MANIFEST_REQUIRED");
    const originalRoute={manifestKey:manifestProof.key,systemID,fleetID,
@@ -403,6 +486,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    if(funded?.status!=="FUNDED_BEFORE_WARP"||
       funded.manifestKey!==manifestProof.key||typeof funded.contractID!=="string")
     return pause("ESCORT_"+(funded?.status||"FUNDING_UNVERIFIED"));
+   fundedEscortContractID=funded.contractID;
    // A native warp ACK can be lost after the ship physically moved.
    // Until ALL warp results are explicitly accepted, forbid an in-process retry.
    let intent;try{intent=durableWarpFence.prepare({
@@ -450,6 +534,27 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    if(committed?.status!=="DURABLE_WARP_ACK_CONFIRMED")
     return pause("ESCORT_"+(committed?.status||"WARP_ACK_UNVERIFIED"));
   }
+  let snapshotStatus="NOT_REQUIRED";
+  if(strictMotion()&&process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT==="1"){
+   // File is created only AFTER the actual durable native WARP_ACK. A
+   // server crash before it is written leaves no guessed recovery authority.
+   if(ships.length!==1) snapshotStatus="INGRESS_SNAPSHOT_NEEDS_ONE_HAULER";
+   else{
+    const current=scene.getEntityByID?.(ships[0]);
+    const nativeIngress=current?.sessionlessWarpIngress;
+    let fence,source;try{
+     fence=durableWarpFence.inspect(manifestProof.key);
+     source=escortGate?.readDurableEscortDeparture?.(manifestProof.key);
+    }catch{}
+    let recorded;try{recorded=nativeIngressSnapshot?.record?.({
+     booking:{manifestKey:manifestProof.key,contractID:fundedEscortContractID,
+      systemID,fleetID,haulerID:ships[0],stationID:destination.stationID,
+      corporationID:destination.corporationID,cargoIDs:manifestProof.cargoIDs.slice().sort((a,b)=>a-b)},
+     ingress:nativeIngress,verifiedAck:fence,source,at:clock()})}
+    catch{recorded={status:"INGRESS_SNAPSHOT_WRITE_UNAVAILABLE"}}
+    snapshotStatus=recorded?.status||"INGRESS_SNAPSHOT_WRITE_UNAVAILABLE";
+   }
+  }
   if(strictMotion()){
    for(const id of ships)activeNativeEscortWarps.set(id,{
     fleet,trip:result,manifestKey:result.manifestID,systemID,fleetID});
@@ -475,7 +580,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    catch(error){console.warn("[CoopOpportunityBoard] convoy",String(error?.message||error).slice(0,120))}
   }
   return {status:"EN_ROUTE",terminal:false,stationID:destination.stationID,
-   ...(escortEnabled?{predepartureNoticeStatus:preparingNoticeStatus}:{})};
+   ...(escortEnabled?{predepartureNoticeStatus:preparingNoticeStatus,
+    ingressSnapshotStatus:snapshotStatus}:{})};
  }
  function tick(scene,fleet,now=clock()){
   const trip=fleet?.coopStationArrival;
@@ -665,7 +771,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,noteNativeMotion,verify:stableAt,warehouse:factory,manifest:manifestDirector,
+ return {start,tick,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
   oracle:destinationOracle};
 }
 let runtimeDirector;
@@ -742,6 +848,16 @@ function noteNativeMotion(entity,now){
   return pause("ESCORT_NATIVE_MOTION_NOT_INSTALLED");
  return runtimeDirector.noteNativeMotion(entity,now);
 }
+function restoreNativeIngress(entity,record){
+ if(process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT!=="1"||
+    process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1")
+  return pause("ESCORT_INGRESS_RESTORE_DISABLED");
+ // Native service may call this during boot; do not create any physical NPC
+ // order. Existing runtime is used if mounted, otherwise only read-only
+ // source-authority bootstrap via getRuntimeDirector is permitted.
+ try{return getRuntimeDirector().restoreNativeIngress(entity,record)}
+ catch{return pause("ESCORT_INGRESS_RESTORE_AUTHORITY_UNAVAILABLE")}
+}
 function checkReturn(scene,fleet,now,director=null){
  const run=director||getRuntimeDirector();
  if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1")return pause("DISABLED");
@@ -762,4 +878,4 @@ function checkReturn(scene,fleet,now,director=null){
   arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
  return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion};
+module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress};

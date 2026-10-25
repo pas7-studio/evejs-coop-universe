@@ -32,6 +32,8 @@ try {
     'tests/coop-escort-route-witness.test.mjs',
     'tests/coop-escort-native-warp-motion.test.mjs',
     'tests/coop-escort-native-route-recovery.test.mjs',
+    'tests/coop-escort-ingress-snapshot.test.mjs',
+    'tests/coop-escort-native-materialize-hook.test.mjs',
     'tests/coop-escort-route-attendance-gate.test.mjs',
     'tests/coop-escort-stage-i-predeparture.test.mjs'
   )

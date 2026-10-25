@@ -29,6 +29,11 @@
     "crashRecovery": [
       "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 (EXPERIMENTAL/DEFAULT OFF, requires genuine active native ingress and all Stage I proof flags)",
       "Never enable on live persistent data before 2-client crash/recovery validation"
+    ],
+    "nativeIngressSnapshot": [
+      "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT=1 (EXPERIMENTAL default-OFF; genuine physical ingress, original WARP_ACK and durable witness)",
+      "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 (required, read-only corporate escrow check)",
+      "All strict native Escort/warehouse/wallet flags required; ONLY use disposable 2-client GameStore E2E"
     ]
   },
   "scenarios": [
@@ -329,6 +334,52 @@
         "Trigger normal station delivery tick with both real pilots and original warehouse"
       ],
       "expected": "Native recovery observer refuses to invent missing midroute observations. Existing cargo/warehouse may be independently valid, but strict Stage I does not award players absent two real checkpoints.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-30",
+      "name": "Real original NPC ingress after durable ACK survives a short native process crash",
+      "actions": [
+        "On a disposable original pinned EveJS world with 2 EVE clients enable Stage I, recovery and ingress-snapshot flags",
+        "Start a real paid corporate Escort from stock in-game Agent; verify source witness and exactly one genuine WARP_ACK_CONFIRMED",
+        "Confirm snapshot under original protected coop-native warehouse root records actual sessionlessWarpIngress and has fsynced file and parent",
+        "Kill the server during the 6-30s native ingress; restart within original remaining ingress time",
+        "Materialize original same native NPC with stored position matching its original physical source; measure true movement and wallet table"
+      ],
+      "expected": "Only the original verified NPC ingress is restored, no new warpToPoint, no new native corporate escrow reservation and no generated route evidence; any recovered checkpoint still requires two genuinely moving authenticated player ships",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-31",
+      "name": "Expired original ingress, missing ACK or mismatched persistent NPC state fails closed",
+      "actions": [
+        "Replay same original checkpoint with server restart after ingress expiry, or only a WARP_PREPARED journal",
+        "Change the persisted native NPC position, target station, cargo or original contract on controlled cloned fixture",
+        "Observe physical materialization and original wallet, mission, cargo journals"
+      ],
+      "expected": "No physical ingress is resurrected, no NPC teleport, no second reservation or reward, no invented mid-route points; operator repair rather than replay",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-32",
+      "name": "Pinned NPC materialization hook must survive controller initialization and reverse cleanly",
+      "actions": [
+        "Run Run-NativeJob-Tests.ps1 -CheckPinned against original pinned Code checkout",
+        "Install overlay on an offline clone, restart a persistent native NPC under snapshot opt-in, and inspect its real mode/ingress after controller initialization",
+        "Run reversible --remove and compare pinned original nativeNpcService.js byte-for-byte"
+      ],
+      "expected": "One source hook after controller/ambient state setup only; NPC original warp state preserves stock physical interpolation; exact pinned source restored after removal",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-33",
+      "name": "Corporate escrow survives snapshot storage failure with no invented proof",
+      "actions": [
+        "With disposable native GameStore inject fsync failure while writing immutable ingress snapshot after true ACK",
+        "Inspect returned ingressSnapshotStatus, native wallet deltas, physical NPC position and repeat attempts",
+        "Restart without a verified snapshot"
+      ],
+      "expected": "Only original pre-funded escrow exists; no second funding/warp on retry; snapshot failure cannot permit automatic ingress reconstruction or fictitious payout; requires manual resolution",
       "status": "NOT_RUN"
     }
   ]
