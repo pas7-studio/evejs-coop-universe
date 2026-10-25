@@ -40,7 +40,7 @@ function createVolunteers({root,io=fs,clock=()=>Date.now(),readEvent,readInteres
   const id=session.characterID,shipID=session._space.shipID;
   if(!pos(id)||!pos(shipID))return null;
   let fleet,scene;try{fleet=fleetRuntime.getFleetForCharacter(id);
-   scene=getScene(event.systemID)}catch{return null}
+   scene=getScene(event.systemID,session)}catch{return null}
   if(!fleet||!pos(fleet.fleetID)||!(fleet.members instanceof Map)||
    fleet.members.size!==2||!fleet.members.has(id)||
    !fleetRuntime.getMemberRecord(fleet,id)||
@@ -126,4 +126,23 @@ function createVolunteers({root,io=fs,clock=()=>Date.now(),readEvent,readInteres
  }
  return {volunteer,status};
 }
-module.exports={createVolunteers};
+let singleton;
+function nativeVoluntaryOptIn(session,eventID,board){
+ if(process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1")return {status:"DISABLED"};
+ try{
+  if(!singleton){
+   if(!board||typeof board.readEvent!=="function"||typeof board.readInterest!=="function")
+    return {status:"NATIVE_BOARD_NOT_WIRED"};
+   const sessions=require("../services/chat/sessionRegistry");
+   const scenes=require("./runtime");
+   const fleets=require("../services/fleets/fleetRuntime");
+   singleton=createVolunteers({root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs",
+    readEvent:id=>board.readEvent(id),readInterest:(characterID,id)=>board.readInterest(characterID,id),
+    getSessions:()=>sessions.getSessions(),
+    getScene:(_systemID,s)=>scenes.getSceneForSession(s),
+    fleetRuntime:fleets});
+  }
+  return singleton.volunteer(session,eventID);
+ }catch{return {status:"NATIVE_VOLUNTEER_GATE_UNAVAILABLE"}}
+}
+module.exports={createVolunteers,nativeVoluntaryOptIn};
