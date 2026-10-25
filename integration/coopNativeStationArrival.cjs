@@ -50,6 +50,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
  const arrivals=new Map(),activeNativeEscortWarps=new Map();
+  const warehouseBlockedAt=new Map();
  const strictMotion=()=>escortEnabled&&
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
@@ -810,8 +811,15 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
       fleetID:trip.fleetID,systemID:trip.systemID,stationID:trip.stationID,
       corporationID:trip.corporationID});
     if(!["COMMITTED","ALREADY_COMMITTED"].includes(result.status)){
-     probe.observe("living-npc-warehouse-blocked",null,{spaceState:{systemID:trip.systemID}},
-      {fleetID:trip.fleetID,cargoID:item.cargoID,reason:result.status});
+     // A blocked deposit is retried every native tick, so an unthrottled event
+     // floods the log (230 lines a minute) and hides every other signal.
+     const key=trip.fleetID+":"+Number(item.cargoID)+":"+String(result.status);
+     const now=Date.now();
+     if(now-(warehouseBlockedAt.get(key)||0)>=120000){
+      warehouseBlockedAt.set(key,now);
+      probe.observe("living-npc-warehouse-blocked",null,{spaceState:{systemID:trip.systemID}},
+       {fleetID:trip.fleetID,cargoID:item.cargoID,reason:result.status});
+     }
      return pause("WAREHOUSE_"+result.status);
     }
     stackCount++;oreQuantity+=Number(item.quantity);
