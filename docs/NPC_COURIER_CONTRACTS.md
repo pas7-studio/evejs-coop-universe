@@ -269,3 +269,41 @@ must be replaced by a real transfer from the co-op economy ledger.
 existing IDs skipped) and dry-run by default. It must be applied with the
 server stopped, in a one-off container that mounts `evejs-data`, because the
 live server keeps gameStore tables in a write cache.
+
+## Session-less adapter (landed) and what blocks the flight
+
+`integration/coopCourierNativeAccept.cjs` bridges a seeded courier character to
+the stock API:
+
+- `buildNpcSession(character)` returns identity only (`charid`, `characterID`,
+  `userid`, `corpid`, `corporationID`, `allianceid`) and deliberately has no
+  `sendNotification`, so `syncInventoryChangesToSession` returns early instead
+  of throwing - the native functions only need the identity.
+- `accept(...)` refuses unless `planSettlement` says `ACCEPT_THEN_FLY`, the live
+  contract is still `outstanding` with `acceptorID 0`, and the identity is
+  usable. On any thrown error it returns `AMBIGUOUS` and does not retry.
+- `complete(...)` refuses unless the package is physically at the destination
+  and this courier is the recorded acceptor, then calls the native
+  `completeContract(id, FINISHED, session)`.
+
+8 unit tests pass with a fake runtime; nothing has been run against the live
+server.
+
+### Flight blocker
+
+The existing physical-arrival helpers assume a **live client session** per
+pilot: `coopNativeStationArrival` filters `sessions.filter(x =>
+x?.characterID === pilot.characterID)` before approving a departure or a paid
+arrival. A seeded courier has no session, so it is rejected there by design.
+
+Two honest options, and the choice must be explicit:
+
+1. register a synthetic session for the courier in the server's session
+   registry - the existing arrival/settlement code then works unchanged, but a
+   fake session can leak into places that assume a real client;
+2. write a separate NPC flight path that does not depend on session checks -
+   more code, no fake sessions, and the courier is honestly a different kind of
+   actor.
+
+Option 2 is the one consistent with "no invented state", and it is the next
+piece of work.
