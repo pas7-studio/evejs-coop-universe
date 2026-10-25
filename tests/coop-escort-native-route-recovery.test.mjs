@@ -7,9 +7,11 @@ const FLAGS=["EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_ESCORT_WARP_FENCE","EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT",
  "EVEJS_COOP_ESCORT_ROUTE_WITNESS","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS",
  "EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER",
- "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY"];
+ "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY",
+ "EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT"];
 const saved=Object.fromEntries(FLAGS.map(k=>[k,process.env[k]]));
 for(const key of FLAGS)process.env[key]="1";
+process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
 const KEY="30000144-77-1000000",CONTRACT="escort-30000144-77-5501";
 function fixture(){
  const station={stationID:60001,corporationID:10001,solarSystemID:30000144};
@@ -40,6 +42,10 @@ function fixture(){
    manifestKey:KEY,contractID:CONTRACT,origin:{x:0,y:0,z:0},
    characters:[701,702],shipIDs:[1701,1702]},
   sampleResult:"ROUTE_NOT_AT_CHECKPOINT",
+  snapshot:{status:"VERIFIED_NATIVE_INGRESS_SNAPSHOT",
+   row:{origin:{x:0,y:0,z:0},targetPoint:{x:100750,y:0,z:0},
+    startTimeMs:1000000,travelCompleteAtMs:1007000,completeAtMs:1007250}},
+  snapshotReads:0,
   counters:{sample:0,warp:0,fund:0,inspect:0,source:0,departure:0,read:0}};
  const gate={
   inspectSource:()=>{state.counters.source++;return state.source},
@@ -63,7 +69,9 @@ function fixture(){
   flush:()=>{throw Error("REPLAY MUST NEVER FLUSH")},
   warpToPoint:()=>{state.counters.warp++;throw Error("REPLAY MUST NEVER WARP")},
   root:"/tmp/native-recovery-guard",clock:()=>1002000,
-  warpFence:gate,escortGate:escort,probe:{observe:()=>{}}
+  warpFence:gate,escortGate:escort,
+  ingressSnapshot:{readDurable:()=>{state.snapshotReads++;return state.snapshot}},
+  probe:{observe:()=>{}}
  });
  return {...state,director,escort,setSampleResult:value=>{state.sampleResult=value}};
 }
@@ -185,6 +193,85 @@ test("fake route evidence status cannot directly create escrow or warp",()=>{
  assert.equal(recover(f),"VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE");
  assert.equal(f.counters.warp,0);
  assert.equal(f.counters.fund,0);
+});
+function physicalRestoreScenario(fn){
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="1";
+ try{
+  const f=fixture();
+  f.npc.sessionlessWarpIngress=null;f.npc.position={x:0,y:0,z:0};
+  f.npc.mode="STOP";
+  const stored={entityID:901,systemID:30000144,transient:false,
+   position:{x:0,y:0,z:0}};
+  fn(f,stored);
+ }finally{process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0"}
+}
+test("pinned materialization can resume real ORIGINAL warp only from fsynced active snapshot",()=>physicalRestoreScenario((f,stored)=>{
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_ORIGINAL_NATIVE_INGRESS_RESTORED");
+ assert.equal(f.npc.mode,"WARP");
+ assert.deepEqual(f.npc.sessionlessWarpIngress.targetPoint,{x:100750,y:0,z:0});
+ assert.equal(f.npc.sessionlessWarpIngress.startTimeMs,1000000);
+ assert.equal(f.npc.sessionlessWarpIngress.travelCompleteAtMs,1007000);
+ assert.equal(f.npc.sessionlessWarpIngress.lastUpdateAtMs,1002000);
+ assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+ assert.equal(recover(f),"ROUTE_NOT_AT_CHECKPOINT");
+ assert.equal(f.counters.sample,1);
+}));
+test("a second native materialization cannot replay an existing ingress",()=>physicalRestoreScenario((f,stored)=>{
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_ORIGINAL_NATIVE_INGRESS_RESTORED");
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_NOT_FRESH_ENTITY");
+ assert.equal(f.snapshotReads,1);
+ assert.equal(f.counters.warp,0);
+}));
+test("snapshot corruption, partial write, or missing original fsync does not resurrect a ship",()=>physicalRestoreScenario((f,stored)=>{
+ f.snapshot={status:"INGRESS_SNAPSHOT_FSYNC_UNCERTAIN"};
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_SNAPSHOT_NOT_DURABLE");
+ assert.equal(f.npc.sessionlessWarpIngress,null);
+ assert.equal(f.counters.warp,0);assert.equal(f.counters.fund,0);
+}));
+test("materialized NPC at a non-original location never teleports back to old warp",()=>physicalRestoreScenario((f,stored)=>{
+ f.npc.position.x=3000;
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_POSITION_OR_TIME_MISMATCH");
+ assert.equal(f.npc.position.x,3000);
+ assert.equal(f.npc.mode,"STOP");
+}));
+test("stale stored NPC position cannot supply original physical ingress",()=>physicalRestoreScenario((f,stored)=>{
+ stored.position.x=100;
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_POSITION_OR_TIME_MISMATCH");
+ assert.equal(f.npc.sessionlessWarpIngress,null);
+}));
+test("no original WARP_ACK_CONFIRMED means no physical restoration",()=>physicalRestoreScenario((f,stored)=>{
+ f.source.phase="WARP_PREPARED";
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_ACK_NOT_CONFIRMED");
+ assert.equal(f.snapshotReads,0);
+ assert.equal(f.npc.sessionlessWarpIngress,null);
+}));
+test("spent wallet or changed original contract denies restore before setting WARP",()=>physicalRestoreScenario((f,stored)=>{
+ f.flight.phase="DELIVERED";
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_FLIGHT_INVALID");
+ assert.equal(f.npc.mode,"STOP");
+}));
+test("snapshot target cannot redirect original NPC to foreign station",()=>physicalRestoreScenario((f,stored)=>{
+ f.snapshot.row.targetPoint.x=900000;
+ assert.equal(f.director.restoreNativeIngress(f.npc,stored).status,
+  "ESCORT_INGRESS_RESTORE_ESCORT_NATIVE_RECOVERY_PHYSICAL_WARP_MISMATCH");
+ assert.equal(f.npc.mode,"STOP");
+ assert.equal(f.counters.warp,0);
+}));
+test("feature OFF prevents loading or inspecting stored warp state",()=>{
+ process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT="0";
+ const f=fixture();
+ f.npc.sessionlessWarpIngress=null;
+ assert.equal(f.director.restoreNativeIngress(f.npc,{entityID:901}).status,
+  "ESCORT_INGRESS_RESTORE_DISABLED");
+ assert.equal(f.snapshotReads,0);
 });
 process.on("exit",()=>{for(const [k,v] of Object.entries(saved)){
  if(v===undefined)delete process.env[k];else process.env[k]=v;
