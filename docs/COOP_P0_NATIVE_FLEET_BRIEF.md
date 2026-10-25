@@ -4,7 +4,7 @@
 
 Existing co-op party notices only sent a one-time rendezvous string on a changed two-player proximity signature. Two players still had to search manually for any nearby native NPC or coordinate exact target identity. This P0 adds a **passive, bounded, opt-in in-game target brief** to the already-running `coopDuoCoordinator.tick()`, not a new UI or RPC.
 
-- Active only with existing opt-in `EVEJS_COOP_PARTY_NOTICES=1` and successful native `coopNativeFleetParty.membership` verified for exactly the two players.
+- Active only with a dedicated, **default-OFF** `EVEJS_COOP_FLEET_BRIEF=1` feature flag and successful native `coopNativeFleetParty.membership` verified for exactly the two players. Standard `-LivingCoop` and `EVEJS_COOP_PARTY_NOTICES=1` do **not** enable this new player-visible behavior; an explicit operator-approved environment change/deployment after client acceptance is required.
 - Both recipients must be real distinct members of the exact same currently authoritative solar-system scene, with Ballpark initialized, non-destroyed socket, unchanged physical ship object and legitimate positions.
 - Uses **only an existing authoritative native NPC ship** in the same `scene.dynamicEntities` Map, `nativeNpc===true`, valid physical position, exact `scene.getEntityByID(npcID) === npc`, and range <=250 km to one player. Never invents a waypoint, NPC, location, mission, loot, ship, threat, or order.
 - A short EveJS system-message brief gives the verified `NPC #itemID` and measured nearest-player km, then suggests ordinary client Overview, Approach, Lock or native Warp Fleet *when available*. Does not falsely claim this NPC is hostile or that a fleet order was issued.
