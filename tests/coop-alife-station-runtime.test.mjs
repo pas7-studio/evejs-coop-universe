@@ -21,6 +21,9 @@ function setup(){
   industryRuntime:{getBlueprintState:()=>({original:true,typeID:BPO,materialEfficiency:0,jobID:0})},
   industryParity:{buildIndustryActivityMaterials:()=>[{typeID:34,quantity:10}]},
   gameStore:{read:(table,path)=>({success:true,data:
+   table==="corporations"&&path==="/records/"+OWNER?{corporationID:OWNER,isNPC:true}:
+   table==="corporationRuntime"&&path==="/corporations/"+OWNER?{corporationID:OWNER,wallet:{divisions:{"1000":{balance:data.wallet}}}}:
+   table==="industryBlueprintState"&&path==="/records/"+BPOITEM?{original:true,typeID:BPO,materialEfficiency:0,jobID:0}:
    table==="industryJobs"&&path==="/jobs"?{}:
    table==="marketEscrow"&&path==="/"?{}:null})},
   marketClient:{call:async(method,args)=>{data.marketCalls.push({method,args});return{sells:[]}}}
@@ -58,4 +61,21 @@ test("read path never sends PlaceOrder, FillOrder, industry install or wallet de
  const f=setup();const r=await f.create().read({ownerID:OWNER,stationID:STATION,systemID:SYSTEM});
  assert.equal(r.source,"GAMESTORE_ITEMSTORE_SDE_RUST");
  assert.ok(f.data.marketCalls.every(x=>x.method==="GetOrders"));
+});
+
+test("read-only authority never calls stock getters which can persist new BPO/corporation rows",async()=>{
+ const f=setup();
+ f.deps.corporationState.getCorporationRecord=()=>{throw Error("ILLEGAL_CORP_INITIALIZER")};
+ f.deps.corporationRuntime.getCorporationRuntime=()=>{throw Error("ILLEGAL_WALLET_INITIALIZER")};
+ f.deps.industryRuntime.getBlueprintState=()=>{throw Error("ILLEGAL_BPO_INITIALIZER")};
+ const r=await f.create().read({ownerID:OWNER,stationID:STATION,systemID:SYSTEM});
+ assert.equal(r.authoritativeNative,true);
+});
+test("missing existing BPO record blocks the observer instead of seeding a new BPO",async()=>{
+ const f=setup(),base=f.deps.gameStore.read;
+ f.deps.gameStore.read=(table,path)=>table==="industryBlueprintState"?
+  {success:false,errorMsg:"ENTRY_NOT_FOUND"}:base(table,path);
+ const r=await f.create().read({ownerID:OWNER,stationID:STATION,systemID:SYSTEM});
+ assert.equal(r.authoritativeNative,false);
+ assert.match(r.reason,/NATIVE_ALIFE_READ_FAILED:industryBlueprintState/);
 });
