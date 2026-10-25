@@ -2,6 +2,7 @@
 // Read-only co-op coverage planner. Never starts a server, changes flags, or opens SQLite.
 const fs = require("node:fs");
 const path = require("node:path");
+const {execFileSync} = require("node:child_process");
 const VALID_STAGES = ["A", "B", "C", "D", "E", "F"];
 const SAFE_PATH = /^(?:[a-zA-Z0-9_.-]+\/)*[a-zA-Z0-9_.-]+$/;
 const SAFE_NAME = /^coop[A-Za-z0-9]+$/;
@@ -60,11 +61,15 @@ function executionOrder(features) {
   return order;
 }
 
-function inspectCatalog(catalog, {root, registry, codePath, exists = fs.existsSync} = {}) {
+function inspectCatalog(catalog, {root, registry, codePath, nativeRevision, exists = fs.existsSync} = {}) {
   const order = validateCatalog(catalog);
   if (!root || !registry || !Array.isArray(registry.names) || !Array.isArray(registry.specs))
     throw Error("INSPECTION_CONTEXT_MISSING");
   if (catalog.upstreamPin !== registry.PIN) throw Error("CATALOG_UPSTREAM_PIN_MISMATCH");
+  const nativeCheckout = codePath ? {
+    revision: nativeRevision || "UNKNOWN",
+    status: nativeRevision === catalog.upstreamPin ? "PIN_MATCH" : "PIN_MISMATCH_OR_UNKNOWN"
+  } : {status: "NOT_INSPECTED"};
   const installedNames = new Set(registry.names);
   const installedSpecs = new Set(registry.specs.map(spec => spec.file));
   const features = order.map(id => {
@@ -98,9 +103,11 @@ function inspectCatalog(catalog, {root, registry, codePath, exists = fs.existsSy
     upstreamPin: catalog.upstreamPin,
     authority: "READ_ONLY_SOURCE_INSPECTION_NOT_GAMEPLAY_PROOF",
     stages: catalog.stages,
+    nativeCheckout,
     features,
     counts: {
       total: features.length,
+      nativePinMismatch: nativeCheckout.status === "PIN_MISMATCH_OR_UNKNOWN" ? 1 : 0,
       integrationGaps: features.filter(feature => feature.status === "INTEGRATION_GAP").length,
       sourceRegistered: features.filter(feature => feature.status === "SOURCE_REGISTERED_LIVE_UNVERIFIED").length,
       liveVerified: 0
@@ -115,7 +122,12 @@ function main(argv = process.argv.slice(2)) {
   const at = argv.indexOf("--code-path");
   if (at >= 0 && (!argv[at + 1] || argv[at + 1].startsWith("--"))) throw Error("--code-path requires a directory");
   const codePath = at >= 0 ? path.resolve(argv[at + 1]) : undefined;
-  const result = inspectCatalog(catalog, {root, registry, codePath});
+  let nativeRevision;
+  if (codePath) {
+    try { nativeRevision = execFileSync("git", ["-C", codePath, "rev-parse", "HEAD"], {encoding:"utf8", stdio:["ignore","pipe","ignore"]}).trim(); }
+    catch { nativeRevision = "UNKNOWN"; }
+  }
+  const result = inspectCatalog(catalog, {root, registry, codePath, nativeRevision});
   if (argv.includes("--json")) console.log(JSON.stringify(result, null, 2));
   else {
     console.log("Co-op native readiness | SOURCE ONLY | pin " + result.upstreamPin.slice(0, 12));
@@ -128,7 +140,7 @@ function main(argv = process.argv.slice(2)) {
     }
     console.log("\n" + JSON.stringify(result.counts) + "\nNO CLIENT, SERVER, FLAG, SQLITE OR GAMEPLAY VERIFICATION WAS PERFORMED.");
   }
-  if (argv.includes("--strict") && result.counts.integrationGaps) process.exitCode = 2;
+  if (argv.includes("--strict") && (result.counts.integrationGaps || result.counts.nativePinMismatch)) process.exitCode = 2;
   return result;
 }
 if (require.main === module) {

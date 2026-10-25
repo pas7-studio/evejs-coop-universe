@@ -135,7 +135,7 @@ node scripts/patch-evejs-coop.cjs --check --code-path 'C:\Games\EveCoop\upstream
 node --test tests/coop-feature-readiness.test.mjs
 ```
 
-`coop-feature-readiness.cjs` intentionally reads the actual `names`, `specs`, `PIN` exports of the **single installer** rather than copying its deployment registry. The feature catalog is a traceability map, not an alternative installer or a game state store. It reports source-level wiring only: registered modules and specs may still be flag-OFF, only partly hooked, incompatible with the real client, or not deployed. It does not read wallet, character, raw account logs or protected volumes; it does not enable any feature.
+`coop-feature-readiness.cjs` intentionally reads the actual `names`, `specs`, `PIN` exports of the **single installer** rather than copying its deployment registry. The feature catalog is a traceability map, not an alternative installer or a game state store. With `--code-path`, it also checks the exact upstream Git HEAD against the catalog PIN (unknown or mismatched checkout fails `--strict`). It reports source-level wiring only: registered modules and specs may still be flag-OFF, only partly hooked, incompatible with the real client, or not deployed. It does not read wallet, character, raw account logs or protected volumes; it does not enable any feature.
 
 ## Explicit non-acceptance / next live task
 

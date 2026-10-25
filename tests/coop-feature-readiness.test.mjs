@@ -69,7 +69,7 @@ test("inspector detects missing copy registration, native source spec, and tests
   const unregistered = {...registry, names: registry.names.filter(n => n !== f.overlayModules[0]),
     specs: registry.specs.filter(spec => spec.file !== f.installerSpecs[0])};
   const report = inspectCatalog(local, {
-    root: "/virtual", registry: unregistered, codePath: "/pinned",
+    root: "/virtual", registry: unregistered, codePath: "/pinned", nativeRevision: catalog.upstreamPin,
     exists: file => !file.endsWith(f.tests[0]) && !file.endsWith(f.nativeEntrypoints[0])
   });
   assert.equal(report.counts.integrationGaps, 1);
@@ -87,4 +87,17 @@ test("catalog pin must match the single central installer pin", () => {
 test("missing native file is not asserted when no real upstream checkout is supplied", () => {
   const report = inspectCatalog(catalog, {root: "/virtual", registry, exists: p => !p.includes("/server/src/")});
   assert.ok(report.features.every(feature => !feature.gaps.some(gap => gap.startsWith("PINNED_NATIVE_FILE_MISSING"))));
+});
+
+
+test("--code-path provenance is independently pinned; unknown checkout never passes", () => {
+  const mismatched = inspectCatalog(catalog, {root: "/virtual", registry, codePath: "/other", nativeRevision: "wrong", exists: allFilesExist});
+  assert.equal(mismatched.nativeCheckout.status, "PIN_MISMATCH_OR_UNKNOWN");
+  assert.equal(mismatched.counts.nativePinMismatch, 1);
+  const missing = inspectCatalog(catalog, {root: "/virtual", registry, codePath: "/other", exists: allFilesExist});
+  assert.equal(missing.nativeCheckout.revision, "UNKNOWN");
+  assert.equal(missing.counts.nativePinMismatch, 1);
+  const pinned = inspectCatalog(catalog, {root: "/virtual", registry, codePath: "/pinned", nativeRevision: catalog.upstreamPin, exists: allFilesExist});
+  assert.equal(pinned.nativeCheckout.status, "PIN_MATCH");
+  assert.equal(pinned.counts.nativePinMismatch, 0);
 });
