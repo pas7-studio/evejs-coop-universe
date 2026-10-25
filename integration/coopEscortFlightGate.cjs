@@ -223,6 +223,43 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
    return blocked("FLIGHT_AUDIT_WAREHOUSE_MISMATCH");
   return JSON.parse(JSON.stringify(state.delivery));
  }
- return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery,readNativeDeliveryForAudit};
+
+ // Disk-backed recovery enumeration. NEVER treats directory presence as proof
+ // of payment or of delivery: each candidate is fully replay-verified by read.
+ // An unreadable/ambiguous journal poisons the WHOLE pass (no partial payout).
+ function listDelivered({systemID=null,maxTrips=64}={}){
+  if(systemID!==null&&!pos(systemID))return blocked("FLIGHT_SCAN_SYSTEM_INVALID");
+  if(!Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>64)
+   return blocked("FLIGHT_SCAN_LIMIT_INVALID");
+  let files;
+  try{files=io.readdirSync(dir)}
+  catch(e){return e?.code==="ENOENT"?{status:"READY",manifestKeys:[]}:
+   blocked("FLIGHT_SCAN_READ_UNAVAILABLE")}
+  if(!Array.isArray(files)||files.length>512)
+   return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
+  const names=files.filter(x=>typeof x==="string"&&
+   /^\d+-\d+-\d+\.jsonl$/.test(x)).sort();
+  if(names.length>512)return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
+  const found=[];
+  for(const name of names){
+   const full=path.join(dir,name);
+   // No following an operator-created symlink into another live file.
+   let fileInfo;
+   try{fileInfo=io.lstatSync(full)}
+   catch{return blocked("FLIGHT_SCAN_METADATA_UNAVAILABLE")}
+   if(!fileInfo||fileInfo.isSymbolicLink()||!fileInfo.isFile())
+    return blocked("FLIGHT_SCAN_NONREGULAR_JOURNAL");
+   const key=name.slice(0,-6);
+   const state=read(key);
+   if(state.status!=="READY")
+    return blocked("FLIGHT_SCAN_UNVERIFIED_JOURNAL");
+   if(state.phase!=="DELIVERED")continue;
+   if(systemID!==null&&state.booking.systemID!==systemID)continue;
+   if(found.length>=maxTrips)return blocked("FLIGHT_SCAN_RESULT_CAP_EXCEEDED");
+   found.push(key);
+  }
+  return {status:"READY",manifestKeys:found};
+ }
+ return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery,readNativeDeliveryForAudit,listDelivered};
 }
 module.exports={createEscortFlightGate};
