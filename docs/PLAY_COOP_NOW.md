@@ -340,3 +340,25 @@ To try one actual cooperative activity **after the approved version has been dep
 4. Use `-Action StockRaid`, `-Action StockRaidLoot`, and `-Action LootPickup` to inspect server evidence. In both clients, check actual shared combat, wreck contents, single withdrawal, normal fleet warp, and reconnect without a ship clone.
 
 All gameplay changes are reversible in the pinned source overlay and tested on isolated native scene fixtures. **This is not yet a live two-EVE-client PASS**; the server deployment and actual in-game acceptance still need a conscious owner-approved test.
+
+## Co-op checkpoint — fly, regroup and reconnect
+
+When the current draft changes have been reviewed and explicitly deployed, you and your friend can test a useful, non-scripted session:
+
+1. **Rendezvous:** log into two separate authorized EVE accounts and join a normal native fleet. Bring both real ships within 250 km in Perimeter (`30000144`); the regular co-op chat acknowledgement is only a convenience, not proof of two rendered clients.
+2. **Fleet warp:** use the game's real **Warp Fleet** action toward a genuine belt, station or gate. The native EveJS server handles the movement. `-Action Party` can now show the accepted follower order separately from a server-confirmed physical arrival. If the ship never moved, landed far away, disconnected or got replaced, the physical arrival remains unverified.
+3. **Escort or intervene:** look for actual Perimeter miners carrying ore, a loaded hauler and a named pirate pursuing them. Decide whether to protect the convoy or investigate a real NPC fight. Avoid expecting mining fleets in beltless Jita.
+4. **Reconnect test:** disconnect the second client (don't reset Docker or remove volumes), log in again with the same character and verify the ship is still the *same physical hull* with the same inventory. The party report will not count an old disconnected session as your second player.
+5. **Loot once:** after a real ship is destroyed, try opening the wreck with both clients. Confirm that a legitimate withdrawal updates native inventory and wreck contents for both, without claiming the same item twice.
+
+Read-only diagnostics from the existing running world:
+
+```powershell
+.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld
+.\scripts\Local-Two-Client-Test.ps1 -Action World
+.\scripts\Local-Two-Client-Test.ps1 -Action Party
+```
+
+If `nativeFleetWarpOrdersAccepted` increases but `nativeFleetWarpPhysicalArrivalsVerified` remains zero, investigate actual scene/wrap state, ship identity and destination rather than assuming a successful transfer. Even a verified physical arrival remains **server-side** evidence; visual behavior in both real EVE clients must be checked directly.
+
+The startup gate also checks the actual configured stock mining-fleet slots. If a fleet fails to materialize, the world continues bounded retries instead of mistakenly marking a partially initialized convoy as ready. This does not spawn fake miners, add arena enemies, or wipe persistent state.
