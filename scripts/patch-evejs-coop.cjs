@@ -36,6 +36,7 @@ const specs=[
  {"file":"server/src/space/modules/localCycleReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {file:"server/src/space/runtime.js",patches:[]},
+ {file:"server/src/space/movement/warp/movementWarpState.js",patches:[]},
  {file:"server/index.js",patches:[]},
  {file:"server/src/gameStore/index.js",patches:[]},
  {file:"server/src/gameStore/sqliteStore.js",patches:[]},
@@ -160,6 +161,8 @@ function transform(source,spec,remove){
  }
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
+  text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
