@@ -11,7 +11,8 @@ const quoteOK=(q,e,a,n)=>q?.eventID===e.id&&
  q.amountISK%2===0&&q.expiresAt>n&&
  typeof q.contractID==="string"&&/^escort-[a-zA-Z0-9-]{1,48}$/.test(q.contractID);
 const reply=(s,actions=[])=>({success:true,data:{
- agentSays:[s,null],actions,lastActionInfo:{}}});
+ agentSays:[s,null],actions,lastActionInfo:{
+  missionCompleted:0,missionDeclined:0,missionQuit:0,missionCantReplay:0}}});
 const safeText=x=>String(x||"").replace(/[<>\x00-\x1f]/g," ").slice(0,180);
 function createNativeJobAgent({listEvents,readEvent,readQuote,readAccepted,
  getAgent,getMission,getSessions,dispatch,selection,clock=()=>Date.now()}={}){
