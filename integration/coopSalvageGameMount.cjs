@@ -28,6 +28,7 @@ function commandInGame(session,eventID,cargoID,action){
    const atomic=require("../gameStore").coopAtomicNativeRows;
    const offers=require("./coopSalvageNativeOffers").createSalvageOffers({
     readManifest:manifest.read,readWitness:ledger.read,
+    getWreckItems:store.listNativeWreckItemsForWreck,
     readEvent:id=>require("./coopWorldOpportunityBoard").readNativeEvent(id),
     readVolunteers:id=>require("./coopEscortVolunteers").readVerifiedNativePair(id),
     readOutcomes:()=>require("./coopConvoyOutcomeProof").createOutcomes().snapshot(),
