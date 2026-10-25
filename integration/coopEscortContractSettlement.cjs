@@ -297,11 +297,12 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    if(state.phase!=="FUNDED"){release();return status("CONTRACT_REFUND_NOT_REPLAYABLE")}
    if(!capabilities()){release();return status("ATOMIC_NATIVE_WALLET_PROVIDER_UNAVAILABLE")}
    const c=state.contract;
-   let failure,previous,payout,delivery;
+   let failure,previous,payout,delivery,reservation;
    try{
     failure=readNativeFailure(c);
     previous=nativeFunds.verifyRefund(c);
     payout=nativeFunds.verifySettlement(c);
+    reservation=nativeFunds.verifyReservation(c);
     delivery=readNativeDelivery(c);
    }catch{release();return status("REFUND_PREFLIGHT_AUTHORITY_UNAVAILABLE")}
    if(failure?.status!=="DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE"||
@@ -321,6 +322,9 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    if(delivery?.status!=="FLIGHT_TERMINAL_DELIVERY_NOT_PERSISTED"&&
       delivery?.status!=="NOT_DELIVERED"){
     release();return status("NATIVE_DELIVERY_STATE_UNKNOWN_REFUND_BLOCKED");
+   }
+   if(!fundedReceipt(c,reservation)){
+    release();return status("NATIVE_ESCROW_NOT_RESERVED_FOR_REFUND");
    }
    if(previous?.status!=="NOT_FOUND"||payout?.status!=="NOT_FOUND"){
     release();return status("REFUND_PREFLIGHT_FUNDS_ALREADY_CONSUMED");
