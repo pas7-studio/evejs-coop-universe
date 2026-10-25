@@ -321,7 +321,7 @@ function ensureNativeMining(scene,systemID){
  const mining=require("../services/mining/miningNpcOperations");
  const expected=Number(process.env.EVEJS_MINING_NPC_STARTUP_FLEET_COUNT||1);
  const configured=String(process.env.EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS||"")
-  .split(",").map(x=>Number(x.trim())).filter(Number.isSafeInteger);
+  .split(",").map(x=>Number(x.trim())).filter(x=>Number.isSafeInteger(x)&&x>0);
  // A lone ship, a GM fleet or just the first of multiple startup
  // slots is not enough: keep retrying missing native fleet slots.
  if(process.env.EVEJS_COOP_MINING_STARTUP_RETRY==="1"&&
