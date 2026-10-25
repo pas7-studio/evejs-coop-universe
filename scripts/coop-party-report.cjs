@@ -84,27 +84,28 @@ function summarize(input,{now=Date.now(),windowMinutes=120}={}){
  // Only count an observed physical arrival attached to the most recent
  // matching *accepted* native command. Neither command acceptance nor
  // arbitrary unpaired arrival JSONL can claim a successful fleet warp.
+ const matchedFleetOrders=new Set();
  const verifiedFleetArrivals=physicalFleetArrivals.filter(e=>{
   if(!e.arrivalVerified||!e.commanderCharacterID||!e.followerCharacterID||
    !e.commanderShipID||!e.followerShipID||!e.systemID)return false;
+  // A new accepted order by this follower supersedes earlier orders,
+  // even if the new target differs. Never mark all same-target
+  // historical orders as "arrived" because one later warp succeeded.
   const earlier=fleetWarpAccepted.filter(o=>
-   o.commanderCharacterID===e.commanderCharacterID&&
    o.followerCharacterID===e.followerCharacterID&&
-   o.commanderShipID===e.commanderShipID&&
-   o.followerShipID===e.followerShipID&&o.systemID===e.systemID&&
-   o.targetEntityID===e.targetEntityID&&
-   Date.parse(o.at)<=e._at);
-  if(!earlier.length)return false;
-  const mostRecent=earlier[earlier.length-1];
-  return e._at-Date.parse(mostRecent.at)<=180000;
+   o.followerShipID===e.followerShipID&&
+   o.systemID===e.systemID&&Date.parse(o.at)<=e._at);
+  const last=earlier[earlier.length-1];
+  if(!last||last.commanderCharacterID!==e.commanderCharacterID||
+   last.commanderShipID!==e.commanderShipID||
+   last.targetEntityID!==e.targetEntityID||
+   e._at-Date.parse(last.at)>180000||matchedFleetOrders.has(last))
+   return false;
+  matchedFleetOrders.add(last);
+  return true;
  });
- const verifiedKeys=new Set(verifiedFleetArrivals.map(e=>
-  [e.commanderCharacterID,e.commanderShipID,e.followerCharacterID,e.followerShipID,
-   e.systemID,e.targetEntityID].join(":")));
  for(const order of fleetWarpAccepted){
-  order.arrivalVerified=verifiedKeys.has([
-   order.commanderCharacterID,order.commanderShipID,order.followerCharacterID,
-   order.followerShipID,order.systemID,order.targetEntityID].join(":"));
+  order.arrivalVerified=matchedFleetOrders.has(order);
  }
  const active=[...pilots.values()].filter(p=>p.active);
  const lastActiveIDs=new Set(active.map(x=>x.characterID));
