@@ -35,7 +35,13 @@ function createPlanner(deps={}){
   const rawAvailable=findMap(owned.filter(i=>Number(i.categoryID)!==9));
   const remaining=new Map(rawAvailable);
   for(const [key,q] of Object.entries(reservedMaterials)){const type=pos(key),qty=count(q);if(!type||qty===null||qty>(remaining.get(type)||0))return{status:'RESERVATION_UNVERIFIED',jobs:[]};remaining.set(type,(remaining.get(type)||0)-qty);}
-  const existingJobs=installed.filter(j=>Number(j.ownerID)===owner&&Number(j.status)<100&&Number(j.status)>=1);
+  // Native COOP industry: 1=INSTALLED, 3=READY, 4=DELIVERED.
+  // Treating status 4 (or cancelled jobs) as WIP causes permanent ghost stock:
+  // the NPC never restarts manufacturing after the finished batch is sold.
+  // Only active manufacturing jobs at this EXACT station reserve output.
+  const existingJobs=installed.filter(j=>Number(j.ownerID)===owner&&
+    Number(j.stationID??j.facilityID)===station&&Number(j.activityID)===1&&
+    [1,3].includes(Number(j.status)));
   const candidateProducts=[...new Set(validArray(productTypeIDs).map(pos).filter(Boolean))].sort(sort);
   const candidates=[],blocked=[];
   for(const typeID of candidateProducts){
@@ -51,7 +57,16 @@ function createPlanner(deps={}){
    const target=count(targetStock[String(typeID)]),market=count(marketStock[String(typeID)]);
    if(target===null||market===null||target>1000000){blocked.push({typeID,reason:'DEMAND_NOT_VERIFIED'});continue;}
    const local=owned.filter(i=>Number(i.typeID)===typeID&&Number(i.categoryID)!==9).reduce((sum,i)=>sum+Math.max(0,Number(i.quantity)||0),0);
-   const inProgress=existingJobs.filter(j=>Number(j.productTypeID)===typeID).reduce((sum,j)=>sum+Math.max(0,Number(j.productQuantity)||0),0);
+   const matchingJobs=existingJobs.filter(j=>Number(j.productTypeID)===typeID);
+   if(matchingJobs.some(j=>!Number.isSafeInteger(j.productQuantity)||j.productQuantity<=0||
+       !Number.isSafeInteger(j.jobID)||j.jobID<=0)||
+      new Set(matchingJobs.map(j=>j.jobID)).size!==matchingJobs.length){
+    blocked.push({typeID,reason:'NATIVE_ACTIVE_JOB_PROOF_INVALID'});continue;
+   }
+   const inProgress=matchingJobs.reduce((sum,j)=>sum+j.productQuantity,0);
+   if(!Number.isSafeInteger(inProgress)){
+    blocked.push({typeID,reason:'NATIVE_JOB_OUTPUT_OVERFLOW'});continue;
+   }
    const shortage=target-market-local-inProgress;
    if(shortage<=0){blocked.push({typeID,reason:'SUFFICIENT_STOCK'});continue;}
    const state=bpState.records[String(original.itemID)];
