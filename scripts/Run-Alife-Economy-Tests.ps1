@@ -21,12 +21,22 @@ $nonPending = @($manifest.scenarios | Where-Object { $_.status -ne "NOT_RUN" })
 if ($nonPending.Count -gt 0) {
   throw "Do not mark local E2E scenarios PASS before actually running them"
 }
+$integrationManifestPath = Join-Path $root "tests/scenarios/alife-native-authority-integration.json"
+if (-not (Test-Path $integrationManifestPath)) { throw "Missing A-Life native integration acceptance manifest" }
+$integration = Get-Content -Raw -Path $integrationManifestPath | ConvertFrom-Json
+if ($integration.schema -ne "evejs-coop/alife-integration-acceptance/v1" -or $integration.scenarios.Count -ne 8) {
+  throw "Invalid A-Life native integration scenario manifest"
+}
+if (@($integration.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not mark native gameplay E2E PASS without actual local evidence"
+}
 $files = @(
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
   "tests/coop-alife-economy-wiring.test.mjs",
   "tests/coop-alife-order-authority.test.mjs",
-  "tests/coop-alife-native-intent-reconciliation.test.mjs"
+  "tests/coop-alife-native-intent-reconciliation.test.mjs",
+  "tests/coop-alife-integration-acceptance.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
@@ -47,7 +57,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + $manifest.scenarios.Count)
-Write-Host ("Evidence checklist: " + $manifestPath)
+Write-Host ("PASS: local unit and contract checks. Existing economic E2E NOT_RUN: " + $manifest.scenarios.Count + "; native integration E2E NOT_RUN: " + $integration.scenarios.Count)
+Write-Host ("Evidence checklists: " + $manifestPath + " ; " + $integrationManifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."
