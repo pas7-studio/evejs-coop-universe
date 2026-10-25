@@ -11,10 +11,10 @@ const {specs,names,transform}=require("../scripts/patch-evejs-coop.cjs");
 
 function setup(kind="INSTALL"){
  const proof={ok:true,kind,characterID:110,ownerID:110,blueprintID:500,
-  jobID:kind==="DELIVER"?700:undefined,activityID:1,runs:2,cost:60};
+  jobID:kind==="INSTALL"?undefined:700,activityID:1,runs:2,cost:60};
  let calls=0;
- const guard={checkInstall:()=>proof,checkDeliver:()=>proof};
- const receipts={capture:p=>({kind:p.kind}),verifyInstall:()=>true,verifyDeliver:()=>true};
+ const guard={checkInstall:()=>proof,checkDeliver:()=>proof,checkCancel:()=>proof};
+ const receipts={capture:p=>({kind:p.kind}),verifyInstall:()=>true,verifyDeliver:()=>true,verifyCancel:()=>true};
  const fence={execute:({proof:p,captureNative,nativeExecute,verifyNative})=>{
   const before=captureNative(p),result=nativeExecute();
   assert.equal(verifyNative({proof:p,before,nativeResult:result}),true);
@@ -50,8 +50,10 @@ test("wrong native job receipt is never returned as a success",()=>{
  assert.throws(()=>x.runtime.install({}, {},x.run,()=>null),/NATIVE_JOB_RECEIPT_MISMATCH/);
  assert.equal(x.calls,1);
 });
-test("cancel cannot bypass industry custody fence",()=>{
- const x=setup();assert.throws(()=>x.runtime.cancel(),/CANCEL_REQUIRES_NATIVE_RECOVERY_BOUNDARY/);
+test("native cancel executes once with original job and owner proof",()=>{
+ const x=setup("CANCEL"),result=x.runtime.cancel({},700,x.run);
+ assert.deepEqual(result,{success:true,data:{jobID:700}});
+ assert.equal(x.calls,1);
 });
 function fixture(eol){
  return ["class IndustryManagerService {",
