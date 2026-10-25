@@ -8,7 +8,7 @@ const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncou
 "coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
 "coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
 "coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeWarehouse","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopNativeTradeAtomic","coopNativeTradeCustody","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings","coopAgentDialogue"];
+"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeWarehouse","coopNativeStationArrival","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopNativeTradeAtomic","coopNativeTradeCustody","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings","coopAgentDialogue"];
 const specs=[
  {file:"server/index.js",patches:[]},
  {file:"server/src/services/machoNet/machoNetService.js",patches:[]},
@@ -157,6 +157,8 @@ function transform(source,spec,remove){
   text=remove?text.replace(slimBroadcastNew,slimBroadcastOld):
    text.replace(slimBroadcastOld,slimBroadcastNew);
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,true);
  if(spec.file.endsWith("miningNpcOperations.js")){
   // Replace the vanilla "miner ore disappears during hauling" path with
   // a real native cargo reparent to a live hauler ship. Keep fallback.
@@ -225,6 +227,8 @@ function transform(source,spec,remove){
  }
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("agent/missionRuntimeState.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
   text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(spec.file.endsWith("industry/industryParityHelpers.js"))
