@@ -240,20 +240,20 @@ function patch(source,{remove=false}={}){
  ]);
  const fire='  const shotResult = resolveTurretShot({';
  modify("executeTurretCycle",[
-  [fire,witnessPreflight+"\n"+turretPreDebit+"\n\n"+fire,"pre-damage debit"],
+  [fire,turretPreDebit+"\n\n"+fire,"pre-damage debit"],
   [turretOld,turretNew,"single native debit"],
   ['  // P0: before actual native fire or turret damage, verify the real',
-   turretBankSafety+"\n"+'  // P0: before actual native fire or turret damage, verify the real',
+   witnessPreflight+"\n"+turretBankSafety+"\n"+'  // P0: before actual native fire or turret damage, verify the real',
    "whole-bank durable preflight"],
   [turretSuccessAnchor,turretOutcomeWitness+"\n"+turretSuccessAnchor,"post-turret outcome witness"]
  ]);
  const start='  const chargeResults = [];';
  const check='  if (groupedAmmoFailure && chargeResults.every((entry) => !entry.result || !entry.result.success)) {';
  modify("executeMissileCycle",[
-  [start,witnessPreflight+"\n"+missilePreflight+"\n"+missileAtomicSetup+"\n"+start,"missile bank preflight"],
+  [start,missilePreflight+"\n"+missileAtomicSetup+"\n"+start,"missile bank preflight"],
   [check,missileFail+"\n"+check,"block partial bank launch"],
   ['  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
-   missileBankSafety+"\n"+'  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+   witnessPreflight+"\n"+missileBankSafety+"\n"+'  if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
    "whole-bank missile journal preflight"],
   [missileConsumeOld,missileConsumeNew,"single bank missile atomic debit"],
   [missileFailAnchor,missileFailNew,"record failed missile spawn"],
