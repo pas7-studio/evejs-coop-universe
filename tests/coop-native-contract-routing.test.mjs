@@ -11,9 +11,11 @@ const samples={
  "server/src/services/machoNet/machoNetService.js":"const services=[\n        [\"contractMgr\", null],\n];\n",
  "server/src/services/contracts/contractRuntimeState.js":"function completeCourierContract(contract, session) { return true; }\nfunction failCourierContract(contract, session) { return false; }\n"
 };
-test("disabled native contracts feature keeps other gameplay flags unchanged",()=>{
+test("native contracts can only be explicitly enabled, never implicitly by LivingCoop",()=>{
  const deployed=fs.readFileSync(new URL("../scripts/Deploy-Coop-RuntimeProbe.ps1",import.meta.url),"utf8");
- assert.ok(!deployed.includes("EVEJS_COOP_NATIVE_CONTRACTS: '1'"));
+ assert.match(deployed,/\[switch\]\$EnableNativeCoopContracts/);
+ assert.ok(deployed.includes('if ($EnableNativeCoopContracts) {\n  $yamlLines += "      EVEJS_COOP_NATIVE_CONTRACTS: \'1\'"\n}'));
+ assert.ok(deployed.includes("EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'"));
 });
 for(const [file,source] of Object.entries(samples)){
  test("native contracts pinned patch exact apply/remove in "+file,()=>{
