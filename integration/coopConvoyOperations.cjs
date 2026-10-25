@@ -174,6 +174,7 @@ function createOperations({file=process.env.EVEJS_COOP_CONVOY_INCIDENTS_FILE||DE
    if(res.status!=="READY")return res;
   }
   const current=incidents.get(incident.key);
+  let newlyConfirmedDuo=false,newlyConfirmedWreck=false;
   if(!current.duoFleetID){
    const peers=[...current.contributions.entries()].filter(([char,info])=>
     info.fleetID===fleetID&&fleet.members.has(char)&&
@@ -187,6 +188,7 @@ function createOperations({file=process.env.EVEJS_COOP_CONVOY_INCIDENTS_FILE||DE
      targetRole:incident.targetRole,state:"DUO_INTERVENED",
      fleetID,characters});
     if(res.status!=="READY")return res;
+    newlyConfirmedDuo=true;
    }
   }
   if(receipt.victimProof==="TERMINAL_NATIVE_WRECK"){
@@ -195,9 +197,12 @@ function createOperations({file=process.env.EVEJS_COOP_CONVOY_INCIDENTS_FILE||DE
     pirateID:incident.pirateID,targetID:incident.targetID,
     targetRole:incident.targetRole,state:"PIRATE_WRECK_CONFIRMED",nativeWreckID});
    if(res.status!=="READY")return res;
+   newlyConfirmedWreck=true;
   }
   return {status:"NATIVE_CONVOY_INTERVENTION_RECORDED",key:incident.key,
    duoConfirmed:!!incidents.get(incident.key)?.duoFleetID,
+   duoFleetID:incidents.get(incident.key)?.duoFleetID||0,
+   newlyConfirmedDuo,newlyConfirmedWreck,
    pirateWreckConfirmed:!!incidents.get(incident.key)?.closed};
  }
  function snapshot(){
