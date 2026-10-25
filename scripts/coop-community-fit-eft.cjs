@@ -67,7 +67,12 @@ function parseEft(raw,sde,metadata={}) {
       const effects=effectSet(sde.dogma,type);
       const families=[['high',27,34,12],['mid',19,26,13],['low',11,18,11],['rig',92,99,2663],['subsystem',125,132,3772],['service',164,171,6306]];
       const family=families.find(entry=>effects.has(entry[3]));
-      if(family){if(qty!==1)throw Error('EFT_MODULE_QUANTITY_NOT_ONE');fitData.push([type,nextFree(family[1],family[2]),1]);}
+      if(family){
+        // A public export sometimes carries a stack size on a module line (spare module in
+        // the hold). Fit one and keep the rest as cargo instead of discarding the whole fit.
+        fitData.push([type,nextFree(family[1],family[2]),1]);
+        if(qty>1)fitData.push([type,5,qty-1]);
+      }
       else if(category===18)fitData.push([type,87,qty]);
       else if(category===87)fitData.push([type,158,qty]);
       else if(category===SUBSYSTEM_CATEGORY_ID)fitData.push([type,nextFree(125,132),qty]);

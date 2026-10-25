@@ -23,9 +23,20 @@ function merge(sde, catalogs, perHull=5) {
     }
   }
   const records=[],coverage=[];
+  const usedNames=new Set();
   for(const ship of sde.ships){
     const all=[...(byHull.get(ship.shipTypeID)?.values()||[])].sort((a,b)=>sourcePriority(b.provenance.kind)-sourcePriority(a.provenance.kind) || a.name.localeCompare(b.name));
     const fits=selectDiverse(all,perHull);
+    for(const fit of fits){
+      if(usedNames.has(fit.name)){
+        const tag='#'+String(fit.provenance?.signature||'').slice(0,4);
+        let candidate=(String(fit.name).slice(0,50-tag.length)+tag).slice(0,50);
+        let attempt=2;
+        while(usedNames.has(candidate)){const extra=`${tag}${attempt++}`;candidate=(String(fit.name).slice(0,50-extra.length)+extra).slice(0,50);}
+        fit.name=candidate;
+      }
+      usedNames.add(fit.name);
+    }
     const fittable=ship.fittable!==false;
     coverage.push({shipTypeID:ship.shipTypeID,shipName:ship.shipName,variants:fits.length,target:perHull,available:all.length,
       fittable, slots:ship.slots??null,
@@ -38,7 +49,7 @@ function merge(sde, catalogs, perHull=5) {
     summary:{hulls:sde.ships.length,fittableHulls:fittableHulls.length,notFittableHulls:coverage.length-fittableHulls.length,
       fits:records.length,withAtLeast3:fittableHulls.filter(x=>x.variants>=3).length,
       withFive:fittableHulls.filter(x=>x.variants>=5).length,zero:fittableHulls.filter(x=>x.variants===0).length,
-      dogmaValidated:Boolean(sde.dogma)}};
+      dogmaValidated:Boolean(sde.dogma),dogmaChecked:Boolean(sde.dogma)?records.length:0}};
 }
 function run(argv){
   if(argv.length<7||argv[0]!=='--sde'||argv[2]!=='--out'||argv[4]!=='--per-hull')throw Error('USAGE --sde PATH --out PATH --per-hull 3..5 CATALOG1.json [CATALOG2.json ...]');

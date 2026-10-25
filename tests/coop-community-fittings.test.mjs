@@ -39,6 +39,19 @@ test('seeding is idempotent, preserves unrelated owners and allocated IDs',()=>{
  assert.equal(once.report.created,1);assert.equal(once.next,11);assert.equal(twice.report.created,0);assert.equal(twice.report.unchanged,1);
  assert.equal(once.owner.fittings['10'].shipTypeID,600);
 });
+test('re-applying a smaller catalog removes only stale COOP043-managed records',()=>{
+ const catalog=buildCatalog([hull],[candidate],sde,3);
+ const first=propose({_meta:{version:1,nextFittingID:1},owners:{}},catalog);
+ const managedID=Object.keys(first.owner.fittings)[0];
+ const stale=first.owner.fittings[managedID];
+ const foreign={fittingID:999,ownerID:OWNER,shipTypeID:600,name:'pilot made this',description:'not managed',fitData:[[10,27,1]],savedDate:'0'};
+ const state={_meta:{version:1,nextFittingID:first.next},owners:{'1000282':{...first.owner,fittings:{...first.owner.fittings,[managedID]:stale,'999':foreign}}}};
+ const emptyCatalog={...catalog,records:[]};
+ const pruned=propose(state,emptyCatalog);
+ assert.equal(pruned.report.removed,1);
+ assert.ok(pruned.owner.fittings['999'],'unmanaged community rows are never deleted');
+ assert.equal(Object.keys(pruned.owner.fittings).length,1);
+});
 test('rejects stale pin and duplicate managed signatures',()=>{
  const catalog=buildCatalog([hull],[candidate],sde,3);
  assert.throws(()=>propose({_meta:{nextFittingID:1},owners:{}},{...catalog,sdePin:'other'}),/BAD_CATALOG_OR_PIN/);

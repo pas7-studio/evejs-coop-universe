@@ -26,7 +26,7 @@ let lastRequest=0;
 async function cachedJson(url,cachePath) {
   if(fs.existsSync(cachePath)) {
     const data=fs.readFileSync(cachePath,'utf8');
-    if(data.length>4_000_000) throw Error('CACHE_TOO_LARGE');
+    if(data.length>32_000_000) throw Error('CACHE_TOO_LARGE');
     return JSON.parse(data);
   }
   const origin=new URL(url);
@@ -40,7 +40,7 @@ async function cachedJson(url,cachePath) {
     if(response.status===429 || response.status>=500){if(attempt===2) throw Error(`UPSTREAM_HTTP_${response.status}`);await pause(1500*(attempt+1));continue;}
     if(!response.ok) throw Error(`UPSTREAM_HTTP_${response.status}`);
     const raw=await response.text();
-    if(raw.length>4_000_000) throw Error('UPSTREAM_TOO_LARGE');
+    if(raw.length>16_000_000) throw Error('UPSTREAM_TOO_LARGE');
     value=JSON.parse(raw);break;
   }
   fs.mkdirSync(path.dirname(cachePath),{recursive:true});

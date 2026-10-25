@@ -81,7 +81,18 @@ After an explicit approval, test apply on stopped staging container with verifie
 .\scripts\Run-CommunityFittings.ps1 -Action Apply -SdePath '<VERIFIED-SDE-DIR>' -OutputRoot '<EXTERNAL-TEMP-DIR>\coop043' -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -DbPath '<VERIFIED-STOPPED-TEST-DB-PATH>' -Container '<TEST-CONTAINER>' -CatalogSha256 '<SHA256-FROM-PLAN>' -BackupDir '<BACKUPS-OUTSIDE-EVEJS-DATA>' -ConfirmApply
 ```
 
-The script checks a stopped container **before it opens the DB**, creates a verified SQLite backup, checks the persistence outbox, and writes only community owner + fitting next ID. It does not automatically restart the server. Reapply on the same catalog must produce zero creations and no duplicates.
+The script checks a stopped container **before it opens the DB**, creates a verified SQLite backup, checks the persistence outbox, and writes only community owner + fitting next ID. It does not automatically restart the server. Reapply on the same catalog must produce zero creations and no duplicates; a managed record that is no longer in the catalog is removed (`removed`), while unmanaged community rows are never deleted.
+
+### Whole-volume install (live world) wrapper
+
+`Install-CommunityFittings-ToVolume.ps1` performs the approved stopped-world sequence on a Docker volume: stop check → volume attachment check → copy `gamestore.sqlite` (+ WAL/SHM) out → Plan → Apply with an out-of-volume backup → WAL checkpoint → copy the single file back → `chown 1000:1000` → native payload verification → evidence JSON. It never starts, restarts or resets anything.
+
+```powershell
+.\scripts\Install-CommunityFittings-ToVolume.ps1 -Volume evejs-data -Container evejs-server-1 `
+  -Catalog '<EXTERNAL-TEMP-DIR>\catalog.json' -SdePath '<VERIFIED-SDE-DIR>' `
+  -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -WorkRoot '<EXTERNAL-TEMP-DIR>\live' `
+  -BackupDir '<EXTERNAL-TEMP-DIR>\live-backups' -AllowOver600 -ConfirmInstall
+```
 
 ### Native payload probe (no client required)
 

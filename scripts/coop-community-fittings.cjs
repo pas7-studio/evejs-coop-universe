@@ -126,6 +126,20 @@ function selectDiverse(variants, perHull) {
 }
 function buildCatalog(hulls, candidates, sde, perHull = 5) {
   if (!Number.isInteger(perHull) || perHull<1 || perHull>5) throw Error('INVALID_PER_HULL');
+  const usedNames=new Set();
+  // Client lists fittings by name; a 50-char truncation collapsed 30 different hulls' fits
+  // into identical labels, so collisions get a deterministic signature suffix.
+  const uniqueName=(base,signature)=>{
+    let name=base.trim().slice(0,50);
+    if(!usedNames.has(name)){usedNames.add(name);return name;}
+    const suffix='#'+String(signature).slice(0,4);
+    for(let attempt=2;attempt<10;attempt++){
+      const tag=attempt===2?suffix:`${suffix}${attempt}`;
+      const candidate=(base.trim().slice(0,50-tag.length)+tag).slice(0,50);
+      if(!usedNames.has(candidate)){usedNames.add(candidate);return candidate;}
+    }
+    throw Error('FITTING_NAME_COLLISION');
+  };
   const byHull=new Map(); const invalid=[]; let dogmaChecked=0;
   for (const candidate of candidates) {
     const result=validateFit(candidate,sde);
@@ -164,7 +178,7 @@ function buildCatalog(hulls, candidates, sde, perHull = 5) {
       const name=curated?text(fit.name||`[COMMUNITY] ${hull.shipName} ${i+1}`):workbench?`[EWB] ${tag}: ${text(fit.name||hull.shipName)}`:`[FIELD] ${tag}: ${hull.shipName} ${i+1}`;
       const origin=curated?`Shared EFT by ${text(fit.source.author).slice(0,70)}`:workbench?`Public EVE Workbench fit by ${text(fit.source.author).slice(0,60)}`:'Public combat-loss fit; not vetted';
       records.push({shipTypeID:hull.shipTypeID,shipName:hull.shipName,fitData:fit.fitData,
-        name:name.slice(0,50),
+        name:uniqueName(name,fit.signature),
         description:`${PREFIX}${id} ${origin}. ${sourceURL}`.slice(0,500),
         role:fit.profile?.role||'combat', tier:fit.profile?.tier||'standard',
         provenance:{kind:fit.source.kind,url:sourceURL,signature:fit.signature,author:curated||workbench?fit.source.author:undefined,permission:curated?fit.source.permission:undefined}});
@@ -195,7 +209,7 @@ function propose(current, input, maxCatalog = 5000) {
     const match= text(f.description).match(/^COOP043#([0-9a-f]{16})\b/);
     if (match) {if(indexed.has(match[1])) throw Error('DUPLICATE_MANAGED_KEY');indexed.set(match[1],Number(id));}
   }
-  const updated={...original}, report={created:0,updated:0,unchanged:0,existing:Object.keys(original).length};
+  const updated={...original}, report={created:0,updated:0,unchanged:0,removed:0,existing:Object.keys(original).length};
   const ids=new Set();
   for (const f of input.records) {
     const match=text(f.description).match(/^COOP043#([0-9a-f]{16})\b/);
@@ -211,6 +225,14 @@ function propose(current, input, maxCatalog = 5000) {
     } else {updated[String(id)]=record;report.created++;}
   }
   if(Object.keys(updated).length>maxCatalog) throw Error('CATALOG_TOO_LARGE');
+  // The incoming catalog is authoritative for COOP043-managed records: a managed fitting
+  // that is no longer in the catalog is removed instead of lingering as a stale duplicate.
+  for (const [key, fitting] of Object.entries(updated)) {
+    const match = text(fitting?.description).match(/^COOP043#([0-9a-f]{16})\b/);
+    if (!match || ids.has(match[1])) continue;
+    delete updated[key];
+    report.removed++;
+  }
   return {owner:{...community,fittings:updated},next,report};
 }
 module.exports={OWNER,PIN,PREFIX,FLAGS,SLOTS,loadSde,fitHash,validateFit,fromKillmail,buildCatalog,propose,selectDiverse,sourcePriority,ROLE_LABEL,TIER_LABEL};

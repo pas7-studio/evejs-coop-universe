@@ -45,7 +45,13 @@ $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 if (-not (Test-Path -LiteralPath $OutputRoot)) { New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null }
 $Catalog = Join-Path $OutputRoot 'catalog.json'
 function Invoke-Node([string[]] $Arguments) {
-  & node @Arguments
+  # Node writes progress/warnings to stderr; with $ErrorActionPreference='Stop' that used to
+  # abort a long Collect run even though node was healthy. Merge both streams and only the
+  # exit code decides success.
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try { & node @Arguments 2>&1 | ForEach-Object { Write-Host $_ } }
+  finally { $ErrorActionPreference = $previous }
   if ($LASTEXITCODE -ne 0) { throw "Node command failed with exit code $LASTEXITCODE; arguments: $($Arguments -join ' ')" }
 }
 if ($Action -eq 'Collect') {
@@ -116,6 +122,23 @@ if ($Action -eq 'Collect') {
     $reasonCounts[$key]++
   }
   $rejectedTotal = $invalidList.Count + $rejectedList.Count
+  # Rejections that happened while reading the public sources (already-fetched candidates
+  # that failed EFT parsing or pinned-SDE dogma) are part of the honest coverage story.
+  $sourceRejections = [ordered]@{}
+  $sourceRejectedTotal = 0
+  foreach ($file in @('workbench.json','field.json')) {
+    $path = Join-Path $OutputRoot $file
+    if (-not (Test-Path -LiteralPath $path)) { continue }
+    $input = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
+    if (-not ($input.PSObject.Properties.Name -contains 'importFailures')) { continue }
+    foreach ($failure in @($input.importFailures)) {
+      $code = ([string]$failure.reason).Split(' ')[0]
+      if (-not $code) { $code = 'UNKNOWN' }
+      if (-not $sourceRejections.Contains($code)) { $sourceRejections[$code] = 0 }
+      $sourceRejections[$code]++
+      $sourceRejectedTotal++
+    }
+  }
   $dogmaValidated = $false
   if ($result.summary.PSObject.Properties.Name -contains 'dogmaValidated') { $dogmaValidated = [bool]$result.summary.dogmaValidated }
   $dogmaChecked = 0
@@ -141,6 +164,8 @@ if ($Action -eq 'Collect') {
     byRole = $roleCounts
     rejectedTotal = $rejectedTotal
     rejectedReasons = $reasonCounts
+    sourceRejectedTotal = $sourceRejectedTotal
+    sourceRejectionReasons = $sourceRejections
     missing = $missing
     notFittableHulls = $notFittable
     dogmaValidated = $dogmaValidated
