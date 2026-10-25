@@ -267,7 +267,11 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    if(verified.status!=="NATIVE_ESCORT_EVIDENCE_VERIFIED"){release();return verified}
    let before;
    try{before=nativeFunds.verifySettlement(c)}catch{release();return status("SETTLEMENT_PREFLIGHT_UNAVAILABLE")}
-   if(before?.status!=="NOT_FOUND"){release();return status("SETTLEMENT_PREFLIGHT_NOT_EMPTY")}
+   // Native escrow exists in RESERVED state; native verifySettlement then
+   // returns NOT_SETTLED rather than NOT_FOUND. Both are unpaid.
+   if(!["NOT_FOUND","NOT_SETTLED"].includes(before?.status)){
+    release();return status("SETTLEMENT_PREFLIGHT_NOT_EMPTY")
+   }
    if(!append(file(contractID),{v:1,contractID,phase:"SETTLEMENT_PREPARED",at:clock()}))
     return status("SETTLEMENT_PREPARE_UNCERTAIN");
    // One native atomic DB transaction MUST consume reserved NPC money and
@@ -326,7 +330,9 @@ function createEscortContractSettlement({root,io=fs,clock=()=>Date.now(),authori
    if(!fundedReceipt(c,reservation)){
     release();return status("NATIVE_ESCROW_NOT_RESERVED_FOR_REFUND");
    }
-   if(previous?.status!=="NOT_FOUND"||payout?.status!=="NOT_FOUND"){
+   // Existing RESERVED escrow reports NOT_REFUNDED/NOT_SETTLED, not NOT_FOUND.
+   if(!["NOT_FOUND","NOT_REFUNDED"].includes(previous?.status)||
+      !["NOT_FOUND","NOT_SETTLED"].includes(payout?.status)){
     release();return status("REFUND_PREFLIGHT_FUNDS_ALREADY_CONSUMED");
    }
    if(!append(file(contractID),{v:1,contractID,phase:"REFUND_PREPARED",at:clock()}))
