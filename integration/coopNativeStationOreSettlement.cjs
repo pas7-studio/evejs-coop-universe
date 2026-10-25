@@ -146,7 +146,7 @@ function createStationOreSettlement({file, depot, inventory, getStation,
       // never repeat the same source credit automatically.
       const entry = {...ticket, before, phase: "GRANT_OUTCOME_UNKNOWN", at: clock()};
       persist(file, {...state, entries: {...state.entries, [key]: entry}});
-      let result;
+      let result, originalSource = null;
       try {
         result = inventory.grantItemToOwnerLocation(ticket.ownerID, ticket.stationID,
           inventory.ITEM_FLAGS.HANGAR, {typeID: ticket.typeID}, ticket.quantity,
@@ -155,7 +155,6 @@ function createStationOreSettlement({file, depot, inventory, getStation,
             Number(result?.data?.quantity) !== ticket.quantity ||
             stock(ticket) !== before + ticket.quantity)
           return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
-        let originalSource = null;
         if (strict) {
           // Original native ItemStore must actually honor the provenance
           // marker and create ONE separate physical source stack. An ignored
