@@ -20,6 +20,7 @@ param(
   [switch]$LivingCoop,
   [switch]$EnableNativeCoopContracts,
   [switch]$EnableNativeLpStandings,
+  [switch]$EnableMarketCatalog,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -32,6 +33,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
   }
 }
 Assert-Range 'NpcCount' $NpcCount 1 3
+if ($EnableMarketCatalog -and -not $LivingCoop) { throw 'Market catalog requires -LivingCoop' }
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
 Assert-Range 'VirtualPopulation' $VirtualPopulation 1 100
@@ -105,6 +107,11 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_PARTY_NOTICES: '1'"
 $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+# Read-only market group catalog from native published SDE itemTypes.
+# Opt-in only; no market.sqlite, seed stock or player-wallet changes.
+if ($EnableMarketCatalog) {
+  $yamlLines += "      EVEJS_COOP_MARKET_CATALOG: '1'"
 }
 # ContractMgr is a stub in pinned EveJS; this opt-in routes it to the real
 # contractProxy with courier acceptor authorization. Keep OFF by default
