@@ -11,6 +11,8 @@ names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
 names.splice(names.indexOf("coopNpcFireOutcomeWitness")+1,0,"coopEconomyDestination");
 names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
+// Stage J native salvage: preserve all currently deployed A-Life/industry modules.
+names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards");
 const specs=[
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
@@ -312,6 +314,8 @@ function transform(source,spec,remove){
   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/services/agent/agentMgrService.js")
   text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
+  text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove);
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
