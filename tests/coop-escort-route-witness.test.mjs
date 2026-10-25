@@ -74,6 +74,15 @@ test("no stage-two witness without independent prior stage-one progress",()=>wit
  assert.equal(f.witness().sample(f.input()).status,
   "ROUTE_EARLIER_CHECKPOINT_REQUIRED");
 }));
+test("short 10km NPC route rejects stationary source pilot even if technically within 10km",()=>withFixture(f=>{
+ f.station.position={x:10000,y:0,z:0};
+ f.move(3000);
+ f.entities.get(7002).position={x:0,y:0,z:0};
+ assert.equal(f.witness().sample(f.input()).status,
+  "ROUTE_PILOT_PROGRESS_MISMATCH");
+ assert.equal(f.witness().verify(booking(),departure()).status,
+  "ROUTE_CHECKPOINT_NOT_FOUND");
+}));
 test("a fleetmate who camps behind at origin is not an active escort",()=>withFixture(f=>{
  f.witness().sample(f.input());
  f.move(70000);f.later(1000);
