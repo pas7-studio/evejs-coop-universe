@@ -99,8 +99,12 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
       orders.push({status:"NATIVE_ATTACK_ORDER_ACCEPTED",systemID,attackerID:id,
        targetID,warID:authorized.warID,campaignID:authorized.campaignID});
       nextAt.set(key,at+cooldownMs);
-     }else if(answer?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED"||
-       answer?.errorMsg==="WAR_ORDER_OUTCOME_UNCERTAIN")nextAt.set(key,at+cooldownMs);
+     }else if(answer?.errorMsg==="WAR_ORDER_OUTCOME_UNCERTAIN")
+      // If the bridge itself escaped with an ambiguous outcome, keep the
+      // local hull quarantined rather than retrying after a cooldown.
+      nextAt.set(key,Number.POSITIVE_INFINITY);
+     else if(answer?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
+      nextAt.set(key,Number.POSITIVE_INFINITY);
      // No target-hopping after a potentially ambiguous native command.
      break;
     }
