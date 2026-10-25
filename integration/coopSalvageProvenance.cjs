@@ -55,7 +55,13 @@ function createSalvageLedger({root,io=fs,clock=()=>Date.now(),readManifest,
    const matches=items.filter(x=>x.wreckItemID===row.wreckItemID&&
     x.wreckID===r.wreckID&&x.sourceCargoID===row.cargoID&&
     x.typeID===row.typeID&&x.quantity===row.quantity);
-   if(original.length!==1||matches.length!==1)
+   // A signed row is not enough after a crash: check ORIGINAL stock is
+   // still absent from its source and destination before declaring salvage.
+   let currentCargo,warehouse;
+   try{currentCargo=readOriginalCargo(row.cargoID);
+    warehouse=readWarehouseItem(row.cargoID)}
+   catch{return deny("SALVAGE_ORIGINAL_EXCLUSIVITY_UNAVAILABLE")}
+   if(original.length!==1||matches.length!==1||currentCargo||warehouse)
     return deny("SALVAGE_ORIGINAL_ITEM_MISMATCH");
   }
   return {status:"SALVAGE_ORIGIN_VERIFIED",manifestKey,
