@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {details,claim,finalize,readClaim}=require("../integration/coopPlayerMarketRustClaim.cjs");
+const {details,claim,finalize,release,readClaim}=require("../integration/coopPlayerMarketRustClaim.cjs");
 const proof=()=>Object.freeze({
  orderID:"23",ownerID:201,counterpartyID:301,bid:false,
  stationID:60001234,typeID:34,priceCents:1234,
@@ -13,7 +13,7 @@ const ticket=()=>Object.freeze({orderID:"23",cycle:1});
 const originalAck=()=>({
  order_id:"23",owner_id:201,is_corp:false,station_id:60001234,
  type_id:34,bid:false,price:12.34,filled_quantity:3,
- vol_remaining:4,state:"open",invalidated:true
+ vol_remaining:4,state:"open",invalidated:true,release_pending:true
 });
 test("original player sell order maps native buyer/seller and exact cent values",()=>{
  const d=details(ticket(),proof());
@@ -72,6 +72,30 @@ test("Rust ACK with incorrect state, quantity or price fails closed",async()=>{
   await assert.rejects(finalize({ticket:ticket(),proof:proof(),client}),
    /RUST_FILL_ACK_NOT_MATCHED/);
  }
+});
+test("post-native ReleasePlayerFill requires committed durable receipt and validates order release",async()=>{
+ const ticket={orderID:"23",cycle:1},p=proof(),key="p2p:23:1";
+ const receipt={key,phase:"GAMESTORE_COMMITTED",orderID:"23",cycle:1,
+  buyerID:301,sellerID:201,quantity:3,priceCents:1234,grossCents:3702};
+ const calls=[];
+ const client={call:async(method,payload)=>{
+  calls.push({method,payload});
+  return {order_id:"23",cycle:1,phase:"released",state:"open",
+   native_receipt_key:key,ack:originalAck()};
+ }};
+ const released=await release({ticket,proof:p,client,receipt});
+ assert.equal(released.phase,"released");
+ assert.equal(calls.length,1);
+ assert.equal(calls[0].method,"ReleasePlayerFill");
+ assert.equal(calls[0].payload.native_receipt_key,key);
+ await assert.rejects(release({ticket,proof:p,client,receipt:{...receipt,key:"wrong"}}),
+  /DURABLE_NATIVE_RECEIPT_REQUIRED/);
+ assert.equal(calls.length,1);
+});
+test("Rust finalize must remain in settling until native receipt release",async()=>{
+ const client={call:async()=>({...originalAck(),release_pending:false})};
+ await assert.rejects(finalize({ticket:ticket(),proof:proof(),client}),
+  /REQUIRES_LOCKED_RELEASE_PENDING/);
 });
 test("GetPlayerFillClaim is read-only and preserves string i64 order identity",async()=>{
  const client={call:async(method,request)=>{
