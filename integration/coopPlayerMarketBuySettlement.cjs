@@ -146,9 +146,15 @@ function createBuySettlement({gameStore,clock=()=>Date.now()}={}){
     throw Error("P2P_BUY_PAY_EXACT_ORIGINAL_SELLER_STACK_REQUIRED");
    const seller=tx.get("characters",String(proof.counterpartyID));
    const buyer=tx.get("characters",String(proof.ownerID));
+   // Original GameStore characters are keyed by character ID; an
+   // embedded ID is optional, but must never contradict the native key.
+   const sellerEmbedded=seller?.characterID??seller?.charID;
+   const buyerEmbedded=buyer?.characterID??buyer?.charID;
    if(!seller||!buyer||
-      Number(seller.characterID??seller.charID)!==proof.counterpartyID||
-      Number(buyer.characterID??buyer.charID)!==proof.ownerID||
+      (sellerEmbedded!==undefined&&sellerEmbedded!==null&&
+       Number(sellerEmbedded)!==proof.counterpartyID)||
+      (buyerEmbedded!==undefined&&buyerEmbedded!==null&&
+       Number(buyerEmbedded)!==proof.ownerID)||
       !Array.isArray(seller.walletJournal)||
       !Array.isArray(seller.marketTransactions)||
       !Array.isArray(buyer.marketTransactions)||
