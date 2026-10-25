@@ -218,9 +218,10 @@ test("dungeon asteroid without native persistent source is denied before cargo o
 test("a second miner on the same asteroid is rejected while the first debit is in-flight",t=>{
  const f=harness(t);
  let inner,innerDebits=0,innerCredits=0;
+ const competingMiner={itemID:980000000002};
  f.input.debit=()=>{
   f.sequence.push("debit");
-  inner=settle({...f.input,entity:{itemID:980000000002},
+  inner=settle({...f.input,entity:competingMiner,
    debit:()=>{innerDebits++;return {success:true}},
    credit:()=>{innerCredits++;return true}});
   f.setSource({remainingQuantity:92});
@@ -230,8 +231,15 @@ test("a second miner on the same asteroid is rejected while the first debit is i
  assert.equal(inner.success,false);
  assert.equal(inner.reason,"ALIFE06_CYCLE_REENTRANT");
  assert.equal(innerDebits,0);assert.equal(innerCredits,0);
+ assert.equal(competingMiner.coopMiningCargoNeedsOperatorRepair,undefined);
  assert.deepEqual(f.sequence,["debit","credit"]);
  assert.equal(fs.readdirSync(f.dir).filter(x=>x.endsWith(".json")).length,1);
+ // A healthy competing NPC must resume on the same source after the first
+ // cycle completes instead of being permanently quarantined.
+ const next={...f.input,entity:competingMiner,
+  mineableState:{yieldTypeID:34,remainingQuantity:92},
+  debit:()=>{f.setSource({remainingQuantity:84});return {success:true}}};
+ assert.equal(settle(next).success,true);
 });
 test("same miner cannot reenter a different asteroid while its cargo is in-flight",t=>{
  const f=harness(t);
@@ -246,6 +254,7 @@ test("same miner cannot reenter a different asteroid while its cargo is in-fligh
  assert.equal(inner.success,false);
  assert.equal(inner.reason,"ALIFE06_CYCLE_REENTRANT");
  assert.equal(innerDebits,0);
+ assert.equal(f.entity.coopMiningCargoNeedsOperatorRepair,undefined);
  assert.equal(fs.readdirSync(f.dir).filter(x=>x.endsWith(".json")).length,1);
 });
 test("resource in-flight guards are released after a completed cycle",t=>{
