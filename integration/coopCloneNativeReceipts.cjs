@@ -1,7 +1,7 @@
 "use strict";
 // Native read-back verification of character, jump clones, ship custody,
 // consumables, boosters and dogma.  No replacement game-state backend.
-const {validateUniqueImplants}=require("./coopCloneNativeGuard.cjs");
+const {validateUniqueImplants}=require("./coopCloneNativeGuard" + (__filename.endsWith(".cjs") ? ".cjs" : ".js"));
 const pos=x=>{const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:0};
 const equals=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const indices=xs=>xs.map(pos).sort((a,b)=>a-b);

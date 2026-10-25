@@ -52,6 +52,12 @@ names.splice(names.indexOf("coopEscortRouteWitness")+1,0,"coopEscortNativeIngres
 names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopPochvenConduit");
 // CH23: native two-pilot wormhole mass/transition fence; default OFF.
 names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
+// Post-42 merge reconciliation: modules delivered after the original installer.
+// Copy only; native hooks remain explicitly default-OFF until their own pinned
+// source contracts and two-client acceptance are independently verified.
+names.push(
+ "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopCourierRuntime", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
+);
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
