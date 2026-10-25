@@ -12,6 +12,8 @@ const injections=[
   hook:'    if (process.env.EVEJS_COOP_ATOMIC_TRADE === "1") require("../../space/coopNativeTradeCustody").assertReady(this);'},
  {anchor:"    trade.status = \"aborted\";",
   hook:'    if (process.env.EVEJS_COOP_ATOMIC_TRADE === "1") require("../../space/coopNativeTradeCustody").finishAbort(this,trade);'},
+ {anchor:"    const completionItemsPayload = this._buildTradeItemsSetPayload(trade);",
+  hook:'    if (process.env.EVEJS_COOP_ATOMIC_TRADE === "1") require("../../space/coopNativeTradeCustody").beforeComplete(this,trade);'},
  {anchor:"    trade.status = \"completed\";",
   hook:'    if (process.env.EVEJS_COOP_ATOMIC_TRADE === "1") require("../../space/coopNativeTradeCustody").finishComplete(this,trade);'}
 ];
