@@ -19,6 +19,12 @@ function isk(value) {
   return Number(value).toLocaleString("en-US") + " ISK";
 }
 
+const policy = {};
+if (args.includes("--base")) policy.baseIsk = Number(opt("base", 0));
+if (args.includes("--per-m3")) policy.iskPerM3 = Number(opt("per-m3", 0));
+if (args.includes("--per-jump")) policy.iskPerJump = Number(opt("per-jump", 0));
+if (args.includes("--premium")) policy.collateralPremiumRate = Number(opt("premium", 0));
+
 const single = args.includes("--volume");
 if (single) {
   const quote = quoteCourier({
@@ -26,7 +32,7 @@ if (single) {
     jumps: Number(opt("jumps", 1)),
     collateral: Number(opt("collateral", 0)),
     hullClass: opt("hull", "industrial"),
-  });
+  }, policy);
   if (quote.status !== "QUOTED") {
     console.log("no quote: " + quote.reason);
     process.exit(2);
@@ -57,7 +63,7 @@ for (const hullClass of ["industrial", "freighter"]) {
       continue;
     }
     const cells = jumpsList.map((jumps) => {
-      const quote = quoteCourier({ volumeM3, jumps, collateral, hullClass });
+      const quote = quoteCourier({ volumeM3, jumps, collateral, hullClass }, policy);
       return quote.status === "QUOTED" ? quote.totalIsk.toLocaleString("en-US") : "-";
     });
     console.log("  " + String(volumeM3).padStart(9) + " | " + cells.join(" | "));
