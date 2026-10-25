@@ -48,13 +48,19 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
    // Older worlds were created before occupation tracking existed.
    // Migrate metadata without replacing a still-living physical ship.
    if(!existing.role&&pilot.role){
+    const previous=state.links[pilot.id].role;
     state.links[pilot.id].role=String(pilot.role).slice(0,24);
-    persist();return {...state.links[pilot.id]};
+    try{persist()}catch(error){
+     state.links[pilot.id].role=previous;throw error;
+    }
+    return {...state.links[pilot.id]};
    }
    return existing;
   }
   const e={pilotID:pilot.id,name:String(pilot.name||pilot.id).slice(0,96),faction:String(pilot.faction||"independent").slice(0,48),role:String(pilot.role||"").slice(0,24),durable:pilot.durable===true,systemID:Number(systemID),entityID:Number(entityID),linkedAt:clock()};
-  state.links[pilot.id]=e;persist();return {...e};
+  state.links[pilot.id]=e;
+  try{persist()}catch(error){delete state.links[pilot.id];throw error;}
+  return {...e};
  }
  // Only update durable identity AFTER the same native ship physically
  // exists in the destination and is absent from its former EveJS scene.
@@ -74,11 +80,14 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
   return {status:"RELOCATED",...state.links[pilotID]};
  }
  function prune(){
+  const before={...state.links};
   let removed=0;
   for(const [id,e] of Object.entries(state.links)){
-   if(!positive(e.systemID)||!positive(e.entityID)||!exists(e.systemID,e.entityID)){delete state.links[id];removed++;}
+   if(!positive(e.systemID)||!positive(e.entityID)||!exists(e.systemID,e.entityID)){
+    delete state.links[id];removed++;
+   }
   }
-  if(removed)persist();
+  if(removed)try{persist()}catch(error){state.links=before;throw error;}
   return removed;
  }
  return {get,link,relocate,prune,snapshot:()=>structuredClone(state)};
