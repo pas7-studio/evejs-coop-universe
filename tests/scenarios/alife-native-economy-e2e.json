@@ -597,6 +597,52 @@
         "A-Life blocker"
       ],
       "destructive": false
+    },
+    {
+      "id": "ALIFE-029",
+      "title": "Installed BPO at location 2003 does not conceal a READY job",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Install NPC manufacturing job through native GameStore; verify original blueprint item moved from hangar to locationID=2003",
+        "Advance isolated world clock until native job is READY with blueprint still installed",
+        "Run A-Life economic observation and native ready/delivery path"
+      ],
+      "expected": [
+        "A-Life reports COMPLETE_JOB despite no free BPO in station hangar",
+        "Exact original BPO owner/type/location and READY jobID are verified; no fabricated BPO",
+        "One physical output item and no duplicate ISK/mineral debit"
+      ],
+      "requiredEvidence": [
+        "native BPO itemID and installed locationID=2003",
+        "industryJobs READY jobID and blueprintID",
+        "native delivered output itemID and original debit journal"
+      ]
+    },
+    {
+      "id": "ALIFE-030",
+      "title": "Empty NPC wallet can list already-produced goods and earn its first sale",
+      "mode": "LOCAL_E2E",
+      "status": "NOT_RUN",
+      "destructive": false,
+      "steps": [
+        "Use disposable NPC corporate wallet division 1000 with verified balance exactly 0 ISK",
+        "Provide an already-produced native item stack and no free original BPO in station hangar",
+        "Run A-Life observer, native escrow listing and an authenticated player purchase",
+        "Attempt a new paid manufacture and paid material buy while balance still zero"
+      ],
+      "expected": [
+        "A-Life may emit LIST_OUTPUT and physical escrow checks still apply",
+        "After authenticated player purchase NPC corporation wallet earns the actual item price",
+        "Paid MANUFACTURE and BUY_SUPPLIES remain blocked without sufficient native ISK; missing wallet proof still blocks all intents"
+      ],
+      "requiredEvidence": [
+        "corporationRuntime wallet before/after",
+        "native output itemID and escrow orderID",
+        "Rust fillID and buyer debit receipt",
+        "A-Life intent and blocker events"
+      ]
     }
   ]
 }
