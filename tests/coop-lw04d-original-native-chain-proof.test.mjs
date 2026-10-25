@@ -75,7 +75,7 @@ test("full source model original miner→hauler→warehouse→refinery→BPO→p
  assert.equal(f.sales,1);
 });
 test("warehouse corporation different from manufacturing corp blocks before finance audit",async()=>{
- const f=fixture();f.station.ownerID=OWNER+1;
+ const f=fixture();f.station.ownerID=OWNER+1;f.haul.haulerOwnerID=OWNER+1;
  assert.equal((await f.audit()).reason,
   "LW04D_WAREHOUSE_TO_MANUFACTURER_TITLE_TRANSFER_NOT_PROVEN");
  assert.equal(f.sales,0);
@@ -83,7 +83,7 @@ test("warehouse corporation different from manufacturing corp blocks before fina
 test("hauler owner different from manufacturer cannot silently transfer native minerals",async()=>{
  const f=fixture();f.haul.haulerOwnerID=OWNER+1;
  assert.equal((await f.audit()).reason,
-  "LW04D_WAREHOUSE_TO_MANUFACTURER_TITLE_TRANSFER_NOT_PROVEN");
+  "LW04E_HAULER_AND_WAREHOUSE_OWNER_DISAGREE");
  assert.equal(f.sales,0);
 });
 test("original SQLite mined asteroid pre/post source conservation is mandatory",async()=>{
@@ -147,6 +147,74 @@ test("native source journal change during async Rust audit fails closed",async()
  });
  assert.match((await bad.audit(f.scope)).reason,/ORIGINAL_SOURCE_CHANGED_DURING_GATE/);
 });
+
+function paidWarehouseTransfer(){
+ const f=fixture(),warehouse=OWNER+1,price=2500;
+ f.station.ownerID=warehouse;f.haul.haulerOwnerID=warehouse;
+ const title={version:1,phase:"COMMITTED",
+  operationID:"coop-warehouse-title:v1:"+CARGO+":"+OWNER,
+  cargoID:CARGO,itemID:ORE,typeID:ORE_TYPE,quantity:50,
+  stationID:STATION,sourceOwnerID:warehouse,buyerOwnerID:OWNER,
+  sourceCustomInfo:"coop-warehouse:v1:cargo:"+CARGO,
+  priceCents:price,sellerBeforeCents:5000,sellerAfterCents:7500,
+  buyerBeforeCents:6000,buyerAfterCents:3500,committedAt:3000};
+ const ledger=(id,other,amount,balance)=>({
+  corporationID:id,wallet:{divisions:{"1000":{
+   balance:balance/100,transactions:[{
+    transactionID:title.operationID,referenceID:title.operationID,
+    ownerID1:id,ownerID2:other,accountKey:1000,
+    amount:amount/100,balance:balance/100
+   }],journal:[{
+    transactionID:title.operationID,referenceID:title.operationID,
+    ownerID1:id,ownerID2:other,accountKey:1000,
+    amount:amount/100,balance:balance/100
+   }]
+  }}}});
+ const seller=ledger(warehouse,OWNER,price,7500);
+ const buyer=ledger(OWNER,warehouse,-price,3500);
+ const gate=createLivingWorldNativeChainProof({
+  readMiningCommit:()=>structuredClone(f.mining),
+  readHaulReceipt:()=>structuredClone(f.haul),
+  readStationReceipt:()=>structuredClone(f.station),
+  readRefineryReceipt:()=>structuredClone(f.refinery),
+  readOriginalIndustryJob:()=>structuredClone(f.job),
+  readIndustryDebit:()=>structuredClone(f.industryDebit),
+  readDirectorJournal:()=>structuredClone(f.journal),
+  readOriginalTitleTransfer:()=>structuredClone(title),
+  readOriginalCorporation:id=>structuredClone(id===warehouse?seller:buyer),
+  saleAudit:{audit:async()=>structuredClone(f.sale)},clock:()=>100000
+ });
+ return {f,title,seller,buyer,warehouse,run:()=>gate.audit(f.scope)};
+}
+test("different native warehouse and manufacturing corporation must have source transfer receipt",async()=>{
+ const x=paidWarehouseTransfer();
+ assert.equal((await x.run()).status,"SOURCE_CHAIN_ATTESTED");
+ const r=await x.run();
+ assert.equal(r.titleTransferOperationID,x.title.operationID);
+ assert.equal(r.warehouseProcurementPriceCents,2500);
+ assert.equal(r.realNativeE2E,false);
+});
+test("cross-owner title cannot be a silent zero-price credit",async()=>{
+ const x=paidWarehouseTransfer();x.title.priceCents=0;
+ assert.equal((await x.run()).reason,"LW04E_ORIGINAL_WAREHOUSE_TITLE_NOT_ATTESTED");
+});
+test("forged GameStore warehouse transfer itemID cannot authorize factory inventory",async()=>{
+ const x=paidWarehouseTransfer();x.title.itemID++;
+ assert.equal((await x.run()).reason,"LW04E_ORIGINAL_WAREHOUSE_TITLE_NOT_ATTESTED");
+});
+test("forged factory ISK debit journal prevents physical source ownership admission",async()=>{
+ const x=paidWarehouseTransfer();
+ x.buyer.wallet.divisions["1000"].transactions[0].amount=0;
+ assert.equal((await x.run()).reason,"LW04E_ORIGINAL_TRANSFER_WALLET_NOT_ATTESTED");
+});
+test("stale source title receipt after async Rust payment blocks whole custody gate",async()=>{
+ const x=paidWarehouseTransfer();
+ const original=x.title.operationID;x.title.operationID="fake";
+ assert.equal((await x.run()).reason,"LW04E_ORIGINAL_WAREHOUSE_TITLE_NOT_ATTESTED");
+ x.title.operationID=original;
+ assert.equal((await x.run()).status,"SOURCE_CHAIN_ATTESTED");
+});
+
 test("source-only verifier never becomes a live A-Life writer or financial refund",()=>{
  const code=fs.readFileSync(new URL("../integration/coopLivingWorldNativeChainProof.cjs",import.meta.url),"utf8");
  assert.doesNotMatch(code,/\bsetInterval\s*\(|\bsetTimeout\s*\(/);
