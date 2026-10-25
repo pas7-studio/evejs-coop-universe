@@ -22,6 +22,27 @@ const sourceProof=[
  '    if (!proof.allowed) return { success: false, errorMsg: "NO_AMMO", stopReason: "ammo" };',
  '  }',
 ].join("\n");
+const persistVerification=[
+ '    if (isNativeNpcEntity(attackerEntity) && process.env.EVEJS_COOP_NPC_STRICT_AMMO === "1") {',
+ '      let observed;',
+ '      try {',
+ '        observed = nativeNpcStore.listNativeCargoForEntity(entityID)',
+ '          .filter((row) => toInt(row && row.cargoID, 0) === chargeItemID);',
+ '      } catch (_) {',
+ '        return { success: false, errorMsg: "AMMO_WRITE_UNVERIFIED", stopReason: "ammo" };',
+ '      }',
+ '      if (!Array.isArray(observed) ||',
+ '        (nextQuantity > 0 ?',
+ '          observed.length !== 1 ||',
+ '          Number(observed[0].quantity) !== nextQuantity ||',
+ '          toInt(observed[0].moduleID, 0) !== moduleID ||',
+ '          Number(observed[0].typeID) !== Number(chargeItem.typeID) ||',
+ '          Number(observed[0].ownerID) !== Number(attackerEntity.ownerID)',
+ '          : observed.length !== 0)) {',
+ '        return { success: false, errorMsg: "AMMO_WRITE_UNVERIFIED", stopReason: "ammo" };',
+ '      }',
+ '    }',
+].join("\n");
 const turretPreDebit=[
  '  // P0: before actual native fire or turret damage, verify the real',
  '  // fitted cargo. Stack ammo is debited before shot resolution; crystals',
@@ -124,7 +145,11 @@ function patch(source,{remove=false}={}){
   });
  };
  const quantity='  const nextQuantity = Math.max(0, previousQuantity - consumeQuantity);';
- modify("consumeTurretAmmoCharge",[[quantity,sourceProof+"\n"+quantity,"native-source-proof"]]);
+ const nativeCargoCache='    if (Array.isArray(attackerEntity.nativeCargoItems)) {';
+ modify("consumeTurretAmmoCharge",[
+  [quantity,sourceProof+"\n"+quantity,"native-source-proof"],
+  [nativeCargoCache,persistVerification+"\n"+nativeCargoCache,"native-debit-commit-proof"]
+ ]);
  const fire='  const shotResult = resolveTurretShot({';
  modify("executeTurretCycle",[
   [fire,turretPreDebit+"\n\n"+fire,"pre-damage debit"],
