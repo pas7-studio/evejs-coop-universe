@@ -118,6 +118,8 @@ function createAmmoSupply({store,getWeaponModules,resolveFamily,isOptional,compa
    const stations=(scene.staticEntities||[]).filter(e=>
     e?.kind==="station"&&id(e.itemID)&&vec(e.position)&&
     Number(getStation(e.itemID)?.solarSystemID)===system&&
+    Number(getStation(e.itemID)?.stationID||
+     getStation(e.itemID)?.itemID)===Number(e.itemID)&&
     (!danger||!vec(danger.position)||
      dist(e.position,danger.position)>500000))
     .sort((x,y)=>dist(ship.position,x.position)-
