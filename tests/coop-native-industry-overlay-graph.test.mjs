@@ -1,0 +1,44 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
+const files=["coopNpcIndustryNativeBindings","coopNpcIndustryGameStoreScope",
+ "coopNpcIndustryReady","coopNpcIndustryOfflineAtomic","coopNpcIndustryOfflineDelivery"];
+const source=n=>fs.readFileSync(new URL("../integration/"+n+".cjs",import.meta.url),"utf8");
+test("local .cjs native industry kernels remain loadable",()=>{
+ for(const name of files){
+  const mod=require("../integration/"+name+".cjs");
+  assert.ok(mod&&typeof mod==="object",name);
+ }
+});
+test("exact pinned-overlay .js graph resolves every industry kernel without .cjs files",t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"lw04-industry-js-overlay-"));
+ t.after(()=>fs.rmSync(root,{force:true,recursive:true}));
+ for(const name of files)fs.writeFileSync(path.join(root,name+".js"),source(name));
+ const native=require(path.join(root,"coopNpcIndustryNativeBindings.js"));
+ assert.equal(typeof native.createNativeIndustryBindings,"function");
+ assert.throws(()=>native.createNativeIndustryBindings(),/NPC_INDUSTRY_NATIVE_BINDINGS_REQUIRED/);
+ for(const name of files)assert.equal(fs.existsSync(path.join(root,name+".cjs")),false);
+});
+test("all original trusted native kernels remain default-off without live binding contracts",()=>{
+ assert.match(source("coopNpcIndustryNativeBindings"),/supportsLiveRuntime:false/);
+ assert.match(source("coopNpcIndustryGameStoreScope"),/SCOPED_SQL_TABLE_REJECTED/);
+ assert.match(source("coopNpcIndustryReady"),/NATIVE_NPC_SCOPE_PROOF_DISABLED/);
+ assert.match(source("coopNpcIndustryOfflineAtomic"),/offlineExclusive/);
+ assert.match(source("coopNpcIndustryOfflineDelivery"),/offlineExclusive/);
+});
+test("industry graph never starts independent NPC economy scheduler",()=>{
+ for(const name of files){
+  assert.doesNotMatch(source(name),/\bsetInterval\s*\(/,name);
+  assert.doesNotMatch(source(name),/\bsetTimeout\s*\(/,name);
+ }
+});
+test("new LW-04 admission is installed exactly once into central overlay",()=>{
+ const text=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
+ const calls=[...text.matchAll(/"coopAlifeNativeManufacturingRuntime"/g)];
+ assert.equal(calls.length,1);
+ assert.match(text,/path\.join\(code,"server\/src\/space",name\+"\.js"\)/);
+});
