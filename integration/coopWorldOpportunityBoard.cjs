@@ -285,6 +285,9 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     "\nTo participate voluntarily: /events interest "+e.id+
     " then fly to the actual location and use native EVE fleet/warp."};
   }
+  if(op==="history"||op==="reputation"){
+   return require("./coopEscortReputation").listNativeHistory(session);
+  }
   if(op==="volunteer"){
    if(process.env.EVEJS_COOP_EVENT_VOLUNTEERS!=="1")
     return {status:"DISABLED",message:"[Co-op Events] Verified two-pilot volunteer mode is disabled."};
@@ -306,7 +309,7 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
      ", find the actual NPC via overview, join a real fleet manually. No automatic warp or ISK award.":
      "[Co-op Events] "+r.status};
   }
-  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events watch local|all|off"};
+  return {status:"HELP",message:"/events list | /events all | /events info <id> | /events interest <id> | /events volunteer <id> | /events history | /events watch local|all|off"};
  }
  return {publish,nativeRaid,nativeConvoy,nativeConvoyOutcome,readEvent,readInterest,list,watch,setWatch,interest,alert,handleChat};
 }
