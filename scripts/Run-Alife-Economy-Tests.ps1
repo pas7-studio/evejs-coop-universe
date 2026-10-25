@@ -21,10 +21,21 @@ $nonPending = @($manifest.scenarios | Where-Object { $_.status -ne "NOT_RUN" })
 if ($nonPending.Count -gt 0) {
   throw "Do not mark local E2E scenarios PASS before actually running them"
 }
+$integrityManifest = Join-Path $root "tests/scenarios/coop-044-industry-replenishment-integrity.json"
+if (-not (Test-Path $integrityManifest)) { throw "Missing native industry replenishment integrity scenarios" }
+$integrity = Get-Content -Raw -Path $integrityManifest | ConvertFrom-Json
+if ($integrity.schema -ne "coop-044-native-industry-replenishment-integrity/v1" -or $integrity.scenarios.Count -lt 10) {
+  throw "Native industry integrity acceptance manifest invalid"
+}
+if (@($integrity.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not mark native industry acceptance scenarios PASS before real gameplay validation"
+}
 $files = @(
   "tests/coop-alife-native-economy.test.mjs",
   "tests/coop-alife-economy-sensor.test.mjs",
-  "tests/coop-alife-economy-wiring.test.mjs"
+  "tests/coop-alife-economy-wiring.test.mjs",
+  "tests/coop-npc-manufacturing.test.mjs",
+  "tests/coop-npc-native-economy-director.test.mjs"
 )
 if ($IncludeExistingEconomyTests) {
   $files += @(
