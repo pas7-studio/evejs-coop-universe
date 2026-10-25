@@ -64,15 +64,17 @@ test("source-backed A-Life decision commits one native NPC purchase and durable 
  assert.equal(entry.fillID,930000000000001);
  assert.match(entry.claimKey,/^npc-corpbuy:[0-9a-f]{32}$/);
 }));
-test("lost native acknowledgement recovers with same persisted claim key",()=>run(async f=>{
+test("lost native acknowledgement remains PREPARED until operator-approved recovery",()=>run(async f=>{
  f.failOnce();
  await assert.rejects(f.create().tick(CONTEXT),/LOST_NATIVE_BUY_ACK/);
  const journal=f.create().inspect(),before=journal.entries[BUYER+":"+ORDER];
  assert.equal(before.phase,"PREPARED");
- const completed=await f.create().tick(CONTEXT);
- assert.equal(completed.status,"NPC_PLAYER_PURCHASE_SETTLED");
- assert.equal(f.calls,2);
- assert.equal(f.history[0].claimKey,f.history[1].claimKey);
+ const blocked=await f.create().tick(CONTEXT);
+ assert.equal(blocked.status,"BLOCKED");
+ assert.equal(blocked.reason,"NPC_BUY_PENDING_OPERATOR_RECOVERY");
+ assert.equal(f.calls,1);
+ assert.equal(f.create().inspect().entries[BUYER+":"+ORDER].claimKey,
+  before.claimKey);
 }));
 test("fresh Rust price change cannot spend NPC money after stale planning",()=>run(async f=>{
  f.repricing(3);
