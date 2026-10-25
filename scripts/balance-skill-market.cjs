@@ -4,10 +4,11 @@ const DB = "/var/lib/evejs/market/market.sqlite";
 const APPLY = process.argv.includes("--apply");
 
 // Real Jita sell prices (2026-10-24) and a deliberately rare stock count.
+// CCP typeIDs are immutable: Small Skill Injector is 45635, NOT 40521.
 const PLAN = [
   { typeID: 40519, name: "Skill Extractor", price: 465000000, quantity: 3 },
   { typeID: 40520, name: "Large Skill Injector", price: 731000000, quantity: 2 },
-  { typeID: 40521, name: "Small Skill Injector", price: 148600000, quantity: 8 },
+  { typeID: 45635, name: "Small Skill Injector", price: 148600000, quantity: 8 },
 ];
 
 const db = new DatabaseSync(DB, { readOnly: !APPLY });
