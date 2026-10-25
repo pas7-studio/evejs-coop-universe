@@ -93,6 +93,23 @@ test("corrupted journal must remain blocked even after all real pilots reconnect
  assert.equal(f.create().read(manifestKey,booking()).status,"DEPARTURE_RECORD_CORRUPT");
  assert.equal(f.create().record(booking(),f.scene,f.verifier).status,"DEPARTURE_RECORD_CORRUPT");
 }));
+test("symlinked witness file never counts as original player escort evidence",()=>use(f=>{
+ f.create().record(booking(),f.scene,f.verifier);
+ const file=path.join(f.root,"escort-departure-witness",manifestKey+".json");
+ const moved=file+".old";fs.renameSync(file,moved);
+ fs.symlinkSync(moved,file);
+ assert.equal(f.create().read(manifestKey,booking()).status,
+  "DEPARTURE_NONREGULAR_OR_LINKED_JOURNAL");
+ assert.equal(f.create().record(booking(),f.scene,f.verifier).status,
+  "DEPARTURE_NONREGULAR_OR_LINKED_JOURNAL");
+}));
+test("hardlinked original witness cannot establish native replay",()=>use(f=>{
+ f.create().record(booking(),f.scene,f.verifier);
+ const file=path.join(f.root,"escort-departure-witness",manifestKey+".json");
+ fs.linkSync(file,file+".linked");
+ assert.equal(f.create().read(manifestKey,booking()).status,
+  "DEPARTURE_NONREGULAR_OR_LINKED_JOURNAL");
+}));
 test("lost fsync acknowledgement fails closed, never reports witnessed departure",()=>use(f=>{
  const io={...fs,fsyncSync(){throw Error("LOST_ACK")}};
  const w=createDepartureWitness({root:f.root,io,clock:()=>now});
