@@ -149,9 +149,16 @@ function createAtomicSell({gameStore,clock=()=>Date.now()}={}){
     throw Error("P2P_ATOMIC_ESCROW_PHYSICAL_QUANTITY_MISMATCH");
    const buyerRow=tx.get("characters",String(buyer)),
     sellerRow=tx.get("characters",String(seller));
+   // Vanilla EveJS character rows are addressed by their authoritative
+   // GameStore key; the JSON record need not embed characterID/charID.
+   // Keep rejecting an explicitly conflicting ID before any item/ISK write.
+   const buyerEmbedded=buyerRow?.characterID??buyerRow?.charID;
+   const sellerEmbedded=sellerRow?.characterID??sellerRow?.charID;
    if(!buyerRow||!sellerRow||
-      Number(buyerRow.characterID??buyerRow.charID)!==buyer||
-      Number(sellerRow.characterID??sellerRow.charID)!==seller||
+      (buyerEmbedded!==undefined&&buyerEmbedded!==null&&
+       Number(buyerEmbedded)!==buyer)||
+      (sellerEmbedded!==undefined&&sellerEmbedded!==null&&
+       Number(sellerEmbedded)!==seller)||
       !Array.isArray(buyerRow.walletJournal)||!Array.isArray(sellerRow.walletJournal)||
       !Array.isArray(buyerRow.marketTransactions)||
       !Array.isArray(sellerRow.marketTransactions))
