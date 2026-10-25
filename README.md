@@ -47,6 +47,7 @@ ship continuity.
 **Executable, optional server-side integration overlay and Windows runbooks.** This repo contains NPC/world modules, reversible source hooks, deployment scripts, and read-only live two-pilot evidence tools. It does **not** include a proprietary EVE client, a standalone complete game server, or a verified VPN gateway. Do not mistake a committed integration for proven end-to-end gameplay.
 
 - [Setup on Windows 11](docs/SETUP_WINDOWS.md) – verified upstream commands, prerequisites, smoke tests, blockers.
+- [Development doctrine](docs/DEVELOPMENT_DOCTRINE.md) – **binding**: how the overlay may touch the pinned server, upgrade runbook for a new upstream SHA, anti-footgun list.
 - [Architecture and private co-op design](docs/ARCHITECTURE.md) – host/client topology, VPN, networking discovery, security, failure cases.
 - [Delivery roadmap and agent tasks](docs/ROADMAP.md) – prioritized, independently testable engineering work.
 - [Upstreams, compatibility and contribution policy](docs/UPSTREAM.md).

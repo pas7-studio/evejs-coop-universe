@@ -51,6 +51,7 @@ server contract tests with observed EVE client gameplay.
 
 ## Change discipline
 - One task ID from `docs/ROADMAP.md` per small reviewable change.
+- **Read [docs/DEVELOPMENT_DOCTRINE.md](docs/DEVELOPMENT_DOCTRINE.md) before touching the overlay.** It is binding: overlay-not-fork, one-call hooks, env-gated default-OFF features, EOL-agnostic anchors, `--check` before every deploy, and the Definition-of-Done ladder. Do not add a second patching mechanism.
 - Prefer native upstream bugfixes with references and attribution over fork-only rewrites.
 - Tests and rollback strategy for every functional change.
 - Record source URL, revision SHA, local environment and pass/fail evidence.

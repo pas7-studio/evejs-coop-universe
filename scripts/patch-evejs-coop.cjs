@@ -276,11 +276,60 @@ function run({codePath,remove=false,dryRun=false}){
  }
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};
 }
+function classifyFile(text,spec){
+ try{
+  const pristine=transform(text,spec,true);
+  if(pristine!==text)return transform(pristine,spec,false)===text?"PATCHED":"DRIFTED";
+  transform(text,spec,false);
+  return spec.patches.some(p=>text.includes(p.line))?"DRIFTED":"PRISTINE";
+ }catch(_error){return "ANCHOR_MISMATCH";}
+}
+function check({codePath}){
+ const project=path.resolve(__dirname,".."),code=path.resolve(codePath);
+ if(!fs.existsSync(path.join(code,"compose.yaml")))throw Error("Missing EveJS compose.yaml: "+code);
+ let sha="UNKNOWN";
+ try{sha=execFileSync("git",["-C",path.dirname(code),"rev-parse","HEAD"],{encoding:"utf8"}).trim();}catch(_error){}
+ const problems=[],files=[],modules=[];
+ for(const spec of specs){
+  const file=path.join(code,spec.file);
+  const state=fs.existsSync(file)?classifyFile(fs.readFileSync(file,"utf8"),spec):"MISSING";
+  files.push({file:spec.file,state});
+  if(state!=="PRISTINE"&&state!=="PATCHED")problems.push({target:spec.file,kind:"native-source",state});
+ }
+ for(const name of names){
+  const deployed=path.join(code,"server/src/space",name+".js");
+  const expected=fs.readFileSync(path.join(project,"integration",name+".cjs"),"utf8");
+  const state=!fs.existsSync(deployed)?"MISSING":fs.readFileSync(deployed,"utf8")===expected?"CURRENT":"STALE";
+  modules.push({name,state});
+  if(state!=="CURRENT")problems.push({target:"server/src/space/"+name+".js",kind:"overlay-module",state});
+ }
+ const pinMatches=sha===PIN;
+ const counts={pristine:0,patched:0,drifted:0,anchorMismatch:0,missing:0,moduleCurrent:0,moduleStale:0,moduleMissing:0};
+ for(const item of files){
+  if(item.state==="PRISTINE")counts.pristine++;
+  else if(item.state==="PATCHED")counts.patched++;
+  else if(item.state==="DRIFTED")counts.drifted++;
+  else if(item.state==="ANCHOR_MISMATCH")counts.anchorMismatch++;
+  else counts.missing++;
+ }
+ for(const item of modules){
+  if(item.state==="CURRENT")counts.moduleCurrent++;
+  else if(item.state==="STALE")counts.moduleStale++;
+  else counts.moduleMissing++;
+ }
+ const status=!pinMatches?"WRONG_PIN":problems.length?"OVERLAY_DRIFT":"OVERLAY_OK";
+ return {status,pin:PIN,sha,pinMatches,counts,problems,files,modules};
+}
 if(require.main===module){
  try{
   const args=process.argv.slice(2),at=args.indexOf("--code-path");
-  if(at<0||!args[at+1])throw Error("Usage: node patch-evejs-coop.cjs --code-path <EveJS/Code> [--remove] [--dry-run]");
-  console.log(JSON.stringify(run({codePath:args[at+1],remove:args.includes("--remove"),dryRun:args.includes("--dry-run")}),null,2));
+  if(at<0||!args[at+1])throw Error("Usage: node patch-evejs-coop.cjs --code-path <EveJS/Code> [--remove] [--dry-run|--check]");
+  const result=args.includes("--check")?check({codePath:args[at+1]}):run({codePath:args[at+1],remove:args.includes("--remove"),dryRun:args.includes("--dry-run")});
+  if(args.includes("--check")){
+   const {files:_files,modules:_modules,...summary}=result;
+   console.log(JSON.stringify({...summary,problems:result.problems},null,2));
+   if(result.status!=="OVERLAY_OK")process.exitCode=2;
+  }else console.log(JSON.stringify(result,null,2));
  }catch(error){console.error("[COOP PATCH ERROR]",error.message);process.exitCode=1;}
 }
-module.exports={run,transform,strip,specs};
+module.exports={run,check,classifyFile,transform,strip,specs,PIN};

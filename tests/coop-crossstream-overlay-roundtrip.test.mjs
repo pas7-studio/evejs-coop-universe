@@ -53,10 +53,14 @@ test("native overlay remains opt-in and local-only; manual verifier covers cross
  assert.match(deploy,/if \(\$EnableNativeLpStandings\) \{/);
  assert.match(deploy,/EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'/);
  const verifier=fs.readFileSync(path.join(project,"scripts/Verify-Local-Coop.ps1"),"utf8");
+ // The verifier discovers tests/*.test.mjs (upstream-* excluded), so registration
+ // is structural; still prove the mechanism and that each test file exists.
+ assert.match(verifier,/Get-ChildItem[^\r\n]*-Filter '\*\.test\.mjs'/);
+ assert.match(verifier,/-notlike 'upstream-\*'/);
  for(const name of ["coop-duo-contribution-report","coop-pve-chain",
    "coop-native-contracts-lp-integration","coop-native-lp-standings",
    "coop-crossstream-overlay-roundtrip"])
-  assert.ok(verifier.includes("tests/"+name+".test.mjs"),"Unregistered local regression: "+name);
+  assert.ok(fs.existsSync(path.join(project,"tests",name+".test.mjs")),"Unregistered local regression: "+name);
  assert.ok(!fs.existsSync(path.join(project,".github","workflows")),
   "Owner prohibited remote GitHub CI for this game");
 });

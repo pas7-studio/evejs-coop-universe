@@ -1,6 +1,6 @@
 #Requires -Version 7.0
-# End-to-end negative tests of the verifier, designed to run in GitHub Actions
-# without Docker, EveJS checkout, game client, or any external services.
+# End-to-end negative tests of the verifier. Run locally only (no CI exists);
+# no Docker, EveJS checkout, game client or external services are required.
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $runner = Join-Path $projectRoot 'scripts/Verify-Local-Coop.ps1'

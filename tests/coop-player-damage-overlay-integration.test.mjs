@@ -40,6 +40,17 @@ test("full transactional transform installs, is repeatable, then removes native 
  assert.equal(installer.transform(installed,spec,true),source);
  assert.equal(installer.transform(source,spec,true),source);
 });
+test("a CRLF Windows checkout patches and reverses byte-for-byte",()=>{
+ const crlf=source.replace(/\n/g,"\r\n");
+ const installed=installer.transform(crlf,spec,false);
+ assert.notEqual(installed,crlf);
+ assert.ok(installed.includes("\r\n"),"patched CRLF source must stay CRLF");
+ assert.ok(!/[^\r]\n/.test(installed),"patched CRLF source must not gain lone LF");
+ assert.equal(installer.transform(installed,spec,false),installed);
+ assert.equal(installer.transform(installed,spec,true),crlf);
+ assert.equal(installer.classifyFile(crlf,spec),"PRISTINE");
+ assert.equal(installer.classifyFile(installed,spec),"PATCHED");
+});
 test("hook fires only when opted into LivingCoop, after native damage ledger update",()=>{
  const installed=installer.transform(source,spec,false);
  function invoke(enabled){
@@ -78,8 +89,12 @@ test("deploy only opts in when LivingCoop was selected; verifier runs the new te
  assert.ok(at>=0&&flag>at);
  assert.equal(deploy.split("EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE:").length-1,1);
  const verifier=fs.readFileSync(path.join(root,"scripts/Verify-Local-Coop.ps1"),"utf8");
+ // Discovery replaces the hand-written list; assert the mechanism plus that
+ // every required test file still exists on disk.
+ assert.match(verifier,/Get-ChildItem[^\r\n]*-Filter '\*\.test\.mjs'/);
+ assert.match(verifier,/-notlike 'upstream-\*'/);
  for(const filename of ["coop-player-combat-witness.test.mjs","coop-duo-contribution-report.test.mjs","coop-player-damage-overlay-integration.test.mjs"])
-  assert.ok(verifier.includes(filename),filename);
+  assert.ok(fs.existsSync(path.join(root,"tests",filename)),filename);
 });
 test("optional full local upstream source must obey source patch/unpatch parity",t=>{
  const code=process.env.EVEJS_COOP_CODE_PATH;
