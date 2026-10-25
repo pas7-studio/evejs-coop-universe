@@ -66,8 +66,8 @@ function assertZeroMoney(trade, service){
  }
 }
 function commitNative({trade,roots,activeShipIDs,readItems,writeItems,
- normalizeInventoryItem,buildInventoryItem,indexDeltaFromChanges,cloneValue,readCharacters}={}){
- if(typeof readItems!=='function'||typeof writeItems!=='function'||typeof readCharacters!=='function'||
+ normalizeInventoryItem,buildInventoryItem,indexDeltaFromChanges,cloneValue,readCharacters,flushItems}={}){
+ if(typeof readItems!=='function'||typeof writeItems!=='function'||typeof readCharacters!=='function'||typeof flushItems!=='function'||
     typeof normalizeInventoryItem!=='function'||typeof buildInventoryItem!=='function'||
     typeof indexDeltaFromChanges!=='function'||typeof cloneValue!=='function')
    return {success:false,errorMsg:'NATIVE_INVENTORY_UNAVAILABLE'};
@@ -94,6 +94,10 @@ function commitNative({trade,roots,activeShipIDs,readItems,writeItems,
  try{
    if(changes.length&&!writeItems(next,{indexDelta:indexDeltaFromChanges(changes)}))
      return {success:false,errorMsg:'TRADE_ATOMIC_WRITE_FAILED'};
+   // GameStore.write schedules asynchronous persistence. Force the native
+   // SQLite items-table flush BEFORE telling clients trade was completed.
+   if(changes.length&&flushItems()?.success!==true)
+     return {success:false,errorMsg:'TRADE_PERSISTENCE_UNCERTAIN_NEEDS_REPAIR'};
  }catch(_error){return {success:false,errorMsg:'TRADE_ATOMIC_WRITE_FAILED'};}
  return {success:true,data:{changes}};
 }
