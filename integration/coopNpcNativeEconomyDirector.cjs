@@ -7,7 +7,7 @@ const STATES=new Set(["PREPARED","INSTALL_UNKNOWN","INSTALLED","READY","DELIVERY
 const safeInt=x=>Number.isSafeInteger(x)&&x>0;
 const cents=x=>Number.isFinite(x)&&x>=0&&x<=1e12&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
 const copy=x=>JSON.parse(JSON.stringify(x));
-const {calculateNativeDemand}=require("./coopNpcDemandAuthority.cjs");
+const {calculateNativeDemand}=require("./coopNpcDemandAuthority"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
 const closed=x=>x==="SOLD";
 function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
