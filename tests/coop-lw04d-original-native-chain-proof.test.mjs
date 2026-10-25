@@ -151,6 +151,8 @@ test("native source journal change during async Rust audit fails closed",async()
 function paidWarehouseTransfer(){
  const f=fixture(),warehouse=OWNER+1,price=2500;
  f.station.ownerID=warehouse;f.haul.haulerOwnerID=warehouse;
+ f.station.oreItemID=ORE;
+ f.station.sourceCustomInfo="coop-warehouse:v1:cargo:"+CARGO;
  const title={version:1,phase:"COMMITTED",
   operationID:"coop-warehouse-title:v1:"+CARGO+":"+OWNER,
   cargoID:CARGO,itemID:ORE,typeID:ORE_TYPE,quantity:50,
