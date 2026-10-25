@@ -466,6 +466,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    if(manifestProof?.status!=="MANIFEST_DURABLY_PREPARED")
     return pause(manifestProof?.status||"MANIFEST_PREPARE_UNAVAILABLE");
   }
+  let fundedEscortContractID=null;
   if(escortEnabled){
    if(!manifestProof?.key)return pause("ESCORT_PREWARP_MANIFEST_REQUIRED");
    const originalRoute={manifestKey:manifestProof.key,systemID,fleetID,
@@ -485,6 +486,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    if(funded?.status!=="FUNDED_BEFORE_WARP"||
       funded.manifestKey!==manifestProof.key||typeof funded.contractID!=="string")
     return pause("ESCORT_"+(funded?.status||"FUNDING_UNVERIFIED"));
+   fundedEscortContractID=funded.contractID;
    // A native warp ACK can be lost after the ship physically moved.
    // Until ALL warp results are explicitly accepted, forbid an in-process retry.
    let intent;try{intent=durableWarpFence.prepare({
@@ -545,7 +547,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      source=escortGate?.readDurableEscortDeparture?.(manifestProof.key);
     }catch{}
     let recorded;try{recorded=nativeIngressSnapshot?.record?.({
-     booking:{manifestKey:manifestProof.key,contractID:funded.contractID,
+     booking:{manifestKey:manifestProof.key,contractID:fundedEscortContractID,
       systemID,fleetID,haulerID:ships[0],stationID:destination.stationID,
       corporationID:destination.corporationID,cargoIDs:manifestProof.cargoIDs.slice().sort((a,b)=>a-b)},
      ingress:nativeIngress,verifiedAck:fence,source,at:clock()})}
