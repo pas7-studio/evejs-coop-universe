@@ -37,7 +37,12 @@ function createPhaseCoordinator({execute,clock=()=>Date.now(),onCycle=()=>{}}={}
    return execute(name,fn);
   };
   try{
-   run(phase);
+   const result=run(phase);
+   // A promise-returning WHOLE tick would release the physical clock lease
+   // before the tick has finished. Only individual native phases may use
+   // their existing, separately guarded async execution.
+   if(result&&typeof result.then==="function")
+    throw Error("LIVING_WORLD_ASYNC_CYCLE_FORBIDDEN");
    return {status:"COMPLETED",sequence,phaseCount};
   }catch(error){
    status="THREW";
