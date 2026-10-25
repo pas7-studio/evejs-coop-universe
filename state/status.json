@@ -1,10 +1,10 @@
 {
-  "updatedAt": "2026-10-25T12:48:23.122Z",
-  "runId": "20261025-124823",
-  "projectRev": "5f1a75ea38150dc568af83cfff4c74039ab06f1e",
+  "updatedAt": "2026-10-25T13:06:39.405Z",
+  "runId": "20261025-130639",
+  "projectRev": "9a217602784e140ff3bbb35f75f1f9521685a164",
   "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
-  "note": "state bundle + agent entry point committed; suite green",
-  "next": "rehearse an upstream SHA upgrade in a throwaway worktree",
+  "note": "real client gamelogs captured; client undocked 12:59:15",
+  "next": "one-client visual NPC confirmation, then two clients",
   "tests": {
     "status": "BASELINE_MATCH",
     "totals": {
@@ -24,40 +24,69 @@
       "drifted": 0,
       "anchorMismatch": 0,
       "missing": 0,
-      "moduleCurrent": 59,
+      "moduleCurrent": 60,
       "moduleStale": 0,
       "moduleMissing": 0
     },
     "problems": []
   },
   "server": {
-    "rows": 234,
+    "rows": 498,
     "firstAt": "2026-10-25T12:31:47.927Z",
-    "lastAt": "2026-10-25T12:48:18.401Z",
+    "lastAt": "2026-10-25T13:06:13.749Z",
     "types": {
-      "living-native-activity": 60,
-      "living-native-combat-damage": 26,
-      "living-world-topology": 18,
-      "living-native-industry": 18,
-      "living-native-materialization-attempt": 18,
-      "virtual-world-materialization": 18,
-      "virtual-faction-patrol": 18,
-      "virtual-world-presence": 18,
-      "living-npc-tactical-event": 9,
-      "virtual-world-identity-projected": 4,
-      "living-native-system-site-readiness": 4,
-      "living-headless-boot-system": 4,
-      "living-pirate-raid": 4,
-      "living-startup-entered": 2,
-      "living-headless-boot-requested": 2
+      "living-native-activity": 130,
+      "living-world-topology": 42,
+      "living-native-industry": 42,
+      "living-native-materialization-attempt": 42,
+      "virtual-world-materialization": 42,
+      "virtual-faction-patrol": 42,
+      "virtual-world-presence": 42,
+      "living-native-combat-damage": 42,
+      "living-npc-tactical-event": 13,
+      "virtual-world-identity-projected": 8,
+      "living-native-system-site-readiness": 8,
+      "living-headless-boot-system": 8,
+      "living-pirate-raid": 6,
+      "living-startup-entered": 4,
+      "living-headless-boot-requested": 4
     },
-    "truncatedTypes": 8,
+    "truncatedTypes": 13,
     "error": null
   },
-  "client": [],
+  "client": [
+    {
+      "name": "20261025_125742_<charid>.txt",
+      "bytes": 499,
+      "lines": 7,
+      "tail": [
+        "[ 2026.10.25 12:59:15 ] (None) Выход из дока <localized hint=\"Manifest V - AIR Laboratories Trade Center\">Manifest V - Торговый центр Лаборатории АМИ* в звездную систему <localized hint=\"Manifest\">Manifest*."
+      ]
+    },
+    {
+      "name": "20261025_<charid>.txt",
+      "bytes": 201,
+      "lines": 5,
+      "tail": [
+        "  Сеанс начат: 2026.10.25 12:57:15",
+        "------------------------------------------------------------",
+        ""
+      ]
+    },
+    {
+      "name": "20261025_124543_<charid>.txt",
+      "bytes": 688,
+      "lines": 9,
+      "tail": [
+        "[ 2026.10.25 12:48:52 ] (question) All your choices will be lost. Are you sure you want to cancel this character customization session?",
+        "[ 2026.10.25 12:56:54 ] (question) Changing the language settings will automatically reboot the client for the changes to take effect, do you wish to continue?",
+        "[ 2026.10.25 12:56:58 ] (warning) You have elevated roles and can swap language live (in development). Some UI elements like chat channels might not be updated live. Still want to restart?"
+      ]
+    }
+  ],
   "gates": {
-    "telemetry": "events 234",
-    "client": "BLOCKED_CLIENT_UNAVAILABLE (no gamelogs on this machine)"
+    "telemetry": "events 498",
+    "client": "logs 3 file(s)"
   },
   "ledgerSummary": {
     "total": 13,

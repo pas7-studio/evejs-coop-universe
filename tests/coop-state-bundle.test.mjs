@@ -55,8 +55,37 @@ test("client logs keep only a short redacted tail",()=>{
  const out=state.summarizeClientLogs([{name:"20261025.txt",bytes:10,lines:101,lines_sample:lines}],["Nazar"]);
  assert.equal(out.length,1);
  assert.ok(out[0].tail.length<=state.budgets.clientTailLines);
- assert.ok(out[0].tail.every(line=>/undock|dock|warp|target|module|damage|destroyed|wreck|loot|cargo|ore|fleet|disconnect|reconnect|error|exception/i.test(line)));
+ assert.ok(out[0].tail.length>0,"a filtered tail must not be empty when matching lines exist");
+ assert.ok(out[0].tail.every(line=>/undock|dock|warp|target|module|damage|destroyed|wreck|loot|cargo|ore|fleet|disconnect|reconnect|error|exception|\((error|warning|question)\)/i.test(line)));
  assert.ok(!JSON.stringify(out).includes("Nazar"));
+});
+
+test("localized client action lines are recognized",()=>{
+ const out=state.summarizeClientLogs([{name:"x.txt",lines_sample:[
+  "[ 2026.10.25 12:59:15 ] (None) Выход из дока <localized hint=\"Manifest\">",
+  "[ 2026.10.25 12:57:15 ] Сеанс начат"
+ ]}]);
+ assert.equal(out[0].tail.length,1,"only the action line is kept");
+ assert.match(out[0].tail[0],/Выход из дока/);
+});
+
+test("real gamelog headers never leak the pilot name or character id",()=>{
+ const lines=[
+  "------------------------------------------------------------",
+  "  Gamelog",
+  "  Listener: Sasunok1488",
+  "  Session Started: 2026.10.25 12:45:43",
+  "[ 2026.10.25 12:48:52 ] (question) All your choices will be lost.",
+  "[ 2026.10.25 12:59:15 ] (warning) Elevated roles detected."
+ ];
+ const out=state.summarizeClientLogs([{name:"20261025_124543_140000005.txt",bytes:688,lines:6,lines_sample:lines}]);
+ const text=JSON.stringify(out);
+ assert.ok(!text.includes("Sasunok1488"),text);
+ assert.ok(!text.includes("140000005"),"character id must be masked");
+ assert.match(out[0].name,/20261025_124543_<charid>\.txt/);
+ assert.ok(out[0].tail.length>=2,"dialog lines are kept as evidence");
+ assert.deepEqual(state.leaks(text),[]);
+ assert.ok(state.leaks("  Listener: Sasunok1488").includes("pilot-name"));
 });
 
 test("roadmap parsing stays in sync with the ledger",()=>{

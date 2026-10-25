@@ -110,21 +110,44 @@ if (-not $SkipServer) {
 # 4. Real client logs, redacted and tail-only.
 $client = @()
 if (-not $SkipClient) {
-  if (-not $ClientLogRoot) { $ClientLogRoot = Join-Path $env:LOCALAPPDATA 'CCP\EVE\logs\Gamelogs' }
-  if (Test-Path -LiteralPath $ClientLogRoot -PathType Container) {
-    $files = @(Get-ChildItem -LiteralPath $ClientLogRoot -Filter '*.txt' -File -ErrorAction SilentlyContinue |
-      Sort-Object LastWriteTime -Descending | Select-Object -First $ClientLogFiles)
+  # The EVE client writes Gamelogs to Documents\EVE\logs on this install; keep
+  # the older LocalAppData location as a fallback and allow an explicit override.
+  $candidateRoots = @()
+  if ($ClientLogRoot) { $candidateRoots += $ClientLogRoot }
+  $candidateRoots += @(
+    (Join-Path $env:USERPROFILE 'Documents\EVE\logs\Gamelogs'),
+    (Join-Path $env:LOCALAPPDATA 'CCP\EVE\logs\Gamelogs')
+  )
+  $foundRoots = @()
+  $files = @()
+  foreach ($root in $candidateRoots) {
+    if (Test-Path -LiteralPath $root -PathType Container) {
+      $foundRoots += $root
+      $files += @(Get-ChildItem -LiteralPath $root -Filter '*.txt' -File -ErrorAction SilentlyContinue)
+    }
+  }
+  if ($foundRoots.Count -eq 0) {
+    Write-Host ('[STATE] No EVE client log directory found; looked in: ' + ($candidateRoots -join '; '))
+  } else {
+    Write-Host ('[STATE] Client log roots: ' + ($foundRoots -join '; '))
+    $files = @($files | Sort-Object LastWriteTime -Descending | Select-Object -First $ClientLogFiles)
     foreach ($file in $files) {
-      $content = @(Get-Content -LiteralPath $file.FullName -Tail $ClientLogLines -ErrorAction SilentlyContinue)
+      # EVE logs are UTF-8 on an English client and Windows-1251 on a localized
+      # one; decode strictly and fall back instead of publishing mojibake.
+      $bytes = [System.IO.File]::ReadAllBytes($file.FullName)
+      $strictUtf8 = New-Object System.Text.UTF8Encoding($false, $true)
+      try { $text = $strictUtf8.GetString($bytes) }
+      catch { $text = [System.Text.Encoding]::GetEncoding(1251).GetString($bytes) }
+      $allLines = @($text -split "\r?\n")
+      $content = @($allLines | Select-Object -Last $ClientLogLines)
       $client += @{
         name = $file.Name
         bytes = $file.Length
-        lines = @(Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue).Count
+        lines = $allLines.Count
         lines_sample = $content
       }
     }
-  } else {
-    Write-Host "[STATE] No EVE client logs at $ClientLogRoot (no authorized client run on this machine)."
+    Write-Host ('[STATE] Captured ' + $files.Count + ' client log file(s).')
   }
 }
 

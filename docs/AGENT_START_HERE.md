@@ -52,5 +52,9 @@ Do not "fix" a red gate by relaxing an assertion.
 node scripts/coop-state.cjs --verify
 ```
 
+Client logs are read from `%USERPROFILE%\Documents\EVE\logs\Gamelogs` (this
+install) with `%LOCALAPPDATA%\CCP\EVE\logs\Gamelogs` as fallback; only a short
+redacted tail is published, never the files.
+
 Then commit `state/` together with the change it describes. A publish without a
 commit is invisible to every cloud session.
