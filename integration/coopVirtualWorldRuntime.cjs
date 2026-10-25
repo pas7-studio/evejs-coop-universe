@@ -18,6 +18,15 @@ function safeNpcPhase(phase,run){
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
  const depot=require("./coopNativeDepot").getNativeDepot();
+ const audit=depot.audit();
+ if(audit.status==="NEEDS_OPERATOR_REPAIR"){
+  require("./coopRuntimeProbe").observe("living-native-depot-repair-needed",null,null,
+   {status:audit.status,invalid:audit.invalid,unresolved:audit.unresolved});
+  return;
+ }
+ if(audit.status==="PENDING_CUSTODY_RECONCILIATION")
+  require("./coopRuntimeProbe").observe("living-native-depot-pending",null,null,
+   {status:audit.status,unresolved:audit.unresolved});
  const result=economy.syncNativeDeliveries(depot.snapshot().totals);
  if(result.quantity>0){
   console.info("[CoopLivingWorld] Real NPC ore delivered to virtual system supply",JSON.stringify(result));
