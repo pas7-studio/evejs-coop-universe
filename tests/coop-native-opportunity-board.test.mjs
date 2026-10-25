@@ -114,14 +114,14 @@ test("corrupted native event storage refuses to return a partial forged board",(
 }));
 test("disabled flag prevents new native event files and live notices",()=>withFixture({players:[{
  characterID:701,_space:{systemID:30000144}
-]},f=>{
+}]},f=>{
  process.env.EVEJS_COOP_OPPORTUNITY_BOARD="0";
  try{assert.equal(f.board.nativeRaid({scene:f.scene,action:f.action}).status,"DISABLED");
   assert.equal(f.mails().length,0)}finally{process.env.EVEJS_COOP_OPPORTUNITY_BOARD="1"}
 }));
 test("mail flag OFF preserves board discovery and prevents EVEmail dispatch",()=>withFixture({players:[{
  characterID:701,_space:{systemID:30000144}
-]},f=>{
+}]},f=>{
  process.env.EVEJS_COOP_OPPORTUNITY_MAIL="0";
  try{assert.equal(f.board.nativeRaid({scene:f.scene,action:f.action}).status,"EVENT_PUBLISHED");
   assert.equal(f.mails().length,0)}finally{process.env.EVEJS_COOP_OPPORTUNITY_MAIL="1"}
