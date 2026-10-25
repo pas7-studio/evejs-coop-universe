@@ -118,10 +118,12 @@ function ensureNativeWarGateHandoff(runtime){
   journalDir:process.env.EVEJS_COOP_WAR_TRANSFER_JOURNAL_DIR||
    "/var/lib/evejs/coop-war-native-transfers"
  });
+ // Keep the controller available to the privileged local operator
+ // even if startup is intentionally blocked by an unresolved warship.
+ warGateHandoff=instance;
  const audit=instance.auditStartup();
  if(audit.status!=="CLEAN")
   throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
- warGateHandoff=instance;
 }
 function advanceNativeWarGateStaging(){
  if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1"||
@@ -2586,4 +2588,15 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  });
  return {status:"PENDING"};
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};
+// This is deliberately NOT an EveJS client RPC or HTTP admin endpoint.
+// The caller must be trusted in-process server code providing a separately
+// authenticated admin/RBAC decision for every inspection and mutation.
+function createWarRecoveryAdmin({authorizeOperator}={}){
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_ADMIN!=="1")
+  throw Error("WAR_RECOVERY_ADMIN_DISABLED");
+ if(typeof authorizeOperator!=="function")
+  throw Error("WAR_RECOVERY_AUTHORITY_MISSING");
+ if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
+ return warGateHandoff.recovery({authorizeOperator});
+}
+module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};
