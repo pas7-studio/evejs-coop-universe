@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "stages": [
+    { "id": "A", "title": "Shared-world and gameplay authority", "releaseGate": "two real clients: join, warp, fight, loot, relog" },
+    { "id": "B", "title": "Durable resource and economic loop", "releaseGate": "original ore to one manufactured market item; money and item conservation after restart" },
+    { "id": "C", "title": "Playable NPC jobs and career", "releaseGate": "real Agent Accept to settled corporate-wallet payout and journal" },
+    { "id": "D", "title": "Exploration, corporations and professions", "releaseGate": "two-player native content with access rights and persisted outcomes" },
+    { "id": "E", "title": "Faction warfare and territory", "releaseGate": "one legitimate capture with persistent occupation, contribution and rewards" },
+    { "id": "F", "title": "Structures, sovereignty and advanced PvE", "releaseGate": "structure or instance ownership, lifecycle and cross-client outcome" }
+  ],
+  "features": [
+    {
+      "id": "session-authority", "stage": "A", "dependsOn": [],
+      "nativeEntrypoints": ["server/src/services/chat/sessionRegistry.js", "server/src/space/transitions.js"],
+      "overlayModules": ["coopSessionPresence", "coopNativeFleetParty"],
+      "installerSpecs": ["server/src/space/transitions.js"],
+      "tests": ["tests/coop-session-ownership.test.mjs", "tests/coop-session-party-authority.test.mjs"],
+      "ownerStore": "native client sessions + original ships", "invariant": "one live character/session/physical hull; reconnect replaces stale admission"
+    },
+    {
+      "id": "fleet-travel", "stage": "A", "dependsOn": ["session-authority"],
+      "nativeEntrypoints": ["server/src/services/fleets/fleetRuntime.js", "server/src/services/ship/beyonceService.js"],
+      "overlayModules": ["coopFleetWarpSafety", "coopFleetWarpArrival"],
+      "installerSpecs": ["server/src/services/ship/beyonceService.js"],
+      "tests": ["tests/coop-fleet-warp-safety.test.mjs", "tests/coop-fleet-warp-arrival.test.mjs"],
+      "ownerStore": "native fleet membership + ballpark movement", "invariant": "two real ships arrive at one grid without forged fleet membership"
+    },
+    {
+      "id": "combat-loot", "stage": "A", "dependsOn": ["fleet-travel"],
+      "nativeEntrypoints": ["server/src/space/npc/nativeNpcWreckService.js", "server/src/space/combat/killmailTracker.js"],
+      "overlayModules": ["coopNativeLootPickupEvidence", "coopPlayerCombatWitness"],
+      "installerSpecs": ["server/src/space/npc/nativeNpcWreckService.js", "server/src/space/combat/killmailTracker.js"],
+      "tests": ["tests/coop-native-loot-pickup.test.mjs", "tests/coop-native-loot-session-proof.test.mjs"],
+      "ownerStore": "native damage + wreck items + itemStore", "invariant": "physical damage and source-debited loot; no duplicate reward"
+    },
+    {
+      "id": "trade-custody", "stage": "A", "dependsOn": ["session-authority"],
+      "nativeEntrypoints": ["server/src/services/trade/tradeMgrService.js", "server/src/services/inventory/itemStore.js"],
+      "overlayModules": ["coopNativeTradeAtomic", "coopNativeTradeCustody"],
+      "installerSpecs": ["server/src/services/trade/tradeMgrService.js"],
+      "tests": ["tests/coop-native-trade-atomic.test.mjs", "tests/coop-native-trade-custody.test.mjs"],
+      "ownerStore": "native itemStore + native wallet + custody journal", "invariant": "at most one owner and one transfer after confirm/disconnect/crash"
+    },
+    {
+      "id": "native-mining-haul", "stage": "B", "dependsOn": ["combat-loot"],
+      "nativeEntrypoints": ["server/src/services/mining/miningNpcOperations.js", "server/src/services/inventory/itemStore.js"],
+      "overlayModules": ["coopNativeMiningAtomic", "coopNativeHaulTransferAtomic", "coopNativeWarehouse"],
+      "installerSpecs": ["server/src/services/mining/miningNpcOperations.js", "server/src/services/inventory/itemStore.js"],
+      "tests": ["tests/coop-native-mining-atomic.test.mjs"],
+      "ownerStore": "native asteroid + npcCargo + native station items", "invariant": "source debit = delivered native cargo; startup receipts resolved before reuse"
+    },
+    {
+      "id": "player-industry", "stage": "B", "dependsOn": ["trade-custody", "native-mining-haul"],
+      "nativeEntrypoints": ["server/src/services/industry/industryRuntimeState.js", "server/src/services/station/reprocessingService.js"],
+      "overlayModules": ["coopPlayerIndustryGuard", "coopPlayerIndustryFence"],
+      "installerSpecs": ["server/src/services/industry/industryRuntimeState.js"],
+      "tests": ["tests/coop-player-industry-guard.test.mjs", "tests/coop-player-industry-cycle.test.mjs"],
+      "ownerStore": "native blueprint + reprocessing + itemStore + wallet", "invariant": "input consumed once and real finished item persisted with its owner"
+    },
+    {
+      "id": "market-settlement", "stage": "B", "dependsOn": ["trade-custody", "player-industry"],
+      "nativeEntrypoints": ["server/src/services/market/marketProxyService.js"],
+      "overlayModules": ["coopMarketCancelCustody", "coopNpcCorporateSettlement"],
+      "installerSpecs": ["server/src/services/market/marketProxyService.js"],
+      "tests": ["tests/coop-market-cancel-custody.test.mjs", "tests/coop-npc-corporate-settlement.test.mjs"],
+      "ownerStore": "Rust market orders + native marketEscrow + itemStore + wallet", "invariant": "one funded fill or cancel across Rust and GameStore; exact original items"
+    },
+    {
+      "id": "native-missions", "stage": "C", "dependsOn": ["combat-loot", "market-settlement"],
+      "nativeEntrypoints": ["server/src/services/agent/agentMissionRuntime.js", "server/src/services/agent/agentMgrService.js"],
+      "overlayModules": ["coopFleetMissionJoin", "coopFleetMissionTurnin"],
+      "installerSpecs": ["server/src/services/agent/agentMgrService.js", "server/src/services/agent/agentMissionRuntime.js"],
+      "tests": ["tests/coop-fleet-mission-join.test.mjs"],
+      "ownerStore": "native accepted mission instance + per-character journal and rewards", "invariant": "only same-instance eligible participants get exactly one personal reward"
+    },
+    {
+      "id": "paid-escort-agent", "stage": "C", "dependsOn": ["fleet-travel", "market-settlement"],
+      "nativeEntrypoints": ["server/src/services/agent/agentMgrService.js", "server/src/services/mail/mailMgrService.js"],
+      "overlayModules": ["coopNativeJobAgent", "coopEscortPeacefulSettlement", "coopEscortTerminalAttendance"],
+      "installerSpecs": ["server/src/services/agent/agentMgrService.js"],
+      "tests": ["tests/coop-native-job-agent.test.mjs"],
+      "ownerStore": "native Agent / EVEmail + corporate escrow + original cargo manifest", "invariant": "both pilots opt in, physical delivery, reward at most once; no pirate required"
+    },
+    {
+      "id": "salvage-rescue", "stage": "C", "dependsOn": ["combat-loot", "trade-custody", "market-settlement"],
+      "nativeEntrypoints": ["server/src/space/npc/nativeNpcWreckService.js"],
+      "overlayModules": ["coopSalvageNativeTransfer", "coopSalvageNpcRivals"],
+      "installerSpecs": ["server/src/space/npc/nativeNpcWreckService.js"],
+      "tests": ["tests/coop-salvage-atomic-custody.test.mjs"],
+      "ownerStore": "original wreck item IDs + NPC cargo + corporate wallet", "invariant": "exact salvage provenance and exclusive player/NPC custody"
+    },
+    {
+      "id": "exploration-bookmarks", "stage": "D", "dependsOn": ["fleet-travel"],
+      "nativeEntrypoints": ["server/src/services/exploration/scanMgrService.js", "server/src/services/bookmark/bookmarkRuntimeStore.js"],
+      "overlayModules": ["coopNativeScanProof"],
+      "installerSpecs": ["server/src/services/exploration/scanMgrService.js"],
+      "tests": ["tests/coop-native-exploration-proof.test.mjs"],
+      "ownerStore": "native scan certainty + access-controlled bookmark", "invariant": "100% native scan receipt before shared authorized bookmark and warp"
+    },
+    {
+      "id": "wormhole-travel", "stage": "D", "dependsOn": ["exploration-bookmarks"],
+      "nativeEntrypoints": ["server/src/services/exploration/wormholes/wormholeMgrService.js"],
+      "overlayModules": ["coopWormholeJumpFence"],
+      "installerSpecs": ["server/src/services/exploration/wormholes/wormholeMgrService.js"],
+      "tests": ["tests/coop-wormhole-jump-fence.test.mjs"],
+      "ownerStore": "native wormholeRuntimeState + ship movement", "invariant": "mass and polarization committed before authentic ship transition"
+    },
+    {
+      "id": "player-corporations", "stage": "D", "dependsOn": ["trade-custody"],
+      "nativeEntrypoints": ["server/src/services/corporation/corpService.js", "server/src/services/corporation/corporationRuntimeState.js"],
+      "overlayModules": ["coopPlayerCorporationAccess"],
+      "installerSpecs": ["server/src/services/corporation/corpService.js"],
+      "tests": [],
+      "ownerStore": "native corp membership + role + division wallet + itemStore", "invariant": "per-member rights checked at each native asset mutation"
+    },
+    {
+      "id": "planetary-industry", "stage": "D", "dependsOn": ["player-industry", "player-corporations"],
+      "nativeEntrypoints": ["server/src/services/planet/planetMgrService.js"],
+      "overlayModules": ["coopPiIntegrityGuard"],
+      "installerSpecs": ["server/src/services/planet/planetMgrService.js"],
+      "tests": ["tests/coop-pi-integrity-guard.test.mjs"],
+      "ownerStore": "native colony + launch container + itemStore + customs taxes", "invariant": "one owner/launch, no free PI commodity or wallet credit"
+    },
+    {
+      "id": "drone-fighter-coop", "stage": "D", "dependsOn": ["combat-loot"],
+      "nativeEntrypoints": ["server/src/services/drone/droneRuntime.js", "server/src/services/fighter/fighterRuntime.js"],
+      "overlayModules": ["coopDroneFighterAuthority"],
+      "installerSpecs": ["server/src/services/drone/droneRuntime.js", "server/src/services/fighter/fighterRuntime.js"],
+      "tests": ["tests/coop-drone-fighter-authority.test.mjs"],
+      "ownerStore": "native drone owner + fighter tube + dogma", "invariant": "two pilots retain independent units, abilities and losses across reconnect"
+    },
+    {
+      "id": "clones-and-skills", "stage": "D", "dependsOn": ["session-authority", "trade-custody"],
+      "nativeEntrypoints": ["server/src/services/station/jumpCloneService.js", "server/src/services/skills/training/skillQueueRuntime.js"],
+      "overlayModules": ["coopCloneNativeGuard", "coopSkillRateCutover"],
+      "installerSpecs": ["server/src/services/station/jumpCloneService.js"],
+      "tests": ["tests/coop-clone-native-guard.test.mjs", "tests/coop-skill-rate-cutover.test.mjs"],
+      "ownerStore": "native clones, implants, queues and account license", "invariant": "no duplicate clone, lost implants, phantom SP or accidental rate migration"
+    },
+    {
+      "id": "faction-warfare", "stage": "E", "dependsOn": ["native-missions", "player-corporations", "combat-loot"],
+      "nativeEntrypoints": ["server/src/services/corporation/fwCharacterEnlistmentMgrService.js", "server/src/services/faction/fwVictoryPointMgrService.js"],
+      "overlayModules": ["coopFwEnlistmentGate", "coopFactionDirector"],
+      "installerSpecs": ["server/src/services/corporation/fwCharacterEnlistmentMgrService.js"],
+      "tests": ["tests/coop-fw-native-enlistment.test.mjs"],
+      "ownerStore": "native FW membership + sites + VP + occupation + LP + standings", "invariant": "only committed eligible capture changes warzone and rewards participants"
+    },
+    {
+      "id": "structures-sovereignty", "stage": "F", "dependsOn": ["player-corporations", "faction-warfare", "player-industry"],
+      "nativeEntrypoints": ["server/src/services/structure/structureDeploymentService.js"],
+      "overlayModules": ["coopStructureAllianceAuthority"],
+      "installerSpecs": ["server/src/services/structure/structureDeploymentService.js"],
+      "tests": ["tests/coop-structure-alliance-authority.test.mjs"],
+      "ownerStore": "native structure owner + corp roles + fuel + timers + assets", "invariant": "real role, upkeep, destruction, item settlement and restart reconciliation"
+    }
+  ]
+}
