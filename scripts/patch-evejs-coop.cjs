@@ -15,6 +15,8 @@ names.splice(names.indexOf("coopWorldOpportunityBoard")+1,0,"coopNpcJobBoard");
 names.splice(names.indexOf("coopNpcJobBoard")+1,0,"coopNativeJobAgent");
 // Native opt-in EVEmail notification bridge for priced corporate offers.
 names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobNotifications");
+// Durable actor-agent source binding for ID-less native Accept button.
+names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelection");
 // Peaceful delivery uses the same native corporate escrow (feature OFF by default).
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 const specs=[
