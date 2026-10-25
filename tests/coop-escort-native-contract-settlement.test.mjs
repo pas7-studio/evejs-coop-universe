@@ -29,7 +29,7 @@ function fixture(options={}){
   verifiedWarehouseStacks:rows.map((r,i)=>({cargoID:r.cargoID,itemID:i+9001,
    typeID:r.typeID,quantity:r.quantity,stationID:offer.stationID,ownerID:offer.corporationID}))}]};
  const delivery={status:'DELIVERED',terminal:true,nativeFullManifestProof:full};
- let balance=50000,reservation=null,settlement=null,reserveCalls=0,payCalls=0;
+ let balance=50000,reservation=null,settlement=null,refundReceipt=null,reserveCalls=0,payCalls=0,refundCalls=0;
  const nativeFunds={
   capabilities:()=>({nativeDurable:true,atomicDualCredit:true,durableIdempotency:true}),
   verifyReservation:()=>reservation||{status:'NOT_FOUND'},
@@ -38,6 +38,15 @@ function fixture(options={}){
    if(balance<c.amountISK)throw Error('insufficient funds');
    balance-=c.amountISK;reservation={status:'RESERVED',contractID:c.contractID,
     corporationID:c.corporationID,amountISK:c.amountISK,escrowKey:c.contractID,nativeDurable:true};},
+  verifyRefund:()=>refundReceipt||{status:'NOT_FOUND'},
+  refundAtomic:(c)=>{refundCalls++;
+   if(options.refundThrow)throw Error('ESCROW_UNKNOWN');
+   if(!reservation||settlement||refundReceipt)throw Error('REFUND_NOT_ALLOWED');
+   balance+=c.amountISK;reservation=null;
+   refundReceipt={status:'REFUNDED',nativeDurable:true,contractID:c.contractID,
+    corporationID:c.corporationID,amountISK:c.amountISK,
+    failureWitnessID:90002,reason:'NATIVE_HAULER_WRECK'};
+  },
   verifySettlement:()=>settlement||{status:'NOT_FOUND'},
   settleAtomic:(c)=>{payCalls++;if(options.payThrow)throw Error('ambiguous');
    if(settlement)throw Error('already paid');
@@ -47,10 +56,17 @@ function fixture(options={}){
  const deps={root,clock:()=>12345678,authorizeOffer:c=>({status:'AUTHORIZED_NATIVE_ESCORT',
   ...c}),
   readManifest:()=>manifest,verifyManifest:()=>full,readIncidents:()=>incident,
-  readOutcomes:()=>outcomes,readNativeDelivery:()=>delivery,nativeFunds};
+  readOutcomes:()=>outcomes,
+  readNativeDelivery:()=>options.nativeDelivery!==undefined?options.nativeDelivery:delivery,
+  readNativeFailure:()=>options.realLoss===true?{
+   status:'DURABLE_NATIVE_CONVOY_TERMINAL_FAILURE',
+   contractID:offer.contractID,manifestKey:offer.manifestKey,
+   corporationID:offer.corporationID,reason:'NATIVE_HAULER_WRECK',
+   failureWitnessID:90002,nativeDurable:true,deliveryImpossible:true,
+   noPriorPayout:true}:null,nativeFunds};
  const engine=()=>createEscortContractSettlement(deps);
  return {root,deps,engine,manifest,full,incident,outcomes,delivery,nativeFunds,
-  getBalance:()=>balance,getReserveCalls:()=>reserveCalls,getPayCalls:()=>payCalls,
+  getBalance:()=>balance,getReserveCalls:()=>reserveCalls,getPayCalls:()=>payCalls,getRefundCalls:()=>refundCalls,
   setReservation:r=>{reservation=r},setSettlement:r=>{settlement=r},
   cleanup:()=>fs.rmSync(root,{recursive:true,force:true})};
 }
@@ -135,5 +151,52 @@ test('missing atomic native wallet features refuses offer',()=>run(t=>{
  assert.equal(t.engine().create(offer).status,'ATOMIC_NATIVE_WALLET_PROVIDER_UNAVAILABLE');
  assert.equal(t.getReserveCalls(),0);
 }));
+
+test('funded escrow cannot refund without durable native wreck proof',()=>run(t=>{
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{const e=t.engine();e.create(offer);e.fund(offer.contractID);
+  assert.equal(e.refund(offer.contractID).status,'NATIVE_REFUND_FAILURE_NOT_PROVEN');
+  assert.equal(t.getRefundCalls(),0);assert.equal(t.getBalance(),30000);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS}
+}));
+test('real native delivered convoy blocks refund even if a loss witness claims failure',()=>{
+ const t=fixture({realLoss:true});
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{const e=t.engine();e.create(offer);e.fund(offer.contractID);
+  assert.equal(e.refund(offer.contractID).status,'NATIVE_DELIVERY_ALSO_PRESENT_REFUND_BLOCKED');
+  assert.equal(t.getBalance(),30000);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS;t.cleanup()}
+});
+test('verified durable loss refunds real corporation exactly once and survives restart',()=>{
+ const t=fixture({realLoss:true,nativeDelivery:{status:'NOT_DELIVERED'}});
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{const e=t.engine();e.create(offer);e.fund(offer.contractID);
+  assert.equal(e.refund(offer.contractID).status,'REFUNDED');
+  assert.equal(t.getBalance(),50000);assert.equal(t.getRefundCalls(),1);
+  assert.equal(t.engine().read(offer.contractID).phase,'REFUNDED');
+  assert.equal(t.engine().settle(offer.contractID).status,'CONTRACT_SETTLEMENT_NOT_REPLAYABLE');
+  assert.equal(t.engine().refund(offer.contractID).status,'CONTRACT_REFUND_NOT_REPLAYABLE');
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS;t.cleanup()}
+});
+test('ambiguous native refund is fenced after fsynced PREPARED phase',()=>{
+ const t=fixture({realLoss:true,nativeDelivery:{status:'NOT_DELIVERED'},refundThrow:true});
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{const e=t.engine();e.create(offer);e.fund(offer.contractID);
+  assert.equal(e.refund(offer.contractID).status,'REFUND_NATIVE_COMMIT_UNCERTAIN_REPAIR_REQUIRED');
+  assert.equal(t.engine().read(offer.contractID).phase,'REFUND_PREPARED');
+  assert.equal(t.engine().inspectRefundRecovery(offer.contractID).status,
+   'REFUND_OUTCOME_UNCERTAIN_DO_NOT_RETRY');
+  assert.equal(e.refund(offer.contractID).status,'ESCORT_WRITER_LOCKED_REPAIR_REQUIRED');
+  assert.equal(t.getRefundCalls(),1);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS;t.cleanup()}
+});
+test('unknown delivery status refuses escrow refund even with a trustworthy loss witness',()=>{
+ const t=fixture({realLoss:true,nativeDelivery:{status:'UNAVAILABLE'}});
+ process.env.EVEJS_COOP_ESCORT_REFUNDS='1';
+ try{const e=t.engine();e.create(offer);e.fund(offer.contractID);
+  assert.equal(e.refund(offer.contractID).status,'NATIVE_DELIVERY_STATE_UNKNOWN_REFUND_BLOCKED');
+  assert.equal(t.getRefundCalls(),0);
+ }finally{delete process.env.EVEJS_COOP_ESCORT_REFUNDS;t.cleanup()}
+});
 process.on('exit',()=>{if(prior===undefined)delete process.env.EVEJS_COOP_ESCORT_CONTRACTS;
  else process.env.EVEJS_COOP_ESCORT_CONTRACTS=prior});

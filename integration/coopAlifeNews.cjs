@@ -10,6 +10,8 @@ const WATCH = new Map([
   ["living-pirate-raid", { kind: "raid", label: "рейд піратів" }],
   ["living-native-combat-damage", { kind: "combat", label: "бій" }],
   ["alife-blocker", { kind: "blocker", label: "блокер" }],
+  ["alife-economy-intent", {kind:"economy-intent",label:"намір NPC"}],
+  ["alife-economy-blocker", {kind:"blocker",label:"блокер NPC-економіки"}],
 ]);
 
 const SYSTEM_NAMES = new Map([
@@ -42,7 +44,8 @@ function describe(item) {
   if (kind === "fleet") return `флот ${Number(item.fleetSlot) || 1}: ${Number(item.miners) || 0} мінер(ів)`;
   if (kind === "raid") return `${Number(item.pirates) || 0} пірат(ів) на полюванні`;
   if (kind === "combat") return `пошкодження ${Math.round(Number(item.damage) || 0)} HP`;
-  if (kind === "blocker") return `${item.module || "?"}: ${item.reason || item.status || "?"}`;
+  if (kind === "economy-intent") return `NPC ${trim(item.pilotID || "?", 20)} планує ${trim(item.stage || "?", 18)} (ще не виконано)`;
+  if (kind === "blocker") return `${item.module || "?", item.pilotID || "NPC"}: ${item.reason || item.status || "?"}`;
   return "";
 }
 
