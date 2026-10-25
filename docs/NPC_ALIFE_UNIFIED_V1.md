@@ -117,6 +117,14 @@ version of this rule.
 5. Two clients see the same NPC doing the same thing for the same reason
    (client gate, human-verified).
 
+## Phase status
+
+- **A (done, opt-in):** EVEJS_COOP_ALIFE=1 now implies native order arbitration in
+  coopVirtualWorldRuntime; the legacy EVEJS_COOP_NPC_ORDER_ARBITER still works and
+  both are resolved in exactly one helper (lifeOrderArbitrationEnabled), guarded by tests.
+- **D (partial, done):** scripts/alife-audit.cjs reads the shared event file and reports
+  blockers per module/status/reason, actors, trades and deliveries.
+
 ## Honest current state
 
 - Mergeable now: A (arbiter exists), B (pure planner exists), C partially
