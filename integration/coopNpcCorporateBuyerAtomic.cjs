@@ -22,8 +22,10 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
    process.env.EVEJS_COOP_NPC_BUY_PLAYER_ASK==="1";}
  function validateClaim(claim,request){
   const n=toInt;
-  if(!claim||claim.source!=="player"||claim.state!=="settling"||
-     claim.fill_phase!=="claimed"||claim.is_corp!==false||
+  if(!claim||claim.source!=="player"||
+     !((claim.state==="settling"&&claim.fill_phase==="claimed")||
+       (claim.state==="filled"&&claim.fill_phase==="finalized"))||
+     claim.is_corp!==false||
      claim.bid!==false||claim.claim_key!==request.claimKey||
      !pos(n(claim.fill_id))||!pos(n(claim.order_id))||
      !pos(n(claim.owner_id))||!pos(n(claim.buyer_corp_id))||
@@ -67,6 +69,8 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
     return {status:"ALREADY_NATIVE_COMMITTED",fillID,
      itemID:previous.itemID,quantity,grossCents};
    }
+   if(claim.state!=="settling"||claim.fill_phase!=="claimed")
+    throw Error("NPC_CORP_BUY_RUST_FINALIZED_WITHOUT_GAMESTORE_RECEIPT");
    const escrow=tx.get("marketEscrow",orderKey),
     corporation=tx.get("corporationRuntime",corpKey),
     seller=tx.get("characters",String(sellerID));
