@@ -1,64 +1,90 @@
 "use strict";
-// Native activity must start only AFTER EVE client Ballpark initialization.
-// Coalesces login/undock/stargate transitions and cancels stale arrivals.
+// Native Ballpark membership is necessary, but by itself cannot authorize an
+// account or its current ship. All checks are read-only and fail closed.
 const scheduled=new WeakMap();
-
-// Once a client completed Ballpark, admit it to co-op side effects only if
-// the current native scene still owns one active session and physical ship.
-// This does not alter stock EveJS session or ship ownership.
-function admission(session,ship,getSceneForSession){
- const characterID=Number(session?.characterID),shipID=Number(ship?.itemID),
-  systemID=Number(session?._space?.systemID);
- if(!Number.isSafeInteger(characterID)||characterID<=0||
-  !Number.isSafeInteger(shipID)||shipID<=0||
-  !Number.isSafeInteger(systemID)||systemID<=0||
-  session?.socket?.destroyed===true)return {status:"STALE_SESSION"};
- if(session?._space?.initialStateSent!==true)
-  return {status:"PENDING_BALLPARK"};
- if(Number(session._space.shipID)!==shipID||
-  Number(ship?.spaceState?.systemID||systemID)!==systemID)
+const positive=value=>{const n=Number(value);return Number.isSafeInteger(n)&&n>0?n:null;};
+const live=session=>Boolean(session?.socket&&session.socket.destroyed!==true);
+function admission(session,ship,getSceneForSession,authority=null){
+ const characterID=positive(session?.characterID),shipID=positive(ship?.itemID),
+  systemID=positive(session?._space?.systemID);
+ if(!characterID||!shipID||!systemID||!live(session))return {status:"STALE_SESSION"};
+ if(session._space.initialStateSent!==true)return {status:"PENDING_BALLPARK"};
+ if(positive(session._space.shipID)!==shipID||
+  positive(ship?.spaceState?.systemID||systemID)!==systemID||
+  (positive(session.shipID??session.shipid)&&positive(session.shipID??session.shipid)!==shipID))
   return {status:"REPLACED_OR_WRONG_SYSTEM_SHIP"};
  let scene;
- try{scene=getSceneForSession(session);}catch{return {status:"SCENE_UNAVAILABLE"}}
- if(!scene||Number(scene.systemID)!==systemID||
+ try{scene=getSceneForSession(session);}catch{return {status:"SCENE_UNAVAILABLE"};}
+ if(!scene||positive(scene.systemID)!==systemID||
   typeof scene.getEntityByID!=="function"||
-  typeof scene.sessions?.values!=="function")
-  return {status:"SCENE_UNAVAILABLE"};
+  typeof scene.sessions?.values!=="function")return {status:"SCENE_UNAVAILABLE"};
  const sessions=[...scene.sessions.values()];
  if(!sessions.includes(session))return {status:"SESSION_NOT_IN_NATIVE_SCENE"};
- const active=sessions.filter(s=>Number(s?.characterID)===characterID&&
-  s?._space?.initialStateSent===true&&s?.socket?.destroyed!==true);
+ const active=sessions.filter(s=>positive(s?.characterID)===characterID&&
+  s?._space?.initialStateSent===true&&live(s));
  if(active.length!==1)return {status:"AMBIGUOUS_NATIVE_CHARACTER_SESSION"};
- const conflicting=sessions.some(s=>s!==session&&
-  Number(s?._space?.shipID)===shipID&&
-  s?._space?.initialStateSent===true&&s?.socket?.destroyed!==true);
- if(conflicting)return {status:"AMBIGUOUS_NATIVE_SHIP_OWNER"};
+ if(sessions.some(s=>s!==session&&positive(s?._space?.shipID)===shipID&&
+  s?._space?.initialStateSent===true&&live(s)))
+  return {status:"AMBIGUOUS_NATIVE_SHIP_OWNER"};
  const physical=scene.getEntityByID(shipID);
- if(!physical||physical.kind!=="ship"||Number(physical.itemID)!==shipID)
+ if(!physical||physical.kind!=="ship"||positive(physical.itemID)!==shipID)
   return {status:"NATIVE_HULL_NOT_READY"};
- const owner=Number(physical.pilotCharacterID??physical.characterID);
- if(Number.isSafeInteger(owner)&&owner>0&&owner!==characterID)
-  return {status:"WRONG_PHYSICAL_PILOT"};
+ const owner=positive(physical.pilotCharacterID??physical.characterID);
+ if(owner&&owner!==characterID)return {status:"WRONG_PHYSICAL_PILOT"};
+ if(physical.session&&physical.session!==session)
+  return {status:"WRONG_PHYSICAL_SESSION"};
+ // The live native caller supplies these native lookups; never use a shadow
+ // account, ship or session store. Pure scene tests can omit authority.
+ if(authority!==null){
+  if(typeof authority.getSessions!=="function"||
+   typeof authority.getCharacterRecord!=="function"||
+   typeof authority.getActiveShipRecord!=="function")
+   return {status:"AUTHORITY_UNAVAILABLE"};
+  let registered,record,activeShip;
+  try{
+   registered=authority.getSessions();
+   record=authority.getCharacterRecord(characterID);
+   activeShip=authority.getActiveShipRecord(characterID);
+  }catch{return {status:"AUTHORITY_UNAVAILABLE"};}
+  if(!Array.isArray(registered))return {status:"AUTHORITY_UNAVAILABLE"};
+  if(!registered.includes(session))return {status:"SESSION_NOT_IN_NATIVE_REGISTRY"};
+  if(registered.some(s=>s!==session&&live(s)&&positive(s.characterID)===characterID))
+   return {status:"AMBIGUOUS_GLOBAL_CHARACTER_SESSION"};
+  if(registered.some(s=>s!==session&&live(s)&&
+   positive(s?._space?.shipID)===shipID))
+   return {status:"AMBIGUOUS_GLOBAL_SHIP_OWNER"};
+  const accountID=positive(session.userid);
+  if(!accountID||!record||positive(record.accountId)!==accountID)
+   return {status:"WRONG_ACCOUNT_OWNER"};
+  if(!activeShip||positive(activeShip.itemID)!==shipID||
+   positive(activeShip.ownerID)!==characterID)
+   return {status:"WRONG_ACTIVE_SHIP_OWNER"};
+ }
  return {status:"ADMITTED_NATIVE_SESSION",scene,physical};
 }
-
+function nativeAuthority(){
+ const registry=require("../services/chat/sessionRegistry");
+ const characters=require("../services/character/characterState");
+ return {getSessions:()=>registry.getSessions(),
+  getCharacterRecord:id=>characters.getCharacterRecord(id),
+  getActiveShipRecord:id=>characters.getActiveShipRecord(id)};
+}
 function schedule(session,ship,reason="transition"){
- if(!session||typeof session!=="object"||!ship?.itemID)return false;
+ if(!session||typeof session!=="object"||!positive(ship?.itemID))return false;
  const previous=scheduled.get(session);
  if(previous)clearTimeout(previous.timer);
- const expectedID=Number(ship.itemID);
- const expectedSystem=Number(ship.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
+ const expectedID=positive(ship.itemID);
+ const expectedSystem=positive(ship.spaceState?.systemID||session?._space?.systemID||session?.solarsystemid);
  const job={expectedID,expectedSystem,reason,attempts:0,timer:null};
  scheduled.set(session,job);
  function poll(){
   if(scheduled.get(session)!==job)return;
   try{
    const space=session._space;
-   if(!space||session.socket?.destroyed===true){scheduled.delete(session);return;}
-   if(Number(space.shipID)!==expectedID||Number(space.systemID)!==expectedSystem){
+   if(!space||!live(session)){scheduled.delete(session);return;}
+   if(positive(space.shipID)!==expectedID||positive(space.systemID)!==expectedSystem){
     scheduled.delete(session);return;
    }
-   // Do not inject dynamic NPCs before the client has initialized Ballpark.
    if(space.initialStateSent!==true){
     if(++job.attempts>=30){
      scheduled.delete(session);
@@ -69,13 +95,14 @@ function schedule(session,ship,reason="transition"){
     job.timer.unref?.();
     return;
    }
-   const verified=admission(session,ship,s=>
-    require("./runtime").getSceneForSession(s));
+   const verified=admission(session,ship,s=>require("./runtime").getSceneForSession(s),nativeAuthority());
    if(verified.status!=="ADMITTED_NATIVE_SESSION"){
     if(++job.attempts>=30||[
      "AMBIGUOUS_NATIVE_CHARACTER_SESSION","AMBIGUOUS_NATIVE_SHIP_OWNER",
-     "WRONG_PHYSICAL_PILOT","REPLACED_OR_WRONG_SYSTEM_SHIP",
-     "STALE_SESSION"].includes(verified.status)){
+     "AMBIGUOUS_GLOBAL_CHARACTER_SESSION","AMBIGUOUS_GLOBAL_SHIP_OWNER",
+     "WRONG_PHYSICAL_PILOT","WRONG_PHYSICAL_SESSION",
+     "WRONG_ACTIVE_SHIP_OWNER","WRONG_ACCOUNT_OWNER",
+     "REPLACED_OR_WRONG_SYSTEM_SHIP","STALE_SESSION"].includes(verified.status)){
      scheduled.delete(session);
      require("./coopRuntimeProbe").observe("coop-session-admission-blocked",
       session,ship,{reason,status:verified.status});
@@ -101,4 +128,4 @@ function schedule(session,ship,reason="transition"){
  job.timer.unref?.();
  return true;
 }
-module.exports={schedule,admission};
+module.exports={schedule,admission,nativeAuthority};

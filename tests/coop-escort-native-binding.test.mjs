@@ -5,7 +5,8 @@ const require=createRequire(import.meta.url);
 const {makeBinding,routeGate,installServerAuthority,inspect}=require("../integration/coopEscortNativeBinding.cjs");
 const old=Object.fromEntries(["EVEJS_COOP_ESCORT_CONTRACTS","EVEJS_COOP_ESCORT_ROUTE_GATE",
 "EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_ESCORT_WALLET",
-"EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_REFUNDS"].map(k=>[k,process.env[k]]));
+"EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_REFUNDS",
+"EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY"].map(k=>[k,process.env[k]]));
 for(const k of Object.keys(old))process.env[k]="1";
 const key="30000144-77-1000000";
 const booking={contractID:"escort-native-01",manifestKey:key,
@@ -21,14 +22,21 @@ const delivery={manifestKey:key,trip:{manifestID:key,systemID:30000144,
 function fixture(options={}){
  let payments=0,reserves=0,deliveryCalls=0,incidents=[];
  const runtime={
-  nativeFunds:{capabilities:()=>({nativeDurable:true,atomicDualCredit:true})},
+  nativeFunds:{capabilities:()=>({nativeDurable:true,atomicDualCredit:true}),
+   verifySettlement:c=>payments?{
+    status:"SETTLED",contractID:c.contractID,corporationID:c.corporationID,
+    amountISK:c.amountISK,nativeDurable:true,
+    credits:c.characters.map(characterID=>({characterID,amountISK:c.amountISK/2}))
+   }:{status:"NOT_SETTLED"},
+   verifyRefund:()=>({status:"NOT_REFUNDED"})},
   fundBeforeWarp:x=>{reserves++;return {status:"FUNDED_BEFORE_WARP",contractID:booking.contractID,manifestKey:x.manifestKey}},
   recordDelivery:x=>{deliveryCalls++;return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey:x.manifestKey}},
   finishAfterRaid:c=>{payments++;return {status:"SETTLED",contractID:c.contractID}},
   refundProvenLoss:()=>({status:"REFUNDED"}),
   refundWreckedFlight:()=>({status:"REFUNDED",contractID:booking.contractID,amountISK:20000}),
   readFlight:k=>({status:"READY",phase:options.notDelivered?"FUNDED":"DELIVERED",booking}),
-  inspectRefundRecovery:()=>({status:"NO_REFUND_RECOVERY_PENDING"})};
+  inspectRefundRecovery:()=>({status:"NO_REFUND_RECOVERY_PENDING"}),
+  listDeliveredFlights:()=>({status:"READY",manifestKeys:[key]})};
  return {runtime,readNativeIncident:()=>({status:"READY",incidents}),
   incidents,counts:()=>({payments,reserves,deliveryCalls})};
 }
@@ -55,6 +63,38 @@ test("only one exact genuine incident with matching two pilots can settle",()=>{
   status:"PIRATE_WRECK_CONFIRMED",closed:true,nativeWreckID:9001});
  assert.equal(b.settleVerifiedNativeRaid(key).status,"SETTLED");
  assert.equal(f.counts().payments,1);
+});
+test("late pirate after delivery is paid by durable journal replay exactly once",()=>{
+ const f=fixture(),b=makeBinding(f);
+ const before=b.reconcilePendingDeliveries({systemID:30000144,maxTrips:4});
+ assert.equal(before.status,"NATIVE_RECONCILE_CHECKED");
+ assert.equal(before.pending,1);assert.equal(f.counts().payments,0);
+ f.incidents.push({systemID:30000144,targetID:901,pirateID:202,
+  targetRole:"hauler",key:"30000144:202:901",duoFleetID:33,
+  characters:[701,702],status:"PIRATE_WRECK_CONFIRMED",
+  closed:true,nativeWreckID:9001});
+ const paid=b.reconcilePendingDeliveries({systemID:30000144,maxTrips:4});
+ assert.equal(paid.status,"NATIVE_RECONCILE_CHECKED");
+ assert.equal(paid.paid,1);
+ assert.equal(f.counts().payments,1);
+ const replay=makeBinding(f).reconcilePendingDeliveries({
+  systemID:30000144,maxTrips:4});
+ assert.equal(replay.alreadyPaid,1);
+ assert.equal(f.counts().payments,1);
+});
+test("native settlement recovery stays disabled without separate opt-in flag",()=>{
+ const f=fixture(),b=makeBinding(f);
+ process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY="0";
+ try{assert.equal(b.reconcilePendingDeliveries({}).status,"DISABLED")}
+ finally{process.env.EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY="1"}
+});
+test("invalid source scan cannot trigger arbitrary native wallet payouts",()=>{
+ const f=fixture(),b=makeBinding(f);
+ assert.equal(b.reconcilePendingDeliveries({maxTrips:999}).status,
+  "NATIVE_RECONCILE_LIMIT_INVALID");
+ assert.equal(b.reconcilePendingDeliveries({systemID:-4}).status,
+  "NATIVE_RECONCILE_SYSTEM_INVALID");
+ assert.equal(f.counts().payments,0);
 });
 test("fake single-player, wrong fleet or missing wreck never authorizes payout",()=>{
  const f=fixture(),b=makeBinding(f);

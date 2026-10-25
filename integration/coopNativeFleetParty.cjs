@@ -17,9 +17,13 @@ function membership({leaderSession,peerSession,fleetRuntime}={}){
  if(!native||!id(native.fleetID)||
   fleetRuntime.getFleetForCharacter(peer)!==native)
   return {ok:false,reason:"NOT_SAME_NATIVE_FLEET"};
- if(!fleetRuntime.getMemberRecord(native,leader)||
-  !fleetRuntime.getMemberRecord(native,peer))
+ const leaderMember=fleetRuntime.getMemberRecord(native,leader);
+ const peerMember=fleetRuntime.getMemberRecord(native,peer);
+ if(!leaderMember||!peerMember)
   return {ok:false,reason:"NOT_ACTIVE_NATIVE_FLEET_MEMBERS"};
+ if(id(leaderMember.charID??leaderMember.characterID)!==leader||
+    id(peerMember.charID??peerMember.characterID)!==peer)
+  return {ok:false,reason:"NATIVE_FLEET_MEMBER_RECORD_MISMATCH"};
  return {ok:true,fleetID:id(native.fleetID),leaderCharacterID:leader,
   peerCharacterID:peer};
 }

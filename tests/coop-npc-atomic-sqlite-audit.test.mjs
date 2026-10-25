@@ -153,3 +153,47 @@ test("strict outcome audit rejects forged boundary or missile entity metadata",(
   assert.equal(report.counts.CORRUPT_NEEDS_REVIEW,1);
  });
 });
+
+function markOutcomeMode(f,{sqlite=true,receipt=true,outcome=null}={}){
+ const k="coopAmmoCycles_101";
+ if(sqlite){
+  const row=f.db.prepare("SELECT json FROM npcCargo WHERE key=?").get(k);
+  const body=JSON.parse(row.json);
+  body.outcomeRequired=true;
+  f.db.prepare("UPDATE npcCargo SET json=? WHERE key=?").run(JSON.stringify(body),k);
+ }
+ if(receipt){
+  const p=path.join(f.dir,"101.json");
+  const r=JSON.parse(fs.readFileSync(p,"utf8"));
+  r.outcomeRequired=true;
+  if(outcome)r.outcome=outcome;
+  fs.writeFileSync(p,JSON.stringify(r));
+ }
+}
+test("persistently latched witnessed NPC bank fails a normal audit if its outcome is absent",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  markOutcomeMode(f);
+  const report=f.audit();
+  assert.equal(report.clean,false);
+  assert.equal(report.counts.MISSING_FIRE_OUTCOME,1);
+  assert.equal(report.entries[0].outcomeRequired,true);
+ });
+});
+test("read-only auditor detects loss of POSIX outcome latch against native SQLite",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  markOutcomeMode(f,{sqlite:true,receipt:false});
+  const report=f.audit();
+  assert.equal(report.clean,false);
+  assert.equal(report.counts.OUTCOME_MODE_MISMATCH,1);
+ });
+});
+test("persistently witnessed turret miss passes normal audit with matching SQLite latch",()=>{
+ fixture(f=>{
+  f.fence(101,{"401":1000});f.receipt(101,"COMMITTED",1000,[401]);
+  markOutcomeMode(f,{outcome:{version:1,kind:"TURRET_RESOLVED",
+   boundaryMs:1000,observedAtMs:2000,hit:false}});
+  assert.equal(f.audit().status,"CLEAN");
+ });
+});

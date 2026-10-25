@@ -8,6 +8,10 @@ function patch(source,file,remove=false){
  const eol=source.includes("\r\n")?"\r\n":"\n";
  const line=ANCHOR+eol+HOOK;
  if(remove){
+  // Idempotent removal: a pristine file simply has no hook to take out.
+  // Without this, classifying an unpatched file threw and the installer
+  // refused to install at all after `git checkout` restored the source.
+  if(source.split(line).length===1)return source;
   if(source.split(line).length!==2)throw Error("Unknown or missing market catalog hook");
   return source.replace(line,ANCHOR);
  }

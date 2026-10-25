@@ -1,0 +1,110 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const {
+ evaluateContract,selectHull,planRoute,piracyOpportunity,
+}=require('../integration/coopCourierDispatch.cjs');
+
+function courier(overrides={}){
+ return {
+  contractID:5001,
+  contractType:'courier',
+  status:'outstanding',
+  plasticWrapItemID:1200001,
+  volume:3500,
+  reward:2500000,
+  collateral:0,
+  startStationID:60003760,
+  endStationID:60003761,
+  startSolarSystemID:30000144,
+  endSolarSystemID:30000144,
+  ...overrides,
+ };
+}
+const HULLS=[
+ {name:'Bestower',typeID:1944,capacityM3:4800},
+ {name:'Charon',typeID:20185,capacityM3:435000},
+];
+const STATIONS={
+ 60003760:{stationID:60003760,solarSystemID:30000144},
+ 60003761:{stationID:60003761,solarSystemID:30000144},
+ 60003762:{stationID:60003762,solarSystemID:30000142},
+};
+
+test('a normal same-system courier contract with a fitting hull is eligible',()=>{
+ const result=evaluateContract(courier(),{},{walletIsk:0,hullCapacityM3:4800});
+ assert.equal(result.status,'ELIGIBLE');
+ assert.equal(result.volumeM3,3500);
+ assert.equal(result.reward,2500000);
+});
+
+test('only real courier contracts in a legal state are considered',()=>{
+ assert.equal(evaluateContract(courier({contractType:'item_exchange'}),{},{hullCapacityM3:4800}).status,'REFUSED_NOT_COURIER');
+ assert.equal(evaluateContract(courier({status:'in_progress'}),{},{hullCapacityM3:4800}).status,'REFUSED_STATUS');
+ assert.equal(evaluateContract(courier({status:'finished'}),{},{hullCapacityM3:4800}).status,'REFUSED_STATUS');
+ assert.equal(evaluateContract(null,{},{}).status,'REFUSED_NO_CONTRACT');
+});
+
+test('a contract without a real package or volume is refused, never partially loaded',()=>{
+ assert.equal(evaluateContract(courier({plasticWrapItemID:0}),{},{hullCapacityM3:4800}).status,'REFUSED_NO_PACKAGE');
+ assert.equal(evaluateContract(courier({volume:0}),{},{hullCapacityM3:4800}).status,'REFUSED_NO_VOLUME');
+ assert.equal(evaluateContract(courier({volume:9000}),{},{hullCapacityM3:4800}).status,'REFUSED_VOLUME_EXCEEDS_HULL');
+});
+
+test('collateral is either zero by policy or covered by real native wallet funds',()=>{
+ assert.equal(evaluateContract(courier({collateral:1000}),{},{walletIsk:5000,hullCapacityM3:4800}).status,'REFUSED_COLLATERAL_POLICY');
+ assert.equal(evaluateContract(courier({collateral:1000}),{requireZeroCollateral:false},{walletIsk:500,hullCapacityM3:4800}).status,'REFUSED_COLLATERAL_UNFUNDED');
+ assert.equal(evaluateContract(courier({collateral:1000}),{requireZeroCollateral:false},{walletIsk:5000,hullCapacityM3:4800}).status,'ELIGIBLE');
+});
+
+test('a cross-system contract is reported, not silently attempted',()=>{
+ const result=evaluateContract(courier({endSolarSystemID:30000142}),{},{hullCapacityM3:4800});
+ assert.equal(result.status,'NEEDS_GATE_TRAVEL');
+ const open=evaluateContract(courier({endSolarSystemID:30000142}),{sameSystemOnly:false},{hullCapacityM3:4800});
+ assert.equal(open.status,'ELIGIBLE');
+});
+
+test('hull selection picks the smallest hull that actually fits',()=>{
+ assert.equal(selectHull(3500,HULLS).name,'Bestower');
+ assert.equal(selectHull(300000,HULLS).name,'Charon');
+ assert.equal(selectHull(500000,HULLS).status,'NO_HULL_FITS');
+ assert.equal(selectHull(0,HULLS).status,'NO_HULL_FITS');
+});
+
+test('hull selection ignores hulls without a real typeID or capacity',()=>{
+ const hulls=[{name:'broken',typeID:0,capacityM3:999999},...HULLS];
+ assert.equal(selectHull(300000,hulls).name,'Charon');
+});
+
+test('route planning stays inside one solar system',()=>{
+ const route=planRoute(courier(),STATIONS);
+ assert.equal(route.status,'ROUTE_PLANNED');
+ assert.equal(route.legs.length,1);
+ assert.equal(route.legs[0].fromStationID,60003760);
+ assert.equal(route.legs[0].toStationID,60003761);
+ assert.equal(route.legs[0].kind,'in-system');
+});
+
+test('route planning refuses unknown, same and cross-system stations',()=>{
+ assert.equal(planRoute(courier({startStationID:1}),STATIONS).status,'NO_ROUTE');
+ assert.equal(planRoute(courier({endStationID:60003760}),STATIONS).status,'NO_ROUTE');
+ const cross=planRoute(courier({endStationID:60003762}),STATIONS);
+ assert.equal(cross.status,'NEEDS_GATE_TRAVEL');
+});
+
+test('piracy is skipped unless explicitly enabled',()=>{
+ const route=planRoute(courier(),STATIONS);
+ assert.equal(piracyOpportunity(route,{},'seed').status,'PIRACY_SKIPPED');
+ assert.equal(piracyOpportunity(route,{enabled:false},'seed').status,'PIRACY_SKIPPED');
+});
+
+test('piracy rolls are deterministic and bounded by the configured chance',()=>{
+ const route=planRoute(courier(),STATIONS);
+ const first=piracyOpportunity(route,{enabled:true,chancePerLeg:1},'contract-5001');
+ const second=piracyOpportunity(route,{enabled:true,chancePerLeg:1},'contract-5001');
+ assert.deepEqual(first,second);
+ assert.deepEqual(first.attackOrderLegs,[1]);
+ const none=piracyOpportunity(route,{enabled:true,chancePerLeg:0},'contract-5001');
+ assert.deepEqual(none.attackOrderLegs,[]);
+});
