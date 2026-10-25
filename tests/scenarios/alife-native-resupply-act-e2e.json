@@ -1,0 +1,162 @@
+{
+  "schema": "evejs-coop/alife-native-resupply-act-acceptance/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "newFeatureFlag": "EVEJS_COOP_ALIFE_NATIVE_RESUPPLY_ACT",
+  "scenarios": [
+    {
+      "id": "ALIFE-ACT-001",
+      "title": "Verified pilot out of ammo follows chosen RESUPPLY and native station warp",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Remove finite native loaded ammo on disposable NPC with real fitted turret",
+        "verify named hull, owner and real station",
+        "enable ALIFE_NATIVE_RESUPPLY_ACT and inspect A-Life intent",
+        "verify one actual native warp accepted"
+      ],
+      "expected": [
+        "One accepted native ammo warp; cargo credited false; pirate excluded from raid until real ammo available",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "native npcCargo and fitted modules before/after",
+        "alife-economy-intent and alife-native-act-order",
+        "scene controller actual warp target"
+      ]
+    },
+    {
+      "id": "ALIFE-ACT-002",
+      "title": "Depleted NPC cannot raid if factory market proof or station read is unavailable",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Make real native ammo unavailable and disable Rust GetOrders or valid station target",
+        "run a 30s world tick with A-Life action enabled",
+        "inspect raid director and ammo shortage lease"
+      ],
+      "expected": [
+        "No unsourced ammo, no new native raid order for exhausted NPC; named blocker and depleted lease survive read failure",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "npcCargo ammo quantity",
+        "native controller orders",
+        "living-native-ammo-supply and alife-economy-blocker"
+      ]
+    },
+    {
+      "id": "ALIFE-ACT-003",
+      "title": "Native emergency retreat preempts slow Rust economy observation",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Create a physically damaged native pirate with zero actual ammunition",
+        "force COOP-043 station authority Rust book timeout in separate trader",
+        "tick world with A-Life action enabled",
+        "observe survivor immediate native ammo retreat"
+      ],
+      "expected": [
+        "Emergency native retreat considered before async economy read; no made-up purchase or blocked survival due to pending GetOrders",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "server tick timestamps",
+        "native controller warp",
+        "rust timeout event",
+        "identical entityID"
+      ]
+    },
+    {
+      "id": "ALIFE-ACT-004",
+      "title": "Repeated A-Life intent cannot repeat native warp on same cycle",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Create real depleted pirate and fresh ALIFE RESUPPLY",
+        "run same native world tick again inside director cooldown",
+        "inspect native movement orders and ammo journal"
+      ],
+      "expected": [
+        "No repeated native warp; arbitration and cooldown preserve one accepted order; no cargo/ISK granted",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "intentID",
+        "two tick IDs",
+        "native order history",
+        "cooldown/arbiter snapshot"
+      ]
+    },
+    {
+      "id": "ALIFE-ACT-005",
+      "title": "Actual ammo bought and loaded clears attack prohibition",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Use previously earned NPC ISK to buy seeded market ammo at physical station",
+        "fit purchased cargoID to real weapon module",
+        "run monitor-only and inspect attack eligibility"
+      ],
+      "expected": [
+        "Physical cargo exists; fitting remains native; ammo shortage fence clears only after actual charge becomes available; wallet decreases exactly once",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "Rust market receipt",
+        "GameStore cargo ID/module ID",
+        "before/after earned wallet and native order"
+      ]
+    },
+    {
+      "id": "ALIFE-ACT-006",
+      "title": "Two-clients see the same NPC native distress and accepted resupply move",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Log in two authorized clients to same disposable real system",
+        "make actual pirate ammo depleted",
+        "observe native retreat request and physical ship movement",
+        "read Local/events without counting an alert as a settled trade"
+      ],
+      "expected": [
+        "Both clients see same physical NPC and event; action after real native warp accepted, not phantom goods or teleport",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "two client observations",
+        "native ship ID and coordinates",
+        "controller logs and same event ID"
+      ]
+    },
+    {
+      "id": "ALIFE-ACT-007",
+      "title": "Restart/crash preserves no-ammo and unresolved operation fences",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "steps": [
+        "Crash disposable server between normal ammo debit and outcome witness, or native resupply warp",
+        "restart retaining SQLite, POSIX receipts, native inventory",
+        "resume one real 30s world tick"
+      ],
+      "expected": [
+        "Unresolved ammo debit never re-fires or gets refunded without proof; still empty NPC cannot raid; repair status recorded",
+        "Do not infer completion from planning-only events"
+      ],
+      "requiredEvidence": [
+        "before/after SQLite",
+        "POSIX locks",
+        "native HP/ship ID",
+        "repair audit",
+        "no duplicate ammo/ISK"
+      ]
+    }
+  ]
+}
