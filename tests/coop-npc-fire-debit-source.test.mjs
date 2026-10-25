@@ -96,3 +96,15 @@ test("replay guard is present at both authoritative turret and missile boundarie
   assert.ok(part.includes('errorMsg: "NATIVE_FIRE_CYCLE_REPLAY"'));
  }
 });
+
+test("native store commit must be verified before changing live cargo cache",()=>{
+ const patched=patch(source);
+ const block=patched.slice(patched.indexOf("function consumeTurretAmmoCharge("),
+  patched.indexOf("\nfunction executeTurretCycle("));
+ const preflight=block.indexOf('coopNpcFireDebitProof');
+ const writeProof=block.indexOf('AMMO_WRITE_UNVERIFIED');
+ const cacheWrite=block.indexOf('if (Array.isArray(attackerEntity.nativeCargoItems))');
+ assert.ok(preflight>=0);
+ assert.ok(writeProof>preflight);
+ assert.ok(cacheWrite>writeProof);
+});
