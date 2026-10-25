@@ -66,7 +66,7 @@ function fixture({terminal=true,route=true,departure=true,reserved=true,
   "./coopEscortTerminalAttendance":{createEscortTerminalAttendance:()=>({
    readDurable:()=>terminal?{status:"VERIFIED_NATIVE_ESCORT_TERMINAL_ATTENDANCE"}:
     {status:"TERMINAL_ATTENDANCE_NOT_FOUND"},
-   record:()=>{terminalWrites++;return {status:"VERIFIED_NATIVE_ESCORT_TERMINAL_ATTENDANCE"}})}
+   record:()=>{terminalWrites++;return {status:"VERIFIED_NATIVE_ESCORT_TERMINAL_ATTENDANCE"}}})}
  };
  const mod={exports:{}};
  vm.runInNewContext(source,{require:k=>{
