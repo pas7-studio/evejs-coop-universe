@@ -126,7 +126,22 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
   readNativeFailure,nativeFunds:funds,
   readPrefunded:c=>flight.readFunded(c)});
  function fundBeforeWarp(route){
-  return ready()?flight.fundBeforeWarp(route):blocked("DISABLED");
+  if(!ready())return blocked("DISABLED");
+  if(process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"){
+   if(process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
+    return blocked("ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
+   // Even a different trusted server-internal caller cannot fund a peaceful
+   // convoy without the same source-linked, fsynced two-pilot departure proof.
+   let offer;try{offer=booking(route)}
+   catch{return blocked("ESCORT_DEPARTURE_BOOKING_UNAVAILABLE")}
+   if(offer?.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING")
+    return blocked("ESCORT_DEPARTURE_BOOKING_NOT_AUTHORIZED");
+   const proof=departure.read(route?.manifestKey,{
+    ...offer,manifestKey:route?.manifestKey});
+   if(proof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+    return blocked("ESCORT_"+proof.status);
+  }
+  return flight.fundBeforeWarp(route);
  }
  function recordDelivery(args){
   return ready()?flight.recordDelivered(args):blocked("DISABLED");
