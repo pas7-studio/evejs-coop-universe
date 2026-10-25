@@ -36,6 +36,7 @@ function validDebitReceipt(r){
     r.buyerBeforeCents<r.totalCents||
     r.buyerAfterCents!==r.buyerBeforeCents-r.totalCents||
     !Array.isArray(r.journalIDs)||r.journalIDs.length!==3||
+    !positive(r.journalIDs[0])||r.journalIDs[0]<5000000000000000||
     r.journalIDs.some((v,i)=>!positive(v)||
       (i>0&&v!==r.journalIDs[0]+i))||
     !positive(r.createdAt)||
