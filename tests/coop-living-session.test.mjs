@@ -53,10 +53,18 @@ test("hauler delivery never removes unrelated native cargo; moved ore retains ex
  const hauler={itemID:201,kind:"ship",ownerID:5001,nativeCargoItems:[{itemID:888,volume:3}]};
  const physicalScene={getEntityByID:id=>id===101?miner:id===201?hauler:null};
  const fleet={fleetID:9,systemID:30000142,haulerEntityIDs:[201]};
- const options={store,probe:{observe:()=>{}}};
+ // Unloading requires a durable depot receipt now (fail closed): a real
+ // prepare/commit pair is a mandatory precondition, not an option.
+ const depot={prepare:()=>({status:"PREPARED"}),commit:()=>({status:"COMMITTED"})};
+ const options={store,probe:{observe:()=>{}},depot};
  assert.equal(transferCargo(physicalScene,fleet,miner,options),1);
  assert.equal(store.listNativeCargoForEntity(201).length,2);
  assert.equal(cargo.get(777)[haulFlag],9);
+ // Without a depot the ore must stay on the hauler: no silent destruction.
+ const blocked=unloadCargo(physicalScene,fleet,{store,probe:{observe:()=>{}}});
+ assert.equal(blocked.status,"BLOCKED_DEPOT_UNAVAILABLE");
+ assert.equal(blocked.stacks,0);
+ assert.equal(cargo.has(777),true);
  const unloaded=unloadCargo(physicalScene,fleet,options);
  assert.equal(unloaded.stacks,1);
  assert.equal(cargo.has(777),false);

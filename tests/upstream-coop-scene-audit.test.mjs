@@ -5,8 +5,12 @@ import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { auditCoopScene } from '../scripts/coop-scene-audit.mjs';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
 
-if(!process.env.EVEJS_CODE_PATH)throw new Error('EVEJS_CODE_PATH required');
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
+
 process.env.EVEJS_SKIP_NPC_STARTUP='1';
 process.env.EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE='1';
 const require=createRequire(import.meta.url);
@@ -44,3 +48,4 @@ test('actual EveJS scene stores two distinct pilot identities and visible ships'
     registry.unregister(a);registry.unregister(b);runtime._testing.clearScenes();
   }
 });
+}

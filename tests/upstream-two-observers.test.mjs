@@ -4,9 +4,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 
 const code = process.env.EVEJS_CODE_PATH;
-if (!code) throw new Error('EVEJS_CODE_PATH is required');
 process.env.EVEJS_SKIP_NPC_STARTUP = '1';
 process.env.EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE = '1';
 const require = createRequire(import.meta.url);
@@ -76,3 +80,4 @@ test('non-observing player does not receive a dynamic entity removal', () => {
   proto.broadcastRemoveBall.call(scene, 3001);
   assert.deepEqual(queued.map(x => x.session.clientID), [113]);
 });
+}

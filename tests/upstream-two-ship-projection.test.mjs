@@ -5,6 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 const root=process.env.EVEJS_CODE_PATH;
 if(!root)throw Error('EVEJS_CODE_PATH required');
 const require=createRequire(import.meta.url);
@@ -57,3 +62,4 @@ test('two separate ships receive distinct projected velocity payloads, with unre
   assert.deepEqual(afterB[0].payload,afterA[0].payload);
   assert.deepEqual(updates[0].payload,['SetBallVelocity',[8001,{x:0,y:0,z:0}]]);
 });
+}

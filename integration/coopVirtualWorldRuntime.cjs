@@ -1,10 +1,10 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -15,9 +15,45 @@ function safeNpcPhase(phase,run){
   return null;
  }
 }
+// Opt-in shared native order arbitration; original native behavior stays OFF.
+function npcOrderBridge(){
+ if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
+ if(!nativeOrderBridge){
+  const native=require("./runtime"),controllers=require("./npc/npcRegistry");
+  const arbiter=require("./coopNpcOrderArbiter").createOrderArbiter();
+  nativeOrderBridge=require("./coopNpcOrderBridge").createOrderBridge({
+   arbiter,assignments:()=>[
+    ...(bridge?.snapshot()||[]),
+    ...Object.values(identityRegistry?.snapshot()?.links||{})
+   ],
+   sceneForSystem:id=>native.ensureScene(id,{refreshStargates:false}),
+   getController:id=>controllers.getControllerByEntityID(id)
+  });
+ }
+ return nativeOrderBridge;
+}
+function npcNativeOrder(owner,entityID,action,execute,systemID){
+ const guard=npcOrderBridge();
+ if(!guard)return execute();
+ return guard.issue({owner,entityID,action,execute,systemID});
+}
+function addNpcOrderBlocks(blockedIDs,systemID,owner){
+ const guard=npcOrderBridge();
+ if(guard)for(const id of guard.blocksForSystem(systemID,owner))blockedIDs.add(id);
+ return blockedIDs;
+}
 function syncNativeDeliveries(){
  if(!economy||process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1")return;
  const depot=require("./coopNativeDepot").getNativeDepot();
+ const audit=depot.audit();
+ if(audit.status==="NEEDS_OPERATOR_REPAIR"){
+  require("./coopRuntimeProbe").observe("living-native-depot-repair-needed",null,null,
+   {status:audit.status,invalid:audit.invalid,unresolved:audit.unresolved});
+  return;
+ }
+ if(audit.status==="PENDING_CUSTODY_RECONCILIATION")
+  require("./coopRuntimeProbe").observe("living-native-depot-pending",null,null,
+   {status:audit.status,unresolved:audit.unresolved});
  const result=economy.syncNativeDeliveries(depot.snapshot().totals);
  if(result.quantity>0){
   console.info("[CoopLivingWorld] Real NPC ore delivered to virtual system supply",JSON.stringify(result));
@@ -256,8 +292,10 @@ function ensurePatrolNavigator(runtime,npc){
  const {createPatrolNavigator}=require("./coopPatrolNavigator");
  patrolNavigator=createPatrolNavigator({
   sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
-  warp:(id,point,options)=>npc.warpToPoint(id,point,options),
-  orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
+  warp:(id,point,options)=>npcNativeOrder("PATROL",id,"warp",
+   ()=>npc.warpToPoint(id,point,options)),
+  orbit:(id,targetID,range)=>npcNativeOrder("PATROL",id,"orbit",
+   ()=>npc.orbit(id,targetID,range))
  });
 }
 function ensureNativeGateTransfer(runtime){
@@ -298,9 +336,11 @@ function advanceNativeGateApproach(){
  ensureNativeGateTransfer(runtime);
  if(!gateTravelDirector){
   gateTravelDirector=require("./coopNpcGateTravel").createGateTravel({
-   warp:(entityID,gateID,options)=>npc.warpToEntity(entityID,gateID,options),
+   warp:(entityID,gateID,options)=>npcNativeOrder("GATE",entityID,"warp-to-gate",
+    ()=>npc.warpToEntity(entityID,gateID,options)),
    getGate:id=>worldData.getStargateByID(id),
-   transfer:nativeGateTransfer?nativeGateTransfer.transfer:null
+   transfer:nativeGateTransfer?(args=>npcNativeOrder("GATE",args.entityID,
+    "transfer",()=>nativeGateTransfer.transfer(args),args.gate?.sourceSystemID)):null
   });
  }
  const roles=economy?.snapshot().pilots||{};
@@ -311,6 +351,7 @@ function advanceNativeGateApproach(){
  for(const systemID of visitedSystems){
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const assignments=links.filter(a=>Number(a.systemID)===Number(systemID));
+  addNpcOrderBlocks(blockedIDs,systemID,"GATE");
   const evidence=gateTravelDirector.tick({systemID,scene,assignments,route,roles,
    getController:id=>controllers.getControllerByEntityID(id),blockedIDs});
   for(const move of evidence.orders){
@@ -341,6 +382,14 @@ function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
   const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
+  // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
+  if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1"){
+   if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+   if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>{
+    const native=require("./runtime");return native.ensureScene(sys,{refreshStargates:false});
+   }))blockedIDs.add(id);
+   addNpcOrderBlocks(blockedIDs,Number(systemID),"PATROL");
+  }
   const result=patrolNavigator.tick(Number(systemID),entityIDs,{blockedIDs});
   if(result.orders?.length)console.info("[CoopFactionPatrol] native waypoint orders",JSON.stringify({systemID,orders:result.orders}));
  }
@@ -383,8 +432,10 @@ function ensureCivilianOrders(runtime,npc){
  const {createCivilianOrders}=require("./coopCivilianOrders");
  civilianOrders=createCivilianOrders({
   sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
-  warp:(id,point,options)=>npc.warpToPoint(id,point,options),
-  orbit:(id,targetID,range)=>npc.orbit(id,targetID,range)
+  warp:(id,point,options)=>npcNativeOrder("CIVILIAN",id,"warp",
+   ()=>npc.warpToPoint(id,point,options)),
+  orbit:(id,targetID,range)=>npcNativeOrder("CIVILIAN",id,"orbit",
+   ()=>npc.orbit(id,targetID,range))
  });
 }
 function observeNativeCombat(){
@@ -500,6 +551,7 @@ async function advanceNativeMarket(){
   if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blocked.add(id);
   if(raidDirector)for(const id of raidDirector.activePirateIDs(id=>
    runtime.ensureScene(id,{refreshStargates:false})))blocked.add(id);
+  for(const sys of visitedSystems)addNpcOrderBlocks(blocked,sys,"CIVILIAN");
   const links=Object.values(identityRegistry.snapshot().links||{})
    .filter(l=>l?.pilotID&&l.entityID)
    .sort((a,b)=>String(a.pilotID).localeCompare(String(b.pilotID)));
@@ -567,6 +619,8 @@ function advanceNativeCivilianOrders(){
  })||new Set();
  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
  if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+ for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+  addNpcOrderBlocks(blockedIDs,sys,"CIVILIAN");
  const orders=civilianOrders.tick(assignments,economy?.snapshot().pilots||{},{blockedIDs});
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
@@ -579,8 +633,18 @@ function advanceNativeRaids(){
  const controllers=require("./npc/npcRegistry");
  if(!raidDirector){
   raidDirector=require("./coopNativeRaids").createRaids({
-   warp:(pirateID,targetID,options)=>npc.warpToEntity(pirateID,targetID,options),
-   attack:(pirateID,targetID,options)=>npc.issueAttackOrder(pirateID,targetID,options)
+   warp:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"warp-to-prey",
+    ()=>npc.warpToEntity(pirateID,targetID,options)),
+   attack:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"attack",
+    ()=>npc.issueAttackOrder(pirateID,targetID,options))
+  });
+ }
+ if(process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&!huntPolicy) {
+  // Opt-in NPC-vs-NPC assessment only. Native stock raid eligibility remains
+  // authoritative; players can only count as potential defenders, not prey.
+  huntPolicy=require("./coopNpcHuntPolicy").createHuntPolicy({
+   file:process.env.EVEJS_COOP_NPC_INTEL_FILE||"/var/lib/evejs/coop-npc-intel.json",
+   onDecision:decision=>require("./coopRuntimeProbe").observe("living-npc-opportunity",null,null,decision)
   });
  }
  const roles=economy?.snapshot().pilots||{};
@@ -598,11 +662,35 @@ function advanceNativeRaids(){
    .filter(link=>Number(link.systemID)===Number(systemID)&&
     scene.getEntityByID(Number(link.entityID)));
   const actualPilots=world.snapshot().pilots;
-  const canAttack=({pirateID,targetID})=>raidPolicy.isAuthorizedStockMiningRaid({
-   systemID,attacker:scene.getEntityByID(pirateID),
-   target:scene.getEntityByID(targetID),links:activeLinks,
-   pilots:actualPilots,fleetShips
-  });
+  const canAttack=({pirateID,targetID})=>{
+   // The existing source-verified NPC combat gate ALWAYS runs first.
+   if(!raidPolicy.isAuthorizedStockMiningRaid({
+    systemID,attacker:scene.getEntityByID(pirateID),
+    target:scene.getEntityByID(targetID),links:activeLinks,
+    pilots:actualPilots,fleetShips
+   }))return false;
+   if(process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1")return true;
+   if(!huntPolicy)return false;
+   const pirateLink=activeLinks.find(x=>Number(x.entityID)===Number(pirateID));
+   const targetRole=fleetShips.find(x=>Number(x.id)===Number(targetID))?.role;
+   if(!pirateLink||!targetRole)return false;
+   const damage=require("./combat/damage");
+   const scramble=require("./modules/hostileModuleRuntime");
+   const decision=huntPolicy.assess({systemID,scene,pirateID,targetID,
+    targetRole,piratePilotID:pirateLink.pilotID,contacts:activeLinks,
+    getHealth:entity=>{
+     const maximum=damage.getEntityMaxHealthLayers(entity);
+     const actual=damage.getEntityCurrentHealthLayers(entity,maximum);
+     if(!maximum||!actual||![maximum.shield,maximum.armor,maximum.structure].some(x=>Number(x)>0))return NaN;
+     const armor=Number(maximum.armor)>0?Number(actual.armor)/Number(maximum.armor):1;
+     const structure=Number(maximum.structure)>0?
+       Number(actual.structure)/Number(maximum.structure):1;
+     return Math.min(armor,structure);
+    },
+    isScrambled:entity=>scramble.isEntityWarpScrambled(entity)
+   });
+   return decision.decision==="RAID";
+  };
   const result=raidDirector.tick({
    systemID,scene,pirates,fleetShips,canAttack,
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
@@ -646,11 +734,16 @@ function advanceNativeTactics(){
  const damage=require("./combat/damage"),scramble=require("./modules/hostileModuleRuntime");
  if(!tacticsDirector){
   tacticsDirector=require("./coopNpcTactics").createTactics({
-   warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options),
-   warpToEntity:(id,targetID,options)=>npc.warpToEntity(id,targetID,options),
-   attack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
-   resumeBehavior:id=>npc.resumeBehavior(id),
-   stopOrder:id=>npc.issueOrder(id,{type:"stop"}),
+   warpToPoint:(id,point,options)=>npcNativeOrder("TACTICS",id,"retreat-warp",
+    ()=>npc.warpToPoint(id,point,options)),
+   warpToEntity:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"rescue-warp",
+    ()=>npc.warpToEntity(id,targetID,options)),
+   attack:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"rescue-attack",
+    ()=>npc.issueAttackOrder(id,targetID,options)),
+   resumeBehavior:id=>npcNativeOrder("TACTICS",id,"resume",
+    ()=>npc.resumeBehavior(id)),
+   stopOrder:id=>npcNativeOrder("TACTICS",id,"stop",
+    ()=>npc.issueOrder(id,{type:"stop"})),
    notify:event=>{
     require("./coopRuntimeProbe").observe("living-npc-tactical-event",null,
      {spaceState:{systemID:event.systemID}},{...event});

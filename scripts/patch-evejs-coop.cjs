@@ -4,11 +4,7 @@
 const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm");
 const {execFileSync}=require("node:child_process");
 const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
-const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncounterDirector",
-"coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry",
-"coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime",
-"coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation",
-"coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeWarehouse","coopNativeStationArrival","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopNativeTradeAtomic","coopNativeTradeCustody","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings","coopAgentDialogue"];
+const names=["coopRuntimeProbe","coopNativeNpcDemo","coopCombatProbe","coopEncounterDirector","coopVirtualWorld","coopVirtualWorldRuntime","coopNpcMaterializer","coopIdentityRegistry","coopVirtualEconomy","coopNpcLossBridge","coopFactionDirector","coopFactionPatrolRuntime","coopPatrolOrders","coopNpcTopology","coopPatrolNavigator","coopNpcPresentation","coopSessionPresence","coopCivilianOrders","coopDuoPresence","coopDuoCoordinator","coopNpcLife","coopNativeIndustry","coopNativeHaulCargo","coopNativeRaids","coopWorldSignals","coopNativeConsequences","coopSystemIntel","coopNativeDepot","coopNpcTactics","coopNpcMemory","coopNpcRecognition","coopNativeActivity","coopNativeCombatEvidence","coopNpcWeaponEvidence","coopNpcHostility","coopNpcDestructionAttacker","coopNpcGateTravel","coopNativeGateTransfer","coopNativeNpcMarket","coopFleetWarpSafety","coopHeadlessScenePolicy","coopNativeRestore","coopNativeRaidEligibility","coopNpcRolePriority","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopPartyNotices","coopFleetWarpArrival","coopNativeMiningReadiness","coopNativeConvoyRenewal","coopNativeFleetParty","coopFleetTradeSafety","coopNativeTradeAtomic","coopNativeTradeCustody","coopFleetMissionTurnin","coopFleetDungeonCredit","coopIndustryPacing","coopPlayerCombatWitness","coopNativeLpStandings","coopAgentDialogue","coopMarketCatalog","coopNativeScanProof","coopDuoRaidTactics","coopNativeStationOreSettlement","coopNpcIntelLedger","coopNpcOpportunityPlanner","coopNpcHuntPolicy","coopNativeWarehouse","coopNpcOrderArbiter","coopNpcOrderBridge","coopNativeStationArrival"];
 const specs=[
  {file:"server/index.js",patches:[]},
  {file:"server/src/services/machoNet/machoNetService.js",patches:[]},
@@ -34,6 +30,8 @@ const specs=[
   {anchor:'    return buildDoActionResponsePayload(result);',line:"    if (coopTicket && coopTicket.ok) { try { const shared = require(\"../../space/coopFleetMissionTurnin\").finish({ticket:coopTicket,missionRuntime:agentMissionRuntime,fleetRuntime:require(\"../fleets/fleetRuntime\"),getDockedLocationID:require(\"../structure/structureLocation\").getDockedLocationID}); require(\"../../space/coopRuntimeProbe\").observe(\"coop-fleet-native-mission-turnin\",session,null,shared); } catch (error) { console.warn(\"[CoopFleetMission]\",error.message); } }"}
  ]},
  {file:"server/src/services/inventory/itemStore.js",patches:[]},
+ {file:"server/src/services/market/marketProxyService.js",patches:[]},
+ {file:"server/src/services/exploration/scanMgrService.js",patches:[]},
  {file:"server/src/services/trade/tradeMgrService.js",patches:[
   {anchor:'    const moneyTransferResult = this._completeMoneyTransfer(trade);',line:"    if (process.env.EVEJS_COOP_FLEET_TRADE_SAFETY === \"1\") { const peerID = trade.traders.find(x => Number(x) !== Number(session.characterID)); const peer = this._getParticipantSession(peerID, session); const fleet = require(\"../fleets/fleetRuntime\"); const fleetState = peer && require(\"../../space/coopNativeFleetParty\").membership({leaderSession:session,peerSession:peer,fleetRuntime:fleet}); if (fleetState && fleetState.ok) { const safe = require(\"../../space/coopFleetTradeSafety\").check({trade,session,peerSession:peer,items:this._listTradeItems(trade),getItem:findItemById,isTradable:isTradableInventoryItem,containedItems:id=>this._collectContainedItems(id),fleetRuntime:fleet,getDockedLocationID}); if (!safe.ok) { this._resetOfferState(trade); this._throwTradeError(\"Co-op trade blocked: \" + safe.reason); } } }"}
  ]},
@@ -102,6 +100,11 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file==="server/src/services/exploration/scanMgrService.js" ||
+    spec.file==="server/src/services/ship/beyonceService.js")
+  text=require("./coop-native-exploration-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/market/marketProxyService.js")
+  text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")

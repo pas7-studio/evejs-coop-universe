@@ -5,6 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 const root=process.env.EVEJS_CODE_PATH;
 if(!root)throw Error('EVEJS_CODE_PATH required');
 const source=p=>readFileSync(resolve(root,'server/src',p),'utf8');
@@ -40,3 +45,4 @@ test('disconnect persists character logoff BEFORE detaching, then cleans social 
  assert.match(s,/buildEmergencyWarpLogoffState/);
  assert.match(s,/moveShipToSpace/);
 });
+}

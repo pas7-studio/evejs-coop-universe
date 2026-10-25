@@ -46,6 +46,7 @@ test("P0 custody patch helper rejects partial installs and preserves native sour
   next,
   '  Handle_InitiateTrade(args, session) {',
   '  }',
+  '    const completionItemsPayload = this._buildTradeItemsSetPayload(trade);',
   '    trade.status = "completed";',
   '}'
  ].join("\n");
