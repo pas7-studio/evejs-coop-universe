@@ -292,6 +292,9 @@ function transform(source,spec,remove){
  }
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-mining-startup-recovery-patch.cjs").patchStartupRecovery(text,remove);
+ // ALIFE-05: existing native stock mining writer; store-before-hull commit when opt-in.
+ if(spec.file.endsWith("miningNpcOperations.js"))
+  text=require("./coop-native-mining-cargo-integrity-patch.cjs").patchMiningCargo(text,remove);
  if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("agent/missionRuntimeState.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
