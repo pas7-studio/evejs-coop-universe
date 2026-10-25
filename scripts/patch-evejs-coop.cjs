@@ -23,6 +23,8 @@ names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacef
 names.splice(names.indexOf("coopEscortNativeBootstrap")+1,0,"coopEscortWarpFence");
 // Source-on-grid native two-pilot service evidence, no escrow authority.
 names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness");
+// Default-OFF source-to-destination native dual-pilot transit sampling.
+names.splice(names.indexOf("coopEscortDepartureWitness")+1,0,"coopEscortRouteWitness");
 const specs=[
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
