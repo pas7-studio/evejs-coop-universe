@@ -56,6 +56,24 @@ function patch(source,remove=false){
   }
   throw Error("SALVAGE_PINNED_NATIVE_DEATH_DRIFT:"+oldLine.slice(0,90));
  }
+ // The native routine otherwise removes the entire wreck on later loot or
+ // physical scene errors. Never erase cargo that was ALREADY ACID moved.
+ // Guard every post-cargo cleanup site, without changing default OFF behavior.
+ const start=s.indexOf("  const lootTable = nativeEntityRecord && nativeEntityRecord.lootTableID");
+ const stop=s.indexOf("  const wreckSpawnResult = spawnNativeWreck",start);
+ if(start<0||stop<0||stop<=start)throw Error("SALVAGE_DEATH_CLEANUP_REGION_DRIFT");
+ const original="nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);";
+ const safe="if(!coopSalvageCargoMoved)nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);";
+ const section=s.slice(start,stop);
+ let after;
+ if(remove){
+  after=section.split(safe).join(original);
+ }else{
+  after=section.split(original).join(safe);
+ }
+ if(section===after&&!section.includes(remove?original:safe))
+  throw Error("SALVAGE_DEATH_CLEANUP_ANCHOR_MISSING");
+ s=s.slice(0,start)+after+s.slice(stop);
  return s;
 }
 module.exports={patch,FILE};
