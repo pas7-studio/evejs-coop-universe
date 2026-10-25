@@ -51,11 +51,14 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
    !same(r.characters,booking.characters)||
    !Array.isArray(r.shipIDs)||r.shipIDs.length!==2||
    r.shipIDs.some(x=>!pos(x))||r.shipIDs[0]===r.shipIDs[1]||
-   !pos(r.at)||!Number.isSafeInteger(r.at))
+   !pos(r.at)||!Number.isSafeInteger(r.at)||
+   !r.origin||!["x","y","z"].every(k=>Number.isFinite(r.origin[k])))
+
    return deny("DEPARTURE_RECORD_CORRUPT_OR_SOURCE_CHANGED");
   return {status:"VERIFIED_NATIVE_ESCORT_DEPARTURE",
    manifestKey,contractID:r.contractID,at:r.at,
-   characters:r.characters.slice(),shipIDs:r.shipIDs.slice()};
+   characters:r.characters.slice(),shipIDs:r.shipIDs.slice(),
+   origin:{x:r.origin.x,y:r.origin.y,z:r.origin.z}};
  }
  function record(booking,scene,verifyNativeDuo){
   if(process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
@@ -123,7 +126,8 @@ function createDepartureWitness({root,io=fs,clock=()=>Date.now()}={}){
    systemID:booking.systemID,fleetID:booking.fleetID,
    stationID:booking.stationID,corporationID:booking.corporationID,
    haulerID:booking.haulerID,playerFleetID:booking.playerFleetID,
-   amountISK:booking.amountISK,characters:booking.characters.slice(),shipIDs,at};
+   amountISK:booking.amountISK,characters:booking.characters.slice(),shipIDs,
+   origin:{x:hauler.position.x,y:hauler.position.y,z:hauler.position.z},at};
   let fd,dirfd;
   try{
    io.mkdirSync(dir,{recursive:true});
