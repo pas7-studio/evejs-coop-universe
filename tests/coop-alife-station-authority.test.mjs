@@ -149,3 +149,11 @@ test("every native reading keeps item ownership/currency untouched",async()=>{
  assert.deepEqual(f.state.escrows,snapshot.escrows);
  assert.equal(f.state.wallet,snapshot.wallet);
 });
+
+test("direct GameStore item transfer during Rust read invalidates the snapshot without version bump",async()=>{
+ const f=fixture();const originalVersion=f.state.version;
+ f.state.delayed=Promise.resolve().then(()=>{f.state.items.find(i=>i.typeID===M).quantity=8});
+ const r=await f.read();
+ assert.equal(r.reason,"NATIVE_STATION_AUTHORITY_CHANGED_DURING_READ");
+ assert.equal(f.state.version,originalVersion);
+});
