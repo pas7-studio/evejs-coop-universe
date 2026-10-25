@@ -444,7 +444,18 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
     "[Co-op Rescue] "+result.status+". No cargo or money granted."};
   }
   if(op==="history"||op==="reputation"){
-   return require("./coopEscortReputation").listNativeHistory(session);
+   const escort=require("./coopEscortReputation").listNativeHistory(session);
+   const rescue=require("./coopRescueNativeGame").runGame(session,"history");
+   if(rescue?.status!=="READY")return escort;
+   const r=rescue.reputation;
+   const rows=rescue.history.map(x=>x.contractID+" / "+x.outcome+
+    " / "+x.earnedISK+" ISK").join("\n");
+   return {status:escort.status==="READY"?"READY":rescue.status,
+    message:(escort.message||"[Co-op Escort] No audited history.")+
+     "\n[Co-op Rescue] Verified: "+r.tier+" | paid "+
+     r.paidContracts+" | rival refunds "+r.refundedContracts+
+     " | earned "+r.earnedISK+" ISK | rescue score +"+r.score+
+     (rows?"\n"+rows:"\nNo paid rescue yet.")};
   }
   if(op==="accept"){
    if(process.env.EVEJS_COOP_ESCORT_PAID_ACCEPT!=="1")
