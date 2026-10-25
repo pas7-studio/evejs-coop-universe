@@ -6,6 +6,7 @@ const {createEscortFlightGate}=require("./coopEscortFlightGate");
 const {createEscortContractSettlement}=require("./coopEscortContractSettlement");
 const {createPeacefulEscortSettlement}=require("./coopEscortPeacefulSettlement");
 const {createDepartureWitness}=require("./coopEscortDepartureWitness");
+const {createRouteWitness}=require("./coopEscortRouteWitness");
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>x===b[i]);
@@ -46,6 +47,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
  const flight=createEscortFlightGate({root,io,clock,authorizeBooking:booking,
   readManifest,verifyManifest,nativeFunds:funds});
  const departure=createDepartureWitness({root,io,clock});
+ const routeWitness=createRouteWitness({root,io,clock});
  function recordEscortDeparture(route,scene){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
    process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1")
@@ -60,6 +62,22 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    ...source,manifestKey:route.manifestKey},scene,verifyNativeDuo);
  }
 
+ function recordEscortRouteSample(manifestKey,scene,station){
+  if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
+   return blocked("DISABLED");
+  let f;try{f=flight.read(manifestKey)}
+  catch{return blocked("ROUTE_FLIGHT_UNAVAILABLE")}
+  if(f?.status!=="READY"||f.phase!=="FUNDED"||!f.booking||
+   f.booking.manifestKey!==manifestKey)
+   return blocked("ROUTE_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  const p=departure.read(manifestKey,f.booking);
+  if(p.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
+   return blocked("ROUTE_DEPARTURE_NOT_VERIFIED");
+  return routeWitness.sample({booking:f.booking,departure:p,scene,station,
+   verifyNativeDuo});
+ }
  const peaceful=createPeacefulEscortSettlement({readFlight:flight.read,
   readNativeDelivery:flight.readNativeDelivery,nativeFunds:funds,
   verifyService:(b,scene)=>{
@@ -72,6 +90,9 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    const departureProof=departure.read(b.manifestKey,b);
    if(departureProof.status!=="VERIFIED_NATIVE_ESCORT_DEPARTURE")
     return deny();
+   if(process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
+    routeWitness.verify(b,departureProof).status!==
+     "VERIFIED_NATIVE_ESCORT_ROUTE_SERVICE")return deny();
 
    if(scene?.systemID!==b.systemID||
     typeof scene.getEntityByID!=="function"||
@@ -244,7 +265,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,finishAfterRaid,settlePeacefulFlight,listDeliveredFlights,
+ return Object.freeze({fundBeforeWarp,recordDelivery,recordEscortDeparture,recordEscortRouteSample,finishAfterRaid,settlePeacefulFlight,listDeliveredFlights,
   refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
