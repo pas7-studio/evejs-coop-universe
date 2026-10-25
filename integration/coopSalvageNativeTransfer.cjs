@@ -183,13 +183,30 @@ function createNativeSalvageTransfer({atomic,readWitness,readManifest,
     const old=tx.get("items",String(current.nativeWarehouseItemID));
     const journal=tx.get("corporationRuntime",journalKey);
     const receipt=journal?.moves?.[receiptKey(args)];
-    if(receipt?.state!=="PLAYER_CARGO"||
+    // The earlier inspect() read was outside this SQLite transaction.
+    // Check ALL immutable pickup identities again before moving ownership:
+    // another writer may have changed the receipt or cargo since inspect().
+    if(receipt?.v!==1||receipt.state!=="PLAYER_CARGO"||
+     receipt.manifestKey!==args.manifestKey||
+     receipt.cargoID!==args.cargoID||
+     receipt.wreckItemID!==args.wreckItemID||
+     receipt.wreckID!==args.expectedWreckID||
+     receipt.characterID!==args.characterID||
+     receipt.shipID!==args.shipID||
+     receipt.stationID!==args.stationID||
+     receipt.corporationID!==args.corporationID||
+     receipt.quantity!==args.quantity||
      receipt.nativeItemID!==current.nativeWarehouseItemID)
-     throw Error("SALVAGE_ATOMIC_PICKUP_RECEIPT_MISSING");
-    if(!old||old.itemID!==current.nativeWarehouseItemID||
-     old.customInfo!==marker(args.manifestKey,args.cargoID,args.wreckItemID)||
+     throw Error("SALVAGE_ATOMIC_PICKUP_RECEIPT_CHANGED");
+    const tag=marker(args.manifestKey,args.cargoID,args.wreckItemID);
+    const matches=tx.scan("items").filter(x=>x.value?.customInfo===tag);
+    if(matches.length!==1||
+     matches[0].key!==String(current.nativeWarehouseItemID)||
+     !old||old.itemID!==current.nativeWarehouseItemID||
+     old.customInfo!==tag||
      old.ownerID!==args.characterID||old.locationID!==args.shipID||
      old.flagID!==5||old.quantity!==args.quantity||
+     old.stacksize!==args.quantity||old.singleton!==0||
      old.typeID!==source(args).row?.typeID)
      throw Error("SALVAGE_NATIVE_PLAYER_HOLD_CHANGED");
     const next={...old,ownerID:args.corporationID,
