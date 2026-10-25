@@ -20,10 +20,11 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
   return ship?.kind==="ship"&&ship.nativeNpc===true&&
    Number(ship.itemID)===id&&!ship.session?.characterID&&position(ship.position)?ship:null;
  };
- function observe({systemID,scene,pirates=[],pilots=[],fleetShips=[]}={}){
+ function observe({systemID,scene,pirates=[],pilots=[],fleetShips=[],canAttack=()=>false}={}){
   const sys=integer(systemID),now=clock();
   if(!sys||Number(scene?.systemID)!==sys||typeof scene.getEntityByID!=="function"||
    !Array.isArray(pirates)||!Array.isArray(pilots)||!Array.isArray(fleetShips)||
+   typeof canAttack!=="function"||
    !Number.isSafeInteger(now)||now<0)return {status:"INVALID",teams:[]};
   const priorTeams=new Map(teams);
   for(const [key,team] of teams)if(team.expiresAt<now||team.systemID===sys)teams.delete(key);
@@ -70,8 +71,11 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
   for(const candidate of visible){
    const {faction,members,target,scout}=candidate,key=sys+":"+faction;
    if(next.has(key)||teams.size+next.size>=maxTeams)continue;
-   const attackerIDs=members.filter(p=>p.entityID!==scout.entityID)
-    .sort((a,b)=>meters(a.ship.position,target.ship.position)-
+   const attackerIDs=members.filter(p=>{
+    if(p.entityID===scout.entityID)return false;
+    try{return canAttack({systemID:sys,pirateID:p.entityID,
+      targetID:target.targetID})===true;}catch(_error){return false;}
+   }).sort((a,b)=>meters(a.ship.position,target.ship.position)-
       meters(b.ship.position,target.ship.position)||a.pilotID.localeCompare(b.pilotID))
     .slice(0,maxAttackers).map(p=>p.entityID);
    if(!attackerIDs.length)continue;
