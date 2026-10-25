@@ -18,7 +18,9 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
  const validShip=(scene,id)=>{
   const ship=scene.getEntityByID(id);
   return ship?.kind==="ship"&&ship.nativeNpc===true&&
-   Number(ship.itemID)===id&&!ship.session?.characterID&&position(ship.position)?ship:null;
+   Number(ship.itemID)===id&&!ship.session?.characterID&&
+   !String(ship.mode||"").toUpperCase().includes("WARP")&&
+   !ship.pendingWarp&&!ship.warpState&&position(ship.position)?ship:null;
  };
  function observe({systemID,scene,pirates=[],pilots=[],fleetShips=[],canAttack=()=>false}={}){
   const sys=integer(systemID),now=clock();
@@ -138,8 +140,15 @@ function createSquadDirector({clock=()=>Date.now(),relayDelayMs=15000,
    systemID:sys,position:{...team.position},observedAt:team.lastSeenAt,
    firstSeenAt:team.firstSeenAt}};
  }
+ function activeScoutIDs(systemID){
+  const sys=integer(systemID),now=clock(),result=new Set();
+  if(!sys)return result;
+  for(const team of teams.values)if(team.systemID===sys&&
+   team.witnessLost!==true&&team.expiresAt>=now)result.add(team.scoutID);
+  return result;
+ }
  function snapshot(){return [...teams.values()].map(t=>({...t,
   position:{...t.position},attackerIDs:[...t.attackerIDs]}));}
- return {observe,permit,snapshot};
+ return {observe,permit,activeScoutIDs,snapshot};
 }
 module.exports={createSquadDirector};
