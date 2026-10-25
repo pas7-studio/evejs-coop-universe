@@ -62,6 +62,10 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
   // operator recovery rather than guessing a physical path after a crash.
   const pending=ledger.pending();
   if(pending.status!=="CLEAN")return pending;
+  // COMPLETE in the SQL ledger is not enough to accept a crash recovery.
+  // Verify persisted native controller, ship, cargo and pilot location first.
+  const audit=ledger.auditPersisted();
+  if(audit.status!=="CLEAN")return audit;
   const recovered=nativeTransfer.recoverPending();
   return recovered.status==="NEEDS_OPERATOR_REPAIR"?
    {status:"NEEDS_OPERATOR_REPAIR",pending:recovered.pending}:
