@@ -64,8 +64,8 @@ test("P0 restart returns exact staged root to native origin, preserving nested c
  const fresh=f.make(),next={_tradeOrdinal:1};
  const r=fresh.start(next,f.inventory);
  assert.equal(r.ok,true);assert.equal(r.recovered,1);assert.equal(r.moved,1);
- assert.equal(f.item.locationID,60003760);
- assert.equal(f.item.ownerID,11);
+ assert.equal(f.items["501"].locationID,60003760);
+ assert.equal(f.items["501"].ownerID,11);
  assert.equal(f.items["502"].ownerID,11);
  assert.equal(f.items["502"].locationID,501);
  assert.equal(f.flushes(),1);
