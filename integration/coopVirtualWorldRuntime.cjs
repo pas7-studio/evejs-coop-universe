@@ -1101,8 +1101,22 @@ function nativeMarketAllowlist(name){
  return [...new Set(String(process.env[name]||"").split(",").map(Number)
   .filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,20);
 }
-async function advanceNativeMarket(){
- if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
+// How the merchant prices its own stock: the best real bid first, then small
+// steps down every few minutes while nothing sells. Pure policy; the guarded
+// native trader still owns every mutation (order fill, cargo, ledger).
+let nativeSellPricing=null;
+function sellPricing(){
+ if(process.env.EVEJS_COOP_NPC_SELL_PRICING!=="1")return null;
+ if(!nativeSellPricing)nativeSellPricing=require("./coopNpcSellPricing").createSellPricing({
+  intervalMs:Math.max(30000,Math.min(3600000,
+   Number(process.env.EVEJS_COOP_NPC_SELL_STEP_INTERVAL_MS||120000))),
+  stepPct:Math.max(0.01,Math.min(0.5,
+   Number(process.env.EVEJS_COOP_NPC_SELL_STEP_PCT||0.05))),
+  minPct:Math.max(0.2,Math.min(0.99,
+   Number(process.env.EVEJS_COOP_NPC_SELL_FLOOR_PCT||0.55)))});
+ return nativeSellPricing;
+}
+async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
   nativeMarketBlocked||nativeMarketTickRunning||
   !identityRegistry||!world||!visitedSystems.size)return;
  const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
@@ -1126,7 +1140,17 @@ async function advanceNativeMarket(){
      "/var/lib/evejs/coop-native-market",
     maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
     maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
-    cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000)))
+    cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000))),
+    // Ask the merchant's own price policy how low this stack may go today.
+    priceFloorFor:process.env.EVEJS_COOP_NPC_SELL_PRICING==="1"?
+     (typeID,bestBid,stationID)=>{
+      const pricing=sellPricing();
+      if(!pricing)return 0;
+      const key=Number(stationID)+":"+Number(typeID);
+      pricing.offer(key,bestBid);
+      const decision=pricing.decide({key,bestBid});
+      return decision.price||0;
+     }:null
    });
    // A pending RPC of unknown outcome can never be retried automatically.
    const recovered=market.recover();
@@ -1246,6 +1270,11 @@ async function advanceNativeMarket(){
      });
      if(result.status==="TRADE_SETTLED"){
       completed++;
+      // A sale resets this stack's asking price for the next haul.
+      if(trade.side==="sell"){
+       const pricing=sellPricing();
+       if(pricing)pricing.noteSold(Number(station.itemID)+":"+Number(trade.typeID));
+      }
       require("./coopRuntimeProbe").observe(
        rearmingPirate&&trade.side==="buy"?
         "living-native-npc-ammo-purchased":
@@ -1270,6 +1299,12 @@ async function advanceNativeMarket(){
          purchaseSettled:true,cargoID:result.cargoID});
       }
       break;
+     }
+     if(result.status==="PRICE_BELOW_FLOOR"){
+      require("./coopRuntimeProbe").observe("living-npc-sell-policy",null,
+       {spaceState:{systemID}},{...result,decision:"HOLD_UNTIL_FLOOR_STEPS_DOWN",
+        marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"});
+      continue;
      }
      if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
       "UNRESOLVED_MARKET_JOURNAL"].includes(result.status)){

@@ -4,7 +4,7 @@
 const fs=require("node:fs"),path=require("node:path"),vm=require("node:vm");
 const {execFileSync}=require("node:child_process");
 const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
-const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNativeDeliveryEvidence","coopAlifeNativeMiningWitness","coopAlifeNativeResupplyBridge","coopAlifeNews","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRescueNavigation","coopEscortRuntime","coopEscortTacticalGame","coopEscortVolunteers","coopEscortWarpFence","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopNativeActivity","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateSettlement","coopNpcDestructionAttacker","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryOfflineDelivery","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMaterializer","coopNpcMemory","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopRuntimeProbe","coopSessionPresence","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
+const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNativeDeliveryEvidence","coopAlifeNativeMiningWitness","coopAlifeNativeResupplyBridge","coopAlifeNews","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRescueNavigation","coopEscortRuntime","coopEscortTacticalGame","coopEscortVolunteers","coopEscortWarpFence","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopNativeActivity","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateSettlement","coopNpcDestructionAttacker","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryOfflineDelivery","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMaterializer","coopNpcMemory","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcSellPricing","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopRuntimeProbe","coopSessionPresence","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
 // COOP-046: opt-in post-commit combat outcome witness for atomic ammo banks.
@@ -402,7 +402,7 @@ function run({codePath,remove=false,dryRun=false}){
  const plan=[];
  for(const spec of specs){
   const file=path.join(code,spec.file),before=fs.readFileSync(file,"utf8");
-  const sourceState=classifyFile(before,spec);
+  const sourceState=classifyFile(before,spec,code);
   if(sourceState!=="PRISTINE"&&sourceState!=="PATCHED")
    throw Error("Refusing to modify drifted native source: "+spec.file+" ("+sourceState+")");
   plan.push({file,before,after:transform(before,spec,remove)});
@@ -425,13 +425,28 @@ function run({codePath,remove=false,dryRun=false}){
  if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};
 }
-function classifyFile(text,spec){
+function classifyFile(text,spec,code){
  try{
   const pristine=transform(text,spec,true);
   if(pristine!==text)return transform(pristine,spec,false)===text?"PATCHED":"DRIFTED";
   transform(text,spec,false);
   return spec.patches.some(p=>text.includes(p.line))?"DRIFTED":"PRISTINE";
- }catch(_error){return "ANCHOR_MISMATCH";}
+ }catch(_error){
+  // Chained patch modules legitimately refuse to REMOVE a hook that a pristine
+  // file never had. Falling back to git HEAD tells the truth: a file identical
+  // to HEAD is pristine, and a HEAD that our patches reproduce exactly is
+  // patched. Only a real mismatch is drift.
+  try{
+   const repoRoot=path.dirname(code);
+   const rel=path.relative(repoRoot,code).split(path.sep).join("/");
+   const head=execFileSync("git",["-C",repoRoot,"show",
+    "HEAD:"+(rel?rel+"/":"")+spec.file],
+    {encoding:"utf8",maxBuffer:64*1024*1024});
+   if(head===text)return "PRISTINE";
+   try{if(transform(head,spec,false)===text)return "PATCHED";}catch(_readd){}
+   return "DRIFTED";
+  }catch(_head){return "ANCHOR_MISMATCH";}
+ }
 }
 function check({codePath}){
  const project=path.resolve(__dirname,".."),code=path.resolve(codePath);
@@ -441,7 +456,7 @@ function check({codePath}){
  const problems=[],files=[],modules=[];
  for(const spec of specs){
   const file=path.join(code,spec.file);
-  const state=fs.existsSync(file)?classifyFile(fs.readFileSync(file,"utf8"),spec):"MISSING";
+  const state=fs.existsSync(file)?classifyFile(fs.readFileSync(file,"utf8"),spec,code):"MISSING";
   files.push({file:spec.file,state});
   if(state!=="PRISTINE"&&state!=="PATCHED")problems.push({target:spec.file,kind:"native-source",state});
  }
