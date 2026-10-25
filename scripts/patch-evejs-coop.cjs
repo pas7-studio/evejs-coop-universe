@@ -65,7 +65,8 @@ names.splice(names.indexOf("coopNpcIndustryNativeBindings")+1,0,
  "coopNpcIndustryRecoveryFence","coopNpcLiveFactoryReadiness",
  "coopNpcIndustryOriginalGameStorePreflight","coopNpcIndustryOriginalStageExecutor",
  "coopNpcIndustryOriginalRustSell","coopNpcIndustryOriginalSaleAudit",
- "coopNpcIndustryOriginalWalletWitness","coopNpcIndustryOriginalBuyerSettlement");
+ "coopNpcIndustryOriginalWalletWitness","coopNpcIndustryOriginalBuyerSettlement",
+ "coopLivingWorldNativeChainProof");
 const specs=[
  {file:"server/src/services/exploration/wormholes/wormholeMgrService.js",patches:[]},
  {file:"server/src/services/npe/airNpeService.js",patches:[]},
