@@ -70,7 +70,7 @@ function makeFixture(native=null){
    {getInstance:id=>id===700?instance:null},
    getMissionRecord,mutateCharacterState,
    (id,agent)=>notices.push(["tracker",id,agent]),
-   (id,type,agent)=>notices.push(["journal",id,agent]),
+   (id,type,agent)=>notices.push(["journal",id,type,agent]),
    "dungeon","modified");
  }else{
   share=(peer,agent,owner,source)=>{
