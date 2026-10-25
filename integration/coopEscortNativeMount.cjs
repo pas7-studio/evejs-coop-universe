@@ -74,8 +74,36 @@ function createNativeMount({root,gameStore,corporations,npcStore,items,
   return a;
  }
  function duo({systemID,fleetID,manifestKey,haulerID,contractID,characters}={}){
-  const a=approved.get(manifestKey);
-  if(!a||a.contractID!==contractID||a.haulerID!==haulerID||
+  let a=approved.get(manifestKey);
+  // The in-memory cache is a pre-warp optimization ONLY. After a process
+  // restart it is empty, although the exact accepted NPC route, player
+  // signatures and escrow are durable. Recovery must reconstruct identity
+  // exclusively from the original persisted native cargo manifest and
+  // server-side accepted quote, never from a client/caller supplied booking.
+  if(!a){
+   let source;
+   try{source=manifest.read(manifestKey)}
+   catch{return deny("NATIVE_DUO_DURABLE_MANIFEST_UNAVAILABLE")}
+   const m=source?.record;
+   if(source?.status!=="READY"||m?.key!==manifestKey||
+    m.systemID!==systemID||!pos(m.fleetID)||
+    !pos(m.stationID)||!pos(m.corporationID)||
+    !same(m.haulerIDs,[haulerID])||
+    !Array.isArray(m.cargo)||m.cargo.length===0)
+    return deny("NATIVE_DUO_DURABLE_MANIFEST_MISMATCH");
+   try{a=readAuthorizedOffer({manifestKey,systemID:m.systemID,
+    fleetID:m.fleetID,stationID:m.stationID,
+    corporationID:m.corporationID,haulerIDs:[haulerID]})}
+   catch{return deny("NATIVE_DUO_DURABLE_ACCEPTANCE_UNAVAILABLE")}
+   if(a?.status!=="AUTHORIZED_NATIVE_ESCORT_BOOKING"||
+    a.manifestKey!==manifestKey||a.systemID!==m.systemID||
+    a.fleetID!==m.fleetID||a.stationID!==m.stationID||
+    a.corporationID!==m.corporationID||a.haulerID!==haulerID||
+    !pos(a.amountISK)||a.amountISK>1000000000||
+    a.amountISK%2!==0)
+    return deny("NATIVE_DUO_DURABLE_ACCEPTANCE_MISMATCH");
+  }
+  if(a.contractID!==contractID||a.haulerID!==haulerID||
    a.systemID!==systemID||a.playerFleetID!==fleetID||
    !same(a.characters,characters))
    return deny("NATIVE_DUO_OFFER_UNAVAILABLE");
