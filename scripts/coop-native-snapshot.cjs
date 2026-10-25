@@ -89,5 +89,9 @@ function cli(argv=process.argv.slice(2)){
     }finally {db.exec('ROLLBACK');}
   }finally{db.close();}
 }
-if(require.main===module){try{cli();}catch(error){console.error('[NATIVE_SNAPSHOT_BLOCKED]',error.message);process.exitCode=2;}}
+// Node's `node -` stdin execution has no require.main; the Windows Docker
+// capture runner depends on this explicit, narrowly scoped entrypoint.
+if(require.main===module || (process.argv[1]==='-' && !require.main)){
+  try{cli();}catch(error){console.error('[NATIVE_SNAPSHOT_BLOCKED]',error.message);process.exitCode=2;}
+}
 module.exports={buildSnapshot,moneyToCents,quantity,verifyInput,parseArgs};
