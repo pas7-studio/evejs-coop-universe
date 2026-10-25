@@ -34,3 +34,20 @@ test("returns the EXACT native rowset header and native SDE IDs",()=>{
  assert.equal(output.rows[1][2],"Minerals");
  assert.equal(output.rows[1][5],true);
 });
+
+test("native keyed itemTypes and canonical readStaticRows both preserve real published SDE groups",()=>{
+ const keyed={types:{
+  "34":{published:true,marketGroupID:500,groupName:"Minerals"},
+  "35":{typeID:35,published:1,marketGroupID:500,groupName:"Minerals"},
+  "999":{published:false,marketGroupID:999,groupName:"Hidden"},
+  "36":{published:true,marketGroupID:0}
+ }};
+ const groups=buildGroups(keyed);
+ assert.equal(groups.length,1);
+ assert.equal(groups[0].marketGroupID,500);
+ assert.equal(groups[0].marketGroupName,"Minerals");
+ assert.deepEqual(buildGroups([
+  {_key:"34",published:true,marketGroupID:500,groupName:"Minerals"},
+  {_key:"35",published:1,marketGroupID:500,groupName:"Minerals"}
+ ]).map(x=>x.marketGroupID),[500]);
+});
