@@ -374,8 +374,8 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
   if(op==="rescue"){
    const result=require("./coopEscortRescueNavigation")
     .rescueInGame(session,tokens[0]);
-   return {status:result.status,message:result.status==="RESCUE_NATIVE_WARP_ACKNOWLEDGED"?
-    "[Co-op Rescue] Actual player ship warp acknowledged toward real wreck "+
+   return {status:result.status,message:["RESCUE_NATIVE_WARP_ACKNOWLEDGED","RESCUE_NATIVE_APPROACH_ACKNOWLEDGED"].includes(result.status)?
+    "[Co-op Rescue] Stock EVE ship movement accepted toward real wreck "+
      result.wreckID+"; "+result.survivingQuantity+
      " units of source-matched cargo present. Open the native wreck inventory and loot manually. NO rescue stock/ISK granted by this command.":
     "[Co-op Rescue] "+result.status+". No cargo or money granted."};
