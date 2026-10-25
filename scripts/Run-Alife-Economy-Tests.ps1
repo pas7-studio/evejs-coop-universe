@@ -66,7 +66,20 @@ if ($npcBuyer.schema -ne "coop-048-native-npc-player-buy/v1" -or $npcBuyer.scena
 if (@($npcBuyer.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Do not claim NPC buyer gameplay success without native Rust/GameStore evidence"
 }
+$buyer49Manifest = Join-Path $root "tests/scenarios/coop-049-alife-native-buyer-e2e.json"
+if (-not (Test-Path $buyer49Manifest)) { throw "Missing ALife native buyer acceptance scenarios" }
+$buyer49 = Get-Content -Raw -Path $buyer49Manifest | ConvertFrom-Json
+if ($buyer49.schema -ne "coop-049-alife-native-buyer-v1" -or $buyer49.scenarios.Count -lt 11) {
+  throw "Invalid ALife native buyer acceptance manifest"
+}
+if (@($buyer49.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Do not claim native ALife buyer gameplay E2E without receipts"
+}
 $files = @(
+  "tests/coop-alife-native-buyer-dispatch.test.mjs",
+  "tests/coop-alife-native-buyer-runtime.test.mjs",
+  "tests/coop-npc-buyer-native-bindings.test.mjs",
+  "tests/coop-alife-native-buyer-wiring.test.mjs",
   "tests/coop-npc-corp-buyer.test.mjs",
   "tests/coop-npc-buyer-coordinator.test.mjs",
   "tests/coop-npc-corp-buyer-real-sqlite.test.mjs",
@@ -101,7 +114,7 @@ try {
 } finally { Pop-Location }
 Get-Content -Path $log | Select-Object -Last 40 | ForEach-Object { Write-Host $_ }
 if ($code -ne 0) { throw "A-Life economy tests failed (exit $code): $log" }
-Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count))
+Write-Host ("PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: " + ($manifest.scenarios.Count + $integrity.scenarios.Count + $demand.scenarios.Count + $policy.scenarios.Count + $partial.scenarios.Count + $npcBuyer.scenarios.Count + $buyer49.scenarios.Count))
 Write-Host ("Evidence checklist: " + $manifestPath)
 Write-Host ("Test report: " + $log)
 Write-Host "No game server, market database, Docker volume, or evejs-data was modified."
