@@ -37,7 +37,7 @@ function snapshot(scene){
   visibilityKnown:p.visibleEntityIDs instanceof Set
  }));
  const shared=rows.length>=2&&rows.every(p=>p.shipExists);
- const mutual=rows.length===2&&rows.every(p=>p.visiblePeerIDs.length===1);
+ const mutual=shared&&rows.length===2&&rows.every(p=>p.visiblePeerIDs.length===1);
  return {status:shared?"TWO_PILOTS_IN_SCENE":rows.length===1?"ONE_PILOT":"NOT_READY",pilots:rows,mutualVisibility:mutual};
 }
 function observe(session,ship,reason="presence"){
