@@ -270,6 +270,52 @@ The internal wallet journal currently uses `entryTypeID: 0`; validate
 the pinned client's display behavior before enabling in-game. The
 existing `evejs-data` volume must remain untouched.
 
+## FW-007A — war fleet movement to real stargates, NOT intersystem travel
+
+The new `coopWarGateStaging.cjs` reuses **`coopNpcGateTravel`** for
+physical NPC warship navigation. No new scheduler, warp simulator,
+virtual `systemID` assignment, fake gate or newly created ship.
+
+- Starts only for an already-authorized `PREPARING` campaign whose
+  origin system is physically loaded and visited. Attackers must have
+  existing native warship custody records in the source system.
+- Requires the campaign's `supplyReservationID` to correspond to the
+  real `HELD` NPC-corporation treasury claim from FW-005A.
+  The real `START_CAMPAIGN` must already have passed its own independent
+  native route AND physical item supply proofs. Treasury escrow alone
+  is **NOT** permission to start the campaign.
+- `connectedGates()` verifies two real reciprocal EveJS gate entities
+  and their original SDE destination references.
+- Uses the same `WAR` NPC Order Arbiter and actual
+  `npcRuntime.warpToEntity` with its native warp start/broadcast,
+  rather than moving coordinates or skipping space.
+- Only one confirmed native warp order per tick by default; tactical
+  retreat and ammo resupply activity take precedence. In-flight native
+  warp and unrelated manual commands remain blocked by the shared bridge.
+- An observed ship within the original EveJS 2.5 km **surface**
+  activation range of the real gate is recorded as
+  `AWAITING_NATIVE_WAR_FLEET_TRANSFER`. It does **not** transfer.
+  The old `entityID`, `systemID`, pilot link, cargo and modules
+  must remain unchanged until a separate native transfer adapter can
+  update the identity and war registry with crash-safe reconciliation.
+- The original `coopNativeGateTransfer` supports non-war ships but
+  has an independent recovery journal; it must NOT be attached to
+  these military hulls without a new two-registry handoff protocol.
+
+**Additional default-off flag:**
+`EVEJS_COOP_FACTION_WAR_GATE_APPROACH=1` requires
+`EVEJS_COOP_FACTION_WAR=1`, `EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_WAR_TREASURY=1`, `EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`,
+and `EVEJS_COOP_ALIFE=1` (or legacy arbiter). The hosting
+`coopVirtualWorldRuntime` also requires `EVEJS_COOP_VIRTUAL_WORLD=1`.
+
+**Validation:** `node --test tests/coop-war-gate-staging.test.mjs`,
+full original pinned overlay dry-run and reversibility,
+native stargate geometry/warp arrival on two physical NPCs,
+a simultaneous player warp and combat conflict, restart with a
+staged ship, and a database crash during pending warp. No real
+cross-system movement is accepted for FW-007A yet.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
