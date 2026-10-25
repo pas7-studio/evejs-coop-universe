@@ -5,10 +5,10 @@ const positive=x=>Number.isSafeInteger(x)&&x>0;
 const vec=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function createNpcSalvageDelivery({atomic,readNativeCargo,readRivalJournal,
- readNativeEntity,getController,getStation,buildInventoryItem,
+ readNativeItems,readNativeEntity,getController,getStation,buildInventoryItem,
  warp,orbit,clock=()=>Date.now()}={}){
  if(typeof atomic?.transact!=="function"||
-  [readNativeCargo,readRivalJournal,readNativeEntity,getController,
+  [readNativeCargo,readRivalJournal,readNativeItems,readNativeEntity,getController,
    getStation,buildInventoryItem,warp,orbit,clock]
    .some(f=>typeof f!=="function"))
   throw Error("SALVAGE_RIVAL_STATION_NATIVE_AUTHORITIES_REQUIRED");
@@ -90,13 +90,28 @@ function createNpcSalvageDelivery({atomic,readNativeCargo,readRivalJournal,
        tx.get("corporationRuntime","coopSalvageRivalMoves");
       const original=cargoRows?.[String(stock.cargoID)],proof=
        rivals?.moves?.[String(stock.sourceWreckItemID)];
+      // The rival's real pickup journal and the original cargo row must
+      // agree on the SAME source wreck, manifest, NPC and corporation.
+      // Preflight reads are not authority: inspect again under GameStore.
       if(!original||original.cargoID!==stock.cargoID||
        original.entityID!==a.entityID||
+       original.ownerID!==ship.ownerID||original.flagID!==5||
+       original.singleton!==false||
        original.sourceCargoID!==stock.sourceCargoID||
        original.sourceWreckItemID!==stock.sourceWreckItemID||
+       original.sourceWreckID!==stock.sourceWreckID||
+       original.salvageManifestKey!==stock.salvageManifestKey||
        original.quantity!==stock.quantity||
        original.typeID!==stock.typeID||
-       proof?.state!=="NPC_CARGO"||
+       !positive(original.typeID)||!positive(original.quantity)||
+       !positive(original.sourceWreckID)||
+       !/^\d+-\d+-\d+$/.test(String(original.salvageManifestKey))||
+       rivals?.version!==1||!rivals.moves||
+       typeof rivals.moves!=="object"||Array.isArray(rivals.moves)||
+       proof?.v!==1||proof.state!=="NPC_CARGO"||
+       proof.wreckID!==original.sourceWreckID||
+       proof.manifestKey!==original.salvageManifestKey||
+       proof.wreckItemID!==original.sourceWreckItemID||
        proof.npcCargoID!==stock.cargoID||
        proof.sourceCargoID!==stock.sourceCargoID||
        proof.entityID!==a.entityID||
@@ -106,6 +121,8 @@ function createNpcSalvageDelivery({atomic,readNativeCargo,readRivalJournal,
       const all=tx.scan("items");
       const maximum=all.reduce((n,x)=>
        Math.max(n,Number(x.value?.itemID)||0),0);
+      if(!positive(current))
+       throw Error("SALVAGE_RIVAL_ITEM_ALLOCATOR_UNAVAILABLE");
       const itemID=Math.max(current,maximum+1);
       if(!positive(itemID)||!Number.isSafeInteger(itemID+1))
        throw Error("SALVAGE_RIVAL_ITEM_ID_INVALID");
@@ -119,8 +136,9 @@ function createNpcSalvageDelivery({atomic,readNativeCargo,readRivalJournal,
        flagID:4,quantity:stock.quantity,stacksize:stock.quantity,
        singleton:0,customInfo});
       if(item?.itemID!==itemID||item.ownerID!==ship.corporationID||
-       item.locationID!==station.itemID||
+       item.locationID!==station.itemID||item.flagID!==4||
        item.typeID!==stock.typeID||item.quantity!==stock.quantity||
+       item.stacksize!==stock.quantity||item.singleton!==0||
        item.customInfo!==customInfo)
        throw Error("SALVAGE_RIVAL_NATIVE_ITEM_BUILD_MISMATCH");
       const next={...cargoRows};delete next[String(stock.cargoID)];
@@ -134,9 +152,42 @@ function createNpcSalvageDelivery({atomic,readNativeCargo,readRivalJournal,
        nativeStockItemID:itemID,sourceCargoID:stock.sourceCargoID};
      });
     if(result?.status==="ALIFE_SALVAGE_RIVAL_STOCK_COMMITTED"){
-     deliveries.push({...result,pilotID:a.pilotID,
-      entityID:a.entityID,stationID:station.itemID,
-      corporationID:ship.corporationID});
+     // The SQLite commit can succeed while cache/index reconciliation fails.
+     // Only the read-back of the same native source and station item is
+     // a CONFIRMED delivery. Uncertain outcomes are never retried blindly.
+     let finalCargo,finalJournal,finalItems;
+     try{
+      finalCargo=readNativeCargo(a.entityID);
+      finalJournal=readRivalJournal();
+      finalItems=readNativeItems();
+     }catch{}
+     const receipt=finalJournal?.moves?.[String(stock.sourceWreckItemID)];
+     const tag="coop-salvage-rival:v1:"+
+      stock.sourceWreckItemID+":"+stock.sourceCargoID;
+     const matches=Array.isArray(finalItems)?
+      finalItems.filter(x=>x?.customInfo===tag):[];
+     const confirmed=Array.isArray(finalCargo)&&
+      !finalCargo.some(x=>x?.cargoID===stock.cargoID)&&
+      finalJournal?.version===1&&
+      receipt?.state==="NPC_STOCK_DELIVERED"&&
+      receipt.nativeItemID===result.nativeStockItemID&&
+      receipt.stationID===station.itemID&&
+      receipt.entityID===a.entityID&&
+      receipt.corporationID===ship.corporationID&&
+      matches.length===1&&
+      matches[0].itemID===result.nativeStockItemID&&
+      matches[0].ownerID===ship.corporationID&&
+      matches[0].locationID===station.itemID&&
+      matches[0].flagID===4&&
+      matches[0].typeID===stock.typeID&&
+      matches[0].quantity===stock.quantity&&
+      matches[0].stacksize===stock.quantity&&
+      matches[0].singleton===0;
+     deliveries.push({...result,
+      status:confirmed?"ALIFE_SALVAGE_RIVAL_STOCK_CONFIRMED":
+       "ALIFE_SALVAGE_RIVAL_COMMITTED_NEEDS_RECONCILIATION",
+      pilotID:a.pilotID,entityID:a.entityID,
+      stationID:station.itemID,corporationID:ship.corporationID});
      cooldown.set(lease,now+60000);
     }
    }catch{cooldown.set(lease,now+60000)}

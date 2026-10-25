@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "feature": "Stage J NPC salvage original cargo to native warehouse",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Use authorized disposable world copy, never production evejs-data",
+    "Pinned EveJS upstream and manual opt-in A-Life salvage flags",
+    "Actual original source-tagged NPC wreck, legal NPC loot-right corporation, real station",
+    "No remote GitHub CI"
+  ],
+  "scenarios": [
+    {
+      "id": "SJ-WH-01",
+      "action": "Source NPC physically takes original wreck cargo, approaches real station",
+      "expected": "Same native cargo ID debited and single corporation-owned native item credited with immutable rival receipt"
+    },
+    {
+      "id": "SJ-WH-02",
+      "action": "Retry after successful native cargo-to-station transfer and restart",
+      "expected": "No second station item; same native item ID and owner"
+    },
+    {
+      "id": "SJ-WH-03",
+      "action": "Mutate original cargo owner between preflight and SQLite transaction on disposable GameStore",
+      "expected": "No station credit, original cargo unchanged by transaction"
+    },
+    {
+      "id": "SJ-WH-04",
+      "action": "Mutate source wreck ID or original salvage manifest after preflight",
+      "expected": "No item minted, explicit native custody mismatch"
+    },
+    {
+      "id": "SJ-WH-05",
+      "action": "Mutate durable NPC rival pickup receipt after preflight",
+      "expected": "Fail closed, no cargo debit or inventory credit"
+    },
+    {
+      "id": "SJ-WH-06",
+      "action": "Remove native nextItemID allocator on test copy",
+      "expected": "Fail closed rather than guessing new item ID"
+    },
+    {
+      "id": "SJ-WH-07",
+      "action": "Force invalid native buildInventoryItem flag/stacksize/singleton on test stub",
+      "expected": "No native stock commit"
+    },
+    {
+      "id": "SJ-WH-08",
+      "action": "Simulate COMMIT succeeds but itemStore native readback is stale or fails",
+      "expected": "COMMITTED_NEEDS_RECONCILIATION; no false warehouse CONFIRMED and no blind retry"
+    },
+    {
+      "id": "SJ-WH-09",
+      "action": "NPC engaged by enemy during intended station delivery",
+      "expected": "NPC prioritizes combat, no warehouse inventory mutation"
+    },
+    {
+      "id": "SJ-WH-10",
+      "action": "Disable salvage/atomic feature flags",
+      "expected": "No native rival warehouse stock movements"
+    },
+    {
+      "id": "SJ-WH-11",
+      "action": "Try to list delivered stock on actual native market with corporate authority",
+      "expected": "Separate safety gate, only backed stock orders, no unescrowed player-style NPC listing"
+    }
+  ]
+}
