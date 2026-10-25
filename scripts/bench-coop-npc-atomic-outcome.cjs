@@ -25,7 +25,7 @@ function run(){
  if(process.platform!=="linux")throw Error("POSIX_LINUX_WSL2_REQUIRED");
  const major=Number(process.versions.node.split(".")[0]);
  if(major<22)throw Error("NODE_22_REQUIRED");
- if(process.argv.some(x=>!/^--(iterations|warmup|barrels|max-p95-ms)=\d+$/.test(x)))
+ if(process.argv.slice(2).some(x=>!/^--(iterations|warmup|barrels|max-p95-ms)=\d+$/.test(x)))
   throw Error("UNKNOWN_BENCH_OPTION");
  const iterations=positiveOption("iterations",100,5,10000),
   warmup=positiveOption("warmup",5,0,1000),
