@@ -356,13 +356,13 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
      if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
-     ensureControllers([...minerIDs,...haulerIDs]);
+     const controllers=ensureControllers([...minerIDs,...haulerIDs]);
      const active=saveSlot(db,key,{version:1,status:"ACTIVE",systemID,slot,
       fleetID:fleetIDForSlot(systemID,slot),
       minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor:born.data.originAnchor||null});
      registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:active.originAnchor});
-     return result("SPAWNED",slot,{minerIDs,haulerIDs});
+     return result("SPAWNED",slot,{minerIDs,haulerIDs,controllers});
     };
     try{
      const record=readSlot(db,key);
@@ -425,6 +425,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
    }
    for(const report of reports){
     const detail=["miners="+(report.minerIDs||[]).length,"haulers="+(report.haulerIDs||[]).length,
+     report.controllers!==undefined?"ctrl=+"+report.controllers:"","restored="+(report.restored||0),
      report.reseededFrom||"",report.repaired?"repaired":"",report.reason||""]
      .filter(Boolean).join(" ");
     log("ALIFE08 slot "+systemID+"-"+report.slot+" -> "+report.status+" "+detail);
