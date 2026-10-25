@@ -11,7 +11,7 @@ const SEP="\u001f";
 function fixture(){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"coop-bank-atomic-"));
  let state={
-  npcEntities:{"entities"+SEP+"101":{entityID:101,ownerID:900,systemID:30000144}},
+  npcEntities:{["entities"+SEP+"101"]:{entityID:101,ownerID:900,systemID:30000144}},
   npcModules:{
    ["modules"+SEP+"401"]:{moduleID:401,entityID:101,ownerID:900,typeID:123,categoryID:7,flagID:27},
    ["modules"+SEP+"402"]:{moduleID:402,entityID:101,ownerID:900,typeID:123,categoryID:7,flagID:28}
