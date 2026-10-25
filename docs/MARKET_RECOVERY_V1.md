@@ -16,7 +16,7 @@ From `C:\Games\EveCoopProject` after updating the project checkout (but **not** 
 .\scripts\Inspect-Coop-Market.ps1 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code' -SolarSystems '30000142,30000144'
 ```
 
-The tool opens the **existing** `/var/lib/evejs/market/market.sqlite` with `better-sqlite3` in `readonly` + `PRAGMA query_only` mode. It reports seeded quantities, station coverage, open sell orders, and the systems with the most stock. It never executes `rebuild`, `AdjustSeedStock`, `PlaceOrder`, `docker down`, any restart, or market inventory mutation.
+The tool opens the **existing** `/var/lib/evejs/market/market.sqlite` with `better-sqlite3` in `readonly` + `PRAGMA query_only` mode. It reports seeded quantities, station coverage, open sell orders, the systems with the most stock, and up to twelve **real cheapest seeded types** with station IDs and current prices (no fabricated offers). It never executes `rebuild`, `AdjustSeedStock`, `PlaceOrder`, `docker down`, any restart, or market inventory mutation.
 
 - `MISSING_MARKET_DB` / `MARKET_SCHEMA_INCOMPLETE`: identify the issue before attempting repair. Do NOT create a fresh DB in place.
 - `NO_SELL_LIQUIDITY`: no positive seeded quantities or open player sell orders globally. Check backups and player order records before any intervention. Restoring a snapshot destroys newer state and needs explicit approval.
