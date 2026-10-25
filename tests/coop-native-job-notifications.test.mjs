@@ -62,15 +62,39 @@ test("watch off excludes opted-out clients",()=>withFixture({settings:{701:"off"
  assert.equal(f.notify(quote()).sent,1);
  assert.deepEqual(f.sent.map(x=>x.id),[702]);
 }));
-test("same quote replay never sends another EVEmail after restart",()=>withFixture({},f=>{
+test("same quote replay skips durable SENT receipts without false delivery errors",()=>withFixture({},f=>{
  assert.equal(f.notify(quote()).sent,2);
- assert.equal(f.create().notify(quote()).sent,0);
+ const replay=f.create().notify(quote());
+ assert.equal(replay.sent,0);
+ assert.equal(replay.uncertain,0);
+ assert.equal(replay.status,"NATIVE_AGENT_MAIL_DISPATCHED");
  assert.equal(f.sent.length,2);
+ const receipt=JSON.parse(fs.readFileSync(path.join(f.root,"coop-opportunities",
+  "native-job-agent-mail",EID+"-701.json"),"utf8"));
+ assert.equal(receipt.state,"SENT");
+ assert.equal(receipt.messageID,1);
 }));
-test("unknown native EVEmail send ACK never retries blindly",()=>withFixture({unknownAck:true},f=>{
+test("lost native EVEmail ACK remains PREPARED, reports uncertainty, and never retries",()=>withFixture({unknownAck:true},f=>{
  const r=f.notify(quote());
  assert.equal(r.sent,0);
- assert.equal(f.create().notify(quote()).sent,0);
+ assert.equal(r.uncertain,2);
+ const again=f.create().notify(quote());
+ assert.equal(again.sent,0);
+ assert.equal(again.uncertain,2);
+ assert.equal(again.status,"MAIL_PARTIAL_OR_UNCERTAIN");
+ assert.equal(f.sent.length,2);
+ const receipt=JSON.parse(fs.readFileSync(path.join(f.root,"coop-opportunities",
+  "native-job-agent-mail",EID+"-701.json"),"utf8"));
+ assert.equal(receipt.state,"PREPARED");
+}));
+test("tampered old mail receipt fails closed without duplicate native email",()=>withFixture({},f=>{
+ assert.equal(f.notify(quote()).sent,2);
+ const file=path.join(f.root,"coop-opportunities","native-job-agent-mail",EID+"-701.json");
+ fs.writeFileSync(file,JSON.stringify({v:1,eventID:EID,characterID:999,
+  state:"SENT",at:NOW,messageID:1})+"\n");
+ const again=f.create().notify(quote());
+ assert.equal(again.sent,0);
+ assert.equal(again.uncertain,1);
  assert.equal(f.sent.length,2);
 }));
 test("agent mismatch cannot impersonate the quote issuer",()=>withFixture({agents:[{...agent(),corporationID:1000999}]},f=>{
