@@ -61,6 +61,13 @@ test('native READY status 3 still reserves output until actual delivery',()=>{
  assert.equal(p.jobs.length,0);
  assert.equal(p.blocked[0].reason,'SUFFICIENT_STOCK');
 });
+test('paused manufacturing job reserves native WIP and prevents another install',()=>{
+ const jobs=[{jobID:970000000000014,ownerID:OWNER,stationID:STATION,activityID:1,
+  productTypeID:AMMO,productQuantity:500,status:2}];
+ const p=fixture({jobs}).plan(args());
+ assert.equal(p.jobs.length,0);
+ assert.equal(p.blocked[0].reason,'SUFFICIENT_STOCK');
+});
 test('cancelled and unrelated-station jobs do not fabricate local inventory',()=>{
  const jobs=[
   {jobID:970000000000004,ownerID:OWNER,stationID:STATION,activityID:1,productTypeID:AMMO,productQuantity:500,status:5},
