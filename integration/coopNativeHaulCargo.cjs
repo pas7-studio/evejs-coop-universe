@@ -25,11 +25,24 @@ function transferCargo(scene,fleet,miner,options={}){
   for(const item of items){
    const cached=(miner.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
    const amount=Number(item.quantity);
-   const result=store.upsertNativeCargo({...item,entityID:Number(hauler.itemID),
+   const durable=process.env.EVEJS_COOP_NPC_STATION_DELIVERY==="1"&&hauler.transient!==true;
+   const result=store.upsertNativeCargo({...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
     ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
     [haulFlag]:Number(fleet.fleetID),coopHaulFromMinerID:Number(miner.itemID),
-    coopHaulLoadedAt:Date.now()},{transient:hauler.transient===true});
+    coopHaulLoadedAt:Date.now()},{transient:durable?true:hauler.transient===true});
    if(!result?.success)continue;
+   if(durable){
+    // Promotes the SAME cargoID and removes its previous transient marker
+    // before synchronous durability, never creating a second ore stack.
+    const db=options.database||require("../gameStore");
+    db.setTransientPath("npcCargo",`/cargo/${Number(item.cargoID)}`,false);
+    if(db.flushTableSync("npcCargo")?.success!==true){
+     probe.observe("living-hauler-cargo-persist-failed",null,
+      {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
+      {fleetID:fleet.fleetID,cargoID:item.cargoID});
+     continue;
+    }
+   }
    if(!(store.listNativeCargoForEntity(hauler.itemID)||[]).some(x=>Number(x.cargoID)===Number(item.cargoID)))continue;
    miner.nativeCargoItems=(miner.nativeCargoItems||[]).filter(x=>Number(x.itemID)!==Number(item.cargoID));
    quantity+=amount;volume+=amount*Math.max(0,Number(cached?.volume)||0);moved++;
