@@ -163,7 +163,14 @@ function report(summary, { title = "ALIFE audit" } = {}) {
 const RECONCILABLE_STAGES=new Set(["BUY_SUPPLIES","RESUPPLY"]);
 const MAX_RECONCILE_ROWS=100000;
 function atMs(row){
- const value=Date.parse(row?.at);
+ const raw=row?.at;
+ // coopRuntimeProbe.observe() can be overridden by native observer extra.at,
+ // which is an epoch-millisecond number, while other native events retain
+ // the initial ISO timestamp. Both forms are authoritative log chronology.
+ if(typeof raw==="number")return Number.isSafeInteger(raw)&&
+  raw>=1600000000000&&raw<=4102444800000?raw:null;
+ if(typeof raw!=="string"||!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T/.test(raw))return null;
+ const value=Date.parse(raw);
  return Number.isFinite(value)?value:null;
 }
 function nativeOutcomeMatches(intent,actual){
