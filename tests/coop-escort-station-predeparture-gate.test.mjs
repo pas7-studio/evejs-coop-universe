@@ -14,15 +14,27 @@ const previousWitness=process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS;
 process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
 process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
 function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=false,
- sourceDispatched=false,ackDurable=true,witnessValid=true}={}){
+ sourceDispatched=false,ackDurable=true,witnessValid=true,sourcePilotAway=false}={}){
  const counters={funding:0,warp:0,manifest:0,closures:0,witness:0};
  const target={stationID:60001,corporationID:10001,solarSystemID:30000144};
  const ship={itemID:901,kind:"ship",nativeNpc:true,transient:false,
   position:{x:0,y:0,z:0},radius:100,mode:"STOP"};
  let shipAlive=true,lossProven=false;
- const scene={systemID:30000144,
+ const playerShips=new Map([
+  [1701,{kind:"ship",itemID:1701,nativeNpc:false,
+   transient:false,position:{x:1000,y:0,z:0}}],
+  [1702,{kind:"ship",itemID:1702,nativeNpc:false,
+   transient:false,position:{x:sourcePilotAway?400000:1100,y:0,z:0}}]
+ ]);
+ const sessions=new Map([
+  [1,{characterID:701,socket:{destroyed:false},
+   _space:{initialStateSent:true,systemID:30000144,shipID:1701}}],
+  [2,{characterID:702,socket:{destroyed:false},
+   _space:{initialStateSent:true,systemID:30000144,shipID:1702}}]
+ ]);
+ const scene={systemID:30000144,sessions,
   staticEntities:[{itemID:60001,kind:"station",position:{x:100000,y:0,z:0},radius:200}],
-  getEntityByID:id=>id===901&&shipAlive?ship:null};
+  getEntityByID:id=>id===901&&shipAlive?ship:playerShips.get(id)||null};
  const fleet={fleetID:77,systemID:30000144,haulerEntityIDs:[901]};
  const cargo=[{cargoID:5501,entityID:901,coopHaulFleetID:77,
   coopHaulFromMinerID:503,typeID:34,quantity:7,transient:false}];
@@ -184,6 +196,22 @@ test("paid peaceful escort requires native departure witness flag before any ISK
    "ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
   assert.equal(f.counters.funding,0);assert.equal(f.counters.warp,0);
  })}finally{process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0"}
+});
+test("off-grid signed player cannot leave an orphan paid cargo manifest",()=>{
+ process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
+ process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="1";
+ try{run(f=>{
+  f.approve();
+  assert.equal(f.director.start(f.scene,f.fleet,1000000).status,
+   "ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID");
+  assert.equal(f.counters.manifest,0);
+  assert.equal(f.counters.funding,0);
+  assert.equal(f.counters.witness,0);
+  assert.equal(f.counters.warp,0);
+ },{sourcePilotAway:true})}finally{
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="0";
+  process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS="0";
+ }
 });
 test("source pilot camping elsewhere blocks peaceful escort BEFORE corporate reservation",()=>{
  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT="1";
