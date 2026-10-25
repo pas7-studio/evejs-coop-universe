@@ -21,7 +21,7 @@ const offer={status:"AUTHORIZED_NATIVE_ESCORT_BOOKING",manifestKey:route.manifes
  stationID:60000001,corporationID:1000152,haulerID:901,
  playerFleetID:44,characters:[701,702],amountISK:600000};
 function fixture({authorized=true,validDuo=true}={}){
- const state={recorded:false,reserves:0,preflight:0,delivery:0,routeSamples:0,routeValid:false,flightPhase:"FUNDED",readStatus:null};
+ const state={recorded:false,reserves:0,preflight:0,delivery:0,routeSamples:0,routeValid:false,flightPhase:"FUNDED",readStatus:null,reserved:true};
  let verifyService=()=>({status:"NOT_WIRED"});
  const requires={
   "./coopEscortNativeFunds":{createEscortNativeFunds:()=>({})},
@@ -29,7 +29,8 @@ function fixture({authorized=true,validDuo=true}={}){
    fundBeforeWarp:()=>{state.reserves++;return {status:"FUNDED_BEFORE_WARP"}},
    recordDelivered:()=>({status:"DURABLE_NATIVE_DELIVERY_RECORDED"}),
    read:()=>({status:"READY",phase:state.flightPhase,booking:offer}),
-   readFunded:()=>({status:"NATIVE_PREFUNDED_BOOKING_VERIFIED"}),
+   readFunded:()=>({status:state.reserved?"NATIVE_PREFUNDED_BOOKING_VERIFIED":
+    "FLIGHT_NATIVE_RESERVATION_NOT_VERIFIED"}),
    readNativeDelivery:()=>({status:"NOT_DELIVERED"}),
    readNativeDeliveryForAudit:()=>({status:"NOT_DELIVERED"}),
    listDelivered:()=>({status:"READY",manifestKeys:[]})})},
@@ -208,6 +209,31 @@ test("delivered or expired financial flight cannot be resumed for transit sample
   f.state.flightPhase="DELIVERED";
   assert.equal(f.runtime.readDurableEscortDeparture(route.manifestKey).status,
    "ESCORT_RECOVERY_ACTIVE_FUNDED_FLIGHT_NOT_VERIFIED");
+  assert.equal(f.state.reserves,0);
+ }finally{
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0";
+ }
+});
+test("refunded or spent native wallet never qualifies for midroute proof even if file says FUNDED",()=>{
+ const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
+ f.state.reserved=false;
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{
+  assert.equal(f.runtime.recordEscortRouteSample(route.manifestKey,f.scene,
+   {stationID:route.stationID}).status,"ROUTE_NATIVE_RESERVATION_NOT_VERIFIED");
+  assert.equal(f.state.routeSamples,0);
+  assert.equal(f.state.reserves,0);
+ }finally{process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="0"}
+});
+test("recovery requires independently RESERVED real wallet and never recreates it",()=>{
+ const f=fixture();f.runtime.recordEscortDeparture(route,f.scene);
+ f.state.reserved=false;
+ process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="1";
+ process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS="1";
+ try{
+  assert.equal(f.runtime.readDurableEscortDeparture(route.manifestKey).status,
+   "ESCORT_RECOVERY_NATIVE_RESERVATION_NOT_VERIFIED");
   assert.equal(f.state.reserves,0);
  }finally{
   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY="0";
