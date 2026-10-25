@@ -118,6 +118,21 @@ test("only real saved EveJS wreck from exact NPC source closes a live event",()=
   "NO_MATCHING_ACTIVE_OPERATION");
  assert.equal(local.snapshot().resolved[0].wreckID,777);
 });
+test("vanished pirate remains hidden from status until actual native wreck proof arrives",()=>{
+ const local=createOperations({clock:()=>time,getScene:()=>scene,getFleets:()=>fleetRuntime,
+  getMiningFleets:()=>nativeFleets,getCargo:id=>cargo.get(id)||[],
+  getWreck:id=>id===778?{wreckID:778,sourceEntityID:6001,systemID:30000144}:null,
+  send:()=>{}});
+ assert.equal(local.recordNativeRaid({...valid,actions:[action]}).accepted,1);
+ const removed=scene.entities.get(6001);
+ scene.entities.delete(6001);
+ try{
+  assert.equal(local.execute(pilot1,"status").status,"NO_NATIVE_RAID");
+  assert.equal(local.recordNativeWreck({systemID:30000144,npcID:6001,wreckID:778}).status,
+   "REAL_WRECK_RESOLVED_OPERATION");
+  assert.equal(local.execute(pilot1,"status").status,"REAL_WRECK_OPERATION_RESOLVED");
+ }finally{scene.entities.set(6001,removed);}
+});
 test("role intent is bound to the actual fleet and physical ship, not a shared chat label",()=>{
  const old=nativeFleet.fleetID;
  nativeFleet.fleetID=990002;
