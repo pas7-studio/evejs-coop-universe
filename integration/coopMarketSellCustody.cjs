@@ -23,6 +23,13 @@ function assertSellEscrow({order,escrow,items,hangarFlag=4}={}){
     row?.bid!==false||order?.is_corp!==false||
     (order?.source!=null&&order.source!=="player")||
     (row?.source!=null&&row.source!=="player"))deny("NATIVE_SELL_ORDER_INVALID");
+ // Original EveJS maps a Rust order ID to a numeric synthetic item location.
+ // Reject IDs that cannot be mapped bijectively in JS (otherwise two
+ // distinct i64 order IDs can alias one inventory container).
+ const expectedLocation=BigInt(id)+9200000000n;
+ if(expectedLocation>BigInt(Number.MAX_SAFE_INTEGER)||
+    escrow?.escrowLocationID!==Number(expectedLocation))
+  deny("UNSAFE_OR_COLLIDING_ESCROW_LOCATION");
  if(!escrow||escrow.escrowType!=="sell"||escrow.isCorp!==false||
     escrow.ownerId!==owner||escrow.stationId!==station||
     escrow.typeId!==type||escrow.remainingQuantity!==remaining||
