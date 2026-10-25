@@ -9,15 +9,18 @@ const HEADERS = Object.freeze([
 ]);
 function readTypes(payload) {
   if (Array.isArray(payload?.types)) return payload.types;
+  if (payload?.types && typeof payload.types === "object")
+    return Object.entries(payload.types).map(([key,value])=>
+      value && typeof value==="object"?{_key:key,...value}:null).filter(Boolean);
   if (Array.isArray(payload)) return payload;
   return [];
 }
 function buildGroups(payload) {
   const groups = new Map();
   for (const type of readTypes(payload)) {
-    if (!type || type.published !== true) continue;
+    if (!type || (type.published !== true && type.published !== 1)) continue;
     const groupID = positive(type.marketGroupID);
-    const typeID = positive(type.typeID);
+    const typeID = positive(type.typeID ?? type._key);
     if (!groupID || !typeID) continue;
     let group = groups.get(groupID);
     if (!group) {
