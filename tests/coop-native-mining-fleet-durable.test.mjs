@@ -245,3 +245,59 @@ test("ALIFE-12 original restored cargo with wrong fleet ID quarantines slot",t=>
  assert.match(result.slots[0].reason,/ALIFE12_NATIVE_HAUL_CUSTODY_AMBIGUOUS/);
  assert.equal(reboot.getSpawnCalls(),0);
 });
+
+test("a witness whose ships were never durable is archived and the slot is seeded again",t=>{
+ const f=fixture(t);
+ const old=process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+ process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE="1";
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+  else process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=old;});
+ // A previous scene generation seeded this slot while durable startup was OFF:
+ // the witness is ACTIVE but every hull behind it is gone, cargo and modules too.
+ f.world.slots.set(slotKey(SYSTEM,1),{version:1,status:"ACTIVE",systemID:SYSTEM,slot:1,
+  fleetID:SYSTEM*32+1,minerEntityIDs:[71001],haulerEntityIDs:[71002],
+  originAnchor:{position:{x:1,y:2,z:3}}});
+ f.world.entities.clear();f.world.controllers.clear();f.setPhysical(new Map());
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.equal(r.slots[0].status,"SPAWNED");
+ assert.equal(r.slots[0].reseededFrom,"ABANDONED_WITNESS");
+ assert.equal(f.getSpawnCalls(),1);
+ const archived=[...f.world.slots.keys()].filter(k=>k.startsWith(slotKey(SYSTEM,1)+"-"));
+ assert.equal(archived.length,1,"the old witness is archived, never silently dropped");
+ assert.deepEqual(f.world.slots.get(slotKey(SYSTEM,1)).minerEntityIDs,[71001]);
+});
+test("an abandoned-looking witness that still holds cargo is never re-seeded",t=>{
+ const f=fixture(t);
+ const old=process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+ process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE="1";
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE;
+  else process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=old;});
+ f.world.slots.set(slotKey(SYSTEM,1),{version:1,status:"ACTIVE",systemID:SYSTEM,slot:1,
+  fleetID:SYSTEM*32+1,minerEntityIDs:[71001],haulerEntityIDs:[71002]});
+ f.world.entities.clear();f.world.controllers.clear();f.setPhysical(new Map());
+ // Real ore is still on record for that ship: never guess it away.
+ f.world.cargo.set(9001,{cargoID:9001,entityID:71002,quantity:500,ownerID:950});
+ const r=f.start();
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(f.getSpawnCalls(),0);
+ assert.equal(r.slots[0].status,"NEEDS_OPERATOR_REPAIR");
+});
+test("a stale runtime fleet whose ships are gone is re-pointed instead of blocking the slot",t=>{
+ const f=fixture(t);assert.equal(f.start().status,"OK");
+ // Simulate a scene generation that kept the runtime record but lost the hulls.
+ f.world.entities.clear();f.world.controllers.clear();f.setPhysical(new Map());
+ f.getFleets()[0].minerEntityIDs=[990001];f.getFleets()[0].haulerEntityIDs=[990002];
+ f.setPhysical(new Map());
+ for(const id of [71001,71002]){
+  f.world.entities.set(id,{entityID:id,systemID:SYSTEM,ownerID:950,
+   operatorKind:roleMarker(SYSTEM,1,id===71001?"miner":"hauler"),nativeNpc:true,transient:false});
+  f.world.controllers.set(id,{entityID:id,systemID:SYSTEM,
+   operatorKind:roleMarker(SYSTEM,1,id===71001?"miner":"hauler"),
+   profileID:"npc-mining",transient:false,startupRuleID:null});
+ }
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.deepEqual(f.getFleets()[0].minerEntityIDs,[71001]);
+ assert.deepEqual(f.getFleets()[0].haulerEntityIDs,[71002]);
+});

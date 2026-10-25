@@ -21,6 +21,8 @@ const EXT = (typeof __filename === "string" && __filename.endsWith(".js")) ? "" 
 const { evaluateContract } = require("./coopCourierDispatch" + EXT);
 const flightCore = require("./coopCourierFlight" + EXT);
 const driver = require("./coopCourierFlightDriver" + EXT);
+// Shared identity object for this courier, owned by the generic motion module.
+const motion = require("./coopNativeAgentMotion" + EXT);
 const bridge = require("./coopCourierNativeAccept" + EXT);
 const notices = require("./coopCourierNotices" + EXT);
 const nodeFs = require("node:fs");
@@ -506,6 +508,8 @@ function createCourierDispatch(deps = {}) {
       transitions,
       space,
       sceneForSystem: typeof deps.sceneForSystem === "function" ? deps.sceneForSystem : null,
+      session: motion.agentSessionFor(identity.character),
+
       warpIngressMs: 30000,
       arrivalConfirmed: flight.step === "arrive" ? arrival.ok : false,
     };
