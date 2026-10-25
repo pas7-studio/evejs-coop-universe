@@ -84,10 +84,14 @@ function createAmmoSupply({store,getWeaponModules,resolveFamily,isOptional,compa
    const readiness=inspect({scene,entityID,pilotID:a.pilotID,assignments});
    const lease=leases.get(key);
    if(readiness.status!=="AMMO_EXHAUSTED"){
-    if(lease){leases.delete(key);lastOrder.delete(key);
+    // A temporarily unreadable native fitting is NOT evidence that cargo
+    // was restored; keep the depleted ship fenced until positive readiness.
+    if(lease&&["AMMO_AVAILABLE","NOT_APPLICABLE"].includes(readiness.status)){
+     leases.delete(key);lastOrder.delete(key);
      if(readiness.status==="AMMO_AVAILABLE")
       events.push({kind:"npc-ammo-resupplied",entityID,systemID:system,
-       pilotID:a.pilotID,source:"REAL_NATIVE_CARGO"});}
+       pilotID:a.pilotID,source:"REAL_NATIVE_CARGO"});
+    }
     continue;
    }
    if(!lease)events.push({kind:"npc-ammo-exhausted",entityID,systemID:system,
