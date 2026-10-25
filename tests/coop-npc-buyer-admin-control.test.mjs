@@ -57,7 +57,8 @@ async function fixture({badLog=false,hold=false,locked=false}={}){
      res.on("end",()=>resolve({code:res.statusCode,body:JSON.parse(data)}));
    });
    req.on("error",reject);
-   req.end(body);
+   if(method==="POST")req.end(body);
+   else req.end();
   });
  }
  const audit=opts=>post("/v1/recovery/audit",{claimKey:K},opts);
