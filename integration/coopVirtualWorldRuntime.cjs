@@ -27,16 +27,33 @@ function syncNativeDeliveries(){
  }
 }
 function start(){
- if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"||world)return;
+ if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1"){
+  if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT==="1")
+   console.warn("[CoopLivingWorld] BLOCKED_RUNTIME_CONFIG: headless boot is enabled but virtual world is disabled");
+  return;
+ }
+ if(world)return;
+ // Diagnostic invocation only; no claim of booted native ships or world.
+ require("./coopRuntimeProbe").observe("living-startup-entered",null,null,
+  {status:"START_REQUESTED_NOT_READY",headlessConfigured:process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT==="1"});
  const route=String(process.env.EVEJS_COOP_VIRTUAL_ROUTE||"30000142,30000144").split(",").map(Number);
- const {createWorld}=require("./coopVirtualWorld");
- const nextWorld=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
-   route,population:Number(process.env.EVEJS_COOP_VIRTUAL_POPULATION||16),
-   travelMs:Number(process.env.EVEJS_COOP_VIRTUAL_TRAVEL_MS||120000),
-   migrateFactions:process.env.EVEJS_COOP_FACTION_LAYOUT_V2==="1"});
- const {createLife}=require("./coopNpcLife");
- const nextLife=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
-  recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
+ let nextWorld,nextLife;
+ try{
+  const {createWorld}=require("./coopVirtualWorld");
+  nextWorld=createWorld({file:process.env.EVEJS_COOP_VIRTUAL_STATE_FILE||"/var/lib/evejs/coop-virtual-world.json",
+    route,population:Number(process.env.EVEJS_COOP_VIRTUAL_POPULATION||16),
+    travelMs:Number(process.env.EVEJS_COOP_VIRTUAL_TRAVEL_MS||120000),
+    migrateFactions:process.env.EVEJS_COOP_FACTION_LAYOUT_V2==="1"});
+  const {createLife}=require("./coopNpcLife");
+  nextLife=createLife({file:process.env.EVEJS_COOP_LIFE_FILE||"/var/lib/evejs/coop-npc-life.json",
+   recoveryMs:Number(process.env.EVEJS_COOP_CLONE_RECOVERY_MS||1800000)});
+ }catch(error){
+  // Never delete or reinitialize real persisted state to fake a ready world.
+  require("./coopRuntimeProbe").observe("living-startup-failed",null,null,
+   {status:"BLOCKED_PERSISTED_WORLD_INIT",phase:"persistent-state-load",
+    errorCode:String(error?.code||error?.name||"UNKNOWN").replace(/[^A-Za-z0-9_]/g,"_").slice(0,48)});
+  throw error;
+ }
  world=nextWorld;life=nextLife;
  // Headless bootstrap must resolve persisted native pilot links before
  // advancing virtual travel; otherwise a real parked ship can be

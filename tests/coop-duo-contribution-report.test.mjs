@@ -92,3 +92,16 @@ test('same two pilots may earn genuine mission credit after a refreshed native s
  ]}));
  assert.equal(run(a).status,'SERVER_TWO_PLAYER_DAMAGE_AND_MISSION_CREDIT');
 });
+
+test('global-merge: mission in another system or before authentic hits does not certify same pair',()=>{
+ const other=rows();other.at(-1).systemID=30000142;
+ assert.equal(run(other).mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+ const early=rows();early.at(-1).at=at(4);
+ assert.equal(run(early).mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+});
+test('global-merge: mission 32 minutes after combat does not certify same duo episode',()=>{
+ const a=rows();a.at(-1).at=new Date(now+32*60000).toISOString();
+ const r=report(a.map(x=>JSON.stringify(x)).join('\n'),{now:now+33*60000,windowMinutes:120});
+ assert.equal(r.mission.status,'NO_INDEPENDENT_NATIVE_MISSION_PROOF');
+ assert.equal(r.status,'INCOMPLETE_NATIVE_COOP_EVIDENCE');
+});

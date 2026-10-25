@@ -38,6 +38,9 @@ Full evidence / test procedure: [COOP_NATIVE_CONTRACTS_LP_STORE_V1.md](COOP_NATI
 - **NOT COMPLETE:** Two real client RPCs, full contract escrow creation/acceptance/delivery, force-crash consistency and corporate wallet role gating. Never mark P0 finance DONE until persistent wallet/item/record consistency is proven. Users' current `evejs-data` untouched.
 - Agent ownership: commerce agent takes 2-player contract validation + crash-atomic persistence; faction agent takes LP offer list/purchase + per-character actual standing/LP traces; other agents can work exploration independently.
 
+
+**Exploration source checkpoint (2026-10-25):** [Native scanner → shared bookmark → physical wormhole audit](COOP_EXPLORATION_NATIVE_GAP_20261025.md) verifies existing access-group bookmark and fleet-compatible native wormhole APIs; flags scan-result string/numeric ID & proof uncertainty, and 120-second shared bookmark delay. Assign RPC validation to exploration agent, coordinate any `beyonceService` edit with fleet/warp owner. No exploration code changed yet; LIVE_UNVERIFIED.
+
 ## SOURCE-VERIFIED high-value discoveries to avoid unnecessary rewrites
 
 See full [24-mechanic native gap audit](EVEJS_NATIVE_MECHANICS_COOP_GAP_AUDIT_20261025.md).
