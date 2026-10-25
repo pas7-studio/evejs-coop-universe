@@ -51,7 +51,7 @@ function fixture(){
   verifyNpcCorporation:(id,st)=>id===OWNER&&st===STATION,
   clock:()=>1761390000000});
  const producer={operationID:OP,ownerID:OWNER,stationID:STATION,
-  orderID:ORDER,itemID:ITEM,typeID:TYPE,quantity:100,
+  orderID:ORDER,itemID:ITEM,typeID:TYPE,quantity:100,jobID:JOB,
   phase:"LISTED"};
  const director={inspect:()=>clone({version:1,entries:{[OP]:producer},history:{}})};
  const wallet=createOriginalNpcWalletReceiptWitness({
