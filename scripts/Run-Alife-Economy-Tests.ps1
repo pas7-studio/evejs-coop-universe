@@ -83,6 +83,7 @@ $files = @(
   "tests/coop-alife-native-buyer-dispatch.test.mjs",
   "tests/coop-alife-native-buyer-runtime.test.mjs",
   "tests/coop-npc-buyer-native-bindings.test.mjs",
+  "tests/coop-npc-rust-order-authority.test.mjs",
   "tests/coop-alife-native-buyer-wiring.test.mjs",
   "tests/coop-alife-native-overlay-compat.test.mjs",
   "tests/coop-npc-corp-buyer.test.mjs",
