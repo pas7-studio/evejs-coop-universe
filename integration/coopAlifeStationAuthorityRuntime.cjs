@@ -19,15 +19,13 @@ function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps,rpcTi
  if(!Array.isArray(products)||!deps||!Number.isSafeInteger(rpcTimeoutMs)||
     rpcTimeoutMs<1000||rpcTimeoutMs>15000)throw Error("NATIVE_ALIFE_RUNTIME_AUTHORITY_REQUIRED");
  const {
-  worldData,corporationState,corporationRuntime,itemStore,industryStatic,
-  industryRuntime,industryParity,gameStore,marketClient
+  worldData,itemStore,industryStatic,industryParity,gameStore,marketClient
  }=deps;
- if(!worldData?.getStationByID||!corporationState?.getCorporationRecord||
-  !corporationRuntime?.getCorporationRuntime||!itemStore?.listOwnedItems||
+ if(!worldData?.getStationByID||!itemStore?.listOwnedItems||
   !itemStore?.findItemById||!itemStore?.getItemMutationVersion||
   !industryStatic?.getFacilityPayloadByID||
   !industryStatic?.getBlueprintDefinitionByProductTypeID||
-  !industryRuntime?.getBlueprintState||!industryParity?.buildIndustryActivityMaterials||
+  !industryParity?.buildIndustryActivityMaterials||
   typeof gameStore?.read!=="function"||typeof marketClient?.call!=="function")
   throw Error("NATIVE_ALIFE_RUNTIME_READER_DEPENDENCIES");
  const read=(table,path)=>{const r=gameStore.read(table,path);
@@ -35,8 +33,10 @@ function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps,rpcTi
   return r.data};
  return createStationAuthority({
   products,clock,
-  getCorporation:id=>corporationState.getCorporationRecord(id),
-  getCorporationRuntime:id=>corporationRuntime.getCorporationRuntime(id),
+  // Direct GameStore reads, NOT getCorporationRecord/getCorporationRuntime:
+  // those upstream getters may initialize and persist defaults on a read.
+  getCorporation:id=>read("corporations","/records/"+id),
+  getCorporationRuntime:id=>read("corporationRuntime","/corporations/"+id),
   getStation:id=>worldData.getStationByID(id),
   getFacility:id=>industryStatic.getFacilityPayloadByID(id),
   listOwnedItems:id=>itemStore.listOwnedItems(id),
@@ -44,7 +44,9 @@ function createRuntimeStationAuthority({products,clock=()=>Date.now(),deps,rpcTi
   listEscrow:()=>Object.values(read("marketEscrow","/")),
   getEscrowItem:id=>itemStore.findItemById(id),
   getDefinition:id=>industryStatic.getBlueprintDefinitionByProductTypeID(id),
-  getBlueprintState:(id,item)=>industryRuntime.getBlueprintState(id,item),
+  // The stock getBlueprintState creates a new BPO state if absent.
+  // Economic perception must never seed/modify a blueprint.
+  getBlueprintState:id=>read("industryBlueprintState","/records/"+id),
   getMaterials:(def,activity,runs,params)=>
    industryParity.buildIndustryActivityMaterials(def,activity,runs,params),
   getOrders:(regionID,typeID)=>{
