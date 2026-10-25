@@ -28,6 +28,7 @@ param(
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
+  [switch]$EnableFullHaulManifest,
 [switch]$Alife,
 [switch]$AlifeTrace,
   [string]$VirtualRouteSystems = '30000142,30000144',
@@ -46,6 +47,7 @@ if ($EnableMissionJoin -and -not $LivingCoop) { throw 'Native mission join requi
 if ($EnableDuoMissionSettlement -and -not $LivingCoop) { throw 'Duo settlement requires -LivingCoop' }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
 if ($EnableNpcStationDelivery -and -not $LivingCoop) { throw 'NPC native station delivery requires -LivingCoop' }
+if ($EnableFullHaulManifest -and (-not $LivingCoop -or -not $EnableNpcStationDelivery)) { throw 'Full native cargo manifest requires LivingCoop and station delivery' }
 if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
 if ($AlifeTrace -and -not $Alife) { throw '-AlifeTrace requires -Alife' }
 Assert-Range 'NpcCount' $NpcCount 1 3
@@ -202,6 +204,7 @@ if ($LivingCoop) {
   $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_CARGO: '1'"
   if ($EnableNpcStationDelivery) {
     $yamlLines += "      EVEJS_COOP_NPC_STATION_DELIVERY: '1'"
+    if ($EnableFullHaulManifest) { $yamlLines += "      EVEJS_COOP_NATIVE_HAUL_MANIFEST: '1'" }
     $yamlLines += "      EVEJS_COOP_NPC_WAREHOUSE_DIR: '/var/lib/evejs/coop-native-warehouse'"
   }
   if ($Alife) {
