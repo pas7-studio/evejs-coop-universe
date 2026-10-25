@@ -334,9 +334,7 @@ function advanceNativeWarObjectives(){
    getController:id=>controllers.getControllerByEntityID(id),
    getFactionForCorporation,
    allowMilitiaPlayers:process.env.EVEJS_COOP_FACTION_WAR_PLAYER_CAPTURE==="1",
-   getLivePlayerSessions:()=>require("../services/chat/sessionRegistry").getSessions(),
-   getCharacterRecord:id=>
-    require("../services/character/characterState").peekCharacterRecord(id)
+   getLivePlayerSessions:()=>require("../services/chat/sessionRegistry").getSessions()
   });
   const adjudicator=adjudicatorApi.createWarObjectiveAdjudicator({
    gameStore,getNativeStructure,getFactionForCorporation,
