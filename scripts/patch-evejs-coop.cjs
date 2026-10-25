@@ -21,6 +21,8 @@ names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelectio
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
 // Stage H durable native physical warp fence, source-linked original cargo.
 names.splice(names.indexOf("coopEscortNativeBootstrap")+1,0,"coopEscortWarpFence");
+// Source-on-grid native two-pilot service evidence, no escrow authority.
+names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness");
 const specs=[
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
