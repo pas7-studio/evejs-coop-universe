@@ -9,7 +9,8 @@
 - `prepare` persists `PENDING`/`PREPARED` in the existing version-1 native depot document before any native cargo removal. The journal uses exact cargo ID, type, quantity, native hauler, system, fleet. An incomplete intent is NOT credited to totals.
 - Confirm native remove success and source absence. Only then `commit` transitions to `COMMITTED`, increments aggregate virtual receipts once; all steps are re-openable after restart.
 - If prepare fails, no native cargo is removed. If remove fails, retain pending intent and retry after verifying the same exact cargo still exists. If native removal succeeded but receipt commit failed, retain an unresolved pending entry; never auto-credit from a missing cargo row, never mint replacement cargo. Require operator investigation.
-- Reused cargo IDs, quantity mismatches, and different fleet ownership fail closed. Read-only audit can compare pending vs committed receipt amounts.
+- Reused cargo IDs, quantity mismatches, and different fleet ownership fail closed. Read-only audit derives committed totals by system and native ore `typeID`; mismatches produce `NEEDS_OPERATOR_REPAIR` and block virtual economy credit.
+- The old `depot.record()` path that accepted unverifiable deliveries is disabled (`UNVERIFIED_DIRECT_CREDIT_DISABLED`). The corresponding legacy tests now use the real prepare/commit protocol.
 
 ## Required stage 2 — true station economy (NOT IMPLEMENTED)
 
@@ -20,3 +21,4 @@ Acceptance: physical miner ore → durable physical hauler → station warehouse
 ## Tests / safety
 
 Fault tests cover prepare failures, remove failures, crash between remove and commit, mismatched IDs, exactly-once receipts across restart. Do not restart live Docker, clear `evejs-data`, credit player items, or turn on native market settlement until stage 2 is independently reviewed and tested in a disposable test volume.
+**Important:** no new items are credited to EveJS station warehouses in this PR; physical refining, industry reservations and exchange settlement remain explicitly blocked. Existing committed receipt history is preserved. Review unresolved PREPARED receipts before any stage-2 settlement or replay.
