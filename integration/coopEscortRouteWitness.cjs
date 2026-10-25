@@ -53,7 +53,11 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
    x.playerFleetID!==b.playerFleetID||x.amountISK!==b.amountISK||
    !same(x.characters,b.characters)||!same(x.shipIDs,p.shipIDs)||
    !equal(x.origin,p.origin)||!vector(x.destination)||
-   !vector(x.hauler)||!pos(x.at)||x.at<=p.at||x.at-p.at>MAX_AGE||
+   !vector(x.hauler)||!Array.isArray(x.pilotPositions)||
+   x.pilotPositions.length!==2||!x.pilotPositions.every(vector)||
+   x.pilotPositions.some(pt=>Math.hypot(
+    pt.x-x.hauler.x,pt.y-x.hauler.y,pt.z-x.hauler.z)>10000)||
+   !pos(x.at)||x.at<=p.at||x.at-p.at>MAX_AGE||
    typeof x.progress!=="number"||!Number.isFinite(x.progress)||
    x.progress<WINDOWS[stage-1][0]||x.progress>WINDOWS[stage-1][1])
    return denied("ROUTE_CHECKPOINT_SOURCE_MISMATCH");
@@ -164,7 +168,7 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
   if(duo?.status!=="VERIFIED_NATIVE_DUO_FLEET"||
    duo.fleetID!==b.playerFleetID||!same(duo.characters,b.characters))
    return denied("ROUTE_NATIVE_FLEET_NOT_VERIFIED");
-  const online=[...scene.sessions.values()];
+  const online=[...scene.sessions.values()],pilotPositions=[];
   for(let i=0;i<2;i++){
    const sessions=online.filter(s=>s?.characterID===b.characters[i]&&
     s?.socket?.destroyed!==true&&s?._space?.initialStateSent===true&&
@@ -175,8 +179,10 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
     ship.nativeNpc===true||ship.transient===true||!vector(ship.position)||
     Math.hypot(ship.position.x-npc.position.x,
      ship.position.y-npc.position.y,
-     ship.position.z-npc.position.z)>150000)
+     ship.position.z-npc.position.z)>10000)
     return denied("ROUTE_PILOT_NOT_ESCORTING_NPC");
+   pilotPositions.push({x:ship.position.x,y:ship.position.y,
+    z:ship.position.z});
   }
   const row={v:1,phase:"MID_ROUTE",stage,manifestKey:b.manifestKey,
    contractID:b.contractID,systemID:b.systemID,fleetID:b.fleetID,
@@ -187,7 +193,7 @@ function createRouteWitness({root,io=fs,clock=()=>Date.now()}={}){
    origin:{x:p.origin.x,y:p.origin.y,z:p.origin.z},
    destination:{x:destination.x,y:destination.y,z:destination.z},
    hauler:{x:npc.position.x,y:npc.position.y,z:npc.position.z},
-   progress,at:now};
+   pilotPositions,progress,at:now};
   let fd,dirfd;
   try{
    io.mkdirSync(dir,{recursive:true});
