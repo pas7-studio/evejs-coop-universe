@@ -30,6 +30,7 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
  if(ledger?.version!==1||!ledger.pilots||typeof ledger.pilots!=="object")
   throw Error("NPC_MARKET_LEDGER_INVALID");
  const txPath=id=>path.join(root,"tx",id+".json");
+ const purchasePath=id=>path.join(root,"purchases",String(id)+".json");
  function atomic(file,obj){
   fs.mkdirSync(path.dirname(file),{recursive:true});
   const temp=file+".tmp-"+process.pid;
@@ -105,6 +106,22 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     tradeCount:acc.tradeCount+1};
    atomic(ledgerFile,ledger);
   }
+  if(tx.side==="buy"){
+   // Durable source witness for the exact cargo ID, not a new asset grant.
+   // Kept after the market RPC journal is removed. If writing it fails,
+   // leave RPC_ACK for recovery and do not claim resupply complete.
+   const receipt={version:1,phase:"SETTLED",source:"EVEJS_SEED_MARKET",
+    pilotID:tx.pilotID,entityID:tx.entityID,systemID:tx.systemID,
+    cargoID:tx.cargoID,typeID:tx.typeID,quantity:tx.quantity,
+    stationID:tx.stationID,marketOrderID:tx.marketOrderID,
+    price:tx.price,at:tx.at};
+   let earlier=null;
+   try{earlier=JSON.parse(fs.readFileSync(purchasePath(tx.cargoID),"utf8"));}
+   catch(e){if(e.code!=="ENOENT")throw e;}
+   if(earlier&&JSON.stringify(earlier)!==JSON.stringify(receipt))
+    throw Error("NPC_MARKET_PURCHASE_RECEIPT_CONFLICT");
+   if(!earlier)atomic(purchasePath(tx.cargoID),receipt);
+  }
   return {status:"TRADE_SETTLED",side:tx.side,pilotID:tx.pilotID,
    entityID:tx.entityID,systemID:tx.systemID,
    stationID:tx.stationID,typeID:tx.typeID,
@@ -112,6 +129,10 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    marketOrderID:tx.marketOrderID,
    marketOrderSource:"EVEJS_SEED",
    cargoID:tx.cargoID,
+   buyReceipt:tx.side==="buy"?{
+    cargoID:tx.cargoID,stationID:tx.stationID,typeID:tx.typeID,
+    quantity:tx.quantity,marketOrderID:tx.marketOrderID
+   }:null,
    lootSource:tx.lootSource||null,
    npcLedgerOnly:true,
    nativeCargoVerified:true,marketRPCAcknowledged:true,
