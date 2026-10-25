@@ -70,7 +70,8 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
   const row=witness.record.rows.find(r=>r.cargoID===cargoID);
   if(!row)return deny("SALVAGE_CARGO_NOT_IN_ORIGINAL_WRECK");
   const ship=readPlayerShip(session);
-  if(!pos(ship?.itemID))return deny("SALVAGE_PLAYER_SHIP_UNVERIFIED");
+  if(!pos(ship?.itemID)||ship.ownerID!==session.characterID)
+   return deny("SALVAGE_PLAYER_SHIP_UNVERIFIED");
   const args={manifestKey:m.key,cargoID,wreckItemID:row.wreckItemID,
    quantity:row.quantity,expectedWreckID:wreckID,stationID:m.stationID,
    corporationID:m.corporationID,characterID:session.characterID,
@@ -88,6 +89,7 @@ function createSalvageGameAuthority({readEvent,readFlight,readManifest,
       session._space?.initialStateSent!==true||
       pos(readDockedStation(session))||
       player?.itemID!==requested.shipID||player.kind!=="ship"||
+      player.nativeNpc===true||
       wreck?.itemID!==requested.expectedWreckID||
       wreck.nativeNpcWreck!==true||
       !vector(player.position)||!vector(wreck.position))
