@@ -48,15 +48,19 @@ function patch(src,{remove=false}={}){
   '        const coopPlayerSellTicket = coopPlayerSellProof && '+gate+
   ' ? '+svc+'.begin(coopPlayerSellProof,{chargeBuyerWallet}) : null;', {after:true});
  edit(bs,ss,sellProof,
-  '        if ('+gate+' && !chargeBuyerWallet) throw Error("P2P_SETTLEMENT_RESERVED_BUY_ORDER_CROSSING_UNSUPPORTED");',{after:false});
- edit(ss,be,buyProof,
+  '        if ('+gate+' && !chargeBuyerWallet) throw Error("P2P_SETTLEMENT_RESERVED_BUY_ORDER_CROSSING_UNSUPPORTED");',{after:true});
+ edit(ss,be,
+  '    const sellerInventoryChanges = [];',
   '    const coopPlayerBuyTicket = coopPlayerBuyProof && '+gate+
   ' ? '+svc+'.begin(coopPlayerBuyProof,{chargeBuyerWallet:false}) : null;', {after:true});
- edit(ss,be,buyProof,
-  '    if ('+gate+' && sourceOrderId) throw Error("P2P_SETTLEMENT_DOUBLE_ORDER_CROSSING_UNSUPPORTED");');
- edit(bs,ss,sellAck,
+ edit(ss,be,
+  '    const sellerInventoryChanges = [];',
+  '    if ('+gate+' && !isSeedBuyOrder && sourceOrderId && normalizeOrderId(sourceOrderId)!=="0") throw Error("P2P_SETTLEMENT_DOUBLE_ORDER_CROSSING_UNSUPPORTED");',{after:true});
+ edit(bs,ss,
+  '        const grossAmount = roundIsk(orderPrice * tradedQuantity);',
   '        if (coopPlayerSellTicket) '+svc+'.confirmRust(coopPlayerSellTicket,fillResponse);',{after:true});
- edit(ss,be,buyAck,
+ edit(ss,be,
+  '    const grossAmount = roundIsk(orderPrice * fillableQuantity);',
   '    if (coopPlayerBuyTicket) '+svc+'.confirmRust(coopPlayerBuyTicket,fillResponse);',{after:true});
  // Proof must become SETTLED only AFTER original escrow mutation and
  // seller wallet credit/tax, not immediately after Rust acknowledges a fill.
