@@ -56,6 +56,8 @@ function createTracker({
    ![...scene.sessions?.values?.()||[]].includes(a)||
    ![...scene.sessions?.values?.()||[]].includes(b))
    return {reason:"NOT_SAME_NATIVE_SCENE"};
+  if(!require("./coopFleetWarpSafety").uniqueOwners(scene,a,b,s.systemID))
+   return {reason:"STALE_OR_DUPLICATE_NATIVE_OWNER"};
   const leader=scene.getShipEntityForSession?.(a);
   const follower=scene.getShipEntityForSession?.(b);
   if(!leader||!follower||leader!==s.leader||follower!==s.follower||
@@ -118,6 +120,8 @@ function createTracker({
    ![...native.sessions?.values?.()||[]].includes(commanderSession)||
    ![...native.sessions?.values?.()||[]].includes(followerSession))
    return {status:"UNVERIFIABLE_NATIVE_SHIPS"};
+  if(!require("./coopFleetWarpSafety").uniqueOwners(native,commanderSession,followerSession,systemID))
+   return {status:"STALE_OR_DUPLICATE_NATIVE_OWNER"};
   const data=result.data||{};
   const target=pos(targetEntityID);
   const destination=[data.targetPoint,data.rawDestination,
