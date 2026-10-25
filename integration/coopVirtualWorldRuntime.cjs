@@ -1165,6 +1165,10 @@ function ensureMarketTrader(){
   resolveType:id=>inventory.resolveItemByTypeID(id),
   root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
   maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
+  // A sale is bounded by the real seeded bid volume, like a player's. The
+  // small MAX_QTY stays a BUY spending guard and never starves the economy.
+  maxSellQuantity:Math.max(1,Math.min(1000000,
+   Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_SELL_QTY||100000))),
   maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
   cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000))),
   priceFloorFor:process.env.EVEJS_COOP_NPC_SELL_PRICING==="1"?
@@ -2326,21 +2330,30 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  const job={startedAt:Date.now(),settled:null};
  arrivalSales.set(key,job);
  void (async()=>{
-  const sold=[];let last="NO_ELIGIBLE_STACK";
+  const sold=[];let last="NO_ELIGIBLE_STACK",settlements=0;
   try{
    const scene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
    for(const typeID of wanted){
-    const result=await trader.execute({scene,pilotID:link.pilotID,
-     entityID:Number(haulerID),stationID:Number(stationID),
-     side:"sell",typeID,buyTypes:[],sellTypes});
-    if(result.status==="TRADE_SETTLED")
+    // Several stacks of one ore type are still one merchant action. Keep going
+    // while the market really buys, so a haul is liquidated instead of decaying
+    // in the warehouse, but stay strictly bounded in count and time.
+    for(;;){
+     if(settlements>=8||Date.now()-job.startedAt>30000)break;
+     const result=await trader.execute({scene,pilotID:link.pilotID,
+      entityID:Number(haulerID),stationID:Number(stationID),
+      side:"sell",typeID,buyTypes:[],sellTypes},
+      {withinBatch:settlements>0});
+     if(result.status!=="TRADE_SETTLED"){last=String(result.status||"UNKNOWN");break;}
+     settlements++;
      sold.push({typeID,quantity:result.quantity,price:result.price,
-      balance:result.balance});
-    else last=String(result.status||"UNKNOWN");
+      isk:Math.round(result.price*result.quantity),balance:result.balance});
+    }
    }
   }catch(error){last="SALE_ERROR:"+String(error?.message||error).slice(0,60);}
   job.settled=sold.length?
-   {status:"SOLD",sold:JSON.parse(JSON.stringify(sold)),lastStatus:last}:
+   {status:"SOLD",sold:JSON.parse(JSON.stringify(sold)),lastStatus:last,
+    quantity:sold.reduce((sum,entry)=>sum+entry.quantity,0),
+    isk:sold.reduce((sum,entry)=>sum+entry.isk,0)}:
    {status:"NOT_SOLD",reason:last};
  })().finally(()=>{
   // Keep the settled result readable for the next arrival tick only.

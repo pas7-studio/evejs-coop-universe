@@ -33,9 +33,17 @@ EVEJS_COOP_NATIVE_NPC_MARKET=0
 EVEJS_COOP_NPC_MARKET_SELL_TYPES=
 EVEJS_COOP_NPC_MARKET_BUY_TYPES=
 EVEJS_COOP_NPC_MARKET_MAX_QTY=5
+EVEJS_COOP_NPC_MARKET_MAX_SELL_QTY=100000
 EVEJS_COOP_NPC_MARKET_MAX_PRICE=10000
 EVEJS_COOP_NPC_MARKET_COOLDOWN_MS=300000
 ```
+
+`MAX_QTY` is a **buy** spending guard. A sale is bounded by the real seeded bid
+volume and the seller's own stack, like a player's, so `MAX_SELL_QTY` only keeps
+an upper sanity bound (default 100000 units per settlement). One station arrival
+is one merchant action: up to eight consecutive settlements of the same haul may
+run inside that batch, each with its own durable journal entry, while the
+per-pilot cooldown still guards every later arrival and every purchase.
 
 Only on a disposable, backed-up world with a running native EveJS market daemon, enable the flag and choose **actually seeded** item types for the chosen station and region. For example, a native hauler may carry an ore/mineral type that the station already buys. Without a real matching `source="seed"` counterparty in the market, no RPC mutation occurs. With zero earned funds, buys cannot occur.
 

@@ -13,13 +13,14 @@ const total=(price,qty)=>Math.round(price*qty*100)/100;
 const status=e=>({status:e});
 function createNpcMarketTrader({call,store,registry,getStation,resolveType,sceneForSystem,getController,
  root="/var/lib/evejs/coop-native-market",clock=()=>Date.now(),
- maxQuantity=10,maxPrice=1000000,cooldownMs=300000,priceFloorFor=null}={}){
+ maxQuantity=10,maxSellQuantity=100000,maxPrice=1000000,cooldownMs=300000,priceFloorFor=null}={}){
  if(typeof call!=="function"||typeof sceneForSystem!=="function"||typeof getController!=="function"||
   !store||typeof registry?.snapshot!=="function"||
   typeof getStation!=="function"||typeof resolveType!=="function"||
   !["getNativeEntity","listNativeCargoForEntity","upsertNativeCargo",
    "removeNativeCargo","allocateCargoID","buildNativeCargoItems"].every(k=>typeof store[k]==="function")||
   !Number.isSafeInteger(maxQuantity)||maxQuantity<1||maxQuantity>100||
+  !Number.isSafeInteger(maxSellQuantity)||maxSellQuantity<1||maxSellQuantity>1000000||
   !Number.isFinite(maxPrice)||maxPrice<=0||
   !Number.isSafeInteger(cooldownMs)||cooldownMs<30000||
   (priceFloorFor!==null&&typeof priceFloorFor!=="function"))
@@ -218,13 +219,17 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    systemID:Number(scene.systemID),side,typeID:type,
    native,stock:chosen,balance};
  }
- async function execute(params={}){
+ async function execute(params={},options={}){
   const pre=offer(params);
   if(pre.status!=="ELIGIBLE")return pre;
   if(active.has(pre.pilotID))return status("TRADE_BUSY");
   if(fs.existsSync(txPath(pre.pilotID)))return status("UNRESOLVED_MARKET_JOURNAL");
   const acc=account(pre.pilotID),now=clock();
-  if(now<acc.lastTradeAt+cooldownMs)return status("COOLDOWN");
+  // One arrival is ONE merchant action. Liquidating several ore stacks of the
+  // same real haul is not a second discretionary trade, so a continuing SELL
+  // inside an explicit batch may skip the cooldown. A purchase never can.
+  const withinBatch=options?.withinBatch===true&&pre.side==="sell";
+  if(!withinBatch&&now<acc.lastTradeAt+cooldownMs)return status("COOLDOWN");
   active.add(pre.pilotID);
   try{
    const station=getStation(pre.stationID);
@@ -264,7 +269,11 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
      return {status:"PRICE_BELOW_FLOOR",typeID:pre.typeID,stationID:pre.stationID,
       pilotID:pre.pilotID,bestBid:Number(row.price),floor:Math.round(floor*100)/100};
    }
-   const price=amount(row.price),maxOrder=Math.min(maxQuantity,Number(row.vol_remaining));
+   // Selling real ore into a real seeded bid is limited by that bid's own
+   // remaining volume, exactly like a player. `maxQuantity` stays the small
+   // BUY cap; a haul is liquidated against the market's actual demand.
+   const cap=pre.side==="sell"?maxSellQuantity:maxQuantity;
+   const price=amount(row.price),maxOrder=Math.min(cap,Number(row.vol_remaining));
    if(price===null||price<=0||maxOrder<1)return status("INVALID_SEEDED_ORDER");
    let quantity,cargo=null,newCargo=null,allocated=null;
    if(pre.side==="sell"){

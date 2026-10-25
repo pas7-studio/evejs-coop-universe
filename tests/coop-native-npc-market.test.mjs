@@ -338,3 +338,53 @@ test("the spending cap still refuses an overpriced purchase",async()=>{
   assert.equal(x.getCargo().some(c=>c.typeID===35),false,"no cargo may arrive above the cap");
  }finally{x.cleanup()}
 });
+
+test("a whole haul is sold against the real bid volume, not the small buy cap",async()=>{
+ const x=fixture();try{
+  // 40 units in the hold, MAX_QTY=10 in the fixture: the buy cap must not
+  // shrink a sale to a token, and the seeded bid volume is the real limit.
+  x.getCargo()[0].quantity=40;
+  const t=x.trader({maxSellQuantity:25});
+  const r=await t.execute(x.params("sell",34));
+  assert.equal(r.status,"TRADE_SETTLED");
+  assert.equal(r.quantity,25);
+  assert.equal(x.getRemaining().buy,75);
+  assert.equal(x.getCargo()[0].quantity,15);
+ }finally{x.cleanup()}
+});
+
+test("one arrival may continue selling stacks of the same haul without the cooldown",async()=>{
+ const x=fixture();try{
+  const t=x.trader();
+  const first=await t.execute(x.params("sell",34));
+  assert.equal(first.status,"TRADE_SETTLED");
+  // The same hold now carries a second stack of the same ore, as after mining.
+  x.getCargo().push({cargoID:980200000099,entityID:x.ship.itemID,ownerID:100,
+   moduleID:0,typeID:34,quantity:5,flagID:5,singleton:false});
+  // Outside a batch the per-pilot cooldown still refuses a new trade.
+  assert.equal((await t.execute(x.params("sell",34))).status,"COOLDOWN");
+  // Inside the same arrival batch the second stack really settles.
+  const second=await t.execute(x.params("sell",34),{withinBatch:true});
+  assert.equal(second.status,"TRADE_SETTLED");
+  assert.equal(second.quantity,5);
+  assert.equal(x.getRemaining().buy,87);
+  assert.equal(x.getCargo().length,0);
+  assert.equal(t.snapshot().pilots["coop-pilot-005"].tradeCount,2);
+ }finally{x.cleanup()}
+});
+
+test("a batch never exempts a purchase from the cooldown",async()=>{
+ const x=fixture();try{
+  const t=x.trader();
+  assert.equal((await t.execute(x.params("sell",34))).status,"TRADE_SETTLED");
+  // Earned ISK is not a licence to hot-loop a station's stock.
+  const buy=await t.execute(x.params("buy",35),{withinBatch:true});
+  assert.equal(buy.status,"COOLDOWN");
+ }finally{x.cleanup()}
+});
+
+test("a sale cap below one unit is refused at construction",()=>{
+ const x=fixture();try{
+  assert.throws(()=>x.trader({maxSellQuantity:0}),/safety caps/);
+ }finally{x.cleanup()}
+});

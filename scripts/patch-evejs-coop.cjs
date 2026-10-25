@@ -175,6 +175,14 @@ const oldLines=[
 // before re-applying, exactly like the legacy migrated lines above.
 for(const spec of specs)for(const patch of spec.patches)
  if(String(patch.line).includes("coopMiningTrace"))oldLines.push(patch.line);
+// Every spec patch that pulls in a co-op module is unambiguously OUR insertion,
+// so strip() must drop it before re-applying. Otherwise the second install (and
+// every --check) sees the hook twice, reports phantom native-source drift and
+// the overlay can never be rebuilt. Missing one line here is a real outage.
+for(const spec of specs)for(const patch of spec.patches){
+ const line=String(patch.line||"");
+ if(line&&line.includes("require(")&&!oldLines.includes(line))oldLines.push(line);
+}
 const lootOld='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID);';
 const lootNew='  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });';
 const slimBroadcastOld='    scene.sendSlimItemChangesToAllSessions([entity]);';
