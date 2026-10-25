@@ -91,3 +91,19 @@ test("bounded read-only reconciliation rejects invalid limits and excessive inpu
  assert.equal(reconcileNativeIntents([],{maxIntents:0}).status,"INVALID_RECONCILIATION_INPUT");
  assert.equal(reconcileNativeIntents([intent(),intent()],{maxIntents:1}).status,"INTENT_LIMIT_EXCEEDED");
 });
+
+test("duplicated native event rows for one market receipt cannot satisfy repeated intents",()=>{
+ const result=reconcileNativeIntents([
+  intent("BUY_SUPPLIES",{intentID:"first"}),
+  intent("BUY_SUPPLIES",{intentID:"second"}),
+  buy({at:t1}),buy({at:t2})
+ ]);
+ assert.equal(result.matched,1,"two log rows for the same native receipt are not two actions");
+ assert.equal(result.counts.NO_AUTHORITATIVE_ACT_PROOF,1);
+});
+test("a forged market order ID never counts as native settled evidence",()=>{
+ for(const order of ["0","-9","not-an-order","10.5",""]){
+  const result=reconcileNativeIntents([intent(),buy({marketOrderID:order})]);
+  assert.equal(result.matched,0);
+ }
+});
