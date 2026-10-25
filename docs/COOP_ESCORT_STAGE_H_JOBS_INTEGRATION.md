@@ -38,6 +38,24 @@ The original `coopWorldOpportunityBoard.interest` used one ambiguous status `ALR
 - Existing `tests/coop-native-job-agent.test.mjs`: 21/21 source-executed V8 PASS after new status gate.
 - The real file-based Node versions of these tests and the full native two-client game tests still need local execution.
 
+## COOP-053 — Source escort participation is mandatory, not just station camping
+
+P0 code review found that the prior peaceful Escort fee checked both ships only at the warehouse terminal. A pilot could wait at the destination and collect half of the real corporate escrow without ever accompanying the real NPC's departure.
+
+**Implemented as an additional default-OFF economic authority gate:**
+
+- `integration/coopEscortDepartureWitness.cjs`: fsyncs an immutable server-owned original `manifestKey + contractID + NPC hauler + corporation + native NPC fleet + player fleet + two authentic character IDs + two real ship IDs` before the NPC can start its paid peaceful warp. Require both player ships within 150 km of the real source NPC, one unique online session per pilot, and the **actual native duo fleet/accepted quote**. No client-supplied payout or source witness. On crash replay, re-fsync the original immutable journal; corrupted, symlinked, hardlinked or unreadable records cannot authorize warp or payout.
+- `integration/coopNativeStationArrival.cjs`: when peaceful payout is enabled, insist on `EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1` and the Stage E witness provider **before any ISK debit**; invoke the trust gate before `fundBeforeWarp` and before durable warp intent/physical movement. Missing pilot => **0** corporate ISK debited and **0** NPC warps.
+- `integration/coopEscortRuntime.cjs`: even direct internal calls to `fundBeforeWarp` must read and verify the original durable source witness under peaceful payout flag; the terminal `verifyService` demands it *plus* independent native fleet, valid original NPC, two authentic current player sessions and original 150 km terminal on-grid proof. Existing pirate/wreck settlement path remains unchanged if peaceful payout is OFF.
+- `integration/coopEscortNativeBinding.cjs`: exposes a trusted source-witness writer only in native Stage E and with both peaceful/witness flags enabled; no chat API and no arbitrary wallet mutation.
+- `scripts/patch-evejs-coop.cjs`: deploys the new module with the pinned reversible overlay. All new source witnesses are written to the server's original protected `root/escort-departure-witness` directory, not to the stock EVE mission journal.
+- Test sources: `tests/coop-escort-departure-witness.test.mjs` (**15/15 source-executed V8 PASS**, including corrupted/symlink/hardlink and fsync), `tests/coop-escort-route-attendance-gate.test.mjs` (**9/9 V8 PASS**, direct wallet bypass blocked) and extended `tests/coop-escort-station-predeparture-gate.test.mjs` (**15/15 V8 PASS**, native station flow), all in `scripts/Run-NativeJob-Tests.ps1`.
+- Three additional real-client scenarios `JOB-UI-16` through `JOB-UI-18` in `tests/scenarios/coop-049-native-agent-opportunities.json`: **NOT_RUN**.
+
+**Limit:** This proves native on-grid departure AND terminal presence, not uninterrupted escorting through every warp leg. A future Stage I route-history journal should sample genuine transit/proximity and combat assistance before calculating contribution-weighted payout. Do not describe a two-point witness as continuous real-time supervision.
+
+**Operational requirement:** `EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1` is required **in addition to** `EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1`. Both remain OFF until disposable native two-client + real GameStore wallet E2E. The new source witness **does not** permit a second funded trip on lost warp ACK, and no free ISK is created.
+
 ## P0 gate before any financial rollout
 
 - On operator-approved disposable EVEJS data clone run `scripts/Run-NativeJob-Tests.ps1 -CheckPinned` plus full original repo baseline.
