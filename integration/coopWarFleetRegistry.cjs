@@ -70,7 +70,7 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
       Object.values(s.ships).some(v=>v.pilotID===pilotID)||
       Object.keys(s.ships).length>=256)return {status:"BLOCKED",reason:"FLEET_IDENTITY_OR_CAP_CONFLICT"};
      const details={entityID,systemID,pilotID,corporationID,factionID,fleetID,warID,campaignID,proofID};
-     let ok=false;try{ok=verifyNativeShip(details)===true&&verifyCampaign(details)===true}catch{}
+     let ok=false;try{ok=verifyNativeShip(details)===true&&verifyCampaign(details,tx)===true}catch{}
      if(!ok)return {status:"BLOCKED",reason:"NATIVE_SHIP_OR_CAMPAIGN_UNVERIFIED"};
      s.ships[id]={...details,assignedAt:clock()};
      receipt={type:"ASSIGN",entityID,pilotID,systemID,fleetID,warID,campaignID};
