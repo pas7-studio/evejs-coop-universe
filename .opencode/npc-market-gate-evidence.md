@@ -72,3 +72,62 @@ of `coopVirtualWorldRuntime.js`, and use an image built from the same revision a
 - 6.2 sell: PASS/FAIL pending trace (0 settled trades so far; cause now measurable)
 - 6.3 buy, 6.4 restart: NOT STARTED
 - Live world: unaffected
+
+## 2026-10-25 (evening) - three silent failures found and fixed
+
+1. **Installer dropped a module.** The rewrite of scripts/patch-evejs-coop.cjs
+   lost coopNpcChatter, so Code/.../coopNpcChatter.js was never installed.
+   The runtime threw Cannot find module ./coopNpcChatter inside the background
+   phase: mining, haul, market and station arrival all stopped writing events
+   while the container stayed healthy. Fixed the names array (74 modules) and
+   added 	ests/coop-installer-module-coverage.test.mjs.
+2. **Warp rejection reason discarded.** coopNativeStationArrival.start() threw
+   away errorMsg from the native warp, so WARP_COMMAND_FAILED was
+   unexplained. Now recorded as life-blocker.reason + haulerID.
+3. **Reused volume does not re-seed the mining fleet.** After several restarts on
+   the same disposable volume the stock EveJS mining startup slot is not seeded
+   again (living-native-mining-startup-slot absent, industry reports
+   NO_NATIVE_FLEET for Jita) and the durable restore path has nothing to
+   revive, so the world looks alive but nothing mines. Gate rule: a delivery or
+   market gate run must use a **fresh disposable volume** (down -v + re-seed).
+
+Also recorded: the raid log line
+[CoopLivingWorld] Native pirate raid {... "targetRole":"hauler"} fires in the
+same window as a station-warp attempt, so "busy/fighting" must be treated as a
+legitimate blocker (ALIFE P0 survival > P3 logistics), never as a bug.
+
+
+## Clean-volume run (15:03-15:15) - chain stops BEFORE the gate
+
+Fresh volume, market re-seeded (193 520 rows / 10 stations), delivery + ALIFE trace ON.
+
+Facts:
+- living-native-mining-startup-slot SEEDED appears (fresh volume fixes the
+  'no fleet' state of reused volumes);
+- living-native-industry 30000144 ACTIVE fleets[0] = {state:'mining',
+  minerIDs:[...109,...110], haulerIDs:[...111]};
+- but every miner has items: [] and oreQuantity: 0 for the whole 12 min, and
+  every living-native-activity sample reports oreGrowth: 0;
+- therefore cargo-loaded never happens and the station gate is never reached
+  (no life-blocker, no station-warp-requested). The gate itself is fine.
+
+Persistent-store probe (read-only, gamestore.sqlite):
+- hauler 980000000111 exists, 	ransient:false, position ~2.2 AU from origin,
+  mode:'STOP', profileID:'ore_mining_venture',
+  **ehaviorProfileID:'npc_passive_idle'**;
+- miners 109/110 are transient (not in 
+pcEntities), as designed;
+- 
+pcCargo is empty ({}) and 
+pcRuntimeControllers holds only per-ship
+  rows - the mining *fleet record* lives in memory only.
+
+Open question (next probe, not a guess): does the native mining controller
+attach to these materialized hulls at all? Needed evidence per tick: miner
+target rock, controller state and current ore, emitted by
+coopNativeIndustry.snapshot() under EVEJS_COOP_ALIFE_TRACE=1.
+
+Implication for ALIFE-1: the 'loaded' stage is not enough - the mechanism needs
+an explicit PERCEIVE assertion that a fleet's miners are actually attached to a
+real mining controller, otherwise the world reports state:'mining' while
+producing nothing (same silent-blocker class as before, one stage earlier).
