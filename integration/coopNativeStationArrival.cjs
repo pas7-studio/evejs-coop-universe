@@ -304,7 +304,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(escortEnabled){
    try{escortSettlement=process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"?
     (typeof escortGate?.settlePeacefulDelivery==="function"?
-     escortGate.settlePeacefulDelivery(trip.manifestID):
+     escortGate.settlePeacefulDelivery(trip.manifestID,scene):
      {status:"ESCORT_PEACEFUL_SETTLEMENT_NOT_WIRED"}):
     (typeof escortGate?.settleVerifiedNativeRaid==="function"?
      escortGate.settleVerifiedNativeRaid(trip.manifestID):
