@@ -20,6 +20,7 @@ This is explicitly **NOT a database-level atomic cross-table transaction**. Inst
 - `DEBIT_CONFIRMED` means the source debit was positively observed and the journal marker persisted. On restart it can safely finish the *same cargo ID* and verify the resulting persisted cargo. A failed cargo credit is retried from this marker only; never a new allocation.
 - `SETTLED` is a durable tombstone; repeat requests do not create more cargo. Conflicting destination identity or changed ship owner blocks settlement. Corrupt journals, temporary files, unavailable storage and unknown outcomes block future transfers rather than resetting state.
 - The journal is bounded to 10,000 transactions (explicit cap). Recovery runs **before** new transfers during each opt-in World tick. This source-first design prioritizes avoiding duplicate cargo; ambiguous operations can temporarily leave resources unavailable until manual repair.
+- The **interprocess writer fence** is `<root>/native-wreck-custody.writer.lock`, created exclusively using `wx`, with file and directory fsync before any native store mutation. Only the owning process releases it after work. A stale lock after a crash is **never automatically removed**; an operator must inspect native source/destination and transaction journals before clearing it. This prevents concurrent EveJS worker processes from debiting the same item simultaneously.
 
 ### Integration
 
@@ -47,7 +48,7 @@ Do not enable this in a production server until the following acceptance gates h
 
 ## Evidence and required game tests
 
-- **16/16** committed custody tests passed in isolated JS (in-memory filesystem): durable source debit, exact cargo credit, type/quantity/owner, repeat and restart, rights rejection, no invented NPC wallet, 2.5-km range, cargo volume cap, pilot uniqueness, active combat, source failure, recovery from confirmed debit, changed owner rejection, corrupt journal and simulated crash between debit and durable marker.
+- **18/18** committed custody tests passed in isolated JS (in-memory filesystem): durable source debit, exact cargo credit, type/quantity/owner, repeat and restart, rights rejection, no invented NPC wallet, 2.5-km range, cargo volume cap, pilot uniqueness, active combat, source failure, recovery from confirmed debit, changed owner rejection, corrupt journal, simulated crash between debit and durable marker, stale writer lock and concurrent worker race.
 - **12/12** committed native wreck-approach tests passed in isolated JS, including the new 2-km orbit regression (previous 11 + one).
 - The exact pinned upstream `nativeNpcStore` API surface (remove wreck item, allocate cargo ID, write cargo, query source and build cargo) was inspected. These tests used native-shaped mocks, **not a live upstream database, real two-client server or replay of actual native files**.
 - **Still required:** real `node --test` on pinned checkout, source overlay round-trip, native database failure injection and flush verification, two-client wreck spawn and approach, active player-vs-NPC loot-right adjudication, trade/market concurrency and restart without resource duplication. No native player ISK wallet is credited by these changes.
