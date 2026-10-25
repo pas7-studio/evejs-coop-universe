@@ -50,3 +50,11 @@ test("native salvage market uses original stock, Rust escrow and a separate conf
  assert.match(alife,/readOps\(\)/);
  assert.match(alife,/market\.reconcile/);
 });
+test("salvage A-Life telemetry never claims native settlement for blocked attempts",()=>{
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ const telemetry=runtime.slice(runtime.indexOf('safeNpcPhase("native-salvage-market"'),
+  runtime.indexOf('safeNpcPhase("native-wreck-custody"'));
+ assert.match(telemetry,/nativeEscrowVerified:result\.result\?\.nativeEscrowVerified===true/);
+ assert.match(telemetry,/corporationWalletCredited:result\.result\?\.walletCredited===true/);
+ assert.doesNotMatch(telemetry,/nativeRustAndGameStore:true/);
+});
