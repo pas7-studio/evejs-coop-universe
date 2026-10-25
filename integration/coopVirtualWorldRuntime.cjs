@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -138,6 +138,7 @@ function start(){
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
+  safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
   safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
   safeNpcPhase("npc-recognition",advanceNpcRecognition);
@@ -359,6 +360,8 @@ function advanceNativeGateApproach(){
   runtime.ensureScene(system,{refreshStargates:false})))blockedIDs.add(id);
  if(wreckRecoveryDirector)for(const sys of visitedSystems)
   for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
+ if(lootCommerce)for(const sys of visitedSystems)
+  for(const id of lootCommerce.activeIDs(sys))blockedIDs.add(id);
  for(const systemID of visitedSystems){
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const assignments=links.filter(a=>Number(a.systemID)===Number(systemID));
@@ -512,12 +515,53 @@ function advanceNativeWreckCustody(){
   }
  }
 }
+// Move only source-authenticated recovered wreck cargo; no market side effects.
+function advanceNativeLootStationDelivery(){
+ if(process.env.EVEJS_COOP_NPC_LOOT_COMMERCE!=="1"||
+  process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !identityRegistry||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
+  controllers=require("./npc/npcRegistry"),
+  store=require("./npc/nativeNpcStore"),worldData=require("./worldData");
+ if(!lootCommerce)lootCommerce=require("./coopNpcLootCommerce").createLootCommerce({
+  root:process.env.EVEJS_COOP_NPC_WRECK_CUSTODY_ROOT||
+   "/var/lib/evejs/coop-npc-wreck-custody",
+  store,sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getController:id=>controllers.getControllerByEntityID(id),
+  getStation:id=>worldData.getStationByID(id),
+  warp:(id,stationID,opts)=>npcNativeOrder("CIVILIAN",id,"loot-station-warp",
+   ()=>npc.warpToEntity(id,stationID,opts)),
+  orbit:(id,stationID,range)=>npcNativeOrder("CIVILIAN",id,"loot-station-orbit",
+   ()=>npc.orbit(id,stationID,range))
+ });
+ const byKey=new Map();
+ for(const row of [...bridge.snapshot(),
+  ...Object.values(identityRegistry.snapshot().links||{})])
+  if(row?.pilotID&&Number(row.entityID)>0&&Number(row.systemID)>0)
+   byKey.set(row.pilotID+":"+row.entityID+":"+row.systemID,row);
+ const assignments=[...byKey.values()],blockedIDs=new Set();
+ if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+ if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
+ if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
+   runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
+ if(wreckRecoveryDirector)for(const sys of visitedSystems)
+  for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
+ for(const sys of visitedSystems)addNpcOrderBlocks(blockedIDs,sys,"CIVILIAN");
+ const result=lootCommerce.tick({assignments,blockedIDs});
+ if(result.orders.length||result.ready.length)
+  require("./coopRuntimeProbe").observe("living-npc-loot-station",null,null,{
+   nativeMovementOrders:result.orders,physicallyReady:result.ready,
+   source:"AUTHENTICATED_NATIVE_WRECK_CARGO",iskCredited:false
+  });
+}
 function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
  for(const [systemID,entityIDs] of Object.entries(patrolDirector.snapshot())){
   const blockedIDs=gateTravelDirector?.activeIDs()||new Set();
   if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
    for(const id of wreckRecoveryDirector.activeIDs(Number(systemID)))blockedIDs.add(id);
+  if(lootCommerce)for(const id of lootCommerce.activeIDs(Number(systemID)))blockedIDs.add(id);
   // Keep the existing patrol scheduling path unchanged when arbitration is OFF.
   if(process.env.EVEJS_COOP_NPC_ORDER_ARBITER==="1"){
    if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
@@ -758,6 +802,8 @@ function advanceNativeCivilianOrders(){
  if(wreckRecoveryDirector&&process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1")
   for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
    for(const id of wreckRecoveryDirector.activeIDs(sys))blockedIDs.add(id);
+ if(lootCommerce)for(const sys of new Set(assignments.map(x=>Number(x.systemID))))
+  for(const id of lootCommerce.activeIDs(sys))blockedIDs.add(id);
  // A physically observing squad scout must stay on-grid for the 15s relay:
  // don't let generic civilian waypoints warp that SAME native ship away.
  if(process.env.EVEJS_COOP_NPC_SQUAD_RAIDS==="1"&&squadDirector)
