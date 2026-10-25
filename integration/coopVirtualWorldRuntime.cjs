@@ -1160,10 +1160,20 @@ function advanceNativeTactics(){
   tacticsDirector=require("./coopNpcTactics").createTactics({
    warpToPoint:(id,point,options)=>npcNativeOrder("TACTICS",id,"retreat-warp",
     ()=>npc.warpToPoint(id,point,options)),
-   warpToEntity:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"rescue-warp",
-    ()=>npc.warpToEntity(id,targetID,options)),
-   attack:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"rescue-attack",
-    ()=>npc.issueAttackOrder(id,targetID,options)),
+   warpToEntity:(id,targetID,options)=>{
+    const systemID=Number(controllers.getControllerByEntityID(id)?.systemID);
+    if(nativeAmmoSupply?.activeIDs(systemID).has(Number(id)))
+     return {success:false,errorMsg:"NATIVE_AMMO_EXHAUSTED"};
+    return npcNativeOrder("TACTICS",id,"rescue-warp",
+     ()=>npc.warpToEntity(id,targetID,options));
+   },
+   attack:(id,targetID,options)=>{
+    const systemID=Number(controllers.getControllerByEntityID(id)?.systemID);
+    if(nativeAmmoSupply?.activeIDs(systemID).has(Number(id)))
+     return {success:false,errorMsg:"NATIVE_AMMO_EXHAUSTED"};
+    return npcNativeOrder("TACTICS",id,"rescue-attack",
+     ()=>npc.issueAttackOrder(id,targetID,options));
+   },
    resumeBehavior:id=>npcNativeOrder("TACTICS",id,"resume",
     ()=>npc.resumeBehavior(id)),
    stopOrder:id=>npcNativeOrder("TACTICS",id,"stop",
