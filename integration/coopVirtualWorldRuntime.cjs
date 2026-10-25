@@ -510,7 +510,7 @@ function advanceNativeSalvageRivals(){
      if(e?.code==="ENOENT")return [];
      throw e;
     }
-    if(names.length>256||names.some(n=>!/^\\d+-\\d+-\\d+\\.json$/.test(n)))
+    if(names.length>256||names.some(n=>!/^[0-9]+-[0-9]+-[0-9]+[.]json$/.test(n)))
      throw Error("SALVAGE_RIVAL_MANIFEST_DIRECTORY_UNTRUSTED");
     const found=[];
     for(const name of names){
@@ -525,7 +525,7 @@ function advanceNativeSalvageRivals(){
    },
    readEscrow:key=>{
     const result=gameStore.read("corporationRuntime","/coopSalvageEscrows");
-    if(!result?.success)return {status:"UNKNOWN"};
+    if(!result?.success)return {status:result?.errorMsg==="ENTRY_NOT_FOUND"?"NOT_FOUND":"UNKNOWN"};
     const saved=result.data?.byContract?.["salvage-"+key];
     return saved?{status:saved.status}:{status:"NOT_FOUND"};
    },
