@@ -2,6 +2,8 @@
 // Reversible modifications to the EXACT pinned native mining cycle and source-state writer.
 const runtimeAnchor="  if (isNativeNpcEntity(entity)) {\n    appendNpcCargo(entity, mineableState.yieldTypeID, transferredQuantity);";
 const runtimeReplace="  if (isNativeNpcEntity(entity)) {\n    if (!coopStrictNative) appendNpcCargo(entity, mineableState.yieldTypeID, transferredQuantity);";
+const originalCargoReturn='  miningNpcOperations.appendNpcMiningCargo(entity, typeID, quantity);';
+const strictCargoReturn='  return miningNpcOperations.appendNpcMiningCargo(entity, typeID, quantity);';
 const oldDelta="  const deltaResult = applyMiningDelta(";
 const newDelta="  const deltaResult = coopStrictDelta || applyMiningDelta(";
 const guard=`  // COOP_ALIFE_NATIVE_MINING_CONSERVATION_V1
@@ -56,7 +58,8 @@ function patch(source,file,remove=false){
   if(remove&&!already)return text;
   if(!remove&&already)return text;
   if(remove){
-   text=transform(text,normalize(runtimeReplace),normalize(runtimeAnchor),true===false);
+   text=transform(text,normalize(runtimeReplace),normalize(runtimeAnchor),false);
+   text=transform(text,strictCargoReturn,originalCargoReturn,false);
    text=transform(text,normalize(newDelta),normalize(oldDelta),false);
    text=transform(text,marker,"",false);
   }else{
@@ -64,6 +67,7 @@ function patch(source,file,remove=false){
    if(start<0||text.indexOf(normalize(oldDelta),start)<0)throw Error("ALIFE06 missing stock mining cycle");
    text=text.slice(0,start)+marker+text.slice(start);
    text=transform(text,normalize(runtimeAnchor),normalize(runtimeReplace),false);
+   text=transform(text,originalCargoReturn,strictCargoReturn,false);
    text=transform(text,normalize(oldDelta),normalize(newDelta),false);
   }
  }else if(file.endsWith("/miningRuntimeState.js")){
