@@ -66,3 +66,53 @@ test("disconnected users and invalid distance cannot cause a made-up two-player 
  assert.equal(f.service.rendezvous({scene:f.scene,party:f.party,systemID}).sent,0);
  assert.equal(f.messages.length,0);
 });
+
+test("P0 fleet brief shows a genuine visible native NPC entity to BOTH real pilots",()=>{
+ const f=fixture();
+ const npc={itemID:911,kind:"ship",nativeNpc:true,position:{x:65000,y:0,z:0}};
+ f.ships.set(911,npc);
+ f.scene.dynamicEntities=new Map([[911,npc]]);
+ const r=f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44});
+ assert.equal(r.status,"FLEET_BRIEF_DELIVERED");
+ assert.equal(r.targetEntityID,911);
+ assert.deepEqual(f.messages.map(x=>x.characterID),[501,502]);
+ assert.match(f.messages[0].text,/NPC-корабель #911/);
+ assert.match(f.messages[0].text,/native Approach \/ Lock \/ Warp Fleet/);
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,"COOLDOWN");
+ f.advance(120000);
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).sent,2);
+});
+test("P0 fleet brief never fabricates a target or trusts a clone of native ship",()=>{
+ const f=fixture();const npc={itemID:911,kind:"ship",nativeNpc:true,position:{x:65000,y:0,z:0}};
+ f.scene.dynamicEntities=new Map([[911,npc]]);
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,
+  "NO_ACTIONABLE_NATIVE_SHIP");
+ f.ships.set(911,{...npc});
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,
+  "NO_ACTIONABLE_NATIVE_SHIP");
+ f.ships.set(911,npc);
+ npc.nativeNpc=false;
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,
+  "NO_ACTIONABLE_NATIVE_SHIP");
+ npc.nativeNpc=true;
+ npc.position.x=500000;
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,
+  "NO_ACTIONABLE_NATIVE_SHIP");
+ assert.equal(f.messages.length,0);
+});
+test("P0 fleet brief denies unauthenticated, disconnected or foreign party",()=>{
+ const f=fixture();const npc={itemID:911,kind:"ship",nativeNpc:true,position:{x:65000,y:0,z:0}};
+ f.scene.dynamicEntities=new Map([[911,npc]]);f.ships.set(911,npc);
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:0}).status,
+  "NO_VERIFIED_NATIVE_FLEET_BRIEF");
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID:30000142,fleetID:44}).status,
+  "NO_VERIFIED_NATIVE_FLEET_BRIEF");
+ f.a.socket.destroyed=true;
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,
+  "STALE_NATIVE_FLEET_MEMBERS");
+ f.a.socket.destroyed=false;
+ f.scene.sessions.set(501,{...f.a});
+ assert.equal(f.service.brief({scene:f.scene,party:f.party,systemID,fleetID:44}).status,
+  "STALE_NATIVE_FLEET_MEMBERS");
+ assert.equal(f.messages.length,0);
+});
