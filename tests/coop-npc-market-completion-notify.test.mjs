@@ -160,3 +160,35 @@ test("receipt with already claimed transient UI event never touches Rust",()=>ru
  assert.equal((await f.notify()).status,"ALREADY_CLAIMED");
  assert.equal(f.calls.length,before);
 }));
+
+test("same paid fill cannot notify with swapped seller receipt during Rust await",()=>run(async f=>{
+ const rpc=f.dependencies.marketClient.call;
+ f.dependencies.marketClient.call=async(method,args)=>{
+  const data=await rpc(method,args);
+  if(method==="GetOrder"){
+   f.dependencies.gameStore.transact(["npcMarketFills"],tx=>{
+    const key="corp-buy\\u001f"+FILL,current=tx.get("npcMarketFills",key);
+    tx.put("npcMarketFills",key,{...current,sellerID:SELLER+1});
+   });
+  }
+  return data;
+ };
+ const r=await f.notify();
+ assert.equal(r.status,"RECEIPT_CHANGED");
+ assert.equal(f.events.length,0);
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+}));
+test("concurrent duplicate notification attempts claim at most one native UI delivery",()=>run(async f=>{
+ const both=await Promise.all([f.notify(),f.notify()]);
+ assert.deepEqual(both.map(x=>x.status).sort(),["ALREADY_CLAIMED","NOTIFIED"]);
+ assert.deepEqual(f.events.map(x=>x.name),["OnOwnOrdersChanged","OnAccountChange"]);
+ assert.equal(f.read().sellerNotifyClaimedAt,1000002);
+}));
+test("negative seller proceeds or tax exceeding gross never produces notification",()=>run(async f=>{
+ f.dependencies.gameStore.transact(["npcMarketFills"],tx=>{
+  const key="corp-buy\\u001f"+FILL,current=tx.get("npcMarketFills",key);
+  tx.put("npcMarketFills",key,{...current,taxCents:3000,netCents:-500});
+ });
+ assert.equal((await f.notify()).reason,"GAMESTORE_RECEIPT_INVALID");
+ assert.equal(f.events.length,0);
+}));
