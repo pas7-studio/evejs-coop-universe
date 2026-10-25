@@ -94,10 +94,16 @@ async function buyFromOrder({session,sellOrder,quantity}={}){
  const buyerID=sessionID(session),orderID=Number(sellOrder.order_id);
  const stationID=Number(sellOrder.station_id),typeID=Number(sellOrder.type_id);
  const listed=Number(sellOrder.vol_remaining);
- const price=Number(sellOrder.price),priceCents=Math.round(price*100);
+ // An original Rust SELL order price must already be canonical cents.
+ // Rounding 1.254 ISK to 1.25 changes the advertised contract before
+ // any Rust claim / original GameStore escrow or wallet authority.
+ const price=sellOrder.price;
+ const rawPriceCents=price*100,priceCents=Math.round(rawPriceCents);
  if(!pos(buyerID)||!pos(orderID)||!pos(stationID)||!pos(typeID)||
-    !pos(listed)||quantity!==listed||!Number.isFinite(price)||price<=0||
+    !pos(listed)||quantity!==listed||typeof price!=="number"||
+    !Number.isFinite(price)||price<=0||
     !pos(priceCents)||priceCents>100000000||
+    Math.abs(rawPriceCents-priceCents)>1e-7||
     Number(getDockedLocationID(session))!==stationID)
    return {status:"BLOCKED",error:"NPC_BUY_REQUIRES_FULL_STACK_DOCKED"};
  const escrow=getEscrowRecord(orderID);
