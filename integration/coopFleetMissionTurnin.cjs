@@ -69,6 +69,108 @@ function beginPeerSettlement(ticket,file){
  return {status:"READY",key};
 }
 
+
+// Extra durability boundary for the FIRST native recipient. The older peer
+// receipt is intentionally independent. This fence is only enabled on an
+// explicitly approved two-recipient mission settlement deployment.
+const DEFAULT_LEADER_FENCE="/var/lib/evejs/coop-duo-mission-leader-fence.jsonl";
+const LEADER_STATES=["PREPARED","LEADER_CONFIRMED","BOTH_CONFIRMED"];
+function leaderFenceKey(ticket){
+ const m=ticket?.leaderMission||{};
+ if(!ticket?.ok||!id(ticket.leader)||!id(ticket.peerID)||
+  !id(ticket.agentID)||!id(m.missionSequence)||
+  !id(ticket.peerMission?.missionSequence)||
+  str(m.contentID)===""||str(m.missionTemplateID)===""||
+  str(m.contentID)!==str(ticket.peerMission?.contentID)||
+  str(m.missionTemplateID)!==str(ticket.peerMission?.missionTemplateID))
+  return null;
+ // Crucially exclude fleet ID and peer ID: reforming a fleet or changing the
+ // wingman cannot reset this character's same native mission payout fence.
+ return JSON.stringify([ticket.leader,ticket.agentID,
+  m.missionSequence,str(m.contentID),str(m.missionTemplateID)]);
+}
+function readLeaderFence(file,key){
+ if(typeof file!=="string"||!path.isAbsolute(file)||!key)
+  return {status:"LEADER_FENCE_PATH_INVALID"};
+ let data;
+ try{data=fs.readFileSync(file,"utf8");}
+ catch(e){return e?.code==="ENOENT"?
+  {status:"READY",previous:null}:
+  {status:"LEADER_FENCE_UNAVAILABLE"};}
+ if(typeof data!=="string"||Buffer.byteLength(data,"utf8")>8*1024*1024||
+  (data.length>0&&!data.endsWith("\n")))
+  return {status:"LEADER_FENCE_CORRUPT"};
+ let previous=null;
+ const latest=new Map();
+ for(const line of data.split("\n")){
+  if(!line)continue;
+  let event;
+  try{event=JSON.parse(line);}catch{return {status:"LEADER_FENCE_CORRUPT"};}
+  if(event?.v!==1||typeof event.key!=="string"||
+   !Array.isArray(event.identity)||event.identity.length!==5||
+   event.key!==JSON.stringify(event.identity)||
+   event.identity.some((x,i)=>i<3?!id(x):str(x)==="")||
+   !id(event.peerID)||!id(event.peerMissionSequence)||
+   !LEADER_STATES.includes(event.state)||!Number.isFinite(event.at))
+   return {status:"LEADER_FENCE_CORRUPT"};
+  const last=latest.get(event.key);
+  if(!last){
+   if(event.state!=="PREPARED")
+    return {status:"LEADER_FENCE_INVALID_TRANSITION"};
+  }else{
+   if(last.peerID!==event.peerID||
+    last.peerMissionSequence!==event.peerMissionSequence||
+    (last.state==="PREPARED"&&event.state!=="LEADER_CONFIRMED")||
+    (last.state==="LEADER_CONFIRMED"&&event.state!=="BOTH_CONFIRMED")||
+    last.state==="BOTH_CONFIRMED")
+    return {status:"LEADER_FENCE_INVALID_TRANSITION"};
+  }
+  latest.set(event.key,event);
+ }
+ previous=latest.get(key)||null;
+ return {status:"READY",previous};
+}
+function writeLeaderFence(file,ticket,key,state){
+ let fd;
+ try{
+  if(!path.isAbsolute(file)||!LEADER_STATES.includes(state))return false;
+  const identity=JSON.parse(key);
+  fs.mkdirSync(path.dirname(file),{recursive:true});
+  fd=fs.openSync(file,"a",0o600);
+  const payload=Buffer.from(JSON.stringify({v:1,key,identity,
+   peerID:ticket.peerID,peerMissionSequence:ticket.peerMission.missionSequence,
+   state,at:Date.now()})+"\n");
+  if(fs.writeSync(fd,payload,0,payload.length,null)!==payload.length)return false;
+  fs.fsyncSync(fd);return true;
+ }catch{return false}
+ finally{if(fd!==undefined)try{fs.closeSync(fd)}catch{}}
+}
+function beginLeaderFence(ticket,file){
+ const key=leaderFenceKey(ticket);
+ if(!key)return {status:"LEADER_FENCE_INVALID_NATIVE_KEY"};
+ const record=readLeaderFence(file,key);
+ if(record.status!=="READY")return record;
+ if(record.previous)
+  return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
+ if(!writeLeaderFence(file,ticket,key,"PREPARED"))
+  return {status:"LEADER_FENCE_WRITE_FAILED"};
+ return {status:"READY",key,file};
+}
+function advanceLeaderFence(ticket,nextState){
+ const fence=ticket?._leaderFence;
+ if(!fence)return {status:"LEADER_FENCE_NOT_PREPARED"};
+ const record=readLeaderFence(fence.file,fence.key);
+ if(record.status!=="READY")return record;
+ const expected=nextState==="LEADER_CONFIRMED"?"PREPARED":"LEADER_CONFIRMED";
+ if(record.previous?.state!==expected||
+  record.previous.peerID!==ticket.peerID||
+  record.previous.peerMissionSequence!==ticket.peerMission?.missionSequence)
+  return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
+ if(!writeLeaderFence(fence.file,ticket,fence.key,nextState))
+  return {status:"LEADER_FENCE_WRITE_FAILED"};
+ return {status:"READY",key:fence.key};
+}
+
 const equivalent=(a,b)=>Boolean(a&&b&&
  id(a.agentID)===id(b.agentID)&&
  str(a.contentID)!==""&&str(a.contentID)===str(b.contentID)&&
@@ -78,7 +180,7 @@ const equivalent=(a,b)=>Boolean(a&&b&&
  a.objectiveCompleted===true&&b.objectiveCompleted===true&&
  a.gmCompleted!==true&&b.gmCompleted!==true);
 function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
- sessions=[],getDockedLocationID}={}){
+ sessions=[],getDockedLocationID,leaderFencePath}={}){
  const leader=id(session?.characterID),agent=id(agentID),action=Number(actionID);
  if(!leader||!agent||![6,7].includes(action)||
   !fleetRuntime||!missionRuntime||
@@ -108,10 +210,22 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
  const peerMission=missionRuntime.getMissionRecord(peerID,agent);
  if(!equivalent(leaderMission,peerMission))
   return {ok:false,reason:"NATIVE_MISSIONS_NOT_BOTH_COMPLETED"};
- return {ok:true,reason:"NATIVE_SHARED_TURNIN_READY",
+ const ticket={ok:true,reason:"NATIVE_SHARED_TURNIN_READY",
   fleetID:member.fleetID,leader,peerID,agentID:agent,
   actionID:action,station,leaderMission:{...leaderMission},
   peerMission:{...peerMission},session,peer};
+ if(process.env.EVEJS_COOP_FLEET_LEADER_FENCE==="1"){
+  if(process.env.EVEJS_COOP_FLEET_MISSION_TURNIN!=="1")
+   throw Error("LEADER_FENCE_REQUIRES_PEER_SETTLEMENT_GUARD");
+  const file=leaderFencePath||process.env.EVEJS_COOP_MISSION_LEADER_FENCE_FILE||
+   DEFAULT_LEADER_FENCE;
+  const result=beginLeaderFence(ticket,file);
+  // Fail CLOSED before the native leader's wallet/LP/standing award starts.
+  if(result.status!=="READY")
+   throw Error("COOP_DUO_LEADER_SETTLEMENT_BLOCKED: "+result.status);
+  ticket._leaderFence={key:result.key,file:result.file};
+ }
+ return ticket;
 }
 function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalPath}={}){
  if(!ticket?.ok||!missionRuntime||!fleetRuntime)
@@ -121,6 +235,14 @@ function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalP
  // attempt or a conversation does not close a peer's mission.
  if(missionRuntime.getMissionRecord(ticket.leader,ticket.agentID))
   return {status:"LEADER_NATIVE_MISSION_NOT_COMPLETED"};
+ if(ticket._leaderFence){
+  // Native original agent completed. Mark AFTER actual mission record deletion
+  // but BEFORE attempting the second recipient's independent reward.
+  const leaderRecord=advanceLeaderFence(ticket,"LEADER_CONFIRMED");
+  if(leaderRecord.status!=="READY")
+   return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION",
+    reason:leaderRecord.status};
+ }
  const ready=require("./coopNativeFleetParty").membership({
   leaderSession:ticket.session,peerSession:ticket.peer,fleetRuntime});
  if(!ready.ok||ready.fleetID!==ticket.fleetID||
@@ -159,7 +281,13 @@ function finish({ticket,missionRuntime,fleetRuntime,getDockedLocationID,journalP
  }
  if(safeMode&&!durableWrite(file,intent.key,"AWARDED"))
   return {status:"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
+ if(ticket._leaderFence){
+  const both=advanceLeaderFence(ticket,"BOTH_CONFIRMED");
+  if(both.status!=="READY")
+   return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION",
+    reason:both.status};
+ }
  return {status:"TWO_NATIVE_MISSIONS_COMPLETED",fleetID:ticket.fleetID,
   characterIDs:[ticket.leader,ticket.peerID],agentID:ticket.agentID};
 }
-module.exports={prepare,finish,equivalent,journalKey,readSettlement,beginPeerSettlement};
+module.exports={prepare,finish,equivalent,journalKey,readSettlement,beginPeerSettlement,leaderFenceKey,readLeaderFence,beginLeaderFence,advanceLeaderFence};
