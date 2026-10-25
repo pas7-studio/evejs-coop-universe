@@ -123,6 +123,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    !Array.isArray(b.characters)||b.characters.length!==2||
    b.characters[0]!==departure.characters?.[0]||
    b.characters[1]!==departure.characters?.[1]||
+   !vector(departure.origin)||
    !Array.isArray(w.cargoIDs)||w.cargoIDs.length!==cargoIDs.length||
    w.cargoIDs.some((x,i)=>x!==cargoIDs[i]))
    return pause("ESCORT_NATIVE_RECOVERY_PROVENANCE_MISMATCH");
