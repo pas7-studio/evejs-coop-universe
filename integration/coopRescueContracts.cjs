@@ -21,6 +21,40 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
   throw Error("RESCUE_CONTRACT_AUTHORITIES_REQUIRED");
  const dir=path.join(root,"rescue-native-acceptance");
  const deny=status=>({status});
+ const quoteFile=id=>path.join(dir,"offer-"+id+".json");
+ function readQuote(id){
+  let raw;try{raw=io.readFileSync(quoteFile(id),"utf8")}
+  catch(e){return e?.code==="ENOENT"?null:deny("RESCUE_QUOTE_READ_UNAVAILABLE")}
+  if(typeof raw!=="string"||raw.length>16384||!raw.endsWith("\n"))
+   return deny("RESCUE_QUOTE_CORRUPT");
+  let q;try{q=JSON.parse(raw)}catch{return deny("RESCUE_QUOTE_CORRUPT")}
+  if(q?.v!==1||q.offer?.contract?.contractID!==id||
+   !Array.isArray(q.offer.expected)||!q.offer.expected.length||
+   q.offer.expected.length>100||
+   q.offer.expected.some(x=>![x.sourceCargoID,x.wreckItemID,
+    x.typeID,x.quantity].every(pos)))
+   return deny("RESCUE_QUOTE_CORRUPT");
+  return q.offer;
+ }
+ function saveQuote(offer){
+  const file=quoteFile(offer.contract.contractID);
+  try{
+   io.mkdirSync(dir,{recursive:true});
+   let fd=io.openSync(file,"wx",0o600);
+   const data=Buffer.from(JSON.stringify({v:1,offer})+"\n");
+   try{
+    if(io.writeSync(fd,data,0,data.length,null)!==data.length)
+     throw Error("SHORT_WRITE");
+    io.fsyncSync(fd);
+   }finally{io.closeSync(fd)}
+   fd=io.openSync(dir,"r");
+   try{io.fsyncSync(fd)}finally{io.closeSync(fd)}
+   return {status:"READY"};
+  }catch(e){
+   if(e?.code==="EEXIST")return {status:"EXISTS"};
+   return deny("RESCUE_QUOTE_WRITE_UNCERTAIN");
+  }
+ }
  function offer(eventID){
   if(process.env.EVEJS_COOP_RESCUE_CONTRACTS!=="1")
    return deny("DISABLED");
@@ -70,25 +104,51 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
   const cargo=items.filter(x=>x.wreckID===wreckID&&
    x.sourceKind==="cargo"&&pos(x.sourceCargoID)&&
    pos(x.sourceOriginalQuantity)&&
-   x.quantity===x.sourceOriginalQuantity&&
+   x.quantity<=x.sourceOriginalQuantity&&
    m.cargo.some(z=>z.cargoID===x.sourceCargoID&&
     z.typeID===x.typeID&&z.quantity===x.sourceOriginalQuantity));
-  if(!cargo.length||cargo.some(x=>!pos(x.wreckItemID)||
-   !pos(x.typeID)||!pos(x.quantity))||
-   new Set(cargo.map(x=>x.sourceCargoID)).size!==cargo.length)
-   return deny("RESCUE_NATIVE_ORIGINAL_CARGO_UNVERIFIED");
-  const first=Math.min(...cargo.map(x=>x.sourceCargoID));
-  const contract={contractID:"escort-rescue-"+wreckID,
+  const persistedID="escort-rescue-"+wreckID;
+  const prior=readQuote(persistedID);
+  if(prior?.status&&prior.status!=="READY")return prior;
+  let expected;
+  if(prior){
+   if(prior.eventID!==eventID||prior.wreckID!==wreckID||
+    prior.stationID!==b.stationID||
+    prior.contract?.corporationID!==b.corporationID||
+    !same(prior.contract?.characters,b.characters)||
+    prior.contract?.amountISK!==amountISK||
+    prior.originalManifestKey!==b.manifestKey||
+    prior.expected.some(x=>!m.cargo.some(z=>
+     z.cargoID===x.sourceCargoID&&z.typeID===x.typeID&&
+     z.quantity===x.quantity)))
+    return deny("RESCUE_PERSISTED_QUOTE_SOURCE_CHANGED");
+   expected=prior.expected;
+  }else{
+   if(!cargo.length||cargo.some(x=>!pos(x.wreckItemID)||
+    !pos(x.typeID)||!pos(x.quantity)||
+    x.quantity!==x.sourceOriginalQuantity)||
+    new Set(cargo.map(x=>x.sourceCargoID)).size!==cargo.length)
+    return deny("RESCUE_NATIVE_ORIGINAL_CARGO_UNVERIFIED");
+   expected=cargo.map(x=>({sourceCargoID:x.sourceCargoID,
+    wreckItemID:x.wreckItemID,typeID:x.typeID,
+    quantity:x.quantity})).sort((a,b)=>a.sourceCargoID-b.sourceCargoID);
+  }
+  const first=Math.min(...expected.map(x=>x.sourceCargoID));
+  const contract={contractID:persistedID,
    manifestKey:b.systemID+"-"+wreckID+"-"+first,
    corporationID:b.corporationID,
    amountISK,characters:b.characters.slice()};
-  const expected=cargo.map(x=>({sourceCargoID:x.sourceCargoID,
-   wreckItemID:x.wreckItemID,typeID:x.typeID,
-   quantity:x.quantity})).sort((a,b)=>a.sourceCargoID-b.sourceCargoID);
-  return {status:"READY",eventID,wreckID,
+  const quote={status:"READY",eventID,wreckID,
    stationID:b.stationID,systemID:b.systemID,
    contract,expected,
    originalManifestKey:b.manifestKey};
+  if(prior){
+   if(!same(prior,quote))return deny("RESCUE_PERSISTED_QUOTE_CHANGED");
+   return quote;
+  }
+  const stored=saveQuote(quote);
+  return stored.status==="READY"?quote:
+   stored.status==="EXISTS"?deny("RESCUE_QUOTE_RACE_NEEDS_RETRY"):stored;
  }
  const file=(c,id)=>path.join(dir,c.contractID+"-"+id+".json");
  function readAccepted(c,id){
