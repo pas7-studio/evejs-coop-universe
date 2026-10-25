@@ -182,10 +182,12 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   let scene;try{scene=getScene(active.systemID)}
   catch{return pause("ESCORT_NATIVE_MOTION_SCENE_UNAVAILABLE")}
   if(scene?.systemID!==active.systemID||
-   scene.getEntityByID?.(Number(entity.itemID))!==entity)
+   scene.getEntityByID?.(Number(entity.itemID))!==entity||
+   (active.recovered&&!findShip(scene,Number(entity.itemID),active.systemID)))
    return pause("ESCORT_NATIVE_MOTION_ENTITY_NOT_CURRENT");
   const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
-  if(!point||point.corporationID!==trip.corporationID)
+  if(!point||point.corporationID!==trip.corporationID||
+   (active.recovered&&distance(point.position,active.destination)>1))
    return pause("ESCORT_NATIVE_MOTION_STATION_CHANGED");
   if(typeof escortGate?.recordEscortRouteSample!=="function")
    return pause("ESCORT_NATIVE_MOTION_AUTHORITY_UNAVAILABLE");
