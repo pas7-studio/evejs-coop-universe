@@ -305,6 +305,8 @@ function createOperations(options={}){
     if(!changed&&(!permitted||tag!=="3"))
      return {status:"NATIVE_COMMAND_PERMISSION_DENIED",message:
       "[Co-op] Only an authorized native fleet commander can tag the courier."};
+    if(!changed)return {status:"NATIVE_COURIER_ESCORT_ALREADY_TAGGED",
+     message:"[Co-op] Native courier ship #"+courier.shipID+" is already tagged 3; no duplicated fleet broadcast."};
     for(const member of ctx.crewmates)if(member.characterID!==ctx.characterID){
      try{send(member.session,"[Co-op] Protect courier ship #"+courier.shipID+
       " (native fleet tag 3), contract #"+contractID+" to station #"+
