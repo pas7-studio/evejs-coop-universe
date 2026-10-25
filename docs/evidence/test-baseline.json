@@ -1,13 +1,13 @@
 {
-  "recordedAt": "2026-10-25T13:06:24.930Z",
+  "recordedAt": "2026-10-25T13:20:23.639Z",
   "nodeVersion": "v22.14.0",
-  "projectRev": "30ba3dbe90399637667554f2938c9e2d8fc718cf",
+  "projectRev": "d1e3450c7f8edce532535475890f8c62883e1b70",
   "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
   "upstreamCheckout": null,
   "scope": "local overlay only (upstream-* excluded)",
   "totals": {
-    "files": 81,
-    "pass": 534,
+    "files": 82,
+    "pass": 538,
     "fail": 0,
     "skipped": 18,
     "crashed": 0
