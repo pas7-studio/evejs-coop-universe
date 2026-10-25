@@ -3,7 +3,7 @@
 // prices, create orders, restart services or modify a named Docker volume.
 const fs=require("node:fs");
 const DB_DEFAULT="/var/lib/evejs/market/market.sqlite";
-const DEFAULT_SYSTEMS=[30000142,30000144]; // Jita and Perimeter
+const DEFAULT_SYSTEMS=[30100032,30000142,30000144]; // Manifest (AIR starter), Jita, Perimeter
 const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 function inspect(db,{systems=DEFAULT_SYSTEMS}={}) {
  const ids=[...new Set(systems.map(positive).filter(Boolean))].slice(0,10);
