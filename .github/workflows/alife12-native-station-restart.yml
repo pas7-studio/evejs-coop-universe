@@ -1,0 +1,37 @@
+name: ALIFE-12 Native Station Restart Integrity
+on:
+  push:
+    branches:
+      - feat/alife-12-native-station-trip-restart-20261026
+      - feat/alife-12-native-station-main-20261026
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integration/coopNativeStationTripJournal.cjs'
+      - 'integration/coopNativeStationArrival.cjs'
+      - 'integration/coopNativeMiningFleetDurable.cjs'
+      - 'tests/coop-alife12-*'
+      - 'tests/coop-native-mining-fleet-durable.test.mjs'
+      - '.github/workflows/alife12-native-station-restart.yml'
+jobs:
+  native-trip-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Native physical route crash-restart + cargo regression
+        run: |
+          node --version
+          node --test \
+            tests/coop-alife12-station-trip-journal.test.mjs \
+            tests/coop-alife12-station-trip-recovery.test.mjs \
+            tests/coop-native-mining-fleet-durable.test.mjs \
+            tests/coop-native-haul-manifest.test.mjs \
+            tests/coop-native-haul-manifest-station.test.mjs \
+            tests/coop-native-station-arrival.test.mjs \
+            tests/coop-native-warehouse.test.mjs
