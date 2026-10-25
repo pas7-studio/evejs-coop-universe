@@ -17,8 +17,8 @@ function journalKey(ticket){
   !id(ticket.peerID)||!id(ticket.agentID)||!n||!leaderSeq||
   !str(p.contentID)||str(p.contentID)!==str(l.contentID)||
   ![6,7].includes(Number(ticket.actionID)))return null;
- return [ticket.fleetID,ticket.leader,ticket.peerID,ticket.agentID,
-  leaderSeq,n,str(p.contentID),str(p.missionTemplateID)].join(":");
+ return JSON.stringify([ticket.fleetID,ticket.leader,ticket.peerID,ticket.agentID,
+  leaderSeq,n,str(p.contentID),str(p.missionTemplateID)]);
 }
 function readSettlement(file,key){
  try{
