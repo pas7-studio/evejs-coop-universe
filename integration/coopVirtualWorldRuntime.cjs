@@ -652,7 +652,10 @@ function ensureCivilianOrders(runtime,npc){
   warp:(id,point,options)=>npcNativeOrder("CIVILIAN",id,"warp",
    ()=>npc.warpToPoint(id,point,options)),
   orbit:(id,targetID,range)=>npcNativeOrder("CIVILIAN",id,"orbit",
-   ()=>npc.orbit(id,targetID,range))
+   ()=>npc.orbit(id,targetID,range)),
+  // With a player on grid, a scheduled civilian route must not warp the NPC
+  // away in front of them (they visually vanish). OFF by default.
+  playerHoldMeters:process.env.EVEJS_COOP_NPC_ROUTE_HOLD==="1"?200000:0
  });
 }
 function observeNativeCombat(){
