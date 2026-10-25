@@ -98,6 +98,10 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
   try{
    const start=clock();if(!count(start))return reason("NATIVE_AUTHORITY_CLOCK_INVALID");
    const before=sample(ownerID,stationID,systemID);
+   // Read-only Rust calls can run concurrently; one slow item type must not
+   // delay the other product books or spawn an extra A-Life scheduler.
+   const books=new Map(await Promise.all(targets.map(async p=>[
+    p.typeID,await getOrders(before.regionID,p.typeID)])));
    const rows=[];
    for(const p of targets){
     const def=getDefinition(p.typeID);
@@ -117,7 +121,7 @@ function createStationAuthority({getCorporation,getCorporationRuntime,getStation
      quote=materials;break;
     }
     if(!quote)throw Error("NATIVE_ORIGINAL_BLUEPRINT_QUOTE_UNAVAILABLE");
-    const book=await getOrders(before.regionID,p.typeID);
+    const book=books.get(p.typeID);
     if(!book||!Array.isArray(book.sells))
      throw Error("NATIVE_RUST_MARKET_BOOK_UNAVAILABLE");
     let listed=0;const matched=new Set();
