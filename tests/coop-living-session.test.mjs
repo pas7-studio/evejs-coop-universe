@@ -97,3 +97,62 @@ test("rival raids skip same-faction loaded miners and only order authorized nati
  assert.equal(result.actions.length,1);
  assert.deepEqual(issued,[[901,202]]);
 });
+
+
+test("P0 Ballpark admission requires one live player and exact physical native ship",()=>{
+ const {admission}=require("../integration/coopSessionPresence.cjs");
+ const ship={itemID:701,kind:"ship",pilotCharacterID:101,spaceState:{systemID:30000144}};
+ const session={characterID:101,socket:{destroyed:false},
+  _space:{initialStateSent:true,shipID:701,systemID:30000144}};
+ const native={systemID:30000144,sessions:new Map([[101,session]]),
+  getEntityByID:id=>id===701?ship:null};
+ const run=()=>admission(session,ship,()=>native);
+ assert.equal(run().status,"ADMITTED_NATIVE_SESSION");
+ session._space.initialStateSent=false;
+ assert.equal(run().status,"PENDING_BALLPARK");
+ session._space.initialStateSent=true;
+ session.socket.destroyed=true;
+ assert.equal(run().status,"STALE_SESSION");
+ session.socket.destroyed=false;
+ native.sessions.set(101,{...session});
+ assert.equal(run().status,"SESSION_NOT_IN_NATIVE_SCENE");
+ native.sessions.set(101,session);
+ assert.equal(run().status,"ADMITTED_NATIVE_SESSION");
+});
+test("P0 duplicate sessions or shared ship IDs cannot double-trigger co-op worlds",()=>{
+ const {admission}=require("../integration/coopSessionPresence.cjs");
+ const ship={itemID:701,kind:"ship",pilotCharacterID:101,spaceState:{systemID:30000144}};
+ const a={characterID:101,socket:{destroyed:false},
+  _space:{initialStateSent:true,shipID:701,systemID:30000144}};
+ const second={...a,_space:{...a._space}};
+ const different={characterID:102,socket:{destroyed:false},
+  _space:{initialStateSent:true,shipID:701,systemID:30000144}};
+ const scene={systemID:30000144,sessions:new Map([[1,a],[2,second]]),
+  getEntityByID:id=>id===701?ship:null};
+ const run=()=>admission(a,ship,()=>scene);
+ assert.equal(run().status,"AMBIGUOUS_NATIVE_CHARACTER_SESSION");
+ scene.sessions.set(2,different);
+ assert.equal(run().status,"AMBIGUOUS_NATIVE_SHIP_OWNER");
+ scene.sessions.delete(2);
+ assert.equal(run().status,"ADMITTED_NATIVE_SESSION");
+});
+test("P0 replaced hull, wrong pilot and wrong scene are not native admission",()=>{
+ const {admission}=require("../integration/coopSessionPresence.cjs");
+ const ship={itemID:701,kind:"ship",pilotCharacterID:101,spaceState:{systemID:30000144}};
+ const a={characterID:101,socket:{destroyed:false},
+  _space:{initialStateSent:true,shipID:701,systemID:30000144}};
+ const scene={systemID:30000144,sessions:new Map([[101,a]]),
+  getEntityByID:id=>id===701?ship:null};
+ const run=()=>admission(a,ship,()=>scene);
+ ship.pilotCharacterID=102;
+ assert.equal(run().status,"WRONG_PHYSICAL_PILOT");
+ ship.pilotCharacterID=101;
+ scene.getEntityByID=()=>({kind:"ship",itemID:702});
+ assert.equal(run().status,"NATIVE_HULL_NOT_READY");
+ scene.getEntityByID=id=>id===701?ship:null;
+ a._space.shipID=702;
+ assert.equal(run().status,"REPLACED_OR_WRONG_SYSTEM_SHIP");
+ a._space.shipID=701;
+ scene.systemID=30000142;
+ assert.equal(run().status,"SCENE_UNAVAILABLE");
+});
