@@ -226,3 +226,29 @@ each('builder changing original mineral item identity cannot mint unverified out
  assert.equal(result.success,false);assert.equal(result.errorMsg,'REFINERY_OUTPUT_MISMATCH');
  assert.equal(writes,0);
 });
+
+
+test('refinery runtime module imports the real .cjs sibling in source checkout',()=>{
+ const entry=require('../integration/coopNpcRefineryRuntime.cjs');
+ assert.equal(typeof entry.createLiveRefinery,'function');
+});
+test('refinery runtime module imports installed .js sibling in pinned overlay',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-refinery-overlay-'));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const code=fs.readFileSync(new URL('../integration/coopNpcRefineryRuntime.cjs',import.meta.url),'utf8');
+ fs.writeFileSync(path.join(root,'coopNpcRefineryRuntime.js'),code);
+ fs.writeFileSync(path.join(root,'coopNpcRefinery.js'),
+  'module.exports={createRefinery:()=>({verified:true})};');
+ const deployed=createRequire(path.join(root,'index.cjs'))('./coopNpcRefineryRuntime.js');
+ assert.equal(typeof deployed.createLiveRefinery,'function');
+});
+test('refinery runtime does not swallow missing transitive native dependency',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-refinery-overlay-broken-'));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const code=fs.readFileSync(new URL('../integration/coopNpcRefineryRuntime.cjs',import.meta.url),'utf8');
+ fs.writeFileSync(path.join(root,'coopNpcRefineryRuntime.js'),code);
+ fs.writeFileSync(path.join(root,'coopNpcRefinery.js'),
+  "require('./missing-original-refinery-implementation');");
+ assert.throws(()=>createRequire(path.join(root,'index.cjs'))('./coopNpcRefineryRuntime.js'),
+  /missing-original-refinery-implementation/);
+});
