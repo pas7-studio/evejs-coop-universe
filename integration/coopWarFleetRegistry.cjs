@@ -17,7 +17,11 @@ function validate(s){
    typeof s.transfers!=="object"||Array.isArray(s.transfers)||
    Object.keys(s.transfers).length>128))||
   (s.recoveryAudit!==undefined&&(!Array.isArray(s.recoveryAudit)||
-   s.recoveryAudit.length>128)))
+   s.recoveryAudit.length>128))||
+  (s.transferHistory!==undefined&&(!Array.isArray(s.transferHistory)||
+   s.transferHistory.length>512))||
+  (s.nextTransferSerial!==undefined&&(!Number.isSafeInteger(s.nextTransferSerial)||
+   s.nextTransferSerial<1||s.nextTransferSerial>Number.MAX_SAFE_INTEGER-1)))
   throw Error("FW_FLEET_REGISTRY_INVALID");
  const pilots=new Set();
  for(const [key,v] of Object.entries(s.ships)){
@@ -28,12 +32,27 @@ function validate(s){
     throw Error("FW_FLEET_REGISTRY_CORRUPT_SHIP");
   pilots.add(v.pilotID);
  }
+ // Closed flights remain immutable history after native custody was
+ // verified. History is not an authorization to materialize or jump a ship.
+ const seenFlights=new Set();
+ for(const h of s.transferHistory||[]){
+  if(!h||!valid(h.transferID)||!pos(h.entityID)||
+   !pilot(h.pilotID)||!pos(h.sourceSystemID)||
+   !pos(h.destinationSystemID)||h.sourceSystemID===h.destinationSystemID||
+   !["COMPLETE","ABORTED"].includes(h.phase)||
+   !/^[a-f0-9]{64}$/.test(h.modulesHash)||
+   !/^[a-f0-9]{64}$/.test(h.cargoHash)||
+   !pos(h.retiredAt)||seenFlights.has(h.transferID))
+   throw Error("FW_FLEET_TRANSFER_HISTORY_CORRUPT");
+  seenFlights.add(h.transferID);
+ }
  for(const [shipID,t] of Object.entries(s.transfers||{})){
   const hull=s.ships[shipID];
   if(!hull||String(t?.entityID)!==shipID||
    hull.pilotID!==t.pilotID||hull.warID!==t.warID||
    hull.campaignID!==t.campaignID||
    !["PREPARED","NATIVE_COMMITTED","COMPLETE","ABORTED"].includes(t.phase)||
+   seenFlights.has(t.transferID)||
    !Number.isSafeInteger(t.sourceSystemID)||t.sourceSystemID<=0||
    !Number.isSafeInteger(t.destinationSystemID)||t.destinationSystemID<=0||
    t.sourceSystemID===t.destinationSystemID||
@@ -109,16 +128,16 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
      s.ships[id]={...details,assignedAt:clock()};
      receipt={type:"ASSIGN",entityID,pilotID,systemID,fleetID,warID,campaignID};
     }else{
-     if(s.transfers?.[id]&&!["ABORTED","COMPLETE"].includes(s.transfers[id].phase))
-      return {status:"BLOCKED",reason:"WAR_HULL_TRANSFER_QUARANTINED"};
+     // Even a COMPLETE transfer remains forensic evidence. The native
+     // transfer ledger must first retire it after verifying journal
+     // cleanup, both physical scenes and the exact pilot/cargo signature.
+     if(s.transfers?.[id])
+      return {status:"BLOCKED",reason:"WAR_HULL_TRANSFER_REQUIRES_VERIFIED_RETIREMENT"};
      if(!priorShip||!valid(command.proofID)||command.pilotID!==priorShip.pilotID||
       command.fleetID!==priorShip.fleetID)return {status:"BLOCKED",reason:"SHIP_NOT_IN_FLEET"};
      let ok=false;try{ok=verifyRelease({...priorShip,proofID:command.proofID})===true}catch{}
      if(!ok)return {status:"BLOCKED",reason:"NATIVE_RELEASE_UNVERIFIED"};
      delete s.ships[id];
-     // Finished/aborted transfer provenance remains in the processed event
-     // receipts, but cannot dangle after this ship leaves the war fleet.
-     if(s.transfers?.[id])delete s.transfers[id];
      receipt={type:"RELEASE",entityID:priorShip.entityID,fleetID:priorShip.fleetID};
     }
     const at=clock();
