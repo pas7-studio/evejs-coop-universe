@@ -323,6 +323,72 @@ function createRescueContracts({root,readEvent,readFlight,readManifest,
     amountISK,perPilotISK:amountISK/2}:
    deny("RESCUE_NATIVE_PAYOUT_NOT_CONFIRMED");
  }
- return {offer,accept,claim,cancel,verifyRivalLoss};
+
+ // Read-only history after native wallet COMMIT. A lost chat ACK or restart
+ // cannot create another credit; each entry is rechecked in SQLite.
+ function history({characterID,limit=20}={}){
+  if(process.env.EVEJS_COOP_RESCUE_CONTRACTS!=="1")
+   return deny("DISABLED");
+  if(!pos(characterID)||!Number.isSafeInteger(limit)||
+   limit<1||limit>50)return deny("RESCUE_HISTORY_QUERY_INVALID");
+  let filenames;try{filenames=io.readdirSync(dir)}
+  catch(e){return e?.code==="ENOENT"?
+   {status:"READY",history:[],reputation:{score:0,tier:"ROOKIE",earnedISK:0,
+    paidContracts:0,refundedContracts:0}}:
+   deny("RESCUE_HISTORY_SOURCE_UNAVAILABLE")}
+  if(!Array.isArray(filenames)||filenames.length>2000)
+   return deny("RESCUE_HISTORY_SCAN_CAP_EXCEEDED");
+  const history=[];
+  for(const file of filenames){
+   if(!/^offer-escort-rescue-\d+\.json$/.test(file))continue;
+   const contractID=file.slice(6,-5);
+   const q=readQuote(contractID);
+   if(q?.status!=="READY"||
+    q.contract?.contractID!==contractID||
+    !Array.isArray(q.contract.characters)||q.contract.characters.length!==2)
+    return deny("RESCUE_HISTORY_QUOTE_UNVERIFIED");
+   if(!q.contract.characters.includes(characterID))continue;
+   let settled,refunded;
+   try{settled=nativeFunds.verifySettlement(q.contract);
+    refunded=nativeFunds.verifyRefund(q.contract)}
+   catch{return deny("RESCUE_HISTORY_WALLET_UNAVAILABLE")}
+   let outcome;
+   if(settled?.status==="SETTLED"){
+    if(settled.nativeDurable!==true||
+     settled.contractID!==contractID||
+     settled.corporationID!==q.contract.corporationID||
+     settled.amountISK!==q.contract.amountISK||
+     !Array.isArray(settled.credits)||settled.credits.length!==2||
+     settled.credits.some((v,i)=>v.characterID!==q.contract.characters[i]||
+      v.amountISK!==q.contract.amountISK/2))
+     return deny("RESCUE_HISTORY_PAID_RECEIPT_UNVERIFIED");
+    outcome="PAID";
+   }else if(refunded?.status==="REFUNDED"){
+    if(refunded.nativeDurable!==true||
+     refunded.contractID!==contractID||
+     refunded.corporationID!==q.contract.corporationID||
+     refunded.amountISK!==q.contract.amountISK)
+     return deny("RESCUE_HISTORY_REFUND_RECEIPT_UNVERIFIED");
+    outcome="RIVAL_REFUNDED";
+   }else{
+    if(!["NOT_FOUND","NOT_SETTLED"].includes(settled?.status)||
+     !["NOT_FOUND","NOT_REFUNDED"].includes(refunded?.status))
+     return deny("RESCUE_HISTORY_TERMINAL_UNCERTAIN");
+    continue;
+   }
+   history.push({contractID,corporationID:q.contract.corporationID,
+    outcome,wreckID:q.wreckID,amountISK:q.contract.amountISK,
+    earnedISK:outcome==="PAID"?q.contract.amountISK/2:0});
+  }
+  history.sort((a,b)=>b.wreckID-a.wreckID);
+  const paid=history.filter(x=>x.outcome==="PAID");
+  const refunded=history.filter(x=>x.outcome==="RIVAL_REFUNDED");
+  return {status:"READY",history:history.slice(0,limit),
+   reputation:{score:paid.length*5,
+    tier:paid.length>=20?"VETERAN":paid.length>=5?"TRUSTED":"ROOKIE",
+    paidContracts:paid.length,refundedContracts:refunded.length,
+    earnedISK:paid.reduce((n,x)=>n+x.earnedISK,0)}};
+ }
+ return {offer,accept,claim,cancel,verifyRivalLoss,history};
 }
 module.exports={createRescueContracts,mark};
