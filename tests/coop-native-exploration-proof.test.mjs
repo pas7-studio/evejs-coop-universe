@@ -43,6 +43,8 @@ test("incomplete, fake, duplicate or mismatched probe scan results cannot grant 
  const a=pilot();
  const bad=record({session:a,scanResult:scan(
   keyVal("ABC-001",0.999),keyVal("DEF-002",0.42),
+  keyVal("ABC-001",Number.NaN),keyVal("DEF-002",Number.POSITIVE_INFINITY),
+  {type:"object",name:"util.KeyVal",args:{type:"dict",entries:[["id","ABC-001"]]}},
   {type:"object",name:"fake",args:{type:"dict",entries:[["id","ABC-001"],["certainty",1]]}}
  ),origin:origin(),sites,nowMs:now});
  assert.equal(bad.count,0);
