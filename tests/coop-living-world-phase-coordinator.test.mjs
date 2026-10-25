@@ -146,3 +146,12 @@ test("all legacy 30s phases are registered exactly once in unchanged source orde
  assert.match(block,/EVEJS_COOP_NATIVE_NPC_MARKET/);
  assert.match(block,/EVEJS_COOP_ALIFE_ECONOMY/);
 });
+
+test("promise-returning WHOLE world tick is forbidden and releases the guard",()=>{
+ const f=fixture();
+ assert.throws(()=>f.coordinator.tick(()=>Promise.resolve("NOT_A_SYNC_TICK")),
+  /LIVING_WORLD_ASYNC_CYCLE_FORBIDDEN/);
+ assert.equal(f.coordinator.snapshot().active,false);
+ assert.equal(f.coordinator.snapshot().last.status,"THREW");
+ assert.equal(f.coordinator.tick(run=>run("virtual-travel",()=>null)).status,"COMPLETED");
+});
