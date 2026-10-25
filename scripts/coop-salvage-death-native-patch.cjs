@@ -47,11 +47,14 @@ const changes=[
 function patch(source,remove=false){
  let s=source;
  for(const [oldLine,newLine] of changes){
-  const from=remove?newLine:oldLine,to=remove?oldLine:newLine;
-  const count=s.split(from).length-1;
-  if(count===0&&s.includes(to))continue;
-  if(count!==1||s.includes(to))throw Error("SALVAGE_PINNED_NATIVE_DEATH_DRIFT:"+oldLine.slice(0,90));
-  s=s.replace(from,to);
+  if(remove){
+   if(s.includes(newLine)){s=s.replace(newLine,oldLine);continue;}
+   if(s.includes(oldLine))continue;
+  }else{
+   if(s.includes(newLine))continue;
+   if(s.split(oldLine).length===2){s=s.replace(oldLine,newLine);continue;}
+  }
+  throw Error("SALVAGE_PINNED_NATIVE_DEATH_DRIFT:"+oldLine.slice(0,90));
  }
  return s;
 }
