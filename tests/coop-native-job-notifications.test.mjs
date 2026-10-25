@@ -119,7 +119,7 @@ test("native quote integration is called only when original priced gate creates 
  const b=fs.readFileSync(new URL("../integration/coopWorldOpportunityBoard.cjs",import.meta.url),"utf8");
  assert.match(s,/NATIVE_QUOTE_DURABLY_PREPARED/);
  assert.match(s,/notifyNativeQuote\(result\.quote\)/);
- assert.match(b,/NATIVE_AGENT_QUOTE_PENDING/);
+ assert.match(b,/An NPC convoy is preparing; this is NOT a paid offer/);
 });
 process.on("exit",()=>{
  if(oldA===undefined)delete process.env.EVEJS_COOP_NATIVE_JOB_AGENT;
