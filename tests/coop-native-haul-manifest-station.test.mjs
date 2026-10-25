@@ -8,6 +8,7 @@ const source=readFileSync(new URL("../integration/coopNativeStationArrival.cjs",
 new Function("require","module","exports",source)(id=>{
  if(id==="./coopNativeWarehouse")return {createWarehouse:()=>{throw Error("Unexpected native warehouse constructor")}};
  if(id==="./coopEconomyDestination")return require("../integration/coopEconomyDestination.cjs");
+ if(id==="./coopAlifeNativeDeliveryEvidence")return require("../integration/coopAlifeNativeDeliveryEvidence.cjs");
  return require(id);
 },compiled,compiled.exports);
 const {createStationArrival}=compiled.exports;

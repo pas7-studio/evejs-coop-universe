@@ -343,8 +343,6 @@ function transform(source,spec,remove){
  // ALIFE-05: existing native stock mining writer; store-before-hull commit when opt-in.
  if(spec.file.endsWith("miningNpcOperations.js"))
   text=require("./coop-native-mining-cargo-integrity-patch.cjs").patchMiningCargo(text,remove);
- if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
-  text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file.endsWith("agent/agentMissionRuntime.js")||spec.file.endsWith("agent/missionRuntimeState.js")||spec.file.endsWith("dungeon/dungeonUniverseSiteService.js"))
   text=require("./coop-fleet-mission-native-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/agent/agentMissionRuntime.js")
@@ -376,6 +374,8 @@ function transform(source,spec,remove){
   if(count(text,anchor)!==1)throw Error("Unknown or duplicate source anchor: "+spec.file+" "+patch.anchor);
   text=text.replace(anchor,patch.after?anchor+eol+patch.line:patch.line+eol+anchor);
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/gameStore/index.js"||spec.file==="server/src/gameStore/sqliteStore.js"||spec.file==="server/src/services/inventory/itemStore.js")
   text=require("./coop-gamestore-atomic-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")

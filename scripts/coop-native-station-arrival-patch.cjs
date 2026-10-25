@@ -5,9 +5,17 @@ const fileName="server/src/services/mining/miningNpcOperations.js";
 function patch(source,file,remove=false){
  if(file!==fileName)return source;
  const eol=source.includes("\r\n")?"\r\n":"\n";
- const once=(s,oldValue,newValue)=>{
-  if(s.split(remove?newValue:oldValue).length!==2)throw Error("STATION_ARRIVAL_ANCHOR_DRIFT");
-  return s.replace(remove?newValue:oldValue,remove?oldValue:newValue);
+ const once=(s,oldValue,newValue,label="anchor",soft=false)=>{
+  const needle=remove?newValue:oldValue;
+  const hits=s.split(needle).length-1;
+  // The durable-fleet patch owns the spawn transient flag now, so an absent
+  // anchor there is a legitimate hand-off, not drift. Every other anchor stays
+  // strict: naming it turns an opaque drift into an actionable message.
+  if(hits!==1){
+   if(soft&&hits===0)return s;
+   throw Error("STATION_ARRIVAL_ANCHOR_DRIFT:"+label+":"+hits);
+  }
+  return s.replace(needle,remove?oldValue:newValue);
  };
  let text=source;
  const durableOld="    transient: true,";
@@ -35,7 +43,7 @@ function patch(source,file,remove=false){
  const spawnA=text.indexOf("function spawnMiningFleetInternal(");
  const spawnB=text.indexOf("function issueResponseOrders(",spawnA);
  if(spawnA<0||spawnB<0)throw Error("STATION_SPAWN_DRIFT");
- text=text.slice(0,spawnA)+once(text.slice(spawnA,spawnB),haulerCall,haulerNew)+text.slice(spawnB);
+ text=text.slice(0,spawnA)+once(text.slice(spawnA,spawnB),haulerCall,haulerNew,"hauler")+text.slice(spawnB);
  const loadedA=text.indexOf('  if (fleetRecord.state === "loaded") {');
  const loadedB=text.indexOf('  if (fleetRecord.state === "haulereturn") {',loadedA);
  if(loadedA<0||loadedB<0)throw Error("STATION_LOADED_DRIFT");
@@ -56,7 +64,7 @@ function patch(source,file,remove=false){
  '      fleetRecord.nextThinkAtMs = now + 1000;'+eol+
  '      return;'+eol+
  '    } else if (fleetRecord.originAnchor && fleetRecord.originAnchor.position) {';
- text=text.slice(0,loadedA)+once(text.slice(loadedA,loadedB),loadedOld,loadedNew)+text.slice(loadedB);
+ text=text.slice(0,loadedA)+once(text.slice(loadedA,loadedB),loadedOld,loadedNew,"loaded")+text.slice(loadedB);
  const returnA=text.indexOf('  if (fleetRecord.state === "haulereturn") {');
  const returnB=text.indexOf('  if (fleetRecord.state !== "mining") {',returnA);
  if(returnA<0||returnB<0)throw Error("STATION_RETURN_DRIFT");
@@ -72,8 +80,8 @@ function patch(source,file,remove=false){
  const unloadNew='      if (process.env.EVEJS_COOP_NATIVE_HAUL_CARGO === "1" && process.env.EVEJS_COOP_NPC_STATION_DELIVERY !== "1") require("../../space/coopNativeHaulCargo").unloadCargo(scene, fleetRecord);';
  let segment=text.slice(returnA,returnB);
  // On remove reverse dependencies in reverse order.
- if(remove){segment=once(segment,unloadOld,unloadNew);segment=once(segment,returnOld,returnNew);}
- else{segment=once(segment,returnOld,returnNew);segment=once(segment,unloadOld,unloadNew);}
+ if(remove){segment=once(segment,unloadOld,unloadNew,"unload");segment=once(segment,returnOld,returnNew,"return");}
+ else{segment=once(segment,returnOld,returnNew,"return");segment=once(segment,unloadOld,unloadNew,"unload");}
  return text.slice(0,returnA)+segment+text.slice(returnB);
 }
 module.exports={patch,fileName};

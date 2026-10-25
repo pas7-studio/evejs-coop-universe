@@ -1116,6 +1116,48 @@ function sellPricing(){
    Number(process.env.EVEJS_COOP_NPC_SELL_FLOOR_PCT||0.55)))});
  return nativeSellPricing;
 }
+// One durable guarded trader for the whole process: the arrival sale and the
+// normal market tick must share the same in-memory ledger, never a second copy.
+function ensureMarketTrader(){
+ if(nativeMarketTrader||nativeMarketBlocked)return nativeMarketTrader;
+ if(!identityRegistry||!world)return null;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
+ const worldData=require("./worldData"),inventory=require("../services/inventory/itemTypeRegistry");
+ const controllers=require("./npc/npcRegistry");
+ const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+ const {createNpcMarketTrader}=require("./coopNativeNpcMarket");
+ const market=createNpcMarketTrader({
+  call:(method,params)=>marketClient.call(method,params),
+  store,registry:identityRegistry,getStation:id=>worldData.getStationByID(id),
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getController:id=>controllers.getControllerByEntityID(id),
+  resolveType:id=>inventory.resolveItemByTypeID(id),
+  root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
+  maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
+  maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
+  cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000))),
+  priceFloorFor:process.env.EVEJS_COOP_NPC_SELL_PRICING==="1"?
+   (typeID,bestBid,stationID)=>{
+    const pricing=sellPricing();
+    if(!pricing)return 0;
+    const key=Number(stationID)+":"+Number(typeID);
+    pricing.offer(key,bestBid);
+    const decision=pricing.decide({key,bestBid});
+    return decision.price||0;
+   }:null
+ });
+ // A pending RPC of unknown outcome can never be retried automatically.
+ const recovered=market.recover();
+ if(recovered.status==="NEEDS_OPERATOR_REPAIR"){
+  nativeMarketBlocked=true;
+  require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,null,recovered);
+  return null;
+ }
+ if(recovered.recovered)
+  require("./coopRuntimeProbe").observe("living-native-market-recovered",null,null,recovered);
+ nativeMarketTrader=market;
+ return market;
+}
 async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1"||
   nativeMarketBlocked||nativeMarketTickRunning||
   !identityRegistry||!world||!visitedSystems.size)return;
@@ -1128,41 +1170,10 @@ async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKE
   const worldData=require("./worldData"),inventory=require("../services/inventory/itemTypeRegistry");
   const controllers=require("./npc/npcRegistry");
   const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
-  if(!nativeMarketTrader){
-   const {createNpcMarketTrader}=require("./coopNativeNpcMarket");
-   const market=createNpcMarketTrader({
-    call:(method,params)=>marketClient.call(method,params),
-    store,registry:identityRegistry,getStation:id=>worldData.getStationByID(id),
-    sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
-    getController:id=>controllers.getControllerByEntityID(id),
-    resolveType:id=>inventory.resolveItemByTypeID(id),
-    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||
-     "/var/lib/evejs/coop-native-market",
-    maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
-    maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
-    cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000))),
-    // Ask the merchant's own price policy how low this stack may go today.
-    priceFloorFor:process.env.EVEJS_COOP_NPC_SELL_PRICING==="1"?
-     (typeID,bestBid,stationID)=>{
-      const pricing=sellPricing();
-      if(!pricing)return 0;
-      const key=Number(stationID)+":"+Number(typeID);
-      pricing.offer(key,bestBid);
-      const decision=pricing.decide({key,bestBid});
-      return decision.price||0;
-     }:null
-   });
-   // A pending RPC of unknown outcome can never be retried automatically.
-   const recovered=market.recover();
-   if(recovered.status==="NEEDS_OPERATOR_REPAIR"){
-    nativeMarketBlocked=true;
-    require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,null,recovered);
-    return;
-   }
-   if(recovered.recovered)
-    require("./coopRuntimeProbe").observe("living-native-market-recovered",null,null,recovered);
-   nativeMarketTrader=market;
-  }
+  const market=ensureMarketTrader();
+  if(!market)return;
+  ensureMarketTrader();
+  if(!nativeMarketTrader)return;
   const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
   const rearmEnabled=process.env.EVEJS_COOP_NPC_EARN_SPEND_REARM==="1"&&
    process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
@@ -2177,4 +2188,59 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    });
  }catch(error){console.warn("[CoopVirtualWorld] native wreck consequence",error.message);}
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled};
+// Option A: the merchant sells at the station BEFORE the warehouse takes the
+// cargo. The native arrival tick is synchronous, so the first call starts the
+// market job and the arrival pauses until it settles, bounded by a hard
+// timeout: a hung RPC can never freeze a hauler or fake a sale.
+const arrivalSales=new Map();
+function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
+ if(process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL!=="1")return {status:"DISABLED"};
+ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1")return {status:"MARKET_OFF"};
+ const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
+ if(!sellTypes.length)return {status:"NO_SELL_TYPES"};
+ const key=Number(stationID)+":"+Number(haulerID);
+ const running=arrivalSales.get(key);
+ if(running){
+  if(running.settled)return running.settled;
+  if(Date.now()-running.startedAt>45000){
+   arrivalSales.delete(key);
+   return {status:"NOT_SOLD",reason:"SALE_TIMEOUT"};
+  }
+  return {status:"PENDING"};
+ }
+ const link=Object.values(identityRegistry?.snapshot()?.links||{})
+  .find(entry=>Number(entry.entityID)===Number(haulerID)&&
+   Number(entry.systemID)===Number(systemID));
+ if(!link)return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};
+ const trader=ensureMarketTrader();
+ if(!trader)return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};
+ const wanted=[...new Set(sellTypes.filter(typeID=>
+  !types.length||types.map(Number).includes(Number(typeID))))];
+ if(!wanted.length)return {status:"NOT_SOLD",reason:"NO_ALLOWED_ORE"};
+ const job={startedAt:Date.now(),settled:null};
+ arrivalSales.set(key,job);
+ void (async()=>{
+  const sold=[];let last="NO_ELIGIBLE_STACK";
+  try{
+   const scene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
+   for(const typeID of wanted){
+    const result=await trader.execute({scene,pilotID:link.pilotID,
+     entityID:Number(haulerID),stationID:Number(stationID),
+     side:"sell",typeID,buyTypes:[],sellTypes});
+    if(result.status==="TRADE_SETTLED")
+     sold.push({typeID,quantity:result.quantity,price:result.price,
+      balance:result.balance});
+    else last=String(result.status||"UNKNOWN");
+   }
+  }catch(error){last="SALE_ERROR:"+String(error?.message||error).slice(0,60);}
+  job.settled=sold.length?
+   {status:"SOLD",sold:JSON.parse(JSON.stringify(sold)),lastStatus:last}:
+   {status:"NOT_SOLD",reason:last};
+ })().finally(()=>{
+  // Keep the settled result readable for the next arrival tick only.
+  const timer=setTimeout(()=>{if(arrivalSales.get(key)===job)arrivalSales.delete(key);},5000);
+  if(typeof timer?.unref==="function")timer.unref();
+ });
+ return {status:"PENDING"};
+}
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival};

@@ -96,3 +96,34 @@ test('a fleet with no physical trip returns home instead of stalling forever',()
   else process.env.EVEJS_COOP_NPC_STATION_DELIVERY=previous;
  }
 });
+
+test('the station sells what a real buyer pays for before the warehouse takes it',()=>{
+ const f=fixture();
+ const calls=[];
+ const dir=createStationArrival({getStations:id=>id===f.scene.systemID?[f.station]:[],
+  getStation:id=>id===f.station.stationID?f.station:null,
+  getCorporation:id=>id===1000035?{corporationID:id}:null,
+  isNpcCorporation:id=>id===1000035,
+  getNativeEntity:id=>id===f.ship.itemID?f.nativeEntity:null,
+  getScene:id=>id===f.scene.systemID?f.scene:null,
+  store:{listNativeCargoForEntity:id=>id===f.ship.itemID?[...f.cargo.values()]:[],
+   buildNativeCargoItems:()=>[]},
+  items:{},flush:()=>({success:true}),warpToPoint:()=>({success:true}),
+  root:'/tmp/test-coop-warehouse',
+  warehouse:{deposit:x=>{calls.push(['deposit',x.cargoID]);return {status:'COMMITTED'}}},
+  beforeDeposit:args=>{calls.push(['sale',args.stationID,args.cargoIDs.length]);
+   // The buyer takes the whole stack, exactly like a settled native fill.
+   for(const cargoID of args.cargoIDs)f.cargo.delete(cargoID);
+   return {status:'SOLD',sold:[{typeID:34,quantity:25,price:100,balance:2500}]}},
+  clock:()=>f.now()});
+ const fleet={fleetID:77,systemID:f.scene.systemID,haulerEntityIDs:[f.ship.itemID]};
+ assert.equal(dir.start(f.scene,fleet,f.now()).status,'EN_ROUTE');
+ arrive(f);
+ dir.tick(f.scene,fleet,f.now());
+ f.setTime(f.now()+3000);
+ const result=dir.tick(f.scene,fleet,f.now());
+ assert.deepEqual(calls[0][0],'sale','the sale must happen before any deposit');
+ assert.equal(calls.filter(c=>c[0]==='deposit').length,0,'a sold stack is never deposited');
+ assert.equal(result.status,'DELIVERED');
+ assert.equal(f.cargo.size,0);
+});

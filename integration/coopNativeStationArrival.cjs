@@ -17,7 +17,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -435,7 +435,30 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     return pause("MANIFEST_TRIP_CONTEXT_MISSING");
    if(manifestDirector&&cargo.some(item=>!trip.expectedCargoIDs.includes(Number(item.cargoID))))
     return pause("MANIFEST_NEW_UNDECLARED_CARGO");
-   for(const item of cargo){
+   // Sell like a player standing at the station: a real bid at or above the
+   // merchant's own floor is filled through the guarded native trader, and only
+   // the remainder is deposited. The sale is asynchronous (market RPC), so the
+   // arrival pauses until it settles instead of blocking the native tick.
+   let sale=null;
+   if(typeof beforeDeposit==="function"&&cargo.length){
+    try{sale=beforeDeposit({systemID:trip.systemID,stationID:trip.stationID,
+     fleetID:trip.fleetID,haulerID:id,corporationID:trip.corporationID,
+     cargoIDs:cargo.map(row=>Number(row.cargoID)),
+     types:[...new Set(cargo.map(row=>Number(row.typeID)))]});}
+    catch(error){sale={status:"SALE_ERROR",
+     reason:String(error?.message||error).slice(0,90)};}
+    if(sale?.status==="PENDING")return pause("MARKET_SALE_PENDING");
+    if(sale?.status==="SOLD")
+     probe.observe("living-npc-station-sold",null,{spaceState:{systemID:trip.systemID}},
+      {fleetID:trip.fleetID,haulerID:id,stationID:trip.stationID,
+       ...sale,earnedPlayerISK:0,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"});
+   }
+   // Re-read: a settled sale really removed the sold stacks from the hull.
+   const deliverable=sale?.status==="SOLD"?
+    (store.listNativeCargoForEntity(id)||[]).filter(row=>
+     pos(row.cargoID)&&Number(row.coopHaulFleetID)===trip.fleetID&&
+     Number(row.moduleID||0)===0):cargo;
+   for(const item of deliverable){
     const result=factory.deposit({cargoID:Number(item.cargoID),haulerID:id,
       fleetID:trip.fleetID,systemID:trip.systemID,stationID:trip.stationID,
       corporationID:trip.corporationID});
@@ -447,6 +470,16 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     stackCount++;oreQuantity+=Number(item.quantity);
    }
    if(typeof store.buildNativeCargoItems==="function")ship.nativeCargoItems=store.buildNativeCargoItems(id);
+   if(sale?.status==="SOLD"&&Array.isArray(sale.sold)&&sale.sold.length){
+    // A settled market fill is its own durable proof (native order id, ledger
+    // balance and the trader's transaction journal), so it replaces the
+    // warehouse receipt for exactly those stacks.
+    trip.soldStacks=(trip.soldStacks||0)+sale.sold.length;
+    trip.soldQuantity=(trip.soldQuantity||0)+sale.sold.reduce((sum,entry)=>
+     sum+Math.max(0,Number(entry.quantity)||0),0);
+    trip.soldISK=Math.round(((trip.soldISK||0)+sale.sold.reduce((sum,entry)=>
+     sum+Math.max(0,Number(entry.quantity)||0)*Math.max(0,Number(entry.price)||0),0))*100)/100;
+   }
   }
   // No cargo remaining is evidence of completion only if at least one
   // previously committed source receipt exists in this trip.
@@ -454,7 +487,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   // follow the LAST committed warehouse debit but precede this in-memory
   // counter update. The cargo is then correctly empty on the next tick.
   // The *full* manifest proof, NOT an empty hull, must decide completion.
-  if(!stackCount&&!trip.completedStackCount&&!manifestDirector)
+  if(!stackCount&&!trip.completedStackCount&&!trip.soldStacks&&!manifestDirector)
    return pause("EMPTY_DELIVERY_NOT_PROVEN");
   trip.completedStackCount=(trip.completedStackCount||0)+stackCount;
   let manifestVerified=null,alifeDeliveryWitness=null;
@@ -512,6 +545,8 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   }
   delete fleet.coopStationArrival;
   return {status:"DELIVERED",terminal:true,stacks:stackCount,quantity:oreQuantity,
+   ...(trip.soldStacks?{soldStacks:trip.soldStacks,soldQuantity:trip.soldQuantity||0,
+    soldISK:trip.soldISK||0,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"}:{}),
    ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
@@ -544,6 +579,9 @@ function getRuntimeDirector(){
   warpToPoint:(id,p,opts)=>require("./npc/npcRuntime").warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
+  // Option A: sell at the station before the warehouse takes the cargo.
+  beforeDeposit:process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL==="1"?
+   args=>require("./coopVirtualWorldRuntime").sellOnArrival(args):null,
   destinationOracle:process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1"?
    loadEconomyDestination().createDestinationOracle({
     call:(method,params)=>require("../services/market/marketDaemonClient")

@@ -51,4 +51,15 @@ for(const eol of ['\n','\r\n'])test('reversible physical-arrival hook in '+JSON.
  assert.match(next,/const delivered = settled\.terminal === true && \(settled\.status === "DELIVERED" \|\| settled\.status === "NO_CARGO"\);/);
 });
 test('wrong target remains untouched',()=>{const s=sample();assert.equal(patch(s,'server/src/space/random.js'),s)});
-test('drift without original hauler return branch aborts',()=>{assert.throws(()=>patch(sample().replace('    transient: true,','    transient: false,'),fileName),/ANCHOR_DRIFT/)});
+test('drift without the original hauler return branch aborts',()=>{
+ // The spawn transient flag is owned by the durable-fleet patch now, so drift is
+ // proven on a strict anchor: the native loaded handler must exist.
+ assert.throws(()=>patch(sample().replace('  if (fleetRecord.state === "loaded") {','  if (fleetRecord.state === "loading") {'),fileName),
+  /STATION_(LOADED|ARRIVAL_ANCHOR)_DRIFT/)});
+
+test('a durable-fleet rewrite of the spawn flag is a hand-off, not drift',()=>{
+ const reworked=sample().replace('    transient: true,','    transient: options.coopDurableNative === true,');
+ const next=patch(reworked,fileName);
+ assert.match(next,/routeFromHaul/);
+ assert.match(next,/durableHauler/);
+});
