@@ -4,6 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
+let warFleetRegistry=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -23,6 +24,31 @@ function safeNpcPhase(phase,run){
 function alifeOrderArbitrationEnabled(env={}){
  return env.EVEJS_COOP_ALIFE==="1"||env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
 }
+// FW-003: use the very same native GameStore and physical identity as
+// existing living-world orders. A missing/corrupt registry is UNKNOWN and
+// cannot silently surrender a warship to a civilian/raid planner.
+function nativeWarFleetRegistry(){
+ if(process.env.EVEJS_COOP_FACTION_WAR!=="1"||
+    process.env.EVEJS_COOP_FACTION_WAR_FLEETS!=="1"||
+    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1")return null;
+ if(!warFleetRegistry){
+  const runtime=require("./runtime"),controllers=require("./npc/npcRegistry"),
+   entityStore=require("./npc/nativeNpcStore"),
+   factions=require("../services/faction/factionState");
+  const proofs=require("./coopWarFleetNativeProofs").createWarFleetNativeProofs({
+   sceneForSystem:id=>runtime.scenes instanceof Map?runtime.scenes.get(id):null,
+   getController:id=>controllers.getControllerByEntityID(id),
+   getNativeEntity:id=>entityStore.getNativeEntity(id),
+   assignments:()=>[...(bridge?.snapshot()||[]),
+    ...Object.values(identityRegistry?.snapshot()?.links||{})],
+   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id)
+  });
+  warFleetRegistry=require("./coopWarFleetRegistry").createWarFleetRegistry({
+   gameStore:require("../gameStore"),...proofs
+  });
+ }
+ return warFleetRegistry;
+}
 function npcOrderBridge(){
  if(!alifeOrderArbitrationEnabled(process.env))return null;
  if(!nativeOrderBridge){
@@ -34,7 +60,9 @@ function npcOrderBridge(){
     ...Object.values(identityRegistry?.snapshot()?.links||{})
    ],
    sceneForSystem:id=>native.ensureScene(id,{refreshStargates:false}),
-   getController:id=>controllers.getControllerByEntityID(id)
+   getController:id=>controllers.getControllerByEntityID(id),
+   warShipClaim:process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"?
+    (link=>nativeWarFleetRegistry()?.claim(link)||"UNKNOWN"):null
   });
  }
  return nativeOrderBridge;
@@ -2396,4 +2424,4 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  });
  return {status:"PENDING"};
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival};
+module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};
