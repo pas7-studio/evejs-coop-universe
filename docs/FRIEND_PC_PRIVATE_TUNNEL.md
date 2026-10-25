@@ -234,3 +234,39 @@ ssh -p 36933 -o StrictHostKeyChecking=accept-new <hostuser>@<vpn public ip> exit
 - `26000`, `26001`, `26002`, `26003`, `443`, `5222` stay on `127.0.0.1`.
 - If Proton cannot forward the port, this path is dead and the alternatives
   are a mesh VPN with endpoint advertisement (blocked by COOP-012) or nothing.
+
+## Friend checklist: what he does and does not need
+
+The friend runs **only** the tunnel client. He needs no server software.
+
+He does **not** need: OpenSSH *Server*, `sshd`, Tailscale, ZeroTier, Docker, an
+EveJS server, port forwarding in his Proton client, or any file from the host
+except the public CA certificate.
+
+He **must** disconnect any VPN before measuring his address. His public IP is
+read with the VPN off; a Proton exit address is not his address and will not
+match the host firewall rule. Exit addresses also change per session (for
+example `159.26.120.41` vs `159.26.120.9`), so the host must read the current
+one from his own Proton client instead of reusing an old value.
+
+He generates **his own** keypair. This is not "substituting someone else's key":
+the private key never leaves his machine and only the `.pub` line is shared.
+
+If `scripts/Setup-Friend-Host.ps1` is missing in his checkout, his clone is
+stale: `git pull`. He still must not run it - it is the host-side script.
+
+```powershell
+# 1. VPN OFF first
+(Invoke-WebRequest https://ifconfig.me/ip -UseBasicParsing).Content.Trim()
+
+# 2. his own dedicated key (Enter twice for an empty passphrase)
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\coop_ed25519"
+
+# 3. send this single line to the host; never the file without .pub
+Get-Content "$env:USERPROFILE\.ssh\coop_ed25519.pub"
+```
+
+Host prerequisites, in this order: Proton connected to a **P2P** server with
+port forwarding enabled (the client shows the port, and it is not the same
+number every session), then `Setup-Friend-Host.ps1 -Apply` with the friend's
+current IP and public key.
