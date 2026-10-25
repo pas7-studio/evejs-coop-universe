@@ -1,32 +1,26 @@
-﻿## Durable fleet: tried, blocked on a real slot witness (2026-10-25 22:20 UTC)
+﻿## Fleet survivability (2026-10-25 22:45 UTC)
 
-`EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE=1` was deployed and then REVERTED. Not a win:
-the fleet slots seeded while durable was OFF left `coopMiningFleetSlots` witnesses whose
-ships were transient and vanished. On the next boot durable startup refused to guess:
+Goal: the mining fleet must not die with a scene or a container restart, and its cargo/trip
+must resume. Five layers, all opt-in:
 
-```
-[ALIFE08] ALIFE08 slot 30000145-1 blocked: ALIFE08_UNEXPECTED_OR_MISSING_MARKED_SHIPS
-[ALIFE08] ALIFE08 slot 30000144-1 blocked: ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT
-```
+1. **Durable ships** - `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE=1` (ALIFE08). Entity, controller,
+   modules and cargo live in the native store; a boot materializes the SAME hulls by ID.
+2. **Abandoned witness re-seed** (new) - `EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE=1`.
+   A slot witness left by a transient generation (every recorded ship provably absent: no durable
+   row, no physical ship, no cargo row, no module row) is ARCHIVED to
+   `/coopMiningFleetSlotsArchive/<key>-<ts>` and that slot is seeded again. PREPARING stays
+   quarantined, and any surviving cargo/module row keeps the slot blocked for an operator.
+3. **Stale runtime fleet adoption** (new) - a runtime fleet record whose listed ships all
+   disappeared is re-pointed at the verified survivors instead of throwing
+   `ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT` forever. A record that still owns a real ship is
+   never touched.
+4. **Trip resume** - `EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY=1` + `EVEJS_COOP_NATIVE_HAUL_MANIFEST=1`
+   makes `resumePendingStationCargo` put a restored loaded hauler back into `loaded` so the
+   station trip runs again with the SAME cargo.
+5. **Stuck warp landing** - `coopStuckWarpRecovery` lands only a warp whose own clock elapsed.
 
-Result: 30000144 got fleet 960004609 with `miners: 0`, 30000145 stopped ticking after 22:13:38,
-every ship `STOP` with 0 ore. So no mining at all. Doctrine says never wipe the registry to
-force a pass, so the flag went back to OFF until the witness can be reconciled legitimately
-(legacy transient slots must be recognised as re-seedable, or an operator repair path used).
+Tests: `tests/coop-native-mining-fleet-durable.test.mjs` 20/20 (3 new: abandoned re-seed,
+cargo protection, stale runtime adoption), overlay test 5/5, station arrival 15/15, market 23/23.
 
-**Important insight:** the earlier trips kept dying because every deploy recreated the container
-(a new transient fleet per scene boot). With no redeploy, the loop actually ran: 21:56 haul
-loaded 26 153 ore, 21:57 station chosen, sale attempted.
-
-## Current build
-
-Transient fleet again, plus one real fix: `sellOnArrival` now receives the live arrival `scene`
-from `coopNativeStationArrival`, instead of looking a scene up by system id, before adopting the
-hauler identity through `coopNativeIndustry`'s existing `registry.link` + `presentVirtualPilot`
-path. Background watcher: `%TEMP%\opencode\economy-watch.log`.
-
-## Unverified failures seen (pre-existing, unrelated to these files)
-
-`tests/coop-escort-durable-flight-recovery.test.mjs` 0/6 and
-`tests/coop-npc-durable-ammo-debit.test.mjs` 2/18 fail on origin/main content that this work did
-not touch. Recorded, not fixed.
+Deployed with all five flags; watcher `%TEMP%\opencode\economy-watch.log` waits for
+`living-npc-station-sold` or the exact skip reason.
