@@ -10,7 +10,7 @@ const OWNER=1000010,SELLER=90000001,STATION=60000001,REGION=10000002;
 const ITEM=1990000200,ORDER=456,FILL=930000000000001,TYPE=34;
 const CKEY="corporations\u001f"+OWNER;
 async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
- noMaterial=false}={}){
+ noMaterial=false,notify=false}={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop049-binding-"));
  const file=path.join(dir,"buyer-journal.json");
  const tables={
@@ -93,8 +93,12 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
  const env={EVEJS_COOP_ALIFE_ECONOMY_ACT:"1",
   EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",EVEJS_COOP_NPC_BUY_PLAYER_ASK:"1",
   EVEJS_COOP_NPC_BUY_RECOVERY_OPERATOR:"1"};
+ const notifications=[];
+ if(notify)env.EVEJS_COOP_NPC_BUY_NOTIFY="1";
+ const marketNotifier={notifyCommitted:async data=>{
+  notifications.push(data);return {status:"NOTIFIED"};}};
  const bridge=createNativeNpcBuyerBindings({file,gameStore,itemStore,
-  marketClient:{call},clock:()=>1000000,env,
+  marketClient:{call},clock:()=>1000000,env,marketNotifier,
   authorizeRecoveryOperator:async data=>data.approvalID==="operator-approval-0001",
   marketRules:{getMarketContext:({characterID,stationID})=>({
    characterID,stationID,limits:{acc:0.08}}),
@@ -111,6 +115,7 @@ async function run(fn,{buyerISK=1000,stale=false,foreign=false,duplicate=false,
  try{return await fn({tick,tables,bridge,load:()=>fs.existsSync(file)?
   JSON.parse(fs.readFileSync(file,"utf8")):null,
   failNext:()=>{loss=true},price:v=>{orderPrice=v},
+  notifications,
   get claims(){return claims},get getOrderCalls(){return getOrderCalls}})}
  finally{
   originals.forEach((k,i)=>{if(previous[i]===undefined)delete process.env[k];
@@ -215,3 +220,14 @@ test("wrong operator-selected action cannot bypass the cross-DB audit",()=>run(a
  assert.equal(f.load().entries[OWNER+":"+ORDER].phase,"PREPARED");
  assert.equal(f.claims,1);
 }));
+test("market seller notification is emitted only after committed native GameStore/Rust settlement",()=>run(async f=>{
+ const r=await f.tick();
+ assert.equal(r.status,"NPC_PLAYER_PURCHASE_SETTLED");
+ assert.equal(r.notification,"NOTIFIED");
+ assert.deepEqual(f.notifications,[{claimKey:r.operation,fillID:FILL}]);
+ assert.equal(f.tables.characters[SELLER].balance,123);
+},{notify:true}));
+test("rejected A-Life material candidate emits no market seller event",()=>run(async f=>{
+ await assert.rejects(f.tick(),/MATERIAL_SHORTAGE_STALE/);
+ assert.equal(f.notifications.length,0);
+},{notify:true,stale:true}));
