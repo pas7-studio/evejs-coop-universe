@@ -1,0 +1,237 @@
+{
+  "schema": "evejs-coop/lw04d-original-native-economy-e2e/v1",
+  "execution": "ORIGINAL_PINNED_EVEJS_DISPOSABLE_ONLY",
+  "pinnedEvejs": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "protectedVolume": "evejs-data",
+  "releaseStatus": "NOT_VERIFIED",
+  "scenarios": [
+    {
+      "id": "LW04D-01",
+      "title": "ALIFE07 asteroid original rock quantity decrement and same GameStore cargoID commit",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-02",
+      "title": "ALIFE10 exact original cargoID miner→hauler atomic transfer and checksum proof",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-03",
+      "title": "ALIFE09 same cargoID warehouse grant with correct physical station owner",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-04",
+      "title": "Cross-corporation warehouse owner cannot provide free materials to NPC factory",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-05",
+      "title": "COOP031 original station oreItemID refinery journal to created native mineral IDs",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-06",
+      "title": "COOP032B/E exact source mineral itemID and quantity debit recorded in SAME job SQLite COMMIT",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-07",
+      "title": "No second material debit on INSTALL replay after lost ack",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-08",
+      "title": "Real original native job READY, output itemID and blueprint restoration",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-09",
+      "title": "One Rust original NPC SELL reservation with GameStore item+escrow atomic custody",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-10",
+      "title": "Lost Rust Activate ACK does not create duplicate order or item escrow",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-11",
+      "title": "Whole order fill debits authenticated buyer and credits NPC corporate wallet exactly once",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-12",
+      "title": "Partial fill preserves source escrow and creates one original buyer item per fill",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-13",
+      "title": "Rust claim FINALIZED + buyer itemID + wallet journals survive cold restart",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-14",
+      "title": "Audited SOLD original producer journal is fsynced and replay idempotent",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-15",
+      "title": "Changed original miner/refinery/job journal during sale audit blocks source gate",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-16",
+      "title": "Two authenticated game clients observe original sold item and NPC wallet balance",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-17",
+      "title": "Pinned original Rust daemon implements native NPC sell RPC and actual SQLite WAL evidence",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-18",
+      "title": "All finance flags OFF unless disposable pinned server explicitly activated",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    },
+    {
+      "id": "LW04D-19",
+      "title": "Protected evejs-data and any existing production Docker volumes remain unchanged",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore SQLite commit / WAL receipt",
+        "original native ItemStore source/buyer item IDs and stock owner",
+        "original Rust NPC order/fill/claim logs and wallet settlement",
+        "original fsynced mining/hauling/refinery/manufacturing director journals",
+        "before/after live native client state where applicable"
+      ]
+    }
+  ]
+}
