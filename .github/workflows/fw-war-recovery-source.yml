@@ -3,6 +3,9 @@ on:
   pull_request:
     paths:
       - 'integration/coopWar*.cjs'
+      - 'integration/coopFactionWarAgent.cjs'
+      - 'integration/coopVirtualWorldRuntime.cjs'
+      - 'scripts/coop-war-structure-killmail-patch.cjs'
       - 'integration/coopNativeGateTransfer.cjs'
       - 'integration/coopIdentityRegistry.cjs'
       - 'tests/coop-war-*.test.mjs'
@@ -34,6 +37,13 @@ jobs:
           node --check integration/coopWarDemobilizer.cjs
           node --check integration/coopWarFleetRegistry.cjs
           node --check integration/coopVirtualWorldRuntime.cjs
+          node --check integration/coopWarNativeStructureControl.cjs
+          node --check integration/coopWarObjectiveAdjudicator.cjs
+          node --check integration/coopWarNativeStructureCombatProof.cjs
+          node --check integration/coopWarObjectiveDirector.cjs
+          node --check integration/coopWarMilitiaIntel.cjs
+          node --check integration/coopFactionWarAgent.cjs
+          node --check scripts/coop-war-structure-killmail-patch.cjs
           node --check scripts/coop-war-recovery-cli.cjs
       - name: Native handoff and protected recovery tests
         run: |
@@ -44,4 +54,13 @@ jobs:
             tests/coop-war-fleet-registry.test.mjs \
             tests/coop-war-gate-staging.test.mjs \
             tests/coop-war-demobilizer.test.mjs \
-            tests/coop-war-fleet-demobilization.test.mjs
+            tests/coop-war-fleet-demobilization.test.mjs \
+            tests/coop-war-objective-adjudicator.test.mjs \
+            tests/coop-war-native-structure-control.test.mjs \
+            tests/coop-war-structure-killmail-proof.test.mjs \
+            tests/coop-war-objective-director.test.mjs \
+            tests/coop-war-structure-killmail-patch.test.mjs \
+            tests/coop-war-player-militia-presence.test.mjs \
+            tests/coop-war-militia-intel.test.mjs \
+            tests/coop-war-militia-agent-frontline.test.mjs \
+            tests/coop-faction-war-agent.test.mjs
