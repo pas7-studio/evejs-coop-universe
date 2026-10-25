@@ -27,6 +27,8 @@ function createNativeIngressSnapshot({root,io=fs,clock=()=>Date.now()}={}){
  function validIngress(g){
   return g&&vec(g.origin)&&vec(g.targetPoint)&&
    positive(g.startTimeMs)&&positive(g.travelCompleteAtMs)&&
+   Math.hypot(g.targetPoint.x-g.origin.x,g.targetPoint.y-g.origin.y,
+    g.targetPoint.z-g.origin.z)>=10000&&
    g.travelCompleteAtMs-g.startTimeMs>=DURATION_MIN&&
    g.travelCompleteAtMs-g.startTimeMs<=DURATION_MAX&&
    (g.completeAtMs===undefined||
