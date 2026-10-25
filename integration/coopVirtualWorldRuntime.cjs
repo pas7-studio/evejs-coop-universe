@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null;
+let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -134,6 +134,7 @@ function start(){
   if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
   safeNpcPhase("native-depot",syncNativeDeliveries);
   if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
+  safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
@@ -941,6 +942,48 @@ function advanceNativeCivilianOrders(){
  if(orders.length)console.info("[CoopVirtualWorld] native civilian work routes",JSON.stringify(orders));
  return orders;
 }
+// Physically stranded NPCs cannot invent ammo. Warping away from battle
+// uses a real unscrumbled native hull, with safe real station destination.
+function advanceNativeAmmoSupply(){
+ if(process.env.EVEJS_COOP_NPC_AMMO_SUPPLY!=="1"||
+  process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1"||
+  !bridge||!identityRegistry||!world||!visitedSystems.size)return;
+ const runtime=require("./runtime"),npc=require("./npc/npcRuntime"),
+  store=require("./npc/nativeNpcStore"),controllers=require("./npc/npcRegistry"),
+  equipment=require("./npc/npcEquipment"),dogma=require("./combat/weaponDogma"),
+  types=require("./npc/npcCapabilityResolver"),
+  worldData=require("./worldData"),
+  scramble=require("./modules/hostileModuleRuntime");
+ if(!nativeAmmoSupply)nativeAmmoSupply=
+  require("./coopNpcAmmoSupply").createAmmoSupply({
+   store,getWeaponModules:equipment.getNpcWeaponModules,
+   resolveFamily:weapon=>dogma.resolveWeaponFamily(weapon,
+    equipment.getNpcLoadedChargeForModule?.(null,weapon)||null),
+   isOptional:weapon=>dogma.isChargeOptionalTurretWeapon(weapon),
+   compatible:types.isNpcChargeCompatibleWithModule,
+   getController:id=>controllers.getControllerByEntityID(id),
+   getStation:id=>worldData.getStationByID(id),
+   warp:(id,targetID,options)=>npcNativeOrder("TACTICS",id,"ammo-retreat-warp",
+    ()=>npc.warpToEntity(id,targetID,options)),
+   orbit:(id,targetID,range)=>npcNativeOrder("CIVILIAN",id,"ammo-resupply-orbit",
+    ()=>npc.orbit(id,targetID,range)),
+   isScrambled:ship=>scramble.isEntityWarpScrambled(ship)
+  });
+ const roles=new Map(world.snapshot().pilots.map(p=>[p.id,p.role]));
+ const assignments=bridge.snapshot().filter(x=>roles.get(x.pilotID)==="pirate");
+ for(const systemID of visitedSystems){
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  const blockedIDs=new Set();
+  if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
+  if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
+  const result=nativeAmmoSupply.tick({scene,assignments,blockedIDs});
+  if(result.orders.length||result.events.length)
+   require("./coopRuntimeProbe").observe("living-native-ammo-supply",null,
+    {spaceState:{systemID}},{orders:result.orders,events:result.events,
+     nativeCargoSupplyOnly:true,cargoCredited:false});
+ }
+}
 function advanceNativeRaids(){
  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
@@ -970,9 +1013,11 @@ function advanceNativeRaids(){
   // Once a pilot has genuinely recovered cargo and begun physical delivery,
   // it must not abandon its sale route to accept an opportunistic new raid.
   const delivering=lootCommerce?.activeIDs(systemID)||new Set();
+  const outOfAmmo=nativeAmmoSupply?.activeIDs(systemID)||new Set();
   const pirates=bridge.snapshot().filter(p=>
    p.systemID===systemID&&roles[p.pilotID]?.role==="pirate"&&
-   !delivering.has(Number(p.entityID))).map(x=>x.entityID);
+   !delivering.has(Number(p.entityID))&&
+   !outOfAmmo.has(Number(p.entityID))).map(x=>x.entityID);
   if(!pirates.length)continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const fleets=mining.getMiningFleetsForSystem(systemID);
