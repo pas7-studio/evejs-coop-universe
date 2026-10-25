@@ -212,6 +212,74 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   return {status:"ESCORT_ORIGINAL_NATIVE_INGRESS_RESTORED",
    manifestKey:b.manifestKey,haulerID:id};
  }
+ // Rebuild ONLY the in-memory terminal delivery pointer after native
+ // materialization restored the same original WARP. Never create a warp or
+ // a new manifest; the original immutable ingress and native wallet must be
+ // verified independently, not inferred from a fleet's runtime flags.
+ function resumeNativeDelivery(scene,fleet,now){
+  if(!strictMotion()||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT!=="1"||
+   process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY!=="1"||
+   typeof nativeIngressSnapshot?.readDurable!=="function")
+   return pause("ESCORT_DELIVERY_RESUME_DISABLED");
+  if(fleet?.coopStationArrival||fleet?.coopEscortWarpOutcomeUncertain)
+   return pause("ESCORT_DELIVERY_RESUME_EXISTING_OR_UNCERTAIN_TRIP");
+  const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID),
+   ids=fleet?.haulerEntityIDs;
+  if(!systemID||!fleetID||pos(fleet?.systemID)!==systemID||
+   !Array.isArray(ids)||ids.length!==1||!pos(ids[0]))
+   return pause("ESCORT_DELIVERY_RESUME_FLEET_NOT_ORIGINAL");
+  const id=pos(ids[0]),ship=findShip(scene,id,systemID);
+  if(!ship||!ship.sessionlessWarpIngress||ship.mode!=="WARP"||
+   !vector(ship.position)||!Number.isSafeInteger(now))
+   return pause("ESCORT_DELIVERY_RESUME_NO_ACTIVE_PHYSICAL_WARP");
+  const proof=recoverNativeMotion(ship,now);
+  if(proof.status!=="ESCORT_NATIVE_RECOVERY_VERIFIED")
+   return pause("ESCORT_DELIVERY_RESUME_"+proof.status);
+  const b=proof.booking;
+  if(!b||b.fleetID!==fleetID||b.systemID!==systemID||
+   b.haulerID!==id||b.manifestKey!==proof.manifestKey||
+   b.stationID!==proof.stationID||b.corporationID!==proof.corporationID)
+   return pause("ESCORT_DELIVERY_RESUME_ORIGINAL_BOOKING_MISMATCH");
+  let cargo;try{cargo=store.listNativeCargoForEntity(id)}
+  catch{return pause("ESCORT_DELIVERY_RESUME_CARGO_UNAVAILABLE")}
+  if(!Array.isArray(cargo)||!cargo.length||
+   cargo.some(c=>c.entityID!==id||c.transient===true||
+    !pos(c.cargoID)||!pos(c.quantity)||pos(c.coopHaulFleetID)!==fleetID||
+    Number(c.moduleID||0)!==0))
+   return pause("ESCORT_DELIVERY_RESUME_CARGO_MISMATCH");
+  const cargoIDs=cargo.map(c=>pos(c.cargoID)).sort((a,b)=>a-b);
+  if(cargoIDs.length>1000||new Set(cargoIDs).size!==cargoIDs.length)
+   return pause("ESCORT_DELIVERY_RESUME_CARGO_AMBIGUOUS");
+  let snapshot;try{snapshot=nativeIngressSnapshot.readDurable({
+   manifestKey:b.manifestKey,contractID:b.contractID,systemID,fleetID,
+   haulerID:id,stationID:b.stationID,corporationID:b.corporationID,
+   cargoIDs})}
+  catch{return pause("ESCORT_DELIVERY_RESUME_SNAPSHOT_UNAVAILABLE")}
+  if(snapshot?.status!=="VERIFIED_NATIVE_INGRESS_SNAPSHOT")
+   return pause("ESCORT_DELIVERY_RESUME_ORIGINAL_SNAPSHOT_NOT_DURABLE");
+  const row=snapshot.row,ingress=ship.sessionlessWarpIngress;
+  if(!row||row.manifestKey!==b.manifestKey||
+   row.startTimeMs!==ingress.startTimeMs||
+   row.travelCompleteAtMs!==ingress.travelCompleteAtMs||
+   row.completeAtMs!==ingress.completeAtMs||
+   !vector(ingress.origin)||!vector(ingress.targetPoint)||
+   distance(row.origin,ingress.origin)>1||
+   distance(row.targetPoint,ingress.targetPoint)>1||
+   now>=row.travelCompleteAtMs||now<row.startTimeMs)
+   return pause("ESCORT_DELIVERY_RESUME_PHYSICAL_SNAPSHOT_MISMATCH");
+  const trip={stationID:b.stationID,corporationID:b.corporationID,
+   systemID,fleetID,startedAt:row.startTimeMs,
+   haulers:{[id]:{arrivedAt:0}},
+   manifestID:b.manifestKey,expectedCargoIDs:cargoIDs.slice(),
+   recoveredFromOriginalNativeIngress:true};
+  // This is an in-memory pointer to the *same* real cargo and contract.
+  // Do not rewrite the warp fence, alter a native ship, or debit an item.
+  fleet.coopStationArrival=trip;
+  return {status:"ESCORT_ORIGINAL_NATIVE_DELIVERY_RESUMED",
+   manifestKey:b.manifestKey,haulerID:id,terminal:false};
+ }
  // Only true confirmed NPC warps can be sampled. Never infer position from
  // timer, navigation commands, forecast points or player RPC.
  function noteNativeMotion(entity,now){
@@ -771,7 +839,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    ...(escortEnabled?{escortSettlementStatus:escortSettlement?.status||"UNAVAILABLE"}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
- return {start,tick,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
+ return {start,tick,noteNativeMotion,restoreNativeIngress,resumeNativeDelivery,verify:stableAt,warehouse:factory,manifest:manifestDirector,
   oracle:destinationOracle};
 }
 let runtimeDirector;
