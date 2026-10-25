@@ -3,7 +3,7 @@
  * COOP-032D. In-process native SQLite/GameStore atomic row bridge.
  * Infrastructure only, never exports supportsAtomicInstall/Delivery.
  */
-const ALLOWED=new Set(["items","corporationRuntime","industryBlueprintState","industryJobs","identityState"]);
+const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState"]);
 const SEP="\u001f",hasOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function assertTables(names){
  if(!Array.isArray(names)||names.length<1||names.length>ALLOWED.size||
@@ -100,7 +100,14 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
     const snapshot=sqliteStore.loadTableObject(t),current=cache[t];
     if(!current||typeof current!=="object"||!snapshot||typeof snapshot!=="object")
       throw Error("NATIVE_CACHE_SNAPSHOT_INVALID:"+t);
-    reconcileObject(current,snapshot);
+    // characterState caches a normalized record by raw child object identity.
+    // Replacing changed child rows (while preserving the table reference) forces
+    // getCharacterRecord() to re-normalize actual committed wallet balances.
+    // Other tables retain their existing deep in-place reconciliation.
+    if(t==="characters"){
+      for(const k of Object.keys(current))if(!hasOwn(snapshot,k))delete current[k];
+      for(const [k,v] of Object.entries(snapshot))current[k]=v;
+    }else reconcileObject(current,snapshot);
     rebuildFlushBaselineFromDisk(t);
     delete dirtyRowKeys[t];fullDirty.delete(t);dirty.delete(t);
    }
