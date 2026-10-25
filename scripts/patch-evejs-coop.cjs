@@ -8,6 +8,8 @@ const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","co
 // LW-03: the one existing Living World 30s tick now dispatches through a
 // pure, timer-free phase coordinator. No new upstream hooks or wallet writers.
 names.splice(names.indexOf("coopVirtualWorldRuntime")+1,0,"coopLivingWorldPhaseCoordinator");
+// LW-03B: pure static grouping for diagnostics, no second scheduler.
+names.splice(names.indexOf("coopLivingWorldPhaseCoordinator")+1,0,"coopLivingWorldPhaseRegistry");
 // CH38: original native NPE state and identity, opt-in, default OFF.
 names.splice(names.indexOf("coopAgentDialogue")+1,0,"coopNpeSafety");
 // Chat 29: source-level buy cancellation custody, default OFF.
