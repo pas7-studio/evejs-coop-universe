@@ -230,3 +230,30 @@ test("two interleaved native transfer workers cannot debit one wreck stack twice
   assert.equal(f.sources.size,0);assert.equal(f.cargo.size,1);
  }finally{f.cleanup();}
 });
+
+test("real recovered cargo preserves exact native wreck and original item provenance",()=>{
+ const f=fixture();try{
+  const result=f.create().transfer(f.input());
+  assert.equal(result.status,"NATIVE_WRECK_CARGO_SETTLED");
+  const item=[...f.cargo.values()][0];
+  assert.equal(item.sourceWreckID,201);
+  assert.equal(item.sourceWreckItemID,500);
+  const tx=JSON.parse(fs.readFileSync(path.join(f.dir,"tx","500.json"),"utf8"));
+  assert.equal(tx.phase,"SETTLED");
+  assert.equal(tx.newCargo.sourceWreckID,201);
+  assert.equal(tx.newCargo.sourceWreckItemID,500);
+ }finally{f.cleanup();}
+});
+test("recovery refuses a cargo row with forged original wreck identity",()=>{
+ const f=fixture();try{
+  f.failCredit(true);
+  assert.equal(f.create().transfer(f.input()).status,
+   "DEBIT_CONFIRMED_DESTINATION_PENDING");
+  f.failCredit(false);
+  const tx=JSON.parse(fs.readFileSync(path.join(f.dir,"tx","500.json"),"utf8"));
+  f.store.upsertNativeCargo({...tx.newCargo,sourceWreckID:999});
+  assert.equal(f.create().recover().status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(f.cargo.size,1);
+  assert.equal([...f.cargo.values()][0].sourceWreckID,999);
+ }finally{f.cleanup();}
+});
