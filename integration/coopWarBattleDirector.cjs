@@ -70,9 +70,12 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
      // raid, rescue or another active manual native order.
      if(targetController?.entityID!==targetID||
         targetController.systemID!==systemID||
-        Number(targetController.currentTargetID)>0||
+        (Number(targetController.currentTargetID)>0&&
+         Number(targetController.currentTargetID)!==id)||
         (targetController.manualOrder&&
-         targetController.manualOrder.type!=="resumeBehavior"))continue;
+         targetController.manualOrder.type!=="resumeBehavior"&&
+         !(targetController.manualOrder.type==="attack"&&
+           Number(targetController.manualOrder.targetID)===id)))continue;
      let answer;
      try{
       answer=bridge.issue({entityID:id,systemID,owner:"WAR",action:"attack",
@@ -81,7 +84,8 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
           isAmmoDepleted(systemID,id)||isTactical(id)||
           warp(attacker)||warp(opponent.entity)||
           Number(getController(id)?.currentTargetID)>0||
-          Number(getController(targetID)?.currentTargetID)>0)
+          (Number(getController(targetID)?.currentTargetID)>0&&
+           Number(getController(targetID)?.currentTargetID)!==id))
           return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
         const fresh=authority.evaluatePair(attacker,opponent.entity,
          {requireAttackIntent:false});
