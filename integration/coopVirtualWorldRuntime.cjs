@@ -45,7 +45,8 @@ function addNpcOrderBlocks(blockedIDs,systemID,owner){
 // Personal intentions affect only NPC routes; no native funds, kills or cargo.
 function npcPersonalGoals(){
  if(process.env.EVEJS_COOP_NPC_PERSONAL_GOALS!=="1"||
-    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1")return null;
+    process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY!=="1"||
+    process.env.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")return null;
  if(!personalGoals)personalGoals=require("./coopNpcPersonalGoals").createPersonalGoals({
   file:process.env.EVEJS_COOP_NPC_GOALS_FILE||"/var/lib/evejs/coop-npc-goals.json"
  });
