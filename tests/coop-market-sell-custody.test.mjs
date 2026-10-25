@@ -5,6 +5,7 @@ const require=createRequire(import.meta.url);
 const {assertSellEscrow,assertSellReturned}=require("../integration/coopMarketSellCustody.cjs");
 const {patch}=require("../scripts/coop-market-sell-custody-patch.cjs");
 const {patch:buyPatch}=require("../scripts/coop-market-cancel-custody-patch.cjs");
+const {assertCancelledAck}=require("../integration/coopMarketCancelCustody.cjs");
 const id="23",station=60001234,location=9200000023;
 const order={order_id:id,owner_id:101,is_corp:false,source:"player",
  row:{order_id:id,bid:false,station_id:station,type_id:34,vol_remaining:7,source:"player"}};
@@ -124,6 +125,16 @@ test("LF/CRLF roundtrip and malformed native hook fail closed",()=>{
 });
 // Full pinned source composition is checked separately; the buy-side patch has
 // additional sections that are intentionally absent from this small fixture.
+test("seller item return is conditioned on real Rust cancellation ACK",()=>{
+ const compiled=patch(marketSource);
+ assert.match(compiled,/coopMarketCancelCustody"\)\.assertCancelledAck\(\{ack:cancelResponse,orderID\}\)/);
+ assert.equal(assertCancelledAck({ack:{order_id:id,state:"cancelled",invalidated:true},orderID:id}),true);
+ for(const ack of [null,{order_id:id,state:"open",invalidated:true},
+  {order_id:id,state:"cancelled",invalidated:false},
+  {order_id:"24",state:"cancelled",invalidated:true}]){
+  assert.throws(()=>assertCancelledAck({ack,orderID:id}),/COOP_MARKET_CANCEL_/);
+ }
+});
 test("existing native buy cancellation guard remains untouched by sell hooks",()=>{
  const installed=patch(marketSource);
  assert.match(installed,/COOP_MARKET_SELL_CUSTODY/);
