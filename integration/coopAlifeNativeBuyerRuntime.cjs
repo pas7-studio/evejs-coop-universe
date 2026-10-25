@@ -1,7 +1,7 @@
 "use strict";
 // COOP-049: one opt-in BUY_SUPPLIES ACT within existing 30-second A-Life
 // snapshot. No extra timer, virtual inventory, account bootstrap or session.
-const {dispatchAlifeNativeBuyer}=require("./coopAlifeNativeBuyerDispatch.cjs");
+const {dispatchAlifeNativeBuyer}=require("./coopAlifeNativeBuyerDispatch"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
  env=process.env,clock=()=>Date.now()}={}){
