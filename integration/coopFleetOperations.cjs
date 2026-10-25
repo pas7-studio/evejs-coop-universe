@@ -290,7 +290,8 @@ function createOperations(options={}){
     const wrapID=id(contract.plasticWrapItemID),wrap=wrapID?getItem(wrapID):null;
     // Only advertise a "live protected courier" when the package is
     // PHYSICALLY in the acceptor's ship cargo. Docked hangar ≠ in transit.
-    if(!wrap||id(wrap.itemID)!==wrapID||
+    if(!wrap||id(wrap.itemID)!==wrapID||Number(wrap.typeID)!==3468||
+       Number(wrap.flagID)!==5|| // stock ITEM_FLAGS.CARGO_HOLD
        id(wrap.ownerID)!==acceptor||id(wrap.locationID)!==courier.shipID)
      return {status:"NATIVE_COURIER_PACKAGE_NOT_LOADED",message:
       "[Co-op] Courier must move the genuine plastic-wrapped package into the active ship's cargo first."};
