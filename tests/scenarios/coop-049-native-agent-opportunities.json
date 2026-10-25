@@ -35,6 +35,11 @@
       "EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 (required, read-only corporate escrow check)",
       "All strict native Escort/warehouse/wallet flags required; ONLY use disposable 2-client GameStore E2E"
     ],
+    "nativeDeliveryRecovery": [
+      "EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY=1 (DEFAULT OFF; only with confirmed original active warp and actual native ingress snapshot)",
+      "Requires existing EVEJS_COOP_ESCORT_NATIVE_WARP_RECOVERY=1 and strict Stage I and atomic corporate escrow flags",
+      "No live usage before genuine two-client warehouse + atomic real wallet E2E passes"
+    ],
     "peacefulDurableReplay": [
       "EVEJS_COOP_ESCORT_PEACEFUL_REPLAY=1 (DEFAULT OFF; requires authentic source, two midroute points and terminal original two-pilot fsync)",
       "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 plus EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 and all existing native escrow and two-player attendance flags required",
@@ -386,6 +391,53 @@
         "Restart without a verified snapshot"
       ],
       "expected": "Only original pre-funded escrow exists; no second funding/warp on retry; snapshot failure cannot permit automatic ingress reconstruction or fictitious payout; requires manual resolution",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-34",
+      "name": "Two-client crash restores original native Escort terminal delivery, not just NPC warp",
+      "actions": [
+        "On disposable pinned EveJS Docker clone with genuine 2 authenticated player ships, enable all Stage I native escrow/witness/warp flags and EVEJS_COOP_ESCORT_NATIVE_DELIVERY_RECOVERY=1",
+        "Start original paid NPC haul via stock in-game Agent and collect original native source/cargo, WARP_ACK and ingress snapshot before crashing",
+        "Restart only while original ingress is unexpired and verify original NPC materializes with same sessionlessWarpIngress",
+        "Allow both original real pilots to follow NPC through recorded stage checkpoints and continue NPC to canonical stock station",
+        "Verify scene checkReturn reconstructs original coopStationArrival from original funded flight/snapshot and true warehouse commits original cargo exactly once",
+        "Verify one native terminal ledger event and exactly two atomically settled original character ISK credits"
+      ],
+      "expected": "No new warpToPoint, NPC materialization, original escrow reservation or duplicated cargo; original source manifest reconciles, cargo reaches real warehouse and only real attended service unlocks native money",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-35",
+      "name": "Unverified original physical ingress never triggers a new predeparture during crash recovery",
+      "actions": [
+        "On disposable clone leave original warp only WARP_PREPARED or replace protected signed source, original cargo or snapshot",
+        "Restart server with original still-warping NPC and old preparatory Agent notice ID",
+        "Inspect native ship positions, native warp call counts and original corporate/character wallet tables"
+      ],
+      "expected": "Fail closed with explicit ESCORT_DELIVERY_RESUME reason; no new command to warp, no new escrow reserve, no invented first or second route checkpoint",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-36",
+      "name": "Stale A-Life no-cargo hint cannot erase genuine proven native haul",
+      "actions": [
+        "After short crash recover an original accepted native cargo flight with both original verified players and durable ingress",
+        "Simulate leftover fleet.coopStationNoCargo=true from pre-restart A-Life state",
+        "Run native checkReturn and verify original loaded ship/cargo and station progress"
+      ],
+      "expected": "Only a full independently verified original in-flight manifest may clear stale no-cargo hint; ordinary empty NPC or invalid ACK retains normal fail-closed behavior",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-37",
+      "name": "True terminal warehouse proof invalid means no player ISK after restart",
+      "actions": [
+        "On disposable native clone resume genuine NPC warp but inject a missing warehouse cargo stack or mismatched manifest proof",
+        "Let NPC physically reach the original station with both fleet ships near it",
+        "Inspect true original warehouse, GameStore credits and original corporate escrow"
+      ],
+      "expected": "Full manifest mismatch blocks native recordDelivered and atomic player settlement; no fabricated cargo, no second ISK reserve, repair required",
       "status": "NOT_RUN"
     },
     {
