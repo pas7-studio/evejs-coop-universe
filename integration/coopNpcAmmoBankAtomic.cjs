@@ -114,11 +114,12 @@ function settle(io,token){
  io.unlinkSync(token.lock);
  syncDir(io,path.dirname(token.file));
 }
-function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>Date.now()}={}){
+function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>Date.now(),faultProbe=null}={}){
  if(typeof root!=="string"||!path.isAbsolute(root)||
    typeof atomicRows?.transact!=="function"||
    typeof store?.listNativeCargoForEntity!=="function"||
-   typeof compatible!=="function"||typeof clock!=="function")
+   typeof compatible!=="function"||typeof clock!=="function"||
+   (faultProbe!==null&&typeof faultProbe!=="function"))
   throw Error("BANK_ATOMIC_DEPENDENCIES_REQUIRED");
  function consume({entity,entries,whenMs}={}){
   const fail=status=>({success:false,errorMsg:status,stopReason:"ammo"});
@@ -141,6 +142,10 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
   let token;
   try{token=prepare(io,root,entityID,seenModules,whenMs,clock);}
   catch(_){return fail("BANK_ATOMIC_JOURNAL_UNSAFE");}
+  // Test-only crash probe. Runtime never passes this injectable callback.
+  if(faultProbe)try{faultProbe("after-prepared",token);}catch(_){
+   return fail("BANK_ATOMIC_FAULT_PROBE_STOP");
+  }
   let updated;
   try{
    updated=atomicRows.transact(["npcEntities","npcModules","npcCargo"],tx=>{
@@ -198,6 +203,9 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
     return result;
    });
   }catch(_){return fail("BANK_ATOMIC_TRANSACTION_UNCERTAIN");}
+  if(faultProbe)try{faultProbe("after-sqlite-commit",token);}catch(_){
+   return fail("BANK_ATOMIC_FAULT_PROBE_STOP");
+  }
   // Re-read real post-transaction GameStore state before marking the
   // separate POSIX journal COMMITTED. Unknown state never retries/refunds.
   try{
