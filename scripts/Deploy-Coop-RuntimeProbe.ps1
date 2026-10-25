@@ -150,6 +150,8 @@ if ($LivingCoop) {
   # Closed-server progression uses the original EveJS account/skill authority.
   # This affects the actual skill queue and client estimates, not fake SP grants.
   $yamlLines += "      EVEJS_SKILL_TRAINING_SPEED: '6'"
+  # Faster T1 blueprint job time; actual minerals, ISK, taxes and skill gates unchanged.
+  $yamlLines += "      EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: '0.35'"
   # Native EveJS Omega license (both friends get identical free closed-server access).
   # The stock client, skill queue and Alpha/Omega restrictions derive it from storeState.
   $yamlLines += "      EVEJS_OMEGA_LICENSE: 'true'"
