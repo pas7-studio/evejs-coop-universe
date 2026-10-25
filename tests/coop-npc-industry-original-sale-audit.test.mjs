@@ -159,6 +159,18 @@ test("different Rust fill ID or buyer identity blocks seller revenue",async()=>{
  const r=await f.audit({ownerID:OWNER,stationID:STATION,operationID:OP,orderID:ORDER});
  assert.match(r.reason,/RUST_FILL_NOT_FINALIZED/);
 });
+test("partial Rust claim without FINALIZED phase is never treated as buyer payment",async()=>{
+ const f=fixture(),row=partialReceipt();addPartial(f,row);
+ delete f.rustClaims.get(row.fillID).fill_phase;
+ const r=await f.audit({ownerID:OWNER,stationID:STATION,operationID:OP,orderID:ORDER});
+ assert.match(r.reason,/RUST_FILL_NOT_FINALIZED/);
+});
+test("buyer item with a forged manufacturing job source cannot certify NPC ISK revenue",async()=>{
+ const f=fixture();setFull(f);
+ f.items.get(ITEM).customInfo="coop-industry:v1:999999";
+ const r=await f.audit({ownerID:OWNER,stationID:STATION,operationID:OP,orderID:ORDER});
+ assert.match(r.reason,/BUYER_ITEM_NOT_ATTESTED/);
+});
 test("duplicate original fill receipt cannot double-count revenue",async()=>{
  const f=fixture(),a=setFull(f);f.append({...a});
  const r=await f.audit({ownerID:OWNER,stationID:STATION,operationID:OP,orderID:ORDER});
