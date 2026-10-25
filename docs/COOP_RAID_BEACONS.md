@@ -27,3 +27,16 @@ Checks cover two independent pilots, same-event deduplication, new attack phases
 5. Claim a playable co-op success only after separate fleet/loot/missions and actual two-client in-game gates pass. Server tests and this beacon alone never establish gameplay PASS.
 
 **Known limitations:** no remote/local Docker or actual game client run was performed by this branch. `main`, PR #2, operator's upstream checkout and `evejs-data` remain unchanged. A process restart clears the notification cooldown and can cause one repeated alert.
+
+## Additional P0: actionable native activity intel
+
+The existing `coopSystemIntel` (already called from `coopVirtualWorldRuntime` when `EVEJS_COOP_LOCAL_INTEL=1`) also gains a grounded duo-friendly Local summary, without introducing new NPC/mission/market systems:
+
+- Report only live native `kind: ship` entities with finite positions; discard wrecks, missing entities, duplicate IDs and player-owned ships posing as NPCs. Count escorts from actual physical ships, not merely saved response IDs.
+- Include only existing stock mining fleet counts, real reported loaded hauler ore, genuine pirate ships and an authoritative static nearest waypoint; no fictional rewards or goals.
+- Use Ukrainian activity options for two pilots, while not claiming an attack or reward just because pirate ships exist.
+- Send to an authenticated, Ballpark-ready connected pilot with a physical ship in the same native scene/system.
+- Suppress an unchanged activity digest for up to 15 minutes, preserve the existing 90-second minimum cadence for meaningful state changes, and cap the per-player cache at 256 entries. Changed ore quantity buckets or actual ship counts can trigger a fresh update.
+- Local tests: `node --test tests/coop-actionable-intel.test.mjs` (8/8 on Node 22), using the existing repo `coopNpcTopology.cjs` fallback; after overlay install the same code uses `coopNpcTopology.js`.
+
+Manual acceptance: after the World/authorized-client gates, check that static or stale NPC IDs cannot produce an in-game mining/pirate summary, that real ore growth or newly arrived physical ships can update the message, and that idle 30-second reconciliation does not spam Local. These are player-information improvements only, not proof that the two-player game loop is complete.
