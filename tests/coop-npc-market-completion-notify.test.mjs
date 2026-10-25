@@ -167,7 +167,7 @@ test("same paid fill cannot notify with swapped seller receipt during Rust await
   const data=await rpc(method,args);
   if(method==="GetOrder"){
    f.dependencies.gameStore.transact(["npcMarketFills"],tx=>{
-    const key="corp-buy\\u001f"+FILL,current=tx.get("npcMarketFills",key);
+    const key="corp-buy\u001f"+FILL,current=tx.get("npcMarketFills",key);
     tx.put("npcMarketFills",key,{...current,sellerID:SELLER+1});
    });
   }
@@ -186,7 +186,7 @@ test("concurrent duplicate notification attempts claim at most one native UI del
 }));
 test("negative seller proceeds or tax exceeding gross never produces notification",()=>run(async f=>{
  f.dependencies.gameStore.transact(["npcMarketFills"],tx=>{
-  const key="corp-buy\\u001f"+FILL,current=tx.get("npcMarketFills",key);
+  const key="corp-buy\u001f"+FILL,current=tx.get("npcMarketFills",key);
   tx.put("npcMarketFills",key,{...current,taxCents:3000,netCents:-500});
  });
  assert.equal((await f.notify()).reason,"GAMESTORE_RECEIPT_INVALID");
