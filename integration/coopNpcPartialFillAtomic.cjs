@@ -210,13 +210,13 @@ function createNpcPartialSettlement({gameStore,market,verifyBuyerSession,verifyN
    if(!final||!["open","filled"].includes(final.state)||
       final.fill_phase!=="finalized"||
       Number(final.fill_id)!==result.fillID||
-      Number(final.vol_remaining)!==result.remainingQuantity)
+      Number(final.remaining_after)!==result.remainingQuantity)
     throw Error("NPC_PARTIAL_RUST_FINALIZE_UNCERTAIN");
    const observed=await market.inspectPartialClaim({claimKey:identity.claimKey,
     operationID:identity.operationID});
    if(!observed||observed.fill_phase!=="finalized"||
       Number(observed.fill_id)!==result.fillID||
-      Number(observed.vol_remaining)!==result.remainingQuantity)
+      Number(observed.remaining_after)!==result.remainingQuantity)
     throw Error("NPC_PARTIAL_RUST_INSPECT_UNCERTAIN");
    return {...result,status:"PURCHASED_PARTIAL"};
   }finally{pending.delete(lock)}
