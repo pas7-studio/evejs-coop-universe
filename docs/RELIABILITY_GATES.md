@@ -87,8 +87,9 @@ never commit player, database, personal or authentication data.
 The actual export must contain **two or more real characters**. For the
 after snapshot, actual `containerStartedAt` must be after the before
 snapshot capture. Compare only a planned idle restart with no gameplay
-or transactions in between. A DB exporter, an operator-approved restart,
-and proof of the preserved named volume at both snapshots are separate prerequisites; this
+or transactions in between. The read-only native snapshot exporter below supplies the database evidence;
+an operator-approved restart and proof of the preserved named volume at both
+snapshots remain separate prerequisites; this
 gate does **not** perform or authorize them.
 
 `ledger.json`: `{source, projectSha, upstreamSha, entries}` with one
@@ -114,7 +115,7 @@ prints player identifiers. Do not mark an unavailable capability PASS.
 ## Current limitations / remaining owner-only evidence
 
 1. Until `DiagnoseWorld` resolves `/var/lib/evejs/coop-events.jsonl`, native world and party status remain **BLOCKED**. No synthetic events may substitute.
-2. The project does not yet have a verified native DB exporter for the exact co-op character/market schema. Thus persistence and economy stay **BLOCKED** until authoritative exports are implemented and validated on an isolated/test snapshot. A hand-written JSON file is not valid evidence.
+2. The character/items exporter is now implemented against upstream `gamestore.sqlite` and tested with deterministic native-shaped rows, but not yet validated on the actual deployed DB. Until its first real capture, persistence remains **BLOCKED**. A complete native double-entry wallet/mission-reward journal exporter is still absent, so economy remains **BLOCKED** independently. A hand-written JSON file is not valid evidence.
 3. Compatible EVE client permission, actual login/visual observation and a disruption-approved server restart require the local operator. TCP connections and Docker health never suffice.
 4. Some exact gameplay functions may still be unimplemented in adjacent work. Never change its source to force the gate green. Fix the functionality and retest.
 
@@ -134,3 +135,43 @@ No CI, no merge, no deploy or persistent-volume modification is part of this QA 
   only one account. **They do not prove the native DB export is complete.**
 - Live host and GUI checks remain pending: the test runner cannot SSH to the
   user's Windows machine and cannot safely claim a Docker/world/client PASS.
+
+## Native SQLite evidence capture — implemented, NOT live-certified
+
+Upstream `Code/server/src/gameStore/README.md` confirms runtime SQLite at
+`/var/lib/evejs/gameStore/gamestore.sqlite` inside the persistent volume,
+with `characters` and `items` keyed rows containing JSON records. Its
+`services/account/walletState.js` rounds wallet balances to two decimals.
+The exporter consequently emits `characters[].isk` as **integer ISK cents**
+(`100025` means **1,000.25 ISK**), never a rounded whole-ISK amount.
+The standalone test suite verifies 16 exporter/QA integration cases.
+
+Once the *existing running world* is diagnosed, use two actual native
+character IDs belonging to the private co-op test pilots. These are examples
+only; replace them with the two observed IDs:
+
+```powershell
+# Read-only: no DB copy, game restart, source patch, or Docker file write.
+.\scripts\Capture-Coop-NativeSnapshot.ps1 -CharacterIds 101,102 -OutputPath .\test-results\before.json
+# Only AFTER separately approved normal idle server restart, capture again:
+.\scripts\Capture-Coop-NativeSnapshot.ps1 -CharacterIds 101,102 -OutputPath .\test-results\after.json
+# Re-run the native gates. Never claim client or economy PASS without their evidence.
+.\scripts\Verify-Coop-Reliability.ps1 -Before .\test-results\before.json -After .\test-results\after.json
+```
+
+The capture script streams `coop-native-snapshot.cjs` into the running
+container's `node -` process via stdin. It opens the *existing* SQLite
+with `readonly:true,fileMustExist:true`, sets `query_only`, and executes
+SELECT queries in a read transaction, then ROLLBACK. Nothing is installed
+or modified inside the container. Its only output is a **private ignored
+local snapshot**. It requires actual Docker `.Mounts`, `.Image`,
+`.State.StartedAt`, both real characters, ownership of each active ship
+and every owned item. Missing/inconsistent rows are explicit failures.
+A simulated fixture cannot count as a real capture; test this against the
+actual pinned database before treating persistence as complete.
+
+The native exporter intentionally does **not** export account usernames,
+passwords, credentials, chat, wallet journals or whole databases. This
+privacy boundary means it cannot by itself certify idempotent mission
+payouts or full market ledger conservation. A later audited native
+transaction adapter is required for `economy = PASS_LEDGER`.
