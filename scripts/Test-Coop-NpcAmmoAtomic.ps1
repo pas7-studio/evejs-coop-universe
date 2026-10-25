@@ -21,6 +21,7 @@ try {
     "tests/coop-npc-ammo-posix-crash.test.mjs",
     "tests/coop-npc-atomic-weapon-bank.test.mjs",
     "tests/coop-npc-atomic-sqlite-crash.test.mjs",
+    "tests/coop-npc-atomic-sqlite-audit.test.mjs",
     "tests/coop-npc-fire-debit-source.test.mjs",
     "tests/coop-gamestore-atomic.test.mjs"
   )
