@@ -49,7 +49,38 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   return Math.max(0,distance(ship.position,point.position)-
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
- const arrivals=new Map();
+ const arrivals=new Map(),activeNativeEscortWarps=new Map();
+ const strictMotion=()=>escortEnabled&&
+  process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+  process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
+  process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER==="1";
+ // Only true confirmed NPC warps can be sampled. Never infer position from
+ // timer, navigation commands, forecast points or player RPC.
+ function noteNativeMotion(entity,now){
+  if(!strictMotion()||entity?.nativeNpc!==true||!pos(entity.itemID)||
+   !Number.isFinite(now)||!entity.sessionlessWarpIngress)
+   return pause("ESCORT_NATIVE_MOTION_DISABLED_OR_NOT_WARPING");
+  const active=activeNativeEscortWarps.get(Number(entity.itemID));
+  if(!active)return pause("ESCORT_NATIVE_MOTION_NOT_REGISTERED");
+  const trip=active.fleet?.coopStationArrival;
+  if(!trip||trip!==active.trip||trip.manifestID!==active.manifestKey||
+   trip.systemID!==active.systemID||trip.fleetID!==active.fleetID||
+   !Object.prototype.hasOwnProperty.call(trip.haulers,String(entity.itemID)))
+   return pause("ESCORT_NATIVE_MOTION_TRIP_NOT_ACTIVE");
+  let scene;try{scene=getScene(active.systemID)}
+  catch{return pause("ESCORT_NATIVE_MOTION_SCENE_UNAVAILABLE")}
+  if(scene?.systemID!==active.systemID||
+   scene.getEntityByID?.(Number(entity.itemID))!==entity)
+   return pause("ESCORT_NATIVE_MOTION_ENTITY_NOT_CURRENT");
+  const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
+  if(!point||point.corporationID!==trip.corporationID)
+   return pause("ESCORT_NATIVE_MOTION_STATION_CHANGED");
+  if(typeof escortGate?.recordEscortRouteSample!=="function")
+   return pause("ESCORT_NATIVE_MOTION_AUTHORITY_UNAVAILABLE");
+  try{return escortGate.recordEscortRouteSample(trip.manifestID,scene,point)}
+  catch{return pause("ESCORT_NATIVE_MOTION_SAMPLE_UNAVAILABLE")}
+ }
+
  const manifestEnabled=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST==="1";
  const escortEnabled=process.env.EVEJS_COOP_ESCORT_ROUTE_GATE==="1";
  const durableWarpFence=escortEnabled&&process.env.EVEJS_COOP_ESCORT_WARP_FENCE==="1"?
@@ -73,6 +104,15 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(escortEnabled&&(!durableWarpFence||
    ["inspectSource","prepare","confirm"].some(k=>typeof durableWarpFence[k]!=="function")))
    return pause("ESCORT_DURABLE_WARP_FENCE_REQUIRED");
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   (process.env.EVEJS_COOP_ESCORT_DEPARTURE_WITNESS!=="1"||
+    typeof escortGate?.recordEscortDeparture!=="function"))
+   return pause("ESCORT_DURABLE_DEPARTURE_WITNESS_REQUIRED");
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
+   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
+   (process.env.EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER!=="1"||
+    typeof escortGate?.recordEscortRouteSample!=="function"))
+   return pause("ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED");
   if(escortEnabled&&(!manifestEnabled||
     typeof escortGate?.fundBeforeWarp!=="function"||
     typeof escortGate?.recordDelivered!=="function"))
@@ -122,7 +162,12 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
       revenue:entry.revenue,filled:entry.filled,unfilled:entry.unfilled}))
     });
   }
-  if(escortEnabled){
+  if(strictMotion()){
+   const first=scene.getEntityByID?.(ships[0]);
+   if(!vector(first?.position)||distance(first.position,destination.position)<10000)
+    return pause("ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS");
+  }
+   if(escortEnabled){
    if(ships.length!==1)return pause("ESCORT_REQUIRES_ONE_NATIVE_HAULER");
    let source;try{source=durableWarpFence.inspectSource({systemID,fleetID,haulerID:ships[0],cargoIDs:cargo.map(x=>Number(x.cargoID))})}
    catch{return pause("ESCORT_WARP_FENCE_SOURCE_UNAVAILABLE")}
@@ -133,7 +178,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   // Real NPC cargo + native hauler must be observed BEFORE an escort offer.
   // Consent is a prerequisite, not permission to create funds or warp:
   // the independent native Stage E binding still authorizes both.
-  let preparingEventID=null;
+  let preparingEventID=null,approvedDepartPilots=null;
   // Paid escort NEVER departs without discoverable source and an explicit
   // independently priced, two-character contract acceptance. Optional native
   // NPC routes remain unchanged with the paid escort flag OFF.
@@ -189,6 +234,33 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     paid.characters[1]!==duo.pilots[1].characterID||
     paid.fleetID!==duo.fleetID)
     return pause("ESCORT_AWAITING_TWO_PAID_ACCEPTANCES");
+   approvedDepartPilots=duo.pilots.map(x=>({characterID:x.characterID,shipID:x.shipID}));
+  }
+  // Fast, non-writing source grid proof BEFORE persisting the native cargo
+  // manifest. Full durable actor/escrow authority is still rechecked in Stage
+  // E before debit; this preflight avoids orphan manifest on absent pilots.
+  if(escortEnabled&&process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"){
+   const npc=scene.getEntityByID?.(ships[0]);
+   const onGrid=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
+   const sessions=typeof scene.sessions?.values==="function"?
+    [...scene.sessions.values()]:null;
+   if(!Array.isArray(approvedDepartPilots)||approvedDepartPilots.length!==2||
+    !Array.isArray(sessions)||!onGrid(npc?.position))
+    return pause("ESCORT_DEPARTURE_ON_GRID_PREFLIGHT_UNAVAILABLE");
+   for(const pilot of approvedDepartPilots){
+    const active=sessions.filter(x=>x?.characterID===pilot.characterID&&
+     x?.socket?.destroyed!==true&&x?._space?.initialStateSent===true&&
+     x._space.systemID===systemID&&x._space.shipID===pilot.shipID);
+    if(active.length!==1)return pause("ESCORT_DEPARTURE_PILOT_NOT_AT_SOURCE");
+    const ship=scene.getEntityByID?.(pilot.shipID);
+    if(ship?.itemID!==pilot.shipID||ship.kind!=="ship"||
+     ship.nativeNpc===true||ship.transient===true||
+     !onGrid(ship.position)||
+     Math.hypot(ship.position.x-npc.position.x,
+      ship.position.y-npc.position.y,
+      ship.position.z-npc.position.z)>150000)
+     return pause("ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID");
+   }
   }
   let manifestProof=null;
   if(manifestDirector){
