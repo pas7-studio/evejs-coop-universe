@@ -24,6 +24,12 @@ names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobNotifications
 names.splice(names.indexOf("coopNativeJobAgent")+1,0,"coopNativeJobAgentSelection");
 // Peaceful delivery uses the same native corporate escrow (feature OFF by default).
 names.splice(names.indexOf("coopEscortContractSettlement")+1,0,"coopEscortPeacefulSettlement");
+// Stage H durable native physical warp fence, source-linked original cargo.
+if(!names.includes("coopEscortWarpFence"))names.splice(names.indexOf("coopEscortNativeBootstrap")+1,0,"coopEscortWarpFence");
+// Source-on-grid native two-pilot service evidence, no escrow authority.
+names.splice(names.indexOf("coopEscortWarpFence")+1,0,"coopEscortDepartureWitness");
+// Default-OFF source-to-destination native dual-pilot transit sampling.
+names.splice(names.indexOf("coopEscortDepartureWitness")+1,0,"coopEscortRouteWitness");
 const specs=[
  {file:"server/src/services/mining/miningRuntime.js",patches:[]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
@@ -37,6 +43,7 @@ const specs=[
  {"file":"server/src/space/modules/localCycleReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {file:"server/src/space/runtime.js",patches:[]},
+ {file:"server/src/space/movement/warp/movementWarpState.js",patches:[]},
  {file:"server/index.js",patches:[]},
  {file:"server/src/gameStore/index.js",patches:[]},
  {file:"server/src/gameStore/sqliteStore.js",patches:[]},
@@ -179,6 +186,8 @@ function transform(source,spec,remove){
  }
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
+ if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
+  text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")

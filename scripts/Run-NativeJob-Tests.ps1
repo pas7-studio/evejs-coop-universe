@@ -6,6 +6,13 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$previousPinnedCode = $env:EVEJS_COOP_PINNED_CODE_PATH
+if ($CheckPinned) {
+  if (-not (Test-Path -LiteralPath $CodePath -PathType Container)) {
+    throw "Pinned EveJS Code checkout not found: $CodePath"
+  }
+  $env:EVEJS_COOP_PINNED_CODE_PATH = (Resolve-Path -LiteralPath $CodePath).Path
+}
 Push-Location $root
 try {
   if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -14,11 +21,20 @@ try {
   $files = @(
     'tests/coop-npc-job-board.test.mjs',
     'tests/coop-native-job-agent.test.mjs',
+    'tests/coop-native-job-agent-interest-replay.test.mjs',
     'tests/coop-native-job-agent-selection.test.mjs',
     'tests/coop-native-job-notifications.test.mjs',
     'tests/coop-escort-priced-mail-replay.test.mjs',
     'tests/coop-escort-restart-duo-authority.test.mjs',
+    'tests/coop-escort-native-binding.test.mjs',
+    'tests/coop-escort-durable-flight-recovery.test.mjs',
+    'tests/coop-escort-durable-warp-fence.test.mjs',
+    'tests/coop-escort-station-predeparture-gate.test.mjs',
     'tests/coop-escort-peaceful-settlement.test.mjs',
+    'tests/coop-escort-departure-witness.test.mjs',
+    'tests/coop-escort-route-attendance-gate.test.mjs',
+    'tests/coop-escort-route-witness.test.mjs',
+    'tests/coop-escort-native-warp-motion.test.mjs',
     'tests/coop-escort-refund-manifest.test.mjs'
   )
   foreach ($file in $files) {
@@ -49,5 +65,10 @@ try {
   }
   Write-Host '[COOP-049] Local source tests passed. REAL EVE CLIENT/SQLite/WALLET VALIDATION STILL PENDING.'
 } finally {
+  if ($null -eq $previousPinnedCode) {
+    Remove-Item Env:EVEJS_COOP_PINNED_CODE_PATH -ErrorAction SilentlyContinue
+  } else {
+    $env:EVEJS_COOP_PINNED_CODE_PATH = $previousPinnedCode
+  }
   Pop-Location
 }

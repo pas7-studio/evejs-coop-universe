@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {
- evaluateContract,selectHull,planRoute,piracyOpportunity,
+ evaluateContract,selectHull,planRoute,piracyOpportunity,quoteCourier,
 }=require('../integration/coopCourierDispatch.cjs');
 
 function courier(overrides={}){
@@ -107,4 +107,35 @@ test('piracy rolls are deterministic and bounded by the configured chance',()=>{
  assert.deepEqual(first.attackOrderLegs,[1]);
  const none=piracyOpportunity(route,{enabled:true,chancePerLeg:0},'contract-5001');
  assert.deepEqual(none.attackOrderLegs,[]);
+});
+
+test('a courier quote grows with volume, jumps and collateral',()=>{
+ const small=quoteCourier({volumeM3:100,jumps:1,collateral:0});
+ const big=quoteCourier({volumeM3:1000,jumps:1,collateral:0});
+ const far=quoteCourier({volumeM3:100,jumps:3,collateral:0});
+ const insured=quoteCourier({volumeM3:100,jumps:1,collateral:10000000});
+ assert.equal(small.status,'QUOTED');
+ assert.ok(big.totalIsk>small.totalIsk);
+ assert.ok(far.totalIsk>small.totalIsk);
+ assert.ok(insured.totalIsk>small.totalIsk);
+ assert.equal(small.breakdown.riskIsk,0);
+});
+
+test('a quote is deterministic, rounded and class-aware',()=>{
+ const industrial=quoteCourier({volumeM3:5000,jumps:2,collateral:1000000,hullClass:'industrial'});
+ const freighter=quoteCourier({volumeM3:5000,jumps:2,collateral:1000000,hullClass:'freighter'});
+ assert.deepEqual(industrial,quoteCourier({volumeM3:5000,jumps:2,collateral:1000000,hullClass:'industrial'}));
+ assert.ok(freighter.totalIsk>industrial.totalIsk);
+ assert.equal(industrial.totalIsk%1000,0);
+ assert.equal(
+  industrial.breakdown.baseIsk+industrial.breakdown.volumeIsk+
+  industrial.breakdown.distanceIsk+industrial.breakdown.riskIsk+
+  industrial.breakdown.hullIsk,
+  industrial.totalIsk
+ );
+});
+
+test('a quote refuses unknown hull classes and empty volume',()=>{
+ assert.equal(quoteCourier({volumeM3:0}).status,'NO_QUOTE');
+ assert.equal(quoteCourier({volumeM3:100,hullClass:'shuttle'}).status,'NO_QUOTE');
 });

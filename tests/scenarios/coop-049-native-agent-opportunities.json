@@ -18,7 +18,16 @@
       "EVEJS_COOP_NPC_JOBS"
     ],
     "finance": [
-      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT (DO NOT ENABLE UNTIL FULL FINANCE E2E)"
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (ONLY ON DISPOSABLE FINANCIAL E2E)",
+      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (mandatory when peaceful payout is ON)",
+      "EVEJS_COOP_ESCORT_WARP_FENCE=1 (Stage H native prewarp authority)",
+      "EVEJS_COOP_ESCORT_SETTLEMENT_REPLAY=1 (only after reconciled wallet E2E)"
+    ],
+    "experimentalStageI": [
+      "EVEJS_COOP_ESCORT_ROUTE_WITNESS=1 (TEST SNAPSHOT ONLY, OFF default)",
+      "EVEJS_COOP_ESCORT_NATIVE_WARP_OBSERVER=1 (required, actual native movement after position update, OFF default)",
+      "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT=1 (actual GameStore E2E only)",
+      "EVEJS_COOP_ESCORT_DEPARTURE_WITNESS=1 (real source on-grid proof required)"
     ]
   },
   "scenarios": [
@@ -168,6 +177,124 @@
         "Check long text, line breaks, actions, no missing localization keys"
       ],
       "expected": "Native UI actually renders; if client rejects custom strings fallback to truthful EVEmail and agent-native static dialogue only"
+    },
+    {
+      "id": "JOB-UI-16",
+      "name": "Paid peaceful escort requires real duo on-grid BEFORE escrow",
+      "actions": [
+        "Two authentic players accept the quoted job with stock agent buttons",
+        "Move one player's real ship farther than 150 km from original NPC hauler",
+        "Trigger actual native prewarp departure"
+      ],
+      "expected": "No funded native contract and no NPC warp: on-grid departure witness denied, no escrow debit"
+    },
+    {
+      "id": "JOB-UI-17",
+      "name": "Exactly one durable on-grid witness survives restart",
+      "actions": [
+        "Both ships position within 150 km of original NPC and join genuine fleet",
+        "Native source record is fsynced before corporate escrow and warp",
+        "Restart server after genuine warp",
+        "Verify native full cargo delivery with both original pilots at terminal"
+      ],
+      "expected": "No new source witness or second warp; settlement requires preserved original manifest-linked source witness AND original terminal attendance"
+    },
+    {
+      "id": "JOB-UI-18",
+      "name": "Source attendance witness corrupt/symlink/lost ACK",
+      "actions": [
+        "On operator-approved disposable data clone, corrupt witness journal",
+        "Replace witness with symlink/hardlink",
+        "Inject lost fsync ACK and repeat request"
+      ],
+      "expected": "No authorization to reserve, launch or pay from corrupt/linked/uncertain witness; human operator repair required"
+    },
+    {
+      "id": "JOB-UI-19",
+      "name": "Off-grid pilot rejected before native manifest or debit",
+      "actions": [
+        "Two distinct genuine pilots accept same corporate escort quote",
+        "Move one real ship beyond 150km of source NPC while preserving its paid acceptance",
+        "Attempt station convoy start; inspect original native manifest directory and GameStore escrow table"
+      ],
+      "expected": "Server denies ESCORT_DEPARTURE_PILOT_NOT_ON_NPC_GRID; no original native manifest prepared, no corporation ISK reserved and no warp command dispatched"
+    },
+    {
+      "id": "JOB-UI-20",
+      "name": "Two genuine players escort two observable midroute waypoints",
+      "actions": [
+        "Enable Stage I only on disposable EVEJS snapshot and real 2-client server",
+        "Accept original source-linked real NPC corporate quote via stock Agent UI with two different authenticated pilots",
+        "Observe native server tick while real hauler crosses 20-45% and 55-85% of the actual source-to-station vector with both ships within 10 km",
+        "Confirm full native cargo warehouse delivery, original two-pilot terminal presence, atomic native wallet settlement"
+      ],
+      "expected": "Exactly one original corporate escrow and two immutable unique stage receipts; route witness source validated with real scene positions; exactly one two-pilot native wallet settlement, no extra ISK"
+    },
+    {
+      "id": "JOB-UI-21",
+      "name": "AFK station camper cannot earn route-certified escort wage",
+      "actions": [
+        "Accept two-player job and sign original departure source witness",
+        "One player remains parked at target station while NPC leaves source",
+        "Observe genuine native NPC midroute tick positions",
+        "Complete physical warehouse cargo delivery"
+      ],
+      "expected": "At least one checkpoint missing; strict Stage I prevents peaceful wallet settlement; cargo delivery is still real and not rewritten"
+    },
+    {
+      "id": "JOB-UI-22",
+      "name": "Real player disconnect, ship swap or changed native fleet blocks checkpoint",
+      "actions": [
+        "Record one genuine transit checkpoint",
+        "Disconnect one participant, duplicate their session or change their real ship/fleet",
+        "Allow NPC to continue crossing second checkpoint"
+      ],
+      "expected": "Second stage NOT durably recorded; original signed pilot cannot be replaced from client input; no payout from invalid two-checkpoint claim"
+    },
+    {
+      "id": "JOB-UI-23",
+      "name": "Fast native warp without observable middle positions is NOT entitled to guessed payout",
+      "actions": [
+        "Use actual pinned NPC warp duration and destination with 2 EVE clients",
+        "Instrument number and positions of actual coopNativeStationArrival.tick callbacks",
+        "Observe whether 20-45% and 55-85% windows occur before terminal cargo delivery"
+      ],
+      "expected": "If either real midpoint cannot be sampled, strict Stage I reports missing evidence and refuses payout; disable Stage I until genuine movement tick integration verified, do not generate samples by timer"
+    },
+    {
+      "id": "JOB-UI-24",
+      "name": "Source-linked route checkpoint corrupted or crash ACK uncertain",
+      "actions": [
+        "On disposable operator clone persist first midroute witness",
+        "Inject lost file/directory fsync ACK, symlink/hardlink or corrupt checkpoint then restart",
+        "Resume original native trip and attempt terminal settlement"
+      ],
+      "expected": "No fabricated completion or blind rewrite; file+dir re-fsync required for immutable original receipts; corrupt/linked evidence blocks payout for operator repair"
+    },
+    {
+      "id": "JOB-UI-25",
+      "name": "Pinned real native movement callback emits two authoritative escort route checkpoints",
+      "actions": [
+        "Run pinned EveJS Docker with two genuinely distinct EVE clients on disposable world snapshot",
+        "Enable peaceful Escort, source witness, strict route witness, and native warp observer flags",
+        "Take actual NPC agent contract with two real ships and original accepted corporate price",
+        "Observe stock advanceSessionlessWarpIngress NPC scene position callbacks, actual six-beat ingress, exact two signed player positions near hauler at 20-45% and 55-85% route progress",
+        "Verify original two checkpoint journal files then full terminal warehouse cargo and genuine atomic GameStore wallet deltas"
+      ],
+      "expected": "Original stock NPC physical interpolation triggers exactly validated native observer samples, both same-authentic-fleet player ships progress with NPC within 10km, two durable route checkpoints exist and exactly one funded corporate two-player payout; no guessed or replayed positions",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-26",
+      "name": "Missing native observer or short route must not reserve corporate ISK",
+      "actions": [
+        "On disposable two-client native job enable strict route witness but disable native warp observer",
+        "Attempt paid original NPC convoy departure and inspect native cargo manifest and actual corporate wallet",
+        "Enable observer and change source-to-actual-station distance to less than 10km in a controlled fixture",
+        "Attempt paid convoy again"
+      ],
+      "expected": "ESCORT_NATIVE_MOTION_OBSERVER_REQUIRED or ESCORT_ROUTE_TOO_SHORT_FOR_WITNESS before manifest creation, original corporation escrow or warp; no stranded paid quote and no invented midpoint",
+      "status": "NOT_RUN"
     }
   ]
 }
