@@ -4,9 +4,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 
 const codePath = process.env.EVEJS_CODE_PATH;
-if (!codePath) throw new Error('EVEJS_CODE_PATH must point to an EveJS/Code checkout');
 process.env.EVEJS_SKIP_NPC_STARTUP = '1';
 process.env.EVEJS_DISABLE_NPC_ANCHOR_RELEVANCE = '1';
 const require = createRequire(import.meta.url);
@@ -49,3 +53,4 @@ test('warp-start delivers once each to two eligible observers; excludes hidden a
   assert.equal(afterDisconnect.deliveredCount, 1);
   assert.deepEqual(deliveries.map(x => x.id), [102]);
 });
+}

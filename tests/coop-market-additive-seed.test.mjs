@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
-import {mkdtempSync,writeFileSync,rmSync} from "node:fs";
+import {mkdtempSync,writeFileSync,rmSync,symlinkSync} from "node:fs";
 import {join} from "node:path";
 import {tmpdir} from "node:os";
 const require=createRequire(import.meta.url);
@@ -74,7 +74,20 @@ test("rejects existing Exordium buy-order liquidity and system-level summaries",
   }
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
-test("same underlying market SQLite file is rejected even through a symlink",async()=>{
+// Windows without Developer Mode / SeCreateSymbolicLinkPrivilege cannot create
+// symlinks at all (EPERM), and that is an OS capability limit, not a product
+// verdict. Probe once and skip only in that case so Linux still enforces it.
+function symlinkUnsupported(){
+ const dir=mkdtempSync(join(tmpdir(),"coop-market-symlink-probe-"));
+ try{
+  const target=join(dir,"target"),alias=join(dir,"alias");
+  writeFileSync(target,"probe");
+  try{symlinkSync(target,alias);return false;}
+  catch(error){return error?.code==="EPERM"||error?.code==="EACCES"||error?.code==="ENOSYS";}
+ }finally{rmSync(dir,{recursive:true,force:true});}
+}
+test("same underlying market SQLite file is rejected even through a symlink",
+ {skip:symlinkUnsupported()?"symlink creation is not permitted for this user":false},async()=>{
  const {symlinkSync}=await import("node:fs");
  const dir=mkdtempSync(join(tmpdir(),"coop-market-additive-"));
  try{const main=join(dir,"market.sqlite"),candidate=join(dir,"alias.sqlite");

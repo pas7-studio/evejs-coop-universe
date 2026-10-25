@@ -36,7 +36,8 @@ test("both hooks are installed once and stay env-gated and default OFF",{skip:!c
 
 test("the installed module is shipped by the installer, not hand-copied",()=>{
  const script=fs.readFileSync(path.join(import.meta.dirname,"..","scripts","patch-evejs-coop.cjs"),"utf8");
- assert.match(script,/coopAgentDialogue"\];/);
+ // The installer ships a long names array; assert membership, not position.
+ assert.match(script,/const names=\[[^\]]*"coopAgentDialogue"/);
  assert.match(script,/coop-agent-dialogue-patch\.cjs"\)\.patch\(text,\{remove\}\)/);
 });
 

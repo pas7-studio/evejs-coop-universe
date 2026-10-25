@@ -5,9 +5,13 @@ import { test } from 'node:test';
 import { createRequire } from 'node:module';
 import { resolve, join } from 'node:path';
 import { existsSync } from 'node:fs';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 
 const root = process.env.EVEJS_CODE_PATH;
-if (!root) throw new Error('Set EVEJS_CODE_PATH to a locally checked-out EveJS/Code directory.');
 const source = resolve(root, 'server/src/services/chat/sessionRegistry.js');
 if (!existsSync(source)) throw new Error('Missing upstream registry: ' + source);
 const require = createRequire(import.meta.url);
@@ -65,3 +69,4 @@ test('registry re-indexes a character reassignment', () => {
     registry.unregister(session);
   }
 });
+}

@@ -4,8 +4,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
+import {hasUpstreamCodePath,upstreamSkipReason,upstreamSuiteName} from "./helpers/upstreamCheckout.mjs";
+
+if (!hasUpstreamCodePath) {
+  test(upstreamSuiteName, { skip: upstreamSkipReason }, () => {});
+} else {
 const code=process.env.EVEJS_CODE_PATH;
-if(!code)throw new Error('EVEJS_CODE_PATH required');
 const require=createRequire(import.meta.url);
 const Module=require('node:module');
 const sourcePath=resolve(code,'server/src/services/_shared/sessionDisconnect.js');
@@ -83,3 +87,4 @@ test('missing session rejected without mutating persistence',()=>{
  const h=harness();assert.equal(h.target.persistCharacterLogoffState(null).errorMsg,'SESSION_REQUIRED');
  assert.equal(h.records.length,0);assert.equal(h.ships.length,0);
 });
+}
