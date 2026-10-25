@@ -23,6 +23,7 @@ param(
   [switch]$EnableMarketCatalog,
   [switch]$EnableNativeExploration,
   [switch]$EnableAtomicCoopTrade,
+  [switch]$EnableDuoMissionSettlement,
   [string]$VirtualRouteSystems = '30000142,30000144',
   [int]$CloneRecoveryMinutes = 30
 )
@@ -36,6 +37,7 @@ function Assert-Range([string]$Name,[int]$Value,[int]$Min,[int]$Max) {
   }
 }
 if ($EnableAtomicCoopTrade -and -not $LivingCoop) { throw 'Atomic co-op trade requires -LivingCoop' }
+if ($EnableDuoMissionSettlement -and -not $LivingCoop) { throw 'Duo mission settlement requires -LivingCoop' }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -111,6 +113,11 @@ if ($LivingCoop) {
 $yamlLines += "      EVEJS_COOP_AGENT_DIALOGUE: '1'"
 $yamlLines += "      EVEJS_COOP_NPC_CHATTER: '1'"
   $yamlLines += "      EVEJS_COOP_FLEET_WARP_ARRIVAL: '1'"
+}
+# Experimental two-native-recipient mission settlement: both independent durable fences must be enabled together. DEFAULT OFF.
+if ($EnableDuoMissionSettlement) {
+  $yamlLines += "      EVEJS_COOP_FLEET_MISSION_TURNIN: '1'"
+  $yamlLines += "      EVEJS_COOP_FLEET_LEADER_FENCE: '1'"
 }
 # Co-op atomic trade remains OFF unless explicitly requested on an approved LivingCoop deploy.
 if ($EnableAtomicCoopTrade) {
