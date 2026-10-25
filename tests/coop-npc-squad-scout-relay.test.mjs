@@ -148,3 +148,11 @@ test("shared report from a different faction is never treated as an attacker sig
   assert.equal(hunt.assess(input).reason,"NO_FRESH_WITNESS");
  }finally{fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test("physical scout remains assigned when strike wing warps closer to prey",()=>{
+ const f=fixture();f.observe();f.advance(16000);
+ f.ships.get(102).position.x=51000;
+ f.observe();
+ assert.equal(f.squads.snapshot()[0].scoutID,101);
+ assert.equal(f.permit(102).reason,"SCOUT_RELAY_CONFIRMED");
+});
