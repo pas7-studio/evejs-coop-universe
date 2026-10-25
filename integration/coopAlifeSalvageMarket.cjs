@@ -59,7 +59,7 @@ function createAlifeSalvageMarket({readJournal,readOps,getStation,
    maxPerTick!==1||!positive(maxPriceCents)||!positive(minPriceCents)||
    minPriceCents>maxPriceCents)
   throw Error("ALIFE_SALVAGE_NATIVE_MARKET_AUTHORITIES_REQUIRED");
- let busy=false,last=null,completedAt=0;
+ let busy=false,last=null,completedAt=0,scanOffset=0;
  async function tick(){
   if(process.env.EVEJS_COOP_ALIFE!=="1"||
    process.env.EVEJS_COOP_ALIFE_SALVAGE_MARKET!=="1"||
@@ -107,7 +107,13 @@ function createAlifeSalvageMarket({readJournal,readOps,getStation,
    const moves=Object.entries(journal.moves).filter(([,p])=>
     p?.state==="NPC_STOCK_DELIVERED").sort((a,b)=>
     Number(a[0])-Number(b[0]));
-   for(const [key,p] of moves.slice(0,128)){
+   // Rotate the bounded scan across ticks. Otherwise a stale/unpriced
+   // 128-source prefix can permanently starve later original native stock.
+   const scanCount=Math.min(128,moves.length);
+   const start=moves.length?scanOffset%moves.length:0;
+   if(moves.length)scanOffset=(start+scanCount)%moves.length;
+   for(let i=0;i<scanCount;i++){
+    const [key,p]=moves[(start+i)%moves.length];
     const id=Number(key);
     if(!positive(id)||!positive(p?.stationID)||
      p.wreckItemID!==id||!positive(p.typeID??1))continue;
