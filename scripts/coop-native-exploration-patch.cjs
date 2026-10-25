@@ -49,7 +49,7 @@ function patch(source,file,remove=false){
    '      // Origin is marked on the internal server scan object, never on RPC args.',
    '      if (process.env.EVEJS_COOP_EXPEDITION_SCAN_PROOF === "1")',
    '        Object.defineProperty(scanResult,"_coopNativeProbeOrigin",{',
-   '          value:{characterID,systemID},enumerable:false,configurable:false',
+   '          value:{characterID,systemID,shipID:getSessionShipID(session)},enumerable:false,configurable:false',
    '        });',
    startOld.replaceAll(eol,"\n")
   ]);

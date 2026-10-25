@@ -1,0 +1,26 @@
+{
+  "id": "COOP-026-NATIVE-PI-TWO-PLAYER-E2E",
+  "status": "NOT_RUN",
+  "pinnedEveJS": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "requirement": "Owner-approved disposable native EveJS state and two independently authenticated clients; never synthetic items or wallet writes",
+  "flags": {"EVEJS_COOP_PI_INTEGRITY": "1"},
+  "requiredEvidence": ["characterID", "planetID", "commandCenterItemID", "pinID", "missionIndependentOwner", "routeID", "nativeSchematicID", "sourceTypeID", "sourceQuantity", "outputTypeID", "outputQuantity", "simTime", "launchID", "physicalContainerID", "customsOfficeID", "locationID", "inventoryItemID", "walletBalanceBefore", "walletBalanceAfter", "stationID", "industryJobID"],
+  "steps": [
+    {"stage": "native-two-user-auth", "status": "NOT_RUN", "check": "Two distinct characterIDs and independent ItemStore ownership; same planet and server"},
+    {"stage": "owner-A-command-center", "status": "NOT_RUN", "check": "One real command center item debited from A ship cargo after network create, exact native itemID"},
+    {"stage": "owner-B-command-center", "status": "NOT_RUN", "check": "Independent B ship command center debit and no A/B pin ownership crossover"},
+    {"stage": "owner-and-permission-negative", "status": "NOT_RUN", "check": "A cannot edit B colony or use B command center; failed command causes no item/ISK mutation"},
+    {"stage": "ecus-depletion", "status": "NOT_RUN", "check": "Actual ECU cycle time, quantity and native resource depletion; no duplicate through two sessions"},
+    {"stage": "route-storage", "status": "NOT_RUN", "check": "Native route IDs and exact transfer quantities from producer to storage; no negative or excessive pin capacity"},
+    {"stage": "processor-recipe", "status": "NOT_RUN", "check": "Native schematic input stacks debited and output quantity credited only once after real cycle"},
+    {"stage": "offline-restart", "status": "NOT_RUN", "check": "Restart before and after native production cycle; no skipped event cap or repeated production"},
+    {"stage": "launch-physical", "status": "NOT_RUN", "check": "Source command pin debited and exact physical Ballpark container with matching ItemStore child itemIDs"},
+    {"stage": "launch-failure", "status": "NOT_RUN", "check": "Force a container creation failure on cloned state; no false success, no blind duplicate, operator-reconcilable custody"},
+    {"stage": "customs-office-A", "status": "NOT_RUN", "check": "A correct real planet customs ID; native item export and wallet tax debit with A ownership"},
+    {"stage": "customs-office-B", "status": "NOT_RUN", "check": "B separately imports/exports through the same office without accessing A cargo or colony"},
+    {"stage": "customs-cross-planet-reject", "status": "NOT_RUN", "check": "Foreign office planet/system rejected before PI, ItemStore or wallet writes"},
+    {"stage": "transfer-crash-before-after", "status": "NOT_RUN", "check": "Crash around each PI/ItemStore/ISK native write; reconcile quantities and owner before any retry"},
+    {"stage": "ship-cargo-to-station", "status": "NOT_RUN", "check": "Physical retrieval and native ship haul to actual station; cargo itemIDs and owner unchanged"},
+    {"stage": "cooperative-manufacturing", "status": "NOT_RUN", "check": "Authorized native trade/corp material custody into manufacturing job and source-debited job output"}
+  ]
+}

@@ -5,7 +5,7 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
-let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null;
+let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
 function safeNpcPhase(phase,run){
  try{return run();}
@@ -176,9 +176,26 @@ function start(){
    const {evaluateContract}=require("./coopCourierDispatch");
    for(const record of listContractRecords()){
     if(Number(record&&record.type)!==3||Number(record&&record.status)!==0)continue;
-    const decision=evaluateContract(record,{sameSystemOnly:true},{walletIsk:0,hullCapacityM3:465000});
+    const decision=evaluateContract(record,{sameSystemOnly:true,requireZeroCollateral:false},{walletIsk:0,hullCapacityM3:465000});
     console.log(`[CoopCourier] contract ${record.contractID} volume ${record.volume} -> ${decision.status}`);
    }
+  });
+  // Real courier dispatch (COOP-024). Opt-in and default OFF: it accepts the
+  // owner's genuine native courier contract with a seeded courier character,
+  // flies it natively and completes it. Observe above stays read-only.
+  if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")safeNpcPhase("courier-dispatch",()=>{
+   if(!courierDispatch)courierDispatch=require("./coopCourierRuntime").createCourierDispatch({
+    contracts:require("../services/contracts/contractRuntimeState"),
+    gameStore:require("../gameStore"),
+    itemStore:require("../services/inventory/itemStore"),
+    worldData:require("./worldData"),
+    transitions:require("./transitions"),
+    space:require("./runtime"),
+    sceneForSystem:id=>require("./runtime").ensureScene(id,{refreshStargates:false}),
+    pilots:String(process.env.EVEJS_COOP_COURIER_PILOTS||"140000100,140000101,140000102,140000103,140000104,140000105,140000106").split(","),
+    log:console.log
+   });
+   courierDispatch.tick();
   });
   safeNpcPhase("virtual-travel",()=>{
    // A real physical EveJS ship is pinned to its actual system.
@@ -218,6 +235,23 @@ function start(){
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
+  // Source-backed market decisions share this tick and never start a second
+  // scheduler. Awaiting Rust does not stall NPC physics or fleet movement.
+  if(process.env.EVEJS_COOP_ALIFE_SALVAGE_MARKET==="1")
+   safeNpcPhase("native-salvage-market",()=>{
+    void require("./coopAlifeSalvageMarketRuntime").advance({
+     systems:()=>new Set(visitedSystems)
+    }).then(result=>{
+     if(result?.status==="ALIFE_SALVAGE_MARKET_ATTEMPT"||
+      result?.status==="ALIFE_SALVAGE_MARKET_RECOVERY")
+      require("./coopRuntimeProbe").observe("alife-native-salvage-market",
+       null,null,{status:result.status,wreckItemID:result.wreckItemID,
+        resultStatus:result.result?.status,priceCents:result.priceCents||null,
+        nativeEscrowVerified:result.result?.nativeEscrowVerified===true,
+        corporationWalletCredited:result.result?.walletCredited===true,
+        virtualISK:false});
+    }).catch(error=>console.warn("[CoopSalvageMarket] tick",error.message));
+   });
   safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
   safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
   safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
@@ -1165,6 +1199,10 @@ function ensureMarketTrader(){
   resolveType:id=>inventory.resolveItemByTypeID(id),
   root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
   maxQuantity:Math.max(1,Math.min(20,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_QTY||5))),
+  // A sale is bounded by the real seeded bid volume, like a player's. The
+  // small MAX_QTY stays a BUY spending guard and never starves the economy.
+  maxSellQuantity:Math.max(1,Math.min(1000000,
+   Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_SELL_QTY||100000))),
   maxPrice:Math.max(0.01,Math.min(1000000,Number(process.env.EVEJS_COOP_NPC_MARKET_MAX_PRICE||10000))),
   cooldownMs:Math.max(30000,Math.min(3600000,Number(process.env.EVEJS_COOP_NPC_MARKET_COOLDOWN_MS||300000))),
   priceFloorFor:process.env.EVEJS_COOP_NPC_SELL_PRICING==="1"?
@@ -2326,21 +2364,30 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
  const job={startedAt:Date.now(),settled:null};
  arrivalSales.set(key,job);
  void (async()=>{
-  const sold=[];let last="NO_ELIGIBLE_STACK";
+  const sold=[];let last="NO_ELIGIBLE_STACK",settlements=0;
   try{
    const scene=require("./runtime").ensureScene(Number(systemID),{refreshStargates:false});
    for(const typeID of wanted){
-    const result=await trader.execute({scene,pilotID:link.pilotID,
-     entityID:Number(haulerID),stationID:Number(stationID),
-     side:"sell",typeID,buyTypes:[],sellTypes});
-    if(result.status==="TRADE_SETTLED")
+    // Several stacks of one ore type are still one merchant action. Keep going
+    // while the market really buys, so a haul is liquidated instead of decaying
+    // in the warehouse, but stay strictly bounded in count and time.
+    for(;;){
+     if(settlements>=8||Date.now()-job.startedAt>30000)break;
+     const result=await trader.execute({scene,pilotID:link.pilotID,
+      entityID:Number(haulerID),stationID:Number(stationID),
+      side:"sell",typeID,buyTypes:[],sellTypes},
+      {withinBatch:settlements>0});
+     if(result.status!=="TRADE_SETTLED"){last=String(result.status||"UNKNOWN");break;}
+     settlements++;
      sold.push({typeID,quantity:result.quantity,price:result.price,
-      balance:result.balance});
-    else last=String(result.status||"UNKNOWN");
+      isk:Math.round(result.price*result.quantity),balance:result.balance});
+    }
    }
   }catch(error){last="SALE_ERROR:"+String(error?.message||error).slice(0,60);}
   job.settled=sold.length?
-   {status:"SOLD",sold:JSON.parse(JSON.stringify(sold)),lastStatus:last}:
+   {status:"SOLD",sold:JSON.parse(JSON.stringify(sold)),lastStatus:last,
+    quantity:sold.reduce((sum,entry)=>sum+entry.quantity,0),
+    isk:sold.reduce((sum,entry)=>sum+entry.isk,0)}:
    {status:"NOT_SOLD",reason:last};
  })().finally(()=>{
   // Keep the settled result readable for the next arrival tick only.

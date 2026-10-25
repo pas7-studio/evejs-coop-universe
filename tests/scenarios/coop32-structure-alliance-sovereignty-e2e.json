@@ -1,0 +1,132 @@
+{
+  "id": "coop32-original-structures-alliances-sov",
+  "pin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "result": "NOT_RUN",
+  "prerequisites": [
+    "Disposable original EveJS deployment with authorized data",
+    "Two independently authenticated characters A and B in separate real corporations",
+    "A executor corp, B allied non-executor corp; one third unaffiliated character C",
+    "Chat01 reversible native integration, EVEJS_COOP_STRUCTURE_ALLIANCE_GUARD=1",
+    "Preserved source deed, actual station manager/director roles and funded wallets"
+  ],
+  "steps": [
+    {
+      "key": "roles",
+      "action": "A verifies executor corp CEO/director; B is valid allied director but not executor",
+      "assert": [
+        "A can edit alliance",
+        "B cannot edit prime time, capital system, alliance policy or expel executive",
+        "B's genuine executor-support vote is accepted"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "deed-deploy",
+      "action": "A holds actual Citadel deed in original inventory and deploys physically through original client",
+      "assert": [
+        "Deed itemID and quantity consumed once",
+        "One native structure ID appears with A's corp owner, anchor timer, original solarSystemID",
+        "Crash before/after native creation-vs-deed debit fails closed without unpaid structure"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "foreign-admin",
+      "action": "B attempts management/unanchoring/renaming foreign Citadel",
+      "assert": [
+        "All unauthorized writes denied",
+        "A's real CEO/director can manage own structure",
+        "No GM-only client RPC available to ordinary players"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "access-list",
+      "action": "A sets original structure profile to allow some alliances; B and outsider C attempt docking/services",
+      "assert": [
+        "B gets only explicitly granted native access",
+        "C cannot dock or withdraw stored items",
+        "Client sees original service entry and denied errors"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "fuel",
+      "action": "A deposits actual fuel blocks, toggles service",
+      "assert": [
+        "Native item quantities debited exactly at real tick",
+        "Service stops when original fuel truly depleted",
+        "Crash before/after fuel tick produces neither duplicate consumption nor free uptime"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "owner-transfer",
+      "action": "A proposes legal transfer to B's corporation through supported native transfer flow",
+      "assert": [
+        "Original owner authorization and recipient consent verified",
+        "Ownership and profile association persist after restart",
+        "Original assets and corp divisions retain correct property rights"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "reinforcement",
+      "action": "C launches actual damage while permitted; wait reinforced timer/vulnerability period",
+      "assert": [
+        "Actual native HP, window and time dilation/real timer state",
+        "No client-only timer drift",
+        "After reconnect both clients see same state"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "war",
+      "action": "A declares supported paid war against an actual external corporation with valid owned HQ",
+      "assert": [
+        "CONCORD bill and native war record one-to-one",
+        "Invalid or foreign HQ creates no bill",
+        "War spool-up and legal aggression consistent for A/B"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "hq-loss",
+      "action": "Destroy genuine War HQ through native combat",
+      "assert": [
+        "War end state and billing updates once",
+        "Legally eligible station hangar items go to correct native asset-safety wrap",
+        "Wreck loot, destroyed rigs and asset-safety rights no duplication"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "sov-claim",
+      "action": "A anchors real TCU/Sov Hub and attempts sovereignty FLEX where system permits",
+      "assert": [
+        "Claimable system and alliance identity verified",
+        "Real deed and fuel consumption",
+        "Sovereignty prime-time, occupancy and timers persist",
+        "B cannot change another executor's capital/prime time"
+      ],
+      "coldRestart": true
+    },
+    {
+      "key": "alliance-change",
+      "action": "B corp leaves alliance, A loses executor privileges then reconnects",
+      "assert": [
+        "Native alliance member index updated once",
+        "Old member cannot manage alliance assets",
+        "Existing structures retain actual owner corp and access is recalculated"
+      ],
+      "coldRestart": true
+    }
+  ],
+  "restartPolicy": "Cold restart original EveJS server and reconnect BOTH independent clients between all consecutive steps; compare native GameStore persisted IDs, wallet, bill, war, structure, alliance, sovereign, fuel and asset safety tables, not only client HUD",
+  "resultEvidence": {
+    "twoClients": "NOT_RUN",
+    "serverPersistence": "NOT_RUN",
+    "actualAssetSafety": "NOT_RUN",
+    "actualUI": "NOT_RUN"
+  }
+}

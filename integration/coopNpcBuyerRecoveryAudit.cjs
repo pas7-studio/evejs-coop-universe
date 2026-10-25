@@ -118,7 +118,8 @@ async function auditNativeNpcBuyerRecovery({journal,inspectRustClaim,
   }
   if(rust.state==="filled"&&receipt&&e.phase==="PREPARED"){
    out.push({id,status:"ACK_JOURNAL_SAME_CLAIM",
-    claimKey:e.claimKey,fillID,requiresOperator:true,
+    claimKey:e.claimKey,fillID,itemID:receipt.itemID,
+    quantity:receipt.quantity,requiresOperator:true,
     historyDay:rust.history_day});
    continue;
   }

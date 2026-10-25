@@ -15,7 +15,9 @@
 //
 // Everything is fail-closed: a chain is only started when planSettlement says it
 // can be finished, and an ambiguous error is reported, never retried.
-const { planSettlement, isCourierContract } = require("./coopCourierDispatch.cjs");
+// Loaded as .cjs in the repo and as .js inside the server.
+const EXT = (typeof __filename === "string" && __filename.endsWith(".js")) ? "" : ".cjs";
+const { planSettlement, isCourierContract } = require("./coopCourierDispatch" + EXT);
 
 // Mirrors contractRuntimeState.CONTRACT_STATUS: OUTSTANDING 0, IN_PROGRESS 1,
 // FINISHED 4 (5 is CANCELLED - getting this wrong would cancel the contract).
