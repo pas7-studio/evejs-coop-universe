@@ -25,7 +25,9 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
   // accept an arbitrarily old snapshot or player-supplied actor identity.
   const ctx=current||(recent&&clock()>=recent.at&&
    clock()-recent.at<=30000?recent:null);
-  if(!ctx||!pos(entityID))return null;
+  if(!ctx||!pos(entityID)||!Number.isSafeInteger(ctx.snapshot?.observedAt)||
+     clock()<ctx.snapshot.observedAt||
+     clock()-ctx.snapshot.observedAt>30000)return null;
   const links=Object.values(ctx.registry?.snapshot()?.links||{}).filter(l=>
    Number(l?.entityID)===entityID&&
    /^coop-pilot-[0-9]{3,}$/.test(String(l.pilotID||"")));
