@@ -11,6 +11,9 @@ const source=[
  ' const consumeQuantity=1;',
  ' const previousQuantity=5;',
  '  const nextQuantity = Math.max(0, previousQuantity - consumeQuantity);',
+ '    if (Array.isArray(attackerEntity.nativeCargoItems)) {',
+ '      attackerEntity.nativeCargoItems = [];',
+ '    }',
  ' return nextQuantity;',
  '}',
  'function executeTurretCycle(scene, attackerEntity, effectState, cycleBoundaryMs){',
@@ -56,6 +59,7 @@ test("pinned source transformer inserts checks without changing baseline functio
  assert.ok(actual.includes("function executeMissileCycle("));
  assert.ok(actual.includes('coopNpcFireDebitProof'));
  assert.ok(actual.includes("strictNativeDebitResults"));
+ assert.ok(actual.includes("AMMO_WRITE_UNVERIFIED"));
  assert.ok(actual.includes("_coopStrictAmmoLastBoundaryMs"));
  new Function(actual);
 });
