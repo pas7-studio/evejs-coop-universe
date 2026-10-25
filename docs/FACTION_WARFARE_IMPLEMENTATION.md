@@ -713,6 +713,100 @@ native objective ownership are later FW-009B / FW-004 / FW-006
 work, not granted here.
 
 
+## FW-009B — native defender structure objective and contestable military capture
+
+**Source gate; default OFF; not a production-authorized capture mechanism.**
+
+FW-009A records physically verified NPC ship deaths, but destruction of
+fighters or an empty/partially loaded scene **does not authorize
+territorial capture**. FW-009B introduces two separate native sources
+and commits the actual objective/capture transitions through the
+original **FW-001 authoritative `coopFactionWarCore.transition`** in
+the same native SQLite transaction as objective provenance.
+
+### Objective: real defender-owned, pre-registered structure
+
+`coopWarObjectiveAdjudicator.bind` requires an active ASSAULT in a
+CONTESTED target solar system and captures an exact original EveJS
+structure record: structureID, typeID, original defender ownerCorpID,
+SDE-derived defender faction, native position, original target
+solarSystemID, and a timestamp *before* destruction. The structure
+must physically exist and must not already have `destroyedAt`.
+
+`neutralize` only records `RECORD_OBJECTIVE` when the exact same
+persisted native structure becomes destroyed **after** binding AND
+the server's separate trusted `verifyNativeCombatDestruction`
+authority confirms an actual native combat destruction receipt.
+The structure record's `destroyedAt` **ALONE is explicitly
+insufficient**, even when it is a genuine native state update.
+
+**Critical EveJS finding:** the pinned
+`Code/server/src/services/structure/structureState.js`
+implementation's `applyAdminStructureDamage()` calls
+`applyRuntimeStructureDamage()` and can then call
+`destroyStructure()`. Therefore neither `destroy:true`,
+`destroyedAt`, a mere structure-change callback, nor a
+`applyRuntimeStructureDamage` hook can independently distinguish
+GM/admin destruction from weapon damage. FW-009B does **not**
+install any of these as a war-winning witness. The supplied
+`verifyNativeCombatDestruction` default is always `false`.
+A trusted, combat-path-exclusive persisted event producer with
+attacker/target provenance must be implemented and locally verified
+before the first legitimate neutralization in production.
+
+### Military occupancy is a second independent gate
+
+`coopWarNativeStructureControl.createNativeStructureControlWitness`
+supports a *complete, trusted live scene enumeration*.
+It refuses absent/unloaded/partial scenes, duplicate/missing entities,
+unknown controller or corporation/faction identity, and any defender,
+neutral or unverified player ship within 20 km. Only an intact
+verified attacker native war fleet ship within the original bound
+objective radius counts toward occupation. This observation is
+separate from combat and cannot spawn, destroy, warp or refit ships.
+
+`sample` requires four successive native uncontested observations
+at 20–45-second intervals, spanning **at least 90 seconds**.
+A missing scene, contesting ship, late/offline catchup, replayed
+event ID or a too-early sample cannot advance the counter. Any
+contested/unknown sample resets progress. A new live observation
+is required at final `capture` (<=45 s after the final sample).
+
+The actual `CAPTURE_TERRITORY` call checks the expected campaign
+revision and observed contested military owner, and runs
+**inside one `coopAtomicNativeRows.transact` with the objective
+provenance and original FW-001 core transition**. It changes
+`militaryControllerFactionID` and campaign state only — never
+stock SDE factionID, sovereignty, stations, native corporation
+ownerID, wallet, market or assets.
+
+### Scope of this PR and remaining native wiring
+
+- New native objective state: `coop-faction-war\\u001fstructure-objectives-v1`,
+  bounded by 128 bound structures/war campaigns, 256 audit entries
+  and 1,024 replay receipts. Campaign revision CAS and exactly-once
+  event signatures apply throughout BIND, NEUTRALIZE, SAMPLE, CAPTURE.
+- The source overlay installs the new modules reversibly.
+  **There is no public API, Agent/GM command or client-facing
+  shortcut that binds/neutralizes a war structure.**
+- **Not yet wired:** the exclusively combat-origin native damage
+  receipt, its durable provenance, a trusted complete ship roster
+  provider at the real EveJS scene, and a server-only authorized
+  objective binding trigger. This is a deliberately unarmed fail-closed
+  source integration, not live war conquest.
+- Later gameplay: native combat-specific lethal structure witness,
+  combat-vs-admin regression, named player militia consent/occupation,
+  in-game objective map/agent UX, defender capture counterplay,
+  true two-client E2E, offline/SIGKILL replay and local SQLite FULL.
+- These tests are isolated source tests:
+  `node --test tests/coop-war-objective-adjudicator.test.mjs
+  tests/coop-war-native-structure-control.test.mjs`. Real native
+  structure combat and live scene acceptance are **not** verified.
+  Feature flag `EVEJS_COOP_FACTION_WAR_NATIVE_OBJECTIVES=1`
+  defaults OFF and requires the original FACTION_WAR, FLEETS,
+  and NATIVE_ATOMIC_ROWS gates.
+
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
