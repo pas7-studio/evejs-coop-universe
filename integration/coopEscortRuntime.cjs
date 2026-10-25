@@ -4,6 +4,7 @@
 const {createEscortNativeFunds}=require("./coopEscortNativeFunds");
 const {createEscortFlightGate}=require("./coopEscortFlightGate");
 const {createEscortContractSettlement}=require("./coopEscortContractSettlement");
+const {createPeacefulEscortSettlement}=require("./coopEscortPeacefulSettlement");
 const pos=n=>Number.isSafeInteger(n)&&n>0;
 const equal=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>x===b[i]);
@@ -43,6 +44,8 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
  };
  const flight=createEscortFlightGate({root,io,clock,authorizeBooking:booking,
   readManifest,verifyManifest,nativeFunds:funds});
+ const peaceful=createPeacefulEscortSettlement({readFlight:flight.read,
+  readNativeDelivery:flight.readNativeDelivery,nativeFunds:funds});
  const contracts=createEscortContractSettlement({root,io,clock,
   authorizeOffer:c=>{
    if(!ready())return blocked("DENIED_NATIVE_RUNTIME_DISABLED");
@@ -155,12 +158,16 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
   return contracts.refund(c.contractID);
  }
+ function settlePeacefulFlight(manifestKey){
+  if(!ready())return blocked("DISABLED");
+  return peaceful.settle(manifestKey);
+ }
  function refundProvenLoss(contractID){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_REFUNDS!=="1")
    return blocked("DISABLED");
   return contracts.refund(contractID);
  }
- return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,
+ return Object.freeze({fundBeforeWarp,recordDelivery,finishAfterRaid,settlePeacefulFlight,
   refundProvenLoss,refundWreckedFlight,readFlight:flight.read,readContract:contracts.read,
   inspectRefundRecovery:contracts.inspectRefundRecovery,
   proof:contracts.proof,nativeFunds:funds,flightGate:flight,contractEngine:contracts});
