@@ -3,16 +3,13 @@
 // It prevents a real fitted ammo-requiring gun from activating/remaining
 // active without a real compatible native module-bound cargo stack.
 // It NEVER consumes ammo, invents a firing event, alters damage, or grants ISK.
-const store = require("./npc/nativeNpcStore");
-const dogma = require("./combat/weaponDogma");
-const capability = require("./npc/npcCapabilityResolver");
 const positive = x => Number.isSafeInteger(Number(x)) && Number(x)>0 ? Number(x) : null;
-const optional = new Set(["laserTurret"]);
 const requiring = new Set(["missileLauncher","projectileTurret","hybridTurret","precursorTurret","laserTurret"]);
-function check({entity,moduleItem,bankModuleIDs=[]}={}){
+function createAmmoGate({store,dogma,capability,env=process.env}={}){
+ function check({entity,moduleItem,bankModuleIDs=[]}={}){
  const allowed=(status,details={})=>({allowed:true,status,...details});
  const refused=(status,details={})=>({allowed:false,status,...details});
- if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+ if(env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
   entity?.nativeNpc!==true||entity?.kind!=="ship")
   return allowed("DEFAULT_UNMODIFIED");
  if(moduleItem?.npcSyntheticHullWeapon===true)return allowed("SYNTHETIC_HULL_WEAPON");
@@ -58,4 +55,17 @@ function check({entity,moduleItem,bankModuleIDs=[]}={}){
   return refused("NATIVE_AMMO_PROOF_UNAVAILABLE");
  }
 }
-module.exports={check};
+ return {check};
+}
+function check(args={}){
+ if(process.env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  args?.entity?.nativeNpc!==true||args?.entity?.kind!=="ship")
+  return {allowed:true,status:"DEFAULT_UNMODIFIED"};
+ try{return createAmmoGate({
+  store:require("./npc/nativeNpcStore"),
+  dogma:require("./combat/weaponDogma"),
+  capability:require("./npc/npcCapabilityResolver")
+ }).check(args);}
+ catch(_){return {allowed:false,status:"NATIVE_AMMO_PROOF_UNAVAILABLE"};}
+}
+module.exports={check,createAmmoGate};
