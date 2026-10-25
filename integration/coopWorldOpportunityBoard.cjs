@@ -119,6 +119,10 @@ function createBoard({root,io=fs,clock=()=>Date.now(),getSessions=()=>[],
    w.mode==="local"&&POS(sessionSystemID)&&sessionSystemID===systemID);
  }
  function alert(e){
+  // Native agent mode sends one verified priced-agent notice AFTER native quote.
+  // Avoid prematurely mailing an unpaid PREPARING event with chat commands.
+  if(process.env.EVEJS_COOP_NATIVE_JOB_AGENT==="1"&&e?.stage==="PREPARING")
+   return {status:"NATIVE_AGENT_QUOTE_PENDING",sent:0};
   if(process.env.EVEJS_COOP_OPPORTUNITY_MAIL!=="1"||!sendNativeMail)
    return {status:"MAIL_DISABLED",sent:0};
   let sessions;try{sessions=getSessions()}catch{return {status:"SESSIONS_UNAVAILABLE",sent:0}}
@@ -424,6 +428,10 @@ function listNativeEvents(filters){
  try{return instance().list(filters)}
  catch{return {status:"NATIVE_EVENT_SOURCE_UNAVAILABLE",events:[]}}
 }
+function readNativeWatch(characterID){
+ try{return instance().watch(characterID)}
+ catch{return {status:"NATIVE_WATCH_UNAVAILABLE"}}
+}
 function handleChat(x){return instance().handleChat(x)}
 function noteNativeRaid(scene,action){try{return instance().nativeRaid({scene,action})}
  catch{return {status:"OPPORTUNITY_RAID_UNAVAILABLE"}}}
@@ -441,5 +449,5 @@ function noteNativePreparingDeparted(scene,fleet,preparingEventID,trip){
  try{return instance().nativePreparingDeparted({scene,fleet,preparingEventID,trip})}
  catch{return {status:"PREPARING_DEPARTURE_WRITE_UNCERTAIN"}}
 }
-module.exports={createBoard,handleChat,readNativeEvent,listNativeEvents,noteNativeRaid,noteNativeConvoy,
+module.exports={createBoard,handleChat,readNativeEvent,listNativeEvents,readNativeWatch,noteNativeRaid,noteNativeConvoy,
  noteNativeConvoyPreparing,noteNativePreparingDeparted,noteNativeConvoyOutcome};
