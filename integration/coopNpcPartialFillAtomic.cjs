@@ -17,8 +17,11 @@ const isk=x=>x/100;
 const integer=x=>typeof x==="string"&&/^[0-9]+$/.test(x)?Number(x):x;
 function requireClaim(r,identity,buyerID,maxUnitPriceCents){
  const n=x=>integer(x);
- if(!r||r.source!=="coop-npc"||r.state!=="settling"||
-    r.fill_phase!=="claimed"||r.is_corp!==true||r.bid!==false||
+ if(!r||r.source!=="coop-npc"||
+    !["settling","open","filled"].includes(r.state)||
+    !["claimed","finalized"].includes(r.fill_phase)||
+    (r.fill_phase==="claimed"&&r.state!=="settling")||
+    (r.fill_phase==="finalized"&&r.state==="settling")||r.is_corp!==true||r.bid!==false||
     !validOp(r.operation_id)||!validClaim(r.claim_key)||
     !pos(n(r.order_id))||!pos(n(r.owner_id))||!pos(n(r.station_id))||
     !pos(n(r.type_id))||!pos(n(r.source_item_id))||!pos(n(r.fill_id))||
@@ -26,7 +29,7 @@ function requireClaim(r,identity,buyerID,maxUnitPriceCents){
     !pos(n(r.remaining_before))||!pos(n(r.price_cents)))
   throw Error("NPC_PARTIAL_RUST_CLAIM_UNVERIFIED");
  const qty=n(r.fill_quantity),remaining=n(r.remaining_before),unit=n(r.price_cents),fillID=n(r.fill_id);
- if(!Number.isSafeInteger(remaining-qty)||qty>=remaining||qty>50000||
+ if(!Number.isSafeInteger(remaining-qty)||qty>remaining||qty>50000||
     unit>100000000||unit>maxUnitPriceCents||!pos(fillID))
   throw Error("NPC_PARTIAL_RUST_QUANTITY_OR_PRICE_INVALID");
  if(r.operation_id!==identity.operationID||r.claim_key!==identity.claimKey||
@@ -77,6 +80,8 @@ function createNpcPartialSettlement({gameStore,market,verifyBuyerSession,verifyN
      buyerItemID:existing.buyerItemID,quantity:q.quantity,
      remainingQuantity:q.remainingAfter,grossCents:q.grossCents};
    }
+   if(claim.fill_phase!=="claimed"||claim.state!=="settling")
+    throw Error("NPC_PARTIAL_RUST_FINALIZED_WITHOUT_NATIVE_RECEIPT");
    const escrow=tx.get("marketEscrow",orderKey),
      source=tx.get("items",itemKey),
      character=tx.get("characters",String(buyerID)),
@@ -111,19 +116,25 @@ function createNpcPartialSettlement({gameStore,market,verifyBuyerSession,verifyN
       division.journal.some(x=>x.transactionID===q.fillID)||
       division.transactions.some(x=>x.transactionID===q.fillID))
     throw Error("NPC_PARTIAL_WALLET_RECEIPT_COLLISION");
-   const counter=tx.get("identityState","nextItemID");
-   if(!pos(counter)||counter<ITEM_FLOOR)
-    throw Error("NPC_PARTIAL_ITEM_ALLOCATOR_MISSING");
-   let maxID=ITEM_FLOOR-1;
-   for(const row of tx.scan("items")){
-    if(!pos(row.value?.itemID)||String(row.value.itemID)!==row.key)
-     throw Error("NPC_PARTIAL_ITEM_KEY_MISMATCH");
-    maxID=Math.max(maxID,row.value.itemID);
+   // The last fill moves the existing source item, while a strict partial
+   // fill uses the persisted native identity allocator under this transaction.
+   const finalFill=q.remainingAfter===0;
+   let buyerItemID=identity.itemID;
+   if(!finalFill){
+    const counter=tx.get("identityState","nextItemID");
+    if(!pos(counter)||counter<ITEM_FLOOR)
+     throw Error("NPC_PARTIAL_ITEM_ALLOCATOR_MISSING");
+    let maxID=ITEM_FLOOR-1;
+    for(const row of tx.scan("items")){
+     if(!pos(row.value?.itemID)||String(row.value.itemID)!==row.key)
+      throw Error("NPC_PARTIAL_ITEM_KEY_MISMATCH");
+     maxID=Math.max(maxID,row.value.itemID);
+    }
+    buyerItemID=Math.max(counter,maxID+1,ITEM_FLOOR);
+    if(!pos(buyerItemID)||!pos(buyerItemID+1)||
+       tx.get("items",String(buyerItemID)))
+     throw Error("NPC_PARTIAL_NEW_ITEM_ID_UNSAFE");
    }
-   const buyerItemID=Math.max(counter,maxID+1,ITEM_FLOOR);
-   if(!pos(buyerItemID)||!pos(buyerItemID+1)||
-      tx.get("items",String(buyerItemID)))
-    throw Error("NPC_PARTIAL_NEW_ITEM_ID_UNSAFE");
    const time=clock();
    if(!pos(time))throw Error("NPC_PARTIAL_NATIVE_CLOCK_INVALID");
    const filetime=String(BigInt(time)*10000n+116444736000000000n);
@@ -159,10 +170,15 @@ function createNpcPartialSettlement({gameStore,market,verifyBuyerSession,verifyN
     buyerBeforeCents:buyerBefore,buyerAfterCents:buyerAfter,
     corpBeforeCents:corpBefore,corpAfterCents:corpAfter,committedAt:time};
    // Same SQLite BEGIN IMMEDIATE transaction across all six native tables.
-   tx.put("items",itemKey,escrowItem);
-   tx.put("items",String(buyerItemID),buyerItem);
-   tx.put("identityState","nextItemID",buyerItemID+1);
-   tx.put("marketEscrow",orderKey,escrowNext);
+   if(finalFill){
+    tx.put("items",itemKey,buyerItem);
+    tx.del("marketEscrow",orderKey);
+   }else{
+    tx.put("items",itemKey,escrowItem);
+    tx.put("items",String(buyerItemID),buyerItem);
+    tx.put("identityState","nextItemID",buyerItemID+1);
+    tx.put("marketEscrow",orderKey,escrowNext);
+   }
    tx.put("characters",String(buyerID),characterNext);
    tx.put("corporationRuntime",corpKey,corpNext);
    tx.put("npcMarketFills",fillKey,receipt);
