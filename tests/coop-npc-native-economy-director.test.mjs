@@ -18,7 +18,8 @@ function fixture({target=100}={}) {
  const plan={ownerID:OWNER,stationID:STATION,facilityID:STATION,blueprintItemID:BPO,productTypeID:TYPE,outputQuantity:100};
  const planner={plan:()=>({status:"PLAN_READY",jobs:[plan]})};
  const native={
-  quote:p=>({verifiedNative:true,totalCost:10,ownerID:OWNER,blueprintID:BPO,productTypeID:TYPE,facilityID:STATION}),
+  quote:p=>({verifiedNative:true,cost:9,tax:1,totalCost:10,
+   ownerID:OWNER,blueprintID:BPO,productTypeID:TYPE,facilityID:STATION}),
   installOnce:(p,q,id)=>{installCalls++;if(job)throw Error("DUP_INSTALL");wallet-=10;
     debit={verifiedNative:true,jobID:970000000000000,ownerID:OWNER,amountCents:1000};
     job={jobID:970000000000000,ownerID:OWNER,coopOperationID:id,productTypeID:TYPE,blueprintID:BPO,status:1};
@@ -362,4 +363,34 @@ test("valid two-decimal sale price retains exact original corporate revenue",()=
  const result=d.tick(ctx);
  assert.equal(result.status,"SOLD");
  assert.equal(result.revenueCents,120500);
+}));
+
+
+test("native factory refuses invalid cost/tax/total BEFORE recording an ambiguous paid install",()=>run(f=>{
+ const d=f.create();
+ assert.equal(d.tick(ctx).status,"PREPARED");
+ const valid=f.native.quote;
+ for(const bad of [
+  {totalCost:10.004},{cost:8.99},{tax:1.001},
+  {totalCost:"10"},{cost:"9"},{tax:null}
+ ]){
+  f.native.quote=plan=>({...valid(plan),...bad});
+  const r=d.tick(ctx);
+  assert.equal(r.reason,"UNVERIFIED_CANONICAL_QUOTE",JSON.stringify(bad));
+  assert.equal(Object.values(d.inspect().entries)[0].phase,"PREPARED");
+  assert.equal(f.installs,0);
+  assert.equal(f.balance,1000);
+ }
+ f.native.quote=valid;
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ assert.equal(f.installs,1);
+ assert.equal(f.balance,990);
+}));
+test("canonical zero-cost manufacturing quote is allowed to reach original atomic authority",()=>run(f=>{
+ const d=f.create();
+ assert.equal(d.tick(ctx).status,"PREPARED");
+ const valid=f.native.quote;
+ f.native.quote=plan=>({...valid(plan),cost:0,tax:0,totalCost:0});
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ assert.equal(f.installs,1);
 }));
