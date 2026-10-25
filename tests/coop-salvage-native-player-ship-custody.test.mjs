@@ -11,13 +11,16 @@ const args={manifestKey:"30000144-77-1000000",cargoID:5501,wreckItemID:9001,
  expectedWreckID:8001,stationID:60001,corporationID:10001,
  quantity:5,characterID:701,shipID:1701};
 function fixture(fn){
- let distance=1000,docked=false,wreckExists=true,txs=0;
+ let distance=1000,docked=false,wreckExists=true,txs=0,beforeNextTx=null;
  let db={npcWreckItems:{items:{"9001":{wreckItemID:9001,wreckID:8001,
   sourceKind:"cargo",sourceCargoID:5501,typeID:34,quantity:5,
   singleton:false,itemName:"Ore"}}},
   npcWrecks:{wrecks:{"8001":{wreckID:8001,systemID:30000144,sourceEntityID:901}}},
   identityState:{nextItemID:100000},items:{},corporationRuntime:{}};
  const atomic={transact(names,fn){
+  // Simulate a competing successful native writer after the read-only
+  // preflight but before this transaction takes the authoritative snapshot.
+  if(beforeNextTx){const mutation=beforeNextTx;beforeNextTx=null;mutation(db);}
   const copy=structuredClone(db);
   const tx={
    get:(t,k)=>copy[t][k]??null,
@@ -46,7 +49,8 @@ function fixture(fn){
    characterID:701,shipID:1701,stationID:60001})
  });
  fn({api,db:()=>structuredClone(db),setDistance:x=>distance=x,
-  dock:()=>docked=true,txs:()=>txs,removeWreck:()=>wreckExists=false});
+  dock:()=>docked=true,txs:()=>txs,removeWreck:()=>wreckExists=false,
+  beforeTx:fn=>beforeNextTx=fn});
 }
 test("a player physically within 2.5km of a real wreck picks up ORIGINAL cargo",()=>fixture(f=>{
  assert.equal(f.api.pickup(args).status,"SALVAGE_NATIVE_PLAYER_CARGO");
@@ -103,3 +107,33 @@ process.on("exit",()=>{
  if(old2===undefined)delete process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
  else process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS=old2;
 });
+
+test("delivery denies a pickup receipt reassigned after inspect without changing item custody",()=>fixture(f=>{
+ assert.equal(f.api.pickup(args).status,"SALVAGE_NATIVE_PLAYER_CARGO");
+ f.dock();
+ f.beforeTx(db=>{
+  db.corporationRuntime.coopSalvageMoves.moves[args.manifestKey+":"+args.cargoID].characterID=702;
+ });
+ assert.equal(f.api.deliver(args).status,"SALVAGE_NATIVE_DELIVERY_UNCERTAIN");
+ assert.equal(f.db().items["100000"].ownerID,args.characterID);
+ assert.equal(f.db().items["100000"].locationID,args.shipID);
+ assert.equal(f.db().corporationRuntime.coopSalvageMoves.moves[args.manifestKey+":"+args.cargoID].state,"PLAYER_CARGO");
+ assert.equal(f.txs(),1);
+}));
+test("delivery refuses quantity-matched stack with altered stacksize between preflight and commit",()=>fixture(f=>{
+ f.api.pickup(args);f.dock();
+ f.beforeTx(db=>{db.items["100000"].stacksize=args.quantity+1;});
+ assert.equal(f.api.deliver(args).status,"SALVAGE_NATIVE_DELIVERY_UNCERTAIN");
+ assert.equal(f.db().items["100000"].ownerID,args.characterID);
+ assert.equal(f.txs(),1);
+}));
+test("delivery refuses a duplicate original salvage marker inserted after preflight",()=>fixture(f=>{
+ f.api.pickup(args);f.dock();
+ f.beforeTx(db=>{
+  db.items["100001"]={...db.items["100000"],itemID:100001};
+ });
+ assert.equal(f.api.deliver(args).status,"SALVAGE_NATIVE_DELIVERY_UNCERTAIN");
+ assert.equal(f.db().items["100000"].ownerID,args.characterID);
+ assert.equal(f.db().corporationRuntime.coopSalvageMoves.moves[args.manifestKey+":"+args.cargoID].state,"PLAYER_CARGO");
+ assert.equal(f.txs(),1);
+}));
