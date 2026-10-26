@@ -188,7 +188,8 @@ function createNativeCorporateSellBridge({marketClient,gameStore,access,readines
  }
  return Object.freeze({prepareAndBind,publishPrepared,sourceOperation,
   inspectUncertain:()=>[...uncertain],
-  supportsNativeCorporatePublish:true,
+  supportsPreparedCorporatePublish:true,
+  supportsNativeCorporatePublish:false,
   supportsNativeCorporateSettlement:false});
 }
 module.exports={createNativeCorporateSellBridge,sourceOperation};
