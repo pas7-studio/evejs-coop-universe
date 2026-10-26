@@ -51,6 +51,23 @@ function liveCampaigns(state) {
     .sort((a, b) => String(a.campaignID).localeCompare(String(b.campaignID)));
 }
 
+// The campaign's real objective. The adjudicator binds a native structure to an
+// assault and records it as objectiveEvidence[].objectiveID = "structure:<id>"
+// only after native verification, so the latest such entry is the live target.
+// No objective yet means 0, exactly like stock (the client renders no structure).
+function objectiveStructureID(campaign) {
+  const evidence = Array.isArray(campaign && campaign.objectiveEvidence)
+    ? campaign.objectiveEvidence
+    : [];
+  for (let index = evidence.length - 1; index >= 0; index -= 1) {
+    const raw = String((evidence[index] && evidence[index].objectiveID) || "");
+    if (!raw.startsWith("structure:")) continue;
+    const structureID = Number(raw.slice("structure:".length));
+    if (Number.isSafeInteger(structureID) && structureID > 0) return structureID;
+  }
+  return 0;
+}
+
 // One client campaign snapshot per live campaign. `coveredSolarsystemIDs` is the
 // real border pair the campaign fights over, never the whole map.
 function campaignSnapshots(state, { nowMs = Date.now(), warzoneID = DEFAULT_WARZONE_ID } = {}) {
@@ -65,7 +82,7 @@ function campaignSnapshots(state, { nowMs = Date.now(), warzoneID = DEFAULT_WARZ
       originSolarsystemID: num(campaign.targetSystemID),
       coveredSolarsystemIDs: [num(campaign.sourceSystemID), num(campaign.targetSystemID)]
         .filter(pos),
-      structureID: 0,
+      structureID: objectiveStructureID(campaign),
       piratePointsRequired: 20,
       antipiratePointsRequired: 5,
       piratePointsScored: 0,
@@ -149,5 +166,6 @@ function liveCampaignSnapshots(options = {}) {
 module.exports = {
   CAMPAIGN_STATE_ACTIVE, DEFAULT_WARZONE_ID, DEFAULT_EXPIRY_MS,
   numericID, filetime, liveCampaigns, campaignSnapshots, occupationStates, frontReport,
+  objectiveStructureID,
   warState, liveCampaignSnapshots,
 };

@@ -68,3 +68,22 @@ test('a front report is built from real values only',()=>{
  assert.equal(view.frontReport('unknown-kind',{}),null);
  assert.match(view.frontReport('war-opened',{}),/unknown/);
 });
+
+test('the campaign objective structure reaches the client snapshot',()=>{
+ // No bound objective yet: the client gets 0, like stock.
+ const none=warState();
+ assert.equal(view.campaignSnapshots(none,{nowMs:1})[0].structureID,0);
+ // A really bound native structure (objectiveID from the adjudicator).
+ const bound=warState();
+ bound.campaigns['camp:1'].objectiveEvidence=[{objectiveID:'structure:1030000000000',
+  proofID:'native:1',at:1}];
+ assert.equal(view.campaignSnapshots(bound,{nowMs:1})[0].structureID,1030000000000);
+ // The latest bound objective wins, and junk never becomes a target.
+ bound.campaigns['camp:1'].objectiveEvidence.push({objectiveID:'structure:1030000000001',proofID:'native:2',at:2});
+ assert.equal(view.campaignSnapshots(bound,{nowMs:1})[0].structureID,1030000000001);
+ bound.campaigns['camp:1'].objectiveEvidence.push({objectiveID:'structure:0',proofID:'native:3',at:3},
+  {objectiveID:'station:60000682',proofID:'native:4',at:4});
+ assert.equal(view.campaignSnapshots(bound,{nowMs:1})[0].structureID,1030000000001);
+ assert.equal(view.objectiveStructureID({objectiveEvidence:null}),0);
+ assert.equal(view.objectiveStructureID(null),0);
+});
