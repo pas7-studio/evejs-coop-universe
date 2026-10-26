@@ -2,6 +2,10 @@
 // Source-of-truth physical station arrival gate for NPC mining haulers.
 // A warp order or elapsed timer is NEVER proof of an arrival or a delivery.
 const {createWarehouse} = require("./coopNativeWarehouse");
+// A refused sale used to be silent: the fleet deposited the cargo and went back
+// to mining with no record of why no ISK arrived. Telemetry is the only way an
+// operator learns that, so the decision is reported once per trip.
+const observeGuard=()=>{try{return require("./coopObserve")}catch(_error){return require("./coopObserve.cjs")}};
 // The resolver deploys as .js next to this file, but is stored as .cjs in the
 // orchestration repo, so resolve either spelling instead of keeping a stale copy.
 function loadEconomyDestination(){
@@ -51,6 +55,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  };
  const arrivals=new Map(),activeNativeEscortWarps=new Map();
   const warehouseBlockedAt=new Map();
+  const saleSkippedNoted=new Set();
  const strictMotion=()=>escortEnabled&&
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
   process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS==="1"&&
@@ -804,6 +809,19 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      probe.observe("living-npc-station-sold",null,{spaceState:{systemID:trip.systemID}},
       {fleetID:trip.fleetID,haulerID:id,stationID:trip.stationID,
        ...sale,earnedPlayerISK:0,marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"});
+    else if(sale&&sale.status!=="PENDING"){
+     // One report per real trip: the same fleet may visit the same station again
+     // with different cargo and must be able to tell us again.
+     const key="sale-skipped:"+trip.fleetID+":"+trip.stationID+":"+
+      (trip.manifestID||cargo.map(row=>Number(row.cargoID)).join(","));
+     observeGuard().noteOnce(saleSkippedNoted,key,probe,
+      "living-npc-station-sale-skipped",{systemID:trip.systemID},
+      {fleetID:trip.fleetID,stationID:trip.stationID,
+       status:String(sale.status||"NO_STATUS"),
+       reason:String(sale.reason||"").slice(0,90),
+       cargoIDs:cargo.map(row=>Number(row.cargoID)).slice(0,32),
+       depositOnly:true});
+    }
    }
    // Re-read: a settled sale really removed the sold stacks from the hull.
    const deliverable=sale?.status==="SOLD"?
