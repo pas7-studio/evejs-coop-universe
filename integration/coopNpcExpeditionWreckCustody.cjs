@@ -49,9 +49,7 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
  }
  function stage({wreckID,shipID,corporationID}={}){
   const w=verifiedWreck(wreckID);
-  if(!w||!POS(shipID)||!POS(corporationID)||
-    w.sourceEntityID!==shipID||
-    w.coopNpcExpeditionSourceCorpID!==corporationID)
+  if(!w||!POS(shipID)||w.sourceEntityID!==shipID)
    return deny("EX03_WRECK_ORIGINAL_SOURCE_MISMATCH");
   let rows,other;
   try{
@@ -67,6 +65,10 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   if(other.some(x=>x?.sourceEntityID===shipID&&x.wreckID!==wreckID))
    return deny("EX03_WRECK_PREVIOUS_DEATH_OR_UNBOUNDED");
   if(candidates.length===0)return {success:true,status:"NO_EXPEDITION_LOOT",itemIDs:[]};
+  // Ordinary native NPC wrecks without original exploration cargo are NOT
+  // blocked by missing expedition-only provenance.
+  if(!POS(corporationID)||w.coopNpcExpeditionSourceCorpID!==corporationID)
+   return deny("EX03_WRECK_ORIGINAL_SOURCE_MISMATCH");
   if(candidates.length>maxItems)
    return deny("EX03_WRECK_PREVIOUS_DEATH_OR_UNBOUNDED");
   if(candidates.some(x=>{
