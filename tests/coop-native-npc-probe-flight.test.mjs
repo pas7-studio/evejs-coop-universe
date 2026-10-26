@@ -32,6 +32,12 @@ function fixture(){
   upsertNativeCargo:row=>{writes++;ops.push("write:"+row.cargoID);
    cargo=cargo.map(old=>old.cargoID===row.cargoID?row:old);return {success:true}},
   flushNpcCargo:()=>{flushes++;ops.push("flush");return {success:!failFlush}},
+  refreshNativeCargoProjection:(ship,id)=>{
+   assert.equal(id,entityID);
+   ship.nativeCargoItems=cargo.filter(x=>x.quantity>0)
+    .map(x=>({itemID:x.cargoID,quantity:x.quantity}));
+   return true;
+  },
   compatibleCharges:()=>[3001],
   resolveProbeRange:(_type,step)=>({rangeStep:step,scanRange:1e10}),
   buildProbeSceneEntity:(probe,{ownerID:owner,systemID:system})=>({
@@ -57,6 +63,7 @@ test("one original cargo unit is durably debited before its exact native probe i
  assert.equal(f.cargo()[0].quantity,0);
  assert.equal(f.cargo()[0].deployedProbe.probeID,f.cargo()[0].cargoID);
  assert.equal(f.sceneMap.get(r.cargoID).kind,"probe");
+ assert.equal(f.ship.nativeCargoItems.some(item=>item.itemID===r.cargoID),false);
  assert.equal(f.spawns(),1);
 });
 test("four genuine original charges produce four distinct persistent physical probes",()=>{
