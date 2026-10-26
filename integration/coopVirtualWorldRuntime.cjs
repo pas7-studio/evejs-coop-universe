@@ -1377,23 +1377,33 @@ async function observeAlifeEconomy(){
    // LW-04B: use this existing A-Life authority tick for manufacturing
    // admission only. Shipped native industry bindings are NOT live-safe.
    if(process.env.EVEJS_COOP_ALIFE_ECONOMY_ACT==="1"){
-    if(!alifeManufacturingRuntime)alifeManufacturingRuntime=
-     require("./coopAlifeNativeManufacturingRuntime").createRuntimeAlifeManufacturing({
-      getNativeEntity:id=>npcStore.getNativeEntity(id),
-      getController:id=>controllers.getControllerByEntityID(id),
-      sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
-      getStation:id=>worldData.getStationByID(id)
-     });
-    const result=await alifeManufacturingRuntime.tick({
-     snapshot:snap,decision,registry:identityRegistry});
-    if(result.status==="BLOCKED"||result.status==="ADMISSION_EVALUATED")
+    try{
+     if(!alifeManufacturingRuntime)alifeManufacturingRuntime=
+      require("./coopAlifeNativeManufacturingRuntime").createRuntimeAlifeManufacturing({
+       getNativeEntity:id=>npcStore.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+       getStation:id=>worldData.getStationByID(id)
+      });
+     const result=await alifeManufacturingRuntime.tick({
+      snapshot:snap,decision,registry:identityRegistry});
+     if(result.status==="BLOCKED"||result.status==="ADMISSION_EVALUATED")
+      probe.observe("alife-native-manufacturing-admission",null,
+       {spaceState:{systemID}},{
+        status:result.status,reason:result.reason||null,
+        count:result.count||0,
+        directorReportedNativeAction:result.results?.some(x=>x.nativeMutation===true)===true,
+        nativeSettlementVerified:false,
+        source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"
+       });
+    }catch(error){
      probe.observe("alife-native-manufacturing-admission",null,
-      {spaceState:{systemID}},
-      {status:result.status,reason:result.reason||null,
-       count:result.count||0,
-       directorReportedNativeAction:result.results?.some(x=>x.nativeMutation===true)===true,
-       nativeSettlementVerified:false,
-       source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
+      {spaceState:{systemID}},{
+       status:"BLOCKED",reason:"NATIVE_MANUFACTURING_ADMISSION_EXCEPTION",
+       source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT",
+       nativeSettlementVerified:false
+      });
+    }
    }
    if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
     safeNpcPhase("alife-native-resupply-act",()=>
