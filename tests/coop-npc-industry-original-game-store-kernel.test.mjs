@@ -107,12 +107,21 @@ test("real source native kernels debit original minerals+ISK once then survive r
   const jobs=f.get("industryJobs","jobs"+SEP+first.jobID);
   assert.equal(jobs.coopOperationID,OP);
   assert.equal(jobs.status,1);
+  // Real COOP-032B/E source now persists exact physical material debits in
+  // the SAME native industry job SQLite commit as the wallet/BPO charge.
+  assert.deepEqual(jobs.coopMaterialDebits,[{
+   itemID:ORE_ID,typeID:34,ownerID:OWNER,stationID:STATION,
+   beforeQuantity:50,consumedQuantity:10,afterQuantity:40,
+   sourceCustomInfo:null
+  }]);
   // Cold-process simulation: a new stage helper reads the ORIGINAL
   // GameStore operation ID; it must never allocate another job or charge.
   const restarted=f.createStage();
   assert.equal(f.run("INSTALL",restarted).status,"ALREADY_INSTALLED");
   assert.equal(f.wallet(),87.5);
   assert.equal(f.get("items",ORE_ID).quantity,40);
+  assert.deepEqual(f.get("industryJobs","jobs"+SEP+first.jobID).coopMaterialDebits,
+   jobs.coopMaterialDebits);
   assert.equal([...f.rows.industryJobs.keys()].filter(k=>k.startsWith("jobs"+SEP)).length,1);
   assert.equal(f.get("industryBlueprintState","records"+SEP+BP_ID).jobID,first.jobID);
  }finally{f.close()}
