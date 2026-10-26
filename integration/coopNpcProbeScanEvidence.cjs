@@ -94,6 +94,7 @@ function createNpcProbeScanEvidence({getNativeEntity,getController,listNativeMod
     return refuse("NPC_SCANNER_PROBE_RANGE_OR_TYPE_UNVERIFIED");
    const physical=scene.getEntityByID(flight.probeID);
    if(!physical||physical.itemID!==flight.probeID||physical.kind!=="probe"||
+      physical.nativeNpcProbe!==true||physical.nativeNpcCargoID!==row.cargoID||
       physical.typeID!==row.typeID||physical.ownerID!==entity.ownerID||
       (positive(physical.systemID)&&physical.systemID!==scene.systemID)||
       !vec(physical.position)||dist(physical.position,flight.position)>1||
