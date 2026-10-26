@@ -6,6 +6,7 @@
 const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 const mineable=x=>positive(x?.cargoID)&&positive(x?.typeID)&&Number.isSafeInteger(Number(x.quantity))&&Number(x.quantity)>0&&Number(x.moduleID||0)===0;
 const haulFlag="coopHaulFleetID";
+const {promote:durableCargo}=require("./coopDurableCargoWrite");
 function dependenciesOf(options={}){
  return {store:options.store||require("./npc/nativeNpcStore"),
  probe:options.probe||require("./coopRuntimeProbe"),
@@ -163,11 +164,11 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
      ownerID:minerOwner,transient:false,[haulFlag]:fleetID,
      coopHaulFromMinerID:minerID,coopHaulSystemID:Number(scene.systemID),
      coopHaulLoadedAt:Date.now()};
-    const ack=store.upsertNativeCargo(updated,{transient:true});
+    const promoted=durableCargo({store,database:options.database,cargoID,row:updated});
     // An unsuccessful ACK does not establish that nothing was written.
-    if(ack?.success!==true)return stop("HAUL_SOURCE_MOVE_UNCERTAIN",true,selected,cargoID);
-    db.setTransientPath("npcCargo","/cargo/"+cargoID,false);
-    if(db.flushTableSync("npcCargo")?.success!==true)
+    if(promoted.status==="UPSERT_REJECTED"||promoted.status==="UPSERT_UNCERTAIN")
+     return stop("HAUL_SOURCE_MOVE_UNCERTAIN",true,selected,cargoID);
+    if(promoted.status!== "DURABLE")
      return stop("HAUL_SOURCE_FLUSH_UNCERTAIN",true,selected,cargoID);
     const after=store.listNativeCargo();
     const hits=Array.isArray(after)?after.filter(x=>Number(x?.cargoID)===cargoID):[];
@@ -216,23 +217,22 @@ function transferCargo(scene,fleet,miner,options={}){
    // conservative behaviour is unchanged.
    const durable=process.env.EVEJS_COOP_NPC_STATION_DELIVERY==="1"&&
      (hauler.transient!==true||process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION==="1");
-   const result=store.upsertNativeCargo({...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
+   const next={...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
     ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
     [haulFlag]:Number(fleet.fleetID),coopHaulFromMinerID:Number(miner.itemID),
-    coopHaulSystemID:Number(fleet.systemID),coopHaulLoadedAt:Date.now()},{transient:durable?true:hauler.transient===true});
-   if(!result?.success)continue;
+    coopHaulSystemID:Number(fleet.systemID),coopHaulLoadedAt:Date.now()};
    if(durable){
     // Promotes the SAME cargoID and removes its previous transient marker
     // before synchronous durability, never creating a second ore stack.
-    const db=options.database||require("../gameStore");
-    db.setTransientPath("npcCargo",`/cargo/${Number(item.cargoID)}`,false);
-    if(db.flushTableSync("npcCargo")?.success!==true){
+    const promoted=durableCargo({store,database:options.database,
+     cargoID:item.cargoID,row:next});
+    if(promoted.status!=="DURABLE"){
      probe.observe("living-hauler-cargo-persist-failed",null,
       {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
-      {fleetID:fleet.fleetID,cargoID:item.cargoID});
+      {fleetID:fleet.fleetID,cargoID:item.cargoID,status:promoted.status});
      continue;
     }
-   }
+   }else if(!store.upsertNativeCargo(next,{transient:hauler.transient===true})?.success)continue;
    if(!(store.listNativeCargoForEntity(hauler.itemID)||[]).some(x=>Number(x.cargoID)===Number(item.cargoID)))continue;
    miner.nativeCargoItems=(miner.nativeCargoItems||[]).filter(x=>Number(x.itemID)!==Number(item.cargoID));
    quantity+=amount;volume+=amount*Math.max(0,Number(cached?.volume)||0);moved++;
