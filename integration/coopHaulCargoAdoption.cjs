@@ -87,7 +87,7 @@ function verifyReAdoptionCustody(row, options={}) {
   if(names.some(name=>typeof name!=="string"))
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   const warehouseClaim=names.some(name=>{
-   const match=/^(\\d+)\\.(?:json(?:\\.tmp-[^/\\\\]*)?|lock)$/.exec(name);
+   const match=/^(\d+)\.(?:json(?:\.tmp-[^/\\]*)?|lock)$/.exec(name);
    return match&&Number(match[1])===cargoID;
   });
   if(warehouseClaim)return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
