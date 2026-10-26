@@ -111,3 +111,21 @@ test("EX-03B5 crash between recall intent and refund preserves exactly one origi
  assert.equal(w.ship.nativeCargoItems.filter(r=>r.itemID===id).length,1);
  assert.equal(w.end().status,"NO_LIFECYCLE_ACTION");
 });
+
+test("EX-03B8 after two-phase recall original probe cargoID can be launched again",()=>{
+ const w=world(),first=w.launch();
+ assert.equal(first.status,"NATIVE_PROBE_LAUNCHED");
+ const id=first.cargoID,probe=w.physical.get(id);
+ probe.position={x:1000,y:0,z:0};
+ const row=w.rows().find(x=>x.cargoID===id);
+ row.deployedProbe.position={...probe.position};
+ assert.equal(w.end({requestRecall:true}).status,"NPC_PROBE_RECALL_COMMITTED");
+ assert.equal(w.end().status,"NPC_PROBE_RETURNED");
+ assert.equal(w.physical.has(id),false);
+ w.restart();
+ const again=w.launch();
+ assert.equal(again.status,"NATIVE_PROBE_LAUNCHED");
+ assert.equal(again.cargoID,id);
+ assert.equal(w.rows().find(x=>x.cargoID===id).quantity,0);
+ assert.equal(w.physical.get(id).nativeNpcCargoID,id);
+});
