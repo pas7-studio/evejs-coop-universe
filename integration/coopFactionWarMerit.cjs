@@ -84,4 +84,29 @@ function capabilitiesFor(record) {
   return { rank: rank.rank, hullClassID: rank.hullClassID, command: rank.command, merit: clampMerit(record && record.merit) };
 }
 
-module.exports = { RANKS, MERIT, rankForMerit, emptyRecord, meritForEvent, applyEvent, capabilitiesFor };
+const RANK_BY_NAME = Object.freeze(Object.fromEntries(RANKS.map((entry) => [entry.rank, entry])));
+
+// How many ships one pilot may command: recruit 1, squad-lead 5, admiral 25.
+// A record that does not exist yet is a recruit, never a silent promotion.
+function commandCapFor(record) {
+  return rankForMerit(record && record.merit).command;
+}
+
+// One side of a campaign is commanded by its highest-ranked assigned pilot. With
+// nobody assigned yet the first ship IS the commander, so the cap starts at a
+// recruit's 1 and only grows when somebody really earned the rank.
+function sideCommandCap({ pilotIDs = [], records = {} } = {}) {
+  const ids = Array.isArray(pilotIDs) ? pilotIDs : [];
+  const table = records && typeof records === "object" ? records : {};
+  let cap = RANKS[0].command;
+  for (const id of ids) {
+    const record = table[String(id)] || table[id];
+    if (record) cap = Math.max(cap, commandCapFor(record));
+  }
+  return Math.min(25, cap);
+}
+
+module.exports = {
+  RANKS, MERIT, RANK_BY_NAME, rankForMerit, emptyRecord, meritForEvent, applyEvent,
+  capabilitiesFor, commandCapFor, sideCommandCap,
+};

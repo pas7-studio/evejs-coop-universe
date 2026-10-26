@@ -887,3 +887,8 @@ Why: Mobilization answered OBSERVED with no reason, and the real blocker was inv
 Detail: tick({dryRun:true}) runs every mobilization check through the same code path, reports the first failed check per candidate and never calls registry.execute; the runtime exposes diagnoseMobilization() and the admin bridge a read-only war_diagnose action. Live diagnosis for war:500011-500014 (Angel Cartel vs ORE) at 23:53Z: - DEFENDER (30000144, ORE 500014): every patrol candidate is WRONG_FACTION. 
 Where: docs/WORKLOG.md, integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs, tests/coop-war-mobilization.test.mjs
 Evidence: war_diagnose DRY_RUN rejected: DEFENDER WRONG_FACTION (ORE has no armed profile), ATTACKER NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON; coop-war-mobilization 8/8
+### 2026-10-26T23:56Z · 92156a1 · DOCS · docs(loop): items 1/2/5 evidence and the exact assault blocker
+
+Why: Record item 1/2/5 evidence and the proven assault blocker
+Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
+Evidence: metrics.md blocks for 3fc8e73c and 457b0ef0; state.md next-step plan

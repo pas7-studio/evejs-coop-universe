@@ -134,3 +134,49 @@ test("a dry run names the first failed check per candidate",()=>{
  assert.equal(dry.rejected.every(x=>typeof x.reason==="string"&&x.reason.length>0),true);
  assert.equal(f.calls.length,0);
 });
+
+test("command size is a rank, not a global constant",()=>{
+ const merit=require("../integration/coopFactionWarMerit.cjs");
+ assert.equal(merit.commandCapFor({merit:0}),1);          // recruit
+ assert.equal(merit.commandCapFor({merit:150}),5);        // squad-lead
+ assert.equal(merit.commandCapFor({merit:1200}),25);      // admiral
+ assert.equal(merit.commandCapFor(undefined),1);          // no record = recruit
+ assert.equal(merit.RANK_BY_NAME["squad-lead"].command,5);
+ // a side is commanded by its highest-ranked assigned pilot
+ assert.equal(merit.sideCommandCap({pilotIDs:[],records:{}}),1);
+ assert.equal(merit.sideCommandCap({pilotIDs:["coop-pilot-001"],
+  records:{"coop-pilot-001":{merit:70}}}),3);
+ assert.equal(merit.sideCommandCap({pilotIDs:["coop-pilot-001","coop-pilot-002"],
+  records:{"coop-pilot-001":{merit:0},"coop-pilot-002":{merit:1200}}}),25);
+});
+
+test("a recruit commander caps a side at one ship, an admiral at the hard cap",()=>{
+ const f=fixture();
+ const recruit=createWarMobilizer({
+  registry:{snapshot:()=>structuredClone(f.registered),execute:c=>{f.calls.push(c);
+   f.registered.ships[String(c.entityID)]={...c};return {status:"APPLIED"}}},
+  readWarState:()=>f.war,readLinks:()=>f.links,
+  sceneForSystem:id=>f.scenes.get(id),getNativeEntity:id=>f.native.get(id),
+  getController:id=>f.controllers.get(id),
+  getFactionForCorporation:corp=>corp===31?11:corp===32?22:null,
+  inspectReadiness:()=>({ready:true}),getOrderLeases:()=>[],
+  isTactical:()=>false,clock:()=>100000,env:f.env,maxPerTick:4,maxPerSide:4,
+  commandCap:()=>1});
+ const one=recruit.tick({systemIDs:[101,202]});
+ assert.equal(one.mobilized.length,2);                    // one per side, not four
+ assert.equal(f.calls.length,2);
+ const f2=fixture();
+ const admiral=createWarMobilizer({
+  registry:{snapshot:()=>structuredClone(f2.registered),execute:c=>{f2.calls.push(c);
+   f2.registered.ships[String(c.entityID)]={...c};return {status:"APPLIED"}}},
+  readWarState:()=>f2.war,readLinks:()=>f2.links,
+  sceneForSystem:id=>f2.scenes.get(id),getNativeEntity:id=>f2.native.get(id),
+  getController:id=>f2.controllers.get(id),
+  getFactionForCorporation:corp=>corp===31?11:corp===32?22:null,
+  inspectReadiness:()=>({ready:true}),getOrderLeases:()=>[],
+  isTactical:()=>false,clock:()=>100000,env:f2.env,maxPerTick:4,maxPerSide:4,
+  commandCap:()=>25});
+ const many=admiral.tick({systemIDs:[101,202]});
+ assert.equal(many.mobilized.length>=2,true);             // a fleet, still bounded by maxPerSide
+ assert.equal(many.mobilized.length<=4,true);
+});

@@ -6,6 +6,9 @@ const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
+// Real merit per pilot (coop-pilot-XXX -> record). Nothing promotes a pilot yet,
+// so it is empty and every commander is a recruit; the career phase fills it.
+const warMeritRecords={};
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
 let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null,npcWormholeApproaches=new Set();
@@ -310,7 +313,11 @@ function advanceNativeWarMobilization(){
    getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
    inspectReadiness:context=>readiness.inspect(context),
    getOrderLeases:()=>guard.snapshot().leases,
-   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true,
+   // Command size comes from real rank. No pilot has earned merit yet, so every
+   // side starts at a recruit's single ship instead of the old blanket two.
+   commandCap:({assignedPilotIDs})=>require("./coopFactionWarMerit")
+    .sideCommandCap({pilotIDs:assignedPilotIDs,records:warMeritRecords})
   });
  }
  const result=warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12)});

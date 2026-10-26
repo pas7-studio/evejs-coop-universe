@@ -18,11 +18,13 @@ const enabled=env=>env.EVEJS_COOP_FACTION_WAR==="1"&&
 function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
  getNativeEntity,getController,getFactionForCorporation,
  inspectReadiness,getOrderLeases,isTactical=()=>false,
+ commandCap=null,
  clock=()=>Date.now(),env=process.env,maxPerTick=2,maxPerSide=2}={}){
  if(!registry?.snapshot||!registry?.execute||
   [readWarState,readLinks,sceneForSystem,getNativeEntity,getController,
    getFactionForCorporation,inspectReadiness,getOrderLeases,isTactical,clock]
    .some(x=>typeof x!=="function")||
+  (commandCap!==null&&typeof commandCap!=="function")||
   !Number.isSafeInteger(maxPerTick)||maxPerTick<1||maxPerTick>4||
   !Number.isSafeInteger(maxPerSide)||maxPerSide<1||maxPerSide>4)
   throw Error("WAR_MOBILIZATION_NATIVE_AUTHORITIES_REQUIRED");
@@ -101,7 +103,22 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
       s?.campaignID===c.campaignID&&s.factionID===side.factionID).length;
      existingSide+=mobilized.filter(s=>s.campaignID===c.campaignID&&
       s.factionID===side.factionID).length;
-     if(existingSide>=maxPerSide)continue;
+     // A side may only field as many ships as its commander's rank allows
+     // (recruit 1 ... admiral 25), and never more than the global hard cap.
+     let sideLimit=maxPerSide;
+     if(typeof commandCap==="function"){
+      const commanded=[...Object.values(assigned.ships),...mobilized]
+       .filter(s=>s?.campaignID===c.campaignID&&s.factionID===side.factionID)
+       .map(s=>s.pilotID);
+      let cap=0;
+      try{
+       cap=Number(commandCap({campaignID:c.campaignID,factionID:side.factionID,
+        systemID:side.systemID,assignedPilotIDs:commanded}));
+      }catch{cap=0}
+      if(!Number.isSafeInteger(cap)||cap<1)cap=1;
+      sideLimit=Math.max(1,Math.min(maxPerSide,cap));
+     }
+     if(existingSide>=sideLimit)continue;
      let scene;
      try{scene=sceneForSystem(side.systemID)}catch{continue}
      if(scene?.systemID!==side.systemID||
@@ -109,7 +126,7 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
      const playerIDs=new Set([...(scene.sessions?.values?.()||[])]
       .map(x=>Number(x?._space?.shipID)).filter(pos));
      for(const link of candidateLinks){
-      if(existingSide>=maxPerSide||mobilized.length>=maxPerTick)break;
+      if(existingSide>=sideLimit||mobilized.length>=maxPerTick)break;
       const id=link?.entityID;
       const cheap=!pos(id)?"INVALID_ENTITY":!named(link.pilotID)?"INVALID_PILOT":
        link.role!=="patrol"?"NOT_PATROL_ROLE":link.systemID!==side.systemID?"WRONG_SYSTEM":
