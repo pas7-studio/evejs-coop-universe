@@ -348,3 +348,63 @@ Why: a durable fleet actor was pruned while its persisted controller row still e
 Detail: pruneMiningFleet filtered every fleet list through the in-memory controller registry only. That registry is rebuilt when a scene is torn down while the persisted native controller row survives, so a durable miner or hauler left the fleet with no destruction at all: the prune forensics reported storedEntity=true storedController=true for every removed actor, the fleet reported miners=0 with live sh
 Where: patches/upstream/0004-native-mining-fleet-retained-actor.patch, patches/upstream/MANIFEST.json, tests/coop-native-fleet-retained-actor.test.mjs
 Evidence: prune forensics storedEntity=true storedController=true on every removed actor; fleet miners=0 with live ships; tests/coop-native-fleet-retained-actor.test.mjs 3/3; patch sha256 in MANIFEST
+### 2026-10-26T14:29Z · 1126761 · L2 · coop: fleet actor self-heal becomes a module function, not a 900-char hook
+
+Why: a 900-character behaviour hook cannot be tested or reviewed; hooks must be one call into a module
+Detail: The prune-time heal that re-attached durable controllers was 900 characters of inline logic inside a string insertion: untestable, unreviewable, and exactly the shape that produced the earlier double-activation bug. It is now coopNativeMiningFleetDurable.healFleetActors, called by a 257-character hook that only passes the service it needs. Behaviour is unchanged and covered: the function dedupes a
+Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs
+Evidence: healFleetActors extracted; hook 900->257 chars; tests/coop-native-mining-fleet-durable 34/34 with durable-slot-heal and retained-actor suites
+### 2026-10-26T14:41Z · e084bec · L1 · L1 0005: a durable NPC is never combat-dormant; mining hooks become module calls
+
+Why: combat dormancy dematerialised durable co-op NPCs on every no-session scene, resetting module effects ~2x/s so no mining cycle could complete
+Detail: Root cause of 'modules active, no ore': a scene with no attached sessions runs dematerializeDormantCombatControllers, whose predicate matches any nativeCombat controller carrying a startup rule OR an operator kind. A durable co-op ship is runtimeKind=nativeCombat with operatorKind=coop-mining-*, so the sweep unregistered its controller; the durable owner restored it immediately and the loop repeat
+Where: docs/coop-flags.json, integration/coopMiningTrace.cjs, integration/coopNativeMiningFleetDurable.cjs, patches/upstream/0005-native-npc-durable-not-dormant.patch, patches/upstream/MANIFEST.json, scripts/overlay-spec.cjs, tests/coop-mining-trace-shape.test.mjs, tests/coop-native-npc-durable-not-dormant.test.mjs
+Evidence: unregister stack: npcCombatDormancy.dematerializeDormantCombatControllersForScene -> dematerializeNativeController -> unregisterController; 21582 restores; 0 mining cycle results; controllers runtimeKind=nativeCombat operatorKind=coop-mining-* transient=false
+### 2026-10-26T14:32Z · 38c3570 · L2 · fix(P0): verify physical original tagged ore remains in native station hangar stack
+
+Why: A previously COMMITTED native warehouse item moved out of the original station HANGAR, split, or changed singleton still passed checkTarget, replay status ALREADY_COMMITTED and audit OK. Exact physical item flag/stacksize/singleton now required.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:33Z · a613a45 · TEST · test(P0): detect moved, split or corrupt tagged warehouse item as unreconciled
+
+Why: Regression tests verify moved, split, invalid singleton/missing hangar tags plus foreign corporate tag and uncertain grant outcome.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:35Z · 8279e66 · L2 · fix(P0): reject global cargo marker collision before warehouse PREPARED and native debit
+
+Why: Source warehouse deposit checked the global cargo tag only after the source cargo was debited and flushed. A previously tagged item at a foreign station/corporation caused destructive debit before identity conflict was discovered. Global tag preflight now runs before PREPARED journal write and native debit.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:35Z · a616d9b · TEST · test(P0): original cargo item collision preflight and missing hangar authority
+
+Why: Regressions verify an already-existing valid item with the same cargoID prevents any source debit or PREPARED journal, and unavailable hangar flags fail closed.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:44Z · 7d0fb0f · DOCS · coop: make hook length part of the measured debt, and document the dormancy root cause
+
+Why: hook length was a convention; the dormancy root cause was not written down for the next session
+Detail: The inventory now counts hooks longer than 400 characters and records the longest one, so 'a hook is one call into a module' is enforced by a test instead of by intent. Today: 3 long hooks (822 tradeMgrService, 501 agentMgrService, 451 nativeNpcWreckService) and zero in miningNpcOperations after the extraction. docs/NATIVE_NPC_DURABILITY.md records why a durable NPC must never be combat dormant, w
+Where: docs/NATIVE_NPC_DURABILITY.md, docs/coop-hook-inventory.json, scripts/coop-hook-inventory.cjs, tests/coop-hook-inventory.test.mjs
+Evidence: HOOKS longHooks=3 longest=822 enforced by tests/coop-hook-inventory.test.mjs 3/3; docs section with the 21582-restore and 0-cycle measurement
+### 2026-10-26T14:49Z · a5e5f72 · L1 · L1 0003: measure the sessionless capacitor interval on a private stamp
+
+Why: sessionless capacitor advance reused a shared timestamp so its dt was milliseconds, leaving NPC hulls starved at 2% and every mining activation failing
+Detail: advanceSessionlessCapacitor took its own dt from capacitorRechargedAtMs, a shared client-visible stamp that other code also refreshes. Each call therefore saw a few milliseconds instead of the interval it covers, so a sessionless hull charged 53x slower than the CCP curve: measured +0.0109 ratio over 121 s against the 0.0048/s expected. The hulls drifted to 2-3% capacitor, every mining activation 
+Where: patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json
+Evidence: measured +0.0109 charge ratio over 121 s vs 0.0048/s expected (53x slow); MODULE_ACTIVATE_FAILED NOT_ENOUGH_CAPACITOR at ratio 0.0023-0.0126; patch 0003 sha256 refreshed in MANIFEST
+### 2026-10-26T14:40Z · 8c7ce29 · L2 · fix(P0): poison native depot after ambiguous journal flush and refuse stale snapshots
+
+Why: After the original depot COMMITTED or PREPARED journal rename succeeded but directory fsync threw EIO, the in-memory state remained older than the disk file. A subsequent prepare persisted the stale receipts map and erased a committed receipt and system supply totals. All uncertain writes now poison the instance and fail-closed prepare/commit/audit/snapshot until a fresh reopen verifies disk state.
+Where: integration/coopNativeDepot.cjs
+Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:41Z · f1c16bd · TEST · test(P0): post-rename fsync failures must not erase disk committed or pending depot receipts
+
+Why: Add deterministic fake-fs tests: post-rename COMMITTED directory fsync error, no overwrite of persisted receipt/totals on next request, blocked stale snapshot, and successful audit/credit after fresh reopen; also PREPARED rename failure and preserved pending cargo.
+Where: tests/coop-native-depot.test.mjs
+Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:33Z · ac3c4c4 · L2 · fix(P0): reject aliased original cargo receipt keys and freeze corrupted depot on reopen
+
+Why: A persisted receipt keyed "000777" with cargoID=777 passed audit OK; a subsequent prepare+commit for cargoID=777 created a second receipt and doubled virtual supply. Startup also allowed mismatched receipt totals and malformed pending to be exposed by snapshot or extended by new commits. Audit now requires canonical source IDs and complete valid pending, while a corrupted loaded journal refuses prepare/commit and snapshot until operator repair; legitimate pending remains recoverable.
+Where: integration/coopNativeDepot.cjs, tests/coop-native-depot.test.mjs
+Evidence: Exact-source old-main reproduction: audit OK -> PREPARED -> COMMITTED -> audit OK with two receipts for original cargoID=777 and 200 units. Updated V8 exact-source depot test suite 8/8 PASS with simulated FS and actual virtual-economy module. Native Node 22/SQLite/Rust/two authenticated EVE clients NOT_RUN.
+

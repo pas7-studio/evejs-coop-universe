@@ -51,3 +51,172 @@ test("bad or repeated native cargo IDs cannot invent virtual goods",()=>{
   assert.deepEqual(depot.snapshot().totals,{});
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test("P0: directory fsync error after COMMITTED rename cannot erase durable cargo receipt",()=>{
+ const file="/test/native-depot.json",files=new Map(),fds=new Map();
+ let fd=0,failNextDirSync=false,writes=0;
+ const fsApi={
+  readFileSync(p){if(!files.has(p))throw Object.assign(Error("ENOENT"),{code:"ENOENT"});return files.get(p);},
+  mkdirSync(){},
+  openSync(p,mode){fds.set(++fd,{path:p,dir:mode==="r"});return fd;},
+  writeFileSync(id,value){files.set(fds.get(id).path,String(value));},
+  fsyncSync(id){
+   if(fds.get(id).dir&&failNextDirSync){
+    failNextDirSync=false;throw Object.assign(Error("EIO"),{code:"EIO"});
+   }
+  },
+  closeSync(id){fds.delete(id);},
+  renameSync(from,to){files.set(to,files.get(from));files.delete(from);writes++;},
+  unlinkSync(p){files.delete(p);}
+ };
+ const request=id=>({systemID:30000142,fleetID:9,
+  item:{cargoID:id,haulerID:201,typeID:34,quantity:100}});
+ const depot=createDepot({file,fsApi,clock:()=>123});
+ assert.equal(depot.prepare(request(777)).status,"PREPARED");
+ failNextDirSync=true;
+ assert.throws(()=>depot.commit(request(777)),/EIO/);
+ const committed=JSON.parse(files.get(file));
+ assert.equal(committed.receipts["777"].cargoID,777);
+ assert.equal(committed.totals["30000142"],100);
+ const writesBefore=writes;
+ assert.equal(depot.prepare(request(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(depot.commit(request(777)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(writes,writesBefore,"no later call can overwrite the newer disk journal");
+ assert.throws(()=>depot.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+ assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(depot.audit().reason,"DEPOT_PERSISTENCE_UNVERIFIED");
+ const reopened=createDepot({file,fsApi,clock:()=>124});
+ assert.equal(reopened.audit().status,"OK");
+ assert.equal(reopened.prepare(request(777)).status,"ALREADY_COMMITTED");
+ assert.equal(reopened.prepare(request(778)).status,"PREPARED");
+ assert.equal(reopened.commit(request(778)).status,"COMMITTED");
+ assert.equal(reopened.snapshot().totals["30000142"],200);
+});
+
+test("P0: post-rename PREPARED failure blocks stale in-memory state from dropping pending",()=>{
+ const file="/test/depot-prepare.json",files=new Map(),fds=new Map();
+ let fd=0,failNextDirSync=true,writes=0;
+ const fsApi={
+  readFileSync(p){if(!files.has(p))throw Object.assign(Error("ENOENT"),{code:"ENOENT"});return files.get(p);},
+  mkdirSync(){},
+  openSync(p,mode){fds.set(++fd,{path:p,dir:mode==="r"});return fd;},
+  writeFileSync(id,value){files.set(fds.get(id).path,String(value));},
+  fsyncSync(id){
+   if(fds.get(id).dir&&failNextDirSync){
+    failNextDirSync=false;throw Object.assign(Error("EIO"),{code:"EIO"});
+   }
+  },
+  closeSync(id){fds.delete(id);},
+  renameSync(a,b){files.set(b,files.get(a));files.delete(a);writes++;},
+  unlinkSync(p){files.delete(p);}
+ };
+ const payload=id=>({systemID:30000142,fleetID:9,
+  item:{cargoID:id,haulerID:201,typeID:34,quantity:100}});
+ const depot=createDepot({file,fsApi,clock:()=>123});
+ assert.throws(()=>depot.prepare(payload(777)),/EIO/);
+ assert.equal(JSON.parse(files.get(file)).pending["777"].cargoID,777);
+ const writesBefore=writes;
+ assert.equal(depot.prepare(payload(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(depot.commit(payload(777)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(writes,writesBefore);
+ const restored=createDepot({file,fsApi,clock:()=>124});
+ assert.equal(restored.prepare(payload(777)).status,"PREPARED");
+ assert.equal(restored.commit(payload(777)).status,"COMMITTED");
+ assert.equal(restored.audit().status,"OK");
+});
+
+function depotSnapshotFixture(snapshot) {
+ const file="/fault-journal/depot.json",files=new Map([[file,JSON.stringify(snapshot)]]);
+ let fd=0,writes=0;
+ const handles=new Map();
+ const fsApi={
+  readFileSync(p){
+   if(!files.has(p))throw Object.assign(Error("ENOENT"),{code:"ENOENT"});
+   return files.get(p);
+  },
+  mkdirSync(){},
+  openSync(p,mode){handles.set(++fd,p);return fd;},
+  writeFileSync(id,value){files.set(handles.get(id),String(value));},
+  fsyncSync(){},closeSync(id){handles.delete(id);},
+  renameSync(from,to){files.set(to,files.get(from));files.delete(from);writes++;},
+  unlinkSync(p){files.delete(p);}
+ };
+ return {depot:createDepot({file,fsApi,clock:()=>123}),file,files,
+  writes:()=>writes,fsApi};
+}
+
+test("P0: aliased persisted cargo receipt cannot receive original ore twice",()=>{
+ const receipt={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9,at:123};
+ const candidate={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ for(const key of ["000777","+777","7.77e2"]){
+  const {depot,files,file,writes}=depotSnapshotFixture({
+   version:1,receipts:{[key]:receipt},pending:{},
+   totals:{"30000142":100}
+  });
+  const original=files.get(file);
+  assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR",key);
+  assert.ok(depot.audit().invalid>0,key);
+  assert.throws(()=>depot.snapshot(),/DEPOT_STATE_UNRECONCILED/,key);
+  assert.equal(depot.prepare(candidate).status,"DEPOT_STATE_UNRECONCILED",key);
+  assert.equal(depot.commit(candidate).status,"DEPOT_STATE_UNRECONCILED",key);
+  assert.equal(writes(),0,key);
+  assert.equal(files.get(file),original,key);
+ }
+});
+
+test("P0: totals mismatch and duplicate canonical/aliased source cannot be repaired by appending credits",()=>{
+ const receipt={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9};
+ const candidate={systemID:30000142,fleetID:9,
+  item:{cargoID:778,haulerID:201,typeID:34,quantity:50}};
+ for(const [label,record] of [
+  ["missing totals credit",{receipts:{"777":receipt},totals:{"30000142":0}}],
+  ["duplicate original ID alias",{receipts:{"777":receipt,"000777":receipt},
+   totals:{"30000142":200}}],
+  ["malformed pending alias",{receipts:{},
+   pending:{"000777":{...receipt}},totals:{}}]
+ ]){
+  const initial={version:1,pending:{},...record};
+  const {depot,files,file,writes}=depotSnapshotFixture(initial);
+  const original=files.get(file);
+  assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR",label);
+  assert.ok(depot.audit().invalid>0,label);
+  assert.equal(depot.prepare(candidate).status,"DEPOT_STATE_UNRECONCILED",label);
+  assert.equal(depot.commit(candidate).status,"DEPOT_STATE_UNRECONCILED",label);
+  assert.throws(()=>depot.snapshot(),/DEPOT_STATE_UNRECONCILED/,label);
+  assert.equal(writes(),0,label);
+  assert.equal(files.get(file),original,label);
+ }
+});
+
+test("P0: a valid pending native debit remains recoverable after depot reopen",()=>{
+ const item={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9};
+ const {depot,writes}=depotSnapshotFixture({
+  version:1,receipts:{},totals:{},pending:{"777":{...item,at:123}}
+ });
+ assert.equal(depot.audit().status,"PENDING_CUSTODY_RECONCILIATION");
+ const candidate={systemID:30000142,fleetID:9,item};
+ assert.equal(depot.prepare(candidate).status,"PREPARED");
+ assert.equal(depot.commit(candidate).status,"COMMITTED");
+ assert.equal(depot.audit().status,"OK");
+ assert.equal(depot.snapshot().totals["30000142"],100);
+ assert.equal(writes(),1);
+});
+
+test("P0: invalid depot index containers cannot become mutable live journals",()=>{
+ const receipt={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9};
+ for(const [name,record] of [
+  ["receipts array",{version:1,receipts:[receipt],totals:{},pending:{}}],
+  ["totals array",{version:1,receipts:{"777":receipt},totals:[],pending:{}}],
+  ["pending array",{version:1,receipts:{},totals:{},pending:[receipt]}]
+ ]){
+  const f=depotSnapshotFixture({version:1,receipts:{},totals:{},pending:{}});
+  f.files.set(f.file,JSON.stringify(record));
+  assert.throws(()=>createDepot({file:f.file,fsApi:f.fsApi}),/bad depot state/,name);
+  assert.equal(f.writes(),0,name);
+ }
+});

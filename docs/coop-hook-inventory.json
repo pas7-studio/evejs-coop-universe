@@ -3,7 +3,9 @@
  "legacyFiles": 65,
  "wiredModules": 48,
  "specFiles": 13,
- "specEntries": 46,
+ "specEntries": 45,
+ "longHooks": 3,
+ "longestHook": 822,
  "overlap": 5,
  "overlaps": [
   {
@@ -35,6 +37,20 @@
    "shared": [
     "server/src/space/npc/nativeNpcWreckService.js"
    ]
+  }
+ ],
+ "long": [
+  {
+   "file": "server/src/services/trade/tradeMgrService.js",
+   "chars": 822
+  },
+  {
+   "file": "server/src/services/agent/agentMgrService.js",
+   "chars": 501
+  },
+  {
+   "file": "server/src/space/npc/nativeNpcWreckService.js",
+   "chars": 451
   }
  ]
 }

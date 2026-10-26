@@ -1,68 +1,46 @@
-# NPC courier dispatch — working plan (COOP-024)
+# Plan — close the ALIFE mining loop
 
-Design: `docs/NPC_COURIER_CONTRACTS.md`. Status: phase 1 only (pure core).
+## Where we are (2026-10-26 ~14:40Z)
 
-## Done
-- `integration/coopCourierDispatch.cjs` — evaluateContract / selectHull /
-  planRoute / piracyOpportunity, no mutation.
-- `tests/coop-courier-dispatch.test.mjs` — 11 passing cases.
-- ROADMAP COOP-024 (PARTIAL), design doc.
+Verified live: durable NPC identity persists to `gamestore.sqlite` (L1 0002 second
+hunk), fleet keeps `m2 h1` (L1 0004 + self-heal hook), capacitors healthy
+(0.5–0.7 with two active strip miners), prunes 27/4.5min → 0–1/5min.
 
-## Next (needs owner go/no-go because it mutates state)
-1. Read-only discovery pass: log what the live server sees for the owner's
-   real contract (`REFUSED_*` / `NEEDS_GATE_TRAVEL` / `ELIGIBLE`), no writes.
-   Cheapest proof that the record shape assumptions are right.
-2. Session-less native accept adapter: mirror `acceptCourier` with explicit
-   owner/wallet refs, only for a durable registered NPC, halt + journal on any
-   ambiguous result.
-3. Same-system flight: undock, warp, dock, `completeCourierContract` with the
-   NPC as acceptor.
-4. Only then: gate travel, then piracy with a real native attack order.
+Not solved: **ore is never produced**. Measured with temporary probes in
+`server/src/space/runtime.js` (reverted later, never committed):
 
-## Open questions for the owner
-- Which hull counts as "large" for him: Bestower-class industrial (~4.8k m3)
-  or a freighter (~435k m3)? Freighter is a much slower target and a bigger
-  loss when interdicted.
-- Collateral: does he want NPC couriers to accept collateral-bearing
-  contracts (NPC must hold real ISK) or reward-only?
-- Is a destroyed courier allowed to lose the package permanently (native
-  failure) or must the package always survive?
+- `living-mining-effect-state`: for the same module the effect is re-created
+  continuously — `startedAtMs ≈ now`, `nextCycleAtMs = started + duration`
+  (37–45 s) at every sample, `miningEffect: true`.
+- `MINER_TARGET` shows `activeEffects` alternating 2 → 0 → 2 → 0 between fleet
+  ticks, target ID stable (5020484739081), so it is not a target-change stop.
+- `living-mining-cycle-result` = 0: the stock cycle commit never runs, so the
+  yield path is never entered.
 
-## 2026-10-26 handoff (context limit reached)
+Current question, answered by `living-generic-deactivate` (running now):
+who removes the mining effect between ticks, and with which `reason`.
 
-Done and committed: dispatch core, identity gate, settlement chain, session-less
-accept/complete bridge, flight state machine, 7 seeded courier characters
-(140000100-140000106, Charon in Jita with 465000 m3).
+## Next steps
 
-Next, in a fresh session:
-1. Live experiment: spawn a native NPC ship with
-   `ownerIDOverride = 140000100` via nativeNpcService, warp it to 60015262,
-   dock through the NPC arrival path, and check the package item follows.
-2. Only if that passes: wire the driver, enable EVEJS_COOP_COURIER_DISPATCH for
-   one contract (the owner's 980000000), watch accept -> fly -> complete.
-3. Keep the concurrency cap at 3 and every env gate OFF by default.
+1. Read `living-generic-deactivate`. If it shows a reason such as
+   `capacity`/`repeat`/`duration`, the module stops at its cycle boundary
+   without running the mining branch — that is the stock bug to patch.
+2. Turn the finding into a fix in the right layer:
+   - stock bug inside a stock function → L1 patch (one patch per file; 0003
+     already owns `npcBehaviorLoop.js`, so fold there if it belongs);
+   - co-op rule → `integration/*.cjs` + one hook line, never a 900-char line.
+3. Remove the temporary probes from `runtime.js` (`git checkout --`) before the
+   next deploy, and delete `EVEJS_COOP_MINING_TRACE_CYCLE` from the probe compose
+   or keep it for the L2 telemetry only.
+4. Deploy: reset drifted files → `apply-upstream-patches.cjs --check`
+   (`CHECK_OK series=4`) → `patch-evejs-coop.cjs` → `--check` `OVERLAY_OK` →
+   build → `compose up -d`.
+5. Then expect `living-hauler-loaded` → `living-native-haul-delivered` →
+   `living-npc-station-sold`, then `scripts/restart-acceptance.sh`.
 
-## 2026-10-26 (owner said "�������") - the last piece, precisely
+## Known external state
 
-The modules are ready and tested (49 tests) but the server never calls them.
-Nothing has been flown, and no contract has been touched.
-
-Hook point identified: `integration/coopVirtualWorldRuntime.cjs`, inside
-`start()` there is `timer=setInterval(() => { ... safeNpcPhase("virtual-travel",
-...) ... })`. A courier phase belongs there, wrapped in `safeNpcPhase` and gated
-by `EVEJS_COOP_COURIER_DISPATCH === "1"` (default OFF).
-
-What that phase must do, in order, with no shortcuts:
-1. `contractRuntimeState.listContractRecords()` -> outstanding courier contracts
-   (`type === 3`, `status === 0`, `acceptorID === 0`).
-2. Pick an idle seeded courier (140000100-140000106) whose character station and
-   hangar ship match the contract origin; refuse otherwise.
-3. `coopCourierNativeAccept.accept(...)` with the live runtime; on AMBIGUOUS stop
-   and journal, never retry.
-4. Drive `coopCourierFlight` + `coopCourierFlightDriver` one step per tick
-   (undock -> warp -> arrive -> dock), cap 3 concurrent.
-5. `coopCourierNativeAccept.complete(...)` only when the package is at the
-   destination.
-
-Verification for each step: telemetry events plus the client's contract window.
-Until that exists, the honest status is: implemented, never flown.
+- `--check` is blocked by another session's `coopHaulCargoAdoption.js` (STALE).
+  Never reset or delete it; report instead.
+- Mechanism debt is now measured: `node scripts/coop-hook-inventory.cjs`
+  → `legacy=65 wired=48 specEntries=46 overlap=5`, `--check` fails if it grows.

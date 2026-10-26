@@ -22,6 +22,13 @@ forever, so their charge only ever fell.
 
 No capacitor is granted out of thin air: the same curve real ships use.
 
+The advance measured its own interval against capacitorRechargedAtMs, a shared
+client-visible stamp that other code also refreshes. The interval therefore
+collapsed to milliseconds per call: measured 0.00009/s of charge against the
+0.0048/s the CCP curve implies, so a hull that fell to 2% never recovered and
+every mining activation failed with NOT_ENOUGH_CAPACITOR. A private stamp
+records the interval this advance actually covers.
+
 Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
 Local overlay: integration/* is NOT part of this patch series.
 ---
@@ -51,7 +58,7 @@ Local overlay: integration/* is NOT part of this patch series.
      tickController(scene, controller, now);
    }
  }
-@@ -4646,6 +4649,103 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
+@@ -4646,6 +4649,114 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
    };
  }
  
@@ -129,7 +136,18 @@ Local overlay: integration/* is NOT part of this patch series.
 +  if (capacity <= 0 || tauMs <= 0 || !Number.isFinite(Number(now))) {
 +    return;
 +  }
-+  const previousAtMs = toFiniteNumber(entity.capacitorRechargedAtMs, 0);
++  // capacitorRechargedAtMs is a shared, client-visible stamp that other paths
++  // also refresh, so measuring our own dt against it collapsed the advance to a
++  // few milliseconds per call: measured 0.00009/s of charge against 0.0048/s
++  // expected, and the fleet starved at 2% capacitor. Keep a private stamp for
++  // the interval this function is responsible for.
++  const previousAtMs = toFiniteNumber(
++    entity.coopCapacitorAdvancedAtMs !== undefined
++      ? entity.coopCapacitorAdvancedAtMs
++      : entity.capacitorRechargedAtMs,
++    0,
++  );
++  entity.coopCapacitorAdvancedAtMs = now;
 +  entity.capacitorRechargedAtMs = now;
 +  if (previousAtMs <= 0 || now <= previousAtMs) {
 +    return;

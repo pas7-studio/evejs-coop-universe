@@ -61,6 +61,33 @@ Pinned upstream:
   require a new physical ship on a later restart. Do not describe
   that one-time legacy transition as preserved ship identity.
 
+## A durable NPC is never combat-dormant (L1 0005)
+
+A scene with no attached sessions runs the combat-dormancy sweep. Its predicate
+matches any `nativeCombat` controller carrying a startup rule **or** an operator
+kind ([`npcCombatDormancy.js`](../../patches/upstream/0005-native-npc-durable-not-dormant.patch)),
+and a durable co-op ship is exactly that: `runtimeKind=nativeCombat`,
+`operatorKind=coop-mining-<system>-<slot>-<role>`, `transient=false`. The sweep
+unregistered the controller, the durable owner restored the ship immediately, and
+the two ran in a loop.
+
+Measured on the local headless world before the fix: `unregisterController` came
+**only** from `dematerializeDormantCombatControllersForScene`, ~2 times per
+second (21 582 restores in one measurement window), and `executeMiningCycle` was
+called **zero** times. Every restore builds a new entity whose
+`activeModuleEffects` map is empty, so a 45 s mining cycle could never finish and
+the fleet reported active modules with no ore — the Capacitor and identity fixes
+were correct but could not show any yield while this loop existed.
+
+**Rule:** dormancy may only evict a controller whose stored record is
+`transient: true`. Ambient and startup combat NPCs keep sleeping exactly as
+upstream intends; a durable NPC belongs to the mechanism that restored it.
+
+Diagnostics that produced this answer (all observation-only, removed afterwards):
+`living-mining-effect-state`, `living-mining-cycle-result`,
+`living-generic-deactivate` (0 events), `living-mining-effect-deleted`
+(0 events), `living-controller-unregistered` (named the caller via its stack).
+
 ## Required manual QA (on an approved disposable/local server)
 
 Only after the owner approves updating the current overlay, with

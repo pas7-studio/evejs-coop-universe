@@ -42,6 +42,30 @@ function specTargets() {
   return files;
 }
 
+// A hook is one call into a module. Anything longer than this is behaviour or
+// telemetry shape hiding inside a string: it cannot be reviewed or unit-tested,
+// and that shape already produced a double module activation once.
+const LONG_HOOK_CHARS = 400;
+
+function specHookShape() {
+  const spec = require(SPEC);
+  let longHooks = 0;
+  let longestHook = 0;
+  const long = [];
+  for (const block of spec.specs || []) {
+    for (const entry of block.patches || []) {
+      const length = String(entry.line || "").length;
+      if (length > longestHook) longestHook = length;
+      if (length > LONG_HOOK_CHARS) {
+        longHooks += 1;
+        long.push({ file: block.file, chars: length });
+      }
+    }
+  }
+  long.sort((a, b) => b.chars - a.chars);
+  return { longHooks, longestHook, long };
+}
+
 function legacyTargets(file) {
   const text = fs.readFileSync(path.join(SCRIPTS, file), "utf8");
   const targets = new Set();
@@ -55,6 +79,7 @@ function inventory() {
   const legacy = legacyFiles();
   const wired = wiredModules();
   const spec = specTargets();
+  const hookShape = specHookShape();
   const overlap = [];
   for (const file of legacy) {
     const shared = legacyTargets(file).filter((target) => spec.has(target));
@@ -65,8 +90,11 @@ function inventory() {
     wiredModules: wired.length,
     specFiles: spec.size,
     specEntries: [...spec.values()].reduce((sum, value) => sum + value, 0),
+    longHooks: hookShape.longHooks,
+    longestHook: hookShape.longestHook,
     overlap: overlap.length,
     overlaps: overlap,
+    long: hookShape.long,
   };
 }
 
@@ -78,6 +106,8 @@ function main(argv) {
     " wired=" + current.wiredModules +
     " specFiles=" + current.specFiles +
     " specEntries=" + current.specEntries +
+    " longHooks=" + current.longHooks +
+    " longest=" + current.longestHook +
     " overlap=" + current.overlap;
   if (args.includes("--baseline")) {
     fs.writeFileSync(BASELINE, JSON.stringify({ version: 1, ...current }, null, 1) + "\n");
@@ -85,6 +115,9 @@ function main(argv) {
     return 0;
   }
   console.log(line);
+  for (const entry of current.long.slice(0, 5)) {
+    console.log("  long-hook", entry.chars, entry.file);
+  }
   for (const entry of current.overlaps.slice(0, 10)) {
     console.log("  overlap", entry.file, entry.shared.join(","));
   }
@@ -103,10 +136,15 @@ function main(argv) {
     console.log("HOOKS_GREW wired " + baseline.wiredModules + " -> " + current.wiredModules);
     failed = true;
   }
+  if (Number.isFinite(baseline.longHooks) && current.longHooks > baseline.longHooks) {
+    console.log("HOOKS_GREW longHooks " + baseline.longHooks + " -> " + current.longHooks);
+    failed = true;
+  }
   if (!failed) {
     console.log(
       "HOOKS_OK legacy " + current.legacyFiles + "/" + baseline.legacyFiles +
       " wired " + current.wiredModules + "/" + baseline.wiredModules +
+      " longHooks " + current.longHooks + "/" + baseline.longHooks +
       " spec " + current.specEntries,
     );
   }
