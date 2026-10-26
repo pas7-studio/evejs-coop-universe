@@ -21,7 +21,7 @@ fn coop_corp_sell_guard(token:&str)->Result<()>{
     Ok(())
 }
 fn coop_corp_sell_op(op:&str,shift:&str)->Result<()>{
-    if op.len()!=49 || !op.starts_with("coop-corp-sell:")||
+    if op.len()!=47 || !op.starts_with("coop-corp-sell:")||
        !op[15..].bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)){
         bail!("CORP_SELL_OPERATION_INVALID");
     }
