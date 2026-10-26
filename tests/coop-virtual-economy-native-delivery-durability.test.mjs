@@ -153,3 +153,54 @@ test("P0: externally damaged native high-water fails read fence before it can be
  assert.throws(()=>e.snapshot(),/ECONOMY_PERSISTENCE_UNVERIFIED/);
  assert.throws(()=>createEconomy({file}),/ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID/);
 }));
+
+test("P0: malformed loss never corrupts native security or journal after durable ore credit",()=>scoped(({file})=>{
+ const economy=createEconomy({file,clock:()=>101});
+ assert.equal(economy.syncNativeDeliveries({[system]:100}).quantity,100);
+ const before=fs.readFileSync(file,"utf8");
+ for(const invalid of [NaN,Infinity,-Infinity,-1,"not-an-amount",{}]){
+  assert.throws(()=>economy.recordLoss(30000144,invalid),
+   /ECONOMY_INVALID_LOSS/,String(invalid));
+  assert.equal(fs.readFileSync(file,"utf8"),before,
+   "invalid loss must not write a new journal or clear native high-water");
+  assert.equal(economy.snapshot().systems[system].security,50);
+ }
+ for(const invalidSystem of [0,-1,1.5,NaN,"invalid-system",null]){
+  assert.throws(()=>economy.recordLoss(invalidSystem,2),
+   /ECONOMY_INVALID_LOSS/,String(invalidSystem));
+  assert.equal(fs.readFileSync(file,"utf8"),before);
+ }
+ const valid=economy.recordLoss(30000144,2);
+ assert.equal(valid.type,"loss");
+ assert.equal(valid.amount,2);
+ assert.equal(valid.systemID,30000144);
+ const saved=createEconomy({file,clock:()=>101}).snapshot().systems[system];
+ assert.equal(saved.security,48);
+ assert.equal(saved.nativeDelivered,100);
+ assert.equal(saved.goods,200);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({[system]:100}).quantity,0);
+}));
+
+test("P0: an unchanged native ore delivery must not trim event history only in memory",()=>scoped(({file})=>{
+ const events=Array.from({length:101},(_,i)=>({type:"prior",at:i}));
+ const persisted={version:1,lastAt:100,systems:{[system]:{
+  ore:200,goods:200,demand:0,security:50,losses:0,nativeDelivered:100
+ }},pilots:{},events};
+ fs.writeFileSync(file,JSON.stringify(persisted));
+ const oldBytes=fs.readFileSync(file,"utf8");
+ const economy=createEconomy({file,clock:()=>100});
+ assert.deepEqual(economy.syncNativeDeliveries({[system]:100}),
+  {status:"UNCHANGED",quantity:0});
+ assert.equal(fs.readFileSync(file,"utf8"),oldBytes);
+ assert.equal(economy.snapshot().events.length,101,
+  "unchanged operation cannot leave a shorter unpersisted memory journal");
+ // A real subsequent original delivery may compact the event history and
+ // atomically persist both new high-water and retained events.
+ assert.deepEqual(economy.syncNativeDeliveries({[system]:120}),
+  {status:"UPDATED",quantity:20});
+ assert.equal(economy.snapshot().events.length,100);
+ const restored=createEconomy({file,clock:()=>100});
+ assert.equal(restored.snapshot().events.length,100);
+ assert.equal(restored.snapshot().systems[system].nativeDelivered,120);
+ assert.equal(restored.syncNativeDeliveries({[system]:120}).quantity,0);
+}));
