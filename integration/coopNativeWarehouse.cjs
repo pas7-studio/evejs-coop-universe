@@ -53,13 +53,20 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
  function persist(id,record){
   fsApi.mkdirSync(dir,{recursive:true});
   const file=receiptPath(id),temp=file+`.tmp-${process.pid}-${Math.floor(Math.random()*1e9)}`;
-  let fd;
+  let fd=null,ownedTemp=false;
   try{
-   fd=fsApi.openSync(temp,"wx",0o600);
-   fsApi.writeFileSync(fd,JSON.stringify(record));fsApi.fsyncSync(fd);fsApi.closeSync(fd);fd=null;
-   fsApi.renameSync(temp,file);syncDir(dir);
-  }catch(e){if(fd!==undefined&&fd!==null)try{fsApi.closeSync(fd);}catch(_){}
-   try{fsApi.unlinkSync(temp);}catch(_){}throw e;}
+   // A failed exclusive open never grants ownership of a collided temp.
+   // Preserve foreign/crash-abandoned receipts for operator reconciliation.
+   fd=fsApi.openSync(temp,"wx",0o600);ownedTemp=true;
+   fsApi.writeFileSync(fd,JSON.stringify(record));fsApi.fsyncSync(fd);
+   fsApi.closeSync(fd);fd=null;
+   fsApi.renameSync(temp,file);ownedTemp=false;
+   syncDir(dir);
+  }catch(e){
+   if(fd!==null)try{fsApi.closeSync(fd);}catch(_ignored){}
+   if(ownedTemp)try{fsApi.unlinkSync(temp);}catch(_ignored){}
+   throw e;
+  }
  }
  function load(id){
   let row;try{row=JSON.parse(fsApi.readFileSync(receiptPath(id),"utf8"));}
