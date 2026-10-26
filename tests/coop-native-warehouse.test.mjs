@@ -493,3 +493,49 @@ test('P0: invalid receipt JSON filename cannot disappear from an otherwise empty
  assert.equal(f.issued,0);
  assert.equal(f.cargo.size,1);
 }));
+
+test('P0: losing wx temp collision must preserve foreign warehouse receipt evidence',()=>withF(f=>{
+ let foreignTemp=null;
+ const io={...fs,openSync(location,mode,...args){
+  if(mode==='wx'&&String(location).includes('.json.tmp-')){
+   foreignTemp=String(location);
+   // Inject a different writer's already-existing temp just before wx.
+   fs.writeFileSync(foreignTemp,'FOREIGN_UNRECONCILED_RECEIPT',{flag:'wx'});
+  }
+  return fs.openSync(location,mode,...args);
+ }};
+ const w=createWarehouse({...f.config,fsApi:io});
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.ok(foreignTemp);
+ assert.equal(fs.readFileSync(foreignTemp,'utf8'),'FOREIGN_UNRECONCILED_RECEIPT');
+ assert.equal(w.audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(f.cargo.size,1,'foreign temp collision must not debit original cargo');
+ assert.equal(f.owned.size,0,'foreign temp collision must not grant new native stock');
+ assert.equal(f.issued,0);
+ assert.equal(fs.existsSync(path.join(f.root,'receipts','8001.lock')),false);
+}));
+
+test('P0: owned warehouse temp is removed when its receipt fsync fails before rename',()=>withF(f=>{
+ let tempFd=null,tempPath=null;
+ const io={...fs,
+  openSync(location,mode,...args){
+   const fd=fs.openSync(location,mode,...args);
+   if(mode==='wx'&&String(location).includes('.json.tmp-')){
+    tempFd=fd;tempPath=String(location);
+   }
+   return fd;
+  },
+  fsyncSync(fd){
+   if(fd===tempFd)throw Object.assign(Error('EIO'),{code:'EIO'});
+   return fs.fsyncSync(fd);
+  }
+ };
+ const w=createWarehouse({...f.config,fsApi:io});
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.ok(tempPath);
+ assert.equal(fs.existsSync(tempPath),false,'cleanup only our own failed temp');
+ assert.equal(fs.existsSync(path.join(f.root,'receipts','8001.json')),false);
+ assert.equal(f.cargo.size,1);
+ assert.equal(f.owned.size,0);
+ assert.equal(f.issued,0);
+}));
