@@ -3,7 +3,18 @@
 // order -> original native item moved to market escrow in ONE GameStore txn.
 // Never calls stock PlaceOrder, invents wallet revenue or retries unknown RPCs.
 const crypto=require("node:crypto");
-const {ESCROW_BASE}=require("./coopNpcPendingMarketEscrow");
+// Checkout siblings are .cjs; the pinned EveJS overlay installs them as .js.
+// Never mask a transitive dependency failure by falling back to a stale file.
+function loadNpcPendingEscrow(){
+ try{return require("./coopNpcPendingMarketEscrow")}
+ catch(error){
+  if(error?.code!=="MODULE_NOT_FOUND"||
+   !String(error.message).includes("Cannot find module './coopNpcPendingMarketEscrow'"))
+   throw error;
+  return require("./coopNpcPendingMarketEscrow.cjs");
+ }
+}
+const {ESCROW_BASE}=loadNpcPendingEscrow();
 const good=n=>Number.isSafeInteger(n)&&n>0;
 const safe=n=>Number.isSafeInteger(n)&&n>=0;
 const blocked=reason=>({status:"BLOCKED",reason});

@@ -20,7 +20,9 @@ const receipt=()=>({phase:"NATIVE_NPC_BUY_COMMITTED",claimKey:K,
  fillID:FILL,orderID:ORDER,buyerCorpID:BUYER,sellerID:SELLER,
  stationID:STATION,typeID:34,itemID:1990000200,quantity:20,
  priceCents:125,grossCents:2500,taxCents:200,netCents:2300,
- taxPolicy:"EVEJS_NATIVE_MARKET_RULES",committedAt:1000001});
+ taxPolicy:"EVEJS_NATIVE_MARKET_RULES",taxTransactionID:FILL+100000000000000,
+ buyerBeforeCents:100000,buyerAfterCents:97500,
+ sellerBeforeCents:10000,sellerAfterCents:12300,committedAt:1000001});
 function fixture({state="settling",phase="PREPARED",
  rustClaim=rust(state),receipts=[],lockPresent=false,throws=false}={}){
  const e={...entry(),phase,fillID:FILL,itemID:1990000200};
@@ -153,4 +155,36 @@ test("recovery journal exceeding native purchase limits is not actionable",async
   assert.equal(r.entries[0].reason,"JOURNAL_IDENTITY_CONFLICT");
   assert.equal(f.reads,0);
  }
+});
+
+
+test("paid Rust receipt with missing financial witnesses must never suggest finalization",async()=>{
+ const {buyerBeforeCents,...incomplete}=receipt();
+ for(const state of ["settling","filled"]){
+  const r=await one({state,receipts:[incomplete]});
+  assert.equal(r.status,"HOLD_MANUAL");
+  assert.equal(r.reason,"GAMESTORE_RECEIPT_IDENTITY_OR_TAX_CONFLICT");
+ }
+});
+test("buyer debit, seller net, tax ID or committed date corruption always blocks recovery",async()=>{
+ const original=receipt();
+ for(const corrupt of [
+  {buyerAfterCents:original.buyerBeforeCents},
+  {buyerBeforeCents:original.grossCents-1},
+  {sellerAfterCents:original.sellerBeforeCents},
+  {sellerBeforeCents:Number.MAX_SAFE_INTEGER},
+  {taxTransactionID:null},
+  {committedAt:0}
+ ]){
+  for(const state of ["settling","filled"]){
+   const r=await one({state,receipts:[{...original,...corrupt}]});
+   assert.equal(r.status,"HOLD_MANUAL");
+   assert.equal(r.reason,"GAMESTORE_RECEIPT_IDENTITY_OR_TAX_CONFLICT");
+  }
+ }
+});
+test("zero-tax native corporate receipt needs no invented tax transaction ID",async()=>{
+ const r=await one({receipts:[{...receipt(),taxCents:0,netCents:2500,
+  sellerAfterCents:12500,taxTransactionID:null}]});
+ assert.equal(r.status,"FINALIZE_RUST_SAME_CLAIM");
 });

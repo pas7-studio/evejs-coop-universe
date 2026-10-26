@@ -1,6 +1,6 @@
 "use strict";
 // Pure native-store receipts for Chat 27. Never mint, debit or transfer items.
-const {ACT,STATUS}=require("./coopPlayerIndustryGuard.cjs");
+const {ACT,STATUS}=require("./coopPlayerIndustryGuard" + (__filename.endsWith(".cjs") ? ".cjs" : ".js"));
 const id=x=>{const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:0};
 const nonneg=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0;
 function makePlayerIndustryReceipts({

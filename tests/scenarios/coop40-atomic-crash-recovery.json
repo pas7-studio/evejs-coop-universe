@@ -1,0 +1,33 @@
+{
+  "owner": "Chat 40",
+  "status": "NOT_RUN_LIVE",
+  "preconditions": [
+    "Pinned EveJS revision and overlay hashes verified",
+    "Disposable, attested copies of GameStore SQLite, Rust market database, wallets, inventory and durable journals",
+    "Two authorized client accounts and independently authenticated characters",
+    "No production evejs-data volume mounted writable",
+    "Explicit human approval for destructive faults on cloned data only"
+  ],
+  "cases": [
+    "Inventory and corporate wallet SQL commit succeeds, account invalidators run, both clients read new balances",
+    "Crash before GameStore BEGIN: no item or wallet changes",
+    "Crash after native item debit but before wallet debit: all rows roll back",
+    "Crash immediately after GameStore COMMIT and before client ACK: identical claim ID reconciles without second payout",
+    "Crash after native reward write but before journal terminal phase: HOLD_MANUAL until authoritative receipt inspected",
+    "WAL synchronous FULL cannot be established: reject before any native economic debit",
+    "Dirty persistence worker/outbox row cannot overwrite a later atomic commit after restart",
+    "Rust PENDING sell order with no native escrow: no visible sell liquidity or duplicate release",
+    "Rust FILLED order without native GameStore receipt: HOLD_MANUAL, not reissue payment",
+    "Native GameStore receipt exists but Rust fill not finalized: reconcile same immutable claim only",
+    "Two Rust claim keys reference same fillID: stop settlement",
+    "Two open market orders claim the same native escrow itemID: stop settlement",
+    "NPC cargo and market escrow both reference same native itemID: stop settlement",
+    "Courier collateral and reward escrow after partial failure: no multiple owner claims",
+    "Manufacturing material consumption and paid job receipt across restart: one job per material debit",
+    "Finished manufacturing product receipt refers to a destroyed or missing item: require manual recovery",
+    "Player-to-player market transfer with tax and fees conserves exact integer cents",
+    "Planetary commodities route/launch transfer across restart conserves exact native quantities",
+    "Independent two-character wallet and item state preserved after forced disconnect/reconnect",
+    "Repeat request after ambiguous native RPC acknowledgment does not regenerate ISK, items, LP or SP"
+  ]
+}

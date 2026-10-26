@@ -9,7 +9,15 @@ const crypto=require("node:crypto");
 const TABLES=Object.freeze(["characters","corporationRuntime","items","marketEscrow","npcMarketFills"]);
 const ESCROW_BASE=9200000000;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const cents=x=>Number.isFinite(x)&&x>=0&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+// Existing native wallet balances are authoritative. A sub-cent balance
+// indicates unverified currency state: do not round it while moving items
+// or crediting the corporate market ledger.
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0)return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
 const isk=c=>Math.round(c)/100;
 const isSalvage=x=>typeof x==="string"&&/^npc-salvage:[0-9a-f]{32}$/.test(x);
 const validID=x=>typeof x==="string"&&
@@ -107,11 +115,28 @@ function createNpcCorporateSettlement({gameStore,market,verifyBuyerSession,verif
   return gameStore.transact(TABLES,tx=>{
    const prior=tx.get("npcMarketFills",fillKey);
    if(prior!==null&&prior!==undefined){
-    if(prior.fillID!==fillID||prior.buyerID!==buyerID||prior.itemID!==identity.itemID||
-       prior.grossCents!==grossCents||prior.ownerID!==identity.ownerID||
+    // A journal row is not evidence of an already-paid original item unless
+    // the full immutable receipt and cent-conservation ledger both verify.
+    // Do not re-debit the buyer or require the item to remain unconsumed:
+    // legitimate replay may happen after the buyer has used the goods.
+    const source=isSalvage(identity.operationID)?"NATIVE_SALVAGE":"NATIVE_INDUSTRY";
+    const walletProof=[prior.buyerBeforeCents,prior.buyerAfterCents,
+      prior.corpBeforeCents,prior.corpAfterCents];
+    if(prior.phase!=="NATIVE_COMMITTED"||
+       prior.fillID!==fillID||prior.orderID!==identity.orderID||
        prior.operationID!==identity.operationID||
-       (isSalvage(identity.operationID)&&prior.coopSource!=="NATIVE_SALVAGE")||
-       prior.phase!=="NATIVE_COMMITTED")throw Error("NPC_CORPORATE_FILL_REPLAY_CONFLICT");
+       prior.coopSource!==source||prior.buyerID!==buyerID||
+       prior.ownerID!==identity.ownerID||prior.stationID!==identity.stationID||
+       prior.typeID!==identity.typeID||prior.itemID!==identity.itemID||
+       prior.quantity!==identity.quantity||prior.priceCents!==priceCents||
+       prior.grossCents!==grossCents||
+       walletProof.some(x=>!Number.isSafeInteger(x)||x<0)||
+       prior.buyerBeforeCents<grossCents||
+       prior.buyerAfterCents!==prior.buyerBeforeCents-grossCents||
+       !Number.isSafeInteger(prior.corpBeforeCents+grossCents)||
+       prior.corpAfterCents!==prior.corpBeforeCents+grossCents||
+       !pos(prior.committedAt))
+     throw Error("NPC_CORPORATE_FILL_REPLAY_CONFLICT");
     return {status:"ALREADY_NATIVE_COMMITTED",fillID,orderID:identity.orderID,
       buyerID,itemID:identity.itemID,quantity:identity.quantity,grossCents};
    }
