@@ -54,7 +54,8 @@ function createNpcProbeScanEvidence({getNativeEntity,getController,listNativeMod
   }catch{return refuse("NPC_SCANNER_NATIVE_STORE_UNAVAILABLE")}
   const ship=scene.getEntityByID(entityID);
   if(!ship||ship.itemID!==entityID||ship.kind!=="ship"||ship.nativeNpc!==true||
-    !vec(ship.position)||ship.pendingWarp||ship.warpState||ship.isWarping||
+    !vec(ship.position)||ship.session?.characterID||ship.pilotCharacterID>0||
+    ship.pendingWarp||ship.warpState||ship.isWarping||
     String(ship.mode||"").toUpperCase().includes("WARP")||
     !entity||entity.entityID!==entityID||entity.systemID!==scene.systemID||
     !positive(entity.ownerID)||!positive(entity.corporationID)||
@@ -68,7 +69,7 @@ function createNpcProbeScanEvidence({getNativeEntity,getController,listNativeMod
   for(const row of cargo){
    if(!row||row.entityID!==entityID||row.ownerID!==entity.ownerID||
       !positive(row.cargoID)||row.groupID!==479||row.categoryID!==8||
-      row.transient===true||row.quantity!==0||!row.deployedProbe)continue;
+      row.transient===true||row.singleton===true||row.quantity!==0||!row.deployedProbe)continue;
    const flight=row.deployedProbe;
    if(flight.status!=="IN_SPACE"||flight.probeID!==row.cargoID||
       flight.entityID!==entityID||flight.systemID!==scene.systemID||
