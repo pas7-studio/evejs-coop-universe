@@ -104,18 +104,20 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
        distance(candidate.position,site.actualPosition)>150000)continue;
     const witness=competition.observe({scene,siteID:site.siteID,shipID});
     if(witness.status==="NATIVE_SITE_OBSERVED")observedPlayers++;
-    if(witness.contested===true)contested++;
+    if(witness.contested===true&&witness.status==="NATIVE_SITE_OBSERVED")contested++;
    }
    for(const pilot of all){
    if(distance(pilot.ship.position,site.actualPosition)>150000)continue;
    const result=competition.observe({scene,siteID:site.siteID,shipID:pilot.entityID});
    if(!["NATIVE_SITE_OBSERVED","ALREADY_OBSERVED"].includes(result.status))continue;
    if(result.status==="NATIVE_SITE_OBSERVED")observed++;
-   if(result.contested===true)contested++;
+   if(result.contested===true&&result.status==="NATIVE_SITE_OBSERVED")contested++;
    const id=key(scene.systemID,site.siteID,pilot.corpID),stamp=fingerprint(site),old=intel.get(id);
-   if(!old||old.fingerprint!==stamp)
+   if(!old||old.fingerprint!==stamp){
+    if(!old&&intel.size>=512)continue;
     intel.set(id,{siteID:site.siteID,systemID:scene.systemID,corpID:pilot.corpID,
      scoutPilotID:pilot.pilotID,fingerprint:stamp,at:now});
+   }
    }
   }
   // Scout must have personally arrived on the original grid. Other native
@@ -134,6 +136,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     if(d<150000||d>2e13)continue;
     const moveKey=p.entityID+":"+id;
     if(pending.get(moveKey)?.fingerprint===tip.fingerprint)continue;
+    if(pending.size>=512){blocked++;continue;}
     if(orderBridge.blocked({entityID:p.entityID,systemID:scene.systemID,owner:"EXPEDITION"})){
      blocked++;continue;
     }
