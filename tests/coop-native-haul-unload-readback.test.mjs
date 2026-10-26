@@ -6,7 +6,7 @@ const {unloadCargo}=require("../integration/coopNativeHaulCargo.cjs");
 
 // The same original cargoID must disappear from proven native custody before
 // a durable virtual depot receipt may change from PREPARED to COMMITTED.
-function fixture({before=null,after=[],global=undefined,throwAfter=false}={}){
+function fixture({before=null,after,global=undefined,throwAfter=false}={}){
  const cargo={cargoID:333,typeID:34,quantity:50,moduleID:0,
   entityID:500,coopHaulFleetID:44,coopHaulFromMinerID:111};
  let removed=false,prepared=0,committed=0,removeCalls=0,reads=0;
