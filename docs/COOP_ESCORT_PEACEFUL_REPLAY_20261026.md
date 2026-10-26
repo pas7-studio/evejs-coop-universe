@@ -28,3 +28,28 @@ The original peaceful payout already uses `nativeFunds.settleAtomic` to consume 
 If the original two pilots **were not actually present at terminal delivery**, or if their terminal proof was lost/corrupt, the server must not infer that they performed the service. It leaves the original corporate reserve pending for authenticated operator repair with external authoritative evidence, not a fraudulent automated payout. This is intentionally fail-closed and not a reason to create more gameplay code before the next local test.
 
 **Go/no-go:** Do NOT turn the new flag ON for live `evejs-data` until pinned install/uninstall QA, real two-client on-grid route, crash after warehouse before payout, native GameStore corporation and both character balance comparison, lost-ACK replay and corrupt-proof denial succeed. Main remains untouched until PR review/merge.
+
+
+## COOP-059 P0 QA follow-up — bounded backlog paging (2026-10-26)
+
+Source audit found that the original `listDelivered({maxTrips:32})` rejected a
+valid 33rd completed flight with `FLIGHT_SCAN_RESULT_CAP_EXCEEDED`; the one-time
+bootstrap then never reached any previously unpaid flight in that backlog.
+
+The follow-up adds a strict, lexicographic `afterKey` **server-internal**
+cursor for immutable native journal filenames, preserving the 32-trip payment
+batch. **Every file is still inspected and replay-validated before a single
+page is returned.** A corrupt, missing or symlinked original journal refuses
+the entire candidate page; invalid cursors refuse all payouts. Bootstrap
+repeats up to 16 pages (512 disk journal cap). No wallet, cargo, route or
+client-facing path is modified; all feature flags stay OFF by default.
+
+Regression additions: actual GameStore atomic writer over disposable SQLite WAL/FULL with database reopen, lost ACK, two native character credits and negative proof/flag checks; 35 real fsynced source flight journals, no skipped or
+duplicated page IDs, an invalid cursor, a corrupt 35th journal poisoning the
+first page, and a pure-runtime next-page/no-second-payment test. GitHub CI now
+runs these and original SQLite funds/terminal attendance tests on Node 22.
+
+**Still NOT_RUN** here: actual CI result, pinned Windows overlay check, and
+the two-authenticated-client live GameStore/SQLite crash E2E. Review source,
+obtain green CI, then run those physical acceptance gates on disposable data
+before enabling Escort payments.
