@@ -451,4 +451,4 @@ if(require.main===module){
   }else console.log(JSON.stringify(result,null,2));
  }catch(error){console.error("[COOP PATCH ERROR]",error.message);process.exitCode=1;}
 }
-module.exports={run,check,executePlan,classifyFile,transform,strip,specs,names,PIN};
+module.exports={run,check,executePlan,classifyFile,transform,strip,specs,names,PIN,l1CoveredFiles};
