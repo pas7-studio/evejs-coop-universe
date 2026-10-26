@@ -88,7 +88,8 @@ names.splice(names.indexOf("coopAlifeNativeBuyerRuntime")+1,0,
 // LW-04C: original GameStore/ItemStore/Rust read-only manufacturing
 // recovery witness; does NOT turn manual industry bindings into live writers.
 names.splice(names.indexOf("coopNpcIndustryNativeBindings")+1,0,
- "coopNpcIndustryRecoveryFence","coopNpcLiveFactoryReadiness");
+ "coopNpcIndustryRecoveryFence","coopNpcLiveFactoryReadiness",
+ "coopNpcIndustryOriginalGameStorePreflight","coopNpcIndustryOriginalStageExecutor");
 names.splice(names.indexOf("coopPlayerIndustryFence")+1,0,"coopPlayerIndustryRuntime");
 // Late native module reconciliation after parallel merges: copy-only.
 // Keep NPE and Living World behavior behind their existing native hooks.
