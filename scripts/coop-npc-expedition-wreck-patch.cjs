@@ -39,7 +39,7 @@ function patch(source,file,remove=false){
  for(const entry of list){
   const before=(remove?entry.after:entry.before).replace(/\n/g,eol);
   const after=(remove?entry.before:entry.after).replace(/\n/g,eol);
-  if(result.includes(after)&&!result.includes(before))continue;
+  if((!remove&&result.includes(after))||(remove&&result.includes(after)&&!result.includes(before)))continue;
   if(result.split(before).length!==2)throw Error("EX03B18_PINNED_WRECK_SOURCE_DRIFT:"+file);
   result=result.replace(before,after);
  }
