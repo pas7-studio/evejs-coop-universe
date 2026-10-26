@@ -29,7 +29,10 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    a.quantity===b.quantity&&a.stacksize===b.stacksize&&a.singleton===b.singleton;
  function verifiedWreck(wreckID){
   if(!POS(wreckID))return null;
-  const w=npcStore.getNativeWreck(wreckID);
+  // Native store unavailability during a death/decay tick must reject this
+  // action, not escape into the original NPC scheduler and kill its phase.
+  let w;
+  try{w=npcStore.getNativeWreck(wreckID)}catch{return null}
   if(!w||w.wreckID!==wreckID||!POS(w.sourceEntityID)||
     !POS(w.corporationID)||w.transient===true)return null;
   return w;
