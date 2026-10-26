@@ -59,7 +59,7 @@ function fixture(){
   getFleet:()=>fleet,verifyNativeFleet:()=>true,clock:()=>now,
   enabled:()=>true,completionEnabled:()=>completionEnabled,
   captureHaul:()=>oracle.captureHaul({fleet}),
-  captureRetreat:()=>oracle.captureRetreat({fleetRecord:record}),
+  captureRetreat:()=>oracle.captureRetreat({fleetRecord:record,scene,fleet}),
   verifyCompletion:({row,fleet})=>oracle.verify({
    row,fleet,fleetRecord:record,scene})});
  const native={deactivate:()=>true,startHaul:()=>{
