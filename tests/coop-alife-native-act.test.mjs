@@ -83,3 +83,22 @@ test("unknown native director implementation is not a valid ACT authority",async
  const f=fixture();f.setDirector({mode:"VIRTUAL_ONLY",tick:()=>{throw Error("SHOULD_NOT_EXECUTE")}});
  assert.equal((await f.bridge.dispatch(intent)).reason,"ALIFE_NATIVE_ACT_DIRECTOR_NOT_NATIVE");
 });
+
+test("actor moving DURING async native director discovery cannot spend original ISK",async()=>{
+ let current={...actor},enteredDirector,finishDirector,ticks=0;
+ const entered=new Promise(resolve=>{enteredDirector=resolve});
+ const hold=new Promise(resolve=>{finishDirector=resolve});
+ const director={mode:"NATIVE_AUTHORITIES_ONLY",
+  tick:()=>{ticks++;return {status:"INSTALLED"}}};
+ const bridge=createAlifeNativeAct({
+  env:{EVEJS_COOP_ALIFE_ECONOMY_ACT:"1",EVEJS_COOP_NATIVE_NPC_ECONOMY:"1"},
+  resolveActor:async()=>({...current}),resolveProductTypes:async()=>[215],
+  resolveDirector:async()=>{enteredDirector();await hold;return director}
+ });
+ const pending=bridge.dispatch({...intent,intentID:"verified-native-async-199"});
+ await entered;current={...actor,inWarp:true};finishDirector();
+ const result=await pending;
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(result.reason,"ALIFE_NATIVE_ACT_ACTOR_CHANGED_AFTER_DIRECTOR");
+ assert.equal(ticks,0);
+});
