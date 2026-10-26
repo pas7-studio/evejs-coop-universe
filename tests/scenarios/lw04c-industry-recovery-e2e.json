@@ -1,0 +1,137 @@
+{
+  "schema": "evejs-coop/lw04c-native-industry-recovery-gates/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW04C-01",
+      "title": "PREPARED durable intent but native job committed after crash",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "No duplicate native industry install"
+      ]
+    },
+    {
+      "id": "LW04C-02",
+      "title": "INSTALL_UNKNOWN with original paid GameStore transaction",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "Operator recovery, never a second industry debit"
+      ]
+    },
+    {
+      "id": "LW04C-03",
+      "title": "DELIVERY_UNKNOWN after ItemStore output grant but ACK lost",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "No second output stack"
+      ]
+    },
+    {
+      "id": "LW04C-04",
+      "title": "LIST_UNKNOWN after Rust order commit but ACK lost",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "No second market escrow or order"
+      ]
+    },
+    {
+      "id": "LW04C-05",
+      "title": "Native READY job and PAUSED job are isolated from actor movement",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "No unauthorized ready or delivery"
+      ]
+    },
+    {
+      "id": "LW04C-06",
+      "title": "SOLD original Rust fills + corporation wallet transaction exact conservation",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "Every ISK credited once, nonzero price"
+      ]
+    },
+    {
+      "id": "LW04C-07",
+      "title": "Two NPC corporations use the same factory station concurrently",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "Per-corporation ownership and journal isolation"
+      ]
+    },
+    {
+      "id": "LW04C-08",
+      "title": "Changed original director journal during live Rust/ItemStore read",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "Fail closed without any new native write"
+      ]
+    },
+    {
+      "id": "LW04C-09",
+      "title": "NPC warps away during asynchronous original journal audit",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "No native financial command"
+      ]
+    },
+    {
+      "id": "LW04C-10",
+      "title": "Physical two-client NPC manufacture and Rust market sale after restart",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native original GameStore SQLite job and wallet receipt",
+        "original ItemStore itemID and custody",
+        "Rust order/escrow/fill proof where applicable",
+        "before/after original durable journal hashes",
+        "two-authenticated-client observation where applicable",
+        "Real original items and ISK both preserved"
+      ]
+    }
+  ]
+}
