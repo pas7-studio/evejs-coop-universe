@@ -300,3 +300,13 @@ Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/R
 Why: Preserve source-specific prior cargo receipt denial without requiring optional audit to produce a more useful error.
 Where: integration/coopHaulCargoAdoption.cjs
 Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.
+### 2026-10-26T13:46Z · 75cc4f7 · L2 · fix(P0): refuse incomplete tagged NPC orphan batches before any original cargo move
+
+Why: Tagged original NPC cargo from the same fleet/system with invalid quantity/type/identity/module/transience was silently skipped while valid sibling cargoIDs were reparented and delivered, causing incomplete partial original-cargo custody.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old main ADOPTED only 1 of 2 original sibling rows while corrupt cargo remained on orphan carrier. Pinned Node/SQLite/Rust/physical gameplay NOT_RUN.
+### 2026-10-26T13:46Z · 9bd05b3 · TEST · test(P0): damaged tagged orphan cannot be silently omitted from physical recovery
+
+Why: Regressions cover eight corrupt sibling variants with no writes/flushes, plus unaffected valid adoption when the invalid native cargo belongs to another fleet/system.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old main ADOPTED only 1 of 2 original sibling rows while corrupt cargo remained on orphan carrier. Pinned Node/SQLite/Rust/physical gameplay NOT_RUN.
