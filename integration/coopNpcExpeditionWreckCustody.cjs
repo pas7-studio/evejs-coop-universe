@@ -53,7 +53,9 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    return deny("EX03_WRECK_ORIGINAL_SOURCE_MISMATCH");
   let rows,other;
   try{
-   rows=cargo(shipID,items.ITEM_FLAGS.CARGO_HOLD);
+   // Read every flag: a damaged inventory flag must never hide physical
+   // original cargo and let NPC death silently orphan its ItemStore item.
+   rows=cargo(shipID,null);
    other=npcStore.listNativeWrecks();
   }catch{return deny("EX03_WRECK_SOURCE_UNAVAILABLE")}
   if(!rows||!Array.isArray(other)||other.length>100000)
@@ -128,7 +130,9 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    return deny("EX03_WRECK_RECOVERY_SOURCE_MISMATCH");
   let source,held,allWrecks;
   try{
-   source=cargo(shipID,items.ITEM_FLAGS.CARGO_HOLD);
+   // Recovery also inspects every flag, refusing corrupted source items
+   // rather than incorrectly declaring the wreck fully reconciled.
+   source=cargo(shipID,null);
    held=cargo(wreckID,null);
    allWrecks=npcStore.listNativeWrecks();
   }catch{return deny("EX03_WRECK_RECOVERY_SOURCE_UNAVAILABLE")}
@@ -244,14 +248,10 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    "coop-npc-expedition:v1:")))return false;
   // After a crash following the persistent intent, the original item may
   // still sit in the destroyed source hull. The wreck then cannot expire.
-  if(unresolved.some(x=>{
-   const value=String(x?.customInfo||"");
-   if(!value.startsWith("coop-npc-expedition:v1:"))return false;
-   const proof=parse(value);
-   return !proof || proof.shipID===w.sourceEntityID &&
-     proof.corpID===w.coopNpcExpeditionSourceCorpID &&
-     (proof.wreckID===null||proof.wreckID===wreckID);
-  }))return false;
+  // Even an apparently valid but mismatched marker is ambiguous on the
+  // destroyed original hull. Fail closed; never expire it as empty.
+  if(unresolved.some(x=>String(x?.customInfo||"").startsWith(
+   "coop-npc-expedition:v1:")))return false;
   return true;
  }
  return Object.freeze({stage,reconcile,list,claim,canDestroy});
