@@ -4,9 +4,9 @@ import fs from "node:fs";
 import path from "node:path";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-test("original pinned source resolves actual rare candidate item pools for linked overseer NPCs",()=>{
+test("original pinned source resolves actual rare candidate item pools for linked overseer NPCs",(t)=>{
  const code=process.env.EVEJS_CODE_PATH||process.env.EVEJS_COOP_CODE_PATH;
- if(!code)return test.skip("not installed in an original pinned EveJS tree");
+ if(!code){t.skip("not installed in an original pinned EveJS tree");return;}
  const native=path.resolve(code,"server/src/space/npc");
  const npcData=require(path.join(native,"npcData.js"));
  const loot=require(path.join(native,"npcLoot.js"));

@@ -87,7 +87,8 @@ function gatePinned(root,nativeCode){
   // Native server source contract tests that inspect the real
   // installed server, without a running game or client.
   cmd(process.execPath,["--test","tests/coop-pve-native-pinned.test.mjs",
-   "tests/coop-overlay-reapply-idempotent.test.mjs"],{cwd:root,
+   "tests/coop-overlay-reapply-idempotent.test.mjs",
+   "tests/coop-pve-native-rare-candidates.test.mjs"],{cwd:root,
    env:{...process.env,EVEJS_CODE_PATH:code,EVEJS_COOP_CODE_PATH:code}});
  }finally{
   if(installed){
