@@ -58,7 +58,7 @@ function noteTargetSelected(fleetRecord, scene, minerEntity, targetEntity, minin
         : -1,
     distance:
       hooks && typeof hooks.getSurfaceDistance === "function"
-        ? Math.round(hooks.getSurfaceDistance(scene, minerEntity, targetEntity))
+        ? Math.round(hooks.getSurfaceDistance(minerEntity, targetEntity))
         : 0,
   });
 }

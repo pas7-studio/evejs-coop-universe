@@ -68,19 +68,29 @@ test('an activation failure carries the fields that explain it', ()=>{
 });
 
 test('a target observation carries module and effect counts', ()=>{
+  const calls = [];
   trace.noteTargetSelected(
     {fleetID: 960004643},
     scene,
     {itemID: 980000016052, activeModuleEffects: new Map([[1, {}]])},
     {itemID: 5020484739081},
     [1],
-    {getNpcFittedModuleItems: () => [1], getSurfaceDistance: () => 1032.4},
+    {
+      getNpcFittedModuleItems: (entity) => { calls.push(['fitted', entity && entity.itemID]); return [1]; },
+      // The mining loop's hook is scene-bound and takes exactly two arguments;
+      // passing a scene in front of it silently returns a nonsense distance.
+      getSurfaceDistance: (...args) => { calls.push(['distance', args.length, args[0] && args[0].itemID, args[1] && args[1].itemID]); return 1032.4; },
+    },
   );
   const event = take('MINER_TARGET');
   assert.equal(event.detail.targetID, 5020484739081);
   assert.equal(event.detail.modules, 1);
   assert.equal(event.detail.activeEffects, 1);
   assert.equal(event.detail.distance, 1032);
+  assert.deepEqual(calls, [
+    ['fitted', 980000016052],
+    ['distance', 2, 980000016052, 5020484739081],
+  ]);
 });
 
 test('a belt with no free rock says so explicitly', ()=>{
