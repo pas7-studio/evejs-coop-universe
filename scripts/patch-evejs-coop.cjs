@@ -360,14 +360,20 @@ function run({codePath,remove=false,dryRun=false}){
   if(!remove){
    const after=fs.readFileSync(src,"utf8");
    new vm.Script(after,{filename:src});
-   // Modules are installed as <name>.js, so require("./sibling.cjs") resolves to
-   // nothing in the running server. The hook then throws on every call and the
-   // caller swallows it per tick, so the feature silently never runs - exactly how
-   // the mining fleet spent hours "charged, stopped, nothing mined".
-   const sibling=after.match(/require\("\.\/[A-Za-z][A-Za-z0-9]*\.cjs"\)/);
-   if(sibling)
-    throw Error("INSTALL_REQUIRE_EXTENSION: "+name+" keeps "+sibling[0]+
-     " but overlay modules are installed as .js; require it without an extension");
+   // A module is installed as <name>.js, so a require("./sibling.cjs") resolves to
+   // nothing in the running server. That is only safe when the same module also
+   // tries the extensionless form (the adaptive pattern), otherwise the hook throws
+   // on every call and the caller swallows it per tick.
+   const siblings=new Set();
+   for(const match of after.matchAll(/require\("\.\/([A-Za-z][A-Za-z0-9]*)\.cjs"\)/g)){
+    const sibling=match[1];
+    if(new RegExp('require\\("\\./'+sibling+'"\\)').test(after))continue;
+    siblings.add(sibling);
+   }
+   if(siblings.size>0)
+    throw Error("INSTALL_REQUIRE_EXTENSION: "+name+" keeps require(\"./"+
+     [...siblings][0]+".cjs\") with no extensionless alternative, but overlay modules"+
+     " are installed as .js");
    plan.push({file,before:fs.existsSync(file)?fs.readFileSync(file,"utf8"):null,after});
   }else if(fs.existsSync(file)){
    const before=fs.readFileSync(file,"utf8");

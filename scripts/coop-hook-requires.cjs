@@ -57,16 +57,32 @@ function audit({ names, specs, integrationsDir, checkout } = {}) {
   }
   const violations = [];
   let stock = 0;
+  const adaptive = new Map();
+  for (const name of installed) {
+    try {
+      const source = path.join(integrationsDir || "", name + ".cjs");
+      const text = fs.readFileSync(source, "utf8");
+      adaptive.set("server/src/space/" + name + ".js", {
+        text,
+        tries: new Set(requiresIn(text).filter((specifier) => /^\.\/[A-Za-z][A-Za-z0-9]*$/.test(specifier))),
+      });
+    } catch (_error) { /* module without source is reported elsewhere */ }
+  }
   for (const target of targets) {
     const base = path.posix.basename(target.resolved);
     if (/^coop/i.test(base)) {
       // Our own modules are installed as <name>.js by the same overlay, so a
       // require that names one must name an installed module - and it must name it
       // without an extension, because .cjs does not exist in the installed tree.
+      // The adaptive pattern (also trying the extensionless form) is allowed.
       if (!installed.has(base)) {
         violations.push({ code: "HOOK_REQUIRE_NOT_INSTALLED", ...target });
       } else if (/\.cjs$/.test(target.specifier)) {
-        violations.push({ code: "HOOK_REQUIRE_EXTENSION", ...target });
+        const owner = adaptive.get(target.from);
+        const extensionless = "./" + base;
+        if (!owner || !owner.tries.has(extensionless)) {
+          violations.push({ code: "HOOK_REQUIRE_EXTENSION", ...target });
+        }
       }
       continue;
     }

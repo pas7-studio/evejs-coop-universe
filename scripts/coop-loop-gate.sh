@@ -54,6 +54,7 @@ run "hook-requires"          node --test tests/coop-hook-requires.test.mjs
 run "hook-inventory"         node --test tests/coop-hook-inventory.test.mjs
 run "deploy-reset-list"      node --test tests/coop-deploy-reset-list.test.mjs
 run "overlay-l1-baseline"    node --test tests/coop-overlay-l1-baseline.test.mjs
+run "fleet-composition"      node --test tests/coop-fleet-composition.test.mjs
 run "loop-verdict"           node --test tests/loop-verdict.test.mjs
 
 if [ -n "$CODE" ]; then

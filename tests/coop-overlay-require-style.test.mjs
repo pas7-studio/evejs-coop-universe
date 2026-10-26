@@ -22,8 +22,14 @@ test('no installed overlay module requires a sibling with a .cjs extension', () 
   for (const name of names) {
     const file = path.join(integrations, name + '.cjs');
     if (!fs.existsSync(file)) continue;
-    const match = fs.readFileSync(file, 'utf8').match(siblingCjsRequire);
-    if (match) offenders.push(name + ' -> ' + match[0]);
+    const text = fs.readFileSync(file, 'utf8');
+    // The adaptive pattern (try "./sibling", fall back to "./sibling.cjs") works in
+    // both trees and is allowed. A .cjs-only require cannot resolve once installed.
+    for (const match of text.matchAll(/require\("\.\/([A-Za-z][A-Za-z0-9]*)\.cjs"\)/g)) {
+      const sibling = match[1];
+      if (text.includes('require("./' + sibling + '")')) continue;
+      offenders.push(name + ' -> ' + match[0]);
+    }
   }
   assert.deepEqual(offenders, [], 'require the sibling without an extension');
 });

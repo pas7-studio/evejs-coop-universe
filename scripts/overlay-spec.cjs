@@ -74,6 +74,9 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningCapacitorGate");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningActivate");
 // An idle native NPC must not clear a mining hull's target locks (default OFF).
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningTargetGuard");
+// Per-role, wealth-tiered fleet hulls (default OFF): a miner hull must never be
+// spawned into the hauler slot.
+names.splice(names.indexOf("coopMiningTargetGuard")+1,0,"coopFleetComposition");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).

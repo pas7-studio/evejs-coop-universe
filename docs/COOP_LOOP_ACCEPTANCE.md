@@ -65,7 +65,23 @@ with `LOOP_PASS` or `LOOP_FAIL:<stage>` from `scripts/loop-verdict.cjs`. A sale 
 only be waived explicitly (`--no-require-sale`); a skipped sale is always printed
 with the runtime reason.
 
-## 5. Known traps (each one cost hours)
+## 5. Fleet composition (why the hauler matters)
+
+`EVEJS_COOP_FLEET_COMPOSITION=1` makes the spawn choose hulls **per role and per
+corporation wallet** (`integration/coopFleetComposition.cjs`): a corp below 250M ISK
+flies T1 (`ore_mining_badger_hauler`…), above it T2 (`ore_mining_occator_hauler`…);
+miners are picked from `venture/retriever` or `skiff/hulk`. With the flag off, the
+pinned spawner keeps its configured query. Every ID is a real row in
+`tools/DatabaseCreator/staticTables`.
+
+Measured failure this fixes: all three durable "hauler" slots were Mining Ventures
+(`typeID 32880`, 50 m³ hold) while miners were Skiffs and Hulks, so
+`living-haul-no-hauler` reported `why:"full", capacityM3:50, needM3:9533` and ore
+could never leave the belt. An existing slot with a mining hull in the hauler role
+must be re-composed: keep the hull as an extra miner and add a real hauler, never
+destroy a durable ship to make the acceptance pass.
+
+## 6. Known traps (each one cost hours)
 
 - A hook module that is not installed throws inside stock code and the caller
   swallows it per tick: the feature looks configured and idle. Never accept "no
