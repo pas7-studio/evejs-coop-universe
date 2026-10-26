@@ -446,3 +446,50 @@ test('P0: failed removal of warehouse lock cannot report COMMITTED as a trusted 
  assert.equal(fs.existsSync(path.join(dir,'8001.lock')),true);
  assert.equal(w.deposit(f.arg).status,'WAREHOUSE_CUSTODY_LOCKED');
 }));
+
+
+test('P0: duplicate receipt filename alias cannot double count original physical warehouse ore',()=>withF(f=>{
+ const w=f.make();
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ const dir=path.join(f.root,'receipts'),canonical=path.join(dir,'8001.json');
+ const original=fs.readFileSync(canonical,'utf8'),alias=path.join(dir,'0008001.json');
+ fs.writeFileSync(alias,original);
+ const audit=w.audit();
+ assert.equal(audit.status,'NEEDS_RECONCILIATION');
+ assert.equal(audit.committed,1,'same original receipt cannot be counted as two goods');
+ assert.ok(audit.problems.some(x=>x.reason==='WAREHOUSE_NONCANONICAL_RECEIPT_FILENAME'));
+ assert.equal(f.owned.size,1);
+ assert.equal(f.issued,1);
+ assert.equal(fs.readFileSync(canonical,'utf8'),original,'audit does not rewrite receipts');
+ fs.unlinkSync(alias);
+ assert.equal(w.audit().status,'OK');
+ assert.equal(w.audit().committed,1);
+}));
+
+test('P0: orphaned durable receipt temp file is visible to audit after interrupted rename',()=>withF(f=>{
+ const w=f.make();
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ const dir=path.join(f.root,'receipts');
+ const stray=path.join(dir,'8001.json.tmp-777-123');
+ fs.writeFileSync(stray,JSON.stringify({phase:'PREPARED',cargoID:8001}));
+ const result=w.audit();
+ assert.equal(result.status,'NEEDS_RECONCILIATION');
+ assert.equal(result.committed,1);
+ assert.ok(result.problems.some(x=>x.reason==='WAREHOUSE_INCOMPLETE_RECEIPT_WRITE'));
+ assert.equal(f.owned.size,1);
+ assert.equal(f.issued,1);
+ assert.equal(fs.existsSync(stray),true,'never auto-delete unresolved temp journal');
+ fs.unlinkSync(stray);
+ assert.equal(w.audit().status,'OK');
+}));
+
+test('P0: invalid receipt JSON filename cannot disappear from an otherwise empty audit',()=>withF(f=>{
+ const dir=path.join(f.root,'receipts');fs.mkdirSync(dir,{recursive:true});
+ fs.writeFileSync(path.join(dir,'unexpected.json'),'{}');
+ const result=f.make().audit();
+ assert.equal(result.status,'NEEDS_RECONCILIATION');
+ assert.equal(result.committed,0);
+ assert.ok(result.problems.some(x=>x.reason==='WAREHOUSE_NONCANONICAL_RECEIPT_FILENAME'));
+ assert.equal(f.issued,0);
+ assert.equal(f.cargo.size,1);
+}));
