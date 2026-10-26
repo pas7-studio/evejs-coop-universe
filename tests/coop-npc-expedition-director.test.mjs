@@ -415,3 +415,32 @@ test("EX-03B12 failing bridge blocked() refuses that ship without issuing",()=>{
  assert.ok(result.blocked>0);
  assert.equal(d.snapshot().unknownOrderOutcomes,0);
 });
+
+test("EX-03B12 second native witness read failure cannot crash other pilots",()=>{
+ const f=fixture();
+ const scene=f.input().scene,original=scene.getEntityByID;
+ let siteReads=0;
+ scene.getEntityByID=id=>{
+  if(id===440&&++siteReads>1)throw Error("scene unloaded during second read");
+  return original(id);
+ };
+ const d=f.create();
+ const result=d.tick({...f.input(),scene});
+ assert.equal(result.status,"NATIVE_EXPEDITION_TICK");
+ assert.equal(result.observed,0);
+ assert.equal(result.orders,0);
+});
+
+test("EX-03B12 explicit unknown native result fences future expedition orders",()=>{
+ const f=fixture(),issued=[];
+ const d=f.create({orderBridge:{
+  blocked:()=>false,
+  issue:({entityID})=>{
+   issued.push(entityID);
+   return {success:false,errorMsg:"COOP_NPC_ORDER_REPAIR_REQUIRED"};
+  }
+ }});
+ d.tick(f.input());d.tick(f.input());
+ assert.deepEqual(issued,[23],"ambiguous native outcome never reissued");
+ assert.equal(d.snapshot().unknownOrderOutcomes,1);
+});
