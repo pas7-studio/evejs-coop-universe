@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null,npcWormholeApproaches=new Set();
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -682,13 +682,30 @@ function advanceNativeNpcExpeditions(){
      endpoint=scene.getEntityByID(tip.siteID)}
     catch{continue}
     if(!hull||!endpoint||endpoint.kind!=="wormhole"||
-     endpoint.itemID!==tip.siteID||!hull.position||!endpoint.position||
-     Math.max(0,Math.hypot(
-      hull.position.x-endpoint.position.x,
-      hull.position.y-endpoint.position.y,
-      hull.position.z-endpoint.position.z)-
-      Math.max(0,Number(hull.radius)||0)-
-      Math.max(0,Number(endpoint.radius)||0))>5000)continue;
+     endpoint.itemID!==tip.siteID||!hull.position||!endpoint.position)continue;
+    const gap=Math.max(0,Math.hypot(
+     hull.position.x-endpoint.position.x,
+     hull.position.y-endpoint.position.y,
+     hull.position.z-endpoint.position.z)-
+     Math.max(0,Number(hull.radius)||0)-
+     Math.max(0,Number(endpoint.radius)||0));
+    const approachKey=link.entityID+":"+tip.siteID;
+    if(gap>5000){
+     // The source-native NPC flight commands the approach; no direct
+     // coordinate update or instant wormhole teleport is permitted.
+     if(gap<=150000&&!npcWormholeApproaches.has(approachKey))
+      try{
+       if(!guard.blocked({entityID:link.entityID,systemID,owner:"EXPEDITION"})){
+        const approach=guard.issue({entityID:link.entityID,systemID,
+         owner:"EXPEDITION",action:"expedition-wormhole-approach",
+         execute:()=>npc.follow(link.entityID,tip.siteID,2500,
+          {wakeController:true})});
+        if(approach?.success===true)npcWormholeApproaches.add(approachKey);
+       }
+      }catch{}
+     continue;
+    }
+    npcWormholeApproaches.delete(approachKey);
     // The original arbiter fences an ambiguous mass/ship handoff.
     let moved;
     try{
@@ -720,6 +737,62 @@ function advanceNativeNpcExpeditions(){
        preservedModules:moved.data.preservedModules,
        nativeMassRefunded:false,nativeWalletMutation:false
       });
+     // Bounded physical same-corp expedition wingmen. A leader's perfect
+     // probe scan can authorize at most 2 companions ALREADY on its grid.
+     // Every follower separately pays source mass and polarization,
+     // preserves its original entity/modules/cargo and owns a journal.
+     let crossedWingmen=0;
+     for(const wing of assignments){
+      if(crossedWingmen>=2)break;
+      if(wing?.pilotID===tip.scoutPilotID||
+         wing?.systemID!==systemID||
+         !Number.isSafeInteger(wing?.entityID)||wing.entityID<=0)continue;
+      let ship,source;
+      try{
+       ship=scene.getEntityByID(wing.entityID);
+       source=store.getNativeEntity(wing.entityID);
+      }catch{continue}
+      if(!ship||ship.kind!=="ship"||ship.nativeNpc!==true||
+         ship.itemID!==wing.entityID||ship.session?.characterID||
+         source?.corporationID!==tip.corpID||
+         source.systemID!==systemID||source.ownerID!==ship.ownerID||
+         !ship.position||!endpoint.position||
+         Math.max(0,Math.hypot(
+          ship.position.x-endpoint.position.x,
+          ship.position.y-endpoint.position.y,
+          ship.position.z-endpoint.position.z)-
+          Math.max(0,Number(ship.radius)||0)-
+          Math.max(0,Number(endpoint.radius)||0))>5000)continue;
+      let wingResult;
+      try{
+       if(guard.blocked({entityID:wing.entityID,systemID,owner:"EXPEDITION"}))
+        continue;
+       wingResult=guard.issue({entityID:wing.entityID,systemID,
+        owner:"EXPEDITION",action:"expedition-wormhole-wingman",execute:()=>{
+         const state=npcWormholeTransit.cross({
+          pilotID:wing.pilotID,entityID:wing.entityID,
+          scene,endpointID:tip.siteID,assignments});
+         if(state.status==="NATIVE_NPC_WORMHOLE_ARRIVED")
+          return {success:true,data:state};
+         if(state.status==="NEEDS_OPERATOR_REPAIR")
+          return {status:"NATIVE_WORMHOLE_OUTCOME_UNKNOWN"};
+         return {success:false,errorMsg:state.reason||"EX03_WORMHOLE_BLOCKED"};
+        }});
+      }catch{continue}
+      if(wingResult?.success===true&&
+         wingResult.data?.status==="NATIVE_NPC_WORMHOLE_ARRIVED"){
+       crossedWingmen++;
+       visitedSystems.add(wingResult.data.destinationSystemID);
+       probe.observe("living-npc-original-wormhole-cross",null,
+        {spaceState:{systemID}},{
+         entityID:wing.entityID,role:"EXPEDITION_WINGMAN",
+         destinationSystemID:wingResult.data.destinationSystemID,
+         originalPairID:wingResult.data.originalPairID,
+         preservedCargo:true,preservedModules:true,
+         nativeMassRefunded:false,nativeWalletMutation:false
+        });
+      }
+     }
     }else if(moved?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
      probe.observe("living-npc-original-wormhole-repair",null,
       {spaceState:{systemID}},{entityID:link.entityID,
