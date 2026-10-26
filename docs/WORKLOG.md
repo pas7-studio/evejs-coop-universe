@@ -563,3 +563,15 @@ Why: On previous main, advance([{id:"__proto__",systemID:30000142}]) succeeded a
 Where: integration/coopVirtualEconomy.cjs, tests/coop-virtual-economy-native-delivery-durability.test.mjs
 Evidence: Reproduced on main with exact source: __proto__ set global Object.prototype.role to "miner"; malformed roster threw TypeError inside native economy step. Patched 20/20 source-backed isolated V8 callbacks PASS (18 economy durability + 2 existing virtual economy scenarios), including prototype name variants, malformed and duplicate rosters, no journal writes, valid miner progress and original native delivery checkpoint after restart. Full pinned original Node22 checkout, SQLite WAL/FULL cold restart, Rust, two authenticated player clients NOT_RUN. No deployments, real original items/ISK, flags or remote CI changed.
 
+### 2026-10-26T17:54Z · f294b64 · L2 · coop: a cycle boundary is a millisecond instant, not a float identity
+
+Why: The atomic mining settler demanded a safe-integer cycle boundary while the runtime passes a float, so every real cycle was refused with ALIFE07_YIELD_INVALID:cycleBoundaryMs.
+Detail: The runtime hands cycleBoundaryMs over as a float and the settler demanded a safe integer, so every real mining cycle was refused with ALIFE07_YIELD_INVALID:cycleBoundaryMs and the durable fleet could not settle a single tonne. Round once at the boundary; the value only builds the journal operation key.
+Where: integration/coopNativeMiningAtomic.cjs, tests/coop-native-mining-atomic-blocking.test.mjs
+Evidence: Live MODULE_STOP why=cargo entityError=ALIFE07_YIELD_INVALID:cycleBoundaryMs; tests/coop-native-mining-atomic-blocking.test.mjs 6/6 (fractional boundary accepted).
+### 2026-10-26T17:55Z · 22ec696 · L2 · coop: a refusal that provably wrote nothing must not block a hull forever
+
+Why: NATIVE_TRANSIENT_STATE_UNSAFE is thrown before the journal and the SQLite transaction, so the sticky operator-repair marker it left was not an uncertain custody state; it blocked every durable miner permanently, across restarts.
+Detail: NATIVE_TRANSIENT_STATE_UNSAFE is thrown while the atomic store checks the native npcCargo table, before the journal and before the SQLite transaction, so the hull is not in an uncertain custody state. The sticky repair marker it left stopped every durable miner permanently, including after a restart - the world could never mine again. Only that exact pre-mutation refusal is cleared now (with a liv
+Where: integration/coopNativeMiningAtomic.cjs, tests/coop-native-mining-atomic-blocking.test.mjs
+Evidence: Live entityError ALIFE07_REPAIR_REQUIRED:ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED:NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo on two miners; tests/coop-native-mining-atomic-blocking.test.mjs clears only that exact pre-mutation refusal and keeps ALIFE07_POSTCOMMIT_SCENE_DIVERGED.
