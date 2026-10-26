@@ -78,10 +78,14 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
      assignments.length>2048||!roles||typeof roles!=="object")
    return {status:"NO_TRUSTED_NATIVE_SCENE",observed:0,orders:0};
   currentScene=scene;currentAssignments=assignments;
-  const all=[...new Set(assignments.filter(a=>pos(a?.entityID)).map(a=>a.entityID))]
-   .slice(0,maxPilotsPerTick).map(id=>readPilot(scene,id,assignments))
-   .filter(Boolean).filter(p=>roles[p.pilotID]==="patrol")
-   .sort((a,b)=>a.entityID-b.entityID);
+  // EX-03B9: apply the native role gate before the per-tick cap.
+  // Otherwise 32 earlier miners/haulers can starve every fitted scout,
+  // even though all of them are valid named durable NPC pilots.
+  const candidateIDs=[...new Set(assignments.filter(a=>
+   pos(a?.entityID)&&named(a?.pilotID)&&roles[a.pilotID]==="patrol")
+   .map(a=>a.entityID))].sort((a,b)=>a-b);
+  const all=candidateIDs.slice(0,maxPilotsPerTick)
+   .map(id=>readPilot(scene,id,assignments)).filter(Boolean);
   let sites;
   try{sites=listNativeSites(scene.systemID)}catch{
    return {status:"NATIVE_SITE_CATALOG_UNAVAILABLE",observed:0,orders:0};
