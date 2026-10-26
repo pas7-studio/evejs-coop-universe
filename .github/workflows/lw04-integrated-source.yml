@@ -1,0 +1,75 @@
+name: LW-04 Integrated Source and SQLite Gates
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'integration/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/lw04-integrated-source.yml'
+  pull_request:
+    branches:
+      - main
+      - fix/lw04c3b-current-main-finance-20261026
+      - fix/lw04c4-current-main-sold-20261026
+      - fix/lw04d-current-main-native-readiness-20261026
+      - fix/lw04e-current-main-warehouse-title-20261026
+    paths:
+      - 'integration/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - '.github/workflows/lw04-integrated-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-original-custody:
+    name: LW-04 full original source custody / replay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check original native financial and warehouse modules
+        run: |
+          set -euo pipefail
+          for f in integration/coopNpcIndustryOriginalSaleAudit.cjs integration/coopNpcIndustryOriginalWalletWitness.cjs integration/coopNpcIndustryOriginalBuyerSettlement.cjs integration/coopNpcNativeEconomyDirector.cjs integration/coopNpcOriginalWarehouseTitleTransfer.cjs integration/coopNativeStationOreSettlement.cjs integration/coopLivingWorldNativeChainProof.cjs scripts/lw04d-native-readiness.cjs; do
+            node --check "$f"
+          done
+      - name: Native full chain source tests (no actual E2E claim)
+        env:
+          EVEJS_COOP_ALIFE_ECONOMY_ACT: "0"
+          EVEJS_COOP_NATIVE_NPC_MARKET: "0"
+          EVEJS_COOP_NATIVE_NPC_ECONOMY_SCHEDULER: "0"
+        run: node scripts/lw04d-native-readiness.cjs --source
+      - name: Manual buyer and original Rust sale settlement regressions
+        run: |
+          node --test \
+            tests/coop-npc-industry-original-buyer-settlement.test.mjs \
+            tests/coop-npc-industry-original-rust-sell.test.mjs \
+            tests/coop-npc-refinery.test.mjs \
+            tests/coop-npc-industry-original-stage-executor.test.mjs \
+            tests/coop-lw04d-native-readiness.test.mjs
+      - name: Check real Node SQLite and durable restart regression
+        run: |
+          node -e "const {DatabaseSync}=require('node:sqlite'); const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE t(x INTEGER); INSERT INTO t VALUES(7)');if(db.prepare('SELECT x FROM t').get().x!==7)process.exit(1);db.close()"
+          node --test tests/coop-escort-peaceful-real-sqlite-restart.test.mjs
+      - name: Keep physical pinned Rust / SQLite / two-client evidence unverified
+        run: |
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const files=[
+            'tests/scenarios/lw04c3b-factory-sale-finance-e2e.json',
+            'tests/scenarios/lw04c4-original-npc-sold-e2e.json',
+            'tests/scenarios/lw04d-original-native-e2e.json',
+            'tests/scenarios/lw04e-original-warehouse-title-e2e.json',
+            'tests/scenarios/lw04f-original-depot-e2e.json'
+          ];
+          for(const file of files){
+            const doc=JSON.parse(fs.readFileSync(file,'utf8'));
+            if(!Array.isArray(doc.scenarios)||doc.scenarios.length===0||doc.scenarios.some(s=>s.status!=='NOT_RUN')) throw Error('PHYSICAL_EVIDENCE_REQUIRES_MANUAL_VERIFICATION: '+file);
+          }
+          console.log('Source gates are not physical EveJS, Rust or authenticated two-client E2E acceptance.');
+          NODE

@@ -1,0 +1,40 @@
+name: LW04F Original Depot Grant and Durability Source Gate
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04e-native-warehouse-title-transfer-20261026
+    paths:
+      - 'integration/coopNativeStationOreSettlement.cjs'
+      - 'scripts/coop-native-warehouse-item-patch.cjs'
+      - 'tests/coop-lw04f-original-native-depot-hook.test.mjs'
+      - 'tests/coop-native-station-ore-settlement.test.mjs'
+      - 'tests/scenarios/lw04f-original-depot-e2e.json'
+      - '.github/workflows/lw04f-original-depot-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  strict-original-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check original depot/grant syntax
+        run: |
+          node --check integration/coopNativeStationOreSettlement.cjs
+          node --check scripts/coop-native-warehouse-item-patch.cjs
+      - name: Test original ItemStore depot hook and ALIFE-09 durable flush
+        run: |
+          node --test \
+            tests/coop-lw04f-original-native-depot-hook.test.mjs \
+            tests/coop-native-station-ore-settlement.test.mjs \
+            tests/coop-lw04e-original-warehouse-title-transfer.test.mjs \
+            tests/coop-lw04d-original-native-chain-proof.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs
+      - name: Preserve honest real native E2E status
+        run: |
+          node -e 'const x=require("./tests/scenarios/lw04f-original-depot-e2e.json");if(x.scenarios.length!==12||x.scenarios.some(y=>y.status!=="NOT_RUN")||x.status!=="NOT_VERIFIED")process.exit(1)'
