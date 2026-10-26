@@ -347,7 +347,7 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("DISABLED");
   if(systemID!==null&&!pos(systemID)||
    !Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>32||
-   afterKey!==null&&(typeof afterKey!=="string"||!/^\\d+-\\d+-\\d+$/.test(afterKey)))
+   afterKey!==null&&(typeof afterKey!=="string"||!/^\d+-\d+-\d+$/.test(afterKey)))
    return blocked("PEACEFUL_REPLAY_SCAN_OPTIONS_INVALID");
   let entries;try{entries=flight.listDelivered({systemID,maxTrips,afterKey})}
   catch{return blocked("PEACEFUL_REPLAY_FLIGHT_SCAN_UNAVAILABLE")}
