@@ -220,8 +220,8 @@ test("EX-03B9 native scanner priority cannot be starved by virtual miners",()=>{
  assert.match(world,/store\.listNativeModulesForEntity\(id\)/);
  assert.match(world,/m\.groupID===481&&m\.categoryID===7/);
  assert.match(workflow,/feat\/ch22-23-npc-expedition-competition-20261026/);
- const push=workflow.split("  push:\\n")[1]?.split("  workflow_dispatch:")[0];
+ const push=workflow.split("  push:\n")[1]?.split("  workflow_dispatch:")[0];
  assert.ok(push,"EX03_PUSH_EVENT_REQUIRED");
- assert.match(push,/integration\\/coopNpcExpedition\\\\\*\\.cjs/);
- assert.match(push,/tests\\/coop-npc-\\\\\*/);
+ assert.match(push,/integration\/coopNpcExpedition\*\.cjs/);
+ assert.match(push,/tests\/coop-npc-\*/);
 });
