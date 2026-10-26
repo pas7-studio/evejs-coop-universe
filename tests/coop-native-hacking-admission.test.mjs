@@ -101,6 +101,13 @@ const clickAnchor=`  Handle_ClickedOnTile(args = [], session = null) {
       emitHackingTurn(session, [buildEvent(HACKING_CONSTANTS.EVENT_ACK, {})]);
       return null;
     }`;
+const quitAnchor=`  Handle_QuitHackingAttempt(args = [], session = null) {
+    normalizeCallArgs(args);
+    const key = getAttemptKey(session);
+    const attempt = ACTIVE_ATTEMPTS.get(key);
+    if (!attempt || attempt.completed) {
+      return null;
+    }`;
 function hackingFixture(){
  return [
  "class HackingMgrService {",
@@ -122,6 +129,8 @@ function hackingFixture(){
  "    };",
  "  }",
  clickAnchor,
+ "  }",
+ quitAnchor,
  "  }",
  "}"
  ].join("\n");
