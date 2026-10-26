@@ -131,6 +131,15 @@ See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
 - Evidence: **9/9** isolated bridge tests, **10/10** Rust source installer safety tests, pinned Rust state/rpc patch install-uninstall exact roundtrip; actual Rust compiler, SQLite process and two EVE clients **NOT_RUN**.
 - See [CHAT24_31_RUST_CORPORATE_SELL_PREPARE.md](CHAT24_31_RUST_CORPORATE_SELL_PREPARE.md) for secure configuration, manual commands, remaining settlement acceptance and rollback.
 
+## Stage E2B3 — original Rust partial/full claim and atomic corporate wallet settlement (source implemented)
+
+- Added private original Rust `ClaimCorpFill` / `GetCorpFillClaim` with a unique `orderID+cycle` and exclusive `state='settling'` lock; only originally published, verified corporation-owned orders are eligible. Stock personal/NPC market rules remain separate.
+- Added source-only native GameStore **five-table atomic** settlement for real buyer character debits, real seller corporation Wallet Division 1000 credits, verified taxes/broker fees, and physical original itemID/quantity conservation for full and partial ore sales. Every cycle writes immutable `coopPlayerMiningCorpFillorderID:cycle` and original escrow/source quantity updates.
+- Partial fills retain the exact source itemID and cargo marker in corporate escrow, allocate one new buyer itemID using the native ItemStore allocator and record its source ID. Full fills transfer the same original itemID. Unknown native COMMIT is not automatically retried.
+- Durable corporate fill receipts are supported by pinned reversible SQLite row-group patch. Evidence: **14/14** isolated JS settlement scenarios PASS, **14/14** Rust source/installer tests after scope review, plus reversible source and row-group roundtrips. **Real Rust/Cargo/SQLite/gameplay NOT_RUN.**
+- **NOT YET LIVE:** Rust `FinalizeCorpFill` / `ReleaseCorpFill`, fully proven native fee source and safe `PublishCorpSell` are still absent. All economy flags remain default OFF, and current stock gameplay cannot call this bridge.
+- See [CHAT24_31_CORPORATE_FILL_SETTLEMENT.md](CHAT24_31_CORPORATE_FILL_SETTLEMENT.md) for the remaining E2B4 acceptance gates.
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
