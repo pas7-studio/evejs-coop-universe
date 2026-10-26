@@ -132,3 +132,23 @@ test("duplicate original source ownership makes objective invalid",()=>{
    waveIndex:2,spawnedAtMs:900000,spawnedEntityIDs:[5200]};
  assert.equal(f.tick().orders,0);
 });
+
+test("original objective REGROUP issues physical orbit only near a verified player",()=>{
+ const f=fixture({stale:true});
+ f.npcShip.position.x=40000;
+ const r=f.tick();
+ assert.equal(r.orders,1);
+ assert.equal(r.events[0].status,"NATIVE_OBJECTIVE_REGROUP_ORBIT_ACK");
+ assert.equal(f.callbacks.length,1);
+ assert.equal(f.callbacks[0].type,"orbit");
+ assert.equal(f.callbacks[0].source,101);
+ assert.equal(f.callbacks[0].target,5200);
+ assert.equal(f.tick().orders,0);
+});
+test("REGROUP holds when no verified visitor or an existing native controller is engaged",()=>{
+ const f=fixture({stale:true,disconnected:true});
+ f.npcShip.position.x=40000;
+ assert.equal(f.tick().orders,0);
+ const b=fixture({stale:true,busy:true});b.npcShip.position.x=40000;
+ assert.equal(b.tick().orders,0);
+});
