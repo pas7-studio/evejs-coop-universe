@@ -113,3 +113,15 @@ test('a deposit event with no stacks is not a delivery', () => {
   assert.equal(result.stages.deliver.status, 'MISSING');
   assert.equal(result.verdict, 'FAIL:deliver');
 });
+
+test('the sale stage reads the shape the arrival runtime really emits', () => {
+  // coopVirtualWorldRuntime settles as {status:"SOLD", sold:[{typeID,quantity,price,isk,balance}], quantity, isk}
+  const real = {at: at(330), event: 'living-npc-station-sold', stationID: 60003760,
+    status: 'SOLD', quantity: 250, isk: 1500000,
+    sold: [{typeID: 1230, quantity: 250, price: 6000, isk: 1500000, balance: 1500000}],
+    earnedPlayerISK: 0, marketCurrency: 'NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET'};
+  const result = verdict([cycle(), load(), delivered(), real]);
+  assert.equal(result.stages.sale.status, 'PROVEN');
+  assert.match(result.stages.sale.detail, /quantity=250 isk=1500000 station=60003760/);
+  assert.equal(result.verdict, 'PASS');
+});

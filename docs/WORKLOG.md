@@ -656,3 +656,33 @@ Why: Ten suites could not load at all: modules require siblings without an exten
 Detail: Ten test files could not even load: their modules require siblings without an extension (correct for the installed .js tree), but the repo had no shim for that name, so require("./coopAlifeStationAuthority") failed in every local run. That is the same convention the repo already used ad hoc - 33 shims are added for the modules the failing suites load, nothing else changes. Also moved the installer
 Where: integration/coopAlifeStationAuthority.js, integration/coopConvoyOperations.js, integration/coopConvoyOutcomeProof.js, integration/coopEscortContractSettlement.js, integration/coopEscortDepartureWitness.js, integration/coopEscortFlightGate.js, integration/coopEscortNativeBinding.js, integration/coopEscortNativeFunds.js, integration/coopEscortNativeMount.js, integration/coopEscortNativeTactics.js, integration/coopEscortPeacefulSettlement.js, integration/coopEscortPricedOffers.js, integration/coopEscortReputation.js, integration/coopEscortRescueNavigation.js, integration/coopEscortRouteWitness.js, integration/coopEscortRuntime.js, integration/coopEscortTacticalGame.js, integration/coopEscortTerminalAttendance.js, integration/coopEscortVolunteers.js, integration/coopMissionInstanceProvenance.js, integration/coopNativeHaulManifest.js, integration/coopNativeJobNotifications.js, integration/coo
 Evidence: 33 repo .js shims for the escort/salvage/station modules; module-coverage check now proves every bundled integration source is registered.
+### 2026-10-26T19:17Z · 33b1a26 · L3 · coop: a settled mining cycle now has one product proof
+
+Why: Every mining signal we had was an input (module active, lock held, cycle attempted); none proved ore left a rock inside a committed transaction, and the acceptance verdict accepted an attempt as mining.
+Detail: Everything we could observe about mining until now was an input: an activated module, a held target lock, a cycle attempt, a fleet snapshot with ore in a hull. None of them proves that a tonne left a rock inside a committed native transaction. The atomic settler now emits living-mining-cycle-settled after its post-commit readback, with the exact numbers it committed: quantity and waste, the rock b
+Where: integration/coopNativeMiningAtomic.cjs, scripts/loop-verdict.cjs, tests/coop-mining-cycle-transient-isolation.test.mjs, tests/loop-verdict.test.mjs
+Evidence: settler emits living-mining-cycle-settled with quantity/waste/rock before-after/cargoID/nextCargo/replayed after post-commit readback; tests/coop-mining-cycle-transient-isolation.test.mjs 12/12; tests/loop-verdict.test.mjs requires it and reports ATTEMPTED otherwise.
+### 2026-10-26T19:17Z · 00085f5 · DOCS · loop: the station-arrival deposit is the delivery proof the live path emits
+
+Why: The loop verdict only accepted the older crate unload, so a world using the station trip would report FAIL:deliver with ore already in the warehouse.
+Detail: The verdict only accepted the older crate unload, so a world using the station trip would have reported FAIL:deliver with the ore already in the warehouse. living-npc-station-delivered (stationID > 0, stacks > 0) and alife-native-delivery-settled now count, a station id of 0 or zero stacks still does not, and both cases are tested.
+Where: scripts/loop-verdict.cjs, tests/loop-verdict.test.mjs
+Evidence: living-npc-station-delivered (stationID>0, stacks>0) and alife-native-delivery-settled accepted; station id 0 or zero stacks still rejected; tests/loop-verdict.test.mjs 13/13.
+### 2026-10-26T19:18Z · 711e2fc · DOCS · loop: the sale stage reads the payload the arrival runtime emits
+
+Why: The sale event payload is {status:SOLD, quantity, isk, sold[]}; the verdict printed an empty revenue.
+Detail: The station arrival settles as {status:SOLD, quantity, isk, sold:[...]}, so the verdict was printing an empty revenue. It now reports quantity, isk and the station id from the real shape, pinned by a test that uses that payload verbatim.
+Where: scripts/loop-verdict.cjs, tests/loop-verdict.test.mjs
+Evidence: tests/loop-verdict.test.mjs uses the payload verbatim and asserts quantity/isk/station.
+### 2026-10-26T19:19Z · e5659f4 · L2 · coop: an activation that cannot even be tried says why
+
+Why: activate() returned early for a missing module entry or a scene without the activation api and told nobody, so those cases looked like an idle fleet.
+Detail: activate() returned early for a missing module entry or a scene without activateGenericModule and told nobody, so those two cases looked identical to a fleet that is simply idle. ACTIVATION_SKIPPED now carries the reason, which closes the last silent path in the activation chain.
+Where: integration/coopMiningActivate.cjs, tests/coop-mining-activate.test.mjs
+Evidence: ACTIVATION_SKIPPED carries no-module / no-scene-api; tests/coop-mining-activate.test.mjs 9/9.
+### 2026-10-26T19:21Z · d473501 · DOCS · docs: one committed loop gate and a runbook for the mining loop
+
+Why: The gate the owner needs must be one command, and the loop's acceptance, reasons and traps must survive in the repo rather than in chat.
+Detail: The gate the owner needs before a build is now a script instead of a paragraph of globs: scripts/coop-loop-gate.sh runs the 25 loop suites and, with --code-path, the structural overlay gates and the isolated real-engine GameStore gate; it ends in LOOP_GATE_PASS (verified: all 25 pass). docs/COOP_LOOP_ACCEPTANCE.md records the exact event each stage must emit, every refusal reason that can appear, 
+Where: AGENTS.md, docs/COOP_LOOP_ACCEPTANCE.md, scripts/coop-loop-gate.sh
+Evidence: scripts/coop-loop-gate.sh LOOP_GATE_PASS (25 suites + structural gates + isolated real-engine gate); docs/COOP_LOOP_ACCEPTANCE.md; AGENTS.md points at it.

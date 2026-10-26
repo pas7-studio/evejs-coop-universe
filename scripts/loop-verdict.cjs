@@ -91,7 +91,10 @@ function verdict(rows, options = {}) {
   const skipped = byName(SALE_SKIPPED);
   if (sold.length) {
     const last = sold[sold.length - 1];
-    stages.sale = {status: "PROVEN", evidence: SALE_SOLD, detail: "quantity=" + num(last.soldQuantity || last.quantity) + " revenue=" + num(last.revenue || last.proceeds)};
+    stages.sale = {status: "PROVEN", evidence: SALE_SOLD,
+      detail: "quantity=" + num(last.soldQuantity || last.quantity) +
+        " isk=" + num(last.isk || last.revenue || last.proceeds) +
+        " station=" + num(last.stationID)};
   } else if (skipped.length) {
     const last = skipped[skipped.length - 1];
     stages.sale = {status: "SKIPPED", evidence: SALE_SKIPPED, detail: String(last.status || "") + ":" + String(last.reason || "")};

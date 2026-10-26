@@ -12,12 +12,12 @@ const MODULE_COST_GJ = 30;
 
 function activate(deps = {}) {
   const {scene, pseudoSession, minerEntity, entry, targetEntity, fleetRecord} = deps;
-  if (!scene || !entry || !entry.moduleItem) return {attempted: false, reason: "no-module"};
+  if (!scene || !entry || !entry.moduleItem) return skipped(deps, "no-module");
   if (gate.shouldWait(minerEntity, MODULE_COST_GJ)) {
     note(deps, "CAPACITOR_WAIT", gate.why(minerEntity, MODULE_COST_GJ));
     return {attempted: false, reason: "capacitor-wait"};
   }
-  if (typeof scene.activateGenericModule !== "function") return {attempted: false, reason: "no-scene-api"};
+  if (typeof scene.activateGenericModule !== "function") return skipped(deps, "no-scene-api");
   const result = scene.activateGenericModule(
     pseudoSession,
     entry.moduleItem,
@@ -38,6 +38,13 @@ function activate(deps = {}) {
   const readBack = readBackEffect(scene, minerEntity, entry);
   note(deps, "MODULE_ACTIVATED", {moduleID, present: readBack.present, miningEffect: readBack.miningEffect});
   return {attempted: true, success: true, miningEffect: readBack.miningEffect, effectPresent: readBack.present};
+}
+
+function skipped(deps, reason) {
+  // The mining loop ignores this outcome, so a module that cannot even be tried
+  // would otherwise look like a fleet that simply never activates anything.
+  note(deps, "ACTIVATION_SKIPPED", {reason});
+  return {attempted: false, reason};
 }
 
 function readBackEffect(scene, minerEntity, entry) {

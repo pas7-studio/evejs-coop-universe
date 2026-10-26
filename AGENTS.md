@@ -7,7 +7,9 @@ published by `scripts/Publish-SessionState.ps1`. Never infer the current state
 from an older document; `node scripts/coop-state.cjs --verify` reports
 `STATE_STALE` when the bundle predates real changes.
 
-For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`,
+For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For the mining →
+hauler → station → sale loop use [`docs/COOP_LOOP_ACCEPTANCE.md`](docs/COOP_LOOP_ACCEPTANCE.md):
+its gates, the exact events each stage must emit, and the acceptance command. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`,
 [`docs/COOP_ARCHITECTURE_BOUNDARIES.md`](docs/COOP_ARCHITECTURE_BOUNDARIES.md)
 (module roles, single owner per record, flags) and relevant upstream docs as needed.
 

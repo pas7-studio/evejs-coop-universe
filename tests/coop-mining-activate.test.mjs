@@ -128,3 +128,29 @@ test("an activation that never reaches the ship the fleet reads is reported", ()
   assert.deepEqual(noted.map((entry_) => entry_[0]), ["MODULE_ACTIVATED"]);
   assert.equal(noted[0][1].present, false);
 });
+
+test("a module that cannot even be tried is reported, not silent", ()=>{
+  const noted = [];
+  const hull = {kind: "ship", nativeNpc: true, itemID: 42, capacitorCapacity: 900, capacitorChargeRatio: 0.5};
+  const outcome = activate.activate({
+    scene: {systemID: 30000144, activateGenericModule(){ return {success: true}; }},
+    pseudoSession: {}, minerEntity: hull, entry: {moduleItem: null}, targetEntity: target, fleetRecord: fleet,
+    trace: {note(reason, payload){ noted.push([reason, payload]); }, noteActivationFailure(){}},
+  });
+  assert.equal(outcome.attempted, false);
+  assert.equal(outcome.reason, "no-module");
+  assert.deepEqual(noted.map((entry_) => entry_[0]), ["ACTIVATION_SKIPPED"]);
+  assert.equal(noted[0][1].reason, "no-module");
+});
+
+test("a scene without the activation api is reported the same way", ()=>{
+  const noted = [];
+  const hull = {kind: "ship", nativeNpc: true, itemID: 42, capacitorCapacity: 900, capacitorChargeRatio: 0.5};
+  const outcome = activate.activate({
+    scene: {systemID: 30000144}, pseudoSession: {}, minerEntity: hull, entry, targetEntity: target, fleetRecord: fleet,
+    trace: {note(reason, payload){ noted.push([reason, payload]); }, noteActivationFailure(){}},
+  });
+  assert.equal(outcome.reason, "no-scene-api");
+  assert.equal(noted[0][0], "ACTIVATION_SKIPPED");
+  assert.equal(noted[0][1].reason, "no-scene-api");
+});

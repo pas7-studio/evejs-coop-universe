@@ -85,14 +85,15 @@ function patch(source,remove=false){
  const original="nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);";
  const safe="if(!coopSalvageCargoMoved)nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);";
  const section=s.slice(start,stop);
- let after;
- if(remove){
-  after=section.split(safe).join(original);
- }else{
-  after=section.split(original).join(safe);
- }
- if(section===after&&!section.includes(remove?original:safe))
+ // The old replace() recursively wrapped an already guarded cleanup on
+ // re-install: if(!moved)if(!moved)removeNativeWreckCascade(...). Normalize
+ // all existing guard layers FIRST to make install and uninstall idempotent.
+ let canonical=section;
+ for(let i=0;i<32&&canonical.includes(safe);i++)
+  canonical=canonical.split(safe).join(original);
+ if(canonical.includes(safe)||!canonical.includes(original))
   throw Error("SALVAGE_DEATH_CLEANUP_ANCHOR_MISSING");
+ const after=remove?canonical:canonical.split(original).join(safe);
  s=s.slice(0,start)+after+s.slice(stop);
  return s;
 }
