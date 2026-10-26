@@ -6,7 +6,6 @@
  * seller order, corporate physical escrow and exact original item identity.
  * One-use source candidate is re-attested before ClaimCorpFill.
  */
-const crypto=require("node:crypto");
 const positive=n=>Number.isSafeInteger(n)&&n>0;
 const ORDER=/^[1-9][0-9]{0,17}$/;
 const safeOrder=id=>typeof id==="string"&&ORDER.test(id)&&
@@ -70,10 +69,9 @@ function createNativeCorporateBuyerMatch({
   if(!positive(now))return denied("CORP_BUYER_QUOTE_CLOCK_INVALID");
   const current=pins.get(key);
   if(current&&current.expiresAt>now)return denied("CORP_BUYER_ORDER_ALREADY_QUOTED");
-  const nonce=crypto.randomBytes(16).toString("hex");
-  pins.set(key,{nonce,session,orderID,cycle,quantity,maxUnitPriceCents,
+  pins.set(key,{session,orderID,cycle,quantity,maxUnitPriceCents,
    initial:q,expiresAt:now+ttlMs});
-  return {status:"ELIGIBLE_NOT_RESERVED",orderID,cycle,nonce,
+  return {status:"ELIGIBLE_NOT_RESERVED",orderID,cycle,
    verifiedUnitPriceCents:q.priceCents,grossCents:q.grossCents,
    availableQuantity:q.volumeBefore,
    expiresAt:now+ttlMs,buyerFundsReserved:false,
