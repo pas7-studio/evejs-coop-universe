@@ -16,7 +16,9 @@ const DEFAULT_TTL_MS=45*60*1000;
 // and a failure must never consume the slot: only a real ADOPTED is final.
 const doneSlots=new Set();
 const noted=new Set();
-function enableFlag(){return process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION==="1";}
+const loadFlag=name=>{try{return require("./"+name)}catch(_error){return require("./"+name+".cjs")}};
+const flags=loadFlag("coopFlags");
+function enableFlag(){return flags.on("EVEJS_COOP_HAUL_CARGO_ADOPTION");}
 function dependenciesOf(options={}){
  return {store:options.store||require("./npc/nativeNpcStore"),
   probe:options.probe||require("./coopRuntimeProbe"),
@@ -101,8 +103,7 @@ function adopt(scene,fleet,options={}){
   return {status:"INVALID_FLEET"};
  const key=systemID+":"+fleetID;
  if(doneSlots.has(key))return {status:"ALREADY_ATTEMPTED"};
- const ttlMs=Number(process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS)>0?
-  Number(process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS):DEFAULT_TTL_MS;
+ const ttlMs=flags.number("EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS",DEFAULT_TTL_MS);
  const planned=plan({store,scene,systemID,fleetID,now,ttlMs,
   cargoTable:options.cargoTable,database});
  if(planned.status!=="ADOPTABLE"){

@@ -9,11 +9,12 @@ const haulFlag="coopHaulFleetID";
 const load=name=>{try{return require("./"+name)}catch(_error){return require("./"+name+".cjs")}};
 const {promote:durableCargo}=load("coopDurableCargoWrite");
 const {observe:safeObserve}=load("coopObserve");
+const flags=load("coopFlags");
 function dependenciesOf(options={}){
  return {store:options.store||require("./npc/nativeNpcStore"),
  probe:options.probe||require("./coopRuntimeProbe"),
  depot:options.depot||(
-  process.env.EVEJS_COOP_NATIVE_HAUL_CARGO==="1"
+  flags.on("EVEJS_COOP_NATIVE_HAUL_CARGO")
   ?require("./coopNativeDepot").getNativeDepot():null)};
 }
 // Chat 16: opt-in, conservative physical custody transfer for persistent NPCs.
@@ -71,13 +72,13 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    {fleetID:fleet?.fleetID,cargoID,reason,operatorRepairRequired:uncertain,nativeMutation:false});
   return 0;
  };
- if(process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1"||
-  process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1"||
-  process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
+ if(!flags.on("EVEJS_COOP_NATIVE_HAUL_CARGO")||
+  !flags.on("EVEJS_COOP_NPC_STATION_DELIVERY")||
+  !flags.on("EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC"))
   return stop("HAUL_NATIVE_PERSISTENCE_FLAGS_REQUIRED");
- const atomicRequired=process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"&&
+ const atomicRequired=flags.on("EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE")&&
    typeof fleet?.startupKey==="string"&&fleet.startupKey.length>0;
- if(atomicRequired&&process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC!=="1")
+ if(atomicRequired&&!flags.on("EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC"))
   return stop("ALIFE10_ATOMIC_HAUL_REQUIRED",true);
  const systemID=Number(scene?.systemID),fleetID=Number(fleet?.fleetID);
  const minerID=Number(miner?.itemID),minerOwner=Number(miner?.ownerID);
@@ -223,10 +224,10 @@ function transferCargo(scene,fleet,miner,options={}){
  try{
   if(!scene||!positive(miner?.itemID)||!positive(fleet?.fleetID))return 0;
   const {store,probe}=dependenciesOf(options);
-  const durableRequired=process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"&&
+  const durableRequired=flags.on("EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE")&&
     miner?.transient===false&&typeof fleet?.startupKey==="string"&&
     fleet.startupKey.length>0;
-  if(durableRequired||process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD==="1")
+  if(durableRequired||flags.on("EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD"))
    return strictTransferCargo(scene,fleet,miner,options,store,probe);
   const hauler=(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID(Number(id)))
     .find(x=>x?.kind==="ship"&&positive(x.itemID)&&x.itemID!==miner.itemID);
@@ -240,8 +241,8 @@ function transferCargo(scene,fleet,miner,options={}){
    // the adoption feature is on, so a restart can re-attach it to the next
    // hauler of the same slot instead of losing the ore. Without the flag the
    // conservative behaviour is unchanged.
-   const durable=process.env.EVEJS_COOP_NPC_STATION_DELIVERY==="1"&&
-     (hauler.transient!==true||process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION==="1");
+   const durable=flags.on("EVEJS_COOP_NPC_STATION_DELIVERY")&&
+     (hauler.transient!==true||flags.on("EVEJS_COOP_HAUL_CARGO_ADOPTION"));
    const next={...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
     ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
     [haulFlag]:Number(fleet.fleetID),coopHaulFromMinerID:Number(miner.itemID),
@@ -278,7 +279,7 @@ function transferCargo(scene,fleet,miner,options={}){
   }
   return volume;
  }catch(error){
-  if(miner?.transient===false&&process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE==="1"){
+  if(miner?.transient===false&&flags.on("EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE")){
    const reason="ALIFE10_UNEXPECTED_HAUL_OUTCOME";
    miner.coopMiningCargoNeedsOperatorRepair=reason;
    miner.coopHaulNeedsOperatorRepair=reason;

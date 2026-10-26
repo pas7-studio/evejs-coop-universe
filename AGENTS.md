@@ -7,7 +7,9 @@ published by `scripts/Publish-SessionState.ps1`. Never infer the current state
 from an older document; `node scripts/coop-state.cjs --verify` reports
 `STATE_STALE` when the bundle predates real changes.
 
-For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` and relevant upstream docs as needed.
+For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`,
+[`docs/COOP_ARCHITECTURE_BOUNDARIES.md`](docs/COOP_ARCHITECTURE_BOUNDARIES.md)
+(module roles, single owner per record, flags) and relevant upstream docs as needed.
 
 ## Where a change goes (read before editing)
 

@@ -47,6 +47,8 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopHaulCargoAdoption");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
+// Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
+names.unshift("coopFlags");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 // Stage J: ship the already-used physical rival warehouse module and the

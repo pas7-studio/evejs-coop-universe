@@ -43,12 +43,31 @@ mining resumes instead of stalling forever.
 - `docs/WORKLOG.md` is the traceable log: `node scripts/log-change.cjs --layer …
   --why … --evidence …`; `--check` audits.
 
+### Measurement correction (2026-10-26T11:50Z)
+- **The authoritative cargo store is SQLite**: `/var/lib/evejs/gameStore/gamestore.sqlite`,
+  table `npcCargo`, key `cargo` holding the whole row map as JSON. The old
+  `gameStore/data/npcCargo/data.json` is legacy and always looks empty.
+- So `DURABLE_HAUL_ROWS 0 / rows_total 0` in `restartAcceptance3.log` was a
+  **measurement bug in my script, not a failed write**. The probe now lives in
+  `scripts/coop-cargo-probe.cjs` and reads SQLite read-only.
+- First correct reading (11:48Z): 2 durable haul rows, `fleet1`, `sys30000145`,
+  `transient:false`, `coopHaulFromMinerID` set, quantities 11340 + 18739.
+  That is the write path working; the restart-survival proof is still missing
+  because both rows were written *after* the restart.
+- Real live events from that run: `living-hauler-loaded` (11:43:40, fleet1,
+  qty 22483/22484) and `living-economy-destination CHOSEN station 60014935`
+  (11:44:21) — mining and the fleet's own choice of delivery station work.
+  No `station-sold` yet.
+
 ### Next
-1. Read `restartAcceptance3.log`: needs `DURABLE_HAUL_ROWS > 0` with
-   `coopHaulSystemID`, then `living-haul-cargo-adopted` after the restart, then a
-   normal trip/sale.
-2. If the durable table stays empty after a real load, the blocker is the
-   `db.setTransientPath` + `flushTableSync` path (`living-hauler-cargo-persist-failed`).
+1. `scripts/restart-acceptance.sh` (versioned) is the replacement for the temp
+   script: load → SQLite snapshot → restart → snapshot → `VERDICT`/`RESTART_PASS`.
+   Read its log for the same-cargoID survival proof.
+2. Only if the same cargoIDs vanish: the blocker is inside
+   `coopDurableCargoWrite.promote()`/`setTransientPath`, not the probe.
 3. Then L3 durable slot journal (`systemID, slot, fleetID, minerIDs, haulerIDs,
    cargoIDs, tripPhase, updatedAt`) + one boot `reconcile` phase, so adoption is
    journal replay instead of heuristics.
+4. `docs/COOP_ARCHITECTURE_BOUNDARIES.md` now states the module roles and the
+   single owner per record; the next split is `coopNativeStationArrival`
+   (route / phase / commit) so the sale path becomes testable without Docker.
