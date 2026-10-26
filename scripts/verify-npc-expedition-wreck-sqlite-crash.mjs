@@ -55,7 +55,8 @@ function child(stage){
   assert.equal(gameStore.write("items","/"+playerShipID,player).success,true);
   assert.equal(gameStore.flushTableSync("items").success,true);
   const write=npcStore.upsertNativeWreck({wreckID,sourceEntityID:shipID,
-   systemID:30000142,corporationID:corpID,ownerID:corpID,
+   systemID:30000142,corporationID:999,coopNpcExpeditionSourceCorpID:corpID,
+   ownerID:999,
    transient:false,typeID:26520,createdAtMs:1,expiresAtMs:10000000});
   assert.equal(write.success,true,JSON.stringify(write));
   assert.equal(gameStore.flushTableSync("npcWrecks").success,true);
