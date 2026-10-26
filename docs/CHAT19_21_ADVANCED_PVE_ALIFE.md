@@ -351,6 +351,89 @@ verification. P0-5 independent mission acceptance and lawful
 per-player reward are still pending.
 
 
+
+## Stage P0-4B-2A — original NPC profile and loot-table binding audit
+
+**Status:** Native source-reviewed / code implemented in stacked Draft;
+source-only unit regressions PASS; **live gameplay/rare drops unproven**.
+
+The original pinned `npcData.buildNpcDefinition(profileID)` resolves the
+NPC profile's `lootTableID` and its loaded loot table. The original
+`nativeNpcService` copies `profileID` and resolved `lootTableID`
+onto the native transient NPC. Upon original native death,
+`nativeNpcWreckService.destroyNativeNpcEntityWithWreck` copies those
+values into the physical `npcWrecks` record. The new read-only
+`coopPveBossLootProfileAudit` checks all of those values against the
+previously **physically witnessed living boss**, the exact original
+wreck, the current original profile, loaded
+`getNpcLootTable`, and `buildNpcDefinition`. A table that exists
+in the catalog but has no profile/wreck binding fails the audit.
+
+For `mode: "rule"`, the audit reports the number of configured
+positive-weight selectors, including configured special/faction/deadspace
+grades. It **does not** claim that those selectors resolve to available
+native items, that an RNG roll succeeds, that rare items dropped, or
+that original itemStore transferred any item to a player. Actual item
+pickup remains P0-4B-1 and the original EveJS native custody path.
+There are no generated items, extra rolls, spawned NPCs or new payouts.
+
+The pinned source includes a configured
+`parity_deadspace_overseer_pending_loot` rule table with overseer and
+rare-item selectors. Its **binding to an actually spawned boss NPC
+profile is still unverified** without a loaded native NPC table or
+disposable server acceptance. The large upstream
+`npcProfiles/data.json` could not be extracted through the current
+source connector; this PR intentionally does not guess a profile ID
+or modify any original data assets.
+
+The audit runs only after the already existing **post-native-wreck**
+callback, using the existing shared world integration, no new scheduler.
+It is OFF unless
+`EVEJS_COOP_PVE_BOSS_LOOT_PROFILE_AUDIT=1`,
+`EVEJS_COOP_PVE_NATIVE_BOSSES=1`, and
+`EVEJS_COOP_PVE_SITE_DEFENSE=1` are all enabled. A mismatch produces
+a read-only diagnostic, never a loot item or reward.
+
+### Additional native item custody fixes
+
+P0-4B-2A also closes two gaps in the P0-4B-1 optional journal:
+
+- The final writer-lock release/directory fsync can fail **after**
+  the JSON claim has been written. The writer now waits until **after**
+  that cleanup before returning success. Any ambiguous final fsync
+  yields `BOSS_LOOT_JOURNAL_UNSAFE`, never pre-grant permission.
+- Each settled claim's final source remainder must match the next
+  native source quantity. For example, `3 → 1` may continue from
+  `1`, but a resurrected `2` is blocked. Two distinct original
+  item IDs may be claimed separately by two characters, whereas two
+  characters claiming the same original item slice are fenced.
+
+The live pre-grant hook also refuses permission if
+`EVEJS_COOP_PVE_BOSS_LOOT_FENCE=1` is enabled without the required
+native boss / original native pickup evidence flags. This cannot
+retroactively make the original EveJS grant and source debit atomic.
+The journal remains opt-in and a native transaction/recovery operator
+is needed before enabling it persistently.
+
+### Evidence and remaining blockers
+
+Exact-GitHub-branch isolated V8 tests: 62/62 inherited PvE and native
+loot tests, 282 assertions; 10/10 new profile audit tests, 47
+assertions; 13/13 durable simulated-fs journal tests, 47 assertions.
+**85/85 isolated cases, 376 assertions** total. No full Node/Rust/
+SQLite, physical disk power-failure, actual connected two-client cargo
+race, pinned overlay roundtrip or rare-drop acceptance was run.
+The tests with two players use synthetic claims, **not** real network
+clients.
+
+**Still pending P0-4B-2B:** load actual deployed native profiles and
+candidate item pools, prove an authored boss is using the configured
+loot table, kill it in a disposable live game, observe a real rare
+item roll and native grant/debit through two clients, and run actual
+power loss + restart reconciliation. P0-5 independent lawful mission
+turn-in and personal rewards is a later stage.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
