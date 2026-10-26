@@ -176,7 +176,7 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
   // A STOWED receipt must have NO still-visible probe in the scene before
   // its original cargoID is reissued. Treat collisions as a hard failure.
   if(candidates.some(row=>ctx.scene.getEntityByID(row.cargoID)))
-   return deny("NPC_PROBE_STOWED_PHYSICAL_ID_COLLISION");
+   return deny("NPC_PROBE_CANDIDATE_PHYSICAL_ID_COLLISION");
   if(!candidates.length)return {status:"NO_NATIVE_PROBE_CHARGE",active:flights.length};
   const row=candidates.sort((a,b)=>a.cargoID-b.cargoID)[0];
   // The probe is launched close to the REAL ship, not a secret site position.
