@@ -242,3 +242,22 @@ The director now:
 **Source test evidence**: `tests/coop-npc-expedition-director.test.mjs` 23/23 isolated PASS (including 40 earlier miners/haulers, wrong first two patrols, store exception and bounded native scanner selection); `tests/coop-npc-probe-wiring.test.mjs` 17/17 isolated PASS. Source workflow now additionally accepts push on the specific PR feature branch, so the source gate can be scheduled without first merging the workflow into main. As of this update GitHub Actions reports **0 runs** on this branch; no CI PASS or real player/NPC two-client runtime can be claimed.
 
 **Live acceptance still required**: actual spawned patrol fitting and inventory, sighting of first physical NPC probes by two authenticated clients and after scene bubble movement, original native 100%-certainty on a real site, real SQLite SIGKILL process recovery, then hacking + physical loot. All feature flags remain OFF.
+
+## EX-03B10 — Scanner-first admission, bounded fairness and CI filter parity (2026-10-26)
+
+**Implemented in PR #286. Feature remains DRAFT, with all experimental flags OFF.**
+
+EX-03B9 still had a live starvation path: the director first truncated `candidateIDs` to `maxPilotsPerTick`, then searched that truncated set for scanner-equipped NPCs. Forty actual **patrol** ships (not miners) ahead of a source-fitted scout could therefore prevent launch/scanning indefinitely; the earlier miner-prefix test did not catch it.
+
+Changes:
+- Before building the ordinary patrol cohort, try original `isNativeProbeScout(entityID, systemID)` over a bounded, sorted candidate window; only a separately verified durable native pilot and controller may be admitted.
+- Prioritize at most **two fitted scouts** into the usual `maxPilotsPerTick` cohort. A missing hardware authority and exceptions from the original module store **fail closed** (no fallback to an unverified patrol).
+- Inspect no more than **128 candidate hardware records per tick**. Advance the window by the full inspected budget even when two scanners are found early, so >128 patrols do not permanently starve late scouts. Uses the pre-existing 30-second A-Life tick; no extra scheduler, cargo creation or remote intel shortcut.
+- Fixed the EX-03 workflow `push.paths` list to mirror the `pull_request.paths` list. The old push list omitted `integration/coopNpcExpedition*.cjs`, so changes to the scheduling implementation alone could not match that push event.
+- Added regression cases for 43 preceding patrols under a tiny 2-pilot cap, 128-check sliding window, and missing native hardware authority; updated source-wiring contracts.
+
+**Verification completed here:** 26/26 director tests in an isolated V8 harness using the actual director and competition modules, plus 17/17 wiring assertions reading the current actual files from the feature branch. These are **not a substitute for real `node --test` execution**, the pinned source `npm ci`, SQLite SIGKILL process tests, or a real two-client server session.
+
+**CI diagnostics:** the workflow file is absent on `main`, so its `workflow_dispatch` UI cannot be invoked until the workflow is registered on the default branch. GitHub supports branch-local `push` workflows, but this alone does not prove the organization's Actions setting permits a run. Check repository **Settings → Actions → General** and the full Actions runs UI if new pushes still yield no runs. The connected run lookup only exposes PR-triggered runs; a zero response there is **not** proof that no `push` event ran.
+
+**Release acceptance still OPEN:** GitHub Node 22 job with pinned upstream checkout, native SQLite actual production-state-machine SIGKILL and restart, original NPC scout fitting verified inside a running server, two authenticated clients observing native probe launch/sweep, native 1.0 certainty signature, NPC warp, followed by independently implemented hacking, physical loot and warehouse delivery. No production enablement or merge claimed.
