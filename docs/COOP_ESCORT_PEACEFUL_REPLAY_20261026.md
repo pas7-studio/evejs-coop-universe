@@ -44,7 +44,7 @@ the entire candidate page; invalid cursors refuse all payouts. Bootstrap
 repeats up to 16 pages (512 disk journal cap). No wallet, cargo, route or
 client-facing path is modified; all feature flags stay OFF by default.
 
-Regression additions: 35 real fsynced source flight journals, no skipped or
+Regression additions: actual GameStore atomic writer over disposable SQLite WAL/FULL with database reopen, lost ACK, two native character credits and negative proof/flag checks; 35 real fsynced source flight journals, no skipped or
 duplicated page IDs, an invalid cursor, a corrupt 35th journal poisoning the
 first page, and a pure-runtime next-page/no-second-payment test. GitHub CI now
 runs these and original SQLite funds/terminal attendance tests on Node 22.
