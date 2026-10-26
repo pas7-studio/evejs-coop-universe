@@ -30,9 +30,10 @@ function fixture(){
   singleton:0,stacksize:50,quantity:50,typeID:34,
   customInfo:"coop-warehouse:v1:cargo:"+CARGO};
  const hulls=new Map([[MINER,{kind:"ship",itemID:MINER,nativeNpc:true,
-  position:{...origin},transient:false}],[HAULER,{kind:"ship",itemID:HAULER,
-  nativeNpc:true,position:{...origin},transient:false}]]);
+  position:{...origin,x:origin.x+12000},transient:false}],[HAULER,{kind:"ship",itemID:HAULER,
+  nativeNpc:true,position:{...origin,x:origin.x+12000},transient:false}]]);
  const scene={systemID:SYSTEM,getEntityByID:id=>hulls.get(id)||null};
+ const landed=()=>{for(const ship of hulls.values())ship.position={...origin}};
  const oracle=createPhysicalCompletionOracle({
   store:{listNativeCargoForEntity:id=>cargo.get(id)},
   warehouseReceipt:()=>delivery,
@@ -79,7 +80,7 @@ function fixture(){
    haulerID:HAULER,at:now+25,updatedAt:now+40};
  };
  return {orders,session,record,fleet,origin,scene,cargo,native,assign,dispatch,
-  current,writes:()=>writes,completedHaul,
+  current,writes:()=>writes,completedHaul,landed,
   setDelivery:x=>delivery=x,setItem:x=>item=x,
   enable:v=>completionEnabled=v,poison:v=>poisoned=v,hulls,
   clock:v=>now=v};
@@ -119,7 +120,7 @@ test("original warehouse item missing or transferred before reconciliation never
 });
 test("source cargo changes before issuing => HAUL is not called or durably issued",()=>{
  const x=fixture();x.assign("HAUL");x.cargo.get(MINER).length=0;
- assert.equal(x.dispatch().reason,"MINING_SHIFT_SOURCE_CARGO_NOT_ATTESTED");
+ assert.equal(x.dispatch().status,"WAITING_FOR_ORIGINAL_MINER_CARGO");
  assert.equal(x.current().commandState,"PENDING");
  assert.equal(x.record.state,"mining");
 });
@@ -127,23 +128,25 @@ test("RETREAT stores the exact native origin before issuing a warp",()=>{
  const x=fixture();x.assign("RETREAT");
  assert.equal(x.dispatch().status,"NATIVE_ORDER_REQUESTED");
  assert.deepEqual(x.current().retreatAnchor,x.origin);
+ assert.deepEqual(x.current().retreatDepartureShipIDs,[MINER,HAULER]);
 });
 test("RETREAT landing cannot be proved while even one original hull remains in warp",()=>{
  const x=fixture();x.assign("RETREAT");x.dispatch();
- x.hulls.get(HAULER).pendingWarp={target:"origin"};
+ x.landed();x.hulls.get(HAULER).pendingWarp={target:"origin"};
  assert.equal(x.dispatch().status,"NATIVE_ORDER_PREVIOUSLY_REQUESTED");
  assert.equal(x.current().commandState,"NATIVE_REQUESTED");
 });
 test("retreated fleet original real hulls at origin commit completion once",()=>{
  const x=fixture();x.assign("RETREAT");x.dispatch();
- assert.equal(x.dispatch().status,"NATIVE_COMPLETED");
+ assert.equal(x.dispatch().status,"NATIVE_ORDER_PREVIOUSLY_REQUESTED");
+ x.landed();assert.equal(x.dispatch().status,"NATIVE_COMPLETED");
  assert.equal(x.current().completionProof.kind,"ORIGINAL_FLEET_WARP_ARRIVED");
  const count=x.writes();
  assert.equal(x.dispatch().status,"NATIVE_COMPLETION_PREVIOUSLY_PROVEN");
  assert.equal(x.writes(),count);
 });
 test("after retreat proof original native fleet can receive MINE when safe",()=>{
- const x=fixture();x.assign("RETREAT");x.dispatch();x.dispatch();
+ const x=fixture();x.assign("RETREAT");x.dispatch();x.landed();x.dispatch();
  assert.equal(x.assign("MINE",1).status,"ORDER_QUEUED");
  assert.equal(x.dispatch().status,"NATIVE_ORDER_REQUESTED");
 });
@@ -162,4 +165,10 @@ test("completion feature OFF preserves old Stage B native requested semantics",(
  const x=fixture();x.enable(false);x.assign("HAUL");x.dispatch();
  assert.equal(x.current().originalCargo,undefined);
  x.completedHaul();assert.equal(x.dispatch().status,"NATIVE_ORDER_PREVIOUSLY_REQUESTED");
+});
+
+test("warp never starts if all original ships are already within the destination radius",()=>{
+ const x=fixture();x.landed();x.assign("RETREAT");
+ assert.equal(x.dispatch().reason,"MINING_SHIFT_RETREAT_ORIGIN_NOT_ATTESTED");
+ assert.equal(x.current().commandState,"PENDING");
 });
