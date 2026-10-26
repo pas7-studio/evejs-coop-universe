@@ -13,7 +13,7 @@ const CONTRACT=id=>"coopPlayerMiningShift"+SEP+id;
 const FLEET_INDEX=(systemID,fleetID)=>"coopPlayerMiningFleet"+SEP+systemID+":"+fleetID;
 const TABLES=["corporationRuntime"];
 const COMMANDS=new Set(["MINE","HAUL","HOLD","RETREAT"]);
-const VALID_STATES=new Set(["IDLE","PENDING","ISSUING","NATIVE_REQUESTED","DISPATCH_UNKNOWN"]);
+const VALID_STATES=new Set(["IDLE","PENDING","ISSUING","NATIVE_REQUESTED","NATIVE_COMPLETED","DISPATCH_UNKNOWN"]);
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const sameIDs=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&
  a.every((x,i)=>pos(x)&&x===b[i])&&new Set(a).size===a.length;
@@ -22,12 +22,15 @@ const sameFleet=(row,fleet)=>row&&fleet&&row.systemID===fleet.systemID&&
  sameIDs(row.minerIDs,fleet.minerIDs)&&sameIDs(row.haulerIDs,fleet.haulerIDs);
 const blocked=(reason,skipNativeTick=false)=>({status:"BLOCKED",reason,skipNativeTick,nativeMutation:false});
 function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
- clock=()=>Date.now(),enabled=()=>false,observe=()=>{}}={}){
+ clock=()=>Date.now(),enabled=()=>false,observe=()=>{},
+ completionEnabled=()=>false,captureHaul=()=>null,
+ captureRetreat=()=>null,verifyCompletion=()=>null}={}){
  if(typeof gameStore?.read!=="function"||
     gameStore?.coopAtomicNativeRows?.mode!=="SERVER_INTERNAL_FLAGGED"||
     typeof gameStore.coopAtomicNativeRows.transact!=="function"||
     typeof gameStore.coopAtomicNativeRows.isPoisoned!=="function"||
-    [access?.isMember,access?.canIndustry,getFleet,verifyNativeFleet,clock,enabled,observe]
+    [access?.isMember,access?.canIndustry,getFleet,verifyNativeFleet,clock,enabled,observe,
+     completionEnabled,captureHaul,captureRetreat,verifyCompletion]
      .some(x=>typeof x!=="function"))
    throw Error("PLAYER_MINING_ORDERS_AUTHORITIES_REQUIRED");
  const atomic=gameStore.coopAtomicNativeRows;
@@ -141,6 +144,41 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
    commandSeq:row.commandSeq,skipNativeTick:true,nativeMutation});
   if(row.commandState==="IDLE")return {status:"NATIVE_MINING_UNMODIFIED",
    skipNativeTick:false,nativeMutation:false};
+  if(row.commandState==="NATIVE_REQUESTED"&&completionEnabled()===true&&
+     ["HAUL","RETREAT"].includes(row.directive)){
+   let evidence=null;
+   try{evidence=verifyCompletion({row,fleet});}catch{}
+   if(evidence&&evidence.version===1&&evidence.commandSeq===row.commandSeq&&
+      evidence.kind===(row.directive==="HAUL"?
+       "ORIGINAL_WAREHOUSE_DELIVERY":"ORIGINAL_FLEET_WARP_ARRIVED")){
+    try{
+     const now=clock();
+     if(!pos(now))throw Error("MINING_SHIFT_COMPLETION_CLOCK_INVALID");
+     const completed=txDo(tx=>{
+      const current=tx.get("corporationRuntime",CONTRACT(row.operationID));
+      if(!current||current.commandSeq!==row.commandSeq||
+        current.directive!==row.directive||
+        current.commandState!=="NATIVE_REQUESTED"||
+        !sameFleet(current,fleet))
+       throw Error("MINING_SHIFT_COMPLETION_CAS_CHANGED");
+      tx.put("corporationRuntime",CONTRACT(row.operationID),{
+       ...current,commandState:"NATIVE_COMPLETED",
+       completedAt:now,completionProof:structuredClone(evidence)});
+      return {status:"NATIVE_COMPLETED",skipNativeTick:false,
+       command:row.directive,commandSeq:row.commandSeq,
+       nativeMutation:false,completionProof:evidence.kind};
+     });
+     try{observe("player-mining-native-completed",{
+      status:"NATIVE_COMPLETED",operationID:row.operationID,
+      systemID:row.systemID,fleetID:row.fleetID,
+      command:row.directive,proof:evidence.kind});}catch{}
+     return completed;
+    }catch{return blocked("MINING_SHIFT_COMPLETION_COMMIT_UNCERTAIN",true);}
+   }
+  }
+  if(row.commandState==="NATIVE_COMPLETED")
+   return {status:"NATIVE_COMPLETION_PREVIOUSLY_PROVEN",
+    skipNativeTick:false,nativeMutation:false};
   if(row.commandState==="NATIVE_REQUESTED"){
    if(row.directive==="HOLD"){
     if(safetyTransit)return {status:"SAFE_HAUL_COMPLETION_PENDING",skipNativeTick:false,nativeMutation:false};
@@ -168,6 +206,23 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
   }
   if(row.directive==="MINE"&&phase!=="mining"&&native.canResume()!==true)
    return blocked("MINING_SHIFT_RESUME_NOT_SAFE",true);
+  // Capture immutable ORIGINAL physical cargo IDs and original retreat
+  // destination BEFORE requesting any native movement. Without these
+  // witnesses later return-time/position checks could clear a foreign trip.
+  let originalCargo=null,retreatAnchor=null;
+  if(completionEnabled()===true){
+   try{
+    if(row.directive==="HAUL")originalCargo=captureHaul({fleet});
+    if(row.directive==="RETREAT")retreatAnchor=captureRetreat({fleet});
+   }catch{return blocked("MINING_SHIFT_COMPLETION_SOURCE_UNAVAILABLE",true);}
+   if(row.directive==="HAUL"&&(!Array.isArray(originalCargo)||
+     originalCargo.length===0||originalCargo.length>256))
+    return blocked("MINING_SHIFT_SOURCE_CARGO_NOT_ATTESTED",true);
+   if(row.directive==="RETREAT"&&(!retreatAnchor||
+     !["x","y","z"].every(k=>typeof retreatAnchor[k]==="number"&&
+      Number.isFinite(retreatAnchor[k]))))
+    return blocked("MINING_SHIFT_RETREAT_ORIGIN_NOT_ATTESTED",true);
+  }
   // Durable intent must be committed BEFORE the first native command. If
   // the process dies after this point we never fire the command a second time.
   try{
@@ -176,7 +231,9 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
     if(!current||current.commandSeq!==row.commandSeq||current.directive!==row.directive||
       current.commandState!=="PENDING")throw Error("MINING_SHIFT_COMMAND_CHANGED");
     tx.put("corporationRuntime",CONTRACT(row.operationID),{
-      ...current,commandState:"ISSUING",issuedAt:clock()});
+      ...current,commandState:"ISSUING",issuedAt:clock(),
+      ...(originalCargo?{originalCargo:structuredClone(originalCargo)}:{}),
+      ...(retreatAnchor?{retreatAnchor:{...retreatAnchor}}:{})});
    });
   }catch(error){return blocked("MINING_SHIFT_COMMAND_FENCE_FAILED:"+String(error?.message||error).slice(0,65),true);}
   let accepted=false,uncertain=false;
