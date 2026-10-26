@@ -27,7 +27,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     !Number.isSafeInteger(maxPilotsPerTick)||maxPilotsPerTick<2||maxPilotsPerTick>64||
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>3)
   throw Error("NPC_EXPEDITION_NATIVE_AUTHORITIES_REQUIRED");
- const intel=new Map(),pending=new Map();
+ const intel=new Map(),pending=new Map(),uncertainOrders=new Set();
  // EX-03B10: bounded, rotating hardware checks avoid starvation when the
  // genuinely equipped scout is beyond the ordinary per-tick patrol cap.
  let scannerCursor=0;
@@ -242,6 +242,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     const d=distance(p.ship.position,site.actualPosition);
     if(d<150000||d>2e13)continue;
     const moveKey=p.entityID+":"+id;
+    if(uncertainOrders.has(moveKey)||uncertainOrders.size>=512){blocked++;continue}
     if(pending.get(moveKey)?.fingerprint===tip.fingerprint)continue;
     if(pending.size>=512){blocked++;continue;}
     let unavailable=false;
@@ -268,7 +269,11 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
       return warpToPoint(p.entityID,{...live.actualPosition},
        {reason:scoutWarpFirst?"coop-npc-expedition-scout":"coop-npc-expedition",
         scheduleWake:true});
-     }})}catch{blocked++;continue}
+     }})}catch{
+      // An exception after a bridge issued native warp is ambiguous:
+      // fence this hull+intel until operator inspection, never replay.
+      uncertainOrders.add(moveKey);blocked++;continue
+     }
     if(result?.success===true){
      pending.set(moveKey,{fingerprint:tip.fingerprint,at:now});orders++;
      if(scoutWarpFirst)scoutWarpOrders++;else patrolWarpOrders++;
@@ -280,7 +285,8 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
    source:"LOCAL_NATIVE_SITE_WITNESS",nativeLootGranted:false,nativeWalletMutation:false};
  }
  function snapshot(){
-  return {tips:[...intel.values()].map(t=>({...t,fingerprint:"[REDACTED]"})),pending:pending.size};
+  return {tips:[...intel.values()].map(t=>({...t,fingerprint:"[REDACTED]"})),
+   pending:pending.size,unknownOrderOutcomes:uncertainOrders.size};
  }
  return Object.freeze({tick,snapshot});
 }
