@@ -27,13 +27,13 @@ const enabled=()=>[
 const blocked=r=>({status:"BLOCKED",reason:r});
 function createCorporateMarketRuntime({
  gameStore,marketClient,access,readiness,
- quoteNativeFees,getActiveSessions,getDockedLocationID,
+ getActiveSessions,getDockedLocationID,
  getCharacterRecord,getMarketContext,computeSalesTaxAmount,computeBrokerFeeInfo,
  token,enabledFn=enabled,pnlEnabled=()=>false
 }={}){
  const deps=[gameStore?.read,marketClient?.call,
   access?.isMember,access?.canIndustry,access?.canWallet,access?.canTake,
-  readiness?.inspect,quoteNativeFees,getActiveSessions,getDockedLocationID,
+  readiness?.inspect,getActiveSessions,getDockedLocationID,
   getCharacterRecord,getMarketContext,computeSalesTaxAmount,computeBrokerFeeInfo,
   enabledFn,pnlEnabled];
  if(deps.some(x=>typeof x!=="function")||
@@ -184,7 +184,6 @@ function native(){
  singleton=createCorporateMarketRuntime({
   gameStore,marketClient:market.marketDaemonClient,access,
   readiness:{inspect:input=>readiness.inspectNative(input)},
-  quoteNativeFees:()=>null,
   getActiveSessions:sessions.getSessions,
   getDockedLocationID:location.getDockedLocationID,
   getCharacterRecord:char.getCharacterRecord,
