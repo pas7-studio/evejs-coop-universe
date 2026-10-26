@@ -159,7 +159,7 @@ test("owner mismatch in original cargo is never rewritten",t=>{
  const f=fixture(t);
  f.miner.nativeCargoItems=[{itemID:900001,ownerID:OWNER,locationID:SHIP,
   moduleID:0,typeID:ORE,quantity:3,stacksize:3}];
- f.db().prepare('UPDATE "npcCargo" SET json=? WHERE key="cargo"').run(JSON.stringify({
+ f.db().prepare("UPDATE \"npcCargo\" SET json=? WHERE key='cargo'").run(JSON.stringify({
   900001:{cargoID:900001,entityID:SHIP,ownerID:999,typeID:ORE,moduleID:0,
     quantity:3,transient:false}
  }));
