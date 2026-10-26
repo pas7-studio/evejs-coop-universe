@@ -17,6 +17,10 @@ const inserted=`  // COOP_EX03B4_NATIVE_SCOUT_AUTHORING
     const authoredScout = require(path.join(__dirname, "../coopNpcScoutLoadout"))
       .createNpcScoutLoadout({
         resolveItemByTypeID,
+        resolveItemByName:name=>require(path.join(__dirname,
+          "../../services/inventory/itemTypeRegistry")).resolveItemByName(name),
+        typeHasEffectName,
+        withAnalyzers:process.env.EVEJS_COOP_NPC_EXPEDITION_HACK==="1",
         compatibleCharges:typeID=>explorationAuthority
           .getCompatibleProbeChargeTypeIDs(typeID)
       }).apply(definition);
