@@ -423,3 +423,77 @@ test("P0: known committed/pending receipt refuses optimistic response while writ
   assert.equal(createDepot({file}).prepare(arg).status,"ALREADY_COMMITTED");
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
+
+
+test("P0: numeric-string fields are not authoritative native cargo custody receipts",()=>{
+ const real={cargoID:777,typeID:34,quantity:100,haulerID:201,systemID:30000142,fleetID:9,at:101};
+ const originalRequest={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ for(const field of ["cargoID","typeID","quantity","haulerID","systemID","fleetID"]){
+  const forged={...real,[field]:String(real[field])};
+  const fx=depotSnapshotFixture({version:1,receipts:{"777":forged},
+   totals:{"30000142":100},pending:{}});
+  const bytes=fx.files.get(fx.file);
+  const audit=fx.depot.audit();
+  assert.equal(audit.status,"NEEDS_OPERATOR_REPAIR",field);
+  assert.ok(audit.invalid>0,field);
+  assert.throws(()=>fx.depot.snapshot(),/DEPOT_STATE_UNRECONCILED/,field);
+  assert.equal(fx.depot.prepare(originalRequest).status,"DEPOT_STATE_UNRECONCILED",field);
+  assert.equal(fx.depot.commit(originalRequest).status,"DEPOT_STATE_UNRECONCILED",field);
+  assert.equal(fx.writes(),0,field);
+  assert.equal(fx.files.get(fx.file),bytes,field);
+ }
+});
+
+test("P0: malformed or aliased cumulative depot totals cannot certify original ore",()=>{
+ const receipt={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9,at:123};
+ const cases=[
+  ["string quantity",{"30000142":"100"}],
+  ["null quantity",{"30000142":null}],
+  ["unsafe quantity",{"30000142":Number.MAX_SAFE_INTEGER+1}],
+  ["fraction quantity",{"30000142":100.5}],
+  ["negative quantity",{"30000142":-1}],
+  ["system alias",{"30000142":100,"030000142":0}],
+  ["unknown type alias",{"30000142":100,"+30000142":0}]
+ ];
+ for(const [label,totals] of cases){
+  const fx=depotSnapshotFixture({version:1,receipts:{"777":receipt},
+   totals,pending:{}});
+  assert.equal(fx.depot.audit().status,"NEEDS_OPERATOR_REPAIR",label);
+  assert.ok(fx.depot.audit().invalid>0,label);
+  assert.throws(()=>fx.depot.snapshot(),/DEPOT_STATE_UNRECONCILED/,label);
+  assert.equal(fx.writes(),0,label);
+ }
+});
+
+test("P0: malformed pending original custody cannot be resumed as a valid source debit",()=>{
+ const real={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9,at:123};
+ const arg={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ for(const field of ["cargoID","typeID","quantity","haulerID","systemID","fleetID"]){
+  const fx=depotSnapshotFixture({version:1,receipts:{},totals:{},
+   pending:{"777":{...real,[field]:String(real[field])}}});
+  assert.equal(fx.depot.audit().status,"NEEDS_OPERATOR_REPAIR",field);
+  assert.equal(fx.depot.prepare(arg).status,"DEPOT_STATE_UNRECONCILED",field);
+  assert.equal(fx.depot.commit(arg).status,"DEPOT_STATE_UNRECONCILED",field);
+  assert.equal(fx.writes(),0,field);
+ }
+});
+
+test("P0: valid strictly typed original receipt remains auditable and idempotent",()=>{
+ const real={cargoID:777,typeID:34,quantity:100,haulerID:201,
+  systemID:30000142,fleetID:9,at:123};
+ const fx=depotSnapshotFixture({version:1,receipts:{"777":real},
+  totals:{"30000142":100},pending:{}});
+ assert.equal(fx.depot.audit().status,"OK");
+ assert.equal(fx.depot.audit().committed,1);
+ assert.deepEqual(fx.depot.audit().totals,{"30000142":100});
+ assert.equal(fx.depot.snapshot().receipts["777"].quantity,100);
+ const req={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ assert.equal(fx.depot.prepare(req).status,"ALREADY_COMMITTED");
+ assert.equal(fx.depot.commit(req).status,"ALREADY_COMMITTED");
+ assert.equal(fx.writes(),0);
+});
