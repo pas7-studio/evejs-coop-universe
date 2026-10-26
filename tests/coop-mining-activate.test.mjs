@@ -31,7 +31,8 @@ test('a charged miner activates on the fleet target', ()=>{
   const calls = [];
   const hull = {kind: 'ship', nativeNpc: true, itemID: 42, capacitorCapacity: 900, capacitorChargeRatio: 0.5};
   const outcome = activate.activate({scene: scene(calls), pseudoSession: {characterID: 0}, minerEntity: hull, entry, targetEntity: target, fleetRecord: fleet, trace: {note(){}, noteActivationFailure(){}}});
-  assert.deepEqual(outcome, {attempted: true, success: true});
+  assert.equal(outcome.attempted, true);
+  assert.equal(outcome.success, true);
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1], entry.moduleItem);
   assert.equal(calls[0][2], 'mining');
@@ -62,6 +63,46 @@ test('a player ship is never gated by the co-op rule', ()=>{
   const calls = [];
   const player = {kind: 'ship', itemID: 42, capacitorCapacity: 900, capacitorChargeRatio: 0.01};
   const outcome = activate.activate({scene: scene(calls), pseudoSession: {}, minerEntity: player, entry, targetEntity: target, fleetRecord: fleet, trace: {note(){}, noteActivationFailure(){}}});
-  assert.deepEqual(outcome, {attempted: true, success: true});
+  assert.equal(outcome.attempted, true);
+  assert.equal(outcome.success, true);
   assert.equal(calls.length, 1);
+});
+
+test("an activation that is not flagged as a mining effect is reported", ()=>{
+  const noted = [];
+  const hull = {kind: "ship", nativeNpc: true, itemID: 42, capacitorCapacity: 900, capacitorChargeRatio: 0.5};
+  const sceneThatIgnoresTheFlag = {
+    systemID: 30000144,
+    activateGenericModule(){ return {success: true}; },
+    getEntityByID(){ return {activeModuleEffects: new Map([[77, {miningEffect: false}]])}; },
+  };
+  const outcome = activate.activate({
+    scene: sceneThatIgnoresTheFlag,
+    pseudoSession: {},
+    minerEntity: hull,
+    entry,
+    targetEntity: target,
+    fleetRecord: fleet,
+    trace: {note(reason, payload){ noted.push([reason, payload]); }, noteActivationFailure(){}},
+  });
+  assert.equal(outcome.miningEffect, false);
+  assert.equal(noted.length, 1);
+  assert.equal(noted[0][0], "ACTIVATED_NOT_MINING");
+  assert.equal(noted[0][1].moduleID, 77);
+});
+
+test("a real mining effect is not reported", ()=>{
+  const noted = [];
+  const hull = {kind: "ship", nativeNpc: true, itemID: 42, capacitorCapacity: 900, capacitorChargeRatio: 0.5};
+  const sceneThatFlagsIt = {
+    systemID: 30000144,
+    activateGenericModule(){ return {success: true}; },
+    getEntityByID(){ return {activeModuleEffects: new Map([[77, {miningEffect: true}]])}; },
+  };
+  const outcome = activate.activate({
+    scene: sceneThatFlagsIt, pseudoSession: {}, minerEntity: hull, entry, targetEntity: target, fleetRecord: fleet,
+    trace: {note(reason, payload){ noted.push([reason, payload]); }, noteActivationFailure(){}},
+  });
+  assert.equal(outcome.miningEffect, true);
+  assert.equal(noted.length, 0);
 });

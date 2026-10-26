@@ -230,8 +230,6 @@ const specs=[
    line:'      require("../../space/coopMiningTrace").note("TARGET_LOCK_FAILED",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),errorMsg:String((targetLockResult&&targetLockResult.errorMsg)||"NONE")});'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
-   {anchor:"  const primaryTargetEntry = [...targetAssignmentCounts.entries()]",after:false,
-  line:"require(\"../../space/coopMiningTrace\").noteFleetPostTick(fleetRecord,scene);"},
    {anchor:"    if (!targetEntity) {\n      delete assignmentMap[toInt(minerEntity.itemID, 0)];",after:true,
   line:"require(\"../../space/coopMiningTrace\").noteNoMineableTarget(fleetRecord,scene,minerEntity,availableTargetEntries,claimCounts);"},
    {anchor:"    const distanceToTarget = hooks.getSurfaceDistance(minerEntity, targetEntity);",after:true,
@@ -248,7 +246,7 @@ const specs=[
    {anchor:"    if (!minerEntity || minerEntity.mode === \"WARP\" || minerEntity.pendingWarp) {",after:true,
    line:'      require("../../space/coopMiningTrace").note("MINER_NOT_IN_SCENE_OR_WARPING",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntityID,0),found:Boolean(minerEntity),mode:String((minerEntity&&minerEntity.mode)||""),pendingWarp:Boolean(minerEntity&&minerEntity.pendingWarp)});'},
   {anchor:"  fleetRecord.nextThinkAtMs = now + thinkIntervalMs;",after:true,
-    line:'  require("../../space/coopMiningTrace").note("TICK_"+String(fleetRecord.state||"unknown"),{fleetID:toInt(fleetRecord.fleetID,0),systemID:toInt(scene.systemID,0),activeAsteroidID:toInt(fleetRecord.activeAsteroidID,0)});'},
+   line:"  require(\"../../space/coopMiningTrace\").noteTick(fleetRecord,scene,now,thinkIntervalMs);"},
   // A durable ship must never leave the fleet just because its runtime
   // controller was rebuilt: the persisted row still owns the hull. Heal it from
   // the store first, then let the stock filter decide.
@@ -280,7 +278,7 @@ const specs=[
   {anchor:"    logNpcCombatDebug(\"npc.weapons.module-activate\", () => ({",line:"    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }"}
  ]}
 ];
-// EX-04A: opt-in original Dogma/hacking native source hardening.
+// EX-04A default-OFF native Dogma & hacking authorized admission.
 specs.push({file:"server/src/services/dogma/dogmaService.js",patches:[]},
  {file:"server/src/services/exploration/hackingMgrService.js",patches:[]});
 const oldLines=[

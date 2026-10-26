@@ -205,3 +205,29 @@ patch as its install baseline (runtime.js + 0006 no longer trips OVERLAY_DRIFT).
 Next: after the deploy, read CAPACITOR_WAIT / caps: caps must climb to ~0.5, then
 expect living-hauler-loaded -> living-native-haul-delivered ->
 living-npc-station-sold, then scripts/restart-acceptance.sh.
+
+## 2026-10-26 15:55Z — after the capacitor gate deploy
+
+Live facts (read-only):
+- 3 slots ACTIVE in the witness, 9 durable coop-mining controllers in the store
+  (3 per system: 30000144, 30000145, 30100032).
+- living-native-durable-slot: RESTORED m2/h1 live m2/h1, then ALREADY_ACTIVE.
+- living-mining-fleet-state per system: 30000144 mining m2h1, 30000145 mining
+  m2h1, 30100032 depleted m2h1.
+- TICK_mining: 5 ticks per system per 10 min -> the fleet thinks once per ~2 min.
+- CAPACITOR_WAIT 0 and MODULE_ACTIVATE_FAILED 0 in the last windows: the new gate
+  is installed (hook + both modules verified in the container) and is not blocking,
+  i.e. the hulls are above 30 GJ when the tick runs.
+- Ore is still 0 in every fleet (q0) and there is no living-hauler-loaded.
+
+Interpretation: durable identity, dormancy and the capacitor reset are fixed and
+verified, but the yield step still never lands. With a 2-minute think interval and
+a 45 s module cycle, the cycle boundary has to be crossed by the runtime effect
+loop between ticks; the earlier probe proved executeMiningCycle was never called.
+
+Next experiment (one probe, then remove): re-arm living-mining-cycle-result at
+executeMiningCycle and living-mining-effect-state for one ship, and check
+whether an effect survives a full 45 s between ticks. If effects survive and the
+cycle still never runs, the boundary code path is the target for the next L1 patch.
+Also note FLEET_POST_TICK almost never fires (its anchor is the module-assignment
+path), so cap/act telemetry needs a different anchor for a slow tick.

@@ -122,3 +122,14 @@ test("a target mismatch names both ids", ()=>{
   assert.equal(event.detail.fleetTargetID, 5020484739081);
   assert.equal(event.detail.moduleID, 77);
 });
+
+test("one think emits both the tick marker and the fleet snapshot", ()=>{
+  trace.noteTick({fleetID: 960004646, state: "mining", activeAsteroidID: 5020484739080, minerEntityIDs: [980000016052]}, scene, 1700000000000, 120000);
+  const tick = take("TICK_mining");
+  assert.ok(tick, "no TICK_mining event");
+  assert.equal(tick.detail.activeAsteroidID, 5020484739080);
+  assert.equal(tick.detail.nextThinkInMs, 120000);
+  const snapshot = take("FLEET_POST_TICK");
+  assert.ok(snapshot, "noteTick must also emit the fleet snapshot");
+  assert.match(snapshot.detail.miners, /^980000016052\|ORBIT\|act2/);
+});
