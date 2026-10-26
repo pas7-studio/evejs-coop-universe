@@ -4,7 +4,7 @@
 // Without this registration subsequent stock flush may regroup our rows.
 const FILE="server/src/gameStore/sqliteStore.js";
 const ANCHOR='    "mutualWarInvites", "mutualWarInviteBlocks", "peaceTreaties",';
-const INJECT='    "coopPlayerMiningShift", "coopPlayerMiningFleet", "coopPlayerMiningOreTitle", "coopPlayerMiningCorpSell",';
+const INJECT='    "coopPlayerMiningShift", "coopPlayerMiningFleet", "coopPlayerMiningOreTitle", "coopPlayerMiningCorpSell", "coopPlayerMiningCorpFill",';
 function patch(source,file,remove=false){
  if(file!==FILE)return source;
  const eol=source.includes("\r\n")?"\r\n":"\n";
