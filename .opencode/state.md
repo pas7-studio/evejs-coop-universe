@@ -15,21 +15,25 @@
    162502 → 151910 → 143244, ships `ORBIT|act2|cap0.94`, fleet `mining → loaded`,
    holds `q44297…q69336` and climbing.
 3. **Hauling and the atomic mining commit are welded, and the commit is refused.**
-   The strict hauler needs `EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC`; those four flags
-   are now on. The settler transacts `["miningRuntimeState","npcCargo"]`, but the
-   atomic store throws `NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo` whenever the native
-   cargo table still has transient paths, and ALIFE-11's mixed mode only covers a
-   single-table `npcCargo` transaction (documented, deliberate). Result: every cycle
-   is refused with `ALIFE07_YIELD_INVALID:cycleBoundaryMs` (fixed: float boundary) and
-   then `ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED:NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo`
-   - no ore is credited in atomic mode, while atomic mode is required for hauling.
-   Fixed meanwhile: config refusals no longer poison a hull (`bc0a1009`), a
-   pre-mutation refusal no longer blocks forever (`22ec6968`), yield refusals name the
-   failing field (`3bba6d12`), and the installer refuses `.cjs` sibling requires
-   (`d75dea53`, caught `coopPveNativeBossDirector` too).
-   **Decision needed:** either extend ALIFE-11 mixed mode to the mining table set
-   (same transient-cargo witness, 25 existing isolation scenarios must stay green), or
-   stop requiring atomic mining for hauling and accept the legacy credit path.
+   RESOLVED in `df2acdc9` (not yet deployed): cargo isolation is now a table of
+   declared contracts instead of one hardcoded `npcCargo` case -
+   `haul-transfer` (unchanged: one cargo root + one receipt) and `mining-cycle`
+   (`miningRuntimeState`+`npcCargo`: zero or one cargo root rewrite, no other
+   npcCargo row, exactly one COMMITTED journal row whose `nextCargo` equals the
+   written stack). Undeclared sets still fail closed with
+   `NATIVE_TRANSIENT_STATE_UNSAFE`.
+   Evidence (offline, no redeploy): `tests/coop-mining-cycle-transient-isolation.test.mjs`
+   10/10 including the real ALIFE-07 settler committing a cycle while transient
+   stock cargo exists; `tests/coop-native-cargo-transient-isolation.test.mjs` 25/25;
+   staged `.js`-only install loads the adapter through the extensionless require;
+   `scripts/Verify-Coop-GameStore-Atomic-Isolated.cjs` -> `PASS
+   COOP_032D_PINNED_GAMESTORE_DISPOSABLE`; `OVERLAY_OK patched 54`, `CHECK_OK series=6`.
+   Also fixed in this arc: config refusals no longer poison a hull (`bc0a1009`),
+   a pre-mutation refusal no longer blocks forever (`22ec6968`), yield refusals name
+   the failing field (`3bba6d12`), float cycle boundaries are rounded (`f294b647`),
+   the installer refuses `.cjs` sibling requires (`d75dea53`, `d9a4b629`).
+   Next: one deploy, then measure `loaded -> delivered -> sold` and a restart
+   acceptance (`DURABLE_BEFORE>0`).
 
 ### ROOT CAUSE FOUND 17:20Z — the activation hook never ran (fixed in `d75dea53`)
 `STOP|act0|cap1` for hours was not a capacitor, targeting or cycle problem.
