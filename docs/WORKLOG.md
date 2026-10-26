@@ -342,3 +342,9 @@ Evidence: 18/18 exact-source isolated V8 warehouse tests PASS with simulated fil
 Why: Original warehouse suite now uses source-backed ownerID in the native cargo fixture and verifies mismatched, zero, null, unknown corporate owners cannot debit, create a receipt or grant stock; valid owner can still commit once.
 Where: tests/coop-native-warehouse.test.mjs
 Evidence: 18/18 exact-source isolated V8 warehouse tests PASS with simulated file IO; previous source reproduced foreign owner's cargo COMMITTED into a different NPC corporation. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:27Z · ca95798 · L1 · L1 0004: keep a mining fleet actor the store still owns
+
+Why: a durable fleet actor was pruned while its persisted controller row still existed, so fleets lost live ships and never hauled
+Detail: pruneMiningFleet filtered every fleet list through the in-memory controller registry only. That registry is rebuilt when a scene is torn down while the persisted native controller row survives, so a durable miner or hauler left the fleet with no destruction at all: the prune forensics reported storedEntity=true storedController=true for every removed actor, the fleet reported miners=0 with live sh
+Where: patches/upstream/0004-native-mining-fleet-retained-actor.patch, patches/upstream/MANIFEST.json, tests/coop-native-fleet-retained-actor.test.mjs
+Evidence: prune forensics storedEntity=true storedController=true on every removed actor; fleet miners=0 with live ships; tests/coop-native-fleet-retained-actor.test.mjs 3/3; patch sha256 in MANIFEST
