@@ -6,10 +6,11 @@ const {unloadCargo}=require("../integration/coopNativeHaulCargo.cjs");
 
 // The same original cargoID must disappear from proven native custody before
 // a durable virtual depot receipt may change from PREPARED to COMMITTED.
-function fixture({before=null,after,global=undefined,throwAfter=false}={}){
+function fixture({before=null,after,global=undefined,throwAfter=false,
+ flushResult={success:true},throwFlush=false}={}){
  const cargo={cargoID:333,typeID:34,quantity:50,moduleID:0,
   entityID:500,coopHaulFleetID:44,coopHaulFromMinerID:111};
- let removed=false,prepared=0,committed=0,removeCalls=0,reads=0;
+ let removed=false,prepared=0,committed=0,removeCalls=0,reads=0,flushes=0;
  const store={
   listNativeCargoForEntity(){
    reads++;
@@ -33,9 +34,15 @@ function fixture({before=null,after,global=undefined,throwAfter=false}={}){
  const ship={kind:"ship",itemID:500,nativeCargoItems:[{itemID:333,volume:0.1}]};
  const scene={getEntityByID:id=>id===500?ship:null};
  const fleet={fleetID:44,systemID:30000144,haulerEntityIDs:[500]};
- const attempt=()=>unloadCargo(scene,fleet,{store,depot,probe:{observe:()=>{}}});
- return {attempt,store,cargo,ship,scene,fleet,
-  stats:()=>({prepared,committed,removeCalls,reads})};
+ const database={flushTableSync:table=>{
+  assert.equal(table,"npcCargo");
+  flushes++;
+  if(throwFlush)throw Error("NATIVE_CARGO_FSYNC_FAILED");
+  return flushResult;
+ }};
+ const attempt=()=>unloadCargo(scene,fleet,{store,depot,database,probe:{observe:()=>{}}});
+ return {attempt,store,database,depot,cargo,ship,scene,fleet,
+  stats:()=>({prepared,committed,removeCalls,reads,flushes})};
 }
 
 test("P0: unknown post-remove cargo inventory cannot attest debit or credit virtual ore",()=>{
@@ -100,4 +107,68 @@ test("proven source disappearance still delivers exactly one original cargo stac
  assert.equal(f.stats().prepared,1);
  assert.equal(f.stats().committed,1);
  assert.equal(f.stats().removeCalls,1);
+});
+
+test("P0: depot never credits ore unless native source deletion is durably flushed",()=>{
+ for(const flushResult of [null,undefined,false,{}, {success:false},
+  {success:0},{success:"true"}]){
+  const f=fixture({after:[],global:[],flushResult});
+  const result=f.attempt();
+  assert.equal(result.status,"NEEDS_REPAIR",String(flushResult));
+  assert.equal(result.stacks,0);
+  assert.equal(f.stats().prepared,1);
+  assert.equal(f.stats().removeCalls,1);
+  assert.equal(f.stats().flushes,1);
+  assert.equal(f.stats().committed,0,"no virtual supply credit without native disk ACK");
+ }
+ const throws=fixture({after:[],global:[],throwFlush:true});
+ assert.equal(throws.attempt().status,"NEEDS_REPAIR");
+ assert.equal(throws.stats().committed,0);
+ assert.equal(throws.stats().flushes,1);
+});
+
+test("P0: durable commit can only occur after native cargo flush and verified absence",()=>{
+ const events=[],sourceOnDisk=new Map([[333,true]]),sourceInMemory=new Map([[333,true]]);
+ let committed=0;
+ const f=fixture({after:[],global:[]});
+ f.store.removeNativeCargo=id=>{
+  events.push("remove");
+  sourceInMemory.delete(id);
+  return {success:true};
+ };
+ f.database.flushTableSync=table=>{
+  assert.equal(table,"npcCargo");
+  events.push("flush");
+  sourceOnDisk.clear();
+  return {success:true};
+ };
+ f.store.listNativeCargoForEntity=()=>{
+  events.push("readback");
+  return sourceInMemory.size?[f.cargo]:[];
+ };
+ f.store.listNativeCargo=()=>{events.push("global-readback");return [];};
+ f.depot.commit=()=>{
+  events.push("depot-commit");
+  assert.equal(sourceOnDisk.size,0,"disk must be clean before virtual credit");
+  committed++;
+  return {status:"COMMITTED"};
+ };
+ const result=f.attempt();
+ assert.equal(result.status,"DELIVERED");
+ assert.equal(result.stacks,1);
+ assert.equal(committed,1);
+ assert.deepEqual(events,["readback","remove","flush","readback",
+  "global-readback","depot-commit"]);
+ assert.equal(sourceOnDisk.size,0);
+});
+
+test("P0: crash with unflushed native cargo leaves only PREPARED, never COMMITTED",()=>{
+ const disk=new Map([[333,true]]);
+ const f=fixture({after:[],global:[],flushResult:{success:false}});
+ const result=f.attempt();
+ assert.equal(result.status,"NEEDS_REPAIR");
+ assert.equal(f.stats().prepared,1);
+ assert.equal(f.stats().committed,0);
+ assert.equal(disk.has(333),true,
+  "a cold restart may restore original cargo; depot must not credit it");
 });
