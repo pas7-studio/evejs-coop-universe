@@ -103,7 +103,7 @@ fn coop_corp_sell_gamestore()->Result<Connection>{
     Ok(db)
 }
 fn coop_corp_sell_json(db:&Connection,table:&str,key:&str)->Result<serde_json::Value>{
-    if !["items","marketEscrow","corporationRuntime"].contains(&table){
+    if !["items","marketEscrow","corporationRuntime","characters"].contains(&table){
         bail!("CORP_SELL_GAMESTORE_TABLE_DENIED");
     }
     let sql=format!("SELECT json FROM \"{}\" WHERE key=?1",table);
@@ -299,6 +299,8 @@ fn coop_corp_fill_schema(db:&Connection)->Result<()>{
            price_cents INTEGER NOT NULL,
            phase TEXT NOT NULL CHECK(phase IN ('claimed','finalized','released')),
            created_at TEXT NOT NULL,
+           ack_json TEXT,
+           native_receipt_key TEXT,
            PRIMARY KEY(order_id,cycle)
          );
          CREATE UNIQUE INDEX IF NOT EXISTS coop_corp_sell_active_claim
@@ -449,5 +451,312 @@ impl MarketRuntime{
        tokio::task::spawn_blocking(move||coop_corp_fill_inspect_db(
          &path,&token,order,cycle))
          .await.context("corporate Rust fill get failed")?
+    }
+}
+
+
+// CH24+31 E2B4 — independently witness original GameStore paid corpus
+// BEFORE Rust finalizes or releases a claim. Invariant: every buyer debit,
+// corporation wallet credit, exact fee, physical item and escrow quantity
+// must be proven from fsynced native SQLite in one read snapshot.
+fn coop_corp_fill_signed_cents(value:&serde_json::Value)->Result<i64>{
+    let n=value.as_f64().ok_or_else(||anyhow!("CORP_FILL_JOURNAL_AMOUNT_INVALID"))?;
+    let scaled=n*100.0;
+    if !scaled.is_finite() || (scaled.round()-scaled).abs()>0.000001 ||
+       scaled.abs()>9_007_199_254_740_991.0 {
+        bail!("CORP_FILL_JOURNAL_AMOUNT_UNSAFE");
+    }
+    Ok(scaled.round() as i64)
+}
+fn coop_corp_fill_journal<'a>(
+  entries:&'a serde_json::Value,id:i64,key:&str
+)->Result<&'a serde_json::Value>{
+    let list=entries.as_array().ok_or_else(||anyhow!("CORP_FILL_WALLET_JOURNAL_NOT_ARRAY"))?;
+    let matches:Vec<_>=list.iter().filter(|row|row["transactionID"]==id).collect();
+    if matches.len()!=1 {bail!("CORP_FILL_WALLET_JOURNAL_ID_MISSING_OR_DUPLICATED: {}",key);}
+    Ok(matches[0])
+}
+fn coop_corp_fill_audit(original:&Connection,proof:&serde_json::Value)
+  ->Result<String>{
+    let order=proof["orderID"].as_str().ok_or_else(||anyhow!("CORP_FILL_ORDER_ID_MISSING"))?;
+    let cycle=proof["cycle"].as_i64().ok_or_else(||anyhow!("CORP_FILL_CYCLE_MISSING"))?;
+    let buyer=proof["buyerCharacterID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_BUYER_MISSING"))?;
+    let seller=proof["sellerCorpID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_SELLER_MISSING"))?;
+    let source_item=proof["sourceItemID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_SOURCE_ITEM_MISSING"))?;
+    let cargo=proof["cargoID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_CARGO_MISSING"))?;
+    let qty=proof["quantity"].as_i64().ok_or_else(||anyhow!("CORP_FILL_QUANTITY_MISSING"))?;
+    let before=proof["volumeBefore"].as_i64().ok_or_else(||anyhow!("CORP_FILL_BEFORE_MISSING"))?;
+    let after=proof["volumeAfter"].as_i64().ok_or_else(||anyhow!("CORP_FILL_AFTER_MISSING"))?;
+    let price=proof["priceCents"].as_i64().ok_or_else(||anyhow!("CORP_FILL_PRICE_MISSING"))?;
+    let station=proof["stationID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_STATION_MISSING"))?;
+    let ty=proof["typeID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_TYPE_MISSING"))?;
+    let location=proof["escrowLocationID"].as_i64().ok_or_else(||anyhow!("CORP_FILL_LOCATION_MISSING"))?;
+    if order.parse::<i64>()? <= 0||cycle<=0||qty<=0||before<=0||
+      qty>before||before-qty!=after||buyer<=0||seller<=0||
+      buyer==seller||price<=0||cargo<=0||source_item<=0{
+       bail!("CORP_FILL_SOURCE_PROOF_INVALID");
+    }
+    let key=format!("coopPlayerMiningCorpFill\u{001f}{}:{}",order,cycle);
+    let result=coop_corp_sell_json(original,"corporationRuntime",&key)?;
+    let corp=coop_corp_sell_json(original,"corporationRuntime",
+      &format!("corporations\u{001f}{}",seller))?;
+    let person=coop_corp_sell_json(original,"characters",&buyer.to_string())?;
+    let escrow=coop_corp_sell_json(original,"marketEscrow",order)?;
+    let origin=coop_corp_sell_json(original,"corporationRuntime",
+      &format!("coopPlayerMiningCorpSell\u{001f}{}",cargo))?;
+    let destination=result["deliveredItemID"].as_i64()
+        .ok_or_else(||anyhow!("CORP_FILL_DELIVERED_ITEM_NOT_RECORDED"))?;
+    let physical=coop_corp_sell_json(original,"items",&destination.to_string())?;
+    let original_item=if after>0 {
+        Some(coop_corp_sell_json(original,"items",&source_item.to_string())?)
+    }else{None};
+    let gross=price.checked_mul(qty).ok_or_else(||anyhow!("CORP_FILL_GROSS_OVERFLOW"))?;
+    let tax=result["transactionTaxCents"].as_i64()
+      .ok_or_else(||anyhow!("CORP_FILL_TAX_MISSING"))?;
+    let broker=result["brokerFeeCents"].as_i64()
+      .ok_or_else(||anyhow!("CORP_FILL_BROKER_MISSING"))?;
+    let total=tax.checked_add(broker).ok_or_else(||anyhow!("CORP_FILL_FEE_OVERFLOW"))?;
+    let net=gross.checked_sub(total).ok_or_else(||anyhow!("CORP_FILL_NET_OVERFLOW"))?;
+    let buyer_before=result["buyerBeforeCents"].as_i64()
+      .ok_or_else(||anyhow!("CORP_FILL_BUYER_BEFORE_MISSING"))?;
+    let buyer_after=result["buyerAfterCents"].as_i64()
+      .ok_or_else(||anyhow!("CORP_FILL_BUYER_AFTER_MISSING"))?;
+    let seller_before=result["sellerBeforeCents"].as_i64()
+      .ok_or_else(||anyhow!("CORP_FILL_SELLER_BEFORE_MISSING"))?;
+    let seller_after=result["sellerAfterCents"].as_i64()
+      .ok_or_else(||anyhow!("CORP_FILL_SELLER_AFTER_MISSING"))?;
+    if tax<0||broker<0||total>gross||buyer_before<gross||
+       buyer_before-gross!=buyer_after||
+       seller_before.checked_add(net)!=Some(seller_after)||
+       result["version"]!=1||result["phase"]!="GAMESTORE_COMMITTED"||
+       result["receiptKey"]!=key||result["orderID"]!=order||
+       result["cycle"]!=cycle||result["buyerCharacterID"]!=buyer||
+       result["sellerCorpID"]!=seller||result["cargoID"]!=cargo||
+       result["sourceItemID"]!=source_item||result["deliveredItemID"]!=destination||
+       result["quantity"]!=qty||result["volumeBefore"]!=before||
+       result["volumeAfter"]!=after||result["priceCents"]!=price||
+       result["stationID"]!=station||result["typeID"]!=ty||
+       result["grossCents"]!=gross||result["netRevenueCents"]!=net||
+       result["committedAt"].as_i64().unwrap_or(0)<=0 ||
+       corp["corporationID"]!=seller||
+       origin["orderID"]!=order||origin["itemID"]!=source_item||
+       origin["cargoID"]!=cargo||origin["corporationID"]!=seller||
+       origin["remainingQuantity"]!=after||origin["lastSettledCycle"]!=cycle||
+       escrow["orderId"]!=order||escrow["isCorp"]!=true||
+       escrow["ownerId"]!=seller||escrow["escrowType"]!="sell"||
+       escrow["remainingQuantity"]!=after||escrow["escrowLocationID"]!=location||
+       escrow["lastSettledCycle"]!=cycle||
+       physical["itemID"]!=destination||physical["ownerID"]!=buyer||
+       physical["locationID"]!=station||physical["flagID"]!=4||
+       physical["typeID"]!=ty||physical["quantity"]!=qty||
+       physical["stacksize"]!=qty||physical["singleton"]!=0||
+       physical["sourceCargoID"]!=cargo||physical["sourceItemID"]!=source_item||
+       physical["customInfo"]!=format!("coop-corp-sale:v1:{}:{}",order,cycle){
+        bail!("CORP_FILL_GAMESTORE_ORIGINAL_CUSTODY_OR_PAYMENT_MISMATCH");
+    }
+    if after>0 {
+        let remainder=original_item.as_ref().ok_or_else(||anyhow!("CORP_FILL_REMAINDER_MISSING"))?;
+        if destination==source_item||remainder["itemID"]!=source_item||
+          remainder["ownerID"]!=seller||remainder["locationID"]!=location||
+          remainder["flagID"]!=4||remainder["quantity"]!=after||
+          remainder["stacksize"]!=after||remainder["typeID"]!=ty||
+          remainder["customInfo"]!=format!("coop-warehouse:v1:cargo:{}",cargo)||
+          origin["phase"]!="ACTIVE_SELL"||escrow["phase"]!="ACTIVE_SELL"{
+            bail!("CORP_FILL_PARTIAL_ORIGINAL_REMAINDER_NOT_PRESERVED");
+        }
+    }else if destination!=source_item||origin["phase"]!="FULLY_SOLD"||
+        escrow["phase"]!="FULLY_SOLD"{
+        bail!("CORP_FILL_COMPLETE_ORIGINAL_ITEM_NOT_TRANSFERRED");
+    }
+    let buyer_wallet_id=result["buyerJournalID"].as_i64()
+        .ok_or_else(||anyhow!("CORP_FILL_BUYER_JOURNAL_ID_NOT_PERSISTED"))?;
+    let seller_wallet_id=result["sellerJournalID"].as_i64()
+        .ok_or_else(||anyhow!("CORP_FILL_SELLER_JOURNAL_ID_NOT_PERSISTED"))?;
+    let buyer_entry=coop_corp_fill_journal(&person["walletJournal"],buyer_wallet_id,"buyer")?;
+    let wallet=&corp["wallet"]["divisions"]["1000"];
+    let seller_entry=coop_corp_fill_journal(&wallet["journal"],seller_wallet_id,"seller")?;
+    let seller_txn=coop_corp_fill_journal(&wallet["transactions"],seller_wallet_id,"seller transaction")?;
+    if buyer_entry["referenceID"]!=key||buyer_entry["ownerID1"]!=buyer||
+       buyer_entry["ownerID2"]!=seller||buyer_entry["balance"].as_f64()
+           .map(|v|(v*100.0-buyer_after as f64).abs()>0.000001)!=Some(false)||
+       coop_corp_fill_signed_cents(&buyer_entry["amount"])?!=-gross||
+       seller_entry["referenceID"]!=key||seller_entry["ownerID1"]!=buyer||
+       seller_entry["ownerID2"]!=seller||
+       coop_corp_fill_signed_cents(&seller_entry["amount"])?!=gross||
+       coop_corp_fill_signed_cents(&seller_txn["amount"])?!=gross||
+       seller_txn["referenceID"]!=key {
+        bail!("CORP_FILL_ORIGINAL_WALLET_DEBIT_CREDIT_NOT_FOUND");
+    }
+    if total>0 {
+        let fee_id=result["feeJournalID"].as_i64()
+          .ok_or_else(||anyhow!("CORP_FILL_FEE_JOURNAL_ID_NOT_PERSISTED"))?;
+        let fee_entry=coop_corp_fill_journal(&wallet["journal"],fee_id,"fee")?;
+        let fee_txn=coop_corp_fill_journal(&wallet["transactions"],fee_id,"fee transaction")?;
+        if fee_entry["referenceID"]!=key||fee_txn["referenceID"]!=key||
+           coop_corp_fill_signed_cents(&fee_entry["amount"])?!=-total||
+           coop_corp_fill_signed_cents(&fee_txn["amount"])?!=-total ||
+           fee_entry["balance"].as_f64()
+             .map(|v|(v*100.0-seller_after as f64).abs()>0.000001)!=Some(false){
+            bail!("CORP_FILL_ORIGINAL_MARKET_FEES_NOT_DEBITED");
+        }
+    }else if !result["feeJournalID"].is_null(){
+        bail!("CORP_FILL_ZERO_FEE_HAS_UNEXPECTED_DEBIT");
+    }
+    Ok(key)
+}
+// Durable original GameStore receipt is independently inspected by Rust,
+// not accepted as a boolean from Node or an untrusted game client.
+fn coop_corp_fill_game_store_witness(proof:&serde_json::Value)->Result<String>{
+    let original=coop_corp_sell_gamestore()?;
+    original.execute_batch("BEGIN DEFERRED TRANSACTION")?;
+    coop_corp_fill_audit(&original,proof)
+}
+fn coop_corp_fill_finalize_db(path:&Path,token:&str,order:i64,cycle:i64)
+ ->Result<serde_json::Value>{
+    coop_corp_fill_gate(token)?;
+    if order<=0||cycle<=0{bail!("CORP_FILL_FINALIZE_SCOPE_INVALID");}
+    let mut db=load_connection(path)?;
+    coop_corp_sell_schema(&db)?;coop_corp_fill_schema(&db)?;
+    let tx=db.transaction()?;
+    let row=tx.query_row(
+       "SELECT phase,ack_json,native_receipt_key,volume_before,volume_after,
+              filled_quantity,price_cents
+        FROM coop_corp_sell_fills WHERE order_id=?1 AND cycle=?2",
+       params![order,cycle],
+       |r|Ok((r.get::<_,String>(0)?,r.get::<_,Option<String>>(1)?,
+         r.get::<_,Option<String>>(2)?,r.get::<_,i64>(3)?,
+         r.get::<_,i64>(4)?,r.get::<_,i64>(5)?,r.get::<_,i64>(6)?))
+    ).optional()?.ok_or_else(||anyhow!("CORP_FILL_FINALIZE_CLAIM_MISSING"))?;
+    let (phase,ack,key,before,after,qty,price)=row;
+    if phase=="finalized"||phase=="released"{
+        let ack=ack.ok_or_else(||anyhow!("CORP_FILL_FINALIZED_ACK_MISSING"))?;
+        let response:serde_json::Value=serde_json::from_str(&ack)?;
+        if key.as_deref()!=Some(format!("coopPlayerMiningCorpFill\u{001f}{}:{}",order,cycle).as_str()){
+            bail!("CORP_FILL_FINALIZED_RECEIPT_KEY_INVALID");
+        }
+        tx.commit()?;return Ok(response);
+    }
+    if phase!="claimed"||ack.is_some()||key.is_some(){
+        bail!("CORP_FILL_FINALIZE_PHASE_INVALID");
+    }
+    let witness=coop_corp_fill_read(&tx,order,cycle)?;
+    if witness["volumeBefore"]!=before||witness["volumeAfter"]!=after||
+       witness["quantity"]!=qty||witness["priceCents"]!=price{
+        bail!("CORP_FILL_FINALIZE_RUST_CLAIM_CHANGED");
+    }
+    let receipt_key=coop_corp_fill_game_store_witness(&witness)?;
+    let n=tx.execute(
+       "UPDATE market_orders SET vol_remaining=?3,updated_at=?4
+        WHERE order_id=?1 AND source='coop-corporation' AND is_corp=1
+          AND bid=0 AND state='settling' AND vol_remaining=?2",
+       params![order,before,after,now_rfc3339()]
+    )?;
+    if n!=1{bail!("CORP_FILL_FINALIZE_ORDER_CAS_FAILED");}
+    let result=serde_json::json!({
+      "orderID":order.to_string(),"cycle":cycle,
+      "phase":"finalized","state":"settling",
+      "volumeAfter":after,"filledQuantity":qty,
+      "receiptKey":receipt_key,"verifiedGameStore":true,
+      "requiresRelease":true
+    });
+    let n=tx.execute(
+       "UPDATE coop_corp_sell_fills
+        SET phase='finalized',ack_json=?3,native_receipt_key=?4
+        WHERE order_id=?1 AND cycle=?2 AND phase='claimed'",
+       params![order,cycle,result.to_string(),receipt_key]
+    )?;
+    if n!=1{bail!("CORP_FILL_FINALIZE_RECEIPT_CAS_FAILED");}
+    tx.commit()?;
+    Ok(result)
+}
+fn coop_corp_fill_release_db(path:&Path,token:&str,order:i64,cycle:i64)
+ ->Result<serde_json::Value>{
+    coop_corp_fill_gate(token)?;
+    if order<=0||cycle<=0{bail!("CORP_FILL_RELEASE_SCOPE_INVALID");}
+    let mut db=load_connection(path)?;
+    coop_corp_sell_schema(&db)?;coop_corp_fill_schema(&db)?;
+    let tx=db.transaction()?;
+    let row=tx.query_row(
+       "SELECT phase,ack_json,native_receipt_key,volume_after
+        FROM coop_corp_sell_fills WHERE order_id=?1 AND cycle=?2",
+       params![order,cycle],
+       |r|Ok((r.get::<_,String>(0)?,r.get::<_,Option<String>>(1)?,
+         r.get::<_,Option<String>>(2)?,r.get::<_,i64>(3)?))
+    ).optional()?.ok_or_else(||anyhow!("CORP_FILL_RELEASE_CLAIM_MISSING"))?;
+    let (phase,ack,key,after)=row;
+    if phase=="released"{
+        let stored=ack.ok_or_else(||anyhow!("CORP_FILL_RELEASE_ACK_MISSING"))?;
+        let value:serde_json::Value=serde_json::from_str(&stored)?;
+        tx.commit()?;return Ok(value);
+    }
+    if phase!="finalized"||key.is_none(){
+        bail!("CORP_FILL_RELEASE_REQUIRES_FINALIZED_PAYMENT");
+    }
+    let stored=ack.ok_or_else(||anyhow!("CORP_FILL_FINALIZE_ACK_MISSING"))?;
+    let v:serde_json::Value=serde_json::from_str(&stored)?;
+    if v["verifiedGameStore"]!=true||v["receiptKey"]!=key.as_deref().unwrap_or("")||
+       v["phase"]!="finalized"{
+        bail!("CORP_FILL_RELEASE_INVALID_FINALIZED_WITNESS");
+    }
+    // A repeated independent read must still confirm exact original
+    // GameStore buyer, corporate seller, market escrow and ISK journal.
+    let original=coop_corp_sell_gamestore()?;
+    original.execute_batch("BEGIN DEFERRED TRANSACTION")?;
+    let receipt=coop_corp_sell_json(&original,"corporationRuntime",
+      key.as_deref().ok_or_else(||anyhow!("CORP_FILL_RELEASE_KEY_MISSING"))?)?;
+    if receipt["phase"]!="GAMESTORE_COMMITTED"||
+       receipt["orderID"]!=order.to_string()||receipt["cycle"]!=cycle||
+       receipt["volumeAfter"]!=after||
+       !receipt["buyerJournalID"].is_i64()||
+       !receipt["sellerJournalID"].is_i64(){
+        bail!("CORP_FILL_RELEASE_DURABLE_PAYMENT_NO_LONGER_VERIFIED");
+    }
+    let state=if after==0{"filled"}else{"open"};
+    let n=tx.execute(
+       "UPDATE market_orders SET state=?3,updated_at=?4,
+         last_state_change_at=?4
+        WHERE order_id=?1 AND vol_remaining=?2 AND
+          state='settling' AND is_corp=1 AND source='coop-corporation'",
+       params![order,after,state,now_rfc3339()]
+    )?;
+    if n!=1{bail!("CORP_FILL_RELEASE_EXCLUSIVE_LOCK_LOST");}
+    let result=serde_json::json!({
+      "orderID":order.to_string(),"cycle":cycle,"phase":"released",
+      "state":state,"volumeAfter":after,"receiptKey":key,
+      "verifiedGameStore":true,"invalidated":true
+    });
+    let n=tx.execute(
+       "UPDATE coop_corp_sell_fills
+        SET phase='released',ack_json=?3
+        WHERE order_id=?1 AND cycle=?2 AND phase='finalized'",
+       params![order,cycle,result.to_string()]
+    )?;
+    if n!=1{bail!("CORP_FILL_RELEASE_RECEIPT_CAS_FAILED");}
+    tx.commit()?;Ok(result)
+}
+impl MarketRuntime{
+    pub async fn coop_corp_fill_finalize(&self,token:String,order:i64,cycle:i64)
+       ->Result<serde_json::Value>{
+       let path=self.database_path.clone();
+       let result=tokio::task::spawn_blocking(move||
+          coop_corp_fill_finalize_db(&path,&token,order,cycle))
+          .await.context("corporate fill finalize failed")??;
+       let row=self.get_order(order).await?;
+       self.invalidate_scope_caches(row.row.region_id,
+         row.row.solar_system_id,row.row.station_id,row.row.type_id).await;
+       self.refresh_region_summary_row(row.row.region_id,row.row.type_id).await?;
+       Ok(result)
+    }
+    pub async fn coop_corp_fill_release(&self,token:String,order:i64,cycle:i64)
+       ->Result<serde_json::Value>{
+       let path=self.database_path.clone();
+       let result=tokio::task::spawn_blocking(move||
+          coop_corp_fill_release_db(&path,&token,order,cycle))
+          .await.context("corporate fill release failed")??;
+       let row=self.get_order(order).await?;
+       self.invalidate_scope_caches(row.row.region_id,
+         row.row.solar_system_id,row.row.station_id,row.row.type_id).await;
+       self.refresh_region_summary_row(row.row.region_id,row.row.type_id).await?;
+       Ok(result)
     }
 }
