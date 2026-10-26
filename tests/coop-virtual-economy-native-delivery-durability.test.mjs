@@ -455,3 +455,61 @@ test("P0: independent verified systems in one depot batch persist once and repla
  assert.deepEqual(createEconomy({file}).syncNativeDeliveries(second),
   {status:"UNCHANGED",quantity:0});
 }));
+
+test("P0: mixed string and numeric solar IDs cannot split one NPC mining system into two warehouses",()=>scoped(({file})=>{
+ let now=0;
+ const e=createEconomy({file,clock:()=>now,stepMs:10000});
+ const pilots=[{id:"miner",systemID:"030000142"},
+  {id:"hauler",systemID:30000142}];
+ assert.equal(e.advance(pilots).steps,0);
+ assert.deepEqual(Object.keys(e.snapshot().systems),["30000142"]);
+ now=10000;
+ assert.equal(e.advance(pilots).steps,1);
+ const sys=e.snapshot().systems;
+ assert.deepEqual(Object.keys(sys),["30000142"]);
+ assert.equal(sys["30000142"].ore,201);
+ assert.equal(sys["30000142"].goods,102);
+ assert.equal(e.syncNativeDeliveries({"30000142":100}).quantity,100);
+ assert.equal(e.snapshot().systems["30000142"].goods,202);
+ assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({"30000142":100}).quantity,0);
+}));
+
+test("P0: aliased historical solar-system journal requires operator reconciliation",()=>scoped(({file})=>{
+ const base={version:1,lastAt:0,systems:{"30000142":{
+  ore:200,goods:100,demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{},events:[]};
+ for(const key of ["030000142","30000142.0","3.0000142e8","0",
+  "-1","not-a-system","__proto__"]){
+  const state=structuredClone(base);
+  state.systems={};
+  Object.defineProperty(state.systems,key,{
+   value:{...base.systems["30000142"]},enumerable:true,configurable:true
+  });
+  const bytes=JSON.stringify(state);
+  fs.writeFileSync(file,bytes);
+  assert.throws(()=>createEconomy({file,clock:()=>0}),
+   /ECONOMY_SYSTEM_KEY_INVALID/,key);
+  assert.equal(fs.readFileSync(file,"utf8"),bytes);
+ }
+ fs.writeFileSync(file,JSON.stringify(base));
+ const e=createEconomy({file,clock:()=>0});
+ assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.equal(e.syncNativeDeliveries({"30000142":100}).quantity,0);
+}));
+
+test("P0: multiple NPCs with equivalent solar system spellings share a single durable balance",()=>scoped(({file})=>{
+ let now=0;
+ const e=createEconomy({file,clock:()=>now,stepMs:10000});
+ const pilots=[{id:"first",systemID:"30000142"},
+  {id:"second",systemID:"030000142"},{id:"third",systemID:30000142}];
+ assert.equal(e.advance(pilots).status,"OK");
+ now=20000;
+ assert.equal(e.advance(pilots).steps,2);
+ assert.deepEqual(Object.keys(e.snapshot().systems),["30000142"]);
+ assert.equal(Object.keys(e.snapshot().pilots).length,3);
+ const disk=JSON.parse(fs.readFileSync(file,"utf8"));
+ assert.deepEqual(Object.keys(disk.systems),["30000142"]);
+ assert.equal(createEconomy({file,clock:()=>now,stepMs:10000})
+  .advance(pilots).steps,0);
+}));
