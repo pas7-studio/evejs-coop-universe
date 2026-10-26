@@ -194,3 +194,37 @@ test("refund rejects corrupted original native debit receipt without wallet muta
   }
  }finally{reset()}
 });
+
+
+test("paid BUY refund replay rejects forged durable credit or original reserve without another ISK credit",()=>{
+ const reset=flags();
+ try{
+  const tamper=[
+   data=>{delete data.playerMarketFills["buy-refund:23"].journalID},
+   data=>{data.playerMarketFills["buy-refund:23"].journalID=1},
+   data=>{data.playerMarketFills["buy-refund:23"].committedAt=0},
+   data=>{data.playerMarketFills["buy-refund:23"].originalReservedCents=1},
+   data=>{data.playerMarketFills[receiptKey].closedReason="forged"},
+   data=>{data.playerMarketFills[receiptKey].closedAt=1},
+   data=>{data.playerMarketFills[receiptKey].stationID=999},
+   data=>{data.playerMarketFills[receiptKey].buyerID=202},
+   data=>{delete data.playerMarketFills[receiptKey].journalIDs},
+   data=>{data.playerMarketFills[receiptKey].minVolume=0}
+  ];
+  for(const change of tamper){
+   const x=fixture(),svc=createBuyRefund({gameStore:x.store,clock:()=>123456});
+   svc.refund(original(),"cancelled");
+   change(x.db);
+   const before=structuredClone(x.db),commits=x.commits;
+   assert.throws(()=>svc.refund(original(),"cancelled"),
+    /P2P_BUY_REFUND_(REPLAY_IDENTITY_CONFLICT|COMMITTED_RESERVE_EVIDENCE_MISSING)/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,commits);
+  }
+  const x=fixture(),svc=createBuyRefund({gameStore:x.store,clock:()=>123456});
+  svc.refund(original(),"cancelled");
+  const snapshot=structuredClone(x.db);
+  assert.equal(svc.refund(original(),"cancelled").replayed,true);
+  assert.deepEqual(x.db,snapshot);
+ }finally{reset()}
+});
