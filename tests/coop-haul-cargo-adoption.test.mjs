@@ -1442,3 +1442,14 @@ test("P0: failed second lock acquisition releases only first owned lock, no orig
  assert.equal(fs.readFileSync(path.join(dir,"7002.lock"),"utf8"),"OTHER_WRITER");
  assert.equal(target.state,"mining");
 });
+
+test("P0: exported read-only plan cannot forge ownership of a foreign warehouse lock",()=>{
+ const custody=clearCustody();
+ fs.writeFileSync(path.join(custody.warehouseRoot,"receipts","7001.lock"),"FOREIGN");
+ const store=fakeStore([secondCrashCargo()]);
+ const result=plan({store,scene:sceneWith([hauler,miner]),systemID:30000145,
+  fleetID:1,now:NOW,enableReAdoption:true,custodyOptions:custody,
+  ownedLocks:new Set([7001])});
+ assert.equal(result.status,"RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS");
+ assert.equal(store.writes.length,0);
+});
