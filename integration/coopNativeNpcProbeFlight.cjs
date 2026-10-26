@@ -96,8 +96,19 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
     existing.typeID===row.typeID&&existing.ownerID===ctx.native.ownerID&&
     (!positive(existing.systemID)||existing.systemID===ctx.scene.systemID)&&
     vec(existing.position)&&dist(existing.position,p.position)<=1;
-   return same?{status:"NATIVE_PROBE_ALREADY_PRESENT",cargoID:row.cargoID}:
-    deny("NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
+   if(same)return {status:"NATIVE_PROBE_ALREADY_PRESENT",cargoID:row.cargoID};
+   // A persist-before-move scout sweep may crash after durable geometry
+   // commit but before the scene projection. Only the physically marked
+   // ORIGINAL NPC probe may have its position reconciled. Foreign entities,
+   // even with a matching itemID, must never be moved or replaced.
+   const resumable=existing.itemID===p.probeID&&existing.kind==="probe"&&
+    existing.nativeNpcProbe===true&&existing.nativeNpcCargoID===row.cargoID&&
+    existing.typeID===row.typeID&&existing.ownerID===ctx.native.ownerID&&
+    existing.systemID===ctx.scene.systemID&&vec(existing.position);
+   if(!resumable)return deny("NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
+   existing.position={...p.position};
+   existing.targetPoint={...p.position};
+   return {status:"NATIVE_PROBE_RECONCILED",cargoID:row.cargoID};
   }
   let physical;
   try{
@@ -112,6 +123,10 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
     physical.ownerID!==ctx.native.ownerID||physical.typeID!==row.typeID||
     !vec(physical.position)||dist(physical.position,p.position)>1)
    return deny("NPC_PROBE_NATIVE_ENTITY_MISMATCH");
+  // Server-only ownership seal used exclusively for fail-closed crash
+  // recovery. Never accept an unmarked foreign probe for repositioning.
+  physical.nativeNpcProbe=true;
+  physical.nativeNpcCargoID=row.cargoID;
   let spawn;
   try{spawn=ctx.scene.spawnDynamicEntity(physical,{broadcast:true})}
   catch{return deny("NPC_PROBE_NATIVE_SPAWN_FAILED")}
