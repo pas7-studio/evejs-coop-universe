@@ -31,7 +31,13 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
   }
   if(!state.systems||typeof state.systems!=="object"||Array.isArray(state.systems))
    throw Error("ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID");
-  for(const entry of Object.values(state.systems)){
+  for(const [key,entry] of Object.entries(state.systems)){
+   // One real solar system must have exactly one durable virtual inventory.
+   // A legacy alias such as "030000142" must be reconciled, not silently
+   // mixed with the canonical "30000142" entry.
+   const parsed=Number(key);
+   if(!Number.isSafeInteger(parsed)||parsed<=0||String(parsed)!==key)
+    throw Error("ECONOMY_SYSTEM_KEY_INVALID");
    if(!entry||typeof entry!=="object"||Array.isArray(entry)||
       (Object.prototype.hasOwnProperty.call(entry,"nativeDelivered")&&
        (!Number.isSafeInteger(entry.nativeDelivered)||entry.nativeDelivered<0)))
@@ -106,7 +112,7 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
   verifyCurrentRead();
   stateBeforeMutation=structuredClone(state);
  }
- function ensure(systemID){const id=String(systemID);return state.systems[id]??={ore:200,goods:100,demand:100,security:50,losses:0};}
+ function ensure(systemID){const id=String(Number(systemID));return state.systems[id]??={ore:200,goods:100,demand:100,security:50,losses:0};}
  function register(pilots){
    const upgradeRoles=state.rolesVersion!==2;
    for(const [i,p] of pilots.entries()){
@@ -156,12 +162,15 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
  }
  function advance(pilots){
   if(!validPilots(pilots))return {status:"INVALID_PILOTS",steps:0};
+  // Validation already proved these IDs safe. Freeze the representation
+  // used for both role registration and step() to avoid string aliases.
+  const canonicalPilots=pilots.map(p=>({id:p.id,systemID:Number(p.systemID)}));
   beforeMutation();
   const now=clock();if(now<state.lastAt)return {status:"CLOCK_REWIND",steps:0};
-  register(pilots);
+  register(canonicalPilots);
   const due=Math.floor((now-state.lastAt)/stepMs);
   const steps=Math.min(due,maxCatchup);
-  for(let i=0;i<steps;i++)step(pilots);
+  for(let i=0;i<steps;i++)step(canonicalPilots);
   if(steps){state.lastAt+=steps*stepMs;persist();}
   else if(JSON.stringify(state)!==JSON.stringify(stateBeforeMutation))persist();
   return {status:due>steps?"CATCHUP_REMAINING":"OK",steps,remaining:due-steps};
