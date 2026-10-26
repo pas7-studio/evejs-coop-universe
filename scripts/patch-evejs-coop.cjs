@@ -16,6 +16,8 @@ names.splice(names.indexOf("coopWarFleetNativeProofs")+1,0,"coopWarCombatPolicy"
 names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarMobilizer");
 // FW-005A: source-bound native corporation military wallet escrow, OFF by default.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarTreasury","coopWarTreasuryNative");
+// FW-007A: physical war-gate approach only, no native fleet transfer.
+names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarGateStaging");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
 names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody","coopPlayerMarketFill","coopPlayerMarketSettlementFence","coopPlayerMarketRustClaim","coopPlayerMarketAtomicSettlement","coopPlayerMarketAtomicRuntime","coopPlayerMarketBuyReserve","coopPlayerMarketBuyReserveRuntime","coopPlayerMarketBuySettlement","coopPlayerMarketBuyRefund","coopPlayerMarketBuyRefundRuntime");

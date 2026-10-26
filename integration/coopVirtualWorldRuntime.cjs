@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -95,6 +95,46 @@ function advanceNativeWarMobilization(){
   "living-native-war-mobilization",null,null,
   {status:result.status,ships:result.mobilized,
    evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
+}
+function advanceNativeWarGateStaging(){
+ if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1"||
+    !visitedSystems.size)return;
+ const {createWarGateStaging,gate}=require("./coopWarGateStaging");
+ if(!gate(process.env))return;
+ const guard=npcOrderBridge();
+ if(!guard||!nativeWarFleetRegistry())return;
+ if(!warGateStaging){
+  const native=require("./runtime"),npc=require("./npc/npcRuntime"),
+   controllers=require("./npc/npcRegistry"),worldData=require("./worldData"),
+   gameStore=require("../gameStore"),
+   warStore=require("./coopFactionWarStore"),
+   fleetStore=require("./coopWarFleetRegistry"),
+   treasuryStore=require("./coopWarTreasury"),
+   warCore=require("./coopFactionWarCore");
+  function readRow(table,key,validate){
+   const read=gameStore.read(table,"/"+key);
+   if(read?.success!==true)return null;
+   validate(read.data);return read.data;
+  }
+  warGateStaging=createWarGateStaging({
+   readWar:()=>readRow(warStore.TABLE,warStore.KEY,warCore.validateState),
+   readFleet:()=>readRow(fleetStore.TABLE,fleetStore.KEY,fleetStore.validate),
+   readTreasury:()=>readRow(treasuryStore.TABLE,treasuryStore.KEY,treasuryStore.validate),
+   sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+   getGate:id=>worldData.getStargateByID(id),
+   warpToEntity:(id,targetID,opts)=>npc.warpToEntity(id,targetID,opts),
+   getController:id=>controllers.getControllerByEntityID(id),
+   bridge:guard,
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true,
+   isAmmoRetreat:(systemID,id)=>nativeAmmoSupply?.activeIDs(systemID)?.has(id)===true
+  });
+ }
+ const result=warGateStaging.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ if(result.orders.length||result.observations.length)
+  require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
+   null,null,{status:result.status,orders:result.orders,
+    observations:result.observations,
+    evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
 }
 function advanceNativeWarCombat(){
  const api=require("./coopWarCombatAuthority");
@@ -347,6 +387,7 @@ function start(){
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
   safeNpcPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
+  safeNpcPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
   safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
