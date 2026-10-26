@@ -154,3 +154,25 @@ test("physical phase change after user preview invalidates old selected command"
  assert.equal(x.interact(3).reason,"REOPEN_NATIVE_AGENT_TO_CONFIRM_ORDER");
  assert.equal(x.issued.length,0);
 });
+
+test("native completed HAUL explicitly permits MINE only with original settled state",()=>{
+ const x=fixture(),row=x.row(500,"HAUL","NATIVE_COMPLETED");
+ row.nativeState="mining";
+ assert.deepEqual(availableCommands(row),["MINE"]);
+ row.nativeState="haulereturn";
+ assert.deepEqual(availableCommands(row),[]);
+});
+test("native completed RETREAT permits safe original MINE resume but no second warp",()=>{
+ const x=fixture(),row=x.row(500,"RETREAT","NATIVE_COMPLETED");
+ row.nativeState="retreating";
+ assert.deepEqual(availableCommands(row),["MINE"]);
+ row.nativeState="panic";
+ assert.deepEqual(availableCommands(row),[]);
+});
+test("uncompleted original HAUL/RETREAT remain locked even when ships appear landed",()=>{
+ const x=fixture();for(const cmd of ["HAUL","RETREAT"]){
+  const r=x.row(500,cmd,"NATIVE_REQUESTED");
+  r.nativeState="mining";
+  assert.deepEqual(availableCommands(r),[]);
+ }
+});
