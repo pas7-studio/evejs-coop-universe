@@ -21,6 +21,7 @@ function make({active=false,locked=false}={}){
   getActiveSessions:()=>[session],
   getDockedLocationID:()=>60001,
   getCharacterRecord:()=>({characterID:8011,corporationID:5001}),
+  findOriginalItemById:()=>null,
   getMarketContext:()=>({characterID:8011,stationID:60001,
    limits:{acc:0.04},brokerCommissionRate:0.03}),
   computeSalesTaxAmount:()=>0.04,
