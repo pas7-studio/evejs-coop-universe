@@ -184,3 +184,29 @@ structure id (carried in the war state campaign record; see
 3) Deploy 1-2 real structures in Perimeter 30000144 / New Caldari via
 `deploy_structure`, then prove `warState` campaign carries the id and the
 client snapshot emits it.
+
+## Стиснення часу для тестів (реальні native-кнопки, без фейкового стану)
+
+Профіль у `compose.coop-probe.yaml` (перевірено в контейнері через `env`):
+
+| ключ | було | тест |
+|---|---|---|
+| `EVEJS_MINING_NPC_HAULER_REPEAT_DELAY_MS` | 600000 (10 хв) | **45000** |
+| `EVEJS_MINING_NPC_WARP_INGRESS_DURATION_MS` | 2500 | **1500** |
+| `EVEJS_MINING_NPC_FLEET_THINK_INTERVAL_MS` | 1000 | **500** |
+| `EVEJS_MINING_NPC_HAUL_THRESHOLD_RATIO` | 0.2 | **0.1** |
+| `EVEJS_COOP_NPC_MARKET_COOLDOWN_MS` | 60000 | **5000** |
+
+Це саме ті ручки, якими керує продукт; код не змінюється, ніякого «підкрученого
+годинника» і ніяких синтетичних подій. Продакшн-світ лишає стокові 30 хв.
+
+## Результат трьох живих продажів
+
+`SOLD` **33 150** + **36 250** + **43 950 = 113 350 ISK** (NPC-леджер).
+
+## Чому зараз не продає
+
+`living-npc-station-sale-skipped` → `NO_SEEDED_COUNTERPARTY`: у нативного сіяного
+ринку закінчились ордери на ці типи руди в цих станціях (ми викупили їх кілька разів).
+Це реальна межа ринку, не дефект циклу. Щоб продавати далі, треба нове сіяння
+маркету (окремий потік) або інші системи/типи.
