@@ -777,3 +777,84 @@ test("second restart requires explicitly configured authoritative warehouse root
   else process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT=previous;
  }
 });
+
+test("damaged persisted adoption history never falls back to first-time custody",()=>{
+ for(const enabled of [false,true]){
+  for(const [label,changes] of [
+   ["zero timestamp",{coopHaulAdoptedAt:0}],
+   ["negative timestamp",{coopHaulAdoptedAt:-100}],
+   ["invalid timestamp",{coopHaulAdoptedAt:"not-a-date"}],
+   ["null timestamp",{coopHaulAdoptedAt:null}],
+   ["missing timestamp",{coopHaulAdoptedAt:undefined}],
+   ["future timestamp",{coopHaulAdoptedAt:NOW+10_000}],
+   ["no source",{coopHaulAdoptedFrom:0}],
+   ["bad source",{coopHaulAdoptedFrom:"unknown"}],
+   ["same ship as predecessor",{coopHaulAdoptedFrom:900000000111}],
+   ["no predecessor",{coopHaulAdoptedFrom:undefined}],
+  ]){
+   resetForTests();
+   if(enabled)process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+   else delete process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION;
+   const row=secondCrashCargo(changes),store=fakeStore([row]);
+   const original=structuredClone(store.listNativeCargo());
+   let reads=0,flushes=0;
+   const target=fleet();
+   const result=adopt(sceneWith([hauler,miner]),target,{
+    store,clock:()=>NOW,
+    database:{flushTableSync:()=>{flushes++;return {success:true}}},
+    ...clearCustody({custodyIo:{readdirSync:()=>{reads++;return []}}})
+   });
+   assert.equal(result.status,"RE_ADOPTION_HISTORY_UNVERIFIED",label+" enabled="+enabled);
+   assert.equal(store.writes.length,0,label);
+   assert.equal(reads,0,"corrupt source must be refused before receipt lookup");
+   assert.equal(flushes,0,label);
+   assert.equal(target.state,"mining");
+   assert.deepEqual(store.listNativeCargo(),original);
+  }
+ }
+});
+
+test("malformed history in one row blocks adoption of an entire fresh/old batch",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const store=fakeStore([
+  orphan({cargoID:7002,entityID:900000000112}),
+  secondCrashCargo({cargoID:7001,coopHaulAdoptedAt:"invalid"})
+ ]);
+ const original=structuredClone(store.listNativeCargo()),target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})},
+  ...clearCustody()
+ });
+ assert.equal(result.status,"RE_ADOPTION_HISTORY_UNVERIFIED");
+ assert.equal(store.writes.length,0);
+ assert.deepEqual(store.listNativeCargo(),original);
+ assert.equal(target.state,"mining");
+});
+
+test("missing or non-finite clock cannot certify physical cargo custody",()=>{
+ for(const currentTime of [NaN,Infinity,-Infinity,0,-100,"invalid"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const target=fleet();
+  const result=adopt(sceneWith([hauler]),target,{
+   store,clock:()=>currentTime,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"INVALID_CLOCK",String(currentTime));
+  assert.equal(store.writes.length,0);
+  assert.equal(target.state,"mining");
+ }
+ const store=fakeStore([orphan()]);
+ assert.equal(plan({store,scene:sceneWith([hauler]),systemID:30000145,
+  fleetID:1,now:NaN}).status,"INVALID_AUTHORITIES");
+});
+
+test("fresh orphan cargo with NO historical markers is still adoptable",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const store=fakeStore([orphan()]),target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(store.listNativeCargo()[0].cargoID,7001);
+ assert.equal(target.state,"loaded");
+});
