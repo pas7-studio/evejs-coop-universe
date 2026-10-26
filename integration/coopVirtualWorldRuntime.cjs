@@ -2816,6 +2816,29 @@ function confirmedWreck(session,ship,npcID,wreckID){
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
 function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
+ // Native service calls this only AFTER original source rows are written
+ // and a physical wreck is spawned; do not wait for the next A-Life tick.
+ if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES==="1"&&
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE==="1"&&pveNativeBossDirector){
+  try{
+   const native=require("./runtime");
+   const system=Number(systemID);
+   const scene=native.scenes instanceof Map?native.scenes.get(system):null;
+   const result=pveNativeBossDirector.confirmNativeWreck({
+    systemID:system,scene,entityID:Number(npcID),wreckID:Number(wreckID)
+   });
+   if(result.status==="ORIGINAL_BOSS_WRECK_CONFIRMED"&&
+      process.env.EVEJS_COOP_PVE_BOSS_LOOT_PROFILE_AUDIT==="1")
+    try{require("./coopPveBossLootProfileAudit").note(result.witness)}
+    catch(error){console.warn("[CoopPveBoss] loot table audit",String(error?.code||"UNAVAILABLE"))}
+   if(result.status==="ORIGINAL_BOSS_WRECK_CONFIRMED")
+    require("./coopRuntimeProbe").observe("living-pve-native-boss-death",null,
+     {spaceState:{systemID:system}},{status:result.status,
+      instanceID:result.witness.instanceID,wreckID:result.witness.wreckID,
+      itemCount:result.witness.originalItems.length,
+      evidence:"NATIVE_ORIGINAL_WRECK_AND_ITEMS_AFTER_DEATH"});
+  }catch(error){console.warn("[CoopPveBoss] native death witness",String(error?.code||"UNAVAILABLE"));}
+ }
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
   // A real wreck is the ONLY authority to mark a named pilot as defeated.
@@ -3102,5 +3125,12 @@ function createWarRecoveryAdmin({authorizeOperator}={}){
  if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
  return warGateHandoff.recovery({authorizeOperator});
 }
+// Read-only: an original native boss was observed alive and its single
+// original wreck + initial item records were verified in this process.
+function witnessedNativeBossWreck(wreckID){
+ if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES!=="1"||
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1")return null;
+ return pveNativeBossDirector?.witnessedWreck(Number(wreckID))||null;
+}
 function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:false,sequence:0,last:null}}
-module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};

@@ -160,3 +160,20 @@ test("completed source after restart cannot fabricate an unwitnessed boss kill",
  const f=fixture();f.kill();f.instance.lifecycleState="completed";
  assert.equal(f.tick().wrecksVerified,0);
 });
+
+test("native physical death callback certifies original loot immediately, even after site completion",()=>{
+ const f=fixture();f.tick();f.kill();f.instance.lifecycleState="completed";
+ const result=f.dir.confirmNativeWreck({systemID,scene:f.scene,entityID:101,wreckID:9551});
+ assert.equal(result.status,"ORIGINAL_BOSS_WRECK_CONFIRMED");
+ assert.equal(result.witness.bossEntityID,101);
+ assert.deepEqual(result.witness.originalItems.map(x=>x.wreckItemID),[9901]);
+ assert.equal(f.dir.witnessedWreck(9551).originalItems.length,1);
+});
+test("native death callback cannot invent a never-witnessed boss or foreign wreck",()=>{
+ const f=fixture();f.kill();
+ assert.equal(f.dir.confirmNativeWreck({systemID,scene:f.scene,entityID:101,wreckID:9551}).status,
+  "NO_PREVIOUS_LIVE_BOSS_WITNESS");
+ const g=fixture();g.tick();g.kill({badType:true});
+ assert.equal(g.dir.confirmNativeWreck({systemID,scene:g.scene,entityID:101,wreckID:9551}).status,
+  "BOSS_WRECK_NATIVE_SOURCE_UNVERIFIED");
+});

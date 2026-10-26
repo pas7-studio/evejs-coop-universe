@@ -103,10 +103,13 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
     const historyKey=site.instanceID+":"+key;
     let history=seen.get(historyKey);
     if(history&&(history.entityID!==entityID||history.typeID!==ship.typeID||
-        history.bornAtMs!==original.createdAtMs))continue; // no recycled hull
+        history.bornAtMs!==original.createdAtMs||
+        history.profileID!==(original.profileID||null)||
+        history.lootTableID!==(original.lootTableID||null)))continue; // no recycled hull
     if(!history){
      history={systemID,instanceID:site.instanceID,siteID:site.siteID,
       encounterKey:key,entityID,typeID:ship.typeID,bornAtMs:original.createdAtMs,
+      profileID:original.profileID||null,lootTableID:original.lootTableID||null,
       spawnedAtMs:wave.spawnedAtMs,peakPhase:0,wreckVerified:false};
      seen.set(historyKey,history);
     }
@@ -136,6 +139,8 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
     const matching=wrecks.filter(w=>w?.sourceEntityID===hist.entityID&&
      w.systemID===systemID&&w.launcherID===hist.entityID&&
      w.sourceTypeID===hist.typeID&&w.transient===true&&
+     (!hist.profileID||w.profileID===hist.profileID)&&
+     (!hist.lootTableID||w.lootTableID===hist.lootTableID)&&
      id(w.wreckID)&&Number.isSafeInteger(w.createdAtMs)&&
      w.createdAtMs>=hist.spawnedAtMs);
     if(matching.length!==1){
@@ -153,6 +158,13 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
        items.some(x=>!id(x?.wreckItemID)||x.wreckID!==wreck.wreckID||
        !id(x.typeID)||!Number.isSafeInteger(x.quantity)||x.quantity<1||
        x.locationID!==wreck.wreckID))continue;
+    // Store the exact original native inventory rows BEFORE any player
+    // removes them. This is read-only source provenance, never an item grant.
+    hist.initialWreckItems=items.map(item=>({
+     wreckItemID:item.wreckItemID,typeID:item.typeID,
+     quantity:item.quantity,singleton:item.singleton===true||
+      item.singleton===1
+    }));
     hist.wreckVerified=true;hist.wreckID=wreck.wreckID;
     out.wrecksVerified++;out.itemsVerified+=items.length;
     out.events.push({status:items.length?
@@ -198,7 +210,34 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
   for(const event of out.events)try{notify(event)}catch{}
   return out;
  }
- return {tick,activeIDs:()=>new Set([...seen.values()].map(x=>x.entityID)),
+ function witnessedWreck(wreckID){
+  if(!id(wreckID))return null;
+  const matches=[...seen.values()].filter(row=>
+   row.wreckVerified===true&&row.wreckID===wreckID);
+  if(matches.length!==1)return null;
+  const row=matches[0];
+  return {systemID:row.systemID,instanceID:row.instanceID,
+   siteID:row.siteID,encounterKey:row.encounterKey,
+   bossEntityID:row.entityID,bossTypeID:row.typeID,
+   profileID:row.profileID,lootTableID:row.lootTableID,
+   wreckID:row.wreckID,originalItems:(row.initialWreckItems||[])
+    .map(item=>({...item}))};
+ }
+ function confirmNativeWreck({systemID,scene,entityID,wreckID}={}){
+  if(!id(systemID)||!id(entityID)||!id(wreckID)||
+     scene?.systemID!==systemID)return {status:"INVALID_NATIVE_BOSS_DEATH_HOOK"};
+  if(![...seen.values()].some(row=>row.systemID===systemID&&
+     row.entityID===entityID))
+   return {status:"NO_PREVIOUS_LIVE_BOSS_WITNESS"};
+  // Native destruction callback fires after source item rows and wreck spawn.
+  tick({systemID,scene,instances:[],excludedIDs:[]});
+  const witness=witnessedWreck(wreckID);
+  return witness?.bossEntityID===entityID&&witness.systemID===systemID?
+   {status:"ORIGINAL_BOSS_WRECK_CONFIRMED",witness}:
+   {status:"BOSS_WRECK_NATIVE_SOURCE_UNVERIFIED"};
+ }
+ return {tick,witnessedWreck,confirmNativeWreck,
+  activeIDs:()=>new Set([...seen.values()].map(x=>x.entityID)),
   snapshot:()=>[...seen.values()].map(x=>({...x}))};
 }
 module.exports={createNativeBossDirector,explicitBoss,phaseFor};
