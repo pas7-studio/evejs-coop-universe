@@ -24,6 +24,18 @@ const state=[
   '    let source = request.source.unwrap_or_else(|| "player".to_string());',
   '    let wallet_division = request.wallet_division.unwrap_or(1000);',
   "}",
+  "fn modify_order_in_db(",
+  "    let mut connection = load_connection(database_path)?;",
+  "    let transaction = connection.transaction()?;",
+  "}",
+  "fn cancel_order_in_db(",
+  "    let mut connection = load_connection(database_path)?;",
+  "    let transaction = connection.transaction()?;",
+  "}",
+  "fn fill_order_in_db(database_path: &Path, request: FillOrderRequest) -> Result<FillOrderResponse> {",
+  "    let mut connection = load_connection(database_path)?;",
+  "    let transaction = connection.transaction()?;",
+  "}",
   ""
 ].join("\n");
 test("original Rust corp SELL RPC patch is idempotent and reversible",()=>{
