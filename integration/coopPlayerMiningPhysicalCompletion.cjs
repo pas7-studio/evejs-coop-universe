@@ -42,9 +42,28 @@ function createPhysicalCompletionOracle({store,warehouseReceipt,findWarehouseIte
   }catch{return null}
   return results.length?results.sort((a,b)=>a.cargoID-b.cargoID):null;
  }
- function captureRetreat({fleetRecord}={}){
+ function captureRetreat({fleetRecord,scene,fleet}={}){
   const point=fleetRecord?.originAnchor?.position;
-  return goodPoint(point)?{x:point.x,y:point.y,z:point.z}:null;
+  if(!goodPoint(point)||typeof scene?.getEntityByID!=="function"||
+    !fleet||!Array.isArray(fleet.minerIDs)||!Array.isArray(fleet.haulerIDs))
+   return null;
+  const departureShipIDs=[],seen=new Set();
+  for(const id of [...fleet.minerIDs,...fleet.haulerIDs]){
+   if(!pos(id)||seen.has(id))return null;
+   seen.add(id);
+   const ship=scene.getEntityByID(id);
+   if(!ship||ship.itemID!==id||ship.kind!=="ship"||
+    ship.nativeNpc!==true||ship.transient===true||
+    ship.isWarping===true||ship.pendingWarp||ship.warpState||
+    ship.sessionlessWarpIngress||!goodPoint(ship.position))return null;
+   const p=ship.position;
+   const dist=(p.x-point.x)**2+(p.y-point.y)**2+(p.z-point.z)**2;
+   if(!finite(dist))return null;
+   if(dist>maxArrivalMeters*maxArrivalMeters)departureShipIDs.push(id);
+  }
+  // Already-at-origin cannot be mistaken for proof of a genuine retreat.
+  if(!departureShipIDs.length)return null;
+  return {origin:{x:point.x,y:point.y,z:point.z},departureShipIDs};
  }
  function haul({row,fleetRecord,fleet}={}){
   if(row?.directive!=="HAUL"||row.commandState!=="NATIVE_REQUESTED"||
@@ -99,7 +118,13 @@ function createPhysicalCompletionOracle({store,warehouseReceipt,findWarehouseIte
  function retreat({row,fleetRecord,fleet,scene}={}){
   if(row?.directive!=="RETREAT"||row.commandState!=="NATIVE_REQUESTED"||
    !pos(row.issuedAt)||!pos(row.nativeRequestedAt)||
-   !goodPoint(row.retreatAnchor)||!fleetRecord||!fleet||
+   !goodPoint(row.retreatAnchor)||
+   !Array.isArray(row.retreatDepartureShipIDs)||
+   !row.retreatDepartureShipIDs.length||
+   row.retreatDepartureShipIDs.some(id=>!pos(id)||
+    ![...fleet.minerIDs,...fleet.haulerIDs].includes(id))||
+   new Set(row.retreatDepartureShipIDs).size!==row.retreatDepartureShipIDs.length||
+   !fleetRecord||!fleet||
    fleetRecord.fleetID!==row.fleetID||fleetRecord.systemID!==row.systemID||
    !samePoint(fleetRecord.originAnchor?.position,row.retreatAnchor)||
    !["retreating","depleted"].includes(fleetRecord.state)||
