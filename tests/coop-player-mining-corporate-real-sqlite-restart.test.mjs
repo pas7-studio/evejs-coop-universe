@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import {spawnSync} from "node:child_process";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
@@ -153,6 +154,32 @@ function fixture(t,{lostCommitAck=false}={}){
   };
   fs.writeFileSync(witnessFile,JSON.stringify(states));
  }
+ function crashCommitAndExit(){
+  // Child is a NEW Node process. It commits to the same on-disk SQLite,
+  // then exits immediately without closing the connection or sending an ACK.
+  const source=[
+   'const {DatabaseSync}=require("node:sqlite");',
+   'const {createSqliteAdapter}=require(process.env.CORP_TEST_ATOMIC);',
+   'const {createCorporateSellFillSettlement}=require(process.env.CORP_TEST_SETTLEMENT);',
+   'const db=new DatabaseSync(process.env.CORP_TEST_SQLITE);',
+   'const writer=createSqliteAdapter(()=>db).claimTransactor();',
+   'const claim=JSON.parse(process.env.CORP_TEST_CLAIM);',
+   'const gameStore={coopAtomicNativeRows:{mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,transact:(tables,fn)=>writer.transact(tables,fn).result}};',
+   'const service=createCorporateSellFillSettlement({gameStore,enabled:()=>true,clock:()=>1793030000000,readNativeClaim:()=>claim,quoteNativeFees:()=>({verifiedNative:true,transactionTaxCents:30,brokerFeeCents:15})});',
+   'const result=service.settle({orderID:claim.orderID,cycle:claim.cycle});',
+   'if(result.phase!=="GAMESTORE_COMMITTED")process.exit(13);',
+   'process.exit(77);'
+  ].join("\\n");
+  const result=spawnSync(process.execPath,["-e",source],{
+   env:{...process.env,CORP_TEST_SQLITE:file,
+    CORP_TEST_ATOMIC:require.resolve("../integration/coopGameStoreAtomic.cjs"),
+    CORP_TEST_SETTLEMENT:require.resolve(
+     "../integration/coopPlayerMiningCorporateFillSettlement.cjs"),
+    CORP_TEST_CLAIM:JSON.stringify(claim)},
+   encoding:"utf8",timeout:20000
+  });
+  assert.equal(result.status,77,result.stderr||result.stdout);
+ }
  function pnl(){
   return createMiningCorporatePnl({
    gameStore,enabled:()=>true,access:{
@@ -168,10 +195,10 @@ function fixture(t,{lostCommitAck=false}={}){
   session:managerSession,corporationID:CORP,operationID:SHIFT
  });
  return {get,close,open,settlement,setClaim,recordTestDoubleRelease,
-  report,dropAck:()=>{dropAck=true},buyerSession:{characterID:BUYER},
+  crashCommitAndExit,report,dropAck:()=>{dropAck=true},buyerSession:{characterID:BUYER},
   managerSession};
 }
-test("real SQLite partial corporate sale, cold restart, P&L and final sale conserve item and ISK",async t=>{
+test("real SQLite partial sale, separate-process COMMIT crash, P&L and full sale conserve item and ISK",async t=>{
  const x=fixture(t);
  assert.notEqual(x.buyerSession.characterID,x.managerSession.characterID);
  const first=x.settlement().settle({orderID:ORDER,cycle:1});
@@ -188,7 +215,11 @@ test("real SQLite partial corporate sale, cold restart, P&L and final sale conse
  assert.equal(replay.replayed,true);
  assert.equal(x.get("characters",BUYER).balance,snapshot);
  x.setClaim(2,5,5);
- const second=x.settlement().settle({orderID:ORDER,cycle:2});
+ x.close();
+ x.crashCommitAndExit();
+ x.open();
+ const second=x.get("corporationRuntime",
+  "coopPlayerMiningCorpFill"+SEP+ORDER+":2");
  assert.equal(second.phase,"GAMESTORE_COMMITTED");
  x.recordTestDoubleRelease(second);
  x.close();x.open();
