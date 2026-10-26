@@ -112,17 +112,37 @@ function createBuyRefund({gameStore,clock=()=>Date.now()}={}){
        past.refundCents!==p.remainingCents||
        past.phase!=="GAMESTORE_COMMITTED"||
        !nonneg(past.walletBeforeCents)||
-       past.walletAfterCents!==past.walletBeforeCents+past.refundCents)
+       !nonneg(past.walletAfterCents)||
+       !nonneg(past.walletBeforeCents+past.refundCents)||
+       past.walletAfterCents!==past.walletBeforeCents+past.refundCents||
+       !pos(past.originalReservedCents)||!nonneg(past.spentCents)||
+       past.originalReservedCents!==past.spentCents+past.refundCents||
+       !pos(past.journalID)||past.journalID<5000000000000000||
+       !pos(past.committedAt))
      throw Error("P2P_BUY_REFUND_REPLAY_IDENTITY_CONFLICT");
     const reserved=tx.get("playerMarketFills",past.reserveReceiptKey);
+    // A refunded reserve must preserve its ORIGINAL paid debit proof;
+    // compare the immutable witness without requiring a current wallet
+    // balance, which may have changed after a legitimate refund.
     if(!reserved||reserved.phase!=="REFUNDED"||
+       !validDebitReceipt({...reserved,phase:"BOUND"})||
        reserved.orderID!==p.orderID||
        reserved.key!==past.reserveReceiptKey||
        reserved.operationID!==past.reserveOperationID||
+       reserved.buyerID!==p.buyerID||
+       reserved.stationID!==p.stationID||
+       reserved.typeID!==p.typeID||
+       reserved.priceCents!==p.priceCents||
+       reserved.quantity-reserved.filledQuantity!==p.volumeRemaining||
+       reserved.spentCents!==reserved.priceCents*reserved.filledQuantity||
+       reserved.closedReason!==reason||
+       reserved.closedAt!==past.committedAt||
        reserved.refundedCents!==past.refundCents||
        reserved.remainingReserveCents!==0||
        reserved.spentCents!==past.spentCents||
-       reserved.reservedCents!==reserved.spentCents+reserved.refundedCents)
+       reserved.reservedCents!==past.originalReservedCents||
+       reserved.reservedCents!==reserved.spentCents+reserved.refundedCents||
+       past.journalID<=reserved.journalIDs[2])
      throw Error("P2P_BUY_REFUND_COMMITTED_RESERVE_EVIDENCE_MISSING");
     if(tx.get("marketEscrow",p.orderID)!==null)
      throw Error("P2P_BUY_REFUND_REPLAY_ESCROW_STILL_EXISTS");
