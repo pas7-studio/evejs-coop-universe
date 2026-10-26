@@ -111,6 +111,11 @@ function createCorporateFillLifecycle({
     throw Error("CORP_FILL_NATIVE_RELEASE_PROOF_INVALID");
    const result=Object.freeze({status:"CORP_SELL_FILL_RELEASED",
     orderID,cycle,receiptKey:receipt.receiptKey,
+    buyerCharacterID:receipt.buyerCharacterID,
+    sellerCorpID:receipt.sellerCorpID,
+    deliveredItemID:receipt.deliveredItemID,
+    originalSourceItemID:receipt.sourceItemID,
+    stationID:receipt.stationID,
     filledQuantity:receipt.quantity,
     remainingQuantity:receipt.volumeAfter,
     verifiedGrossCents:receipt.grossCents,
