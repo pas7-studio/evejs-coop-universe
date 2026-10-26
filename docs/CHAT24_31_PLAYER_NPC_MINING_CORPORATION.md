@@ -75,9 +75,18 @@ node --test tests/coop-player-mining-company.test.mjs
 - The Agent uses the original startup native fleet, real corp access and an already-mounted scene. The feature does **not** create an agent, ship, mission, extra salary or ore and is **OFF** by default.
 - Critical durable SQLite fix: explicitly register `coopPlayerMiningShift`, `coopPlayerMiningFleet` and `coopPlayerMiningOreTitle` in the pinned `corporationRuntime` row group map, so ordinary stock flush cannot regroup atomic source-key rows. New reversible native patch has been tested against the exact pinned source.
 - Regression source results: **17/17** isolated Agent JS cases, **6/6** agent+SQLite patch cases; pinned Agent source and SQLite source both exact reversible after source transformation. Full Node/SQLite and two-client runtime remains **NOT_RUN**.
-- Next: real seller-authorized NPC wage offer/hire UI, native multi-fleet selector, separate in-game HOLD/HAUL/RETREAT commands without hijacking stock button meanings, player corporation market sale, expiry, recovery and two-person acceptance.
+- Next: Stage D2 **server-authorized in-Agent hire** has been added in source (see below); remaining are multi-fleet selection, separate in-game HOLD/HAUL/RETREAT controls, native market sale, wage-cycle expiry/recovery and two-person acceptance.
 
 See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
+
+## Stage D2 — authentic operator-priced native NPC hiring via Agent (source implemented)
+
+- The **same original NPC Agent** now offers exactly one physically verified uncontracted startup mining fleet. Its wage comes only from an **explicit server-owned NPC employer tariff policy**; a native market quote is not a wage approval.
+- Native **View** previews three paid cycles, real miner/hauler counts and total ISK; the exact quote is bound to the same authenticated live session for 120 seconds. **Accept** revalidates original NPC ownership, corporation industry + wallet access, unchanged rate, uncontracted fleet and approval before invoking Stage A's true `corporationRuntime` atomic wallet-funded hire. The client cannot choose amount or operationID.
+- Deterministic SHA-256 operation identity plus native fleet uniqueness gate prevents repeated payroll for a double-click; unknown commits fail closed and are never auto-retried. After hiring, reopening the Agent shows the existing funded fleet control flow from D1. All flags OFF by default.
+- The server-owned policy file `$EVEJS_DATA_ROOT/coop-npc-mining/wage-policy.json` must be explicitly provisioned by the operator, otherwise **no hire offer**. No player wallet, ore, hull, fake mission or salary is fabricated.
+- Evidence: **18/18** isolated JS wage-policy/payment regressions, **10/10** Agent hiring integrations, existing **17/17** D1 Agent regressions. They are not original deployed SQLite or EVE client gameplay tests.
+- Read [CHAT24_31_NATIVE_MINING_HIRING.md](CHAT24_31_NATIVE_MINING_HIRING.md) for tariff example, source boundaries, flags and release criteria. Still pending: actual two-client UI confirmation, native SQLite crash/restart E2E, multi-fleet selection, HOLD/HAUL/RETREAT controls, payroll exhaustion, native market sale and realized profits.
 
 ## Stage D — native sale, profit and 2-player gameplay
 
