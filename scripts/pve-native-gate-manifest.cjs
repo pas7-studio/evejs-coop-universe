@@ -34,6 +34,8 @@ const testFiles=[
  "tests/coop-native-loot-pickup.test.mjs",
  "tests/coop-native-loot-evidence-integrity.test.mjs",
  "tests/coop-pve-chain.test.mjs",
- "tests/coop-pve-native-support-audit.test.mjs"
+ "tests/coop-pve-native-support-audit.test.mjs",
+ "tests/coop-pve-native-e2e-audit.test.mjs",
+ "tests/coop-pve-native-gates.test.mjs"
 ];
 module.exports={requiredModules,testFiles};
