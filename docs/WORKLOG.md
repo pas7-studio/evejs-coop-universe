@@ -123,3 +123,8 @@ Evidence: new tests/coop-haul-load-verification.test.mjs 4/4 pass with the fix a
 Why: 149 modules read 310 EVEJS_* keys inline and nobody could say which gates were on; module roles and the single owner per record were undocumented, which is how a second recovery heuristic and a duplicate cargo check appeared
 Where: tests/coop-haul-cargo-adoption.test.mjs, tests/coop-restart-haul-adoption.test.mjs
 Evidence: coopFlags + scripts/coop-flags.cjs --check FLAGS_OK declared=311; --live on the probe compose shows 103 set / 52 on; flag tests 4/4; docs/COOP_ARCHITECTURE_BOUNDARIES.md; haul+adoption suites 27/27 and 45 pass
+### 2026-10-26T11:50Z · 3f47f11 · OPS · docs(worklog): log the flag registry and architecture boundaries
+
+Why: the acceptance run measured durability by reading the legacy JSON store while the live world had moved to gamestore.sqlite, which produced a false DURABLE_HAUL_ROWS 0
+Where: docs/WORKLOG.md
+Evidence: scripts/coop-cargo-probe.cjs reads npcCargo read-only from SQLite; first correct reading 2 durable rows fleet1 sys30000145; scripts/restart-acceptance.sh prints VERDICT/RESTART_PASS
