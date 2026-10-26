@@ -1,40 +1,42 @@
-﻿## Durable mining fleet / ore stall — state 2026-10-25 23:35 UTC
+﻿## Session state — 2026-10-26 (latest)
 
-**World mode:** `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE` is OFF in the live compose file
-(the flag was removed after the durable roster kept decaying). Slot reconcile, trip
-recovery, haul manifest, haul cargo, station delivery, mining trace stay ON. The durable
-code (witness reconcile / repair / widen / controller re-attach) is committed and green
-(25/25) but dormant until the flag is turned back on.
+### Change layering (binding, also in AGENTS.md)
+We own every change in this repo; the EveJS checkout is never the source of truth.
+- **L1** stock bug/omission → `patches/upstream/NNN-*.patch`, applied by
+  `scripts/apply-upstream-patches.cjs` (pin + sha256 enforced, `--apply|--reverse|--branch`).
+- **L2** co-op rule → `integration/*.cjs` + one hook line in `scripts/patch-evejs-coop.cjs`.
+- **L3** stateful mechanism → runtime phase/module, never a string patch.
+Order is L1 → L2 → `OVERLAY_OK` → build. `docs/UPSTREAM_PATCH_SERIES.md`.
 
-**Hard fact about restarts:** `npcCargo` is empty after a restart and the startup fleet's
-ship rows are gone, so the whole startup-fleet state is transient. Only cargo that
-`coopNativeHaulCargo` marks non-transient during a real haul survives. Therefore path B
-(durable haul-cargo journal + adoption onto a freshly spawned hauler) is the short path;
-path A (durable hulls) also has to beat entity transience.
+Series now: `0001` export `listNativeCargo`, `0002` native NPC capacitor recharge rate
+(replaces the deleted `coopNpcCapacitor` top-up hack; last good check: `OVERLAY_OK`,
+patched 54, anchorMismatch 0, `tests/upstream-patch-series.test.mjs` 4/4).
 
-**Current gameplay blocker (not durability):** the fleet reaches `state=mining` with real
-asteroid targets, ticks run every second (`TICK_mining`), but the miners sit `STOP` with
-`targets []`, `qty 0` and mining modules `active:false / online:true`. No `NO_MINING_MODULE`,
-`NO_MINING_SNAPSHOT`, `TARGET_OUT_OF_RANGE` or `TARGET_LOCK_FAILED` reason was ever recorded,
-so the loop is not skipping on those. Last `living-hauler-loaded` is 21:56; economy director
-is healthy (ranks ore 17464 at 5203.7 ISK, station 60014935 for 30000144/30000145).
+### Restart resilience (path B)
+- Haul cargo is now persisted for transient haulers too **only when**
+  `EVEJS_COOP_HAUL_CARGO_ADOPTION=1`; without the flag the old conservative behaviour stays.
+- `integration/coopHaulCargoAdoption.cjs`: `plan()` accepts only durable rows whose
+  `coopHaulFleetID` **and** `coopHaulSystemID` match the slot, younger than TTL (45 min),
+  whose old entity is neither live in the scene nor in the native registry. `adopt()`
+  needs one live hauler, idle `mining` fleet, empty hauler; re-points preserving `cargoID`,
+  requires `flushTableSync("npcCargo")` success (else rolls back), then hands the fleet to
+  `loaded -> station -> sell`. One line per status (no tick spam), 2 s throttle, 120 tries.
+- Store caveat: the pinned `nativeNpcStore` does **not** export `listNativeCargo`; read the
+  table via `gameStore.read("npcCargo","/cargo")` (patch `0001` fixes the export).
+- 11/11 tests in `tests/coop-haul-cargo-adoption.test.mjs`.
 
-**Instrumentation added (overlay patches, not a fork):**
-- `MINER_TARGET` — modules/fitted/activeEffects counts, distance, chosen target, once per
-  2 min per fleet.
-- `NO_MINEABLE_TARGET` — the silent `if (!targetEntity)` branch that never logged.
-- `coopStuckWarpRecovery.release()` now also completes a **sessionless** warp whose own
-  `completeAtMs` elapsed (`WARP_INGRESS_COMPLETED`); before this only `warpState` warps were
-  landed and miners stayed `mode=WARP` forever (`MINER_NOT_IN_SCENE_OR_WARPING`).
+### Evidence so far
+- Restart (10:34): 4 systems `NATIVE_SCENE_READY` in ~2 s, slot re-seeded, warehouse
+  receipts 18 → 18, but `lastHauledVolumeM3=0` (in-flight state was lost).
+- First adoption attempt (10:53): `INVALID_AUTHORITIES` every tick → root cause found
+  (missing export) and fixed. Second attempt (11:01) proved `living-hauler-loaded`
+  happens but the durable table was still empty **before** the persistence change.
+- Acceptance run in flight (`restartAcceptance2.sh`): deploy → wait for a real load →
+  restart → assert `living-haul-cargo-adopted` and durable rows with `coopHaulSystemID`.
 
-**Anchor lesson:** the patch engine matches anchors after trimming indentation, so
-`    if (!targetEntity) {` was "unknown or duplicate". Multi-line anchors that include the
-body line are unique. Always require `OVERLAY_OK` with `patched: 53 / anchorMismatch: 0`
-before building an image; a failed install still lets the build stage run on half-patched
-sources.
-
-**Next step:** Docker Desktop died mid-deploy (engine pipe gone). Restart it, rebuild
-`evejs-local` from the verified overlay, `compose up -d`, wait ~3 min, then read
-`living-mining-blocker` reasons for `MINER_TARGET` / `NO_MINEABLE_TARGET`. That answer
-decides the fix: if `activeEffects` stays 0 while `modules > 0`, activation does not stick;
-if `NO_MINEABLE_TARGET`, target selection is the blocker.
+### Next
+1. Read `restartAcceptance2.log`: if `DURABLE_HAUL_ROWS 0` after a real load, the
+   `db.setTransientPath` flush path is the blocker (`living-hauler-cargo-persist-failed`).
+2. Then L3 `durable slot journal` (`systemID, slot, fleetID, minerIDs, haulerIDs, cargoIDs,
+   tripPhase, updatedAt`, fsync per phase change) + one boot `reconcile` phase, so adoption
+   becomes journal replay instead of heuristics.

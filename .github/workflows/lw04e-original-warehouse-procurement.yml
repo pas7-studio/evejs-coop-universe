@@ -1,0 +1,44 @@
+name: LW04E Original NPC Warehouse Procurement Source Gate
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04d-source-custody-and-native-e2e-gates-20261026
+    paths:
+      - 'integration/coopNpcOriginalWarehouseTitleTransfer.cjs'
+      - 'integration/coopNativeStationOreSettlement.cjs'
+      - 'integration/coopLivingWorldNativeChainProof.cjs'
+      - 'tests/coop-lw04e-original-warehouse-title-transfer.test.mjs'
+      - 'tests/coop-native-station-ore-settlement.test.mjs'
+      - 'tests/coop-lw04d-original-native-chain-proof.test.mjs'
+      - 'tests/scenarios/lw04e-original-warehouse-title-e2e.json'
+      - '.github/workflows/lw04e-original-warehouse-procurement.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse native title and source custody modules
+        run: |
+          node --check integration/coopNpcOriginalWarehouseTitleTransfer.cjs
+          node --check integration/coopNativeStationOreSettlement.cjs
+          node --check integration/coopLivingWorldNativeChainProof.cjs
+      - name: Original exact-source warehouse/factory/title Node tests
+        run: |
+          node --test \
+            tests/coop-lw04e-original-warehouse-title-transfer.test.mjs \
+            tests/coop-native-station-ore-settlement.test.mjs \
+            tests/coop-lw04d-original-native-chain-proof.test.mjs \
+            tests/coop-npc-industry-original-game-store-kernel.test.mjs \
+            tests/coop-npc-refinery.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs
+      - name: Physical SQLite/Rust/two-client cases not falsely promoted
+        run: |
+          node -e 'const x=require("./tests/scenarios/lw04e-original-warehouse-title-e2e.json");if(x.scenarios.length!==15||x.scenarios.some(r=>r.status!=="NOT_RUN")||x.releaseStatus!=="NOT_VERIFIED")process.exit(1)'

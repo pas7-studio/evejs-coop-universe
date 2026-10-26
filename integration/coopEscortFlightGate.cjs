@@ -247,13 +247,16 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
  // Disk-backed recovery enumeration. NEVER treats directory presence as proof
  // of payment or of delivery: each candidate is fully replay-verified by read.
  // An unreadable/ambiguous journal poisons the WHOLE pass (no partial payout).
- function listDelivered({systemID=null,maxTrips=64}={}){
+ function listDelivered({systemID=null,maxTrips=64,afterKey=null}={}){
   if(systemID!==null&&!pos(systemID))return blocked("FLIGHT_SCAN_SYSTEM_INVALID");
   if(!Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>64)
    return blocked("FLIGHT_SCAN_LIMIT_INVALID");
+  if(afterKey!==null&&!keyOK(afterKey))
+   return blocked("FLIGHT_SCAN_CURSOR_INVALID");
   let files;
   try{files=io.readdirSync(dir)}
-  catch(e){return e?.code==="ENOENT"?{status:"READY",manifestKeys:[]}:
+  catch(e){return e?.code==="ENOENT"?
+   {status:"READY",manifestKeys:[],hasMore:false,nextAfterKey:null}:
    blocked("FLIGHT_SCAN_READ_UNAVAILABLE")}
   if(!Array.isArray(files)||files.length>512)
    return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
@@ -275,10 +278,15 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
     return blocked("FLIGHT_SCAN_UNVERIFIED_JOURNAL");
    if(state.phase!=="DELIVERED")continue;
    if(systemID!==null&&state.booking.systemID!==systemID)continue;
-   if(found.length>=maxTrips)return blocked("FLIGHT_SCAN_RESULT_CAP_EXCEEDED");
+   if(afterKey!==null&&key<=afterKey)continue;
    found.push(key);
   }
-  return {status:"READY",manifestKeys:found};
+  // All original journals are validated before any page reaches wallet
+  // reconciliation. Later corruption must poison the entire scan.
+  const manifestKeys=found.slice(0,maxTrips);
+  const hasMore=found.length>manifestKeys.length;
+  return {status:"READY",manifestKeys,hasMore,
+   nextAfterKey:hasMore?manifestKeys[manifestKeys.length-1]:null};
  }
  return {fundBeforeWarp,recordDelivered,read,readFunded,readNativeDelivery,readNativeDeliveryForAudit,listDelivered};
 }

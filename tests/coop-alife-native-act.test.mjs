@@ -102,3 +102,72 @@ test("actor moving DURING async native director discovery cannot spend original 
  assert.equal(result.reason,"ALIFE_NATIVE_ACT_ACTOR_CHANGED_AFTER_DIRECTOR");
  assert.equal(ticks,0);
 });
+
+
+test("live native director without source recovery audit cannot write money",async()=>{
+ const f=fixture();f.setDirector({
+  mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:true,
+  tick:()=>{throw Error("UNSAFE_FINANCIAL_TICK") }
+ });
+ const result=await f.bridge.dispatch({...intent,intentID:"live-no-audit-1"});
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(result.reason,"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_MISSING");
+});
+test("unreconciled original Rust/SQLite journal fences a live director",async()=>{
+ let invoked=0;const f=fixture();f.setDirector({
+  mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:true,
+  auditBeforeTick:async()=>({status:"BLOCKED",reason:"LIST_UNKNOWN",readOnly:true}),
+  tick:()=>{invoked++;return{status:"PREPARED"}}
+ });
+ const result=await f.bridge.dispatch({...intent,intentID:"live-unknown-outcome-1"});
+ assert.equal(result.reason,"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_NOT_READY");
+ assert.equal(invoked,0);
+});
+test("live actor moving while original journal audit awaits is rechecked",async()=>{
+ let current={...actor},started,release,ticks=0;
+ const wait=new Promise(resolve=>{started=resolve});
+ const held=new Promise(resolve=>{release=resolve});
+ const f=fixture();
+ f.options.resolveActor=async()=>({...current});
+ f.options.resolveDirector=async()=>({
+  mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:true,
+  auditBeforeTick:async scope=>{started();await held;return{
+   status:"READY",ownerID:scope.ownerID,stationID:scope.stationID,
+   readOnly:true,nativeMutation:false,
+   proof:"ORIGINAL_DIRECTOR_JOURNAL_AND_NATIVE_RECEIPTS_READ_ONLY"
+  }},
+  tick:()=>{ticks++;return{status:"PREPARED"}}
+ });
+ const bridge=createAlifeNativeAct(f.options);
+ const pending=bridge.dispatch({...intent,intentID:"live-after-audit-move-1"});
+ await wait;
+ current={...current,inWarp:true};
+ release();
+ const result=await pending;
+ assert.equal(result.reason,"ALIFE_NATIVE_ACT_ACTOR_CHANGED_AFTER_AUDIT");
+ assert.equal(ticks,0);
+});
+test("validated live audit and stable native actor may advance existing director",async()=>{
+ let calls=0;const f=fixture();
+ f.setDirector({mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:true,
+  auditBeforeTick:scope=>({
+   status:"READY",ownerID:scope.ownerID,stationID:scope.stationID,
+   readOnly:true,nativeMutation:false,
+   proof:"ORIGINAL_DIRECTOR_JOURNAL_AND_NATIVE_RECEIPTS_READ_ONLY"
+  }),tick:()=>{calls++;return{status:"PREPARED"}}});
+ const result=await f.bridge.dispatch({...intent,intentID:"live-audited-1"});
+ assert.equal(result.status,"NATIVE_DIRECTOR_RESULT");
+ assert.equal(calls,1);
+});
+
+test("unavailable original industry recovery auditor fails closed without native debit",async()=>{
+ let calls=0;const f=fixture();f.setDirector({
+  mode:"NATIVE_AUTHORITIES_ONLY",supportsLiveRuntime:true,
+  auditBeforeTick:async()=>{throw Error("original SQLite source offline")},
+  tick:()=>{calls++;return{status:"INSTALLED"}}
+ });
+ const result=await f.bridge.dispatch({...intent,intentID:"live-audit-unavailable-1"});
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(result.reason,"ALIFE_NATIVE_ACT_RECOVERY_AUDIT_UNAVAILABLE");
+ assert.equal(calls,0);
+});

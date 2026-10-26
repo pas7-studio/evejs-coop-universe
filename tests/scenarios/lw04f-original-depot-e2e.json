@@ -1,0 +1,141 @@
+{
+  "schema": "evejs-coop/lw04f-original-itemstore-depot-e2e/v1",
+  "status": "NOT_VERIFIED",
+  "pin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "environment": "DISPOSABLE_PINNED_NATIVE_ONLY",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW04F-01",
+      "title": "Pinned original itemStore COOP-030 unique NPC depot grant creates separate cargo-tagged itemID",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-02",
+      "title": "Original stock grant path still merges untagged items with unchanged default behavior",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-03",
+      "title": "Strict ALIFE-09 journal persists GRANT_OUTCOME_UNKNOWN before issuing native ItemStore write",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-04",
+      "title": "Pinned GameStore items flush commits item row before ALIFE-09 writes COMPLETED",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-05",
+      "title": "Crash after stock write before native flush never issues second item grant",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-06",
+      "title": "Native flush failure leaves original journal UNKNOWN across server cold restart",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-07",
+      "title": "CargoID collision, different owner/station/quantity and duplicate tag never duplicate ore",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-08",
+      "title": "Native source ItemStore data and ALIFE-09 journal carry the same immutable original oreItemID",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-09",
+      "title": "Cross-owner corporate purchase charges exact real NPC ISK once after durable warehouse grant",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-10",
+      "title": "Real refinery and manufacturing consume only purchased original ItemStore mineral lineage",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-11",
+      "title": "Two players observe native items and corporate wallet after Rust NPC trade settlement",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04F-12",
+      "title": "Protected evejs-data stays untouched; source patch removal restores pinned original itemStore",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original pinned ItemStore and GameStore SQLite WAL",
+        "original ALIFE-09 file journal fsync, cold-restart and unique cargoId item ID",
+        "actual corporate ISK wallet and source item transfer where applicable",
+        "original Rust order/fill and two authenticated clients where applicable"
+      ]
+    }
+  ]
+}

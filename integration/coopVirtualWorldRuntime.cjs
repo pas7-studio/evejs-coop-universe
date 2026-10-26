@@ -542,6 +542,9 @@ function start(){
   // Real courier dispatch (COOP-024). Opt-in and default OFF: it accepts the
   // owner's genuine native courier contract with a seeded courier character,
   // flies it natively and completes it. Observe above stays read-only.
+  if(process.env.EVEJS_COOP_ADMIN_BRIDGE==="1")runPhase("admin-bridge",()=>{
+    require("./coopAdminBridge").drain({log:console.log});
+  });
   if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")runPhase("courier-dispatch",()=>{
    if(!courierDispatch)courierDispatch=require("./coopCourierRuntime").createCourierDispatch({
     contracts:require("../services/contracts/contractRuntimeState"),
@@ -1374,10 +1377,12 @@ async function observeAlifeEconomy(){
     }
    }
    const decision=alifeEconomyObserver.tick(snap);
-   // LW-04B: one existing 30s A-Life observation tick, never another
-   // manufacturer timer or GameStore writer. No verified live director is
-   // injected here: even when the flag is on, manufacturing is fail closed.
+   // LW-04B: use this existing A-Life authority tick for manufacturing
+   // admission only. Shipped native industry bindings are NOT live-safe.
    if(process.env.EVEJS_COOP_ALIFE_ECONOMY_ACT==="1"){
+    // Manufacturing admission is independent of the remaining A-Life phases.
+    // A failed native source callback cannot suppress NPC resupply or buyer
+    // observations in this 30-second world cycle; never retry the intent.
     try{
      if(!alifeManufacturingRuntime)alifeManufacturingRuntime=
       require("./coopAlifeNativeManufacturingRuntime").createRuntimeAlifeManufacturing({
@@ -1390,20 +1395,18 @@ async function observeAlifeEconomy(){
       snapshot:snap,decision,registry:identityRegistry});
      if(result.status==="BLOCKED"||result.status==="ADMISSION_EVALUATED")
       probe.observe("alife-native-manufacturing-admission",null,
-       {spaceState:{systemID}},{
-        status:result.status,reason:result.reason||null,
+       {spaceState:{systemID}},
+       {status:result.status,reason:result.reason||null,
         count:result.count||0,
         directorReportedNativeAction:result.results?.some(x=>x.nativeMutation===true)===true,
         nativeSettlementVerified:false,
-        source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"
-       });
-    }catch(error){
+        source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
+    }catch(_error){
      probe.observe("alife-native-manufacturing-admission",null,
-      {spaceState:{systemID}},{
-       status:"BLOCKED",reason:"NATIVE_MANUFACTURING_ADMISSION_EXCEPTION",
-       source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT",
-       nativeSettlementVerified:false
-      });
+      {spaceState:{systemID}},
+      {status:"BLOCKED",reason:"NATIVE_MANUFACTURING_ADMISSION_EXCEPTION",
+       nativeSettlementVerified:false,
+       source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
     }
    }
    if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())

@@ -205,12 +205,28 @@ function installNativeEscorts(){
     // Offline service is a *fsynced original terminal duo receipt*, not an
     // inference from a delivered cargo journal or elapsed time. Native wallet
     // atomic idempotency remains the only authority for a player credit.
-    let checked;try{checked=require("./coopEscortNativeBinding")
-     .reconcilePeacefulDeliveries({maxTrips:32})}
-    catch{checked={status:"PEACEFUL_REPLAY_BOOTSTRAP_UNAVAILABLE"}}
-    if(checked?.status!=="NATIVE_PEACEFUL_REPLAY_CHECKED")
-     console.warn("[CoopEscort] peaceful payout replay:",
-      checked?.status||"UNAVAILABLE");
+    // Reconcile original deliveries in strictly bounded 32-journal pages.
+    // Each scan validates every source journal first, so later corruption
+    // cannot let a safe-looking first page trigger an unverified payout.
+    let afterKey=null,checked;
+    for(let page=0;page<16;page++){
+     try{checked=require("./coopEscortNativeBinding")
+      .reconcilePeacefulDeliveries({maxTrips:32,afterKey})}
+     catch{checked={status:"PEACEFUL_REPLAY_BOOTSTRAP_UNAVAILABLE"}}
+     if(checked?.status!=="NATIVE_PEACEFUL_REPLAY_CHECKED"){
+      console.warn("[CoopEscort] peaceful payout replay:",
+       checked?.status||"UNAVAILABLE");break;
+     }
+     if(!checked.hasMore)break;
+     if(typeof checked.nextAfterKey!=="string"||
+        checked.nextAfterKey===afterKey){
+      console.warn("[CoopEscort] peaceful payout replay:",
+       "PEACEFUL_REPLAY_BOOTSTRAP_CURSOR_INVALID");break;
+     }
+     afterKey=checked.nextAfterKey;
+     if(page===15)console.warn("[CoopEscort] peaceful payout replay:",
+      "PEACEFUL_REPLAY_BOOTSTRAP_PAGE_LIMIT");
+    }
   }
   lastState=mount;return mount;
  }catch{return {status:"ESCORT_NATIVE_BOOTSTRAP_UNAVAILABLE"}}

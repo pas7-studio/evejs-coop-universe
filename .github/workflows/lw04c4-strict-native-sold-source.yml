@@ -1,0 +1,39 @@
+name: LW04C4 Strict NPC SOLD Source Gate
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04c3b-native-factory-sale-settlement-20261026
+    paths:
+      - 'integration/coopNpcNativeEconomyDirector.cjs'
+      - 'integration/coopNpcIndustryOriginalSaleAudit.cjs'
+      - 'tests/coop-npc-native-economy-director.test.mjs'
+      - 'tests/scenarios/lw04c4-original-npc-sold-e2e.json'
+      - '.github/workflows/lw04c4-strict-native-sold-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  original-sold-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Parse exact original native director code
+        run: |
+          node --check integration/coopNpcNativeEconomyDirector.cjs
+      - name: Original director financial audit and market settlement tests
+        run: |
+          node --test \
+            tests/coop-npc-native-economy-director.test.mjs \
+            tests/coop-npc-industry-original-sale-audit.test.mjs \
+            tests/coop-npc-industry-original-wallet-witness.test.mjs \
+            tests/coop-npc-factory-original-sale-finance-chain.test.mjs \
+            tests/coop-npc-industry-original-buyer-settlement.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs
+      - name: Real original SQLite/Rust acceptance remains NOT_RUN
+        run: |
+          node -e 'const m=require("./tests/scenarios/lw04c4-original-npc-sold-e2e.json");if(m.scenarios.length!==13||m.scenarios.some(s=>s.status!=="NOT_RUN"))process.exit(1)'

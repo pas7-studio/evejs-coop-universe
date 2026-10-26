@@ -90,9 +90,12 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   }
   return answer("COMMITTED",record,{itemID:record.itemID,quantity:record.quantity});
  }
- function deposit({cargoID,haulerID,fleetID,systemID,stationID,corporationID}={}){
+ function deposit({cargoID,haulerID,fleetID,systemID,stationID,corporationID,arrivedAtMs}={}){
   const id=pos(cargoID),args={cargoID:id,haulerID:pos(haulerID),fleetID:pos(fleetID),
    systemID:pos(systemID),stationID:pos(stationID),corporationID:pos(corporationID)};
+  // The arrival proof is checked but never becomes part of the receipt identity:
+  // it is a time stamp, not a property of the cargo.
+  const arrivalAtMs=pos(arrivedAtMs);
   if(Object.values(args).some(v=>!v))return answer("INVALID_REQUEST");
   if(busy.has(id))return answer("IN_PROGRESS");
   busy.add(id);
@@ -109,7 +112,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     return answer("PENDING_RECONCILIATION",record,{phase:record.phase});
    }
    if(!validateOwner(args))return answer("OWNER_OR_STATION_MISSING");
-   if(verifyArrival(args)!==true)return answer("ARRIVAL_NOT_VERIFIED");
+   if(verifyArrival({...args,arrivedAtMs:arrivalAtMs})!==true)return answer("ARRIVAL_NOT_VERIFIED");
    const cargo=(store.listNativeCargoForEntity(args.haulerID)||[]).find(x=>Number(x.cargoID)===id);
    if(!cargo||Number(cargo.entityID)!==args.haulerID||!pos(cargo.typeID)||!pos(cargo.quantity)||
       Number(cargo.moduleID||0)!==0||Number(cargo.coopHaulFleetID)!==args.fleetID||
