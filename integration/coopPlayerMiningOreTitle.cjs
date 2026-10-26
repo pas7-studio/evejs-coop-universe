@@ -10,7 +10,6 @@ const INDEX=(systemID,fleetID)=>"coopPlayerMiningFleet"+SEP+systemID+":"+fleetID
 const RECEIPT=id=>"coopPlayerMiningOreTitle"+SEP+id;
 const LEGACY=id=>"coopWarehouseTitleTransfer"+SEP+id;
 const POS=x=>Number.isSafeInteger(x)&&x>0;
-const nonneg=x=>Number.isSafeInteger(x)&&x>=0;
 const cents=x=>{
  if(typeof x!=="number"||!Number.isFinite(x)||x<0)return null;
  const n=Math.round(x*100);
@@ -98,7 +97,9 @@ function createPlayerMiningOreTitle({gameStore,access,getWarehouseReceipt,
     if(shift?.version!==1||shift.status!=="FUNDED"||
       shift.operationID!==shiftID||shift.corporationID!==buyerCorpID||
       shift.employerCorpID!==sourceCorpID||shift.systemID!==systemID||
-      shift.fleetID!==fleetID||!Array.isArray(shift.haulerIDs)||
+      shift.fleetID!==fleetID||!POS(shift.createdAt)||
+      !POS(proof.at)||proof.at<shift.createdAt||proof.updatedAt<proof.at||
+      !Array.isArray(shift.haulerIDs)||
       !shift.haulerIDs.includes(proof.haulerID)||
       index?.operationID!==shiftID||index.corporationID!==buyerCorpID||
       index.employerCorpID!==sourceCorpID)
