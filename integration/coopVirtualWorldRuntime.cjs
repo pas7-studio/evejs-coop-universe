@@ -435,6 +435,19 @@ function advanceNativeNpcExpeditions(){
    listNativeSites:systemID=>signatures.listSystemSignatureSites(systemID),
    getNativeEntity:id=>store.getNativeEntity(id),
    getController:id=>controllers.getControllerByEntityID(id),
+   isNativeProbeScout:(id,systemID)=>{
+    // Only the native inventory authority can identify an equipped scout.
+    const native=store.getNativeEntity(id);
+    if(!native||native.entityID!==id||native.systemID!==systemID||
+       native.transient===true)return false;
+    const modules=store.listNativeModulesForEntity(id);
+    return Array.isArray(modules)&&modules.some(m=>
+     m?.entityID===id&&m.ownerID===native.ownerID&&
+     m.groupID===481&&m.categoryID===7&&
+     Number.isSafeInteger(m.moduleID)&&m.moduleID>0&&
+     Number.isSafeInteger(m.flagID)&&m.flagID>0&&
+     m.moduleState?.online===true&&m.transient!==true);
+   },
    orderBridge:guard,
    warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options),
    nativeProbeScan:({scene,entityID,assignments})=>{
