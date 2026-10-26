@@ -40,18 +40,26 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   const found=sites.filter(s=>s&&s.siteID===siteID&&
    (s.systemID===systemID||s.solarSystemID===systemID)&&vector(s.actualPosition));
   if(found.length!==1)return null;
-  const physical=currentScene?.systemID===systemID?
-   currentScene.getEntityByID?.(siteID):null;
+  let physical=null;
+  try{physical=currentScene?.systemID===systemID?
+   currentScene.getEntityByID?.(siteID):null}catch{return null}
   if(!physical||physical.itemID!==siteID||!vector(physical.position)||
      distance(physical.position,found[0].actualPosition)>1)return null;
   return {...found[0],systemID};
  };
  const readPilot=(scene,entityID,assignments)=>{
-  const matches=assignments.filter(a=>a.entityID===entityID&&
+  const matches=assignments.filter(a=>a?.entityID===entityID&&
    a.systemID===scene.systemID&&named(a.pilotID));
-  if(matches.length!==1||assignments.some(a=>a.pilotID===matches[0].pilotID&&
+  if(matches.length!==1||assignments.some(a=>a?.pilotID===matches[0].pilotID&&
    (a.entityID!==entityID||a.systemID!==scene.systemID)))return null;
-  const ship=scene.getEntityByID?.(entityID),c=getController(entityID),n=getNativeEntity(entityID);
+  // EX-03B12: a native store or scene lookup is a fallible authority.
+  // It may reject THIS hull but must never abort the entire A-Life tick.
+  let ship,c,n;
+  try{
+   ship=scene.getEntityByID?.(entityID);
+   c=getController(entityID);
+   n=getNativeEntity(entityID);
+  }catch{return null}
   if(!ship||ship.kind!=="ship"||ship.nativeNpc!==true||ship.itemID!==entityID||
     ship.session?.characterID||!vector(ship.position)||
     (pos(ship.systemID)&&ship.systemID!==scene.systemID)||
@@ -137,7 +145,8 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     const shipID=session?._space?.shipID;
     if(!pos(shipID)||seenPlayerShips.has(shipID))continue;
     seenPlayerShips.add(shipID);
-    const candidate=scene.getEntityByID(shipID);
+    let candidate;
+    try{candidate=scene.getEntityByID(shipID)}catch{continue}
     if(!candidate||!vector(candidate.position)||
        distance(candidate.position,site.actualPosition)>150000)continue;
     const witness=competition.observe({scene,siteID:site.siteID,shipID});
@@ -235,10 +244,12 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     const moveKey=p.entityID+":"+id;
     if(pending.get(moveKey)?.fingerprint===tip.fingerprint)continue;
     if(pending.size>=512){blocked++;continue;}
-    if(orderBridge.blocked({entityID:p.entityID,systemID:scene.systemID,owner:"EXPEDITION"})){
-     blocked++;continue;
-    }
-    const result=orderBridge.issue({entityID:p.entityID,systemID:scene.systemID,
+    let unavailable=false;
+    try{unavailable=orderBridge.blocked({entityID:p.entityID,systemID:scene.systemID,owner:"EXPEDITION"})!==false}
+    catch{unavailable=true}
+    if(unavailable){blocked++;continue}
+    let result;
+    try{result=orderBridge.issue({entityID:p.entityID,systemID:scene.systemID,
      owner:"EXPEDITION",action:scoutWarpFirst?
       "expedition-scout-rendezvous":"expedition-rendezvous",execute:()=>{
       // Re-read original native signatures immediately before a remote warp.
@@ -257,7 +268,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
       return warpToPoint(p.entityID,{...live.actualPosition},
        {reason:scoutWarpFirst?"coop-npc-expedition-scout":"coop-npc-expedition",
         scheduleWake:true});
-     }});
+     }})}catch{blocked++;continue}
     if(result?.success===true){
      pending.set(moveKey,{fingerprint:tip.fingerprint,at:now});orders++;
      if(scoutWarpFirst)scoutWarpOrders++;else patrolWarpOrders++;
