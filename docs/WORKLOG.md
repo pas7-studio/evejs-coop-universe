@@ -354,3 +354,23 @@ Why: a 900-character behaviour hook cannot be tested or reviewed; hooks must be 
 Detail: The prune-time heal that re-attached durable controllers was 900 characters of inline logic inside a string insertion: untestable, unreviewable, and exactly the shape that produced the earlier double-activation bug. It is now coopNativeMiningFleetDurable.healFleetActors, called by a 257-character hook that only passes the service it needs. Behaviour is unchanged and covered: the function dedupes a
 Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs
 Evidence: healFleetActors extracted; hook 900->257 chars; tests/coop-native-mining-fleet-durable 34/34 with durable-slot-heal and retained-actor suites
+### 2026-10-26T14:32Z · 38c3570 · L2 · fix(P0): verify physical original tagged ore remains in native station hangar stack
+
+Why: A previously COMMITTED native warehouse item moved out of the original station HANGAR, split, or changed singleton still passed checkTarget, replay status ALREADY_COMMITTED and audit OK. Exact physical item flag/stacksize/singleton now required.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:33Z · a613a45 · TEST · test(P0): detect moved, split or corrupt tagged warehouse item as unreconciled
+
+Why: Regression tests verify moved, split, invalid singleton/missing hangar tags plus foreign corporate tag and uncertain grant outcome.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:35Z · 8279e66 · L2 · fix(P0): reject global cargo marker collision before warehouse PREPARED and native debit
+
+Why: Source warehouse deposit checked the global cargo tag only after the source cargo was debited and flushed. A previously tagged item at a foreign station/corporation caused destructive debit before identity conflict was discovered. Global tag preflight now runs before PREPARED journal write and native debit.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:35Z · a616d9b · TEST · test(P0): original cargo item collision preflight and missing hangar authority
+
+Why: Regressions verify an already-existing valid item with the same cargoID prevents any source debit or PREPARED journal, and unavailable hangar flags fail closed.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
