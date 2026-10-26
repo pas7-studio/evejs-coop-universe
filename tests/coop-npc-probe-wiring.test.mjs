@@ -127,7 +127,7 @@ test("EX-03B5 source expiry and recovery use original gameStore single-table dur
  const manifest=read("scripts/overlay-spec.cjs");
  assert.match(lifecycle,/"RECALLING"/);
  assert.match(lifecycle,/status:"STOWED"/);
- assert.match(lifecycle,/status:"EXPIRED"/);
+ assert.match(lifecycle,/"EXPIRED"/);
  assert.match(lifecycle,/upsertNativeCargo\(row\)/);
  assert.match(lifecycle,/flushNpcCargo\(\)/);
  assert.match(lifecycle,/removeNativeProbe\(scene\.systemID,row\.cargoID\)/);
