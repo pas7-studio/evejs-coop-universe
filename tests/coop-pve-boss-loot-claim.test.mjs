@@ -107,3 +107,67 @@ test("multiple original loot items cannot bypass the same pending source-item fe
   requestedQuantity:1};
  assert.equal(two.begin(modified).status,"BOSS_LOOT_REPLAY_BLOCKED");
 }));
+
+
+test("two separate players may collect different original item IDs without sharing a claim",()=>fixture(f=>{
+ f.witness.originalItems.push({wreckItemID:9902,typeID:91002,quantity:2,singleton:false});
+ const a=f.make(),second={
+  wreck:f.native,wreckItem:{wreckID:9551,wreckItemID:9902,locationID:9551,
+   typeID:91002,quantity:2},characterID:88,destinationLocationID:8002,
+  requestedQuantity:1
+ };
+ assert.equal(a.begin(f.args).status,"BOSS_LOOT_CLAIMED");
+ assert.equal(f.make().begin(second).status,"BOSS_LOOT_CLAIMED");
+ assert.equal(f.make().begin({...f.args,characterID:88,
+  destinationLocationID:8002,requestedQuantity:1}).status,"BOSS_LOOT_REPLAY_BLOCKED");
+ assert.equal(f.make().settle({verified:f.confirmed,
+  sourceBefore:f.args.wreckItem}).status,"BOSS_LOOT_CLAIM_SETTLED");
+ assert.equal(f.make().settle({verified:{...f.confirmed,wreckItemID:9902,
+  characterID:88,shipID:8002,quantity:1,remainingQuantity:1},
+  sourceBefore:second.wreckItem}).status,"BOSS_LOOT_CLAIM_SETTLED");
+ assert.equal(Object.keys(f.make().snapshot().entries).length,2);
+}));
+test("native source resurrection after a settled debit is refused",()=>fixture(f=>{
+ const g=f.make();
+ assert.equal(g.begin(f.args).status,"BOSS_LOOT_CLAIMED");
+ assert.equal(g.settle({verified:f.confirmed,
+  sourceBefore:f.args.wreckItem}).status,"BOSS_LOOT_CLAIM_SETTLED");
+ const bad={...f.args,wreckItem:{...f.args.wreckItem,quantity:2},
+  requestedQuantity:1};
+ assert.equal(f.make().begin(bad).status,"BOSS_LOOT_SOURCE_SEQUENCE_MISMATCH");
+ const correct={...bad,wreckItem:{...bad.wreckItem,quantity:1}};
+ assert.equal(f.make().begin(correct).status,"BOSS_LOOT_CLAIMED");
+}));
+test("failure of the FINAL directory fsync cannot return a successful pregrant ACK",()=>fixture(f=>{
+ let n=0;
+ const broken={...fs,fsyncSync:fd=>{
+  n++;
+  if(n===5)throw Error("final fsync failed");
+  return fs.fsyncSync(fd);
+ }};
+ const g=f.make({storage:broken});
+ assert.equal(g.begin(f.args).status,"BOSS_LOOT_JOURNAL_UNSAFE");
+ assert.equal(g.snapshot().status,"BOSS_LOOT_JOURNAL_UNSAFE");
+ // A durable source record may exist, but the uncertain final result
+ // must never be reported as permission to perform the original grant.
+ assert.equal(JSON.parse(fs.readFileSync(f.file,"utf8"))
+  .entries["9551:9901:3"].phase,"PENDING");
+}));
+
+test("after restart an original overseer wreck cannot bypass strict pregrant without live witness",()=>fixture(f=>{
+ const overseer={...f.native,profileID:"deadspace-overseer",
+  lootTableID:"parity_deadspace_overseer_pending_loot"};
+ const a=f.make({getBossWreck:()=>null,getNativeWreck:()=>overseer});
+ assert.equal(a.begin(f.args).status,"BOSS_LOOT_LIVE_WITNESS_REQUIRED");
+ assert.equal(fs.existsSync(f.file),false);
+}));
+test("ordinary original native wreck with no boss evidence continues the unmodified transfer",()=>fixture(f=>{
+ const regular={...f.native,profileID:"belt-guristas-frigate",
+  lootTableID:"loot_belt_normal_small"};
+ const a=f.make({getBossWreck:()=>null,getNativeWreck:()=>regular});
+ assert.equal(a.begin(f.args).status,"NOT_VERIFIED_BOSS_WRECK");
+}));
+test("missing original wreck API does not silently treat a verified boss as an unclassified NPC",()=>fixture(f=>{
+ const a=f.make({getNativeWreck:()=>{throw Error("original native db offline")}});
+ assert.equal(a.begin(f.args).status,"BOSS_LOOT_AUTHORITY_UNAVAILABLE");
+}));

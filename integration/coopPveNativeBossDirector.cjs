@@ -103,10 +103,13 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
     const historyKey=site.instanceID+":"+key;
     let history=seen.get(historyKey);
     if(history&&(history.entityID!==entityID||history.typeID!==ship.typeID||
-        history.bornAtMs!==original.createdAtMs))continue; // no recycled hull
+        history.bornAtMs!==original.createdAtMs||
+        history.profileID!==(original.profileID||null)||
+        history.lootTableID!==(original.lootTableID||null)))continue; // no recycled hull
     if(!history){
      history={systemID,instanceID:site.instanceID,siteID:site.siteID,
       encounterKey:key,entityID,typeID:ship.typeID,bornAtMs:original.createdAtMs,
+      profileID:original.profileID||null,lootTableID:original.lootTableID||null,
       spawnedAtMs:wave.spawnedAtMs,peakPhase:0,wreckVerified:false};
      seen.set(historyKey,history);
     }
@@ -136,6 +139,8 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
     const matching=wrecks.filter(w=>w?.sourceEntityID===hist.entityID&&
      w.systemID===systemID&&w.launcherID===hist.entityID&&
      w.sourceTypeID===hist.typeID&&w.transient===true&&
+     (!hist.profileID||w.profileID===hist.profileID)&&
+     (!hist.lootTableID||w.lootTableID===hist.lootTableID)&&
      id(w.wreckID)&&Number.isSafeInteger(w.createdAtMs)&&
      w.createdAtMs>=hist.spawnedAtMs);
     if(matching.length!==1){
@@ -214,6 +219,7 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
   return {systemID:row.systemID,instanceID:row.instanceID,
    siteID:row.siteID,encounterKey:row.encounterKey,
    bossEntityID:row.entityID,bossTypeID:row.typeID,
+   profileID:row.profileID,lootTableID:row.lootTableID,
    wreckID:row.wreckID,originalItems:(row.initialWreckItems||[])
     .map(item=>({...item}))};
  }

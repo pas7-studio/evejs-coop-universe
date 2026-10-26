@@ -351,6 +351,346 @@ verification. P0-5 independent mission acceptance and lawful
 per-player reward are still pending.
 
 
+
+## Stage P0-4B-2A — original NPC profile and loot-table binding audit
+
+**Status:** Native source-reviewed / code implemented in stacked Draft;
+source-only unit regressions PASS; **live gameplay/rare drops unproven**.
+
+The original pinned `npcData.buildNpcDefinition(profileID)` resolves the
+NPC profile's `lootTableID` and its loaded loot table. The original
+`nativeNpcService` copies `profileID` and resolved `lootTableID`
+onto the native transient NPC. Upon original native death,
+`nativeNpcWreckService.destroyNativeNpcEntityWithWreck` copies those
+values into the physical `npcWrecks` record. The new read-only
+`coopPveBossLootProfileAudit` checks all of those values against the
+previously **physically witnessed living boss**, the exact original
+wreck, the current original profile, loaded
+`getNpcLootTable`, and `buildNpcDefinition`. A table that exists
+in the catalog but has no profile/wreck binding fails the audit.
+
+For `mode: "rule"`, the audit reports the number of configured
+positive-weight selectors, including configured special/faction/deadspace
+grades. It **does not** claim that those selectors resolve to available
+native items, that an RNG roll succeeds, that rare items dropped, or
+that original itemStore transferred any item to a player. Actual item
+pickup remains P0-4B-1 and the original EveJS native custody path.
+There are no generated items, extra rolls, spawned NPCs or new payouts.
+
+The pinned source includes a configured
+`parity_deadspace_overseer_pending_loot` rule table with overseer and
+rare-item selectors. Its **binding to an actually spawned boss NPC
+profile is still unverified** without a loaded native NPC table or
+disposable server acceptance. The large upstream
+`npcProfiles/data.json` could not be extracted through the current
+source connector; this PR intentionally does not guess a profile ID
+or modify any original data assets.
+
+The audit runs only after the already existing **post-native-wreck**
+callback, using the existing shared world integration, no new scheduler.
+It is OFF unless
+`EVEJS_COOP_PVE_BOSS_LOOT_PROFILE_AUDIT=1`,
+`EVEJS_COOP_PVE_NATIVE_BOSSES=1`, and
+`EVEJS_COOP_PVE_SITE_DEFENSE=1` are all enabled. A mismatch produces
+a read-only diagnostic, never a loot item or reward.
+
+### Additional native item custody fixes
+
+P0-4B-2A also closes two gaps in the P0-4B-1 optional journal:
+
+- The final writer-lock release/directory fsync can fail **after**
+  the JSON claim has been written. The writer now waits until **after**
+  that cleanup before returning success. Any ambiguous final fsync
+  yields `BOSS_LOOT_JOURNAL_UNSAFE`, never pre-grant permission.
+- Each settled claim's final source remainder must match the next
+  native source quantity. For example, `3 → 1` may continue from
+  `1`, but a resurrected `2` is blocked. Two distinct original
+  item IDs may be claimed separately by two characters, whereas two
+  characters claiming the same original item slice are fenced.
+
+The live pre-grant hook also refuses permission if
+`EVEJS_COOP_PVE_BOSS_LOOT_FENCE=1` is enabled without the required
+native boss / original native pickup evidence flags. This cannot
+retroactively make the original EveJS grant and source debit atomic.
+The journal remains opt-in and a native transaction/recovery operator
+is needed before enabling it persistently.
+
+### Evidence and remaining blockers
+
+Exact-GitHub-branch isolated V8 tests: 62/62 inherited PvE and native
+loot tests, 282 assertions; 10/10 new profile audit tests, 47
+assertions; 13/13 durable simulated-fs journal tests, 47 assertions.
+**85/85 isolated cases, 376 assertions** total. No full Node/Rust/
+SQLite, physical disk power-failure, actual connected two-client cargo
+race, pinned overlay roundtrip or rare-drop acceptance was run.
+The tests with two players use synthetic claims, **not** real network
+clients.
+
+**Still pending P0-4B-2B:** load actual deployed native profiles and
+candidate item pools, prove an authored boss is using the configured
+loot table, kill it in a disposable live game, observe a real rare
+item roll and native grant/debit through two clients, and run actual
+power loss + restart reconciliation. P0-5 independent lawful mission
+turn-in and personal rewards is a later stage.
+
+
+
+## P0-5A — strict native two-person PvE mission reward preflight (Draft)
+
+**State:** code prepared, original-source semantics inspected, isolated tests
+PASS; full Node/SQLite/Rust and real two-client gameplay **NOT RUN**.
+
+The project ALREADY has `coopFleetMissionJoin` (independent native
+Request/Offer/Accept for a wingman), `coopMissionInstanceProvenance`
+(durable link from two different mission sequences to the original
+leader-owned dungeon), `coopFleetDungeonCredit` (native site-presence
+proof and stock `shareCoopDungeonObjective`), and
+`coopFleetMissionTurnin` (two independent original
+`agentMissionRuntime.doAgentAction` calls with native payout journals
+and a separate leader pre-payout fence). P0-5A deliberately reuses
+ALL of them. It does **not** introduce another wallet, reward algorithm,
+mission instance store, loot roll, native agent RPC or event clock.
+
+New `coopPveDuoNativeRewardGuard` runs only on the **opted-in native
+shared turn-in path**, just before the first native payout intent:
+
+1. Requires `EVEJS_COOP_FLEET_MISSION_TURNIN=1`,
+   `EVEJS_COOP_FLEET_LEADER_FENCE=1`, and
+   `EVEJS_COOP_MISSION_INSTANCE_LINK=1`. A partial rollout fails
+   CLOSED before the original captain's `DoAction`.
+2. Requires two distinct connected native sessions, the same actual
+   creator-led fleet and agent station (already checked by
+   `coopFleetMissionTurnin.prepare`), and **two independently
+   accepted and completed** personal native agent missions with
+   different `missionSequence`, exact `agentID`, content,
+   template and mission system. GM-completed, storyline projection
+   and important-mission paths cannot use automated shared PvE payout.
+3. Calls the original `dungeonRuntime.getInstance` BEFORE native
+   leader payout. Requires the exact original leader
+   `dungeonInstanceID`, source system, original
+   `missionOwnerCharacterID` or mission owner metadata,
+   `missionAgentID`, and genuine native completed objective/lifecycle.
+   A manually toggled `objectiveCompleted` flag on the agent record
+   is not sufficient.
+4. Rechecks immutable `coopMissionInstanceProvenance.verify` and the
+   *independently persisted* native `coopSharedDungeon` receipt on
+   the peer using `nativeSharedObjectiveMatches`.
+   Matching mission names or fleet membership alone cannot authorize
+   an automated second native reward.
+
+Once authorized, the original `beginLeaderFence` writes its existing
+fsynced **PREPARED** intent BEFORE native leader `DoAction`. Native
+EveJS owns all actual ISK, LP, items, standing, mission history and the
+original leader mission deletion. On successful native leader turn-in,
+the original EveJS implementation **purges the source dungeon**.
+Therefore the second-player check MUST NOT demand that same live
+instance again: it retains the source proof captured before leader
+payout, and instead revalidates the exact native peer mission sequence,
+source identity, both connected characters, durable link and native
+shared-objective receipt. Only then may the original existing
+`beginPeerSettlement` journal and second native `DoAction` execute.
+
+The existing `LEADER_NATIVE_CLEARED` and
+`BOTH_NATIVE_CLEARED` fencing transitions remain untouched. Only
+after both native mission records are absent does an informational
+`TWO_NATIVE_PERSONAL_MISSION_RECORDS_CLEARED` event appear. This is
+**mission completion evidence**, NOT a direct wallet/LP or balance
+delta. A native recipient payout failure or ambiguous journal leaves
+the normal manual reconciliation requirement; there are no automatic
+retries or compensating synthetic payments.
+
+The new `EVEJS_COOP_PVE_DUO_REWARD_GUARD=1` flag is OFF by default.
+Without it, existing vanilla solo agent completion and previous
+cooperative behavior remain unchanged. This does not impose a universal
+combat-damage requirement: native same-dungeon sharing may award
+non-damage support roles, and the existing `coopPlayerCombatWitness`
+receipts are **not** sufficient to claim a linked dungeon contribution
+unless they are additionally matched to the original encounter.
+
+### Evidence and release blockers
+
+- 16/16 source-executed isolated V8 tests PASS, 59 assertions,
+  including original dungeon ownership/completion, unique accepted
+  agent mission sequence, provenance failures, disconnects, native
+  numeric content IDs and valid peer completion after the source
+  dungeon is purged.
+- 9/9 initial source-wiring checks passed. Additional source-hook
+  regression tests are part of this PR.
+- Full `node --test`, pinned installer dry-run and byte-exact
+  roundtrip, actual native agent two-client request/accept/dungeon
+  completion/personal ISK-LP/standing audit, restart and interrupted
+  payout reconciliation were NOT RUN. The overlay is not safe to
+  enable on persistent servers without those checks.
+- **P0-5B next:** actual per-recipient native reward-result/balance
+  evidence and identity-safe two-client acceptance. Also pending is
+  P0-4B-2B real rare loot and original inventory concurrent RPC test.
+
+
+
+## P0-5B-1 — actual original personal ISK / LP / mission-history evidence (Draft)
+
+**Status:** source-inspected and code-prepared; isolated test PASS;
+native two-client wallet/LP/inventory/standing E2E **NOT RUN**.
+
+Original pinned EveJS \`agentMissionRuntime.completeMission\` first calls
+\`applyMissionRewards\`, which writes an original **ISK wallet journal**
+(\`entryTypeID=3\`, \`referenceID=agentID\`), then potentially mints
+original item rewards to the station hangar, applies native issuer-corp
+LP and standing changes, and finally deletes the native accepted
+mission and adds a personal \`completed\` mission-history row.
+\`doAgentAction\` ultimately returns an agent **conversation**;
+its \`success:true\` is **not** an independent wallet receipt.
+
+New \`coopPveDuoNativeRewardEvidence\` **only reads** the native
+\`walletState.getCharacterWallet\`,
+\`walletState.getCharacterWalletJournal\`,
+\`lpWalletState.getCharacterWalletLPBalance\` for the real agent
+corporation, \`missionRuntimeState.getCharacterStateSnapshot\` history,
+\`agentAuthority.getAgentByID\` and
+\`standingRuntime.getCharacterRawStanding\` for that agent/corporation.
+No new wallet, reward writer, independent itemStore, retry service,
+mission database, scheduler, or direct ISK/LP/standing mutation.
+
+With \`EVEJS_COOP_PVE_DUO_REWARD_EVIDENCE=1\` (default OFF, requires
+P0-5A's guard), the already authorized native duo turn-in uses these
+**two different** source snapshots:
+
+1. Before the leader native DoAction, verify that original wallet,
+   LP issuer, agent and mission history sources can be read and that
+   wallet transaction IDs are unambiguous. Snapshot failure denies
+   native co-op payout BEFORE the existing leader payout journal.
+2. After the original leader native DoAction and mission deletion,
+   require a **new unique native mission journal** with the original
+   agent \`referenceID\`, entryType 3, proper NPC corporation and
+   actual player, and a wallet balance delta equal to that exact
+   journal amount. The original reward amount must be either the
+   native mission base ISK or base plus the originally configured
+   bonus (the latter is not guaranteed).
+3. Check exact issuer LP balance delta against the original personal
+   \`loyaltyPoints\` reward. Require one new native personal
+   \`completed\` mission history entry with that exact personal
+   \`missionSequence\`, agent, content and template. Standing snapshots
+   are reported as observations; zero standing delta may be lawful.
+4. BEFORE the second native payout intent, take an independent
+   native snapshot for the **wingman**. After the wingman's original
+   DoAction, verify *his own* native wallet journal, issuer LP delta
+   and exact new personal mission-history entry before recording
+   \`AWARDED\` and the leader's \`BOTH_NATIVE_CLEARED\`.
+   Only after both pass does the read-only
+   \`TWO_INDEPENDENT_NATIVE_WALLET_LP_AND_HISTORY_VERIFIED\`
+   telemetry event appear.
+5. Any missing, inconsistent, ambiguous or partially written source
+   requires manual reconciliation. After a native award starts,
+   this code **never retries it**, never compensates with virtual ISK
+   or LP, and never falsely marks both recipients as settled.
+   The original existing leader and peer fsynced payout fences remain
+   in charge.
+
+**Critical scope:** This receipt verifies source ISK, source LP and
+native per-person mission history, **not** physical original item
+reward custody or a standing **transaction** receipt. Real standing
+values are read and their deltas shown, but a positive standing delta
+is not always expected and cannot by itself prove a mission reward.
+\`itemsVerified:false\` and
+\`standingMutationReceiptVerified:false\` are explicit on the
+individual native receipts. Follow-on P0-5B-2 must correlate original
+itemStore deltas and native standing transaction row(s) where
+applicable, and run two real network clients. It must not overstate
+completion from a successful agent dialogue.
+
+**Code evidence:** 15/15 original-source isolated cases (36 assertions)
+for wallet journal references, balances, bonus branches, LP issuer,
+new personal history, wrong agent/character, stale or duplicate journal,
+no-standing change, partial payout, and zero-LP missions; plus 7/7
+wiring ordering checks (22 assertions). **22/22 isolated checks, 58
+assertions**. Full Node/SQLite/Rust, pinned overlay reversibility,
+real payout receipt vs mission balance, live two-person gameplay,
+crashes and actual item custody **NOT RUN**. The flag remains OFF.
+
+
+
+## P0-5B-2 — original per-character station reward item + standing transaction custody
+
+**State:** isolated exact-source unit/wiring tests PASS; native full
+Node/SQLite/Rust, two-client in-game settlement and restart **NOT RUN**.
+
+Original pinned EveJS rewards items only through
+\`itemStore.grantItemsToCharacterStationHangar\` during original agent
+\`applyMissionRewards\`. An original station-granted item may appear
+as a new \`itemID\` for a singleton or as an increased \`stacksize\`
+on an EXISTING item with the same \`typeID\`. This new read-only
+\`coopPveDuoNativeRewardCustody\` captures
+\`itemStore.listContainerItems(characterID,rewardStationID,
+ITEM_FLAGS.HANGAR)\` for each personal mission before and after
+the original \`doAgentAction\`. It refuses inconsistent item IDs,
+owner, location, flag, quantity or mixed item types; compares exact
+\`typeID → total stacksize\` deltas against original per-character
+\`rewards.itemRewards\` and \`rewards.bonusItemRewards\` ONLY when the
+separately verified personal ISK journal proves the native bonus
+was paid. It reports actual newly observed item IDs without assuming
+each original reward must allocate a new item.
+
+Standing verification uses original
+\`standingRuntime.buildMissionOutcomeStandingChanges(...,"completed")\`
+to identify expected direct standing owners/event types. Original
+\`getStandingTransactions(ownerID,characterID)\` is read before and
+after each payout. Every originally configured nonzero direct standing
+change requires exactly one **new** native transaction of the expected
+event type. The comparison uses full original transaction row
+multiplicities, detects historical rows changing/disappearing, and
+rejects duplicate or stale events. Zero configured direct standing
+changes correctly produce an empty standing-receipt set. Source
+\`standingRuntime.applyStandingChanges\` invalidates the standing
+transaction cache after its original write.
+
+With new \`EVEJS_COOP_PVE_DUO_REWARD_CUSTODY=1\` (default OFF),
+P0-5A's durable original dungeon guard and P0-5B-1's personal
+wallet/LP/mission-history verification MUST already be enabled.
+The native leader custody snapshot is acquired before the leader's
+existing **PREPARED** intent and native payout; after the native
+DoAction the original item and standing transaction deltas are
+verified BEFORE advancing \`LEADER_NATIVE_CLEARED\`. The wingman's
+snapshot is taken independently before his **PREPARED** intent.
+After original wingman DoAction, the same checks complete before
+the existing peer \`AWARDED\` and leader
+\`BOTH_NATIVE_CLEARED\` journal transitions.
+
+The telemetry \`TWO_ORIGINAL_REWARD_ITEMS_AND_STANDING_TRANSACTIONS_VERIFIED\`
+is emitted only when both independently pass and BOTH original
+settlement journals have cleared. It describes source inventory
+and direct standing event deltas, not a new grant. Original native
+inventory, standing, LP and wallet writers are unchanged; no extra
+reward generation, duplicated itemStore, payout retries, or scheduled
+worker is introduced. Empty expected item and standing rewards
+are legal and produce evidence of zero expected changes, NOT evidence
+of a positive payout of those types.
+
+**Limitations/release gates:** strict before/after type quantity and
+native standing event auditing is NOT an atomic cross-store
+transaction and cannot prove that unrelated concurrent inventory
+edits did not coincide with the payout. A concurrent change can
+cause a conservative false negative or, without transaction-scoped
+item grants, a source-delta that happens to match a reward. Actual
+agent reward item-grant transaction IDs are not exposed by
+\`doAgentAction\` and remain unverified. Existing leader/peer
+fsynced PENDING/UNKNOWN journal states must be reconciled by an
+operator; no automatic second award. Full Node tests, pinned overlay
+install/remove, disposable real two-client original agent mission,
+genuine item and standing receipts, native restart and failed-write
+cases are **NOT RUN**.
+
+**Isolated verification:** 13/13 direct original-source custody
+behavior tests (29 assertions), 6 source-hook order tests
+(14 assertions), combined P0-5A/P0-5B-1/P0-5B-2 **62/62 test cases
+and 176 assertions** PASS in source-executed V8; real native gameplay
+and disk power-loss tests NOT RUN.
+
+**Next:** operationally prove two native connected clients accept
+two actual missions, complete one original dungeon, receive
+correct independent wallet/LP/standing/item custody, then test
+disconnection and intentional crash between original writes and
+reconcile PENDING; also finish P0-4B-2B authentic rare drops.
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |

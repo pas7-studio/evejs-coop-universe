@@ -40,6 +40,7 @@ function createFence({file,storage=fs,clock=()=>Date.now(),getBossWreck,
  function write(op){
   if(unsafe)return {status:"BOSS_LOOT_JOURNAL_UNSAFE"};
   let fd,lockOwned=false,done=false;
+  let output={status:"BOSS_LOOT_JOURNAL_UNSAFE"};
   try{
    storage.mkdirSync(dir,{recursive:true});
    fd=storage.openSync(lock,"wx",0o600);lockOwned=true;
@@ -54,25 +55,39 @@ function createFence({file,storage=fs,clock=()=>Date.now(),getBossWreck,
     finally{storage.closeSync(outfd)}
     storage.renameSync(out,file);persistDir();
    }
-   done=true;return result.output;
+   done=true;output=result.output;
   }catch(e){
    // A lock owned by ANOTHER process is not automatically deleted.
    if(e?.code!=="EEXIST")unsafe=true;
-   return {status:e?.code==="EEXIST"?"BOSS_LOOT_WRITER_BUSY":"BOSS_LOOT_JOURNAL_UNSAFE"};
+   output={status:e?.code==="EEXIST"?
+    "BOSS_LOOT_WRITER_BUSY":"BOSS_LOOT_JOURNAL_UNSAFE"};
   }finally{
    if(fd!==undefined)try{storage.closeSync(fd)}catch{unsafe=true;done=false}
    if(lockOwned&&done&&!unsafe)try{storage.unlinkSync(lock);persistDir()}
     catch{unsafe=true}
    // Unknown crash/failure retains lock and blocks all subsequent attempts.
   }
+  // The final close/unlink/fsync happens in finally. Never acknowledge a
+  // pre-grant claim if that final durability step was ambiguous.
+  return unsafe?{status:"BOSS_LOOT_JOURNAL_UNSAFE"}:output;
  }
  function begin({wreck,wreckItem,characterID,destinationLocationID,
    requestedQuantity}={}){
   let witness,native;
   try{
+   // Inspect native original wreck BEFORE giving an unclassified wreck
+   // permission to bypass the boss-specific pre-grant fence. After
+   // restart an authored overseer can lose its in-memory live witness.
+   native=getNativeWreck(wreck?.wreckID);
    witness=getBossWreck(wreck?.wreckID);
-   if(!witness)return {status:"NOT_VERIFIED_BOSS_WRECK"};
-   native=getNativeWreck(wreck.wreckID);
+   if(!witness){
+    const authored=String(native?.profileID||"")+" "+
+     String(native?.lootTableID||"");
+    if(native?.transient===true&&
+       /(?:overseer|boss|officer|commander)/i.test(authored))
+     return {status:"BOSS_LOOT_LIVE_WITNESS_REQUIRED"};
+    return {status:"NOT_VERIFIED_BOSS_WRECK"};
+   }
   }catch{return {status:"BOSS_LOOT_AUTHORITY_UNAVAILABLE"}}
   const w=id(wreck?.wreckID),i=id(wreckItem?.wreckItemID),
    ch=id(characterID),dest=id(destinationLocationID),
@@ -94,9 +109,20 @@ function createFence({file,storage=fs,clock=()=>Date.now(),getBossWreck,
   return write(state=>{
    if(Object.keys(state.entries).length>=maxEntries)
     return {changed:false,output:{status:"BOSS_LOOT_JOURNAL_FULL"}};
-   if(Object.values(state.entries).some(row=>row.wreckID===w&&row.wreckItemID===i&&
-      (row.phase==="PENDING"||row.beforeQuantity===before)))
+   const prior=Object.values(state.entries).filter(row=>
+    row.wreckID===w&&row.wreckItemID===i);
+   if(prior.some(row=>row.phase==="PENDING"||row.beforeQuantity===before))
     return {changed:false,output:{status:"BOSS_LOOT_REPLAY_BLOCKED"}};
+   // Exactly the original native source remainder is authorized, not an
+   // accidentally resurrected or inflated stack after an earlier pickup.
+   if(prior.length){
+    const previousRemainders=prior.map(row=>row.beforeQuantity-row.quantity);
+    if(previousRemainders.some(q=>!Number.isSafeInteger(q)||q<0))
+     return {changed:false,output:{status:"BOSS_LOOT_JOURNAL_UNSAFE"}};
+    const lastRemaining=Math.min(...previousRemainders);
+    if(lastRemaining!==before)
+     return {changed:false,output:{status:"BOSS_LOOT_SOURCE_SEQUENCE_MISMATCH"}};
+   }
    const now=clock();
    if(!id(now))return {changed:false,output:{status:"BOSS_LOOT_CLOCK_INVALID"}};
    state.entries[key]={key,wreckID:w,wreckItemID:i,characterID:ch,
@@ -124,6 +150,7 @@ function createFence({file,storage=fs,clock=()=>Date.now(),getBossWreck,
   });
  }
  function snapshot(){
+  if(unsafe)return {status:"BOSS_LOOT_JOURNAL_UNSAFE"};
   try{if(storage.existsSync(lock))return {status:"BOSS_LOOT_WRITER_BUSY"};
    return {status:"OK",entries:read().entries}}
   catch{return {status:"BOSS_LOOT_JOURNAL_UNSAFE"}}
@@ -144,6 +171,10 @@ function current(){
 }
 function begin(args){
  if(process.env.EVEJS_COOP_PVE_BOSS_LOOT_FENCE!=="1")return {status:"DISABLED"};
+ if(["EVEJS_COOP_PVE_SITE_DEFENSE","EVEJS_COOP_PVE_NATIVE_BOSSES",
+  "EVEJS_COOP_NATIVE_LOOT_EVIDENCE","EVEJS_COOP_PVE_BOSS_LOOT_PICKUP"]
+  .some(key=>process.env[key]!=="1"))
+  return {status:"BOSS_LOOT_DEPENDENCY_DISABLED"};
  try{return current().begin(args)}catch{return {status:"BOSS_LOOT_JOURNAL_UNSAFE"}}
 }
 function settle(args){
