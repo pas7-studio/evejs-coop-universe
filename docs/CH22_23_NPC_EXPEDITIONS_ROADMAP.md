@@ -299,3 +299,18 @@ Critical end-to-end bug: perfect original NPC scanner proof added a remote corpo
 **Executed in isolated V8 with the actual current source modules:** expedition director+competition **34/34 PASS**, native director+bridge+arbiter **2/2 PASS**, dedicated EX-03B12/B13 source-wiring contract **1/1 PASS**. Full pinned Node 22 `node --test`, actual SQLite SIGKILL, genuine server native warp and two authenticated clients are **NOT verified**. The EX-03 feature branch currently had **zero GitHub Actions runs** at review time.
 
 **Remaining release gates:** execute full native Node/SQLite CI, two-player source-verified bubble and ship-fitting/flight test, proper NPC analyzer/hacking integration, real item custody/physical loot and warehouse transfer, and crash-resume proof. Do not merge #286 or turn on NPC exploration flags based only on isolated tests.
+
+## EX-03B14 — PvE/P0 three-way integration and default-branch EX-03 CI gate (2026-10-26)
+
+**Source integration complete in feature PR #286; gameplay release acceptance still OPEN.**
+
+- Reconciled `main` (61 concurrent PvE/P0 commits plus subsequent P0 corrections) with the EX-03 feature tree using an actual Git merge ancestry. The four overlapping paths were merged individually: `coopLivingWorldPhaseRegistry.cjs`, `coopVirtualWorldRuntime.cjs`, `overlay-spec.cjs`, and `coop-living-world-phase-coordinator.test.mjs`.
+- **Fixed a real integration defect**: EX-03 previously declared 28 registered phase names but compared distinct names to 27; the newly merged PvE registry has **32 actual unique names** (31 from updated main plus `native-expeditions`). The phase coordinator test now expects 32 and preserves original-clock relative phase ordering.
+- Both the opt-in `native-expeditions` phase and all four native PvE combat phases remain inside the existing 30-second A-Life tick. No second scheduler, new loot grant or changed feature defaults.
+- Deployment overlay keeps all 10 EX-03 original native probe/scout/hacking modules **and** newly integrated PvE custody modules/patches. Removed no P0 sources.
+- Source-level merged branch verification: the 32-entry registry is unique, `native-expeditions` is registered exactly once, all four PvE phases are registered once, the merged runtime and overlay parse, the source opt-in remains explicit, and all EX-03 module names are in the overlay.
+- Updated the existing default-branch CI registration through **P0 PR #332**, merged to `main`, to run the real EX-03 Node 22/pinned SQLite SIGKILL workflow on `pull_request`, not just a manual-dispatch sentinel. This registers a gate but does **NOT** mean it has run. The workflow excludes a default-branch push test of feature modules (which do not yet exist on main), and test feature flags remain OFF. Feature PR #286 retains the full workflow and is merged with its latest parent `main`.
+- Verified source-backed checks after reconciliation: **34/34 expedition director**, **2/2 native arbiter/bridge**, **19/19 wiring** (run in two isolated batches), plus merged phase/overlay consistency assertions. A real GitHub Actions run on #286 has not yet appeared in the checked branch runs; do not claim Node/SQLite CI PASS.
+- Remaining hard blockers: native SQLite process-kill and restart on an actual Node runner, real native NPC hull/fit and probe broadcast in a live server with two authenticated clients, successful native scout arrival, NPC analyzer/hacking, actual physical item loot custody, warehouse delivery, and no-dupe restart proof.
+
+**Status:** PR #286 DRAFT / flags OFF / do not merge into production until the real acceptance gates pass.
