@@ -45,7 +45,7 @@ function fixture(){
  }};
  const deps={nativeStore,itemStore,gameStore,
   getController:controllers.get,getStation:id=>id===stationID?
-   {stationID,solarSystemID:sid}:null,
+   {stationID,solarSystemID:sid,corporationID:corp}:null,
   isNpcCorporation:id=>id===corp,
   isNativeSiteOwner:(owner,source)=>owner===1&&source.ownerID===1,
   verifyNativeArrival:()=>docked,clock:()=>1000000};
@@ -122,4 +122,31 @@ test("EX-03B15 player-owned or unauthorized dock cannot launder native expeditio
  f.ship.session=null;
  f.rows.get(itemID).ownerID=8000;
  assert.equal(d.deliver(f.args).status,"BLOCKED");
+});
+
+test("EX-03B15 valid station location but foreign corporate owner refuses native title",()=>{
+ const f=fixture(),d=f.make();
+ assert.equal(d.collect(f.args).status,"NATIVE_ORIGINAL_LOOT_IN_SHIP");
+ f.setDocked(true);
+ const foreign=f.make();
+ // A fresh source authority can present a physically nearby but foreign
+ // station. The custody engine itself must reject, not rely on planner.
+ const other=createNpcExpeditionLoot({
+  nativeStore:{getNativeEntity:()=>({entityID,systemID:sid,ownerID:901,corporationID:corp})},
+  getController:()=>({entityID,systemID:sid}),
+  itemStore:{
+   ITEM_FLAGS:{CARGO_HOLD:5,HANGAR:4},
+   findItemById:id=>f.rows.get(id),
+   listContainerItems:()=>[],
+   updateInventoryItem:()=>({success:false}),
+   transferItemToOwnerLocation:()=>({success:false}),
+   moveItemToLocation:()=>{throw Error("foreign station must not move item")},
+  },
+  gameStore:{flushTableSync:()=>({success:true})},
+  getStation:()=>({stationID,solarSystemID:sid,corporationID:999}),
+  isNpcCorporation:()=>true,isNativeSiteOwner:()=>true,
+  verifyNativeArrival:()=>true,clock:()=>1000000
+ });
+ assert.equal(other.deliver(f.args).reason,"EX03_LOOT_NATIVE_STATION_ARRIVAL_MISSING");
+ assert.equal(f.rows.get(itemID).locationID,entityID);
 });
