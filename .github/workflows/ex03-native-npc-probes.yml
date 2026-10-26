@@ -1,0 +1,16 @@
+# CI registration only: main deliberately carries no experimental EX-03 code.
+# When dispatched on the EX-03 feature branch, GitHub runs that branch's
+# full native probe/SQLite workflow (same path), not this sentinel job.
+name: EX-03 Native NPC Probe Source Gate
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  registration-only:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Select the EX-03 feature branch when dispatching
+        run: |
+          echo "Registration sentinel: no experimental code is present on main."
+          echo "For real source and SQLite tests, choose feat/ch22-23-npc-expedition-competition-20261026."
