@@ -55,6 +55,9 @@ function liveShip(scene,id){
 // Missing or failing native entity registry is NOT proof a former hauler
 // has disappeared. Reusing its original cargo would duplicate custody.
 const REGISTRY_UNVERIFIED=Symbol("NATIVE_ENTITY_REGISTRY_UNVERIFIED");
+// Only an actual successful in-process exclusive claim can exempt its OWN lock.
+// plan() is exported, so caller-supplied fake Sets must never bypass custody.
+const authoritativeLockClaims=new WeakSet();
 function stillRegistered(store,entityID){
  if(typeof store?.getNativeEntity!=="function")return REGISTRY_UNVERIFIED;
  try{return store.getNativeEntity(Number(entityID))||null}
@@ -89,7 +92,8 @@ function verifyReAdoptionCustody(row, options={}, ownedLocks=null) {
   const warehouseClaim=names.some(name=>{
    const match=/^(\d+)\.(?:json(?:\.tmp-[^/\\]*)?|lock)$/.exec(name);
    return match&&Number(match[1])===cargoID&&
-    !(name===cargoID+".lock"&&ownedLocks?.has(cargoID)===true);
+    !(name===cargoID+".lock"&&ownedLocks instanceof Set&&
+      authoritativeLockClaims.has(ownedLocks)&&ownedLocks.has(cargoID));
   });
   if(warehouseClaim)return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
   const items=options.custodyItems||
@@ -145,6 +149,7 @@ function acquireReAdoptionLocks(rows,options={}){
  const dir=path.join(root,"receipts"),held=new Set();
  let released=false;
  function release(){
+  authoritativeLockClaims.delete(held);
   if(released)return true;
   let ok=true;
   for(const id of [...held].reverse()){
@@ -161,6 +166,7 @@ function acquireReAdoptionLocks(rows,options={}){
    try{io.writeFileSync(fd,String(process.pid));io.fsyncSync(fd);}
    finally{io.closeSync(fd);}
   }
+  authoritativeLockClaims.add(held);
   return {status:"HELD",held,release};
  }catch(error){
   const cleared=release();
