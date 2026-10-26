@@ -1,6 +1,6 @@
 # Chat 24 + Chat 31 — Player-owned NPC mining company
 
-**Status 2026-10-26:** first native financing slice implemented, **not wired to the live server**, no in-client UI and no physical mining gameplay evidence. Default OFF. Native EveJS wallets and physical ore remain authoritative; the player company cannot mint its own ore or ISK. This is a new player corporation business, **not** a second corporation registry.
+**Status 2026-10-26:** Stages A+B CODE_READY in draft PR #287; original native stock mining tick is hooked behind a default-OFF flag, with a durable command journal and zero autonomous timers. **NOT deployed or live-verified:** stock GameStore SQLite, original client commands, actual ore/hauling/arrival, and two-client UI remain untested. Native wallets and ore remain authoritative; no duplicate stock, no second corporation registry.
 
 ## Gameplay loop (target)
 
@@ -42,9 +42,25 @@ No new GitHub CI and no automatic deployment. Test locally:
 node --test tests/coop-player-mining-company.test.mjs
 ```
 
-**Isolated test result:** 15/15 PASS on Node (transaction mock, not real GameStore SQLite, Docker or client). A real native GameStore rollback/replay test and restart after every wallet write are required before opting in.
+**Isolated funding test result:** 15/15 PASS on Node (transaction mock, not real GameStore SQLite, Docker or client). A real native GameStore rollback/replay test and restart after every wallet write are required before opting in.
 
-## Stage B — physical dispatch and safety (next PR)
+## Stage B — stock fleet command integration (implemented source / not gameplay accepted)
+
+- `coopPlayerMiningShiftOrders.cjs` records strict authenticated `MINE | HAUL | HOLD | RETREAT` directives with monotonic sequence, native original GameStore shift index and ISSUING-before-native-call journal fence.
+- `coopPlayerMiningFleetTick.cjs` verifies the *same* startup native miner+hauler hull/controller/owner from native store and original scene, exact original cargoID for HAUL, and passes through state mutations to the actual original fleetRecord.
+- `scripts/coop-player-mining-shift-native-patch.cjs` injects one reversible, default-OFF hook into the pinned original `miningNpcOperations.tickMiningFleet` **after** native aggression/response handling but before the normal hauling phase. No second timer, no scripted ore credit. The hook reuses native `startHaulCycle`, `deactivateMiningModulesForFleet` and `retreatFleetToOrigin`.
+- Native combat/panic outranks peaceful commands. Loaded/hauling/haulereturn remains in the native custody pipeline until completion. RETREAT is only an attempted warp, not proof of arrival.
+- A failed/unknown native call is fenced as `DISPATCH_UNKNOWN` and never blindly retried. A recorded `NATIVE_REQUESTED` is not a proven delivery, landing or mining cycle.
+- The action entrypoint `createAdapter().assign` is a trusted server-side API: **not exposed in stock corporation/agent client UI yet**.
+- Local isolated command/hook/adapter and funding tests: **39/39 PASS**, with an in-memory atomic transaction mock. Actual pinned source hook anchor confirmed by read-only inspection of `gameboys84/EveJS@c3ea396b`; no installed overlay `--check`, Docker native kill/restart or client gameplay gate has passed.
+
+## Stage B2 — in-client command and full native shift verification (pending)
+
+- Integrate the trusted assign endpoint into stock NPC agent or corporation UI with live authenticated session, exact corp role and selected native fleet; no slash-command-only release.
+- Verify GameStore/SQLite original native corp wallets, native miner effect shutdown, original hauler warp, native controller/fleet state after forced restart and ambiguous lost ACK on a disposable world.
+- Add role-specific safety and escort allocation with the existing arbitration authority, not a second combat scheduler.
+
+## Stage C — corporate ore ownership and shared warehouse
 
 - Bind the existing native mining slot runtime to an explicitly funded contract by original native fleet ID, miner and hauler entity IDs. **Never change `ownerID` on the hull to impersonate the player corporation**.
 - Add a registered `PLAYER_MINING_COMPANY` order intent to the *existing* arbiter — no side scheduler. Check exact live entity/controller and incoming threat before sending any native orders.
