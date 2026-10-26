@@ -18,6 +18,8 @@ on:
       - 'scripts/patch-evejs-coop.cjs'
       - 'scripts/overlay-spec.cjs'
       - 'tests/coop-npc-*'
+      - 'tests/coop-native-npc-probe-*.test.mjs'
+      - 'scripts/verify-npc-probe-*.mjs'
       - 'tests/coop-native-npc-probe-flight.test.mjs'
       - 'tests/coop-native-hacking-admission.test.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
@@ -33,6 +35,8 @@ on:
       - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
       - 'scripts/coop-npc-scout-loadout-patch.cjs'
       - 'tests/coop-npc-probe-*'
+      - 'tests/coop-native-npc-probe-*.test.mjs'
+      - 'scripts/verify-npc-probe-*.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
   workflow_dispatch:
 permissions:
