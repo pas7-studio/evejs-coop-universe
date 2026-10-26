@@ -138,3 +138,13 @@ Evidence: economy-destination 12/12; haul/adoption sets identical failure names 
 Why: a live world phase failed on every cycle with Cannot find module './coopWarObjectiveDirector' because the module existed in integration/ but was never added to the overlay copy list, and nothing checked that the copy list and the require graph agree
 Where: scripts/overlay-spec.cjs, tests/coop-overlay-dependencies.test.mjs
 Evidence: new tests/coop-overlay-dependencies.test.mjs fails on the previous overlay (1/3) and passes now (3/3); names 291; OVERLAY_OK patched 54
+### 2026-10-26T11:59Z · 39212ce · L2 · fix(haul): unwrap authoritative GameStore npcCargo read envelope
+
+Why: GameStore.read returns {success,data}; reading the result envelope as a cargo table silently classified persisted orphan ore as no cargo.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 4/4 exact source V8 isolated before/after checks PASS; Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T11:59Z · 5a6513c · TEST · test(haul): prove wrapped GameStore fallback and fail-closed unreadable cargo
+
+Why: Guard the native GameStore response contract; failed reads must not be mistaken for no orphan cargo.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 4/4 exact source V8 isolated before/after checks PASS; Node/SQLite/Rust/two-client gameplay NOT_RUN.
