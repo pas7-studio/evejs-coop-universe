@@ -785,3 +785,39 @@ Evidence: tests coop-alife12-station-trip-journal 23 pass + recovery 6 pass; dep
 Why: The second-restart path audited warehouse receipts, ItemStore and depot before reparenting npcCargo but did not hold the same exclusive per-cargo <cargoID>.lock that warehouse deposit/resume uses. A separate warehouse process could enter settlement after the read-only scan and before native upsert/flush, causing duplicate or misowned ore. For opt-in repeated adoption, acquire sorted exclusive original-cargo locks after initial preflight; reacquire all settlement proofs and re-enumerate exact original native rows while locks are held; require the replacement hauler still be empty; hold locks through durable flush, readback and compensation. Reject foreign/abandoned locks, preserve foreign custody evidence, release only locks acquired by this operation. A private WeakSet authenticates the lock claim so exported plan() callers cannot skip foreign locks using a fake Set. An unreleaseable lock after mutation quarantines both fleet and hauler for operator repair. First-time adoption behavior and default-off flags are unchanged.
 Where: integration/coopHaulCargoAdoption.cjs, tests/coop-haul-cargo-adoption.test.mjs
 Evidence: Node 22 real filesystem standalone extraction of exact lock algorithm: 6/6 PASS (successful exclusive lock+release, EEXIST foreign lock, deterministic multi-source cleanup, fsync EIO, unlink EIO, malformed authority/IDs). Seven integrated module regression scenarios added for races, receipt written after first scan, native source drift, lock held through upsert/flush, failed unlock and a forged plan() lock claim, but NOT_RUN here: runner cannot clone GitHub due DNS. Full pinned original GameStore/SQLite SIGKILL WAL/FULL recovery, Rust and two authenticated clients NOT_RUN; no live cargo/ISK, deployment, feature flag changes or remote CI triggered. This is a P0 source fix, not physical gameplay acceptance.
+### 2026-10-26T22:23Z · 54ac301 · L3 · feat(war): derive fronts from territory ownership and real gates
+
+Why: Faction fronts must be derived from sector ownership and real gate adjacency, not hand-placed
+Detail: Owner definition: every faction owns sectors, and a front is the intersection of two factions' sectors - two adjacent systems whose owners differ. The front is now computed from territories + the real reciprocal gate graph, never placed by hand: move control of one system and the line moves with it. contestedSystemIDs gives the candidate systems for a front operation.
+Where: integration/coopFactionWarFronts.cjs, tests/coop-faction-war-fronts.test.mjs
+Evidence: node --test tests/coop-faction-war-fronts.test.mjs 5/5 PASS: single border, same-owner neighbours, unowned systems, multiple separate borders, contested set
+### 2026-10-26T22:24Z · c29cbcd · L3 · feat(war): campaigns per front, with assault, defence, breakthrough and deep ops
+
+Why: Faction war needs per-front campaigns (assault/defence/breakthrough) plus deep sabotage operations behind the enemy line, validated against real ownership
+Detail: One campaign is one operation on one front. Ownership is validated before a plan exists: an offensive starts on our side and takes an enemy system, a defence is fought inside our own space, and a deep op deliberately leaves the front to hit a rear system. A campaign only changes state on real evidence (objective captured, force lost) or expiry - never on a timer alone.
+Where: integration/coopFactionWarCampaigns.cjs, tests/coop-faction-war-campaigns.test.mjs
+Evidence: node --test tests/coop-faction-war-campaigns.test.mjs 7/7 PASS: assault ownership, refusal cases, deep op off-front, evidence-only resolution (WON/LOST/EXPIRED), rolesForFront
+### 2026-10-26T22:26Z · 1cf0234 · L3 · feat(war): rank progression paid only for real results
+
+Why: Faction pilots need military progression: ranks earned from evidenced operations, promotion unlocks a bigger hull and command, failure costs position
+Detail: The roster starts fixed; from there a pilot earns merit for a confirmed kill, an objective taken or held, a delivered supply run, surviving a battle - and loses position when a force or an objective is lost. A higher rank unlocks a bigger hull and a bigger command, so rank is not cosmetic. Merit never goes negative and an unknown event never mutates the record.
+Where: integration/coopFactionWarMerit.cjs, tests/coop-faction-war-merit.test.mjs
+Evidence: node --test tests/coop-faction-war-merit.test.mjs 6/6 PASS: merit table, promotion at threshold, demotion on force-lost, no negative merit, monotonic ladder
+### 2026-10-26T22:39Z · 2694535 · L3 · feat(war): derive territory from real ship presence
+
+Why: Fronts need a real ownership input; deriving it from actual faction ship presence avoids inventing a territory map
+Detail: Fronts need an ownership map, and inventing one would be fake. A faction now holds a system when its own ships are actually there: majority presence with a minimum count. A tie is contested, never handed to a coin flip.
+Where: integration/coopFactionWarFronts.cjs, tests/coop-faction-war-fronts.test.mjs
+Evidence: node --test tests/coop-faction-war-fronts.test.mjs 6/6 PASS incl. majority, tie-is-contested, minShips threshold, invalid rows
+### 2026-10-26T22:41Z · fd4bac8 · L3 · feat(war): build the opening war and campaign from a real front
+
+Why: The war state must be seeded from a real front in the exact shape the mobiliser reads, instead of an empty state that can never mobilise
+Detail: The mobiliser only reserves ships for a war that already exists in the state: wars[warID] ACTIVE with numeric attacker/defender factions plus campaigns[campaignID] PREPARING with sourceSystemID/targetSystemID. This module derives exactly that record from the biggest real front, refuses non-numeric or same-owner owners, and keeps ids stable for the same input.
+Where: integration/coopFactionWarBootstrap.cjs, tests/coop-faction-war-bootstrap.test.mjs
+Evidence: node --test tests/coop-faction-war-bootstrap.test.mjs 5/5 PASS; shape verified against coopWarMobilizer.cjs:70-86 (wars[warID].state ACTIVE, attackerFactionID/defenderFactionID, campaigns[].state PREPARING, sourceSystemID, targetSystemID)
+### 2026-10-26T22:42Z · f494bff · L3 · coop: a partly sold hull row is proven by its fill receipt and keeps the trip alive
+
+Why: The market partly fills a row (5000 of 54999), so a sale left the trip unrecoverable; the receipt now proves the sold units and the remainder stays declared aboard. A closed route is also skipped before accounting.
+Detail: The market fills what its order supports, so rows are usually partly sold (measured: 5 000 of a 54 999 row). The receipt now records the units the hull actually lost and accumulates over successive fills; the journal accepts a row whose remainder equals declared minus sold, counts it as still aboard, and only treats a row as delivered when nothing is left. A closed route is skipped before any acco
+Where: integration/coopNativeStationArrival.cjs, integration/coopNativeStationTripJournal.cjs, tests/coop-alife12-station-trip-journal.test.mjs
+Evidence: tests coop-alife12-station-trip-journal 25 pass; live: living-npc-station-sold isk=36250 x5 after the fix
