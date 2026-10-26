@@ -4,7 +4,7 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createNativeNpcProbeLifecycle}=require("../integration/coopNativeNpcProbeLifecycle.cjs");
 function fixture(){
- let now=1000000,writes=0,flushes=0,removes=0,failFlush=false,failRemove=false;
+ let now=1000000,writes=0,flushes=0,removes=0,failFlush=false,failRemove=false,fakeRemovalAck=false;
  const entityID=980000000111,systemID=30000142,ownerID=901,corporationID=700;
  const ship={itemID:entityID,kind:"ship",nativeNpc:true,
   ownerID,corporationID,position:{x:0,y:0,z:0}};
@@ -27,6 +27,7 @@ function fixture(){
   flushNpcCargo:()=>{flushes++;return {success:!failFlush}},
   removeNativeProbe:(system,id)=>{assert.equal(system,systemID);
    if(failRemove)return {success:false};
+   if(fakeRemovalAck)return {success:true};
    removes++;entities.delete(id);return{success:true}},
   refreshNativeCargoProjection:(s,id)=>{assert.equal(id,entityID);
    s.nativeCargoItems=cargo.filter(r=>r.quantity>0);
@@ -40,7 +41,7 @@ function fixture(){
   restart:()=>{api=make()},advance:x=>{now+=x},
   rows:()=>cargo,entities,ship,assignments,failedFlush:()=>{failFlush=true},
   clearFlush:()=>{failFlush=false},failedRemove:()=>{failRemove=true},
-  clearRemove:()=>{failRemove=false},
+  clearRemove:()=>{failRemove=false},fakeRemovalAck:()=>{fakeRemovalAck=true},
   writes:()=>writes,flushes:()=>flushes,removes:()=>removes};
 }
 test("expiration durably seals original cargo before any physical removal",()=>{
@@ -135,4 +136,15 @@ test("expired source with physical object absent is idempotently cleaned after r
  assert.equal(f.tick().status,"NPC_PROBE_EXPIRY_COMMITTED");
  assert.equal(f.rows()[0].quantity,0);
  assert.equal(f.rows()[0].deployedProbe.status,"EXPIRED");
+});
+
+test("native removal false-success ACK cannot refund while physical probe remains",()=>{
+ const f=fixture();assert.equal(f.tick({requestRecall:true}).status,
+  "NPC_PROBE_RECALL_COMMITTED");
+ f.fakeRemovalAck();
+ const returned=f.tick();
+ assert.equal(returned.reason,"NPC_PROBE_NATIVE_REMOVAL_UNCONFIRMED");
+ assert.equal(f.rows()[0].quantity,0);
+ assert.equal(f.rows()[0].deployedProbe.status,"RECALLING");
+ assert.equal(f.entities.has(980200000001),true);
 });
