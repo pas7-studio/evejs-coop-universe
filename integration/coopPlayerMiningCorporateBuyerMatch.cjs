@@ -35,22 +35,6 @@ function createNativeCorporateBuyerMatch({
    positive(session.characterID)&&
    session.socket?.destroyed!==true;
  };
- const verify=(q,session,orderID,qty,maxPrice,cycle)=>{
-  const gross=qty*q?.priceCents;
-  return goodSource(q)&&q.orderID===orderID&&
-   q.buyerCharacterID===session.characterID&&
-   positive(q.sellerCorpID)&&q.sellerCorpID!==session.characterID&&
-   positive(q.cargoID)&&positive(q.sourceItemID)&&
-   positive(q.stationID)&&positive(q.typeID)&&
-   q.quantity===qty&&positive(q.volumeBefore)&&q.volumeBefore>=qty&&
-   positive(q.priceCents)&&q.priceCents<=maxPrice&&
-   q.grossCents===gross&&positive(gross)&&
-   Number.isSafeInteger(q.buyerWalletCentsAtQuote)&&
-   q.buyerWalletCentsAtQuote>=gross&&
-   q.escrowLocationID===undefined || false;
- };
- // Validate in one predicate; quote's Rust escrow location can be omitted
- // by older pinned native replies, so compute from the source order.
  const attest=(q,session,orderID,qty,maxPrice)=>{
   if(!goodSource(q)||q.orderID!==orderID||
    q.buyerCharacterID!==session.characterID||
@@ -84,6 +68,8 @@ function createNativeCorporateBuyerMatch({
   }catch{return denied("CORP_BUYER_ORIGINAL_QUOTE_UNAVAILABLE")}
   const now=clock(),key=orderID+":"+cycle;
   if(!positive(now))return denied("CORP_BUYER_QUOTE_CLOCK_INVALID");
+  const current=pins.get(key);
+  if(current&&current.expiresAt>now)return denied("CORP_BUYER_ORDER_ALREADY_QUOTED");
   const nonce=crypto.randomBytes(16).toString("hex");
   pins.set(key,{nonce,session,orderID,cycle,quantity,maxUnitPriceCents,
    initial:q,expiresAt:now+ttlMs});
