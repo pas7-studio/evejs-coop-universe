@@ -243,3 +243,8 @@ Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED w
 Why: Require both local native cargo inventory and global NPC cargo view to prove a replacement hauler empty; regression covers untagged stacks, hidden global stacks, and read failures.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED with unrelated physical cargoIDs [7001,8001] on one hauler; full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:39Z · 45a8887 · L2 · chore(trace): fleet tick shows transient flag and runtime-controller presence per miner
+
+Why: the churn diagnosis needed to know whether a miner is durable and whether it owns a runtime controller, which the previous event could not show
+Where: scripts/overlay-spec.cjs
+Evidence: live after rebuild every miner reads tr0 ctl1 (durable and controlled); caps now rise 0.021 -> 0.031 with reAt advancing; OVERLAY_OK patched 54
