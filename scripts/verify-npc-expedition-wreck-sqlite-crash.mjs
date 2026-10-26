@@ -154,7 +154,7 @@ function child(stage){
    .map(x=>x.itemID).sort((a,b)=>a-b),[id,secondID]);
   assert.equal(items.listContainerItems(null,shipID,null).length,0);
   assert.equal(items.listContainerItems(null,wreckID,null).length,0);
-  process.stdout.write("EX03B22_MULTI_ITEM_NATIVE_WRECK_SQLITE_SIGKILL_PASS\\n");
+  process.stdout.write("EX03B22_MULTI_ITEM_NATIVE_WRECK_SQLITE_SIGKILL_PASS\n");
   return;
  }else if(stage==="stage"){
   const receipt=custody().stage({wreckID,shipID,corporationID:corpID});
