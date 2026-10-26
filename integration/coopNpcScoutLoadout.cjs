@@ -5,7 +5,11 @@
 // Never retrofit existing hulls or mint stock outside original source store.
 const LAUNCHER_TYPE_ID=17938;  // Core Probe Launcher I, group 481
 const CHARGE_TYPE_ID=30013;   // Core Scanner Probe I, group 479
-function createNpcScoutLoadout({resolveItemByTypeID,compatibleCharges}={}){
+function createNpcScoutLoadout({resolveItemByTypeID,compatibleCharges,
+ resolveItemByName=null,typeHasEffectName=null,withAnalyzers=false}={}){
+ if(withAnalyzers===true&&
+    (typeof resolveItemByName!=="function"||typeof typeHasEffectName!=="function"))
+  throw Error("EX03_NATIVE_ANALYZER_TYPE_AUTHORITIES_REQUIRED");
  if(typeof resolveItemByTypeID!=="function"||typeof compatibleCharges!=="function")
   throw Error("NPC_SCOUT_NATIVE_ITEM_AUTHORITIES_REQUIRED");
  function apply(definition){
@@ -34,14 +38,38 @@ function createNpcScoutLoadout({resolveItemByTypeID,compatibleCharges}={}){
    if(!item)return fail("NPC_SCOUT_MODULE_UNVERIFIED");
    if(item.groupID===481)return fail("NPC_SCOUT_LAUNCHER_ALREADY_PRESENT");
   }
+  // EX-03B15: only original item-type registry/effect metadata may add a
+  // real fitted analyzer. Original nativeNpcService still validates slots and
+  // allocates every original moduleID; no synthetic module in runtime.
+  const analyzers=[];
+  if(withAnalyzers===true){
+   for(const name of ["Data Analyzer I","Relic Analyzer I"]){
+    let entry,type;
+    try{
+     const lookup=resolveItemByName(name);
+     entry=lookup?.success===true?lookup.match:null;
+     type=resolveItemByTypeID(entry?.typeID);
+    }catch{return fail("EX03_ANALYZER_NATIVE_STATIC_UNAVAILABLE")}
+    if(!entry||!type||!Number.isSafeInteger(type.typeID)||
+       type.typeID<=0||type.categoryID!==7||
+       typeHasEffectName(type.typeID,"doHacking")!==true||
+       !String(type.name||type.typeName||"").toLowerCase()
+        .includes(name.toLowerCase()))
+     return fail("EX03_ANALYZER_NATIVE_TYPE_INVALID");
+    if(!definition.loadout.modules.some(x=>x.typeID===type.typeID))
+     analyzers.push({typeID:type.typeID,quantity:1});
+   }
+   if(definition.loadout.modules.length+analyzers.length+1>12)
+    return fail("EX03_ANALYZER_NATIVE_SLOT_BUDGET");
+  }
   const loadout={...definition.loadout,
    modules:[...definition.loadout.modules.map(x=>({...x})),
-    {typeID:LAUNCHER_TYPE_ID,quantity:1}],
+    {typeID:LAUNCHER_TYPE_ID,quantity:1},...analyzers],
    charges:[...definition.loadout.charges.map(x=>({...x})),
     {typeID:CHARGE_TYPE_ID,quantityPerModule:4,singleton:false}]};
   return {success:true,definition:{...definition,loadout},
    addedLauncherTypeID:LAUNCHER_TYPE_ID,addedChargeTypeID:CHARGE_TYPE_ID,
-   originalProbeCharges:4};
+   originalProbeCharges:4,originalAnalyzerModules:analyzers.length};
  }
  return Object.freeze({apply});
 }
