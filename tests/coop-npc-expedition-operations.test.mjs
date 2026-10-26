@@ -35,7 +35,9 @@ function fixture(){
   listContainerItems:(owner,loc,flag)=>[...rows.values()].filter(x=>
    x.locationID===loc&&(owner==null||x.ownerID===owner)&&
    (flag==null||x.flagID===flag)).map(x=>({...x})),
-  writeItemCustomInfo:(id,s)=>{rows.get(id).customInfo=s;return {success:true}},
+  updateInventoryItem:(id,fn)=>{
+   rows.set(id,fn({...rows.get(id)}));return {success:true};
+  },
   transferItemToOwnerLocation:(id,owner,loc,flag)=>{
    Object.assign(rows.get(id),{ownerID:owner,locationID:loc,flagID:flag});return {success:true}},
   moveItemToLocation:(id,loc,flag)=>{
