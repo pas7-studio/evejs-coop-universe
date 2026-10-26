@@ -1,0 +1,145 @@
+"use strict";
+// CH24+31 E2B2: isolated pinned, reversible Rust market-server overlay.
+// No parallel daemon and no new market database. NO automatic deployment.
+const fs=require("node:fs"),path=require("node:path");
+const {execFileSync}=require("node:child_process");
+const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
+const STATE="externalservices/market-server/src/state.rs";
+const RPC="externalservices/market-server/src/rpc.rs";
+const EXT="externalservices/market-server/src/coop_corp_mining_sell.rs";
+const TYPES=[
+"// CH24+31 CORPORATE RUST SELL TYPES BEGIN",
+"#[derive(Debug,Deserialize)]",
+"struct CoopCorpPrepareParams {",
+"    access_token:String,",
+"    operation_id:String,",
+"    shift_id:String,",
+"    cargo_id:i64,",
+"    source_item_id:i64,",
+"    owner_id:i64,",
+"    station_id:i64,",
+"    type_id:i64,",
+"    quantity:i64,",
+"    price_cents:i64,",
+"}",
+"#[derive(Debug,Deserialize)]",
+"struct CoopCorpQueryParams {",
+"    access_token:String,",
+"    operation_id:String,",
+"}",
+"// CH24+31 CORPORATE RUST SELL TYPES END",
+""].join("\n");
+const ARMS=[
+'        // CH24+31 CORPORATE RUST SELL ARMS BEGIN',
+'        "PrepareCorpSell" => {',
+'            let p:CoopCorpPrepareParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_sell_prepare(p.access_token,p.operation_id,p.shift_id,',
+'                p.cargo_id,p.source_item_id,p.owner_id,p.station_id,',
+'                p.type_id,p.quantity,p.price_cents).await?)',
+'        }',
+'        "GetCorpSell" => {',
+'            let p:CoopCorpQueryParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_sell_get(p.access_token,p.operation_id).await?)',
+'        }',
+'        "VerifyCorpSellEscrow" => {',
+'            let p:CoopCorpQueryParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_sell_verify(p.access_token,p.operation_id).await?)',
+'        }',
+'        "PublishCorpSell" => {',
+'            let p:CoopCorpQueryParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_sell_publish(p.access_token,p.operation_id).await?)',
+'        }',
+'        // CH24+31 CORPORATE RUST SELL ARMS END',
+''].join("\n");
+const GUARD=[
+'    // CH24+31 CORPORATE SELL STOCK PLACEORDER GUARD BEGIN',
+'    if source == "coop-corporation" {',
+'        bail!("CORP_SELL_REQUIRES_PRIVATE_PREPARE");',
+'    }',
+'    // CH24+31 CORPORATE SELL STOCK PLACEORDER GUARD END',
+''].join("\n");
+const INCLUDE=[
+'',
+'// CH24+31 CORPORATE RUST SELL EXTENSION BEGIN',
+'include!("coop_corp_mining_sell.rs");',
+'// CH24+31 CORPORATE RUST SELL EXTENSION END',
+''].join("\n");
+const unique=(src,part)=>src.split(part).length-1;
+function patch(source,which,remove=false){
+ if(typeof source!=="string")throw Error("CORP_RUST_SOURCE_REQUIRED");
+ const eol=source.includes("\r\n")?"\r\n":"\n";
+ let text=source.replace(/\r\n/g,"\n");
+ const put=(part,anchor)=>{
+  if(remove){
+   if(unique(text,part)!==1)throw Error("CORP_RUST_REMOVE_DRIFT");
+   text=text.replace(part,"");
+  }else if(unique(text,part)===1)return;
+  else{
+   if(unique(text,part)!==0||unique(text,anchor)!==1)
+    throw Error("CORP_RUST_PINNED_ANCHOR_DRIFT");
+   text=text.replace(anchor,part+anchor);
+  }
+ };
+ if(which==="rpc"){
+  put(TYPES,"#[derive(Debug, Deserialize)]\nstruct RpcRequest");
+  put(ARMS,'        "ModifyOrder" =>');
+ }else if(which==="state"){
+  put(GUARD,"    let wallet_division = request.wallet_division.unwrap_or(1000);");
+  if(remove){
+   if(unique(text,INCLUDE)!==1)throw Error("CORP_RUST_INCLUDE_DRIFT");
+   text=text.replace(INCLUDE,"");
+  }else if(unique(text,INCLUDE)===0)text+=INCLUDE;
+  else if(unique(text,INCLUDE)!==1)throw Error("CORP_RUST_INCLUDE_DUPLICATE");
+ }else throw Error("CORP_RUST_PATCH_TARGET_UNKNOWN");
+ return eol==="\r\n"?text.replace(/\n/g,"\r\n"):text;
+}
+function run({codePath,dryRun=false,check=false,remove=false}={}){
+ const code=path.resolve(codePath||"");
+ if(!fs.existsSync(path.join(code,"compose.yaml")))
+  throw Error("INVALID_PINNED_EVEJS_CODE_ROOT");
+ const rev=execFileSync("git",["-C",path.dirname(code),"rev-parse","HEAD"],
+  {encoding:"utf8"}).trim();
+ if(rev!==PIN)throw Error("REFUSE_MISMATCHED_EVEJS_PIN:"+rev);
+ const expected=fs.readFileSync(path.join(__dirname,"..","rust","coop_corp_mining_sell.rs"),"utf8");
+ const files=[];
+ for(const [name,kind] of [[STATE,"state"],[RPC,"rpc"]]){
+  const file=path.join(code,name),before=fs.readFileSync(file,"utf8"),
+   installed=before.includes(kind==="state"?
+    "CH24+31 CORPORATE RUST SELL EXTENSION BEGIN":
+    "CH24+31 CORPORATE RUST SELL ARMS BEGIN");
+  if(check&&installed!==!remove)
+   throw Error("CORP_RUST_INSTALLED_STATE_MISMATCH:"+name);
+  files.push({file,name,before,after:check?before:patch(before,kind,remove)});
+ }
+ const file=path.join(code,EXT),before=fs.existsSync(file)?fs.readFileSync(file,"utf8"):null;
+ if(before!==null&&before!==expected)throw Error("CORP_RUST_EXTENSION_CONTENT_DRIFT");
+ if(check&&Boolean(before)!==!remove)throw Error("CORP_RUST_EXTENSION_INSTALL_DRIFT");
+ files.push({file,name:EXT,before,after:check?before:remove?null:expected});
+ if(!check&&!dryRun){
+  const written=[];
+  try{
+   for(const f of files){
+    if(f.after===null)fs.unlinkSync(f.file);
+    else fs.writeFileSync(f.file,f.after);
+    written.push(f);
+   }
+  }catch(err){
+   for(const f of written.reverse()){
+    try{if(f.before===null)fs.unlinkSync(f.file);
+     else fs.writeFileSync(f.file,f.before)}catch{}
+   }
+   throw err;
+  }
+ }
+ return {status:check?"CHECKED":dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",
+  files:files.map(f=>({path:f.name,changed:f.before!==f.after}))};
+}
+if(require.main===module){
+ try{
+  const args=process.argv.slice(2),p=args.indexOf("--code-path");
+  if(p<0||!args[p+1])throw Error("Usage: --code-path <exact pinned Code> [--dry-run|--check|--remove]");
+  console.log(JSON.stringify(run({codePath:args[p+1],dryRun:args.includes("--dry-run"),
+   check:args.includes("--check"),remove:args.includes("--remove")}),null,2));
+ }catch(e){console.error("E2B2 Rust blocked:",e.message);process.exitCode=1;}
+}
+module.exports={patch,run,PIN,STATE,RPC,EXT,TYPES,ARMS,GUARD,INCLUDE};
