@@ -22,6 +22,7 @@ function fixture(){
    position:{x:i*1000,y:0,z:0},rangeStep:4,scanRange:1e10}
  }));
  const probes=new Map(cargo.map(c=>[c.cargoID,{itemID:c.cargoID,kind:"probe",
+  nativeNpcProbe:true,nativeNpcCargoID:c.cargoID,
   typeID:3001,ownerID:owner,systemID:sid,
   position:{...c.deployedProbe.position}}]));
  const scene={systemID:sid,getEntityByID:probeID=>probeID===id?ship:probes.get(probeID)};
@@ -145,5 +146,18 @@ test("deployed singleton charge that would still render stacksize=1 is refused",
 test("player-occupied NPC hull cannot impersonate a real autonomous scout",()=>{
  const f=fixture();f.ship.session={characterID:88};
  assert.equal(f.scan().status,"BLOCKED");
+ assert.equal(f.getScanCalls(),0);
+});
+
+test("foreign probe sharing native cargo ID, owner and position cannot scan without server seal",()=>{
+ const f=fixture(),physical=f.probes.get(f.cargo[0].cargoID);
+ delete physical.nativeNpcProbe;
+ assert.equal(f.scan().reason,"NPC_SCANNER_PHYSICAL_PROBE_UNVERIFIED");
+ assert.equal(f.getScanCalls(),0);
+});
+test("fake cargo seal pointing at another original itemID cannot scan",()=>{
+ const f=fixture(),physical=f.probes.get(f.cargo[0].cargoID);
+ physical.nativeNpcCargoID=f.cargo[1].cargoID;
+ assert.equal(f.scan().reason,"NPC_SCANNER_PHYSICAL_PROBE_UNVERIFIED");
  assert.equal(f.getScanCalls(),0);
 });
