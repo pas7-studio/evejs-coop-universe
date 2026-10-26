@@ -93,8 +93,9 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
   const p=row.deployedProbe,existing=ctx.scene.getEntityByID(p.probeID);
   if(existing){
    const same=existing.itemID===p.probeID&&existing.kind==="probe"&&
+    existing.nativeNpcProbe===true&&existing.nativeNpcCargoID===row.cargoID&&
     existing.typeID===row.typeID&&existing.ownerID===ctx.native.ownerID&&
-    (!positive(existing.systemID)||existing.systemID===ctx.scene.systemID)&&
+    existing.systemID===ctx.scene.systemID&&
     vec(existing.position)&&dist(existing.position,p.position)<=1;
    if(same)return {status:"NATIVE_PROBE_ALREADY_PRESENT",cargoID:row.cargoID};
    // A persist-before-move scout sweep may crash after durable geometry
