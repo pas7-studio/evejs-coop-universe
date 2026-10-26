@@ -137,7 +137,7 @@ test("independent read-only GameStore audit checks both wallet journals and deli
  "coop_corp_fill_signed_cents",'"buyerJournalID"', '"sellerJournalID"',
  '"feeJournalID"','"walletJournal"','"transactions"',
  '"deliveredItemID"','"sourceCargoID"','"sourceItemID"',
- '"remainingQuantity"','"lastSettledCycle"','"native_receipt_key"'])
+ '"remainingQuantity"','"lastSettledCycle"','native_receipt_key'])
   assert.ok(extension.includes(witness),witness);
  assert.match(extension,/CORP_FILL_ORIGINAL_WALLET_DEBIT_CREDIT_NOT_FOUND/);
  assert.match(extension,/CORP_FILL_ORIGINAL_MARKET_FEES_NOT_DEBITED/);
