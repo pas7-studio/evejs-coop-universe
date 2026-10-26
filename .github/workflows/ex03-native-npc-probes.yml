@@ -26,17 +26,25 @@ on:
   push:
     branches: [main, feat/ch22-23-npc-expedition-competition-20261026]
     paths:
+      - 'integration/coopNpcExpedition*.cjs'
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
       - 'integration/coopNativeNpcProbeLifecycle.cjs'
       - 'integration/coopNativeNpcProbeSceneTransition.cjs'
       - 'integration/coopNpcScoutLoadout.cjs'
+      - 'integration/coopNativeHackingAdmission.cjs'
+      - 'integration/coopVirtualWorldRuntime.cjs'
       - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
       - 'scripts/coop-npc-scout-loadout-patch.cjs'
-      - 'tests/coop-npc-probe-*'
+      - 'scripts/coop-native-hacking-admission-patch.cjs'
+      - 'scripts/patch-evejs-coop.cjs'
+      - 'scripts/overlay-spec.cjs'
+      - 'tests/coop-npc-*'
       - 'tests/coop-native-npc-probe-*.test.mjs'
       - 'scripts/verify-npc-probe-*.mjs'
+      - 'tests/coop-native-npc-probe-flight.test.mjs'
+      - 'tests/coop-native-hacking-admission.test.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
   workflow_dispatch:
 permissions:
