@@ -121,7 +121,7 @@
     {
       "id": "wreck_source_death_crash_window",
       "status": "NOT_RUN",
-      "proof": "Real Node22 pinned original GameStore SQLite OS SIGKILL between durable death-to-wreck intent, original ItemStore move, native ship remove and client pickup; recovery requires operator for ambiguous state, no recreated hull or leaked/minted ItemStore row."
+      "proof": "Real Node22 pinned original GameStore SQLite OS SIGKILL between durable death-to-wreck intent, original ItemStore move, native ship remove and client pickup; recovery requires operator for ambiguous state, no recreated hull or leaked/minted ItemStore row. Include the real pinned ItemStore persistent :wreck intent SIGKILL, explicit operator authorization, original same-itemID reconciliation, and idempotent retry. Client/server E2E remains NOT_RUN."
     },
     {
       "id": "native_wreck_expiry_does_not_destroy_original_loot",
