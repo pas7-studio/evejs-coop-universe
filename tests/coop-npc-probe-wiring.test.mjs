@@ -175,3 +175,32 @@ test("EX-03B6 CI includes real SQLite SIGKILL and native scene acceptance fixtur
  assert.match(script,/EVEJS_PINNED_SERVER/);
  assert.match(script,/flushTableSync\("npcCargo"\)/);
 });
+
+test("EX-03B7 production probe state machines use attested native SQLite across kill windows",()=>{
+ const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const source=read("scripts/verify-npc-probe-feature-sqlite-crash.mjs");
+ const original=read("scripts/verify-npc-probe-sqlite-crash.mjs");
+ assert.match(workflow,/node scripts\/verify-npc-probe-feature-sqlite-crash\.mjs/);
+ assert.match(source,/createNativeNpcProbeFlight/);
+ assert.match(source,/createNativeNpcProbeSweep/);
+ assert.match(source,/createNativeNpcProbeLifecycle/);
+ assert.match(source,/native\.upsertNativeCargo/);
+ assert.match(source,/flushTableSync\("npcCargo"\)/);
+ assert.match(source,/process\.kill\(process\.pid,"SIGKILL"\)/);
+ assert.match(source,/EX03B7_NATIVE_FEATURE_SQLITE_PASS/);
+ for(const script of [original,source]){
+  assert.match(script,/function assertDisposableNativeStore\(\)/);
+  assert.match(script,/EVEJS_TEST_STORE_ISOLATED/);
+  assert.match(script,/EX03_TEST_ROOT_SYMLINK_FORBIDDEN/);
+  assert.match(script,/evejs-test-store-attestation\.json/);
+ }
+});
+test("EX-03 strict source provenance is checked by both scanner and launch replay",()=>{
+ const scanner=read("integration/coopNpcProbeScanEvidence.cjs");
+ const flight=read("integration/coopNativeNpcProbeFlight.cjs");
+ assert.match(scanner,/physical\.nativeNpcProbe!==true/);
+ assert.match(scanner,/physical\.nativeNpcCargoID!==row\.cargoID/);
+ assert.match(scanner,/physical\.systemID!==scene\.systemID/);
+ assert.match(flight,/existing\.nativeNpcProbe===true/);
+ assert.match(flight,/existing\.nativeNpcCargoID===row\.cargoID/);
+});
