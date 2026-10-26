@@ -258,3 +258,70 @@ test("P0: valid bounded virtual balances and prior delivery checkpoint remain co
  assert.equal(e.snapshot().systems[system].goods,1000000);
  assert.equal(createEconomy({file}).syncNativeDeliveries({[system]:110}).quantity,0);
 }));
+
+
+test("P0: malicious NPC prototype key cannot mutate JavaScript global object prototype",()=>scoped(({file})=>{
+ const originalRole=Object.prototype.role;
+ const economy=createEconomy({file,clock:()=>0});
+ for(const dangerous of ["__proto__","constructor","toString","valueOf",
+  "hasOwnProperty","prototype"]){
+  const r=economy.advance([{id:dangerous,systemID:30000144}]);
+  assert.deepEqual(r,{status:"INVALID_PILOTS",steps:0},dangerous);
+  assert.equal(Object.prototype.role,originalRole,dangerous);
+  assert.deepEqual(economy.snapshot().pilots,{},dangerous);
+  assert.deepEqual(economy.snapshot().systems,{},dangerous);
+  assert.equal(fs.existsSync(file),false,"invalid roster must not persist");
+ }
+}));
+
+test("P0: malformed NPC roster never partially registers pilots or corrupts supply",()=>scoped(({file})=>{
+ let now=0;
+ const economy=createEconomy({file,clock:()=>now,stepMs:10000});
+ assert.equal(economy.syncNativeDeliveries({[system]:100}).quantity,100);
+ const checkpoint=fs.readFileSync(file,"utf8");
+ now=30000;
+ const valid={id:"npc-miner-1",systemID:30000144};
+ const invalidRosters=[
+  [valid,null],
+  [valid,{}],
+  [valid,{id:4,systemID:30000144}],
+  [valid,{id:"not-an-entity",systemID:"NaN"}],
+  [valid,{id:"invalid-system",systemID:-1}],
+  [valid,{id:"",systemID:30000144}],
+  [valid,{id:"x".repeat(257),systemID:30000144}],
+  [valid,{id:"constructor",systemID:30000144}],
+  [valid,{...valid}],
+  [valid,{id:"npc-other",systemID:0}],
+  null,undefined,{},42
+ ];
+ for(const roster of invalidRosters){
+  assert.deepEqual(economy.advance(roster),
+   {status:"INVALID_PILOTS",steps:0},String(roster));
+  assert.equal(fs.readFileSync(file,"utf8"),checkpoint);
+  assert.equal(economy.snapshot().systems[system].nativeDelivered,100);
+  assert.deepEqual(economy.snapshot().pilots,{});
+ }
+ assert.equal(economy.advance([valid]).steps,3);
+ assert.equal(economy.snapshot().pilots["npc-miner-1"].completed,9);
+ assert.equal(economy.snapshot().systems[system].nativeDelivered,100);
+ assert.equal(createEconomy({file,clock:()=>now,stepMs:10000})
+  .syncNativeDeliveries({[system]:100}).quantity,0);
+}));
+
+test("P0: repeated same native NPC ID cannot mine twice or manufacture virtual ore",()=>scoped(({file})=>{
+ let now=0;
+ const e=createEconomy({file,clock:()=>now,stepMs:10000});
+ const npc={id:"npc-miner-2",systemID:30000144};
+ assert.equal(e.advance([npc]).steps,0);
+ now=10000;
+ const checkpoint=fs.readFileSync(file,"utf8");
+ assert.equal(e.advance([npc,{...npc}]).status,"INVALID_PILOTS");
+ assert.equal(fs.readFileSync(file,"utf8"),checkpoint);
+ assert.equal(e.snapshot().systems[system].ore,200);
+ assert.equal(e.snapshot().pilots[npc.id].completed,0);
+ assert.equal(e.advance([npc]).steps,1);
+ assert.equal(e.snapshot().systems[system].ore,203);
+ assert.equal(e.snapshot().pilots[npc.id].completed,3);
+ assert.equal(createEconomy({file,clock:()=>now,stepMs:10000})
+  .snapshot().pilots[npc.id].completed,3);
+}));
