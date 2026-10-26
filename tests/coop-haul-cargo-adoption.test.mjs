@@ -354,3 +354,81 @@ test("original registry confirms ship is gone before same-owner cargo changes ha
  assert.equal(store.listNativeCargo()[0].entityID,hauler.itemID);
  assert.equal(target.state,"loaded");
 });
+
+
+test("native cargo view failure after durable adoption quarantines both hauler and fleet",()=>{
+ for(const fault of ["throw","empty"]){
+  const store=fakeStore([
+   orphan({cargoID:7001}),
+   orphan({cargoID:7002,entityID:900000000112})
+  ]);
+  const build=store.buildNativeCargoItems;
+  store.buildNativeCargoItems=id=>{
+   if(fault==="throw")throw Error("POST_COMMIT_CARGO_VIEW_LOST");
+   if(fault==="empty")return [];
+   return build(id);
+  };
+  let flushes=0;
+  const ship={...hauler},target=fleet();
+  const outcome=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return{success:true}}}
+  });
+  assert.equal(outcome.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",fault);
+  assert.equal(outcome.adopted,0);
+  assert.equal(flushes,1);
+  assert.equal(target.state,"mining");
+  assert.equal(target.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(ship.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.deepEqual(store.listNativeCargo().map(x=>x.entityID),
+   [ship.itemID,ship.itemID],"durable data remains for operator; never mint replacements");
+  assert.equal(adopt(sceneWith([ship]),fleet(),{
+   store,clock:()=>NOW+5000
+  }).status,"ALREADY_ATTEMPTED");
+ }
+});
+test("a silently missing or falsely owned post-flush cargo row blocks loaded fleet",()=>{
+ for(const fault of ["missing","foreign-owner"]){
+  const store=fakeStore([
+   orphan({cargoID:7001}),
+   orphan({cargoID:7002,entityID:900000000112})
+  ]);
+  const read=store.listNativeCargoForEntity;
+  let calls=0;
+  store.listNativeCargoForEntity=id=>{
+   const rows=read(id);calls++;
+   if(calls===1)return rows; // Native preflight: empty original hauler
+   if(fault==="missing")return rows.slice(0,1);
+   return rows.map((r,i)=>i===1?{...r,ownerID:9999}:r);
+  };
+  const ship={...hauler},target=fleet();
+  const result=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",fault);
+  assert.equal(target.state,"mining");
+  assert.equal(target.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(ship.nativeCargoItems,undefined);
+ }
+});
+test("complete post-commit readback preserves original cargoIDs and starts exactly one normal trip",()=>{
+ const store=fakeStore([
+  orphan({cargoID:7001}),
+  orphan({cargoID:7002,entityID:900000000112})
+ ]);
+ const target=fleet(),ship={...hauler};
+ const result=adopt(sceneWith([ship]),target,{
+  store,clock:()=>NOW,
+  database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(result.adopted,2);
+ assert.equal(target.state,"loaded");
+ assert.equal(target.coopHaulNeedsOperatorRepair,undefined);
+ assert.deepEqual(ship.nativeCargoItems.map(x=>x.cargoID),[7001,7002]);
+ assert.deepEqual(store.listNativeCargo().map(x=>x.ownerID),[hauler.ownerID,hauler.ownerID]);
+});
