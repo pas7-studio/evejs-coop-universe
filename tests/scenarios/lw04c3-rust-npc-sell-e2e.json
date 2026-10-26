@@ -1,0 +1,163 @@
+{
+  "schema": "evejs-coop/lw04c3-original-rust-npc-sell-e2e/v1",
+  "environment": "DISPOSABLE_PINNED_NATIVE_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW04C3-01",
+      "title": "Original ItemStore finished NPC output used in Rust ReserveNpcSellOrder once",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-02",
+      "title": "Pending Rust original NPC order not visible for market matching",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-03",
+      "title": "Original GameStore items + marketEscrow commit atomically with single writer",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-04",
+      "title": "Crash after Rust Reserve but before original GameStore escrow commit",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-05",
+      "title": "Crash after GameStore escrow COMMIT but before Rust Activate ACK",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-06",
+      "title": "Crash after Rust Activate COMMIT before director LISTED journal save",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-07",
+      "title": "No operator retry of LIST_UNKNOWN without original source reconciliation",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-08",
+      "title": "Partial Rust buy moves original full-stack escrow without losing leftover items",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-09",
+      "title": "Final Rust fill confirms exact buyer item and original NPC seller wallet credit once",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-10",
+      "title": "Two corporations listing same product in one station have disjoint order IDs",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-11",
+      "title": "Real player buys NPC-produced item through original market UI, both clients agree",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    },
+    {
+      "id": "LW04C3-12",
+      "title": "Cold restart and reversible overlay on disposable pinned SQLite/Rust server",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore wallet and native item ID",
+        "Rust ReserveNpcSellOrder/GetNpcSellOrder/ActivateNpcSellOrder ACK",
+        "durable LIST_UNKNOWN/ LISTED director journal",
+        "marketEscrow row and original ItemStore custody",
+        "native market order remaining/fill and wallet credit where applicable",
+        "two native clients where applicable"
+      ]
+    }
+  ]
+}
