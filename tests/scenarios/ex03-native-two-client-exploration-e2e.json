@@ -18,6 +18,7 @@
     "EVEJS_COOP_NPC_SCOUT_LOADOUT",
     "EVEJS_COOP_NPC_EXPEDITION_HACK",
     "EVEJS_COOP_NPC_EXPEDITION_LOOT",
+    "EVEJS_COOP_NPC_EXPEDITION_WRECK",
     "EVEJS_COOP_NPC_EXPEDITION_WORMHOLES"
   ],
   "negativeDefaults": "All flags remain OFF in production compose and during installer validation; turn on only in disposable E2E host.",
