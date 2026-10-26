@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -597,6 +597,7 @@ function start(){
   runPhase("native-raids",advanceNativeRaids);
   runPhase("native-tactics",advanceNativeTactics);
   runPhase("native-pve-site-defense",advanceNativePveSiteDefense);
+  runPhase("native-pve-wave-reinforcements",advanceNativePveWaveReinforcements);
   runPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
@@ -2080,6 +2081,43 @@ function advanceNativeRaids(){
 // PVE-002: no scheduler, spawn, wallet, or objective side effects.
 // Only existing transient native-combat defenders recorded in an exact
 // authored dungeon encounter are allowed to assist after verified aggression.
+// PVE-003A: only existing waves' source-proven transient NPCs may warp.
+// No new site, native NPC spawn, reward, or timer.
+function advanceNativePveWaveReinforcements(){
+ if(process.env.EVEJS_COOP_PVE_WAVE_REINFORCEMENTS!=="1"||
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1"||
+    !bridge||!visitedSystems.size)return;
+ const native=require("./runtime"),dungeon=require("../services/dungeon/dungeonRuntime"),
+  npc=require("./npc/npcRuntime"),ctrl=require("./npc/npcRegistry"),
+  nativeStore=require("./npc/nativeNpcStore");
+ if(!(native.scenes instanceof Map))return;
+ if(!pveWaveReinforcementsDirector)
+  pveWaveReinforcementsDirector=require("./coopPveWaveReinforcements")
+   .createWaveReinforcements({
+    getNativeEntity:id=>nativeStore.getNativeEntity(id),
+    getController:id=>ctrl.getControllerByEntityID(id),
+    resolveVerifiedPlayer:(scene,ship)=>
+     require("./coopNativeConsequences").resolveVerifiedPlayerID(scene,ship),
+    warpToEntity:(npcID,targetID,options)=>npc.warpToEntity(npcID,targetID,options),
+    attack:(npcID,targetID,options)=>npc.issueAttackOrder(npcID,targetID,options)
+   });
+ const reserved=new Set([...(bridge.snapshot()||[]),
+  ...Object.values(identityRegistry?.snapshot()?.links||{})]
+  .map(x=>Number(x.entityID)).filter(x=>Number.isSafeInteger(x)&&x>0));
+ if(reserved.size>1024)return;
+ for(const systemID of [...visitedSystems].slice(0,12)){
+  const scene=native.scenes.get(systemID);
+  if(!scene||Number(scene.systemID)!==Number(systemID))continue;
+  const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
+  const output=pveWaveReinforcementsDirector.tick({
+   systemID,scene,instances,excludedIDs:[...reserved]
+  });
+  for(const event of output.events)
+   require("./coopObserve").observe(require("./coopRuntimeProbe"),
+    "living-pve-native-wave-reinforcement",{systemID},{...event,
+     evidence:"NATIVE_ORDER_ACK_NOT_SPAWN_DAMAGE_OR_REWARD_PROOF"});
+ }
+}
 function advanceNativePveSiteDefense(){
  if(process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1"||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),dungeon=require("../services/dungeon/dungeonRuntime"),
@@ -2104,9 +2142,16 @@ function advanceNativePveSiteDefense(){
   if(!scene||Number(scene.systemID)!==Number(systemID))continue;
   const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
   // If ownership reservations exceed the bounded audit budget, fail closed.
-  if(reserved.size>1024)continue;
+  // A site warp lease retains custody of its physical hull across ticks.
+  // Never let the closer-range site director preempt the warp/attack handoff.
+  const waveLeases=pveWaveReinforcementsDirector?.snapshot()||[];
+  const excluded=new Set(reserved);
+  for(const lease of waveLeases)
+   if(Number(lease.systemID)===Number(systemID)&&Number.isSafeInteger(lease.helperID)&&
+      lease.helperID>0)excluded.add(lease.helperID);
+  if(excluded.size>1024)continue;
   const result=pveSiteDefenseDirector.tick({
-   systemID,scene,instances,excludedIDs:[...reserved]
+   systemID,scene,instances,excludedIDs:[...excluded]
   });
   if(result.events.length)for(const event of result.events){
    require("./coopObserve").observe(require("./coopRuntimeProbe"),
