@@ -69,11 +69,18 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     Number(station.solarSystemID)===record.systemID);
  }
  function checkTarget(record){
-  const result=items.findWarehouseItem({ownerID:record.corporationID,stationID:record.stationID,
-    cargoID:record.cargoID});
+  // The pinned ItemStore lookup is global by the original cargo tag.
+  // A target is proven as station stock only while it is the *same*
+  // physical, unsplit stack in the receiving corporation's hangar.
+  const result=items.findWarehouseItem({cargoID:record.cargoID});
   if(result&&(!pos(result.itemID)||Number(result.typeID)!==record.typeID||
      Number(result.quantity)!==record.quantity||Number(result.ownerID)!==record.corporationID||
-     Number(result.locationID)!==record.stationID||String(result.customInfo)!==marker(record.cargoID)))
+     Number(result.locationID)!==record.stationID||
+     !Number.isSafeInteger(items.ITEM_FLAGS?.HANGAR)||
+     Number(result.flagID)!==items.ITEM_FLAGS.HANGAR||
+     Number(result.singleton)!==0||
+     Number(result.stacksize)!==record.quantity||
+     String(result.customInfo)!==marker(record.cargoID)))
    throw Error("WAREHOUSE_TARGET_IDENTITY_CONFLICT");
   return result||null;
  }
@@ -136,6 +143,12 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    if(pos(cargo.ownerID)!==args.corporationID)
     return answer("ORIGINAL_CARGO_OWNER_MISMATCH");
    if(verifyDurableCargo(cargo,args)!==true)return answer("CARGO_NOT_DURABLE");
+   // Before the durable PREPARED fence and irreversible native source debit,
+   // check the *global* original cargo-tag namespace. If this cargoID already
+   // has any station item, the source and target coexist: never delete ore
+   // from the ship merely to discover an ownership/stack conflict later.
+   const originalTicket={...args,typeID:Number(cargo.typeID),quantity:Number(cargo.quantity)};
+   if(checkTarget(originalTicket))return answer("WAREHOUSE_SOURCE_TARGET_COLLISION");
    record={version:1,...args,typeID:Number(cargo.typeID),quantity:Number(cargo.quantity),
     phase:statuses.PREPARED,at:clock(),updatedAt:clock()};
    persist(id,record); // Durably prepared before source mutation.
