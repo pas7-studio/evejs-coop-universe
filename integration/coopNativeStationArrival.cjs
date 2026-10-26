@@ -356,9 +356,14 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    const scene=getScene(args.systemID),point=scene&&isValidStation(scene,getStation(args.stationID),args.systemID);
    const ship=scene&&findShip(scene,args.haulerID,args.systemID);
    const active=arrivals.get(args.haulerID);
-   return Boolean(point&&point.stationID===args.stationID&&stableAt(ship,point)&&
-      active&&active.fleetID===args.fleetID&&active.stationID===args.stationID&&
-      active.arrivedAt>0&&clock()-active.arrivedAt>=ARRIVAL_DWELL_MS);
+   // The trip itself just proved stability + dwell before it asks for a deposit,
+   // so a vanished in-memory record must not block a physically arrived hauler:
+   // accept the trip's own arrivedAt only together with a live stability check.
+   const dwelled=active
+    ?(active.fleetID===args.fleetID&&active.stationID===args.stationID&&
+      active.arrivedAt>0&&clock()-active.arrivedAt>=ARRIVAL_DWELL_MS)
+    :(pos(args.arrivedAtMs)&&clock()-Number(args.arrivedAtMs)>=ARRIVAL_DWELL_MS);
+   return Boolean(point&&point.stationID===args.stationID&&stableAt(ship,point)&&dwelled);
   },
   verifyDurableCargo:(cargo,args)=>cargo.transient!==true&&
       Number(cargo.entityID)===args.haulerID&&Number(cargo.coopHaulFleetID)===args.fleetID&&
@@ -809,7 +814,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    for(const item of deliverable){
     const result=factory.deposit({cargoID:Number(item.cargoID),haulerID:id,
       fleetID:trip.fleetID,systemID:trip.systemID,stationID:trip.stationID,
-      corporationID:trip.corporationID});
+      corporationID:trip.corporationID,arrivedAtMs:arrival.arrivedAt});
     if(!["COMMITTED","ALREADY_COMMITTED"].includes(result.status)){
      // A blocked deposit is retried every native tick, so an unthrottled event
      // floods the log (230 lines a minute) and hides every other signal.
