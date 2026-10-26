@@ -288,6 +288,10 @@ function transform(source,spec,remove){
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/gameStore/index.js"||spec.file==="server/src/gameStore/sqliteStore.js"||spec.file==="server/src/services/inventory/itemStore.js")
   text=require("./coop-gamestore-atomic-patch.cjs").patch(text,spec.file,remove);
+ // Keep atomically written mining receipts in the same native SQLite
+ // nested-row format through ordinary gameStore flush and restart.
+ if(spec.file==="server/src/gameStore/sqliteStore.js")
+  text=require("./coop-player-mining-storage-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
   text=require("./coop-npc-market-fills-table-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
