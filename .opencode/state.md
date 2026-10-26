@@ -1,63 +1,72 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
-Updated: 2026-10-26 ~21:10Z · commits `dc46e3fc`, `3455c4ed`, `b7ccf5e6` (+ docs)
+Updated: 2026-10-26 ~21:55Z · HEAD `7bc50c6e` (+ this note) · loop gate `LOOP_GATE_PASS`
 
-## Where the loop actually is now (live, container evejs-server-1 healthy)
+## The loop now closes (live, own evidence)
 
 | stage | evidence |
 |---|---|
-| mine | `living-mining-cycle-settled` ×24-61 per window, `status: COMMITTED` |
-| fleet | `FLEET_COMPOSITION_OK` — 3 slots, zero mis-roled hulls, real haulers (Bestower/Badger/Mammoth) |
-| load | `living-hauler-loaded` 14 466 m³ + 14 277 m³ (system 144), fleet state `loaded`, `lastHauledVolumeM3` 28 743 / 10 999 |
-| fly | `living-npc-station-route` with `fleetState: loaded` |
-| deliver | **BLOCKED** `living-npc-warehouse-blocked` reason `ORIGINAL_CARGO_OWNER_MISMATCH` |
-| sell | **BLOCKED** `living-npc-station-sale-skipped` reason `HAULER_NOT_NAMED` |
+| mine | `living-mining-cycle-settled`, `COMMITTED`, every window |
+| fleet | `FLEET_COMPOSITION_OK`, real haulers (Bestower/Badger/Mammoth), no mis-roled hulls |
+| load | `living-hauler-loaded` 14 466 m³ + 14 277 m³, fleet state `loaded` |
+| fly | `living-npc-station-route` (`loaded` → station) |
+| **sell** | **`living-npc-station-sold` `SOLD` `isk: 33 150` (×5), `sold:[{typeID:17470, quantity:5000, price:6.63}]`** |
+| currency | `NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET` — real NPC ledger, never a player wallet |
 
-## Two remaining blockers, in order
+Profit is real but small: 5 000 units of Gneiss at 6.63 ISK/unit.
 
-1. `HAULER_NOT_NAMED` (`integration/coopVirtualWorldRuntime.cjs:3107-3113`): the sale
-   needs an identity-registry link for the hauler. `adoptMerchant` only links a *free*
-   pilot whose role is `hauler`/`miner` from `world.snapshot().pilots` — there are 5
-   pilots total and the fleet now has 10 haulers, so most hulls can never be named and
-   every sale is skipped. Fix direction: name durable fleet hulls at spawn (identity
-   link per ship, presentation through `scene.broadcastSlimItemChanges`) and size the
-   pilot pool to the real fleet, or accept a durable native hull with its own profile
-   name. Do not fake a name.
-2. `ORIGINAL_CARGO_OWNER_MISMATCH` (`integration/coopNativeWarehouse.cjs:210`):
-   `deposit()` requires `cargo.ownerID === station corporation`, but the ore belongs to
-   the fleet corporation 1000129 (ORE) and the station belongs to another corp. The
-   sale path would have removed the sold stacks first; with the sale skipped, the
-   deposit refuses. Decide: route to a station owned by 1000129, or deposit into the
-   seller's own hangar (verify the cargo owner, credit that corporation) instead of the
-   station operator. Do not weaken "credit only the proven owner of this cargo row".
+## Fixed in this stretch (each measured, each with a test)
 
-## Fresh facts worth keeping
+1. `HAULER_NOT_NAMED` — `adoptMerchant` filtered world residents on `pilot.role`, but the
+   world file has no roles (the economy ledger owns them), so no hauler was ever named
+   and every sale was skipped. Now the role is read from whichever layer has it and any
+   free resident is acceptable.
+2. Restart mid-haul stranded the fleet in `loaded` forever — an overdue trip now gets a
+   durable `<manifest>.expired.json` (immutable ack untouched), `recover()` stops
+   offering it, and the fleet plans a NEW trip with the ore it still carries.
+3. `ORIGINAL_CARGO_OWNER_MISMATCH` — the deposit credited the *station* corporation for
+   ore owned by the fleet corporation. It now credits the corporation that provably
+   owned that cargo row (the owner's own hangar at that station).
+4. Earlier in the same chain: cargo-volume fallback (a restart made every fill ratio 0),
+   the `{success,data}` cargo-id allocator, a convergent slot re-composition, and an
+   installer guard for unresolvable relative requires (which found two live instances).
 
-- Config in the image: `miningNpcHaulerRepeatDelayMs=600000`,
-  `miningNpcHaulerCargoCapacityM3=65000`, `miningNpcHaulerCargoCapacityM3` caps
-  *mining-table* only; `miningNpcHaulThresholdRatio=0.2`.
-- `getNpcOreCargoVolume()` read `entry.volume`, which
-  `nativeNpcStore.buildNativeCargoItems()` never sets → after any restart the fill
-  ratio was 0 and the fleet never dispatched. Fixed by `coopCargoVolume`
-  (`EVEJS_COOP_CARGO_VOLUME_FALLBACK=1`).
-- `allocateCargoID()` answers `{success, data}`, not a bare id; assuming a number made
-  every partial load fail and marked the miners for operator repair, which then masked
-  the cause as `HAUL_MINER_NOT_PHYSICALLY_ATTESTED`. Fixed.
-- The pinned wing spawner clamps `minerAmount` to ≥1 twice, so a "haulers only" spawn
-  also adds one miner. The recompose therefore converges on the REAL marker set and
-  spawns only when a mis-roled hull needs replacing.
-- The world carries extra hulls (13 miners/10 haulers in 144 and 145, 8/5 in 30100032)
-  left by the early failed attempts. They are real, consistent and non-destructive; a
-  clean acceptance run would rather use a fresh world.
+## The one open item
+
+A restart **after a sale but before the remainder deposit** leaves that trip's manifest
+with cargo rows whose quantities changed by the sale, and recovery refuses it as
+`ALIFE12_SOURCE_CARGO_CHANGED`. The sale is a real market fill but leaves no
+warehouse-style receipt per `cargoID`, so `receiptMatches` cannot prove it.
+
+Proposed fix (not implemented): after a `SOLD` settlement, reconcile the hauler's hull
+against the trip's declared cargo per type — Σ(declared − remaining) per typeID must
+equal exactly the quantity the market paid for that type, in that station, in that
+settled trade — then write a durable `receipts/<cargoID>.json` with
+`source:"NPC_MARKET_FILL"` and accept that provenance in `receiptMatches`. Anything that
+does not reconcile exactly stays operator repair. Do NOT just expire the manifest by
+hand: that would drop the only grip on the ore.
 
 ## Verification commands
 
 ```
-node scripts/coop-deploy.cjs --checkout C:\Games\EveCoop\upstream-evejs\Code   # reset=47 OVERLAY_OK
-docker build -t evejs-local . && cd Code && docker compose -f compose.yaml -f compose.coop-probe.yaml up -d
-docker cp scripts/coop-fleet-audit.cjs evejs-server-1:/tmp/ && docker exec evejs-server-1 node /tmp/coop-fleet-audit.cjs --db /var/lib/evejs/gameStore/gamestore.sqlite
+node scripts/coop-deploy.cjs --checkout C:\Games\EveCoop\upstream-evejs\Code    # reset=47 OVERLAY_OK
+cd C:\Games\EveCoop\upstream-evejs\Code
+docker build -t evejs-local . && docker compose -f compose.yaml -f compose.coop-probe.yaml up -d
+docker cp scripts/coop-fleet-audit.cjs evejs-server-1:/tmp/
+docker exec evejs-server-1 node /tmp/coop-fleet-audit.cjs --db /var/lib/evejs/gameStore/gamestore.sqlite
 bash scripts/coop-loop-gate.sh --code-path C:\Games\EveCoop\upstream-evejs\Code
 ```
 
-Loop gate: all suites PASS except `module-coverage`, which fails on another session's
-untracked `integration/coopCourierGateHop.cjs`.
+## Environment facts (still true)
+
+- `miningNpcHaulerRepeatDelayMs=600000` (a trip then a 10 min cooldown), threshold 0.2,
+  `EVEJS_COOP_VIRTUAL_POPULATION=48` (naming capacity; grows without wiping history).
+- The pinned wing spawner clamps `minerAmount` to ≥1, so "haulers only" also adds a
+  miner; the re-composition converges on the real marker set and spawns only when a
+  mis-roled hull needs replacing.
+- The world carries extra hulls from the early failed attempts (13 miners / 10 haulers
+  in 144 and 145). Real, consistent, non-destructive; a clean acceptance prefers a
+  fresh world.
+- Pre-existing test noise: `coop-alife12-station-trip-recovery` 2 failures
+  (`./coopStuckWarpRecovery` resolution from `tests/`) and
+  `coop-alife-native-delivery-wiring` 2 failures — identical at HEAD.
