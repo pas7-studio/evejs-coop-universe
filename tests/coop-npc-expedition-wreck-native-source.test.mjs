@@ -111,3 +111,58 @@ test("EX-03B19 actual pinned NPC wreck and native salvage hooks are composable, 
  const cleaned=patch(salvagePatch(installed,true),WRECK,true);
  assert.equal(cleaned,original,"must restore exact pinned stock source bytes");
 });
+
+test("EX-03B20 stock native wreck remains fully functional with experimental flag OFF",
+ {skip:!nativeWreck},()=>{
+ const raw=source(nativeWreck);
+ const patched=patch(raw,WRECK);
+ // Execute ORIGINAL native build function, with a tripwire if the new
+ // expedition module is accessed when flags are unset.
+ let newModuleRequested=0;
+ const item={itemID:980300000321,ownerID:901,typeID:26520,
+  locationID:980300000321,flagID:4};
+ const wreck={wreckID:item.itemID,systemID:30000142,
+  sourceEntityID:980000000321,corporationID:999,
+  sourceTypeID:588,createdAtMs:1000,
+  position:{x:0,y:0,z:0},direction:{x:1,y:0,z:0}};
+ const npcStore={
+  buildNativeWreckInventoryItem:()=>({...item}),
+  listNativeWreckItemsForWreck:()=>[],
+  getNativeWreck:()=>({...wreck})};
+ const scene={systemID:30000142,
+  getEntityByID:()=>({itemID:item.itemID,kind:"wreck",isEmpty:false}),
+  getCurrentSimTimeMs:()=>1200};
+ const runtime={buildRuntimeSpaceEntityFromItemRecord:()=>({itemID:item.itemID}),
+  ensureScene:()=>scene};
+ const shim=p=>{
+  if(p==="path")return {join:(...parts)=>parts.join("/")};
+  if(p.includes("coopNpcExpeditionWreckCustody")){
+   newModuleRequested++;throw Error("EX03_MODULE_TOUCHED_WHEN_FLAG_OFF");
+  }
+  if(p.includes("space/runtime")||p.endsWith("/runtime"))return runtime;
+  if(p.includes("spaceDebrisState"))return{getSpaceDebrisLifetimeMs:()=>100000};
+  if(p.includes("itemStore"))return{ITEM_FLAGS:{HANGAR:4}};
+  if(p.includes("itemTypeRegistry"))return{resolveItemByTypeID:()=>null};
+  if(p.includes("npcData"))return{getNpcLootTable:()=>null};
+  if(p.includes("npcLoot"))return{rollNpcLootEntries:()=>[]};
+  if(p.includes("npcRegistry"))return{getControllerByEntityID:()=>null,unregisterController:()=>{}};
+  if(p.includes("nativeNpcStore"))return npcStore;
+  if(p.includes("wreckUtils"))return{buildDunRotationFromDirection:()=>[],
+   resolveEntityWreckType:()=>({typeID:26520})};
+  return {};
+ };
+ const m={exports:{}},before=process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK;
+ try{
+  delete process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK;
+  new Function("require","module","exports","__dirname",patched)(
+   shim,m,m.exports,"/pinned/server/src/space/npc");
+  const native=m.exports.buildNativeWreckRuntimeEntity(wreck,{nowMs:1200});
+  assert(native);
+  assert.equal(native.itemID,item.itemID);
+  assert.equal(native.isEmpty,true);
+  assert.equal(newModuleRequested,0,"stock OFF must not load expedition itemStore");
+ }finally{
+  if(before===undefined)delete process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK;
+  else process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK=before;
+ }
+});
