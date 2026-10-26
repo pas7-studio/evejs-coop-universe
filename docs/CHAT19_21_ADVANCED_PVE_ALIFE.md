@@ -608,6 +608,89 @@ real payout receipt vs mission balance, live two-person gameplay,
 crashes and actual item custody **NOT RUN**. The flag remains OFF.
 
 
+
+## P0-5B-2 — original per-character station reward item + standing transaction custody
+
+**State:** isolated exact-source unit/wiring tests PASS; native full
+Node/SQLite/Rust, two-client in-game settlement and restart **NOT RUN**.
+
+Original pinned EveJS rewards items only through
+\`itemStore.grantItemsToCharacterStationHangar\` during original agent
+\`applyMissionRewards\`. An original station-granted item may appear
+as a new \`itemID\` for a singleton or as an increased \`stacksize\`
+on an EXISTING item with the same \`typeID\`. This new read-only
+\`coopPveDuoNativeRewardCustody\` captures
+\`itemStore.listContainerItems(characterID,rewardStationID,
+ITEM_FLAGS.HANGAR)\` for each personal mission before and after
+the original \`doAgentAction\`. It refuses inconsistent item IDs,
+owner, location, flag, quantity or mixed item types; compares exact
+\`typeID → total stacksize\` deltas against original per-character
+\`rewards.itemRewards\` and \`rewards.bonusItemRewards\` ONLY when the
+separately verified personal ISK journal proves the native bonus
+was paid. It reports actual newly observed item IDs without assuming
+each original reward must allocate a new item.
+
+Standing verification uses original
+\`standingRuntime.buildMissionOutcomeStandingChanges(...,"completed")\`
+to identify expected direct standing owners/event types. Original
+\`getStandingTransactions(ownerID,characterID)\` is read before and
+after each payout. Every originally configured nonzero direct standing
+change requires exactly one **new** native transaction of the expected
+event type. The comparison uses full original transaction row
+multiplicities, detects historical rows changing/disappearing, and
+rejects duplicate or stale events. Zero configured direct standing
+changes correctly produce an empty standing-receipt set. Source
+\`standingRuntime.applyStandingChanges\` invalidates the standing
+transaction cache after its original write.
+
+With new \`EVEJS_COOP_PVE_DUO_REWARD_CUSTODY=1\` (default OFF),
+P0-5A's durable original dungeon guard and P0-5B-1's personal
+wallet/LP/mission-history verification MUST already be enabled.
+The native leader custody snapshot is acquired before the leader's
+existing **PREPARED** intent and native payout; after the native
+DoAction the original item and standing transaction deltas are
+verified BEFORE advancing \`LEADER_NATIVE_CLEARED\`. The wingman's
+snapshot is taken independently before his **PREPARED** intent.
+After original wingman DoAction, the same checks complete before
+the existing peer \`AWARDED\` and leader
+\`BOTH_NATIVE_CLEARED\` journal transitions.
+
+The telemetry \`TWO_ORIGINAL_REWARD_ITEMS_AND_STANDING_TRANSACTIONS_VERIFIED\`
+is emitted only when both independently pass and BOTH original
+settlement journals have cleared. It describes source inventory
+and direct standing event deltas, not a new grant. Original native
+inventory, standing, LP and wallet writers are unchanged; no extra
+reward generation, duplicated itemStore, payout retries, or scheduled
+worker is introduced. Empty expected item and standing rewards
+are legal and produce evidence of zero expected changes, NOT evidence
+of a positive payout of those types.
+
+**Limitations/release gates:** strict before/after type quantity and
+native standing event auditing is NOT an atomic cross-store
+transaction and cannot prove that unrelated concurrent inventory
+edits did not coincide with the payout. A concurrent change can
+cause a conservative false negative or, without transaction-scoped
+item grants, a source-delta that happens to match a reward. Actual
+agent reward item-grant transaction IDs are not exposed by
+\`doAgentAction\` and remain unverified. Existing leader/peer
+fsynced PENDING/UNKNOWN journal states must be reconciled by an
+operator; no automatic second award. Full Node tests, pinned overlay
+install/remove, disposable real two-client original agent mission,
+genuine item and standing receipts, native restart and failed-write
+cases are **NOT RUN**.
+
+**Isolated verification:** 13/13 direct original-source custody
+behavior tests (29 assertions), 6 source-hook order tests
+(14 assertions), combined P0-5A/P0-5B-1/P0-5B-2 **62/62 test cases
+and 176 assertions** PASS in source-executed V8; real native gameplay
+and disk power-loss tests NOT RUN.
+
+**Next:** operationally prove two native connected clients accept
+two actual missions, complete one original dungeon, receive
+correct independent wallet/LP/standing/item custody, then test
+disconnection and intentional crash between original writes and
+reconcile PENDING; also finish P0-4B-2B authentic rare drops.
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |

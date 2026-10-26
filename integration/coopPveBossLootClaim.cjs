@@ -75,9 +75,19 @@ function createFence({file,storage=fs,clock=()=>Date.now(),getBossWreck,
    requestedQuantity}={}){
   let witness,native;
   try{
+   // Inspect native original wreck BEFORE giving an unclassified wreck
+   // permission to bypass the boss-specific pre-grant fence. After
+   // restart an authored overseer can lose its in-memory live witness.
+   native=getNativeWreck(wreck?.wreckID);
    witness=getBossWreck(wreck?.wreckID);
-   if(!witness)return {status:"NOT_VERIFIED_BOSS_WRECK"};
-   native=getNativeWreck(wreck.wreckID);
+   if(!witness){
+    const authored=String(native?.profileID||"")+" "+
+     String(native?.lootTableID||"");
+    if(native?.transient===true&&
+       /(?:overseer|boss|officer|commander)/i.test(authored))
+     return {status:"BOSS_LOOT_LIVE_WITNESS_REQUIRED"};
+    return {status:"NOT_VERIFIED_BOSS_WRECK"};
+   }
   }catch{return {status:"BOSS_LOOT_AUTHORITY_UNAVAILABLE"}}
   const w=id(wreck?.wreckID),i=id(wreckItem?.wreckItemID),
    ch=id(characterID),dest=id(destinationLocationID),
