@@ -633,3 +633,50 @@ test("P0: non-finite or noninteger clock cannot poison initial or durable NPC ec
  assert.equal(createEconomy({file,clock:()=>1000})
   .syncNativeDeliveries({"30000142":100}).quantity,0);
 }));
+
+
+test("P0: all five NPC roles saturate completed telemetry before saved journal becomes unsafe",()=>scoped(({file})=>{
+ const max=Number.MAX_SAFE_INTEGER,roles=["miner","hauler","patrol","trader","pirate"];
+ const pilots=roles.map((role,i)=>({id:"npc-"+role,systemID:30000142}));
+ const saved={version:1,lastAt:0,rolesVersion:2,
+  systems:{"30000142":{ore:200,goods:100,demand:100,security:50,losses:0,nativeDelivered:100}},
+  pilots:Object.fromEntries(roles.map(role=>["npc-"+role,{
+   role,cargo:0,credits:100,completed:max-1
+  }])),events:[]};
+ fs.writeFileSync(file,JSON.stringify(saved));
+ let now=10000;
+ const economy=createEconomy({file,clock:()=>now,stepMs:10000});
+ assert.equal(economy.advance(pilots).steps,1);
+ for(const role of roles)
+  assert.equal(economy.snapshot().pilots["npc-"+role].completed,max,role);
+ assert.equal(economy.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.equal(createEconomy({file,clock:()=>now,stepMs:10000})
+  .snapshot().pilots["npc-miner"].completed,max,"restart must accept safe progress");
+ now=20000;
+ assert.equal(economy.advance(pilots).steps,1);
+ for(const role of roles)
+  assert.equal(economy.snapshot().pilots["npc-"+role].completed,max,
+   role+" remains safe after repeated production");
+ const reloaded=createEconomy({file,clock:()=>now,stepMs:10000});
+ assert.equal(reloaded.advance(pilots).steps,0);
+ assert.equal(reloaded.syncNativeDeliveries({"30000142":100}).quantity,0);
+ assert.equal(reloaded.snapshot().systems["30000142"].nativeDelivered,100);
+}));
+
+test("P0: miner with completed MAX_SAFE_INTEGER can keep mining without bricking reboot",()=>scoped(({file})=>{
+ const max=Number.MAX_SAFE_INTEGER;
+ const saved={version:1,lastAt:0,rolesVersion:2,
+  systems:{"30000142":{ore:200,goods:100,demand:100,security:50,losses:0}},
+  pilots:{"npc-miner":{role:"miner",cargo:0,credits:100,completed:max}},
+  events:[]};
+ fs.writeFileSync(file,JSON.stringify(saved));
+ const miners=[{id:"npc-miner",systemID:30000142}];
+ const economy=createEconomy({file,clock:()=>30000,stepMs:10000});
+ assert.equal(economy.advance(miners).steps,3);
+ assert.equal(economy.snapshot().systems["30000142"].ore,209);
+ assert.equal(economy.snapshot().pilots["npc-miner"].completed,max);
+ const again=createEconomy({file,clock:()=>30000,stepMs:10000});
+ assert.equal(again.snapshot().pilots["npc-miner"].completed,max);
+ assert.equal(again.advance(miners).steps,0);
+ assert.equal(again.snapshot().systems["30000142"].ore,209);
+}));
