@@ -41,7 +41,7 @@ test("a remote scan is rechecked against live site identity before NPC native wa
 });
 test("new native source modules are deployed with original overlay",()=>{
  const source=read("scripts/overlay-spec.cjs");
- assert.match(source,/"coopNpcExpeditionDirector","coopNpcProbeHardware","coopNpcProbeScanEvidence"/);
+ assert.match(source,/"coopNpcExpeditionDirector".*"coopNpcProbeHardware","coopNpcProbeScanEvidence"/);
 });
 test("probe evidence remains explicit opt-in, requires exploration and A-Life",()=>{
  const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
