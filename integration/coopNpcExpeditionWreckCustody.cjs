@@ -114,6 +114,79 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   return {success:true,status:"ORIGINAL_ITEMSTORE_LOOT_IN_WRECK",
     itemIDs:processed,nativeItemMinted:false};
  }
+ // EX-03B20: explicit operator-gated forward-only recovery of an original
+ // ItemStore durable wreck intent. NEVER create wreck, spawn ship, refund
+ // mass, move an untagged item, or choose a different original itemID.
+ // A normal A-Life tick must never call this method.
+ function reconcile({wreckID,shipID,corporationID,operatorApproved=false}={}){
+  if(operatorApproved!==true)
+   return deny("EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+  const w=verifiedWreck(wreckID);
+  if(!w||!POS(shipID)||!POS(corporationID)||
+   w.sourceEntityID!==shipID||
+   w.coopNpcExpeditionSourceCorpID!==corporationID)
+   return deny("EX03_WRECK_RECOVERY_SOURCE_MISMATCH");
+  let source,held,allWrecks;
+  try{
+   source=cargo(shipID,items.ITEM_FLAGS.CARGO_HOLD);
+   held=cargo(wreckID,null);
+   allWrecks=npcStore.listNativeWrecks();
+  }catch{return deny("EX03_WRECK_RECOVERY_SOURCE_UNAVAILABLE")}
+  if(!source||!held||!Array.isArray(allWrecks)||
+   allWrecks.some(x=>x?.sourceEntityID===shipID&&x.wreckID!==wreckID))
+   return deny("EX03_WRECK_RECOVERY_AMBIGUOUS");
+  const relevant=source.concat(held).filter(x=>
+   String(x?.customInfo||"").startsWith("coop-npc-expedition:v1:"));
+  if(relevant.length===0)return {success:true,status:"NO_ORIGINAL_WRECK_CUSTODY"};
+  if(relevant.length>maxItems||
+   new Set(relevant.map(x=>x.itemID)).size!==relevant.length)
+   return deny("EX03_WRECK_RECOVERY_UNBOUNDED");
+  const actions=[];
+  for(const x of relevant){
+   const r=parse(x.customInfo);
+   if(!original(x)||!r||r.wreckID!==wreckID||
+      r.shipID!==shipID||r.corpID!==corporationID||
+      x.ownerID!==corporationID||
+      !(x.locationID===shipID&&x.flagID===items.ITEM_FLAGS.CARGO_HOLD||
+       x.locationID===wreckID&&x.flagID===items.ITEM_FLAGS.HANGAR))
+    return deny("EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+   const exact=row(x.itemID);
+   if(!same(x,exact)||exact.customInfo!==x.customInfo||
+     exact.locationID!==x.locationID||exact.ownerID!==x.ownerID)
+    return deny("EX03_WRECK_RECOVERY_INDEX_DISAGREEMENT");
+   actions.push({itemID:x.itemID,move:x.locationID===shipID,original:x});
+  }
+  // Confirm both original stock wreck ledger and existing item intents before
+  // touching ANY item. The only allowed mutation is ship -> its existing wreck.
+  if(!flush())return deny("EX03_WRECK_RECOVERY_ITEMS_NOT_DURABLE");
+  try{if(gameStore.flushTableSync("npcWrecks")?.success!==true)
+    return deny("EX03_WRECK_RECOVERY_WRECK_NOT_DURABLE")}
+  catch{return deny("EX03_WRECK_RECOVERY_WRECK_NOT_DURABLE")}
+  const resumed=[];
+  for(const act of actions){
+   if(act.move){
+    let changed;
+    try{changed=items.moveItemToLocation(act.itemID,wreckID,
+      items.ITEM_FLAGS.HANGAR)}
+    catch{return deny("EX03_WRECK_RECOVERY_MOVE_UNCERTAIN")}
+    if(changed?.success!==true||!flush())
+     return deny("EX03_WRECK_RECOVERY_MOVE_UNCERTAIN");
+   }
+   const after=row(act.itemID);
+   if(!same(act.original,after)||after.locationID!==wreckID||
+      after.flagID!==items.ITEM_FLAGS.HANGAR||
+      after.ownerID!==corporationID||
+      after.customInfo!==act.original.customInfo)
+    return deny("EX03_WRECK_RECOVERY_IDENTITY_CHANGED");
+   resumed.push(act.itemID);
+  }
+  const visible=list({wreckID});
+  if(resumed.some(id=>!visible.some(x=>x.itemID===id)))
+   return deny("EX03_WRECK_RECOVERY_VISIBILITY_UNCONFIRMED");
+  return {success:true,status:"ORIGINAL_WRECK_CUSTODY_RECOVERED",
+   itemIDs:resumed,movedCount:actions.filter(x=>x.move).length,
+   nativeItemMinted:false};
+ }
  function claim({characterID,wreckID,itemID,destinationLocationID,
    destinationFlagID,quantity}={}){
   const w=verifiedWreck(wreckID);
@@ -166,6 +239,6 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   return !present.some(x=>String(x?.customInfo||"").startsWith(
    "coop-npc-expedition:v1:"));
  }
- return Object.freeze({stage,list,claim,canDestroy});
+ return Object.freeze({stage,reconcile,list,claim,canDestroy});
 }
 module.exports={createNpcExpeditionWreckCustody,parse};
