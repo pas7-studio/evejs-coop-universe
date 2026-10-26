@@ -74,6 +74,9 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningCapacitorGate");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningActivate");
 // An idle native NPC must not clear a mining hull's target locks (default OFF).
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningTargetGuard");
+// Per-role, wealth-tiered fleet hulls (default OFF): a miner hull must never be
+// spawned into the hauler slot.
+names.splice(names.indexOf("coopMiningTargetGuard")+1,0,"coopFleetComposition");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -91,6 +94,8 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConserva
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
 // ALIFE-08 durable native miner/hauler identity (opt-in).
 names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetDurable");
+// CH24+31: original mining fleet shift, default OFF and no parallel tick.
+names.splice(names.indexOf("coopNativeMiningFleetDurable")+1,0,"coopPlayerMiningCompany","coopPlayerMiningShiftOrders","coopPlayerMiningFleetTick","coopPlayerMiningOreTitle","coopPlayerMiningOreNativeBindings","coopPlayerMiningAgent","coopPlayerMiningHiring","coopPlayerMiningAgentOrders","coopPlayerMiningPhysicalCompletion","coopPlayerMiningMarketReadiness","coopPlayerMiningCorporateSellCustody","coopPlayerMiningCorporateSellBridge","coopPlayerMiningCorporateFillSettlement","coopPlayerMiningCorporateFillLifecycle","coopPlayerMiningCorporateUnsoldReturn","coopPlayerMiningCorporateCancelLifecycle","coopPlayerMiningCorporateBuyerMatch","coopPlayerMiningCorporatePnl","coopPlayerMiningCorporateFeeAuthority","coopPlayerMiningCorporateMarketRuntime");
 // Durable cargo write is the single owner of "make this row survive a restart".
 names.splice(names.indexOf("coopNativeHaulCargo")+1,0,"coopDurableCargoWrite");
 // ALIFE-10 strict native miner->hauler original cargoID atomic handoff.
