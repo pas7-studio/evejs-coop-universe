@@ -174,3 +174,66 @@ test("release remains locked until finalized original GameStore settlement",()=>
  assert.match(f,/phase='released'/);
  assert.match(f,/CORP_FILL_RELEASE_DURABLE_PAYMENT_NO_LONGER_VERIFIED/);
 });
+
+test("stock market fill/modify/cancel cannot silently execute corporation-owned ore",()=>{
+ const source=[
+  "fn modify_order_in_db(",
+  "    let mut connection = load_connection(database_path)?;",
+  "    let transaction = connection.transaction()?;",
+  "}",
+  "fn cancel_order_in_db(",
+  "    let mut connection = load_connection(database_path)?;",
+  "    let transaction = connection.transaction()?;",
+  "}",
+  "fn fill_order_in_db(database_path: &Path, request: FillOrderRequest) -> Result<FillOrderResponse> {",
+  "    let mut connection = load_connection(database_path)?;",
+  "    let transaction = connection.transaction()?;",
+  "}",
+  "    let wallet_division = request.wallet_division.unwrap_or(1000);",
+  ""
+ ].join("\n");
+ const once=patch(source,"state");
+ for(const operation of ["FILL","MODIFY","CANCEL"]){
+  assert.match(once,new RegExp("CORP_SELL_STOCK_"+operation+"_DENIED"));
+  assert.match(once,new RegExp("CORPORATE ORDER STOCK "+operation+" GUARD BEGIN"));
+ }
+ assert.equal(patch(once,"state",true),source);
+ assert.equal(patch(once,"state"),once);
+});
+test("Rust corporate partial cancellation requires released fills and exclusive order lock",()=>{
+ for(const proof of [
+ "fn coop_corp_cancel_lock_db",
+ "CORP_CANCEL_UNSETTLED_OR_ACTIVE_FILL",
+ "CORP_CANCEL_NONCONTIGUOUS_FILLS",
+ "state='cancelling'",
+ "phase='released'",
+ "coop_corp_sell_cancel_intents",
+ "CORP_CANCEL_EXCLUSIVE_ORDER_LOCK_FAILED"])
+ assert.ok(extension.includes(proof),proof);
+});
+test("Rust finalizes original corporate cancellation only after native physical item return",()=>{
+ for(const proof of [
+ "fn coop_corp_cancel_finalize_db",
+ "fn coop_corp_cancel_verify_return",
+ '"RETURNED_UNSOLD"',
+ '"returnedQuantity"',
+ '"remainingQuantity"',
+ '"sourceItemIDs"',
+ '"customInfo"',
+ "CORP_CANCEL_ORIGINAL_UNSOLD_ITEM_NOT_RETURNED",
+ "CORP_CANCEL_ORDER_CAS_FAILED"])
+ assert.ok(extension.includes(proof),proof);
+});
+test("Rust corporate private cancellation RPCs are separate from stock CancelOrder",()=>{
+ const source=patch(rpc,"rpc");
+ for(const method of ["LockCorpSellCancel","GetCorpSellCancel","FinalizeCorpSellCancel"])
+  assert.ok(source.includes('"'+method+'"'),method);
+ assert.match(source,/struct CoopCorpCancelParams/);
+});
+test("Rust corporate market still refuses publication and rejects stock FillOrder",()=>{
+ const source=patch(state,"state");
+ assert.match(source,/CORP_SELL_STOCK_FILL_DENIED/);
+ const body=extension.slice(extension.indexOf("fn coop_corp_sell_publish_db("),
+  extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
+ assert.match(body,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
+});
