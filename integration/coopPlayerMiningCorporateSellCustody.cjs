@@ -193,7 +193,6 @@ function createOriginalCorporateSellCustody({gameStore,access,readiness,verifyNa
     tx.put("items",ITEM(receipt.itemID),{...item,
       locationID:receipt.originalLocationID,
       flagID:receipt.originalFlagID});
-    tx.delete?.("marketEscrow",ESCROW(orderID)); // adapter may not support delete
     // We preserve the original marketEscrow key as a terminal tombstone:
     // no other order can reuse that ID, including after restart.
     tx.put("marketEscrow",ESCROW(orderID),{...stored,
