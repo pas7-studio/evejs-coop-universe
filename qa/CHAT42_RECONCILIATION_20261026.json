@@ -1,0 +1,43 @@
+{
+  "schema": "coop-qa42-postmerge-source-review/v1",
+  "mainHeadAtReview": "489839519a0b6db87f44d5fdc8bf71f69e0ff4a0",
+  "originalQA42Commit": "f49b05bf41ab6eea23b48fd356e9afdb1f803de5",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "sourceScope": "github history and exact source files, isolated local QA; no live host or client observation",
+  "postQA42Commits": 66,
+  "danbalanAuthoredMainCommits": 54,
+  "commitLedger": "qa/CHAT42_RECONCILED_COMMIT_LEDGER.json",
+  "acceptanceMatrix": {"ownerDirections": 41, "cases": 45, "twoClientGameplayPass": 0},
+  "currentState": {
+    "publishedProjectRev": "da549fd29841676e6f0c96d347ee93acbfe2d08a",
+    "statusManifestSha256Match": true,
+    "nowManifestSha256Match": true,
+    "ledgerManifestSha256Match": true,
+    "missingManifestEntry": "state/digests/20261025-142742.md",
+    "staleForReviewedMain": true
+  },
+  "policy": {
+    "githubActionsYmlCount": 0,
+    "resolvedCommit": "e9bc93d28bba5d8aa62fbac944f150c46b835e2a",
+    "status": "RESOLVED_IN_SOURCE_NOT_RUNTIME_PROOF"
+  },
+  "nativeDedicatedHelpersNotInvokedByCentralInstaller": [
+    {"owner":10,"helper":"coop-ewar-dogma-patch.cjs"},
+    {"owner":21,"helper":"coop-pve-native-objective-patch.cjs"},
+    {"owner":28,"helper":"coop-moon-extraction-read-patch.cjs"},
+    {"owner":28,"helper":"coop-moon-fuel-output-patch.cjs"},
+    {"owner":35,"helper":"coop-fw-native-enlistment-patch.cjs"},
+    {"owner":35,"helper":"coop-fw-insurgency-visibility-patch.cjs"}
+  ],
+  "localQaTests": {"pass":35,"fail":0,"skip":0,"scope":"isolated previous QA42 tests and new reconciliation tests"},
+  "sourceIssueStatus": {
+    "172":"OPEN_HOST_STATE_DIGEST",
+    "173":"RESOLVED_NO_WORKFLOWS_IN_REVIEWED_TREE",
+    "174":"OPEN_TWO_AUTHENTICATED_CLIENTS",
+    "175":"OPEN_NATIVE_OWNER_PATCH_HOOKS"
+  },
+  "runtime": "NOT_OBSERVED",
+  "twoClient": "NOT_OBSERVED",
+  "restart": "NOT_OBSERVED",
+  "verdict": "NO_GO_NOT_PROVEN_COMPLETE"
+}

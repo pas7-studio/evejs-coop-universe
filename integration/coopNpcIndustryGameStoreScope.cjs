@@ -1,8 +1,10 @@
 "use strict";
 // COOP-032E: proof-only adapter. No external SQLite handle, no scheduler, no live enablement.
 // Reuses the audited 032B/032C state machines behind the 032D GameStore transaction.
-const {createOfflineAtomicInstaller}=require("./coopNpcIndustryOfflineAtomic.cjs");
-const {createOfflineAtomicDelivery}=require("./coopNpcIndustryOfflineDelivery.cjs");
+// The same module runs as .cjs in source tests and .js inside pinned EveJS.
+const siblingSuffix=typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs";
+const {createOfflineAtomicInstaller}=require("./coopNpcIndustryOfflineAtomic"+siblingSuffix);
+const {createOfflineAtomicDelivery}=require("./coopNpcIndustryOfflineDelivery"+siblingSuffix);
 const INSTALL_TABLES=Object.freeze(["items","corporationRuntime","industryBlueprintState","industryJobs"]);
 const DELIVER_TABLES=Object.freeze(["items","industryJobs","industryBlueprintState","identityState"]);
 const ALLOWED=new Set([...INSTALL_TABLES,...DELIVER_TABLES]);

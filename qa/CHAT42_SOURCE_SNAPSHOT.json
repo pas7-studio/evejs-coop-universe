@@ -1,0 +1,50 @@
+{
+  "schema": "coop-qa42-snapshot/v1",
+  "observedAt": "2026-10-25T21:38:53Z",
+  "auditHeadAtSnapshot": "81b6469b463afd7d6add891bc0458d73c732a222",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "publishedStateRev": "da549fd29841676e6f0c96d347ee93acbfe2d08a",
+  "publishedStateAt": "2026-10-25T14:27:42.404Z",
+  "stateDigestReferenced": "state/digests/20261025-142742.md",
+  "stateDigestPresentInMain": false,
+  "publishedLocalTotals": {
+    "pass": 542,
+    "fail": 0,
+    "skip": 18,
+    "files": 83
+  },
+  "independentlyRerunIsolated": {
+    "pass": 89,
+    "fail": 0,
+    "skip": 10,
+    "files": 17
+  },
+  "isolatedSnapshotsHashMatchedOwners": [
+    3,
+    10,
+    28,
+    35
+  ],
+  "isolatedSnapshotDrift": [
+    {
+      "owner": 21,
+      "path": "tests/coop-pve-native-objective.test.mjs",
+      "localBlob": "658e3461efa64cca9b8e5083e40233dabf1b1576",
+      "headBlob": "d161f92a8a374595efef9bfd02271c8c46081b22"
+    }
+  ],
+  "forbiddenWorkflowsObserved": [
+    ".github/workflows/alife11-native-cargo.yml",
+    ".github/workflows/alife12-native-station-restart.yml"
+  ],
+  "reportedServerEventsHistorical": 3918,
+  "historicalClientLogFiles": 3,
+  "observedOneClientMilestones": [
+    "undock notification at Manifest",
+    "autopilot jump Manifest to Yulai"
+  ],
+  "verifiedSecondIndependentAuthenticatedClient": false,
+  "freshRuntimeProofAtAuditHead": false,
+  "noDirectHostOrAuthorizedClientAccess": true,
+  "notes": "Sourced from GitHub state/status, state/manifest, AGENTS, live tree and locally re-executed isolated modules. No Docker/client was accessible to this QA worker. File presence and counters are NOT gameplay evidence. Verified intervening two commits after prior audit base did not touch isolated tests, published state, or workflows."
+}

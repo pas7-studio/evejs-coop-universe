@@ -170,3 +170,57 @@ test("purchase receipt must belong to exact cargo ID and station",()=>{
   assert.equal(f.make().load(f.args()).status,"NATIVE_PURCHASE_RECEIPT_NOT_VERIFIED");
  }finally{f.cleanup();}
 });
+
+
+test("two different bought cargo stacks cannot claim one fitted weapon during nested write",()=>{
+ const f=fixture();try{
+  const another={...f.stock[0],cargoID:2002};
+  f.stock.push(another);
+  const originalReceipt=JSON.parse(fs.readFileSync(
+   path.join(f.root,"purchases","2001.json"),"utf8"));
+  fs.writeFileSync(path.join(f.root,"purchases","2002.json"),
+   JSON.stringify({...originalReceipt,cargoID:2002}));
+  const adapter=f.make(),originalUpsert=f.store.upsertNativeCargo;
+  let competing=null,enter=true;
+  f.store.upsertNativeCargo=(row,options)=>{
+   if(enter){enter=false;
+    // Second adapter instance shares a module on disk, not an in-memory lock.
+    competing=f.make().load(f.args({cargoID:2002}));
+   }
+   return originalUpsert(row,options);
+  };
+  const result=adapter.load(f.args());
+  assert.equal(result.status,"NATIVE_NPC_CHARGE_LOADED");
+  assert.equal(competing?.status,"NATIVE_REARM_LOCK_UNSAFE");
+  assert.equal(f.stock.filter(x=>x.moduleID===1001).length,1);
+  assert.equal(f.stock.find(x=>x.cargoID===2002).moduleID,0);
+  assert.equal(fs.existsSync(path.join(f.root,"rearm-locks","2002.lock")),false);
+  assert.equal(fs.existsSync(path.join(f.root,"rearm-module-locks","101-1001.lock")),false);
+ }finally{f.cleanup()}
+});
+test("replayed moduleID cannot claim loaded success without native combat visibility",()=>{
+ const f=fixture();try{
+  assert.equal(f.make().load(f.args()).status,"NATIVE_NPC_CHARGE_LOADED");
+  f.store.buildNativeCargoItems=()=>[];
+  assert.equal(f.make().load(f.args()).status,
+   "NATIVE_REARM_COMBAT_VISIBILITY_UNVERIFIED");
+ }finally{f.cleanup()}
+});
+test("tampered fitted flag cannot attest already loaded charge",()=>{
+ const f=fixture();try{
+  assert.equal(f.make().load(f.args()).status,"NATIVE_NPC_CHARGE_LOADED");
+  f.stock[0].flagID=5;
+  assert.equal(f.make().load(f.args()).status,"NATIVE_REARM_OUTCOME_UNVERIFIED");
+ }finally{f.cleanup()}
+});
+test("stale module lock blocks any alternative cargo without deleting operator evidence",()=>{
+ const f=fixture();try{
+  const lock=path.join(f.root,"rearm-module-locks","101-1001.lock");
+  fs.mkdirSync(path.dirname(lock),{recursive:true});
+  fs.writeFileSync(lock,"persisted after crash");
+  assert.equal(f.make().load(f.args()).status,"NATIVE_REARM_LOCK_UNSAFE");
+  assert.equal(fs.readFileSync(lock,"utf8"),"persisted after crash");
+  assert.equal(fs.existsSync(path.join(f.root,"rearm-locks","2001.lock")),false);
+  assert.equal(f.stock[0].moduleID,0);
+ }finally{f.cleanup()}
+});

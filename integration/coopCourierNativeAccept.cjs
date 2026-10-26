@@ -40,6 +40,8 @@ function buildNpcSession(character) {
     corporationID: Number(character.corporationID) || 0,
     allianceid: Number(character.allianceID) || 0,
     isNpcCourier: true,
+    // No client to notify; the native contract calls only need identity.
+    sendSessionChange() { return undefined; },
   };
 }
 
@@ -50,11 +52,11 @@ function refusal(reason, extra) {
 }
 
 // runtime: { acceptContract, completeContract, getContractRecord }
-function accept({ contract, identity, packageLocationID, runtime }) {
+function accept({ contract, identity, packageLocationID, packageOwnerID, runtime }) {
   if (!runtime || typeof runtime.acceptContract !== "function" || typeof runtime.getContractRecord !== "function") {
     return refusal("runtime does not expose acceptContract/getContractRecord");
   }
-  const plan = planSettlement(contract, identity, packageLocationID);
+  const plan = planSettlement(contract, identity, packageLocationID, { packageOwnerID, allowIssuerHeldPackage: true });
   if (plan.status !== "ACCEPT_THEN_FLY") {
     return refusal("settlement chain not startable", { plan: plan.status });
   }

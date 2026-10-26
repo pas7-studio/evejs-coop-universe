@@ -352,7 +352,8 @@ function evaluateCourierIdentity(identity, contract, atStationID) {
 // The settlement chain, as data. Accept escrows the courier's own ISK and moves
 // the real package into its hangar; complete is only legal once that package is
 // physically at the destination station. Nothing here mutates anything.
-function planSettlement(contract, identity, packageLocationID) {
+function planSettlement(contract, identity, packageLocationID, options) {
+  const opts = options || {};
   const origin = Number(contract && contract.startStationID) || 0;
   const destination = Number(contract && contract.endStationID) || 0;
   const packageAt = Number(packageLocationID) || 0;
@@ -364,9 +365,17 @@ function planSettlement(contract, identity, packageLocationID) {
   const readiness = evaluateCourierIdentity(identity, contract, origin);
   if (readiness.status !== "READY") return readiness;
   if (packageAt !== origin) {
-    return status("REFUSED_PACKAGE_ELSEWHERE", {
-      contractID: readiness.contractID, packageAt, origin, destination,
-    });
+    // A real EveJS contract keeps the wrapped package in the issuer's own
+    // hangar/office location until somebody accepts it, so that location is not
+    // "elsewhere". Only an explicit opt-in may treat it as ready to fly.
+    const issuerHeld = opts.allowIssuerHeldPackage === true &&
+      Number(opts.packageOwnerID) === Number(contract && contract.issuerID) &&
+      Number(contract && contract.issuerID) > 0;
+    if (!issuerHeld) {
+      return status("REFUSED_PACKAGE_ELSEWHERE", {
+        contractID: readiness.contractID, packageAt, origin, destination,
+      });
+    }
   }
   return status("ACCEPT_THEN_FLY", {
     contractID: readiness.contractID,

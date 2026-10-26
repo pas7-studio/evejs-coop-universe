@@ -46,6 +46,7 @@ function sample(mutate={}){
   facilityAvailable:(s,owner)=>s.stationID===2001&&owner===1001};
  Object.assign(state,mutate);
  return {dir,state,items,deps,engine:createRefinery(deps),getDb:()=>structuredClone(db),getDisk:()=>disk,
+  mutateItem:(id,patch)=>{db[String(id)]={...db[String(id)],...patch}},
   restore:()=>{db=structuredClone(disk)},writes:()=>writes,flushes:()=>flushes,dispose:()=>fs.rmSync(dir,{recursive:true,force:true})};
 }
 const args={oreItemID:700,ownerID:1001,stationID:2001};
@@ -170,4 +171,84 @@ each('refinery journal lock prevents simultaneous writers from different executo
  assert.equal(f.engine.reconcile(700,100,{authorize:true}).status,'REFINERY_LOCKED_NEEDS_REVIEW');
  assert.equal(f.writes(),0);
  assert.equal(fs.existsSync(path.join(f.dir,id+'.json.lock')),true);
+});
+
+
+each('mismatched original ore stacksize rejects refinery preview without issuing native write',f=>{
+ f.mutateItem(700,{stacksize:99});
+ assert.equal(f.engine.preview(args).status,'NATIVE_ORE_NOT_AVAILABLE');
+ assert.equal(f.engine.refine(args).status,'NATIVE_ORE_NOT_AVAILABLE');
+ assert.equal(f.writes(),0);
+});
+each('original raw ore stack mismatched after quote is rejected by native itemStore atomic hook',f=>{
+ const plan=f.engine.preview(args);
+ assert.equal(plan.status,'READY');
+ f.mutateItem(700,{stacksize:99});
+ const before=f.getDb(),result=f.items.refineNpcWarehouseOreAtomic(plan);
+ assert.equal(result.success,false);
+ assert.equal(result.errorMsg,'REFINERY_SOURCE_STACK_UNVERIFIED');
+ assert.deepEqual(f.getDb(),before);
+ assert.equal(f.writes(),0);
+});
+each('corrupt leftover original ore stack cannot authorize committed journal replay',f=>{
+ assert.equal(f.engine.refine(args).status,'COMMITTED');
+ f.mutateItem(700,{stacksize:9});
+ const id='coop-refine:v1:700:100';
+ assert.equal(f.engine.refine({...args,operationID:id}).status,'COMMITTED_STATE_INVALID');
+ assert.equal(f.engine.reconcile(700,100,{authorize:true}).status,
+  'PENDING_OPERATOR_RECONCILIATION');
+ assert.equal(f.writes(),1);
+});
+each('corrupt created native mineral stacksize cannot authorize committed journal replay',f=>{
+ assert.equal(f.engine.refine(args).status,'COMMITTED');
+ const mineral=Object.values(f.getDb()).find(x=>x.typeID===34);
+ assert.ok(mineral);
+ f.mutateItem(mineral.itemID,{stacksize:999});
+ const id='coop-refine:v1:700:100';
+ assert.equal(f.engine.refine({...args,operationID:id}).status,'COMMITTED_STATE_INVALID');
+ assert.equal(f.writes(),1);
+});
+each('builder changing original mineral item identity cannot mint unverified output',f=>{
+ // Native itemStore callback has the original raw item and output builder.
+ const from=HOOK.slice(HOOK.indexOf('function refineNpcWarehouseOreAtomic('),
+  HOOK.indexOf('// COOP_NATIVE_REFINERY_ATOMIC_END'));
+ const load=new Function('env',`with(env){ ${from}; return refineNpcWarehouseOreAtomic; }`);
+ const original=f.getDb(),data=structuredClone(original);
+ let writes=0;
+ const env={ensureMigrated(){},readItems:()=>structuredClone(data),writeItems:()=>{writes++;return true},
+  normalizeInventoryItem:x=>x,toNumber:(v,d=0)=>Number.isFinite(Number(v))?Number(v):d,
+  getItemMetadata:id=>({typeID:id,groupID:18}),ITEM_FLAGS:{HANGAR:4},
+  CLIENT_INVENTORY_STACK_LIMIT:2147483647,
+  ITEMS_TABLE:'items',repo:{flushTableSync:()=>({success:true})},
+  buildInventoryItem:x=>({...x,stacksize:x.typeID===34?0:x.stacksize}),
+  nextItemID:(_owner,items)=>Math.max(700,...Object.keys(items).map(Number))+1};
+ const result=load(env)(f.engine.preview(args));
+ assert.equal(result.success,false);assert.equal(result.errorMsg,'REFINERY_OUTPUT_MISMATCH');
+ assert.equal(writes,0);
+});
+
+
+test('refinery runtime module imports the real .cjs sibling in source checkout',()=>{
+ const entry=require('../integration/coopNpcRefineryRuntime.cjs');
+ assert.equal(typeof entry.createLiveRefinery,'function');
+});
+test('refinery runtime module imports installed .js sibling in pinned overlay',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-refinery-overlay-'));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const code=fs.readFileSync(new URL('../integration/coopNpcRefineryRuntime.cjs',import.meta.url),'utf8');
+ fs.writeFileSync(path.join(root,'coopNpcRefineryRuntime.js'),code);
+ fs.writeFileSync(path.join(root,'coopNpcRefinery.js'),
+  'module.exports={createRefinery:()=>({verified:true})};');
+ const deployed=createRequire(path.join(root,'index.cjs'))('./coopNpcRefineryRuntime.js');
+ assert.equal(typeof deployed.createLiveRefinery,'function');
+});
+test('refinery runtime does not swallow missing transitive native dependency',t=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'coop-refinery-overlay-broken-'));
+ t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ const code=fs.readFileSync(new URL('../integration/coopNpcRefineryRuntime.cjs',import.meta.url),'utf8');
+ fs.writeFileSync(path.join(root,'coopNpcRefineryRuntime.js'),code);
+ fs.writeFileSync(path.join(root,'coopNpcRefinery.js'),
+  "require('./missing-original-refinery-implementation');");
+ assert.throws(()=>createRequire(path.join(root,'index.cjs'))('./coopNpcRefineryRuntime.js'),
+  /missing-original-refinery-implementation/);
 });

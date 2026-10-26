@@ -186,3 +186,31 @@ test("unverified buyer session cannot acquire native Rust claim",()=>run(async f
  assert.equal(result.error,"NPC_BUYER_SESSION_OR_DOCK_INVALID");
  assert.equal(f.counts().claims,0);
 }));
+
+
+test("noncanonical fractional-cent player wallet never funds native NPC goods",()=>run(async f=>{
+ f.mutate(db=>db.characters["701"].balance=250.004);
+ const before=f.data();
+ await assert.rejects(buy(f),/NPC_BUYER_INSUFFICIENT_FUNDS/);
+ assert.deepEqual(f.data(),before);
+ assert.equal(f.counts().finals,0);
+}));
+test("noncanonical fractional-cent NPC corporation balance cannot receive rounded ISK",()=>run(async f=>{
+ f.mutate(db=>db.corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance=50.004);
+ const before=f.data();
+ await assert.rejects(buy(f),/NPC_CORPORATE_WALLET_INVALID/);
+ assert.deepEqual(f.data(),before);
+ assert.equal(f.counts().finals,0);
+}));
+test("legitimate two-decimal native balances retain every cent after salvage sale",()=>run(async f=>{
+ f.mutate(db=>{
+  db.characters["701"].balance=250.05;
+  db.corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance=50.05;
+ });
+ const result=await buy(f),db=f.data();
+ assert.equal(result.status,"PURCHASED");
+ assert.equal(db.characters["701"].balance,190.05);
+ assert.equal(db.corporationRuntime["corporations\u001f10001"].wallet.divisions["1000"].balance,110.05);
+ assert.equal(db.npcMarketFills["order\u001f456"].buyerBeforeCents,25005);
+ assert.equal(db.npcMarketFills["order\u001f456"].corpBeforeCents,5005);
+}));

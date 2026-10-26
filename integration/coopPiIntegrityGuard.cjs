@@ -95,9 +95,11 @@ function createPiIntegrityGuard({inventory,staticData,runtime,orbitals,clock=()=
     for(const l of launches){
       if (!own(l,actor) || positive(l.planetID)!==planet || l.deleted===true)continue;
       if (positive(l.physicalContainerID))continue;
-      const created=Date.parse(l.createdAt);
-      // An unmaterialized *recent* launch is a potential native custody loss.
-      if(!Number.isFinite(created) || (created<=now && now-created<=7*86400000))reject(CODE.LAUNCH);
+      // A stale orphan launch remains an unresolved native custody loss.
+      // Passage of seven days, or a future-dated clock, cannot establish that
+      // the missing physical commodity container was recovered/consumed.
+      // Only native deletion/reconciliation can release this guard.
+      reject(CODE.LAUNCH);
     }
     return {ok:true};
   }
@@ -169,7 +171,13 @@ function afterLaunch({session,launch}={}){
   return g.assertLaunchPhysicalized({session,launch,
    readLaunch:id=>runtime.getLaunch(id,session?.characterID),
    container:containerID?inventory.findItemById(containerID):null,
-   items:containerID?inventory.listContainerItems(session?.characterID,containerID,inventory.ITEM_FLAGS.HANGAR):[]});
+   items:containerID?inventory.listContainerItems(session?.characterID,containerID,inventory.ITEM_FLAGS.HANGAR):[],
+   // The native PI launch path physically spawns this item into the system
+   // Ballpark. An ItemStore container alone is not evidence of a visible,
+   // recoverable launch. Resolve the real native entity rather than passing
+   // the previously omitted sceneEntity (which denied every legitimate launch).
+   sceneEntity:containerID && positive(full?.solarSystemID)?
+    require("../space/runtime").ensureScene(full.solarSystemID)?.getEntityByID?.(containerID):null});
  });
 }
 function beforeGmMutation(){return guarded(g=>g.disableGmCommodity());}

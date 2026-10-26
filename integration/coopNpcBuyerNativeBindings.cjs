@@ -10,8 +10,14 @@ const {createNpcMarketCompletionNotifier}=require("./coopNpcMarketCompletionNoti
 const fs=require("node:fs");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const count=x=>Number.isSafeInteger(x)&&x>=0;
-const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&
- Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+// Match the authoritative COOP-048 atomic wallet. An existing wallet with
+// fractional cents is NOT spendable and must not acquire a Rust claim.
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0)return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
 function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
  getStation,resolveActor,readNeeds,file,marketRules,
  authorizeRecoveryOperator=null,marketNotifier=null,
@@ -48,9 +54,13 @@ function createNativeNpcBuyerBindings({gameStore,itemStore,marketClient,
   try{
    if(!pos(id)||!pos(stationID))return false;
    const s=read("characters","/"+id);
-   return Number(s?.characterID??s?.charID)===id&&
+   // The original native GameStore key and verified Rust seller escrow
+   // bind this record. Vanilla characterState may omit embedded IDs.
+   const embedded=s?.characterID??s?.charID;
+   return Boolean(s&&
+     (embedded===undefined||embedded===null||Number(embedded)===id)&&
      cents(s.balance)!==null&&Array.isArray(s.walletJournal)&&
-     Array.isArray(s.marketTransactions);
+     Array.isArray(s.marketTransactions));
   }catch{return false}
  }
  const market={
