@@ -153,6 +153,13 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
        items.some(x=>!id(x?.wreckItemID)||x.wreckID!==wreck.wreckID||
        !id(x.typeID)||!Number.isSafeInteger(x.quantity)||x.quantity<1||
        x.locationID!==wreck.wreckID))continue;
+    // Store the exact original native inventory rows BEFORE any player
+    // removes them. This is read-only source provenance, never an item grant.
+    hist.initialWreckItems=items.map(item=>({
+     wreckItemID:item.wreckItemID,typeID:item.typeID,
+     quantity:item.quantity,singleton:item.singleton===true||
+      item.singleton===1
+    }));
     hist.wreckVerified=true;hist.wreckID=wreck.wreckID;
     out.wrecksVerified++;out.itemsVerified+=items.length;
     out.events.push({status:items.length?
@@ -198,7 +205,20 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
   for(const event of out.events)try{notify(event)}catch{}
   return out;
  }
- return {tick,activeIDs:()=>new Set([...seen.values()].map(x=>x.entityID)),
+ function witnessedWreck(wreckID){
+  if(!id(wreckID))return null;
+  const matches=[...seen.values()].filter(row=>
+   row.wreckVerified===true&&row.wreckID===wreckID);
+  if(matches.length!==1)return null;
+  const row=matches[0];
+  return {systemID:row.systemID,instanceID:row.instanceID,
+   siteID:row.siteID,encounterKey:row.encounterKey,
+   bossEntityID:row.entityID,bossTypeID:row.typeID,
+   wreckID:row.wreckID,originalItems:(row.initialWreckItems||[])
+    .map(item=>({...item}))};
+ }
+ return {tick,witnessedWreck,
+  activeIDs:()=>new Set([...seen.values()].map(x=>x.entityID)),
   snapshot:()=>[...seen.values()].map(x=>({...x}))};
 }
 module.exports={createNativeBossDirector,explicitBoss,phaseFor};
