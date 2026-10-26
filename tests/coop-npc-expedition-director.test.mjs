@@ -170,3 +170,40 @@ test("EX-03B cross-corporation native proof cannot issue another corp warp",()=>
  const d=f.create({nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[proof]})});
  const r=d.tick(f.input());assert.equal(r.remoteScans,0);assert.equal(r.orders,0);
 });
+
+test("real scanner scheduler skips un-equipped early patrol and selects native scout",()=>{
+ const f=fixture(),scanned=[];
+ const d=f.create({
+  isNativeProbeScout:id=>id===23,
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }
+ });
+ d.tick(f.input());
+ assert.deepEqual(scanned,[23]);
+});
+test("original scanner scheduling is bounded to two fitted native patrols",()=>{
+ const f=fixture(),scanned=[];
+ const d=f.create({
+  isNativeProbeScout:()=>true,
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }
+ });
+ d.tick(f.input());
+ assert.deepEqual(scanned,[21,23]);
+});
+test("broken native scanner equipment lookup fails closed per hull",()=>{
+ const f=fixture(),scanned=[];
+ const d=f.create({
+  isNativeProbeScout:id=>{if(id===21)throw Error("Native store unavailable");return id===24;},
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }
+ });
+ d.tick(f.input());
+ assert.deepEqual(scanned,[24]);
+});
