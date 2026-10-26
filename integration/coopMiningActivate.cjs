@@ -28,27 +28,30 @@ function activate(deps = {}) {
     noteFailure(deps, result);
     return {attempted: true, success: false};
   }
-  // A successful activation is not proof that the module mines: the runtime flags
-  // the effect as a mining effect only when resolveMiningActivation matched the
-  // module and its target. An effect that activates without that flag runs and
-  // produces nothing, which looks exactly like "active modules, no ore".
-  const miningEffect = readBackMiningEffect(scene, minerEntity, entry);
-  if (miningEffect === false) note(deps, "ACTIVATED_NOT_MINING", {moduleID: Number(entry.moduleItem.itemID) || 0});
-  return {attempted: true, success: true, miningEffect};
+  // A successful activation is not proof that the module mines. Two different
+  // failures hide behind "active modules, no ore": the effect can be missing from
+  // the ship the fleet reads back (activation landed on another entity object),
+  // or it can be present but not flagged as a mining effect, because the runtime
+  // only sets that flag when resolveMiningActivation matched module and target.
+  // Both are reported, so the next step is a fact instead of a guess.
+  const moduleID = Number(entry.moduleItem.itemID) || 0;
+  const readBack = readBackEffect(scene, minerEntity, entry);
+  note(deps, "MODULE_ACTIVATED", {moduleID, present: readBack.present, miningEffect: readBack.miningEffect});
+  return {attempted: true, success: true, miningEffect: readBack.miningEffect, effectPresent: readBack.present};
 }
 
-function readBackMiningEffect(scene, minerEntity, entry) {
+function readBackEffect(scene, minerEntity, entry) {
   try {
     const entity = minerEntity && scene && typeof scene.getEntityByID === "function"
       ? scene.getEntityByID(minerEntity.itemID)
       : null;
     const effects = entity && entity.activeModuleEffects;
-    if (!(effects instanceof Map)) return null;
+    if (!(effects instanceof Map)) return {present: null, miningEffect: null};
     const effect = effects.get(Number(entry.moduleItem.itemID)) || null;
-    if (!effect) return null;
-    return effect.miningEffect === true;
+    if (!effect) return {present: false, miningEffect: null};
+    return {present: true, miningEffect: effect.miningEffect === true};
   } catch (_error) {
-    return null;
+    return {present: null, miningEffect: null};
   }
 }
 
