@@ -177,3 +177,18 @@ test("EX-03B20 recovery rejects a forged source corporation and inconsistent ite
  assert.equal(f.rows.get(itemID).locationID,shipID);
  assert.equal(f.rows.size,2);
 });
+
+test("EX-03B20 native wreck expiry cannot hide corrupted original item flag or pending ship intent",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ assert.equal(c.canDestroy(wreckID),false);
+ // Corrupt the original ItemStore flag, so stock hangar listing cannot see it.
+ f.rows.get(itemID).flagID=777;
+ assert.equal(c.list({wreckID}).length,0);
+ assert.equal(c.canDestroy(wreckID),false,"expiry must inspect every ItemStore flag");
+ // The original row is still owned by the same corporation but stuck on
+ // the ship in the post-intent/pre-move crash window.
+ f.rows.get(itemID).locationID=shipID;
+ f.rows.get(itemID).flagID=5;
+ assert.equal(c.canDestroy(wreckID),false,"pending original ship intent blocks wreck expiry");
+});
