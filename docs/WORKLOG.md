@@ -773,3 +773,9 @@ Why: Faction war needs an earned treasury: income for held sectors and confirmed
 Detail: Four defects, each measured on the live world, each with a test where the logic allows. 1. A sale left no provable trace on the route. It removes the hull row through a REAL market fill but never creates a station item, so the manifest's own receipt check could not see it and recovery read the trip as "cargo changed" forever. A settled sale now writes a durable receipt per cargo row - only for row
 Where: integration/coopNativeStationArrival.cjs, integration/coopNativeStationTripJournal.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/coop-deploy.cjs, scripts/coop-hook-requires.cjs, scripts/overlay-spec.cjs, scripts/patch-evejs-coop.cjs, tests/coop-alife12-station-trip-journal.test.mjs
 Evidence: node --test tests/coop-faction-war-treasury.test.mjs 5/5 PASS; purchase() returns paper:true + PAPER_BUDGET_NO_MARKET_ORDER_NO_CARGO and REFUSED_UNFUNDED when the balance is short
+### 2026-10-26T22:16Z · 58d8afd · L3 · feat(war): faction treasury as an explicit paper budget
+
+Why: A trip whose cargo no longer matches the hull paused the fleet forever when it was overdue; it is now closed durably and replanned, while a trip inside its deadline keeps the strict refusal.
+Detail: Owner decision: a faction earns ISK for holding sectors and for confirmed enemy kills, and spends it on hulls and ammunition. Ship purchases stay on paper until real production exists, because real market buying would bleed the market. Every result carries paper:true and a purchase that cannot be paid is refused, never partially applied, so a paper budget can never be mistaken for a native market 
+Where: integration/coopFactionWarTreasury.cjs, tests/coop-faction-war-treasury.test.mjs
+Evidence: tests coop-alife12-station-trip-journal 23 pass + recovery 6 pass; deploy OVERLAY_OK reset=49
