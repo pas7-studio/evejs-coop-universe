@@ -98,3 +98,18 @@ test('a settled cycle with zero quantity does not count as mining', () => {
   assert.equal(result.stages.mining.status, 'MISSING');
   assert.equal(result.verdict, 'FAIL:mining');
 });
+
+test('the station-arrival deposit is a delivery, with its stacks and ore', () => {
+  const deposit = {at: at(300), event: 'living-npc-station-delivered', stationID: 60003760, stacks: 2, oreQuantity: 250};
+  const result = verdict([cycle(), load(), deposit, sold()]);
+  assert.equal(result.stages.deliver.status, 'PROVEN');
+  assert.match(result.stages.deliver.detail, /station=60003760 stacks=2 ore=250/);
+  assert.equal(result.verdict, 'PASS');
+});
+
+test('a deposit event with no stacks is not a delivery', () => {
+  const deposit = {at: at(300), event: 'living-npc-station-delivered', stationID: 60003760, stacks: 0};
+  const result = verdict([cycle(), load(), deposit, sold()]);
+  assert.equal(result.stages.deliver.status, 'MISSING');
+  assert.equal(result.verdict, 'FAIL:deliver');
+});

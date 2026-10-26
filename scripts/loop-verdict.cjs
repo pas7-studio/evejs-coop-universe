@@ -16,6 +16,8 @@ const fs = require("node:fs");
 
 const HAUL_LOAD = "living-hauler-loaded";
 const HAUL_DELIVERED = "living-native-haul-delivered";
+const STATION_DELIVERED = "living-npc-station-delivered";
+const ALIFE_DELIVERY = "alife-native-delivery-settled";
 const WAREHOUSE = "living-warehouse-committed";
 const SALE_SOLD = "living-npc-station-sold";
 const SALE_SKIPPED = "living-npc-station-sale-skipped";
@@ -68,13 +70,22 @@ function verdict(rows, options = {}) {
     ? {status: "PROVEN", evidence: HAUL_LOAD, detail: "cargoQuantity=" + num(loads[loads.length - 1].cargoQuantity) + " hauler=" + num(loads[loads.length - 1].haulerID)}
     : {status: "MISSING", evidence: "", detail: "no hauler took ore (see living-haul-no-hauler for the per-hull reason)"};
 
+  // Delivery has two legitimate producers: the station-arrival trip (the modern
+  // path: stacks deposited at a real station, plus an alife delivery witness) and
+  // the older crate unload. A station id of 0 is never a delivery either way.
   const delivered = byName(HAUL_DELIVERED).filter((row) => String(row.status || "").toUpperCase() === "DELIVERED" && num(row.stationID) > 0);
+  const deposited = byName(STATION_DELIVERED).filter((row) => num(row.stationID) > 0 && num(row.stacks) > 0);
+  const alifeDelivered = byName(ALIFE_DELIVERY).filter((row) => num(row.stationID) > 0);
   const warehoused = byName(WAREHOUSE);
-  stages.deliver = delivered.length
-    ? {status: "PROVEN", evidence: HAUL_DELIVERED, detail: "station=" + num(delivered[delivered.length - 1].stationID)}
-    : warehoused.length
-      ? {status: "PROVEN", evidence: WAREHOUSE, detail: "stacks=" + num(warehoused[warehoused.length - 1].stacks)}
-      : {status: "MISSING", evidence: "", detail: "nothing reached a real station (stationID > 0)"};
+  stages.deliver = deposited.length
+    ? {status: "PROVEN", evidence: STATION_DELIVERED, detail: "station=" + num(deposited[deposited.length - 1].stationID) + " stacks=" + num(deposited[deposited.length - 1].stacks) + " ore=" + num(deposited[deposited.length - 1].oreQuantity)}
+    : alifeDelivered.length
+      ? {status: "PROVEN", evidence: ALIFE_DELIVERY, detail: "station=" + num(alifeDelivered[alifeDelivered.length - 1].stationID)}
+      : delivered.length
+        ? {status: "PROVEN", evidence: HAUL_DELIVERED, detail: "station=" + num(delivered[delivered.length - 1].stationID)}
+        : warehoused.length
+          ? {status: "PROVEN", evidence: WAREHOUSE, detail: "stacks=" + num(warehoused[warehoused.length - 1].stacks)}
+          : {status: "MISSING", evidence: "", detail: "nothing reached a real station (stationID > 0)"};
 
   const sold = byName(SALE_SOLD);
   const skipped = byName(SALE_SKIPPED);
