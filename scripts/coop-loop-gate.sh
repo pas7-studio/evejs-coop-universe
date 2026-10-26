@@ -58,6 +58,7 @@ run "fleet-composition"      node --test tests/coop-fleet-composition.test.mjs
 run "fleet-audit"           node --test tests/coop-fleet-audit.test.mjs
 run "fleet-slot-recompose"   node --test tests/coop-fleet-slot-recompose.test.mjs
 run "mining-fill-cap"       node --test tests/coop-mining-fill-cap.test.mjs
+run "cargo-volume"         node --test tests/coop-cargo-volume.test.mjs
 run "partial-haul"         node --test tests/coop-native-haul-transfer-atomic.test.mjs tests/coop-native-haul-atomic-routing.test.mjs
 run "loop-verdict"           node --test tests/loop-verdict.test.mjs
 

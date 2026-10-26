@@ -121,7 +121,10 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
   if(partial){
    if(typeof nativeStore.allocateCargoID!=="function")
     return failed(miner,hauler,fleet,"ALIFE10_CARGO_ALLOCATOR_UNAVAILABLE");
-   destinationID=pos(nativeStore.allocateCargoID());
+   // The native allocator answers {success, data}; a test double may answer the id.
+   const allocated=nativeStore.allocateCargoID();
+   destinationID=pos(allocated&&typeof allocated==="object"?
+    (allocated.success===true?allocated.data:0):allocated);
    const allCargo=typeof nativeStore.listNativeCargo==="function"?
     nativeStore.listNativeCargo():null;
    if(!destinationID||destinationID===id||!Array.isArray(allCargo)||

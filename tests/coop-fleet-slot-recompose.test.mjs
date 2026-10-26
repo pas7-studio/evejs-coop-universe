@@ -133,7 +133,8 @@ test("a mining hull in the hauler role is demoted to an extra miner and a real h
  assert.equal(f.world.entities.get(90003).entityID,90003);
  // The added hull is a real industrial hull, and the event names the change.
  assert.equal(f.world.controllers.get(77010).profileID,"ore_mining_badger_hauler");
- assert.ok(f.log.some(line=>line.includes("recomposed")&&line.includes("addedHaulers=77010")));
+ assert.ok(f.log.some(line=>line.includes("composed")&&line.includes("addedHaulers=77010")&&
+  line.includes("reason=MISROLED_HAULER_DEMOTED")));
 });
 
 test("a mis-roled hull that already holds ore is never demoted",t=>{
@@ -176,4 +177,40 @@ test("the repair is idempotent: a recomposed slot is stable on the next start",t
  assert.equal(f.getSpawnCalls(),1);
  assert.deepEqual(f.witness().minerEntityIDs,[90001,90002,90003]);
  assert.deepEqual(f.witness().haulerEntityIDs,[77010]);
+});
+
+// The first live attempt spawned a hauler and then failed before writing the witness.
+// The next start must ABSORB that real hull instead of spawning another one: an
+// interrupted repair must converge, never accumulate.
+test("a real hauler left by an interrupted attempt is absorbed, not duplicated",t=>{
+ const f=fixture(t);f.seed();
+ // A real hauler that wears this slot"s marker but is missing from the witness.
+ const marker=roleMarker(SYSTEM,1,"hauler");
+ f.world.entities.set(90009,{entityID:90009,systemID:SYSTEM,ownerID:950,typeID:1,
+  operatorKind:marker,nativeNpc:true,transient:false,profileID:"ore_mining_badger_hauler"});
+ f.world.controllers.set(90009,{entityID:90009,systemID:SYSTEM,operatorKind:marker,
+  profileID:"ore_mining_badger_hauler",transient:false,startupRuleID:null});
+ f.world.modules.set(900090,{moduleID:900090,entityID:90009,transient:false});
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.equal(r.slots[0].recomposed,true);
+ assert.equal(f.getSpawnCalls(),0,"the orphan real hauler already replaces the Venture");
+ const slot=f.witness();
+ assert.deepEqual(slot.minerEntityIDs,[90001,90002,90003]);
+ assert.deepEqual(slot.haulerEntityIDs,[90009]);
+ assert.deepEqual(slot.addedHaulerIDs,[]);
+ assert.equal(slot.recomposedAtMs>0,true);
+});
+
+test("a witness that merely disagrees with the markers is reconciled without spawning",t=>{
+ const f=fixture(t,{haulerProfile:"ore_mining_mammoth_hauler"});f.seed();
+ const marker=roleMarker(SYSTEM,1,"hauler");
+ f.world.entities.set(90019,{entityID:90019,systemID:SYSTEM,ownerID:950,typeID:1,
+  operatorKind:marker,nativeNpc:true,transient:false,profileID:"ore_mining_mammoth_hauler"});
+ f.world.controllers.set(90019,{entityID:90019,systemID:SYSTEM,operatorKind:marker,
+  profileID:"ore_mining_mammoth_hauler",transient:false,startupRuleID:null});
+ const r=f.start();
+ assert.equal(r.status,"OK");
+ assert.equal(f.getSpawnCalls(),0);
+ assert.deepEqual(f.witness().haulerEntityIDs,[90003,90019]);
 });

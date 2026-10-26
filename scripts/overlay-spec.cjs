@@ -79,6 +79,8 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningTargetGuard");
 names.splice(names.indexOf("coopMiningTargetGuard")+1,0,"coopFleetComposition");
 // A miner must not fill beyond one hauler load (default OFF).
 names.splice(names.indexOf("coopFleetComposition")+1,0,"coopMiningFillCap");
+// The cargo projection carries no volume; annotate it from SDE (default OFF).
+names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -274,6 +276,11 @@ const specs=[
    line:'      require("../../space/coopMiningTrace").note("TARGET_OUT_OF_RANGE",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),distanceMeters:Math.round(distanceToTarget),engagementMeters:Math.round(engagementRangeMeters)});'},
   {anchor:"    if (!targetLockResult || targetLockResult.success !== true) {",after:true,
    line:'      require("../../space/coopMiningTrace").note("TARGET_LOCK_FAILED",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),errorMsg:String((targetLockResult&&targetLockResult.errorMsg)||"NONE")});'},
+   {anchor:"    const volume = Math.max(0, toFiniteNumber(entry && entry.volume, 0));",
+    // The stored cargo projection carries no volume, so after a restart every ore
+    // stack reads as 0 m3 and the fleet never dispatches a hauler. Annotate the entry
+    // with the SDE volume of its own type. Default OFF.
+    line:'    require("../../space/coopCargoVolume").ensure(entry);'},
    {anchor:"  const cargoState = getFleetCargoState(scene, fleetRecord);",after:true,
     // A miner must not fill beyond what the fleet can actually carry away: the stock
     // trigger compares the fill against the MINER's own capacity, which is how

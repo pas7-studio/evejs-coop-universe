@@ -258,3 +258,26 @@ test("a partial request larger than the stack is a full move, not a split",t=>{
  assert.equal(f.getOre().entityID,haulerID);
  assert.equal(Object.keys(f.rows().get("cargo")).length,1);
 });
+
+// The native allocator answers {success, data}, not a bare id. Assuming a number made
+// every partial load fail with CARGO_ID_ALLOCATION_CONFLICT, and because that failure
+// is "uncertain" it also marked the miners for operator repair, so every later attempt
+// short-circuited as HAUL_MINER_NOT_PHYSICALLY_ATTESTED. Measured live.
+test("a partial load accepts the native {success, data} allocator answer",t=>{
+ const f=fixture(t);
+ f.store.allocateCargoID=()=>({success:true,data:cargoID+900});
+ const result=f.transferPartial(10);
+ assert.equal(result.status,"COMMITTED");
+ assert.equal(result.cargoID,cargoID+900);
+ assert.equal(f.getOre().quantity,15);
+ assert.equal(f.store.listNativeCargoForEntity(haulerID)[0].quantity,10);
+});
+
+test("a partial load refuses a failed allocator answer instead of guessing an id",t=>{
+ const f=fixture(t);
+ f.store.allocateCargoID=()=>({success:false,errorMsg:"NO_CAPACITY"});
+ const result=f.transferPartial(10);
+ assert.equal(result.status,"NEEDS_OPERATOR_REPAIR");
+ assert.match(String(result.reason),/ALIFE10_CARGO_ID_ALLOCATION_CONFLICT/);
+ assert.equal(f.getOre().quantity,25);
+});
