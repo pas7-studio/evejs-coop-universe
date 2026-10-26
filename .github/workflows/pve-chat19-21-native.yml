@@ -1,5 +1,6 @@
 name: PVE Chat19-21 Native CI Gate
 on:
+  workflow_dispatch:
   push:
     branches:
       - feat/chat19-21-pve-native-integration-gates
