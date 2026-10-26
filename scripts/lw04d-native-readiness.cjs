@@ -7,6 +7,7 @@ const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
 const TESTS=Object.freeze([
  "tests/coop-lw04d-original-native-chain-proof.test.mjs",
  "tests/coop-lw04e-original-warehouse-title-transfer.test.mjs",
+ "tests/coop-lw04f-original-native-depot-hook.test.mjs",
  "tests/coop-native-station-ore-settlement.test.mjs",
  "tests/coop-npc-industry-original-game-store-kernel.test.mjs",
  "tests/coop-npc-native-economy-director.test.mjs",
