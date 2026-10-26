@@ -6,7 +6,9 @@
 const positive=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
 const mineable=x=>positive(x?.cargoID)&&positive(x?.typeID)&&Number.isSafeInteger(Number(x.quantity))&&Number(x.quantity)>0&&Number(x.moduleID||0)===0;
 const haulFlag="coopHaulFleetID";
-const {promote:durableCargo}=require("./coopDurableCargoWrite");
+const load=name=>{try{return require("./"+name)}catch(_error){return require("./"+name+".cjs")}};
+const {promote:durableCargo}=load("coopDurableCargoWrite");
+const {observe:safeObserve}=load("coopObserve");
 function dependenciesOf(options={}){
  return {store:options.store||require("./npc/nativeNpcStore"),
  probe:options.probe||require("./coopRuntimeProbe"),
@@ -33,10 +35,9 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    fleet.coopHaulCargoNeedsOperatorRepair=reason;
    if(hauler)hauler.coopHaulNeedsOperatorRepair=reason;
   }
-  try{probe.observe("living-haul-custody-blocked",null,
-   {itemID:miner.itemID,spaceState:{systemID:scene?.systemID}},
-   {fleetID:fleet?.fleetID,cargoID,reason,operatorRepairRequired:uncertain,nativeMutation:false});}
-  catch(_){} // Telemetry cannot affect custody.
+  safeObserve(probe,"living-haul-custody-blocked",
+   {itemID:miner.itemID,systemID:scene?.systemID},
+   {fleetID:fleet?.fleetID,cargoID,reason,operatorRepairRequired:uncertain,nativeMutation:false});
   return 0;
  };
  if(process.env.EVEJS_COOP_NATIVE_HAUL_CARGO!=="1"||
@@ -187,10 +188,9 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   finally{strictInFlight.delete(key);}
  }
  if(count){
-  try{probe.observe("living-hauler-loaded",null,
-   {itemID:miner.itemID,spaceState:{systemID}},
+  safeObserve(probe,"living-hauler-loaded",{itemID:miner.itemID,systemID},
    {fleetID,minerID,stacks:count,cargoQuantity:quantity,volumeM3:totalMoved,
-    verifiedNativeCargo:true});}catch(_){}
+    verifiedNativeCargo:true});
  }
  return totalMoved;
 }
@@ -227,8 +227,8 @@ function transferCargo(scene,fleet,miner,options={}){
     const promoted=durableCargo({store,database:options.database,
      cargoID:item.cargoID,row:next});
     if(promoted.status!=="DURABLE"){
-     probe.observe("living-hauler-cargo-persist-failed",null,
-      {itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
+     safeObserve(probe,"living-hauler-cargo-persist-failed",
+      {itemID:hauler.itemID,systemID:fleet.systemID},
       {fleetID:fleet.fleetID,cargoID:item.cargoID,status:promoted.status});
      continue;
     }
@@ -239,7 +239,7 @@ function transferCargo(scene,fleet,miner,options={}){
   }
   if(moved){
    hauler.nativeCargoItems=store.buildNativeCargoItems(hauler.itemID);
-   probe.observe("living-hauler-loaded",null,{itemID:hauler.itemID,spaceState:{systemID:fleet.systemID}},
+   safeObserve(probe,"living-hauler-loaded",{itemID:hauler.itemID,systemID:fleet.systemID},
     {fleetID:fleet.fleetID,minerID:miner.itemID,haulerID:hauler.itemID,
      stacks:moved,cargoQuantity:quantity,volumeM3:volume});
   }
