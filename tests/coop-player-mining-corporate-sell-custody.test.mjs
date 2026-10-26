@@ -24,7 +24,7 @@ function setup(){
   stationID:STATION,officeFolderID:OFFICE,division:115};
  const order={order_id:ORDER,is_corp:true,owner_id:CORP,bid:false,
   station_id:STATION,type_id:34,vol_remaining:80,vol_entered:80,
-  source:"coop-corporation",price_cents:1500,escrowed:false,state:"open"};
+  source:"coop-corporation",price_cents:1500,escrowed:false,state:"prepared"};
  const gameStore={coopAtomicNativeRows:{
   mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>poisoned,
   transact(tables,fn){
@@ -50,7 +50,8 @@ function setup(){
    canWallet:()=>role,canTake:()=>role},
   readiness:{inspect:()=>({status:"NATIVE_CORPORATE_SELL_UNSUPPORTED",
    marketOrderCreated:false,originalCorporateOre:[ore]})},
-  verifyNativeSellOrder:()=>validNative?{verifiedNative:true,phase:"OPEN",
+  verifyNativeSellOrder:()=>validNative?{verifiedNative:true,phase:"PREPARED_UNPUBLISHED",
+   isPublished:false,totalFilled:0,totalPaidCents:0,
    orderID:ORDER,order:{...order}}:null,
   readCancelProof:()=>({verifiedNative:true,orderID:ORDER,ownerID:CORP,
    phase:cancelled?"CANCELLED":"OPEN",totalFilled:filled,totalPaidCents:filled*1500}),
@@ -187,4 +188,10 @@ test("no corporate sell can claim received revenue until original Rust claim and
  assert.equal(x.receipt().marketRevenueCents,null);
  assert.equal(x.receipt().marketOrderCreated,false);
  assert.equal(x.escrow().phase,"ESCROW_BOUND_UNSETTLED");
+});
+
+test("an already OPEN native Rust order cannot reserve corporate cargo after buyers might fill",()=>{
+ const x=setup();x.order.state="open";
+ assert.equal(x.reserve().reason,"CORP_SELL_NATIVE_ORDER_NOT_ATTESTED");
+ assert.equal(x.item().locationID,OFFICE);assert.equal(x.mutations(),0);
 });
