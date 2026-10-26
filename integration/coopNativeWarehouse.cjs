@@ -143,6 +143,12 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    if(pos(cargo.ownerID)!==args.corporationID)
     return answer("ORIGINAL_CARGO_OWNER_MISMATCH");
    if(verifyDurableCargo(cargo,args)!==true)return answer("CARGO_NOT_DURABLE");
+   // Before the durable PREPARED fence and irreversible native source debit,
+   // check the *global* original cargo-tag namespace. If this cargoID already
+   // has any station item, the source and target coexist: never delete ore
+   // from the ship merely to discover an ownership/stack conflict later.
+   const originalTicket={...args,typeID:Number(cargo.typeID),quantity:Number(cargo.quantity)};
+   if(checkTarget(originalTicket))return answer("WAREHOUSE_SOURCE_TARGET_COLLISION");
    record={version:1,...args,typeID:Number(cargo.typeID),quantity:Number(cargo.quantity),
     phase:statuses.PREPARED,at:clock(),updatedAt:clock()};
    persist(id,record); // Durably prepared before source mutation.
