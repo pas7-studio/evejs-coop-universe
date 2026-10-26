@@ -111,3 +111,25 @@ test("EX-03B18 previously allocated native wreck blocks second death even when o
  assert.equal(c.stage({wreckID:980300000322,shipID,corporationID:corp}).success,false);
  assert.equal(f.rows.size,2);
 });
+
+test("EX-03B18 ordinary stock NPC wreck without original cargo is not blocked",()=>{
+ const f=fixture(),c=f.make();
+ f.rows.get(itemID).customInfo="";
+ f.wrecks.get(wreckID).coopNpcExpeditionSourceCorpID=0;
+ const result=c.stage({wreckID,shipID,corporationID:0});
+ assert.equal(result.success,true);
+ assert.equal(result.status,"NO_EXPEDITION_LOOT");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.flushCount,0,"no original item movement for stock NPC death");
+});
+test("EX-03B18 foreign wreck rights never replace NPC source ownership",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(f.wrecks.get(wreckID).corporationID,999);
+ assert.equal(f.wrecks.get(wreckID).coopNpcExpeditionSourceCorpID,corp);
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ assert.equal(c.list({wreckID})[0].ownerID,corp);
+ const claimed=c.claim({characterID,wreckID,itemID,
+  destinationLocationID:playerShipID,destinationFlagID:5,quantity:3});
+ assert.equal(claimed.success,true);
+ assert.equal(f.rows.get(itemID).ownerID,characterID);
+});
