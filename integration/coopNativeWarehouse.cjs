@@ -238,13 +238,24 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
  function audit(){
   let entries;try{entries=fsApi.readdirSync(dir);}
   catch(e){if(e.code==="ENOENT")return {status:"EMPTY",committed:0,pending:0,problems:[]};throw e;}
-  const files=entries.filter(x=>/^\d+\.json$/.test(x));
+  // In this dedicated receipt directory any .json is a claimed journal.
+  // An alias like 0008001.json must NOT resolve through load(8001) and
+  // count the same COMMITTED native ore a second time.
+  const files=entries.filter(x=>x.endsWith(".json"));
   let committed=0,pending=0;const problems=entries
    .filter(x=>/^\d+\.lock$/.test(x))
    .map(x=>({cargoID:Number(x.slice(0,-5)),reason:"WAREHOUSE_CUSTODY_LOCKED"}));
+  for(const temp of entries.filter(x=>/^\d+\.json\.tmp-/.test(x)))
+   problems.push({cargoID:Number(temp.split(".")[0]),reason:"WAREHOUSE_INCOMPLETE_RECEIPT_WRITE"});
   if(!files.length&&!problems.length)
    return {status:"EMPTY",committed:0,pending:0,problems:[]};
-  for(const file of files){const id=Number(file.slice(0,-5));try{
+  for(const file of files){
+   const stem=file.slice(0,-5),id=Number(stem);
+   if(!pos(id)||stem!==String(id)){
+    problems.push({cargoID:pos(id),reason:"WAREHOUSE_NONCANONICAL_RECEIPT_FILENAME"});
+    continue;
+   }
+   try{
    const row=load(id),target=checkTarget(row),source=findCargo(row);
    if(row.phase===statuses.COMMITTED){if(!target||source||Number(target.itemID)!==row.itemID)problems.push({cargoID:id,reason:"COMMITTED_MISMATCH"});else committed++;}
    else{pending++;problems.push({cargoID:id,reason:row.phase+(source?"_SOURCE_PRESENT":"_SOURCE_ABSENT")});}
