@@ -82,3 +82,8 @@ Evidence: 0003 applies clean, OVERLAY_OK patched 54 anchorMismatch 0, npcBehavio
 Why: re-running the series failed on already-applied patches and forced a manual git apply for 0003, which is exactly the second mechanism the doctrine forbids
 Where: scripts/apply-upstream-patches.cjs
 Evidence: round trip proved: 3 reversed then 3 applied; second --apply reports PRESENT for all 3; OVERLAY_OK patched 54 after the round trip
+### 2026-10-26T11:31Z · 0fd5032 · L2 · refactor(haul): one owner for the operator-repair flags; record the capacitor root cause
+
+Why: the same five repair flags were written by two failure paths, and the capacitor root cause plus live proof had to be recorded before the next session
+Where: .opencode/state.md, integration/coopNativeHaulCargo.cjs
+Evidence: transfer suites 15 pass/10 pre-existing failures identical with and without the change; live cap1 on fleet2 miners and climbing on fleet1
