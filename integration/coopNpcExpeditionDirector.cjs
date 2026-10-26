@@ -79,6 +79,13 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
    return p?{...p,durableLinkVerified:true,nativeControllerVerified:true}:null;
   }
  });
+ // A scene can change between the first site read and the original
+ // competition's second physical witness read. Never let a transient
+ // native getter exception abort every NPC in the existing 30-second tick.
+ const safeObserve=args=>{
+  try{return competition.observe(args)}
+  catch{return {status:"NATIVE_SCENE_WITNESS_UNAVAILABLE"}}
+ };
  const key=(systemID,siteID,corpID)=>systemID+":"+siteID+":"+corpID;
  const fingerprint=s=>JSON.stringify([s.siteID,s.targetID??null,s.siteKind??null,
   s.family??null,s.typeID??null,s.instanceID??null,s.pairID??null,
@@ -149,13 +156,13 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     try{candidate=scene.getEntityByID(shipID)}catch{continue}
     if(!candidate||!vector(candidate.position)||
        distance(candidate.position,site.actualPosition)>150000)continue;
-    const witness=competition.observe({scene,siteID:site.siteID,shipID});
+    const witness=safeObserve({scene,siteID:site.siteID,shipID});
     if(witness.status==="NATIVE_SITE_OBSERVED")observedPlayers++;
     if(witness.contested===true&&witness.status==="NATIVE_SITE_OBSERVED")contested++;
    }
    for(const pilot of all){
    if(distance(pilot.ship.position,site.actualPosition)>150000)continue;
-   const result=competition.observe({scene,siteID:site.siteID,shipID:pilot.entityID});
+   const result=safeObserve({scene,siteID:site.siteID,shipID:pilot.entityID});
    if(!["NATIVE_SITE_OBSERVED","ALREADY_OBSERVED"].includes(result.status))continue;
    if(result.status==="NATIVE_SITE_OBSERVED")observed++;
    if(result.contested===true&&result.status==="NATIVE_SITE_OBSERVED")contested++;
@@ -228,7 +235,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     else{
      const liveSite=nativeSite(tip.systemID,tip.siteID,true);
      if(!liveSite||fingerprint(liveSite)!==tip.fingerprint){blocked++;continue}
-     const witness=competition.observe({scene,siteID:tip.siteID,shipID:scout.entityID});
+     const witness=safeObserve({scene,siteID:tip.siteID,shipID:scout.entityID});
      if(witness.status!=="NATIVE_SITE_OBSERVED"&&witness.status!=="ALREADY_OBSERVED"){
       blocked++;continue;
      }
@@ -277,7 +284,10 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     if(result?.success===true){
      pending.set(moveKey,{fingerprint:tip.fingerprint,at:now});orders++;
      if(scoutWarpFirst)scoutWarpOrders++;else patrolWarpOrders++;
-    }else blocked++;
+    }else{
+     if(result?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")uncertainOrders.add(moveKey);
+     blocked++;
+    }
    }
   }
   return {status:"NATIVE_EXPEDITION_TICK",observed,observedPlayers,contested,remoteScans,orders,blocked,
