@@ -638,6 +638,81 @@ and default-off configuration. Full pinned Node + SQLite FULL,
 Rust, restart/SIGKILL, actual SDE corp identity and two-client
 fleet behavior must pass before enabling or merging.
 
+## FW-009A — real native warship casualties, NOT automatic victory
+
+**Purpose.** Gather durable, exact-native losses to support later campaign
+adjudication without using combat orders, hypothetical damage or elapsed
+time as evidence of victory. Native faction-war losses never apply
+ship damage, grant loot or ISK, create wrecks, or change territorial
+control. The original FW-001 `CAPTURE_TERRITORY` still requires
+independent native objective and final capture witnesses.
+
+### Event source and transaction
+
+The stock EveJS `nativeNpcWreckService` calls
+`coopVirtualWorldRuntime.confirmedNativeNpcWreck` *after* creating an
+original physical NPC wreck. Its existing `coopNativeCombatEvidence.verifyWreck`
+checks actual loaded native scene, persisted `getNativeWreck`, wreck
+source entity/launcher identity, and stored loot rows (including valid
+empty wrecks). The new optional
+`coopWarCasualtyLedger.record` re-runs this same source proof **inside**
+the existing `GameStore.coopAtomicNativeRows.transact(["corporationRuntime"])`
+and verifies:
+
+- The named pilot is uniquely matched to the exact live native fleet
+  registry `entityID`, corporation and `systemID` captured by the
+  real destruction callback.
+- Native SDE maps the corporation to the registered faction, and the
+  authoritative native war is `ACTIVE`; its campaign must be in
+  `ASSAULT` of this **target** system, with only its actual attacker or
+  defender side.
+- No unretired native flight exists for the victim. A physical ship
+  lost *mid-handoff* cannot be casually recorded in a different
+  system before the operator reconciles its durable custody.
+- A wreck can produce one immutable record, keyed by the original
+  positive numeric `wreckID`. Conflicting retries are rejected.
+  A different wreck ID for the same native entity in the same
+  campaign is rejected as well. A successful original callback
+  may replay as `DUPLICATE` even after a player salvages its wreck.
+
+Records are stored in `coop-faction-war\\u001fcasualties-v1` in the
+same native SQLite `corporationRuntime` table, with strict caps
+(4,096 total, 256 per campaign) and no automatic eviction. Uncertain
+native SQLite outcomes are propagated and **never interpreted as a
+successful kill**; only a retry with the original `wreckID` may
+observe a committed duplicate.
+
+### Native campaign assessment
+
+`assess({campaignID})` returns witnessed **victim losses only**,
+separated by the war's actual attacker/defender faction, with explicit
+`captureAuthorized:false`, `victoryAdjudicated:false`,
+`defeatAdjudicated:false`, `killCreditAssigned:false` and
+`objectiveProofRequired:true`. It never assigns a killer, score,
+standing, reward or control of the solar system. A ship death is NOT
+an independent siege-objective completion proof, and an enemy
+fleet disappearing from a scene is NOT a victory event.
+
+### Enablement and acceptance
+
+New flag `EVEJS_COOP_FACTION_WAR_NATIVE_CASUALTIES=1`, requiring
+`EVEJS_COOP_FACTION_WAR=1`,
+`EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`, and the existing opt-in
+`EVEJS_COOP_VIRTUAL_WORLD=1` for the native wreck callback.
+Defaults OFF, no separate A-Life clock or new public RPC.
+
+Source tests: `node --test tests/coop-war-casualty-ledger.test.mjs`.
+Verify actual native physical wreck from BOTH factions, wreck
+loot/no loot, saved pilot/corporation SDE authority, double callback,
+two wreck IDs for one native victim, source/destination mismatch,
+unretired gate handoff, non-ASSAULT war, restart/SQLite FULL,
+concurrent double insert, player salvage before replay, two-player
+visible battle and preserved cargo/ISK. Kill credit and verified
+native objective ownership are later FW-009B / FW-004 / FW-006
+work, not granted here.
+
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 

@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -2558,6 +2558,49 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    require("./coopRuntimeProbe").observe("living-native-wreck-evidence",null,
     {spaceState:{systemID}},proof);
    return;
+  }
+  // FW-009A: native casualty evidence uses the same verified physical
+  // wreck callback, never combat orders, hit counters or missing NPCs.
+  // This is a SQLite ledger of actual victim ships, NOT victory or kill
+  // credit. Any ambiguous SQLite commit is inspected on next callback
+  // with this SAME physical wreck ID, never a synthetic replacement ID.
+  if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_CASUALTIES==="1"&&
+     process.env.EVEJS_COOP_FACTION_WAR==="1"&&
+     process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
+     process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"){
+   try{
+    if(!warCasualtyLedger)
+     warCasualtyLedger=require("./coopWarCasualtyLedger").createWarCasualtyLedger({
+      gameStore:require("../gameStore"),
+      getFactionForCorporation:id=>
+       require("../services/faction/factionState").getFactionIDForCorporation(id),
+      verifyNativeWreck:({systemID:sys,entityID:id,wreckID:wid,pilotID:pid})=>{
+       // The authoritative callback already read the on-disk native
+       // pilot link; do not require the virtual A-Life registry to be
+       // initialized before this synchronous physical wreck hook.
+       const links=Object.values(registry.links||{});
+       return require("./coopNativeCombatEvidence").verifyWreck({
+        systemID:sys,npcID:id,wreckID:wid,
+        scene:runtime.ensureScene(sys,{refreshStargates:false}),
+        links:links.filter(x=>x?.pilotID===pid),
+        getWreck:w=>store.getNativeWreck(w),
+        getWreckItems:w=>store.listNativeWreckItemsForWreck(w)
+       });
+      }
+     });
+    const casualty=warCasualtyLedger.record({
+     systemID:Number(systemID),entityID:Number(npcID),
+     wreckID:Number(wreckID),pilotID:link.pilotID
+    });
+    if(casualty.status==="RECORDED"||
+       casualty.status==="DUPLICATE")
+     require("./coopRuntimeProbe").observe(
+      "living-native-war-casualty",null,{spaceState:{systemID}},
+      {status:casualty.status,receipt:casualty.receipt,
+       captureAuthorized:false,killCreditAssigned:false});
+   }catch(error){
+    console.warn("[CoopNativeWarCasualty] strict native evidence",error.message);
+   }
   }
   // The ship is already removed from the EveJS scene at this point,
   // but its authoritative source object is still held by the wreck

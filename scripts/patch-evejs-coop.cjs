@@ -24,6 +24,8 @@ names.splice(names.indexOf("coopWarGateStaging")+1,0,"coopWarTransferLedger","co
 names.splice(names.indexOf("coopWarGateHandoff")+1,0,"coopWarRecoveryConsole","coopWarRecoverySocket");
 // FW-008: terminal war-campaign demobilization and reuse via existing A-Life.
 names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
+// FW-009A: native confirmed faction-war casualties, never synthetic victory.
+names.splice(names.indexOf("coopWarDemobilizer")+1,0,"coopWarCasualtyLedger");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
 names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody","coopPlayerMarketFill","coopPlayerMarketSettlementFence","coopPlayerMarketRustClaim","coopPlayerMarketAtomicSettlement","coopPlayerMarketAtomicRuntime","coopPlayerMarketBuyReserve","coopPlayerMarketBuyReserveRuntime","coopPlayerMarketBuySettlement","coopPlayerMarketBuyRefund","coopPlayerMarketBuyRefundRuntime");
