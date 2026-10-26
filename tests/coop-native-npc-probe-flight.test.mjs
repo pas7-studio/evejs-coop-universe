@@ -189,3 +189,23 @@ test("foreign unsealed original-ID probe cannot be moved on durable mismatch",()
  assert.equal(out.status,"BLOCKED");
  assert.equal(out.reason,"NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
 });
+
+test("same native position does not authorize a foreign unsealed ID as already spawned",()=>{
+ const f=fixture();const first=f.tick();
+ assert.equal(first.status,"NATIVE_PROBE_LAUNCHED");
+ const original=f.sceneMap.get(first.cargoID);
+ delete original.nativeNpcProbe;
+ const result=f.tick();
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(result.reason,"NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
+ assert.equal(f.cargo()[0].quantity,0);
+});
+test("same-position foreign cargo seal cannot bypass original ID proof",()=>{
+ const f=fixture();const first=f.tick();
+ const original=f.sceneMap.get(first.cargoID);
+ original.nativeNpcCargoID=999;
+ const result=f.tick();
+ assert.equal(result.status,"BLOCKED");
+ assert.equal(result.reason,"NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
+ assert.equal(f.cargo()[0].quantity,0);
+});
