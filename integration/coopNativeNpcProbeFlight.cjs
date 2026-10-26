@@ -10,10 +10,10 @@ const named=s=>typeof s==="string"&&/^coop-pilot-[0-9]{3,}$/.test(s);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function createNativeNpcProbeFlight({getNativeEntity,getController,
  listNativeModulesForEntity,listNativeCargoForEntity,upsertNativeCargo,
- flushNpcCargo,compatibleCharges,resolveProbeRange,buildProbeSceneEntity,
+ flushNpcCargo,refreshNativeCargoProjection,compatibleCharges,resolveProbeRange,buildProbeSceneEntity,
  clock=()=>Date.now(),flightTtlMs=3600000,maxProbes=8}={}){
  const funcs=[getNativeEntity,getController,listNativeModulesForEntity,
-  listNativeCargoForEntity,upsertNativeCargo,flushNpcCargo,compatibleCharges,
+  listNativeCargoForEntity,upsertNativeCargo,flushNpcCargo,refreshNativeCargoProjection,compatibleCharges,
   resolveProbeRange,buildProbeSceneEntity,clock];
  if(funcs.some(f=>typeof f!=="function")||
     !Number.isSafeInteger(flightTtlMs)||flightTtlMs<60000||flightTtlMs>3600000||
@@ -83,6 +83,12 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
  }
  function materialize(ctx,row,now){
   if(!validFlight(ctx,row,now))return deny("NPC_PROBE_FLIGHT_INVALID_OR_EXPIRED");
+  // Once cargo is durably IN_SPACE it must disappear from the live
+  // NPC ship's cargo projection before any native scan or probe spawn.
+  let projected=false;
+  try{projected=refreshNativeCargoProjection(ctx.ship,ctx.native.entityID)===true}
+  catch{projected=false}
+  if(!projected)return deny("NPC_PROBE_CARGO_PROJECTION_NOT_REFRESHED");
   if(blocked.has(row.cargoID))return deny("NPC_PROBE_CARGO_NEEDS_OPERATOR_REPAIR");
   const p=row.deployedProbe,existing=ctx.scene.getEntityByID(p.probeID);
   if(existing){
