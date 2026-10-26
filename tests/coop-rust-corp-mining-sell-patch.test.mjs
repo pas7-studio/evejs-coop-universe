@@ -249,3 +249,29 @@ test("Rust corporate market still refuses publication and rejects stock FillOrde
   extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
  assert.match(body,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
 });
+
+test("Rust private original corporate buyer quote is authenticated, read-only and default-off",()=>{
+ for(const s of ["fn coop_corp_buyer_quote_db",
+  "EVEJS_COOP_RUST_CORP_BUYER_QUOTE","GetCorpBuyerQuote",
+  "CORP_BUYER_REAL_FUNDS_MISSING","CORP_BUYER_ESCROW_OR_TITLE_DRIFT",
+  "ELIGIBLE_NOT_RESERVED","buyerFundsReserved"])
+   if(s==="GetCorpBuyerQuote")assert.match(patch(rpc,"rpc"),/GetCorpBuyerQuote/);
+   else assert.ok(extension.includes(s),s);
+});
+test("Rust buyer quote verifies source market price, quantity, original physical item and ISK",()=>{
+ const s=extension.slice(extension.indexOf("fn coop_corp_buyer_quote_db("));
+ for(const marker of ["m.vol_remaining,m.price,p.quantity",
+   "price as f64","coop_corp_fill_signed_cents",
+   'coop_corp_sell_json(&gs,"marketEscrow"',
+   'coop_corp_sell_json(&gs,"items"',
+   'coop_corp_sell_json(&gs,"characters"',
+   '"coop-warehouse:v1:cargo:"'])
+   assert.ok(s.includes(marker),marker);
+});
+test("Rust buyer quote cannot publish SELL or commit wallet debits by itself",()=>{
+ const s=extension.slice(extension.indexOf("fn coop_corp_buyer_quote_db("));
+ assert.doesNotMatch(s,/UPDATE market_orders/);
+ assert.doesNotMatch(s,/tx\.put/);
+ assert.match(s,/"nativeMutation":false/);
+ assert.match(s,/"buyerFundsReserved":false/);
+});
