@@ -32,6 +32,10 @@ param(
   [switch]$EnableNpcProbeSweep,
   [switch]$EnableNpcProbeLifecycle,
   [switch]$EnableNpcScoutLoadout,
+  [switch]$EnableNpcExpeditionHacking,
+  [switch]$EnableNpcExpeditionLoot,
+  [switch]$EnableNpcExpeditionWreck,
+  [switch]$EnableNpcExpeditionWormholes,
   [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
@@ -232,6 +236,31 @@ if ($EnableNpcProbeLaunch) {
 }
 if ($EnableNpcProbeLoadoutSplit) {
   $yamlLines += "      EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '1'"
+}
+# EX-03B19 autonomous NPC exploration: deny unsafe partial deployments.
+# Wreck custody must ALWAYS be enabled with physical ItemStore loot.
+if ($EnableNpcExpeditionLoot -and -not $EnableNpcExpeditionWreck) {
+  throw 'NPC original loot pickup requires -EnableNpcExpeditionWreck (native death/wreck custody)'
+}
+if ($EnableNpcExpeditionHacking -or $EnableNpcExpeditionLoot -or
+    $EnableNpcExpeditionWreck -or $EnableNpcExpeditionWormholes) {
+  if (-not ($LivingCoop -and $EnableNativeExploration -and $EnableNpcExpeditions -and
+            $EnableNpcProbeScan -and $EnableNpcProbeLaunch -and
+            $EnableNpcProbeLoadoutSplit -and $EnableNpcScoutLoadout)) {
+    throw 'Native NPC expedition operations require -LivingCoop -EnableNativeExploration -EnableNpcExpeditions -EnableNpcProbeScan -EnableNpcProbeLaunch -EnableNpcProbeLoadoutSplit -EnableNpcScoutLoadout'
+  }
+}
+if ($EnableNpcExpeditionHacking) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_HACK: '1'"
+}
+if ($EnableNpcExpeditionLoot) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_LOOT: '1'"
+}
+if ($EnableNpcExpeditionWreck) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_WRECK: '1'"
+}
+if ($EnableNpcExpeditionWormholes) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_WORMHOLES: '1'"
 }
 # EX-03B4 blind native geometry sweep, independent explicit opt-in.
 # No source-site coords are consulted to move NPC probes.
