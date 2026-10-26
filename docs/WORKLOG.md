@@ -254,6 +254,12 @@ Why: the mining loop activated the same module twice per tick, and durable slot 
 Detail: The overlay inserts lines before an anchor, so the traced activation was added in front of the stock activateGenericModule call instead of replacing it: every fleet tick with no cached effect spent the module capacitor twice. Measured live on a 250 GJ hull: charge pinned at 0.003-0.013 against a 0.092 requirement, so the fleet never mined again after its first cycle. The traced call now continues 
 Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs, tests/coop-native-durable-slot-heal.test.mjs
 Evidence: live FLEET_POST_TICK: miners now hold ratio 0.72-0.96 with both strip miners active (was 0.003-0.013); living-native-durable-slot reports SPAWNED/../RESTORED with miners=2 haulers=1 per slot; OVERLAY_OK patched 54; durable suites 28/28 + new slot test 3/3
+### 2026-10-26T13:47Z · 6c238f6 · L1 · coop: keep durable NPC identity on disk and stop the fleet dropping live ships
+
+Why: durable NPC identity was deleted from disk by a transient state write; fleet dropped live ships
+Detail: L1 0002 now also keeps a dematerialized NPC's own durability: the state save wrote transient:true, which strips the row from every later store flush, so a durable hull vanished from disk the first time it left the scene and each boot reseeded new IDs. Measured: 0 durable rows in gamestore.sqlite before, 9 live rows after, with fleet IDs stable across scene rebuilds instead of changing every 20-40 
+Where: docs/coop-flags.json, integration/coopNativeMiningFleetDurable.cjs, patches/upstream/0002-native-npc-capacitor-recharge.patch, patches/upstream/MANIFEST.json, scripts/overlay-spec.cjs
+Evidence: gamestore.sqlite npcEntities/npcRuntimeControllers: 9 durable rows persist, fleet IDs stable across scene rebuilds; prunes 27/4.5min -> 1/5min; slate telemetry live m2/h1
 ### 2026-10-26T13:23Z · 69cb8c3 · L2 · fix(P0): prove exact native cargo membership after commit and rollback
 
 Why: The post-commit guard accepted a correct subset of planned cargo on a replacement hauler while unrelated native cargoIDs remained in the same physical hold. The rollback guard likewise accepted an otherwise restored batch with additional cargo still on the target.
