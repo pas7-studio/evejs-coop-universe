@@ -402,3 +402,9 @@ Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated 
 Why: Add deterministic fake-fs tests: post-rename COMMITTED directory fsync error, no overwrite of persisted receipt/totals on next request, blocked stale snapshot, and successful audit/credit after fresh reopen; also PREPARED rename failure and preserved pending cargo.
 Where: tests/coop-native-depot.test.mjs
 Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:33Z · ac3c4c4 · L2 · fix(P0): reject aliased original cargo receipt keys and freeze corrupted depot on reopen
+
+Why: A persisted receipt keyed "000777" with cargoID=777 passed audit OK; a subsequent prepare+commit for cargoID=777 created a second receipt and doubled virtual supply. Startup also allowed mismatched receipt totals and malformed pending to be exposed by snapshot or extended by new commits. Audit now requires canonical source IDs and complete valid pending, while a corrupted loaded journal refuses prepare/commit and snapshot until operator repair; legitimate pending remains recoverable.
+Where: integration/coopNativeDepot.cjs, tests/coop-native-depot.test.mjs
+Evidence: Exact-source old-main reproduction: audit OK -> PREPARED -> COMMITTED -> audit OK with two receipts for original cargoID=777 and 200 units. Updated V8 exact-source depot test suite 8/8 PASS with simulated FS and actual virtual-economy module. Native Node 22/SQLite/Rust/two authenticated EVE clients NOT_RUN.
+
