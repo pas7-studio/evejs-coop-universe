@@ -175,3 +175,16 @@ test("ambiguous SQLite COMMIT never retries a potentially paid corporate fill",(
  x.loseAck(false);
  assert.equal(x.run().reason,"CORP_FILL_ORDER_SCOPE_OR_OUTCOME_UNKNOWN");
 });
+
+test("tampered previous corporate fill quantity/cycle receipt cannot purchase more physical ore",()=>{
+ const x=fixture();const first=x.run();assert.equal(first.phase,"GAMESTORE_COMMITTED");
+ x.next();x.get("corporationRuntime","coopPlayerMiningCorpSell"+SEP+CARGO).remainingQuantity=6;
+ assert.equal(x.run().reason,"CORP_FILL_NATIVE_SETTLEMENT_OUTCOME_UNKNOWN");
+ assert.equal(x.receipt(2),undefined);
+});
+test("a fake native Rust claim with out-of-order volume cannot bypass previous fill receipt",()=>{
+ const x=fixture();const first=x.run();assert.equal(first.phase,"GAMESTORE_COMMITTED");
+ x.next();x.tamperClaim(c=>({...c,cycle:3}));
+ assert.equal(x.run().reason,"CORP_FILL_NATIVE_SETTLEMENT_OUTCOME_UNKNOWN");
+ assert.equal(x.receipt(3),undefined);
+});
