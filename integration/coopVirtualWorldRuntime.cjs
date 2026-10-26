@@ -640,7 +640,8 @@ function advanceNativeNpcExpeditions(){
    const ops=npcExpeditionOperations.tick({scene,assignments,
     tips:npcExpeditionDirector.operations(),flags:{
      hack:process.env.EVEJS_COOP_NPC_EXPEDITION_HACK==="1",
-     loot:process.env.EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"
+     loot:process.env.EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"&&
+      process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK==="1"
     }});
    if(ops.hacked||ops.picked||ops.delivered||ops.orderedReturn||
       ops.blocked&&backgroundTicks%10===0)
