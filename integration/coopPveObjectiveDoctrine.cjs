@@ -123,8 +123,29 @@ function createObjectiveDoctrine({
     if(orders.has(key))continue; // all uncertain/accepted ACKs fenced
     const recent=attacker&&Number.isSafeInteger(at)&&at>0&&at<=now&&now-at<=120000;
     if(!recent){
-     // HOLD policy: native NPC retains its original mission behavior;
-     // no invented forced ceasefire, damage, or manual-order override.
+     // HOLD = no order when there is no authentic player near the site.
+     // REGROUP = actual native orbit around the source-authenticated
+     // destructible objective, not a generated or decorative marker.
+     if(busy(controller)||warping(member.ship)||
+        dist(member.ship.position,structure.position)<20000||
+        dist(member.ship.position,structure.position)>120000)continue;
+     const arrivals=activePlayers.map(s=>verifiedPlayer(s._space.shipID))
+      .filter(p=>p&&dist(p.position,structure.position)<=200000);
+     if(!arrivals.length)continue;
+     const receipt={phase:"REGROUP_ISSUING",systemID,instanceID:site.instanceID,
+      siteID:site.siteID,entityID,objectiveID:structure.itemID,at:now};
+     orders.set(key,receipt);
+     let ack;
+     try{ack=orbit(entityID,structure.itemID,15000,{wakeController:true})}
+     catch{ack=null}
+     receipt.phase=ack?.success===true?"REGROUP_ORBIT_ACCEPTED":
+      ack?.success===false?"REGROUP_REJECTED":"OUTCOME_UNKNOWN";
+     if(receipt.phase==="REGROUP_ORBIT_ACCEPTED"){
+      result.orders++;
+      result.events.push({status:"NATIVE_OBJECTIVE_REGROUP_ORBIT_ACK",...receipt});
+     }else if(receipt.phase==="OUTCOME_UNKNOWN"){
+      result.events.push({status:"NATIVE_OBJECTIVE_REGROUP_UNKNOWN",...receipt});
+     }
      continue;
     }
     let health;
