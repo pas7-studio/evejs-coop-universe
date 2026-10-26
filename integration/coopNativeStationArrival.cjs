@@ -21,7 +21,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null,deliveryEvidence=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,verifyTransferredTitle=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null,deliveryEvidence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -356,7 +356,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  const routeJournal=recoverEnabled?(tripJournal||
   require("./coopNativeStationTripJournal").createJournal({
    root,manifest:manifestDirector,store,items,getNativeEntity,clock})):null;
- const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,
+ const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,verifyTransferredTitle,
   verifyArrival:args=>{
    const scene=getScene(args.systemID),point=scene&&isValidStation(scene,getStation(args.stationID),args.systemID);
    const ship=scene&&findShip(scene,args.haulerID,args.systemID);
