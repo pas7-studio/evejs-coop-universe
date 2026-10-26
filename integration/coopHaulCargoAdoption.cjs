@@ -55,6 +55,9 @@ function liveShip(scene,id){
 // Missing or failing native entity registry is NOT proof a former hauler
 // has disappeared. Reusing its original cargo would duplicate custody.
 const REGISTRY_UNVERIFIED=Symbol("NATIVE_ENTITY_REGISTRY_UNVERIFIED");
+// Only an actual successful in-process exclusive claim can exempt its OWN lock.
+// plan() is exported, so caller-supplied fake Sets must never bypass custody.
+const authoritativeLockClaims=new WeakSet();
 function stillRegistered(store,entityID){
  if(typeof store?.getNativeEntity!=="function")return REGISTRY_UNVERIFIED;
  try{return store.getNativeEntity(Number(entityID))||null}
@@ -65,7 +68,7 @@ function stillRegistered(store,entityID){
 // would also allow a sold stack to be hauled and paid a second time.
 // This read-only check must verify ALL settlement authorities before a
 // single source row can move. Missing authority is never an empty ledger.
-function verifyReAdoptionCustody(row, options={}) {
+function verifyReAdoptionCustody(row, options={}, ownedLocks=null) {
  const cargoID=pos(row?.cargoID);
  if(!cargoID)return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
  try{
@@ -88,7 +91,9 @@ function verifyReAdoptionCustody(row, options={}) {
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   const warehouseClaim=names.some(name=>{
    const match=/^(\d+)\.(?:json(?:\.tmp-[^/\\]*)?|lock)$/.exec(name);
-   return match&&Number(match[1])===cargoID;
+   return match&&Number(match[1])===cargoID&&
+    !(name===cargoID+".lock"&&ownedLocks instanceof Set&&
+      authoritativeLockClaims.has(ownedLocks)&&ownedLocks.has(cargoID));
   });
   if(warehouseClaim)return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
   const items=options.custodyItems||
@@ -128,10 +133,52 @@ function verifyReAdoptionCustody(row, options={}) {
   return "CLEAR";
  }catch(_error){return "RE_ADOPTION_SETTLEMENT_UNVERIFIED"}
 }
+// Lock the SAME <cargoID>.lock used by coopNativeWarehouse. No lock
+// removal unless our own exclusive wx acquired it; crashed locks stay put.
+function acquireReAdoptionLocks(rows,options={}){
+ const fs=require("node:fs"),path=require("node:path");
+ const io=options.custodyIo||fs;
+ const root=options.warehouseRoot||process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
+ if(typeof root!=="string"||!path.isAbsolute(root)||
+    ["openSync","writeFileSync","fsyncSync","closeSync","unlinkSync","readdirSync"]
+     .some(method=>typeof io?.[method]!=="function"))
+  return {status:"RE_ADOPTION_LOCK_AUTHORITY_UNVERIFIED"};
+ const ids=rows.map(row=>pos(row.cargoID));
+ if(ids.some(id=>!id)||new Set(ids).size!==ids.length)
+  return {status:"RE_ADOPTION_LOCK_AUTHORITY_UNVERIFIED"};
+ const dir=path.join(root,"receipts"),held=new Set();
+ let released=false;
+ function release(){
+  authoritativeLockClaims.delete(held);
+  if(released)return true;
+  let ok=true;
+  for(const id of [...held].reverse()){
+   try{io.unlinkSync(path.join(dir,id+".lock"));held.delete(id)}
+   catch(_error){ok=false}
+  }
+  if(ok)released=true;
+  return ok;
+ }
+ try{
+  for(const id of ids.sort((a,b)=>a-b)){
+   const fd=io.openSync(path.join(dir,id+".lock"),"wx",0o600);
+   held.add(id);
+   try{io.writeFileSync(fd,String(process.pid));io.fsyncSync(fd);}
+   finally{io.closeSync(fd);}
+  }
+  authoritativeLockClaims.add(held);
+  return {status:"HELD",held,release};
+ }catch(error){
+  const cleared=release();
+  return {status:!cleared?"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED":
+   error?.code==="EEXIST"?"RE_ADOPTION_WAREHOUSE_LOCKED":
+   "RE_ADOPTION_LOCK_AUTHORITY_UNVERIFIED"};
+ }
+}
 // Which orphans may this exact fleet slot adopt? Every condition is an
 // independent refusal, so a missing or odd field never guesses ownership.
 function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
- cargoTable,database,enableReAdoption=false,custodyOptions}={}){
+ cargoTable,database,enableReAdoption=false,custodyOptions,ownedLocks=null}={}){
  const pid=pos(systemID),fid=pos(fleetID);
  if(!pid||!fid||!scene||!Number.isSafeInteger(now)||now<=0)
   return {status:"INVALID_AUTHORITIES",rows:[]};
@@ -184,7 +231,7 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
    return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
   if(registered)continue;
   if(adoptedAt){
-   const custody=verifyReAdoptionCustody(row,custodyOptions);
+   const custody=verifyReAdoptionCustody(row,custodyOptions,ownedLocks);
    if(custody!=="CLEAR")return {status:custody,rows:[]};
   }
   rows.push(row);
@@ -259,6 +306,32 @@ function adopt(scene,fleet,options={}){
   return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
  if(globalBefore.some(row=>pos(row?.entityID)===haulerID))
   return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // Repeat-adoption requires the SAME warehouse writer lock across the
+ // second settlement check, native upsert, flush and final readback.
+ const needsReAdoption=planned.rows.some(row=>pos(row.coopHaulAdoptedAt));
+ const custodyLock=needsReAdoption?acquireReAdoptionLocks(planned.rows,options):null;
+ if(custodyLock&&custodyLock.status!=="HELD")
+  return {status:custodyLock.status,adopted:0};
+ try{
+  if(custodyLock){
+   const current=plan({store,scene,systemID,fleetID,now,ttlMs,
+    cargoTable:options.cargoTable,database,enableReAdoption:true,
+    custodyOptions:options,ownedLocks:custodyLock.held});
+   if(current.status!=="ADOPTABLE")
+    return {status:current.status,adopted:0};
+   const originals=new Map(planned.rows.map(row=>[pos(row.cargoID),JSON.stringify(row)]));
+   if(current.rows.length!==planned.rows.length||current.rows.some(row=>
+      originals.get(pos(row.cargoID))!==JSON.stringify(row)))
+    return {status:"RE_ADOPTION_SOURCE_CHANGED",adopted:0};
+   try{
+    const local=store.listNativeCargoForEntity(haulerID);
+    const global=cargoRows({store,cargoTable:options.cargoTable,database});
+    if(!Array.isArray(local)||!Array.isArray(global))
+     return {status:"RE_ADOPTION_PREFLIGHT_UNVERIFIED",adopted:0};
+    if(local.length||global.some(row=>pos(row?.entityID)===haulerID))
+     return {status:"HAULER_ALREADY_LOADED",adopted:0};
+   }catch(_error){return {status:"RE_ADOPTION_PREFLIGHT_UNVERIFIED",adopted:0};}
+  }
  // Upserts are not a GameStore transaction. A failed second write
  // cannot turn a partially transferred batch into an authorised haul.
  // Include the failing row: an adapter may mutate then return failure.
@@ -430,6 +503,16 @@ function adopt(scene,fleet,options={}){
    carriage:"native",invented:false});
  doneSlots.add(key);
  return {status:"ADOPTED",adopted,quantity,volumeM3:volume,haulerID};
+ }finally{
+  if(custodyLock&&!custodyLock.release()){
+   fleet.coopHaulNeedsOperatorRepair="RE_ADOPTION_LOCK_RELEASE_UNVERIFIED";
+   hauler.coopHaulNeedsOperatorRepair="RE_ADOPTION_LOCK_RELEASE_UNVERIFIED";
+   doneSlots.add(key);
+   noteOnce(noted,key+":lock",probe,"living-haul-cargo-adoption-skipped",
+    {systemID},{fleetID,status:"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED"});
+   return {status:"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED",adopted:0};
+  }
+ }
 }
 function resetForTests(){doneSlots.clear();noted.clear();}
 module.exports={adopt,plan,resetForTests};

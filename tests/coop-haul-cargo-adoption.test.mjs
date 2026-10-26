@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 const require = createRequire(import.meta.url);
 const { adopt, plan, resetForTests } = require("../integration/coopHaulCargoAdoption.cjs");
 
@@ -615,10 +618,15 @@ function secondCrashCargo(over={}) {
  return orphan({coopHaulAdoptedAt:NOW-30_000,
   coopHaulAdoptedFrom:900000000100,...over});
 }
+const tempCustodyRoots=[];
+test.after(()=>{for(const dir of tempCustodyRoots)fs.rmSync(dir,{recursive:true,force:true});});
 function clearCustody(over={}) {
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-readopt-"));
+ fs.mkdirSync(path.join(root,"receipts"));
+ tempCustodyRoots.push(root);
  return {
-  warehouseRoot:"/tmp/evejs-warehouse-proof",
-  custodyIo:{readdirSync:()=>[]},
+  warehouseRoot:root,
+  custodyIo:fs,
   custodyItems:{findWarehouseItem:()=>null},
   custodyDepot:{
    snapshot:()=>({version:1,receipts:{},pending:{},totals:{}}),
@@ -713,9 +721,10 @@ test("any original warehouse receipt, in-progress temp, ItemStore stock, or depo
 test("unrelated native warehouse journals do not block a distinct original cargo",()=>{
  process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
  resetForTests();
- const f=secondCrashAttempt(secondCrashCargo(),{
-  custodyIo:{readdirSync:()=>["7002.lock","7002.json.tmp-21-2","7002.json"]}
- });
+ const custody=clearCustody();
+ for(const name of ["7002.lock","7002.json.tmp-21-2","7002.json"])
+  fs.writeFileSync(path.join(custody.warehouseRoot,"receipts",name),"FOREIGN");
+ const f=secondCrashAttempt(secondCrashCargo(),custody);
  assert.equal(f.result.status,"ADOPTED");
  assert.equal(f.store.writes.length,1);
  assert.equal(f.flushes,1);
@@ -782,14 +791,14 @@ test("a third restart can only recover once with a new warehouse/depot check and
  const target=fleet({haulerEntityIDs:[nextShip.itemID]});
  let checks=0;
  const opts=clearCustody({
-  custodyIo:{readdirSync:()=>{checks++;return []}}
+  custodyIo:{...fs,readdirSync:p=>{checks++;return fs.readdirSync(p)}}
  });
  const result=adopt(sceneWith([nextShip,miner]),target,{
   ...opts,store,clock:()=>NOW+10_000,probe:{},
   database:{flushTableSync:()=>({success:true})}
  });
  assert.equal(result.status,"ADOPTED");
- assert.equal(checks,1);
+ assert.equal(checks,2,"one pre-lock read and one lock-protected read");
  assert.equal(store.listNativeCargo().length,1);
  assert.equal(store.listNativeCargo()[0].cargoID,7001);
  assert.equal(store.listNativeCargo()[0].entityID,nextShip.itemID);
@@ -1320,4 +1329,127 @@ test("corrupt cargo tagged to another system/fleet cannot block a clean original
  assert.equal(store.writes.length,1);
  assert.equal(target.state,"loaded");
  assert.equal(store.listNativeCargo().find(x=>x.cargoID===8111).quantity,-100);
+});
+
+test("P0: foreign warehouse writer lock acquired after preflight blocks repeat adoption",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const custody=clearCustody(),dir=path.join(custody.warehouseRoot,"receipts");
+ const foreign=path.join(dir,"7001.lock");
+ let reads=0;
+ custody.custodyIo={...fs,readdirSync(p){
+  if(++reads===1){fs.writeFileSync(foreign,"OTHER_WRITER");return [];}
+  return fs.readdirSync(p);
+ }};
+ const f=secondCrashAttempt(secondCrashCargo(),custody);
+ assert.equal(f.result.status,"RE_ADOPTION_WAREHOUSE_LOCKED");
+ assert.equal(f.store.writes.length,0);
+ assert.equal(f.flushes,0);
+ assert.equal(fs.readFileSync(foreign,"utf8"),"OTHER_WRITER");
+});
+
+test("P0: receipt appearing after exclusive lock is rechecked before any original cargo mutation",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const custody=clearCustody(),dir=path.join(custody.warehouseRoot,"receipts");
+ let reads=0;
+ custody.custodyIo={...fs,readdirSync(p){
+  if(++reads===2)fs.writeFileSync(path.join(dir,"7001.json"),
+   JSON.stringify({phase:"PREPARED",cargoID:7001}));
+  return fs.readdirSync(p);
+ }};
+ const f=secondCrashAttempt(secondCrashCargo(),custody);
+ assert.equal(f.result.status,"RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS");
+ assert.equal(f.store.writes.length,0);
+ assert.equal(f.flushes,0);
+ assert.equal(fs.existsSync(path.join(dir,"7001.lock")),false);
+});
+
+test("P0: native source changes after first read but before warehouse lock fail closed",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const store=fakeStore([secondCrashCargo()]),read=store.listNativeCargo;
+ let reads=0,flushes=0;
+ store.listNativeCargo=()=>{
+  const rows=read();
+  if(++reads>=3)rows[0].ownerID=90099;
+  return rows;
+ };
+ const custody=clearCustody();
+ const result=adopt(sceneWith([hauler,miner]),fleet(),{
+  store,clock:()=>NOW,...custody,
+  database:{flushTableSync:()=>{flushes++;return {success:true}}}
+ });
+ assert.equal(result.status,"RE_ADOPTION_SOURCE_CHANGED");
+ assert.equal(store.writes.length,0);
+ assert.equal(flushes,0);
+ assert.equal(fs.readdirSync(path.join(custody.warehouseRoot,"receipts")).length,0);
+});
+
+test("P0: both native write and flush execute while matching warehouse lock remains held",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const custody=clearCustody();
+ const lock=path.join(custody.warehouseRoot,"receipts","7001.lock");
+ const store=fakeStore([secondCrashCargo()]),write=store.upsertNativeCargo;
+ let writes=0,flushes=0;
+ store.upsertNativeCargo=(row,opts)=>{
+  assert.equal(fs.existsSync(lock),true,"reparent must hold warehouse lock");
+  writes++;return write(row,opts);
+ };
+ const target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,...custody,
+  database:{flushTableSync:()=>{
+   assert.equal(fs.existsSync(lock),true,"durable flush must hold warehouse lock");
+   flushes++;return {success:true};
+  }}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(writes,1);
+ assert.equal(flushes,1);
+ assert.equal(fs.existsSync(lock),false,"lock must release only after readback");
+ assert.equal(target.state,"loaded");
+});
+
+test("P0: failed post-commit warehouse lock release quarantines fleet, never reports trusted adoption",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const custody=clearCustody(),lock=path.join(custody.warehouseRoot,"receipts","7001.lock");
+ custody.custodyIo={...fs,unlinkSync(p){
+  if(p===lock)throw Object.assign(Error("EIO"),{code:"EIO"});
+  return fs.unlinkSync(p);
+ }};
+ const f=secondCrashAttempt(secondCrashCargo(),custody);
+ assert.equal(f.result.status,"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED");
+ assert.equal(f.store.writes.length,1,"original reparent may already be durable");
+ assert.equal(f.target.coopHaulNeedsOperatorRepair,"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED");
+ assert.equal(f.ship.coopHaulNeedsOperatorRepair,"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED");
+ assert.equal(fs.existsSync(lock),true,"foreign or abandoned custody evidence is not deleted");
+});
+
+test("P0: failed second lock acquisition releases only first owned lock, no original writes",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const custody=clearCustody(),dir=path.join(custody.warehouseRoot,"receipts");
+ let reads=0;
+ custody.custodyIo={...fs,readdirSync(p){
+  if(++reads===2){fs.writeFileSync(path.join(dir,"7002.lock"),"OTHER_WRITER");return [];}
+  return fs.readdirSync(p);
+ }};
+ const store=fakeStore([secondCrashCargo(),secondCrashCargo({cargoID:7002,entityID:900000000112})]);
+ const target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,...custody,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"RE_ADOPTION_WAREHOUSE_LOCKED");
+ assert.equal(store.writes.length,0);
+ assert.equal(fs.existsSync(path.join(dir,"7001.lock")),false);
+ assert.equal(fs.readFileSync(path.join(dir,"7002.lock"),"utf8"),"OTHER_WRITER");
+ assert.equal(target.state,"mining");
+});
+
+test("P0: exported read-only plan cannot forge ownership of a foreign warehouse lock",()=>{
+ const custody=clearCustody();
+ fs.writeFileSync(path.join(custody.warehouseRoot,"receipts","7001.lock"),"FOREIGN");
+ const store=fakeStore([secondCrashCargo()]);
+ const result=plan({store,scene:sceneWith([hauler,miner]),systemID:30000145,
+  fleetID:1,now:NOW,enableReAdoption:true,custodyOptions:custody,
+  ownedLocks:new Set([7001])});
+ assert.equal(result.status,"RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS");
+ assert.equal(store.writes.length,0);
 });
