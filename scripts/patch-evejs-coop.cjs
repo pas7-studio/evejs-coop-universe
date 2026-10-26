@@ -11,6 +11,8 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-player-mining-shift-native-patch.cjs").patch(text,spec.file,true);
  if(spec.file==="server/src/services/industry/industryManagerService.js")
   text=require("./coop-player-industry-native-patch.cjs").patch(text,spec.file,remove);
  // Undo late Chat 25/32/39 hooks BEFORE the existing itemStore and
@@ -300,6 +302,8 @@ function transform(source,spec,remove){
    ["./coop-social-native-guards-patch.cjs",SOCIAL_PATCH_PATHS]
   ])if(targets.has(spec.file))text=require(helper).patch(text,spec.file,false);
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-player-mining-shift-native-patch.cjs").patch(text,spec.file,false);
  new vm.Script(text,{filename:spec.file});
  return text;
 }
