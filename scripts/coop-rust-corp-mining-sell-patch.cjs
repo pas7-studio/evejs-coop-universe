@@ -51,6 +51,41 @@ const ARMS=[
 '        }',
 '        // CH24+31 CORPORATE RUST SELL ARMS END',
 ''].join("\n");
+const CLAIM_TYPES=[
+"// CH24+31 CORP FILL CLAIM TYPES BEGIN",
+"#[derive(Debug,Deserialize)]",
+"struct CoopCorpFillClaimParams {",
+"    access_token:String,",
+"    #[serde(with=\"string_i64\")]",
+"    order_id:i64,",
+"    cycle:i64,",
+"    buyer_id:i64,",
+"    volume_before:i64,",
+"    filled_quantity:i64,",
+"    price_cents:i64,",
+"}",
+"#[derive(Debug,Deserialize)]",
+"struct CoopCorpFillQueryParams {",
+"    access_token:String,",
+"    #[serde(with=\"string_i64\")]",
+"    order_id:i64,",
+"    cycle:i64,",
+"}",
+"// CH24+31 CORP FILL CLAIM TYPES END",
+""].join("\n");
+const CLAIM_ARMS=[
+'        // CH24+31 CORP FILL CLAIM ARMS BEGIN',
+'        "ClaimCorpFill" => {',
+'            let p:CoopCorpFillClaimParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_fill_claim(p.access_token,p.order_id,p.cycle,',
+'                p.buyer_id,p.volume_before,p.filled_quantity,p.price_cents).await?)',
+'        }',
+'        "GetCorpFillClaim" => {',
+'            let p:CoopCorpFillQueryParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_fill_get(p.access_token,p.order_id,p.cycle).await?)',
+'        }',
+'        // CH24+31 CORP FILL CLAIM ARMS END',
+''].join("\n");
 const GUARD=[
 '    // CH24+31 CORPORATE SELL STOCK PLACEORDER GUARD BEGIN',
 '    if source == "coop-corporation" {',
@@ -81,8 +116,17 @@ function patch(source,which,remove=false){
   }
  };
  if(which==="rpc"){
-  put(TYPES,"#[derive(Debug, Deserialize)]\nstruct RpcRequest");
-  put(ARMS,'        "ModifyOrder" =>');
+  if(remove){
+   put(CLAIM_TYPES,"#[derive(Debug, Deserialize)]\nstruct RpcRequest");
+   put(CLAIM_ARMS,'        "ModifyOrder" =>');
+   put(TYPES,"#[derive(Debug, Deserialize)]\nstruct RpcRequest");
+   put(ARMS,'        "ModifyOrder" =>');
+  }else{
+   put(TYPES,"#[derive(Debug, Deserialize)]\nstruct RpcRequest");
+   put(ARMS,'        "ModifyOrder" =>');
+   put(CLAIM_TYPES,"#[derive(Debug, Deserialize)]\nstruct RpcRequest");
+   put(CLAIM_ARMS,'        "ModifyOrder" =>');
+  }
  }else if(which==="state"){
   put(GUARD,"    let wallet_division = request.wallet_division.unwrap_or(1000);");
   if(remove){
@@ -142,4 +186,4 @@ if(require.main===module){
    check:args.includes("--check"),remove:args.includes("--remove")}),null,2));
  }catch(e){console.error("E2B2 Rust blocked:",e.message);process.exitCode=1;}
 }
-module.exports={patch,run,PIN,STATE,RPC,EXT,TYPES,ARMS,GUARD,INCLUDE};
+module.exports={patch,run,PIN,STATE,RPC,EXT,TYPES,ARMS,CLAIM_TYPES,CLAIM_ARMS,GUARD,INCLUDE};
