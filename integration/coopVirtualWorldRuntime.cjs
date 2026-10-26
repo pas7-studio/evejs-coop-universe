@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -461,6 +461,17 @@ function advanceNativeNpcExpeditions(){
     // launcher. One charge row is synchronously flushed before scene spawn.
     // Neither a player session nor a new scheduler is ever constructed.
     if(process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
+     if(!npcProbeSceneTransition){
+      const nativeSpace=require("../runtime");
+      const nativeProbeScene=require("../services/exploration/probes/probeSceneRuntime");
+      npcProbeSceneTransition=require("./coopNativeNpcProbeSceneTransition")
+       .createNativeNpcProbeSceneTransition({
+        removeDynamicEntity:(systemID,itemID,options)=>
+         nativeSpace.removeDynamicEntity(systemID,itemID,options),
+        buildProbeSceneEntity:(probe,options)=>
+         nativeProbeScene.buildProbeSceneEntity(probe,options)
+       });
+     }
      if(!npcProbeFlight){
       const auth=require("../services/exploration/explorationAuthority");
       const probeState=require("../services/exploration/probes/probeRuntimeState");
@@ -473,6 +484,7 @@ function advanceNativeNpcExpeditions(){
        listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
        upsertNativeCargo:row=>store.upsertNativeCargo(row),
        flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       relocateNativeProbe:payload=>npcProbeSceneTransition.move(payload),
        refreshNativeCargoProjection:(ship,id)=>{
         const cargo=store.buildNativeCargoItems(id);
         if(!Array.isArray(cargo))return false;
@@ -550,7 +562,8 @@ function advanceNativeNpcExpeditions(){
        getController:id=>controllers.getControllerByEntityID(id),
        listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
        upsertNativeCargo:row=>store.upsertNativeCargo(row),
-       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo")
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       relocateNativeProbe:payload=>npcProbeSceneTransition.move(payload)
       });
      }
      const moved=npcProbeSweep.tick({scene,entityID,assignments});
