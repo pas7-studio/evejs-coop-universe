@@ -71,6 +71,11 @@ test("original native partial SELL: debit actual buyer, credit corporation after
  const x=fixture(),r=x.run();
  assert.equal(r.phase,"GAMESTORE_COMMITTED");
  assert.equal(r.quantity,3);assert.equal(r.volumeAfter,5);
+ assert.ok(Number.isSafeInteger(r.buyerJournalID));
+ assert.equal(r.sellerJournalID,r.buyerJournalID+1);
+ assert.equal(r.feeJournalID,r.buyerJournalID+2);
+ assert.equal(x.buyer().walletJournal[0].transactionID,r.buyerJournalID);
+ assert.equal(x.corp().wallet.divisions["1000"].journal.at(-2).transactionID,r.sellerJournalID);
  assert.equal(r.grossCents,750);assert.equal(r.netRevenueCents,705);
  assert.equal(x.buyer().balance,192.50);assert.equal(x.corp().wallet.divisions["1000"].balance,127.05);
  assert.equal(x.source().itemID,ITEM);assert.equal(x.source().quantity,5);
