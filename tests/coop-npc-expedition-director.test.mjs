@@ -8,9 +8,9 @@ function fixture(){
  let sites=[{siteID:440,solarSystemID:30000142,siteKind:"signature",
   targetID:"XYZ-440",family:"relic",instanceID:900,actualPosition:{x:0,y:0,z:0}}];
  const ships=new Map([
- [21,{kind:"ship",nativeNpc:true,itemID:21,systemID:30000142,position:{x:10000,y:0,z:0}}],
- [23,{kind:"ship",nativeNpc:true,itemID:23,systemID:30000142,position:{x:1000000,y:0,z:0}}],
- [24,{kind:"ship",nativeNpc:true,itemID:24,systemID:30000142,position:{x:1100000,y:0,z:0}}]]);
+ [21,{kind:"ship",nativeNpc:true,itemID:21,corporationID:700,systemID:30000142,position:{x:10000,y:0,z:0}}],
+ [23,{kind:"ship",nativeNpc:true,itemID:23,corporationID:700,systemID:30000142,position:{x:1000000,y:0,z:0}}],
+ [24,{kind:"ship",nativeNpc:true,itemID:24,corporationID:701,systemID:30000142,position:{x:1100000,y:0,z:0}}]]);
  const native=new Map([[21,{entityID:21,systemID:30000142,corporationID:700}],
  [23,{entityID:23,systemID:30000142,corporationID:700}],
  [24,{entityID:24,systemID:30000142,corporationID:701}]]);
@@ -45,7 +45,7 @@ test("repeated world ticks cannot blindly reissue accepted physical warp",()=>{
  assert.equal(d.tick(f.input()).orders,0);assert.equal(f.commands.length,2);
 });
 test("different-corp patrol cannot receive privileged scan coordinates",()=>{
- const f=fixture();f.native.get(23).corporationID=701;
+ const f=fixture();f.native.get(23).corporationID=701;f.ships.get(23).corporationID=701;
  assert.equal(f.create().tick(f.input()).orders,0);assert.equal(f.commands.length,0);
 });
 test("no physically present scout means no discovery or warp",()=>{
