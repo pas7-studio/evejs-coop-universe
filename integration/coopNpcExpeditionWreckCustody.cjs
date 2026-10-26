@@ -148,17 +148,24 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   const actions=[];
   for(const x of relevant){
    const r=parse(x.customInfo);
-   if(!original(x)||!r||r.wreckID!==wreckID||
-      r.shipID!==shipID||r.corpID!==corporationID||
-      x.ownerID!==corporationID||
-      !(x.locationID===shipID&&x.flagID===items.ITEM_FLAGS.CARGO_HOLD||
-       x.locationID===wreckID&&x.flagID===items.ITEM_FLAGS.HANGAR))
+   const onShip=x.locationID===shipID&&x.flagID===items.ITEM_FLAGS.CARGO_HOLD;
+   const inWreck=x.locationID===wreckID&&x.flagID===items.ITEM_FLAGS.HANGAR;
+   // A multi-item death may SIGKILL after transferring the first item but
+   // before marking the next. Explicit operator approval can finish ONLY
+   // original unmodified provenance still on this same destroyed source hull.
+   // Never accept a fresh/untagged item already moved to the wreck.
+   const needsIntent=r?.wreckID===null;
+   if(!original(x)||!r||r.shipID!==shipID||
+      r.corpID!==corporationID||x.ownerID!==corporationID||
+      (!onShip&&!inWreck)||
+      (needsIntent?!onShip:r.wreckID!==wreckID))
     return deny("EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
    const exact=row(x.itemID);
    if(!same(x,exact)||exact.customInfo!==x.customInfo||
      exact.locationID!==x.locationID||exact.ownerID!==x.ownerID)
     return deny("EX03_WRECK_RECOVERY_INDEX_DISAGREEMENT");
-   actions.push({itemID:x.itemID,move:x.locationID===shipID,original:x});
+   actions.push({itemID:x.itemID,move:onShip,needsIntent,
+    tag:needsIntent?x.customInfo+":wreck:"+wreckID:x.customInfo,original:x});
   }
   // Confirm both original stock wreck ledger and existing item intents before
   // touching ANY item. The only allowed mutation is ship -> its existing wreck.
@@ -168,6 +175,30 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   catch{return deny("EX03_WRECK_RECOVERY_WRECK_NOT_DURABLE")}
   const resumed=[];
   for(const act of actions){
+   if(act.needsIntent){
+    // Per-item durable intent must precede its original-ID location move.
+    // Uncertain writes stop the batch: do not infer a successful move.
+    let stamped;
+    try{
+     stamped=items.updateInventoryItem(act.itemID,previous=>{
+      if(!same(previous,act.original)||
+       previous.customInfo!==act.original.customInfo||
+       previous.locationID!==shipID||
+       previous.ownerID!==corporationID||
+       previous.flagID!==items.ITEM_FLAGS.CARGO_HOLD)
+       throw Error("EX03_WRECK_RECOVERY_SOURCE_CHANGED");
+      return {...previous,customInfo:act.tag};
+     });
+    }catch{return deny("EX03_WRECK_RECOVERY_INTENT_UNCERTAIN")}
+    if(stamped?.success!==true||!flush())
+     return deny("EX03_WRECK_RECOVERY_INTENT_UNCERTAIN");
+    const marked=row(act.itemID);
+    if(!same(act.original,marked)||
+     marked.customInfo!==act.tag||
+     marked.locationID!==shipID||marked.ownerID!==corporationID||
+     marked.flagID!==items.ITEM_FLAGS.CARGO_HOLD)
+     return deny("EX03_WRECK_RECOVERY_INTENT_CHANGED");
+   }
    if(act.move){
     let changed;
     try{changed=items.moveItemToLocation(act.itemID,wreckID,
@@ -180,7 +211,7 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    if(!same(act.original,after)||after.locationID!==wreckID||
       after.flagID!==items.ITEM_FLAGS.HANGAR||
       after.ownerID!==corporationID||
-      after.customInfo!==act.original.customInfo)
+      after.customInfo!==act.tag)
     return deny("EX03_WRECK_RECOVERY_IDENTITY_CHANGED");
    resumed.push(act.itemID);
   }
@@ -189,6 +220,7 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    return deny("EX03_WRECK_RECOVERY_VISIBILITY_UNCONFIRMED");
   return {success:true,status:"ORIGINAL_WRECK_CUSTODY_RECOVERED",
    itemIDs:resumed,movedCount:actions.filter(x=>x.move).length,
+   stampedCount:actions.filter(x=>x.needsIntent).length,
    nativeItemMinted:false};
  }
  function claim({characterID,wreckID,itemID,destinationLocationID,
