@@ -46,7 +46,8 @@ function createAdapter({gameStore,store,access,getFleetRecord,getScene,
       (owner&&owner!==entity.ownerID))return null;
    owner=entity.ownerID;
   }
-  return {systemID,fleetID,ownerID:owner,minerIDs:[...f.minerEntityIDs],
+  return {systemID,fleetID,ownerID:owner,state:f.state,
+   minerIDs:[...f.minerEntityIDs],
    haulerIDs:[...f.haulerEntityIDs]};
  }
  const orders=createShiftOrders({gameStore,access,getFleet:verified,
