@@ -1,0 +1,190 @@
+{
+  "schema": "evejs-coop/lw04e-original-warehouse-title-finance-e2e/v1",
+  "revision": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "environment": "DISPOSABLE_PINNED_EVEJS_ONLY",
+  "protectedVolume": "evejs-data",
+  "liveFinancialFlags": "OFF",
+  "releaseStatus": "NOT_VERIFIED",
+  "scenarios": [
+    {
+      "id": "LW04E-01",
+      "title": "Original ALIFE-09 station grant creates exactly one cargo-marked source itemID, no merge",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-02",
+      "title": "Silent native item merge refuses standalone source proof; no second cargo grant",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-03",
+      "title": "Same cargo ID transfer requires original ALIFE-09 completed journal marker and item ID",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-04",
+      "title": "Trusted server operator authorizes exactly two verified NPC corporations",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-05",
+      "title": "Native source price quotation greater than zero; free ownership change rejected",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-06",
+      "title": "Atomic GameStore transfers one original ItemStore ore ID and reciprocal corporate ISK journals",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-07",
+      "title": "Buyer NPC corporation insufficient ISK prevents owner change and seller credit",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-08",
+      "title": "Native SQLite COMMIT before ACK loss is never repeated as fresh transaction",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-09",
+      "title": "Replayed transfer after original ore refinement does not reallocate ore or debit wallet",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-10",
+      "title": "Station owner and hauler owner mismatch prevents unbacked source procurement",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-11",
+      "title": "Original COOP-031 refines owned transferred ore; original mineral source follows cargo ID",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-12",
+      "title": "COOP-032 factory consumes exact refinery output itemID with one original debit",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-13",
+      "title": "Real Rust market buyer pays factory and signed original wallet receipts finalize SOLD",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-14",
+      "title": "Two clients see correct NPC corporation balances and item owner after power-loss restart",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    },
+    {
+      "id": "LW04E-15",
+      "title": "Protected evejs-data unchanged on disposable pinned source original SQLite and Rust daemon",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "Original GameStore transaction and WAL snapshot",
+        "Original ALIFE-09 source cargoID and ItemStore oreItemID",
+        "Reciprocal NPC corporation debit/credit native wallet journal",
+        "Original COOP-031 refinery input provenance and COOP-032 job material debits",
+        "Rust market receipt and real authenticated two-client observations where applicable"
+      ]
+    }
+  ]
+}

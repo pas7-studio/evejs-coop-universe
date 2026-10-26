@@ -127,9 +127,18 @@ function createStationOreSettlement({file, depot, inventory, getStation,
         return {status: prior.phase === "COMPLETED" ? "ALREADY_SETTLED" : "NEEDS_OPERATOR_REPAIR",
           cargoID: ticket.cargoID};
       }
+      const strict = process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ORE_SOURCE_PROOF === "1";
+      const marker = "coop-warehouse:v1:cargo:" + ticket.cargoID;
       let before;
-      try { before = stock(ticket); }
-      catch (_error) { return {status: "STATION_STOCK_UNAVAILABLE"}; }
+      try {
+        before = stock(ticket);
+        if (strict) {
+          const originals = inventory.listContainerItems(ticket.ownerID,
+            ticket.stationID, inventory.ITEM_FLAGS.HANGAR);
+          if (!Array.isArray(originals) || originals.some(x => x?.customInfo === marker))
+            return {status: "WAREHOUSE_ORIGINAL_SOURCE_ALREADY_PRESENT"};
+        }
+      } catch (_error) { return {status: "STATION_STOCK_UNAVAILABLE"}; }
       if (!Number.isSafeInteger(before + ticket.quantity))
         return {status: "STATION_STOCK_OVERFLOW"};
       // Fence is durable BEFORE itemStore.grantItemToOwnerLocation is called.
@@ -137,24 +146,46 @@ function createStationOreSettlement({file, depot, inventory, getStation,
       // never repeat the same source credit automatically.
       const entry = {...ticket, before, phase: "GRANT_OUTCOME_UNKNOWN", at: clock()};
       persist(file, {...state, entries: {...state.entries, [key]: entry}});
-      let result;
+      let result, originalSource = null;
       try {
         result = inventory.grantItemToOwnerLocation(ticket.ownerID, ticket.stationID,
           inventory.ITEM_FLAGS.HANGAR, {typeID: ticket.typeID}, ticket.quantity,
-          {singleton: 0});
+          strict ? {singleton: 0, customInfo: marker} : {singleton: 0});
         if (result?.success !== true ||
             Number(result?.data?.quantity) !== ticket.quantity ||
             stock(ticket) !== before + ticket.quantity)
           return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
+        if (strict) {
+          // Original native ItemStore must actually honor the provenance
+          // marker and create ONE separate physical source stack. An ignored
+          // option or an automatic merge leaves GRANT_OUTCOME_UNKNOWN.
+          // Never repeat the grant to try to guess which item was changed.
+          const after = inventory.listContainerItems(ticket.ownerID,
+            ticket.stationID, inventory.ITEM_FLAGS.HANGAR);
+          if (!Array.isArray(after)) return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
+          const found = after.filter(x => x?.customInfo === marker);
+          if (found.length !== 1 || !pos(found[0]?.itemID) ||
+              Number(found[0].ownerID) !== ticket.ownerID ||
+              Number(found[0].locationID) !== ticket.stationID ||
+              Number(found[0].flagID) !== inventory.ITEM_FLAGS.HANGAR ||
+              Number(found[0].typeID) !== ticket.typeID ||
+              Number(found[0].quantity) !== ticket.quantity ||
+              Number(found[0].stacksize) !== ticket.quantity ||
+              Number(found[0].singleton) !== 0)
+            return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
+          originalSource = {oreItemID: Number(found[0].itemID),
+            sourceCustomInfo: marker};
+        }
         persist(file, {...state, entries: {...state.entries,
-          [key]: {...entry, phase: "COMPLETED", after: before + ticket.quantity,
-            completedAt: clock()}}});
+          [key]: {...entry, ...originalSource, phase: "COMPLETED",
+            after: before + ticket.quantity, completedAt: clock()}}});
       } catch (_error) {
         return {status: "NEEDS_OPERATOR_REPAIR", cargoID: ticket.cargoID};
       }
       return {status: "STATION_STOCK_SETTLED", cargoID: ticket.cargoID,
         stationID: ticket.stationID, ownerID: ticket.ownerID,
-        typeID: ticket.typeID, quantity: ticket.quantity};
+        typeID: ticket.typeID, quantity: ticket.quantity,
+        ...(originalSource || {})};
     } catch (_error) {
       return {status: "NEEDS_OPERATOR_REPAIR"};
     } finally {

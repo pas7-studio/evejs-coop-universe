@@ -18,12 +18,16 @@ const immutable=x=>JSON.stringify(x);
 function createLivingWorldNativeChainProof({
  readMiningCommit,readHaulReceipt,readStationReceipt,readRefineryReceipt,
  readOriginalIndustryJob,readIndustryDebit,readDirectorJournal,
+ readOriginalTitleTransfer=null,readOriginalCorporation=null,
  saleAudit,clock=()=>Date.now()
 }={}){
  if([readMiningCommit,readHaulReceipt,readStationReceipt,readRefineryReceipt,
       readOriginalIndustryJob,readIndustryDebit,readDirectorJournal,clock]
      .some(x=>typeof x!=="function")||
-    typeof saleAudit?.audit!=="function")
+    typeof saleAudit?.audit!=="function"||
+    (readOriginalTitleTransfer!==null&&typeof readOriginalTitleTransfer!=="function")||
+    (readOriginalCorporation!==null&&typeof readOriginalCorporation!=="function")||
+    ((readOriginalTitleTransfer===null)!==(readOriginalCorporation===null)))
   throw Error("LW04D_ORIGINAL_READ_AUTHORITIES_REQUIRED");
  async function audit({operationID,ownerID,stationID,systemID,
   miningOperationKey,cargoID,oreItemID,refineOperationID,oreTypeID,
@@ -79,9 +83,54 @@ function createLivingWorldNativeChainProof({
       ore.after-ore.before!==ore.quantity||
       !NN(ore.before)||!POS(ore.after)||!POS(ore.ownerID))
     throw Error("LW04D_NATIVE_STATION_ORE_GRANT_UNVERIFIED");
-   if(ore.ownerID!==ownerID||haul.haulerOwnerID!==ownerID)
-    return BLOCK("LW04D_WAREHOUSE_TO_MANUFACTURER_TITLE_TRANSFER_NOT_PROVEN",
-     operationID);
+   if(haul.haulerOwnerID!==ore.ownerID)
+    return BLOCK("LW04E_HAULER_AND_WAREHOUSE_OWNER_DISAGREE",operationID);
+   // The ALIFE-09 native station receipt credits the station WAREHOUSE,
+   // not automatically the factory corporation. Cross-owner source must
+   // provide the ORIGINAL two-wallet + exact itemID transfer COMMIT.
+   let title=null,originalSeller=null,originalBuyer=null;
+   if(ore.ownerID!==ownerID){
+    if(readOriginalTitleTransfer===null)
+     return BLOCK("LW04D_WAREHOUSE_TO_MANUFACTURER_TITLE_TRANSFER_NOT_PROVEN",
+      operationID);
+    title=reader(readOriginalTitleTransfer,cargoID);
+    if(title?.version!==1||title.phase!=="COMMITTED"||
+       title.operationID!=="coop-warehouse-title:v1:"+cargoID+":"+ownerID||
+       title.cargoID!==cargoID||title.sourceOwnerID!==ore.ownerID||
+       title.buyerOwnerID!==ownerID||title.stationID!==stationID||
+       title.typeID!==oreTypeID||title.quantity!==ore.quantity||
+       title.itemID!==oreItemID||
+       ore.oreItemID!==oreItemID||
+       ore.sourceCustomInfo!=="coop-warehouse:v1:cargo:"+cargoID||
+       title.sourceCustomInfo!=="coop-warehouse:v1:cargo:"+cargoID||
+       !POS(title.priceCents)||title.sellerAfterCents-title.sellerBeforeCents!==title.priceCents||
+       title.buyerBeforeCents-title.buyerAfterCents!==title.priceCents||
+       !NN(title.buyerAfterCents)||!NN(title.sellerBeforeCents)||
+       !POS(title.committedAt)||title.committedAt>now)
+     return BLOCK("LW04E_ORIGINAL_WAREHOUSE_TITLE_NOT_ATTESTED",operationID);
+    const ledger=(corporation,corporationID,other,amount,after)=>{
+     const division=corporation?.wallet?.divisions?.["1000"];
+     if(corporation?.corporationID!==corporationID||
+        !Array.isArray(division?.transactions)||!Array.isArray(division?.journal))
+      return false;
+     const one=rows=>rows.filter(x=>x?.transactionID===title.operationID);
+     const tx=one(division.transactions),journal=one(division.journal);
+     return tx.length===1&&journal.length===1&&
+      [tx[0],journal[0]].every(x=>x.referenceID===title.operationID&&
+       x.ownerID1===corporationID&&x.ownerID2===other&&
+       x.accountKey===1000&&Number.isFinite(x.amount)&&
+       Number.isFinite(x.balance)&&
+       Math.abs(x.amount*100-amount)<1e-7&&
+       Math.abs(x.balance*100-after)<1e-7);
+    };
+    originalSeller=reader(readOriginalCorporation,ore.ownerID);
+    originalBuyer=reader(readOriginalCorporation,ownerID);
+    if(!ledger(originalSeller,ore.ownerID,ownerID,
+        title.priceCents,title.sellerAfterCents)||
+       !ledger(originalBuyer,ownerID,ore.ownerID,
+        -title.priceCents,title.buyerAfterCents))
+     return BLOCK("LW04E_ORIGINAL_TRANSFER_WALLET_NOT_ATTESTED",operationID);
+   }
    // COOP-031: original refinery journal proves the warehouse ore marker
    // was converted to actual owned mineral itemIDs. No virtual inputs.
    const refine=reader(readRefineryReceipt,refineOperationID);
@@ -169,6 +218,13 @@ function createLivingWorldNativeChainProof({
     [job,reader(readOriginalIndustryJob,operationID)],
     [debit,reader(readIndustryDebit,job.jobID)]
    ];
+   if(title){
+    again.push(
+     [title,reader(readOriginalTitleTransfer,cargoID)],
+     [originalSeller,reader(readOriginalCorporation,ore.ownerID)],
+     [originalBuyer,reader(readOriginalCorporation,ownerID)]
+    );
+   }
    if(immutable(journal)!==immutable(after)||
       again.some(([before,current])=>immutable(before)!==immutable(current)))
     throw Error("LW04D_ORIGINAL_SOURCE_CHANGED_DURING_GATE");
@@ -178,6 +234,8 @@ function createLivingWorldNativeChainProof({
     originalProductItemID:entry.itemID,originalRustOrderID:orderID,
     soldQuantity:entry.quantity,oreQuantity:mine.quantity,
     consumedMineralQuantity:material[0].consumedQuantity,
+    titleTransferOperationID:title?.operationID??null,
+    warehouseProcurementPriceCents:title?.priceCents??0,
     manufacturingCostCents:debit.amountCents,revenueCents:sales.revenueCents,
     originalFillIDs:[...sales.fillIDs],nativeMutation:false,readOnly:true,
     // This is a read-only source-contract assertion, not proof the
