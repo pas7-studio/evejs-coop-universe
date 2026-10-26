@@ -107,6 +107,66 @@ Enabled ONLY by `EVEJS_COOP_PVE_SITE_DEFENSE=1` AND new default-OFF `EVEJS_COOP_
 **P0-3B next:** authentic static pirate objective defense and NPC hold/regroup/retreat, without unauthorized target creation. P0-4 boss, original wreck/loot and P0-5 per-player lawful mission payouts remain pending.
 
 
+
+## Stage 3B — native pirate objective defense, regroup and retreat (dependent Draft)
+
+**Code-prepared; native server / two-client NOT_RUN.** The pinned EveJS
+`dungeonUniverseSiteService.spawnEncounterKillableStructures` creates original
+`siteKillableStructure` entities with original `dungeonSiteID`,
+`dungeonSiteInstanceID`, `dungeonEncounterKey`, physical position and
+`structureHP`, plus a record in the same encounter's `spawnedEntityIDs`.
+The P0-3B `coopPveObjectiveDoctrine` uses this **exact** source ownership
+with the P0-2 site ledger and the original NPC store/controller. A random
+objective marker, generic container, environmental prop, dead structure or
+different-site structure cannot authorize attacks, warp, or orbit.
+
+The policy only issues ORIGINAL `npcRuntime` orders:
+
+- **DEFEND:** a nearby healthy original NPC may attack a player ONLY when
+  its original native controller records that exact recently authenticated
+  player as an aggressor. The objective must still physically exist within
+  150 km of the defender, and player must be within 250 km of objective.
+  This is a defender aggression witness, NOT evidence the structure took
+  damage.
+- **HOLD:** with no authorized target/site proximity, don't override native
+  NPC combat orders; no fake hold-fire command or invisible damage.
+- **REGROUP:** when idle, far enough from an original physical killable
+  objective (20–120 km), with a verified visitor within 200 km but NO
+  recent verified aggression, issue an original `npcRuntime.orbit` request
+  around the exact structure. ACK is not proof that native orbit completes.
+- **RETREAT:** if actual native ship armor is below 28% or structure below
+  72%, recently attacked by an authenticated player, *not* warp-scrambled,
+  and a physical original station or gate exists over 500 km from attacker
+  and at least 150 km from the NPC, issue original `npcRuntime.warpToPoint`
+  to that actual waypoint. No invented safe location; ACK is not arrival.
+
+The guard refuses another native order if a helper is leased by P0-2,
+P0-3A, named A-Life tactics or the existing native order arbiter. It has
+no independent timer. Native definitive rejection and unknown response
+remain process-local nonreplayable per NPC; restart reconciliation is
+**still required**. No original damage, loot, mission objective, wallet,
+standing, or player ship mutation happens in this module.
+
+Activation: `EVEJS_COOP_PVE_SITE_DEFENSE=1` plus new default-OFF
+`EVEJS_COOP_PVE_OBJECTIVE_DOCTRINE=1`. The explicit phase is
+`native-pve-objective-doctrine` inside the existing 30-second A-Life
+combat group, and the only overlay installer registers the new module.
+
+**Isolated verification:** 12 new original-source tests and 22 inherited
+site/wave tests, 34/34 cases total with 170 assertions as first combined
+check; 14 phase/installer/source-wiring checks. Follow-up validations
+may update these numbers. Full Node/SQLite/Rust, pinned installer
+roundtrip, native damage/warp and two-client gameplay NOT_RUN.
+The minimum controlled live test must verify a destructible original
+objective, authentic native controller hit, objective guard command,
+actual orbit/warp motion, health-threshold retreat, no cross-site
+interference, no extra spawn, no fake reward and safe restart handling.
+
+P0-4 actual authored bosses and original wreck/loot remain pending.
+P0-5 independent duo mission acceptance and native reward settlement
+remain pending.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
