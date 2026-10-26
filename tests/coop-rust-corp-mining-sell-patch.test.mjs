@@ -265,7 +265,7 @@ test("Rust buyer quote verifies source market price, quantity, original physical
    'coop_corp_sell_json(&gs,"marketEscrow"',
    'coop_corp_sell_json(&gs,"items"',
    'coop_corp_sell_json(&gs,"characters"',
-   '"coop-warehouse:v1:cargo:"'])
+   "coop-warehouse:v1:cargo:"])
    assert.ok(s.includes(marker),marker);
 });
 test("Rust buyer quote cannot publish SELL or commit wallet debits by itself",()=>{
