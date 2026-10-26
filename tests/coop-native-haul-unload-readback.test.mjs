@@ -7,7 +7,8 @@ const {unloadCargo}=require("../integration/coopNativeHaulCargo.cjs");
 // The same original cargoID must disappear from proven native custody before
 // a durable virtual depot receipt may change from PREPARED to COMMITTED.
 function fixture({before=null,after,global=undefined,throwAfter=false,
- flushResult={success:true},throwFlush=false}={}){
+ flushResult,throwFlush=false}={}){
+ const hasFlushResult=Object.hasOwn(arguments[0]||{},"flushResult");
  const cargo={cargoID:333,typeID:34,quantity:50,moduleID:0,
   entityID:500,coopHaulFleetID:44,coopHaulFromMinerID:111};
  let removed=false,prepared=0,committed=0,removeCalls=0,reads=0,flushes=0;
@@ -38,7 +39,7 @@ function fixture({before=null,after,global=undefined,throwAfter=false,
   assert.equal(table,"npcCargo");
   flushes++;
   if(throwFlush)throw Error("NATIVE_CARGO_FSYNC_FAILED");
-  return flushResult;
+  return hasFlushResult?flushResult:{success:true};
  }};
  const attempt=()=>unloadCargo(scene,fleet,{store,depot,database,probe:{observe:()=>{}}});
  return {attempt,store,database,depot,cargo,ship,scene,fleet,
