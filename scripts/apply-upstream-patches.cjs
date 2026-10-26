@@ -48,6 +48,7 @@ function parseArgs(argv) {
     else if (token === "--reverse") args.reverse = true;
     else if (token === "--check") args.check = true;
     else if (token === "--commit") args.commit = true;
+    else if (token === "--only") args.only = argv[++i];
     else if (token === "--help" || token === "-h") args.help = true;
     else die("Unknown argument: " + token);
   }
@@ -98,29 +99,31 @@ function main() {
   if (!args.checkout) die("--checkout <path to the EveJS Code directory> is required");
   const checkout = path.resolve(args.checkout);
   if (!fs.existsSync(path.join(checkout, "server"))) die("Not an EveJS checkout: " + checkout);
-  const { manifest, entries } = loadSeries();
+  const { manifest, entries: all } = loadSeries();
+  const entries = args.only
+    ? all.filter((entry) => entry.file.includes(args.only))
+    : all;
+  if (!entries.length) die("--only matched no patch: " + args.only);
   ensurePin(checkout, manifest);
   if (args.apply || args.commit) ensureBranch(checkout, args.branch, manifest);
 
   const order = args.reverse ? entries.slice().reverse() : entries;
   const applied = [];
   for (const entry of order) {
-    const flags = args.reverse ? ["--reverse"] : [];
-    try {
-      git(checkout, ["apply", "--check", ...flags, entry.path]);
-    } catch (error) {
-      die(
-        (args.reverse ? "Cannot reverse " : "Cannot apply ") +
-          entry.file +
-          "\n" +
-          String(error.stderr || error.message).trim(),
-      );
-    }
-    if (!args.apply && !args.reverse) {
-      console.log("[PATCHES] OK      " + entry.file);
+    const state = stateOf(checkout, entry, args.reverse);
+    if (state === "ALREADY_APPLIED") {
+      // Re-running the tool must be a no-op, never a partial re-apply.
+      console.log("[PATCHES] PRESENT " + entry.file);
       continue;
     }
-    git(checkout, ["apply", ...flags, entry.path]);
+    if (state === "MISSING") {
+      console.log("[PATCHES] SKIP    " + entry.file + " (not applied)");
+      continue;
+    }
+    if (state === "CONFLICT") {
+      die("Checkout matches neither the pinned base nor our patched state: " + entry.file);
+    }
+    git(checkout, ["apply", ...(args.reverse ? ["--reverse"] : []), entry.path]);
     applied.push(entry);
     console.log("[PATCHES] " + (args.reverse ? "REVERSED " : "APPLIED  ") + entry.file);
     if (args.commit && !args.reverse) {
@@ -141,6 +144,23 @@ function main() {
       ") pin=" +
       manifest.pin.slice(0, 12),
   );
+}
+
+function stateOf(checkout, entry, reverse) {
+  const can = (flags) => {
+    try {
+      git(checkout, ["apply", "--check", ...flags, entry.path]);
+      return true;
+    } catch (_error) {
+      return false;
+    }
+  };
+  if (reverse) {
+    if (can(["--reverse"])) return "READY";
+    return can([]) ? "MISSING" : "CONFLICT";
+  }
+  if (can([])) return "READY";
+  return can(["--reverse"]) ? "ALREADY_APPLIED" : "CONFLICT";
 }
 
 main();
