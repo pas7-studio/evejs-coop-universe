@@ -527,7 +527,7 @@ test("P0: equivalent system IDs and independent original cargo stacks share one 
   const requests=[
    {systemID:"030000142",fleetID:"9",item:{cargoID:777,typeID:34,quantity:100,haulerID:201}},
    {systemID:30000142,fleetID:9,item:{cargoID:778,typeID:35,quantity:50,haulerID:201}},
-   {systemID:"3.0000142e8",fleetID:9,item:{cargoID:779,typeID:34,quantity:20,haulerID:201}}
+   {systemID:"3.0000142e7",fleetID:9,item:{cargoID:779,typeID:34,quantity:20,haulerID:201}}
   ];
   for(const row of requests){
    assert.equal(d.prepare(row).status,"PREPARED");
