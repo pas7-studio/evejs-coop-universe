@@ -485,6 +485,30 @@
       ],
       "expected": "Only fully fsynced original DELIVERED flight journals are candidates; an untrusted manifest or incomplete original cargo never enters native settleAtomic; scan limits and incorrect flags fail closed.",
       "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-42",
+      "name": "Backlog of 35 genuine original delivered Escorts is replayed across two bounded startup pages",
+      "actions": [
+        "On an operator-approved disposable pinned GameStore clone complete at least 35 independent original funded+DELIVERED NPC Escort jobs using two real authenticated clients per job; retain ALL original fsynced immutable source, intermediate, terminal and cargo warehouse receipts",
+        "Interrupt the peaceful payout before native dual-character settlement for the last jobs; confirm their original NPC corporation escrows remain RESERVED and all real DELIVERED journals are present",
+        "Restart the original server with opt-in strict peaceful replay and capture server startup page logs, original GameStore escrow statuses, and two-character wallet deltas for all 35 contracts",
+        "Restart again with the same original data and compare the original corporate and player wallet journals, receipts and balances byte-for-byte"
+      ],
+      "expected": "Startup scans all original flight journals in bounded pages of at most 32, processes the 33rd-35th jobs, credits each genuinely proven duo at most once from original RESERVED corporate escrow, and the second restart produces no new wallet or cargo side effects. No synthetic proofs or backdated on-grid sessions.",
+      "status": "NOT_RUN"
+    },
+    {
+      "id": "JOB-UI-43",
+      "name": "Corrupt later paid Escort journal quarantines the whole startup replay before any player ISK mutation",
+      "actions": [
+        "On a disposable backup with at least 35 fully original DELIVERED flight journals, verify initial corporate and player balances and native escrow states",
+        "Corrupt only the original 35th flight journal while preserving a restorable copy; restart with peaceful replay opted in and inspect all real GameStore balance and wallet journal deltas",
+        "Confirm no earlier batch makes a payout, original escrow remains RESERVED, and startup emits a fail-closed scan status",
+        "Restore the exact verified journal from disposable backup, restart, and confirm eligible original settlements can complete once without changing the original contract or manufacturing cargo"
+      ],
+      "expected": "A corrupt later source journal rejects the full scan before any page can authorize new dual-player credits. No silently skipped corrupt journal, second funding, fake delivery or automatic unproven refund. Genuine originals remain eligible once integrity is restored.",
+      "status": "NOT_RUN"
     }
   ]
 }

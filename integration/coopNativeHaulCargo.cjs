@@ -161,7 +161,8 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    }else{
     const updated={...item,cargoID,entityID:selected.itemID,
      ownerID:minerOwner,transient:false,[haulFlag]:fleetID,
-     coopHaulFromMinerID:minerID,coopHaulLoadedAt:Date.now()};
+     coopHaulFromMinerID:minerID,coopHaulSystemID:Number(scene.systemID),
+     coopHaulLoadedAt:Date.now()};
     const ack=store.upsertNativeCargo(updated,{transient:true});
     // An unsuccessful ACK does not establish that nothing was written.
     if(ack?.success!==true)return stop("HAUL_SOURCE_MOVE_UNCERTAIN",true,selected,cargoID);
@@ -213,7 +214,7 @@ function transferCargo(scene,fleet,miner,options={}){
    const result=store.upsertNativeCargo({...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
     ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
     [haulFlag]:Number(fleet.fleetID),coopHaulFromMinerID:Number(miner.itemID),
-    coopHaulLoadedAt:Date.now()},{transient:durable?true:hauler.transient===true});
+    coopHaulSystemID:Number(fleet.systemID),coopHaulLoadedAt:Date.now()},{transient:durable?true:hauler.transient===true});
    if(!result?.success)continue;
    if(durable){
     // Promotes the SAME cargoID and removes its previous transient marker

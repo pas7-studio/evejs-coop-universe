@@ -86,6 +86,9 @@ function fixture({env=FLAGS,ackLost=false,mutateRust=null}={}){
      stationID:STATION,itemID:ITEM,typeID:TYPE,quantity:30});
     if(out?.status!=="LISTED")return {status:"BLOCKED",reason:"UNKNOWN_OUTCOME"};
     entry.phase="LISTED";entry.orderID=out.orderID;
+    // Mirrors the real original director, which fsyncs the validated
+    // market ASK on the durable LISTED transition.
+    entry.priceCents=1250;
     return {status:"LISTED",operationID:OP,orderID:out.orderID};
    }catch(error){return {status:"BLOCKED",reason:String(error.message)}}
   }};
@@ -218,4 +221,31 @@ test("no new clock, native SQLite writer, wallet or shadow market implemented",(
  const code=fs.readFileSync(new URL("../integration/coopNpcIndustryOriginalRustSell.cjs",import.meta.url),"utf8");
  assert.doesNotMatch(code,/\bsetInterval\s*\(|\bsetTimeout\s*\(/);
  assert.doesNotMatch(code,/\.transact\(|\.installOnce\(|\.grantItem\(/);
+});
+
+
+test("original Rust SELL read-only audit refuses repriced listing against durable ASK",async()=>{
+ const f=fixture(),stage=f.create();
+ assert.equal((await stage.listDelivered(f.scope)).status,"LISTED");
+ assert.equal(f.entry.priceCents,1250);
+ const authentic=f.orders.get(OP);
+ for(const price of [12.49,12.51,15]){
+  f.orders.set(OP,{...authentic,price});
+  const result=await stage.observe(f.scope);
+  assert.equal(result.status,"BLOCKED");
+  assert.match(result.reason,/LW04C3_RUST_SELL_IDENTITY_INVALID/);
+  assert.equal(result.nativeMutation,false);
+ }
+ f.orders.set(OP,authentic);
+ const valid=await stage.observe(f.scope);
+ assert.equal(valid.status,"NATIVE_SELL_ORDER_ATTESTED");
+ assert.equal(valid.priceCents,1250);
+});
+test("missing durable original ASK cannot attest a LISTED native sell order",async()=>{
+ const f=fixture(),stage=f.create();
+ assert.equal((await stage.listDelivered(f.scope)).status,"LISTED");
+ delete f.entry.priceCents;
+ const result=await stage.observe(f.scope);
+ assert.equal(result.status,"BLOCKED");
+ assert.match(result.reason,/LW04C3_RUST_SELL_IDENTITY_INVALID/);
 });

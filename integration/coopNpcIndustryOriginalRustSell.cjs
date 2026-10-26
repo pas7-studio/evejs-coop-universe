@@ -73,6 +73,11 @@ function createOriginalNpcRustSellStage({
      n(raw?.type_id)!==x.typeID||quantity!==x.quantity||
      raw?.source!=="coop-npc"||raw.bid!==false||raw.is_corp!==true||
      !POS(cents)||Math.abs(p*100-cents)>1e-7||
+     // The original director persists the immutable listing ASK when its
+     // market readback first advances DELIVERED -> LISTED. A later Rust
+     // repricing is NOT the paid/order-custody proof for that journal.
+     (x.phase==="LISTED"&&
+      (!POS(x.priceCents)||cents!==x.priceCents))||
      !["pending","open","filled"].includes(raw.state)||
      !Number.isSafeInteger(remaining)||remaining<0||remaining>x.quantity)
    throw Error("LW04C3_RUST_SELL_IDENTITY_INVALID");
