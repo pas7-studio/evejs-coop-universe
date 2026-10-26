@@ -188,3 +188,8 @@ Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLi
 Why: fleet miners sit at 1-5% charge with no recharge even after the L1 rate fix, and FLEET_POST_TICK could not show whether the ship carries tau or when it was last advanced, so the cause was pure guesswork
 Where: scripts/overlay-spec.cjs
 Evidence: event now carries tau and reAt per miner; OVERLAY_OK patched 54 anchorMismatch 0; no behaviour change (telemetry only)
+### 2026-10-26T12:35Z · 7cc9df5 · L2 · fix(pve): require site kind to match authoritative native beacon
+
+Why: Link actual authored native dungeon encounter IDs, physical site beacon, original NPC store and combat controller before a helper ship can receive a retaliatory attack order; avoid cross-site/hull collision and replay.
+Where: integration/coopPveNativeSiteDefense.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, docs/coop-flags.json, tests/coop-pve-native-site-defense.test.mjs
+Evidence: Exact-source V8 isolated test callbacks 12/12 PASS (61 assertions), nine overlay wiring checks PASS. Full Node suite, pinned overlay roundtrip, Docker native combat, two clients NOT_RUN; feature default OFF.
