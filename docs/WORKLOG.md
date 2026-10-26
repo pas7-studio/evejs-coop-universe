@@ -348,3 +348,9 @@ Why: a durable fleet actor was pruned while its persisted controller row still e
 Detail: pruneMiningFleet filtered every fleet list through the in-memory controller registry only. That registry is rebuilt when a scene is torn down while the persisted native controller row survives, so a durable miner or hauler left the fleet with no destruction at all: the prune forensics reported storedEntity=true storedController=true for every removed actor, the fleet reported miners=0 with live sh
 Where: patches/upstream/0004-native-mining-fleet-retained-actor.patch, patches/upstream/MANIFEST.json, tests/coop-native-fleet-retained-actor.test.mjs
 Evidence: prune forensics storedEntity=true storedController=true on every removed actor; fleet miners=0 with live ships; tests/coop-native-fleet-retained-actor.test.mjs 3/3; patch sha256 in MANIFEST
+### 2026-10-26T14:29Z · 1126761 · L2 · coop: fleet actor self-heal becomes a module function, not a 900-char hook
+
+Why: a 900-character behaviour hook cannot be tested or reviewed; hooks must be one call into a module
+Detail: The prune-time heal that re-attached durable controllers was 900 characters of inline logic inside a string insertion: untestable, unreviewable, and exactly the shape that produced the earlier double-activation bug. It is now coopNativeMiningFleetDurable.healFleetActors, called by a 257-character hook that only passes the service it needs. Behaviour is unchanged and covered: the function dedupes a
+Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs
+Evidence: healFleetActors extracted; hook 900->257 chars; tests/coop-native-mining-fleet-durable 34/34 with durable-slot-heal and retained-actor suites
