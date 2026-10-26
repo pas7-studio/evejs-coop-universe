@@ -203,3 +203,43 @@ Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after
 Why: A cargo still on a physical live ship is not an orphan; preserve existing HAULER_ALREADY_LOADED protection for the replacement hauler.
 Where: integration/coopHaulCargoAdoption.cjs
 Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after reproduction confirms INVALID/MISSING timestamp previously ADOPTABLE and now RE_ADOPTION_HISTORY_UNVERIFIED; Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:22Z · 48bbf2f · L2 · fix(P0): prove exactly one original cargoID globally after durable NPC haul adoption
+
+Why: The new hauler's local item cache could be correct while the native global inventory still retained an old copy of the exact original cargoID; the fleet previously started a potentially duplicate haul after durable commit.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOPTED despite duplicated global cargoID, now ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED. Full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:23Z · a594f77 · TEST · test(P0): global post-commit duplicate and stale original cargoID fail closed
+
+Why: Verify preflight and global readback use the same original cargoIDs; stale or duplicated post-commit global native rows require quarantining the entire fleet, and tests must emulate actual GameStore post-commit readbacks.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOPTED despite duplicated global cargoID, now ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED. Full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:27Z · 8c02b08 · L1 · fix(l1): recharge every sessionless ship each scene tick; record the runtime-controller churn
+
+Why: the capacitor advance only ran for controllers whose think was due and co-op mining hulls carry none: live telemetry showed tau set but capacitorRechargedAtMs stuck at 0, so charge only fell
+Where: .opencode/state.md, patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json
+Evidence: 0003 extended (one patch per file) with a 1s scene sweep; live after rebuild reAt is set and caps read 0.04-0.05 with tau 125-187s; series PRESENT x3 CHECK_OK; OVERLAY_OK patched 54
+### 2026-10-26T12:27Z · f663997 · L2 · fix(P0): verify original global cargo custody after compensation flush
+
+Why: Native upsert and cargo flush ACKs did not prove compensation restored original cargoIDs after an interrupted multi-row adoption. New fail-closed global/per-hauler custody readback prevents silent partial rollback.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:27Z · 6e69623 · L2 · fix(haul): keep existing operator repair flag contract after rollback quarantine
+
+Why: Preserve the established fleet operator-repair boolean while quarantining the replacement hauler and burning the adoption slot after uncertain rollback.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:28Z · 66eebb8 · TEST · test(P0): reject acknowledged but unverified native cargo rollback
+
+Why: Simulate silent ACK, wrong owner/quantity, stale adoption history, missing/throwing global readback and unavailable target inventory after compensation.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:32Z · d0755b4 · L2 · fix(P0): require globally empty native hauler before orphan cargo adoption
+
+Why: Replacement NPC hauler with same-owner untagged physical cargo was accepted because preflight checked only coopHaulFleetID. The loaded fleet mixed unrelated cargoIDs and could misroute inventory.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED with unrelated physical cargoIDs [7001,8001] on one hauler; full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:32Z · e4ead0d · TEST · test(P0): reject mixed untagged cargo and globally occupied replacement hauler
+
+Why: Require both local native cargo inventory and global NPC cargo view to prove a replacement hauler empty; regression covers untagged stacks, hidden global stacks, and read failures.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED with unrelated physical cargoIDs [7001,8001] on one hauler; full Node/SQLite/Rust/gameplay NOT_RUN.
