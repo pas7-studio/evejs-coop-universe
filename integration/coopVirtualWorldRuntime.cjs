@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -456,6 +456,40 @@ function advanceNativeNpcExpeditions(){
        scanRuntime.buildSignatureScanResults(systemID,probes),
       listNativeSites:systemID=>signatures.listSystemSignatureSites(systemID)
      });
+    }
+    // EX-03B2: an independently disabled original cargo debit+physical
+    // launcher. One charge row is synchronously flushed before scene spawn.
+    // Neither a player session nor a new scheduler is ever constructed.
+    if(process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
+     if(!npcProbeFlight){
+      const auth=require("../services/exploration/explorationAuthority");
+      const probeState=require("../services/exploration/probes/probeRuntimeState");
+      const probeScene=require("../services/exploration/probes/probeSceneRuntime");
+      const gameStore=require("../gameStore");
+      npcProbeFlight=require("./coopNativeNpcProbeFlight").createNativeNpcProbeFlight({
+       getNativeEntity:id=>store.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       listNativeModulesForEntity:id=>store.listNativeModulesForEntity(id),
+       listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+       upsertNativeCargo:row=>store.upsertNativeCargo(row),
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       compatibleCharges:typeID=>auth.getCompatibleProbeChargeTypeIDs(typeID),
+       resolveProbeRange:(typeID,step,range)=>
+        probeState.resolveProbeRangeContract(typeID,step,range),
+       buildProbeSceneEntity:(record,options)=>
+        probeScene.buildProbeSceneEntity(record,options)
+      });
+     }
+     const launched=npcProbeFlight.tick({scene,entityID,assignments});
+     if(launched.status==="NATIVE_PROBE_LAUNCHED"||
+        launched.status==="NATIVE_PROBE_PENDING_RECONCILIATION"||
+        launched.status==="BLOCKED"&&backgroundTicks%10===0)
+      probe.observe("living-npc-native-probe-flight",null,
+       {spaceState:{systemID:scene.systemID}},
+       {entityID,status:launched.status,reason:launched.reason||null,
+        originalCargoID:launched.cargoID||null,
+        source:"ORIGINAL_NPC_CARGO_DURABLE_BEFORE_SCENE",
+        nativeWalletMutation:false,nativeLootGranted:false});
     }
     return npcProbeEvidence.scan({scene,entityID,assignments});
    }
