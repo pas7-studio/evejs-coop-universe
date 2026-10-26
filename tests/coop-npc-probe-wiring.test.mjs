@@ -232,7 +232,7 @@ test("EX-03B11 native scanner handoff orders the scout before escorted patrols",
  const pinned=read("tests/coop-npc-probe-pinned-native-source.test.mjs");
  assert.match(director,/const warpCandidates=scoutWarpFirst\?\[scout\]:all/);
  assert.match(director,/action:scoutWarpFirst\?/);
- assert.match(director,/competition\.observe\(\{scene,siteID:tip\.siteID,shipID:scout\.entityID\}\)/);
+ assert.match(director,/safeObserve\(\{scene,siteID:tip\.siteID,shipID:scout\.entityID\}\)/);
  assert.match(director,/nativeSite\(tip\.systemID,tip\.siteID,true\)/);
  assert.match(director,/scoutWarpOrders,patrolWarpOrders,scoutOnGridVerified/);
  assert.match(runtime,/scoutWarpOrders:result\.scoutWarpOrders\|\|0/);
@@ -251,6 +251,8 @@ test("EX-03B12/B13 source checks protect the native scout-to-arbiter bridge",()=
  assert.match(director,/catch\{return null\}/);
  assert.match(director,/uncertainOrders\.add\(moveKey\)/);
  assert.match(director,/unknownOrderOutcomes:uncertainOrders\.size/);
+ assert.match(director,/const safeObserve=args=>/);
+ assert.match(director,/result\?\.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED"/);
  assert.match(live,/createOrderArbiter/);
  assert.match(live,/createOrderBridge/);
  assert.match(live,/actual native order bridge\/arbiter accepts scout-first warp/);
