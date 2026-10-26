@@ -306,3 +306,51 @@ test("failed original cargo rollback never starts a half-loaded transport trip",
  assert.equal(target.lastHauledVolumeM3,undefined);
  assert.equal(flushes,1);
 });
+
+
+test("unavailable original hauler registry cannot authorize native cargo adoption",()=>{
+ for(const failure of ["missing","throw"]){
+  const store=fakeStore([orphan()]);
+  if(failure==="missing")delete store.getNativeEntity;
+  else store.getNativeEntity=()=>{throw Error("NATIVE_REGISTRY_READ_FAILED")};
+  const target=fleet(),before=structuredClone(store.listNativeCargo());
+  const result=adopt(sceneWith([hauler,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"NATIVE_ENTITY_REGISTRY_UNVERIFIED",failure);
+  assert.equal(result.adopted,0);
+  assert.deepEqual(store.listNativeCargo(),before);
+  assert.equal(store.writes.length,0);
+  assert.equal(target.state,"mining");
+ }
+});
+test("one bad registry lookup invalidates the whole mixed orphan candidate batch",()=>{
+ const store=fakeStore([
+  orphan({cargoID:7001,entityID:900000000111}),
+  orphan({cargoID:7002,entityID:900000000112})
+ ]);
+ store.getNativeEntity=id=>{
+  if(id===900000000112)throw Error("NATIVE_REGISTRY_UNAVAILABLE");
+  return null;
+ };
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"NATIVE_ENTITY_REGISTRY_UNVERIFIED");
+ assert.equal(store.writes.length,0);
+ assert.equal(target.state,"mining");
+ assert.deepEqual(store.listNativeCargo().map(x=>x.entityID),
+  [900000000111,900000000112]);
+});
+test("original registry confirms ship is gone before same-owner cargo changes haulers",()=>{
+ const store=fakeStore([orphan()]);
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(store.listNativeCargo()[0].entityID,hauler.itemID);
+ assert.equal(target.state,"loaded");
+});
