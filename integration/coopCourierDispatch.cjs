@@ -104,7 +104,12 @@ function evaluateContract(contract, policy, context) {
   if (!positive(startSystemID) || !positive(endSystemID)) {
     return status("REFUSED_UNKNOWN_SYSTEM", { contractID, startSystemID, endSystemID });
   }
-  if (rules.sameSystemOnly && startSystemID !== endSystemID) {
+  // A same-system policy is the safe default, but it is not a law: when the
+  // real native gate path is enabled (approach + transfer), a cross-system
+  // delivery is exactly what the courier is supposed to fly.
+  const gateTravelEnabled = process.env.EVEJS_COOP_NATIVE_GATE_APPROACH === "1" &&
+    process.env.EVEJS_COOP_NATIVE_GATE_TRANSFER === "1";
+  if (rules.sameSystemOnly && startSystemID !== endSystemID && !gateTravelEnabled) {
     return status("NEEDS_GATE_TRAVEL", { contractID, startSystemID, endSystemID });
   }
   return status("ELIGIBLE", {
