@@ -154,6 +154,34 @@ function advanceNativeWarMobilization(){
  const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
  if(!registry)return warSkip("mobilization","NO_WAR_FLEET_REGISTRY");
  if(!guard)return warSkip("mobilization","NO_ORDER_BRIDGE");
+ // The war domain needs a valid state record to exist at all. Without it every
+ // mobilisation answers INVALID_MOBILIZATION_STATE, which looks like a broken
+ // feature instead of an empty world. Bootstrapping the empty state is the
+ // documented factory (`core.empty()`), never hand-written JSON.
+ {
+  const {TABLE,KEY}=require("./coopFactionWarStore"),
+   core=require("./coopFactionWarCore"),
+   gameStore=require("../gameStore");
+  const rowKey="/"+KEY;
+  let current=null;
+  try{const read=gameStore.read(TABLE,rowKey);current=read?.success===true?read.data:null}
+  catch(_error){current=null}
+  if(!current){
+   const state=core.empty();
+   core.validateState(state);
+   try{
+    gameStore.write(TABLE,rowKey,state);
+    if(typeof gameStore.flushTableSync==="function")gameStore.flushTableSync(TABLE);
+    console.log("[CoopFactionWar] empty war state created (version "+core.VERSION+")");
+    require("./coopRuntimeProbe").observe("living-native-war-state",null,null,
+     {status:"CREATED",version:core.VERSION,
+      evidence:"DOCUMENTED_EMPTY_STATE_FACTORY_NO_CAMPAIGN_YET"});
+   }catch(error){
+    warSkip("mobilization","WAR_STATE_WRITE_FAILED:"+String(error&&error.message||error));
+    return;
+   }
+  }
+ }
  if(!warMobilizer){
   const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
    controllers=require("./npc/npcRegistry"),
