@@ -173,4 +173,8 @@ function inspect({systemID,fleetID}={}){
   return fleet&&row.employerCorpID===fleet.ownerID?row:null;
  }catch{return null;}
 }
-module.exports={createAdapter,getMountedScene,beforeTick,assign,inspect};
+function verified({systemID,fleetID}={}){
+ if(process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY!=="1")return null;
+ try{return native().verified({systemID,fleetID})}catch{return null;}
+}
+module.exports={createAdapter,getMountedScene,beforeTick,assign,inspect,verified};
