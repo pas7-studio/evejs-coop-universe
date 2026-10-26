@@ -15,6 +15,84 @@ agent/dungeon/npc/wallet/itemStore/LP/standing modules.
 It does **not** spawn a second server, add a fake mission ledger,
 create game entities or run any client.
 
+
+## Final hardening — PR #323 (2026-10-26)
+
+The PVE-005 final dependent PR is intentionally additive and remains
+default OFF; it does not merge any staged changes into `main` or
+activate a persistent world.
+
+### Fixes and source-backed evidence
+
+- The original `coopRuntimeProbe.observe` now stamps every emitted
+  source event with a server-generated UUID v4 `runtimeRunID`, **after**
+  all caller fields, so a native event caller cannot override that ID.
+  The read-only cross-PvE auditor rejects event logs without a valid
+  boot ID, and rejects attempts to combine one prior-boot boss death
+  with later-boot personal payout receipts. This deliberately refuses
+  to treat a server restart as one already-proven session.
+- The opt-in native boss loot fence now examines the *original native
+  wreck record* even when the in-process boss witness is missing.
+  A native transient wreck whose original `profileID` or
+  `lootTableID` explicitly identifies an overseer/boss/officer/
+  commander is blocked with `BOSS_LOOT_LIVE_WITNESS_REQUIRED` rather
+  than bypassing the durable claim after restart. Ordinary untagged
+  native wrecks continue original EveJS item transfer. This is a
+  conservative heuristic, NOT globally durable original-boss identity.
+- Zero-ISK untimed native bonus item rewards now count toward expected
+  station-hangar item quantities, matching original
+  `isMissionBonusRewardAvailable`. Timed zero-ISK bonus items cannot
+  be inferred from wallet amounts, so the strict audit fails closed
+  pending a transaction-scoped source receipt.
+- Actual **pinned upstream** source content was read: the 5.39 MB
+  `npcProfiles/data.json` has **171 distinct profiles** linked to
+  `parity_deadspace_overseer_pending_loot` and that original table
+  has **4 positive-weight special/faction/deadspace selectors**.
+  This is real catalog data, not a test fixture. It does not prove
+  item candidate pools, authored dungeon availability, RNG occurrence
+  or live client loot. The source catalog audit is now a hard pinned
+  gate; the separate installed native
+  `coop-pve-native-rare-candidates.test.mjs` checks that source
+  selectors resolve to at least one real native item type in the
+  original `npcLoot._testing.getRuleCandidatePool`.
+
+### Verification status
+
+- **PASS, isolated V8 original branch source:** 118 source PvE /
+  NPC / native duo-reward unit scenarios, 457 assertions;
+  16 durable loot-claim scenarios, 51 assertions (simulated fsync);
+  14 native cross-event correlation cases, 40 assertions;
+  6 native catalog audit cases, 11 assertions.
+  **154/154 cases, 559 assertions**, across those disjoint source suites.
+- **PASS, actual pinned data read through GitHub:** 171 original
+  authored overseer profile links and 4 rule selectors; catalog
+  auditor returned `SOURCE_AUTHORED_BOSS_TABLE_LINK_PRESENT`.
+- **NOT VERIFIED:** actual Node22 GitHub Actions / pinned installer
+  roundtrip, original item candidate pool test (requires installed
+  pinned native data reader), actual on-disk crash fsync, two real
+  authenticated clients, native network/RPC loot and payouts, real
+  rare roll, native SQLite/Rust and post-restart settlement.
+  Those statuses cannot be replaced with PASS from V8 source checks.
+
+### Required final release gates
+
+1. Real Node22 source suite must report PASS, including the server-run
+   UUID telemetry test and rare source catalog tests.
+2. Disposable original pinned EveJS complete installer dry-run,
+   install, reapply, source verification and exact remove must PASS.
+   The new native rare candidate pool test must also PASS.
+3. Original in-game E2E must complete all **16** independent scenarios
+   in `tests/scenarios/chat19-21-native-two-client-pve-e2e.json`,
+   with two authenticated real clients, no counterfeit scene/ships,
+   original NPCs and source-backed rewards. A server-only JSONL
+   correlation is insufficient.
+4. Crash/restart mid-grant or between captain/wingman payout must not
+   duplicate original native ISK/LP/items/standing; manual recovery
+   is mandatory where cross-store atomicity is not provided by EveJS.
+5. After these gates, review and merge all stacked PvE PRs in
+   dependency order. Do not deploy code and enable all flags in one
+   uncontrolled operation.
+
 ## 1. CI source tests: genuine Node runner
 
 From this branch of the overlay repository:
