@@ -122,4 +122,26 @@ function noteNoMineableTarget(fleetRecord, scene, minerEntity, availableTargetEn
   });
 }
 
-module.exports = { note, noteActivationFailure, noteTargetSelected, noteFleetPostTick, noteNoMineableTarget };
+// A module that is stopped because the fleet picked a different rock and then
+// restarted on the next tick pays the activation cost forever and never reaches a
+// cycle boundary: the fleet shows active modules and produces no ore. Both ids are
+// reported so the mismatch is a fact instead of a suspicion.
+function noteTargetMismatch(fleetRecord, scene, minerEntity, entry, activeEffect, targetEntity) {
+  note("MODULE_TARGET_MISMATCH", {
+    fleetID: Number(fleetRecord && fleetRecord.fleetID) || 0,
+    systemID: Number(scene && scene.systemID) || 0,
+    minerID: Number(minerEntity && minerEntity.itemID) || 0,
+    moduleID: Number(entry && entry.moduleItem && entry.moduleItem.itemID) || 0,
+    effectTargetID: Number(activeEffect && activeEffect.targetID) || 0,
+    fleetTargetID: Number(targetEntity && targetEntity.itemID) || 0,
+  });
+}
+
+module.exports = {
+  note,
+  noteActivationFailure,
+  noteTargetSelected,
+  noteTargetMismatch,
+  noteFleetPostTick,
+  noteNoMineableTarget,
+};

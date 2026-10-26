@@ -299,8 +299,11 @@ function unloadCargo(scene,fleet,options={}){
   for(const rawID of fleet.haulerEntityIDs||[]){
    const hauler=scene.getEntityByID(Number(rawID));
    if(hauler?.kind!=="ship")continue;
-   const manifest=(store.listNativeCargoForEntity(hauler.itemID)||[])
-    .filter(x=>mineable(x)&&Number(x[haulFlag])===Number(fleet.fleetID));
+   // "Unknown" is not an empty hold. A failed native inventory adapter
+   // must not make original ore silently disappear from the unloading plan.
+   const before=store.listNativeCargoForEntity(hauler.itemID);
+   if(!Array.isArray(before)){blocked++;continue;}
+   const manifest=before.filter(x=>mineable(x)&&Number(x[haulFlag])===Number(fleet.fleetID));
    for(const item of manifest){
     const delivery={cargoID:Number(item.cargoID),typeID:Number(item.typeID),
       quantity:Number(item.quantity),fromMinerID:positive(item.coopHaulFromMinerID),
@@ -312,8 +315,31 @@ function unloadCargo(scene,fleet,options={}){
     const cached=(hauler.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
     const removed=store.removeNativeCargo(item.cargoID);
     if(!removed?.success){blocked++;continue;}
-    // Prevent a false credit when the source row still exists.
-    if((store.listNativeCargoForEntity(hauler.itemID)||[]).some(x=>Number(x.cargoID)===Number(item.cargoID))){blocked++;continue;}
+    // The virtual depot journal is durable. A native cargo deletion that
+    // exists only in memory is NOT a durable debit: after a server restart
+    // the original cargoID would reappear alongside the committed credit.
+    // Flush original npcCargo BEFORE verifying absence or depot.commit().
+    let durableSourceDebit=false;
+    try{
+     const database=options.database||require("../gameStore");
+     durableSourceDebit=database?.flushTableSync?.("npcCargo")?.success===true;
+    }catch(error){
+     console.warn("[CoopHaul] native cargo debit flush uncertain",error.message);
+    }
+    if(!durableSourceDebit){blocked++;continue;}
+    // A mutation ACK is not proof of physical source debit. Require a
+    // verified native cargo inventory array after removal; null/errors
+    // leave the durable PREPARED intent for operator reconciliation.
+    const after=store.listNativeCargoForEntity(hauler.itemID);
+    if(!Array.isArray(after)||after.some(x=>
+       Number(x?.cargoID)===Number(item.cargoID))){blocked++;continue;}
+    // When the store supports global enumeration, also refuse a cargoID
+    // silently moved to another hauler while removeNativeCargo returned OK.
+    if(typeof store.listNativeCargo==="function"){
+     const all=store.listNativeCargo();
+     if(!Array.isArray(all)||all.some(x=>
+        Number(x?.cargoID)===Number(item.cargoID))){blocked++;continue;}
+    }
     let committed;
     try{committed=depot.commit({systemID:fleet.systemID,fleetID:fleet.fleetID,item:delivery});}
     catch(error){console.warn("[CoopHaul] NEEDS_REPAIR: removed cargo with pending receipt",error.message);blocked++;continue;}

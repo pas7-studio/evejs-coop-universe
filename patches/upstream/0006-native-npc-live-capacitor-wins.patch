@@ -1,0 +1,66 @@
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0006/0006] runtime: do not reset a ship's capacitor to a stale snapshot
+
+refreshShipConditionFields copies the ship item's stored condition into the live
+entity on every presentation refresh, including capacitor charge. For a native
+NPC the ship item exists, so its stored condition (written only when the NPC is
+persisted) overwrote the live charge continuously. A durable NPC that never
+leaves its scene therefore kept a frozen charge while the recharge loop advanced
+correctly: measured 0.77 -> 0.014 over four minutes with a correct 187.5 s tau,
+and every mining activation failed with NOT_ENOUGH_CAPACITOR.
+
+The live entity is now authoritative when it already has a charge ratio, and the
+stored snapshot seeds a fresh entity and is kept in step otherwise. Damage and
+activation write the live entity first, so downward changes still apply.
+
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+Local overlay: integration/* is NOT part of this patch series.
+---
+--- a/server/src/space/runtime.js
++++ b/server/src/space/runtime.js
+@@ -5623,24 +5623,37 @@ function refreshShipConditionFields(entity) {
+     return entity;
+   }
+ 
+   const shipItem = findShipItemById(entity.itemID) || null;
+   const conditionState = shipItem
+     ? getShipConditionState(shipItem)
+     : normalizeShipConditionState(entity.conditionState);
+   entity.conditionState = conditionState;
+-  entity.capacitorChargeRatio = clamp(
+-    toFiniteNumber(
+-      conditionState && conditionState.charge,
+-      toFiniteNumber(entity.capacitorChargeRatio, 1),
+-    ),
+-    0,
+-    1,
+-  );
++  // The live entity is authoritative for capacitor charge: a ship that is
++  // recharging must not be knocked back to a stale stored snapshot every time
++  // its presentation fields are refreshed. A native NPC has a ship item whose
++  // stored condition is only written when the NPC is persisted, so a durable
++  // ship that never leaves the scene kept a frozen charge: measured 0.77 -> 0.01
++  // over four minutes while the recharge loop advanced correctly, and every
++  // mining activation failed with NOT_ENOUGH_CAPACITOR. The stored snapshot now
++  // seeds a fresh entity and is otherwise kept in step with the live value.
++  const liveChargeRatio = toFiniteNumber(entity.capacitorChargeRatio, NaN);
++  if (Number.isFinite(liveChargeRatio)) {
++    entity.capacitorChargeRatio = clamp(liveChargeRatio, 0, 1);
++    if (conditionState && typeof conditionState === "object") {
++      conditionState.charge = entity.capacitorChargeRatio;
++    }
++  } else {
++    entity.capacitorChargeRatio = clamp(
++      toFiniteNumber(conditionState && conditionState.charge, 1),
++      0,
++      1,
++    );
++  }
+   return entity;
+ }
+ 
+ function refreshShipPresentationFields(entity) {
+   if (!entity || entity.kind !== "ship") {
+     return entity;
+   }
+ 

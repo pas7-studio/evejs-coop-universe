@@ -407,4 +407,29 @@ Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated 
 Why: A persisted receipt keyed "000777" with cargoID=777 passed audit OK; a subsequent prepare+commit for cargoID=777 created a second receipt and doubled virtual supply. Startup also allowed mismatched receipt totals and malformed pending to be exposed by snapshot or extended by new commits. Audit now requires canonical source IDs and complete valid pending, while a corrupted loaded journal refuses prepare/commit and snapshot until operator repair; legitimate pending remains recoverable.
 Where: integration/coopNativeDepot.cjs, tests/coop-native-depot.test.mjs
 Evidence: Exact-source old-main reproduction: audit OK -> PREPARED -> COMMITTED -> audit OK with two receipts for original cargoID=777 and 200 units. Updated V8 exact-source depot test suite 8/8 PASS with simulated FS and actual virtual-economy module. Native Node 22/SQLite/Rust/two authenticated EVE clients NOT_RUN.
+### 2026-10-26T15:00Z · 2121c44 · L2 · fix(P0): require verified native cargo absence before depot delivery
 
+Why: The original unloadCargo() treated listNativeCargoForEntity(hauler) returning null after removeNativeCargo ACK as an empty inventory. It invoked depot.commit(), returned DELIVERED and credited 50 virtual ore without attested native source removal. After removal, native cargo inventory must be a real array with no original cargoID; when supported, global listNativeCargo must also prove no original ID survived on any ship. Missing preflight inventory blocks the unload instead of treating it as NO_CARGO. Uncertainty leaves PREPARED journal for operator repair, never a blind virtual credit.
+Where: integration/coopNativeHaulCargo.cjs, tests/coop-native-haul-unload-readback.test.mjs
+Evidence: Old main exact-source reproduction: null readback -> DELIVERED and one commit. Patched exact-source V8 source-backed suite 7/7 PASS (null, undefined, throw, stale original ID, global reparent, valid source removal). Native Node 22/SQLite WAL/Rust/two authenticated EVE clients NOT_RUN.
+
+### 2026-10-26T15:09Z · 1f59967 · L2 · fix(P0): flush original native cargo deletion before durable depot supply commit
+
+Why: The old unloadCargo() removed original npcCargo in native memory and immediately committed a durable virtual depot receipt after a memory-only readback. It NEVER flushed npcCargo; an actual server restart could restore the original item while preserving credited depot supply. Require flushTableSync('npcCargo') successful ACK after the delete and before readback/depot.commit.
+Where: integration/coopNativeHaulCargo.cjs
+Evidence: Before fix, exact-source unload returned DELIVERED, credited 50 virtual ore, and made 0 native cargo flush calls, so original durable cargoID survived simulated restart. Patched 19/19 exact-source isolated V8 cargo/depot test callbacks PASS with simulated native flush and IO. Full Node 22 original repo, native SQLite WAL/FULL cold reboot, Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T15:10Z · f92870b · TEST · test(P0): unflushed native cargo cannot commit virtual depot ore, prove flush ordering
+
+Why: New exact-source source/depot fault tests prove no virtual credit on absent/false/throwing native flush; assert disk source removed prior to depot.commit, preserving PREPARED-only recovery on failure.
+Where: tests/coop-native-haul-unload-readback.test.mjs
+Evidence: Before fix, exact-source unload returned DELIVERED, credited 50 virtual ore, and made 0 native cargo flush calls, so original durable cargoID survived simulated restart. Patched 19/19 exact-source isolated V8 cargo/depot test callbacks PASS with simulated native flush and IO. Full Node 22 original repo, native SQLite WAL/FULL cold reboot, Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T15:10Z · c760adc · TEST · test(P0): supply native cargo flush acknowledgement in depot unload custody fixtures
+
+Why: Adjust existing depot custody fixtures to attest the required native npcCargo flush before successful unload/commit; no production behavior weakened.
+Where: tests/coop-native-depot-custody.test.mjs
+Evidence: Before fix, exact-source unload returned DELIVERED, credited 50 virtual ore, and made 0 native cargo flush calls, so original durable cargoID survived simulated restart. Patched 19/19 exact-source isolated V8 cargo/depot test callbacks PASS with simulated native flush and IO. Full Node 22 original repo, native SQLite WAL/FULL cold reboot, Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T15:11Z · 5b19d06 · TEST · test(P0): preserve explicitly undefined durability ACK in deterministic mocks
+
+Why: Fix deterministic test mock: an explicitly undefined flush result must remain undefined (not silently receive the success default).
+Where: tests/coop-native-haul-unload-readback.test.mjs
+Evidence: Before fix, exact-source unload returned DELIVERED, credited 50 virtual ore, and made 0 native cargo flush calls, so original durable cargoID survived simulated restart. Patched 19/19 exact-source isolated V8 cargo/depot test callbacks PASS with simulated native flush and IO. Full Node 22 original repo, native SQLite WAL/FULL cold reboot, Rust/two-client gameplay NOT_RUN.

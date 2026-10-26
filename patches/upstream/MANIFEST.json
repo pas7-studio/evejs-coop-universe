@@ -46,6 +46,15 @@
       ],
       "status": "not-sent",
       "note": "a durable co-op NPC is dematerialised by the combat-dormancy sweep on every no-session scene, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0006-native-npc-live-capacitor-wins.patch",
+      "sha256": "9a5cbc78c1e90982f85112a05e27011eb5b6789a2dff904717cccb26fb7b6932",
+      "files": [
+        "server/src/space/runtime.js"
+      ],
+      "status": "not-sent",
+      "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, candidate for an atomic upstream PR"
     }
   ]
 }
