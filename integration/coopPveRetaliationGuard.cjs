@@ -5,7 +5,7 @@ const id=value=>Number.isSafeInteger(value)&&value>0?value:null;
 const position=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 const range=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function authorize({systemID,scene,victim,helper,attacker,session,
- verifiedCharacterID,aggression,now,maxRangeMeters=250000}={}){
+ verifiedCharacterID,aggression,witnessedAggression,now,maxRangeMeters=250000}={}){
  const system=id(systemID),character=id(verifiedCharacterID);
  if(!system||!character||!Number.isSafeInteger(now)||now<=0||
     !Number.isFinite(maxRangeMeters)||maxRangeMeters<1000||maxRangeMeters>300000||
@@ -20,10 +20,19 @@ function authorize({systemID,scene,victim,helper,attacker,session,
     scene.getEntityByID(helperID)!==helper||scene.getEntityByID(attackerID)!==attacker||
     !position(victim.position)||!position(helper.position)||!position(attacker.position)||
     range(victim.position,attacker.position)>maxRangeMeters)return false;
- if(id(aggression?.lastAggressorID)!==attackerID||
-    !Number.isSafeInteger(aggression?.lastAggressedAtMs)||
-    aggression.lastAggressedAtMs>now||
-    now-aggression.lastAggressedAtMs>120000)return false;
+ const nativeAggression=id(aggression?.lastAggressorID)===attackerID&&
+    Number.isSafeInteger(aggression?.lastAggressedAtMs)&&
+    aggression.lastAggressedAtMs<=now&&now-aggression.lastAggressedAtMs<=120000;
+ // A native controller does not always record a player aggressor, so the damage
+ // witness receipt is the second admissible proof. It is not a client claim: it
+ // comes from the killmail tracker with a unique live session, and it must match
+ // this exact system, victim, attacker ship and verified character.
+ const witnessed=witnessedAggression;
+ const witnessedAggressionOK=Boolean(witnessed)&&
+    id(witnessed.systemID)===system&&id(witnessed.victimEntityID)===victimID&&
+    id(witnessed.attackerShipID)===attackerID&&id(witnessed.characterID)===character&&
+    Number.isSafeInteger(witnessed.atMs)&&witnessed.atMs<=now&&now-witnessed.atMs<=120000;
+ if(!nativeAggression&&!witnessedAggressionOK)return false;
  if(!session||id(session.characterID)!==character||
     id(session?._space?.shipID)!==attackerID||
     id(session?._space?.systemID)!==system||

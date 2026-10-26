@@ -11,7 +11,7 @@ const inWarp=ship=>String(ship?.mode||"").toUpperCase().includes("WARP")||
 function createTactics({
  clock=()=>Date.now(),warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder,
  maxResponders=2,callCooldownMs=120000,retreatCooldownMs=300000,
- authorizePlayerDefense=()=>false,notify=()=>{}
+ authorizePlayerDefense=()=>false,aggressionFor=()=>null,notify=()=>{}
 }){
  if([warpToPoint,warpToEntity,attack,resumeBehavior,stopOrder].some(x=>typeof x!=="function")||
   !Number.isInteger(maxResponders)||maxResponders<1||maxResponders>3||
@@ -77,9 +77,15 @@ function createTactics({
    if(context.kind==="player"){
     try{return authorizePlayerDefense({systemID:system,scene,
       victim: victim?.ship,helper:helper.ship,attacker,
-      session:context.session})===true;}catch(_error){return false;}
+      session:context.session,witnessedAggression:witnessedFor(victim)})===true;}catch(_error){return false;}
    }
    return true;
+  }
+  // The last VERIFIED player attack on this exact victim, if any. It only fills
+  // the gap when the native controller did not record an aggressor.
+  function witnessedFor(victim){
+   try{return aggressionFor({systemID:system,victimEntityID:Number(victim?.entityID),nowMs:now})||null}
+   catch(_error){return null}
   }
   const engaged=new Set();
   // The true EveJS warp must finish before the NPC can stand down.
@@ -145,9 +151,16 @@ function createTactics({
   for(const victim of present.values()){
    const c=nativeController(victim.entityID);
    if(!c||retreats.has(victim.entityID))continue;
-   const attackerID=positive(c.lastAggressorID),source=attackerContext(attackerID);
+   // A native controller does not always record a player aggressor. The damage
+   // witness fills exactly that gap and nothing else: same victim, same system,
+   // verified session, fresh window.
+   const witnessed=witnessedFor(victim),nativeAggressor=positive(c.lastAggressorID);
+   const attackerID=nativeAggressor||positive(witnessed?.attackerShipID),source=attackerContext(attackerID);
    const attacker=source?.ship;
-   const aggroAt=Number(c.lastAggressedAtMs)||0;
+   const aggroAt=Number(c.lastAggressedAtMs)||Number(witnessed?.atMs)||0;
+   if(attacker&&attackerID&&!nativeAggressor&&witnessed)
+    events.push({kind:"npc-defence-from-witness",systemID:system,entityID:victim.entityID,
+     attackerID,characterID:witnessed.characterID});
    if(!attacker||!attackerID||aggroAt<=0||now-aggroAt>120000||aggroAt>now)continue;
    const allyAttacker=present.get(attackerID);
    if(allyAttacker&&allyAttacker.faction===victim.faction)continue;

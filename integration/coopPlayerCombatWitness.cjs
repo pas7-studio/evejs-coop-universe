@@ -80,6 +80,16 @@ function note(attackerEntity,targetEntity,appliedDamage){
           {spaceState:{systemID:receipt.systemID}},receipt);
         if(written!==true)throw Error("TELEMETRY_NOT_RECORDED");
       }});
+    if(receipt?.status==="APPLIED_NATIVE_PLAYER_DAMAGE"){
+      // The verified receipt is the only source of "who attacked this NPC". The
+      // tactics director reads it for real self-defence and ally help when the
+      // native controller did not record an aggressor.
+      try{
+        require("./coopNpcAggressionLedger").getSharedLedger().note({
+          systemID:receipt.systemID,victimEntityID:receipt.victimEntityID,
+          attackerShipID:receipt.shipID,characterID:receipt.characterID,atMs:Date.now()});
+      }catch(_ledgerError){/* self-defence ledger is best effort */}
+    }
     if(receipt?.status==="APPLIED_NATIVE_PLAYER_DAMAGE"&&
        process.env.EVEJS_COOP_CONVOY_OPERATIONS==="1"){
       try{
