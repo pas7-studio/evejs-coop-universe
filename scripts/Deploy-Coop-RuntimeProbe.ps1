@@ -28,6 +28,7 @@ param(
   [switch]$EnableNpcExpeditions,
   [switch]$EnableNpcProbeScan,
   [switch]$EnableNpcProbeLaunch,
+  [switch]$EnableNpcProbeLoadoutSplit,
   [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
@@ -69,6 +70,9 @@ if ($EnableNpcProbeScan -and (-not $EnableNpcExpeditions -or -not $EnableNativeE
 }
 if ($EnableNpcProbeLaunch -and -not $EnableNpcProbeScan) {
   throw 'NPC native probe launch requires -EnableNpcProbeScan'
+}
+if ($EnableNpcProbeLoadoutSplit -and -not $EnableNpcProbeLaunch) {
+  throw 'NPC scanner charge unitization requires -EnableNpcProbeLaunch'
 }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
@@ -213,6 +217,9 @@ if ($EnableNpcProbeScan) {
 # Disable until SQLite fault-injection + physical two-client scene checks pass.
 if ($EnableNpcProbeLaunch) {
   $yamlLines += "      EVEJS_COOP_NPC_PROBE_LAUNCH: '1'"
+}
+if ($EnableNpcProbeLoadoutSplit) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '1'"
 }
 if ($EnableNativeHackingAdmission) {
   $yamlLines += "      EVEJS_COOP_NATIVE_HACKING_ADMISSION: '1'"
