@@ -232,12 +232,27 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   if(!w)return false;
   // Never delete a live native wreck when original ItemStore cannot be read,
   // or when a corrupt/partial tag may hide custody from public inventory.
-  let present;
-  try{present=cargo(wreckID,items.ITEM_FLAGS.HANGAR)}
-  catch{return false}
-  if(!present)return false;
-  return !present.some(x=>String(x?.customInfo||"").startsWith(
-   "coop-npc-expedition:v1:"));
+  let present,unresolved;
+  try{
+   // Read ALL flags. A damaged item can have the wrong flag but must never
+   // become invisible to the expiry guard and be silently destroyed.
+   present=cargo(wreckID,null);
+   unresolved=cargo(w.sourceEntityID,null);
+  }catch{return false}
+  if(!present||!unresolved)return false;
+  if(present.some(x=>String(x?.customInfo||"").startsWith(
+   "coop-npc-expedition:v1:")))return false;
+  // After a crash following the persistent intent, the original item may
+  // still sit in the destroyed source hull. The wreck then cannot expire.
+  if(unresolved.some(x=>{
+   const value=String(x?.customInfo||"");
+   if(!value.startsWith("coop-npc-expedition:v1:"))return false;
+   const proof=parse(value);
+   return !proof || proof.shipID===w.sourceEntityID &&
+     proof.corpID===w.coopNpcExpeditionSourceCorpID &&
+     (proof.wreckID===null||proof.wreckID===wreckID);
+  }))return false;
+  return true;
  }
  return Object.freeze({stage,reconcile,list,claim,canDestroy});
 }
