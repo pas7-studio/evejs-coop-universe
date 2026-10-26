@@ -106,6 +106,14 @@ See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
 - Gate `EVEJS_COOP_PLAYER_NPC_MINING_COMPLETION` remains OFF by default. New source-only regression results: **17/17** physical oracle, **14/14** CAS, **22/22** Stage B, **26/26** Agent selector. The full original SQLite/client test is **NOT_RUN**.
 - See [CHAT24_31_PHYSICAL_MINING_COMPLETION.md](CHAT24_31_PHYSICAL_MINING_COMPLETION.md) for safety and acceptance.
 
+## Stage E2A — native market blocker and actual mining-corp cost account (source implemented)
+
+- Confirmed the exact pinned stock EveJS market rejects `useCorp=true` and its SELL flow requires **character-owned personal station-hangar** stock. Existing P2P market settlement intentionally asserts `is_corp=false`; it cannot be reused to pretend an original corporation-owned ore stack has been sold.
+- **Implemented read-only** `coopPlayerMiningMarketReadiness`: one funded shift, genuine original fleet index, **both** real wage wallet journals, all server-enumerated original `coopPlayerMiningOreTitle` receipts and reciprocal wallet purchases, physically present tagged original ore itemIDs in player corporate office with canTake/office/wallet roles.
+- Manager-only actual Agent status now shows scoped verified corporate ISK **cash outflow**; `realizedRevenueCents` and `netProfitCents` deliberately remain **null**, and no corporate market order or wallet credit occurs. Missing evidence blocks, not zeroes.
+- **15/15** isolated original market-readiness scenarios and **19/19** Agent regressions PASS. No actual corporate native SELL runtime or Rust/SQLite E2E exists yet. The `EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ` flag remains default OFF.
+- See [CHAT24_31_NATIVE_CORPORATE_ORE_MARKET.md](CHAT24_31_NATIVE_CORPORATE_ORE_MARKET.md) for the precise pinned market incompatibility and the next corporate escrow, Rust claim, wallet settlement and crash/recovery gates.
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
