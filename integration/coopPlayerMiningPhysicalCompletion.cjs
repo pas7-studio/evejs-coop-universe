@@ -45,7 +45,9 @@ function createPhysicalCompletionOracle({store,warehouseReceipt,findWarehouseIte
  function captureRetreat({fleetRecord,scene,fleet}={}){
   const point=fleetRecord?.originAnchor?.position;
   if(!goodPoint(point)||typeof scene?.getEntityByID!=="function"||
-    !fleet||!Array.isArray(fleet.minerIDs)||!Array.isArray(fleet.haulerIDs))
+    !fleet||scene.systemID!==fleet.systemID||
+    fleetRecord?.systemID!==fleet.systemID||fleetRecord?.fleetID!==fleet.fleetID||
+    !Array.isArray(fleet.minerIDs)||!Array.isArray(fleet.haulerIDs))
    return null;
   const departureShipIDs=[],seen=new Set();
   for(const id of [...fleet.minerIDs,...fleet.haulerIDs]){
@@ -128,6 +130,7 @@ function createPhysicalCompletionOracle({store,warehouseReceipt,findWarehouseIte
    fleetRecord.fleetID!==row.fleetID||fleetRecord.systemID!==row.systemID||
    !samePoint(fleetRecord.originAnchor?.position,row.retreatAnchor)||
    !["retreating","depleted"].includes(fleetRecord.state)||
+   scene?.systemID!==row.systemID||
    typeof scene?.getEntityByID!=="function")return null;
   const ids=[...fleet.minerIDs,...fleet.haulerIDs];
   if(!ids.length||new Set(ids).size!==ids.length)return null;
