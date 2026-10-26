@@ -9,7 +9,7 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const validOrder=id=>typeof id==="string"&&/^[1-9][0-9]{0,17}$/.test(id)&&
  BigInt(id)+9200000000n<=BigInt(Number.MAX_SAFE_INTEGER);
 function createCorporateCancelLifecycle({
- marketClient,unsoldReturn,token,enabled=()=>false,observe=()=>{}
+ marketClient,unsoldReturn,token,enabled=()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_CANCEL==="1",observe=()=>{}
 }={}){
  if(typeof marketClient?.call!=="function"||
   typeof unsoldReturn?.returnRemaining!=="function"||
