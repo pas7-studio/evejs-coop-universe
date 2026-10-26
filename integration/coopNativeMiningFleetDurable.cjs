@@ -9,6 +9,33 @@
  */
 const MAX_SLOTS=16, MAX_WING=32;
 const busy=new Set();
+// Slot status used to be invisible: start() was called without a log callback and
+// its result was discarded, so a blocked slot looked exactly like a healthy one in
+// the event log. One event per real status change, never per scene tick.
+const lastSlotStatus=new Map();
+function noteSlotStatus(systemID,reports){
+ let guard=null;
+ try{
+  guard={observe:require("./coopObserve"),probe:require("./coopRuntimeProbe")};
+ }catch(_error){return;}
+ for(const report of reports||[]){
+  const key=systemID+"-"+report.slot;
+  const signature=[report.status,report.reason||"",
+   (report.minerIDs||[]).length,(report.haulerIDs||[]).length].join("|");
+  if(lastSlotStatus.get(key)===signature)continue;
+  lastSlotStatus.set(key,signature);
+  try{
+   guard.observe.observe(guard.probe,"living-native-durable-slot",{systemID},{
+    status:String(report.status),slot:Number(report.slot)||0,
+    reason:report.reason?String(report.reason).slice(0,160):null,
+    miners:(report.minerIDs||[]).length,haulers:(report.haulerIDs||[]).length,
+    restored:Number(report.restored)||0,controllers:Number(report.controllers)||0,
+    reseededFrom:report.reseededFrom?String(report.reseededFrom):null,
+    repaired:report.repaired===true,
+   });
+  }catch(_error){}
+ }
+}
 const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):0;
 const clone=x=>JSON.parse(JSON.stringify(x));
 function slotKey(systemID,slot){return systemID+"-"+slot;}
@@ -434,6 +461,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      log("ALIFE08 slot "+key+" blocked: "+reason);
     }
    }
+   noteSlotStatus(systemID,reports);
    for(const report of reports){
     const detail=["miners="+(report.minerIDs||[]).length,"haulers="+(report.haulerIDs||[]).length,
      report.controllers!==undefined?"ctrl=+"+report.controllers:"","restored="+(report.restored||0),
