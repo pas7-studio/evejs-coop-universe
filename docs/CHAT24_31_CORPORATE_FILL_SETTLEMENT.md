@@ -33,6 +33,15 @@ One native atomic transaction spanning \`characters\`, \`corporationRuntime\`, \
 
 Native \`coopPlayerMiningCorpFill\` receipts are registered in the reversible pinned \`sqliteStore.ROW_GROUPS.corporationRuntime\` mapping. There is no second wallet, item system or orderbook.
 
+## Stage E2B4 — original Rust claim finalization + wallet/ore receipt release (source implemented)
+
+- Added `FinalizeCorpFill` and `ReleaseCorpFill` private Rust RPCs. They **independently read the real original GameStore SQLite** to verify the exact durable corporate fill receipt, buyer wallet debit, corporate Wallet Division 1000 revenue and tax/fee journal entries, physical delivered item, original cargo provenance and remaining corporate escrow quantity before the Rust order is finalized/unlocked.
+- The Rust order remains `settling` between the two original transactions; `ReleaseCorpFill` only reopens an order with positive remaining volume, otherwise marks it `filled`. Lost RPC ACKs can be inspected with read-only `GetCorpFillClaim` for `claimed/finalized/released` states; repeats cannot reissue a GameStore payment.
+- Added a default-OFF server-only native orchestration `coopPlayerMiningCorporateFillLifecycle`, which requires a genuine separately verified orderbook match; no public endpoint, synthetic buyer, second market or timer.
+- Source evidence: **20/20** Rust source/patch tests, **14/14** native atomic settlement tests, **11/11** lifecycle interface tests; original E2A/E2B1/E2B2 regressions **44/44** PASS. Pinned Rust reversible patch and SQLite receipt row-group roundtrip PASS; **real Cargo/SQLite/2-client E2E NOT_RUN**.
+- `PublishCorpSell` still **FAILS CLOSED**. Trusted native buyer matching, verified native fee/tax authority, safe publication and cancelled/partially unsold return remain incomplete; no real in-game ISK sale occurred.
+- See [CHAT24_31_CORPORATE_FILL_FINALIZATION.md](CHAT24_31_CORPORATE_FILL_FINALIZATION.md) for exact source identity checks, restart recovery, flags and release gates.
+
 ## Proof limits and remaining blockers
 
 - **14/14** isolated in-memory native settlement tests PASS: one partial and subsequent full sale, same original itemID, conservation of ISK/ore, fees, duplicate Rust claim, tampered native receipt, out-of-sequence cycle, insufficient funds, unknown COMMIT and disabled flags.
