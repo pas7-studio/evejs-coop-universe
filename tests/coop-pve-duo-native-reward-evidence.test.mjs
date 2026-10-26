@@ -100,9 +100,9 @@ test("zero LP reward is valid only when native issuer LP stays unchanged",()=>{
  const f=fixture({lp:0,actualLP:0});f.pay();
  assert.equal(f.assessNow().lpDelta,0);
 });
-test("unexpected standing owners or unreadable raw standings deny full evidence",()=>{
+test("unrelated standing changes are not mission proof; unreadable original agent standings deny evidence",()=>{
  const f=fixture();f.pay();f.now().standings[9000]=2;
- assert.equal(f.assessNow().status,"NATIVE_STANDING_SNAPSHOT_MISMATCH");
+ assert.equal(f.assessNow().status,"NATIVE_PERSONAL_REWARD_SOURCE_VERIFIED");
  const g=fixture();const broken={...g.adapters,getStanding:()=>NaN};
  assert.equal(capture({characterID:101,agentID:50,...broken}).status,
   "REWARD_STANDING_SOURCE_UNAVAILABLE");
