@@ -133,6 +133,9 @@ function adopt(scene,fleet,options={}){
   }catch(_error){return false}
  };
  const restore=(touched,status,detail)=>{
+  // A failed batch must not consume the once-only slot: the rows were put back,
+  // so a later tick may legitimately try again.
+  attempts.delete(systemID+":"+fleetID);
   let restored=true;
   for(const row of [...touched].reverse()){
    try{
