@@ -657,7 +657,7 @@ fn coop_corp_fill_finalize_db(path:&Path,token:&str,order:i64,cycle:i64)
       "phase":"finalized","state":"settling",
       "volumeAfter":after,"filledQuantity":qty,
       "receiptKey":receipt_key,"verifiedGameStore":true,
-      "requiresRelease":true
+      "claimProof":witness,"requiresRelease":true
     });
     let n=tx.execute(
        "UPDATE coop_corp_sell_fills
@@ -702,13 +702,12 @@ fn coop_corp_fill_release_db(path:&Path,token:&str,order:i64,cycle:i64)
     // GameStore buyer, corporate seller, market escrow and ISK journal.
     let original=coop_corp_sell_gamestore()?;
     original.execute_batch("BEGIN DEFERRED TRANSACTION")?;
-    let receipt=coop_corp_sell_json(&original,"corporationRuntime",
-      key.as_deref().ok_or_else(||anyhow!("CORP_FILL_RELEASE_KEY_MISSING"))?)?;
-    if receipt["phase"]!="GAMESTORE_COMMITTED"||
-       receipt["orderID"]!=order.to_string()||receipt["cycle"]!=cycle||
-       receipt["volumeAfter"]!=after||
-       !receipt["buyerJournalID"].is_i64()||
-       !receipt["sellerJournalID"].is_i64(){
+    let claim_proof=&v["claimProof"];
+    if claim_proof["verifiedNative"]!=true||
+       claim_proof["orderID"]!=order.to_string()||
+       claim_proof["cycle"]!=cycle||
+       claim_proof["volumeAfter"]!=after||
+       coop_corp_fill_audit(&original,claim_proof)?!=key.as_deref().unwrap_or(""){
         bail!("CORP_FILL_RELEASE_DURABLE_PAYMENT_NO_LONGER_VERIFIED");
     }
     let state=if after==0{"filled"}else{"open"};
