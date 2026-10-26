@@ -761,3 +761,19 @@ test("a third restart can only recover once with a new warehouse/depot check and
  assert.equal(store.listNativeCargo()[0].coopHaulAdoptedFrom,hauler.itemID);
  assert.equal(target.state,"loaded");
 });
+
+test("second restart requires explicitly configured authoritative warehouse root",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const previous=process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
+ delete process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
+ try{
+  const f=secondCrashAttempt(secondCrashCargo(),{warehouseRoot:undefined});
+  assert.equal(f.result.status,"RE_ADOPTION_SETTLEMENT_UNVERIFIED");
+  assert.equal(f.store.writes.length,0);
+  assert.equal(f.flushes,0);
+  assert.equal(f.target.state,"mining");
+ }finally{
+  if(previous===undefined)delete process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
+  else process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT=previous;
+ }
+});
