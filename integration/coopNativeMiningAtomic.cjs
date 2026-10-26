@@ -11,10 +11,28 @@ const positive = value => Number.isSafeInteger(Number(value)) && Number(value) >
 const integer = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0;
 const clone = value => JSON.parse(JSON.stringify(value));
 
+// Blocking has two very different meanings and both used to overwrite the same
+// field, so the original reason was lost and a pure configuration refusal looked
+// exactly like an uncertain native mutation:
+//  - the co-op rules are not enabled (or the rock/ship is not durable): nothing
+//    was read or written, so the hull stays usable and must NOT be marked for
+//    operator repair - otherwise enabling the flags later can never start the loop;
+//  - a real custody question (yield, identities, post-commit readback): keep the
+//    first reason verbatim and require an operator.
+const CONFIG_ONLY = new Set([
+  "ALIFE07_ATOMIC_FLAGS_REQUIRED",
+  "ALIFE07_PERSISTENT_NPC_REQUIRED",
+  "ALIFE07_PERSISTENT_ROCK_REQUIRED",
+]);
 function blocked(entity, reason) {
   if (entity && typeof entity === "object") {
-    entity.coopMiningCargoNeedsOperatorRepair = reason;
-    entity.coopMiningCargoLastError = reason;
+    if (CONFIG_ONLY.has(reason)) {
+      entity.coopMiningCargoLastError = reason;
+    } else {
+      entity.coopMiningCargoNeedsOperatorRepair =
+        entity.coopMiningCargoNeedsOperatorRepair || reason;
+      entity.coopMiningCargoLastError = reason;
+    }
   }
   return {success:false,stopReason:"cargo",reason};
 }
@@ -26,7 +44,9 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     const {scene,entity,targetEntity,mineableState,miningResult,transferredQuantity,
       cycleBoundaryMs,moduleItem,commitScene,readState} = input || {};
     if (!entity || entity.coopMiningCargoNeedsOperatorRepair)
-      return blocked(entity,"ALIFE07_REPAIR_REQUIRED");
+      return blocked(entity, entity && entity.coopMiningCargoNeedsOperatorRepair
+        ? "ALIFE07_REPAIR_REQUIRED:" + String(entity.coopMiningCargoNeedsOperatorRepair)
+        : "ALIFE07_REPAIR_REQUIRED");
     if (process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC !== "1" ||
         process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS !== "1" ||
         process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY !== "1" ||
