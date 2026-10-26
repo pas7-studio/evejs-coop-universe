@@ -34,6 +34,7 @@ function noteSlotStatus(systemID,reports){
     restored:Number(report.restored)||0,controllers:Number(report.controllers)||0,
     reseededFrom:report.reseededFrom?String(report.reseededFrom):null,
     repaired:report.repaired===true,
+    recomposed:report.recomposed===true,
    });
   }catch(_error){}
  }
@@ -224,6 +225,79 @@ function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,m
   replacedEntityIDs:[...minerIDs,...haulerIDs].filter(id=>
    !merged.minerEntityIDs.includes(id)&&!merged.haulerEntityIDs.includes(id))});
  return merged;
+}
+// A durable slot can keep a hull whose class does not match its role. Measured on the
+// live world: all three "hauler" slots were Mining Ventures (50 m3 hold) while the
+// miners were Hulks and Skiffs, so every strict transfer was refused as "full"
+// (needM3 5 243.7 at capacityM3 50) and ore never left the belt.
+// The repair is additive and gated by EVEJS_COOP_FLEET_COMPOSITION:
+//  - a mis-roled hull with an empty hold is re-marked as an extra MINER: same ship,
+//    same entity ID, same modules, same cargo rows;
+//  - one real hauler from the composition pool is ADDED to the slot;
+//  - a mis-roled hull that already holds ore is never re-marked, because its cargo
+//    would be orphaned: it stays a hauler and a real hauler is added beside it.
+// Nothing is destroyed, and the witness is rewritten only after the new marker set
+// and the native store have been verified again.
+function repairSlotComposition({scene,store,systemID,slot,key,db,spawn,ensureState,
+ minerIDs,haulerIDs,log=()=>{}}){
+ if(process.env.EVEJS_COOP_FLEET_COMPOSITION!=="1")return null;
+ const composition=require("./coopFleetComposition");
+ const profileOf=id=>String(store.getNativeController(id)?.profileID||"");
+ const misRoled=haulerIDs.filter(id=>!composition.isHaulerHull(profileOf(id)));
+ if(!misRoled.length)return null;
+ const demotable=misRoled.filter(id=>{
+  const cargo=store.listNativeCargoForEntity(id);
+  if(!Array.isArray(cargo))throw Error("ALIFE08_RECOMPOSE_CARGO_UNREADABLE:"+id);
+  return cargo.length===0;
+ });
+ const kept=misRoled.filter(id=>!demotable.includes(id));
+ // The scene mining state must exist BEFORE allocating, exactly like a first seed.
+ ensureState();
+ const born=spawn(slot,{miners:0,haulers:misRoled.length});
+ if(!born?.success||!born.data||born.data.haulerSpawnResult?.data?.partialFailure)
+  throw Error("ALIFE08_RECOMPOSE_SPAWN_FAILED");
+ const fresh=ids(born.data.haulerEntityIDs||[]);
+ if(!fresh||fresh.length!==misRoled.length)
+  throw Error("ALIFE08_RECOMPOSE_SPAWN_COUNT_MISMATCH:"+String(fresh&&fresh.length)+
+   "/"+misRoled.length);
+ for(const id of fresh){
+  const profile=profileOf(id);
+  if(!composition.isHaulerHull(profile))
+   throw Error("ALIFE08_RECOMPOSE_BAD_HAULER_HULL:"+id+":"+profile);
+ }
+ const minerMarker=roleMarker(systemID,slot,"miner");
+ for(const id of demotable){
+  const entity=store.getNativeEntity(id),controller=store.getNativeController(id);
+  if(!entity||!controller||entity.transient===true||controller.transient===true)
+   throw Error("ALIFE08_RECOMPOSE_HULL_NOT_DURABLE:"+id);
+  if(store.upsertNativeEntity({...entity,operatorKind:minerMarker})?.success!==true ||
+     store.upsertNativeController({...controller,operatorKind:minerMarker})?.success!==true)
+   throw Error("ALIFE08_RECOMPOSE_REMARK_FAILED:"+id);
+ }
+ const nextMiner=[...minerIDs,...demotable];
+ const nextHauler=[...haulerIDs.filter(id=>!demotable.includes(id)),...fresh];
+ if(nextMiner.length+nextHauler.length>MAX_WING)
+  throw Error("ALIFE08_RECOMPOSE_WING_TOO_LARGE");
+ const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
+ if(synced?.success!==true)throw Error("ALIFE08_RECOMPOSE_FLUSH_FAILED");
+ verifyActors({scene,store,systemID,slot,minerIDs:nextMiner,haulerIDs:nextHauler});
+ const previous=readSlot(db,key)||{};
+ saveSlot(db,key,{...previous,version:1,status:"ACTIVE",systemID,slot,
+  fleetID:previous.fleetID||fleetIDForSlot(systemID,slot),
+  minerEntityIDs:nextMiner,haulerEntityIDs:nextHauler,recomposedAtMs:Date.now(),
+  demotedHaulerIDs:demotable,addedHaulerIDs:fresh,keptMisroledHaulerIDs:kept});
+ log("ALIFE08 slot "+key+" recomposed: demoted="+demotable.join(",")+
+  " addedHaulers="+fresh.join(",")+(kept.length?" keptMisroled="+kept.join(","):""));
+ try{
+  const guard={observe:require("./coopObserve"),probe:require("./coopRuntimeProbe")};
+  guard.observe.observe(guard.probe,"living-fleet-slot-recomposed",{systemID},{
+   slot:Number(slot)||0,demoted:demotable.length,added:fresh.length,
+   keptMisroled:kept.length,demotedEntityIDs:demotable,addedHaulerIDs:fresh,
+   minerCount:nextMiner.length,haulerCount:nextHauler.length,
+   reason:kept.length?"MISROLED_HAULER_HOLDS_CARGO":null});
+ }catch(_error){}
+ return {minerEntityIDs:nextMiner,haulerEntityIDs:nextHauler,demoted:demotable,
+  added:fresh,kept};
 }
 function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
  const expected=[...minerIDs,...haulerIDs];
@@ -436,6 +510,16 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       haulerIDs=healed.haulerEntityIDs;
       ensureControllers([...minerIDs,...haulerIDs]);
      }
+     // A surviving slot can still be composed wrong: the hull in the hauler role may
+     // be a mining hull with a hold far smaller than one ore stack, which no amount
+     // of healing fixes. Repair the composition additively (flag-gated).
+     const recomposed=repairSlotComposition({scene,store,systemID,slot,key,db,spawn,
+      ensureState,minerIDs,haulerIDs,log});
+     if(recomposed){
+      minerIDs=recomposed.minerEntityIDs;
+      haulerIDs=recomposed.haulerEntityIDs;
+      ensureControllers([...minerIDs,...haulerIDs]);
+     }
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      // ALIFE-13: verify ALL original cargo transfers and historical manifests
      // before restoring ANY physical hull or registering a mining state.
@@ -462,6 +546,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       .find(x=>Number(x&&x.fleetID)===fleetIDForSlot(systemID,slot));
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
       minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed,
+      recomposed:!!recomposed,
       liveMiners:Array.isArray(liveRecord&&liveRecord.minerEntityIDs)?liveRecord.minerEntityIDs.length:-1,
       liveHaulers:Array.isArray(liveRecord&&liveRecord.haulerEntityIDs)?liveRecord.haulerEntityIDs.length:-1}));
     }catch(error){

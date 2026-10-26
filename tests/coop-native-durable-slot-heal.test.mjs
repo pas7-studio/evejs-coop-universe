@@ -16,11 +16,13 @@ test("the identity audit runs before any controller is attached",()=>{
  const tail=restore.slice(audit);
  assert.ok(tail.indexOf("ensureControllers([...minerIDs,...haulerIDs]);")>0,
   "an unconditional controller attach follows the audit");
- // The only attach allowed before the audit belongs to the repair branch, which
- // already verified the merged witness against the native store.
+ // The only attaches allowed before the audit belong to the repair branches, which
+ // already verified their merged witness against the native store: the partial-slot
+ // repair and the additive composition repair.
  const head=restore.slice(0,audit);
- assert.equal((head.match(/ensureControllers\(\[/g)||[]).length,1);
+ assert.equal((head.match(/ensureControllers\(\[/g)||[]).length,2);
  assert.match(head,/if\(healed\)\{/);
+ assert.match(head,/if\(recomposed\)\{/);
 });
 test("a slot blocked by the audit is never materialized",()=>{
  const catchBlock=source.slice(source.indexOf("}catch(error){",source.indexOf("const registered=registerOnce")));

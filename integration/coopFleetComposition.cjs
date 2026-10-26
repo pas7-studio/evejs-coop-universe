@@ -40,6 +40,22 @@ const TIERS = Object.freeze([
   Object.freeze({id: "t1", minBudgetISK: 0}),
 ]);
 
+// A hull's class is a property of the profile, not of the slot it sits in. The live
+// failure was a mining hull holding the hauler role, so the role must be checked
+// against the real profile before a fleet is declared healthy.
+const HAULER_PROFILE = /_hauler$/;
+const MINER_PROFILE = /^ore_mining_/;
+
+function classify(profileID) {
+  const id = String(profileID || "");
+  if (HAULER_PROFILE.test(id)) return "hauler";
+  if (MINER_PROFILE.test(id)) return "miner";
+  return "unknown";
+}
+
+const isHaulerHull = (profileID) => classify(profileID) === "hauler";
+const isMinerHull = (profileID) => classify(profileID) === "miner";
+
 const positive = (value) => Number.isFinite(Number(value)) && Number(value) > 0;
 const clampRoll = (roll) => {
   const value = Number(roll);
@@ -110,6 +126,11 @@ module.exports = {
   DEFAULT_CORP_ID,
   HULLS,
   TIERS,
+  HAULER_PROFILE,
+  MINER_PROFILE,
+  classify,
+  isHaulerHull,
+  isMinerHull,
   tierFor,
   pickHull,
   readCorpWallet,

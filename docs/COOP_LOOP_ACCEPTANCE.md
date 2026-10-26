@@ -81,6 +81,35 @@ could never leave the belt. An existing slot with a mining hull in the hauler ro
 must be re-composed: keep the hull as an extra miner and add a real hauler, never
 destroy a durable ship to make the acceptance pass.
 
+The repair is code, not a manual edit: on start, a slot whose hauler hull is not a
+hauler profile is re-composed **additively** (`repairSlotComposition` in
+`integration/coopNativeMiningFleetDurable.cjs`): the mis-roled hull keeps its entity
+ID, modules and cargo and is re-marked as an extra miner, one real hauler from the
+tier pool is spawned beside it, and `living-fleet-slot-recomposed` records the change
+in the slot witness (`demotedHaulerIDs`, `addedHaulerIDs`, `keptMisroledHaulerIDs`).
+A mis-roled hull that already holds ore is never re-marked — its cargo would be
+orphaned — so it stays a hauler and a real hauler is added next to it.
+
+## 5b. Fill cap and partial loads
+
+Two independent limits kept ore in the belt even after the fleet was composed right:
+
+- **`EVEJS_COOP_MINING_FILL_CAP=1`** (`integration/coopMiningFillCap.cjs`) lowers the
+  capacity the dispatch trigger compares against to what the fleet can really carry
+  right now (real SDE `capacity` of the haulers minus what they already hold). The
+  stock trigger waits for 85 % of the *miner's* own hold (Hulk: 8 000 m³), which no
+  industrial can take. Events: `living-mining-fill-cap` with `status: CAP_APPLIED`,
+  `HAULER_HOLD_UNUSABLE` (a 50 m³ hull never silently stops mining) or
+  `CAP_UNPROVEN`.
+- **A hauler moves what physically fits** (`coopNativeHaulCargo` +
+  `coopNativeHaulTransferAtomic`): when no hull can take the whole row, the largest
+  free hold takes a partial load in ONE atomic `npcCargo` transaction — the source row
+  keeps its cargoID with the remainder, the moved units become one new cargo row and
+  one receipt (`partial:true`, `sourceCargoID`, `remainingQuantity`). Nothing is
+  invented, nothing is merged, and a request larger than the stack is a normal full
+  move. This is what drains stacks that grew to 8 000–18 777 m³ before the cap
+  existed.
+
 ## 6. Known traps (each one cost hours)
 
 - A hook module that is not installed throws inside stock code and the caller

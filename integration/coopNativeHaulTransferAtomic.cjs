@@ -23,7 +23,7 @@ const failed=(miner,hauler,fleet,reason)=>{
 function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date.now()}={}){
  if(!gameStore||!nativeStore||typeof resolveType!=="function")
   throw Error("ALIFE10_NATIVE_AUTHORITIES_REQUIRED");
- function transfer({scene,fleet,miner,hauler,cargoID}={}){
+ function transfer({scene,fleet,miner,hauler,cargoID,maxQuantity}={}){
   if(miner?.coopHaulCargoNeedsOperatorRepair||hauler?.coopHaulCargoNeedsOperatorRepair||
      fleet?.coopHaulCargoNeedsOperatorRepair)
    return {status:"NEEDS_OPERATOR_REPAIR",reason:"ALIFE10_REPAIR_ALREADY_REQUIRED",volumeM3:0};
@@ -106,22 +106,46 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
   const timestamp=Number(clock());
   if(!Number.isSafeInteger(timestamp)||timestamp<=0)
    return failed(miner,hauler,fleet,"ALIFE10_TIMESTAMP_INVALID");
-  const after={...before,entityID:haulerID,ownerID:pos(hauler.ownerID),
-    transient:false,coopHaulFleetID:fleetID,coopHaulFromMinerID:minerID,
+  // A hauler that physically cannot hold the whole stack moves what fits, in the SAME
+  // single transaction: the source row keeps its original cargoID with the remainder
+  // and the moved units become ONE new cargo row on the hauler. Never an invented
+  // item, never a merge, never a second receipt for the same destination row.
+  const requested=Number(maxQuantity);
+  const wantsPartial=maxQuantity!==undefined&&maxQuantity!==null;
+  if(wantsPartial&&(!Number.isSafeInteger(requested)||requested<=0))
+   return failed(miner,hauler,fleet,"ALIFE10_PARTIAL_QUANTITY_INVALID");
+  const partial=wantsPartial&&requested<quantity;
+  const movedQuantity=partial?requested:quantity;
+  const remaining=quantity-movedQuantity;
+  let destinationID=id;
+  if(partial){
+   if(typeof nativeStore.allocateCargoID!=="function")
+    return failed(miner,hauler,fleet,"ALIFE10_CARGO_ALLOCATOR_UNAVAILABLE");
+   destinationID=pos(nativeStore.allocateCargoID());
+   const allCargo=typeof nativeStore.listNativeCargo==="function"?
+    nativeStore.listNativeCargo():null;
+   if(!destinationID||destinationID===id||!Array.isArray(allCargo)||
+      allCargo.some(x=>pos(x?.cargoID)===destinationID))
+    return failed(miner,hauler,fleet,"ALIFE10_CARGO_ID_ALLOCATION_CONFLICT");
+  }
+  const after={...before,cargoID:destinationID,entityID:haulerID,ownerID:pos(hauler.ownerID),
+    transient:false,quantity:movedQuantity,coopHaulFleetID:fleetID,coopHaulFromMinerID:minerID,
     coopHaulOriginalOwnerID:pos(miner.ownerID),coopHaulSystemID:systemID,
-    coopHaulLoadedAt:timestamp};
+    coopHaulLoadedAt:timestamp,
+    ...(partial?{coopHaulSplitFromCargoID:id,coopHaulSplitRemaining:remaining}:{})};
+  const remainder=partial?{...before,quantity:remaining}:null;
   const beforeHash=sha(before),afterHash=sha(after);
-  const proof={version:1,status:"COMMITTED",cargoID:id,systemID,fleetID,
+  const proof={version:1,status:"COMMITTED",cargoID:destinationID,systemID,fleetID,
     minerID,haulerID,sourceOwnerID:pos(miner.ownerID),
-    haulerOwnerID:pos(hauler.ownerID),typeID,quantity,beforeHash,afterHash,
-    loadedAt:timestamp};
+    haulerOwnerID:pos(hauler.ownerID),typeID,quantity:movedQuantity,beforeHash,afterHash,
+    loadedAt:timestamp,partial,sourceCargoID:id,remainingQuantity:remaining};
   const authority=gameStore.coopAtomicNativeRows;
   if(!authority||typeof authority.transact!=="function")
    return failed(miner,hauler,fleet,"ALIFE10_NATIVE_SQLITE_AUTHORITY_UNAVAILABLE");
   let outcome;
   try{
    outcome=authority.transact(["npcCargo"],tx=>{
-    const old=tx.get("npcCargo",receiptKey(id));
+    const old=tx.get("npcCargo",receiptKey(destinationID));
     if(old)throw Error("ALIFE10_CARGO_TRANSFER_ALREADY_WITNESSED");
     const root=tx.get("npcCargo","cargo");
     if(!root||typeof root!=="object"||Array.isArray(root))
@@ -130,9 +154,16 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
     if(!actual||sha(actual)!==beforeHash||
        pos(actual.entityID)!==minerID||pos(actual.ownerID)!==pos(miner.ownerID))
      throw Error("ALIFE10_SOURCE_CARGO_CAS_CONFLICT");
+    const nextRoot={...root};
+    if(partial){
+     if(nextRoot[String(destinationID)]||Object.keys(nextRoot).includes(String(destinationID)))
+      throw Error("ALIFE10_DESTINATION_CARGO_ID_TAKEN");
+     nextRoot[String(id)]=remainder;
+     nextRoot[String(destinationID)]=after;
+    }else nextRoot[String(id)]=after;
     // The next owner/location and an immutable receipt become visible together.
-    tx.put("npcCargo","cargo",{...root,[String(id)]:after});
-    tx.put("npcCargo",receiptKey(id),proof);
+    tx.put("npcCargo","cargo",nextRoot);
+    tx.put("npcCargo",receiptKey(destinationID),proof);
     return proof;
    });
   }catch(error){
@@ -143,22 +174,28 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
   try{
    const haulerCargo=nativeStore.listNativeCargoForEntity(haulerID),
      minerCargo=nativeStore.listNativeCargoForEntity(minerID);
-   const moved=(haulerCargo||[]).filter(x=>pos(x.cargoID)===id);
-   if(!Array.isArray(minerCargo)||moved.length!==1||
-      minerCargo.some(x=>pos(x.cargoID)===id)||sha(moved[0])!==afterHash||
-      outcome?.cargoID!==id||outcome?.afterHash!==afterHash)
+   const moved=(haulerCargo||[]).filter(x=>pos(x.cargoID)===destinationID);
+   const still=(minerCargo||[]).filter(x=>pos(x.cargoID)===id);
+   const sourceOk=partial?
+     (still.length===1&&Number(still[0].quantity)===remaining&&sha(still[0])===sha(remainder)):
+     still.length===0;
+   if(!Array.isArray(minerCargo)||moved.length!==1||!sourceOk||sha(moved[0])!==afterHash||
+      outcome?.cargoID!==destinationID||outcome?.afterHash!==afterHash)
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CUSTODY_READBACK_FAILED");
    if(typeof nativeStore.buildNativeCargoItems!=="function")
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CARGO_BUILDER_MISSING");
    const rebuilt=nativeStore.buildNativeCargoItems(haulerID);
-   if(!Array.isArray(rebuilt)||rebuilt.filter(x=>pos(x?.itemID)===id).length!==1)
+   if(!Array.isArray(rebuilt)||rebuilt.filter(x=>pos(x?.itemID)===destinationID).length!==1)
     return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_CARGO_BUILD_INVALID");
    // Update both in-memory ships only after ALL source/readback checks pass.
    const minerLocal=Array.isArray(miner.nativeCargoItems)?miner.nativeCargoItems:[];
-   miner.nativeCargoItems=minerLocal.filter(x=>pos(x?.itemID)!==id);
+   miner.nativeCargoItems=partial?
+    minerLocal.map(x=>pos(x?.itemID)===id?{...x,quantity:remaining}:x):
+    minerLocal.filter(x=>pos(x?.itemID)!==id);
    hauler.nativeCargoItems=rebuilt;
-   return {status:"COMMITTED",cargoID:id,fleetID,quantity,
-     volumeM3:quantity*volumePerUnit,receipt:outcome};
+   return {status:"COMMITTED",cargoID:destinationID,sourceCargoID:id,fleetID,
+     partial,quantity:movedQuantity,remainingQuantity:remaining,
+     volumeM3:movedQuantity*volumePerUnit,receipt:outcome};
   }catch(error){
    return failed(miner,hauler,fleet,"ALIFE10_POSTCOMMIT_READBACK_UNKNOWN:"+String(error?.message||error).slice(0,80));
   }

@@ -34,7 +34,7 @@ function fixture(t,options={}){
  const ore={cargoID,typeID:34,quantity:25,entityID:minerID,ownerID:1000035,moduleID:0,
    transient:false,itemName:"Tritanium"};
  let rows=new Map([["cargo",{[String(cargoID)]:clone(ore)}]]);
- let commitMode="ok",txCalls=0;
+ let commitMode="ok",txCalls=0,nextCargoID=cargoID+500;
  const authority={
   transact(tables,fn){
    txCalls++;
@@ -60,13 +60,18 @@ function fixture(t,options={}){
   listNativeCargoForEntity:id=>Object.values(rows.get("cargo")||{}).filter(v=>v.entityID===id).map(clone),
   buildNativeCargoItems:id=>store.listNativeCargoForEntity(id).map(v=>({
    itemID:v.cargoID,typeID:v.typeID,ownerID:v.ownerID,locationID:v.entityID,quantity:v.quantity})),
+  listNativeCargo:()=>Object.values(rows.get("cargo")||{}).map(clone),
+  allocateCargoID:()=>nextCargoID++,
  };
  const mover=createAtomicHaulMover({gameStore:{coopAtomicNativeRows:authority},nativeStore:store,
   resolveType:id=>({typeID:id,volume:0.1}),clock:()=>456789});
  const transfer=()=>mover.transfer({scene,fleet,miner,hauler,cargoID});
- return {miner,hauler,scene,fleet,store,nativeEntities,controllers,transfer,rows:()=>rows,
+ const transferPartial=maxQuantity=>mover.transfer({scene,fleet,miner,hauler,cargoID,maxQuantity});
+ return {miner,hauler,scene,fleet,store,nativeEntities,controllers,transfer,transferPartial,
+  rows:()=>rows,
   getOre:()=>clone(rows.get("cargo")[String(cargoID)]),receipt:()=>rows.get(receiptKey(cargoID)),
-  setMode:mode=>commitMode=mode,txCalls:()=>txCalls};
+  receiptFor:id=>rows.get(receiptKey(id)),
+  setMode:mode=>commitMode=mode,txCalls:()=>txCalls,nextID:()=>nextCargoID};
 }
 test("one SQLite commit keeps original cargoID and writes immutable same-commit receipt",t=>{
  const f=fixture(t),result=f.transfer();
@@ -193,4 +198,63 @@ test("a hull without a physical position fails closed",t=>{
  const result=f.transfer();
  assert.equal(result.status,"BLOCKED_PHYSICAL_RANGE");
  assert.equal(f.txCalls(),0);
+});
+
+// A hauler that physically cannot hold the whole stack must still move what fits.
+// Measured live: 8 000-18 000 m3 of ore on a miner while every industrial hull in the
+// mining pools holds at most 5 500 m3, so a strict whole-row transfer refused forever
+// and 93 mined cycles sat in the belt.
+test("a partial load keeps the source cargoID with a remainder and writes one receipt",t=>{
+ const f=fixture(t),result=f.transferPartial(10);
+ assert.equal(result.status,"COMMITTED");
+ assert.equal(result.partial,true);
+ assert.equal(result.quantity,10);
+ assert.equal(result.sourceCargoID,cargoID);
+ assert.equal(result.volumeM3,1);
+ const ore=f.getOre();
+ assert.equal(ore.entityID,minerID,"the remainder never leaves the miner");
+ assert.equal(ore.quantity,15);
+ const moved=f.store.listNativeCargoForEntity(haulerID);
+ assert.equal(moved.length,1);
+ assert.equal(moved[0].quantity,10);
+ assert.equal(moved[0].entityID,haulerID);
+ assert.equal(moved[0].coopHaulFleetID,fleetID);
+ assert.notEqual(moved[0].cargoID,cargoID);
+ assert.equal(moved[0].coopHaulSplitFromCargoID,cargoID);
+ const receipt=f.receiptFor(moved[0].cargoID);
+ assert.equal(receipt.status,"COMMITTED");
+ assert.equal(receipt.partial,true);
+ assert.equal(receipt.remainingQuantity,15);
+ assert.equal(Object.keys(f.rows().get("cargo")).length,2,"two real rows, no invented stack");
+ assert.equal(f.txCalls(),1);
+});
+
+test("a second partial load is a different receipt, not a repeat of the first",t=>{
+ const f=fixture(t);
+ assert.equal(f.transferPartial(10).status,"COMMITTED");
+ const second=f.transferPartial(5);
+ assert.equal(second.status,"COMMITTED");
+ assert.equal(second.quantity,5);
+ assert.equal(f.getOre().quantity,10);
+ assert.equal(f.store.listNativeCargoForEntity(haulerID).length,2);
+ assert.equal(f.txCalls(),2);
+});
+
+test("a partial load is refused when the store cannot allocate a cargo id",t=>{
+ const f=fixture(t);
+ f.store.allocateCargoID=undefined;
+ const result=f.transferPartial(10);
+ assert.equal(result.status,"NEEDS_OPERATOR_REPAIR");
+ assert.match(String(result.reason),/ALIFE10_CARGO_ALLOCATOR_UNAVAILABLE/);
+ assert.equal(f.getOre().quantity,25);
+ assert.equal(f.store.listNativeCargoForEntity(haulerID).length,0);
+});
+
+test("a partial request larger than the stack is a full move, not a split",t=>{
+ const f=fixture(t),result=f.transferPartial(999);
+ assert.equal(result.status,"COMMITTED");
+ assert.equal(result.partial,false);
+ assert.equal(result.cargoID,cargoID);
+ assert.equal(f.getOre().entityID,haulerID);
+ assert.equal(Object.keys(f.rows().get("cargo")).length,1);
 });

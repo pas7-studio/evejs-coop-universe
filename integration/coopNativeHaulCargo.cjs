@@ -130,7 +130,7 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
   if(!ore||Number(ore.typeID)!==Number(item.typeID)||
      Number(ore.categoryID)!==25||!Number.isFinite(volume)||volume<=0)
    return stop("HAUL_ORE_VOLUME_UNVERIFIED");
-  cargo.push({item,volume:volume*Number(item.quantity)});
+  cargo.push({item,volume:volume*Number(item.quantity),unit:volume});
  }
  if(!cargo.length){
   if(miner.nativeCargoItems.some(x=>Number(x?.moduleID||0)===0))
@@ -141,13 +141,17 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  if(!atomicRequired&&(!db||typeof db.setTransientPath!=="function"||
   typeof db.flushTableSync!=="function"))return stop("HAUL_GAMESTORE_UNAVAILABLE");
  let totalMoved=0,quantity=0,count=0;
- // Pick the first physical, in-range hull with VERIFIED remaining capacity;
- // never merge, split, or invent an ore stack to satisfy a capacity deficit.
+ // Pick the first physical, in-range hull that can take the WHOLE stack. When no hull
+ // can, the largest free hold is used for what physically fits: a Mining Venture
+ // could never take an 8 000 m3 stack, and refusing forever is how ore sat in the
+ // belt while the world mined 93 cycles. A partial move is still one atomic cargo
+ // transaction (source quantity down, a NEW cargo row on the hauler, one receipt),
+ // never an invented item and never a merge of two different stacks.
  // Every hauler that is not chosen leaves a reason: the loop used to fall through
  // silently, so a fleet could report "loaded" with nothing moved and no way to
  // tell whether the hull was out of range, full, warping or unresolvable in SDE.
- for(const {item,volume} of cargo){
-  let selected=null,why="",skipped=[];
+ for(const {item,volume,unit} of cargo){
+  let selected=null,why="",skipped=[],partialUnits=0,bestFree=0,bestShip=null;
   for(const haulerID of fleet.haulerEntityIDs){
    if(!integer(haulerID)||haulerID===minerID){skipped.push({haulerID,why:"invalid-id"});continue;}
    const ship=scene.getEntityByID(haulerID),native=store.getNativeEntity(haulerID);
@@ -190,9 +194,21 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
     used+=unit*Number(row.quantity);
    }
    if(valid&&Number.isFinite(used)&&used+volume<=capacity+1e-6){selected=ship;break;}
+   if(valid&&Number.isFinite(used)){
+    const free=capacity-used;
+    if(free>bestFree){bestFree=free;bestShip=ship;}
+    if(free>0&&unit>0)partialUnits=Math.max(partialUnits,
+     Math.floor((free-1e-6)/unit));
+   }
    skipped.push({haulerID,why:valid?"full":"cargo-invalid",
     usedM3:Number.isFinite(used)?Math.round(used*100)/100:null,
     capacityM3:Math.round(capacity*100)/100,needM3:Math.round(volume*1000)/1000});
+  }
+  // Only the atomic mover can split a stack, and only down to whole units.
+  let maxQuantity=null;
+  if(!selected&&atomicRequired&&bestShip&&partialUnits>0){
+   selected=bestShip;
+   maxQuantity=partialUnits;
   }
   if(!selected){
    safeObserve(probe,"living-haul-no-hauler",{itemID:miner.itemID,systemID},
@@ -209,13 +225,20 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
     // Keep all upstream physical range, capacity, and original ore type guards.
     // Only the final native cargo reparent is made transactional.
     const atomic=options.atomicMover||require("./coopNativeHaulTransferAtomic");
-    const result=atomic.transfer({scene,fleet,miner,hauler:selected,cargoID});
+    const result=atomic.transfer({scene,fleet,miner,hauler:selected,cargoID,maxQuantity});
     if(result?.status!=="COMMITTED")
      return stop("ALIFE10_"+String(result?.reason||result?.status||"UNKNOWN"),true,selected,cargoID);
-    if(Number(result.quantity)!==Number(item.quantity)||
-       !Number.isFinite(result.volumeM3)||
-       Math.abs(result.volumeM3-volume)>1e-6)
+    const movedQty=Number(result.quantity);
+    const expected=movedQty>0&&movedQty<=Number(item.quantity)?
+     movedQty*unit:NaN;
+    if(!Number.isSafeInteger(movedQty)||movedQty<=0||
+       movedQty>Number(item.quantity)||!Number.isFinite(result.volumeM3)||
+       Math.abs(result.volumeM3-expected)>1e-6)
      return stop("ALIFE10_AFTER_COMMIT_VOLUME_CONFLICT",true,selected,cargoID);
+    if(result.partial===true?Number(result.sourceCargoID)!==cargoID:
+       (movedQty!==Number(item.quantity)||Number(result.cargoID)!==cargoID))
+     return stop("ALIFE10_AFTER_COMMIT_IDENTITY_CONFLICT",true,selected,cargoID);
+    totalMoved+=result.volumeM3;quantity+=movedQty;count++;
    }else{
     const updated={...item,cargoID,entityID:selected.itemID,
      ownerID:minerOwner,transient:false,[haulFlag]:fleetID,
@@ -232,8 +255,8 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
     if(unproven)return stop("HAUL_POSTCOMMIT_IDENTITY_UNKNOWN",true,selected,cargoID);
     miner.nativeCargoItems=miner.nativeCargoItems.filter(x=>Number(x.itemID)!==cargoID);
     selected.nativeCargoItems=store.buildNativeCargoItems(selected.itemID);
+    totalMoved+=volume;quantity+=Number(item.quantity);count++;
    }
-   totalMoved+=volume;quantity+=Number(item.quantity);count++;
   }catch(_){return stop("HAUL_TRANSFER_OUTCOME_UNKNOWN",true,selected,cargoID);}
   finally{strictInFlight.delete(key);}
  }
