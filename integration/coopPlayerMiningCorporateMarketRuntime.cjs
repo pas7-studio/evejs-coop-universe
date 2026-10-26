@@ -29,14 +29,14 @@ function createCorporateMarketRuntime({
  gameStore,marketClient,access,readiness,
  getActiveSessions,getDockedLocationID,
  getCharacterRecord,findOriginalItemById,getMarketContext,
- computeSalesTaxAmount,computeBrokerFeeInfo,
+ computeSalesTaxAmount,computeBrokerFeeInfo,notifyPurchasedItem=()=>{},
  token,enabledFn=enabled,pnlEnabled=()=>false
 }={}){
  const deps=[gameStore?.read,marketClient?.call,
   access?.isMember,access?.canIndustry,access?.canWallet,access?.canTake,
   readiness?.inspect,getActiveSessions,getDockedLocationID,
   getCharacterRecord,findOriginalItemById,getMarketContext,
-  computeSalesTaxAmount,computeBrokerFeeInfo,
+  computeSalesTaxAmount,computeBrokerFeeInfo,notifyPurchasedItem,
   enabledFn,pnlEnabled];
  if(deps.some(x=>typeof x!=="function")||
   typeof token!=="string"||token.length<32||token.length>256)
@@ -160,8 +160,22 @@ function createCorporateMarketRuntime({
    return quote||blocked("CORP_MARKET_BUY_RUST_QUOTE_INVALID");
   const result=await lifecycle.processVerifiedMatch({orderID,
    cycle:quote.cycle});
-  return result?.status==="CORP_SELL_FILL_RELEASED"?result:
-   result||blocked("CORP_MARKET_BUY_NOT_RELEASED");
+  if(result?.status!=="CORP_SELL_FILL_RELEASED")
+   return result||blocked("CORP_MARKET_BUY_NOT_RELEASED");
+  // Post-COMMIT client inventory notification is best-effort. Its failure
+  // must never undo a real paid fill or trigger a second buyer debit.
+  try{
+   const item=findOriginalItemById(result.deliveredItemID);
+   if(item?.ownerID===result.buyerCharacterID&&
+      item.locationID===result.stationID&&
+      item.itemID===result.deliveredItemID)
+    notifyPurchasedItem(result.buyerCharacterID,item,{
+      ownerID:result.sellerCorpID,locationID:9200000000+Number(orderID),
+      flagID:4,quantity:result.filledQuantity,
+      stacksize:result.filledQuantity
+    });
+  }catch{}
+  return result;
  }
  return Object.freeze({sellFromEntries,buyFromOrder,
   pnlReport:params=>pnl.inspect(params),
@@ -179,6 +193,7 @@ function native(){
  const marketRules=require("../services/market/marketRules");
  const char=require("../services/character/characterState");
  const itemStore=require("../services/inventory/itemStore");
+ const notifications=require("../services/raffles/raffleInventory");
  const access=require("./coopPlayerCorporationAccess");
  const readiness=require("./coopPlayerMiningMarketReadiness");
  const sessions=require("../services/chat/sessionRegistry");
@@ -192,6 +207,8 @@ function native(){
   getDockedLocationID:location.getDockedLocationID,
   getCharacterRecord:char.getCharacterRecord,
   findOriginalItemById:itemStore.findItemById,
+  notifyPurchasedItem:(buyerID,item,previousData)=>
+    notifications.notifyInventoryChangesToCharacter(buyerID,[{item,previousData}]),
   getMarketContext:marketRules.getMarketContext,
   computeSalesTaxAmount:marketRules.computeSalesTaxAmount,
   computeBrokerFeeInfo:marketRules.computeBrokerFeeInfo,
