@@ -139,13 +139,17 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
   const key=String(candidate.cargoID);
   if(state.receipts[key])return {status:same(state.receipts[key],candidate)?"ALREADY_COMMITTED":"CONFLICT"};
   if(!same(state.pending[key],candidate))return {status:"NOT_PREPARED_OR_MISMATCH"};
-  const previous=Number(state.totals[String(systemID)]||0);
+  // The native receipt identity is already canonicalized by normalize().
+  // Never use the raw caller's spelling (e.g. "030000142") as a distinct
+  // solar-system inventory key after returning COMMITTED.
+  const systemKey=String(candidate.systemID);
+  const previous=Number(state.totals[systemKey]||0);
   if(!Number.isSafeInteger(previous)||previous<0||
      !Number.isSafeInteger(previous+candidate.quantity))return {status:"TOTAL_OVERFLOW"};
   const pending={...state.pending};delete pending[key];
   persist({...state,pending,receipts:{...state.receipts,
     [key]:{...candidate,at:clock()}},totals:{...state.totals,
-     [String(systemID)]:previous+candidate.quantity}});
+     [systemKey]:previous+candidate.quantity}});
   return {status:"COMMITTED",quantity:candidate.quantity};
  }
  // Legacy direct credits are deliberately disabled: the old API was able to
