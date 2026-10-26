@@ -17,6 +17,7 @@ names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic
 names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitness");
 names.splice(names.indexOf("coopNpcFireOutcomeWitness")+1,0,"coopEconomyDestination");
 names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNpcCapacitor");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 // Stage J: ship the already-used physical rival warehouse module and the
@@ -191,6 +192,8 @@ const specs=[
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:"  try { require(\"../coopNpcDestructionAttacker\").note(scene, shipEntity, options, wreckRecord); } catch (_coopError) { console.warn(\"[CoopNpcDestructionAttacker]\", _coopError.message); }"}
  ]},
  {file:"server/src/space/npc/npcBehaviorLoop.js",patches:[
+   {anchor:"    tickController(scene, controller, now);\n    processed += 1;",
+    line:'    if (process.env.EVEJS_COOP_NPC_CAPACITOR === "1") { try { require("../coopNpcCapacitor").refill(scene, controller); } catch (_coopError) { console.warn("[CoopNpcCapacitor]", _coopError.message); } }',after:true},
   {"anchor":"    if (activeEffect) {\n      logNpcCombatDebug(\"npc.weapons.module-already-active\"","line":"    if (!require(\"../coopNpcWeaponAmmoGate\").check({entity,moduleItem,bankModuleIDs}).allowed) { if (activeEffect) scene.deactivateGenericModule(pseudoSession, activeEffect.moduleID || moduleItem.itemID, { reason: \"npc-ammo-empty\", deferUntilCycle: false }); continue; }","after":false},
   {anchor:"  if (sourceClass === \"npc\" && targetClass === \"npc\") {",line:"    if (process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",after:true},
   {anchor:"      if (launchResult && launchResult.success) {",line:"        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",after:true},
