@@ -242,6 +242,8 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   let committed=0,pending=0;const problems=entries
    .filter(x=>/^\d+\.lock$/.test(x))
    .map(x=>({cargoID:Number(x.slice(0,-5)),reason:"WAREHOUSE_CUSTODY_LOCKED"}));
+  if(!files.length&&!problems.length)
+   return {status:"EMPTY",committed:0,pending:0,problems:[]};
   for(const file of files){const id=Number(file.slice(0,-5));try{
    const row=load(id),target=checkTarget(row),source=findCargo(row);
    if(row.phase===statuses.COMMITTED){if(!target||source||Number(target.itemID)!==row.itemID)problems.push({cargoID:id,reason:"COMMITTED_MISMATCH"});else committed++;}
