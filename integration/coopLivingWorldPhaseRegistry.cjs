@@ -7,7 +7,7 @@ const groups=[
  ["world-state",["virtual-travel","virtual-economy","native-depot"]],
  ["alife-strategy",["alife-native-mining-proof","alife-native-economy-observe","faction"]],
  ["combat",["native-ammo-readiness","native-ammo-survival","native-ammo-supply",
-  "native-raids","native-tactics","native-pve-site-defense","native-pve-wave-reinforcements","native-pve-objective-doctrine","native-ammo-observe"]],
+  "native-raids","native-tactics","native-pve-boss-wreck","native-pve-site-defense","native-pve-wave-reinforcements","native-pve-objective-doctrine","native-ammo-observe"]],
  ["salvage",["native-wreck-recovery","native-salvage-rivals","native-salvage-market",
   "native-wreck-custody","native-loot-station-delivery"]],
  ["movement",["native-gate-approach","native-patrols","npc-recognition","native-civilians"]],
@@ -22,7 +22,7 @@ const entries=Object.freeze(groups.flatMap(([group,names])=>
  names.map(name=>Object.freeze({name,group,mode:"EXISTING_NATIVE_OWNER_ONLY"}))));
 const names=Object.freeze(entries.map(x=>x.name));
 const byName=new Map(entries.map(x=>[x.name,x]));
-if(names.length!==30||new Set(names).size!==30||
+if(names.length!==31||new Set(names).size!==31||
    groupOrder.length!==new Set(groupOrder).size||
    names.filter(x=>x===dynamicPrefix).length!==1)
  throw Error("LIVING_WORLD_PHASE_REGISTRY_INVALID");
