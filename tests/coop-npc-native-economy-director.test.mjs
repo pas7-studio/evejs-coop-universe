@@ -152,13 +152,13 @@ test("lost install acknowledgment persists and never double-charges after restar
  const old=f.native.installOnce;f.native.installOnce=(...a)=>{old(...a);throw Error("LOST_INSTALL_ACK")};
  assert.throws(()=>d.tick(ctx),/LOST_INSTALL_ACK/);assert.equal(f.balance,990);
  f.native.installOnce=old;
- assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");assert.equal(f.installs,1);
+ assert.equal(f.create().tick(ctx).reason,"NATIVE_RECOVERY_CONTEXT_UNVERIFIED");assert.equal(f.installs,1);
 }));
 test("lost delivery acknowledgment prevents second native item issuance",()=>run(f=>{
  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);
  const old=f.native.deliverOnce;f.native.deliverOnce=(...a)=>{old(...a);throw Error("LOST_DELIVERY_ACK")};
  assert.throws(()=>d.tick(ctx),/LOST_DELIVERY_ACK/);
- assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");
+ assert.equal(f.create().tick(ctx).reason,"NATIVE_RECOVERY_CONTEXT_UNVERIFIED");
 }));
 test("duplicated market transaction receipts cannot declare a completed sale",()=>run(f=>{
  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);d.tick(ctx);
@@ -185,7 +185,7 @@ test("replayed demand receipts block auto manufacturing",()=>run(f=>{
 test("missing native debit receipt fences job after install",()=>run(f=>{
  const d=f.create();d.tick(ctx);f.native.getIndustryDebit=()=>null;
  assert.equal(d.tick(ctx).reason,"NATIVE_INDUSTRY_ISK_DEBIT_UNVERIFIED");
- assert.equal(f.create().tick(ctx).reason,"OUTCOME_UNKNOWN_OPERATOR_RECONCILIATION");
+ assert.equal(f.create().tick(ctx).reason,"NATIVE_RECOVERY_CONTEXT_UNVERIFIED");
 }));
 test("missing native market wallet credit prevents phantom profit",()=>run(f=>{
  const d=f.create();d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);d.tick(ctx);
@@ -308,6 +308,8 @@ test("a lost delivery ACK recovers the exact produced item, then lists it once",
  f.native.deliverOnce=id=>{
   const r=deliver(id),item=f.native.getItem(r.itemID);
   Object.assign(item,{flagID:4,stacksize:r.quantity,singleton:0});
+  // Recover only on the complete original GameStore custody receipt.
+  Object.assign(job.coopDelivery,{operationID:id,typeID:TYPE});
   throw Error("LOST_NATIVE_DELIVERY_ACK");
  };
  assert.throws(()=>d.tick(ctx),/LOST_NATIVE_DELIVERY_ACK/);
@@ -364,6 +366,164 @@ test("valid two-decimal sale price retains exact original corporate revenue",()=
  assert.equal(result.status,"SOLD");
  assert.equal(result.revenueCents,120500);
 }));
+
+
+async function runAuditedSold(fn,{proofOverride=null,authorize=null}={}){
+ const f=fixture({target:100});
+ const envKeys=["EVEJS_COOP_NATIVE_NPC_ECONOMY",
+  "EVEJS_COOP_NATIVE_NPC_SOLD_FINALIZE_PROOF"];
+ const before=envKeys.map(key=>process.env[key]);
+ envKeys.forEach(key=>{process.env[key]="1"});
+ let audits=0;
+ const saleAudit={audit:async scope=>{
+  audits++;
+  return proofOverride?proofOverride(scope):{
+   status:"ORIGINAL_FULL_SALE_ATTESTED",operationID:scope.operationID,
+   orderID:scope.orderID,ownerID:scope.ownerID,stationID:scope.stationID,
+   quantity:100,soldQuantity:100,remainingQuantity:0,
+   revenueCents:120000,fillIDs:[910000000001],
+   readOnly:true,nativeMutation:false,
+   proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"
+  };
+ }};
+ try{
+  const director=f.create({saleAudit,
+   authorizeSoldOperator:authorize||(({operatorGrant})=>operatorGrant==="authorized")});
+  const params={ownerID:OWNER,stationID:STATION,productTypeIDs:[TYPE]};
+  assert.equal(director.tick(params).status,"PREPARED");
+  assert.equal(director.tick(params).status,"INSTALLED");
+  f.setElapsed(true);
+  assert.equal(director.tick(params).status,"READY");
+  assert.equal(director.tick(params).status,"DELIVERED");
+  assert.equal(director.tick(params).status,"LISTED");
+  const original=director.inspect();
+  const operationID=Object.keys(original.entries)[0];
+  f.sell(100,12);
+  return await fn({f,director,operationID,
+   request:{operationID,ownerID:OWNER,stationID:STATION,
+    operatorGrant:"authorized"},params,
+   audits:()=>audits});
+ }finally{
+  for(const [i,key]of envKeys.entries()){
+   if(before[i]===undefined)delete process.env[key];
+   else process.env[key]=before[i];
+  }
+  f.close();
+ }
+}
+test("manual original Rust/GameStore audit makes one fsynced durable SOLD journal",()=>runAuditedSold(async x=>{
+ assert.equal(x.director.tick(x.params).reason,
+  "ORIGINAL_NATIVE_SOLD_OPERATOR_AUDIT_REQUIRED");
+ const balance=x.f.balance,head=x.director.inspect();
+ const result=await x.director.confirmSoldOnce(x.request);
+ assert.equal(result.status,"SOLD");
+ assert.equal(result.revenueCents,120000);
+ assert.equal(result.nativeMutation,false);
+ assert.equal(result.durableJournalUpdate,true);
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"SOLD");
+ assert.equal(x.director.inspect().entries[x.operationID].settlementFillIDs[0],910000000001);
+ assert.equal(x.f.balance,balance);
+ assert.equal(x.f.installs,1);
+ assert.equal(x.f.listings,1);
+ assert.equal(x.audits(),1);
+}));
+test("fsynced SOLD replay is idempotent after recreating director; no new wallet mutation",()=>runAuditedSold(async x=>{
+ const a=await x.director.confirmSoldOnce(x.request);
+ const restarted=x.f.create({saleAudit:{audit:()=>{throw Error("MUST_NOT_REAUDIT")}},
+  authorizeSoldOperator:()=>true});
+ const cash=x.f.balance;
+ const b=await restarted.confirmSoldOnce(x.request);
+ assert.equal(a.status,"SOLD");assert.equal(b.status,"ALREADY_SOLD");
+ assert.equal(b.revenueCents,a.revenueCents);
+ assert.equal(x.f.balance,cash);
+ assert.equal(x.audits(),1);
+}));
+test("operator grant is mandatory before read-only Rust/SQLite audit",()=>runAuditedSold(async x=>{
+ const result=await x.director.confirmSoldOnce({...x.request,operatorGrant:"forged"});
+ assert.equal(result.reason,"NATIVE_SOLD_OPERATOR_NOT_AUTHORIZED");
+ assert.equal(x.audits(),0);
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+}));
+test("partial native Rust sale cannot be stored as SOLD",()=>runAuditedSold(async x=>{
+ const result=await x.director.confirmSoldOnce(x.request);
+ assert.equal(result.reason,"NATIVE_SOLD_ORIGINAL_FINANCE_NOT_ATTESTED");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:scope=>({status:"ORIGINAL_PARTIAL_SALE_ATTESTED",
+ operationID:scope.operationID,ownerID:scope.ownerID,stationID:scope.stationID,
+ orderID:scope.orderID,quantity:100,soldQuantity:50,remainingQuantity:50,
+ revenueCents:60000,fillIDs:[910000000001],readOnly:true,
+ nativeMutation:false,proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"})}));
+test("forged fill ID, price or Rust provenance cannot finalize native NPC SOLD",()=>runAuditedSold(async x=>{
+ const result=await x.director.confirmSoldOnce(x.request);
+ assert.equal(result.reason,"NATIVE_SOLD_ORIGINAL_FINANCE_NOT_ATTESTED");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:scope=>({status:"ORIGINAL_FULL_SALE_ATTESTED",
+ operationID:scope.operationID,ownerID:scope.ownerID,stationID:scope.stationID,
+ orderID:scope.orderID,quantity:100,soldQuantity:100,remainingQuantity:0,
+ revenueCents:120000,fillIDs:[123,123],readOnly:true,nativeMutation:false,
+ proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"})}));
+test("read-only original audit exception leaves fsynced LISTED unchanged",()=>runAuditedSold(async x=>{
+ const r=await x.director.confirmSoldOnce(x.request);
+ assert.equal(r.reason,"NATIVE_SOLD_AUDIT_UNAVAILABLE");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:()=>{throw Error("ORIGINAL_RUST_CONNECTION_LOST")}}));
+test("manual SOLD feature remains OFF and cannot be triggered by normal tick",()=>runAuditedSold(async x=>{
+ delete process.env.EVEJS_COOP_NATIVE_NPC_SOLD_FINALIZE_PROOF;
+ const r=await x.director.confirmSoldOnce(x.request);
+ assert.equal(r.reason,"NATIVE_SOLD_OPERATOR_FINALIZATION_DISABLED");
+ assert.equal(x.director.tick(x.params).reason,
+  "ORIGINAL_NATIVE_SOLD_OPERATOR_AUDIT_REQUIRED");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+}));
+test("original director rejects half-wired sale audit/authorization at construction",()=>run(f=>{
+ assert.throws(()=>f.create({saleAudit:{audit:async()=>({status:"READY"})}}),
+  /NPC_ECONOMY_NATIVE_AUTHORITIES_REQUIRED/);
+ assert.throws(()=>f.create({authorizeSoldOperator:()=>true}),
+  /NPC_ECONOMY_NATIVE_AUTHORITIES_REQUIRED/);
+}));
+
+
+test("asynchronous original Rust sale audit holds the existing native station journal lock",async()=>{
+ let entered,release;
+ const started=new Promise(resolve=>{entered=resolve});
+ const held=new Promise(resolve=>{release=resolve});
+ const audit=async scope=>{entered();await held;return {
+  status:"ORIGINAL_FULL_SALE_ATTESTED",
+  operationID:scope.operationID,orderID:scope.orderID,
+  ownerID:scope.ownerID,stationID:scope.stationID,
+  quantity:100,soldQuantity:100,remainingQuantity:0,
+  revenueCents:120000,fillIDs:[910000000011],
+  readOnly:true,nativeMutation:false,
+  proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"}};
+ await runAuditedSold(async x=>{
+  const pending=x.director.confirmSoldOnce(x.request);
+  await started;
+  assert.equal(x.director.tick(x.params).status,"ECONOMY_LOCKED");
+  const other=x.f.create({saleAudit:{audit},authorizeSoldOperator:()=>true});
+  assert.equal((await other.confirmSoldOnce(x.request)).status,"ECONOMY_LOCKED");
+  release();
+  assert.equal((await pending).status,"SOLD");
+  assert.equal(x.director.inspect().entries[x.operationID].phase,"SOLD");
+ },{proofOverride:audit});
+});
+test("out-of-band change to original fsynced journal while auditing never commits SOLD",async()=>{
+ let fixtureRoot;
+ await runAuditedSold(async x=>{fixtureRoot=x.f.root;
+ const r=await x.director.confirmSoldOnce(x.request);
+ assert.equal(r.reason,"NATIVE_SOLD_JOURNAL_CHANGED_DURING_AUDIT");
+ assert.equal(x.director.inspect().entries[x.operationID].phase,"LISTED");
+},{proofOverride:scope=>{
+ const file=path.join(fixtureRoot,"director.json");
+ const state=JSON.parse(fs.readFileSync(file,"utf8"));
+ state.entries[scope.operationID].priceCents=770;
+ fs.writeFileSync(file,JSON.stringify(state));
+ return{status:"ORIGINAL_FULL_SALE_ATTESTED",operationID:scope.operationID,
+  orderID:scope.orderID,ownerID:scope.ownerID,stationID:scope.stationID,
+  quantity:100,soldQuantity:100,remainingQuantity:0,revenueCents:120000,
+  fillIDs:[910000000001],readOnly:true,nativeMutation:false,
+  proof:"RUST_FINALIZED_GAMESTORE_BUYER_ITEM_AND_CORP_WALLET"};
+ }});
+});
 
 
 test("native factory refuses invalid cost/tax/total BEFORE recording an ambiguous paid install",()=>run(f=>{
