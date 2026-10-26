@@ -77,19 +77,20 @@ compose still sets that no module reads (for example the removed
 
 ## Still mixed, in the order worth splitting
 
-1. **`coopNativeStationArrival` (1060 lines).** Three responsibilities in one
-   file: route planning, the trip phase machine, and the impure commit
-   (warehouse deposit, sale, ISK). Target seams:
-   - `chooseDestination(market, fleet, cargo)` — pure, decides the station by
-     argmax of fillable price × volume;
+1. **`coopNativeStationArrival` (1060 lines).** It still mixes two things
+   that must not share a file: the trip phase machine (docked → undocking →
+   in-transit → arrived → delivered) and the impure commit (warehouse deposit,
+   sale, ISK). Route choice is **already** an authority and must stay out of
+   reach here: `destinationOracle.decide()` in `coopEconomyDestination`, which
+   picks by fillable price × volume and is unit-tested on its own. Target seams:
    - `nextPhase(state, observation)` — pure, returns the next phase or the
      reason it cannot advance;
    - `commitArrival(deps, ...)` — impure, the only place that sells, deposits
-     and books ISK.
+     and books ISK, with one explicit `status` per outcome.
    Payoff: the sell path becomes testable without Docker, which is the last
-   unverified link in mining → haul → sell → ISK. Risk: this file is being
-   edited by the owner right now, so do it only after the live acceptance run
-   and after announcing the seam list.
+   unverified link in mining → haul → sell → ISK. Risk: the owner edits this
+   file actively, so do it only after the live acceptance run and after
+   announcing the seam list.
 2. **`coopVirtualWorldRuntime` (2881 lines).** Should be a table of named
    phases plus a runner, not one function that grows. Highest risk, lowest
    urgency: it already works, and a silent reorder would change the world.
