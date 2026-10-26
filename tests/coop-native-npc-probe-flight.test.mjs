@@ -209,3 +209,52 @@ test("same-position foreign cargo seal cannot bypass original ID proof",()=>{
  assert.equal(result.reason,"NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
  assert.equal(f.cargo()[0].quantity,0);
 });
+
+test("durably returned same original cargoID can be re-launched without minting",()=>{
+ const f=fixture(),first=f.tick();
+ assert.equal(first.status,"NATIVE_PROBE_LAUNCHED");
+ const original=first.cargoID;
+ f.sceneMap.delete(original);
+ const row=f.cargo()[0],oldFlight=row.deployedProbe;
+ row.quantity=1;row.deployedProbe={...oldFlight,status:"STOWED",recoveredAtMs:1000000};
+ const before=f.writes(),spawnCount=f.spawns();
+ const second=f.tick();
+ assert.equal(second.status,"NATIVE_PROBE_LAUNCHED");
+ assert.equal(second.cargoID,original);
+ assert.equal(f.cargo()[0].quantity,0);
+ assert.equal(f.cargo()[0].deployedProbe.status,"IN_SPACE");
+ assert.equal(f.writes(),before+1);
+ assert.equal(f.spawns(),spawnCount+1);
+ assert.equal(f.sceneMap.get(original).nativeNpcCargoID,original);
+});
+test("STOWED original cargoID is refused if physical probe remains in space",()=>{
+ const f=fixture(),first=f.tick(),id=first.cargoID;
+ const row=f.cargo()[0];
+ row.quantity=1;row.deployedProbe={...row.deployedProbe,status:"STOWED",recoveredAtMs:1000000};
+ const writes=f.writes(),spawns=f.spawns(),second=f.tick();
+ assert.equal(second.status,"BLOCKED");
+ assert.equal(second.reason,"NPC_PROBE_STOWED_PHYSICAL_ID_COLLISION");
+ assert.equal(f.writes(),writes);assert.equal(f.spawns(),spawns);
+});
+test("incomplete or forged STOWED receipts cannot mint same-ID probe on relaunch",()=>{
+ const mutations=[
+  row=>{row.deployedProbe.status="EXPIRED"},
+  row=>{row.deployedProbe.status="RECALLING"},
+  row=>{row.deployedProbe.probeID=321},
+  row=>{row.deployedProbe.recoveredAtMs=99999999},
+  row=>{row.deployedProbe.recoveredAtMs=1},
+  row=>{row.deployedProbe.ownerID=99999},
+ ];
+ for(const mutate of mutations){
+  const f=fixture(),first=f.tick();f.sceneMap.delete(first.cargoID);
+  const row=f.cargo()[0];
+  row.quantity=1;row.deployedProbe={...row.deployedProbe,status:"STOWED",recoveredAtMs:1000000};
+  mutate(row);const writes=f.writes();
+  const result=f.tick();
+  // Unused OTHER charges remain eligible, but the forged original ID
+  // can never be relaunched or written again.
+  assert.notEqual(result.cargoID,first.cargoID);
+  assert.equal(f.cargo()[0].quantity,1);
+  assert.equal(f.writes(),writes+1);
+ }
+});
