@@ -174,4 +174,35 @@ function createCorporateMiningMarketReadiness({
  return Object.freeze({inspect,inspectShift,mode:"NATIVE_CORPORATE_MARKET_READ_ONLY",
   canPlaceNativeCorporateOrder:false});
 }
-module.exports={createCorporateMiningMarketReadiness,matchingWallet,iskCents};
+// Original EveJS server only. This adapter is intentionally read-only;
+// the market service itself rejects useCorp orders at the pinned source.
+let runtimeService=null;
+function native(){
+ if(runtimeService)return runtimeService;
+ const gameStore=require("../gameStore"),
+  corp=require("../services/corporation/corporationState"),
+  corpRuntime=require("../services/corporation/corporationRuntimeState"),
+  itemStore=require("../services/inventory/itemStore"),
+  location=require("../services/structure/structureLocation"),
+  access=require("./coopPlayerCorporationAccess"),
+  office=require("./coopPlayerMiningOreNativeBindings"),
+  flags=require("./coopFlags");
+ const binding=office.createNativeMiningOreBindings({
+  gameStore,corporationState:corp,corporationRuntime:corpRuntime,
+  itemStore,getDockedStation:location.getDockedLocationID,access});
+ runtimeService=createCorporateMiningMarketReadiness({
+  gameStore,itemStore,access,verifyOffice:binding.verifyOffice,
+  enabled:()=>flags.on("EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ")&&
+   flags.on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY")});
+ return runtimeService;
+}
+function inspectNative(input){
+ try{
+  if(!require("./coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ"))
+   return null;
+  return native().inspectShift(input);
+ }catch{return null;}
+}
+module.exports={createCorporateMiningMarketReadiness,matchingWallet,iskCents,
+ inspectNative};
+
