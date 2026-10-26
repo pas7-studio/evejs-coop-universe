@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null,npcWormholeApproaches=new Set();
 // The courier roster is data, not a constant: every seeded "Haul ..." character
 // is a real carrier with its own hull and balance. A hardcoded id list silently
 // ignored any courier added later, so a new carrier never accepted a contract.
@@ -453,6 +453,392 @@ function npcRealPoints(scene){
   beltCount:points.filter(p=>p.kind==="asteroidBelt").length,
   stationCount:points.filter(p=>p.kind==="station").length};
 }
+// EX-02/03. Exactly one new phase in the EXISTING 30s A-Life tick; never
+// enumerate private bookmarks, spawn sites, or derive NPC knowledge from the
+// full native signature catalog without a physical on-grid witness.
+function advanceNativeNpcExpeditions(){
+ if(process.env.EVEJS_COOP_ALIFE!=="1"||
+    process.env.EVEJS_COOP_NPC_EXPEDITIONS!=="1"||
+    !alifeOrderArbitrationEnabled(process.env)||
+    !world||!identityRegistry||!visitedSystems.size)return;
+ const native=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  controllers=require("./npc/npcRegistry"),
+  signatures=require("../services/exploration/signatures/signatureRuntime"),
+  npc=require("./npc/npcRuntime"),probe=require("./coopRuntimeProbe");
+ const guard=npcOrderBridge();
+ if(!guard)return;
+ if(!npcExpeditionDirector)
+  npcExpeditionDirector=require("./coopNpcExpeditionDirector").createExpeditionDirector({
+   listNativeSites:systemID=>signatures.listSystemSignatureSites(systemID),
+   getNativeEntity:id=>store.getNativeEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id),
+   isNativeProbeScout:(id,systemID)=>{
+    // Only the native inventory authority can identify an equipped scout.
+    const native=store.getNativeEntity(id);
+    if(!native||native.entityID!==id||native.systemID!==systemID||
+       native.transient===true)return false;
+    const modules=store.listNativeModulesForEntity(id);
+    return Array.isArray(modules)&&modules.some(m=>
+     m?.entityID===id&&m.ownerID===native.ownerID&&
+     m.groupID===481&&m.categoryID===7&&
+     Number.isSafeInteger(m.moduleID)&&m.moduleID>0&&
+     Number.isSafeInteger(m.flagID)&&m.flagID>0&&
+     m.moduleState?.online===true&&m.transient!==true);
+   },
+   orderBridge:guard,
+   warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options),
+   nativeProbeScan:({scene,entityID,assignments})=>{
+    if(process.env.EVEJS_COOP_NPC_PROBE_SCAN!=="1")
+     return {status:"DISABLED",proofs:[]};
+    if(!npcProbeEvidence){
+     const auth=require("../services/exploration/explorationAuthority");
+     const probeState=require("../services/exploration/probes/probeRuntimeState");
+     const scanRuntime=require("../services/exploration/probes/probeScanRuntime");
+     npcProbeEvidence=require("./coopNpcProbeScanEvidence").createNpcProbeScanEvidence({
+      getNativeEntity:id=>store.getNativeEntity(id),
+      getController:id=>controllers.getControllerByEntityID(id),
+      listNativeModulesForEntity:id=>store.listNativeModulesForEntity(id),
+      listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+      getCompatibleProbeChargeTypeIDs:typeID=>auth.getCompatibleProbeChargeTypeIDs(typeID),
+      resolveProbeRangeContract:(typeID,step,range)=>
+       probeState.resolveProbeRangeContract(typeID,step,range),
+      scanNativeResults:(systemID,probes)=>
+       scanRuntime.buildSignatureScanResults(systemID,probes),
+      listNativeSites:systemID=>signatures.listSystemSignatureSites(systemID)
+     });
+    }
+    // EX-03B2: an independently disabled original cargo debit+physical
+    // launcher. One charge row is synchronously flushed before scene spawn.
+    // Neither a player session nor a new scheduler is ever constructed.
+    if(process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
+     if(!npcProbeSceneTransition){
+      const nativeSpace=require("../runtime");
+      const nativeProbeScene=require("../services/exploration/probes/probeSceneRuntime");
+      npcProbeSceneTransition=require("./coopNativeNpcProbeSceneTransition")
+       .createNativeNpcProbeSceneTransition({
+        removeDynamicEntity:(systemID,itemID,options)=>
+         nativeSpace.removeDynamicEntity(systemID,itemID,options),
+        buildProbeSceneEntity:(probe,options)=>
+         nativeProbeScene.buildProbeSceneEntity(probe,options)
+       });
+     }
+     if(!npcProbeFlight){
+      const auth=require("../services/exploration/explorationAuthority");
+      const probeState=require("../services/exploration/probes/probeRuntimeState");
+      const probeScene=require("../services/exploration/probes/probeSceneRuntime");
+      const gameStore=require("../gameStore");
+      npcProbeFlight=require("./coopNativeNpcProbeFlight").createNativeNpcProbeFlight({
+       getNativeEntity:id=>store.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       listNativeModulesForEntity:id=>store.listNativeModulesForEntity(id),
+       listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+       upsertNativeCargo:row=>store.upsertNativeCargo(row),
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       relocateNativeProbe:payload=>npcProbeSceneTransition.move(payload),
+       refreshNativeCargoProjection:(ship,id)=>{
+        const cargo=store.buildNativeCargoItems(id);
+        if(!Array.isArray(cargo))return false;
+        ship.nativeCargoItems=cargo.filter(item=>
+         Number.isSafeInteger(item?.quantity)&&item.quantity>0);
+        return true;
+       },
+       compatibleCharges:typeID=>auth.getCompatibleProbeChargeTypeIDs(typeID),
+       resolveProbeRange:(typeID,step,range)=>
+        probeState.resolveProbeRangeContract(typeID,step,range),
+       buildProbeSceneEntity:(record,options)=>
+        probeScene.buildProbeSceneEntity(record,options)
+      });
+     }
+     const launched=npcProbeFlight.tick({scene,entityID,assignments});
+     if(launched.status==="NATIVE_PROBE_LAUNCHED"||
+        launched.status==="NATIVE_PROBE_PENDING_RECONCILIATION"||
+        launched.status==="BLOCKED"&&backgroundTicks%10===0)
+      probe.observe("living-npc-native-probe-flight",null,
+       {spaceState:{systemID:scene.systemID}},
+       {entityID,status:launched.status,reason:launched.reason||null,
+        originalCargoID:launched.cargoID||null,
+        source:"ORIGINAL_NPC_CARGO_DURABLE_BEFORE_SCENE",
+        nativeWalletMutation:false,nativeLootGranted:false});
+    }
+    // EX-03B5 original native probe lifecycle: source transition durably
+    // commits before a sealed physical probe is removed from the scene.
+    // Single existing A-Life scan tick, no independent schedule or player RPC.
+    if(process.env.EVEJS_COOP_NPC_PROBE_LIFECYCLE==="1" &&
+       process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
+     if(!npcProbeLifecycle){
+      const gameStore=require("../gameStore");
+      const runtime=require("../runtime");
+      npcProbeLifecycle=require("./coopNativeNpcProbeLifecycle").createNativeNpcProbeLifecycle({
+       getNativeEntity:id=>store.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+       upsertNativeCargo:row=>store.upsertNativeCargo(row),
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       removeNativeProbe:(systemID,probeID)=>
+        runtime.removeDynamicEntity(systemID,probeID,
+         {allowSessionOwned:false,broadcast:true}),
+       refreshNativeCargoProjection:(ship,id)=>{
+        const cargo=store.buildNativeCargoItems(id);
+        if(!Array.isArray(cargo))return false;
+        ship.nativeCargoItems=cargo.filter(item=>
+         Number.isSafeInteger(item?.quantity)&&item.quantity>0);
+        return true;
+       }
+      });
+     }
+     const lifecycle=npcProbeLifecycle.tick({scene,entityID,assignments});
+     if(lifecycle.status==="BLOCKED"&&backgroundTicks%10===0||
+        lifecycle.status!=="NO_LIFECYCLE_ACTION"&&lifecycle.status!=="BLOCKED")
+      probe.observe("living-npc-original-probe-lifecycle",null,
+       {spaceState:{systemID:scene.systemID}},
+       {entityID,status:lifecycle.status,reason:lifecycle.reason||null,
+        originalCargoID:lifecycle.cargoID||null,
+        nativeWalletMutation:false,nativeLootGranted:false});
+    }
+    const result=npcProbeEvidence.scan({scene,entityID,assignments});
+    if(npcProbeLifecycle&&result.proofs?.length>0&&
+       process.env.EVEJS_COOP_NPC_PROBE_LIFECYCLE==="1")
+      npcProbeLifecycle.tick({scene,entityID,assignments,requestRecall:true});
+    // EX-03B4: independently opt-in blind sweep, AFTER native result
+    // certainty is checked, never use system-private site coordinates.
+    if(process.env.EVEJS_COOP_NPC_PROBE_SWEEP==="1" &&
+       process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1" &&
+       result.status==="NATIVE_PROBE_SCANNED" &&
+       !result.proofs.length){
+     if(!npcProbeSweep){
+      const gameStore=require("../gameStore");
+      npcProbeSweep=require("./coopNativeNpcProbeSweep").createNativeNpcProbeSweep({
+       getNativeEntity:id=>store.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+       upsertNativeCargo:row=>store.upsertNativeCargo(row),
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       relocateNativeProbe:payload=>npcProbeSceneTransition.move(payload)
+      });
+     }
+     const moved=npcProbeSweep.tick({scene,entityID,assignments});
+     if(moved.moved||moved.status==="BLOCKED"&&backgroundTicks%10===0)
+      probe.observe("living-npc-native-probe-sweep",null,
+       {spaceState:{systemID:scene.systemID}},
+       {entityID,status:moved.status,reason:moved.reason||null,
+        originalCargoID:moved.originalCargoID||null,
+        nativeWalletMutation:false,nativeLootGranted:false});
+    }
+    return result;
+   }
+  });
+ const roles=Object.fromEntries((world.snapshot()?.pilots||[])
+  .filter(p=>typeof p?.id==="string").map(p=>[p.id,p.role]));
+ // Only the durable NPC materialization registry authorizes named hulls.
+ const assignments=Object.values(identityRegistry.snapshot()?.links||{});
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,2)){
+  // A read-only observer must never instantiate an absent native scene.
+  const scene=native.scenes instanceof Map?native.scenes.get(systemID):null;
+  if(!scene)continue;
+  const result=npcExpeditionDirector.tick({scene,assignments,roles});
+  if(result.orders||result.observed||result.observedPlayers||result.contested||result.remoteScans||result.blocked&&backgroundTicks%10===0)
+   probe.observe("living-npc-expedition",null,{spaceState:{systemID}},
+    {status:result.status,orders:result.orders,observed:result.observed,
+     observedPlayers:result.observedPlayers||0,contested:result.contested||0,
+     remoteNativeProbeScans:result.remoteScans||0,
+     scoutWarpOrders:result.scoutWarpOrders||0,
+     patrolWarpOrders:result.patrolWarpOrders||0,
+     sourceScoutOnGridVerified:result.scoutOnGridVerified||0,
+     blocked:result.blocked||0,source:result.source||"NATIVE_SITE_OBSERVE",
+     nativeLootGranted:false,nativeWalletMutation:false});
+  // EX-03B15: the same existing native 30-second A-Life tick drives
+  // legitimate hacking turns, original ItemStore pickup and warehouse
+  // delivery. Re-check the scout's CURRENT physical site witness, never
+  // execute from a cached private catalog coordinate.
+  if(process.env.EVEJS_COOP_NPC_EXPEDITION_HACK==="1"||
+     process.env.EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"){
+   if(!npcExpeditionOperations){
+    const items=require("../services/inventory/itemStore"),
+     data=require("./worldData"),
+     fitting=require("../services/fitting/liveFittingState"),
+     types=require("../services/inventory/itemTypeRegistry"),
+     state=require("../services/corporation/corporationState"),
+     gameStore=require("../gameStore");
+    npcExpeditionOperations=
+     require("./coopNpcExpeditionOperations").createNpcExpeditionOperations({
+      nativeStore:store,itemStore:items,gameStore,
+      getController:id=>controllers.getControllerByEntityID(id),
+      getStation:id=>data.getStationByID(id),
+      getStationsForSystem:id=>data.getStationsForSystem(id),
+      isNpcCorporation:id=>state.isNpcCorporationID(id),
+      siteService:require("../services/dungeon/dungeonUniverseSiteService"),
+      hackingService:require("../services/exploration/hackingMgrService"),
+      typeHasEffectName:fitting.typeHasEffectName,
+      resolveItemByTypeID:types.resolveItemByTypeID,
+      orderBridge:guard,
+      warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options)
+     });
+   }
+   const ops=npcExpeditionOperations.tick({scene,assignments,
+    tips:npcExpeditionDirector.operations(),flags:{
+     hack:process.env.EVEJS_COOP_NPC_EXPEDITION_HACK==="1",
+     loot:process.env.EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"&&
+      process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK==="1"
+    }});
+   if(ops.hacked||ops.picked||ops.delivered||ops.orderedReturn||
+      ops.blocked&&backgroundTicks%10===0)
+    probe.observe("living-npc-original-expedition-loot",null,
+     {spaceState:{systemID}},{...ops,nativeWalletMutation:false});
+  }
+  // EX-03B16: an independently opt-in native wormhole jump can be considered
+  // ONLY after this exact scanner scout physically witnesses a real endpoint.
+  // Never iterate the private wormhole catalog to discover a destination.
+  if(process.env.EVEJS_COOP_NPC_EXPEDITION_WORMHOLES==="1"){
+   if(!npcWormholeTransit){
+    npcWormholeTransit=require("./coopNpcWormholeTransit")
+     .createNpcWormholeTransit({
+      store,service:require("./npc/nativeNpcService"),
+      registry:identityRegistry,gameStore:require("../gameStore"),
+      wormholes:require("../services/exploration/wormholes/wormholeRuntime"),
+      wormholeState:require("../services/exploration/wormholes/wormholeRuntimeState"),
+      sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+      root:process.env.EVEJS_COOP_NPC_WORMHOLE_JOURNAL_DIR||
+       "/var/lib/evejs/coop-npc-wormholes"
+     });
+   }
+   const liveTips=npcExpeditionDirector.operations();
+   for(const tip of liveTips.slice(0,2)){
+    let exact;
+    try{
+     const matches=signatures.listSystemSignatureSites(systemID).filter(x=>
+      x.siteID===tip.siteID&&x.family==="wormhole"&&
+      (x.solarSystemID===systemID||x.systemID===systemID));
+     exact=matches.length===1?matches[0]:null;
+    }catch{continue}
+    if(!exact)continue;
+    const link=assignments.find(x=>x.pilotID===tip.scoutPilotID&&
+     x.systemID===systemID&&Number.isSafeInteger(x.entityID));
+    if(!link||assignments.some(x=>x.pilotID===tip.scoutPilotID&&
+     (x.entityID!==link.entityID||x.systemID!==systemID)))continue;
+    let hull,endpoint;
+    try{hull=scene.getEntityByID(link.entityID);
+     endpoint=scene.getEntityByID(tip.siteID)}
+    catch{continue}
+    if(!hull||!endpoint||endpoint.kind!=="wormhole"||
+     endpoint.itemID!==tip.siteID||!hull.position||!endpoint.position)continue;
+    const gap=Math.max(0,Math.hypot(
+     hull.position.x-endpoint.position.x,
+     hull.position.y-endpoint.position.y,
+     hull.position.z-endpoint.position.z)-
+     Math.max(0,Number(hull.radius)||0)-
+     Math.max(0,Number(endpoint.radius)||0));
+    const approachKey=link.entityID+":"+tip.siteID;
+    if(gap>5000){
+     // The source-native NPC flight commands the approach; no direct
+     // coordinate update or instant wormhole teleport is permitted.
+     if(gap<=150000&&!npcWormholeApproaches.has(approachKey))
+      try{
+       if(!guard.blocked({entityID:link.entityID,systemID,owner:"EXPEDITION"})){
+        const approach=guard.issue({entityID:link.entityID,systemID,
+         owner:"EXPEDITION",action:"expedition-wormhole-approach",
+         execute:()=>npc.follow(link.entityID,tip.siteID,2500,
+          {wakeController:true})});
+        if(approach?.success===true)npcWormholeApproaches.add(approachKey);
+       }
+      }catch{}
+     continue;
+    }
+    npcWormholeApproaches.delete(approachKey);
+    // The original arbiter fences an ambiguous mass/ship handoff.
+    let moved;
+    try{
+     if(guard.blocked({entityID:link.entityID,systemID,owner:"EXPEDITION"}))
+      continue;
+     moved=guard.issue({entityID:link.entityID,systemID,
+      owner:"EXPEDITION",action:"expedition-wormhole-cross",execute:()=>{
+       const state=npcWormholeTransit.cross({
+        pilotID:tip.scoutPilotID,entityID:link.entityID,
+        scene,endpointID:tip.siteID,assignments});
+       if(state.status==="NATIVE_NPC_WORMHOLE_ARRIVED")
+        return {success:true,data:state};
+       // Native mass/ship may have changed. An ambiguous arbiter response
+       // fences the hull; persistent wormhole receipt prevents replay.
+       if(state.status==="NEEDS_OPERATOR_REPAIR")
+        return {status:"NATIVE_WORMHOLE_OUTCOME_UNKNOWN"};
+       return {success:false,errorMsg:state.reason||"EX03_WORMHOLE_BLOCKED"};
+      }});
+    }catch{continue}
+    if(moved?.success===true&&
+       moved.data?.status==="NATIVE_NPC_WORMHOLE_ARRIVED"){
+     visitedSystems.add(moved.data.destinationSystemID);
+     probe.observe("living-npc-original-wormhole-cross",null,
+      {spaceState:{systemID}},{
+       entityID:link.entityID,
+       destinationSystemID:moved.data.destinationSystemID,
+       originalPairID:moved.data.originalPairID,
+       preservedCargo:moved.data.preservedCargo,
+       preservedModules:moved.data.preservedModules,
+       nativeMassRefunded:false,nativeWalletMutation:false
+      });
+     // Bounded physical same-corp expedition wingmen. A leader's perfect
+     // probe scan can authorize at most 2 companions ALREADY on its grid.
+     // Every follower separately pays source mass and polarization,
+     // preserves its original entity/modules/cargo and owns a journal.
+     let crossedWingmen=0;
+     for(const wing of assignments){
+      if(crossedWingmen>=2)break;
+      if(wing?.pilotID===tip.scoutPilotID||
+         wing?.systemID!==systemID||
+         !Number.isSafeInteger(wing?.entityID)||wing.entityID<=0)continue;
+      let ship,source;
+      try{
+       ship=scene.getEntityByID(wing.entityID);
+       source=store.getNativeEntity(wing.entityID);
+      }catch{continue}
+      if(!ship||ship.kind!=="ship"||ship.nativeNpc!==true||
+         ship.itemID!==wing.entityID||ship.session?.characterID||
+         source?.corporationID!==tip.corpID||
+         source.systemID!==systemID||source.ownerID!==ship.ownerID||
+         !ship.position||!endpoint.position||
+         Math.max(0,Math.hypot(
+          ship.position.x-endpoint.position.x,
+          ship.position.y-endpoint.position.y,
+          ship.position.z-endpoint.position.z)-
+          Math.max(0,Number(ship.radius)||0)-
+          Math.max(0,Number(endpoint.radius)||0))>5000)continue;
+      let wingResult;
+      try{
+       if(guard.blocked({entityID:wing.entityID,systemID,owner:"EXPEDITION"}))
+        continue;
+       wingResult=guard.issue({entityID:wing.entityID,systemID,
+        owner:"EXPEDITION",action:"expedition-wormhole-wingman",execute:()=>{
+         const state=npcWormholeTransit.cross({
+          pilotID:wing.pilotID,entityID:wing.entityID,
+          scene,endpointID:tip.siteID,assignments});
+         if(state.status==="NATIVE_NPC_WORMHOLE_ARRIVED")
+          return {success:true,data:state};
+         if(state.status==="NEEDS_OPERATOR_REPAIR")
+          return {status:"NATIVE_WORMHOLE_OUTCOME_UNKNOWN"};
+         return {success:false,errorMsg:state.reason||"EX03_WORMHOLE_BLOCKED"};
+        }});
+      }catch{continue}
+      if(wingResult?.success===true&&
+         wingResult.data?.status==="NATIVE_NPC_WORMHOLE_ARRIVED"){
+       crossedWingmen++;
+       visitedSystems.add(wingResult.data.destinationSystemID);
+       probe.observe("living-npc-original-wormhole-cross",null,
+        {spaceState:{systemID}},{
+         entityID:wing.entityID,role:"EXPEDITION_WINGMAN",
+         destinationSystemID:wingResult.data.destinationSystemID,
+         originalPairID:wingResult.data.originalPairID,
+         preservedCargo:true,preservedModules:true,
+         nativeMassRefunded:false,nativeWalletMutation:false
+        });
+      }
+     }
+    }else if(moved?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
+     probe.observe("living-npc-original-wormhole-repair",null,
+      {spaceState:{systemID}},{entityID:link.entityID,
+       status:"NEEDS_OPERATOR_REPAIR",nativeMassRefunded:false});
+   }
+  }
+ }
+}
 function observeNativeMiningProof(){
  if(!world||!visitedSystems.size)return;
  const runtime=require("./runtime"),mining=require("../services/mining/miningNpcOperations"),
@@ -633,6 +1019,8 @@ function start(){
   else runPhase("native-ammo-supply",advanceNativeAmmoSupply);
   runPhase("native-raids",advanceNativeRaids);
   runPhase("native-tactics",advanceNativeTactics);
+  if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_NPC_EXPEDITIONS==="1")
+   runPhase("native-expeditions",advanceNativeNpcExpeditions);
   runPhase("native-pve-boss-wreck",advanceNativePveBossWreck);
   runPhase("native-pve-site-defense",advanceNativePveSiteDefense);
   runPhase("native-pve-wave-reinforcements",advanceNativePveWaveReinforcements);
@@ -2544,6 +2932,14 @@ function observeSession(session,ship){
             return npc.spawnBatchInSystem(system,{
               ...anchor,amount:1,entityType:"npc",
               transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
+              // EX-03B4: one in four newly materialized named patrols may
+              // author genuine original scanner hardware. Non-patrols,
+              // existing hulls and generic spawns remain unchanged.
+              coopExpeditionScout:process.env.EVEJS_COOP_NPC_SCOUT_LOADOUT==="1"&&
+               process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"&&
+               pilot.role==="patrol"&&
+               /^coop-pilot-[0-9]{3,}$/.test(pilot.id)&&
+               Number(pilot.id.split("-").pop())%4===0,
               broadcast:true,
               ...pool,
               // Pirates actively hunt players and rival NPCs; civilians and

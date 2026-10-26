@@ -31,6 +31,14 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/exploration/scanMgrService.js" ||
     spec.file==="server/src/services/ship/beyonceService.js")
   text=require("./coop-native-exploration-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/dogma/dogmaService.js" ||
+    spec.file==="server/src/services/exploration/hackingMgrService.js")
+  text=require("./coop-native-hacking-admission-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/exploration/hackingMgrService.js")
+  text=require("./coop-npc-expedition-hacking-patch.cjs").patch(text,spec.file,remove);
+ if(!remove && (spec.file==="server/src/space/npc/nativeNpcStore.js" ||
+    spec.file==="server/src/space/npc/nativeNpcWreckService.js"))
+  text=require("./coop-npc-expedition-wreck-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/services/market/marketProxyService.js")
   text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js") {
@@ -71,8 +79,13 @@ function transform(source,spec,remove){
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
   text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
- if(spec.file==="server/src/space/npc/nativeNpcService.js")
+ if(spec.file==="server/src/space/npc/nativeNpcService.js") {
+  if(remove)text=require("./coop-npc-scout-loadout-patch.cjs").patch(text,spec.file,true);
+  if(remove)text=require("./coop-npc-probe-loadout-split-patch.cjs").patch(text,spec.file,true);
   text=require("./coop-escort-ingress-materialize-patch.cjs").patch(text,{remove});
+  if(!remove)text=require("./coop-npc-probe-loadout-split-patch.cjs").patch(text,spec.file,false);
+  if(!remove)text=require("./coop-npc-scout-loadout-patch.cjs").patch(text,spec.file,false);
+ }
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
@@ -281,7 +294,10 @@ function transform(source,spec,remove){
   }
  }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
-  text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove);
+  text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove); 
+ if(remove && (spec.file==="server/src/space/npc/nativeNpcStore.js" ||
+    spec.file==="server/src/space/npc/nativeNpcWreckService.js"))
+  text=require("./coop-npc-expedition-wreck-patch.cjs").patch(text,spec.file,true);
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);

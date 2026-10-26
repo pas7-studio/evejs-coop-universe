@@ -25,6 +25,18 @@ param(
   [switch]$EnableMarketCatalog,
   [switch]$EnableMissionJoin,
   [switch]$EnableNativeExploration,
+  [switch]$EnableNpcExpeditions,
+  [switch]$EnableNpcProbeScan,
+  [switch]$EnableNpcProbeLaunch,
+  [switch]$EnableNpcProbeLoadoutSplit,
+  [switch]$EnableNpcProbeSweep,
+  [switch]$EnableNpcProbeLifecycle,
+  [switch]$EnableNpcScoutLoadout,
+  [switch]$EnableNpcExpeditionHacking,
+  [switch]$EnableNpcExpeditionLoot,
+  [switch]$EnableNpcExpeditionWreck,
+  [switch]$EnableNpcExpeditionWormholes,
+  [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
@@ -54,6 +66,30 @@ if ($EnableNativeJobAgents -and -not $LivingCoop) { throw 'Native NPC job agents
 if ($EnableFullHaulManifest -and (-not $LivingCoop -or -not $EnableNpcStationDelivery)) { throw 'Full native cargo manifest requires LivingCoop and station delivery' }
 if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
 if ($AlifeTrace -and -not $Alife) { throw '-AlifeTrace requires -Alife' }
+if ($EnableNpcExpeditions -and (-not $Alife -or -not $LivingCoop)) {
+  throw 'Native NPC expeditions require -LivingCoop -Alife'
+}
+if ($EnableNativeHackingAdmission -and -not $EnableNativeExploration) {
+  throw 'Native hacking admission requires -EnableNativeExploration'
+}
+if ($EnableNpcProbeScan -and (-not $EnableNpcExpeditions -or -not $EnableNativeExploration)) {
+  throw 'NPC physical probe scan requires -EnableNpcExpeditions -EnableNativeExploration'
+}
+if ($EnableNpcProbeLaunch -and -not $EnableNpcProbeScan) {
+  throw 'NPC native probe launch requires -EnableNpcProbeScan'
+}
+if ($EnableNpcProbeLoadoutSplit -and -not $EnableNpcProbeLaunch) {
+  throw 'NPC scanner charge unitization requires -EnableNpcProbeLaunch'
+}
+if ($EnableNpcProbeSweep -and -not $EnableNpcProbeLaunch) {
+  throw 'Native NPC blind probe sweep requires -EnableNpcProbeLaunch'
+}
+if ($EnableNpcProbeLifecycle -and -not $EnableNpcProbeLaunch) {
+  throw 'Native NPC probe lifecycle requires -EnableNpcProbeLaunch'
+}
+if ($EnableNpcScoutLoadout -and (-not $EnableNpcProbeLoadoutSplit -or -not $MaterializeVirtualNpcs)) {
+  throw 'Native NPC scout authoring requires -EnableNpcProbeLoadoutSplit -MaterializeVirtualNpcs'
+}
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -181,6 +217,64 @@ if ($EnableMarketCatalog) {
 if ($EnableNativeExploration) {
   $yamlLines += "      EVEJS_COOP_EXPEDITION_SCAN_PROOF: '1'"
   $yamlLines += "      EVEJS_COOP_EXPEDITION_FLEET_BOOKMARKS: '1'"
+}
+# EX-02 / EX-04A: independent explicit opt-ins, not implicitly enabled
+# by the generic exploration or LivingCoop switches.
+if ($EnableNpcExpeditions) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITIONS: '1'"
+}
+# EX-03B read-only probe-evidence admission only. This does NOT deploy
+# a native launcher/charge writer; it denies scans until genuine original
+# flight receipts and materialized physical probes can be verified.
+if ($EnableNpcProbeScan) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_SCAN: '1'"
+}
+# EX-03B2: original cargo debit is an EXTRA opt-in beyond read-only scans.
+# Disable until SQLite fault-injection + physical two-client scene checks pass.
+if ($EnableNpcProbeLaunch) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_LAUNCH: '1'"
+}
+if ($EnableNpcProbeLoadoutSplit) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '1'"
+}
+# EX-03B19 autonomous NPC exploration: deny unsafe partial deployments.
+# Wreck custody must ALWAYS be enabled with physical ItemStore loot.
+if ($EnableNpcExpeditionLoot -and -not $EnableNpcExpeditionWreck) {
+  throw 'NPC original loot pickup requires -EnableNpcExpeditionWreck (native death/wreck custody)'
+}
+if ($EnableNpcExpeditionHacking -or $EnableNpcExpeditionLoot -or
+    $EnableNpcExpeditionWreck -or $EnableNpcExpeditionWormholes) {
+  if (-not ($LivingCoop -and $Alife -and $EnableNativeExploration -and $EnableNpcExpeditions -and
+            $EnableNpcProbeScan -and $EnableNpcProbeLaunch -and
+            $EnableNpcProbeLoadoutSplit -and $EnableNpcScoutLoadout)) {
+    throw 'Native NPC expedition operations require -LivingCoop -Alife -EnableNativeExploration -EnableNpcExpeditions -EnableNpcProbeScan -EnableNpcProbeLaunch -EnableNpcProbeLoadoutSplit -EnableNpcScoutLoadout'
+  }
+}
+if ($EnableNpcExpeditionHacking) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_HACK: '1'"
+}
+if ($EnableNpcExpeditionLoot) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_LOOT: '1'"
+}
+if ($EnableNpcExpeditionWreck) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_WRECK: '1'"
+}
+if ($EnableNpcExpeditionWormholes) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITION_WORMHOLES: '1'"
+}
+# EX-03B4 blind native geometry sweep, independent explicit opt-in.
+# No source-site coords are consulted to move NPC probes.
+if ($EnableNpcProbeSweep) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_SWEEP: '1'"
+}
+if ($EnableNpcProbeLifecycle) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_LIFECYCLE: '1'"
+}
+if ($EnableNpcScoutLoadout) {
+  $yamlLines += "      EVEJS_COOP_NPC_SCOUT_LOADOUT: '1'"
+}
+if ($EnableNativeHackingAdmission) {
+  $yamlLines += "      EVEJS_COOP_NATIVE_HACKING_ADMISSION: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"

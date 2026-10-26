@@ -3,7 +3,7 @@
 // Deliberately no hardcoded EveJS access or global singleton in this module.
 const pos = x => Number.isSafeInteger(Number(x)) && Number(x)>0 ? Number(x) : null;
 const named = x => typeof x === "string" && /^coop-pilot-[0-9]{3,}$/.test(x);
-const PEACEFUL = new Set(["PATROL","CIVILIAN","GATE"]);
+const PEACEFUL = new Set(["PATROL","CIVILIAN","GATE","EXPEDITION"]);
 function createOrderBridge({arbiter, assignments, sceneForSystem, getController,
  warShipClaim=null}={}) {
  if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");

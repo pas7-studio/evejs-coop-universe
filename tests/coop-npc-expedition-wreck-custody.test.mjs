@@ -1,0 +1,339 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
+const {createNpcExpeditionWreckCustody}=
+ require("../integration/coopNpcExpeditionWreckCustody.cjs");
+const shipID=980000000321,wreckID=980300000321,corp=700,
+ itemID=730000000321,characterID=321,playerShipID=880000000321;
+const tag="coop-npc-expedition:v1:container:620000000321:ship:"+shipID+":corp:"+corp;
+function fixture(){
+ let flushCount=0,failAt=0,transferCount=0;
+ const rows=new Map([
+ [itemID,{itemID,typeID:34,ownerID:corp,locationID:shipID,flagID:5,
+  singleton:0,stacksize:3,quantity:3,customInfo:tag}],
+ [playerShipID,{itemID:playerShipID,typeID:123,ownerID:characterID,
+  locationID:999,flagID:4,singleton:1,stacksize:1,quantity:-1,customInfo:""}]
+ ]);
+ const wrecks=new Map([[wreckID,{wreckID,sourceEntityID:shipID,
+  corporationID:999,coopNpcExpeditionSourceCorpID:corp,systemID:30000142,transient:false}]]);
+ const items={ITEM_FLAGS:{HANGAR:4,CARGO_HOLD:5},
+  findItemById:id=>rows.get(id)?{...rows.get(id)}:null,
+  listContainerItems:(_owner,loc,flag)=>[...rows.values()]
+   .filter(x=>x.locationID===loc&&(flag==null||x.flagID===flag))
+   .map(x=>({...x})),
+  updateInventoryItem:(id,fn)=>{const row=rows.get(id);
+   if(!row)return {success:false};
+   rows.set(id,fn({...row}));return {success:true}},
+  moveItemToLocation:(id,loc,flag)=>{const row=rows.get(id);
+   if(!row)return {success:false};
+   rows.set(id,{...row,locationID:loc,flagID:flag});return {success:true}},
+  transferItemToOwnerLocation:(id,owner,loc,flag)=>{
+   transferCount++;const row=rows.get(id);
+   if(!row)return {success:false};
+   rows.set(id,{...row,ownerID:owner,locationID:loc,flagID:flag});
+   return {success:true,data:{quantity:row.stacksize,changes:[]}}
+  }
+ };
+ const npcStore={getNativeWreck:id=>wrecks.get(id)||null,
+  listNativeWrecks:()=>[...wrecks.values()]};
+ const gameStore={flushTableSync:()=>({success:++flushCount!==failAt})};
+ return {make:()=>createNpcExpeditionWreckCustody({items,npcStore,gameStore}),
+  rows,wrecks,items,
+  get flushCount(){return flushCount},get transferCount(){return transferCount},
+  setFail:v=>{failAt=v}};
+}
+test("EX-03B18 exact original ItemStore itemID survives NPC death, physical wreck and player pickup",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).status,"ORIGINAL_ITEMSTORE_LOOT_IN_WRECK");
+ assert.equal(c.list({wreckID}).length,1);
+ assert.equal(c.list({wreckID})[0].itemID,itemID);
+ assert.equal(f.rows.size,2,"no new itemID, including no fabricated wreckItemID");
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+ assert.equal(c.canDestroy(wreckID),false,"physical wreck cannot vanish with original cargo");
+ assert.equal(f.flushCount,3,"original wreck and item provenance/move were flushed");
+ const result=c.claim({characterID,wreckID,itemID,destinationLocationID:playerShipID,
+  destinationFlagID:5,quantity:3});
+ assert.equal(result.status,"HANDLED");
+ assert.equal(result.success,true);
+ assert.equal(result.originalItemID,itemID);
+ assert.equal(result.data.quantity,3);
+ assert.equal(f.rows.get(itemID).itemID,itemID);
+ assert.equal(f.rows.get(itemID).ownerID,characterID);
+ assert.equal(f.rows.get(itemID).locationID,playerShipID);
+ assert.equal(f.rows.get(itemID).quantity,3);
+ assert.equal(f.rows.size,2);
+ assert.equal(f.transferCount,1);
+ assert.equal(c.canDestroy(wreckID),true);
+ assert.equal(c.list({wreckID}).length,0);
+ assert.equal(c.claim({characterID,wreckID,itemID,destinationLocationID:playerShipID,
+  destinationFlagID:5}).status,"NOT_EXPEDITION_ITEM");
+ assert.equal(f.transferCount,1,"same original ID never claimed twice");
+});
+test("EX-03B18 no split, foreign player ship, or wrong flag can collect original NPC wreck loot",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ for(const attempt of [
+  {characterID,wreckID,itemID,destinationLocationID:playerShipID,destinationFlagID:5,quantity:1},
+  {characterID:777,wreckID,itemID,destinationLocationID:playerShipID,destinationFlagID:5,quantity:3},
+  {characterID,wreckID,itemID,destinationLocationID:playerShipID,destinationFlagID:4,quantity:3}
+ ]){
+  const r=c.claim(attempt);
+  assert.equal(r.status,"HANDLED");assert.equal(r.success,false);
+ }
+ assert.equal(f.rows.get(itemID).ownerID,corp);
+ assert.equal(f.transferCount,0);
+});
+test("EX-03B18 SIGKILL window after durable intent is fail-closed across fresh driver",()=>{
+ const f=fixture(),c=f.make();f.setFail(2);
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,false);
+ assert.equal(f.rows.get(itemID).itemID,itemID);
+ assert.match(f.rows.get(itemID).customInfo,/:wreck:/);
+ const resumed=f.make();f.setFail(0);
+ assert.equal(resumed.stage({wreckID,shipID,corporationID:corp}).success,false);
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.size,2);
+ assert.equal(resumed.list({wreckID}).length,0);
+});
+test("EX-03B18 wreck decay refuses unverifiable/partial original expedition items",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ assert.equal(c.canDestroy(wreckID),false);
+ f.rows.get(itemID).customInfo="coop-npc-expedition:v1:corrupt";
+ assert.equal(c.list({wreckID}).length,0);
+ assert.equal(c.canDestroy(wreckID),false,"malformed marker must not hide cargo from expiry guard");
+});
+test("EX-03B18 previously allocated native wreck blocks second death even when original NPC hold empty",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ f.wrecks.set(980300000322,{wreckID:980300000322,
+  sourceEntityID:shipID,corporationID:999,coopNpcExpeditionSourceCorpID:corp,transient:false});
+ assert.equal(c.stage({wreckID:980300000322,shipID,corporationID:corp}).success,false);
+ assert.equal(f.rows.size,2);
+});
+
+test("EX-03B18 ordinary stock NPC wreck without original cargo is not blocked",()=>{
+ const f=fixture(),c=f.make();
+ f.rows.get(itemID).customInfo="";
+ f.wrecks.get(wreckID).coopNpcExpeditionSourceCorpID=0;
+ const result=c.stage({wreckID,shipID,corporationID:0});
+ assert.equal(result.success,true);
+ assert.equal(result.status,"NO_EXPEDITION_LOOT");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.flushCount,0,"no original item movement for stock NPC death");
+});
+test("EX-03B18 foreign wreck rights never replace NPC source ownership",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(f.wrecks.get(wreckID).corporationID,999);
+ assert.equal(f.wrecks.get(wreckID).coopNpcExpeditionSourceCorpID,corp);
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ assert.equal(c.list({wreckID})[0].ownerID,corp);
+ const claimed=c.claim({characterID,wreckID,itemID,
+  destinationLocationID:playerShipID,destinationFlagID:5,quantity:3});
+ assert.equal(claimed.success,true);
+ assert.equal(f.rows.get(itemID).ownerID,characterID);
+});
+
+test("EX-03B20 operator-approved recovery resumes SAME original itemID after durable intent without duplicating",()=>{
+ const f=fixture(),first=f.make();
+ f.setFail(2);
+ assert.equal(first.stage({wreckID,shipID,corporationID:corp}).success,false);
+ const tagged=f.rows.get(itemID);
+ assert.equal(tagged.locationID,shipID);
+ assert.match(tagged.customInfo,/:wreck:/);
+ f.setFail(0);
+ const restarted=f.make();
+ const denied=restarted.reconcile({wreckID,shipID,corporationID:corp});
+ assert.equal(denied.errorMsg,"EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ const recovered=restarted.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(recovered.success,true);
+ assert.equal(recovered.movedCount,1);
+ assert.deepEqual(recovered.itemIDs,[itemID]);
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+ assert.equal(f.rows.size,2);
+ assert.equal(restarted.list({wreckID}).length,1);
+ const replay=restarted.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(replay.success,true);
+ assert.equal(replay.movedCount,0);
+ assert.equal(f.rows.size,2,"same original ID after idempotent recovery");
+});
+test("EX-03B20 recovery rejects a forged source corporation and inconsistent item before any mutation",()=>{
+ const f=fixture(),d=f.make();
+ f.setFail(2);
+ assert.equal(d.stage({wreckID,shipID,corporationID:corp}).success,false);
+ f.setFail(0);
+ const wrong=d.reconcile({wreckID,shipID,corporationID:999,
+  operatorApproved:true});
+ assert.equal(wrong.success,false);
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ f.rows.get(itemID).customInfo=f.rows.get(itemID).customInfo.replace(
+  ":corp:"+corp,":corp:999");
+ const forged=d.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(forged.success,false);
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.size,2);
+});
+
+test("EX-03B20 native wreck expiry cannot hide corrupted original item flag or pending ship intent",()=>{
+ const f=fixture(),c=f.make();
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
+ assert.equal(c.canDestroy(wreckID),false);
+ // Corrupt the original ItemStore flag, so stock hangar listing cannot see it.
+ f.rows.get(itemID).flagID=777;
+ assert.equal(c.list({wreckID}).length,0);
+ assert.equal(c.canDestroy(wreckID),false,"expiry must inspect every ItemStore flag");
+ // The original row is still owned by the same corporation but stuck on
+ // the ship in the post-intent/pre-move crash window.
+ f.rows.get(itemID).locationID=shipID;
+ f.rows.get(itemID).flagID=5;
+ assert.equal(c.canDestroy(wreckID),false,"pending original ship intent blocks wreck expiry");
+});
+
+test("EX-03B21 invalid native cargo flag cannot silently discard original expedition loot",()=>{
+ const f=fixture(),bridge=f.make();
+ f.rows.get(itemID).flagID=777;
+ const denied=bridge.stage({wreckID,shipID,corporationID:corp});
+ assert.equal(denied.success,false);
+ assert.equal(denied.errorMsg,"EX03_WRECK_CUSTODY_UNVERIFIED");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.get(itemID).ownerID,corp);
+ assert.equal(f.flushCount,0,"no durable mutation before mismatch is rejected");
+ assert.equal(bridge.canDestroy(wreckID),false,"source-hull loot still blocks wreck expiry");
+});
+
+test("EX-03B21 original source with damaged marker cannot proceed through ordinary NPC death",()=>{
+ const f=fixture(),bridge=f.make();
+ f.rows.get(itemID).customInfo="coop-npc-expedition:v1:corrupt";
+ const denied=bridge.stage({wreckID,shipID,corporationID:corp});
+ assert.equal(denied.success,false);
+ assert.equal(denied.errorMsg,"EX03_WRECK_CUSTODY_UNVERIFIED");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(bridge.canDestroy(wreckID),false);
+});
+
+test("EX-03B21 operator recovery rejects intent on source ship with corrupted flag",()=>{
+ const f=fixture(),first=f.make();
+ f.setFail(2);
+ assert.equal(first.stage({wreckID,shipID,corporationID:corp}).success,false);
+ f.setFail(0);
+ f.rows.get(itemID).flagID=777;
+ const recovered=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(recovered.success,false);
+ assert.equal(recovered.errorMsg,"EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.size,2,"invalid recovery does not mint or move the item");
+});
+
+test("EX-03B21 expiry refuses any tagged cargo still on the original source hull",()=>{
+ const f=fixture(),bridge=f.make();
+ f.rows.get(itemID).customInfo=tag+":wreck:"+(wreckID+99);
+ assert.equal(bridge.canDestroy(wreckID),false,
+  "foreign-looking but tagged item still belongs to a quarantined loss domain");
+ f.rows.get(itemID).customInfo="coop-npc-expedition:v1:container:1:ship:"+
+   shipID+":corp:"+(corp+1);
+ assert.equal(bridge.canDestroy(wreckID),false,
+  "plausible corrupt corporation provenance must not allow expiry");
+});
+
+test("EX-03B22 recovery finishes multi-item native wreck after the first item's durable move",()=>{
+ const f=fixture(),secondID=itemID+1;
+ // Simulate SIGKILL after the first item's fully durable death-to-wreck move,
+ // before the next ORIGINAL source item was even marked with wreck intent.
+ f.rows.set(secondID,{...f.rows.get(itemID),itemID:secondID});
+ Object.assign(f.rows.get(itemID),{
+  customInfo:tag+":wreck:"+wreckID,locationID:wreckID,flagID:4});
+ const beforeCount=f.rows.size;
+ const bridge=f.make();
+ const noConsent=bridge.reconcile({wreckID,shipID,corporationID:corp});
+ assert.equal(noConsent.errorMsg,"EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+ assert.equal(f.rows.get(secondID).locationID,shipID);
+ const recovered=bridge.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(recovered.success,true,JSON.stringify(recovered));
+ assert.equal(recovered.movedCount,1);
+ assert.equal(recovered.stampedCount,1);
+ assert.deepEqual(recovered.itemIDs,[secondID,itemID]);
+ assert.equal(f.rows.size,beforeCount,"no new ItemStore itemID allocated");
+ assert.equal(f.rows.get(secondID).itemID,secondID);
+ assert.equal(f.rows.get(secondID).locationID,wreckID);
+ assert.equal(f.rows.get(secondID).flagID,4);
+ assert.equal(f.rows.get(secondID).customInfo,tag+":wreck:"+wreckID);
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+ assert.deepEqual(bridge.list({wreckID}).map(x=>x.itemID).sort(),[itemID,secondID]);
+ const replay=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(replay.success,true);
+ assert.equal(replay.movedCount,0);
+ assert.equal(replay.stampedCount,0);
+ assert.equal(f.rows.size,beforeCount);
+});
+test("EX-03B22 corrupt second native item blocks entire operator recovery before mutation",()=>{
+ const f=fixture(),secondID=itemID+1;
+ f.rows.set(secondID,{...f.rows.get(itemID),itemID:secondID,flagID:777});
+ Object.assign(f.rows.get(itemID),{
+  customInfo:tag+":wreck:"+wreckID,locationID:wreckID,flagID:4});
+ const before=JSON.stringify([...f.rows]);
+ const blocked=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(blocked.success,false);
+ assert.equal(blocked.errorMsg,"EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+ assert.equal(JSON.stringify([...f.rows]),before);
+ assert.equal(f.flushCount,0,"no persistence before full original cohort validation");
+});
+test("EX-03B22 foreign signed wreck destination cannot repair unmarked original loot",()=>{
+ const f=fixture();
+ const secondID=itemID+1;
+ f.rows.set(secondID,{...f.rows.get(itemID),itemID:secondID,
+  customInfo:tag+":wreck:"+(wreckID+1)});
+ const blocked=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(blocked.success,false);
+ assert.equal(blocked.errorMsg,"EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.get(secondID).locationID,shipID);
+ assert.equal(f.flushCount,0);
+});
+test("EX-03B22 intent durability uncertainty never advances the newly sealed item",()=>{
+ const f=fixture(),bridge=f.make();
+ // Recovery flush order: items, npcWrecks, new intent, original move.
+ f.setFail(3);
+ const uncertain=bridge.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(uncertain.success,false);
+ assert.equal(uncertain.errorMsg,"EX03_WRECK_RECOVERY_INTENT_UNCERTAIN");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.get(itemID).itemID,itemID);
+ assert.equal(f.rows.size,2);
+ // A subsequent operator attempt is safe ONLY if the intent survived.
+ f.setFail(0);
+ const replay=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(replay.success,true);
+ assert.equal(replay.movedCount,1);
+ assert.equal(replay.stampedCount,0);
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+});
+
+test("EX-03B23 native wreck store read exception fails closed without aborting A-Life phase",()=>{
+ const f=fixture();
+ const c=createNpcExpeditionWreckCustody({items:f.items,
+  gameStore:{flushTableSync:()=>({success:true})},
+  npcStore:{
+   getNativeWreck:()=>{throw Error("SQLITE_READ_TEMPORARILY_UNAVAILABLE")},
+   listNativeWrecks:()=>[]
+  }});
+ assert.deepEqual(c.list({wreckID}),[]);
+ assert.equal(c.canDestroy(wreckID),false);
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,false);
+ assert.equal(c.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true}).success,false);
+ assert.equal(c.claim({characterID,wreckID,itemID,
+  destinationLocationID:playerShipID,destinationFlagID:5}).status,
+  "NOT_EXPEDITION_ITEM");
+ assert.equal(f.rows.get(itemID).locationID,shipID,"read error cannot touch original loot");
+});
