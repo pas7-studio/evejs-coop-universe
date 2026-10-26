@@ -42,9 +42,13 @@ function liveShip(scene,id){
  const entity=scene?.getEntityByID?.(Number(id));
  return entity?.kind==="ship"&&pos(entity.itemID)===Number(id)?entity:null;
 }
+// Missing or failing native entity registry is NOT proof a former hauler
+// has disappeared. Reusing its original cargo would duplicate custody.
+const REGISTRY_UNVERIFIED=Symbol("NATIVE_ENTITY_REGISTRY_UNVERIFIED");
 function stillRegistered(store,entityID){
- if(typeof store?.getNativeEntity!=="function")return null;
- try{return store.getNativeEntity(Number(entityID))||null}catch(_error){return null}
+ if(typeof store?.getNativeEntity!=="function")return REGISTRY_UNVERIFIED;
+ try{return store.getNativeEntity(Number(entityID))||null}
+ catch(_error){return REGISTRY_UNVERIFIED}
 }
 // Which orphans may this exact fleet slot adopt? Every condition is an
 // independent refusal, so a missing or odd field never guesses ownership.
@@ -65,7 +69,10 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,cargoTable,
   if(!Number.isFinite(loadedAt)||loadedAt<=0||loadedAt>now)continue;
   if(now-loadedAt>ttlMs)continue;
   if(liveShip(scene,row.entityID))continue;
-  if(stillRegistered(store,row.entityID))continue;
+  const registered=stillRegistered(store,row.entityID);
+  if(registered===REGISTRY_UNVERIFIED)
+   return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
+  if(registered)continue;
   rows.push(row);
  }
  return {status:rows.length?"ADOPTABLE":"NO_ORPHAN_CARGO",rows};
@@ -133,6 +140,9 @@ function adopt(scene,fleet,options={}){
   }catch(_error){return false}
  };
  const restore=(touched,status,detail)=>{
+  // A failed batch must not consume the once-only slot: the rows were put back,
+  // so a later tick may legitimately try again.
+  attempts.delete(systemID+":"+fleetID);
   let restored=true;
   for(const row of [...touched].reverse()){
    try{

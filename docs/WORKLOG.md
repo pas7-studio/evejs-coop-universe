@@ -62,3 +62,13 @@ Evidence: tests/worklog-format.test.mjs 4/4; scripts/log-change.cjs --check OK
 Why: the installer mixed 298 lines of data with the engine, so a gameplay hook edit and a mechanism edit were indistinguishable and every change risked the deploy path
 Where: scripts/overlay-spec.cjs, scripts/patch-evejs-coop.cjs
 Evidence: check status identical before/after (OVERLAY_DRIFT, patched 54, anchorMismatch 0); overlay-spec names=288 specs=54 oldLines=50
+### 2026-10-26T11:21Z · f6aef17 · L2 · refactor(telemetry): one guarded observe entry point for gameplay modules
+
+Why: every module wrapped probe.observe in its own try/catch, so a failing probe could still break a haul and per-tick callers could flood the event log
+Where: integration/coopAdminBridge.cjs, integration/coopHaulCargoAdoption.cjs, integration/coopNativeHaulCargo.cjs, integration/coopObserve.cjs, scripts/overlay-spec.cjs, tests/coop-observe.test.mjs
+Evidence: tests 30 pass (4 pre-existing manifest failures unchanged); OVERLAY_OK patched 54; deployed modules node --check clean; new tests/coop-observe.test.mjs 4/4
+### 2026-10-26T11:22Z · f16b13d · L2 · fix(adoption): a rolled-back batch must not consume the once-only slot
+
+Why: after reconciling with the owner's refactor of the same module, a failed batch left the throttle state set, so a legitimate retry was reported as THROTTLED
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: tests/coop-haul-cargo-adoption.test.mjs 16/16 (owner's expanded suite incl. partial multi-orphan rollback)

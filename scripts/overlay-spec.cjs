@@ -45,6 +45,8 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 // Restart resilience: re-attach durable haul cargo orphans to the re-seeded
 // hauler of the same system/slot (default OFF, never invents ore).
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopHaulCargoAdoption");
+// Guarded telemetry used by the restart-resilience modules.
+names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 // Stage J: ship the already-used physical rival warehouse module and the
