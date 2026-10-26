@@ -121,7 +121,7 @@ function hackingFixture(){
  ].join("\n");
 }
 test("source patch is anchored, idempotent and reversible",()=>{
- const dogma="class Dogma {\n"+dogmaAnchor+"\n}";
+ const dogma="class Dogma {\n  run(session,contextData){\n"+dogmaAnchor+"\n  }\n}";
  const hack=hackingFixture();
  for(const [file,src] of [[DOGMA,dogma],[HACK,hack]]){
   const applied=patch(src,file,false);
