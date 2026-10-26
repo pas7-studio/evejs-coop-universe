@@ -169,6 +169,8 @@ function Write-DropIn {
     '# Managed by scripts/Setup-Friend-Host-Hardened.ps1',
     "Port $ListenPort",
     'PasswordAuthentication no',
+    'KbdInteractiveAuthentication no',
+    'AuthenticationMethods publickey',
     'PubkeyAuthentication yes',
     'PermitRootLogin no',
     'GatewayPorts no',
