@@ -12,12 +12,17 @@ function fixture(options={}){
  const owned=new Map();let issued=0,failRemove=false,failCargoFlush=false,failItemsFlush=false,failGrant=false,acceptArrival=true,durableCargo=true;
  const store={listNativeCargoForEntity:id=>[...cargo.values()].filter(c=>c.entityID===id),
   removeNativeCargo(id){if(failRemove)return {success:false};return {success:cargo.delete(id)};}};
- const items={findWarehouseItem({ownerID,stationID,cargoID}){const item=owned.get(cargoID);return item&&item.ownerID===ownerID&&item.locationID===stationID?item:null;},
+ // The patched native ItemStore exposes global cargo-tag lookup and
+ // original physical hangar identity, including stacksize/singleton/flagID.
+ const items={ITEM_FLAGS:{HANGAR:4},
+  findWarehouseItem({cargoID}){return owned.get(cargoID)||null;},
   grantUniqueNpcDepotItem({ownerID,stationID,typeID,quantity,cargoID}){
    if(failGrant)return {success:false};
    const existing=owned.get(cargoID);
    if(existing)return {success:existing.ownerID===ownerID&&existing.locationID===stationID};
-   owned.set(cargoID,{itemID:++issued,ownerID,locationID:stationID,typeID,quantity,customInfo:marker(cargoID)});
+   owned.set(cargoID,{itemID:++issued,ownerID,locationID:stationID,
+    flagID:items.ITEM_FLAGS.HANGAR,singleton:0,stacksize:quantity,
+    typeID,quantity,customInfo:marker(cargoID)});
    return {success:true,data:{itemID:issued}};
   }};
  const config={root,store,items,flush:table=>({success:table==='npcCargo'?!failCargoFlush:!failItemsFlush}),
@@ -179,4 +184,53 @@ test('P0: native ore title must equal receiving NPC corporate warehouse owner',(
  assert.equal(f.cargo.size,0);
  assert.equal(f.owned.size,1);
  assert.equal(f.issued,1);
+}));
+
+test('P0: completed physical ore receipt invalid if tagged item is not in true station hangar',()=>withF(f=>{
+ const w=f.make();
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ const original={...f.owned.get(8001)};
+ for(const [name,patch] of [
+  ['moved to another inventory slot',{flagID:5}],
+  ['singleton turned into a unique item',{singleton:1}],
+  ['split stack quantity no longer matches',{stacksize:249}],
+  ['stacksize exceeds credited quantity',{stacksize:251}],
+  ['missing hangar identity',{flagID:undefined}]
+ ]){
+  f.owned.set(8001,{...original,...patch});
+  assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR',name);
+  assert.equal(w.resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR',name);
+  assert.equal(w.audit().status,'NEEDS_RECONCILIATION',name);
+  assert.equal(f.issued,1,'never create another original tagged stack');
+ }
+ f.owned.set(8001,original);
+ assert.equal(w.deposit(f.arg).status,'ALREADY_COMMITTED');
+ assert.equal(w.audit().status,'OK');
+ assert.equal(f.issued,1);
+}));
+
+test('P0: warehouse item with source tag owned by another corporation is a conflict',()=>withF(f=>{
+ f.owned.set(8001,{itemID:777,ownerID:7777,locationID:6002,
+  flagID:4,singleton:0,stacksize:250,typeID:1230,quantity:250,customInfo:marker(8001)});
+ const w=f.make();
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.cargo.size,1);
+ assert.equal(f.issued,0);
+ assert.equal(w.audit().status,'EMPTY');
+}));
+
+test('P0: a successful item grant cannot claim completed credit without native hangar metadata',()=>withF(f=>{
+ const grant=f.config.items.grantUniqueNpcDepotItem;
+ f.config.items.grantUniqueNpcDepotItem=args=>{
+  const result=grant(args);
+  if(result.success)f.owned.get(8001).flagID=9;
+  return result;
+ };
+ const w=f.make(),result=w.deposit(f.arg);
+ assert.equal(result.status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.owned.size,1,'unknown item write must not be retried blindly');
+ assert.equal(f.issued,1);
+ assert.equal(w.audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(JSON.parse(fs.readFileSync(path.join(f.root,'receipts','8001.json'),'utf8')).phase,
+  'SOURCE_DEBIT_PROVEN');
 }));
