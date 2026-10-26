@@ -223,6 +223,14 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
   fleetID:member.fleetID,leader,peerID,agentID:agent,
   actionID:action,station,leaderMission:{...leaderMission},
   peerMission:{...peerMission},session,peer};
+ // The optional PVE-005A gate executes BEFORE any native leader reward
+ // intent or stock doAgentAction. Never simulate mission completion.
+ if(process.env.EVEJS_COOP_PVE_DUO_REWARD_GUARD==="1"){
+  const proof=require("./coopPveDuoNativeRewardGuard").preflight(ticket);
+  if(!proof.ok)
+   throw Error("COOP_PVE_DUO_REWARD_BLOCKED: "+proof.status);
+  ticket._pveRewardPreflight=proof;
+ }
  if(process.env.EVEJS_COOP_FLEET_LEADER_FENCE==="1"){
   if(process.env.EVEJS_COOP_FLEET_MISSION_TURNIN!=="1")
    throw Error("LEADER_FENCE_REQUIRES_PEER_SETTLEMENT_GUARD");
@@ -277,6 +285,15 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
    leaderMission:ticket.leaderMission,peerMission:second}))
    return {status:"PEER_NATIVE_SHARED_OBJECTIVE_NOT_PROVED"};
  }
+ // The leader's original native DoAction purges the dungeon on completion,
+ // so recheck immutable mission/source identity and peer's original shared
+ // objective receipt WITHOUT requiring that already-purged live instance.
+ if(ticket._pveRewardPreflight||
+    process.env.EVEJS_COOP_PVE_DUO_REWARD_GUARD==="1"){
+  const peerGuard=require("./coopPveDuoNativeRewardGuard").beforePeer(ticket,second);
+  if(!peerGuard.ok)return {status:"PVE_DUO_PEER_NATIVE_REWARD_BLOCKED",
+   reason:peerGuard.status};
+ }
  // The old native DoAction remains the ONLY reward/standing authority.
  // This durable intent is required only for explicitly opted-in automated
  // two-recipient turn-in; by default this gameplay feature stays OFF.
@@ -308,6 +325,21 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
   if(both.status!=="READY")
    return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION",
     reason:both.status};
+ }
+ // Both *native mission records* were independently cleared by EveJS.
+ // This is no ISK/LP balance attestation or additional reward mutation.
+ if(ticket._pveRewardPreflight){
+  try{require("./coopRuntimeProbe").observe(
+   "living-pve-duo-native-mission-turnin",null,
+   {spaceState:{systemID:ticket._pveRewardPreflight.missionSystemID}},
+   {status:"TWO_NATIVE_PERSONAL_MISSION_RECORDS_CLEARED",
+    fleetID:ticket.fleetID,agentID:ticket.agentID,
+    sourceInstanceID:ticket._pveRewardPreflight.sourceInstanceID,
+    characterIDs:[ticket.leader,ticket.peerID],
+    missionSequences:[ticket.leaderMission.missionSequence,
+     ticket.peerMission.missionSequence],
+    evidence:"NATIVE_PERSONAL_MISSION_DELETION_NOT_WALLET_OR_LP_DELTA"}
+  )}catch{}
  }
  return {status:"TWO_NATIVE_MISSIONS_COMPLETED",fleetID:ticket.fleetID,
   characterIDs:[ticket.leader,ticket.peerID],agentID:ticket.agentID};
