@@ -391,6 +391,13 @@ function run({codePath,remove=false,dryRun=false}){
  if(requires.violations.length>0)
   throw Error("HOOK_REQUIRE_UNRESOLVED: "+requires.violations[0].code+" "+
    requires.violations[0].from+" -> "+requires.violations[0].specifier);
+ // Same rule for every file that is actually written: a relative require that
+ // resolves to nothing must fail the install, not throw once per tick at runtime.
+ const unresolved=require("./coop-hook-requires.cjs").installedFileViolations({
+  plan:plan.map(p=>({file:p.file,after:p.before!==p.after?p.after:null})),checkout:code});
+ if(unresolved.length>0)
+  throw Error("INSTALL_REQUIRE_UNRESOLVED: "+unresolved[0].from+" -> "+
+   unresolved[0].specifier+" (looked for "+unresolved[0].tried.join(", ")+")");
  const changed=plan.filter(p=>p.before!==p.after);
  if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};

@@ -97,7 +97,41 @@ function audit({ names, specs, integrationsDir, checkout } = {}) {
   return { targets: targets.length, installed: installed.size, stock, violations };
 }
 
-module.exports = { audit, requiresIn, resolveTarget };
+// A relative require that resolves to nothing throws inside stock code on every
+// call and the caller swallows it, so the feature silently never runs. That is how a
+// pinned patch inserted `require("../gameStore")` into
+// server/src/services/mining/miningNpcOperations.js - one level too shallow, so the
+// whole durable fleet start threw MODULE_NOT_FOUND and every slot went
+// NEEDS_OPERATOR_REPAIR. Check every file the install writes, including the placed
+// module files and the stock files the hooks edit.
+function installedFileViolations({ plan, checkout } = {}) {
+  const planned = new Set((plan || []).map((item) => path.resolve(item.file)));
+  const violations = [];
+  for (const item of plan || []) {
+    if (item.after === null || item.after === undefined) continue;
+    const from = path.resolve(item.file);
+    for (const specifier of requiresIn(item.after)) {
+      if (!/^\.\.?\//.test(specifier)) continue;
+      const base = path.dirname(from);
+      const target = path.resolve(base, specifier);
+      const candidates = [target, target + ".js", target + ".cjs", target + ".mjs",
+        target + ".json", path.join(target, "index.js"), path.join(target, "index.cjs")];
+      const found = candidates.some((candidate) =>
+        planned.has(candidate) || fs.existsSync(candidate));
+      if (found) continue;
+      violations.push({
+        code: "INSTALL_REQUIRE_UNRESOLVED",
+        from: checkout ? path.relative(checkout, from).replace(/\\/g, "/") : from,
+        specifier,
+        tried: candidates.slice(0, 3).map((candidate) =>
+          checkout ? path.relative(checkout, candidate).replace(/\\/g, "/") : candidate),
+      });
+    }
+  }
+  return violations;
+}
+
+module.exports = { audit, requiresIn, resolveTarget, installedFileViolations };
 
 if (require.main === module) {
   const argv = process.argv.slice(2);

@@ -4,7 +4,8 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 
 const require = createRequire(import.meta.url);
-const {audit} = require('../scripts/coop-hook-requires.cjs');
+const hookRequires = require('../scripts/coop-hook-requires.cjs');
+const {audit} = hookRequires;
 const spec = require('../scripts/overlay-spec.cjs');
 const integrations = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', 'integration');
 
@@ -59,4 +60,43 @@ test('builtins and packages are out of scope', () => {
     integrationsDir: integrations,
   });
   assert.deepEqual(result.violations, []);
+});
+
+// A relative require that resolves to nothing is a runtime only failure: the hook
+// throws and the stock caller swallows it. Two live hooks had exactly that bug
+// (miningNpcOperations -> ../gameStore, agentMgrService -> ../space/coopAgentDialogue),
+// so the installer now refuses to write such a file.
+test("the installer refuses a written file whose relative require resolves to nothing", ()=>{
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "coop-requires-"));
+  try {
+    fs.mkdirSync(path.join(dir, "server/src/services/mining"), {recursive: true});
+    fs.mkdirSync(path.join(dir, "server/src/gameStore"), {recursive: true});
+    fs.writeFileSync(path.join(dir, "server/src/gameStore/index.js"), "");
+    const target = path.join(dir, "server/src/services/mining/miningNpcOperations.js");
+    const sibling = path.join(dir, "server/src/services/mining/coopSibling.js");
+    const plan = (text) => [{file: target, after: text}];
+    const violations = (text) => hookRequires.installedFileViolations({plan: plan(text), checkout: dir});
+    assert.equal(violations("const x = require(\"../../gameStore\");").length, 0,
+      "the correct depth resolves to a real directory");
+    assert.equal(hookRequires.installedFileViolations({
+      plan: [{file: target, after: "const y = require(\"./coopSibling\");"},
+        {file: sibling, after: "module.exports = {};"}], checkout: dir}).length, 0,
+      "a sibling installed by the same plan is allowed");
+    const bad = violations("const x = require(\"../gameStore\");");
+    assert.equal(bad.length, 1);
+    assert.equal(bad[0].code, "INSTALL_REQUIRE_UNRESOLVED");
+    assert.equal(bad[0].from, "server/src/services/mining/miningNpcOperations.js");
+    assert.equal(bad[0].specifier, "../gameStore");
+  } finally {
+    fs.rmSync(dir, {recursive: true, force: true});
+  }
+});
+
+test("a plan entry that is only removed is not scanned", ()=>{
+  const violations = hookRequires.installedFileViolations({
+    plan: [{file: "/nowhere/x.js", after: null}], checkout: null});
+  assert.deepEqual(violations, []);
 });

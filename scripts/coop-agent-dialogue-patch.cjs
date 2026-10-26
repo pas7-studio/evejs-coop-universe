@@ -10,9 +10,9 @@ const APPLY_ANCHOR = [
   '    : ["This agent is unavailable.", null]);',
 ].join("\n");
 const ENTER_HOOK =
-  '  if (process.env.EVEJS_COOP_AGENT_DIALOGUE === "1") { try { require("../space/coopAgentDialogue").enter(session); } catch (error) { console.warn("[CoopAgentDialogue]", error.message); } }';
+  '  if (process.env.EVEJS_COOP_AGENT_DIALOGUE === "1") { try { require("../../space/coopAgentDialogue").enter(session); } catch (error) { console.warn("[CoopAgentDialogue]", error.message); } }';
 const APPLY_HOOK =
-  '  if (process.env.EVEJS_COOP_AGENT_DIALOGUE === "1") { try { require("../space/coopAgentDialogue").applyToTuple(agentSays); } catch (error) { console.warn("[CoopAgentDialogue]", error.message); } }';
+  '  if (process.env.EVEJS_COOP_AGENT_DIALOGUE === "1") { try { require("../../space/coopAgentDialogue").applyToTuple(agentSays); } catch (error) { console.warn("[CoopAgentDialogue]", error.message); } }';
 
 function count(text, part) {
   return text.split(part).length - 1;
