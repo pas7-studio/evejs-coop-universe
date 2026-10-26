@@ -82,6 +82,15 @@ The lifecycle is disabled by default behind \`EVEJS_COOP_PLAYER_NPC_MINING_CORP_
 
 **Total 89/89 isolated tests PASS.** These are **NOT** compiled Cargo tests, native SQLite transaction/restart tests, or two real EveJS client E2E. Rust toolchain and external pinned server are not installed in the current execution runtime. No remote CI or deployment was triggered.
 
+## Stage E2B5 — partially unsold corporate order cancellation (source implemented)
+
+- Pinned original Rust `FillOrder`, `ModifyOrder`, `CancelOrder` now **reject** original `source='coop-corporation'` orders before stock wallet/item mutations, preserving separation from unsafe character-only settlement.
+- Private original Rust `LockCorpSellCancel/GetCorpSellCancel/FinalizeCorpSellCancel` holds exclusive `cancelling` order lock, refuses active or incomplete prior fills, tracks exact original source item/cargo and unsold quantity, and independently rechecks original GameStore SQLite after the physical return.
+- The original corporate `coopPlayerMiningCorporateUnsoldReturn` atomically returns **only remaining source item quantity** to the same player corporation office, leaving prior bought units, ISK payments and all completed fill receipts unchanged. A terminal `RETURNED_UNSOLD` tombstone protects order/cargo IDs after restart.
+- Private `coopPlayerMiningCorporateCancelLifecycle` protects `Rust Lock → GameStore Return → Rust Finalize` from lost ACK and duplicate cargo return. No new scheduler or public UI. All feature flags and constructor gates remain OFF by default.
+- Source tests: **25/25** Rust safety/patch, **12/12** corporate remainder return, **8/8** original Rust cancellation orchestration isolated PASS. Real Cargo/SQLite and two-client E2E **NOT RUN**.
+- **Still not playable**: original Rust `PublishCorpSell` remains fail-closed because native buyer matching / independent fee authority and full Rust/GameStore E2E are not live-verified. See [CHAT24_31_CORPORATE_UNSOLD_CANCEL.md](CHAT24_31_CORPORATE_UNSOLD_CANCEL.md).
+
 ## Remaining blockers before playable corporate SELL and profit
 
 1. Add a genuine original orderbook **buyer match authority**; the lifecycle currently requires an externally injected, verified source match and trusted native tax/broker fee quote. No client may dictate volume, price or ownership.
