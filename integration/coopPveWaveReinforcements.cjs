@@ -58,6 +58,7 @@ function createWaveReinforcements({
       ship.session?.characterID||ship.systemID&&ship.systemID!==systemID||!pos(ship.position)||
       !record||record.entityID!==entityID||record.systemID!==systemID||
       record.nativeNpc!==true||record.transient!==true||
+      !id(record.corporationID)||record.corporationID!==ship.corporationID||
       !id(record.typeID)||record.typeID!==ship.typeID||
       !Number.isSafeInteger(record.createdAtMs)||record.createdAtMs<=0||
       record.createdAtMs>wave.spawnedAtMs+2000||
