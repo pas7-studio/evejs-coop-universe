@@ -10,6 +10,12 @@ const {unloadCargo,haulFlag}=require('../integration/coopNativeHaulCargo.cjs');
 function fixture(){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'evejs-depot-'));const file=path.join(dir,'depot.json');
  const depot=createDepot({file,clock:()=>123456});
+ // Source cargo is only attested durable once the original GameStore
+ // npcCargo table has acknowledged its own flush, before depot credit.
+ const database={flushTableSync:table=>{
+  assert.equal(table,"npcCargo");
+  return {success:true};
+ }};
  const cargo=new Map([[333,{cargoID:333,typeID:34,quantity:50,moduleID:0,entityID:500,coopHaulFleetID:44}]]);
  const store={
    listNativeCargoForEntity:entityID=>[...cargo.values()].filter(x=>x.entityID===entityID),
@@ -20,7 +26,7 @@ function fixture(){
  const scene={getEntityByID:id=>id===500?hauler:null};
  const fleet={fleetID:44,systemID:30000144,haulerEntityIDs:[500]};
  const observed=[];const probe={observe:(...args)=>observed.push(args)};
- return {dir,file,depot,cargo,store,hauler,scene,fleet,probe,observed,delivery:{cargoID:333,typeID:34,quantity:50,haulerID:500}};
+ return {dir,file,depot,database,cargo,store,hauler,scene,fleet,probe,observed,delivery:{cargoID:333,typeID:34,quantity:50,haulerID:500}};
 }
 test('depot prepare does not credit virtual supply; commit credits exactly once, durable across reopen',()=>{
  const f=fixture();
