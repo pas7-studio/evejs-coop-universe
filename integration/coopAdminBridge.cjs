@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -512,6 +512,95 @@ function deployStructure(request) {
   };
 }
 
+// Spawns real native NPC hulls in a system from a real SDE profile, so the world
+// can be set up honestly (e.g. a second faction's patrol in a tied system). It
+// uses the same native spawnBatchInSystem + scene anchor the materializer uses,
+// reports the resulting entity/corporation/faction, and never fabricates a ship.
+function spawnNativeNpc(request) {
+  const systemID = Number(request.systemID) || 0;
+  const profileQuery = String(request.profileQuery || "").trim();
+  const amount = Math.max(1, Math.min(4, Number(request.amount) || 1));
+  if (!(systemID > 0)) return { ok: false, error: "systemID is required" };
+  if (!profileQuery) return { ok: false, error: "profileQuery is required" };
+  let runtime = null;
+  let npc = null;
+  let topology = null;
+  let npcStore = null;
+  let factions = null;
+  try {
+    runtime = require("./runtime");
+    npc = require("./npc/npcRuntime");
+    topology = require("./coopNpcTopology" + siblingSuffix);
+    npcStore = require("./npc/nativeNpcStore");
+    factions = require("../services/faction/factionState");
+  } catch (error) {
+    return { ok: false, error: "native spawn dependencies unavailable: " + String(error && error.message || error) };
+  }
+  let scene = null;
+  try {
+    scene = runtime.ensureScene(systemID, { refreshStargates: false });
+  } catch (error) {
+    return { ok: false, error: "scene unavailable: " + String(error && error.message || error) };
+  }
+  const anchor = topology.anchorOptions(scene);
+  if (!anchor) return { ok: false, error: "NO_NATIVE_SYSTEM_ANCHOR" };
+  let result = null;
+  try {
+    result = npc.spawnBatchInSystem(systemID, {
+      ...anchor,
+      amount,
+      entityType: "npc",
+      transient: true,
+      broadcast: true,
+      profileQuery,
+    });
+  } catch (error) {
+    return { ok: false, error: "spawn threw: " + String(error && error.message || error) };
+  }
+  const spawned = (result && result.data && Array.isArray(result.data.spawned)) ? result.data.spawned : [];
+  if (!result || result.success !== true || !spawned.length) {
+    return { ok: false, error: String((result && result.errorMsg) || "spawn refused"), spawned: spawned.length };
+  }
+  const ships = spawned.map((entry) => {
+    const entityID = Number((entry.entity && entry.entity.itemID) || entry.entityID || 0);
+    let corporationID = 0;
+    let factionID = 0;
+    try {
+      const native = npcStore.getNativeEntity(entityID);
+      corporationID = Number(native && native.corporationID) || 0;
+      factionID = Number(factions.getFactionIDForCorporation(corporationID)) || 0;
+    } catch (_error) {
+      corporationID = 0;
+    }
+    return { entityID, corporationID, factionID };
+  });
+  // Optional: make the ship a real world presence by linking it to an unlinked
+  // roster pilot. Without a link the war presence legitimately ignores the hull.
+  let link = null;
+  const pilotID = String(request.pilotID || "").trim();
+  if (pilotID && ships.length) {
+    try {
+      const runtimeWorld = require("./coopVirtualWorldRuntime" + siblingSuffix);
+      link = runtimeWorld.linkSpawnedIdentity({
+        pilotID,
+        systemID,
+        entityID: ships[0].entityID,
+      });
+    } catch (error) {
+      link = { status: "LINK_UNAVAILABLE", reason: String(error && error.message || error) };
+    }
+  }
+  return {
+    ok: true,
+    systemID,
+    profileQuery,
+    spawned: ships.length,
+    ships,
+    link,
+    selectionID: String((result.data && (result.data.selectionID || result.data.selectionName)) || ""),
+  };
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
@@ -519,6 +608,7 @@ function executeRequest(request) {
   // A structure belongs to a corporation, not to a character, so this action is
   // the one admin request that legitimately has no characterID.
   if (action === "deploy_structure") return deployStructure(request);
+  if (action === "spawn_native_npc") return spawnNativeNpc(request);
   const characterID = Number(request.characterID) || 0;
   if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
   if (action === "chat_command") return executeChatCommand(request);

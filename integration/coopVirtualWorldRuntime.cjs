@@ -3702,4 +3702,35 @@ function witnessedNativeBossWreck(wreckID){
  return pveNativeBossDirector?.witnessedWreck(Number(wreckID))||null;
 }
 function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:false,sequence:0,last:null}}
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};
+// World-setup seam used by the admin bridge. A ship spawned outside the
+// materializer is only a real presence for the war layer once the identity
+// registry knows which roster pilot flies it, so this links the pair and refuses
+// unless the native entity really exists in that system and the pilot is a real,
+// still-unlinked roster identity.
+function linkSpawnedIdentity({pilotID,systemID,entityID}={}){
+ if(!identityRegistry)return {status:"IDENTITY_REGISTRY_UNAVAILABLE"};
+ const pilotId=String(pilotID||"").trim();
+ const system=Number(systemID),entity=Number(entityID);
+ if(!pilotId||!Number.isSafeInteger(system)||system<=0||
+  !Number.isSafeInteger(entity)||entity<=0)return {status:"INVALID_IDS"};
+ let roster=[];
+ try{roster=world?.snapshot?.().pilots||[]}catch{roster=[]}
+ const pilot=roster.find(p=>String(p?.id)===pilotId);
+ if(!pilot)return {status:"UNKNOWN_ROSTER_PILOT",pilotID:pilotId};
+ let links={};
+ try{links=identityRegistry.snapshot()?.links||{}}catch{links={}}
+ if(Object.values(links).some(l=>String(l?.pilotID)===pilotId))
+  return {status:"PILOT_ALREADY_LINKED",pilotID:pilotId};
+ if(Object.values(links).some(l=>Number(l?.entityID)===entity))
+  return {status:"SHIP_ALREADY_LINKED",entityID:entity};
+ try{
+  const native=require("./npc/nativeNpcStore").getNativeEntity(entity);
+  if(!native||Number(native.systemID)!==system)
+   return {status:"NATIVE_ENTITY_NOT_IN_SYSTEM",entityID:entity};
+  identityRegistry.link(pilot,system,entity);
+  return {status:"LINKED",pilotID:pilotId,systemID:system,entityID:entity};
+ }catch(error){
+  return {status:"LINK_FAILED",reason:String(error?.message||error)};
+ }
+}
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity};

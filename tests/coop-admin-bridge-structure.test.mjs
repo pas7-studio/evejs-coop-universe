@@ -32,3 +32,17 @@ test('a structure request without a name is refused by the factory, not written'
  assert.equal(result.status,'REFUSED');
  assert.equal(result.error,'NAME_REQUIRED');
 });
+
+test('spawn_native_npc validates its inputs before touching native code',()=>{
+ assert.equal(bridge.ALLOWED_ACTIONS.has('spawn_native_npc'),true);
+ const noSystem=bridge.executeRequest({action:'spawn_native_npc',profileQuery:'angel_raider'});
+ assert.equal(noSystem.ok,false);
+ assert.equal(noSystem.error,'systemID is required');
+ const noProfile=bridge.executeRequest({action:'spawn_native_npc',systemID:30000142});
+ assert.equal(noProfile.ok,false);
+ assert.equal(noProfile.error,'profileQuery is required');
+ // A repo without the EveJS tree must refuse, never pretend a ship exists.
+ const offline=bridge.executeRequest({action:'spawn_native_npc',systemID:30000142,profileQuery:'angel_raider'});
+ assert.equal(offline.ok,false);
+ assert.match(offline.error,/native spawn dependencies unavailable/);
+});
