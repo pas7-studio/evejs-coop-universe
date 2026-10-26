@@ -103,3 +103,13 @@ Evidence: source diff reviewed; local Node/SQLite and gameplay NOT_RUN (remote G
 Why: the throttle returned THROTTLED for legitimate retries and hid the real blocker (registry/custody), and there was no test proving a load survives a restart end to end
 Where: integration/coopAdminBridge.cjs, integration/coopHaulCargoAdoption.cjs, tests/coop-haul-cargo-adoption.test.mjs, tests/coop-restart-haul-adoption.test.mjs
 Evidence: adoption 26/26 incl. owner's custody/registry suites, new restart simulation 4/4 (durable row -> new hauler -> loaded), OVERLAY_OK patched 54
+### 2026-10-26T11:37Z · c0d8514 · L2 · fix(haul): block duplicate original cargoID enumeration before any adoption
+
+Why: Duplicate native records for one cargoID could be treated as two physical ore rows and distort adoption totals.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: source review; targeted Node 22 tests authored, NOT_RUN on owner's checkout; remote CI prohibited.
+### 2026-10-26T11:37Z · 0566d9f · TEST · test(haul): reject duplicate native cargoID in source or other fleet
+
+Why: Exercise same-ID collisions both inside the fleet and across fleet/system boundaries before any mutation.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: source review; targeted Node 22 tests authored, NOT_RUN on owner's checkout; remote CI prohibited.
