@@ -133,7 +133,7 @@ test("adopts exactly once per fleet slot", () => {
   const scene = sceneWith([hauler]);
   const first = adopt(scene, fleet(), { store, clock: () => NOW, database });
   assert.equal(first.status, "ADOPTED");
-  const second = adopt(scene, fleet({ state: "mining" }), { store, clock: () => NOW, database });
+  const second = adopt(scene, fleet({ state: "mining" }), { store, clock: () => NOW + 5000, database });
   assert.equal(second.status, "ALREADY_ATTEMPTED");
   assert.equal(store.writes.length, 1);
 });
@@ -176,6 +176,20 @@ test("expired orphans are archived by policy, never credited", () => {
   });
   assert.equal(result.status, "NO_ORPHAN_CARGO");
   assert.equal(store.writes.length, 0);
+});
+
+test("falls back to the gameStore cargo table when the store cannot enumerate", () => {
+  const store = fakeStore([]);
+  delete store.listNativeCargo;
+  const row = orphan();
+  const result = adopt(sceneWith([hauler]), fleet(), {
+    store,
+    clock: () => NOW,
+    database: { flushTableSync: () => ({ success: true }) },
+    cargoTable: () => ({ [row.cargoID]: row }),
+  });
+  assert.equal(result.status, "ADOPTED");
+  assert.equal(store.listNativeCargoForEntity(hauler.itemID).length, 1);
 });
 
 test("requires exactly one live hauler for the slot", () => {

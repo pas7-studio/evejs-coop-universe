@@ -210,7 +210,12 @@ function transferCargo(scene,fleet,miner,options={}){
   for(const item of items){
    const cached=(miner.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
    const amount=Number(item.quantity);
-   const durable=process.env.EVEJS_COOP_NPC_STATION_DELIVERY==="1"&&hauler.transient!==true;
+   // Restart resilience: a transient hauler's haul cargo is persisted too when
+   // the adoption feature is on, so a restart can re-attach it to the next
+   // hauler of the same slot instead of losing the ore. Without the flag the
+   // conservative behaviour is unchanged.
+   const durable=process.env.EVEJS_COOP_NPC_STATION_DELIVERY==="1"&&
+     (hauler.transient!==true||process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION==="1");
    const result=store.upsertNativeCargo({...item,transient:durable?false:item.transient,entityID:Number(hauler.itemID),
     ownerID:positive(hauler.ownerID)||positive(item.ownerID)||0,
     [haulFlag]:Number(fleet.fleetID),coopHaulFromMinerID:Number(miner.itemID),

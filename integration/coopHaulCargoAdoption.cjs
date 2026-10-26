@@ -9,14 +9,34 @@
 // invents a destination.
 const pos=v=>{const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:0;};
 const DEFAULT_TTL_MS=45*60*1000;
-const MAX_ATTEMPTS=300;
+const MAX_ATTEMPTS=120;
+const THROTTLE_MS=2000;
 const attempts=new Map();
+const noted=new Set();
 function enableFlag(){return process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION==="1";}
 function dependenciesOf(options={}){
  return {store:options.store||require("./npc/nativeNpcStore"),
   probe:options.probe||require("./coopRuntimeProbe"),
   database:options.database||null,
+  cargoTable:options.cargoTable||null,
   clock:options.clock||(()=>Date.now())};
+}
+// The pinned store exports listNativeCargoForEntity but NOT a global
+// listNativeCargo, so the durable table is read through gameStore when the
+// store cannot enumerate.
+function cargoRows({store,cargoTable,database}={}){
+ if(typeof store?.listNativeCargo==="function"){
+  const all=store.listNativeCargo();
+  if(Array.isArray(all))return all;
+ }
+ let read=cargoTable;
+ if(typeof read!=="function"){
+  const db=database||require("../gameStore");
+  read=()=>db.read?.("npcCargo","/cargo");
+ }
+ const table=read();
+ return table&&typeof table==="object"&&!Array.isArray(table)?
+  Object.values(table):null;
 }
 function liveShip(scene,id){
  const entity=scene?.getEntityByID?.(Number(id));
@@ -28,11 +48,11 @@ function stillRegistered(store,entityID){
 }
 // Which orphans may this exact fleet slot adopt? Every condition is an
 // independent refusal, so a missing or odd field never guesses ownership.
-function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS}={}){
+function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,cargoTable,database}={}){
  const pid=pos(systemID),fid=pos(fleetID);
- if(!pid||!fid||!scene||typeof store?.listNativeCargo!=="function")
-  return {status:"INVALID_AUTHORITIES",rows:[]};
- let all;try{all=store.listNativeCargo()}catch(_error){return {status:"CARGO_UNAVAILABLE",rows:[]}}
+ if(!pid||!fid||!scene)return {status:"INVALID_AUTHORITIES",rows:[]};
+ let all;try{all=cargoRows({store,cargoTable,database})}
+ catch(_error){return {status:"CARGO_UNAVAILABLE",rows:[]}}
  if(!Array.isArray(all))return {status:"CARGO_UNAVAILABLE",rows:[]};
  const rows=[];
  for(const row of all){
@@ -64,16 +84,23 @@ function adopt(scene,fleet,options={}){
  if(!systemID||!fleetID||systemID!==pos(fleet?.systemID))
   return {status:"INVALID_FLEET"};
  const key=systemID+":"+fleetID;
- const tries=(attempts.get(key)||0)+1;
- if(tries>MAX_ATTEMPTS||attempts.get(key)===-1)return {status:"ALREADY_ATTEMPTED"};
- attempts.set(key,tries);
+ const state=attempts.get(key)||{tries:0,at:0,done:false};
+ if(state.done)return {status:"ALREADY_ATTEMPTED"};
+ if(now-state.at<THROTTLE_MS)return {status:"THROTTLED"};
+ if(state.tries>=MAX_ATTEMPTS){state.done=true;attempts.set(key,state);return {status:"ALREADY_ATTEMPTED"}}
+ state.tries+=1;state.at=now;attempts.set(key,state);
  const ttlMs=Number(process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS)>0?
   Number(process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS):DEFAULT_TTL_MS;
- const planned=plan({store,scene,systemID,fleetID,now,ttlMs});
+ const planned=plan({store,scene,systemID,fleetID,now,ttlMs,
+  cargoTable:options.cargoTable,database});
  if(planned.status!=="ADOPTABLE"){
-  if(planned.status!=="NO_ORPHAN_CARGO")
+  // One status line per slot, not one per native tick.
+  const noteKey=key+":"+planned.status;
+  if(planned.status!=="NO_ORPHAN_CARGO"&&!noted.has(noteKey)){
+   noted.add(noteKey);
    observe(probe,"living-haul-cargo-adoption-skipped",null,
     {fleetID,status:planned.status},systemID);
+  }
   return {status:planned.status,adopted:0};
  }
  // A fresh slot may keep mining; an active trip or a fleet already holding
@@ -131,8 +158,8 @@ function adopt(scene,fleet,options={}){
    fromEntityIDs:planned.rows.map(row=>pos(row.entityID)).slice(0,16),
    carriage:"native",invented:false},systemID);
  const result={status:"ADOPTED",adopted,quantity,volumeM3:volume,haulerID};
- attempts.set(key,-1);
+ attempts.set(key,{tries:state.tries,at:now,done:true});
  return result;
 }
-function resetForTests(){attempts.clear();}
+function resetForTests(){attempts.clear();noted.clear();}
 module.exports={adopt,plan,resetForTests};

@@ -542,6 +542,9 @@ function start(){
   // Real courier dispatch (COOP-024). Opt-in and default OFF: it accepts the
   // owner's genuine native courier contract with a seeded courier character,
   // flies it natively and completes it. Observe above stays read-only.
+  if(process.env.EVEJS_COOP_ADMIN_BRIDGE==="1")runPhase("admin-bridge",()=>{
+    require("./coopAdminBridge").drain({log:console.log});
+  });
   if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")runPhase("courier-dispatch",()=>{
    if(!courierDispatch)courierDispatch=require("./coopCourierRuntime").createCourierDispatch({
     contracts:require("../services/contracts/contractRuntimeState"),
