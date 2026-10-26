@@ -729,3 +729,52 @@ test("P0: supported legacy role schemas migrate once, never accidentally re-upgr
   assert.equal(createEconomy({file,clock:()=>20000}).syncNativeDeliveries({"30000142":100}).quantity,0);
  }
 }));
+
+
+test("P0: virtual economy lock race preserves a foreign same-PID temp",()=>scoped(({file})=>{
+ const tmp=file+".tmp-"+process.pid,foreign="FOREIGN_ECONOMY_TXN";
+ fs.writeFileSync(tmp,foreign);
+ const io={...fs,openSync(p,mode,...rest){
+  if(p===file+".lock"&&mode==="wx")
+   throw Object.assign(Error("ECONOMY_FOREIGN_LOCK"),{code:"EEXIST"});
+  return fs.openSync(p,mode,...rest);
+ }};
+ const e=createEconomy({file,fsApi:io,clock:()=>100});
+ assert.throws(()=>e.syncNativeDeliveries({"30000142":100}),/ECONOMY_FOREIGN_LOCK/);
+ assert.equal(fs.readFileSync(tmp,"utf8"),foreign,"must not unlink foreign temp");
+ assert.equal(fs.existsSync(file),false);
+ assert.throws(()=>e.snapshot(),/ECONOMY_PERSISTENCE_UNVERIFIED/);
+}));
+
+test("P0: abandoned virtual economy temp from a reused PID never gets truncated",()=>scoped(({file})=>{
+ const tmp=file+".tmp-"+process.pid,foreign="ORIGINAL_CRASH_ECONOMY_TEMP";
+ fs.writeFileSync(tmp,foreign);
+ const e=createEconomy({file,clock:()=>100});
+ assert.throws(()=>e.recordLoss(30000142,1),error=>error?.code==="EEXIST");
+ assert.equal(fs.readFileSync(tmp,"utf8"),foreign);
+ assert.equal(fs.existsSync(file),false);
+ assert.equal(fs.existsSync(file+".lock"),false);
+ assert.throws(()=>e.snapshot(),/ECONOMY_PERSISTENCE_UNVERIFIED/);
+}));
+
+test("P0: economy only unlinks an exclusively created own temp on write failure",()=>scoped(({file})=>{
+ const tmp=file+".tmp-"+process.pid;
+ const owned=new Set();
+ const io={...fs,
+  openSync(p,mode,...rest){
+   const fd=fs.openSync(p,mode,...rest);
+   if(p===tmp)owned.add(fd);
+   return fd;
+  },
+  fsyncSync(fd){
+   if(owned.has(fd))throw Object.assign(Error("ECONOMY_TEMP_FSYNC_EIO"),{code:"EIO"});
+   return fs.fsyncSync(fd);
+  }
+ };
+ const e=createEconomy({file,clock:()=>100,fsApi:io});
+ assert.throws(()=>e.recordLoss(30000142,1),/ECONOMY_TEMP_FSYNC_EIO/);
+ assert.equal(fs.existsSync(tmp),false);
+ assert.equal(fs.existsSync(file+".lock"),false);
+ assert.equal(fs.existsSync(file),false);
+ assert.throws(()=>e.recordLoss(30000142,1),/ECONOMY_PERSISTENCE_UNVERIFIED/);
+}));

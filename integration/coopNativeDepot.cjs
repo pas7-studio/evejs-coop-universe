@@ -52,7 +52,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  function persist(next){
   if(persistenceUnverified)throw Error("DEPOT_PERSISTENCE_UNVERIFIED");
   const folder=path.dirname(file),lock=file+".lock",tmp=file+".tmp-"+process.pid;
-  let lockFd=null,locked=false;
+  let lockFd=null,locked=false,tmpCreated=false;
   try{
    fsApi.mkdirSync(folder,{recursive:true});
    // Cross-process exclusive creation: no writer may enter the compare/rename
@@ -72,7 +72,9 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
       (journalPresent&&JSON.stringify({...disk,pending:disk?.pending||{}})!==JSON.stringify(state)))
     throw Error("DEPOT_CONCURRENT_JOURNAL_DRIFT");
    const encoded=JSON.stringify(next);
-   const fd=fsApi.openSync(tmp,"w");
+   // Never overwrite another in-flight/crash-abandoned temp of this PID.
+   // Only a temp exclusively created here may be removed on failure.
+   const fd=fsApi.openSync(tmp,"wx",0o600);tmpCreated=true;
    try{fsApi.writeFileSync(fd,encoded);fsApi.fsyncSync(fd);}
    finally{fsApi.closeSync(fd);}
    fsApi.renameSync(tmp,file);
@@ -88,7 +90,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
    // A failed CAS, lock, rename or fsync makes THIS stale instance untrusted.
    // Never retry an older in-memory receipts/totals map over a newer disk.
    persistenceUnverified=true;
-   try{fsApi.unlinkSync(tmp);}catch(_ignored){}
+   if(tmpCreated)try{fsApi.unlinkSync(tmp);}catch(_ignored){}
    throw error;
   }finally{
    let unlockError=null;

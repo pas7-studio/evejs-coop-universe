@@ -565,3 +565,66 @@ test("P0: canonical native totals can synchronize the same original cargo with v
   assert.deepEqual(Object.keys(createDepot({file}).snapshot().totals),["30000142"]);
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
+
+
+test("P0: a lock race must not delete another depot writer's pending temp",()=>{
+ const fx=depotSnapshotFixture({version:1,receipts:{},pending:{},totals:{}});
+ const tmp=fx.file+".tmp-"+process.pid,foreign="UNFINISHED_OTHER_WRITER_DEPOT";
+ fx.files.set(tmp,foreign);
+ const oldOpen=fx.fsApi.openSync;
+ fx.fsApi.openSync=(p,mode)=>{
+  if(p===fx.file+".lock"&&mode==="wx")
+   throw Object.assign(Error("foreign writer acquired lock"),{code:"EEXIST"});
+  return oldOpen(p,mode);
+ };
+ const arg={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ assert.throws(()=>fx.depot.prepare(arg),/foreign writer acquired lock/);
+ assert.equal(fx.files.get(tmp),foreign,"writer B may not unlink writer A's temp");
+ assert.equal(fx.writes(),0);
+ assert.equal(fx.depot.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(fx.depot.audit().status,"NEEDS_OPERATOR_REPAIR");
+});
+
+test("P0: crashed same-PID depot temp cannot be overwritten by a new writer",()=>{
+ const fx=depotSnapshotFixture({version:1,receipts:{},pending:{},totals:{}});
+ const tmp=fx.file+".tmp-"+process.pid,foreign="SAVED_CRASH_ORIGINAL_DEPOT_TEMP";
+ fx.files.set(tmp,foreign);
+ const open=fx.fsApi.openSync;
+ fx.fsApi.openSync=(p,mode)=>{
+  if(mode==="wx"){
+   if(fx.files.has(p))throw Object.assign(Error("EEXIST"),{code:"EEXIST"});
+   fx.files.set(p,"");
+  }
+  return open(p,mode);
+ };
+ const payload={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ assert.throws(()=>fx.depot.prepare(payload),/EEXIST/);
+ assert.equal(fx.files.get(tmp),foreign,"crash evidence cannot be truncated");
+ assert.equal(fx.files.has(fx.file+".lock"),false);
+ assert.equal(fx.writes(),0);
+});
+
+test("P0: a depot writer still cleans exclusively created temp on fsync failure",()=>{
+ const fx=depotSnapshotFixture({version:1,receipts:{},pending:{},totals:{}});
+ const tmp=fx.file+".tmp-"+process.pid,payload={systemID:30000142,fleetID:9,
+  item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+ const open=fx.fsApi.openSync,paths=new Map();
+ fx.fsApi.openSync=(p,mode)=>{
+  if(mode==="wx"){
+   if(fx.files.has(p))throw Object.assign(Error("EEXIST"),{code:"EEXIST"});
+   fx.files.set(p,"");
+  }
+  const fd=open(p,mode);paths.set(fd,p);return fd;
+ };
+ fx.fsApi.fsyncSync=id=>{
+  if(paths.get(id)===tmp)throw Object.assign(Error("DEPO_TEMP_FSYNC_EIO"),{code:"EIO"});
+ };
+ assert.throws(()=>fx.depot.prepare(payload),/DEPO_TEMP_FSYNC_EIO/);
+ assert.equal(fx.files.has(tmp),false,"owned incomplete temp is cleaned");
+ assert.equal(fx.files.has(fx.file+".lock"),false);
+ assert.equal(fx.writes(),0);
+ assert.deepEqual(JSON.parse(fx.files.get(fx.file)).pending,{});
+ assert.equal(fx.depot.prepare(payload).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+});

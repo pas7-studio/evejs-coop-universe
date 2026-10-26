@@ -82,7 +82,7 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
  function persist(){
   if(persistenceUnverified)throw Error("ECONOMY_PERSISTENCE_UNVERIFIED");
   const folder=path.dirname(file),lock=file+".lock",tmp=file+".tmp-"+process.pid;
-  let lockFd=null,held=false;
+  let lockFd=null,held=false,tmpCreated=false;
   try{
    fsApi.mkdirSync(folder,{recursive:true});
    lockFd=fsApi.openSync(lock,"wx",0o600);held=true;
@@ -94,7 +94,9 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
    if((disk!==null)!==journalPresent||
       (journalPresent&&JSON.stringify(disk)!==JSON.stringify(stateBeforeMutation)))
     throw Error("ECONOMY_CONCURRENT_JOURNAL_DRIFT");
-   const fd=fsApi.openSync(tmp,"w");
+   // A different writer or an earlier crash may own this PID's temp.
+   // Refuse collisions, and never delete evidence we did not create.
+   const fd=fsApi.openSync(tmp,"wx",0o600);tmpCreated=true;
    try{fsApi.writeFileSync(fd,JSON.stringify(state));fsApi.fsyncSync(fd);}
    finally{fsApi.closeSync(fd);}
    fsApi.renameSync(tmp,file);
@@ -107,7 +109,7 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
    journalPresent=true;
   }catch(error){
    persistenceUnverified=true;
-   try{fsApi.unlinkSync(tmp);}catch(_ignored){}
+   if(tmpCreated)try{fsApi.unlinkSync(tmp);}catch(_ignored){}
    throw error;
   }finally{
    let releaseError=null;
