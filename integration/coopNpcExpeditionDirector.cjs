@@ -247,7 +247,8 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
    }
    // Native operations may proceed ONLY with this tick's verified on-grid
    // scout witness and original site entity; never with a cached scan alone.
-   if(!scoutWarpFirst&&distance(scout.ship.position,site.actualPosition)<=150000&&
+   if(tip.source==="NATIVE_PROBE_SCAN"&&!scoutWarpFirst&&
+      distance(scout.ship.position,site.actualPosition)<=150000&&
       nativeSite(tip.systemID,tip.siteID,true)&&physicallyReady.length<64)
     physicallyReady.push({systemID:tip.systemID,siteID:tip.siteID,
      corpID:tip.corpID,scoutPilotID:scout.pilotID});
