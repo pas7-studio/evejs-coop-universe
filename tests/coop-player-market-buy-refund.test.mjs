@@ -27,10 +27,13 @@ function fixture({filled=3}={}){
    kind:"P2P_BUY_RESERVE",phase:"BOUND",key:receiptKey,orderID:"23",
    operationID,buyerID:201,stationID:60001234,typeID:34,
    priceCents:1234,quantity:7,reservedCents:8638,
+   minVolume:2,durationDays:30,orderRange:0,
    spentCents:filled*1234,filledQuantity:filled,
    remainingReserveCents:remaining*1234,
    brokerCents:123,sccCents:45,totalCents:8806,
-   buyerBeforeCents:100000,buyerAfterCents:91194
+   buyerBeforeCents:100000,buyerAfterCents:91194,
+   journalIDs:[5000000000000000,5000000000000001,5000000000000002],
+   createdAt:123456
   }},
   identityState:{coopP2PMarketJournal:{next:5000000000000000}}
  };
