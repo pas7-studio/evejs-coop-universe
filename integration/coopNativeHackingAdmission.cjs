@@ -7,9 +7,11 @@ const vector = p => p && ["x","y","z"].every(k=>typeof p[k]==="number"&&Number.i
 const distance = (a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const finite = n=>typeof n==="number"&&Number.isFinite(n);
 function createNativeHackingAdmission({getSceneForSession,clock=()=>Date.now(),
- ttlMs=5000,maxRangeMeters=10000}={}) {
+ ttlMs=5000,maxGameDurationMs=180000,maxRangeMeters=10000}={}) {
  if(typeof getSceneForSession!=="function"||typeof clock!=="function"||
   !Number.isSafeInteger(ttlMs)||ttlMs<1000||ttlMs>30000||
+  !Number.isSafeInteger(maxGameDurationMs)||maxGameDurationMs<60000||
+  maxGameDurationMs>600000||maxGameDurationMs<=ttlMs||
   !Number.isSafeInteger(maxRangeMeters)||maxRangeMeters<1000||maxRangeMeters>20000)
   throw Error("NATIVE_HACKING_AUTHORITIES_REQUIRED");
  const pending=new WeakMap();
@@ -66,10 +68,11 @@ function createNativeHackingAdmission({getSceneForSession,clock=()=>Date.now(),
   pending.set(session,entry);
   return {status:"ISSUED"};
  }
- function validate(session,entry){
+ function validate(session,entry,{starting=false}={}){
   if(!entry||entry.session!==session)return false;
   const now=clock();
-  if(!Number.isSafeInteger(now)||now<entry.at||now-entry.at>ttlMs)return false;
+  if(!Number.isSafeInteger(now)||now<entry.at||
+   now-entry.at>(starting?ttlMs:maxGameDurationMs))return false;
   const proof=state(session,entry.targetID);
   return Boolean(proof&&proof.shipID===entry.shipID&&
    proof.systemID===entry.systemID&&proof.characterID===entry.characterID&&
@@ -82,7 +85,7 @@ function createNativeHackingAdmission({getSceneForSession,clock=()=>Date.now(),
   if(!entry||entry.targetID!==targetID||entry.gameType!==gameType||
     entry.moduleTypeID!==moduleTypeID)return null;
   const sealed={...entry,session};
-  if(!validate(session,sealed))return null;
+  if(!validate(session,sealed,{starting:true}))return null;
   return sealed;
  }
  return Object.freeze({issue,consume,validate});
