@@ -152,7 +152,7 @@ function handler(){
  return singleton;
 }
 function enabled(){
- return process.env.EVEJS_COOP_PLAYER_NPC_MINING_ORDERS_UI==="1";
+ return require("./coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_ORDERS_UI");
 }
 function interact(payload){
  if(!enabled())return null;
