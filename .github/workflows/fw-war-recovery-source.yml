@@ -1,0 +1,40 @@
+name: Faction War Recovery Source Tests
+on:
+  pull_request:
+    paths:
+      - 'integration/coopWar*.cjs'
+      - 'integration/coopNativeGateTransfer.cjs'
+      - 'integration/coopIdentityRegistry.cjs'
+      - 'tests/coop-war-*.test.mjs'
+      - '.github/workflows/fw-war-recovery-source.yml'
+  push:
+    branches:
+      - 'feat/fw-007c-guarded-war-recovery-20261026'
+    paths:
+      - 'integration/coopWar*.cjs'
+      - 'tests/coop-war-*.test.mjs'
+      - '.github/workflows/fw-war-recovery-source.yml'
+permissions:
+  contents: read
+jobs:
+  node-source-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax check recovery sources and operator CLI
+        run: |
+          node --check integration/coopWarTransferLedger.cjs
+          node --check integration/coopWarRecoveryConsole.cjs
+          node --check integration/coopWarRecoverySocket.cjs
+          node --check integration/coopWarGateHandoff.cjs
+          node --check scripts/coop-war-recovery-cli.cjs
+      - name: Native handoff and protected recovery tests
+        run: |
+          node --test tests/coop-war-transfer-ledger.test.mjs \
+            tests/coop-war-gate-handoff.test.mjs \
+            tests/coop-war-recovery-console.test.mjs \
+            tests/coop-war-recovery-socket.test.mjs

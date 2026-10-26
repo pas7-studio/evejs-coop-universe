@@ -398,6 +398,107 @@ dematerialized, destination entity written, destination materialized,
 native SQL moved, JSON identity moved, COMPLETE, and cleanup.
 No claim of successful live testing until these gates pass.
 
+## FW-007C — guarded recovery for partially moved real warships
+
+FW-007B deliberately quarantines a ship after an ambiguous three-owner
+handoff. FW-007C provides a **local-only** privileged repair surface:
+`coopWarTransferLedger.witness`,
+`coopWarRecoveryConsole`, `coopWarRecoverySocket`, and
+`scripts/coop-war-recovery-cli.cjs`. Nothing is attached to a player
+EveJS RPC, chat command, website or public HTTP port.
+
+### Independent native evidence and permitted steps
+
+A trusted server operator must first `review` an entity. A read-only
+witness requires BOTH physically loaded scenes, exactly ONE real native
+ship, its canonical native controller and corporation, one unique
+persistent pilot link, and the original module/cargo ID+quantity hashes.
+Missing scenes, missing/doubled hulls, stale owners, lost items and
+contradictory native records are **UNSAFE / manual repair only**.
+An action is derived from the observed phase; clients cannot choose
+another system, owner, quantity, faction, fleet or pilot.
+
+| SQL phase | Real physical hull | Pilot JSON | One permitted action |
+| --- | --- | --- | --- |
+| PREPARED | source | source | ABORT |
+| PREPARED | destination | source | NATIVE_COMMIT |
+| NATIVE_COMMITTED | destination | source | RELOCATE_PILOT |
+| NATIVE_COMMITTED | destination | destination | FINISH |
+| NATIVE_COMMITTED | source | source | RESTORE |
+| COMPLETE | destination | destination | CLEANUP_JOURNAL (if present) |
+| ABORTED | source | source | CLEANUP_JOURNAL (if present) |
+
+A successful step **does not automatically execute the next one**.
+After every step, the operator must review again and provide the new
+SHA-256 witness token. The service re-reads the sources immediately
+before any action; a stale token always fails. Every authorized
+mutation first records an attempt with the privileged principal,
+witness, action, operator's reason and timestamp in the existing native
+SQLite fleet row (`recoveryAudit`). This is an audit of the **attempt**,
+not evidence that it succeeded if a crash happened later.
+
+A matching, completed native journal is moved into a sibling
+`<journalDir>.recovered` archive with directory fsync; it is never
+silently discarded. Unknown files, symlinks, excessive sizes and
+orphan temporary files block recovery. The original low-level native
+journal is NEVER automatically replayed while scenes are only partly
+restored.
+
+### Local operator channel (Linux server / Docker container)
+
+Enable explicitly and **only after local testing**:
+`EVEJS_COOP_WAR_RECOVERY_ADMIN=1` and
+`EVEJS_COOP_WAR_RECOVERY_SOCKET=1`. Requires all FW-007B gates as
+well. Default socket:
+`/run/evejs/coop-war-recovery.sock`.
+Default credential path:
+`/run/secrets/evejs-war-recovery-key`.
+
+The credential file must contain a strong **32+ character random
+base64/URL-safe secret**, owned by the server process and mode `0600`;
+the socket directory must be owned by that process and mode `0700`.
+Mount a Docker secret or pre-provision the file with your deployment
+secrets manager; do not commit it. The server checks the secret in
+constant time and never trusts a caller-supplied operator field.
+The local audit principal is `local-war-operator`; individual human
+attribution must additionally come from the host's Docker/SSH audit
+logs. Stale socket inode after an unclean shutdown requires operator
+inspection before manual cleanup; the service will not remove an
+unexpected existing socket.
+
+From a privileged shell inside the Linux container, using the overlay
+repository's scripts:
+
+```bash
+node scripts/coop-war-recovery-cli.cjs review 501
+node scripts/coop-war-recovery-cli.cjs apply 501 NATIVE_COMMIT <64-hex-witness-from-review> "Confirmed native hull, controller, fittings and cargo"
+node scripts/coop-war-recovery-cli.cjs review 501
+```
+
+Never expose the socket to remote clients. These steps cannot move a
+missing ship, conjure inventory or resolve an unverified physical
+transit automatically.
+
+### Not yet acceptance-certified
+
+FW-007C adds guarded administrative operations but **does not** make
+the underlying native scene, SQLite and JSON stores ACID. After
+hard crashes some states still require offline operator recovery.
+The current fleet registry retains the most recent transfer per ship:
+multi-hop route cycling requires a further safe cleanup/rotation
+protocol before a second trip can begin. Avoid enabling multi-hop
+military AI on this PR alone.
+
+New source suites:
+`node --test tests/coop-war-recovery-console.test.mjs
+tests/coop-war-recovery-socket.test.mjs
+tests/coop-war-transfer-ledger.test.mjs
+tests/coop-war-gate-handoff.test.mjs`.
+Also validate the real pinned overlay install/rollback, SQLite FULL
+sync, actual Docker socket permissions, SIGKILL after **each** native
+handoff phase, native ammo and cargo conservation, and two-client
+observation before any production enablement. All flags default OFF.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 

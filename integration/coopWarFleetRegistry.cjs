@@ -15,7 +15,9 @@ function validate(s){
   s.history.length>128||
   (s.transfers!==undefined&&(!s.transfers||
    typeof s.transfers!=="object"||Array.isArray(s.transfers)||
-   Object.keys(s.transfers).length>128)))
+   Object.keys(s.transfers).length>128))||
+  (s.recoveryAudit!==undefined&&(!Array.isArray(s.recoveryAudit)||
+   s.recoveryAudit.length>128)))
   throw Error("FW_FLEET_REGISTRY_INVALID");
  const pilots=new Set();
  for(const [key,v] of Object.entries(s.ships)){

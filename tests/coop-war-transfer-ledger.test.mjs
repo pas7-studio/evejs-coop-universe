@@ -144,3 +144,29 @@ test("an incomplete handoff is an explicit restart repair blocker",()=>{
  assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
  assert.equal(f.ledger.auditPersisted().status,"NEEDS_OPERATOR_REPAIR");
 });
+
+
+test("operator recovery intent is persisted once with principal, reason and witness",()=>{
+ const f=fixture();
+ assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
+ const req={entityID:501,transferID:f.cmd.transferID,action:"ABORT",
+  witnessHash:"a".repeat(64),principalID:"local-war-operator",
+  reason:"Verified original native ship, cargo and unique pilot identity"};
+ const first=f.ledger.recordRecoveryAttempt(req);
+ assert.equal(first.status,"RECORDED");
+ assert.equal(f.ledger.recordRecoveryAttempt(req).status,"ALREADY_RECORDED");
+ assert.equal(f.fleet().recoveryAudit.length,1);
+ assert.equal(f.fleet().recoveryAudit[0].principalID,"local-war-operator");
+ const second=f.ledger.recordRecoveryAttempt({...req,principalID:"secondary-admin"});
+ assert.equal(second.status,"RECORDED");
+ assert.equal(f.fleet().recoveryAudit.length,2);
+ assert.equal(f.fleet().ships["501"].systemID,101);
+});
+test("missing operator identity and malformed witness never write an audit",()=>{
+ const f=fixture();f.ledger.begin(f.cmd);
+ const x=f.ledger.recordRecoveryAttempt({entityID:501,
+  transferID:f.cmd.transferID,action:"FINISH",
+  witnessHash:"not-a-sha",principalID:"",reason:"Reviewed physical custody"});
+ assert.equal(x.status,"INVALID_ADMIN_AUDIT");
+ assert.equal(f.fleet().recoveryAudit,undefined);
+});

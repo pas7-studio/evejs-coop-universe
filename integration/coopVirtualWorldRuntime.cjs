@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -98,12 +98,35 @@ function advanceNativeWarMobilization(){
 }
 // FW-007B: recover/audit native military handoff BEFORE the materializer
 // may prune old pilot links or rebuild another physical hull.
+function ensureWarRecoverySocket(){
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_SOCKET!=="1")return;
+ if(warRecoverySocket)return;
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_ADMIN!=="1")
+  throw Error("WAR_RECOVERY_ADMIN_FLAG_REQUIRED");
+ const instance=require("./coopWarRecoverySocket").createWarRecoverySocket({
+  createConsole:({authorizeOperator})=>
+   createWarRecoveryAdmin({authorizeOperator}),
+  socketPath:process.env.EVEJS_COOP_WAR_RECOVERY_SOCKET_PATH||
+   "/run/evejs/coop-war-recovery.sock",
+  secretFile:process.env.EVEJS_COOP_WAR_RECOVERY_SECRET_FILE||
+   "/run/secrets/evejs-war-recovery-key"
+ });
+ const result=instance.start();
+ if(result.status!=="LISTENING_INITIATED")
+  throw Error("WAR_RECOVERY_SOCKET_NOT_LISTENING:"+result.status);
+ warRecoverySocket=instance;
+}
 function ensureNativeWarGateHandoff(runtime){
  if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER!=="1")return;
  const {flag,createWarGateHandoff}=require("./coopWarGateHandoff");
  if(!flag(process.env))
   throw Error("WAR_GATE_HANDOFF_FLAGS_INCOMPLETE");
- if(warGateHandoff)return;
+ if(warGateHandoff){
+  const audit=warGateHandoff.auditStartup();
+  if(audit.status!=="CLEAN")
+   throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
+  return;
+ }
  if(!identityRegistry)throw Error("WAR_GATE_IDENTITY_MISSING");
  const worldData=require("./worldData"),controllers=require("./npc/npcRegistry"),
   store=require("./npc/nativeNpcStore"),service=require("./npc/nativeNpcService"),
@@ -118,10 +141,15 @@ function ensureNativeWarGateHandoff(runtime){
   journalDir:process.env.EVEJS_COOP_WAR_TRANSFER_JOURNAL_DIR||
    "/var/lib/evejs/coop-war-native-transfers"
  });
+ // Keep the controller available to the privileged local operator
+ // even if startup is intentionally blocked by an unresolved warship.
+ warGateHandoff=instance;
+ // The protected recovery channel must stay reachable after quarantine
+ // blocks normal world materialization.
+ ensureWarRecoverySocket();
  const audit=instance.auditStartup();
  if(audit.status!=="CLEAN")
   throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
- warGateHandoff=instance;
 }
 function advanceNativeWarGateStaging(){
  if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1"||
@@ -2613,4 +2641,15 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  });
  return {status:"PENDING"};
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};
+// This is deliberately NOT an EveJS client RPC or HTTP admin endpoint.
+// The caller must be trusted in-process server code providing a separately
+// authenticated admin/RBAC decision for every inspection and mutation.
+function createWarRecoveryAdmin({authorizeOperator}={}){
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_ADMIN!=="1")
+  throw Error("WAR_RECOVERY_ADMIN_DISABLED");
+ if(typeof authorizeOperator!=="function")
+  throw Error("WAR_RECOVERY_AUTHORITY_MISSING");
+ if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
+ return warGateHandoff.recovery({authorizeOperator});
+}
+module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};

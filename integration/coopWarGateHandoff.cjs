@@ -124,6 +124,15 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
   }catch{return {success:false,errorMsg:"WAR_HANDOFF_NEEDS_OPERATOR_REPAIR"}}
   return {success:false,errorMsg:answer?.errorMsg||"WAR_NATIVE_TRANSFER_NOT_APPLIED"};
  }
- return Object.freeze({transfer,auditStartup,pending:ledger.pending});
+ function recovery({authorizeOperator,io}={}){
+  if(typeof authorizeOperator!=="function")
+   throw Error("WAR_RECOVERY_TRUSTED_OPERATOR_AUTH_REQUIRED");
+  return require("./coopWarRecoveryConsole"+
+   (__filename.endsWith(".js")?"":".cjs")).createWarRecoveryConsole({
+    ledger,identityRegistry,authorizeOperator,journalDir,env,
+    ...(io?{io}:{})
+   });
+ }
+ return Object.freeze({transfer,auditStartup,pending:ledger.pending,recovery});
 }
 module.exports={createWarGateHandoff,flag};

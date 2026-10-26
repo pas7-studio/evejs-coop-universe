@@ -20,6 +20,8 @@ names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarTreasury","coopWarTre
 names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarGateStaging");
 // FW-007B: physical warship handoff journal / two durable registry gates.
 names.splice(names.indexOf("coopWarGateStaging")+1,0,"coopWarTransferLedger","coopWarGateHandoff");
+// FW-007C: local-only verified repair console and protected Unix socket.
+names.splice(names.indexOf("coopWarGateHandoff")+1,0,"coopWarRecoveryConsole","coopWarRecoverySocket");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
 names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody","coopPlayerMarketFill","coopPlayerMarketSettlementFence","coopPlayerMarketRustClaim","coopPlayerMarketAtomicSettlement","coopPlayerMarketAtomicRuntime","coopPlayerMarketBuyReserve","coopPlayerMarketBuyReserveRuntime","coopPlayerMarketBuySettlement","coopPlayerMarketBuyRefund","coopPlayerMarketBuyRefundRuntime");
