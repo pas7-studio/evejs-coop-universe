@@ -434,6 +434,98 @@ power loss + restart reconciliation. P0-5 independent lawful mission
 turn-in and personal rewards is a later stage.
 
 
+
+## P0-5A — strict native two-person PvE mission reward preflight (Draft)
+
+**State:** code prepared, original-source semantics inspected, isolated tests
+PASS; full Node/SQLite/Rust and real two-client gameplay **NOT RUN**.
+
+The project ALREADY has `coopFleetMissionJoin` (independent native
+Request/Offer/Accept for a wingman), `coopMissionInstanceProvenance`
+(durable link from two different mission sequences to the original
+leader-owned dungeon), `coopFleetDungeonCredit` (native site-presence
+proof and stock `shareCoopDungeonObjective`), and
+`coopFleetMissionTurnin` (two independent original
+`agentMissionRuntime.doAgentAction` calls with native payout journals
+and a separate leader pre-payout fence). P0-5A deliberately reuses
+ALL of them. It does **not** introduce another wallet, reward algorithm,
+mission instance store, loot roll, native agent RPC or event clock.
+
+New `coopPveDuoNativeRewardGuard` runs only on the **opted-in native
+shared turn-in path**, just before the first native payout intent:
+
+1. Requires `EVEJS_COOP_FLEET_MISSION_TURNIN=1`,
+   `EVEJS_COOP_FLEET_LEADER_FENCE=1`, and
+   `EVEJS_COOP_MISSION_INSTANCE_LINK=1`. A partial rollout fails
+   CLOSED before the original captain's `DoAction`.
+2. Requires two distinct connected native sessions, the same actual
+   creator-led fleet and agent station (already checked by
+   `coopFleetMissionTurnin.prepare`), and **two independently
+   accepted and completed** personal native agent missions with
+   different `missionSequence`, exact `agentID`, content,
+   template and mission system. GM-completed, storyline projection
+   and important-mission paths cannot use automated shared PvE payout.
+3. Calls the original `dungeonRuntime.getInstance` BEFORE native
+   leader payout. Requires the exact original leader
+   `dungeonInstanceID`, source system, original
+   `missionOwnerCharacterID` or mission owner metadata,
+   `missionAgentID`, and genuine native completed objective/lifecycle.
+   A manually toggled `objectiveCompleted` flag on the agent record
+   is not sufficient.
+4. Rechecks immutable `coopMissionInstanceProvenance.verify` and the
+   *independently persisted* native `coopSharedDungeon` receipt on
+   the peer using `nativeSharedObjectiveMatches`.
+   Matching mission names or fleet membership alone cannot authorize
+   an automated second native reward.
+
+Once authorized, the original `beginLeaderFence` writes its existing
+fsynced **PREPARED** intent BEFORE native leader `DoAction`. Native
+EveJS owns all actual ISK, LP, items, standing, mission history and the
+original leader mission deletion. On successful native leader turn-in,
+the original EveJS implementation **purges the source dungeon**.
+Therefore the second-player check MUST NOT demand that same live
+instance again: it retains the source proof captured before leader
+payout, and instead revalidates the exact native peer mission sequence,
+source identity, both connected characters, durable link and native
+shared-objective receipt. Only then may the original existing
+`beginPeerSettlement` journal and second native `DoAction` execute.
+
+The existing `LEADER_NATIVE_CLEARED` and
+`BOTH_NATIVE_CLEARED` fencing transitions remain untouched. Only
+after both native mission records are absent does an informational
+`TWO_NATIVE_PERSONAL_MISSION_RECORDS_CLEARED` event appear. This is
+**mission completion evidence**, NOT a direct wallet/LP or balance
+delta. A native recipient payout failure or ambiguous journal leaves
+the normal manual reconciliation requirement; there are no automatic
+retries or compensating synthetic payments.
+
+The new `EVEJS_COOP_PVE_DUO_REWARD_GUARD=1` flag is OFF by default.
+Without it, existing vanilla solo agent completion and previous
+cooperative behavior remain unchanged. This does not impose a universal
+combat-damage requirement: native same-dungeon sharing may award
+non-damage support roles, and the existing `coopPlayerCombatWitness`
+receipts are **not** sufficient to claim a linked dungeon contribution
+unless they are additionally matched to the original encounter.
+
+### Evidence and release blockers
+
+- 16/16 source-executed isolated V8 tests PASS, 59 assertions,
+  including original dungeon ownership/completion, unique accepted
+  agent mission sequence, provenance failures, disconnects, native
+  numeric content IDs and valid peer completion after the source
+  dungeon is purged.
+- 9/9 initial source-wiring checks passed. Additional source-hook
+  regression tests are part of this PR.
+- Full `node --test`, pinned installer dry-run and byte-exact
+  roundtrip, actual native agent two-client request/accept/dungeon
+  completion/personal ISK-LP/standing audit, restart and interrupted
+  payout reconciliation were NOT RUN. The overlay is not safe to
+  enable on persistent servers without those checks.
+- **P0-5B next:** actual per-recipient native reward-result/balance
+  evidence and identity-safe two-client acceptance. Also pending is
+  P0-4B-2B real rare loot and original inventory concurrent RPC test.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
