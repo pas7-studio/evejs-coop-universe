@@ -88,6 +88,15 @@ See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
 - Evidence: **18/18** isolated JS wage-policy/payment regressions, **10/10** Agent hiring integrations, existing **17/17** D1 Agent regressions. They are not original deployed SQLite or EVE client gameplay tests.
 - Read [CHAT24_31_NATIVE_MINING_HIRING.md](CHAT24_31_NATIVE_MINING_HIRING.md) for tariff example, source boundaries, flags and release criteria. Still pending: actual two-client UI confirmation, native SQLite crash/restart E2E, multi-fleet selection, HOLD/HAUL/RETREAT controls, payroll exhaustion, native market sale and realized profits.
 
+## Stage D3 — native multi-fleet and MINE/HOLD/HAUL/RETREAT Agent selector (source implemented)
+
+- The stock Agent **View Mission** previews a server-selected real fleet and safe order, **Request Mission** browses funded fleet/order pairs, **Accept** queues the exact session-selected original command using durable native GameStore CAS. No new client or mission identifiers; the unusual stock button labels are explained to the player.
+- Existing original `coopPlayerMiningShiftOrders` now prevents commands from overwriting unreconciled `HAUL`/`RETREAT`, blocks dangerous immediate cargo transit switches, and requires physically enforced `coop-hold` before MINE resume.
+- Menu candidates read the verified original NPC phase through `coopPlayerMiningFleetTick.inspect`. Cargo transit offers deferred HOLD only; aggression gives native RETREAT; pending/unknown command state offers no new mutations.
+- Each View session pin expires in 120 seconds and is consumed on Accept, with renewed station, corporate manager, original fleet, command revision and scene proof. This is **source-only**, OFF by default behind `EVEJS_COOP_PLAYER_NPC_MINING_ORDERS_UI`.
+- Evidence: **23/23** isolated menu scenarios, **8/8** Agent integration scenarios, **22/22** Stage B commands, plus **17/17** D1 and **10/10** D2 Agent regressions. Real client UX and SQLite are still untested.
+- See [CHAT24_31_NATIVE_MINING_FLEET_ORDERS.md](CHAT24_31_NATIVE_MINING_FLEET_ORDERS.md). Next: independent original HAUL/RETREAT completion reconciliation, corporate ore sale/realized ISK profits, payroll cycles and fully observed two-client gameplay.
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
