@@ -827,3 +827,21 @@ Why: Manifest verification required an exact warehouse receipt and a matching ha
 Detail: verify() required receipt.quantity === row.quantity and a matching hangar item, which a sale can never satisfy: the market fills what its order supports, so a fill may cover part of a row and leaves no station item at all. A fill receipt is now proven by its own recorded quantity and type (quantity equals the settled market quantity and never exceeds the row) and skips the hangar check; a warehous
 Where: .opencode/state.md, integration/coopNativeHaulManifest.cjs, scripts/overlay-spec.cjs
 Evidence: deploy OVERLAY_OK reset=49; live: mining 28 settled cycles and haulers reloaded after the fix
+### 2026-10-26T22:56Z · 7f78b9f · L3 · fix(war): read and write the war state through the authoritative SQLite keyspace
+
+Why: The war record was written through coopAtomicNativeRows but read through the JSON cache path, so the empty state was recreated on every restart and every war phase answered NO_WAR_STATE
+Detail: The war phases read the record with gameStore.read(table, "/"+KEY), which is the JSON cache view, while coopFactionWarStore writes the row through coopAtomicNativeRows with the raw KEY. A state written by one was invisible to the other, so the live server recreated the empty state on every restart and every phase answered NO_WAR_STATE. One warStateStore() helper now owns read/write for opening, as
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: live container after deploy: 'empty war state created' exactly once, then opening NO_FRONT / mobilization NO_MOBILIZED_SHIP:OBSERVED / assault NO_PREPARING_CAMPAIGN; SQLite row verified via coopAtomicNativeRows (version 1, wars 0, campaigns 0, territories 0)
+### 2026-10-26T22:53Z · 9b0d6f2 · L3 · feat(war): open real multi-front wars and promote them to assault
+
+Why: The faction war could never mobilise: the mobiliser reserves ships only for an existing campaign, and the empty state never created one. Wars must be derived from real presence, real reciprocal gates and real held ground
+Detail: The mobiliser could only reserve ships for a campaign that already existed, and the empty state never produced one, so NO_MOBILIZED_SHIP:OBSERVED was permanent. coopFactionWarOpening derives the war from the real world: identity links plus the real corporation->faction table give territory (majority presence, a tie is contested), the real reciprocal gate graph gives fronts, and the paper treasury 
+Where: integration/coopFactionWarAssault.cjs, integration/coopFactionWarBootstrap.cjs, integration/coopFactionWarFronts.cjs, integration/coopFactionWarOpening.cjs, integration/coopFactionWarTreasury.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-faction-war-assault.test.mjs, tests/coop-faction-war-opening.test.mjs
+Evidence: node --test tests/coop-faction-war-*.test.mjs 69/69 PASS; read-only live probe: 58 linked pilots -> 30000144=500014, 30000145=500014, 30100032=500020, Jita 30000142 contested 3-3 -> NO_FRONT refusal; overlay --check OVERLAY_OK
+### 2026-10-26T23:00Z · 11a9d2e · L3 · feat(npc): real self-defence from a verified damage witness
+
+Why: Player attacks on NPCs never produced self-defence or ally help because the native controller does not always record lastAggressorID, and the retaliation flag was off in the live profile
+Detail: The owner's rule is that a player who shoots an NPC must be shot back, and that nearby same-faction allies must join in. In practice that never happened: EveJS does not always record a player as the controller's last aggressor, and the retaliation guard required exactly that record. coopNpcAggressionLedger keeps the last VERIFIED attack per victim for a bounded window. It is fed only by the killma
+Where: integration/coopNpcAggressionLedger.cjs, integration/coopNpcTactics.cjs, integration/coopPlayerCombatWitness.cjs, integration/coopPveRetaliationGuard.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-npc-aggression-ledger.test.mjs, tests/coop-pve-retaliation-witnessed.test.mjs
+Evidence: node --test 96/96 PASS incl. 6 ledger tests and 5 witnessed-retaliation tests; live env now EVEJS_COOP_PVE_NPC_RETALIATION=1; ledger module present and functional inside the running image

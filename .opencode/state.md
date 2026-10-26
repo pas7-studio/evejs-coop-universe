@@ -59,3 +59,43 @@ cd C:\Games\EveCoop\upstream-evejs\Code
 docker build -t evejs-local . && docker compose -f compose.yaml -f compose.coop-probe.yaml up -d
 bash scripts/coop-loop-gate.sh --code-path C:\Games\EveCoop\upstream-evejs\Code
 ```
+
+## 2026-10-27 late: faction war wired to the real world
+
+Commits (local, not pushed): 1cf02347 merit, 26945358 territory-from-presence,
+c29cbcd7 campaigns, 58d8afd4 treasury, fd4bac85 bootstrap, 9b0d6f2a opening +
+assault + runtime phases, 7f78b9fc war-state SQLite fix, 11a9d2ec self-defence.
+
+Chain: real presence (identity links + corporation->faction) -> territories
+(majority, tie = contested) -> fronts (real reciprocal gates) -> war + campaign
+per open border (one war per faction pair) -> mobiliser reserves existing native
+patrols -> BEGIN_ASSAULT only with a real muster on both sides.
+
+**Root cause found:** the war phases read the record via gameStore.read(table,
+"/"+KEY) (JSON cache) while coopFactionWarStore writes through
+coopAtomicNativeRows with the raw KEY. A written state was invisible to the next
+tick, so the empty state was recreated on every restart. warStateStore() now owns
+read/write for opening/assault/mobilization/demobilization/objectives, and
+ensureWarState() bootstraps once before any war phase.
+
+**Live state after deploy:** `empty war state created (version 1)` exactly once,
+then `opening skipped: NO_FRONT`, `mobilization skipped: NO_MOBILIZED_SHIP:OBSERVED`,
+`assault skipped: NO_PREPARING_CAMPAIGN`. The state row now persists in SQLite
+(version 1, wars 0, campaigns 0, territories 0).
+
+**Why no front exists yet (real data, read-only probe):** 58 linked pilots ->
+30000144=500014 (13), 30000145=500014 (9), 30100032=500020 (4), Jita 30000142 is a
+3-3 tie between 500010 and 500011, so it is contested and owns nothing. The two
+systems owned by 500014 share one owner and 30100032 is not adjacent, so there is
+no border between two different owners. The opener refuses instead of inventing a
+front. Next real action: a second faction must really outnumber the current
+holder in a system adjacent to another faction's system (one extra patrol/pirate
+of 500010 or 500011 in Jita is enough), then the war opens by itself.
+
+Self-defence: coopNpcAggressionLedger (fed only by the killmail-tracker receipt
+proven in coopPlayerCombatWitness) lets coopPveRetaliationGuard accept a verified
+witness when the native controller has no lastAggressorID. The live compose
+profile now sets EVEJS_COOP_PVE_NPC_RETALIATION=1 (it was absent, so
+self-defence was gated off).
+
+Tests: 96/96 across war + tactics + retaliation + ledger.
