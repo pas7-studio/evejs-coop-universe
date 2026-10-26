@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -646,6 +646,85 @@ function advanceNativeNpcExpeditions(){
       ops.blocked&&backgroundTicks%10===0)
     probe.observe("living-npc-original-expedition-loot",null,
      {spaceState:{systemID}},{...ops,nativeWalletMutation:false});
+  }
+  // EX-03B16: an independently opt-in native wormhole jump can be considered
+  // ONLY after this exact scanner scout physically witnesses a real endpoint.
+  // Never iterate the private wormhole catalog to discover a destination.
+  if(process.env.EVEJS_COOP_NPC_EXPEDITION_WORMHOLES==="1"){
+   if(!npcWormholeTransit){
+    npcWormholeTransit=require("./coopNpcWormholeTransit")
+     .createNpcWormholeTransit({
+      store,service:require("./npc/nativeNpcService"),
+      registry:identityRegistry,gameStore:require("../gameStore"),
+      wormholes:require("../services/exploration/wormholes/wormholeRuntime"),
+      wormholeState:require("../services/exploration/wormholes/wormholeRuntimeState"),
+      sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+      root:process.env.EVEJS_COOP_NPC_WORMHOLE_JOURNAL_DIR||
+       "/var/lib/evejs/coop-npc-wormholes"
+     });
+   }
+   const liveTips=npcExpeditionDirector.operations();
+   for(const tip of liveTips.slice(0,2)){
+    let exact;
+    try{
+     const matches=signatures.listSystemSignatureSites(systemID).filter(x=>
+      x.siteID===tip.siteID&&x.family==="wormhole"&&
+      (x.solarSystemID===systemID||x.systemID===systemID));
+     exact=matches.length===1?matches[0]:null;
+    }catch{continue}
+    if(!exact)continue;
+    const link=assignments.find(x=>x.pilotID===tip.scoutPilotID&&
+     x.systemID===systemID&&Number.isSafeInteger(x.entityID));
+    if(!link||assignments.some(x=>x.pilotID===tip.scoutPilotID&&
+     (x.entityID!==link.entityID||x.systemID!==systemID)))continue;
+    let hull,endpoint;
+    try{hull=scene.getEntityByID(link.entityID);
+     endpoint=scene.getEntityByID(tip.siteID)}
+    catch{continue}
+    if(!hull||!endpoint||endpoint.kind!=="wormhole"||
+     endpoint.itemID!==tip.siteID||!hull.position||!endpoint.position||
+     Math.max(0,Math.hypot(
+      hull.position.x-endpoint.position.x,
+      hull.position.y-endpoint.position.y,
+      hull.position.z-endpoint.position.z)-
+      Math.max(0,Number(hull.radius)||0)-
+      Math.max(0,Number(endpoint.radius)||0))>5000)continue;
+    // The original arbiter fences an ambiguous mass/ship handoff.
+    let moved;
+    try{
+     if(guard.blocked({entityID:link.entityID,systemID,owner:"EXPEDITION"}))
+      continue;
+     moved=guard.issue({entityID:link.entityID,systemID,
+      owner:"EXPEDITION",action:"expedition-wormhole-cross",execute:()=>{
+       const state=npcWormholeTransit.cross({
+        pilotID:tip.scoutPilotID,entityID:link.entityID,
+        scene,endpointID:tip.siteID,assignments});
+       if(state.status==="NATIVE_NPC_WORMHOLE_ARRIVED")
+        return {success:true,data:state};
+       // Native mass/ship may have changed. An ambiguous arbiter response
+       // fences the hull; persistent wormhole receipt prevents replay.
+       if(state.status==="NEEDS_OPERATOR_REPAIR")
+        return {status:"NATIVE_WORMHOLE_OUTCOME_UNKNOWN"};
+       return {success:false,errorMsg:state.reason||"EX03_WORMHOLE_BLOCKED"};
+      }});
+    }catch{continue}
+    if(moved?.success===true&&
+       moved.data?.status==="NATIVE_NPC_WORMHOLE_ARRIVED"){
+     visitedSystems.add(moved.data.destinationSystemID);
+     probe.observe("living-npc-original-wormhole-cross",null,
+      {spaceState:{systemID}},{
+       entityID:link.entityID,
+       destinationSystemID:moved.data.destinationSystemID,
+       originalPairID:moved.data.originalPairID,
+       preservedCargo:moved.data.preservedCargo,
+       preservedModules:moved.data.preservedModules,
+       nativeMassRefunded:false,nativeWalletMutation:false
+      });
+    }else if(moved?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
+     probe.observe("living-npc-original-wormhole-repair",null,
+      {spaceState:{systemID}},{entityID:link.entityID,
+       status:"NEEDS_OPERATOR_REPAIR",nativeMassRefunded:false});
+   }
   }
  }
 }
