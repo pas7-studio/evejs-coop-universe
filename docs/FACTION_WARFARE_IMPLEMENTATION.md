@@ -155,6 +155,61 @@ and real stargate transport. Run all in local test environment before
 enabling any combat flag. A war battle accepted order remains
 `NATIVE_ATTACK_ORDER_ACCEPTED`, never a kill/capture result.
 
+## FW-003C finite native war-patrol mobilization (source only)
+
+The original 30-second living-world tick now calls `advanceNativeWarMobilization`
+**before** native war combat; it creates no extra timer or background world.
+
+- `coopWarMobilizer.cjs` scans at most 16 active PREPARING/ASSAULT campaigns
+  and at most 512 uniquely linked **already materialized** patrol NPCs in
+  visited, already-loaded scenes. It never recruits pirates, traders,
+  miners, haulers, players, unlinked NPCs or duplicated pilots.
+- Real native `corporationID → factionID` determines the side. In PREPARING,
+  defenders muster in the target system, attackers in their verified source
+  system. An ASSAULT attacking ship must **physically exist in the target
+  system** before it can be recruited there. No virtual faction tags or
+  fabricated teleports.
+- `coopWarMusterReadiness.cjs` inspects actual native NPC module/cargo rows:
+  at least one **real fitted online compatible weapon with loaded charges**,
+  or a native charge-optional turret. Pure synthetic hull guns do not qualify,
+  and no cargo is minted or debited by recruitment.
+- Native patrol must be stationary/not warping, idle, not owned by an
+  existing active/uncertain Arbiter lease, not in tactical retreat and
+  not player-controlled. Native store record, live physical scene,
+  controller, durable identity and corporation all must agree.
+- The existing `coopWarFleetRegistry.execute(ASSIGN)` performs actual
+  native SQLite atomic reservation with a same-transaction active campaign
+  proof. In-process snapshot and processed event ledger prevent duplicate
+  claim and survive restart. A failed or uncertain native transaction
+  never produces a successful mobilization notification.
+- Hard limits: 2 new ship assignments per tick, 2 per campaign/faction side
+  (defaults), no extra patrol spawn or free wallet/industry inventory.
+
+**New default-off flag:** `EVEJS_COOP_FACTION_WAR_MOBILIZE=1`, requiring
+`EVEJS_COOP_FACTION_WAR=1`, `EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`, native ammo safety flags
+`EVEJS_COOP_NPC_STRICT_AMMO=1`,
+`EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE=1`,
+`EVEJS_COOP_NPC_BANK_ATOMIC=1`, and existing single tick enabled by
+`EVEJS_COOP_ALIFE=1` or `EVEJS_COOP_NPC_ORDER_ARBITER=1`;
+also requires `EVEJS_COOP_VIRTUAL_WORLD=1` for the current runtime.
+
+**Scope boundary:** this does NOT initiate a new war or manufacture a supply
+reservation. The FW-001 `START_CAMPAIGN` operation still requires trusted
+native proof of reciprocal stargate adjacency and finite supply;
+an operator-supplied mock proof is NOT suitable for real deployment.
+Attackers do not automatically jump: native military travel/relocation
+is a separate FW-007 acceptance gate.
+
+**Local tests for agent QA:**
+`node --test tests/coop-war-muster-readiness.test.mjs
+tests/coop-war-mobilization.test.mjs
+tests/coop-war-fleet-native-proofs.test.mjs
+tests/coop-war-fleet-registry.test.mjs`.
+Then pinned overlay --check/roundtrip, SQLite FULL synchronous restart,
+combat ammo/Rust and 2-client physical battle verification. Keep OFF until
+all these pass; no main merge or production enablement is implied.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
