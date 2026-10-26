@@ -217,7 +217,20 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
    wreckID:row.wreckID,originalItems:(row.initialWreckItems||[])
     .map(item=>({...item}))};
  }
- return {tick,witnessedWreck,
+ function confirmNativeWreck({systemID,scene,entityID,wreckID}={}){
+  if(!id(systemID)||!id(entityID)||!id(wreckID)||
+     scene?.systemID!==systemID)return {status:"INVALID_NATIVE_BOSS_DEATH_HOOK"};
+  if(![...seen.values()].some(row=>row.systemID===systemID&&
+     row.entityID===entityID))
+   return {status:"NO_PREVIOUS_LIVE_BOSS_WITNESS"};
+  // Native destruction callback fires after source item rows and wreck spawn.
+  tick({systemID,scene,instances:[],excludedIDs:[]});
+  const witness=witnessedWreck(wreckID);
+  return witness?.bossEntityID===entityID&&witness.systemID===systemID?
+   {status:"ORIGINAL_BOSS_WRECK_CONFIRMED",witness}:
+   {status:"BOSS_WRECK_NATIVE_SOURCE_UNVERIFIED"};
+ }
+ return {tick,witnessedWreck,confirmNativeWreck,
   activeIDs:()=>new Set([...seen.values()].map(x=>x.entityID)),
   snapshot:()=>[...seen.values()].map(x=>({...x}))};
 }
