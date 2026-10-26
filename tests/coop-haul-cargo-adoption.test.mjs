@@ -20,7 +20,8 @@ function fakeStore(rows, { entities = [], flushFails = false } = {}) {
       table.set(row.cargoID, { ...row });
       return { success: true };
     },
-    buildNativeCargoItems: (id) => [...table.values()].filter((r) => r.entityID === id),
+    buildNativeCargoItems: (id) => [...table.values()].filter((r) => r.entityID === id)
+      .map((r) => ({ itemID: r.cargoID, typeID: r.typeID, quantity: r.quantity, volume: r.volume })),
     getNativeEntity: (id) => entities.find((e) => e.itemID === id) || null,
   };
 }
@@ -429,6 +430,87 @@ test("complete post-commit readback preserves original cargoIDs and starts exact
  assert.equal(result.adopted,2);
  assert.equal(target.state,"loaded");
  assert.equal(target.coopHaulNeedsOperatorRepair,undefined);
- assert.deepEqual(ship.nativeCargoItems.map(x=>x.cargoID),[7001,7002]);
+ assert.deepEqual(ship.nativeCargoItems.map(x=>x.itemID),[7001,7002]);
  assert.deepEqual(store.listNativeCargo().map(x=>x.ownerID),[hauler.ownerID,hauler.ownerID]);
+});
+
+test("native preflight must prove existing hauler inventory before any adoption writes",()=>{
+ for(const fault of ["null","throw","wrong-owner","wrong-ship","transient","malformed"]){
+  const store=fakeStore([orphan()]);
+  store.listNativeCargoForEntity=id=>{
+   if(fault==="throw")throw Error("NATIVE_CARGO_READ_UNAVAILABLE");
+   if(fault==="null")return null;
+   if(fault==="malformed")return [{cargoID:0,entityID:id,ownerID:hauler.ownerID}];
+   return [{cargoID:7888,entityID:fault==="wrong-ship"?123:id,
+    ownerID:fault==="wrong-owner"?9999:hauler.ownerID,
+    transient:fault==="transient",typeID:34,quantity:1}];
+  };
+  const target=fleet(),before=structuredClone(store.listNativeCargo());
+  let flushes=0;
+  const result=adopt(sceneWith([hauler,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"HAULER_CARGO_PREFLIGHT_UNVERIFIED",fault);
+  assert.equal(result.adopted,0);
+  assert.equal(store.writes.length,0);
+  assert.equal(flushes,0);
+  assert.equal(target.state,"mining");
+  assert.deepEqual(store.listNativeCargo(),before);
+ }
+});
+
+test("native ship item cache cannot substitute or misstate durable original cargoIDs",()=>{
+ for(const fault of ["different-itemID","wrong-type","wrong-quantity","duplicated-itemID"]){
+  const store=fakeStore([
+   orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112})
+  ]);
+  const builder=store.buildNativeCargoItems;
+  store.buildNativeCargoItems=id=>{
+   const result=builder(id);
+   if(fault==="different-itemID")result[1]={...result[1],itemID:7999};
+   if(fault==="wrong-type")result[1]={...result[1],typeID:34};
+   if(fault==="wrong-quantity")result[1]={...result[1],quantity:1};
+   if(fault==="duplicated-itemID")result[1]={...result[1],itemID:result[0].itemID};
+   return result;
+  };
+  const ship={...hauler},target=fleet();
+  let flushes=0;
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",fault);
+  assert.equal(flushes,1,"the original cargo batch was committed once");
+  assert.equal(result.adopted,0);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(ship.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.deepEqual(store.listNativeCargo().map(x=>x.cargoID),[7001,7002]);
+  assert.deepEqual(store.listNativeCargo().map(x=>x.entityID),
+   [ship.itemID,ship.itemID],"physical custody is held for repair, not rolled back");
+ }
+});
+
+test("post-commit transient or module-conflicted original cargo cannot start hauling",()=>{
+ for(const fault of ["transient","module"]){
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargoForEntity;
+  let reads=0;
+  store.listNativeCargoForEntity=id=>{
+   const rows=read(id);
+   if(++reads===1)return rows;
+   return rows.map(row=>fault==="transient"
+    ?{...row,transient:true}:{...row,moduleID:1234});
+  };
+  const ship={...hauler},target=fleet();
+  const result=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",fault);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+ }
 });

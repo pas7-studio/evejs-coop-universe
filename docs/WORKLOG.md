@@ -87,3 +87,13 @@ Evidence: round trip proved: 3 reversed then 3 applied; second --apply reports P
 Why: the same five repair flags were written by two failure paths, and the capacitor root cause plus live proof had to be recorded before the next session
 Where: .opencode/state.md, integration/coopNativeHaulCargo.cjs
 Evidence: transfer suites 15 pass/10 pre-existing failures identical with and without the change; live cap1 on fleet2 miners and climbing on fleet1
+### 2026-10-26T11:33Z · 91e1ce6 · L2 · fix(haul): fail closed on native preflight ambiguity and attest actual item cache after commit
+
+Why: An unreadable preflight was treated as an empty hauler, and the post-commit ship cache accepted wrong original items when its length looked correct.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: source diff reviewed; local Node/SQLite and gameplay NOT_RUN (remote GitHub CI prohibited; local checkout unavailable).
+### 2026-10-26T11:33Z · ed0ee3b · TEST · test(haul): reject ambiguous preflight and mismatched native itemID cache
+
+Why: Source-backed regression coverage must use the native itemID cache shape and exercise ambiguous inventory and cargo readback.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: source diff reviewed; local Node/SQLite and gameplay NOT_RUN (remote GitHub CI prohibited; local checkout unavailable).
