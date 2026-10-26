@@ -314,3 +314,36 @@ Critical end-to-end bug: perfect original NPC scanner proof added a remote corpo
 - Remaining hard blockers: native SQLite process-kill and restart on an actual Node runner, real native NPC hull/fit and probe broadcast in a live server with two authenticated clients, successful native scout arrival, NPC analyzer/hacking, actual physical item loot custody, warehouse delivery, and no-dupe restart proof.
 
 **Status:** PR #286 DRAFT / flags OFF / do not merge into production until the real acceptance gates pass.
+
+## EX-03B15–B17 — Autonomous native hacking, original loot custody, wormhole transit and restart gates (2026-10-26)
+
+**PR #286 remains Draft, all new flags remain OFF. These source implementations are NOT a substitute for actual live-game acceptance.**
+
+### EX-03B15 — Real analyzer, hacking and original inventory custody
+- The original native NPC scout loadout now opt-in authors **real Data Analyzer I and Relic Analyzer I modules** by resolving original item type registry and Dogma `doHacking` metadata. Original native NPC service still chooses slots and mints genuine module IDs (no synthetic gear).
+- Added an **exactly reversible pinned native HackingMgrService source hook** (`scripts/coop-npc-expedition-hacking-patch.cjs`) for one server-only NPC hacking turn per existing 30s A-Life phase, using original `buildSyntheticBoard`, `markContainerState`, `maybeCompleteAttemptSite`. Rejects player hulls, absent fitted analyzers, wrong target kind, old/busy sites and out-of-range NPCs. No fake game session/loot.
+- Added original ItemStore-native loot custody (`integration/coopNpcExpeditionLoot.cjs`). Only source owner 1, actual hacked and physically proximate dungeon container, and original NPC ship/corporation/controller are accepted. The **same itemID** is tagged with durable source provenance on its original ItemStore row, flushed, transferred whole to original NPC ship cargo and flushed. The exact item is then returned by genuine native warp to a same-corporation station, held for >=2 seconds of actual physical arrival, transferred via original ItemStore to station hangar and flushed. The original item ID/owner/type/stack quantities are checked at every transition. No new item allocation and no fabricated warehouse credit.
+- **P0 bug corrected:** original `itemStore.writeItemCustomInfo` does not update its `byID` index; replaced it with `itemStore.updateInventoryItem` which updates native source and index consistently.
+- `integration/coopNpcExpeditionOperations.cjs` and `integration/coopVirtualWorldRuntime.cjs` wire this to the **existing** A-Life phase. Only the NPC scout's *current-tick*, physically verified, **original certainty=1 scanner site proof** admits an operation. Return logistics can continue from original ItemStore custody receipt even after the source signal expires.
+- Experimental opt-ins: `EVEJS_COOP_NPC_EXPEDITION_HACK=1` and `EVEJS_COOP_NPC_EXPEDITION_LOOT=1` (OFF by default).
+
+### EX-03B16 — Original NPC wormhole crossing and on-grid wingmen
+- The original wormhole `prepareJump` (visibility, max ship mass, polarization) authorizes transit. The original `commitJump` owns actual mass debit, collapse and native polarization; `buildJumpSpawnState` determines destination geometry. No direct teleport or virtual wormhole ledger.
+- Journals are fsynced before mass commitment and after phase changes; native NPC dematerialization/record-transfer/rematerialization and durable identity relocation preserve original entityID/moduleIDs/cargoIDs.
+- On an ambiguous mass or original ship transfer, a persistent `NEEDS_OPERATOR_REPAIR` receipt blocks replay; **never** automatically refund/retry mass or create a replacement hull.
+- Native `npc.follow` approaches a source-witnessed actual wormhole endpoint within 2,500 m, then source-fitted scout may jump. After successful leader transit, at most two already physically present, same-corporation expedition wingmen may each independently pay mass and cross through the same original native pair.
+- The new flag `EVEJS_COOP_NPC_EXPEDITION_WORMHOLES=1` is OFF by default. A solo source scout can travel; an expedition member stranded by collapse/mass/polarization is **not** teleported after the leader.
+
+### EX-03B17 — Real SQLite SIGKILL gate and two-client acceptance definition
+- Added `scripts/verify-npc-expedition-loot-sqlite-crash.mjs`, requiring **pinned original** Node22 EveJS ItemStore and `items` SQLite, disposable attested GameStore, explicit `SIGKILL` between seed → intent → ship → warehouse and reload/identity check. It was registered alongside both existing probe-flight SQLite process-kill scenarios.
+- Extended EX-03 CI to retrieve the exact pinned original HackingMgrService, run production-source original hacking-board fixtures, test source native loot logistics and wormhole mass/repair fixtures, check all new modules, with all new feature flags explicitly OFF during CI.
+- P0 CI registration [PR #337](https://github.com/pas7-studio/evejs-coop-universe/pull/337) merged into `main` so PR #286 can execute these checks on default-branch-registered GitHub Actions.
+- Added `tests/scenarios/ex03-native-two-client-exploration-e2e.json`: **16 required, all NOT_RUN** steps for native fitted NPC scanner, four physical probes visible to two independently authenticated clients, original scan certainty, scout/follower Destiny warp, original NPC hack, original single ItemStore item handoff, native corporate station dwell, wormhole mass/polarization, collapse and full-server crash/no-dupe verification.
+
+### Test evidence and hard open gates
+- Isolated original-source V8 execution completed: **34/34** director tests, **7/7** native ItemStore custody fixtures, **3/3** combined A-Life hacking/loot/warehouse fixtures, **8/8** native source scout fitting fixtures, **3/3** pinned original hacking fixtures, **3/3** original wormhole transport simulations with disposable filesystem journal and **20/20** full source wiring checks plus the new B17 contract **1/1**.
+- Both native HackingMgr source patches (previous EX-04A and new EX-03B15) were checked together for syntactic validity, idempotency and exact byte-for-byte removal on the exact pinned original source.
+- **NOT RUN:** actual GitHub Node22/SQLite SIGKILL workflow (zero branch Actions runs at last inspection); live two-authenticated-client gameplay; source-fitted scanner/analyzer actual server spawn; native wormhole and group movement observed by clients; and full-server crash/resume. The 16 E2E steps must have independent native client/server evidence.
+- **Additional loss-domain review required:** the original `nativeNpcWreckService` projects `nativeNpcStore.buildNativeCargoItems` and does not automatically include separate ItemStore items stored under NPC ship ID; a destroyed NPC carrying original dungeon ItemStore loot could strand that item. Do not claim native wreck recovery or enable loot in production until death/recovery handling is explicitly verified/bridged.
+
+**Release status: source-level proof and acceptance gates implemented; actual full game sign-off NOT COMPLETE. Keep PR #286 Draft and experimental flags OFF.**
