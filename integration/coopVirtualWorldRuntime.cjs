@@ -108,16 +108,9 @@ function advanceNativeWarDemobilization(){
  const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
  if(!registry||!guard)return;
  if(!warDemobilizer){
-  const gameStore=require("../gameStore"),
-   warStore=require("./coopFactionWarStore"),
-   warCore=require("./coopFactionWarCore");
   warDemobilizer=createWarDemobilizer({
    registry,
-   readWarState:()=>{
-    const result=gameStore.read(warStore.TABLE,"/"+warStore.KEY);
-    if(result?.success!==true)return null;
-    warCore.validateState(result.data);return result.data;
-   },
+   readWarState:()=>warStateStore().read(),
    readLinks:()=>Object.values(identityRegistry.snapshot()?.links||{}),
    getOrderLeases:()=>guard.snapshot().leases
   });
@@ -146,6 +139,47 @@ function warSkip(phase,reason){
    {phase,reason,status:"SKIPPED",evidence:"EXPLICIT_PRECONDITION_NOT_MET"});
  }catch(_error){/* probe is best effort */}
 }
+// The war record lives in the SAME SQLite keyspace the authoritative war store
+// writes: `coopAtomicNativeRows` with the raw KEY. The JSON-path API is a
+// different, cache-only view - a state written there is never the state a later
+// tick reads, which is why the bootstrap used to recreate the record forever.
+function warStateStore(){
+ const {TABLE,KEY}=require("./coopFactionWarStore"),core=require("./coopFactionWarCore"),
+  gameStore=require("../gameStore");
+ const rows=gameStore.coopAtomicNativeRows;
+ if(!rows||typeof rows.transact!=="function")throw Error("WAR_STORE_UNAVAILABLE");
+ return {
+  TABLE,KEY,
+  read(){
+   const value=rows.transact([TABLE],tx=>tx.get(TABLE,KEY));
+   if(value==null)return null;
+   core.validateState(value);
+   return value;
+  },
+  write(state){
+   core.validateState(state);
+   rows.transact([TABLE],tx=>{tx.put(TABLE,KEY,state);});
+  }
+ };
+}
+// The war domain needs a valid state record to exist at all. Without it every
+// phase answers NO_WAR_STATE, which looks like a broken feature instead of an
+// empty world. One documented factory (`core.empty()`) owns the bootstrap, and
+// every war phase may call it - it is idempotent and never overwrites a record.
+function ensureWarState(){
+ const store=warStateStore(),core=require("./coopFactionWarCore");
+ const current=store.read();
+ if(current)return current;
+ const state=core.empty();
+ store.write(state);
+ console.log("[CoopFactionWar] empty war state created (version "+core.VERSION+")");
+ try{
+  require("./coopRuntimeProbe").observe("living-native-war-state",null,null,
+   {status:"CREATED",version:core.VERSION,
+    evidence:"DOCUMENTED_EMPTY_STATE_FACTORY_NO_CAMPAIGN_YET"});
+ }catch(_error){/* probe is best effort */}
+ return state;
+}
 // FW-010: open the first real war. The mobiliser can only reserve ships for a
 // campaign that already exists in the state, so this phase derives the war from
 // real presence + real reciprocal gates + real held ground, and writes it through
@@ -156,15 +190,11 @@ function advanceNativeWarOpening(){
  if(!enabled(process.env))return warSkip("opening","WAR_FLAGS_OFF");
  if(!visitedSystems.size)return warSkip("opening","NO_VISITED_SYSTEMS");
  if(!identityRegistry)return warSkip("opening","NO_IDENTITY_REGISTRY");
- const gameStore=require("../gameStore"),{TABLE,KEY}=require("./coopFactionWarStore"),
-  core=require("./coopFactionWarCore");
- const rowKey="/"+KEY;
- const readWarState=()=>{
-  const row=gameStore.read(TABLE,rowKey);
-  if(row?.success!==true)return null;
-  core.validateState(row.data);
-  return row.data;
- };
+ try{ensureWarState()}catch(error){
+  return warSkip("opening","WAR_STATE_WRITE_FAILED:"+String(error&&error.message||error));
+ }
+ const store=warStateStore();
+ const readWarState=()=>store.read();
  if(!warOpening){
   const npcStore=require("./npc/nativeNpcStore"),
    factions=require("../services/faction/factionState"),
@@ -176,11 +206,7 @@ function advanceNativeWarOpening(){
    getStargatesForSystem:id=>worldData.getStargatesForSystem(id),
    getGate:id=>worldData.getStargateByID(id),
    readWarState,
-   writeWarState:state=>{
-    core.validateState(state);
-    gameStore.write(TABLE,rowKey,state);
-    if(typeof gameStore.flushTableSync==="function")gameStore.flushTableSync(TABLE);
-   },
+   writeWarState:state=>store.write(state),
    minShips:Math.max(1,Number(process.env.EVEJS_COOP_WAR_TERRITORY_MIN_SHIPS)||1)
   });
  }
@@ -223,21 +249,18 @@ function advanceNativeWarAssault(){
  if(!enabled(process.env))return warSkip("assault","WAR_FLAGS_OFF");
  const registry=nativeWarFleetRegistry();
  if(!registry)return warSkip("assault","NO_WAR_FLEET_REGISTRY");
- const gameStore=require("../gameStore"),{TABLE,KEY}=require("./coopFactionWarStore"),
-  core=require("./coopFactionWarCore"),assault=require("./coopFactionWarAssault");
- const rowKey="/"+KEY;
- const row=gameStore.read(TABLE,rowKey);
- if(row?.success!==true)return warSkip("assault","NO_WAR_STATE");
+ try{ensureWarState()}catch(_error){return warSkip("assault","NO_WAR_STATE")}
+ const core=require("./coopFactionWarCore"),assault=require("./coopFactionWarAssault");
+ const store=warStateStore();
  let state;
- try{state=row.data;core.validateState(state)}
- catch(error){return warSkip("assault","INVALID_WAR_STATE")}
+ try{state=store.read()}
+ catch(_error){return warSkip("assault","INVALID_WAR_STATE")}
+ if(!state)return warSkip("assault","NO_WAR_STATE");
  const readiness=assault.campaignReadiness({state,ships:registry.snapshot()?.ships});
  if(readiness.status!=="READY")return warSkip("assault",String(readiness.reason||readiness.status));
  const begun=assault.beginAssault({state,readiness});
  if(begun.status!=="ASSAULT_BEGUN")return warSkip("assault",String(begun.reason||begun.status));
- core.validateState(begun.state);
- gameStore.write(TABLE,rowKey,begun.state);
- if(typeof gameStore.flushTableSync==="function")gameStore.flushTableSync(TABLE);
+ store.write(begun.state);
  console.log("[CoopFactionWar] assault begun "+begun.campaignID+
   " attacker="+begun.attackerShips.length+" defender="+begun.defenderShips.length);
  require("./coopRuntimeProbe").observe("living-native-war-assault",null,null,{
@@ -256,31 +279,10 @@ function advanceNativeWarMobilization(){
  if(!guard)return warSkip("mobilization","NO_ORDER_BRIDGE");
  // The war domain needs a valid state record to exist at all. Without it every
  // mobilisation answers INVALID_MOBILIZATION_STATE, which looks like a broken
- // feature instead of an empty world. Bootstrapping the empty state is the
- // documented factory (`core.empty()`), never hand-written JSON.
- {
-  const {TABLE,KEY}=require("./coopFactionWarStore"),
-   core=require("./coopFactionWarCore"),
-   gameStore=require("../gameStore");
-  const rowKey="/"+KEY;
-  let current=null;
-  try{const read=gameStore.read(TABLE,rowKey);current=read?.success===true?read.data:null}
-  catch(_error){current=null}
-  if(!current){
-   const state=core.empty();
-   core.validateState(state);
-   try{
-    gameStore.write(TABLE,rowKey,state);
-    if(typeof gameStore.flushTableSync==="function")gameStore.flushTableSync(TABLE);
-    console.log("[CoopFactionWar] empty war state created (version "+core.VERSION+")");
-    require("./coopRuntimeProbe").observe("living-native-war-state",null,null,
-     {status:"CREATED",version:core.VERSION,
-      evidence:"DOCUMENTED_EMPTY_STATE_FACTORY_NO_CAMPAIGN_YET"});
-   }catch(error){
-    warSkip("mobilization","WAR_STATE_WRITE_FAILED:"+String(error&&error.message||error));
-    return;
-   }
-  }
+ // feature instead of an empty world. One shared, idempotent bootstrap owns it.
+ try{ensureWarState()}catch(error){
+  warSkip("mobilization","WAR_STATE_WRITE_FAILED:"+String(error&&error.message||error));
+  return;
  }
  if(!warMobilizer){
   const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
@@ -298,12 +300,7 @@ function advanceNativeWarMobilization(){
   });
   warMobilizer=createWarMobilizer({
    registry,
-   readWarState:()=>{
-    const r=gameStore.read(TABLE,"/"+KEY);
-    if(r?.success!==true)return null;
-    core.validateState(r.data);
-    return r.data;
-   },
+   readWarState:()=>warStateStore().read(),
    readLinks:()=>Object.values(identityRegistry.snapshot().links||{}),
    // Existing scenes only: a military director must never manufacture an
    // enemy or force NPC materialization by observing an unvisited system.
@@ -512,13 +509,7 @@ function advanceNativeWarObjectives(){
    adjudicator,combatProof:proof,
    getFactionForCorporation,
    listNativeStructures:systemID=>worldData.getStructuresForSystem(systemID),
-   readWarState:()=>{
-    const row=gameStore.read("corporationRuntime",
-     "/coop-faction-war\u001fstate-v1");
-    if(row?.success!==true)return null;
-    require("./coopFactionWarCore").validateState(row.data);
-    return row.data;
-   }
+   readWarState:()=>warStateStore().read()
   });
  }
  const result=warObjectiveDirector.tick({
