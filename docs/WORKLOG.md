@@ -433,3 +433,33 @@ Evidence: Before fix, exact-source unload returned DELIVERED, credited 50 virtua
 Why: Fix deterministic test mock: an explicitly undefined flush result must remain undefined (not silently receive the success default).
 Where: tests/coop-native-haul-unload-readback.test.mjs
 Evidence: Before fix, exact-source unload returned DELIVERED, credited 50 virtual ore, and made 0 native cargo flush calls, so original durable cargoID survived simulated restart. Patched 19/19 exact-source isolated V8 cargo/depot test callbacks PASS with simulated native flush and IO. Full Node 22 original repo, native SQLite WAL/FULL cold reboot, Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T15:26Z · 94017d7 · L2 · fix(P0): refuse foreign/transient/wrong-system native cargo before depot preparation
+
+Why: Source-backed reproduction on latest main: unloadCargo() credited virtual ore and deleted the original cargoID despite an original cargo owner different from the live hauler, an inconsistent systemID, transient source cargo or missing original miner provenance. Match original corporate title, fleet/system, native entity, miner and durability before even preparing depot custody; block the whole tagged batch on invalid/duplicate sibling.
+Where: integration/coopNativeHaulCargo.cjs
+Evidence: Previous main exact-source source reproduction showed four invalid original cargo variants all returned DELIVERED and depot COMMITTED. Patched 23/23 exact-source isolated V8 unload/depot callbacks PASS. Full native Node 22/SQLite WAL cold restart, Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T15:26Z · b93316b · TEST · test(P0): use original corporate owner, system and durable cargo identity in unload fixtures
+
+Why: Update source-backed unload fixtures with actual original cargo owner, system, durable marker, and live hauler owner/system evidence.
+Where: tests/coop-native-haul-unload-readback.test.mjs
+Evidence: Previous main exact-source source reproduction showed four invalid original cargo variants all returned DELIVERED and depot COMMITTED. Patched 23/23 exact-source isolated V8 unload/depot callbacks PASS. Full native Node 22/SQLite WAL cold restart, Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T15:26Z · 2fc8ee0 · TEST · test(P0): use original corporate owner, system and durable cargo identity in unload fixtures
+
+Why: Align native depot-custody regression fixtures with the pinned native cargo provenance fields and hauler/scene identities; preserve existing custody recovery expectations.
+Where: tests/coop-native-depot-custody.test.mjs
+Evidence: Previous main exact-source source reproduction showed four invalid original cargo variants all returned DELIVERED and depot COMMITTED. Patched 23/23 exact-source isolated V8 unload/depot callbacks PASS. Full native Node 22/SQLite WAL cold restart, Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T15:27Z · 1c5318e · TEST · test(P0): reject foreign-owner, wrong-system, transient and duplicate original ore before depot preflight
+
+Why: Test foreign/missing owners, wrong/missing system, transient/unknown persistence, missing miner, wrong carrier, module-bound cargo, malformed quantity/type, duplicate cargoID, wrong live ship/scene and mixed valid-invalid original batch. Preserve unrelated fleet cargo and valid exactly-once unload.
+Where: tests/coop-native-haul-unload-readback.test.mjs
+Evidence: Previous main exact-source source reproduction showed four invalid original cargo variants all returned DELIVERED and depot COMMITTED. Patched 23/23 exact-source isolated V8 unload/depot callbacks PASS. Full native Node 22/SQLite WAL cold restart, Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T15:32Z · 94bfc92 · L2 · fix(P0): reject missing original fleet/system provenance during warehouse credit recovery
+
+Why: Old native warehouse load() did not validate fleetID or systemID from an original receipt. An authorized DEBIT-stage resume created a real ItemStore station stack and durably marked COMMITTED from a journal missing fleetID. Require both original fleet and system authority on every receipt load before any recovery, completion, or audit.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: Pre-fix exact-source reproduction: authorized SOURCE_DEBIT_PROVEN receipt with missing fleetID returned COMMITTED and granted one native ItemStore warehouse item. Patched 26/26 exact-source isolated V8 warehouse tests PASS with simulated native fs and ItemStore. Full pinned Node 22, SQLite WAL/FULL cold restart, Rust and two authenticated EVE clients NOT_RUN.
+### 2026-10-26T15:32Z · 0fdcbc1 · TEST · test(P0): missing original fleet/system journal provenance blocks physical ItemStore recovery
+
+Why: Reproduce missing/zero/negative fleet, absent/zero/invalid system in a durable DEBIT receipt, require no ItemStore grant and no journal rewrite; invalid COMMITTED receipt fails audit; unchanged legitimate DEBIT recovery still credits only once.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: Pre-fix exact-source reproduction: authorized SOURCE_DEBIT_PROVEN receipt with missing fleetID returned COMMITTED and granted one native ItemStore warehouse item. Patched 26/26 exact-source isolated V8 warehouse tests PASS with simulated native fs and ItemStore. Full pinned Node 22, SQLite WAL/FULL cold restart, Rust and two authenticated EVE clients NOT_RUN.

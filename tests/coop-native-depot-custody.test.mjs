@@ -16,14 +16,16 @@ function fixture(){
   assert.equal(table,"npcCargo");
   return {success:true};
  }};
- const cargo=new Map([[333,{cargoID:333,typeID:34,quantity:50,moduleID:0,entityID:500,coopHaulFleetID:44}]]);
+ const cargo=new Map([[333,{cargoID:333,typeID:34,quantity:50,moduleID:0,
+  entityID:500,ownerID:1000035,transient:false,coopHaulFleetID:44,
+  coopHaulSystemID:30000144,coopHaulFromMinerID:111}]]);
  const store={
    listNativeCargoForEntity:entityID=>[...cargo.values()].filter(x=>x.entityID===entityID),
    removeNativeCargo:id=>{cargo.delete(Number(id));return {success:true}},
    buildNativeCargoItems:entityID=>[...cargo.values()].filter(x=>x.entityID===entityID)
  };
- const hauler={kind:'ship',itemID:500,nativeCargoItems:[{itemID:333,volume:0.1}]};
- const scene={getEntityByID:id=>id===500?hauler:null};
+ const hauler={kind:'ship',itemID:500,ownerID:1000035,nativeCargoItems:[{itemID:333,volume:0.1}]};
+ const scene={systemID:30000144,getEntityByID:id=>id===500?hauler:null};
  const fleet={fleetID:44,systemID:30000144,haulerEntityIDs:[500]};
  const observed=[];const probe={observe:(...args)=>observed.push(args)};
  return {dir,file,depot,database,cargo,store,hauler,scene,fleet,probe,observed,delivery:{cargoID:333,typeID:34,quantity:50,haulerID:500}};
@@ -88,7 +90,9 @@ test('replayed reused cargo ID cannot credit or remove a second cargo after comm
  const f=fixture();
  try{
   assert.equal(unloadCargo(f.scene,f.fleet,f).status,'DELIVERED');
-  f.cargo.set(333,{cargoID:333,typeID:34,quantity:50,moduleID:0,entityID:500,[haulFlag]:44});
+  f.cargo.set(333,{cargoID:333,typeID:34,quantity:50,moduleID:0,
+   entityID:500,ownerID:1000035,transient:false,coopHaulSystemID:30000144,
+   coopHaulFromMinerID:111,[haulFlag]:44});
   assert.equal(unloadCargo(f.scene,f.fleet,f).status,'NEEDS_REPAIR');
   assert.equal(f.cargo.has(333),true);
   assert.equal(f.depot.snapshot().totals['30000144'],50);
