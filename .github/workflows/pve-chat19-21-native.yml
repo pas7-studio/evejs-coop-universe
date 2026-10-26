@@ -3,6 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - feat/chat19-21-pve-native-integration-gates
       - feat/chat19-21-pve-final-readiness-20261026
     paths:
