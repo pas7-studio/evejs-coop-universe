@@ -62,14 +62,6 @@ node --test tests/coop-player-mining-company.test.mjs
 
 ## Stage C — corporate ore ownership and shared warehouse
 
-- Bind the existing native mining slot runtime to an explicitly funded contract by original native fleet ID, miner and hauler entity IDs. **Never change `ownerID` on the hull to impersonate the player corporation**.
-- Add a registered `PLAYER_MINING_COMPANY` order intent to the *existing* arbiter — no side scheduler. Check exact live entity/controller and incoming threat before sending any native orders.
-- Bind each selected pilot to a role: MINE, HAUL, ESCORT, HOLD, RETREAT or RETURN. Physical approach and cargo capacity must be witnessed before completion.
-- Order ACK is **not** completion. Persist dispatched/accepted/observed/blocked state with explicit blocker reason. NPC retreat wins over ongoing mining, including after restart.
-- Handle contract exhaustion by releasing the fleet **only after** native cargo and wallet reconciliation; never release a paid active shift on timeout alone.
-
-## Stage C — corporate ore ownership and shared warehouse
-
 - Extend the existing original-item title-transfer path to NPC-employer-to-player-corp, with native `items` + `corporationRuntime` transaction and a durable receipt for the **same itemID and original cargoID**. Do not copy a depot quantity.
 - A genuine shared player hangar is the **native rented corporate office**, with divisions 115–121 and independent QUERY/TAKE rights; no extra virtual storage.
 - Each cargoID can end at most one place: miner, hauler, wreck, employer warehouse, player warehouse, reserved industry or market escrow. Cross-feature reconciliation blocks duplicate titles.
