@@ -241,3 +241,19 @@ test("EX-03B11 native scanner handoff orders the scout before escorted patrols",
  assert.match(pinned,/pinned native certainty 1 flows from real original probes/);
  assert.match(pinned,/EX-03B11/);
 });
+
+test("EX-03B12/B13 source checks protect the native scout-to-arbiter bridge",()=>{
+ const director=read("integration/coopNpcExpeditionDirector.cjs");
+ const live=read("tests/coop-npc-expedition-native-bridge.test.mjs");
+ const tests=read("tests/coop-npc-expedition-director.test.mjs");
+ const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ assert.match(director,/let ship,c,n;/);
+ assert.match(director,/catch\{return null\}/);
+ assert.match(director,/uncertainOrders\.add\(moveKey\)/);
+ assert.match(director,/unknownOrderOutcomes:uncertainOrders\.size/);
+ assert.match(live,/createOrderArbiter/);
+ assert.match(live,/createOrderBridge/);
+ assert.match(live,/actual native order bridge\/arbiter accepts scout-first warp/);
+ assert.match(tests,/ambiguous arbiter issue result is permanently fenced/);
+ assert.match(workflow,/tests\/coop-npc-expedition-native-bridge\.test\.mjs/);
+});
