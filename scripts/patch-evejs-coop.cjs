@@ -29,6 +29,9 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/exploration/scanMgrService.js" ||
     spec.file==="server/src/services/ship/beyonceService.js")
   text=require("./coop-native-exploration-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/dogma/dogmaService.js" ||
+    spec.file==="server/src/services/exploration/hackingMgrService.js")
+  text=require("./coop-native-hacking-admission-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js")
   text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js") {
