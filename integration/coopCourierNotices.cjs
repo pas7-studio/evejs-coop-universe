@@ -26,6 +26,46 @@ function contractRef(context) {
   return String(context && context.contractID || "");
 }
 
+// A delivery report is only worth reading if it is concrete: how long the run
+// actually took and what really happened on the way. Nothing here invents an
+// incident; an empty list is reported as a clean run.
+const INCIDENT_WORDS = Object.freeze({
+  rewarp: "warp re-issue",
+  "warp-failed": "warp failure",
+  "dock-failed": "dock failure",
+  "undock-failed": "undock failure",
+  "origin-return": "return to origin",
+  "station-repair": "station record repair",
+  "cargo-load": "cargo load",
+  "handover-failed": "hand-over failure",
+  "settle-failed": "settlement retry",
+});
+
+function durationText(ms) {
+  const total = Number(ms);
+  if (!Number.isFinite(total) || total <= 0) return "an unknown time";
+  const minutes = Math.max(1, Math.round(total / 60000));
+  if (minutes < 60) return minutes + (minutes === 1 ? " minute" : " minutes");
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  const hourText = hours + (hours === 1 ? " hour" : " hours");
+  return rest ? hourText + " " + rest + (rest === 1 ? " minute" : " minutes") : hourText;
+}
+
+function incidentsText(list) {
+  const incidents = Array.isArray(list) ? list : [];
+  if (!incidents.length) return "No incidents on the way: no warp failures, no returns, no lost time.";
+  const counts = new Map();
+  for (const row of incidents) {
+    const kind = String(row && row.kind || "incident");
+    const word = INCIDENT_WORDS[kind] || kind;
+    counts.set(word, (counts.get(word) || 0) + 1);
+  }
+  const parts = [...counts.entries()].map(([word, count]) =>
+    count === 1 ? word : count + " " + word + "s");
+  return "Incidents on the way: " + parts.join(", ") + ".";
+}
+
 function buildNotice(kind, context) {
   if (!KINDS.includes(kind)) {
     return { status: "NO_NOTICE", reason: "unknown kind: " + kind };
@@ -60,13 +100,16 @@ function buildNotice(kind, context) {
     };
   }
   if (kind === "delivered") {
+    const departed = String(ctx.departedClockText || "");
     return {
       status: "NOTICE",
       kind,
       subject: `Contract ${id} delivered`,
       body:
-        `${name} here. Package delivered at ${to}. ` +
-        `Thank you for the ${isk(ctx.reward)} - it was a clean run.`,
+        `${name} here. Package delivered at ${to} after ${durationText(ctx.durationMs)}` +
+        `${departed ? " in flight (departed " + from + " at " + departed + ")" : ""}. ` +
+        `${incidentsText(ctx.incidents)} ` +
+        `Thank you for the ${isk(ctx.reward)}.`,
     };
   }
   if (kind === "failed") {
@@ -121,4 +164,4 @@ function negotiate(contract, quote) {
   };
 }
 
-module.exports = { KINDS, buildNotice, negotiate };
+module.exports = { KINDS, buildNotice, negotiate, durationText, incidentsText };

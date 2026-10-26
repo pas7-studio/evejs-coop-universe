@@ -235,3 +235,59 @@ test('job identity mismatch after install never advances PREPARED into success',
   assert.equal(a.inspect(p.operationID).status,'INSTALL_OUTCOME_UNKNOWN');
  }finally{f.clean()}
 });
+
+
+const siblingModuleMocks={
+ coopNpcIndustryGameStoreScope:{createNpcIndustryScopedProof:()=>({})},
+ coopNpcIndustryReady:{createNpcIndustryReadyProof:()=>({})},
+ coopNpcIndustryOfflineAtomic:{createOfflineAtomicInstaller:()=>({})},
+ coopNpcIndustryOfflineDelivery:{createOfflineAtomicDelivery:()=>({})},
+ coopNpcManufacturingPlanner:{createPlanner:()=>({verifiedNativePlanner:true})},
+ coopAlifeSalvageMarket:{createAlifeSalvageMarket:()=>({})},
+ coopSalvageNpcPendingMarket:{createSalvagePendingMarket:()=>({verifiedNativeMarket:true})}
+};
+function sourceParityModule(name,deployed){
+ const source=fs.readFileSync(new URL('../integration/'+name+'.cjs',import.meta.url),'utf8');
+ const file=deployed?'/evejs/server/src/space/'+name+'.js':
+  '/checkout/integration/'+name+'.cjs';
+ const loaded=[],m={exports:{}};
+ const loader=id=>{
+  loaded.push(id);
+  if(id.startsWith('./coop')&&id.replace(/^\.\//,'').replace(/\.cjs$/,'') in siblingModuleMocks){
+   const base=id.replace(/^\.\//,'').replace(/\.cjs$/,'');
+   if(deployed===id.endsWith('.cjs')){
+    const err=Error("Cannot find module '"+id+"'");
+    err.code='MODULE_NOT_FOUND';throw err;
+   }
+   return siblingModuleMocks[base];
+  }
+  if(id==='node:fs')return fs;
+  if(id==='node:path')return path;
+  return {};
+ };
+ new Function('module','require','__filename','process',source)
+  (m,loader,file,{env:{}});
+ if(name==='coopNpcManufacturingNative')
+  assert.equal(m.exports.createNativePlanner().verifiedNativePlanner,true);
+ if(name==='coopAlifeSalvageMarketRuntime'){
+  const binding=m.exports.createBindings({
+   gameStore:{coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>false}},
+   itemStore:{findItemById:()=>null},marketClient:{call:()=>({})},
+   worldData:{getStationByID:()=>({})},
+   getEscrow:()=>null,root:'/tmp/coop-native-salvage',
+   systems:()=>new Set([30000144])
+  });
+  assert.equal(binding.marketFactory(100).verifiedNativeMarket,true);
+ }
+ return loaded.filter(x=>x.startsWith('./coop'));
+}
+for(const deployed of [false,true])
+ test('native NPC industry, manufacturing and salvage siblings resolve in '+
+  (deployed?'deployed JS overlay':'source CJS checkout'),()=>{
+  for(const name of ['coopNpcIndustryNativeBindings','coopNpcIndustryGameStoreScope',
+   'coopNpcManufacturingNative','coopAlifeSalvageMarketRuntime']){
+   const loaded=sourceParityModule(name,deployed);
+   assert.ok(loaded.length>=1,name);
+   assert.equal(loaded.every(x=>x.endsWith('.cjs')===!deployed),true,name);
+  }
+ });

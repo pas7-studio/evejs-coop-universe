@@ -1,0 +1,62 @@
+{
+  "schema": "coop-qa42-isolated-reruns/v1",
+  "observedAt": "2026-10-25T21:31:00Z",
+  "runtime": "node v22.16.0",
+  "source": "sandbox local snapshots of previous Chat 03/10/21/28/35 only, NOT an audit of all current main tests",
+  "rows": [
+    {
+      "owner": 3,
+      "dir": "chat03",
+      "pass": 17,
+      "fail": 0,
+      "skip": 0,
+      "allRepoBlobsMatched": true
+    },
+    {
+      "owner": 10,
+      "dir": "chat10",
+      "pass": 16,
+      "fail": 0,
+      "skip": 2,
+      "allRepoBlobsMatched": true
+    },
+    {
+      "owner": 21,
+      "dir": "chat21",
+      "pass": 13,
+      "fail": 0,
+      "skip": 2,
+      "allRepoBlobsMatched": false,
+      "drifted": [
+        "tests/coop-pve-native-objective.test.mjs"
+      ]
+    },
+    {
+      "owner": 28,
+      "dir": "chat28",
+      "pass": 23,
+      "fail": 0,
+      "skip": 3,
+      "allRepoBlobsMatched": true
+    },
+    {
+      "owner": 35,
+      "dir": "chat35",
+      "pass": 20,
+      "fail": 0,
+      "skip": 3,
+      "allRepoBlobsMatched": true
+    }
+  ],
+  "totals": {
+    "pass": 89,
+    "fail": 0,
+    "skip": 10
+  },
+  "limitations": [
+    "No pinned EveJS Code checkout in sandbox",
+    "Skipped pinned tests remain NOT_TESTED",
+    "Current main test file for Chat21 changed from sandbox copy",
+    "No server process, UI or two-client observation"
+  ]
+}

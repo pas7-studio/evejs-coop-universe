@@ -388,3 +388,4 @@ test("a sale cap below one unit is refused at construction",()=>{
   assert.throws(()=>x.trader({maxSellQuantity:0}),/safety caps/);
  }finally{x.cleanup()}
 });
+

@@ -2,7 +2,8 @@
 // Load only within the trusted server process. Every dependency is the pinned
 // native EveJS store, not a parallel factory or a fabricated player session.
 function createNativePlanner(){
- const {createPlanner}=require('./coopNpcManufacturingPlanner');
+ const suffix=typeof __filename==='string'&&__filename.endsWith('.js')?'':'.cjs';
+ const {createPlanner}=require('./coopNpcManufacturingPlanner'+suffix);
  const corp=require('../services/corporation/corporationState');
  const world=require('./worldData');
  const staticData=require('../services/industry/industryStaticData');

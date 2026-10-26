@@ -1,0 +1,5 @@
+{
+  "schema": "coop-qa42-claims/v1",
+  "notes": "LOCAL PRIVATE FILE ONLY. Do not commit real client logs, identifiers or raw inventory. Submission with hashes only is REVIEW_REQUIRED, never automatic PASS.",
+  "claims": []
+}

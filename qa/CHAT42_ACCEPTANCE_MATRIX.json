@@ -1,0 +1,1672 @@
+{
+  "schema": "coop-qa42-matrix/v1",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "owners": [
+    {
+      "owner": 1,
+      "title": "Central overlay, runtime and integration",
+      "caseIDs": [
+        "QA42-REVISION",
+        "QA42-BOOT"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "HISTORICAL_OPERATOR_REPORT_REQUIRES_REVALIDATION"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 2,
+      "title": "Pinned EveJS / EVE 2026 compatibility",
+      "caseIDs": [
+        "QA42-REVISION",
+        "QA42-SDE_BALANCE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 3,
+      "title": "Authentication and independent multiplayer sessions",
+      "caseIDs": [
+        "QA42-CLIENT_A",
+        "QA42-CLIENT_B",
+        "QA42-SCENE",
+        "QA42-STATIONS",
+        "QA42-PRIVATE_CONNECT"
+      ],
+      "unit": {
+        "status": "PASS_ISOLATED_SNAPSHOT_HASH_MATCH",
+        "pass": 17,
+        "skip": 0
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 4,
+      "title": "Authoritative ballpark, Destiny and world replication",
+      "caseIDs": [
+        "QA42-SCENE",
+        "QA42-MOVE",
+        "QA42-TRAVEL"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 5,
+      "title": "Native fleet and cooperative navigation",
+      "caseIDs": [
+        "QA42-FLEET",
+        "QA42-FLEET_WARP",
+        "QA42-EXPLORATION",
+        "QA42-SOCIAL"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 6,
+      "title": "Inter-system travel and gate transitions",
+      "caseIDs": [
+        "QA42-MOVE",
+        "QA42-FLEET_WARP",
+        "QA42-TRAVEL",
+        "QA42-WORMHOLES"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "HISTORICAL_OPERATOR_REPORT_REQUIRES_REVALIDATION"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 7,
+      "title": "Stations, docking, ship and hangar services",
+      "caseIDs": [
+        "QA42-CLIENT_A",
+        "QA42-STATIONS",
+        "QA42-CLONES"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "HISTORICAL_OPERATOR_REPORT_REQUIRES_REVALIDATION"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 8,
+      "title": "Fitting, attributes and Dogma",
+      "caseIDs": [
+        "QA42-DOGMA"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 9,
+      "title": "Weapons, targeting and combat damage",
+      "caseIDs": [
+        "QA42-COMBAT",
+        "QA42-NPC_COMBAT"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 10,
+      "title": "EWAR, neutralizers and remote assistance",
+      "caseIDs": [
+        "QA42-EWAR"
+      ],
+      "unit": {
+        "status": "PASS_ISOLATED_SNAPSHOT_HASH_MATCH",
+        "pass": 16,
+        "skip": 2
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 11,
+      "title": "Drones and fighters",
+      "caseIDs": [
+        "QA42-DRONES",
+        "QA42-PLAYER_MINING"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 12,
+      "title": "Wrecks, salvage and loot custody",
+      "caseIDs": [
+        "QA42-WRECK"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 13,
+      "title": "Crimewatch, PvP aftermath and insurance",
+      "caseIDs": [
+        "QA42-COMBAT",
+        "QA42-WRECK",
+        "QA42-CRIME"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 14,
+      "title": "Single autonomous NPC AI director",
+      "caseIDs": [
+        "QA42-BOOT",
+        "QA42-NPC_DIRECTOR",
+        "QA42-NPC_MINING"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "HISTORICAL_OPERATOR_REPORT_REQUIRES_REVALIDATION"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 15,
+      "title": "NPC combat tactics, ammo and physical kills",
+      "caseIDs": [
+        "QA42-NPC_COMBAT"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "HISTORICAL_OPERATOR_REPORT_REQUIRES_REVALIDATION"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 16,
+      "title": "Autonomous NPC miners and haulers",
+      "caseIDs": [
+        "QA42-NPC_MINING"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "HISTORICAL_OPERATOR_REPORT_REQUIRES_REVALIDATION"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 17,
+      "title": "NPC production and industrial economy",
+      "caseIDs": [
+        "QA42-NPC_INDUSTRY"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 18,
+      "title": "NPC faction affiliation and reputation",
+      "caseIDs": [
+        "QA42-FACTION_REPUTATION",
+        "QA42-FACTION_WARFARE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 19,
+      "title": "Cooperative agent missions and rewards",
+      "caseIDs": [
+        "QA42-AGENT_MISSIONS"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 20,
+      "title": "Storyline missions and Epic Arcs",
+      "caseIDs": [
+        "QA42-EPIC_ARC",
+        "QA42-STARTER"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 21,
+      "title": "Native anomalies, dungeons and extended PvE",
+      "caseIDs": [
+        "QA42-AGENT_MISSIONS",
+        "QA42-PVE_SITES"
+      ],
+      "unit": {
+        "status": "HISTORICAL_LOCAL_ONLY_CHANGED_TEST",
+        "pass": 13,
+        "skip": 2
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 22,
+      "title": "Exploration, scanning and hacking",
+      "caseIDs": [
+        "QA42-PVE_SITES",
+        "QA42-EXPLORATION"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 23,
+      "title": "Wormhole travel, mass and polarization",
+      "caseIDs": [
+        "QA42-WORMHOLES",
+        "QA42-SPECIAL_REGIONS"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 24,
+      "title": "Player ore, ice and gas mining",
+      "caseIDs": [
+        "QA42-PLAYER_MINING"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 25,
+      "title": "Cargo transport, compression and reprocessing",
+      "caseIDs": [
+        "QA42-HAUL_REFINE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 26,
+      "title": "Planetary industry",
+      "caseIDs": [
+        "QA42-PI"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 27,
+      "title": "Player manufacturing and industry jobs",
+      "caseIDs": [
+        "QA42-HAUL_REFINE",
+        "QA42-PI",
+        "QA42-PLAYER_INDUSTRY"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 28,
+      "title": "Moon extraction and industrial structures",
+      "caseIDs": [
+        "QA42-MOON",
+        "QA42-STRUCTURES"
+      ],
+      "unit": {
+        "status": "PASS_ISOLATED_SNAPSHOT_HASH_MATCH",
+        "pass": 23,
+        "skip": 3
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 29,
+      "title": "Native market, escrow and trade",
+      "caseIDs": [
+        "QA42-MARKET",
+        "QA42-CONTRACTS",
+        "QA42-PERSISTENCE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 30,
+      "title": "Contracts, couriers and paid jobs",
+      "caseIDs": [
+        "QA42-CONTRACTS"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 31,
+      "title": "Corporations, offices and shared assets",
+      "caseIDs": [
+        "QA42-CORPORATIONS"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 32,
+      "title": "Citadels, alliances, war and sovereignty",
+      "caseIDs": [
+        "QA42-MOON",
+        "QA42-CORPORATIONS",
+        "QA42-STRUCTURES"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 33,
+      "title": "Skills, queue, Alpha/Omega and offline training",
+      "caseIDs": [
+        "QA42-DOGMA",
+        "QA42-SKILLS"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 34,
+      "title": "Medical clones, jump clones and implants",
+      "caseIDs": [
+        "QA42-CLONES"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 35,
+      "title": "Faction Warfare and military campaigns",
+      "caseIDs": [
+        "QA42-FACTION_REPUTATION",
+        "QA42-FACTION_WARFARE"
+      ],
+      "unit": {
+        "status": "PASS_ISOLATED_SNAPSHOT_HASH_MATCH",
+        "pass": 20,
+        "skip": 3
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 36,
+      "title": "Pochven, Triglavian and special regions",
+      "caseIDs": [
+        "QA42-SPECIAL_REGIONS"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 37,
+      "title": "SDE, ships, modules and balance",
+      "caseIDs": [
+        "QA42-DOGMA",
+        "QA42-SKILLS",
+        "QA42-SDE_BALANCE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 38,
+      "title": "New-player experience, starter rewards and tutorials",
+      "caseIDs": [
+        "QA42-CLIENT_A",
+        "QA42-EPIC_ARC",
+        "QA42-STARTER"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 39,
+      "title": "Chat, mail, contacts, map and notifications",
+      "caseIDs": [
+        "QA42-FLEET",
+        "QA42-SOCIAL"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 40,
+      "title": "SQLite, GameStore and economic recovery",
+      "caseIDs": [
+        "QA42-REVISION",
+        "QA42-NPC_INDUSTRY",
+        "QA42-PLAYER_INDUSTRY",
+        "QA42-MARKET",
+        "QA42-PERSISTENCE",
+        "QA42-BACKUP_RESTORE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    },
+    {
+      "owner": 41,
+      "title": "Private multiplayer transport, deployment and backup",
+      "caseIDs": [
+        "QA42-REVISION",
+        "QA42-BOOT",
+        "QA42-CLIENT_A",
+        "QA42-CLIENT_B",
+        "QA42-PRIVATE_CONNECT",
+        "QA42-BACKUP_RESTORE"
+      ],
+      "unit": {
+        "status": "NOT_REEXECUTED_AT_CURRENT_HEAD"
+      },
+      "integration": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "runtime": {
+        "status": "NOT_VERIFIED_ON_AUDIT_HEAD"
+      },
+      "twoClient": {
+        "status": "NO_CURRENT_TWO_CLIENT_EVIDENCE"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "QA42-REVISION",
+      "title": "Revision, pin, runtime image, overlay and authoritative evidence provenance",
+      "owners": [
+        1,
+        2,
+        40,
+        41
+      ],
+      "minimumTier": "integration",
+      "requiredKinds": [
+        "overlay",
+        "server"
+      ],
+      "invariant": "Reject any evidence from another project SHA, source pin, Docker image or environment",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-BOOT",
+      "title": "Real server boot and headless event production",
+      "owners": [
+        1,
+        14,
+        41
+      ],
+      "minimumTier": "runtime",
+      "requiredKinds": [
+        "server"
+      ],
+      "invariant": "Event writer is current and process logs match running image, not source code",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-CLIENT_A",
+      "title": "First authorized client login, character, undock and reconnect",
+      "owners": [
+        3,
+        7,
+        38,
+        41
+      ],
+      "minimumTier": "oneClient",
+      "requiredKinds": [
+        "server",
+        "clientA"
+      ],
+      "invariant": "Authenticated char and ship, not a TCP socket or launcher window",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-CLIENT_B",
+      "title": "Second independent authenticated client login and character",
+      "owners": [
+        3,
+        41
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Distinct client hosts, accounts, sessions and character records",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-SCENE",
+      "title": "Two ships in same authoritative ballpark, bidirectional visibility",
+      "owners": [
+        3,
+        4
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "A sees B and B sees A, one ordered Destiny stream each",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-MOVE",
+      "title": "Simultaneous motion, warp, target and visibility isolation",
+      "owners": [
+        4,
+        6
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Visible updates to both eligible observers; none to hidden/disconnected",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-FLEET",
+      "title": "Invitation, acceptance, roles and fleet disband",
+      "owners": [
+        5,
+        39
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Actual native fleetID and current members, not virtual team link",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-FLEET_WARP",
+      "title": "Native fleet warp follower arrival and reconnection",
+      "owners": [
+        5,
+        6
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Same real target/grid, no phantom follower or cross-system teleport",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-TRAVEL",
+      "title": "Stargate travel and landing in adjacent system",
+      "owners": [
+        6,
+        4
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Two real ships transition separately; identity and modules persist",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-STATIONS",
+      "title": "Dock/undock, ship boarding, repair and independent hangars",
+      "owners": [
+        7,
+        3
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Cross-character ownership/permissions and fees preserved",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-DOGMA",
+      "title": "Fitting and actual module/skill attribute effects",
+      "owners": [
+        8,
+        33,
+        37
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Actual fitted bonuses and anti-illegal-fit restrictions",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-COMBAT",
+      "title": "Player damage, ammo debit, shields/armor/hull and destruction",
+      "owners": [
+        9,
+        13
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Native HP delta, ammo debit, no speculative hit or free ammo",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-EWAR",
+      "title": "Scram/web/ECM/neut/NOS/remote reps and stacking",
+      "owners": [
+        10
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Module activation changes real native target state and UI",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-DRONES",
+      "title": "Drone launch/attack/return, damage and ownership",
+      "owners": [
+        11
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "No ghost drones across reconnect and bandwidth limits",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-WRECK",
+      "title": "Native wreck, salvage, tractor and loot ownership",
+      "owners": [
+        12,
+        13
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Original cargo custody from victim to wreck to player exactly once",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-CRIME",
+      "title": "PvP CONCORD/security, killmail, insurance and bounties",
+      "owners": [
+        13
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "No duplicate claims or fabricated final blow",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-NPC_DIRECTOR",
+      "title": "One accountable NPC AI order, physical action and telemetry",
+      "owners": [
+        14
+      ],
+      "minimumTier": "runtime",
+      "requiredKinds": [
+        "server"
+      ],
+      "invariant": "Scene NPC entity and controller observed, not virtual faction logs",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-NPC_COMBAT",
+      "title": "NPC-vs-player and NPC-vs-NPC physical damage, ammo and kills",
+      "owners": [
+        15,
+        9
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Witness the same native victim, weapon debit, HP delta and wreck",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-NPC_MINING",
+      "title": "Physical NPC miner, source depletion, real hauler cargo",
+      "owners": [
+        16,
+        14
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "No virtual ore or teleporting shipment",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-NPC_INDUSTRY",
+      "title": "Native NPC ore to refinery, BPO, goods and escrow",
+      "owners": [
+        17,
+        40
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "Exactly once source->output and funded NPC wallet",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-FACTION_REPUTATION",
+      "title": "Native NPC factions, aggression standings and consequences",
+      "owners": [
+        18,
+        35
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "True standings transactions, NPC reacts to affiliation",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-AGENT_MISSIONS",
+      "title": "Same mission participation, separate eligible turn-in/reward",
+      "owners": [
+        19,
+        21
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "No duplicate LP, ISK, mission or personal progress",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-EPIC_ARC",
+      "title": "Storyline/Epic chains, branches and per-character progress",
+      "owners": [
+        20,
+        38
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "No skipped stage or repeated unique reward after restart",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-PVE_SITES",
+      "title": "Real anomaly/dungeon rooms, objectives, drops and respawn",
+      "owners": [
+        21,
+        22
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Only authored native sites, no fabricated escalations/abyss",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-EXPLORATION",
+      "title": "D-scan, probes, signatures, hacking and fleet site access",
+      "owners": [
+        22,
+        5
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Real signature/site IDs and original data/relic loot",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-WORMHOLES",
+      "title": "Same wormhole, independent transit, mass and polarization",
+      "owners": [
+        23,
+        6
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Mass decreases, polarization timers and paired system identity",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-PLAYER_MINING",
+      "title": "Two-player mining depletion, drone yield and actual cargo",
+      "owners": [
+        24,
+        11
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Total ore conservation and cargo capacity",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-HAUL_REFINE",
+      "title": "Ore transfer, jetcan, compression, refining and taxes",
+      "owners": [
+        25,
+        27
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "Actual item custody and real material yield without double-debit",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-PI",
+      "title": "Native colonies, extractor network, launch and shared cargo",
+      "owners": [
+        26,
+        27
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Character ownership and only actual launched materials available",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-PLAYER_INDUSTRY",
+      "title": "Native BPO install, consumed materials, output and fees",
+      "owners": [
+        27,
+        40
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "No duplicate job settlement on concurrent delivery/restart",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-MOON",
+      "title": "Refinery schedule/chunk/Metenox fuel and material output",
+      "owners": [
+        28,
+        32
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "No fuel burn without physically backed/atomic material output",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-MARKET",
+      "title": "Native buy/sell order, escrow, Rust settlement and delivery",
+      "owners": [
+        29,
+        40
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter",
+        "rust"
+      ],
+      "invariant": "Order+ISK+item conservation on partial fill, cancel and replay",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-CONTRACTS",
+      "title": "Two-party exchange, courier escrow, payment and collateral",
+      "owners": [
+        30,
+        29
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "Real contract completion and funded wallets",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-CORPORATIONS",
+      "title": "Join/create, roles, office assets and corp hangar permissions",
+      "owners": [
+        31,
+        32
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "B cannot access assets without assigned role",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-STRUCTURES",
+      "title": "Structure ownership, fuel, destruction, asset safety and sov",
+      "owners": [
+        32,
+        28
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "Native timers, protection, fuel use, asset-safety receipts",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-SKILLS",
+      "title": "Training queue offline, speed, prerequisites and restart",
+      "owners": [
+        33,
+        37
+      ],
+      "minimumTier": "restart",
+      "requiredKinds": [
+        "serverBefore",
+        "serverAfter",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Actual SP delta bounded, no stale training/clone loophole",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-CLONES",
+      "title": "Clone jump, previous ship, death and implant loss",
+      "owners": [
+        34,
+        7
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "No lost ship on jump or free duplicate implants",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-FACTION_WARFARE",
+      "title": "Militia enlistment, VP, occupation and genuine LP",
+      "owners": [
+        35,
+        18
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "walletBefore",
+        "walletAfter"
+      ],
+      "invariant": "Only actual sites, territory updates and earned LP",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-SPECIAL_REGIONS",
+      "title": "Pochven/Triglavian gate, NPC standings and restricted travel",
+      "owners": [
+        36,
+        23
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Native supported regions/assets, no synthetic access",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-SDE_BALANCE",
+      "title": "Installed published SDE matches actual ship modules and UI",
+      "owners": [
+        37,
+        2
+      ],
+      "minimumTier": "oneClient",
+      "requiredKinds": [
+        "server",
+        "clientA"
+      ],
+      "invariant": "Types must have client assets; no invented unsupported hulls",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-STARTER",
+      "title": "Two new characters starter ships, tutorial and one-time rewards",
+      "owners": [
+        38,
+        20
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB",
+        "inventoryBefore",
+        "inventoryAfter"
+      ],
+      "invariant": "No double starter reward under reconnect",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-SOCIAL",
+      "title": "Fleet chat, corp chat, EVEmail, bookmarks and notification isolation",
+      "owners": [
+        39,
+        5
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Messages reach only authorized recipients exactly once",
+      "status": "NOT_TESTED",
+      "severity": "P1"
+    },
+    {
+      "id": "QA42-PERSISTENCE",
+      "title": "Crash/ACK/replay of trade, contracts, industry, market, NPC cargo",
+      "owners": [
+        40,
+        29
+      ],
+      "minimumTier": "restart",
+      "requiredKinds": [
+        "serverBefore",
+        "serverAfter",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter",
+        "rust"
+      ],
+      "invariant": "Never test destructive faults on live evejs-data; conservation survives restart",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-PRIVATE_CONNECT",
+      "title": "Private two-computer VPN/TCP/handshake, reconnect and no public ports",
+      "owners": [
+        41,
+        3
+      ],
+      "minimumTier": "twoClient",
+      "requiredKinds": [
+        "server",
+        "clientA",
+        "clientB"
+      ],
+      "invariant": "Two authenticated sessions over approved private tunnel, firewall closed externally",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    },
+    {
+      "id": "QA42-BACKUP_RESTORE",
+      "title": "Isolated backup restore, market SQLite, item/ISK invariants",
+      "owners": [
+        41,
+        40
+      ],
+      "minimumTier": "restart",
+      "requiredKinds": [
+        "serverBefore",
+        "serverAfter",
+        "inventoryBefore",
+        "inventoryAfter",
+        "walletBefore",
+        "walletAfter",
+        "rust"
+      ],
+      "invariant": "Restore disposable copy, no unbacked item or escrow delta",
+      "status": "NOT_TESTED",
+      "severity": "P0"
+    }
+  ]
+}

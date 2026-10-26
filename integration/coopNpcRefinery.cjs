@@ -60,7 +60,8 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
   const item=items.findItemById(id);
   if(!item||Number(item.ownerID)!==owner||Number(item.locationID)!==stationIDNum||
      Number(item.flagID)!==Number(items.ITEM_FLAGS?.HANGAR)||
-     !positive(item.typeID)||!positive(item.quantity)||Number(item.singleton)!==0||
+     !positive(item.typeID)||!positive(item.quantity)||
+     item.stacksize!==item.quantity||Number(item.singleton)!==0||
      !/^coop-warehouse:v1:cargo:[0-9]+$/.test(String(item.customInfo||"")))
     return {status:"NATIVE_ORE_NOT_AVAILABLE"};
   // A real static station with no explicit session. Character 0 has no fake skills,
@@ -105,11 +106,16 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
   const matches=found.filter(x=>String(x.customInfo||"").startsWith(prefix));
   const expected=new Map(row.outputs.map(x=>[Number(x.typeID),Number(x.quantity)]));
   if(matches.length!==expected.size||matches.some(x=>Number(x.singleton)!==0||
+     !positive(x.quantity)||x.stacksize!==x.quantity||
+     Number(x.ownerID)!==row.ownerID||Number(x.locationID)!==row.stationID||
+     Number(x.flagID)!==Number(items.ITEM_FLAGS.HANGAR)||
      expected.get(Number(x.typeID))!==Number(x.quantity)||
      String(x.customInfo)!==prefix+Number(x.typeID)))return false;
   const left=items.findItemById(row.oreItemID);
   if(row.leftOvers===0)return !left;
   return Boolean(left&&Number(left.quantity)===row.leftOvers&&
+     left.stacksize===left.quantity&&Number(left.singleton)===0&&
+     Number(left.flagID)===Number(items.ITEM_FLAGS.HANGAR)&&
      Number(left.ownerID)===row.ownerID&&Number(left.locationID)===row.stationID&&
      Number(left.typeID)===row.oreTypeID&&String(left.customInfo)===row.sourceCustomInfo);
  }

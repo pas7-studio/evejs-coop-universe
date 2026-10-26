@@ -1,7 +1,19 @@
 "use strict";
 // Internal only. No network endpoint, session impersonation or NPC background tick.
 const path=require("node:path");
-const {createRefinery}=require("./coopNpcRefinery");
+// In checkout the sibling is .cjs; the EveJS overlay installs it as .js.
+// Fall back only when the sibling itself is absent. Never hide a transitive
+// MODULE_NOT_FOUND in the real refinery implementation.
+function nativeRefineryModule(){
+ try{return require("./coopNpcRefinery")}
+ catch(error){
+  if(error?.code!=="MODULE_NOT_FOUND"||
+     !String(error.message).includes("Cannot find module './coopNpcRefinery'"))
+   throw error;
+  return require("./coopNpcRefinery.cjs");
+ }
+}
+const {createRefinery}=nativeRefineryModule();
 function createLiveRefinery({root=process.env.EVEJS_COOP_NPC_REFINERY_DIR}={}){
  if(process.env.EVEJS_COOP_NPC_REFINERY!=="1")throw Error("NPC_REFINERY_DISABLED");
  if(!root||!path.isAbsolute(root))throw Error("NPC_REFINERY_DIRECTORY_REQUIRED");

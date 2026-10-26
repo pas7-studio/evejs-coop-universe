@@ -5,10 +5,49 @@
 const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const STATES=new Set(["PREPARED","INSTALL_UNKNOWN","INSTALLED","READY","DELIVERY_UNKNOWN","DELIVERED","LIST_UNKNOWN","LISTED","SOLD","REPAIR_REQUIRED"]);
 const safeInt=x=>Number.isSafeInteger(x)&&x>0;
-const cents=x=>Number.isFinite(x)&&x>=0&&x<=1e12&&Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0||x>1e12)return null;
+ const scaled=x*100,n=Math.round(scaled);
+ return Number.isSafeInteger(n)&&Math.abs(scaled-n)<=1e-6?n:null;
+};
+// The original signed job quote must conserve exact ISK cents BEFORE
+// persisting INSTALL_UNKNOWN or asking the atomic GameStore writer to pay.
+// Recovery verifies the same cost/tax/total contract on lost acknowledgements.
+const quoteCents=q=>{
+ const cost=cents(q?.cost),tax=cents(q?.tax),total=cents(q?.totalCost);
+ return cost!==null&&tax!==null&&total!==null&&cost+tax===total?
+  total:null;
+};
+// A sale price must be at least one whole cent; rounding a sub-cent quote
+// to zero would let a physical native item be considered sold for free.
+const saleCents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<=0||x>1e12)return null;
+ const exact=x*100,n=Math.round(exact);
+ return Number.isSafeInteger(n)&&n>0&&Math.abs(exact-n)<=1e-7?n:null;
+};
+const warehouseItem=(item,e,ownerID,stationID)=>Boolean(item&&
+ item.itemID===e.itemID&&item.typeID===e.typeID&&
+ item.ownerID===ownerID&&item.locationID===stationID&&
+ item.flagID===4&&item.singleton===0&&
+ Number.isSafeInteger(e.quantity)&&e.quantity>0&&
+ item.quantity===e.quantity&&item.stacksize===e.quantity&&
+ item.customInfo==="coop-industry:v1:"+e.jobID);
 const copy=x=>JSON.parse(JSON.stringify(x));
-const {calculateNativeDemand}=require("./coopNpcDemandAuthority.cjs");
-const {reconcileUnknown}=require("./coopNpcEconomyUnknownRecovery.cjs");
+// The orchestration checkout stores modules as .cjs, but the pinned EveJS
+// installer deploys the SAME sources as server/src/space/*.js. Resolve the
+// deployed native sibling first, and only fall back on an absent sibling in
+// local tests. Never swallow a missing transitive dependency as a fallback.
+function loadEconomySibling(name){
+ try{return require("./"+name)}
+ catch(error){
+  if(error?.code!=="MODULE_NOT_FOUND"||
+     !String(error.message).includes("Cannot find module './"+name+"'"))
+   throw error;
+  return require("./"+name+".cjs");
+ }
+}
+const {calculateNativeDemand}=loadEconomySibling("coopNpcDemandAuthority");
+const {reconcileUnknown}=loadEconomySibling("coopNpcEconomyUnknownRecovery");
 const isOperation=x=>typeof x==="string"&&/^npc-manufacture:[0-9a-f]{32}$/.test(x);
 const closed=x=>x==="SOLD";
 function createDirector({file,planner,native,market,observe,clock=()=>Date.now(),maxActive=2,maxStock=50000,minReorderMs=60000}={}){
@@ -105,7 +144,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   const job=()=>native.getJob(id);
   if(e.phase==="PREPARED"){
    const q=native.quote(e.plan);
-   if(!q||q.verifiedNative!==true||cents(q.totalCost)===null||q.ownerID!==ownerID||
+   if(!q||q.verifiedNative!==true||quoteCents(q)===null||q.ownerID!==ownerID||
      q.blueprintID!==e.plan.blueprintItemID||q.productTypeID!==e.typeID||q.facilityID!==stationID)
     return halt("UNVERIFIED_CANONICAL_QUOTE",id);
    e.phase="INSTALL_UNKNOWN";e.quote=copy(q);save(state);
@@ -137,16 +176,15 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
    const r=native.deliverOnce(id),j=job();
    if(!receipt(j,{...r,operationID:id,jobID:e.jobID}))return halt("DELIVERY_OUTCOME_UNKNOWN",id);
    const item=native.getItem(r.itemID);
-   if(!item||item.itemID!==r.itemID||item.typeID!==e.typeID||item.ownerID!==ownerID||
-      item.locationID!==stationID||item.quantity!==r.quantity||
-      item.customInfo!=="coop-industry:v1:"+e.jobID)return halt("DELIVERY_ITEM_IDENTITY_UNKNOWN",id);
+   if(!warehouseItem(item,{...e,itemID:r.itemID,quantity:r.quantity},
+      ownerID,stationID))
+    return halt("DELIVERY_ITEM_IDENTITY_UNKNOWN",id);
    e.phase="DELIVERED";e.itemID=item.itemID;e.quantity=item.quantity;save(state);
    return {status:"DELIVERED",operationID:id,itemID:e.itemID,quantity:e.quantity};
   }
   if(e.phase==="DELIVERED"){
    const item=native.getItem(e.itemID);
-   if(!item||item.ownerID!==ownerID||item.locationID!==stationID||item.typeID!==e.typeID||
-      item.quantity!==e.quantity||item.customInfo!=="coop-industry:v1:"+e.jobID)
+   if(!warehouseItem(item,e,ownerID,stationID))
       return halt("NATIVE_OUTPUT_NO_LONGER_AVAILABLE",id);
    e.phase="LIST_UNKNOWN";save(state);
    const rpc=market.listOnce({operationID:id,ownerID,stationID,itemID:e.itemID,typeID:e.typeID,quantity:e.quantity});
@@ -156,7 +194,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
       order.ownerID!==ownerID||order.stationID!==stationID||order.typeID!==e.typeID||
       order.sourceItemID!==e.itemID||order.originalQuantity!==e.quantity||
       order.nativeEscrowVerified!==true)return halt("NATIVE_MARKET_LIST_OUTCOME_UNKNOWN",id);
-   e.phase="LISTED";e.orderID=r.orderID;e.priceCents=cents(order.price);
+   e.phase="LISTED";e.orderID=r.orderID;e.priceCents=saleCents(order.price);
    if(e.priceCents===null)return halt("NATIVE_MARKET_PRICE_INVALID",id);
    save(state);return {status:"LISTED",operationID:id,orderID:e.orderID};
    };
@@ -164,15 +202,31 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
   }
   if(e.phase==="LISTED"){
    const order=market.getOrder(e.orderID),sales=market.getSaleEvidence(e.orderID);
+   // A paid receipt for an order ID is NOT proof of this factory stack.
+   // Re-attest the original listing identity on every read before SOLD.
+   // The order's asking price is immutable for this director: repricing
+   // requires a separate original Rust/escrow operation and new evidence.
    if(!order||order.orderID!==e.orderID||order.ownerID!==ownerID||
-      order.nativeEscrowVerified!==true||!Array.isArray(sales))return halt("NATIVE_SALE_EVIDENCE_MISSING",id);
+      order.stationID!==stationID||order.typeID!==e.typeID||
+      order.sourceItemID!==e.itemID||
+      order.originalQuantity!==e.quantity||
+      !safeInt(e.priceCents)||saleCents(order.price)!==e.priceCents||
+      order.nativeEscrowVerified!==true||!Array.isArray(sales))
+    return halt("NATIVE_SALE_ORIGINAL_ORDER_CUSTODY_DRIFT",id);
    if(!Number.isSafeInteger(order.remainingQuantity)||order.remainingQuantity<0||
       order.remainingQuantity>e.quantity)return halt("NATIVE_SALE_REMAINING_INVALID",id);
    const filled=sales.reduce((sum,x)=>{
+    const unitCents=saleCents(x?.price);
+    // A native ASK cannot legitimately settle BELOW its original listed
+    // minimum price; a better buyer bid may pay above the ask.
+    // Also reject products beyond the safe integer-cent ledger range.
+    const expected=unitCents===null?null:unitCents*x.quantity;
     if(!x||x.orderID!==e.orderID||x.ownerID!==ownerID||x.typeID!==e.typeID||
-       !safeInt(x.quantity)||!safeInt(x.transactionID)||cents(x.price)===null||x.nativeWalletSettled!==true)
+       !safeInt(x.quantity)||!safeInt(x.transactionID)||unitCents===null||
+       unitCents<e.priceCents||!Number.isSafeInteger(expected)||expected<=0||
+       x.nativeWalletSettled!==true)
        throw Error("NATIVE_SALE_LEDGER_INVALID");
-    const wallet=market.getWalletEntry(x.transactionID),expected=cents(x.price)*x.quantity;
+    const wallet=market.getWalletEntry(x.transactionID);
     if(!wallet||wallet.verifiedNative!==true||wallet.transactionID!==x.transactionID||
        wallet.ownerID!==ownerID||wallet.orderID!==e.orderID||wallet.amountCents!==expected)
        throw Error("NATIVE_SALE_WALLET_NOT_SETTLED");
@@ -182,7 +236,7 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
     return halt("NATIVE_MARKET_QUANTITY_NOT_CONSERVED",id);
    if(filled===0)return {status:"LISTED_AWAITING_BUYER",operationID:id};
    if(order.remainingQuantity>0)return {status:"PARTIALLY_SOLD",operationID:id,filled,remaining:order.remainingQuantity};
-   const revenue=sales.reduce((sum,x)=>sum+cents(x.price)*x.quantity,0);
+   const revenue=sales.reduce((sum,x)=>sum+saleCents(x.price)*x.quantity,0);
    if(!Number.isSafeInteger(revenue)||revenue<0)return halt("NATIVE_SALE_REVENUE_INVALID",id);
    e.phase="SOLD";e.revenueCents=revenue;e.soldQuantity=filled;save(state);
    return {status:"SOLD",operationID:id,revenueCents:revenue,productionCostCents:e.installCostCents};
@@ -234,7 +288,11 @@ function createDirector({file,planner,native,market,observe,clock=()=>Date.now()
 
    const p=planner.plan({ownerID,stationID,productTypeIDs:available,targetStock:target,
     marketStock:stock,maxJobs:Math.min(maxActive,2)});
-   if(p?.status!=="PLAN_READY"||!Array.isArray(p.jobs)||!p.jobs.length)return {status:"NO_NATIVE_FACTORY_JOB",blocked:p?.blocked||[]};
+   // A verified Rust sale poll is meaningful gameplay even if the station
+   // has no new job to install. Don't erase PARTIALLY_SOLD / waiting-for-buyer
+   // with a separate planner NO_JOB result; no extra financial action occurs.
+   if(p?.status!=="PLAN_READY"||!Array.isArray(p.jobs)||!p.jobs.length)
+    return listingResult||{status:"NO_NATIVE_FACTORY_JOB",blocked:p?.blocked||[]};
    const j=p.jobs[0];if(!safeInt(j.blueprintItemID)||!safeInt(j.productTypeID)||j.ownerID!==ownerID||
      j.stationID!==stationID||!available.includes(j.productTypeID)||j.outputQuantity>maxStock)
      return halt("PLANNER_JOB_CONTEXT_INVALID");

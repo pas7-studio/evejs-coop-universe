@@ -2,7 +2,19 @@
 // COOP-035 optional server-side bridge. Only called by authenticated native market
 // handler with exact docked session; NEVER impersonates a character or corp.
 // Intentionally no background/startup side effects or timer.
-const {createNpcCorporateSettlement}=require("./coopNpcCorporateSettlement");
+// Source checkout contains .cjs, while pinned EveJS overlay deploys .js.
+ // Keep native .js resolution first; do not disguise transitive missing deps.
+function loadSettlement(){
+ try{return require("./coopNpcCorporateSettlement")}
+ catch(error){
+  if(error?.code!=="MODULE_NOT_FOUND"||
+     String(error.message).split("\n")[0]!==
+      "Cannot find module './coopNpcCorporateSettlement'")
+   throw error;
+  return require("./coopNpcCorporateSettlement.cjs");
+ }
+}
+const {createNpcCorporateSettlement}=loadSettlement();
 const {marketDaemonClient}=require("../services/market/marketDaemonClient");
 const {getEscrowRecord}=require("../services/market/marketEscrowState");
 const {getCorporationRecord}=require("../services/corporation/corporationState");
@@ -10,10 +22,19 @@ const {getCorporationRuntime}=require("../services/corporation/corporationRuntim
 const {getDockedLocationID}=require("../services/structure/structureLocation");
 const {findItemById}=require("../services/inventory/itemStore");
 const {getCharacterRecord}=require("../services/character/characterState");
+const {getAccountByUserName}=require("../services/login/accountStore");
 const {notifyInventoryChangesToCharacter}=require("../services/raffles/raffleInventory");
 const gameStore=require("../gameStore");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const sessionID=s=>Number(s&&(s.characterID??s.charid));
+const canonicalID=x=>{
+ const n=Number(x);
+ return (typeof x==="number"||typeof x==="string"&&/^[1-9][0-9]*$/.test(x))&&
+  Number.isSafeInteger(n)&&n>0?n:0;
+};
+const sessionID=s=>{
+ const a=canonicalID(s?.characterID),b=canonicalID(s?.charid);
+ return a&&b&&a!==b?0:a||b;
+};
 // Session guard: never run an untrusted global buyer session across concurrent RPCs.
 // Build a fresh actor-scoped instance with the same captured native authorities.
 function makeForSession(session){
@@ -34,9 +55,27 @@ function makeForSession(session){
   inspectClaim:({operationID})=>marketDaemonClient.call("GetNpcSellClaim",{
    operation_id:operationID})
  };
- const verifyBuyerSession=(actor,stationID)=>actor===buyerID&&
-  Number(getDockedLocationID(session))===stationID&&
-  getCharacterRecord(buyerID)?.characterID===buyerID;
+ const verifyBuyerSession=(actor,stationID)=>{
+  if(actor!==buyerID||session?.socket?.destroyed===true||
+     sessionID(session)!==buyerID||
+     Number(getDockedLocationID(session))!==stationID)return false;
+  // Pinned EveJS characterState records are keyed by character ID, and
+  // neither characterID nor accountId is persisted on the character row.
+  // The trusted handshake binds userName -> account.id to session.userid;
+  // character selection already binds the same native session to buyerID.
+  const record=getCharacterRecord(buyerID);
+  const userID=canonicalID(session.userid??session.userID??session.accountID);
+  const userName=session.userName??session.username;
+  const account=typeof userName==="string"&&userName.length>0?
+   getAccountByUserName(userName):null;
+  const embedded=record?.characterID??record?.charID;
+  const optionalAccountID=record?.accountId??record?.accountID;
+  return Boolean(record&&userID&&account&&account.banned!==true&&
+   canonicalID(account.id)===userID&&
+   (embedded===undefined||embedded===null||canonicalID(embedded)===buyerID)&&
+   (optionalAccountID===undefined||optionalAccountID===null||
+    canonicalID(optionalAccountID)===userID));
+ };
  const verifyNpcCorporation=(corpID,stationID)=>{
   const record=getCorporationRecord(corpID),runtime=getCorporationRuntime(corpID);
   return Boolean(record?.corporationID===corpID&&record.isNPC===true&&
@@ -55,10 +94,16 @@ async function buyFromOrder({session,sellOrder,quantity}={}){
  const buyerID=sessionID(session),orderID=Number(sellOrder.order_id);
  const stationID=Number(sellOrder.station_id),typeID=Number(sellOrder.type_id);
  const listed=Number(sellOrder.vol_remaining);
- const price=Number(sellOrder.price),priceCents=Math.round(price*100);
+ // An original Rust SELL order price must already be canonical cents.
+ // Rounding 1.254 ISK to 1.25 changes the advertised contract before
+ // any Rust claim / original GameStore escrow or wallet authority.
+ const price=sellOrder.price;
+ const rawPriceCents=price*100,priceCents=Math.round(rawPriceCents);
  if(!pos(buyerID)||!pos(orderID)||!pos(stationID)||!pos(typeID)||
-    !pos(listed)||quantity!==listed||!Number.isFinite(price)||price<=0||
+    !pos(listed)||quantity!==listed||typeof price!=="number"||
+    !Number.isFinite(price)||price<=0||
     !pos(priceCents)||priceCents>100000000||
+    Math.abs(rawPriceCents-priceCents)>1e-7||
     Number(getDockedLocationID(session))!==stationID)
    return {status:"BLOCKED",error:"NPC_BUY_REQUIRES_FULL_STACK_DOCKED"};
  const escrow=getEscrowRecord(orderID);
