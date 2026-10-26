@@ -21,6 +21,11 @@ function dependenciesOf(options={}){
 // It never allocates cargo or credits virtual/station stock. Unknown outcomes
 // quarantine both actors instead of replaying a possibly committed transfer.
 const strictInFlight=new Set();
+// One owner for "this pair needs an operator": the same five flags were
+// written by two different failure paths and one of them could drift.
+function markHaulRepair(actors,reason){
+ for(const actor of actors)if(actor&&typeof actor==="object")actor.coopHaulNeedsOperatorRepair=reason;
+}
 const integer=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>0;
 const vector=x=>x&&["x","y","z"].every(k=>Number.isFinite(x[k]));
 const isWarping=x=>Boolean(x?.isWarping||x?.pendingWarp||x?.warpState||
@@ -31,9 +36,8 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    miner.coopHaulNeedsOperatorRepair=reason;
    miner.coopHaulCargoNeedsOperatorRepair=reason;
    miner.coopMiningCargoNeedsOperatorRepair=reason;
-   fleet.coopHaulNeedsOperatorRepair=reason;
    fleet.coopHaulCargoNeedsOperatorRepair=reason;
-   if(hauler)hauler.coopHaulNeedsOperatorRepair=reason;
+   markHaulRepair([fleet,hauler],reason);
   }
   safeObserve(probe,"living-haul-custody-blocked",
    {itemID:miner.itemID,systemID:scene?.systemID},
