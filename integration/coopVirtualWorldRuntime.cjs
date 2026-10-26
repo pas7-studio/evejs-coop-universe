@@ -2127,6 +2127,13 @@ function advanceNativePveObjectiveDoctrine(){
    if(Number.isSafeInteger(id)&&id>0)excluded.add(id);
   }
   for(const id of tacticsDirector?.activeIDs()||[])excluded.add(id);
+  // Do not override any native lease owned by the already shared A-Life
+  // arbiter. This remains read-only; original owners keep order authority.
+  for(const lease of nativeOrderBridge?.snapshot()?.leases||[])
+   if(Number(lease.systemID)===Number(systemID)&&
+      ["ACTIVE","ISSUING","OUTCOME_UNKNOWN"].includes(lease.phase)&&
+      Number.isSafeInteger(lease.entityID)&&lease.entityID>0)
+    excluded.add(lease.entityID);
   if(excluded.size>1024)continue;
   const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
   const output=pveObjectiveDoctrineDirector.tick({
