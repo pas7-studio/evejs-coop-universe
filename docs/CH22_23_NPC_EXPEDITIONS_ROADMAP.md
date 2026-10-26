@@ -205,3 +205,16 @@ The scene in this test is **native-shaped and controlled**, not the actual two-c
 **Safety:** both SQLite crash scripts require `EVEJS_TEST_STORE_ISOLATED=1`, exact `<os.tmpdir>/evejs-ex03b{6,7}-*` roots, a correctly matching `.evejs-test-store-attestation.json`, no symlink root/data, and `EVEJS_GAMESTORE_DATA_DIR=<that root>/data` before importing the original native GameStore. They must never touch the production database.
 
 **Remaining release gates:** GitHub Actions execution of both actual SQLite SIGKILL suites; original server-backed NPC scout fitting/cargo provisioning; verified physical probe bubble visibility with two authenticated clients; authoritative scanner certainty against a real live signature; probe reclaim and warehouse/loot economic settlement; single-writer deployment. Keep PR #286 Draft and all feature flags OFF.
+
+## EX-03B8 — Original recovered probe reuse & safe relaunch (2026-10-26)
+
+A real gameplay limitation was found during lifecycle review: EX-03B5's completed `IN_SPACE → RECALLING → STOWED` returned one original probe charge with `quantity:1`, yet the launch writer and hardware preflight both required a charge with no `deployedProbe` receipt. NPC explorers therefore could not reuse recovered probes.
+
+**Fixed in source:**
+- `coopNpcProbeHardware.cjs` now considers the **same original item** with a verified durable `STOWED` receipt as ready stock; it never treats `IN_SPACE`, `RECALLING`, `EXPIRED` or ambiguous receipts as charge inventory.
+- `coopNativeNpcProbeFlight.cjs` permits `STOWED → IN_SPACE` on the **exact original cargoID**. It requires matching receipt `probeID`, `entityID`, `ownerID`, `typeID`, a valid original system, source launch time, and a completed `recoveredAtMs` between launch and current time. No new ID, wallet settlement, synthetic stock or hidden scanner certainty is generated. The new in-flight receipt overwrites the completed one only **after** the original `npcCargo` debit is synchronously flushed.
+- Any native scene entity occupying a candidate charge's original ID is now rejected **before debit**, including new charge units. This prevents a foreign original-ID collision from consuming legitimate NPC scanner stock. A post-spawn ACK must also confirm exact original `cargoID`, owner, system and server-owned provenance seal.
+- `verify-npc-probe-feature-sqlite-crash.mjs` now includes `stow → relaunch → recall again → stow again` in the real pinned SQLite production-state-machine test sequence, with an actual OS SIGKILL between each stage when the workflow executes.
+- Expanded GitHub Actions `paths` triggers to include the crash harnesses and **all** native NPC probe suites, not just the original first-stage test files.
+
+**Verified in isolated JS source fixtures:** native launcher/recovery 19/19 PASS, scanner evidence with STOWED preflight 19/19 PASS, original flight+sweep+lifecycle source-cycle 3/3 PASS, native scene transition 6/6, sweep 8/8, lifecycle 13/13. The SQLite SIGKILL/production test files have been added and syntax-checked but **have not run against pinned SQLite on a GitHub Runner**. Live two-client and real native scout fit acceptance remain unverified. Do not enable any experimental flags in production or merge based on isolated fixture PASS alone.
