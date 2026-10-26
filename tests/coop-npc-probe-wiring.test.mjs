@@ -210,7 +210,11 @@ test("EX-03B9 native scanner priority cannot be starved by virtual miners",()=>{
  const world=read("integration/coopVirtualWorldRuntime.cjs");
  const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
  assert.match(director,/roles\[a\.pilotID\]==="patrol"/);
- assert.match(director,/isNativeProbeScout\(scout\.entityID,scene\.systemID\)/);
+ assert.match(director,/isNativeProbeScout\(id,scene\.systemID\)/);
+ assert.match(director,/SCANNER_PREFLIGHT_BUDGET=128/);
+ assert.match(director,/scannerCursor=\(scannerCursor\+checks\)%candidateIDs\.length/);
+ assert.match(director,/const all=\[\.\.\.equipped\]/);
+ assert.match(director,/if\(nativeProbeScan&&isNativeProbeScout&&candidateIDs\.length\)/);
  assert.match(director,/if\(equipped\.length>=2\)break/);
  assert.match(world,/isNativeProbeScout:\(id,systemID\)=>/);
  assert.match(world,/store\.listNativeModulesForEntity\(id\)/);
