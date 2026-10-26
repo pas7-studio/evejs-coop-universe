@@ -42,7 +42,8 @@ function fixture({sold=3,returned=false}={}){
   itemID:ITEM,typeID:34,stationID:60001,quantity:8,
   orderID:ORDER,remainingQuantity:returned||sold===8?0:8-sold,
   returnedQuantity:returned?8-sold:undefined,
-  settledCycles:sold?1:0,lastSettledCycle:sold?1:0};
+  settledCycles:sold?1:0,lastSettledCycle:sold?1:0,
+  escrowLocationID:9200000000+Number(ORDER)};
  const groups={
    coopPlayerMiningShift:{[SHIFT]:{version:1,status:"FUNDED",
     operationID:SHIFT,corporationID:CORP,employerCorpID:EMPLOYER,
@@ -51,7 +52,8 @@ function fixture({sold=3,returned=false}={}){
    coopPlayerMiningOreTitle:{[CARGO]:{
     version:1,status:"COMMITTED",operationID:titleID,shiftID:SHIFT,
     cargoID:CARGO,itemID:ITEM,typeID:34,quantity:8,
-    stationID:60001,sourceCorpID:EMPLOYER,buyerCorpID:CORP,
+    stationID:60001,officeFolderID:64001,division:115,
+    sourceCorpID:EMPLOYER,buyerCorpID:CORP,
     priceCents:800,buyerAfterCents:98900,sourceAfterCents:101100}},
    coopPlayerMiningCorpSell:{[CARGO]:sale},
    coopPlayerMiningCorpFill:sold?{[ORDER+":1"]:fill}:{}
@@ -64,8 +66,12 @@ function fixture({sold=3,returned=false}={}){
   return data===undefined||data===null?{success:false,errorMsg:"ENTRY_NOT_FOUND"}:
    {success:true,data};
  }};
+ const sourceItem={itemID:ITEM,ownerID:CORP,typeID:34,quantity:8-sold,
+  stacksize:8-sold,singleton:0,customInfo:"coop-warehouse:v1:cargo:"+CARGO,
+  locationID:returned?64001:9200000000+Number(ORDER),flagID:returned?115:4};
+ if(sold===0){sourceItem.locationID=64001;sourceItem.flagID=115}
  const service=createMiningCorporatePnl({
-  gameStore,access:{isMember:()=>role,canIndustry:()=>role,canWallet:()=>role},
+  gameStore,findOriginalItemById:()=>sourceItem,access:{isMember:()=>role,canIndustry:()=>role,canWallet:()=>role},
   readNativeReleased:async({orderID,cycle})=>{
    witnessReads++;
    return rustValid?{verifiedNative:true,phase:"released",
