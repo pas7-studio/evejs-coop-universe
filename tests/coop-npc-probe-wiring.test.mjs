@@ -119,3 +119,29 @@ test("EX-03B4 original scout hardware is a conditional source-authored fitting",
  const manifest=read("scripts/overlay-spec.cjs");
  assert.match(manifest,/"coopNativeNpcProbeSweep","coopNpcScoutLoadout"/);
 });
+
+test("EX-03B5 source expiry and recovery use original gameStore single-table durability barrier",()=>{
+ const lifecycle=read("integration/coopNativeNpcProbeLifecycle.cjs");
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
+ const manifest=read("scripts/overlay-spec.cjs");
+ assert.match(lifecycle,/status:"RECALLING"/);
+ assert.match(lifecycle,/status:"STOWED"/);
+ assert.match(lifecycle,/status:"EXPIRED"/);
+ assert.match(lifecycle,/upsertNativeCargo\(row\)/);
+ assert.match(lifecycle,/flushNpcCargo\(\)/);
+ assert.match(lifecycle,/removeNativeProbe\(scene\.systemID,row\.cargoID\)/);
+ assert.match(runtime,/EVEJS_COOP_NPC_PROBE_LIFECYCLE==="1"/);
+ assert.match(runtime,/runtime\.removeDynamicEntity\(systemID,probeID/);
+ assert.match(runtime,/gameStore\.flushTableSync\("npcCargo"\)/);
+ assert.match(deploy,/\[switch\]\$EnableNpcProbeLifecycle/);
+ assert.match(deploy,/EnableNpcProbeLifecycle -and -not \$EnableNpcProbeLaunch/);
+ assert.match(deploy,/EVEJS_COOP_NPC_PROBE_LIFECYCLE: '1'/);
+ assert.match(manifest,/"coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle"/);
+});
+test("EX-03B5 cannot produce player/client inventory or synthetic ISK during probe end",()=>{
+ const lifecycle=read("integration/coopNativeNpcProbeLifecycle.cjs");
+ assert.doesNotMatch(lifecycle,/grantItemToCharacterLocation|transferISK|wallet|launchCharacterProbes|resolveNativeSite/);
+ assert.match(lifecycle,/p\.probeID!==row\.cargoID/);
+ assert.match(lifecycle,/dist\(physical\.position,p\.position\)<=1/);
+});
