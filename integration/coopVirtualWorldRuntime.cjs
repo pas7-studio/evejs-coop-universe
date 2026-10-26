@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -498,7 +498,45 @@ function advanceNativeNpcExpeditions(){
         source:"ORIGINAL_NPC_CARGO_DURABLE_BEFORE_SCENE",
         nativeWalletMutation:false,nativeLootGranted:false});
     }
+    // EX-03B5 original native probe lifecycle: source transition durably
+    // commits before a sealed physical probe is removed from the scene.
+    // Single existing A-Life scan tick, no independent schedule or player RPC.
+    if(process.env.EVEJS_COOP_NPC_PROBE_LIFECYCLE==="1" &&
+       process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
+     if(!npcProbeLifecycle){
+      const gameStore=require("../gameStore");
+      const runtime=require("../runtime");
+      npcProbeLifecycle=require("./coopNativeNpcProbeLifecycle").createNativeNpcProbeLifecycle({
+       getNativeEntity:id=>store.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+       upsertNativeCargo:row=>store.upsertNativeCargo(row),
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       removeNativeProbe:(systemID,probeID)=>
+        runtime.removeDynamicEntity(systemID,probeID,
+         {allowSessionOwned:false,broadcast:true}),
+       refreshNativeCargoProjection:(ship,id)=>{
+        const cargo=store.buildNativeCargoItems(id);
+        if(!Array.isArray(cargo))return false;
+        ship.nativeCargoItems=cargo.filter(item=>
+         Number.isSafeInteger(item?.quantity)&&item.quantity>0);
+        return true;
+       }
+      });
+     }
+     const lifecycle=npcProbeLifecycle.tick({scene,entityID,assignments});
+     if(lifecycle.status==="BLOCKED"&&backgroundTicks%10===0||
+        lifecycle.status!=="NO_LIFECYCLE_ACTION"&&lifecycle.status!=="BLOCKED")
+      probe.observe("living-npc-original-probe-lifecycle",null,
+       {spaceState:{systemID:scene.systemID}},
+       {entityID,status:lifecycle.status,reason:lifecycle.reason||null,
+        originalCargoID:lifecycle.cargoID||null,
+        nativeWalletMutation:false,nativeLootGranted:false});
+    }
     const result=npcProbeEvidence.scan({scene,entityID,assignments});
+    if(npcProbeLifecycle&&result.proofs?.length>0&&
+       process.env.EVEJS_COOP_NPC_PROBE_LIFECYCLE==="1")
+      npcProbeLifecycle.tick({scene,entityID,assignments,requestRecall:true});
     // EX-03B4: independently opt-in blind sweep, AFTER native result
     // certainty is checked, never use system-private site coordinates.
     if(process.env.EVEJS_COOP_NPC_PROBE_SWEEP==="1" &&
