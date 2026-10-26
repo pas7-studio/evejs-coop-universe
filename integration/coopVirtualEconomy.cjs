@@ -3,11 +3,11 @@
 const fs=require("node:fs"),path=require("node:path");
 const ROLES=["miner","hauler","patrol","trader","pirate"];
 const cap=n=>Math.max(0,Math.min(1000000,Math.floor(Number(n)||0)));
-function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440}){
+function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,fsApi=fs}){
  if(!file||!Number.isInteger(stepMs)||stepMs<10000||!Number.isInteger(maxCatchup)||maxCatchup<1||maxCatchup>10000)throw Error("invalid economy settings");
  let state,journalPresent=false,persistenceUnverified=false;
  try{
-  state=JSON.parse(fs.readFileSync(file,"utf8"));
+  state=JSON.parse(fsApi.readFileSync(file,"utf8"));
   if(state.version!==1)throw Error("incompatible economy state");
   journalPresent=true;
  }catch(e){if(e.code!=="ENOENT")throw e;}
@@ -19,11 +19,11 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
   if(persistenceUnverified)throw Error("ECONOMY_PERSISTENCE_UNVERIFIED");
   try{
    try{
-    fs.readFileSync(file+".lock","utf8");
+    fsApi.readFileSync(file+".lock","utf8");
     throw Error("ECONOMY_WRITE_IN_PROGRESS");
    }catch(e){if(e?.code!=="ENOENT")throw e;}
    let disk=null;
-   try{disk=JSON.parse(fs.readFileSync(file,"utf8"));}
+   try{disk=JSON.parse(fsApi.readFileSync(file,"utf8"));}
    catch(e){if(e?.code!=="ENOENT")throw e;}
    if((disk!==null)!==journalPresent||
       (journalPresent&&JSON.stringify(disk)!==JSON.stringify(state)))
@@ -35,35 +35,35 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
   const folder=path.dirname(file),lock=file+".lock",tmp=file+".tmp-"+process.pid;
   let lockFd=null,held=false;
   try{
-   fs.mkdirSync(folder,{recursive:true});
-   lockFd=fs.openSync(lock,"wx",0o600);held=true;
-   fs.writeFileSync(lockFd,String(process.pid));fs.fsyncSync(lockFd);
-   fs.closeSync(lockFd);lockFd=null;
+   fsApi.mkdirSync(folder,{recursive:true});
+   lockFd=fsApi.openSync(lock,"wx",0o600);held=true;
+   fsApi.writeFileSync(lockFd,String(process.pid));fsApi.fsyncSync(lockFd);
+   fsApi.closeSync(lockFd);lockFd=null;
    let disk=null;
-   try{disk=JSON.parse(fs.readFileSync(file,"utf8"));}
+   try{disk=JSON.parse(fsApi.readFileSync(file,"utf8"));}
    catch(e){if(e?.code!=="ENOENT")throw e;}
    if((disk!==null)!==journalPresent||
       (journalPresent&&JSON.stringify(disk)!==JSON.stringify(stateBeforeMutation)))
     throw Error("ECONOMY_CONCURRENT_JOURNAL_DRIFT");
-   const fd=fs.openSync(tmp,"w");
-   try{fs.writeFileSync(fd,JSON.stringify(state));fs.fsyncSync(fd);}
-   finally{fs.closeSync(fd);}
-   fs.renameSync(tmp,file);
+   const fd=fsApi.openSync(tmp,"w");
+   try{fsApi.writeFileSync(fd,JSON.stringify(state));fsApi.fsyncSync(fd);}
+   finally{fsApi.closeSync(fd);}
+   fsApi.renameSync(tmp,file);
    try{
-    const directoryFd=fs.openSync(folder,"r");
-    try{fs.fsyncSync(directoryFd);}finally{fs.closeSync(directoryFd);}
+    const directoryFd=fsApi.openSync(folder,"r");
+    try{fsApi.fsyncSync(directoryFd);}finally{fsApi.closeSync(directoryFd);}
    }catch(error){
     if(!["EPERM","EACCES","EISDIR","EINVAL","EBADF"].includes(error?.code))throw error;
    }
    journalPresent=true;
   }catch(error){
    persistenceUnverified=true;
-   try{fs.unlinkSync(tmp);}catch(_ignored){}
+   try{fsApi.unlinkSync(tmp);}catch(_ignored){}
    throw error;
   }finally{
    let releaseError=null;
-   if(lockFd!==null)try{fs.closeSync(lockFd);}catch(e){releaseError=e;}
-   if(held)try{fs.unlinkSync(lock);}catch(e){releaseError=releaseError||e;}
+   if(lockFd!==null)try{fsApi.closeSync(lockFd);}catch(e){releaseError=e;}
+   if(held)try{fsApi.unlinkSync(lock);}catch(e){releaseError=releaseError||e;}
    if(releaseError){persistenceUnverified=true;throw releaseError;}
   }
  }
