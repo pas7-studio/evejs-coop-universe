@@ -4,6 +4,9 @@
 // logs, rather than silently misreported as a missing EVE client.
 const fs = require("node:fs");
 const path = require("node:path");
+const {randomUUID}=require("node:crypto");
+// Unique for this Node process boot, not user-supplied or a game state ID.
+const runtimeRunID=randomUUID();
 let lastWarning = "";
 // Opt-in, additive subscribers (e.g. the ALIFE news digest). They receive the
 // exact record that was appended, can never change it, and are isolated so a
@@ -43,6 +46,8 @@ function observe(event,session,ship,extra={}){
       event,
       ...describe(session,ship),
       ...extra,
+      // Reserved final key: callers cannot counterfeit a prior process run.
+      runtimeRunID,
     };
     fs.mkdirSync(path.dirname(destination),{recursive:true});
     fs.appendFileSync(destination,JSON.stringify(record)+"\n",{encoding:"utf8",flag:"a"});
