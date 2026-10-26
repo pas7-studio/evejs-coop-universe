@@ -19,7 +19,8 @@ function fixture(){
  return [
   {...base,event:"living-pve-native-boss-death",at:at(0),
    status:"ORIGINAL_BOSS_WRECK_CONFIRMED",instanceID:sourceInstanceID,
-   wreckID:887,itemCount:1},
+   wreckID:887,itemCount:1,
+   evidence:"NATIVE_ORIGINAL_WRECK_AND_ITEMS_AFTER_DEATH"},
   {...base,event:"living-pve-duo-native-reward-custody",at:at(10),
    status:"TWO_ORIGINAL_REWARD_ITEMS_AND_STANDING_TRANSACTIONS_VERIFIED",
    fleetID,agentID,sourceInstanceID,recipients:cargo},
@@ -108,4 +109,16 @@ test("native event proof NEVER claims real client rendering or restart acceptanc
  assert.equal(r.genuineClientsVerified,false);
  assert.equal(r.gameplayVerified,false);
  assert.equal(r.serverRestartVerified,false);
+});
+
+
+test("one new native item ID cannot be allocated to both independent recipients",()=>{
+ const f=fixture();
+ f[1].recipients[1].newItemIDs=[...f[1].recipients[0].newItemIDs];
+ assert.equal(run(f).status,"TWO_PERSONAL_REWARD_SOURCE_CHAINS_NOT_MATCHED");
+});
+test("an original wreck event without source authority tag is not live wreck proof",()=>{
+ const f=fixture();
+ delete f[0].evidence;
+ assert.equal(run(f).status,"NATIVE_BOSS_WRECK_NOT_OBSERVED");
 });

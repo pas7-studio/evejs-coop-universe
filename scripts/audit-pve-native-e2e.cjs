@@ -26,7 +26,7 @@ function receiptsMatch(b,c,t){
  if(!pair(char)||!pair(seq)||!Array.isArray(b.recipients)||
     !Array.isArray(c.recipients)||b.recipients.length!==2||
     c.recipients.length!==2)return false;
- const seenWallet=new Set(),seenChar=new Set();
+ const seenWallet=new Set(),seenChar=new Set(),allNewItemIDs=new Set();
  for(let i=0;i<2;i++){
   const player=char[i],sequence=seq[i];
   const reward=b.recipients.find(x=>x?.characterID===player),
@@ -44,7 +44,8 @@ function receiptsMatch(b,c,t){
    positive(x?.typeID)&&Number.isSafeInteger(x.quantity)&&x.quantity>0?n+x.quantity:NaN,0);
   if(!Number.isSafeInteger(total)||total!==custody.itemCount||
      new Set(custody.newItemIDs).size!==custody.newItemIDs.length||
-     custody.newItemIDs.some(x=>!positive(x)))return false;
+     custody.newItemIDs.some(x=>!positive(x)||allNewItemIDs.has(x)))return false;
+  for(const itemID of custody.newItemIDs)allNewItemIDs.add(itemID);
   for(const standing of custody.standingTransactions)
    if(!positive(standing?.ownerID)||!positive(standing?.eventTypeID)||
       !Number.isFinite(standing?.rawModification)||
@@ -65,7 +66,8 @@ function analyze(input){
  if(parsed.status!=="PARSED")return {...base,status:parsed.status};
  const logs=parsed.records;
  const deaths=logs.filter(x=>x.event==="living-pve-native-boss-death"&&
-  x.status==="ORIGINAL_BOSS_WRECK_CONFIRMED"&&positive(x.systemID)&&
+  x.status==="ORIGINAL_BOSS_WRECK_CONFIRMED"&&
+  x.evidence==="NATIVE_ORIGINAL_WRECK_AND_ITEMS_AFTER_DEATH"&&positive(x.systemID)&&
   positive(x.instanceID)&&positive(x.wreckID)&&
   Number.isSafeInteger(x.itemCount)&&x.itemCount>=0);
  const turnins=logs.filter(x=>x.event==="living-pve-duo-native-mission-turnin"&&
