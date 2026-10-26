@@ -201,3 +201,36 @@ test("requires exactly one live hauler for the slot", () => {
   assert.equal(result.status, "HAULER_NOT_UNIQUE");
   assert.equal(store.writes.length, 0);
 });
+
+
+test("never reassigns original NPC corporate title from an orphan with the same fleet slot",()=>{
+ const otherCorp=9999;
+ const store=fakeStore([
+  orphan({cargoID:7001,ownerID:otherCorp}),
+  orphan({cargoID:7002,entityID:900000000112,ownerID:hauler.ownerID})
+ ]);
+ const original=structuredClone(store.listNativeCargo());
+ const target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ORIGINAL_CARGO_OWNER_MISMATCH");
+ assert.equal(result.adopted,0);
+ assert.equal(store.writes.length,0);
+ assert.deepEqual(store.listNativeCargo(),original);
+ assert.equal(target.state,"mining");
+ assert.equal(target.coopHaulAdoptedAt,undefined);
+});
+test("same-owner orphan batch can be attached only to its original corporate fleet",()=>{
+ const store=fakeStore([
+  orphan({cargoID:7001}),
+  orphan({cargoID:7002,entityID:900000000112})
+ ]);
+ const result=adopt(sceneWith([hauler,miner]),fleet(),{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(result.adopted,2);
+ assert.deepEqual(store.listNativeCargo().map(x=>x.ownerID),[hauler.ownerID,hauler.ownerID]);
+ assert.deepEqual(store.listNativeCargo().map(x=>x.entityID),[hauler.itemID,hauler.itemID]);
+});
