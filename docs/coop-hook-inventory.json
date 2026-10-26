@@ -1,12 +1,12 @@
 {
  "version": 1,
- "legacyFiles": 70,
- "wiredModules": 52,
+ "legacyFiles": 75,
+ "wiredModules": 57,
  "specFiles": 15,
  "specEntries": 52,
  "longHooks": 3,
  "longestHook": 822,
- "overlap": 7,
+ "overlap": 8,
  "overlaps": [
   {
    "file": "coop-native-exploration-patch.cjs",
@@ -24,6 +24,12 @@
    "file": "coop-native-trade-custody-patch.cjs",
    "shared": [
     "server/src/services/trade/tradeMgrService.js"
+   ]
+  },
+  {
+   "file": "coop-npc-expedition-wreck-patch.cjs",
+   "shared": [
+    "server/src/space/npc/nativeNpcWreckService.js"
    ]
   },
   {
