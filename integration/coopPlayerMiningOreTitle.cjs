@@ -177,4 +177,42 @@ function createPlayerMiningOreTitle({gameStore,access,getWarehouseReceipt,
  return Object.freeze({transfer,requiresOperatorReconciliation:()=>[...held],
   mode:"NATIVE_ORIGINAL_ITEM_ATOMIC_ONLY",supportsLiveRuntime:false});
 }
-module.exports={createPlayerMiningOreTitle,RECEIPT,TABLES};
+// Read-only reconciliation for the original NPC warehouse. A title transfer
+// is legitimate only while the exact same physical item and reciprocal native
+// wallet journal entries remain independently observable.
+function createPlayerMiningOreAudit({readTitleReceipt,readCorporation,findItemById,
+ findByCargoID,verifyOfficeReceipt}={}){
+ if([readTitleReceipt,readCorporation,findItemById,findByCargoID,verifyOfficeReceipt]
+   .some(x=>typeof x!=="function"))throw Error("MINING_ORE_AUDIT_AUTHORITIES_REQUIRED");
+ function transferred(record){
+  try{
+   if(record?.phase!=="COMMITTED"||!POS(record.cargoID)||!POS(record.itemID))return false;
+   const r=readTitleReceipt(record.cargoID);
+   if(r?.version!==1||r.status!=="COMMITTED"||r.cargoID!==record.cargoID||
+    r.itemID!==record.itemID||r.typeID!==record.typeID||
+    r.quantity!==record.quantity||r.stationID!==record.stationID||
+    r.sourceCorpID!==record.corporationID||!POS(r.buyerCorpID)||
+    !POS(r.officeFolderID)||!POS(r.committedAt)||
+    r.priceCents<=0||!POS(r.priceCents)||
+    r.sourceBeforeCents+r.priceCents!==r.sourceAfterCents||
+    r.buyerBeforeCents-r.priceCents!==r.buyerAfterCents||
+    !POS(r.division)||r.division<115||r.division>121||
+    verifyOfficeReceipt(r)!==true)return false;
+   const seller=wallet(readCorporation(r.sourceCorpID),r.sourceCorpID),
+    buyer=wallet(readCorporation(r.buyerCorpID),r.buyerCorpID);
+   if(!paid(seller,r.operationID,r.sourceCorpID,r.buyerCorpID,
+      r.priceCents,r.sourceAfterCents)||
+      !paid(buyer,r.operationID,r.buyerCorpID,r.sourceCorpID,
+      -r.priceCents,r.buyerAfterCents))return false;
+   const item=findItemById(record.itemID),byCargo=findByCargoID(record.cargoID);
+   return Boolean(item&&byCargo&&byCargo.itemID===item.itemID&&
+    item.itemID===r.itemID&&item.ownerID===r.buyerCorpID&&
+    item.locationID===r.officeFolderID&&item.flagID===r.division&&
+    item.singleton===0&&item.typeID===record.typeID&&
+    item.quantity===record.quantity&&item.stacksize===record.quantity&&
+    item.customInfo===marker(record.cargoID));
+  }catch{return false;}
+ }
+ return Object.freeze({transferred});
+}
+module.exports={createPlayerMiningOreTitle,createPlayerMiningOreAudit,RECEIPT,TABLES};
