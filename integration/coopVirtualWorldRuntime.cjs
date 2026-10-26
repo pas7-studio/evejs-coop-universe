@@ -3102,5 +3102,12 @@ function createWarRecoveryAdmin({authorizeOperator}={}){
  if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
  return warGateHandoff.recovery({authorizeOperator});
 }
+// Read-only: an original native boss was observed alive and its single
+// original wreck + initial item records were verified in this process.
+function witnessedNativeBossWreck(wreckID){
+ if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES!=="1"||
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1")return null;
+ return pveNativeBossDirector?.witnessedWreck(Number(wreckID))||null;
+}
 function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:false,sequence:0,last:null}}
-module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};
