@@ -1,0 +1,81 @@
+name: EX-03 Native NPC Probe Source Gate
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integration/coopNpcExpedition*.cjs'
+      - 'integration/coopNpcProbe*.cjs'
+      - 'integration/coopNativeNpcProbeFlight.cjs'
+      - 'integration/coopNativeHackingAdmission.cjs'
+      - 'integration/coopVirtualWorldRuntime.cjs'
+      - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
+      - 'scripts/coop-native-hacking-admission-patch.cjs'
+      - 'scripts/patch-evejs-coop.cjs'
+      - 'scripts/overlay-spec.cjs'
+      - 'tests/coop-npc-*'
+      - 'tests/coop-native-npc-probe-flight.test.mjs'
+      - 'tests/coop-native-hacking-admission.test.mjs'
+      - '.github/workflows/ex03-native-npc-probes.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'integration/coopNpcProbe*.cjs'
+      - 'integration/coopNativeNpcProbeFlight.cjs'
+      - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
+      - 'tests/coop-npc-probe-*'
+      - '.github/workflows/ex03-native-npc-probes.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-npc-probe-source:
+    name: Original NPC probe source, data custody and restart fixtures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: All new source parses
+        run: |
+          set -euo pipefail
+          for f in \
+            integration/coopNpcExpeditionCompetition.cjs \
+            integration/coopNpcExpeditionDirector.cjs \
+            integration/coopNpcProbeHardware.cjs \
+            integration/coopNpcProbeScanEvidence.cjs \
+            integration/coopNativeNpcProbeFlight.cjs \
+            integration/coopNativeHackingAdmission.cjs \
+            scripts/coop-npc-probe-loadout-split-patch.cjs \
+            scripts/coop-native-hacking-admission-patch.cjs \
+            scripts/patch-evejs-coop.cjs; do
+            node --check "$f"
+          done
+      - name: Retrieve the exact pinned upstream native NPC cargo authoring source
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/space/npc/nativeNpcService.js' \
+            --output "${RUNNER_TEMP}/pinned-nativeNpcService.js"
+          test -s "${RUNNER_TEMP}/pinned-nativeNpcService.js"
+      - name: Run actual Node 22 tests with the source pin
+        env:
+          EVEJS_PINNED_NPC_SERVICE_SOURCE: ${{ runner.temp }}/pinned-nativeNpcService.js
+          EVEJS_COOP_NPC_PROBE_SCAN: '0'
+          EVEJS_COOP_NPC_PROBE_LAUNCH: '0'
+          EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '0'
+          EVEJS_COOP_NATIVE_HACKING_ADMISSION: '0'
+        run: |
+          node --test --test-concurrency=1 \
+            tests/coop-npc-expedition-competition.test.mjs \
+            tests/coop-npc-expedition-director.test.mjs \
+            tests/coop-npc-expedition-native-bridge.test.mjs \
+            tests/coop-npc-probe-evidence.test.mjs \
+            tests/coop-npc-probe-wiring.test.mjs \
+            tests/coop-npc-probe-loadout-source.test.mjs \
+            tests/coop-native-npc-probe-flight.test.mjs \
+            tests/coop-native-hacking-admission.test.mjs
+      - name: Keep native SQLite kill/restart and two-client gameplay blocked
+        run: |
+          echo "EX-03 source contracts only; pinned-game SQLite kill/restart, native ship loadout fixture and physical two-client acceptance must still be run before production enablement."
