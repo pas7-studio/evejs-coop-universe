@@ -29,6 +29,8 @@ function noteSlotStatus(systemID,reports){
     status:String(report.status),slot:Number(report.slot)||0,
     reason:report.reason?String(report.reason).slice(0,160):null,
     miners:(report.minerIDs||[]).length,haulers:(report.haulerIDs||[]).length,
+    liveMiners:Number.isInteger(report.liveMiners)?report.liveMiners:-1,
+    liveHaulers:Number.isInteger(report.liveHaulers)?report.liveHaulers:-1,
     restored:Number(report.restored)||0,controllers:Number(report.controllers)||0,
     reseededFrom:report.reseededFrom?String(report.reseededFrom):null,
     repaired:report.repaired===true,
@@ -453,8 +455,15 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:record.originAnchor||null});
      const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
+     // The witness alone is not proof that the live fleet record still owns the
+     // ships: the native tick prunes any actor it has no controller for. Reporting
+     // both lists makes a hauler-less fleet visible instead of silently idle.
+     const liveRecord=(typeof getFleets==="function"?(getFleets()||[]):[])
+      .find(x=>Number(x&&x.fleetID)===fleetIDForSlot(systemID,slot));
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
-      minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed}));
+      minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed,
+      liveMiners:Array.isArray(liveRecord&&liveRecord.minerEntityIDs)?liveRecord.minerEntityIDs.length:-1,
+      liveHaulers:Array.isArray(liveRecord&&liveRecord.haulerEntityIDs)?liveRecord.haulerEntityIDs.length:-1}));
     }catch(error){
      const reason=String(error?.message||error).slice(0,160);
      reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason}));

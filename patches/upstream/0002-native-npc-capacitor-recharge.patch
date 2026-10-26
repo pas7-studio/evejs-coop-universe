@@ -1,5 +1,5 @@
 From: pas7std co-op <coop@pas7std.invalid>
-Subject: [PATCH 0002/0002] nativeNpcService: give native NPC hulls a capacitor recharge rate
+Subject: [PATCH 0002/0002] nativeNpcService: native NPC capacitor rate and durable identity
 
 Native NPC entities received capacitorCapacity but never capacitorRechargeRate,
 so the CCP passive recharge loop in runtime.js (which requires a positive
@@ -11,12 +11,19 @@ so NPCs recharge like real ships at the same non-linear CCP curve. This is a
 native fix for a native omission; it does not add a co-op timer or grant
 capacitor out of thin air.
 
+A dematerialized NPC also had its stored entity/controller state written with
+transient:true. That transient marker strips the row from every later store
+flush, so a durable ship was deleted from disk the first time it left the
+scene and the next boot found no hull at all (measured: zero durable rows in
+gamestore.sqlite for every live fleet). The state save now keeps the row's own
+durability, so a durable NPC survives both a scene teardown and a restart.
+
 Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
 Local overlay: integration/* is NOT part of this patch series.
 ---
 --- a/server/src/space/npc/nativeNpcService.js
 +++ b/server/src/space/npc/nativeNpcService.js
-@@ -251,6 +251,10 @@
+@@ -251,6 +251,10 @@ function applyCapitalNpcCombatOverrides(entity, entityRecord, definition) {
        toFiniteNumber(entity.capacitorCapacity, 0),
        toFiniteNumber(getTypeAttributeValue(supportHullTypeID, "capacitorCapacity"), 0),
      );
@@ -27,7 +34,7 @@ Local overlay: integration/* is NOT part of this patch series.
      entity.scanResolution = Math.max(
        toFiniteNumber(entity.scanResolution, 0),
        toFiniteNumber(getTypeAttributeValue(supportHullTypeID, "scanResolution"), 0),
-@@ -265,6 +269,7 @@
+@@ -265,6 +269,7 @@ function applyCapitalNpcCombatOverrides(entity, entityRecord, definition) {
      entity.passiveDerivedState.maxTargetRange = entity.maxTargetRange;
      entity.passiveDerivedState.scanResolution = entity.scanResolution;
      entity.passiveDerivedState.capacitorCapacity = entity.capacitorCapacity;
@@ -35,7 +42,7 @@ Local overlay: integration/* is NOT part of this patch series.
    }
    return entity;
  }
-@@ -331,6 +336,14 @@
+@@ -331,6 +336,14 @@ function applyNativeNpcHullCombatOverrides(entity, entityRecord, definition) {
      toFiniteNumber(entity.capacitorCapacity, 0),
      dogmaCapacitorCapacity,
    );
@@ -50,7 +57,7 @@ Local overlay: integration/* is NOT part of this patch series.
    if (typeHasEffectName(shipTypeID, "entitySuperWeapon")) {
      entity.component_turboshield = 0;
    }
-@@ -340,6 +353,7 @@
+@@ -340,6 +353,7 @@ function applyNativeNpcHullCombatOverrides(entity, entityRecord, definition) {
      entity.passiveDerivedState.maxTargetRange = entity.maxTargetRange;
      entity.passiveDerivedState.maxLockedTargets = entity.maxLockedTargets;
      entity.passiveDerivedState.capacitorCapacity = entity.capacitorCapacity;
@@ -58,3 +65,34 @@ Local overlay: integration/* is NOT part of this patch series.
    }
    return entity;
  }
+@@ -982,6 +996,9 @@ function materializeNativeRuntimeEntity(scene, entityRecord, controllerRecord, d
+   if (runtimeKind === "nativeAmbient") {
+     syncNativeAmbientIdleState(scene, entity, controller, definition);
+   }
++  if (process.env.EVEJS_COOP_ESCORT_NATIVE_INGRESS_SNAPSHOT === "1" && entity.nativeNpc === true) {
++    try { require("../coopNativeStationArrival").restoreNativeIngress(entity, entityRecord); } catch (_) { /* skip recovery; never alter spawn */ }
++  }
+   return {
+     success: true,
+     data: {
+@@ -1180,7 +1197,10 @@ function dematerializeNativeController(controller, options = {}) {
+       nativeNpcStore.upsertNativeEntity(
+         buildStoredEntityRecordFromRuntimeEntity(storedEntityRecord, runtimeEntity),
+         {
+-          transient: true,
++          // A durable NPC keeps its durable identity: marking this state write
++          // transient would strip the row from every later flush, so a restart
++          // would find no ship and start the world from zero again.
++          transient: storedEntityRecord.transient === true,
+         },
+       );
+     }
+@@ -1193,7 +1213,7 @@ function dematerializeNativeController(controller, options = {}) {
+           runtimeController,
+         ),
+         {
+-          transient: true,
++          transient: storedControllerRecord.transient === true,
+         },
+       );
+     }
