@@ -171,7 +171,8 @@ function inspect({systemID,fleetID}={}){
   const row=adapter.lookup(systemID,fleetID);
   if(!row)return null;
   const fleet=adapter.verified({systemID,fleetID});
-  return fleet&&row.employerCorpID===fleet.ownerID?row:null;
+  return fleet&&row.employerCorpID===fleet.ownerID?{
+   ...row,nativeState:fleet.state}:null;
  }catch{return null;}
 }
 function verified({systemID,fleetID}={}){
