@@ -218,3 +218,18 @@ Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOP
 Why: the capacitor advance only ran for controllers whose think was due and co-op mining hulls carry none: live telemetry showed tau set but capacitorRechargedAtMs stuck at 0, so charge only fell
 Where: .opencode/state.md, patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json
 Evidence: 0003 extended (one patch per file) with a 1s scene sweep; live after rebuild reAt is set and caps read 0.04-0.05 with tau 125-187s; series PRESENT x3 CHECK_OK; OVERLAY_OK patched 54
+### 2026-10-26T12:27Z · f663997 · L2 · fix(P0): verify original global cargo custody after compensation flush
+
+Why: Native upsert and cargo flush ACKs did not prove compensation restored original cargoIDs after an interrupted multi-row adoption. New fail-closed global/per-hauler custody readback prevents silent partial rollback.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:27Z · 6e69623 · L2 · fix(haul): keep existing operator repair flag contract after rollback quarantine
+
+Why: Preserve the established fleet operator-repair boolean while quarantining the replacement hauler and burning the adoption slot after uncertain rollback.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:28Z · 66eebb8 · TEST · test(P0): reject acknowledged but unverified native cargo rollback
+
+Why: Simulate silent ACK, wrong owner/quantity, stale adoption history, missing/throwing global readback and unavailable target inventory after compensation.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
