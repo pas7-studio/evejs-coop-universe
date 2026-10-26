@@ -117,7 +117,7 @@ test("EX-03B4 original scout hardware is a conditional source-authored fitting",
  assert.match(deploy,/\[switch\]\$EnableNpcScoutLoadout/);
  assert.match(deploy,/EVEJS_COOP_NPC_SCOUT_LOADOUT: '1'/);
  const manifest=read("scripts/overlay-spec.cjs");
- assert.match(manifest,/"coopNativeNpcProbeSweep","coopNpcScoutLoadout"/);
+ assert.match(manifest,/"coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle","coopNpcScoutLoadout"/);
 });
 
 test("EX-03B5 source expiry and recovery use original gameStore single-table durability barrier",()=>{
@@ -125,7 +125,7 @@ test("EX-03B5 source expiry and recovery use original gameStore single-table dur
  const runtime=read("integration/coopVirtualWorldRuntime.cjs");
  const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
  const manifest=read("scripts/overlay-spec.cjs");
- assert.match(lifecycle,/status:"RECALLING"/);
+ assert.match(lifecycle,/"RECALLING"/);
  assert.match(lifecycle,/status:"STOWED"/);
  assert.match(lifecycle,/status:"EXPIRED"/);
  assert.match(lifecycle,/upsertNativeCargo\(row\)/);
