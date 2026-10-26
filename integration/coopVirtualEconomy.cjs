@@ -82,7 +82,8 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
      state.pilots[p.id]??={role:ROLES[i%ROLES.length],cargo:0,credits:100,completed:0};
      if(upgradeRoles)state.pilots[p.id].role=ROLES[i%ROLES.length];
    }
-   state.rolesVersion=2;
+   // An empty registration is not a durable schema upgrade.
+   if(pilots.length)state.rolesVersion=2;
  }
  function step(pilots){
   // Accumulate decisions first, then commit. No negative or infinite balances.
@@ -107,13 +108,13 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
  }
  function advance(pilots){
   beforeMutation();
-  register(pilots);
   const now=clock();if(now<state.lastAt)return {status:"CLOCK_REWIND",steps:0};
+  register(pilots);
   const due=Math.floor((now-state.lastAt)/stepMs);
   const steps=Math.min(due,maxCatchup);
   for(let i=0;i<steps;i++)step(pilots);
   if(steps){state.lastAt+=steps*stepMs;persist();}
-  else if(Object.keys(state.pilots).length)persist();
+  else if(JSON.stringify(state)!==JSON.stringify(stateBeforeMutation))persist();
   return {status:due>steps?"CATCHUP_REMAINING":"OK",steps,remaining:due-steps};
  }
  function recordLoss(systemID,amount=1){
@@ -130,9 +131,10 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
    const systemID=Number(id),count=Number(total);
    if(!Number.isSafeInteger(systemID)||systemID<=0||
       !Number.isSafeInteger(count)||count<0)continue;
-   const sys=ensure(systemID),before=Math.max(0,Number(sys.nativeDelivered)||0);
+   const existing=state.systems[String(systemID)];
+   const before=Math.max(0,Number(existing?.nativeDelivered)||0);
    if(count<=before)continue;
-   const gained=count-before;
+   const sys=ensure(systemID),gained=count-before;
    sys.goods=cap(sys.goods+gained);
    sys.demand=Math.max(0,cap(sys.demand-gained));
    sys.nativeDelivered=count;
