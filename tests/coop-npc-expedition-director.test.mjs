@@ -336,3 +336,82 @@ test("EX-03B11 remote scan cannot warp a scout with stale native controller",()=
  assert.equal(d.snapshot().pending,0);
  assert.equal(f.commands.length,0);
 });
+
+test("EX-03B12 native store exception excludes only that NPC; next scout still scans",()=>{
+ const f=fixture(),scanned=[];
+ const d=f.create({
+  getNativeEntity:id=>{
+   if(id===21)throw Error("NPC Native SQLite unavailable");
+   return f.native.get(id);
+  },
+  isNativeProbeScout:id=>id===21||id===23,
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }
+ });
+ const result=d.tick(f.input());
+ assert.equal(result.status,"NATIVE_EXPEDITION_TICK");
+ assert.deepEqual(scanned,[23]);
+ assert.equal(result.orders,0);
+});
+
+test("EX-03B12 per-ship controller exception fails closed instead of crashing A-Life",()=>{
+ const f=fixture(),scanned=[];
+ const d=f.create({
+  getController:id=>{
+   if(id===21)throw Error("controller query failed");
+   return f.controllers.get(id);
+  },
+  isNativeProbeScout:id=>id===21||id===23,
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }
+ });
+ d.tick(f.input());
+ assert.deepEqual(scanned,[23]);
+});
+
+test("EX-03B12 native site physical lookup exception cannot synthesize intel",()=>{
+ const f=fixture();
+ const scene=f.input().scene;
+ scene.getEntityByID=id=>{
+  if(id===440)throw Error("scene mutation");
+  return f.ships.get(id);
+ };
+ const result=f.create().tick({...f.input(),scene});
+ assert.equal(result.status,"NATIVE_EXPEDITION_TICK");
+ assert.equal(result.observed,0);
+ assert.equal(result.orders,0);
+});
+
+test("EX-03B12 ambiguous arbiter issue result is permanently fenced against replay",()=>{
+ const f=fixture(),attempts=[];
+ const d=f.create({orderBridge:{
+  blocked:()=>false,
+  issue:({entityID,execute})=>{
+   attempts.push(entityID);
+   const result=execute();
+   assert.equal(result.success,true);
+   throw Error("bridge lost the native result after warp");
+  }
+ }});
+ assert.equal(d.tick(f.input()).orders,0);
+ assert.equal(d.tick(f.input()).orders,0);
+ f.advance(800000);
+ assert.equal(d.tick(f.input()).orders,0);
+ assert.deepEqual(attempts,[23],"never repeat an ambiguous native warp");
+ assert.equal(d.snapshot().unknownOrderOutcomes,1);
+});
+
+test("EX-03B12 failing bridge blocked() refuses that ship without issuing",()=>{
+ const f=fixture(),d=f.create({orderBridge:{
+  blocked:()=>{throw Error("arbiter not accessible");},
+  issue:()=>{throw Error("must not issue");}
+ }});
+ const result=d.tick(f.input());
+ assert.equal(result.orders,0);
+ assert.ok(result.blocked>0);
+ assert.equal(d.snapshot().unknownOrderOutcomes,0);
+});
