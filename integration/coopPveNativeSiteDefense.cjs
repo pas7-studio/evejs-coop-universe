@@ -22,7 +22,7 @@ function siteEntries(systemID,scene,instances){
   const beacon=scene.getEntityByID(siteID);
   if(!beacon||beacon.itemID!==siteID||
      beacon.dungeonSiteID!==siteID||beacon.dungeonSiteInstanceID!==instanceID||
-     !["universeAnomalySite","universeSignatureSite"].includes(beacon.kind)||
+     beacon.kind!==(instance.siteKind==="anomaly"?"universeAnomalySite":"universeSignatureSite")||
      !point(beacon.position))continue;
   const waves=instance.spawnState?.encounterStatesByKey;
   if(!waves||typeof waves!=="object"||Array.isArray(waves))continue;
