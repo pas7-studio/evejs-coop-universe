@@ -31,6 +31,9 @@ names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
 names.splice(names.indexOf("coopWarDemobilizer")+1,0,"coopWarCasualtyLedger");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarObjectiveAdjudicator","coopWarNativeStructureControl","coopWarNativeStructureCombatProof");
+// The world runtime requires this director from a live phase; leaving it out of
+// the copy list produced "Cannot find module" on every world cycle.
+names.splice(names.indexOf("coopWarObjectiveAdjudicator")+1,0,"coopWarObjectiveDirector");
 // FW-009C: actor-scoped native militia briefing, read-only and reversible.
 names.splice(names.indexOf("coopWarNativeStructureCombatProof")+1,0,"coopWarMilitiaIntel");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
