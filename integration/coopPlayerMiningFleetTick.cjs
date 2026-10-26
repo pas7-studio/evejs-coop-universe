@@ -122,7 +122,12 @@ function native(){
     return matches.length===1?matches[0]:null;},
    getScene:systemID=>{
     // Native tick supplies the ONLY permitted live scene for this call.
-    return activeScene?.systemID===systemID?activeScene:null;},
+    if(activeScene?.systemID===systemID)return activeScene;
+    // Trusted player action only: inspect an ALREADY mounted native scene.
+    // Never create a scene or spawn NPCs to satisfy a client command.
+    const runtime=require("./runtime");
+    const existing=runtime.getScene?.(systemID);
+    return existing?.systemID===systemID?existing:null;},
    enabled:()=>load("coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY"),
    observe:(event,payload)=>{
     const key=[payload?.systemID,payload?.fleetID,payload?.operationID,
@@ -145,4 +150,20 @@ function beforeTick(input){
   return true;
  }finally{activeScene=null;}
 }
-module.exports={createAdapter,beforeTick};
+function assign(input){
+ if(process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY!=="1")
+  return {status:"BLOCKED",reason:"MINING_COMPANY_DISABLED",nativeMutation:false};
+ try{return native().assign(input)}
+ catch(error){return {status:"BLOCKED",reason:"MINING_COMPANY_NATIVE_ORDER_UNAVAILABLE",nativeMutation:false};}
+}
+function inspect({systemID,fleetID}={}){
+ if(process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY!=="1")return null;
+ try{
+  const adapter=native();
+  const row=adapter.lookup(systemID,fleetID);
+  if(!row)return null;
+  const fleet=adapter.verified({systemID,fleetID});
+  return fleet&&row.employerCorpID===fleet.ownerID?row:null;
+ }catch{return null;}
+}
+module.exports={createAdapter,beforeTick,assign,inspect};
