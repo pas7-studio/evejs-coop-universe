@@ -27,6 +27,8 @@ const motion = require("./coopNativeAgentMotion" + EXT);
 const living = require("./coopLivingAgentRuntime" + EXT);
 const bridge = require("./coopCourierNativeAccept" + EXT);
 const notices = require("./coopCourierNotices" + EXT);
+// Real native stargate hops for a cross-system delivery.
+const gateHop = require("./coopCourierGateHop" + EXT);
 const nodeFs = require("node:fs");
 // Notice ledger lives on the persistent data volume: a restart or a container
 // recreate must never mail the same courier message twice.
@@ -40,6 +42,10 @@ const FLIGHT_HISTORY_FILE = process.env.EVEJS_COOP_COURIER_HISTORY_FILE || "/var
 // the origin and start the leg again.
 const FLIGHT_FILE = process.env.EVEJS_COOP_COURIER_FLIGHT_FILE || "/var/lib/evejs/coop-courier-flights.json";
 const FLIGHT_STEPS = Object.freeze(["undock", "warp", "arrive", "dock", "done"]);
+// A native undock or a stargate jump detaches the ship from the source scene for
+// a moment. A hull that is really gone must stay gone this long before it is
+// docked back, otherwise a normal native transition looks like a lost ship.
+const SCENE_ENTITY_GRACE_MS = 90000;
 
 // Collateral is insurance, not a refusal reason: a courier takes a contract when
 // it actually holds the ISK. requireZeroCollateral stays the pure-core default
@@ -352,7 +358,19 @@ function createCourierDispatch(deps = {}) {
         walletIsk: num(identity.character.balance),
         hullCapacityM3: identity.hullCapacityM3,
       });
-      if (decision.status === "ELIGIBLE") return { identity, decision };
+      if (decision.status === "ELIGIBLE") {
+        // A courier can only fly the pickup it can actually reach. The native
+        // gate path is for the DELIVERY leg; there is no cross-system pickup
+        // flight, so a hull parked in another system is not a candidate (it used
+        // to be picked and then stranded in space by a cross-system reposition).
+        const startSystemID = num(contract && contract.startSolarSystemID);
+        const courierSystemID = num(identity.character.solarSystemID);
+        if (startSystemID > 0 && courierSystemID !== startSystemID) {
+          seen.push(`${pilotID}:WRONG_SYSTEM:sys${courierSystemID}`);
+          continue;
+        }
+        return { identity, decision };
+      }
       seen.push(`${pilotID}:${decision.status}:own${num(identity.ship && identity.ship.ownerID)}/cap${identity.hullCapacityM3}/sys${num(identity.character.solarSystemID)}/st${num(identity.character.stationID)}`);
     }
     log(`[CoopCourier] contract ${num(contract && contract.contractID)} pilots ${seen.join(" ")}`);
@@ -497,6 +515,7 @@ function createCourierDispatch(deps = {}) {
       }
       flights.set(contractID, Object.assign({}, planned, {
         systemID: num(record.startSolarSystemID),
+        destinationSystemID: num(record.endSolarSystemID),
         identity,
       }));
       attempted.add(contractID);
@@ -577,6 +596,7 @@ function createCourierDispatch(deps = {}) {
       }
       const flight = Object.assign({}, planned, {
         systemID: num(record.startSolarSystemID),
+        destinationSystemID: num(record.endSolarSystemID),
         identity: picked.identity,
       });
       flights.set(contractID, flight);
@@ -585,39 +605,70 @@ function createCourierDispatch(deps = {}) {
     }
   }
 
+  // A real station of the system the hull is actually sitting in. A dock repair
+  // must never move the ship into another system: that would fake a gate jump.
+  function stationInSystem(systemID, preferredID) {
+    try {
+      const stations = typeof worldData.getStationsForSystem === "function"
+        ? worldData.getStationsForSystem(num(systemID))
+        : [];
+      const ids = (stations || []).map((station) => num(station && station.stationID)).filter((id) => id > 0);
+      if (num(preferredID) > 0 && ids.includes(num(preferredID))) return num(preferredID);
+      return ids.length ? ids[0] : 0;
+    } catch (_error) {
+      return 0;
+    }
+  }
+
   // A native undock that already moved the real ship leaves it in space with no
   // station. Retrying "undock" would refuse forever, so a ship that is really in
   // the scene continues from the warp step with its real entity.
   function recoverInSpace(flight) {
-    if (flight.step !== "undock") return flight;
+    // A hop that has already issued the stock stargate jump detaches the ship
+    // from the source scene until the native handoff finishes. That is not a
+    // lost ship, so nothing may be repaired during it.
+    if (flight.hop && (flight.hop.phase === "jump" || flight.hop.phase === "verify-jump")) return flight;
     const scene = sceneFor(num(flight.systemID));
     if (!scene || typeof scene.getEntityByID !== "function") return flight;
     const shipID = num(flight.shipItemID);
-    const entity = typeof scene?.getEntityByID === "function" ? scene.getEntityByID(shipID) : null;
-    if (entity) return Object.assign({}, flight, {
-      step: "warp",
-      entityID: num(entity.entityID) || shipID,
-      stepStartedAtMs: now(),
-      recoveredInSpace: true,
-    });
+    const entity = scene.getEntityByID(shipID);
+    if (entity) {
+      // Only the undock step needs the shortcut: every other step is already
+      // flying with a live entity.
+      if (flight.step !== "undock") return flight;
+      return Object.assign({}, flight, {
+        step: "warp",
+        entityID: num(entity.entityID) || shipID,
+        stepStartedAtMs: now(),
+        recoveredInSpace: true,
+        missingSinceMs: 0,
+      });
+    }
     // No live entity: the ship is a leftover from a previous process (undocked,
-    // then the server restarted). Dock it back with the stock dockSession rather
-    // than inventing a position or a warp.
+    // then the server restarted). Dock it back at a REAL station of its own
+    // system with the stock dockSession rather than inventing a position, a warp
+    // or a system change. A short grace window absorbs the normal gap between a
+    // native undock/jump and the moment the scene exposes the new entity.
+    const missingSince = num(flight.missingSinceMs);
+    if (!(missingSince > 0)) return Object.assign({}, flight, { missingSinceMs: now() });
+    if (now() - missingSince < SCENE_ENTITY_GRACE_MS) return flight;
     const identity = identityFor(num(flight.characterID));
     if (!identity || num(identity.character.stationID)) return flight;
-    const session = driver.buildCourierSession(identity.character, num(flight.destinationStationID));
+    const dockAt = stationInSystem(num(flight.systemID), num(flight.destinationStationID));
+    if (!(dockAt > 0)) return flight;
+    const session = driver.buildCourierSession(identity.character, dockAt);
     if (!session || !transitions || typeof transitions.dockSession !== "function") return flight;
     try {
-      const outcome = transitions.dockSession(session, num(flight.destinationStationID));
+      const outcome = transitions.dockSession(session, dockAt);
       if (outcome && outcome.success === true) {
-        return Object.assign({}, flight, { step: "done", dockedFromSpace: true, stepStartedAtMs: now() });
+        return Object.assign({}, flight, { dockedFromSpace: true, dockStationID: dockAt, stepStartedAtMs: now() });
       }
       if (outcome && String(outcome.errorMsg || "") === "ALREADY_DOCKED") {
         // The native layer says docked, but the stored row lost its station when
         // the interrupted undock threw. Repair the location through the store -
         // never by pretending a flight happened.
         const id = num(identity.character.characterID);
-        const row = Object.assign({}, identity.character, { stationID: num(flight.destinationStationID) });
+        const row = Object.assign({}, identity.character, { stationID: dockAt });
         delete row.characterID;
         gameStore.write("characters", String(id), row);
         if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("characters");
@@ -625,12 +676,12 @@ function createCourierDispatch(deps = {}) {
         // A docked ship must be in a station hangar, so repair that too.
         const shipRow = itemRow(flight.shipItemID);
         if (shipRow) {
-          const fixed = Object.assign({}, shipRow, { locationID: num(flight.destinationStationID), flagID: 4 });
+          const fixed = Object.assign({}, shipRow, { locationID: dockAt, flagID: 4 });
           gameStore.write("items", String(num(flight.shipItemID)), fixed);
           if (typeof gameStore.flushTableSync === "function") gameStore.flushTableSync("items");
         }
-        log(`[CoopCourier] courier ${id} station and hull repaired to ${num(flight.destinationStationID)} (native ALREADY_DOCKED)`);
-        return Object.assign({}, flight, { step: "done", dockedFromSpace: true, stepStartedAtMs: now() });
+        log(`[CoopCourier] courier ${id} station and hull repaired to ${dockAt} (native ALREADY_DOCKED)`);
+        return Object.assign({}, flight, { dockedFromSpace: true, dockStationID: dockAt, stepStartedAtMs: now() });
       }
       log(`[CoopCourier] courier ${flight.characterID} dock-from-space refused ${String(outcome && outcome.errorMsg || "no result")}`);
     } catch (error) {
@@ -640,17 +691,39 @@ function createCourierDispatch(deps = {}) {
   }
 
   function stepFlight(contractID, flight) {
-    if (flight.step === "undock") {
-      const recovering = identityFor(num(flight.characterID));
-      const inSpace = recovering && !num(recovering.character.stationID);
-      if (inSpace) {
-        const recovered = recoverInSpace(flight);
-        if (recovered.recoveredInSpace || recovered.dockedFromSpace) {
-          log(`[CoopCourier] courier ${flight.characterID} already in space, resuming from warp`);
-          flight = recovered;
-          if (flight.reposition) repositions.set(num(flight.characterID), flight);
-          else flights.set(contractID, flight);
+    // A flight whose hull has no live scene entity can never make progress. This
+    // is not only an undock case: a server restart while the ship was flying
+    // leaves it in space with no entity, and the old code re-warped forever.
+    const recovering = identityFor(num(flight.characterID));
+    const inSpace = recovering && !num(recovering.character.stationID);
+    if (inSpace && flight.step !== "done" && flight.step !== "failed") {
+      const recovered = recoverInSpace(flight);
+      if (recovered.recoveredInSpace) {
+        log(`[CoopCourier] courier ${flight.characterID} already in space, resuming from warp`);
+        flight = recovered;
+        if (flight.reposition) repositions.set(num(flight.characterID), flight);
+        else flights.set(contractID, flight);
+      } else if (recovered.dockedFromSpace) {
+        // The ship really is in space in that system and the scene lost it. It
+        // is docked back at a real station of the SAME system and the leg is
+        // re-planned; no delivery is ever invented from this.
+        const station = num(recovered.dockStationID);
+        log(`[CoopCourier] courier ${flight.characterID} lost scene entity, docked back at real station ${station} in system ${num(flight.systemID)}`);
+        if (flight.reposition) {
+          repositions.delete(num(flight.characterID));
+        } else {
+          noteIncident(contractID, "scene-entity-lost", "docked back at station " + station);
+          flights.delete(contractID);
+          attempted.delete(contractID);
         }
+        return;
+      } else if (num(recovered.missingSinceMs) > 0 && !num(flight.missingSinceMs)) {
+        // First sighting of a missing entity: remember when, and give the native
+        // transition its grace window before anything is repaired.
+        const stamped = Object.assign({}, flight, { missingSinceMs: num(recovered.missingSinceMs) });
+        if (flight.reposition) repositions.set(num(flight.characterID), stamped);
+        else flights.set(contractID, stamped);
+        return;
       }
     }
     const action = flightCore.nextAction(flight, now());
@@ -729,6 +802,63 @@ function createCourierDispatch(deps = {}) {
       }
       return;
     }
+    // A cross-system delivery is a real gate flight: warp to the reciprocal
+    // gate, native jumpSessionViaStargate, verify the same ship in the
+    // destination scene, then warp to the destination station. The pure flight
+    // machine only ever sees the result of that hop, and the plain warp is never
+    // issued towards a station in another system.
+    if (flight.step === "warp" && num(flight.destinationSystemID) > 0 &&
+        num(flight.destinationSystemID) !== num(flight.systemID)) {
+      const hopLabel = flight.reposition ? `courier ${flight.characterID} reposition` : `contract ${contractID}`;
+      const hop = gateHop.advance({
+        flight,
+        ctx,
+        session: ctx.session,
+        transitions,
+        sceneFor,
+        stationPosition: target,
+        nowMs: now(),
+        fromSystemID: num(flight.systemID),
+        toSystemID: num(flight.destinationSystemID),
+        getStargatesForSystem: (id) => worldData.getStargatesForSystem(id),
+        getGate: (id) => worldData.getStargateByID(id),
+        dockingRangeM: DOCKING_RANGE_M,
+      });
+      const hopReason = String(hop.reason || hop.status);
+      if (hop.status === "OK") {
+        const arrived = flightCore.advanceFlight(flight, "OK", now(), flightCore.stepToken(flight));
+        const moved = Object.assign({}, arrived, {
+          systemID: num(hop.systemID) || num(flight.destinationSystemID),
+          entityID: num(hop.entityID) || num(flight.shipItemID),
+          hop: null,
+          hopReason: "",
+          stepStartedAtMs: now(),
+        });
+        if (flight.reposition) repositions.set(num(flight.characterID), moved);
+        else flights.set(contractID, moved);
+        log(`[CoopCourier] ${hopLabel} native gate hop verified ${num(flight.systemID)} -> ${num(moved.systemID)}, warp -> arrive`);
+        return;
+      }
+      if (hop.status === "FAILED") {
+        log(`[CoopCourier] ${hopLabel} gate hop FAILED ${hopReason}`);
+        if (!flight.reposition) noteIncident(contractID, "gate-hop", hopReason);
+        const failed = Object.assign({}, flight, { step: "failed", hop: null, hopReason, stepStartedAtMs: now() });
+        if (flight.reposition) repositions.delete(num(flight.characterID));
+        else flights.set(contractID, failed);
+        return;
+      }
+      const progressed = hopReason !== String(flight.hopReason || "");
+      const pending = Object.assign({}, flight, {
+        hop: hop.state || flight.hop,
+        hopReason,
+        entityID: num(flight.entityID) || num(flight.shipItemID),
+        stepStartedAtMs: progressed ? now() : num(flight.stepStartedAtMs),
+      });
+      if (flight.reposition) repositions.set(num(flight.characterID), pending);
+      else flights.set(contractID, pending);
+      if (progressed) log(`[CoopCourier] ${hopLabel} gate hop ${hopReason}`);
+      return;
+    }
     const observed = driver.runStep(ctx, flight, target);
     if (flight.step === "dock" && observed.status === driver.OK && !flight.reposition) {
       const handedOver = unloadPackageAtStation(contracts.getContractRecord(contractID), identity);
@@ -770,7 +900,45 @@ function createCourierDispatch(deps = {}) {
     }
   }
 
+  // A restart can leave a courier hull in space with no scene entity and no
+  // flight to repair it (the in-memory leg is gone). Give it the same grace
+  // window, then dock it back at a real station of its own system.
+  const strandedSince = new Map();
+  function repairStrandedPilots() {
+    const flying = new Set([...flights.values()].map((entry) => num(entry && entry.characterID)));
+    for (const pilotID of pilots) {
+      const id = num(pilotID);
+      if (!(id > 0)) continue;
+      if (flying.has(id) || repositions.has(id)) { strandedSince.delete(id); continue; }
+      const identity = identityFor(id);
+      if (!identity || num(identity.character.stationID)) { strandedSince.delete(id); continue; }
+      const shipID = num(identity.ship && identity.ship.itemID);
+      const systemID = num(identity.character.solarSystemID);
+      if (!(shipID > 0) || !(systemID > 0)) continue;
+      const scene = sceneFor(systemID);
+      if (scene && typeof scene.getEntityByID === "function" && scene.getEntityByID(shipID)) {
+        strandedSince.delete(id);
+        continue;
+      }
+      const since = num(strandedSince.get(id));
+      if (!(since > 0)) { strandedSince.set(id, now()); continue; }
+      if (now() - since < SCENE_ENTITY_GRACE_MS) continue;
+      const repaired = recoverInSpace({
+        characterID: id,
+        shipItemID: shipID,
+        systemID,
+        step: "undock",
+        missingSinceMs: 1,
+      });
+      if (repaired.dockedFromSpace) {
+        strandedSince.delete(id);
+        log(`[CoopCourier] courier ${id} stranded after a restart, docked back at real station ${num(repaired.dockStationID)} in system ${systemID}`);
+      }
+    }
+  }
+
   function tick() {
+    repairStrandedPilots();
     startFlights();
     resumeInProgress();
     for (const [contractID, flight] of [...flights]) {
