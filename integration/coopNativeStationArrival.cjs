@@ -970,6 +970,10 @@ function getRuntimeDirector(){
   warpToPoint:(id,p,opts)=>require("./npc/npcRuntime").warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
+  // Audit only: original GameStore + ItemStore + live rented office witness.
+  // OFF by default, NEVER authorizes or performs an ore title mutation.
+  verifyTransferredTitle:process.env.EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE==="1"?
+   require("./coopPlayerMiningOreNativeBindings").createRuntimeTitleVerifier():null,
   // Option A: sell at the station before the warehouse takes the cargo.
   beforeDeposit:process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL==="1"?
    args=>require("./coopVirtualWorldRuntime").sellOnArrival(args):null,
