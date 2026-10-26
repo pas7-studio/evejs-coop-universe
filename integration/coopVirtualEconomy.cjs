@@ -12,6 +12,23 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
   // nativeDelivered is a durable monotone high-water mark of original
   // depot receipts. Treating a malformed value as zero would re-credit
   // historical cargo on the next syncNativeDeliveries() call.
+  // A corrupt tick cursor can mint hours of phantom virtual ore or
+  // disable catch-up forever; malformed saved pilots can crash the tick
+  // after changing in-memory supply. Refuse incomplete persisted metadata.
+  if(!Number.isSafeInteger(state.lastAt)||state.lastAt<0||
+     !state.pilots||typeof state.pilots!=="object"||
+     Array.isArray(state.pilots)||!Array.isArray(state.events))
+   throw Error("ECONOMY_TICK_JOURNAL_INVALID");
+  for(const [id,pilot] of Object.entries(state.pilots)){
+   if(!id.trim()||id.length>256||id==="prototype"||
+      Object.prototype.hasOwnProperty.call(Object.prototype,id)||
+      !pilot||typeof pilot!=="object"||Array.isArray(pilot)||
+      !ROLES.includes(pilot.role)||
+      !Number.isSafeInteger(pilot.cargo)||pilot.cargo<0||
+      !Number.isSafeInteger(pilot.credits)||pilot.credits<0||pilot.credits>1000000||
+      !Number.isSafeInteger(pilot.completed)||pilot.completed<0)
+    throw Error("ECONOMY_TICK_JOURNAL_INVALID");
+  }
   if(!state.systems||typeof state.systems!=="object"||Array.isArray(state.systems))
    throw Error("ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID");
   for(const entry of Object.values(state.systems)){
