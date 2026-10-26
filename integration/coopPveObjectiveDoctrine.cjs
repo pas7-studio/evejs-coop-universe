@@ -15,10 +15,10 @@ const safeRatios=r=>r&&Number.isFinite(r.armor)&&Number.isFinite(r.structure)&&
  r.armor>=0&&r.armor<=1&&r.structure>=0&&r.structure<=1;
 function createObjectiveDoctrine({
  clock=()=>Date.now(),getNativeEntity,getController,resolveVerifiedPlayer,
- getHealth,isScrambled,attack,warpToPoint,orbit,notify=()=>{},
+ getHealth,getStructureHP,isScrambled,attack,warpToPoint,orbit,notify=()=>{},
  maxOrdersPerTick=3,maxReceipts=1024
 }={}){
- if([clock,getNativeEntity,getController,resolveVerifiedPlayer,getHealth,
+ if([clock,getNativeEntity,getController,resolveVerifiedPlayer,getHealth,getStructureHP,
   isScrambled,attack,warpToPoint,orbit,notify].some(x=>typeof x!=="function")||
   !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>4||
   !Number.isSafeInteger(maxReceipts)||maxReceipts<1||maxReceipts>4096)
@@ -93,8 +93,12 @@ function createObjectiveDoctrine({
         obj.dungeonMaterializedKillableStructure!==true||
         obj.dungeonSiteInstanceID!==site.instanceID||
         obj.dungeonSiteID!==site.siteID||obj.dungeonEncounterKey!==key||
+        scene.getEntityByID(entityID)!==obj||
         !pos(obj.position)||!id(obj.typeID)||!id(obj.structureHP)||
         obj.conditionState?.incapacitated===true)continue;
+     let hp=null;
+     try{hp=getStructureHP(obj)}catch{hp=null}
+     if(!Number.isFinite(hp)||hp<=0)continue;
      const owner=original.owners.get(entityID)[0];
      if(owner.site!==site||owner.encounterKey!==key)continue;
      const item=objectives.get(site.instanceID)||[];
