@@ -20,7 +20,7 @@ function setup(){
   marketEscrow:new Map()
  };
  const calls=[],events=[];let enabled=true,authorized=true,price=1500,
-  rustValid=true,verifyValid=true,failAfter=null,writes=0;
+  rustValid=true,verifyValid=true,publishOn=false,failAfter=null,writes=0;
  const op="coop-corp-sell:"+"f".repeat(32);
  const native={
   verifiedNative:true,phase:"PREPARED_UNPUBLISHED",isPublished:false,
@@ -40,6 +40,9 @@ function setup(){
    return verifyValid?{status:"ESCROW_PROVEN_NOT_PUBLISHED",orderID:ORDER,
     itemID:ITEM,cargoID:CARGO,corporationID:CORP,
     nativeMarketMutation:false,verifiedGameStore:true}:null;
+  if(name==="PublishCorpSell")return {status:"PUBLISHED_ORIGINAL_CORP_SELL",
+    phase:"OPEN",orderID:ORDER,verifiedNative:true,verifiedGameStore:true,
+    nativeMutation:true};
   throw Error("NO_CORPORATE_MARKET_PUBLISH_ALLOWS_"+name);
  }};
  const gameStore={coopAtomicNativeRows:{
@@ -62,13 +65,17 @@ function setup(){
   marketOrderCreated:false,originalCorporateOre:[ore]}:{status:"BLOCKED"}};
  const svc=createNativeCorporateSellBridge({marketClient,gameStore,access,readiness,
   token:"X".repeat(40),quotePrice:()=>price,clock:()=>1793030000000,
-  enabled:()=>enabled,observe:(name,data)=>events.push({name,data})});
+  enabled:()=>enabled,publishEnabled:()=>publishOn,
+  observe:(name,data)=>events.push({name,data})});
  return {svc,session,calls,events,original,tables,ore,native,
   run:()=>svc.prepareAndBind({session,corporationID:CORP,operationID:SHIFT,cargoID:CARGO}),
+  publish:()=>svc.publishPrepared({session,corporationID:CORP,
+    operationID:SHIFT,cargoID:CARGO,itemID:ITEM,priceCents:1500,orderID:ORDER}),
   item:()=>tables.items.get(String(ITEM)),receipt:()=>tables.corporationRuntime.get("coopPlayerMiningCorpSell"+SEP+CARGO),
   escrow:()=>tables.marketEscrow.get(ORDER),written:()=>writes,
   enable:x=>enabled=x,role:x=>authorized=x,price:x=>price=x,
-  native:x=>rustValid=x,verify:x=>verifyValid=x,failAt:x=>failAfter=x};
+  native:x=>rustValid=x,verify:x=>verifyValid=x,failAt:x=>failAfter=x,
+  publishOn:x=>publishOn=x};
 }
 test("Rust-private prepare -> Get -> native escrow -> independent read-only Rust verification",async()=>{
  const x=setup(),r=await x.run();
@@ -132,4 +139,32 @@ test("repeating the same corporate request never creates another item or fresh R
  assert.equal((await x.run()).reason,"CORP_SELL_PREPARE_OR_ESCROW_OUTCOME_UNKNOWN");
  assert.equal(x.written(),last);
  assert.equal(x.item().itemID,ITEM);assert.equal(x.escrow().sourceItemIDs[0],ITEM);
+});
+
+test("original corporation SELL publication requires independent operator gate",async()=>{
+ const x=setup();await x.run();
+ assert.equal((await x.publish()).reason,"CORP_SELL_PUBLISH_DISABLED");
+ assert.equal(x.calls.some(c=>c.name==="PublishCorpSell"),false);
+});
+test("original Rust publish after native physical escrow does not itself claim revenue",async()=>{
+ const x=setup();await x.run();x.publishOn(true);
+ const r=await x.publish();
+ assert.equal(r.status,"CORPORATE_SELL_PUBLISHED");
+ assert.equal(r.marketOrderCreated,true);
+ assert.equal(r.realizedRevenueCents,null);
+ assert.equal(x.item().ownerID,CORP);
+ assert.deepEqual(x.calls.slice(-3).map(c=>c.name),
+  ["GetCorpSell","VerifyCorpSellEscrow","PublishCorpSell"]);
+});
+test("revoked corporate industry or wallet role cannot publish physical ore",async()=>{
+ const x=setup();await x.run();x.publishOn(true);x.role(false);
+ assert.equal((await x.publish()).reason,"CORP_SELL_PUBLISH_CORPORATION_ROLE_REVOKED");
+ assert.equal(x.calls.some(c=>c.name==="PublishCorpSell"),false);
+});
+test("unknown native Rust publish ACK fences source cargo and never automatically reposts",async()=>{
+ const x=setup();await x.run();x.publishOn(true);x.failAt("PublishCorpSell");
+ assert.equal((await x.publish()).reason,"CORP_SELL_PUBLISH_RUST_OUTCOME_UNKNOWN");
+ x.failAt(null);
+ assert.equal((await x.publish()).reason,"CORP_SELL_PUBLISH_SCOPE_OR_UNKNOWN");
+ assert.deepEqual(x.svc.inspectUncertain(),[CARGO]);
 });
