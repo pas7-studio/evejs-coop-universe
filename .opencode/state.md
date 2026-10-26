@@ -59,9 +59,31 @@ mining resumes instead of stalling forever.
   (11:44:21) — mining and the fleet's own choice of delivery station work.
   No `station-sold` yet.
 
+### L1 / repo corrections (2026-10-26T12:05Z)
+- `git ls-files patches` was **empty**: `.gitignore` line `upstream/` also matched
+  `patches/upstream/`, so the whole atomic L1 series lived only on disk while
+  the docs claimed it was versioned. Fixed with an explicit exception; the
+  series is now tracked and pushed.
+- The applier cannot verify two patches for the same file (both directions
+  pass), so the follow-up capacitor patch was folded into
+  `0003-native-npc-sessionless-capacitor.patch`: sessionless advance **and** the
+  hull recharge rate resolved at use. `--check` **converges** (it applies), it
+  is not a dry run. Both rules are now in `docs/UPSTREAM_PATCH_SERIES.md`.
+- Live after the fix (12:03Z): fleet 2 miners still report
+  `NOT_ENOUGH_CAPACITOR` at ratio 0.03, but the sequence shows
+  `MINER_NOT_IN_SCENE_OR_WARPING` between every attempt and a **new miner ID
+  every 1-2 min** (13953 → 14058 → 14178). Ships are being re-materialised and
+  re-warped in Perimeter, so recharge never gets a chance: the next blocker is
+  that churn, not the curve.
+- `coopWarObjectiveDirector` was never copied by the overlay, so a live world
+  phase failed on every cycle; registered, and
+  `tests/coop-overlay-dependencies.test.mjs` now fails if the copy list and the
+  require graph disagree.
+
 ### Next
-1. `scripts/restart-acceptance.sh` (versioned) is the replacement for the temp
-   script: load → SQLite snapshot → restart → snapshot → `VERDICT`/`RESTART_PASS`.
+1. `scripts/restart-acceptance.sh` (versioned) snapshots SQLite cargo, restarts,
+   and prints `VERDICT`/`RESTART_PASS`; it accepts cargo already in flight
+   (`INFLIGHT_CARGO_PRESENT`) because a fleet will not load twice per trip.
    Read its log for the same-cargoID survival proof.
 2. Only if the same cargoIDs vanish: the blocker is inside
    `coopDurableCargoWrite.promote()`/`setTransientPath`, not the probe.
