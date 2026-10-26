@@ -148,3 +148,42 @@ test("source-only adapter has no clock, wallet, original market or inventory mut
  assert.match(source,/supportsLiveRuntime===true/);
  assert.match(source,/supportsNativeMutation:typeof resolveDirector/);
 });
+
+
+test("A-Life exact world tick isolates manufacturing exception before NPC resupply and buyer",async()=>{
+ const src=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
+ const i=src.indexOf("async function observeAlifeEconomy(){");
+ const j=src.indexOf("\nfunction lockedTargets(",i);
+ assert.ok(i>=0&&j>i);
+ const seen=[],events=[];
+ const modules={
+  "./runtime":{ensureScene:()=>({})},
+  "./npc/nativeNpcStore":{getNativeEntity:()=>null,listNativeCargoForEntity:()=>[]},
+  "./npc/npcRegistry":{getControllerByEntityID:()=>null},
+  "./worldData":{getStationByID:()=>null},
+  "./coopRuntimeProbe":{observe:(kind,_a,_b,info)=>events.push({kind,info})},
+  "./coopAlifeEconomySensor":{readEconomySnapshot:()=>({authoritativeNative:false,systemID:42,pilots:[]})},
+  "./coopAlifeNativeResupplyBridge":{nativeResupplyActEnabled:()=>true}
+ };
+ const ctx={
+  world:{snapshot:()=>({pilots:[]})},identityRegistry:{snapshot:()=>({links:{}})},
+  visitedSystems:new Set([42]),backgroundTicks:1,alifeEconomyAuthorityBusy:false,
+  alifeEconomyObserver:{tick:()=>({status:"OBSERVED"})},
+  alifeManufacturingRuntime:{tick:async()=>{seen.push("manufacture");throw Error("NATIVE_FAIL")}},
+  alifeBuyerRuntime:{tick:async()=>{seen.push("buyer");return{status:"NO_BUY",purchases:[]}}},
+  alifeStationAuthority:null,nativeMarketTickRunning:false,nativeAmmoSupply:null,
+  process:{env:{EVEJS_COOP_ALIFE_ECONOMY_AUTHORITY:"0",
+   EVEJS_COOP_ALIFE_ECONOMY_ACT:"1",EVEJS_COOP_ALIFE_NATIVE_BUYER:"1",
+   EVEJS_COOP_NATIVE_NPC_MARKET:"0"}},
+  safeNpcPhase:(_name,fn)=>{seen.push("resupply");fn()},
+  advanceNativeAmmoSupply:()=>seen.push("resupply-done"),
+  require:id=>{if(!Object.hasOwn(modules,id))throw Error("UNEXPECTED_IMPORT:"+id);return modules[id]}
+ };
+ const step=new Function("ctx","with(ctx){"+src.slice(i,j)+";return observeAlifeEconomy;}")(ctx);
+ await step();
+ assert.deepEqual(seen,["manufacture","resupply","resupply-done","buyer"]);
+ assert.equal(ctx.alifeEconomyAuthorityBusy,false);
+ assert.deepEqual(events.filter(x=>x.kind==="alife-native-manufacturing-admission")
+  .map(x=>x.info),[{status:"BLOCKED",reason:"NATIVE_MANUFACTURING_ADMISSION_EXCEPTION",
+   nativeSettlementVerified:false,source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"}]);
+});
