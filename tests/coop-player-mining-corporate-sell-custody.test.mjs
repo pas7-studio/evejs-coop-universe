@@ -195,3 +195,11 @@ test("an already OPEN native Rust order cannot reserve corporate cargo after buy
  assert.equal(x.reserve().reason,"CORP_SELL_NATIVE_ORDER_NOT_ATTESTED");
  assert.equal(x.item().locationID,OFFICE);assert.equal(x.mutations(),0);
 });
+
+test("duplicate original cargo marker can never be bound into a corporation SELL escrow",()=>{
+ const x=setup();
+ x.records.items.set("190004",{...x.original,itemID:190004,ownerID:CORP});
+ assert.equal(x.reserve().reason,"CORP_SELL_NATIVE_ESCROW_COMMIT_UNCERTAIN");
+ assert.equal(x.item().locationID,OFFICE);
+ assert.equal(x.escrow(),undefined);
+});
