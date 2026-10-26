@@ -182,3 +182,26 @@ A separate executable `scripts/verify-npc-probe-sqlite-crash.mjs` now covers the
 **Verified now in isolated JavaScript source/scene fixtures:** scene projection 6/6 PASS, original flight 14/14 PASS, sweep 8/8 PASS, lifecycle including false removal success ACK 13/13 PASS, original combined launch/sweep/expiry/recall with controller recreation 2/2 PASS, and 14/14 source-wiring checks PASS. The external SQLite SIGKILL script parses in a JS syntax check but **its pinned SQLite command has NOT yet been run**; GitHub Actions reported no feature-branch runs. Do not call its result PASS.
 
 **Mandatory before main merge / feature enablement:** get the EX-03 Actions workflow to complete (including real pinned SQLite SIGKILL tests); perform two authenticated clients in one system and across public-grid boundaries to verify native remove/add broadcasts and exact same item identity; prove real NPC scout launch module fit, four original charges, materialized and visible probes; verify native scan certainty and NPC corporation intel/warp; confirm GameStore single-writer deployment and NPC crash recreation. Further hacking loot custody and wormhole transit are separate uncompleted goals.
+
+## EX-03B7 — Original physical provenance, production-state-machine SQLite crash gate (2026-10-26)
+
+**Implemented on PR #286 (Draft), with all runtime flags default OFF. Native SQLite kill/restart remains NOT RUN because feature-branch GitHub Actions reports no runs.**
+
+An EX-03 security review identified a replay and scan admission weakness: merely matching a probe scene object's itemID, owner and coordinates was insufficient; an unrelated server-side physical probe could impersonate the original cargo. The original scanner and the launch replay now require **both** `physical.nativeNpcProbe === true` and `physical.nativeNpcCargoID === original cargoID`, plus exact native source systemID. The original flight materializer's idempotent already-present case also demands these seals. Unsealed, wrong-cargo-seal or missing-system physical probes never generate a scan proof or satisfy replay.
+
+New negative tests cover this: scanner evidence **18/18 isolated PASS**, original launch/recovery **16/16 isolated PASS**; pinned original upstream `probeScanRuntime` and `probeSceneRuntime` integrated with a sealed NPC proof **1/1 isolated PASS**.
+
+The existing `verify-npc-probe-sqlite-crash.mjs` checks durable original row transitions. A **new, stricter source-integration** `scripts/verify-npc-probe-feature-sqlite-crash.mjs` exercises the production modules `createNativeNpcProbeFlight`, `createNativeNpcProbeSweep` and `createNativeNpcProbeLifecycle` against the actual pinned `nativeNpcStore` and SQLite-backed `gameStore`, with separate fresh Node processes and OS `SIGKILL` after each successful durable transition. The workflow now runs both subprocess suites after installing pinned original EveJS native dependencies.
+
+New production-module test stages:
+1. Seed four ORIGINAL separately identified `npcCargo` charges plus native entity/module/controller source rows into disposable pinned SQLite.
+2. Launch all four through `createNativeNpcProbeFlight`, reloading the actual database after an OS `SIGKILL` between launches.
+3. Move one original probe through `createNativeNpcProbeSweep`; persist/kill/reload.
+4. Authorize a nearby physical return for the second probe via original `RECALLING` durability fence; kill; reconstruct scene without the removed physical item and use `createNativeNpcProbeLifecycle` for original `STOWED` return; kill/reload.
+5. Expire the first probe with no refund; kill/reload; assert exact original IDs, correct quantities, original scanner geometry, no duplicate items.
+
+The scene in this test is **native-shaped and controlled**, not the actual two-client EveJS runtime; original cargo access and SQLite persistence are real *when CI executes*. Do not label the test PASS until it runs on an actual pinned native checkout.
+
+**Safety:** both SQLite crash scripts require `EVEJS_TEST_STORE_ISOLATED=1`, exact `<os.tmpdir>/evejs-ex03b{6,7}-*` roots, a correctly matching `.evejs-test-store-attestation.json`, no symlink root/data, and `EVEJS_GAMESTORE_DATA_DIR=<that root>/data` before importing the original native GameStore. They must never touch the production database.
+
+**Remaining release gates:** GitHub Actions execution of both actual SQLite SIGKILL suites; original server-backed NPC scout fitting/cargo provisioning; verified physical probe bubble visibility with two authenticated clients; authoritative scanner certainty against a real live signature; probe reclaim and warehouse/loot economic settlement; single-writer deployment. Keep PR #286 Draft and all feature flags OFF.
