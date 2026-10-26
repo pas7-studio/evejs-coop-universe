@@ -686,6 +686,14 @@ test("any original warehouse receipt, in-progress temp, ItemStore stock, or depo
    "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
   ["pending file",{custodyIo:{readdirSync:()=>["7001.json.tmp-101-2"]}},
    "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
+  ["writer lock before PREPARED",{custodyIo:{readdirSync:()=>["7001.lock"]}},
+   "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
+  ["noncanonical receipt alias",{custodyIo:{readdirSync:()=>["0007001.json"]}},
+   "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
+  ["noncanonical writer lock",{custodyIo:{readdirSync:()=>["0007001.lock"]}},
+   "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
+  ["noncanonical temp alias",{custodyIo:{readdirSync:()=>["0007001.json.tmp-11-2"]}},
+   "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
   ["original native stock",{custodyItems:{findWarehouseItem:()=>({itemID:55})}},
    "RE_ADOPTION_WAREHOUSE_ITEM_EXISTS"],
   ["depot committed",{custodyDepot:{snapshot:()=>({version:1,receipts:{"7001":{status:"COMMITTED"}},pending:{}})}},
@@ -701,6 +709,26 @@ test("any original warehouse receipt, in-progress temp, ItemStore stock, or depo
   assert.equal(f.flushes,0,name);
   assert.equal(f.target.state,"mining",name);
  }
+});
+test("unrelated native warehouse journals do not block a distinct original cargo",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ resetForTests();
+ const f=secondCrashAttempt(secondCrashCargo(),{
+  custodyIo:{readdirSync:()=>["7002.lock","7002.json.tmp-21-2","7002.json"]}
+ });
+ assert.equal(f.result.status,"ADOPTED");
+ assert.equal(f.store.writes.length,1);
+ assert.equal(f.flushes,1);
+});
+test("non-string warehouse directory result is not proof of free physical cargo",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ resetForTests();
+ const f=secondCrashAttempt(secondCrashCargo(),{
+  custodyIo:{readdirSync:()=>[null,"unreadable-dir-entry"]}
+ });
+ assert.equal(f.result.status,"RE_ADOPTION_SETTLEMENT_UNVERIFIED");
+ assert.equal(f.store.writes.length,0);
+ assert.equal(f.flushes,0);
 });
 test("unreadable original warehouse/depot/ItemStore or corrupt lineage never authorizes second adoption",()=>{
  process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
