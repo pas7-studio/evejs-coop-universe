@@ -57,3 +57,8 @@ Evidence: 5/5 new tests; manifest suite unchanged at its 12 pre-existing failure
 Why: traceability: changes lived only in chat and commit subjects, so a bot could not tell what changed, why, when or by which commit
 Where: AGENTS.md, docs/WORKLOG.md, scripts/log-change.cjs, tests/worklog-format.test.mjs
 Evidence: tests/worklog-format.test.mjs 4/4; scripts/log-change.cjs --check OK
+### 2026-10-26T11:17Z · eed42d6 · L2 · refactor(overlay): split the declarative overlay data out of the patch engine
+
+Why: the installer mixed 298 lines of data with the engine, so a gameplay hook edit and a mechanism edit were indistinguishable and every change risked the deploy path
+Where: scripts/overlay-spec.cjs, scripts/patch-evejs-coop.cjs
+Evidence: check status identical before/after (OVERLAY_DRIFT, patched 54, anchorMismatch 0); overlay-spec names=288 specs=54 oldLines=50
