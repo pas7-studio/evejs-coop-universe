@@ -30,6 +30,7 @@ param(
   [switch]$EnableNpcProbeLaunch,
   [switch]$EnableNpcProbeLoadoutSplit,
   [switch]$EnableNpcProbeSweep,
+  [switch]$EnableNpcProbeLifecycle,
   [switch]$EnableNpcScoutLoadout,
   [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
@@ -78,6 +79,9 @@ if ($EnableNpcProbeLoadoutSplit -and -not $EnableNpcProbeLaunch) {
 }
 if ($EnableNpcProbeSweep -and -not $EnableNpcProbeLaunch) {
   throw 'Native NPC blind probe sweep requires -EnableNpcProbeLaunch'
+}
+if ($EnableNpcProbeLifecycle -and -not $EnableNpcProbeLaunch) {
+  throw 'Native NPC probe lifecycle requires -EnableNpcProbeLaunch'
 }
 if ($EnableNpcScoutLoadout -and (-not $EnableNpcProbeLoadoutSplit -or -not $MaterializeVirtualNpcs)) {
   throw 'Native NPC scout authoring requires -EnableNpcProbeLoadoutSplit -MaterializeVirtualNpcs'
@@ -233,6 +237,9 @@ if ($EnableNpcProbeLoadoutSplit) {
 # No source-site coords are consulted to move NPC probes.
 if ($EnableNpcProbeSweep) {
   $yamlLines += "      EVEJS_COOP_NPC_PROBE_SWEEP: '1'"
+}
+if ($EnableNpcProbeLifecycle) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_LIFECYCLE: '1'"
 }
 if ($EnableNpcScoutLoadout) {
   $yamlLines += "      EVEJS_COOP_NPC_SCOUT_LOADOUT: '1'"
