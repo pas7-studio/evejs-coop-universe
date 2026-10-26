@@ -96,7 +96,7 @@
     {
       "id": "process_kill_original_probe_and_itemstore",
       "status": "NOT_RUN",
-      "proof": "GitHub Node22 pinned original native GameStore SQLite tests verify real OS SIGKILL after probe flight and all four native ItemStore item custody stages; no alternate JSON-only mock."
+      "proof": "GitHub Node22 pinned original native GameStore SQLite tests verify real OS SIGKILL after probe flight and all four native ItemStore item custody stages; no alternate JSON-only mock. Include the third original ItemStore native SQLite multi-item partial-commit crash scenario in scripts/verify-npc-expedition-wreck-sqlite-crash.mjs."
     },
     {
       "id": "full_live_restart_and_no_dupe",
@@ -121,7 +121,7 @@
     {
       "id": "wreck_source_death_crash_window",
       "status": "NOT_RUN",
-      "proof": "Real Node22 pinned original GameStore SQLite OS SIGKILL between durable death-to-wreck intent, original ItemStore move, native ship remove and client pickup; recovery requires operator for ambiguous state, no recreated hull or leaked/minted ItemStore row. Include the real pinned ItemStore persistent :wreck intent SIGKILL, explicit operator authorization, original same-itemID reconciliation, and idempotent retry. Client/server E2E remains NOT_RUN."
+      "proof": "Real Node22 pinned original GameStore SQLite OS SIGKILL between durable death-to-wreck intent, original ItemStore move, native ship remove and client pickup; recovery requires operator for ambiguous state, no recreated hull or leaked/minted ItemStore row. Include the real pinned ItemStore persistent :wreck intent SIGKILL, explicit operator authorization, original same-itemID reconciliation, and idempotent retry. Client/server E2E remains NOT_RUN. Multi-item death must also be tested: seed two distinct original ItemStore itemIDs, OS SIGKILL after the first is durably moved but before the next receives a wreck intent, then use explicit operator-approved recovery to stamp and transfer the untouched original ID; confirm two itemIDs, two client-visible rows, and idempotent retry without any new item allocation."
     },
     {
       "id": "native_wreck_expiry_does_not_destroy_original_loot",
