@@ -316,6 +316,12 @@ Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old mai
 Why: Regressions cover eight corrupt sibling variants with no writes/flushes, plus unaffected valid adoption when the invalid native cargo belongs to another fleet/system.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old main ADOPTED only 1 of 2 original sibling rows while corrupt cargo remained on orphan carrier. Pinned Node/SQLite/Rust/physical gameplay NOT_RUN.
+### 2026-10-26T14:22Z · 6c95e68 · DOCS · coop: make the number of patch mechanisms countable and non-growing
+
+Why: three overlapping patch mechanisms (65 legacy transformers, 48 wired) made stock files unmanaged and untestable
+Detail: Three mechanisms edit the pinned checkout today: L1 patches, the declarative overlay spec, and 65 hand-written coop-*-patch.cjs transformers, 48 of which patch-evejs-coop.cjs wires in one by one. The last group is invisible to --check and to review; coop-native-npc-fire-debit-patch.cjs alone inserts 172 unmanaged lines into space/runtime.js, which is why adding a normal spec entry for that file tu
+Where: docs/DEVELOPMENT_DOCTRINE.md, docs/coop-hook-inventory.json, scripts/coop-hook-inventory.cjs
+Evidence: HOOKS legacy=65 wired=48 specFiles=13 specEntries=46 overlap=5; baseline docs/coop-hook-inventory.json; --check HOOKS_OK
 ### 2026-10-26T14:14Z · 409fe28 · L2 · fix(P0): require authoritative native source cargo array before warehouse credit
 
 Why: An authorized warehouse DEBIT repair treated null/undefined from native source inventory as proof the original cargo was absent; it created a real station item with no verified source debit. Require a native cargo array and reject duplicate/misassigned original rows.
