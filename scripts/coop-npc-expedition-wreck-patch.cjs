@@ -41,6 +41,16 @@ const edits={
 };
 function patch(source,file,remove=false){
  if(!edits[file])return source;
+ if(!remove){
+  const marks=file===WRECK?
+   ["EX03B18_NATIVE_WRECK_STAGE","EX03B18_NATIVE_ORIGINAL_ITEM_PICKUP",
+    "EX03B18_NATIVE_WRECK_DECAY_GUARD","EX03B18_NATIVE_WRECK_SLIM_REFRESH",
+    "EX03B18_NATIVE_DEATH_FAILURE_FENCE","EX03B18_SOURCE_CORPORATION"]:
+   ["EX03B18_NATIVE_WRECK_CONTENTS"];
+  const present=marks.filter(x=>source.includes(x));
+  if(present.length===marks.length)return source;
+  if(present.length)throw Error("EX03B18_PARTIAL_NATIVE_SOURCE_PATCH:"+file);
+ }
  const eol=source.includes("\r\n")?"\r\n":"\n";
  let result=source;
  const list=remove?[...edits[file]].reverse():edits[file];
