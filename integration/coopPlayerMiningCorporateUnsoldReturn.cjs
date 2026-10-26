@@ -11,7 +11,7 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const validOrder=id=>typeof id==="string"&&ORDER.test(id)&&
  BigInt(id)+9200000000n<=BigInt(Number.MAX_SAFE_INTEGER);
 function createCorporateUnsoldReturn({
- gameStore,access,readNativeCancelLock,enabled=()=>false,clock=()=>Date.now()
+ gameStore,access,readNativeCancelLock,enabled=()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_CANCEL==="1",clock=()=>Date.now()
 }={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=="SERVER_INTERNAL_FLAGGED"||
