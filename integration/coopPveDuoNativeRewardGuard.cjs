@@ -3,7 +3,7 @@
 // native leader agent DoAction. Native EveJS still owns every per-character
 // mission, ISK, LP, item, standing and completion mutation.
 const id=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-const tag=x=>typeof x==="string"&&x.trim()===x&&x.length>0&&x.length<=256?x:null;
+const tag=x=>(typeof x==="string"||typeof x==="number")&&String(x).trim()===String(x)&&String(x).length>0&&String(x).length<=256?String(x):null;
 const REQUIRED_FLAGS=[
  "EVEJS_COOP_FLEET_MISSION_TURNIN",
  "EVEJS_COOP_FLEET_LEADER_FENCE",
@@ -33,10 +33,11 @@ function validate({ticket,getInstance,verifyLink,sharedObjectiveMatches,flags={}
     a.storylineOfferProjection===true||b.storylineOfferProjection===true||
     id(a.agentID)!==agent||id(b.agentID)!==agent||
     !id(a.missionSequence)||!id(b.missionSequence)||
-    a.missionSequence===b.missionSequence||
+    id(a.missionSequence)===id(b.missionSequence)||
     !id(a.missionSystemID)||id(b.missionSystemID)!==id(a.missionSystemID)||
     !tag(a.contentID)||!tag(a.missionTemplateID)||
-    a.contentID!==b.contentID||a.missionTemplateID!==b.missionTemplateID||
+    tag(a.contentID)!==tag(b.contentID)||
+    tag(a.missionTemplateID)!==tag(b.missionTemplateID)||
     !id(a.dungeonInstanceID)||
     (id(b.dungeonInstanceID)&&
      id(b.dungeonInstanceID)===id(a.dungeonInstanceID)&&
@@ -79,7 +80,7 @@ function validate({ticket,getInstance,verifyLink,sharedObjectiveMatches,flags={}
   leaderID:owner,peerID:peer,agentID:agent,stationID:station,
   sourceInstanceID:sourceID,missionSystemID:id(a.missionSystemID),
   leaderSequence:id(a.missionSequence),peerSequence:id(b.missionSequence),
-  contentID:a.contentID,missionTemplateID:a.missionTemplateID,
+  contentID:tag(a.contentID),missionTemplateID:tag(a.missionTemplateID),
   // This proof only authorizes the existing native TWO payouts; it
   // intentionally does NOT assert wallet/LP/standing balances changed.
   evidence:"ORIGINAL_DUNGEON_AND_TWO_ACCEPTED_NATIVE_MISSIONS_AND_DURABLE_SHARED_OBJECTIVE"};
@@ -107,8 +108,8 @@ function checkPeerBeforeNativePayout({ticket,currentPeer,preflight,
     id(currentPeer?.missionSequence)!==preflight.peerSequence||
     id(currentPeer?.agentID)!==preflight.agentID||
     id(currentPeer?.missionSystemID)!==preflight.missionSystemID||
-    currentPeer.contentID!==preflight.contentID||
-    currentPeer.missionTemplateID!==preflight.missionTemplateID||
+    tag(currentPeer.contentID)!==preflight.contentID||
+    tag(currentPeer.missionTemplateID)!==preflight.missionTemplateID||
     currentPeer.runtimeStatus!=="accepted"||
     currentPeer.objectiveMode!=="dungeon"||
     currentPeer.objectiveCompleted!==true||
