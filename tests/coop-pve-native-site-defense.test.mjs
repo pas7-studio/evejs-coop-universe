@@ -136,3 +136,8 @@ test("named A-Life or war-owned IDs cannot be hijacked by site defense",()=>{
  const f=fixture();assert.equal(f.tick([f.instance],[102]).orders,0);
  assert.equal(f.tick([f.instance],new Array(1025).fill(0)).status,"INVALID_EXCLUSIONS");
 });
+
+test("a signature beacon cannot impersonate an anomaly and vice versa",()=>{
+ const f=fixture();f.beacon.kind="universeSignatureSite";
+ assert.equal(f.tick().orders,0);
+});
