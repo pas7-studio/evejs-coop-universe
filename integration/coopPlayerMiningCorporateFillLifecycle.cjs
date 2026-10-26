@@ -11,7 +11,7 @@ const pos=x=>Number.isSafeInteger(x)&&x>0;
 const fillKey=(id,cycle)=>"coopPlayerMiningCorpFill\u001f"+id+":"+cycle;
 const orderLocation=id=>Number(BigInt(id)+9200000000n);
 function createCorporateFillLifecycle({
- marketClient,getTrustedMatch,settlement,token,enabled=()=>false,observe=()=>{}
+ marketClient,getTrustedMatch,settlement,token,enabled=()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_FILL_LIFECYCLE==="1",observe=()=>{}
 }={}){
  if(typeof marketClient?.call!=="function"||
   typeof getTrustedMatch!=="function"||
