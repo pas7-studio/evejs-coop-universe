@@ -113,6 +113,14 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
     candidates.push({site,key,wave,ship,controller,health,history});
    }
   }
+  // An original dungeon may complete and leave listActiveInstances
+  // immediately after the boss dies. Preserve the ALREADY VERIFIED live
+  // native boss's identity for observational wreck reconciliation only.
+  // This cannot admit an unwitnessed boss after process restart.
+  const queued=new Set(candidates.map(c=>c.history));
+  for(const history of seen.values())
+   if(history.systemID===systemID&&!queued.has(history)&&!history.wreckVerified)
+    candidates.push({history});
   if(!candidates.length)return out;
   let wrecks=null;
   for(const cand of candidates){
