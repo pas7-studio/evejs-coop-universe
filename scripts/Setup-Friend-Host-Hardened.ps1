@@ -112,27 +112,33 @@ function Ensure-FriendAccount {
   $password = -join (1..40 | ForEach-Object { $alphabet[(Get-Random -Maximum $alphabet.Length)] })
   New-LocalUser -Name $SshUser -Password (ConvertTo-SecureString $password -AsPlainText -Force) `
     -PasswordNeverExpires -AccountNeverExpires -Description 'EVE co-op friend tunnel (key-only, forward-only)' | Out-Null
-  Write-Step "account $SshUser created (random password, not stored, not an administrator)"
+  # A script-created account is not always a member of the local Users group; without
+  # it the account has no "Access this computer from the network" right and sshd
+  # rejects every key before it even looks at the file.
+  net localgroup Users $SshUser /add 2>&1 | Out-Null
+  net user $SshUser /passwordreq:yes 2>&1 | Out-Null
+  Write-Step "account $SshUser created (random password, not stored, not an administrator, in Users)"
 }
 
 function Install-FriendKey {
-  $profileDir = Join-Path 'C:\Users' $SshUser
-  if (-not (Test-Path -LiteralPath $profileDir)) {
-    # The profile is created on first logon; sshd reads it, so create it now.
-    New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
-  }
-  $sshDir = Join-Path $profileDir '.ssh'
-  $authorized = Join-Path $sshDir 'authorized_keys'
-  if (-not (Test-Path -LiteralPath $sshDir)) { New-Item -ItemType Directory -Path $sshDir -Force | Out-Null }
-
+  # The account is created by script and has no Windows registry profile, so a
+  # relative .ssh/authorized_keys cannot be resolved reliably and sshd silently
+  # finds no key. Use an administrator-owned absolute file instead: it is both
+  # deterministic and unreadable by the friend himself.
+  $authorized = Join-Path $configDir ($SshUser + '_authorized_keys')
   $key = (Get-Content -LiteralPath $FriendPublicKeyFile -Raw).Trim()
   if ($key -notmatch '^(ssh-ed25519|ssh-rsa|ecdsa-sha2-)') { throw 'That file is not an OpenSSH public key.' }
   $current = if (Test-Path -LiteralPath $authorized) { @(Get-Content -LiteralPath $authorized) } else { @() }
   if ($current -notcontains $key) { Add-Content -LiteralPath $authorized -Value $key }
-  Write-Step "friend key authorised for $SshUser only"
+  Write-Step ("friend key authorised for $SshUser only: " + $authorized)
 
-  icacls $authorized /inheritance:r /grant:r "SYSTEM:(F)" "Administrators:(F)" "$($SshUser):(F)" | Out-Null
-  icacls $sshDir /inheritance:r /grant:r "SYSTEM:(F)" "Administrators:(F)" "$($SshUser):(F)" | Out-Null
+  $acl = Get-Acl -LiteralPath $authorized
+  $acl.SetAccessRuleProtection($true, $false)
+  foreach ($rule in @($acl.Access)) { $acl.RemoveAccessRule($rule) | Out-Null }
+  foreach ($id in @('NT AUTHORITY\SYSTEM', 'BUILTIN\Administrators')) {
+    $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($id, 'FullControl', 'Allow'))) | Out-Null
+  }
+  Set-Acl -LiteralPath $authorized -AclObject $acl
 }
 
 function Write-DropIn {
@@ -178,6 +184,7 @@ function Write-DropIn {
     "AllowUsers $SshUser",
     'AllowTcpForwarding yes',
     "Match User $SshUser",
+    "  AuthorizedKeysFile C:/ProgramData/ssh/${SshUser}_authorized_keys",
     '  PermitTTY no',
     '  X11Forwarding no',
     '  AllowAgentForwarding no',
