@@ -32,6 +32,14 @@ function fixture(){
   upsertNativeCargo:row=>{writes++;ops.push("write:"+row.cargoID);
    cargo=cargo.map(old=>old.cargoID===row.cargoID?row:old);return {success:true}},
   flushNpcCargo:()=>{flushes++;ops.push("flush");return {success:!failFlush}},
+  relocateNativeProbe:({scene,row})=>{
+   const old=scene.getEntityByID(row.cargoID);
+   if(!old||old.nativeNpcProbe!==true||old.nativeNpcCargoID!==row.cargoID)
+    return {success:false};
+   old.position={...row.deployedProbe.position};
+   old.targetPoint={...row.deployedProbe.position};
+   return {success:true};
+  },
   refreshNativeCargoProjection:(ship,id)=>{
    assert.equal(id,entityID);
    if(failProjection)return false;
