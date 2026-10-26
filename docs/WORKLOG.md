@@ -113,3 +113,8 @@ Evidence: source review; targeted Node 22 tests authored, NOT_RUN on owner's che
 Why: Exercise same-ID collisions both inside the fleet and across fleet/system boundaries before any mutation.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: source review; targeted Node 22 tests authored, NOT_RUN on owner's checkout; remote CI prohibited.
+### 2026-10-26T11:40Z · 5de1f2d · L2 · refactor(haul): one verifyLoad() owner for both transfer paths; the normal path could remove ore it never proved moved
+
+Why: the live (non-strict) transfer accepted a row with the right cargoID but a wrong entity, quantity or transient marker and then deleted the ore from the miner, so a corrupt write could destroy cargo instead of failing closed
+Where: integration/coopNativeHaulCargo.cjs, tests/coop-haul-load-verification.test.mjs
+Evidence: new tests/coop-haul-load-verification.test.mjs 4/4 pass with the fix and 4/4 fail on the previous implementation; haul+adoption suites 46 pass / 19 pre-existing failures identical by name before and after; OVERLAY_OK patched 54
