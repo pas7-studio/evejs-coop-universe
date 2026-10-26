@@ -129,3 +129,28 @@ test("no viable native command has no Accept button",()=>{
  const r=x.interact(1,rows);assert.equal(r.status,"NO_SAFE_ORDER");
  assert.deepEqual(r.actions,[[1,1]]);assert.equal(x.issued.length,0);
 });
+
+test("native cargo transit exposes only safely deferred HOLD, no HAUL or RETREAT",()=>{
+ const x=fixture();x.rows[0].nativeState="haulereturn";
+ assert.deepEqual(availableCommands(x.rows[0]),["HOLD"]);
+ x.rows[0].nativeState="loaded";
+ assert.deepEqual(availableCommands(x.rows[0]),["HOLD"]);
+});
+test("native NPC combat phase keeps RETREAT visible but never peaceful HAUL",()=>{
+ const x=fixture();x.rows[0].nativeState="panic";
+ assert.deepEqual(availableCommands(x.rows[0]),["RETREAT"]);
+ x.rows[0].nativeState="aggressed";
+ assert.deepEqual(availableCommands(x.rows[0]),["RETREAT"]);
+});
+test("HOLD that has not physically stopped the original miners offers no MINE resume",()=>{
+ const x=fixture();x.rows[1].nativeState="hauling";
+ assert.deepEqual(availableCommands(x.rows[1]),[]);
+ x.rows[1].nativeState="coop-hold";
+ assert.deepEqual(availableCommands(x.rows[1]),["MINE","RETREAT"]);
+});
+test("physical phase change after user preview invalidates old selected command",()=>{
+ const x=fixture();x.rows[0].nativeState="mining";x.interact(1);
+ x.rows[0].nativeState="hauling";
+ assert.equal(x.interact(3).reason,"REOPEN_NATIVE_AGENT_TO_CONFIRM_ORDER");
+ assert.equal(x.issued.length,0);
+});
