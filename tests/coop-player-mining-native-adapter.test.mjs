@@ -21,7 +21,10 @@ function fixture(bound=true){
  records.set(CONTRACT(OP),{version:1,status:'FUNDED',operationID:OP,
  corporationID:CORP,employerCorpID:NPC,systemID:SYSTEM,fleetID:FLEET,
  minerIDs:[1001,1002],haulerIDs:[1003],directive:'MINE',commandSeq:0,commandState:'IDLE'});}
- const db={coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>false,
+ const db={read(table,p){assert.equal(table,'corporationRuntime');
+  const key=p.slice(1).replace('/',"\u001f");
+  return records.has(key)?{success:true,data:structuredClone(records.get(key))}:
+   {success:false,errorMsg:'ENTRY_NOT_FOUND'};},coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>false,
  transact(t,fn){return fn({get:(_,k)=>records.get(k)||null,put:(_,k,v)=>records.set(k,structuredClone(v))})}}};
  const scene={systemID:SYSTEM,getEntityByID:id=>ships.get(id)||null};
  const store={getNativeEntity:id=>entities.get(id)||null,
