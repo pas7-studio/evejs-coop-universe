@@ -18,7 +18,7 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
  if(!nativeStore||!itemStore||!gameStore||
   ["getNativeEntity"].some(k=>typeof nativeStore[k]!=="function")||
   ["findItemById","listContainerItems","transferItemToOwnerLocation",
-   "moveItemToLocation","writeItemCustomInfo"].some(k=>typeof itemStore[k]!=="function")||
+   "moveItemToLocation","updateInventoryItem"].some(k=>typeof itemStore[k]!=="function")||
   typeof gameStore.flushTableSync!=="function"||
   [getController,getStation,isNpcCorporation,isNativeSiteOwner,verifyNativeArrival,clock]
    .some(f=>typeof f!=="function")||
@@ -103,7 +103,9 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
    // Durable intent written onto the SAME original ItemStore item row.
    // After SIGKILL the authoritative item still lives in either container
    // or ship; it is never represented by a second allocated cargoID.
-   const stamp=itemStore.writeItemCustomInfo(itemID,tag);
+   // The original source writeItemCustomInfo() bypasses byID index invalidation.
+   // updateInventoryItem() writes the SAME row while updating the native index.
+   const stamp=itemStore.updateInventoryItem(itemID,old=>({...old,customInfo:tag}));
    if(stamp?.success!==true){quarantined.add(itemID);return deny("EX03_LOOT_INTENT_UNCERTAIN")}
    if(!flush()){quarantined.add(itemID);return deny("EX03_LOOT_INTENT_NOT_DURABLE")}
    const marked=inspect(itemID);
