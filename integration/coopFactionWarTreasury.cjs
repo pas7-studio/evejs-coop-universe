@@ -27,6 +27,10 @@ const DEFAULT_RATES = Object.freeze({
   killBountyISK: 1_500_000,
   // Ammunition is abstract until real logistics exist.
   ammoPerShipISK: 1_500_000,
+  // One military operation (a campaign opening, a front push) costs about one
+  // sector cycle, so a faction that really holds ground can always act, and a
+  // faction that holds nothing cannot.
+  supplyPerOperationISK: 250_000,
 });
 
 function hullForClass(classID) {
@@ -100,4 +104,28 @@ function affordableClass({ balanceISK = 0, preferredClassID = "", rates = DEFAUL
   return null;
 }
 
-module.exports = { HULL_CLASSES, DEFAULT_RATES, hullForClass, income, credit, purchase, affordableClass };
+// Can this faction pay for one military operation right now? The budget is what
+// it really holds plus whatever balance it carries. Still paper: no order, no
+// cargo, and `paper: true` travels with the answer.
+function fundOperation({ balanceISK = 0, heldSystemIDs = [], rates = DEFAULT_RATES } = {}) {
+  const rules = Object.assign({}, DEFAULT_RATES, rates || {});
+  const inflow = income({ heldSystemIDs, rates: rules });
+  const budgetISK = isk(balanceISK) + inflow.totalISK;
+  const costISK = isk(rules.supplyPerOperationISK);
+  if (costISK <= 0) return { status: "REFUSED_INVALID_RATE", paper: true, costISK };
+  if (budgetISK < costISK) {
+    return {
+      status: "REFUSED_UNFUNDED", paper: true,
+      heldSystems: inflow.systems, sectorIncomeISK: inflow.totalISK,
+      budgetISK, costISK, evidence: "PAPER_BUDGET_NO_HELD_GROUND",
+    };
+  }
+  return {
+    status: "FUNDED", paper: true,
+    heldSystems: inflow.systems, sectorIncomeISK: inflow.totalISK,
+    budgetISK, costISK, afterISK: budgetISK - costISK,
+    evidence: "PAPER_OPERATION_BUDGET_NO_MARKET_ORDER_NO_CARGO",
+  };
+}
+
+module.exports = { HULL_CLASSES, DEFAULT_RATES, hullForClass, income, credit, purchase, affordableClass, fundOperation };

@@ -8,9 +8,16 @@
 const num = (value) => Number(value) || 0;
 const positive = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0;
 
+// Two shapes are real: the presence map (`systemID -> faction`) and the
+// authoritative war-state record (`militaryControllerFactionID`). Reading both
+// keeps a front derived from the state after a capture, instead of silently
+// forgetting every registered system.
 function ownerOf(territories, systemID) {
   const value = territories && territories[systemID];
-  const owner = typeof value === "object" && value ? value.factionID : value;
+  const owner = typeof value === "object" && value
+    ? (value.factionID !== undefined ? value.factionID : value.militaryControllerFactionID)
+    : value;
+  if (typeof owner === "number") return Number.isSafeInteger(owner) && owner > 0 ? String(owner) : null;
   return typeof owner === "string" && owner ? owner : null;
 }
 

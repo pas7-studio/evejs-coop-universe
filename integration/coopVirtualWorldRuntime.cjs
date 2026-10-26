@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
@@ -145,6 +145,106 @@ function warSkip(phase,reason){
   require("./coopRuntimeProbe").observe("living-native-war-skip",null,null,
    {phase,reason,status:"SKIPPED",evidence:"EXPLICIT_PRECONDITION_NOT_MET"});
  }catch(_error){/* probe is best effort */}
+}
+// FW-010: open the first real war. The mobiliser can only reserve ships for a
+// campaign that already exists in the state, so this phase derives the war from
+// real presence + real reciprocal gates + real held ground, and writes it through
+// the authoritative core. One faction pair = one war; every open border under it
+// is its own campaign, so a war is multi-front by construction.
+function advanceNativeWarOpening(){
+ const {enabled}=require("./coopWarMobilizer");
+ if(!enabled(process.env))return warSkip("opening","WAR_FLAGS_OFF");
+ if(!visitedSystems.size)return warSkip("opening","NO_VISITED_SYSTEMS");
+ if(!identityRegistry)return warSkip("opening","NO_IDENTITY_REGISTRY");
+ const gameStore=require("../gameStore"),{TABLE,KEY}=require("./coopFactionWarStore"),
+  core=require("./coopFactionWarCore");
+ const rowKey="/"+KEY;
+ const readWarState=()=>{
+  const row=gameStore.read(TABLE,rowKey);
+  if(row?.success!==true)return null;
+  core.validateState(row.data);
+  return row.data;
+ };
+ if(!warOpening){
+  const npcStore=require("./npc/nativeNpcStore"),
+   factions=require("../services/faction/factionState"),
+   worldData=require("./worldData");
+  warOpening=require("./coopFactionWarOpening").createWarOpening({
+   readLinks:()=>Object.values(identityRegistry.snapshot()?.links||{}),
+   getNativeEntity:id=>npcStore.getNativeEntity(id),
+   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
+   getStargatesForSystem:id=>worldData.getStargatesForSystem(id),
+   getGate:id=>worldData.getStargateByID(id),
+   readWarState,
+   writeWarState:state=>{
+    core.validateState(state);
+    gameStore.write(TABLE,rowKey,state);
+    if(typeof gameStore.flushTableSync==="function")gameStore.flushTableSync(TABLE);
+   },
+   minShips:Math.max(1,Number(process.env.EVEJS_COOP_WAR_TERRITORY_MIN_SHIPS)||1)
+  });
+ }
+ let result;
+ try{result=warOpening.tick({systemIDs:[...visitedSystems].slice(0,12)})}
+ catch(error){
+  warSkip("opening","OPENING_THROW:"+String(error&&error.message||error));
+  return;
+ }
+ if(result.status!=="OPENED"){
+  const reason=String(result.reason||result.status||"UNKNOWN");
+  // A refusal is a real answer, not a silent feature: publish what the world
+  // actually contained (owners, ties, front count) once per reason change.
+  if(warSkipReasons["opening"]!==reason){
+   try{
+    require("./coopRuntimeProbe").observe("living-native-war-opening-blocked",null,null,{
+     status:"BLOCKED",reason,
+     territories:result.plan?.territories||{},
+     presence:result.plan?.summary||{},
+     fronts:(result.plan?.fronts||[]).length,
+     evidence:"REAL_PRESENCE_DERIVED_NO_FRONT_INVENTED"
+    });
+   }catch(_error){/* probe is best effort */}
+  }
+  return warSkip("opening",reason);
+ }
+ console.log("[CoopFactionWar] war opened "+result.warIDs.join(",")+
+  " campaigns "+result.campaignIDs.join(","));
+ require("./coopRuntimeProbe").observe("living-native-war-opened",null,null,{
+  status:result.status,warIDs:result.warIDs,campaignIDs:result.campaignIDs,
+  presence:result.presence,territories:result.territories,fronts:result.fronts,
+  funding:result.fundings,
+  evidence:"REAL_PRESENCE_REAL_RECIPROCAL_GATE_PAPER_TREASURY"
+ });
+}
+// FW-010B: PREPARING becomes ASSAULT only when the mobiliser has really put
+// native ships on both sides of that border. No muster, no assault.
+function advanceNativeWarAssault(){
+ const {enabled}=require("./coopWarMobilizer");
+ if(!enabled(process.env))return warSkip("assault","WAR_FLAGS_OFF");
+ const registry=nativeWarFleetRegistry();
+ if(!registry)return warSkip("assault","NO_WAR_FLEET_REGISTRY");
+ const gameStore=require("../gameStore"),{TABLE,KEY}=require("./coopFactionWarStore"),
+  core=require("./coopFactionWarCore"),assault=require("./coopFactionWarAssault");
+ const rowKey="/"+KEY;
+ const row=gameStore.read(TABLE,rowKey);
+ if(row?.success!==true)return warSkip("assault","NO_WAR_STATE");
+ let state;
+ try{state=row.data;core.validateState(state)}
+ catch(error){return warSkip("assault","INVALID_WAR_STATE")}
+ const readiness=assault.campaignReadiness({state,ships:registry.snapshot()?.ships});
+ if(readiness.status!=="READY")return warSkip("assault",String(readiness.reason||readiness.status));
+ const begun=assault.beginAssault({state,readiness});
+ if(begun.status!=="ASSAULT_BEGUN")return warSkip("assault",String(begun.reason||begun.status));
+ core.validateState(begun.state);
+ gameStore.write(TABLE,rowKey,begun.state);
+ if(typeof gameStore.flushTableSync==="function")gameStore.flushTableSync(TABLE);
+ console.log("[CoopFactionWar] assault begun "+begun.campaignID+
+  " attacker="+begun.attackerShips.length+" defender="+begun.defenderShips.length);
+ require("./coopRuntimeProbe").observe("living-native-war-assault",null,null,{
+  status:begun.status,campaignID:begun.campaignID,warID:begun.warID,
+  attackerShips:begun.attackerShips,defenderShips:begun.defenderShips,
+  evidence:"REAL_NATIVE_MUSTER_ON_BOTH_SIDES"
+ });
 }
 function advanceNativeWarMobilization(){
  const {enabled,createWarMobilizer}=require("./coopWarMobilizer");
@@ -1054,7 +1154,9 @@ function start(){
   runPhase("native-pve-wave-reinforcements",advanceNativePveWaveReinforcements);
   runPhase("native-pve-objective-doctrine",advanceNativePveObjectiveDoctrine);
   runPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
+  runPhase("native-faction-war-opening",advanceNativeWarOpening);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
+  runPhase("native-faction-war-assault",advanceNativeWarAssault);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
   runPhase("native-faction-war-battle",advanceNativeWarCombat);
   runPhase("native-faction-war-objectives",advanceNativeWarObjectives);
