@@ -173,6 +173,7 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
    status:"IN_SPACE",probeID:row.cargoID,entityID,
    ownerID:ctx.native.ownerID,systemID:ctx.scene.systemID,
    typeID:row.typeID,launchedAtMs:now,position,
+   originPosition:{...ctx.ship.position},sweepStep:0,
    rangeStep:range.rangeStep,scanRange:range.scanRange
   }};
   let persisted;
