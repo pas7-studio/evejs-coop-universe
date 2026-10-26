@@ -115,6 +115,12 @@ function adopt(scene,fleet,options={}){
  if(!hauler)return {status:"HAULER_NOT_UNIQUE",adopted:0};
  const haulerID=pos(hauler.itemID),ownerID=pos(hauler.ownerID);
  if(!haulerID||!ownerID)return {status:"HAULER_NOT_ATTESTED",adopted:0};
+ // A fleet slot is NOT corporate title: fleet IDs can be reused across
+ // original NPC owners. Never transfer a cargo item to a different owner
+ // merely by adopting its previous hauler's stale entityID.
+ // Validate the entire batch before any original cargo row is rewritten.
+ if(planned.rows.some(row=>pos(row.ownerID)!==ownerID))
+  return {status:"ORIGINAL_CARGO_OWNER_MISMATCH",adopted:0};
  const existing=(store.listNativeCargoForEntity(haulerID)||[]);
  if(existing.some(x=>pos(x?.coopHaulFleetID)))return {status:"HAULER_ALREADY_LOADED",adopted:0};
  let adopted=0,quantity=0,volume=0,failed=null;
