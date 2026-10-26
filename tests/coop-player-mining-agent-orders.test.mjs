@@ -149,7 +149,7 @@ test("HOLD that has not physically stopped the original miners offers no MINE re
  assert.deepEqual(availableCommands(x.rows[1]),["MINE","RETREAT"]);
 });
 test("physical phase change after user preview invalidates old selected command",()=>{
- const x=fixture();x.rows[0].nativeState="mining";x.interact(1);
+ const x=fixture();x.rows[0].nativeState="mining";x.interact(1);x.interact(2);
  x.rows[0].nativeState="hauling";
  assert.equal(x.interact(3).reason,"REOPEN_NATIVE_AGENT_TO_CONFIRM_ORDER");
  assert.equal(x.issued.length,0);
