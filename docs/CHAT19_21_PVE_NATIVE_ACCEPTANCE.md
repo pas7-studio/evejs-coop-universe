@@ -15,6 +15,84 @@ agent/dungeon/npc/wallet/itemStore/LP/standing modules.
 It does **not** spawn a second server, add a fake mission ledger,
 create game entities or run any client.
 
+
+## Final hardening — PR #323 (2026-10-26)
+
+The PVE-005 final dependent PR is intentionally additive and remains
+default OFF; it does not merge any staged changes into `main` or
+activate a persistent world.
+
+### Fixes and source-backed evidence
+
+- The original `coopRuntimeProbe.observe` now stamps every emitted
+  source event with a server-generated UUID v4 `runtimeRunID`, **after**
+  all caller fields, so a native event caller cannot override that ID.
+  The read-only cross-PvE auditor rejects event logs without a valid
+  boot ID, and rejects attempts to combine one prior-boot boss death
+  with later-boot personal payout receipts. This deliberately refuses
+  to treat a server restart as one already-proven session.
+- The opt-in native boss loot fence now examines the *original native
+  wreck record* even when the in-process boss witness is missing.
+  A native transient wreck whose original `profileID` or
+  `lootTableID` explicitly identifies an overseer/boss/officer/
+  commander is blocked with `BOSS_LOOT_LIVE_WITNESS_REQUIRED` rather
+  than bypassing the durable claim after restart. Ordinary untagged
+  native wrecks continue original EveJS item transfer. This is a
+  conservative heuristic, NOT globally durable original-boss identity.
+- Zero-ISK untimed native bonus item rewards now count toward expected
+  station-hangar item quantities, matching original
+  `isMissionBonusRewardAvailable`. Timed zero-ISK bonus items cannot
+  be inferred from wallet amounts, so the strict audit fails closed
+  pending a transaction-scoped source receipt.
+- Actual **pinned upstream** source content was read: the 5.39 MB
+  `npcProfiles/data.json` has **171 distinct profiles** linked to
+  `parity_deadspace_overseer_pending_loot` and that original table
+  has **4 positive-weight special/faction/deadspace selectors**.
+  This is real catalog data, not a test fixture. It does not prove
+  item candidate pools, authored dungeon availability, RNG occurrence
+  or live client loot. The source catalog audit is now a hard pinned
+  gate; the separate installed native
+  `coop-pve-native-rare-candidates.test.mjs` checks that source
+  selectors resolve to at least one real native item type in the
+  original `npcLoot._testing.getRuleCandidatePool`.
+
+### Verification status
+
+- **PASS, isolated V8 original branch source:** 118 source PvE /
+  NPC / native duo-reward unit scenarios, 457 assertions;
+  16 durable loot-claim scenarios, 51 assertions (simulated fsync);
+  14 native cross-event correlation cases, 40 assertions;
+  6 native catalog audit cases, 11 assertions.
+  **154/154 cases, 559 assertions**, across those disjoint source suites.
+- **PASS, actual pinned data read through GitHub:** 171 original
+  authored overseer profile links and 4 rule selectors; catalog
+  auditor returned `SOURCE_AUTHORED_BOSS_TABLE_LINK_PRESENT`.
+- **NOT VERIFIED:** actual Node22 GitHub Actions / pinned installer
+  roundtrip, original item candidate pool test (requires installed
+  pinned native data reader), actual on-disk crash fsync, two real
+  authenticated clients, native network/RPC loot and payouts, real
+  rare roll, native SQLite/Rust and post-restart settlement.
+  Those statuses cannot be replaced with PASS from V8 source checks.
+
+### Required final release gates
+
+1. Real Node22 source suite must report PASS, including the server-run
+   UUID telemetry test and rare source catalog tests.
+2. Disposable original pinned EveJS complete installer dry-run,
+   install, reapply, source verification and exact remove must PASS.
+   The new native rare candidate pool test must also PASS.
+3. Original in-game E2E must complete all **16** independent scenarios
+   in `tests/scenarios/chat19-21-native-two-client-pve-e2e.json`,
+   with two authenticated real clients, no counterfeit scene/ships,
+   original NPCs and source-backed rewards. A server-only JSONL
+   correlation is insufficient.
+4. Crash/restart mid-grant or between captain/wingman payout must not
+   duplicate original native ISK/LP/items/standing; manual recovery
+   is mandatory where cross-store atomicity is not provided by EveJS.
+5. After these gates, review and merge all stacked PvE PRs in
+   dependency order. Do not deploy code and enable all flags in one
+   uncontrolled operation.
+
 ## 1. CI source tests: genuine Node runner
 
 From this branch of the overlay repository:
@@ -105,3 +183,106 @@ Do not automatically move these to PASS just because source Node tests,
 installer roundtrip or telemetry correlation passed. Keep all native
 PvE economy/order flags OFF until full live acceptance is independently
 recorded, reviewed and the stacked PRs are merged in dependency order.
+
+## Final source-authored boss loot proof and CI status (2026-10-26)
+
+The original pinned EveJS catalogue contains **171** authored NPC profiles
+whose `lootTableID` is `parity_deadspace_overseer_pending_loot`.
+That rule table has **four** weighted native selectors (special overseer
+personal effects, faction ammo, faction modules and deadspace modules),
+with a source-authored non-empty expectation. This establishes actual
+profile-to-rule configuration; it is not a proof of physical drops.
+
+The pinned-run gate includes
+`tests/coop-pve-native-rare-candidates.test.mjs`: it looks up the
+original native `npcData` definition, resolves original item-type pools
+with `npcLoot._testing.getRuleCandidatePool`, then calls the **original**
+`npcLoot.rollNpcLootEntries(table)` 32 times with a deterministic
+locally restored random stream and checks selected item IDs against
+native candidate pools. This is algorithm/in-memory candidate evidence,
+**not** a real spawned wreck, a native inventory grant, or a completed
+EVE client pickup. Keep live rare-drop scenario `NOT_RUN` until
+original native itemStore + wreck source and two clients are witnessed.
+
+The optional boss-loot pregrant fence additionally blocks native wrecks
+whose source profile/rule names unmistakably identify an overseer,
+officer, boss or commander after server restart when the in-process
+boss witness is lost. It does **not** auto-replay an uncertain item grant;
+non-boss wrecks retain their original native transfer path.
+
+For duo personal agent rewards, zero-ISK **untimed** bonus item grants
+are now recognized according to the original native reward function.
+A timed bonus with zero ISK cannot be inferred from a wallet delta and
+is deliberately rejected until explicit native timing/receipt proof is
+available. This protects against false payout-success claims.
+
+**Test evidence at this point:** isolated source-executed suites for
+personal reward custody (15/15), event correlation (14/14) and static
+catalog checks (6/6), **35/35 PASS**; 171 original profile bindings
+and four selector rules inspected. GitHub Actions has returned **zero
+runs** for the final feature branch, so actual Node22 full source suite,
+full disposable original overlay install/reapply/remove, native rare
+candidate/RNG execution against pinned checkout, two-client game play,
+SQLite/Rust and crash/restart are **NOT_VERIFIED/NOT_RUN**. No claim
+of release-readiness or merged code is made. The final PvE PR stays
+Draft and all game flags remain OFF by default.
+
+
+## Final regression hardening follow-up: CI dependency + provenance (2026-10-26)
+
+This update is **source-authored, NOT A PASSED NATIVE CI RESULT**:
+
+- The disposable pinned CI now executes `npm ci --no-audit --no-fund`
+  inside `isolated-upstream/Code/server` before importing original
+  server modules. This is an actual upstream lockfile installation,
+  not a substitute for in-game service bootstrap.
+- The original pinned `npcData` imports `gameStore`, which refuses
+  unisolated `node:test` processes. The native rare candidate test
+  now reports `NATIVE_RARE_RNG_NOT_RUN` **before** importing protected
+  GameStore when an attested isolated test store is unavailable.
+  Do not disable the upstream isolation guard to make CI green.
+- A clean pinned Git checkout has original authored NPC profiles and
+  loot rule data in `tools/DatabaseCreator/staticTables`, but that
+  static source by itself is **not** a populated native GameStore
+  itemTypes catalogue. Until an approved isolated real itemTypes
+  authority is prepared and the native RNG test executes, keep its
+  release gate **BLOCKED**, even if all other source tests pass.
+- Personal standing receipts now reject sign-inverted transactions:
+  a reputational loss cannot witness an authored gain, or vice versa.
+- Native personal inventory receipts normalize numeric itemID/typeID
+  representations before duplicate detection and original/new stack
+  comparison, preventing duplicate IDs represented as both strings
+  and numbers from masquerading as newly granted items.
+- Added regression cases for opposite standing polarity, mixed-repr
+  duplicate item IDs and a genuine existing item stack serialized
+  under a different numeric representation.
+- GitHub Actions had **zero** runs reported on the final PR branch
+  when this update was authored. Test cases are **AUTHORED, NOT RUN**
+  under full Node CI, pinned install and live clients. Do not remove
+  Draft status, merge the stacked chain or switch production flags ON
+  based on these commits alone.
+
+To clear the native rare RNG blocker safely: provision the original
+EveJS attested isolated GameStore harness with original NPC and
+itemTypes authority; run the pinned native test in that disposable
+environment, capture actual roll/candidate evidence, then execute the
+separate real two-client item custody acceptance scenario.
+
+
+### Separating executable pinned CI from rare-data authority (follow-up)
+
+A clean original checkout does not contain the verified populated itemTypes
+GameStore needed by `npcLoot.getRuleCandidatePool`. Accordingly, the normal
+pinned overlay CI can check install/check/reapply/remove and source-only native
+contracts without importing protected production GameStore. Its final
+`rareNativeRng.status` is **`NOT_RUN`**. This does NOT clear the rare-loot
+acceptance gate or allow a release.
+
+To execute the additional native rare gate on an explicitly isolated original
+test store, supply an upstream-valid attested test store and genuine NPC,
+lootTable and itemTypes authority, set
+`EVEJS_PVE_RUN_NATIVE_RARE_RNG=1`, and re-run the disposable pinned gate.
+Any attestation error, missing original reference rows, zero native candidates,
+or no valid rare roll must make that explicit run FAIL. The upstream isolation
+safety check must remain active; it is never acceptable to point the test at
+a real game server database.

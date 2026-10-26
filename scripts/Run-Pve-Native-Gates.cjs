@@ -67,7 +67,17 @@ function gatePinned(root,nativeCode){
  const before=execFileSync("git",["-C",repo,"status","--porcelain","--untracked-files=all"],{encoding:"utf8"});
  if(before.trim())crash("DISPOSABLE_NATIVE_REPO_NOT_CLEAN");
  let installed=false;
+ // A clean source checkout does not include the populated original itemTypes
+ // authority or an attested GameStore. Do not treat a skipped RNG test as PASS.
+ let rareNativeRng={status:"NOT_RUN",reason:"ATTESTED_ORIGINAL_GAMESTORE_AND_ITEM_TYPES_REQUIRED"};
  try{
+  // First, original authored content must provide at least one NPC
+  // profile linked to the real overseer rule. Catalog-only rules are
+  // never presented as a playable boss drop.
+  const catalog=require("./audit-pve-native-loot-catalog.cjs").inspectCode(code);
+  process.stdout.write("[PVE_NATIVE_CATALOG] "+JSON.stringify(catalog)+"\n");
+  if(catalog.status!=="SOURCE_AUTHORED_BOSS_TABLE_LINK_PRESENT")
+   crash("ORIGINAL_NATIVE_BOSS_RARE_TABLE_UNBOUND: "+catalog.status);
   const dry=run({codePath:code,dryRun:true});
   if(dry.status!=="DRY_RUN_OK")crash("PINNED_DRY_RUN_FAILED");
   const applied=run({codePath:code});
@@ -82,6 +92,14 @@ function gatePinned(root,nativeCode){
   cmd(process.execPath,["--test","tests/coop-pve-native-pinned.test.mjs",
    "tests/coop-overlay-reapply-idempotent.test.mjs"],{cwd:root,
    env:{...process.env,EVEJS_CODE_PATH:code,EVEJS_COOP_CODE_PATH:code}});
+  // The original rare item candidate/RNG gate is an INDEPENDENT release
+  // obligation. Only execute it with an authorized isolated native GameStore.
+  // Never bypass upstream's node:test anti-production isolation safeguards.
+  if(process.env.EVEJS_PVE_RUN_NATIVE_RARE_RNG==="1"){
+   cmd(process.execPath,["--test","tests/coop-pve-native-rare-candidates.test.mjs"],{
+    cwd:root,env:{...process.env,EVEJS_CODE_PATH:code,EVEJS_COOP_CODE_PATH:code}});
+   rareNativeRng={status:"PASS",evidence:"ORIGINAL_NATIVE_ITEM_CANDIDATE_AND_32_RNG_ROLLS"};
+  }
  }finally{
   if(installed){
    const undone=run({codePath:code,remove:true});
@@ -91,7 +109,8 @@ function gatePinned(root,nativeCode){
  const after=execFileSync("git",["-C",repo,"status","--porcelain","--untracked-files=all"],{encoding:"utf8"});
  if(after!==before)crash("PINNED_ROUNDTRIP_NOT_BYTE_EXACT "+after.slice(0,600));
  return {status:"PINNED_INSTALL_REAPPLY_REMOVE_PASS",pin:PIN,
-  nativeTests:"SERVER_SOURCE_ONLY_NO_GAME_CLIENTS"};
+  nativeTests:"SERVER_SOURCE_ONLY_NO_GAME_CLIENTS",
+  rareNativeRng};
 }
 function main(args=process.argv.slice(2)){
  const root=path.resolve(__dirname,".."),flag=args.indexOf("--upstream-code");
