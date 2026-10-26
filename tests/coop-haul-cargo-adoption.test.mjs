@@ -205,7 +205,10 @@ test("falls back to the gameStore cargo table when the store cannot enumerate", 
     store,
     clock: () => NOW,
     database: { flushTableSync: () => ({ success: true }) },
-    cargoTable: () => ({ [row.cargoID]: row }),
+    cargoTable: () => {
+      const current=store.listNativeCargoForEntity(hauler.itemID)[0]||row;
+      return { [row.cargoID]: current };
+    },
   });
   assert.equal(result.status, "ADOPTED");
   assert.equal(store.listNativeCargoForEntity(hauler.itemID).length, 1);
@@ -566,14 +569,15 @@ test("pinned GameStore result envelope exposes original durable npcCargo rows",(
  let reads=0,flushes=0;
  const db={
   read:(table,path)=>{reads++;assert.equal(table,"npcCargo");assert.equal(path,"/cargo");
-   return {success:true,data:{[row.cargoID]:{...row}}};},
+   const current=store.listNativeCargoForEntity(hauler.itemID)[0]||row;
+   return {success:true,data:{[row.cargoID]:{...current}}};},
   flushTableSync:()=>{flushes++;return {success:true};}
  };
  const target=fleet();
  const result=adopt(sceneWith([hauler,miner]),target,{store,database:db,clock:()=>NOW});
  assert.equal(result.status,"ADOPTED");
  assert.equal(result.adopted,1);
- assert.equal(reads,1);
+ assert.equal(reads,2,"preflight and post-commit both consult the original table");
  assert.equal(flushes,1);
  assert.equal(store.listNativeCargoForEntity(hauler.itemID).length,1);
  assert.equal(target.state,"loaded");
@@ -857,4 +861,54 @@ test("fresh orphan cargo with NO historical markers is still adoptable",()=>{
  assert.equal(result.status,"ADOPTED");
  assert.equal(store.listNativeCargo()[0].cargoID,7001);
  assert.equal(target.state,"loaded");
+});
+
+test("post-commit global duplicate original cargoID must never start a loaded NPC trip",()=>{
+ for(const mode of ["old-and-new","stale-original","missing","throw","null"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const listing=store.listNativeCargo;
+  let listingCount=0,flushes=0;
+  store.listNativeCargo=()=>{
+   listingCount++;
+   if(listingCount===1)return listing();
+   if(mode==="throw")throw Error("GLOBAL_INVENTORY_UNAVAILABLE");
+   if(mode==="null")return null;
+   if(mode==="missing")return [];
+   if(mode==="stale-original")return [orphan()];
+   return [orphan(),...listing()];
+  };
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",mode);
+  assert.equal(result.adopted,0);
+  assert.equal(flushes,1,"the original transfer happened once");
+  assert.equal(store.writes.length,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(ship.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+ }
+});
+test("globally unique original cargoID post-commit permits one physical NPC haul",()=>{
+ const store=fakeStore([orphan()]);
+ const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+ let flushes=0,globalReads=0;
+ const listing=store.listNativeCargo;
+ store.listNativeCargo=()=>{globalReads++;return listing()};
+ const result=adopt(sceneWith([ship]),target,{
+  store,clock:()=>NOW,
+  database:{flushTableSync:()=>{flushes++;return {success:true}}}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(globalReads,2,"preflight and post-commit both verify all native cargoIDs");
+ assert.equal(flushes,1);
+ assert.equal(store.listNativeCargo().length,1);
+ assert.equal(target.state,"loaded");
+ assert.equal(ship.nativeCargoItems[0].itemID,7001);
 });
