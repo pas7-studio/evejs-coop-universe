@@ -58,7 +58,8 @@ function createNativeNpcProbeSceneTransition({removeDynamicEntity,buildProbeScen
   if(spawned?.success!==true||!actual||actual.itemID!==id||
     actual.kind!=="probe"||actual.nativeNpcProbe!==true||
     actual.nativeNpcCargoID!==id||actual.ownerID!==row.ownerID||
-    actual.typeID!==row.typeID||!vec(actual.position)||
+    actual.typeID!==row.typeID||actual.systemID!==scene.systemID||
+    !vec(actual.position)||
     distance(actual.position,p.position)>1)
    return fail("NPC_PROBE_SCENE_SPAWN_UNCONFIRMED");
   return {success:true,status:"NATIVE_SCENE_BROADCAST_REPLACED",cargoID:id};
