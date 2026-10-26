@@ -91,3 +91,31 @@ test("Rust patch fails closed when pinned source markers are absent",()=>{
  assert.throws(()=>patch("unknown source","state"),/CORP_RUST_PINNED_ANCHOR_DRIFT/);
  assert.throws(()=>patch("unknown source","rpc"),/CORP_RUST_PINNED_ANCHOR_DRIFT/);
 });
+
+test("corporate Rust claim-only interface adds private authenticated RPC methods",()=>{
+ const installed=patch(rpc,"rpc");
+ assert.match(installed,/"ClaimCorpFill" =>/);
+ assert.match(installed,/"GetCorpFillClaim" =>/);
+ assert.match(installed,/struct CoopCorpFillClaimParams/);
+ assert.match(installed,/struct CoopCorpFillQueryParams/);
+});
+test("Rust corporate fill requires published original corporate order and exact price",()=>{
+ assert.match(extension,/fn coop_corp_fill_claim_db/);
+ assert.match(extension,/publish_phase!="published"/);
+ assert.match(extension,/source!="coop-corporation"/);
+ assert.match(extension,/state!="open"/);
+ assert.match(extension,/native_cents\.round\(\) as i64!=price_cents/);
+});
+test("Rust private claim CAS isolates market order and preserves single in-flight fill",()=>{
+ assert.match(extension,/CREATE UNIQUE INDEX IF NOT EXISTS coop_corp_sell_active_claim/);
+ assert.match(extension,/WHERE phase='claimed'/);
+ assert.match(extension,/UPDATE market_orders SET state='settling'/);
+ assert.match(extension,/vol_remaining=\?3/);
+ assert.match(extension,/CORP_FILL_EXCLUSIVE_LOCK_FAILED/);
+});
+test("Rust E2B3 does not finalize or release before wallet settlement",()=>{
+ assert.match(extension,/EVEJS_COOP_RUST_CORP_FILL_CLAIM/);
+ assert.match(extension,/CORP_FILL_NATIVE_CLAIM_NO_LONGER_LOCKED/);
+ assert.doesNotMatch(extension,/fn coop_corp_fill_finalize_db/);
+ assert.doesNotMatch(extension,/fn coop_corp_fill_release_db/);
+});
