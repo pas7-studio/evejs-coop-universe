@@ -209,16 +209,22 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
   // Capture immutable ORIGINAL physical cargo IDs and original retreat
   // destination BEFORE requesting any native movement. Without these
   // witnesses later return-time/position checks could clear a foreign trip.
-  let originalCargo=null,retreatAnchor=null;
+  let originalCargo=null,retreatAnchor=null,retreatDepartureShipIDs=null;
   if(completionEnabled()===true){
    try{
     if(row.directive==="HAUL")originalCargo=captureHaul({fleet});
-    if(row.directive==="RETREAT")retreatAnchor=captureRetreat({fleet});
+    if(row.directive==="RETREAT"){
+     const departure=captureRetreat({fleet});
+     retreatAnchor=departure?.origin;
+     retreatDepartureShipIDs=departure?.departureShipIDs;
+    }
    }catch{return blocked("MINING_SHIFT_COMPLETION_SOURCE_UNAVAILABLE",true);}
    if(row.directive==="HAUL"&&(!Array.isArray(originalCargo)||
      originalCargo.length===0||originalCargo.length>256))
     return blocked("MINING_SHIFT_SOURCE_CARGO_NOT_ATTESTED",true);
    if(row.directive==="RETREAT"&&(!retreatAnchor||
+     !Array.isArray(retreatDepartureShipIDs)||
+     retreatDepartureShipIDs.length===0||
      !["x","y","z"].every(k=>typeof retreatAnchor[k]==="number"&&
       Number.isFinite(retreatAnchor[k]))))
     return blocked("MINING_SHIFT_RETREAT_ORIGIN_NOT_ATTESTED",true);
@@ -233,7 +239,8 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
     tx.put("corporationRuntime",CONTRACT(row.operationID),{
       ...current,commandState:"ISSUING",issuedAt:clock(),
       ...(originalCargo?{originalCargo:structuredClone(originalCargo)}:{}),
-      ...(retreatAnchor?{retreatAnchor:{...retreatAnchor}}:{})});
+      ...(retreatAnchor?{retreatAnchor:{...retreatAnchor},
+       retreatDepartureShipIDs:[...retreatDepartureShipIDs]}:{})});
    });
   }catch(error){return blocked("MINING_SHIFT_COMMAND_FENCE_FAILED:"+String(error?.message||error).slice(0,65),true);}
   let accepted=false,uncertain=false;
