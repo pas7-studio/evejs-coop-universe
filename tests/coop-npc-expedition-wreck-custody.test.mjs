@@ -239,3 +239,82 @@ test("EX-03B21 expiry refuses any tagged cargo still on the original source hull
  assert.equal(bridge.canDestroy(wreckID),false,
   "plausible corrupt corporation provenance must not allow expiry");
 });
+
+test("EX-03B22 recovery finishes multi-item native wreck after the first item's durable move",()=>{
+ const f=fixture(),secondID=itemID+1;
+ // Simulate SIGKILL after the first item's fully durable death-to-wreck move,
+ // before the next ORIGINAL source item was even marked with wreck intent.
+ f.rows.set(secondID,{...f.rows.get(itemID),itemID:secondID});
+ Object.assign(f.rows.get(itemID),{
+  customInfo:tag+":wreck:"+wreckID,locationID:wreckID,flagID:4});
+ const beforeCount=f.rows.size;
+ const bridge=f.make();
+ const noConsent=bridge.reconcile({wreckID,shipID,corporationID:corp});
+ assert.equal(noConsent.errorMsg,"EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+ assert.equal(f.rows.get(secondID).locationID,shipID);
+ const recovered=bridge.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(recovered.success,true,JSON.stringify(recovered));
+ assert.equal(recovered.movedCount,1);
+ assert.equal(recovered.stampedCount,1);
+ assert.deepEqual(recovered.itemIDs,[secondID,itemID]);
+ assert.equal(f.rows.size,beforeCount,"no new ItemStore itemID allocated");
+ assert.equal(f.rows.get(secondID).itemID,secondID);
+ assert.equal(f.rows.get(secondID).locationID,wreckID);
+ assert.equal(f.rows.get(secondID).flagID,4);
+ assert.equal(f.rows.get(secondID).customInfo,tag+":wreck:"+wreckID);
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+ assert.deepEqual(bridge.list({wreckID}).map(x=>x.itemID).sort(),[itemID,secondID]);
+ const replay=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(replay.success,true);
+ assert.equal(replay.movedCount,0);
+ assert.equal(replay.stampedCount,0);
+ assert.equal(f.rows.size,beforeCount);
+});
+test("EX-03B22 corrupt second native item blocks entire operator recovery before mutation",()=>{
+ const f=fixture(),secondID=itemID+1;
+ f.rows.set(secondID,{...f.rows.get(itemID),itemID:secondID,flagID:777});
+ Object.assign(f.rows.get(itemID),{
+  customInfo:tag+":wreck:"+wreckID,locationID:wreckID,flagID:4});
+ const before=JSON.stringify([...f.rows]);
+ const blocked=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(blocked.success,false);
+ assert.equal(blocked.errorMsg,"EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+ assert.equal(JSON.stringify([...f.rows]),before);
+ assert.equal(f.flushCount,0,"no persistence before full original cohort validation");
+});
+test("EX-03B22 foreign signed wreck destination cannot repair unmarked original loot",()=>{
+ const f=fixture();
+ const secondID=itemID+1;
+ f.rows.set(secondID,{...f.rows.get(itemID),itemID:secondID,
+  customInfo:tag+":wreck:"+(wreckID+1)});
+ const blocked=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(blocked.success,false);
+ assert.equal(blocked.errorMsg,"EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.get(secondID).locationID,shipID);
+ assert.equal(f.flushCount,0);
+});
+test("EX-03B22 intent durability uncertainty never advances the newly sealed item",()=>{
+ const f=fixture(),bridge=f.make();
+ // Recovery flush order: items, npcWrecks, new intent, original move.
+ f.setFail(3);
+ const uncertain=bridge.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(uncertain.success,false);
+ assert.equal(uncertain.errorMsg,"EX03_WRECK_RECOVERY_INTENT_UNCERTAIN");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.get(itemID).itemID,itemID);
+ assert.equal(f.rows.size,2);
+ // A subsequent operator attempt is safe ONLY if the intent survived.
+ f.setFail(0);
+ const replay=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(replay.success,true);
+ assert.equal(replay.movedCount,1);
+ assert.equal(replay.stampedCount,0);
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+});
