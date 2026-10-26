@@ -11,6 +11,8 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-player-mining-shift-native-patch.cjs").patch(text,spec.file,true);
  if(spec.file==="server/src/services/industry/industryManagerService.js")
   text=require("./coop-player-industry-native-patch.cjs").patch(text,spec.file,remove);
  // Undo late Chat 25/32/39 hooks BEFORE the existing itemStore and
@@ -71,6 +73,8 @@ function transform(source,spec,remove){
    text=require("./coop-player-market-buy-refund-patch.cjs").patch(text,{remove:false});
   }
  }
+ if(spec.file==="server/src/services/market/marketProxyService.js")
+  text=require("./coop-player-mining-corp-market-isolation-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
@@ -278,6 +282,7 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/agent/agentMgrService.js"){
   // Remove job hooks first, then existing dialogue patch. Install in reverse.
   if(remove){
+   text=require("./coop-player-mining-agent-patch.cjs").patch(text,true);
    text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
@@ -285,6 +290,7 @@ function transform(source,spec,remove){
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
    text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-player-mining-agent-patch.cjs").patch(text,false);
   }
  }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
@@ -302,6 +308,10 @@ function transform(source,spec,remove){
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/gameStore/index.js"||spec.file==="server/src/gameStore/sqliteStore.js"||spec.file==="server/src/services/inventory/itemStore.js")
   text=require("./coop-gamestore-atomic-patch.cjs").patch(text,spec.file,remove);
+ // Keep atomically written mining receipts in the same native SQLite
+ // nested-row format through ordinary gameStore flush and restart.
+ if(spec.file==="server/src/gameStore/sqliteStore.js")
+  text=require("./coop-player-mining-storage-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
   text=require("./coop-npc-market-fills-table-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
@@ -316,6 +326,8 @@ function transform(source,spec,remove){
    ["./coop-social-native-guards-patch.cjs",SOCIAL_PATCH_PATHS]
   ])if(targets.has(spec.file))text=require(helper).patch(text,spec.file,false);
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-player-mining-shift-native-patch.cjs").patch(text,spec.file,false);
  new vm.Script(text,{filename:spec.file});
  return text;
 }
@@ -364,14 +376,20 @@ function run({codePath,remove=false,dryRun=false}){
   if(!remove){
    const after=fs.readFileSync(src,"utf8");
    new vm.Script(after,{filename:src});
-   // Modules are installed as <name>.js, so require("./sibling.cjs") resolves to
-   // nothing in the running server. The hook then throws on every call and the
-   // caller swallows it per tick, so the feature silently never runs - exactly how
-   // the mining fleet spent hours "charged, stopped, nothing mined".
-   const sibling=after.match(/require\("\.\/[A-Za-z][A-Za-z0-9]*\.cjs"\)/);
-   if(sibling)
-    throw Error("INSTALL_REQUIRE_EXTENSION: "+name+" keeps "+sibling[0]+
-     " but overlay modules are installed as .js; require it without an extension");
+   // A module is installed as <name>.js, so a require("./sibling.cjs") resolves to
+   // nothing in the running server. That is only safe when the same module also
+   // tries the extensionless form (the adaptive pattern), otherwise the hook throws
+   // on every call and the caller swallows it per tick.
+   const siblings=new Set();
+   for(const match of after.matchAll(/require\("\.\/([A-Za-z][A-Za-z0-9]*)\.cjs"\)/g)){
+    const sibling=match[1];
+    if(new RegExp('require\\("\\./'+sibling+'"\\)').test(after))continue;
+    siblings.add(sibling);
+   }
+   if(siblings.size>0)
+    throw Error("INSTALL_REQUIRE_EXTENSION: "+name+" keeps require(\"./"+
+     [...siblings][0]+".cjs\") with no extensionless alternative, but overlay modules"+
+     " are installed as .js");
    plan.push({file,before:fs.existsSync(file)?fs.readFileSync(file,"utf8"):null,after});
   }else if(fs.existsSync(file)){
    const before=fs.readFileSync(file,"utf8");
