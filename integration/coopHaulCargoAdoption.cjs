@@ -71,9 +71,10 @@ function verifyReAdoptionCustody(row, options={}) {
  try{
   const path=require("node:path");
   const io=options.custodyIo||require("node:fs");
+  // No guessed default: the path must match the actual native warehouse
+  // writer. Missing configuration is unknown settlement, not no receipt.
   const root=options.warehouseRoot||
-   process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT||
-   "/var/lib/evejs/coop-native-warehouse";
+   process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
   if(typeof root!=="string"||!path.isAbsolute(root)||
      typeof io?.readdirSync!=="function")
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
