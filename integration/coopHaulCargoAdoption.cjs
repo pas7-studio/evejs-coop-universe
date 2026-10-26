@@ -124,7 +124,15 @@ function adopt(scene,fleet,options={}){
  // Validate the entire batch before any original cargo row is rewritten.
  if(planned.rows.some(row=>pos(row.ownerID)!==ownerID))
   return {status:"ORIGINAL_CARGO_OWNER_MISMATCH",adopted:0};
- const existing=(store.listNativeCargoForEntity(haulerID)||[]);
+ // A missing/throwing native inventory read is not proof this ship is empty.
+ // Require authoritative original custody before changing a single cargoID.
+ let existing;
+ try{existing=store.listNativeCargoForEntity(haulerID)}
+ catch(_error){return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0}}
+ if(!Array.isArray(existing)||existing.some(x=>
+    !pos(x?.cargoID)||pos(x?.entityID)!==haulerID||
+    pos(x?.ownerID)!==ownerID||x?.transient===true))
+  return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
  if(existing.some(x=>pos(x?.coopHaulFleetID)))return {status:"HAULER_ALREADY_LOADED",adopted:0};
  // Upserts are not a GameStore transaction. A failed second write
  // cannot turn a partially transferred batch into an authorised haul.
@@ -192,12 +200,18 @@ function adopt(scene,fleet,options={}){
     pos(matches[0].coopHaulFleetID)!==fleetID||
     pos(matches[0].coopHaulSystemID)!==systemID||
     pos(matches[0].coopHaulAdoptedFrom)!==pos(row.entityID)||
-    Number(matches[0].coopHaulAdoptedAt)!==now;
+    Number(matches[0].coopHaulAdoptedAt)!==now||
+    matches[0].transient!==false||Number(matches[0].moduleID||0)!==0;
   }))throw Error("ORIGINAL_CARGO_READBACK_MISMATCH");
+  // buildNativeCargoItems produces itemID (the original cargoID), not
+  // cargoID. A view with the right length but wrong items must never sail.
   cargoItems=store.buildNativeCargoItems(haulerID);
-  if(!Array.isArray(cargoItems)||
-     cargoItems.length<planned.rows.length)
-   throw Error("NATIVE_HAULER_CARGO_VIEW_UNAVAILABLE");
+  if(!Array.isArray(cargoItems)||planned.rows.some(row=>{
+   const matches=cargoItems.filter(x=>pos(x?.itemID)===pos(row.cargoID));
+   return matches.length!==1||
+    pos(matches[0].typeID)!==pos(row.typeID)||
+    pos(matches[0].quantity)!==pos(row.quantity);
+  }))throw Error("NATIVE_HAULER_CARGO_VIEW_MISMATCH");
  }catch(error){
   // The original GameStore mutation is already durable. Blind rollback
   // or a second delivery attempt could duplicate custody. Quarantine
