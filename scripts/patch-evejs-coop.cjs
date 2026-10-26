@@ -11,6 +11,8 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file.endsWith("miningNpcOperations.js")&&remove)
+  text=require("./coop-player-mining-shift-native-patch.cjs").patch(text,spec.file,true);
  if(spec.file==="server/src/services/industry/industryManagerService.js")
   text=require("./coop-player-industry-native-patch.cjs").patch(text,spec.file,remove);
  // Undo late Chat 25/32/39 hooks BEFORE the existing itemStore and
@@ -63,6 +65,8 @@ function transform(source,spec,remove){
    text=require("./coop-player-market-buy-refund-patch.cjs").patch(text,{remove:false});
   }
  }
+ if(spec.file==="server/src/services/market/marketProxyService.js")
+  text=require("./coop-player-mining-corp-market-isolation-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
@@ -265,6 +269,7 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/agent/agentMgrService.js"){
   // Remove job hooks first, then existing dialogue patch. Install in reverse.
   if(remove){
+   text=require("./coop-player-mining-agent-patch.cjs").patch(text,true);
    text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
@@ -272,6 +277,7 @@ function transform(source,spec,remove){
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
    text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-player-mining-agent-patch.cjs").patch(text,false);
   }
  }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
@@ -286,6 +292,10 @@ function transform(source,spec,remove){
   text=require("./coop-native-station-arrival-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/gameStore/index.js"||spec.file==="server/src/gameStore/sqliteStore.js"||spec.file==="server/src/services/inventory/itemStore.js")
   text=require("./coop-gamestore-atomic-patch.cjs").patch(text,spec.file,remove);
+ // Keep atomically written mining receipts in the same native SQLite
+ // nested-row format through ordinary gameStore flush and restart.
+ if(spec.file==="server/src/gameStore/sqliteStore.js")
+  text=require("./coop-player-mining-storage-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
   text=require("./coop-npc-market-fills-table-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/gameStore/index.js")
@@ -300,6 +310,8 @@ function transform(source,spec,remove){
    ["./coop-social-native-guards-patch.cjs",SOCIAL_PATCH_PATHS]
   ])if(targets.has(spec.file))text=require(helper).patch(text,spec.file,false);
  }
+ if(spec.file.endsWith("miningNpcOperations.js")&&!remove)
+  text=require("./coop-player-mining-shift-native-patch.cjs").patch(text,spec.file,false);
  new vm.Script(text,{filename:spec.file});
  return text;
 }
