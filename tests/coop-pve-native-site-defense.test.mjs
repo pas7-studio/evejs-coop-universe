@@ -5,7 +5,7 @@ const require=createRequire(import.meta.url);
 const {siteEntries,createDirector}=require("../integration/coopPveNativeSiteDefense.cjs");
 const systemID=30000144;
 const mk=(itemID,nativeNpc,x,extra={})=>({
- itemID,kind:"ship",nativeNpc,systemID,position:{x,y:0,z:0},factionID:5001,mode:"STOP",...extra
+ itemID,kind:"ship",nativeNpc,typeID:30001,systemID,position:{x,y:0,z:0},factionID:5001,mode:"STOP",...extra
 });
 function fixture({
  age=1000,duplicatePilot=false,outcome="accepted",missingBeacon=false,
@@ -29,7 +29,10 @@ function fixture({
   lastAggressedAtMs:now-age}],[102,{entityID:102,systemID,
   ...(helperBusy?{currentTargetID:12345}:{})}]]);
  const orders=[],events=[];
+ const nativeRecords=new Map([101,102].map(entityID=>[entityID,{entityID,systemID,nativeNpc:true,transient:true,typeID:30001,createdAtMs:900000}]));
+ for(const entry of controllers.values())entry.runtimeKind="nativeCombat";
  const director=createDirector({clock:()=>now,getController:id=>controllers.get(id),
+  getNativeEntity:id=>nativeRecords.get(id),
   resolveVerifiedPlayer:(_scene,entity)=>entity===attacker?77:null,
   issueAttack:(source,target)=>{orders.push([source,target]);
    if(outcome==="throw")throw Error("native unknown");
@@ -37,7 +40,7 @@ function fixture({
    return {success:outcome==="accepted"};},
   notify:e=>events.push(e)});
  const tick=(instances=[instance])=>director.tick({systemID,scene,instances});
- return {tick,instance,scene,entities,victim,helper,attacker,session,controllers,orders,events,director,beacon};
+ return {tick,instance,scene,entities,victim,helper,attacker,session,controllers,nativeRecords,orders,events,director,beacon};
 }
 test("native site spawn ledger + physical beacon establish precise owner of two ships",()=>{
  const f=fixture(),proof=siteEntries(systemID,f.scene,[f.instance]);
@@ -87,10 +90,15 @@ test("stale aggression, unverified login, disconnected pilot and helper in comba
   const f=fixture(o);assert.equal(f.tick().orders,0);assert.deepEqual(f.orders,[]);
  }
 });
-test("recycled hull ID, missing native controller and impossible position deny order",()=>{
+test("recycled hull ID, missing native store/controller and impossible position deny order",()=>{
  for(const edit of [
   f=>f.entities.delete(102),
   f=>f.controllers.delete(102),
+  f=>f.nativeRecords.delete(102),
+  f=>{f.nativeRecords.get(102).typeID=2;},
+  f=>{f.nativeRecords.get(102).nativeNpc=false;},
+  f=>{f.nativeRecords.get(102).transient=false;},
+  f=>{f.controllers.get(102).runtimeKind="nativeAmbient";},
   f=>{f.helper.kind="container";},
   f=>{f.helper.nativeNpc=false;},
   f=>{f.attacker.position.x=300000;},
