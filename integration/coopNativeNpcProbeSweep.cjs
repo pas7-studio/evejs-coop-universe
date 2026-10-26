@@ -18,10 +18,10 @@ function spiral(n){
  return [0,0];
 }
 function createNativeNpcProbeSweep({getNativeEntity,getController,
- listNativeCargoForEntity,upsertNativeCargo,flushNpcCargo,clock=()=>Date.now(),
+ listNativeCargoForEntity,upsertNativeCargo,flushNpcCargo,relocateNativeProbe,clock=()=>Date.now(),
  maxSteps=32,cellSpacingMeters=2e10}={}){
  if([getNativeEntity,getController,listNativeCargoForEntity,
-   upsertNativeCargo,flushNpcCargo,clock].some(x=>typeof x!=="function")||
+   upsertNativeCargo,flushNpcCargo,relocateNativeProbe,clock].some(x=>typeof x!=="function")||
    !Number.isSafeInteger(maxSteps)||maxSteps<2||maxSteps>64||
    !Number.isFinite(cellSpacingMeters)||cellSpacingMeters<1e9||
    cellSpacingMeters>1e11)throw Error("NPC_PROBE_SWEEP_NATIVE_AUTHORITIES_REQUIRED");
@@ -81,9 +81,12 @@ function createNativeNpcProbeSweep({getNativeEntity,getController,
    // Source-first motion may have been interrupted by a crash. Only the
    // original sealed physical probe may be projected to its durable location.
    if(dist(physical.position,p.position)>1){
-    physical.position={...p.position};physical.targetPoint={...p.position};
-    return {status:"SWEEP_GEOMETRY_RECONCILED",moved:0,
-     originalCargoID:row.cargoID};
+    let relocated;
+    try{relocated=relocateNativeProbe({scene,row})}
+    catch{return denied("SWEEP_NATIVE_VISIBILITY_REFRESH_FAILED")}
+    return relocated?.success===true?
+     {status:"SWEEP_GEOMETRY_RECONCILED",moved:0,originalCargoID:row.cargoID}:
+     denied("SWEEP_NATIVE_VISIBILITY_REFRESH_UNCONFIRMED");
    }
   }
   const next=flights.slice().sort((a,b)=>
@@ -114,7 +117,13 @@ function createNativeNpcProbeSweep({getNativeEntity,getController,
   if(!live||live.nativeNpcProbe!==true||live.nativeNpcCargoID!==next.cargoID||
    live.ownerID!==native.ownerID||live.typeID!==next.typeID||
    !vec(live.position))return {status:"SWEEP_PENDING_RECONCILIATION",moved:0};
-  live.position={...position};live.targetPoint={...position};
+  let relocated;
+  try{relocated=relocateNativeProbe({scene,row:changed})}
+  catch{return {status:"SWEEP_PENDING_RECONCILIATION",moved:0,
+   originalCargoID:next.cargoID}}
+  if(relocated?.success!==true)
+   return {status:"SWEEP_PENDING_RECONCILIATION",moved:0,
+    originalCargoID:next.cargoID};
   return {status:"SWEEP_ORIGINAL_PROBE_MOVED",moved:1,
    originalCargoID:next.cargoID,sweepStep:step};
  }
