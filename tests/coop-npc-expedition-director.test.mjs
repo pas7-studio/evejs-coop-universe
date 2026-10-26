@@ -100,3 +100,24 @@ test("catalog position divergent from physical site entity fails closed",()=>{
  const f=fixture();f.siteEntity.position.x=30000;
  const r=f.create().tick(f.input());assert.equal(r.orders,0);assert.equal(r.observed,0);
 });
+
+test("real player on grid becomes rival without receiving corporate intel",()=>{
+ const f=fixture();
+ f.ships.set(88,{kind:"ship",itemID:88,nativeNpc:false,systemID:30000142,
+  position:{x:1000,y:0,z:0}});
+ const input=f.input();
+ input.scene.sessions=new Map([["p",{characterID:800,
+  _space:{shipID:88,systemID:30000142,initialStateSent:true},
+  socket:{destroyed:false}}]]);
+ const r=f.create().tick(input);
+ assert.equal(r.observedPlayers,1);
+ assert.ok(r.contested>=1);
+ assert.equal(r.orders,1);
+ assert.equal(f.commands[0].entityID,23);
+});
+test("fake player session with no original ship cannot observe a native site",()=>{
+ const f=fixture(),input=f.input();
+ input.scene.sessions=new Map([["p",{characterID:800,
+  _space:{shipID:88,systemID:30000142,initialStateSent:true}}]]);
+ assert.equal(f.create().tick(input).observedPlayers,0);
+});
