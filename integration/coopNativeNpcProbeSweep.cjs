@@ -54,6 +54,7 @@ function createNativeNpcProbeSweep({getNativeEntity,getController,
    !controller||controller.entityID!==entityID||
    controller.systemID!==scene.systemID||!Array.isArray(cargo)||
    cargo.length>512)return denied("SWEEP_NATIVE_SHIP_UNVERIFIED");
+  if(quarantine.size)return denied("SWEEP_OPERATOR_REPAIR_REQUIRED");
   const flights=cargo.filter(row=>row?.deployedProbe?.status==="IN_SPACE");
   if(flights.length<4||flights.length>8||
      new Set(flights.map(x=>x.cargoID)).size!==flights.length)
