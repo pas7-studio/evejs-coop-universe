@@ -226,3 +226,44 @@ candidate/RNG execution against pinned checkout, two-client game play,
 SQLite/Rust and crash/restart are **NOT_VERIFIED/NOT_RUN**. No claim
 of release-readiness or merged code is made. The final PvE PR stays
 Draft and all game flags remain OFF by default.
+
+
+## Final regression hardening follow-up: CI dependency + provenance (2026-10-26)
+
+This update is **source-authored, NOT A PASSED NATIVE CI RESULT**:
+
+- The disposable pinned CI now executes `npm ci --no-audit --no-fund`
+  inside `isolated-upstream/Code/server` before importing original
+  server modules. This is an actual upstream lockfile installation,
+  not a substitute for in-game service bootstrap.
+- The original pinned `npcData` imports `gameStore`, which refuses
+  unisolated `node:test` processes. The native rare candidate test
+  now reports `NATIVE_RARE_RNG_NOT_RUN` **before** importing protected
+  GameStore when an attested isolated test store is unavailable.
+  Do not disable the upstream isolation guard to make CI green.
+- A clean pinned Git checkout has original authored NPC profiles and
+  loot rule data in `tools/DatabaseCreator/staticTables`, but that
+  static source by itself is **not** a populated native GameStore
+  itemTypes catalogue. Until an approved isolated real itemTypes
+  authority is prepared and the native RNG test executes, keep its
+  release gate **BLOCKED**, even if all other source tests pass.
+- Personal standing receipts now reject sign-inverted transactions:
+  a reputational loss cannot witness an authored gain, or vice versa.
+- Native personal inventory receipts normalize numeric itemID/typeID
+  representations before duplicate detection and original/new stack
+  comparison, preventing duplicate IDs represented as both strings
+  and numbers from masquerading as newly granted items.
+- Added regression cases for opposite standing polarity, mixed-repr
+  duplicate item IDs and a genuine existing item stack serialized
+  under a different numeric representation.
+- GitHub Actions had **zero** runs reported on the final PR branch
+  when this update was authored. Test cases are **AUTHORED, NOT RUN**
+  under full Node CI, pinned install and live clients. Do not remove
+  Draft status, merge the stacked chain or switch production flags ON
+  based on these commits alone.
+
+To clear the native rare RNG blocker safely: provision the original
+EveJS attested isolated GameStore harness with original NPC and
+itemTypes authority; run the pinned native test in that disposable
+environment, capture actual roll/candidate evidence, then execute the
+separate real two-client item custody acceptance scenario.
