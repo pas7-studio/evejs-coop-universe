@@ -89,3 +89,33 @@ test("EX-03B3 original NPC cargo unitization is pinned-source opt-in only",()=>{
  assert.match(patch,/quantity: splitNativeScannerCharges \? 1 : quantityPerModule/);
  assert.match(patch,/const originalUnits = splitNativeScannerCharges \? quantityPerModule : 1/);
 });
+
+test("EX-03B4 blind probe sweep never consults secret signature sites or client probes",()=>{
+ const sweep=read("integration/coopNativeNpcProbeSweep.cjs");
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ assert.match(sweep,/flushNpcCargo\(\)/);
+ assert.match(sweep,/upsertNativeCargo\(changed\)/);
+ assert.match(sweep,/SWEEP_OPERATOR_REPAIR_REQUIRED/);
+ assert.match(sweep,/nativeNpcCargoID!==row\.cargoID/);
+ assert.doesNotMatch(sweep,/listNativeSites|signatureRuntime|resolveNativeSite|buildResolvedSignatureScanResults|launchCharacterProbes/);
+ assert.match(runtime,/EVEJS_COOP_NPC_PROBE_SWEEP==="1"/);
+ assert.match(runtime,/EVEJS_COOP_NPC_PROBE_LAUNCH==="1"/);
+ assert.match(runtime,/npcProbeSweep\.tick\(\{scene,entityID,assignments\}\)/);
+});
+test("EX-03B4 original scout hardware is a conditional source-authored fitting",()=>{
+ const code=read("integration/coopNpcScoutLoadout.cjs");
+ const source=read("scripts/coop-npc-scout-loadout-patch.cjs");
+ const installer=read("scripts/patch-evejs-coop.cjs");
+ const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
+ assert.match(code,/LAUNCHER_TYPE_ID=17938/);
+ assert.match(code,/CHARGE_TYPE_ID=30013/);
+ assert.match(code,/compatibleCharges\(LAUNCHER_TYPE_ID\)/);
+ assert.match(source,/options\.coopExpeditionScout === true/);
+ assert.match(source,/options\.transient === false/);
+ assert.match(source,/EVEJS_COOP_NPC_SCOUT_LOADOUT === "1"/);
+ assert.match(installer,/coop-npc-scout-loadout-patch\.cjs/);
+ assert.match(deploy,/\[switch\]\$EnableNpcScoutLoadout/);
+ assert.match(deploy,/EVEJS_COOP_NPC_SCOUT_LOADOUT: '1'/);
+ const manifest=read("scripts/overlay-spec.cjs");
+ assert.match(manifest,/"coopNativeNpcProbeSweep","coopNpcScoutLoadout"/);
+});
