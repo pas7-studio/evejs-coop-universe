@@ -244,10 +244,10 @@ if ($EnableNpcExpeditionLoot -and -not $EnableNpcExpeditionWreck) {
 }
 if ($EnableNpcExpeditionHacking -or $EnableNpcExpeditionLoot -or
     $EnableNpcExpeditionWreck -or $EnableNpcExpeditionWormholes) {
-  if (-not ($LivingCoop -and $EnableNativeExploration -and $EnableNpcExpeditions -and
+  if (-not ($LivingCoop -and $Alife -and $EnableNativeExploration -and $EnableNpcExpeditions -and
             $EnableNpcProbeScan -and $EnableNpcProbeLaunch -and
             $EnableNpcProbeLoadoutSplit -and $EnableNpcScoutLoadout)) {
-    throw 'Native NPC expedition operations require -LivingCoop -EnableNativeExploration -EnableNpcExpeditions -EnableNpcProbeScan -EnableNpcProbeLaunch -EnableNpcProbeLoadoutSplit -EnableNpcScoutLoadout'
+    throw 'Native NPC expedition operations require -LivingCoop -Alife -EnableNativeExploration -EnableNpcExpeditions -EnableNpcProbeScan -EnableNpcProbeLaunch -EnableNpcProbeLoadoutSplit -EnableNpcScoutLoadout'
   }
 }
 if ($EnableNpcExpeditionHacking) {
