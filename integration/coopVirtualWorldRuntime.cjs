@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -436,7 +436,29 @@ function advanceNativeNpcExpeditions(){
    getNativeEntity:id=>store.getNativeEntity(id),
    getController:id=>controllers.getControllerByEntityID(id),
    orderBridge:guard,
-   warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options)
+   warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options),
+   nativeProbeScan:({scene,entityID,assignments})=>{
+    if(process.env.EVEJS_COOP_NPC_PROBE_SCAN!=="1")
+     return {status:"DISABLED",proofs:[]};
+    if(!npcProbeEvidence){
+     const auth=require("../services/exploration/explorationAuthority");
+     const probeState=require("../services/exploration/probes/probeRuntimeState");
+     const scanRuntime=require("../services/exploration/probes/probeScanRuntime");
+     npcProbeEvidence=require("./coopNpcProbeScanEvidence").createNpcProbeScanEvidence({
+      getNativeEntity:id=>store.getNativeEntity(id),
+      getController:id=>controllers.getControllerByEntityID(id),
+      listNativeModulesForEntity:id=>store.listNativeModulesForEntity(id),
+      listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+      getCompatibleProbeChargeTypeIDs:typeID=>auth.getCompatibleProbeChargeTypeIDs(typeID),
+      resolveProbeRangeContract:(typeID,step,range)=>
+       probeState.resolveProbeRangeContract(typeID,step,range),
+      scanNativeResults:(systemID,probes)=>
+       scanRuntime.buildSignatureScanResults(systemID,probes),
+      listNativeSites:systemID=>signatures.listSystemSignatureSites(systemID)
+     });
+    }
+    return npcProbeEvidence.scan({scene,entityID,assignments});
+   }
   });
  const roles=Object.fromEntries((world.snapshot()?.pilots||[])
   .filter(p=>typeof p?.id==="string").map(p=>[p.id,p.role]));
@@ -447,10 +469,11 @@ function advanceNativeNpcExpeditions(){
   const scene=native.scenes instanceof Map?native.scenes.get(systemID):null;
   if(!scene)continue;
   const result=npcExpeditionDirector.tick({scene,assignments,roles});
-  if(result.orders||result.observed||result.observedPlayers||result.contested||result.blocked&&backgroundTicks%10===0)
+  if(result.orders||result.observed||result.observedPlayers||result.contested||result.remoteScans||result.blocked&&backgroundTicks%10===0)
    probe.observe("living-npc-expedition",null,{spaceState:{systemID}},
     {status:result.status,orders:result.orders,observed:result.observed,
      observedPlayers:result.observedPlayers||0,contested:result.contested||0,
+     remoteNativeProbeScans:result.remoteScans||0,
      blocked:result.blocked||0,source:result.source||"NATIVE_SITE_OBSERVE",
      nativeLootGranted:false,nativeWalletMutation:false});
  }
