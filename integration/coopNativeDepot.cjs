@@ -9,10 +9,15 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  // After an uncertain rename/directory fsync the in-memory state may be
  // OLDER than the just-replaced disk journal. No further write may use it.
  let persistenceUnverified=false;
+ // Damaged loaded journals cannot be amended or presented as valid supply.
+ let stateUnreconciled=false;
  try{
   const saved=JSON.parse(fsApi.readFileSync(file,"utf8"));
-  if(saved?.version!==1||!saved.receipts||!saved.totals ||
-     typeof saved.receipts!=="object" ||typeof saved.totals!=="object")throw Error("bad depot state");
+  if(saved?.version!==1||!saved.receipts||!saved.totals||
+     typeof saved.receipts!=="object"||Array.isArray(saved.receipts)||
+     typeof saved.totals!=="object"||Array.isArray(saved.totals)||
+     (saved.pending!=null&&(typeof saved.pending!=="object"||Array.isArray(saved.pending))))
+   throw Error("bad depot state");
   state={...saved,pending:saved.pending||{}};
  }catch(e){if(e.code!=="ENOENT")throw e;}
  function persist(next){
@@ -55,6 +60,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
    a.systemID===b.systemID&&a.fleetID===b.fleetID;
  function prepare({systemID,fleetID,item}={}){
   if(persistenceUnverified)return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
+  if(stateUnreconciled)return {status:"DEPOT_STATE_UNRECONCILED"};
   const candidate=normalize({systemID,fleetID,item});
   if(!candidate)return {status:"INVALID"};
   const key=String(candidate.cargoID);
@@ -65,6 +71,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  }
  function commit({systemID,fleetID,item}={}){
   if(persistenceUnverified)return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
+  if(stateUnreconciled)return {status:"DEPOT_STATE_UNRECONCILED"};
   const candidate=normalize({systemID,fleetID,item});
   if(!candidate)return {status:"INVALID"};
   const key=String(candidate.cargoID);
@@ -91,8 +98,14 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
   const bySystemType={},derived={};
   let invalid=0,committed=0;
   for(const [key,entry] of Object.entries(state.receipts)){
-   if(!positive(key)||Number(key)!==Number(entry?.cargoID)||!positive(entry?.systemID)||
-      !positive(entry?.typeID)||!Number.isSafeInteger(Number(entry?.quantity))||
+   // Numeric aliases such as "000777", "7e2" or "+777" can point to
+   // the same original cargoID as canonical "777". An audit must NEVER
+   // certify multiple receipts for the same physical source item.
+   if(!positive(key)||key!==String(Number(key))||
+      Number(key)!==Number(entry?.cargoID)||
+      !positive(entry?.systemID)||!positive(entry?.fleetID)||
+      !positive(entry?.haulerID)||!positive(entry?.typeID)||
+      !Number.isSafeInteger(Number(entry?.quantity))||
       Number(entry.quantity)<=0||state.pending[key]){invalid++;continue;}
    const system=String(entry.systemID),type=String(entry.typeID),amount=Number(entry.quantity);
    bySystemType[system]??={};
@@ -108,11 +121,25 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
    if(!positive(key)||Number(derived[key]||0)!==Number(state.totals[key]||0))invalid++;
   }
   const unresolved=Object.keys(state.pending).length;
+  for(const [key,entry] of Object.entries(state.pending)){
+   // Pending may be legitimate source debits, but a malformed or aliased
+   // key is NOT proof the receipt is unique and safe to finalize.
+   if(!positive(key)||key!==String(Number(key))||
+      Number(key)!==Number(entry?.cargoID)||
+      !positive(entry?.systemID)||!positive(entry?.fleetID)||
+      !positive(entry?.haulerID)||!positive(entry?.typeID)||
+      !Number.isSafeInteger(Number(entry?.quantity))||
+      Number(entry.quantity)<=0||state.receipts[key])invalid++;
+  }
   return {status:invalid?'NEEDS_OPERATOR_REPAIR':unresolved?'PENDING_CUSTODY_RECONCILIATION':'OK',
    committed,unresolved,invalid,bySystemType,totals:derived};
  }
+ // A pending-but-well-formed source debit is legitimate and may resume.
+ // Any invalid receipt/totals/pending index freezes new writes instead.
+ if(audit().invalid!==0)stateUnreconciled=true;
  return {record,prepare,commit,audit,snapshot:()=>{
   if(persistenceUnverified)throw Error("DEPOT_PERSISTENCE_UNVERIFIED");
+  if(stateUnreconciled)throw Error("DEPOT_STATE_UNRECONCILED");
   return structuredClone(state);
  }};
 }
