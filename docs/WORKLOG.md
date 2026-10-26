@@ -715,3 +715,15 @@ Why: A pinned patch inserted require('../gameStore') one level too shallow, so t
 Detail: The durable fleet start threw MODULE_NOT_FOUND on every slot because a pinned patch inserted require("../gameStore") into server/src/services/mining/miningNpcOperations.js - one level too shallow, so the whole boot path died and all three slots reported NEEDS_OPERATOR_REPAIR while the rest of the world kept mining. That is the same class of bug as the 8 modules installed as .js but required as .cj
 Where: scripts/coop-agent-dialogue-patch.cjs, scripts/coop-hook-requires.cjs, scripts/coop-native-mining-durable-patch.cjs, scripts/patch-evejs-coop.cjs, tests/coop-hook-requires.test.mjs
 Evidence: tests/coop-hook-requires.test.mjs 9 pass; deploy reset=47 overlay=OVERLAY_OK with INSTALL_REQUIRE_UNRESOLVED active
+### 2026-10-26T20:47Z · c8b1710 · L3 · fix(war): report why a native faction-war phase does not run
+
+Why: Native faction-war phases returned silently when a precondition was missing, so an enabled war could not be distinguished from a disabled one
+Detail: Both war phases returned silently when a precondition was missing, so an enabled war looked identical to a disabled one. Each phase now emits one living-native-war-skip event with the exact reason (flags off, no visited system, no identity registry, no fleet registry, no order bridge, ammo flags off) and logs it once per change.
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: live logs before: no war output at all with EVEJS_COOP_FACTION_WAR=1; after: '[CoopFactionWar] mobilization skipped: WAR_FLAGS_OFF' and 'combat skipped: AMMO_FLAGS_OFF' with living-native-war-skip events
+### 2026-10-26T21:06Z · 2c4550a · L3 · coop: the load reaches the station — fill volume, cargo ids and convergence
+
+Why: The haul chain reached the station but stopped there: a restarted fleet never dispatched (cargo projection has no volume), every partial load failed on the native allocator shape, and the slot repair accumulated hulls.
+Detail: Live run after the previous commit got the fleet to `loaded` and to the station, then stopped there. Four defects, each measured, each fixed. 1. After ANY restart the fleet never dispatched a hauler. Native buildNativeCargoItems() rebuilds ore stacks without a `volume` field, so getNpcOreCargoVolume() returned 0, minerFillRatio stayed 0 and shouldTriggerHauling() was false forever: the world sat i
+Where: .opencode/state.md, docs/coop-flags.json, docs/coop-hook-inventory.json, integration/coopCargoVolume.cjs, integration/coopNativeHaulTransferAtomic.cjs, integration/coopNativeMiningFleetDurable.cjs, scripts/coop-loop-gate.sh, scripts/overlay-spec.cjs, tests/coop-cargo-volume.test.mjs, tests/coop-fleet-slot-recompose.test.mjs, tests/coop-native-haul-transfer-atomic.test.mjs
+Evidence: live: living-hauler-loaded 14466+14277 m3, fleet state loaded, lastHauledVolumeM3 28743/10999; tests coop-cargo-volume 6, coop-fleet-slot-recompose 8, coop-native-haul-transfer-atomic 24
