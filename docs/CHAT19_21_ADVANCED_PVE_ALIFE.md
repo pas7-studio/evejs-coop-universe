@@ -526,6 +526,88 @@ unless they are additionally matched to the original encounter.
   P0-4B-2B real rare loot and original inventory concurrent RPC test.
 
 
+
+## P0-5B-1 — actual original personal ISK / LP / mission-history evidence (Draft)
+
+**Status:** source-inspected and code-prepared; isolated test PASS;
+native two-client wallet/LP/inventory/standing E2E **NOT RUN**.
+
+Original pinned EveJS \`agentMissionRuntime.completeMission\` first calls
+\`applyMissionRewards\`, which writes an original **ISK wallet journal**
+(\`entryTypeID=3\`, \`referenceID=agentID\`), then potentially mints
+original item rewards to the station hangar, applies native issuer-corp
+LP and standing changes, and finally deletes the native accepted
+mission and adds a personal \`completed\` mission-history row.
+\`doAgentAction\` ultimately returns an agent **conversation**;
+its \`success:true\` is **not** an independent wallet receipt.
+
+New \`coopPveDuoNativeRewardEvidence\` **only reads** the native
+\`walletState.getCharacterWallet\`,
+\`walletState.getCharacterWalletJournal\`,
+\`lpWalletState.getCharacterWalletLPBalance\` for the real agent
+corporation, \`missionRuntimeState.getCharacterStateSnapshot\` history,
+\`agentAuthority.getAgentByID\` and
+\`standingRuntime.getCharacterRawStanding\` for that agent/corporation.
+No new wallet, reward writer, independent itemStore, retry service,
+mission database, scheduler, or direct ISK/LP/standing mutation.
+
+With \`EVEJS_COOP_PVE_DUO_REWARD_EVIDENCE=1\` (default OFF, requires
+P0-5A's guard), the already authorized native duo turn-in uses these
+**two different** source snapshots:
+
+1. Before the leader native DoAction, verify that original wallet,
+   LP issuer, agent and mission history sources can be read and that
+   wallet transaction IDs are unambiguous. Snapshot failure denies
+   native co-op payout BEFORE the existing leader payout journal.
+2. After the original leader native DoAction and mission deletion,
+   require a **new unique native mission journal** with the original
+   agent \`referenceID\`, entryType 3, proper NPC corporation and
+   actual player, and a wallet balance delta equal to that exact
+   journal amount. The original reward amount must be either the
+   native mission base ISK or base plus the originally configured
+   bonus (the latter is not guaranteed).
+3. Check exact issuer LP balance delta against the original personal
+   \`loyaltyPoints\` reward. Require one new native personal
+   \`completed\` mission history entry with that exact personal
+   \`missionSequence\`, agent, content and template. Standing snapshots
+   are reported as observations; zero standing delta may be lawful.
+4. BEFORE the second native payout intent, take an independent
+   native snapshot for the **wingman**. After the wingman's original
+   DoAction, verify *his own* native wallet journal, issuer LP delta
+   and exact new personal mission-history entry before recording
+   \`AWARDED\` and the leader's \`BOTH_NATIVE_CLEARED\`.
+   Only after both pass does the read-only
+   \`TWO_INDEPENDENT_NATIVE_WALLET_LP_AND_HISTORY_VERIFIED\`
+   telemetry event appear.
+5. Any missing, inconsistent, ambiguous or partially written source
+   requires manual reconciliation. After a native award starts,
+   this code **never retries it**, never compensates with virtual ISK
+   or LP, and never falsely marks both recipients as settled.
+   The original existing leader and peer fsynced payout fences remain
+   in charge.
+
+**Critical scope:** This receipt verifies source ISK, source LP and
+native per-person mission history, **not** physical original item
+reward custody or a standing **transaction** receipt. Real standing
+values are read and their deltas shown, but a positive standing delta
+is not always expected and cannot by itself prove a mission reward.
+\`itemsVerified:false\` and
+\`standingMutationReceiptVerified:false\` are explicit on the
+individual native receipts. Follow-on P0-5B-2 must correlate original
+itemStore deltas and native standing transaction row(s) where
+applicable, and run two real network clients. It must not overstate
+completion from a successful agent dialogue.
+
+**Code evidence:** 14/14 original-source isolated cases (35 assertions)
+for wallet journal references, balances, bonus branches, LP issuer,
+new personal history, wrong agent/character, stale or duplicate journal,
+no-standing change, partial payout, and zero-LP missions; plus 7/7
+wiring ordering checks (22 assertions). **21/21 isolated checks, 57
+assertions**. Full Node/SQLite/Rust, pinned overlay reversibility,
+real payout receipt vs mission balance, live two-person gameplay,
+crashes and actual item custody **NOT RUN**. The flag remains OFF.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
