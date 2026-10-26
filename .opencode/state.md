@@ -14,12 +14,22 @@
    Measured after: `MINING_CYCLE_ATTEMPT locked=true pending=0`, rock ore falling
    162502 → 151910 → 143244, ships `ORBIT|act2|cap0.94`, fleet `mining → loaded`,
    holds `q44297…q69336` and climbing.
-3. **Hauling still refuses: `HAUL_NATIVE_PERSISTENCE_FLAGS_REQUIRED`.** The strict
-   hauler needs `EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC` plus `NATIVE_ATOMIC_ROWS`,
-   `MINING_CARGO_INTEGRITY`, `MINING_CYCLE_CONSERVATION`; none were set, so the
-   hauler delivered `NO_CARGO stationID=0` while the miners kept the ore. Those four
-   flags are now enabled in the probe compose (deploy in flight); the ALIFE07 refusal
-   reason now rides on `MODULE_STOP_*` as `entityError`.
+3. **Hauling and the atomic mining commit are welded, and the commit is refused.**
+   The strict hauler needs `EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC`; those four flags
+   are now on. The settler transacts `["miningRuntimeState","npcCargo"]`, but the
+   atomic store throws `NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo` whenever the native
+   cargo table still has transient paths, and ALIFE-11's mixed mode only covers a
+   single-table `npcCargo` transaction (documented, deliberate). Result: every cycle
+   is refused with `ALIFE07_YIELD_INVALID:cycleBoundaryMs` (fixed: float boundary) and
+   then `ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED:NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo`
+   - no ore is credited in atomic mode, while atomic mode is required for hauling.
+   Fixed meanwhile: config refusals no longer poison a hull (`bc0a1009`), a
+   pre-mutation refusal no longer blocks forever (`22ec6968`), yield refusals name the
+   failing field (`3bba6d12`), and the installer refuses `.cjs` sibling requires
+   (`d75dea53`, caught `coopPveNativeBossDirector` too).
+   **Decision needed:** either extend ALIFE-11 mixed mode to the mining table set
+   (same transient-cargo witness, 25 existing isolation scenarios must stay green), or
+   stop requiring atomic mining for hauling and accept the legacy credit path.
 
 ### ROOT CAUSE FOUND 17:20Z — the activation hook never ran (fixed in `d75dea53`)
 `STOP|act0|cap1` for hours was not a capacitor, targeting or cycle problem.
