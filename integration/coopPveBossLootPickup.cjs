@@ -61,9 +61,9 @@ function verify({args,nativePickup,bossWitness,currentWreck}={}){
   evidence:"BOSS_NATIVE_WRECK_MANIFEST_AND_SOURCE_DEBIT_AND_DESTINATION_DELTA"};
 }
 function createObserver({
- getBossWreck,getNativeWreck,observe=()=>true,maxReceipts=4096
+ getBossWreck,getNativeWreck,observe=()=>true,settle=()=>({status:"DISABLED"}),maxReceipts=4096
 }={}){
- if([getBossWreck,getNativeWreck,observe].some(f=>typeof f!=="function")||
+ if([getBossWreck,getNativeWreck,observe,settle].some(f=>typeof f!=="function")||
     !Number.isSafeInteger(maxReceipts)||maxReceipts<1||maxReceipts>100000)
   throw Error("INVALID_BOSS_LOOT_OBSERVER");
  const emitted=new Set();
@@ -78,6 +78,13 @@ function createObserver({
   }catch{return {status:"BOSS_LOOT_AUTHORITY_UNAVAILABLE"}}
   const verified=verify({args,nativePickup,bossWitness:boss,currentWreck:wreck});
   if(verified.status!=="ORIGINAL_BOSS_ITEM_PICKUP_VERIFIED")return verified;
+  // Durable source-before claim pre-dates the ORIGINAL native inventory
+  // grant; never acknowledge settled without authenticated native debit.
+  let claim=null;
+  try{claim=settle({verified,sourceBefore:args.sourceBefore})}
+  catch{return {status:"BOSS_LOOT_DURABLE_CLAIM_UNCONFIRMED"}}
+  if(!claim||!["DISABLED","BOSS_LOOT_CLAIM_SETTLED"].includes(claim.status))
+   return {status:"BOSS_LOOT_DURABLE_CLAIM_UNCONFIRMED"};
   // Exact source slice is unique: the same pre-debit quantity cannot
   // legitimately be credited to a second player. This is telemetry
   // deduplication, not a durable transfer/transaction lock.
@@ -107,6 +114,7 @@ function note(args,nativePickup){
    getBossWreck:id=>require("./coopVirtualWorldRuntime")
     .witnessedNativeBossWreck(id),
    getNativeWreck:id=>require("./npc/nativeNpcStore").getNativeWreck(id),
+   settle:payload=>require("./coopPveBossLootClaim").settle(payload),
    observe:row=>require("./coopRuntimeProbe").observe(
     "living-pve-native-boss-loot-pickup",null,
     {spaceState:{systemID:row.systemID}},row)
