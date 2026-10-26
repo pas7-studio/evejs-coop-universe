@@ -10,6 +10,7 @@ const SEP="\u001f";
 const TABLES=Object.freeze(["corporationRuntime"]);
 const CONTRACT=id=>"coopPlayerMiningShift"+SEP+id;
 const CORP=id=>"corporations"+SEP+id;
+const FLEET_INDEX=(systemID,fleetID)=>"coopPlayerMiningFleet"+SEP+systemID+":"+fleetID;
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const validOperation=x=>typeof x==="string"&&/^coop-mining-shift:[0-9a-f]{32}$/.test(x);
 const money=x=>{
@@ -88,11 +89,14 @@ function createPlayerMiningCompany({gameStore,access,getFleet,verifyNativeFleet,
     if(buyer?.corporationID!==corporationID||!verifyNpcCorporation(employerCorpID,employer))
      throw Error("MINING_COMPANY_OWNER_INVALID");
     const old=tx.get("corporationRuntime",CONTRACT(operationID));
+    const indexKey=FLEET_INDEX(systemID,fleetID);
+    const priorFleet=tx.get("corporationRuntime",indexKey);
     if(old){
      if(old.version!==1||old.status!=="FUNDED"||old.operationID!==operationID||
       old.corporationID!==corporationID||old.employerCorpID!==employerCorpID||
       old.systemID!==systemID||old.fleetID!==fleetID||old.cycles!==cycles||
-      old.wageCents!==cost||!companyReceipt(buyer,operationID,corporationID,employerCorpID,-cost,old.buyerAfterCents)||
+      old.wageCents!==cost||priorFleet?.operationID!==operationID||
+      priorFleet?.corporationID!==corporationID||!companyReceipt(buyer,operationID,corporationID,employerCorpID,-cost,old.buyerAfterCents)||
       !companyReceipt(employer,operationID,employerCorpID,corporationID,cost,old.employerAfterCents))
       throw Error("MINING_COMPANY_REPLAY_CONFLICT");
      return {status:"ALREADY_FUNDED",operationID,wageCents:cost};
@@ -101,7 +105,7 @@ function createPlayerMiningCompany({gameStore,access,getFleet,verifyNativeFleet,
     const existing=tx.scan("corporationRuntime").filter(({key,value})=>
      String(key).startsWith("coopPlayerMiningShift"+SEP)&&value?.status==="FUNDED"&&
      value?.systemID===systemID&&value?.fleetID===fleetID);
-    if(existing.length)throw Error("MINING_FLEET_ALREADY_CONTRACTED");
+    if(existing.length||priorFleet)throw Error("MINING_FLEET_ALREADY_CONTRACTED");
     const src=wallet(buyer,corporationID),dst=wallet(employer,employerCorpID);
     if(!src||!dst)throw Error("NATIVE_CORPORATION_WALLET_MISSING");
     const a=money(src.balance),b=money(dst.balance);
@@ -128,7 +132,10 @@ function createPlayerMiningCompany({gameStore,access,getFleet,verifyNativeFleet,
      earned=entry(employerCorpID,corporationID,cost,b+cost);
     tx.put("corporationRuntime",CORP(corporationID),update(buyer,src,a-cost,paid));
     tx.put("corporationRuntime",CORP(employerCorpID),update(employer,dst,b+cost,earned));
+    tx.put("corporationRuntime",indexKey,{version:1,operationID,
+     corporationID,employerCorpID,systemID,fleetID});
     tx.put("corporationRuntime",CONTRACT(operationID),{version:1,status:"FUNDED",
+     directive:"MINE",commandSeq:0,commandState:"IDLE",
      operationID,corporationID,employerCorpID,systemID,fleetID,cycles,
      minerIDs:fleet.minerIDs,haulerIDs:fleet.haulerIDs,wageCents:cost,
      buyerBeforeCents:a,buyerAfterCents:a-cost,
@@ -143,4 +150,4 @@ function createPlayerMiningCompany({gameStore,access,getFleet,verifyNativeFleet,
  }
  return Object.freeze({hire});
 }
-module.exports={createPlayerMiningCompany,canonicalFleet,companyReceipt};
+module.exports={createPlayerMiningCompany,canonicalFleet,companyReceipt,FLEET_INDEX,CONTRACT,CORP};
