@@ -274,3 +274,23 @@ Evidence: 54/54 isolated exact-source V8 test callbacks PASS, old main reproduce
 Why: Cover global and per-hauler post-commit mutation of original minerID and loadedAt, ensuring the fleet holds rather than warping.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 54/54 isolated exact-source V8 test callbacks PASS, old main reproduced ADOPTED after miner/load-time mutation. Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:41Z · 4ba5255 · L2 · fix(P0): require reconciled native depot journal before second-restart ore adoption
+
+Why: Already adopted cargo could be replayed when depot receipts map was empty but persisted totals still showed previously credited ore. A per-cargo receipt absence does not prove depot journal consistency.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.
+### 2026-10-26T13:41Z · 74866e1 · TEST · test(P0): prevent re-adoption on broken native depot totals or audit failure
+
+Why: Regression proof for missing audit, malformed totals, unbalanced credited totals, unresolved custody, throwing audit, and a successful fully reconciled second-restart.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.
+### 2026-10-26T13:42Z · 0a5d1b3 · L2 · fix(P0): retain direct native depot receipt denials before global audit checks
+
+Why: Retain direct per-cargo receipt refusal even when unrelated depot state is malformed.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.
+### 2026-10-26T13:43Z · 66991c9 · L2 · fix(P0): direct cargo receipts override missing unrelated depot audit hooks
+
+Why: Preserve source-specific prior cargo receipt denial without requiring optional audit to produce a more useful error.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.

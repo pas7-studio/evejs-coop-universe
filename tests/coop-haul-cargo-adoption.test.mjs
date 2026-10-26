@@ -620,7 +620,10 @@ function clearCustody(over={}) {
   warehouseRoot:"/tmp/evejs-warehouse-proof",
   custodyIo:{readdirSync:()=>[]},
   custodyItems:{findWarehouseItem:()=>null},
-  custodyDepot:{snapshot:()=>({version:1,receipts:{},pending:{}})},
+  custodyDepot:{
+   snapshot:()=>({version:1,receipts:{},pending:{},totals:{}}),
+   audit:()=>({status:"OK",committed:0,unresolved:0,invalid:0})
+  },
   ...over
  };
 }
@@ -1185,4 +1188,64 @@ test("global post-commit source claim cannot disagree with original cargo proven
   assert.equal(target.state,"mining");
   assert.equal(ship.nativeCargoItems,undefined);
  }
+});
+
+test("second restart refuses a depot with missing audit, corrupted totals or unresolved custody",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const clear={version:1,receipts:{},pending:{},totals:{}};
+ const cases=[
+  ["no-audit",{snapshot:()=>clear},"RE_ADOPTION_SETTLEMENT_UNVERIFIED"],
+  ["missing-totals",{snapshot:()=>({version:1,receipts:{},pending:{}}),
+   audit:()=>({status:"OK",committed:0,unresolved:0,invalid:0})},
+   "RE_ADOPTION_SETTLEMENT_UNVERIFIED"],
+  ["stale-credit-totals",{snapshot:()=>({...clear,totals:{"30000145":9000}}),
+   audit:()=>({status:"NEEDS_OPERATOR_REPAIR",committed:0,unresolved:0,invalid:1})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["unresolved",{snapshot:()=>clear,
+   audit:()=>({status:"PENDING_CUSTODY_RECONCILIATION",committed:0,unresolved:1,invalid:0})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["misleading-status",{snapshot:()=>clear,
+   audit:()=>({status:"OK",committed:0,unresolved:0,invalid:1})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["missing-counts",{snapshot:()=>clear,
+   audit:()=>({status:"OK"})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["audit-throws",{snapshot:()=>clear,
+   audit:()=>{throw Error("DEPO_REPLAY_AUDIT_READ_FAILURE")}},
+   "RE_ADOPTION_SETTLEMENT_UNVERIFIED"]
+ ];
+ for(const [label,custodyDepot,status] of cases){
+  resetForTests();
+  const f=secondCrashAttempt(secondCrashCargo(),{custodyDepot});
+  assert.equal(f.result.status,status,label);
+  assert.equal(f.store.writes.length,0,label);
+  assert.equal(f.flushes,0,label);
+  assert.equal(f.target.state,"mining",label);
+ }
+});
+
+test("second restart requires reconciled native depot audit before any physical reparent",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ let audited=0;
+ const f=secondCrashAttempt(secondCrashCargo(),{custodyDepot:{
+  snapshot:()=>({version:1,receipts:{},pending:{},totals:{}}),
+  audit:()=>{audited++;return {status:"OK",committed:0,invalid:0,unresolved:0}}
+ }});
+ assert.equal(f.result.status,"ADOPTED");
+ assert.equal(audited,1);
+ assert.equal(f.flushes,1);
+ assert.equal(f.store.writes.length,1);
+ assert.equal(f.target.state,"loaded");
+});
+
+test("first-time orphan cargo adoption does not require an unrelated repeat-adoption depot audit",()=>{
+ const store=fakeStore([orphan()]),target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,
+  custodyDepot:{snapshot:()=>{throw Error("MUST_NOT_QUERY_DEPOT")},
+   audit:()=>{throw Error("MUST_NOT_AUDIT_DEPOT")}},
+  database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(target.state,"loaded");
 });
