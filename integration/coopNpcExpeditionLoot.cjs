@@ -8,9 +8,10 @@ const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const marker=(containerID,shipID,corpID)=>
  "coop-npc-expedition:v1:container:"+containerID+":ship:"+shipID+":corp:"+corpID;
 const parseMarker=s=>{
- const m=/^coop-npc-expedition:v1:container:([1-9]\d*):ship:([1-9]\d*):corp:([1-9]\d*)$/.exec(s);
- if(!m)return null;const n=m.slice(1).map(Number);
- return n.every(POS)?{containerID:n[0],shipID:n[1],corpID:n[2]}:null;
+ const m=/^coop-npc-expedition:v1:container:([1-9]\d*):ship:([1-9]\d*):corp:([1-9]\d*)(?::wreck:([1-9]\d*))?$/.exec(s);
+ if(!m)return null;const n=m.slice(1).map(v=>v===undefined?null:Number(v));
+ return n.every(v=>v===null||POS(v))?
+  {containerID:n[0],shipID:n[1],corpID:n[2],wreckID:n[3]}:null;
 };
 function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
  getStation,isNpcCorporation,isNativeSiteOwner,verifyNativeArrival,
@@ -179,6 +180,14 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
   // The original NPC wreck service drops nativeNpcStore cargo, NOT these
   // separately owned ItemStore rows. A destroyed NPC must never silently
   // appear to have a safely delivered or retrievable ship cargo item.
+  if(receipt.wreckID!==null){
+   let w;
+   try{w=nativeStore.getNativeWreck(receipt.wreckID)}catch{w=null}
+   phase=item.locationID===receipt.wreckID&&item.ownerID===receipt.corpID&&
+     item.flagID===itemStore.ITEM_FLAGS.HANGAR&&w?.wreckID===receipt.wreckID&&
+     w.sourceEntityID===receipt.shipID&&w.corporationID===receipt.corpID?
+      "IN_NATIVE_WRECK":"NEEDS_OPERATOR_REPAIR";
+  }
   if(phase==="IN_SHIP"){
    let native,physical=null;
    try{
