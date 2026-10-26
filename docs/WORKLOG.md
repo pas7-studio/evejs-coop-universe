@@ -316,3 +316,13 @@ Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old mai
 Why: Regressions cover eight corrupt sibling variants with no writes/flushes, plus unaffected valid adoption when the invalid native cargo belongs to another fleet/system.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old main ADOPTED only 1 of 2 original sibling rows while corrupt cargo remained on orphan carrier. Pinned Node/SQLite/Rust/physical gameplay NOT_RUN.
+### 2026-10-26T14:14Z · 409fe28 · L2 · fix(P0): require authoritative native source cargo array before warehouse credit
+
+Why: An authorized warehouse DEBIT repair treated null/undefined from native source inventory as proof the original cargo was absent; it created a real station item with no verified source debit. Require a native cargo array and reject duplicate/misassigned original rows.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 17/17 exact-source isolated V8 warehouse suite callbacks PASS with simulated FS and itemStore; prior source returned COMMITTED and credited original ore with null source reader. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:14Z · 1bef709 · TEST · test(P0): prove warehouse DEBIT resume and committed audit refuse unverified native cargo
+
+Why: Regression tests cover unreadable native source during DEBIT repair, completed receipt validation/audit under unavailable source, and duplicate or wrong-ship native cargo; clean authorized replay remains exactly once.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 17/17 exact-source isolated V8 warehouse suite callbacks PASS with simulated FS and itemStore; prior source returned COMMITTED and credited original ore with null source reader. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
