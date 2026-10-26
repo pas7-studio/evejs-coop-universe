@@ -124,3 +124,39 @@ test('exact native office division and poisoned store reject pre-commit',()=>{
  const x=fixture();assert.equal(x.request({division:114}).reason,'MINING_ORE_TRANSFER_SCOPE_INVALID');
  x.poison(true);assert.equal(x.request().reason,'MINING_ORE_GAMESTORE_POISONED');
 });
+
+import {createPlayerMiningOreAudit} from '../integration/coopPlayerMiningOreTitle.cjs';
+function auditFixture(){
+ const x=fixture();assert.equal(x.request().status,'TITLE_TRANSFERRED');
+ let office=true;
+ const audit=createPlayerMiningOreAudit({
+  readTitleReceipt:()=>x.rows.get('corporationRuntime'+SEP+RECEIPT(CID)),
+  readCorporation:id=>x.rows.get('corporationRuntime'+SEP+'corporations'+SEP+id),
+  findItemById:id=>x.rows.get('items'+SEP+id),
+  findByCargoID:()=>[...x.rows].find(([key,value])=>key.startsWith('items'+SEP)&&
+   value.customInfo===`coop-warehouse:v1:cargo:${CID}`)?.[1]||null,
+  verifyOfficeReceipt:()=>office});
+ const receipt={phase:'COMMITTED',cargoID:CID,itemID:ITEM,typeID:34,quantity:75,
+   corporationID:NPC,stationID:STATION};
+ return {x,audit,receipt,setOffice:v=>office=v};
+}
+test('warehouse reconciles paid title with same item, real office and both native journals',()=>{
+ const a=auditFixture();assert.equal(a.audit.transferred(a.receipt),true);
+});
+test('warehouse reconciliation refuses absent source title or wrong destination office',()=>{
+ const a=auditFixture();a.setOffice(false);assert.equal(a.audit.transferred(a.receipt),false);
+ a.setOffice(true);a.x.rows.delete('corporationRuntime'+SEP+RECEIPT(CID));
+ assert.equal(a.audit.transferred(a.receipt),false);
+});
+test('warehouse reconciliation refuses cloned or consumed original native item',()=>{
+ const a=auditFixture();a.x.rows.delete('items'+SEP+ITEM);
+ assert.equal(a.audit.transferred(a.receipt),false);
+});
+test('warehouse reconciliation rejects tampered native buyer wallet after title',()=>{
+ const a=auditFixture();a.x.wallet(CORP).journal[0].amount=0;
+ assert.equal(a.audit.transferred(a.receipt),false);
+});
+test('warehouse reconciliation rejects tampered conserved price witness',()=>{
+ const a=auditFixture();a.x.rows.get('corporationRuntime'+SEP+RECEIPT(CID)).sourceAfterCents++;
+ assert.equal(a.audit.transferred(a.receipt),false);
+});
