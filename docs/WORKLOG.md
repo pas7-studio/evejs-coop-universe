@@ -615,3 +615,39 @@ Why: Prior main protected against __proto__ as a plain ID, but validated the unt
 Where: integration/coopVirtualEconomy.cjs, tests/coop-virtual-economy-native-delivery-durability.test.mjs
 Evidence: Exact-source reproduction on prior main returned OK steps=0, id getter read twice, Object.prototype.role polluted. Patched source 32/32 isolated V8 economy callbacks PASS (29 existing + 3 new getter/proxy/symbolic system regressions including native ore checkpoint). Full Node22 source checkout/SQLite WAL-FULL crash restart/Rust/authenticated two-player EVE sessions NOT_RUN; local GitHub clone still DNS-blocked. No remote CI, deployment, feature flags, real cargo/ISK touched.
 
+### 2026-10-26T18:45Z · ab75030 · TEST · test: the hauler suite was hiding behind a position-less fixture
+
+Why: The atomic hauler suite could not pass: its fixture gave the two hulls no position, so every scenario stopped at the co-located-ships check and the hauler contract was untested.
+Detail: coopNativeHaulTransferAtomic refuses to move cargo between ships that are not physically co-located, which is correct - but the fixture gave the two hulls no position at all, so all thirteen scenarios stopped at BLOCKED_PHYSICAL_RANGE and the atomic hauler contract was effectively untested (they failed at HEAD for this reason). The fixture now places the ships 500 m apart, and three new cases pin 
+Where: tests/coop-native-haul-transfer-atomic.test.mjs
+Evidence: tests/coop-native-haul-transfer-atomic.test.mjs 16/16 (was 3/13), including three new refusals: out of range, warping, no position - each without opening a transaction.
+### 2026-10-26T18:47Z · 7116933 · TEST · test: three stale assertions that had stopped testing anything
+
+Why: Three assertions had silently stopped testing anything: a legacy allowlist entry, installer-side module registration, and an SQL identifier quoted as a string.
+Detail: - gamestore allowlist: marketEscrow became a legitimate table, so asserting it is rejected proved nothing; the undeclared case now uses a name no allowlist contains. - native mining wiring: module registration moved into the single overlay module list, so counting the name in the installer always found zero; the invariant is now "registered exactly once in names, and never wired by hand in the ins
+Where: tests/coop-alife-native-mining-wiring.test.mjs, tests/coop-gamestore-atomic.test.mjs, tests/coop-native-mining-atomic.test.mjs
+Evidence: tests/coop-gamestore-atomic.test.mjs 21/21, tests/coop-alife-native-mining-wiring.test.mjs 4/4, tests/coop-native-mining-atomic.test.mjs 13/13.
+### 2026-10-26T18:52Z · 550ec59 · L2 · test: four stale suites that had stopped guarding the loop
+
+Why: The hauler selection loop fell through silently when no hull could take the cargo, so a fleet could report loaded with nothing moved and no reason; routing tests also loaded the module with a stub that rejected its real load-time helpers.
+Detail: - haul atomic routing: the source was loaded with a require stub that threw on every dependency, but the module now loads three co-op helpers at load time. The stubs are faithful (real durable-write and flag helpers, telemetry forwarded to the fixture probe), so the routing audit still fails on any *new* dependency. - mining cycle conservation: module registration moved to the overlay module list,
+Where: integration/coopNativeHaulCargo.cjs, tests/coop-native-haul-atomic-routing.test.mjs, tests/coop-native-haul-transfer-physical.test.mjs, tests/coop-native-mining-cycle-conservation.test.mjs
+Evidence: living-haul-no-hauler carries per-hull why/range/capacity; tests/coop-native-haul-transfer-physical.test.mjs 16/16, loop suites 247/247 (was 239/247).
+### 2026-10-26T18:56Z · 1c57ed6 · TEST · loop: the acceptance verdict now has to reach a sale, and install tests follow the module list
+
+Why: Restart acceptance proved cargo survival but never that the loop reached a sale, and overlay-compat tests assumed every dependency keeps a .cjs suffix.
+Detail: restart-acceptance.sh proved that cargo survived a restart but never that anything was sold, so a world could print RESTART_PASS with no ISK. scripts/loop-verdict.cjs states each stage separately - mining, haul, delivery, sale - with the event that proves it, names the reason when a stage is skipped, refuses delivery to stationID 0, and is unit-tested (8 cases) without a server. The acceptance run
+Where: scripts/loop-verdict.cjs, scripts/restart-acceptance.sh, tests/coop-alife-native-overlay-compat.test.mjs, tests/loop-verdict.test.mjs
+Evidence: scripts/loop-verdict.cjs with tests/loop-verdict.test.mjs 8/8; restart-acceptance.sh now ends in LOOP_PASS or LOOP_FAIL:<stage>; tests/coop-alife-native-overlay-compat.test.mjs 16/16.
+### 2026-10-26T18:59Z · 790cf72 · TEST · test: overlay registration tests read the one module list
+
+Why: Three suites still parsed a module list out of the installer that moved to scripts/overlay-spec.cjs, so they asserted nothing.
+Detail: Three suites still parsed a hand-maintained `const names=[...]` out of the installer, which has not existed since registration moved into scripts/overlay-spec.cjs, so they asserted nothing: - agent dialogue: membership now comes from the module list, and the installer keeps its two exact rollback/install patch calls. - resupply wiring: the bridge is proven registered exactly once and inside the AL
+Where: tests/coop-agent-dialogue-patch.test.mjs, tests/coop-alife-native-resupply-wiring.test.mjs, tests/coop-crossstream-overlay-roundtrip.test.mjs
+Evidence: tests/coop-agent-dialogue-patch.test.mjs, tests/coop-alife-native-resupply-wiring.test.mjs, tests/coop-crossstream-overlay-roundtrip.test.mjs read the real registry.
+### 2026-10-26T19:04Z · d7361b7 · TEST · test: complete the repo .js shims for the escort, salvage and station modules
+
+Why: Ten suites could not load at all: modules require siblings without an extension (correct for the installed .js tree) but the repo had no shim for that name.
+Detail: Ten test files could not even load: their modules require siblings without an extension (correct for the installed .js tree), but the repo had no shim for that name, so require("./coopAlifeStationAuthority") failed in every local run. That is the same convention the repo already used ad hoc - 33 shims are added for the modules the failing suites load, nothing else changes. Also moved the installer
+Where: integration/coopAlifeStationAuthority.js, integration/coopConvoyOperations.js, integration/coopConvoyOutcomeProof.js, integration/coopEscortContractSettlement.js, integration/coopEscortDepartureWitness.js, integration/coopEscortFlightGate.js, integration/coopEscortNativeBinding.js, integration/coopEscortNativeFunds.js, integration/coopEscortNativeMount.js, integration/coopEscortNativeTactics.js, integration/coopEscortPeacefulSettlement.js, integration/coopEscortPricedOffers.js, integration/coopEscortReputation.js, integration/coopEscortRescueNavigation.js, integration/coopEscortRouteWitness.js, integration/coopEscortRuntime.js, integration/coopEscortTacticalGame.js, integration/coopEscortTerminalAttendance.js, integration/coopEscortVolunteers.js, integration/coopMissionInstanceProvenance.js, integration/coopNativeHaulManifest.js, integration/coopNativeJobNotifications.js, integration/coo
+Evidence: 33 repo .js shims for the escort/salvage/station modules; module-coverage check now proves every bundled integration source is registered.
