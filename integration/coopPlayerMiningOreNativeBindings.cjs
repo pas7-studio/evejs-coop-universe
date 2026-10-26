@@ -19,7 +19,7 @@ const sameOffice=(o,corpID,stationID,folderID)=>
  pos(o.officeID)&&pos(o.officeFolderID);
 function createNativeMiningOreBindings({gameStore,corporationState,
  corporationRuntime,itemStore,getDockedStation,
- getWarehouseReceipt=null,access=null,priceQuote=null}={}){
+ getWarehouseReceipt=null,getHaulerCargo=null,access=null,priceQuote=null}={}){
  if(!gameStore||typeof gameStore.read!=="function"||
   !corporationState||typeof corporationState.getCorporationRecord!=="function"||
   typeof corporationState.isNpcCorporationID!=="function"||
@@ -28,6 +28,7 @@ function createNativeMiningOreBindings({gameStore,corporationState,
   typeof itemStore.findWarehouseItem!=="function"||
   typeof getDockedStation!=="function"||
   (getWarehouseReceipt!==null&&typeof getWarehouseReceipt!=="function")||
+  (getHaulerCargo!==null&&typeof getHaulerCargo!=="function")||
   (priceQuote!==null&&typeof priceQuote!=="function"))
   throw Error("MINING_ORE_TRUSTED_NATIVE_READERS_REQUIRED");
  function row(table,path){
@@ -98,7 +99,15 @@ function createNativeMiningOreBindings({gameStore,corporationState,
  function warehouseReceipt(cargoID){
   if(typeof getWarehouseReceipt!=="function"||!pos(cargoID))return null;
   const r=getWarehouseReceipt(cargoID);
-  return r?.version===1&&r?.cargoID===cargoID&&r?.phase==="COMMITTED"?r:null;
+  if(r?.version!==1||r?.cargoID!==cargoID||r?.phase!=="COMMITTED"||
+   !pos(r.haulerID)||!pos(r.itemID)||!pos(r.quantity)||
+   typeof getHaulerCargo!=="function")return null;
+  // An fsynced COMMITTED receipt must agree with the CURRENT original
+  // nativeNpcStore. No source cargoID may survive the warehouse debit.
+  const original=getHaulerCargo(r.haulerID);
+  if(!Array.isArray(original)||original.some(c=>c?.cargoID===cargoID))
+   return null;
+  return r;
  }
  return Object.freeze({
   verifyNpcCorporation:(corpID)=>npc(corpID),
@@ -129,15 +138,17 @@ function createRuntimeTitleVerifier(){
 // MUST provide the original fsynced warehouse instance and a native seller
 // price authority. An unbound price source cannot create a paid order.
 function createTrustedTitleService({gameStore,corporationState,
- corporationRuntime,itemStore,getDockedStation,warehouse,access,
+ corporationRuntime,itemStore,getDockedStation,warehouse,nativeNpcStore,access,
  priceQuote,env=process.env}={}){
  if(!warehouse||typeof warehouse.getReceipt!=="function"||
+  typeof nativeNpcStore?.listNativeCargoForEntity!=="function"||
   typeof priceQuote!=="function"||!access||
   ["isMember","canIndustry","canWallet","canView"].some(k=>typeof access[k]!=="function"))
   throw Error("MINING_ORE_TRUSTED_SELLER_AND_WAREHOUSE_REQUIRED");
  const bindings=createNativeMiningOreBindings({gameStore,corporationState,
   corporationRuntime,itemStore,getDockedStation,access,priceQuote,
-  getWarehouseReceipt:id=>warehouse.getReceipt(id)});
+  getWarehouseReceipt:id=>warehouse.getReceipt(id),
+  getHaulerCargo:id=>nativeNpcStore.listNativeCargoForEntity(id)});
  const {createPlayerMiningOreTitle}=loadModule("coopPlayerMiningOreTitle");
  return createPlayerMiningOreTitle({gameStore,access,
   verifyNpcCorporation:(id,row)=>bindings.verifyNpcCorporation(id)&&
