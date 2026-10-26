@@ -517,3 +517,39 @@ test("post-commit transient or module-conflicted original cargo cannot start hau
   assert.equal(ship.nativeCargoItems,undefined);
  }
 });
+
+test("a repeated original cargoID in native enumeration cannot be double-counted or adopted",()=>{
+ const good=orphan({cargoID:7001});
+ const fakeDuplicate={...good,entityID:900000000112};
+ const store=fakeStore([good]);
+ store.listNativeCargo=()=>[{...good},{...fakeDuplicate}];
+ let flushes=0;
+ const target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
+ });
+ assert.equal(result.status,"NATIVE_CARGO_ID_COLLISION");
+ assert.equal(result.adopted,0);
+ assert.equal(store.writes.length,0);
+ assert.equal(flushes,0);
+ assert.equal(target.state,"mining");
+ assert.equal(store.listNativeCargoForEntity(good.entityID).length,1);
+});
+test("a duplicate cargoID outside the target fleet still invalidates its physical source claim",()=>{
+ const row=orphan({cargoID:7001});
+ const another={...orphan({cargoID:7001,entityID:900000000222}),
+  coopHaulSystemID:30000144,coopHaulFleetID:2};
+ const store=fakeStore([row]);
+ store.listNativeCargo=()=>[row,another];
+ const planned=plan({
+  store,scene:sceneWith([hauler]),systemID:30000145,
+  fleetID:1,now:NOW
+ });
+ assert.equal(planned.status,"NATIVE_CARGO_ID_COLLISION");
+ assert.deepEqual(planned.rows,[]);
+ const result=adopt(sceneWith([hauler]),fleet(),{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"NATIVE_CARGO_ID_COLLISION");
+ assert.equal(store.writes.length,0);
+});
