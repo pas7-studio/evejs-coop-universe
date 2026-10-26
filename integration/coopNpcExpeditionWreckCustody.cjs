@@ -41,15 +41,17 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
   return source.filter(x=>{
    const r=parse(x.customInfo);
    return original(x)&&r?.wreckID===wreckID&&
-    r.shipID===w.sourceEntityID&&r.corpID===w.corporationID&&
-    x.ownerID===w.corporationID&&x.locationID===wreckID&&
+    r.shipID===w.sourceEntityID&&
+    r.corpID===w.coopNpcExpeditionSourceCorpID&&
+    x.ownerID===w.coopNpcExpeditionSourceCorpID&&x.locationID===wreckID&&
     x.flagID===items.ITEM_FLAGS.HANGAR;
   }).map(x=>({...x}));
  }
  function stage({wreckID,shipID,corporationID}={}){
   const w=verifiedWreck(wreckID);
   if(!w||!POS(shipID)||!POS(corporationID)||
-    w.sourceEntityID!==shipID||w.corporationID!==corporationID)
+    w.sourceEntityID!==shipID||
+    w.coopNpcExpeditionSourceCorpID!==corporationID)
    return deny("EX03_WRECK_ORIGINAL_SOURCE_MISMATCH");
   let rows,other;
   try{
@@ -117,10 +119,12 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    return {status:"NOT_EXPEDITION_ITEM"};
   const originalRow=row(itemID),r=parse(originalRow?.customInfo);
   if(!r||r.wreckID!==wreckID||r.shipID!==w.sourceEntityID||
-    r.corpID!==w.corporationID||originalRow.locationID!==wreckID)
+    r.corpID!==w.coopNpcExpeditionSourceCorpID||
+    originalRow.locationID!==wreckID)
    return {status:"NOT_EXPEDITION_ITEM"};
   if(!POS(destinationLocationID)||destinationFlagID!==items.ITEM_FLAGS.CARGO_HOLD||
-    !original(originalRow)||originalRow.ownerID!==w.corporationID||
+    !original(originalRow)||
+    originalRow.ownerID!==w.coopNpcExpeditionSourceCorpID||
     originalRow.flagID!==items.ITEM_FLAGS.HANGAR||
     !list({wreckID}).some(x=>x.itemID===itemID))
    return {status:"HANDLED",...deny("EX03_WRECK_CLAIM_SOURCE_INVALID")};
