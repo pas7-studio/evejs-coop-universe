@@ -88,5 +88,57 @@ test("non-regular filesystem journal rejects blind or symlinked source",()=>setu
  catch(e){if(["EPERM","ENOTSUP","EACCES"].includes(e.code))return;throw e}
  assert.equal(f.create().listDelivered({}).status,"FLIGHT_SCAN_NONREGULAR_JOURNAL");
 }));
+test("35 genuine fsynced delivery journals paginate without starving later paid flights",()=> {
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-escort-replay-pages-"));
+ const records=new Map(),reserved=new Set();
+ const wallet={
+  capabilities:()=>({nativeDurable:true,atomicDualCredit:true,durableIdempotency:true}),
+  reserveAtomic:b=>{assert.equal(reserved.has(b.contractID),false);reserved.add(b.contractID)},
+  verifyReservation:b=>reserved.has(b.contractID)?{
+   status:"RESERVED",contractID:b.contractID,corporationID:b.corporationID,
+   amountISK:b.amountISK,escrowKey:b.contractID,nativeDurable:true
+  }:{status:"NOT_FOUND"}
+ };
+ const gate=()=>createEscortFlightGate({root,clock:()=>1000000,
+  authorizeBooking:route=>({status:"AUTHORIZED_NATIVE_ESCORT_BOOKING",
+   ...route,contractID:"escort-"+route.manifestKey,
+   characters:[701,702],playerFleetID:44,amountISK:20000}),
+  readManifest:key=>({status:"READY",record:records.get(key)?.manifest}),
+  verifyManifest:request=>records.get(request.key)?.full,
+  nativeFunds:wallet
+ });
+ try{
+  for(let i=0;i<35;i++){
+   const k="30000144-77-"+(1000000+i),cargoID=5501+i;
+   const m={...manifest,key:k,cargo:[{...manifest.cargo[0],cargoID}]};
+   const p={...full,key:k,cargoIDs:[cargoID]};
+   records.set(k,{manifest:m,full:p});
+   const g=gate();
+   assert.equal(g.fundBeforeWarp({...route,manifestKey:k}).status,"FUNDED_BEFORE_WARP");
+   const delivered={...arrived,manifestKey:k,
+    trip:{...arrived.trip,manifestID:k},
+    terminalProof:{...arrived.terminalProof,nativeFullManifestProof:p}};
+   assert.equal(g.recordDelivered(delivered).status,"DURABLE_NATIVE_DELIVERY_RECORDED");
+  }
+  const fresh=gate(),first=fresh.listDelivered({maxTrips:32});
+  assert.equal(first.status,"READY");
+  assert.equal(first.manifestKeys.length,32);
+  assert.equal(first.hasMore,true);
+  assert.equal(first.nextAfterKey,first.manifestKeys[31]);
+  const second=fresh.listDelivered({maxTrips:32,afterKey:first.nextAfterKey});
+  assert.equal(second.status,"READY");
+  assert.equal(second.manifestKeys.length,3);
+  assert.equal(second.hasMore,false);
+  assert.equal(second.nextAfterKey,null);
+  assert.equal(new Set([...first.manifestKeys,...second.manifestKeys]).size,35);
+  assert.equal(fresh.listDelivered({maxTrips:32,afterKey:"../escape"}).status,
+   "FLIGHT_SCAN_CURSOR_INVALID");
+  // A corrupt later journal must poison even the FIRST page, never pay part.
+  const tail=second.manifestKeys[2];
+  fs.appendFileSync(path.join(root,"escort-flight-gate",tail+".jsonl"),"CORRUPT");
+  assert.equal(fresh.listDelivered({maxTrips:32}).status,
+   "FLIGHT_SCAN_UNVERIFIED_JOURNAL");
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
 process.on("exit",()=>{if(old===undefined)delete process.env.EVEJS_COOP_ESCORT_ROUTE_GATE;
  else process.env.EVEJS_COOP_ESCORT_ROUTE_GATE=old});
