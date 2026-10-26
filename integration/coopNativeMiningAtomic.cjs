@@ -67,7 +67,12 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     const moduleID=Number(moduleItem?.itemID), before=Number(mineableState?.remainingQuantity);
     const normal=Number(miningResult?.normalQuantity), wasted=Number(miningResult?.wastedQuantity);
     const quantity=Number(transferredQuantity), consumed=quantity+wasted;
-    const cycle=Number(cycleBoundaryMs);
+    // A cycle boundary is a millisecond instant, but the runtime hands it over as
+    // a float (effect timing math), so a strict safe-integer check rejected every
+    // real cycle with ALIFE07_YIELD_INVALID:cycleBoundaryMs. Round it once; the
+    // value is only used to build the journal operation key.
+    const cycleRaw = Number(cycleBoundaryMs);
+    const cycle = Number.isFinite(cycleRaw) ? Math.round(cycleRaw) : NaN;
     // Every refusal names the input that failed. A single ALIFE07_YIELD_INVALID
     // for eleven different checks meant a stuck fleet with no way to tell whether
     // the ship id, the ore type, the owner or the scene preimage was wrong.
