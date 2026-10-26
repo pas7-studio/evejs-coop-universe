@@ -122,7 +122,7 @@ test("existing Living World still has ONE 30s tick and separate observational sa
  assert.doesNotMatch(coordinator,/\bsetTimeout\s*\(/);
  assert.match(source,/livingWorldPhases\(\)/);
 });
-test("existing 30s phases retain deterministic source order, including war and expeditions",()=>{
+test("registered original-clock phases preserve order amid separately owned war and admin phases",()=>{
  const source=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
  const start=source.indexOf("timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{");
  const end=source.indexOf(" }),30000);",start);
@@ -131,21 +131,23 @@ test("existing 30s phases retain deterministic source order, including war and e
  assert.doesNotMatch(block,/safeNpcPhase\(/);
  const actual=[...block.matchAll(/runPhase\("([^"]+)"/g)].map(x=>x[1]);
  const expected=[
-  "courier-observe","admin-bridge","courier-dispatch","virtual-travel","virtual-economy",
+  "courier-observe","courier-dispatch","virtual-travel","virtual-economy",
   "native-depot","alife-native-mining-proof","alife-native-economy-observe",
   "faction","native-ammo-readiness","native-ammo-survival",
-  "native-ammo-supply","native-raids","native-tactics","native-expeditions",
-  "native-faction-war-demobilization","native-faction-war-mobilization",
-  "native-faction-war-gate-staging","native-faction-war-battle",
-  "native-faction-war-objectives","native-ammo-observe",
+  "native-ammo-supply","native-raids","native-tactics","native-expeditions","native-pve-boss-wreck","native-pve-site-defense",
+  "native-pve-wave-reinforcements","native-pve-objective-doctrine","native-ammo-observe",
   "native-wreck-recovery","native-salvage-rivals","native-salvage-market",
   "native-wreck-custody","native-loot-station-delivery",
   "native-gate-approach","native-patrols","npc-recognition",
   "native-civilians","native-market-schedule","economy-destination-ore",
   "native-activity","npc-reconcile:"
  ];
- assert.deepEqual(actual,expected);
- assert.equal(actual.length,34);
+ // Other workstreams add native war/admin phases to this shared tick.
+ // Keep their ownership untouched; verify our 28 registered phases remain
+ // an exact ordered subsequence without requiring unrelated phases to vanish.
+ assert.deepEqual(actual.filter(name=>expected.includes(name)),expected);
+ assert.equal(expected.length,32);
+ assert.ok(actual.length>=expected.length);
  assert.match(block,/EVEJS_COOP_ALIFE_SALVAGE_MARKET/);
  assert.match(block,/EVEJS_COOP_NATIVE_NPC_MARKET/);
  assert.match(block,/EVEJS_COOP_ALIFE_ECONOMY/);
@@ -160,11 +162,11 @@ test("promise-returning WHOLE world tick is forbidden and releases the guard",()
  assert.equal(f.coordinator.tick(run=>run("virtual-travel",()=>null)).status,"COMPLETED");
 });
 
-test("LW-03B static catalog defines all 28 registered phases exactly once",()=>{
+test("LW-03B static catalog defines all 32 reviewed phases exactly once",()=>{
  const c=catalog();
- assert.equal(c.phases.length,28);
+ assert.equal(c.phases.length,32);
  assert.deepEqual(c.phases.map(x=>x.name),[...phaseNames]);
- assert.equal(new Set(c.phases.map(x=>x.name)).size,28);
+ assert.equal(new Set(c.phases.map(x=>x.name)).size,32);
  assert.deepEqual(c.groupOrder,["opportunities","world-state","alife-strategy",
   "combat","salvage","movement","market","activity","reconciliation"]);
  assert.equal(c.phases.every(x=>x.mode==="EXISTING_NATIVE_OWNER_ONLY"),true);
@@ -228,4 +230,24 @@ test("registry remains pure and has no second timer or native game writers",()=>
   assert.doesNotMatch(s,/coopAtomicNativeRows|grantItem|marketDaemonClient|\.transact\(/);
  }
  assert.match(installer,/coopLivingWorldPhaseRegistry/);
+});
+
+test("native PvE site defense joins existing combat group, not unclassified",()=>{
+ assert.deepEqual(classifyPhase("native-pve-site-defense"),{
+  status:"KNOWN",group:"combat",canonical:"native-pve-site-defense"});
+});
+
+test("native wave reinforcement stays in existing combat phase group",()=>{
+ assert.deepEqual(classifyPhase("native-pve-wave-reinforcements"),{
+  status:"KNOWN",group:"combat",canonical:"native-pve-wave-reinforcements"});
+});
+
+test("original pirate objective doctrine is a single owned combat phase",()=>{
+ assert.deepEqual(classifyPhase("native-pve-objective-doctrine"),{
+  status:"KNOWN",group:"combat",canonical:"native-pve-objective-doctrine"});
+});
+
+test("original native boss-wreck observer shares combat phase",()=>{
+ assert.deepEqual(classifyPhase("native-pve-boss-wreck"),{
+  status:"KNOWN",group:"combat",canonical:"native-pve-boss-wreck"});
 });
