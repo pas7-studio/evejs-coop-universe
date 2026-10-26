@@ -13,11 +13,16 @@ function inventory(items,characterID,stationID,hangarFlag){
  if(!Array.isArray(items)||items.length>10000)return null;
  const ids=new Set(),counts=new Map();
  for(const item of items){
-  if(!id(item?.itemID)||ids.has(item.itemID)||!id(item.typeID)||
+  // Native/GameStore serialization may represent the same numeric itemID
+  // as a number or decimal string. Normalize BEFORE checking uniqueness.
+  const itemID=id(item?.itemID),typeID=id(item?.typeID);
+  if(!itemID||ids.has(itemID)||!typeID||
      item.ownerID!==characterID||item.locationID!==stationID||
      item.flagID!==hangarFlag||qty(item)===null)return null;
-  ids.add(item.itemID);
-  counts.set(item.typeID,(counts.get(item.typeID)||0)+qty(item));
+  ids.add(itemID);
+  const total=(counts.get(typeID)||0)+qty(item);
+  if(!Number.isSafeInteger(total))return null;
+  counts.set(typeID,total);
  }
  return {counts,ids};
 }
@@ -137,13 +142,14 @@ function verify({before,after,mission,characterID,agentID,personalReward}={}){
   if(delta!==(wanted.counts.get(type)||0))
    return fail("NATIVE_REWARD_ITEM_CUSTODY_MISMATCH");
  }
- const originalByID=new Map(before.inventory.map(x=>[x.itemID,x]));
+ const originalByID=new Map(before.inventory.map(x=>[id(x.itemID),x]));
  const itemIDs=[];
  for(const item of after.inventory){
-  const old=originalByID.get(item.itemID);
+  const canonicalID=id(item.itemID);
+  const old=originalByID.get(canonicalID);
   if(old&&old.typeID!==item.typeID)
    return fail("NATIVE_INVENTORY_ITEM_ID_REUSED");
-  if(!old)itemIDs.push(item.itemID);
+  if(!old)itemIDs.push(canonicalID);
   if(old&&item.stacksize<old.stacksize)
    return fail("NATIVE_REWARD_HANGAR_SOURCE_DECREMENTED");
  }
