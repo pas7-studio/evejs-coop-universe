@@ -33,6 +33,14 @@ function fixture(){
   upsertNativeCargo:row=>{writes++;rows=rows.map(x=>x.cargoID===row.cargoID?row:x);
    return {success:true}},
   flushNpcCargo:()=>{flushes++;return {success:!failFlush}},
+  relocateNativeProbe:({scene,row})=>{
+   const original=scene.getEntityByID(row.cargoID);
+   if(!original||original.nativeNpcProbe!==true||
+      original.nativeNpcCargoID!==row.cargoID)return {success:false};
+   original.position={...row.deployedProbe.position};
+   original.targetPoint={...row.deployedProbe.position};
+   return {success:true};
+  },
   clock:()=>clock,maxSteps:32,cellSpacingMeters:2e10
  };
  const guard=createNativeNpcProbeSweep(opts);
