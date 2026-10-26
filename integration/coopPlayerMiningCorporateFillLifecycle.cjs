@@ -15,7 +15,7 @@ function createCorporateFillLifecycle({
 }={}){
  if(typeof marketClient?.call!=="function"||
   typeof getTrustedMatch!=="function"||
-  typeof settlement?.settle!=="function"||
+  typeof settlement?.settle!=="function"&&typeof settlement?.settleAsync!=="function"||
   typeof token!=="string"||token.length<32||token.length>256||
   typeof enabled!=="function"||typeof observe!=="function")
   throw Error("CORP_FILL_LIFECYCLE_NATIVE_AUTHORITIES_REQUIRED");
@@ -77,7 +77,9 @@ function createCorporateFillLifecycle({
     throw Error("CORP_FILL_RUST_CLAIM_CHANGED");
    // Synchronous original GameStore atomic COMMIT. It must obtain its own
    // verified Rust source claim + separately trusted native fee quote.
-   const receipt=settlement.settle({orderID,cycle});
+   const receipt=typeof settlement.settleAsync==="function"?
+    await settlement.settleAsync({orderID,cycle}):
+    await settlement.settle({orderID,cycle});
    if(!receipt||receipt.phase!=="GAMESTORE_COMMITTED"||
     receipt.orderID!==orderID||receipt.cycle!==cycle||
     receipt.buyerCharacterID!==two.buyerCharacterID||
