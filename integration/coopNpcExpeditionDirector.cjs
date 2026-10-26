@@ -26,10 +26,10 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>3)
   throw Error("NPC_EXPEDITION_NATIVE_AUTHORITIES_REQUIRED");
  const intel=new Map(),pending=new Map();
- let currentScene=null,currentAssignments=[];
- const nativeSite=(systemID,siteID)=>{
+ let currentScene=null,currentAssignments=[],currentCatalog=null;
+ const nativeSite=(systemID,siteID,fresh=false)=>{
   let sites;
-  try{sites=listNativeSites(systemID)}catch{return null}
+  try{sites=!fresh&&currentScene?.systemID===systemID&&currentCatalog?currentCatalog:listNativeSites(systemID)}catch{return null}
   if(!Array.isArray(sites)||sites.length>2048)return null;
   const found=sites.filter(s=>s&&s.siteID===siteID&&
    (s.systemID===systemID||s.solarSystemID===systemID)&&vector(s.actualPosition));
@@ -45,7 +45,9 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     ship.session?.characterID||!vector(ship.position)||
     (pos(ship.systemID)&&ship.systemID!==scene.systemID)||
     !n||n.entityID!==entityID||n.systemID!==scene.systemID||
-    !pos(n.corporationID)||!c||c.entityID!==entityID||c.systemID!==scene.systemID)
+    !pos(n.corporationID)||n.transient===true||ship.transient===true||
+    ship.corporationID!==n.corporationID||
+    !c||c.entityID!==entityID||c.systemID!==scene.systemID)
    return null;
   return {pilotID:matches[0].pilotID,entityID,systemID:scene.systemID,
    corpID:n.corporationID,ship};
@@ -79,6 +81,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   }
   if(!Array.isArray(sites)||sites.length>2048)
    return {status:"NATIVE_SITE_CATALOG_INVALID",observed:0,orders:0};
+  currentCatalog=sites;
   const candidates=sites.filter(s=>pos(s?.siteID)&&vector(s?.actualPosition))
    .slice(0,maxSitesPerTick).map(s=>nativeSite(scene.systemID,s.siteID)).filter(Boolean);
   let observed=0,orders=0,blocked=0;
@@ -115,7 +118,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     }
     const result=orderBridge.issue({entityID:p.entityID,systemID:scene.systemID,
      owner:"EXPEDITION",action:"expedition-rendezvous",execute:()=>{
-      const live=nativeSite(tip.systemID,tip.siteID);
+      const live=nativeSite(tip.systemID,tip.siteID,true);
       const native=readPilot(scene,p.entityID,assignments);
       if(!live||fingerprint(live)!==tip.fingerprint||!native||native.corpID!==tip.corpID)
        return {success:false,errorMsg:"EXPEDITION_NATIVE_INTEL_STALE"};
