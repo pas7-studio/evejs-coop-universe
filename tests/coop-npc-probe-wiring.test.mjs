@@ -259,3 +259,47 @@ test("EX-03B12/B13 source checks protect the native scout-to-arbiter bridge",()=
  assert.match(tests,/ambiguous arbiter issue result is permanently fenced/);
  assert.match(workflow,/tests\/coop-npc-expedition-native-bridge\.test\.mjs/);
 });
+
+test("EX-03B15/B16 original native hack, ItemStore title and wormhole source wiring",()=>{
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ const operations=read("integration/coopNpcExpeditionOperations.cjs");
+ const loot=read("integration/coopNpcExpeditionLoot.cjs");
+ const wormholes=read("integration/coopNpcWormholeTransit.cjs");
+ const hacking=read("scripts/coop-npc-expedition-hacking-patch.cjs");
+ const fitting=read("integration/coopNpcScoutLoadout.cjs");
+ const patch=read("scripts/patch-evejs-coop.cjs");
+ const overlay=read("scripts/overlay-spec.cjs");
+ const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ assert.match(runtime,/npcExpeditionDirector\.operations\(\)/);
+ assert.match(runtime,/createNpcExpeditionOperations/);
+ assert.match(runtime,/EVEJS_COOP_NPC_EXPEDITION_HACK==="1"/);
+ assert.match(runtime,/EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"/);
+ assert.match(runtime,/EVEJS_COOP_NPC_EXPEDITION_WORMHOLES==="1"/);
+ assert.match(runtime,/createNpcWormholeTransit/);
+ assert.match(runtime,/expedition-wormhole-cross/);
+ assert.match(operations,/hackingService\.nativeNpcTurn/);
+ assert.match(operations,/listMaterializedUniverseSiteContentEntities/);
+ assert.match(operations,/loot\.collect/);
+ assert.match(operations,/loot\.deliver/);
+ assert.match(loot,/transferItemToOwnerLocation/);
+ assert.match(loot,/moveItemToLocation/);
+ assert.match(loot,/writeItemCustomInfo/);
+ assert.match(loot,/flushTableSync\("items"\)/);
+ assert.match(wormholes,/wormholes\.prepareJump/);
+ assert.match(wormholes,/wormholes\.commitJump/);
+ assert.match(wormholes,/wormholes\.buildJumpSpawnState/);
+ assert.match(wormholes,/wormholeRuntimeState/);
+ assert.match(wormholes,/materializeStoredNativeController/);
+ assert.match(hacking,/EX03_NPC_HACK_SOURCE_BEGIN/);
+ assert.match(fitting,/withAnalyzers/);
+ assert.match(patch,/coop-npc-expedition-hacking-patch/);
+ for(const name of ["coopNpcExpeditionLoot","coopNpcExpeditionOperations",
+  "coopNpcWormholeTransit"])assert.match(overlay,new RegExp('"'+name+'"'));
+ for(const file of ["coop-npc-expedition-hacking.test.mjs",
+  "coop-npc-expedition-loot.test.mjs",
+  "coop-npc-expedition-operations.test.mjs",
+  "coop-npc-wormhole-transit.test.mjs"])assert.ok(workflow.includes(file));
+ assert.match(workflow,/EVEJS_PINNED_HACKING_SOURCE/);
+ assert.match(workflow,/EVEJS_COOP_NPC_EXPEDITION_HACK: '0'/);
+ assert.match(workflow,/EVEJS_COOP_NPC_EXPEDITION_WORMHOLES: '0'/);
+});
