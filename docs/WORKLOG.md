@@ -188,3 +188,18 @@ Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLi
 Why: fleet miners sit at 1-5% charge with no recharge even after the L1 rate fix, and FLEET_POST_TICK could not show whether the ship carries tau or when it was last advanced, so the cause was pure guesswork
 Where: scripts/overlay-spec.cjs
 Evidence: event now carries tau and reAt per miner; OVERLAY_OK patched 54 anchorMismatch 0; no behaviour change (telemetry only)
+### 2026-10-26T12:18Z · eda4d4d · L2 · fix(P0): reject malformed adoption history and invalid time before orphan custody
+
+Why: A damaged or missing adoptedAt with a real adoptedFrom reverted an already-custodied stack to the first-time path, bypassing warehouse settlement checks. Also refuse invalid clock evidence.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after reproduction confirms INVALID/MISSING timestamp previously ADOPTABLE and now RE_ADOPTION_HISTORY_UNVERIFIED; Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:19Z · 4832f7b · TEST · test(P0): malformed recovery lineage cannot bypass settlement guards
+
+Why: Protect all original custody before/after paths against malformed historical adoption timestamps and clock values.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after reproduction confirms INVALID/MISSING timestamp previously ADOPTABLE and now RE_ADOPTION_HISTORY_UNVERIFIED; Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:20Z · a42aa1e · L2 · fix(P0): skip live cargo before orphan lineage validation, preserve loaded-hauler guard
+
+Why: A cargo still on a physical live ship is not an orphan; preserve existing HAULER_ALREADY_LOADED protection for the replacement hauler.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after reproduction confirms INVALID/MISSING timestamp previously ADOPTABLE and now RE_ADOPTION_HISTORY_UNVERIFIED; Node/SQLite/Rust/gameplay NOT_RUN.
