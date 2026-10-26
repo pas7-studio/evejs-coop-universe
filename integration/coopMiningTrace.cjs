@@ -153,6 +153,7 @@ function noteModuleStop(scene, entity, moduleID, reason, via) {
     moduleID: Number(moduleID) || 0,
     stopReason: String(reason || ""),
     mining: effect.miningEffect === true,
+    entityError: String(entity.coopMiningCargoLastError || ""),
     ageMs: Math.round(Date.now() - (Number(effect.startedAtMs) || 0)),
   });
 }
