@@ -1,6 +1,6 @@
 # ALIFE-11 — mixed original native transient/persistent NPC cargo
 
-**Status:** implementation in Draft PR; 18 file-backed SQLite regression tests authored, plus existing GameStore and ALIFE-10 suites. Nine physical server E2E **NOT_RUN**. Feature OFF by default. Protected `evejs-data` unchanged.
+**Status:** implementation in Draft PR; 25 file-backed SQLite regression tests for the haul contract plus 10 for the mining-cycle contract, plus existing GameStore and ALIFE-10 suites. Nine physical server E2E **NOT_RUN**. Feature OFF by default. Protected `evejs-data` unchanged.
 
 ## Original EveJS authority
 
@@ -8,14 +8,16 @@ The pinned original `gameStore/index.js` tracks ephemeral values via `transientP
 
 ## Implementation
 
-New `coopNativeCargoTransientIsolation.cjs` provides strictly synchronous `capture`, `guardMutation` and `rehydrate` operations. `coopGameStoreAtomic.createGameStoreAdapter` enables them **only** if all are true:
+New `coopNativeCargoTransientIsolation.cjs` provides strictly synchronous `capture`, `guardMutation` and `rehydrate` operations, plus the declared **cargo contracts** (`contractForTables`). `coopGameStoreAtomic.createGameStoreAdapter` enables isolation **only** when the transaction's table set matches a declared contract, `EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`, `EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION=1`, and that contract's own flags are on:
 
-- `EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`
-- `EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC=1`
-- `EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION=1`
-- Transaction is exactly the single original GameStore `npcCargo` table.
+| contract | table set | own flag | rows it may write |
+| --- | --- | --- | --- |
+| `haul-transfer` | `npcCargo` | `EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC=1` | exactly one `cargo` root rewrite plus exactly one `coopNativeHaulTransfer:<id>` `COMMITTED` receipt |
+| `mining-cycle` | `miningRuntimeState` + `npcCargo` | `EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC=1` | zero or one `cargo` root rewrite, no other `npcCargo` row, exactly one `miningRuntimeState` row with `status:"COMMITTED"` whose `nextCargo` equals the written stack's quantity |
 
-Other table transactions retain the original `NATIVE_TRANSIENT_STATE_UNSAFE` behavior.
+A table set that is not declared keeps the original `NATIVE_TRANSIENT_STATE_UNSAFE` behaviour. Adding a set is a contract change with its own write set and tests, never a configuration toggle. Why the mining cycle needs it: ALIFE-07 commits the rock source, the miner's ore stack and its own journal row in one native transaction, so it is the second cargo-bearing transaction that must coexist with transient (stock NPC) cargo in the single original `npcCargo` table; without the contract every cycle is refused while any stock miner still holds ore.
+
+`tests/coop-mining-cycle-transient-isolation.test.mjs` pins the mining contract: the declared sets, a real cycle next to transient stock cargo, a missing journal, a journal that disagrees with the written stack, an extra `npcCargo` row, a smuggled transient row, an all-waste cycle with no cargo write, the mining flag removed, and the haul contract still insisting on its own flag.
 
 Before SQL `BEGIN IMMEDIATE`, GameStore reconciles any in-flight worker and checks a successful synchronous flush. Isolation then validates **every** active transient path as exactly `/cargo/<canonical-positive-safe-integer-ID>`. Each shadow cargo must exist once in the in-process cache, carry its correct original cargoID/entityID/ownerID/typeID/positive integer quantity and `transient:true`, and have no SQLite row with that ID. After removing only those paths from the cache snapshot, the entire remaining GameStore table must match the actual native SQLite snapshot byte-semantically.
 

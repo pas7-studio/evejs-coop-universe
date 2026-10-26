@@ -14,12 +14,26 @@
    Measured after: `MINING_CYCLE_ATTEMPT locked=true pending=0`, rock ore falling
    162502 → 151910 → 143244, ships `ORBIT|act2|cap0.94`, fleet `mining → loaded`,
    holds `q44297…q69336` and climbing.
-3. **Hauling still refuses: `HAUL_NATIVE_PERSISTENCE_FLAGS_REQUIRED`.** The strict
-   hauler needs `EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC` plus `NATIVE_ATOMIC_ROWS`,
-   `MINING_CARGO_INTEGRITY`, `MINING_CYCLE_CONSERVATION`; none were set, so the
-   hauler delivered `NO_CARGO stationID=0` while the miners kept the ore. Those four
-   flags are now enabled in the probe compose (deploy in flight); the ALIFE07 refusal
-   reason now rides on `MODULE_STOP_*` as `entityError`.
+3. **Hauling and the atomic mining commit are welded, and the commit is refused.**
+   RESOLVED in `df2acdc9` (not yet deployed): cargo isolation is now a table of
+   declared contracts instead of one hardcoded `npcCargo` case -
+   `haul-transfer` (unchanged: one cargo root + one receipt) and `mining-cycle`
+   (`miningRuntimeState`+`npcCargo`: zero or one cargo root rewrite, no other
+   npcCargo row, exactly one COMMITTED journal row whose `nextCargo` equals the
+   written stack). Undeclared sets still fail closed with
+   `NATIVE_TRANSIENT_STATE_UNSAFE`.
+   Evidence (offline, no redeploy): `tests/coop-mining-cycle-transient-isolation.test.mjs`
+   10/10 including the real ALIFE-07 settler committing a cycle while transient
+   stock cargo exists; `tests/coop-native-cargo-transient-isolation.test.mjs` 25/25;
+   staged `.js`-only install loads the adapter through the extensionless require;
+   `scripts/Verify-Coop-GameStore-Atomic-Isolated.cjs` -> `PASS
+   COOP_032D_PINNED_GAMESTORE_DISPOSABLE`; `OVERLAY_OK patched 54`, `CHECK_OK series=6`.
+   Also fixed in this arc: config refusals no longer poison a hull (`bc0a1009`),
+   a pre-mutation refusal no longer blocks forever (`22ec6968`), yield refusals name
+   the failing field (`3bba6d12`), float cycle boundaries are rounded (`f294b647`),
+   the installer refuses `.cjs` sibling requires (`d75dea53`, `d9a4b629`).
+   Next: one deploy, then measure `loaded -> delivered -> sold` and a restart
+   acceptance (`DURABLE_BEFORE>0`).
 
 ### ROOT CAUSE FOUND 17:20Z — the activation hook never ran (fixed in `d75dea53`)
 `STOP|act0|cap1` for hours was not a capacitor, targeting or cycle problem.

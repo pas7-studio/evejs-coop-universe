@@ -145,8 +145,11 @@ test("SQLite failure after cargo update rolls back witness AND reparent",t=>{
  assert.equal(f.bridge.isPoisoned(),false);
 });
 test("postcommit cache reload error poisons the only authoritative writer",t=>{
- const f=fixture(t);f.setReload(true);
- assert.throws(()=>f.change(),/NATIVE_GAMESTORE_COMMITTED_BUT_CACHE_UNSAFE/);
+ const f=fixture(t);
+ // Arming the reload error before the call would fail the pre-image read instead,
+ // which is a pre-commit failure and must stay a plain error (nothing persisted).
+ // The poison path is only reachable when the read breaks AFTER the SQL COMMIT.
+ assert.throws(()=>f.change(()=>f.setReload(true)),/NATIVE_GAMESTORE_COMMITTED_BUT_CACHE_UNSAFE/);
  assert.equal(f.bridge.isPoisoned(),true);
  assert.equal(f.fatal(),1);
  assert.throws(()=>f.change(),/NATIVE_GAMESTORE_POISONED/);

@@ -36,6 +36,29 @@ function blocked(entity, reason) {
   }
   return {success:false,stopReason:"cargo",reason};
 }
+// A durable hull can carry a sticky "needs operator repair" marker from a commit
+// that was refused *before* anything was written: the atomic store refuses while
+// the native npcCargo table still has transient paths
+// (NATIVE_TRANSIENT_STATE_UNSAFE), which happens in assertTables/flush, i.e. ahead
+// of the journal and the SQLite transaction. Such a marker is not an uncertain
+// custody state, and leaving it set stops the hull forever - across restarts, so
+// the world would never mine again. Only that exact pre-mutation refusal is
+// cleared; every other marker still requires an operator.
+const PRE_MUTATION_BLOCK = /^ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED.*NATIVE_TRANSIENT_STATE_UNSAFE/;
+function clearProvablePreMutationBlock(entity) {
+  const reason = String(entity.coopMiningCargoNeedsOperatorRepair || "");
+  if (!reason || !PRE_MUTATION_BLOCK.test(reason)) return false;
+  entity.coopMiningCargoNeedsOperatorRepair = undefined;
+  entity.coopMiningCargoLastError = undefined;
+  console.warn("[CoopNativeMiningAtomic] cleared pre-mutation block: " + reason);
+  try {
+    require("./coopRuntimeProbe").observe("living-mining-cargo-repair-cleared", null,
+      {spaceState: {systemID: Number(entity.systemID) || 0}},
+      {status: "CLEARED", reason, shipID: Number(entity.itemID) || 0, nativeMutation: false});
+  } catch (_error) { /* telemetry never authorizes custody */ }
+  return true;
+}
+
 function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
   if (!gameStore || !nativeStore || typeof resolveType !== "function")
     throw Error("ALIFE07_NATIVE_AUTHORITIES_REQUIRED");
@@ -43,6 +66,7 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
   function settle(input) {
     const {scene,entity,targetEntity,mineableState,miningResult,transferredQuantity,
       cycleBoundaryMs,moduleItem,commitScene,readState} = input || {};
+    if (entity) clearProvablePreMutationBlock(entity);
     if (!entity || entity.coopMiningCargoNeedsOperatorRepair)
       return blocked(entity, entity && entity.coopMiningCargoNeedsOperatorRepair
         ? "ALIFE07_REPAIR_REQUIRED:" + String(entity.coopMiningCargoNeedsOperatorRepair)
@@ -67,7 +91,12 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     const moduleID=Number(moduleItem?.itemID), before=Number(mineableState?.remainingQuantity);
     const normal=Number(miningResult?.normalQuantity), wasted=Number(miningResult?.wastedQuantity);
     const quantity=Number(transferredQuantity), consumed=quantity+wasted;
-    const cycle=Number(cycleBoundaryMs);
+    // A cycle boundary is a millisecond instant, but the runtime hands it over as
+    // a float (effect timing math), so a strict safe-integer check rejected every
+    // real cycle with ALIFE07_YIELD_INVALID:cycleBoundaryMs. Round it once; the
+    // value is only used to build the journal operation key.
+    const cycleRaw = Number(cycleBoundaryMs);
+    const cycle = Number.isFinite(cycleRaw) ? Math.round(cycleRaw) : NaN;
     // Every refusal names the input that failed. A single ALIFE07_YIELD_INVALID
     // for eleven different checks meant a stuck fleet with no way to tell whether
     // the ship id, the ore type, the owner or the scene preimage was wrong.

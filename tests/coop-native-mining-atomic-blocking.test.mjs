@@ -62,3 +62,47 @@ test('an invalid yield names the input that failed', ()=>{
   delete process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY;
   delete process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION;
 });
+
+test('a fractional cycle boundary is rounded, not rejected', ()=>{
+  process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC = '1';
+  process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS = '1';
+  process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY = '1';
+  process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION = '1';
+  const entity = hull();
+  const rock = {itemID: 5020484726789};
+  const scene = {systemID: 30000144, getEntityByID: (id) => (id === rock.itemID ? rock : null)};
+  const result = settler.settle({
+    entity,
+    scene,
+    targetEntity: rock,
+    mineableState: {remainingQuantity: 100, yieldTypeID: 1230},
+    miningResult: {normalQuantity: 10, wastedQuantity: 0},
+    transferredQuantity: 10,
+    cycleBoundaryMs: 1793031234567.5,
+    moduleItem: {itemID: 77},
+    commitScene: () => true,
+    readState: () => ({remainingQuantity: 90, yieldTypeID: 1230}),
+  });
+  assert.notEqual(result.reason, 'ALIFE07_YIELD_INVALID:cycleBoundaryMs');
+  delete process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC;
+  delete process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
+  delete process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY;
+  delete process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION;
+});
+
+test('a block that provably happened before any write is cleared', ()=>{
+  const entity = hull();
+  entity.coopMiningCargoNeedsOperatorRepair =
+    'ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED:NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo';
+  entity.coopMiningCargoLastError = entity.coopMiningCargoNeedsOperatorRepair;
+  settler.settle({entity});
+  assert.equal(entity.coopMiningCargoNeedsOperatorRepair, undefined,
+    'a pre-mutation refusal must not block the hull forever');
+});
+
+test('an uncertain custody block is never cleared automatically', ()=>{
+  const entity = hull();
+  entity.coopMiningCargoNeedsOperatorRepair = 'ALIFE07_POSTCOMMIT_SCENE_DIVERGED';
+  settler.settle({entity});
+  assert.equal(entity.coopMiningCargoNeedsOperatorRepair, 'ALIFE07_POSTCOMMIT_SCENE_DIVERGED');
+});
