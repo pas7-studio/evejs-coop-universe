@@ -19,8 +19,12 @@ function getMountedScene(runtime,systemID){
 const array=x=>Array.isArray(x)&&x.length>0&&x.length<=32&&
  x.every(pos)&&new Set(x).size===x.length;
 function createAdapter({gameStore,store,access,getFleetRecord,getScene,
- clock=()=>Date.now(),enabled=()=>false,observe=()=>{}}={}){
+ clock=()=>Date.now(),enabled=()=>false,observe=()=>{},
+ completionEnabled=()=>false,completionOracle=null}={}){
  if(!store||!access||typeof getFleetRecord!=="function"||
+   typeof completionEnabled!=="function"||
+   (completionOracle!==null&&["captureHaul","captureRetreat","verify"].some(k=>
+    typeof completionOracle[k]!=="function"))||
    typeof getScene!=="function"||
    ["getNativeEntity","getNativeController","listNativeCargoForEntity"].some(x=>typeof store[x]!=="function"))
    throw Error("MINING_SHIFT_NATIVE_ADAPTER_AUTHORITIES_REQUIRED");
@@ -55,7 +59,13 @@ function createAdapter({gameStore,store,access,getFleetRecord,getScene,
    current.ownerID===f.ownerID&&
    JSON.stringify(current.minerIDs)===JSON.stringify(f.minerIDs)&&
    JSON.stringify(current.haulerIDs)===JSON.stringify(f.haulerIDs);},
-  clock,enabled,observe});
+  clock,enabled,observe,completionEnabled,
+  captureHaul:({fleet})=>completionOracle?.captureHaul({fleet})||null,
+  captureRetreat:({fleet})=>completionOracle?.captureRetreat({
+   fleetRecord:getFleetRecord(fleet.systemID,fleet.fleetID)})||null,
+  verifyCompletion:({row,fleet})=>completionOracle?.verify({row,fleet,
+   fleetRecord:getFleetRecord(fleet.systemID,fleet.fleetID),
+   scene:getScene(fleet.systemID)})||null});
  function assign(input){return orders.assign(input);}
  function beforeTick({scene,fleetRecord,now,hooks,startHaul,deactivate,retreat}={}){
   if(enabled()!==true)return false;
@@ -122,7 +132,16 @@ function native(){
    store=require("./npc/nativeNpcStore"),
    access=load("coopPlayerCorporationAccess"),
    operations=require("../services/mining/miningNpcOperations");
-  singleton=createAdapter({gameStore,store,access,
+  const completion=load("coopPlayerMiningPhysicalCompletion")
+   .createPhysicalCompletionOracle({store,
+    warehouseReceipt:cargoID=>require("./coopNativeStationArrival")
+     .getOriginalWarehouseReceipt(cargoID),
+    findWarehouseItem:args=>require("../services/inventory/itemStore")
+     .findWarehouseItem(args)});
+  singleton=createAdapter({gameStore,store,access,completionOracle:completion,
+   completionEnabled:()=>load("coopFlags").on(
+    "EVEJS_COOP_PLAYER_NPC_MINING_COMPLETION")&&
+    load("coopFlags").on("EVEJS_COOP_NPC_STATION_DELIVERY"),
    getFleetRecord:(systemID,fleetID)=>{
     const matches=operations.getMiningFleetsForSystem(systemID).filter(x=>x?.fleetID===fleetID);
     return matches.length===1?matches[0]:null;},
