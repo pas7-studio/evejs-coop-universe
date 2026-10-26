@@ -22,6 +22,10 @@ const edits={
     {
       "before": "    ).length === 0;\n  entity.launcherID =",
       "after": "    ).length === 0 &&\n    (!process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\" || require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).list({wreckID:wreckRecord.wreckID}).length===0);\n  entity.launcherID ="
+    },
+    {
+      "before": "  if (!removeResult.success) {\n    nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);\n    return removeResult;\n  }",
+      "after": "  if (!removeResult.success) {\n    // EX03B18_NATIVE_DEATH_FAILURE_FENCE: original item IDs may already\n    // be in a durable wreck. Do not cascade-delete their authoritative home.\n    if (process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\" &&\n        !require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\"))\n          .createNpcExpeditionWreckCustody({\n           items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),\n           npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))\n          }).canDestroy(wreckRecord.wreckID))\n      return {success:false,errorMsg:\"EX03_WRECK_DEATH_DESTRUCTION_NEEDS_OPERATOR_REPAIR\"};\n    nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);\n    return removeResult;\n  }"
     }
   ],
   "server/src/space/npc/nativeNpcStore.js": [
