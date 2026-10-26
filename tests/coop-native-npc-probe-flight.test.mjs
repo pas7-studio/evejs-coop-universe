@@ -158,3 +158,26 @@ test("failed native cargo projection leaves durable source receipt pending, no f
  assert.equal(f.sceneMap.get(980200000001).kind,"probe");
  assert.equal(f.cargo()[0].quantity,0);
 });
+
+test("durable NPC probe sweep geometry is reconciled to SAME sealed physical itemID",()=>{
+ const f=fixture(),first=f.tick();assert.equal(first.status,"NATIVE_PROBE_LAUNCHED");
+ const originalID=first.cargoID,physical=f.sceneMap.get(originalID);
+ assert.equal(physical.nativeNpcProbe,true);
+ assert.equal(physical.nativeNpcCargoID,originalID);
+ const newPosition={...f.cargo()[0].deployedProbe.position,x:1e10};
+ f.cargo()[0].deployedProbe.position=newPosition;
+ const out=f.tick();
+ assert.equal(out.status,"NATIVE_PROBE_LAUNCHED");
+ assert.deepEqual(f.sceneMap.get(originalID).position,newPosition);
+ assert.equal(f.cargo()[0].quantity,0);
+ assert.equal(f.sceneMap.get(originalID).itemID,originalID);
+});
+test("foreign unsealed original-ID probe cannot be moved on durable mismatch",()=>{
+ const f=fixture(),first=f.tick();
+ const physical=f.sceneMap.get(first.cargoID);
+ physical.nativeNpcProbe=false;
+ f.cargo()[0].deployedProbe.position={...physical.position,x:2e10};
+ const out=f.tick();
+ assert.equal(out.status,"BLOCKED");
+ assert.equal(out.reason,"NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
+});
