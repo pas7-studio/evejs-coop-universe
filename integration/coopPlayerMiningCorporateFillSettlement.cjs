@@ -33,7 +33,7 @@ function isValidClaim(c){
   c.escrowLocationID===Number(BigInt(c.orderID)+9200000000n);
 }
 function createCorporateSellFillSettlement({gameStore,readNativeClaim,quoteNativeFees,
- clock=()=>Date.now(),enabled=()=>false}={}){
+ clock=()=>Date.now(),enabled=()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_FILL==="1"}={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=="SERVER_INTERNAL_FLAGGED"||
   typeof atomic.transact!=="function"||typeof atomic.isPoisoned!=="function"||
