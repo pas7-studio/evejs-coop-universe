@@ -26,9 +26,35 @@ test("original pinned source resolves actual rare candidate item pools for linke
  }));
  assert.ok(pools.some(x=>x.candidateCount>0),
   "configured source selector has no resolved real native item types");
- // This validates real candidates, NOT RNG selection or spawned rewards.
+ // Exercise the ORIGINAL rule-backed RNG with a deterministic local
+ // random stream. This tests native item-type selection, not itemStore,
+ // spawned wreck contents, or physical game-client pickup.
  for(const p of pools)assert.ok(Number.isSafeInteger(p.candidateCount)&&p.candidateCount>=0);
+ const candidateIDs=new Set(selected.flatMap(selector=>
+  loot._testing.getRuleCandidatePool(selector).map(item=>item.typeID)));
+ const originalRandom=Math.random;
+ let seed=0x1970a11f;
+ let rolled=[],rareNativeSelections=0;
+ try{
+  Math.random=()=>{
+   seed^=seed<<13;seed^=seed>>>17;seed^=seed<<5;
+   return (seed>>>0)/4294967296;
+  };
+  for(let i=0;i<32;i++){
+   const entries=loot.rollNpcLootEntries(table);
+   assert.ok(Array.isArray(entries));
+   for(const item of entries){
+    assert.ok(Number.isSafeInteger(item.typeID)&&item.typeID>0);
+    if(candidateIDs.has(item.typeID))rareNativeSelections++;
+   }
+   rolled.push(...entries.map(e=>e.typeID));
+  }
+ }finally{Math.random=originalRandom}
+ assert.ok(rareNativeSelections>0,
+  "original source RNG did not select any configured overseer rare candidate");
  console.log("[PVE_NATIVE_LOOT_CANDIDATES] "+JSON.stringify({
   profileID:profile.profileID,lootTableID:table.lootTableID,
-  pools,actualDropVerified:false}));
+  pools,actualNativeRngRolls:32,actualNativeSelectedItems:rolled.length,
+  selectedNativeCandidateItems:rareNativeSelections,
+  actualDropVerified:false,actualPhysicalItemVerified:false}));
 });
