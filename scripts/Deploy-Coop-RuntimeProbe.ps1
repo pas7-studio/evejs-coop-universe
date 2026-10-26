@@ -25,6 +25,8 @@ param(
   [switch]$EnableMarketCatalog,
   [switch]$EnableMissionJoin,
   [switch]$EnableNativeExploration,
+  [switch]$EnableNpcExpeditions,
+  [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
   [switch]$EnableNpcStationDelivery,
@@ -54,6 +56,12 @@ if ($EnableNativeJobAgents -and -not $LivingCoop) { throw 'Native NPC job agents
 if ($EnableFullHaulManifest -and (-not $LivingCoop -or -not $EnableNpcStationDelivery)) { throw 'Full native cargo manifest requires LivingCoop and station delivery' }
 if (($Alife -or $AlifeTrace) -and -not $LivingCoop) { throw 'ALIFE mode requires -LivingCoop' }
 if ($AlifeTrace -and -not $Alife) { throw '-AlifeTrace requires -Alife' }
+if ($EnableNpcExpeditions -and (-not $Alife -or -not $LivingCoop)) {
+  throw 'Native NPC expeditions require -LivingCoop -Alife'
+}
+if ($EnableNativeHackingAdmission -and -not $EnableNativeExploration) {
+  throw 'Native hacking admission requires -EnableNativeExploration'
+}
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
 Assert-Range 'EncounterMaxSpawns' $EncounterMaxSpawns 1 1000
@@ -181,6 +189,14 @@ if ($EnableMarketCatalog) {
 if ($EnableNativeExploration) {
   $yamlLines += "      EVEJS_COOP_EXPEDITION_SCAN_PROOF: '1'"
   $yamlLines += "      EVEJS_COOP_EXPEDITION_FLEET_BOOKMARKS: '1'"
+}
+# EX-02 / EX-04A: independent explicit opt-ins, not implicitly enabled
+# by the generic exploration or LivingCoop switches.
+if ($EnableNpcExpeditions) {
+  $yamlLines += "      EVEJS_COOP_NPC_EXPEDITIONS: '1'"
+}
+if ($EnableNativeHackingAdmission) {
+  $yamlLines += "      EVEJS_COOP_NATIVE_HACKING_ADMISSION: '1'"
 }
 if ($EnablePersistentEncounters) {
   $yamlLines += "      EVEJS_COOP_PERSISTENT_ENCOUNTERS: '1'"
