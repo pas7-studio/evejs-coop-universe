@@ -101,6 +101,35 @@ const GUARD=[
 '    }',
 '    // CH24+31 CORPORATE SELL STOCK PLACEORDER GUARD END',
 ''].join("\n");
+const STANDARD_ORDER_GUARDS={
+ fill:[
+  '    // CH24+31 CORPORATE ORDER STOCK FILL GUARD BEGIN',
+  '    let corporate_order:Option<i64>=transaction.query_row(',
+  '      "SELECT is_corp FROM market_orders WHERE order_id=?1',
+  '       AND source=\'coop-corporation\'",',
+  '      params![request.order_id],|r|r.get(0)).optional()?;',
+  '    if corporate_order.is_some(){bail!("CORP_SELL_STOCK_FILL_DENIED");}',
+  '    // CH24+31 CORPORATE ORDER STOCK FILL GUARD END',
+  ''].join("\n"),
+ cancel:[
+  '    // CH24+31 CORPORATE ORDER STOCK CANCEL GUARD BEGIN',
+  '    let corporate_order:Option<i64>=transaction.query_row(',
+  '      "SELECT is_corp FROM market_orders WHERE order_id=?1',
+  '       AND source=\'coop-corporation\'",',
+  '      params![order_id],|r|r.get(0)).optional()?;',
+  '    if corporate_order.is_some(){bail!("CORP_SELL_STOCK_CANCEL_DENIED");}',
+  '    // CH24+31 CORPORATE ORDER STOCK CANCEL GUARD END',
+  ''].join("\n"),
+ modify:[
+  '    // CH24+31 CORPORATE ORDER STOCK MODIFY GUARD BEGIN',
+  '    let corporate_order:Option<i64>=transaction.query_row(',
+  '      "SELECT is_corp FROM market_orders WHERE order_id=?1',
+  '       AND source=\'coop-corporation\'",',
+  '      params![request.order_id],|r|r.get(0)).optional()?;',
+  '    if corporate_order.is_some(){bail!("CORP_SELL_STOCK_MODIFY_DENIED");}',
+  '    // CH24+31 CORPORATE ORDER STOCK MODIFY GUARD END',
+  ''].join("\n")
+};
 const INCLUDE=[
 '',
 '// CH24+31 CORPORATE RUST SELL EXTENSION BEGIN',
@@ -137,6 +166,24 @@ function patch(source,which,remove=false){
   }
  }else if(which==="state"){
   put(GUARD,"    let wallet_division = request.wallet_division.unwrap_or(1000);");
+  for(const [kind,anchor,block] of [
+   ["fill","fn fill_order_in_db(database_path: &Path, request: FillOrderRequest) -> Result<FillOrderResponse> {",STANDARD_ORDER_GUARDS.fill],
+   ["cancel","fn cancel_order_in_db(","",STANDARD_ORDER_GUARDS.cancel],
+   ["modify","fn modify_order_in_db(","",STANDARD_ORDER_GUARDS.modify]
+  ]){
+   if(remove){
+    if(unique(text,block)!==1)throw Error("CORP_RUST_STOCK_GUARD_REMOVE_DRIFT:"+kind);
+    text=text.replace(block,"");
+   }else if(unique(text,block)===0){
+    const start=text.indexOf(anchor);
+    if(start<0||text.indexOf(anchor,start+anchor.length)>=0)
+     throw Error("CORP_RUST_STOCK_GUARD_ANCHOR_DRIFT:"+kind);
+    const begin=text.indexOf("    let transaction = connection.transaction()?;\\n".replace("\\n","\n"),start);
+    if(begin<0||begin-start>1800)throw Error("CORP_RUST_TRANSACTION_ANCHOR_DRIFT:"+kind);
+    const where=begin+"    let transaction = connection.transaction()?;".length+"\n".length;
+    text=text.slice(0,where)+block+text.slice(where);
+   }else if(unique(text,block)!==1)throw Error("CORP_RUST_STOCK_GUARD_DUPLICATE:"+kind);
+  }
   if(remove){
    if(unique(text,INCLUDE)!==1)throw Error("CORP_RUST_INCLUDE_DRIFT");
    text=text.replace(INCLUDE,"");
@@ -194,4 +241,4 @@ if(require.main===module){
    check:args.includes("--check"),remove:args.includes("--remove")}),null,2));
  }catch(e){console.error("E2B2 Rust blocked:",e.message);process.exitCode=1;}
 }
-module.exports={patch,run,PIN,STATE,RPC,EXT,TYPES,ARMS,CLAIM_TYPES,CLAIM_ARMS,GUARD,INCLUDE};
+module.exports={patch,run,PIN,STATE,RPC,EXT,TYPES,ARMS,CLAIM_TYPES,CLAIM_ARMS,GUARD,STANDARD_ORDER_GUARDS,INCLUDE};
