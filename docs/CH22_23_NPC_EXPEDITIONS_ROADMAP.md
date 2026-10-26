@@ -261,3 +261,21 @@ Changes:
 **CI diagnostics:** the workflow file is absent on `main`, so its `workflow_dispatch` UI cannot be invoked until the workflow is registered on the default branch. GitHub supports branch-local `push` workflows, but this alone does not prove the organization's Actions setting permits a run. Check repository **Settings → Actions → General** and the full Actions runs UI if new pushes still yield no runs. The connected run lookup only exposes PR-triggered runs; a zero response there is **not** proof that no `push` event ran.
 
 **Release acceptance still OPEN:** GitHub Node 22 job with pinned upstream checkout, native SQLite actual production-state-machine SIGKILL and restart, original NPC scout fitting verified inside a running server, two authenticated clients observing native probe launch/sweep, native 1.0 certainty signature, NPC warp, followed by independently implemented hacking, physical loot and warehouse delivery. No production enablement or merge claimed.
+
+## EX-03B11 — Native scan-to-scout-warp handoff (2026-10-26)
+
+**Implemented in PR #286, still DRAFT; all opt-in flags OFF.**
+
+Critical end-to-end bug: perfect original NPC scanner proof added a remote corporate intel record, but the rendezvous loop explicitly skipped the scout pilot. It could warp a different patrol to the hidden location while the physically fitted/authoritative scanner NPC never arrived to begin hacking.
+
+- For `NATIVE_PROBE_SCAN` intel only, the source-fitted, durable NPC scout now receives the FIRST native `expedition-scout-rendezvous` order. The existing expedition order bridge and native `warpToPoint` remain the only movement authority; native signatures are re-read and fingerprint-checked immediately before execution.
+- Before the scout arrives, ALL other patrols are withheld. A same-corp patrol may follow only after the scout is physically within 150 km of the revalidated actual site, the native site entity exists at its source coordinate, and `competition.observe` validates the real NPC witness and original controller. Catalog-only near-site claims are refused.
+- Added read-only `scoutWarpOrders`, `patrolWarpOrders`, `scoutOnGridVerified` counters to the existing `living-npc-expedition` runtime probe. These represent accepted warp **orders**, not proof of travel success; only the separate physical on-grid witness validates arrival. No extra scheduler, client RPC, bookmarks, items, wallets, or loot grants.
+- New direct integration regression against the **exact pinned original** `probeScanRuntime.buildSignatureScanResults` and `probeSceneRuntime.buildProbeSceneEntity`, through the production `createNpcProbeScanEvidence` and `createExpeditionDirector`: genuine 1.0 source scan -> scout order -> no premature follower -> materialized on-grid witness -> patrol order -> no duplicate replay.
+- Added negative tests for stale native controller during order execution, catalog-only arrival, waiting follow-up, and telemetry.
+
+**Executed in isolated V8 with actual source modules:** 27/27 director assertions; 2/2 pinned-original-scanner-to-director fixtures. Previous wiring tests pass 17/17 and were expanded with one EX-03B11 contract test. A complete Node 22 `node --test` run, pinned native SQLite SIGKILL, two authenticated clients, arrival simulation by real server physics, hacking, physical loot and warehouse settlement remain **UNVERIFIED**.
+
+**CI status:** A prior P0 workflow registration PR #327 merged a manual-dispatch entry onto `main`. No branch runs were visible in the checked GitHub Actions listing. Run the full workflow by choosing the EX-03 feature branch from Actions; registration alone does not prove SQLite or E2E acceptance.
+
+**Do not merge #286 or enable experimental flags** until source Node 22/SQLite, real two-client bubble visibility and cargo custody acceptance pass.
