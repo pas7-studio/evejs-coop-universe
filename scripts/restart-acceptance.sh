@@ -56,15 +56,24 @@ probe() {
   docker exec -i "$NAME" node - < "$REPO/scripts/coop-cargo-probe.cjs" 2>/dev/null
 }
 
-echo "=== 1. WAIT FOR A REAL LOAD (poll 20s, max ${WAIT_LOAD_MIN}min) ==="
+echo "=== 0. FLAGS IN THIS WORLD ==="
+node "$REPO/scripts/coop-flags.cjs" --live   --compose "$CODE/compose.yaml,$CODE/compose.coop-probe.yaml" 2>/dev/null | head -1
+
+echo "=== 1. CARGO TO PROVE (wait for a new load, or use cargo already in flight) ==="
 found=0
 for _ in $(seq 1 $((WAIT_LOAD_MIN * 3))); do
   out=$(events "$START" | grep "living-hauler-loaded" || true)
   if [ -n "$out" ]; then echo "$out"; found=1; break; fi
+  # Cargo already loaded and not yet delivered is just as valid a subject: the
+  # fleet will not load again before it completes the round trip.
+  if [ -n "$(probe | grep -o '"haulRows":[1-9]')" ]; then
+    echo "INFLIGHT_CARGO_PRESENT (no new load needed)"
+    found=1; break
+  fi
   sleep 20
 done
 if [ "$found" = "0" ]; then
-  echo "NO_LOAD_WITHIN_WINDOW"
+  echo "NO_CARGO_WITHIN_WINDOW"
   probe
   events "$START"
   exit 4
@@ -72,7 +81,7 @@ fi
 sleep 20
 echo "=== 2. DURABLE CARGO BEFORE RESTART ==="
 probe | tee "$TMP/before.json"
-BEFORE_HAUL=$(node -e 'const j=require(process.argv[1]);console.log(j.haulRows||0)' "$TMP/before.json")
+BEFORE_HAUL=$(node -e 'const fs=require("fs");const j=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));console.log(j.haulRows||0)' "$TMP/before.json")
 echo "DURABLE_BEFORE $BEFORE_HAUL"
 if [ "$BEFORE_HAUL" = "0" ]; then echo "FAIL_NO_DURABLE_ROW_BEFORE_RESTART"; exit 5; fi
 

@@ -29,6 +29,9 @@ client/
 EVE/
 ResFiles/
 upstream/
+# ...but our own atomic upstream patch series IS versioned (patches/upstream/).
+!patches/upstream/
+!patches/upstream/**
 vendor/
 *.zip
 *.7z

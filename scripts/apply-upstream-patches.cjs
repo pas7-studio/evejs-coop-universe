@@ -15,6 +15,14 @@
 //   node scripts/apply-upstream-patches.cjs --checkout <Code dir> --reverse
 //   node scripts/apply-upstream-patches.cjs --checkout <Code dir> --apply \
 //        --branch coop/pas7std --commit
+//
+// Two constraints learned the hard way (2026-10-26):
+//   * --check CONVERGES: a patch that is not applied yet gets applied, so this
+//     is "make the series present", never a dry run;
+//   * one patch per file. A patch stacked on another patch for the same file
+//     cannot be verified by "can it be applied / reversed": both directions can
+//     pass, so the reported state is wrong and the tool silently does nothing.
+//     Extend the older patch for that file instead of adding a second one.
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");

@@ -48,3 +48,14 @@ Nothing in this series changes a client binary, authentication or CCP assets.
 |---|---|---|
 | `0001` `nativeNpcStore: export listNativeCargo` | `listNativeCargo()` existed but was never exported. | Stock omission; a caller cannot scan cargo rows whose entity is gone. |
 | `0002` `nativeNpcService: NPC capacitor recharge rate` | Native NPC hulls got `capacitorCapacity` but never `capacitorRechargeRate`, so CCP passive recharge never ran and a cap-hungry module worked once. | Replacing it in L2 meant topping up the capacitor before every module activation — a symptom fix. |
+
+## Two hard rules of the applier
+
+1. **`--check` converges.** A patch that is missing is applied. It is not a
+   dry run, so never treat it as a read-only audit.
+2. **One patch per file.** Two patches for the same file cannot be verified:
+   the "can it be applied / reversed" probe succeeds or fails for both, so the
+   tool misreports and silently changes nothing (seen on 2026-10-26 with a
+   follow-up capacitor patch). Extend the older patch for that file instead.
+   `0003-native-npc-sessionless-capacitor.patch` carries both halves of the NPC
+   recharge defect for this reason.

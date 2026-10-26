@@ -1,0 +1,60 @@
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0002/0002] nativeNpcService: give native NPC hulls a capacitor recharge rate
+
+Native NPC entities received capacitorCapacity but never capacitorRechargeRate,
+so the CCP passive recharge loop in runtime.js (which requires a positive
+recharge rate) never ran for them. A cap-hungry module such as a strip miner
+could activate once and then failed with NOT_ENOUGH_CAPACITOR forever.
+
+The rate is taken from the same hull dogma attribute the fitting service uses,
+so NPCs recharge like real ships at the same non-linear CCP curve. This is a
+native fix for a native omission; it does not add a co-op timer or grant
+capacitor out of thin air.
+
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+Local overlay: integration/* is NOT part of this patch series.
+---
+--- a/server/src/space/npc/nativeNpcService.js
++++ b/server/src/space/npc/nativeNpcService.js
+@@ -251,6 +251,10 @@
+       toFiniteNumber(entity.capacitorCapacity, 0),
+       toFiniteNumber(getTypeAttributeValue(supportHullTypeID, "capacitorCapacity"), 0),
+     );
++    entity.capacitorRechargeRate = Math.max(
++      toFiniteNumber(entity.capacitorRechargeRate, 0),
++      toFiniteNumber(getTypeAttributeValue(supportHullTypeID, "rechargeRate"), 0),
++    );
+     entity.scanResolution = Math.max(
+       toFiniteNumber(entity.scanResolution, 0),
+       toFiniteNumber(getTypeAttributeValue(supportHullTypeID, "scanResolution"), 0),
+@@ -265,6 +269,7 @@
+     entity.passiveDerivedState.maxTargetRange = entity.maxTargetRange;
+     entity.passiveDerivedState.scanResolution = entity.scanResolution;
+     entity.passiveDerivedState.capacitorCapacity = entity.capacitorCapacity;
++    entity.passiveDerivedState.capacitorRechargeRate = entity.capacitorRechargeRate;
+   }
+   return entity;
+ }
+@@ -331,6 +336,14 @@
+     toFiniteNumber(entity.capacitorCapacity, 0),
+     dogmaCapacitorCapacity,
+   );
++  // Native NPC hulls never received a recharge rate, so CCP passive capacitor
++  // recharge never ran for them and a module that needs cap worked exactly once.
++  if (toFiniteNumber(entity.capacitorRechargeRate, 0) <= 0) {
++    entity.capacitorRechargeRate = Math.max(
++      0,
++      toFiniteNumber(getTypeAttributeValue(shipTypeID, "rechargeRate"), 0),
++    );
++  }
+   if (typeHasEffectName(shipTypeID, "entitySuperWeapon")) {
+     entity.component_turboshield = 0;
+   }
+@@ -340,6 +353,7 @@
+     entity.passiveDerivedState.maxTargetRange = entity.maxTargetRange;
+     entity.passiveDerivedState.maxLockedTargets = entity.maxLockedTargets;
+     entity.passiveDerivedState.capacitorCapacity = entity.capacitorCapacity;
++    entity.passiveDerivedState.capacitorRechargeRate = entity.capacitorRechargeRate;
+   }
+   return entity;
+ }

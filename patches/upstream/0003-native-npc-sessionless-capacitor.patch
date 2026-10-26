@@ -1,0 +1,122 @@
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0003/0003] NPC capacitor: advance it without a session and give every hull a recharge rate
+
+runtime.js advances a ship capacitor only inside active module cycle bookkeeping,
+so a native NPC with no session never recovered: a strip miner activated once and
+then failed with NOT_ENOUGH_CAPACITOR forever.
+
+Two halves of the same defect:
+  * the CCP non-linear curve (with the 1% floor) is advanced for sessionless
+    ships from the behaviour loop;
+  * the recharge rate is a property of the HULL, but it was only filled in by
+    nativeNpcService, which co-op mining fleets never pass through. Those hulls
+    kept tau = 0 and the new advance returned immediately (live evidence:
+    fleet 2 miners at 3-5% charge, NOT_ENOUGH_CAPACITOR every cycle). The rate
+    is now resolved lazily from the same dogma attribute the fitting service
+    uses and cached on the entity.
+
+No capacitor is granted out of thin air: the same curve real ships use.
+
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+Local overlay: integration/* is NOT part of this patch series.
+---
+--- a/server/src/space/npc/npcBehaviorLoop.js
++++ b/server/src/space/npc/npcBehaviorLoop.js
+@@ -4513,6 +4513,7 @@ function tickScene(scene, now) {
+     if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {
+       continue;
+     }
++    advanceSessionlessCapacitor(scene.getEntityByID(controller.entityID), now);
+     tickController(scene, controller, now);
+     processed += 1;
+   }
+@@ -4547,6 +4548,7 @@ function tickControllersByEntityID(scene, entityIDs, now) {
+     if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {
+       continue;
+     }
++    advanceSessionlessCapacitor(scene.getEntityByID(controller.entityID), now);
+     tickController(scene, controller, now);
+   }
+ }
+@@ -4646,6 +4648,81 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
+   };
+ }
+ 
++// CCP non-linear capacitor recharge (dC/dt = (10*Cmax/tau)*(sqrt(r)-r)) for a
++// native NPC that has no session. runtime.js advances capacitor only inside
++// active module cycle bookkeeping, so an idle NPC never recovered and a
++// cap-hungry module could activate exactly once. The same curve is used, with
++// the 1% floor CCP keeps so a fully drained ship still recovers.
++// The recharge rate is a property of the HULL, not of the code path that
++// spawned the ship. Patch 0002 fills it in nativeNpcService, which co-op mining
++// fleets never pass through, so those hulls kept tau = 0 and never recovered a
++// single capacitor unit ("NOT_ENOUGH_CAPACITOR" every cycle). Resolve it lazily
++// here instead of duplicating the rule in every spawner.
++let resolveNpcRechargeRate = null;
++function npcRechargeRateOf(entity) {
++  const declared = toFiniteNumber(entity.capacitorRechargeRate, 0);
++  if (declared > 0) {
++    return declared;
++  }
++  try {
++    if (!resolveNpcRechargeRate) {
++      resolveNpcRechargeRate = require(path.join(
++        __dirname,
++        "../../services/fitting/liveFittingState",
++      )).getTypeAttributeValue;
++      if (typeof resolveNpcRechargeRate !== "function") {
++        resolveNpcRechargeRate = null;
++        return 0;
++      }
++    }
++    const resolved = toFiniteNumber(
++      resolveNpcRechargeRate(toFiniteNumber(entity.typeID, 0), "rechargeRate"),
++      0,
++    );
++    if (resolved > 0) {
++      entity.capacitorRechargeRate = resolved;
++      if (entity.passiveDerivedState && typeof entity.passiveDerivedState === "object") {
++        entity.passiveDerivedState.capacitorRechargeRate = resolved;
++      }
++    }
++    return resolved;
++  } catch (_error) {
++    return 0;
++  }
++}
++
++function advanceSessionlessCapacitor(entity, now) {
++  if (!entity || entity.kind !== "ship" || entity.session) {
++    return;
++  }
++  const capacity = toFiniteNumber(entity.capacitorCapacity, 0);
++  const tauMs = npcRechargeRateOf(entity);
++  if (capacity <= 0 || tauMs <= 0 || !Number.isFinite(Number(now))) {
++    return;
++  }
++  const previousAtMs = toFiniteNumber(entity.capacitorRechargedAtMs, 0);
++  entity.capacitorRechargedAtMs = now;
++  if (previousAtMs <= 0 || now <= previousAtMs) {
++    return;
++  }
++  const dtSeconds = Math.min(5000, now - previousAtMs) / 1000;
++  const tauSeconds = tauMs / 1000;
++  let ratio = Math.min(1, Math.max(0, toFiniteNumber(entity.capacitorChargeRatio, 1)));
++  if (ratio >= 1) {
++    return;
++  }
++  const steps = Math.max(1, Math.ceil(dtSeconds));
++  const stepSeconds = dtSeconds / steps;
++  for (let step = 0; step < steps && ratio < 1; step += 1) {
++    const bounded = Math.max(0.01, ratio);
++    ratio += ((10 / tauSeconds) * (Math.sqrt(bounded) - bounded)) * stepSeconds;
++  }
++  entity.capacitorChargeRatio = Math.min(1, Math.max(0, ratio));
++  if (entity.conditionState && typeof entity.conditionState === "object") {
++    entity.conditionState.charge = entity.capacitorChargeRatio;
++  }
++}
++
+ module.exports = {
+   normalizeBehaviorOverrides,
+   tickScene,

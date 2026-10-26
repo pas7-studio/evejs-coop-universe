@@ -1,0 +1,21 @@
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0001/0002] nativeNpcStore: export listNativeCargo
+
+listNativeCargo() exists but was not exported, so no caller could enumerate
+native cargo rows globally. Co-op restart recovery needs a read-only scan
+(the per-entity helper cannot find rows whose entity is gone). No behaviour
+change for existing callers.
+
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+Local overlay: integration/* is NOT part of this patch series.
+---
+--- a/server/src/space/npc/nativeNpcStore.js
++++ b/server/src/space/npc/nativeNpcStore.js
+@@ -602,6 +602,7 @@
+   listNativeModulesForEntity,
+   upsertNativeModule,
+   removeNativeModule,
++  listNativeCargo,
+   listNativeCargoForEntity,
+   upsertNativeCargo,
+   removeNativeCargo,

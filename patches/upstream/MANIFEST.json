@@ -1,0 +1,33 @@
+{
+  "pin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "policy": "applied only by scripts/apply-upstream-patches.cjs, before the L2 overlay",
+  "patches": [
+    {
+      "file": "0001-native-npc-store-export-list-cargo.patch",
+      "sha256": "3b3c510919c07fac8bfcc1a46751807e0756a712297cae8be0b516cf0908ff44",
+      "files": [
+        "server/src/space/npc/nativeNpcStore.js"
+      ],
+      "status": "not-sent",
+      "note": "trivial export, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0002-native-npc-capacitor-recharge.patch",
+      "sha256": "00a2ca6b90ab7e1ac9bae4afc5a8398cca597fe3bb45280c4cd6a391f5554b19",
+      "files": [
+        "server/src/space/npc/nativeNpcService.js"
+      ],
+      "status": "not-sent",
+      "note": "native NPC capacitor recharge rate, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0003-native-npc-sessionless-capacitor.patch",
+      "sha256": "4bd6fd13fa074c855121bb362ad44d814ddf7926190cae8fd0763723b2eceeb3",
+      "files": [
+        "server/src/space/npc/npcBehaviorLoop.js"
+      ],
+      "status": "not-sent",
+      "note": "sessionless capacitor advance AND the hull recharge rate resolved at use, so every NPC spawn path recharges; candidate for an atomic upstream PR"
+    }
+  ]
+}
