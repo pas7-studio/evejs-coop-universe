@@ -1249,3 +1249,47 @@ test("first-time orphan cargo adoption does not require an unrelated repeat-adop
  assert.equal(result.status,"ADOPTED");
  assert.equal(target.state,"loaded");
 });
+
+test("one invalid tagged original cargo row blocks the entire NPC mining haul batch",()=>{
+ for(const [label,patch] of [
+  ["zero quantity",{quantity:0}],
+  ["negative quantity",{quantity:-1}],
+  ["zero type",{typeID:0}],
+  ["bad cargo identity",{cargoID:0}],
+  ["missing miner",{coopHaulFromMinerID:undefined}],
+  ["zero native carrier",{entityID:0}],
+  ["transient source",{transient:true}],
+  ["module-bound source",{moduleID:17}]
+ ]){
+  resetForTests();
+  const source=[orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112,...patch})];
+  const store=fakeStore(source);
+  const before=structuredClone(store.listNativeCargo()),target=fleet();
+  let flushes=0;
+  const result=adopt(sceneWith([hauler,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"ORIGINAL_HAUL_CARGO_UNVERIFIED",label);
+  assert.equal(result.adopted,0,label);
+  assert.equal(store.writes.length,0,label);
+  assert.equal(flushes,0,label);
+  assert.equal(target.state,"mining",label);
+  assert.deepEqual(store.listNativeCargo(),before,label);
+ }
+});
+
+test("corrupt cargo tagged to another system/fleet cannot block a clean original haul",()=>{
+ const unrelated=orphan({cargoID:8111,entityID:900000000123,
+  quantity:-100,coopHaulFleetID:999,coopHaulSystemID:30000146});
+ const store=fakeStore([orphan(),unrelated]);
+ const target=fleet(),ship={...hauler};
+ const result=adopt(sceneWith([ship,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(result.adopted,1);
+ assert.equal(store.writes.length,1);
+ assert.equal(target.state,"loaded");
+ assert.equal(store.listNativeCargo().find(x=>x.cargoID===8111).quantity,-100);
+});
