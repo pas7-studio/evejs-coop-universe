@@ -6,6 +6,8 @@ const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypt
 const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
 const TESTS=Object.freeze([
  "tests/coop-lw04d-original-native-chain-proof.test.mjs",
+ "tests/coop-lw04e-original-warehouse-title-transfer.test.mjs",
+ "tests/coop-native-station-ore-settlement.test.mjs",
  "tests/coop-npc-industry-original-game-store-kernel.test.mjs",
  "tests/coop-npc-native-economy-director.test.mjs",
  "tests/coop-npc-factory-original-sale-finance-chain.test.mjs",
@@ -19,7 +21,7 @@ const OVERLAY=Object.freeze(["coopNativeMiningAtomic","coopNativeHaulTransferAto
  "coopNativeStationOreSettlement","coopNpcRefinery","coopNpcIndustryOfflineAtomic",
  "coopNpcIndustryNativeBindings","coopNpcNativeEconomyDirector",
  "coopNpcIndustryOriginalSaleAudit","coopNpcIndustryOriginalWalletWitness",
- "coopLivingWorldNativeChainProof"]);
+ "coopLivingWorldNativeChainProof","coopNpcOriginalWarehouseTitleTransfer"]);
 const RUST=Object.freeze(["ReserveNpcSellOrder","ActivateNpcSellOrder",
  "GetNpcSellOrder","ClaimNpcSellOrder","FinalizeNpcSellOrder","GetNpcSellClaim"]);
 function parse(argv){
