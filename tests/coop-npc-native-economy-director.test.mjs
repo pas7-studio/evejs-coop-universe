@@ -18,7 +18,8 @@ function fixture({target=100}={}) {
  const plan={ownerID:OWNER,stationID:STATION,facilityID:STATION,blueprintItemID:BPO,productTypeID:TYPE,outputQuantity:100};
  const planner={plan:()=>({status:"PLAN_READY",jobs:[plan]})};
  const native={
-  quote:p=>({verifiedNative:true,totalCost:10,ownerID:OWNER,blueprintID:BPO,productTypeID:TYPE,facilityID:STATION}),
+  quote:p=>({verifiedNative:true,cost:9,tax:1,totalCost:10,
+   ownerID:OWNER,blueprintID:BPO,productTypeID:TYPE,facilityID:STATION}),
   installOnce:(p,q,id)=>{installCalls++;if(job)throw Error("DUP_INSTALL");wallet-=10;
     debit={verifiedNative:true,jobID:970000000000000,ownerID:OWNER,amountCents:1000};
     job={jobID:970000000000000,ownerID:OWNER,coopOperationID:id,productTypeID:TYPE,blueprintID:BPO,status:1};
@@ -363,3 +364,120 @@ test("valid two-decimal sale price retains exact original corporate revenue",()=
  assert.equal(result.status,"SOLD");
  assert.equal(result.revenueCents,120500);
 }));
+
+
+test("native factory refuses invalid cost/tax/total BEFORE recording an ambiguous paid install",()=>run(f=>{
+ const d=f.create();
+ assert.equal(d.tick(ctx).status,"PREPARED");
+ const valid=f.native.quote;
+ for(const bad of [
+  {totalCost:10.004},{cost:8.99},{tax:1.001},
+  {totalCost:"10"},{cost:"9"},{tax:null}
+ ]){
+  f.native.quote=plan=>({...valid(plan),...bad});
+  const r=d.tick(ctx);
+  assert.equal(r.reason,"UNVERIFIED_CANONICAL_QUOTE",JSON.stringify(bad));
+  assert.equal(Object.values(d.inspect().entries)[0].phase,"PREPARED");
+  assert.equal(f.installs,0);
+  assert.equal(f.balance,1000);
+ }
+ f.native.quote=valid;
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ assert.equal(f.installs,1);
+ assert.equal(f.balance,990);
+}));
+test("canonical zero-cost manufacturing quote is allowed to reach original atomic authority",()=>run(f=>{
+ const d=f.create();
+ assert.equal(d.tick(ctx).status,"PREPARED");
+ const valid=f.native.quote;
+ f.native.quote=plan=>({...valid(plan),cost:0,tax:0,totalCost:0});
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ assert.equal(f.installs,1);
+}));
+
+
+test("completed NPC manufacturing cannot become SOLD for a different original native Rust sell order",()=>run(f=>{
+ const d=f.create();
+ assert.equal(d.tick(ctx).status,"PREPARED");
+ assert.equal(d.tick(ctx).status,"INSTALLED");
+ f.setElapsed(true);
+ assert.equal(d.tick(ctx).status,"READY");
+ assert.equal(d.tick(ctx).status,"DELIVERED");
+ assert.equal(d.tick(ctx).status,"LISTED");
+ f.sell(100);
+ const original=f.market.getOrder;
+ for(const drift of [
+  {stationID:STATION+1},
+  {typeID:TYPE+1},
+  {sourceItemID:1990000201},
+  {originalQuantity:101},
+  {price:12.01},
+  {price:0.004},
+  {price:"12"}
+ ]){
+  f.market.getOrder=id=>({...original(id),...drift});
+  const result=d.tick(ctx);
+  assert.equal(result.status,"BLOCKED",JSON.stringify(drift));
+  assert.equal(result.reason,"NATIVE_SALE_ORIGINAL_ORDER_CUSTODY_DRIFT");
+  assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+ }
+ f.market.getOrder=original;
+ const completed=d.tick(ctx);
+ assert.equal(completed.status,"SOLD");
+ assert.equal(completed.revenueCents,120000);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"SOLD");
+}));
+
+
+test("NPC factory cannot count a paid Rust sell fill below the original durable ASK",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ f.sell(100,11.99);
+ assert.throws(()=>d.tick(ctx),/NATIVE_SALE_LEDGER_INVALID/);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+}));
+test("paid NPC partial sell fill must have safe integer cent gross before wallet evidence",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ // A 99-unit fill at 1e12 ISK yields 9.9e15 cents (outside JS safe
+ // integer); even a matching rounded wallet receipt cannot certify it.
+ f.sell(99,1000000000000);
+ assert.throws(()=>d.tick(ctx),/NATIVE_SALE_LEDGER_INVALID/);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+}));
+test("genuine higher Rust buyer match price and original ASK minimum both remain valid",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);
+ d.tick(ctx);d.tick(ctx);d.tick(ctx);
+ f.sell(100,12.05);
+ assert.equal(d.tick(ctx).status,"SOLD");
+ assert.equal(Object.values(d.inspect().entries)[0].revenueCents,120500);
+}));
+
+
+test("read-only NPC partial sale remains visible if factory has no new eligible job",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+ assert.equal(d.tick(ctx).status,"LISTED");
+ f.sell(50);
+ f.setNow(1100000);
+ f.planner.plan=()=>({status:"NO_ELIGIBLE_JOB",jobs:[],
+  blocked:[{typeID:TYPE,reason:"NEEDS_MINERALS"}]});
+ const r=d.tick(ctx);
+ assert.equal(r.status,"PARTIALLY_SOLD");
+ assert.equal(r.filled,50);
+ assert.equal(r.remaining,50);
+ assert.equal(Object.values(d.inspect().entries)[0].phase,"LISTED");
+ assert.equal(f.installs,1);
+},{target:200}));
+test("native listed waiting for buyer is not overwritten by unrelated planner no-job state",()=>run(f=>{
+ const d=f.create();
+ d.tick(ctx);d.tick(ctx);f.setElapsed(true);d.tick(ctx);d.tick(ctx);
+ assert.equal(d.tick(ctx).status,"LISTED");
+ f.setNow(1100000);
+ f.planner.plan=()=>({status:"NO_ELIGIBLE_JOB",jobs:[]});
+ assert.equal(d.tick(ctx).status,"LISTED_AWAITING_BUYER");
+ assert.equal(f.installs,1);
+},{target:200}));

@@ -12,6 +12,7 @@ $node=(Get-Command node -ErrorAction Stop).Source
 $files=@(
  "tests/coop-alife12-station-trip-journal.test.mjs",
  "tests/coop-alife12-station-trip-recovery.test.mjs",
+ "tests/coop-alife13-startup-cargo-audit.test.mjs",
  "tests/coop-native-mining-fleet-durable.test.mjs",
  "tests/coop-native-haul-transfer-atomic.test.mjs",
  "tests/coop-native-haul-transfer-sqlite.test.mjs",

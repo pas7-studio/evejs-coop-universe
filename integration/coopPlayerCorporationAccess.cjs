@@ -14,15 +14,32 @@ const QUERY={115:1048576n,116:2097152n,117:4194304n,118:8388608n,119:16777216n,1
 const WALLETS={1000:134217728n,1001:268435456n,1002:536870912n,1003:1073741824n,1004:2147483648n,1005:4294967296n,1006:8589934592n};
 const FACTORY=1024n;
 const BP_MASK=1024n|1125899906842624n|2251799813685248n;
+// Native characterState.getCharacterRecord(id) returns a record keyed by id;
+// it does NOT guarantee an embedded characterID. Confirm account+session
+// identity, and verify the optional field only when actually present.
+function selectedCharacter(session){
+  const id=integer(session?.characterID),alias=integer(session?.charid);
+  if(id&&alias&&id!==alias)return 0;
+  return id||alias;
+}
+function authenticatedCharacter(session,id,record){
+  if(!pos(id)||selectedCharacter(session)!==id||!record||
+    session?.socket?.destroyed===true)return false;
+  const account=integer(session?.userid),owner=integer(record.accountId??record.accountID);
+  if(!pos(account)||!pos(owner)||account!==owner)return false;
+  const embedded=record.characterID??record.charID;
+  if(embedded!==undefined&&embedded!==null&&integer(embedded)!==id)return false;
+  return true;
+}
 function createAuthority({getCorporation,getMember,getCharacter,getOffices,getDockedStation,getItem,getDirectorRole,getPersonnelRole,getRentRole,getRuntime}={}){
   if([getCorporation,getMember,getCharacter,getOffices,getDockedStation,getItem,getDirectorRole,getPersonnelRole,getRentRole,getRuntime]
     .some(x=>typeof x!=="function"))throw Error("CH31_NATIVE_CORPORATION_AUTHORITIES_REQUIRED");
   function actor(session,corpID){
-    const id=integer(session?.characterID??session?.charid),corp=integer(corpID);
+    const id=selectedCharacter(session),corp=integer(corpID);
     if(!pos(id)||!pos(corp)||integer(session?.corporationID??session?.corpid)!==corp)return null;
     const record=getCorporation(corp),char=getCharacter(id),member=getMember(corp,id);
     if(!record||record.isNPC!==false||integer(record.corporationID)!==corp||
-      !char||integer(char.characterID??char.charID)!==id||integer(char.corporationID)!==corp||
+      !authenticatedCharacter(session,id,char)||integer(char.corporationID)!==corp||
       !member||integer(member.characterID)!==id||integer(member.corporationID)!==corp)return null;
     const directorMask=mask(getDirectorRole());
     if(directorMask===0n)return null;
@@ -82,9 +99,7 @@ function createAuthority({getCorporation,getMember,getCharacter,getOffices,getDo
       application.deleted===true)return false;
     const previous=integer(application.status);
     if([4,5,6].includes(st))return canRecruit(session,corp)&&[0,1,5].includes(previous);
-    const char=integer(session?.characterID??session?.charid);
-    if(char!==target||integer(getCharacter(target)?.characterID??getCharacter(target)?.charID)!==char)
-      return false;
+    if(!authenticatedCharacter(session,target,getCharacter(target)))return false;
     if(st===2||st===3)return [6,8].includes(previous);
     if(st===7||st===1)return [0,1].includes(previous);
     return false;
@@ -113,8 +128,8 @@ function createAuthority({getCorporation,getMember,getCharacter,getOffices,getDo
   function authorizeInventoryMove({session,sourceItemDescriptor,destination}={}){
     if(sourceItemDescriptor?.sourceKind==="nativeWreck")return true; // stock wreck rights still required
     if(sourceItemDescriptor?.sourceKind!=="inventory"||!sourceItemDescriptor.item||!destination)return false;
-    const item=sourceItemDescriptor.item,owner=integer(item.ownerID),id=integer(session?.characterID??session?.charid);
-    if(!pos(id)||!pos(owner)||!pos(integer(item.itemID)))return false;
+    const item=sourceItemDescriptor.item,owner=integer(item.ownerID),id=selectedCharacter(session);
+    if(!authenticatedCharacter(session,id,getCharacter(id))||!pos(owner)||!pos(integer(item.itemID)))return false;
     const corporation=getCorporation(owner);
     if(owner!==id){
       // No fleet membership or stale session permits taking corp or foreign personal assets.

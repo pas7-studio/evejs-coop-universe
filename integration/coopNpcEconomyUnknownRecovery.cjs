@@ -3,8 +3,26 @@
 // Only trust exact persisted native job, debit and item receipts. Never replay
 // a potentially committed native write, market listing or wallet transfer.
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const cents=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0&&x<=1e12&&
- Number.isSafeInteger(Math.round(x*100))?Math.round(x*100):null;
+// Source wallet/quote amounts must ALREADY be exact integer cents. Do
+// not invent missing cents when interpreting persisted crash receipts.
+const cents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0||x>1e12)return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
+function quotedPayment(e,job){
+ const quote=e.quote,total=cents(quote?.totalCost),
+  base=cents(quote?.cost),tax=cents(quote?.tax);
+ if(total===null||base===null||tax===null||base+tax!==total||
+    quote.verifiedNative!==true||
+    quote.ownerID!==e.ownerID||quote.facilityID!==e.stationID||
+    quote.blueprintID!==e.plan.blueprintItemID||
+    quote.productTypeID!==e.typeID||
+    job.coopQuoteSignature!==JSON.stringify(quote)||
+    cents(job.totalCost)!==total)return null;
+ return total;
+}
 const blocked=reason=>({ok:false,reason});
 function reconcileUnknown({entry,native}={}){
  if(!entry||!native||![
@@ -29,13 +47,8 @@ function reconcileUnknown({entry,native}={}){
     job.outputLocationID!==e.stationID||job.outputFlagID!==4)
    return blocked("NATIVE_RECOVERY_JOB_NOT_ATTESTED");
   if(e.phase==="INSTALL_UNKNOWN"){
-   const quote=e.quote,amount=cents(quote?.totalCost);
-   if(amount===null||quote?.verifiedNative!==true||
-      quote.ownerID!==e.ownerID||quote.facilityID!==e.stationID||
-      quote.blueprintID!==plan.blueprintItemID||
-      quote.productTypeID!==e.typeID||
-      job.coopQuoteSignature!==JSON.stringify(quote)||
-      cents(job.totalCost)!==amount||![1,2,3].includes(job.status))
+   const amount=quotedPayment(e,job);
+   if(amount===null||![1,2,3].includes(job.status))
     return blocked("NATIVE_RECOVERY_INSTALL_QUOTE_OR_STATUS_INVALID");
    const debit=native.getIndustryDebit(job.jobID);
    if(!debit||debit.verifiedNative!==true||debit.jobID!==job.jobID||
@@ -45,8 +58,13 @@ function reconcileUnknown({entry,native}={}){
    return {ok:true,status:"RECOVERED_INSTALLED",patch:{phase:"INSTALLED",
     jobID:job.jobID,installCostCents:amount}};
   }
+  // A DELIVERED item is NOT proof a manufacturing job was fully paid.
+  // Re-attest the same original quote, exact cost/tax and signed job
+  // before recognizing the lost delivery acknowledgement.
+  const amount=quotedPayment(e,job);
   if(job.jobID!==e.jobID||job.status!==4||
-     !pos(e.installCostCents)&&e.installCostCents!==0)
+     !Number.isSafeInteger(e.installCostCents)||e.installCostCents<0||
+     amount===null||e.installCostCents!==amount)
    return blocked("NATIVE_RECOVERY_DELIVERY_JOB_NOT_ATTESTED");
   const paid=native.getIndustryDebit(job.jobID);
   if(!paid||paid.verifiedNative!==true||paid.jobID!==job.jobID||

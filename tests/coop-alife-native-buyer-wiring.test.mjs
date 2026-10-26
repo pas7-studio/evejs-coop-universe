@@ -15,8 +15,8 @@ const buyer=read("integration/coopAlifeNativeBuyerRuntime.cjs");
 const dispatch=read("integration/coopAlifeNativeBuyerDispatch.cjs");
 const manifest=JSON.parse(read("tests/scenarios/coop-049-alife-native-buyer-e2e.json"));
 test("single existing 30-second world timer owns native buyer dispatch",()=>{
- const timer=runtime.indexOf("timer=setInterval(()=>{");
- const observation=runtime.indexOf('safeNpcPhase("alife-native-economy-observe"',timer);
+ const timer=runtime.indexOf("timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{");
+ const observation=runtime.indexOf('runPhase("alife-native-economy-observe"',timer);
  const purchase=runtime.indexOf('dispatchAlifeNativeBuyer',observation);
  assert.ok(timer>=0&&observation>timer);
  assert.match(runtime,/alifeBuyerRuntime\.tick\(\{snapshot:snap,decision/);

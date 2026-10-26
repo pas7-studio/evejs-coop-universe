@@ -120,3 +120,47 @@ test('native item row with mismatched itemID refuses install',()=>withFixture(f=
  let snap=f.snapshot();assert.match(f.installer().installOnce(plan,quote,OP).error,/NATIVE_ITEM_KEY_MISMATCH/);
  assert.deepEqual(f.snapshot(),snap);
 }));
+
+
+test('sub-cent native NPC corporate balance never changes when installing real production',()=>withFixture(f=>{
+ const corp=f.read('corporationRuntime','corporations\u001f1000010');
+ corp.wallet.divisions['1000'].balance=120.004;
+ f.db.prepare('UPDATE corporationRuntime SET json=? WHERE key=?')
+  .run(JSON.stringify(corp),'corporations\u001f1000010');
+ const before=f.snapshot(),r=f.installer().installOnce(plan,quote,OP);
+ assert.equal(r.status,'BLOCKED');
+ assert.match(r.error,/CORPORATE_WALLET_MISSING/);
+ assert.deepEqual(f.snapshot(),before);
+ assert.equal(f.read('industryJobs','jobs\u001f970000000000000'),null);
+}));
+test('sub-cent native production quote is rejected before any original inventory debit',()=>withFixture(f=>{
+ const bad={...quote,cost:10.024,totalCost:11.134};
+ const before=f.snapshot();
+ assert.throws(()=>f.installer().installOnce(plan,bad,OP),/NATIVE_QUOTE_MISMATCH/);
+ assert.deepEqual(f.snapshot(),before);
+}));
+test('one-cent mismatch between production cost, tax and total is not paid silently',()=>withFixture(f=>{
+ const bad={...quote,totalCost:11.14};
+ const before=f.snapshot();
+ assert.throws(()=>f.installer().installOnce(plan,bad,OP),/NATIVE_QUOTE_MISMATCH/);
+ assert.deepEqual(f.snapshot(),before);
+}));
+test('physical mineral stacksize mismatch cannot be spent as a valid original item',()=>withFixture(f=>{
+ const item=f.read('items','92');item.stacksize=4;
+ f.db.prepare('UPDATE items SET json=? WHERE key=?').run(JSON.stringify(item),'92');
+ const before=f.snapshot(),result=f.installer().installOnce(plan,quote,OP);
+ assert.equal(result.status,'BLOCKED');
+ assert.match(result.error,/INSUFFICIENT_NATIVE_MINERALS/);
+ assert.deepEqual(f.snapshot(),before);
+}));
+test('non-numeric wallet and quote strings are not accepted as native currency amounts',()=>withFixture(f=>{
+ const bad={...quote,totalCost:'11.13'};
+ assert.throws(()=>f.installer().installOnce(plan,bad,OP),/NATIVE_QUOTE_MISMATCH/);
+ const corp=f.read('corporationRuntime','corporations\u001f1000010');
+ corp.wallet.divisions['1000'].balance='120.19';
+ f.db.prepare('UPDATE corporationRuntime SET json=? WHERE key=?')
+  .run(JSON.stringify(corp),'corporations\u001f1000010');
+ const before=f.snapshot(),r=f.installer().installOnce(plan,quote,OP);
+ assert.match(r.error,/CORPORATE_WALLET_MISSING/);
+ assert.deepEqual(f.snapshot(),before);
+}));

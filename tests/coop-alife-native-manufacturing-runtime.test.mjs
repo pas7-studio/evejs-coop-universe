@@ -141,8 +141,10 @@ test("source-only adapter has no clock, wallet, original market or inventory mut
   "../integration/coopAlifeNativeManufacturingRuntime.cjs",import.meta.url),"utf8");
  assert.doesNotMatch(source,/\bsetInterval\s*\(|\bsetTimeout\s*\(/);
  assert.doesNotMatch(source,/marketDaemonClient|grantItem|\.transact\(|createDirector\(/);
- const world=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
- assert.match(world,/alifeManufacturingRuntime\.tick\(/);
- assert.match(world,/EVEJS_COOP_ALIFE_ECONOMY_ACT==="1"/);
- assert.match(world,/LIVE_NATIVE_MANUFACTURING_BINDINGS_NOT_AVAILABLE|createRuntimeAlifeManufacturing/);
+ // This PR installs ONLY the source admission module. The A-Life 30s
+ // runtime wiring is a separate reviewed integration step; do not pretend
+ // a module export implies a verified live financial director.
+ assert.match(source,/LIVE_NATIVE_MANUFACTURING_BINDINGS_NOT_AVAILABLE/);
+ assert.match(source,/supportsLiveRuntime===true/);
+ assert.match(source,/supportsNativeMutation:typeof resolveDirector/);
 });
