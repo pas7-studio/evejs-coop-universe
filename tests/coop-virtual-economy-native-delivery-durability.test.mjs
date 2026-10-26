@@ -393,3 +393,65 @@ test("P0: previous valid persisted NPC role and native checkpoint survive restar
  assert.equal(restored.advance([{id:"npc-miner",systemID:30000144}]).steps,0);
  assert.equal(restored.syncNativeDeliveries({[system]:100}).quantity,0);
 }));
+
+test("P0: invalid later original depot total never leaves earlier delivery credited only in memory",()=>scoped(({file})=>{
+ const econ=createEconomy({file,clock:()=>100});
+ const contaminated={"30000142":100,"30000144":Symbol("unreadable-total")};
+ assert.deepEqual(econ.syncNativeDeliveries(contaminated),
+  {status:"INVALID_TOTALS",quantity:0});
+ assert.equal(fs.existsSync(file),false,"no prepared-only native supply state");
+ assert.deepEqual(econ.snapshot().systems,{});
+ const real={"30000142":100};
+ assert.deepEqual(econ.syncNativeDeliveries(real),{status:"UPDATED",quantity:100});
+ assert.equal(econ.snapshot().systems["30000142"].goods,200);
+ assert.equal(econ.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.deepEqual(econ.syncNativeDeliveries(real),{status:"UNCHANGED",quantity:0});
+ assert.equal(createEconomy({file}).syncNativeDeliveries(real).quantity,0);
+}));
+
+test("P0: malformed or ambiguously encoded system totals reject the entire depot delivery batch",()=>scoped(({file})=>{
+ const econ=createEconomy({file,clock:()=>10}),valid={"30000142":100};
+ for(const invalid of [
+  {"30000142":100,"030000142":150},
+  {"30000142":100,"bad-id":20},
+  {"30000142":100,"0":20},
+  {"30000142":100,"30000144":NaN},
+  {"30000142":100,"30000144":Infinity},
+  {"30000142":100,"30000144":-1},
+  {"30000142":100,"30000144":1.5},
+  {"30000142":100,"30000144":"invalid"},
+  {"30000142":100,"30000144":Number.MAX_SAFE_INTEGER+1},
+  null,[],42,"not-a-depot-map"
+ ]){
+  assert.deepEqual(econ.syncNativeDeliveries(invalid),
+   {status:"INVALID_TOTALS",quantity:0});
+  assert.equal(fs.existsSync(file),false);
+  assert.deepEqual(econ.snapshot().systems,{});
+ }
+ const throwing={"30000142":100};
+ Object.defineProperty(throwing,"30000144",{enumerable:true,
+  get(){throw Error("native depot read uncertainty")}});
+ assert.deepEqual(econ.syncNativeDeliveries(throwing),
+  {status:"INVALID_TOTALS",quantity:0});
+ assert.deepEqual(econ.snapshot().systems,{});
+ assert.equal(econ.syncNativeDeliveries(valid).quantity,100);
+ assert.equal(createEconomy({file}).syncNativeDeliveries(valid).quantity,0);
+}));
+
+test("P0: independent verified systems in one depot batch persist once and replay only genuine delta",()=>scoped(({file})=>{
+ const econ=createEconomy({file,clock:()=>100});
+ const first={"30000142":50,"30000144":30};
+ assert.deepEqual(econ.syncNativeDeliveries(first),
+  {status:"UPDATED",quantity:80});
+ const loaded=createEconomy({file,clock:()=>100});
+ assert.equal(loaded.snapshot().systems["30000142"].goods,150);
+ assert.equal(loaded.snapshot().systems["30000144"].goods,130);
+ assert.deepEqual(loaded.syncNativeDeliveries(first),{status:"UNCHANGED",quantity:0});
+ const second={"30000142":70,"30000144":30};
+ assert.deepEqual(loaded.syncNativeDeliveries(second),
+  {status:"UPDATED",quantity:20});
+ assert.equal(loaded.snapshot().systems["30000142"].goods,170);
+ assert.equal(loaded.snapshot().systems["30000144"].nativeDelivered,30);
+ assert.deepEqual(createEconomy({file}).syncNativeDeliveries(second),
+  {status:"UNCHANGED",quantity:0});
+}));
