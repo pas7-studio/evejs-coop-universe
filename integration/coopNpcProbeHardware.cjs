@@ -64,7 +64,17 @@ function createNpcProbeHardware({getNativeEntity,getController,listNativeModules
     c.groupID===SCANNER_PROBE_GROUP&&c.categoryID===8&&
     positive(c.cargoID)&&types.has(c.typeID)&&
     c.transient!==true&&Number.isSafeInteger(c.quantity)&&c.quantity>0&&
-    c.deployedProbe==null);
+    (c.deployedProbe==null||(
+     c.deployedProbe.status==="STOWED"&&
+     c.deployedProbe.probeID===c.cargoID&&
+     c.deployedProbe.entityID===entityID&&
+     c.deployedProbe.ownerID===entity.ownerID&&
+     c.deployedProbe.typeID===c.typeID&&
+     positive(c.deployedProbe.systemID)&&
+     Number.isSafeInteger(c.deployedProbe.launchedAtMs)&&
+     c.deployedProbe.launchedAtMs>0&&
+     Number.isSafeInteger(c.deployedProbe.recoveredAtMs)&&
+     c.deployedProbe.recoveredAtMs>=c.deployedProbe.launchedAtMs)));
    if(!charges.length)continue;
    if(new Set(charges.map(x=>x.cargoID)).size!==charges.length)
     return fail("NATIVE_SCANNER_CHARGE_ID_AMBIGUOUS");
