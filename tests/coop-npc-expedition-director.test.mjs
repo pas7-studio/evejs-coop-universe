@@ -19,7 +19,9 @@ function fixture(){
  {pilotID:"coop-pilot-023",entityID:23,systemID:30000142},
  {pilotID:"coop-pilot-024",entityID:24,systemID:30000142}];
  const roles={"coop-pilot-021":"patrol","coop-pilot-023":"patrol","coop-pilot-024":"patrol"};
- const scene={systemID:30000142,getEntityByID:id=>ships.get(id),sessions:new Map()};
+ const siteEntity={itemID:440,kind:"signature",position:{x:0,y:0,z:0}};
+ const scene={systemID:30000142,getEntityByID:id=>id===440?siteEntity:ships.get(id),
+  sessions:new Map()};
  const orderBridge={blocked:({entityID})=>leases.has(entityID),
   issue:({entityID,systemID,owner,action,execute})=>{
    commands.push({entityID,systemID,owner,action});return execute();
@@ -29,7 +31,7 @@ function fixture(){
   getController:id=>controllers.get(id),orderBridge,
   warpToPoint:(id,point)=>{commands.push({id,point});return {success:true}},...config});
  const input=()=>({scene,assignments,roles});
- return {create,input,ships,native,controllers,assignments,roles,commands,leases,
+ return {create,input,ships,native,controllers,assignments,roles,commands,leases,siteEntity,
   site:()=>sites[0],setSites:x=>{sites=x},advance:ms=>{now+=ms}};
 }
 test("on-grid scout dispatches same-corp patrol through native order bridge",()=>{
@@ -66,7 +68,7 @@ test("active order lease blocks expedition instead of preempting patrol",()=>{
 });
 test("site reused at different coordinates invalidates old rendezvous",()=>{
  const f=fixture(),d=f.create();f.leases.add(23);d.tick(f.input());
- f.ships.get(21).position.x=5e7;f.site().actualPosition.x=8e7;
+ f.ships.get(21).position.x=5e7;f.site().actualPosition.x=8e7;f.siteEntity.position.x=8e7;
  f.leases.delete(23);const r=d.tick(f.input());
  assert.equal(r.orders,0);assert.equal(f.commands.length,0);
 });
@@ -89,4 +91,12 @@ test("duplicate native pilot identity denies survey and escort",()=>{
 test("oversized catalog cannot exhaust NPC tick",()=>{
  const f=fixture();f.setSites(Array.from({length:2050},(_,i)=>({...f.site(),siteID:i+1})));
  assert.equal(f.create().tick(f.input()).status,"NATIVE_SITE_CATALOG_INVALID");
+});
+\ntest("catalog-only phantom site cannot grant NPC expedition intel",()=>{
+ const f=fixture();f.siteEntity.itemID=900;
+ const r=f.create().tick(f.input());assert.equal(r.orders,0);assert.equal(r.observed,0);
+});
+test("catalog position divergent from physical site entity fails closed",()=>{
+ const f=fixture();f.siteEntity.position.x=30000;
+ const r=f.create().tick(f.input());assert.equal(r.orders,0);assert.equal(r.observed,0);
 });
