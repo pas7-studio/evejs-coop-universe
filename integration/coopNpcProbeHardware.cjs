@@ -63,7 +63,7 @@ function createNpcProbeHardware({getNativeEntity,getController,listNativeModules
     c.entityID===entityID&&c.ownerID===entity.ownerID&&
     c.groupID===SCANNER_PROBE_GROUP&&c.categoryID===8&&
     positive(c.cargoID)&&types.has(c.typeID)&&
-    c.transient!==true&&Number.isSafeInteger(c.quantity)&&c.quantity>0&&
+    c.transient!==true&&c.singleton!==true&&c.quantity===1&&
     (c.deployedProbe==null||(
      c.deployedProbe.status==="STOWED"&&
      c.deployedProbe.probeID===c.cargoID&&
