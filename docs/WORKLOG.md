@@ -857,3 +857,9 @@ Why: A sale receipt kept one running total and one station, so a row sold in two
 Detail: A route can only prove the units that left the hull during its own visit, but the receipt carried one running total and one station, so a row sold in two visits could be proven for neither. The receipt now keeps fills:[{stationID,quantity,at}] and accumulates (atomic tmp+fsync+rename, identity checked against the prior row), and both the trip journal and manifest verify sum only the fills of the m
 Where: docs/coop-flags.json, docs/coop-hook-inventory.json, integration/coopNativeHaulManifest.cjs, integration/coopNativeStationArrival.cjs, integration/coopNativeStationTripJournal.cjs, tests/coop-alife12-station-trip-journal.test.mjs
 Evidence: tests coop-alife12-station-trip-journal 28 pass; deploy OVERLAY_OK reset=50
+### 2026-10-26T23:32Z · 52b28db · L3 · feat(war): server-side structure factory for real faction objectives
+
+Why: War objectives need a server-side structure writer; EveJS only exposes client RPCs
+Detail: The pinned EveJS deploys structures only through client RPCs, so the war layer had no honest way to place a real objective. coopStructureFactory plans a normalized structure record (unknown typeID, invalid position, non-numeric faction, owner corporation outside the claimed faction and a missing name are explicit refusals) and writes it through the native writer structureState.createStructure -> p
+Where: integration/coopStructureFactory.cjs, scripts/overlay-spec.cjs, tests/coop-structure-factory.test.mjs
+Evidence: node --test tests/coop-structure-factory.test.mjs 12/12 pass; patch-evejs-coop --apply INSTALLED coopStructureFactory.js; --check OVERLAY_OK

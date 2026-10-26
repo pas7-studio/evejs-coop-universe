@@ -129,3 +129,58 @@ The probe world is blocked by that historic evidence gap. Two honest options:
 
 Neither is done automatically: the repo forbids wiping a volume to force a PASS, and a
 second project needs ports 26000-26003/40110/443/5222 that the current one holds.
+
+## 2026-10-27 handoff: CCP subsystem inventory (verified by file/handler count)
+
+structure 46 files/77 handlers = real (deploy, control, destruction+loot, moon mining)
+campaign 3/20 = real (the FSM that feeds insurgency) | shipcaster 5/6 = real
+sovereignty 24/1 = logic only, no client surface | agency 1/2 = thin
+incursion 2/0, superweapons 2/0, loyalty 1/0 = STUBS, do not build on them
+
+Next step (not started): structureDeploymentService exposes ONLY client RPCs
+(Handle_Anchor/Unanchor/CancelUnanchor/RenameStructure) - there is no server-side
+deploy API. Two paths: (a) call the underlying structureState writer directly and
+verify the structure appears in worldData.getStructuresForSystem + the scene;
+(b) drive the stock Anchor action. Then set EVEJS_COOP_WAR_OBJECTIVE_STRUCTURE_TYPE_IDS
+to the real typeIDs and use the structure as the campaign objective (structureID is
+already a field in the client campaign snapshot; the projector currently emits 0).
+
+## 2026-10-27 loop — item 1 DONE (structure factory), item 2 in progress
+
+**Item 1 PASS (commit 52b28db1).** `integration/coopStructureFactory.cjs`:
+`plan()` -> PLANNED record or REFUSED (UNKNOWN_TYPE_ID, INVALID_POSITION,
+INVALID_FACTION for any non-number, OWNER_CORPORATION_REQUIRED,
+CORPORATION_FACTION_MISMATCH, UNKNOWN_CORPORATION_FACTION, NAME_REQUIRED,
+SYSTEM_ID_REQUIRED); `deploy()` writes through the native writer
+`structureState.createStructure` -> `persistStructures` ->
+`writeTable("structures")` (which applies `normalizeStructureDescription`,
+invalidates the cache and notifies scene listeners) with `{emitLive:true}`;
+`verify()` reads back through `listStructuresForSystem`, the same reader behind
+`worldData.getStructuresForSystem`. Evidence: `node --test
+tests/coop-structure-factory.test.mjs` 12/12, `--apply` INSTALLED
+coopStructureFactory.js, `--check` OVERLAY_OK, docker build + recreate OK.
+
+Assumption (owner default): objectives are created in SHIELD_VULNERABLE (110)
+with a quantum core so they are real, attackable targets; the co-op faction is
+stored in `devFlags.coop` because `normalizeStructureRecord` has no faction
+field.
+
+**Admin bridge (uncommitted->next commit):** `coopAdminBridge` gained the
+whitelisted action `deploy_structure` (no characterID: a structure belongs to a
+corporation) which calls the factory and reads the row back; `deps` are the real
+native services. Tests `tests/coop-admin-bridge-structure.test.mjs` 4/4.
+
+**Deliberately dirty (not mine):** `integration/coopNativeHaulManifest.cjs`,
+`integration/coopNativeStationTripJournal.cjs` (another session's ore-owner vs
+station-corp fill fix), `scripts/coop-supervise.ps1`, `state/digests/*`, `NUL`.
+Never commit them.
+
+**NEXT (item 2):** 1) add `EVEJS_COOP_ADMIN_BRIDGE: '1'` and
+`EVEJS_COOP_WAR_OBJECTIVE_STRUCTURE_TYPE_IDS` to `compose.coop-probe.yaml`
+(re-check the file right before each recreate). 2) `coopWarClientView.cjs:68`
+hardcodes `structureID: 0` - replace it with the campaign's real objective
+structure id (carried in the war state campaign record; see
+`coopFactionWarCampaigns.cjs` `planCampaign` and `coopFactionWarAssault.cjs`).
+3) Deploy 1-2 real structures in Perimeter 30000144 / New Caldari via
+`deploy_structure`, then prove `warState` campaign carries the id and the
+client snapshot emits it.

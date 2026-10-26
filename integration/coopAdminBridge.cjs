@@ -18,10 +18,13 @@
 // runtime decision is never only in a chat log.
 const fs = require("node:fs");
 
+// Source .cjs modules become .js siblings in the deployed EveJS overlay.
+const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js") ? "" : ".cjs";
+
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -452,10 +455,70 @@ function fitSlots(request) {
   return { ok: fitted > 0, fitted, attempted: results.length, results, characterID, itemID: shipItemID };
 }
 
+// Deploys one real structure for a faction through coopStructureFactory, which
+// writes via the native structureState writer. The co-op layer needs this because
+// the stock deployment surface is client RPC only. The result always carries the
+// factory's own refusal reason, and a deploy is only "ok" when the row is read
+// back from the native system reader afterwards.
+function deployStructure(request) {
+  let factory = null;
+  try {
+    factory = require("./coopStructureFactory" + siblingSuffix);
+  } catch (error) {
+    return { ok: false, error: "structure factory unavailable: " + String(error && error.message || error) };
+  }
+  const input = {
+    systemID: Number(request.systemID) || 0,
+    typeID: Number(request.typeID) || 0,
+    // Passed verbatim: the factory's own strict faction validation must be what
+    // the caller sees, so a JSON string never becomes a faction here.
+    factionID: request.factionID,
+    ownerCorpID: Number(request.ownerCorpID) || 0,
+    position: request.position,
+    name: String(request.name || ""),
+  };
+  if (typeof request.description === "string" && request.description.trim()) {
+    input.description = request.description;
+  }
+  let deployed = null;
+  try {
+    deployed = factory.deploy(input);
+  } catch (error) {
+    return { ok: false, error: "deploy threw: " + String(error && error.message || error) };
+  }
+  if (!deployed || deployed.status !== "DEPLOYED") {
+    return {
+      ok: false,
+      status: String((deployed && deployed.status) || "UNKNOWN"),
+      error: String((deployed && (deployed.reason || deployed.errorMsg)) || "deploy refused"),
+    };
+  }
+  let verified = { status: "UNKNOWN", reason: "NOT_VERIFIED" };
+  try {
+    verified = factory.verify({ systemID: deployed.systemID, structureID: deployed.structureID });
+  } catch (_error) {
+    verified = { status: "UNKNOWN", reason: "VERIFY_FAILED" };
+  }
+  return {
+    ok: verified.status === "PRESENT",
+    status: deployed.status,
+    structureID: deployed.structureID,
+    systemID: deployed.systemID,
+    typeID: deployed.typeID,
+    factionID: deployed.factionID,
+    verified: verified.status,
+    verifyReason: String(verified.reason || ""),
+    name: String((deployed.record && (deployed.record.name || deployed.record.itemName)) || ""),
+  };
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
   if (!ALLOWED_ACTIONS.has(action)) return { ok: false, error: "action not allowed: " + action };
+  // A structure belongs to a corporation, not to a character, so this action is
+  // the one admin request that legitimately has no characterID.
+  if (action === "deploy_structure") return deployStructure(request);
   const characterID = Number(request.characterID) || 0;
   if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
   if (action === "chat_command") return executeChatCommand(request);
