@@ -104,6 +104,10 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
    return blocked("MINING_SHIFT_NATIVE_OUTCOME_UNKNOWN",true);
   const phase=fleet.state;
   const safetyTransit=["hauling","loaded","haulereturn"].includes(phase);
+  // The native aggression/response phase always owns a threatened fleet.
+  // Peaceful company commands cannot cancel an already-active NPC defense.
+  if(["aggressed","panic"].includes(phase)&&row.directive!=="RETREAT")
+   return {status:"NATIVE_COMBAT_PRIORITY",skipNativeTick:false,nativeMutation:false};
   const skip=(status,nativeMutation=false)=>({status,command:row.directive,
    commandSeq:row.commandSeq,skipNativeTick:true,nativeMutation});
   if(row.commandState==="IDLE")return {status:"NATIVE_MINING_UNMODIFIED",
