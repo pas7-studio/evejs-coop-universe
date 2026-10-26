@@ -70,8 +70,11 @@ function transform(source,spec,remove){
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
   text=require("./coop-escort-native-motion-patch.cjs").patch(text,{remove});
- if(spec.file==="server/src/space/npc/nativeNpcService.js")
+ if(spec.file==="server/src/space/npc/nativeNpcService.js") {
+  if(remove)text=require("./coop-npc-probe-loadout-split-patch.cjs").patch(text,spec.file,true);
   text=require("./coop-escort-ingress-materialize-patch.cjs").patch(text,{remove});
+  if(!remove)text=require("./coop-npc-probe-loadout-split-patch.cjs").patch(text,spec.file,false);
+ }
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
   text=require("./coop-atomic-trade-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/inventory/itemStore.js" || spec.file==="server/src/services/trade/tradeMgrService.js")
