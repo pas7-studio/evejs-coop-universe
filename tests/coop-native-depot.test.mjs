@@ -267,3 +267,62 @@ test("P0: an active or crash-abandoned depot lock blocks writes until operator i
   assert.equal(createDepot({file}).snapshot().totals["30000144"],100);
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
+
+test("P0: a stale depot reader cannot advertise clean audit or zero supply after another commit",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-stale-read-"));
+ try{
+  const file=join(dir,"depot.json"),stale=createDepot({file,clock:()=>101}),
+   writer=createDepot({file,clock:()=>102});
+  const item={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  assert.equal(writer.prepare(item).status,"PREPARED");
+  assert.equal(writer.commit(item).status,"COMMITTED");
+  assert.equal(createDepot({file}).snapshot().totals["30000144"],100);
+  const unsafe=stale.audit();
+  assert.equal(unsafe.status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(unsafe.reason,"DEPOT_CONCURRENT_JOURNAL_DRIFT");
+  assert.equal(unsafe.invalid,1);
+  assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+  assert.equal(stale.prepare(item).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(stale.commit(item).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(createDepot({file}).audit().status,"OK");
+  assert.equal(createDepot({file}).snapshot().receipts["777"].cargoID,777);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: a pre-existing writer lock makes depot audit and supply snapshot untrusted",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-lock-read-"));
+ try{
+  const file=join(dir,"depot.json"),lock=file+".lock";
+  const depot=createDepot({file});
+  const holder=openSync(lock,"wx");closeSync(holder);
+  try{
+   const audit=depot.audit();
+   assert.equal(audit.status,"NEEDS_OPERATOR_REPAIR");
+   assert.equal(audit.reason,"DEPOT_JOURNAL_WRITE_IN_PROGRESS");
+   assert.throws(()=>depot.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+  }finally{unlinkSync(lock)}
+  // A poisoned instance does not silently recover just because a foreign
+  // lock vanished. A fresh instance verifies the current on-disk journal.
+  assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(createDepot({file}).audit().status,"OK");
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: externally damaged or removed depot journal cannot yield a trusted old supply",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-unreadable-read-"));
+ try{
+  const file=join(dir,"depot.json"),depot=createDepot({file});
+  const arg={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  assert.equal(depot.prepare(arg).status,"PREPARED");
+  assert.equal(depot.commit(arg).status,"COMMITTED");
+  const stale=createDepot({file});
+  unlinkSync(file);
+  const audit=stale.audit();
+  assert.equal(audit.status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(audit.reason,"DEPOT_CONCURRENT_JOURNAL_DRIFT");
+  assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+  assert.equal(stale.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
