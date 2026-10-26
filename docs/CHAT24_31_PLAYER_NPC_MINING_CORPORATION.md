@@ -42,7 +42,7 @@ No new GitHub CI and no automatic deployment. Test locally:
 node --test tests/coop-player-mining-company.test.mjs
 ```
 
-**Isolated test result:** 14/14 PASS on Node (transaction mock, not real GameStore SQLite, Docker or client). A real native GameStore rollback/replay test and restart after every wallet write are required before opting in.
+**Isolated test result:** 15/15 PASS on Node (transaction mock, not real GameStore SQLite, Docker or client). A real native GameStore rollback/replay test and restart after every wallet write are required before opting in.
 
 ## Stage B — physical dispatch and safety (next PR)
 
