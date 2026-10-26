@@ -60,6 +60,15 @@ EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ=1
 - Registered `coopPlayerMiningCorpSell` in the reversible pinned native SQLite group mapping, plus a default-OFF feature flag. **20/20** isolated escrow/return tests and exact pinned SQLite row-group roundtrip PASS. Actual Rust corporate order publication and corporate settlement remain future engineering.
 - See [CHAT24_31_CORPORATE_SELL_ESCROW.md](CHAT24_31_CORPORATE_SELL_ESCROW.md) for source contract, tests and next actual native `PrepareCorpSell → escrow → PublishCorpSell → ClaimFill` requirements.
 
+## Stage E2B2 — private original Rust corporate SELL preparation + GameStore proof
+
+- Added a **reversible, pinned Rust market-server extension** with `PrepareCorpSell`, `GetCorpSell` and `VerifyCorpSellEscrow`. The prepared corporate order is **not open or matchable**; it is uniquely bound to the real ore `itemID`, `cargoID`, corporation, station, quantity, price and source operation. Original `PlaceOrder` is guarded against source `coop-corporation`.
+- Rust itself opens original GameStore SQLite in **read-only mode** and checks the exact original corporate SELL receipt, item owner/location/provenance, and genuine `marketEscrow` order row before exposing a successful proof. A client `verifiedNative` boolean is never accepted as a substitute for the physical SQLite evidence.
+- The original Node bridge performs: authorized original corporation and price → private Rust prepare → independent Rust get → E2B1 atomic GameStore cargo escrow → independent Rust GameStore audit. Unknown outcomes fail closed without retry or ISK credit.
+- **`PublishCorpSell` intentionally refuses** after its read-only verification. Live original Rust full/partial claims, corporate buyer debit and seller-wallet/tax settlement have not been built. Enabling early order matching would produce unbacked trades.
+- Evidence: **9/9** isolated bridge tests, **10/10** Rust source installer safety tests, pinned Rust state/rpc patch install-uninstall exact roundtrip; actual Rust compiler, SQLite process and two EVE clients **NOT_RUN**.
+- See [CHAT24_31_RUST_CORPORATE_SELL_PREPARE.md](CHAT24_31_RUST_CORPORATE_SELL_PREPARE.md) for secure configuration, manual commands, remaining settlement acceptance and rollback.
+
 ## Native corporate SELL required before Stage E2B can be truthfully called live
 
 1. Native market service must create a **real corporation-owned SELL order** from the original office warehouse itemID with authentic corporation roles and full order-price/quantity/tax authorization. Character-only SELL admission cannot be reused unchanged.
