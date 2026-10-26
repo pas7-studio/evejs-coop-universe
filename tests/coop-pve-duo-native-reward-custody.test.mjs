@@ -88,6 +88,11 @@ test("original standing transaction must be new with correct event type",()=>{
  f.now().standing[0].eventTypeID=74;
  assert.equal(f.report().status,"NATIVE_PERSONAL_STANDING_TRANSACTION_UNVERIFIED");
 });
+test("opposite-sign original standing receipt cannot certify mission reputation gain",()=>{
+ const f=fixture();f.credit();
+ f.now().standing[0].modification=-0.015;
+ assert.equal(f.report().status,"NATIVE_PERSONAL_STANDING_TRANSACTION_UNVERIFIED");
+});
 test("stale standing history or unchanged raw value alone cannot replace actual mission receipt",()=>{
  const f=fixture();f.credit();
  f.now().standing=[f.older];
@@ -112,6 +117,23 @@ test("duplicate or reused native item IDs are fail closed",()=>{
  f.now().items.push({...f.now().items[0]});
  assert.equal(f.report().status,"NATIVE_PERSONAL_CUSTODY_IDENTITY_MISMATCH");
 });
+test("numeric and decimal-string forms of an original item ID cannot evade duplicate detection",()=>{
+ const f=fixture({originalStacks:[
+  {itemID:8201,typeID:9001,ownerID:101,locationID:60001234,flagID:4,stacksize:1},
+  {itemID:"8201",typeID:9001,ownerID:101,locationID:60001234,flagID:4,stacksize:1}
+ ]});
+ assert.equal(f.before.status,"NATIVE_HANGAR_SOURCE_UNAVAILABLE");
+});
+test("native stack repr change cannot forge a second new reward item ID",()=>{
+ const f=fixture({originalStacks:[{itemID:8001,typeID:9001,ownerID:101,
+  locationID:60001234,flagID:4,stacksize:3,singleton:0}]});
+ f.credit();
+ f.now().items[0].itemID="8001";
+ f.now().items[0].typeID="9001";
+ const r=f.report();
+ assert.equal(r.status,"NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED");
+ assert.deepEqual(r.newItemIDs,[]);
+});
 test("native reward receiver is not another agent or issuer corporation",()=>{
  const f=fixture();
  const wrong={...f.adapters,getAgent:()=>({agentID:51,corporationID:1000123})};
@@ -126,4 +148,22 @@ test("two different recipients can prove original personal hangar and standing i
    characterID:102,agentID:50,missionSequence:11,iskDelta:100000}});
  assert.equal(a.report().status,"NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED");
  assert.equal(bReport.status,"NATIVE_PERSONAL_CUSTODY_IDENTITY_MISMATCH");
+});
+
+test("untimed bonus-only native item rewards with zero bonus ISK are still actual item custody",()=>{
+ const f=fixture({base:100000,bonus:0,items:[],
+  bonusItems:[{typeID:9301,quantity:2}],standingChange:false});
+ f.credit(true);
+ const r=f.report({iskDelta:100000});
+ assert.equal(r.status,"NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED");
+ assert.equal(r.itemCount,2);
+ assert.equal(r.expectedTypes[0].typeID,9301);
+});
+test("timed zero-ISK bonus item availability is ambiguous from wallet receipt and fails closed",()=>{
+ const f=fixture({base:100000,bonus:0,items:[],
+  bonusItems:[{typeID:9301,quantity:1}],standingChange:false});
+ f.mission.rewards.bonusTimeIntervalMinutes=12;
+ f.credit(true);
+ assert.equal(f.report({iskDelta:100000}).status,
+  "NATIVE_ITEM_REWARD_CONFIGURATION_UNSUPPORTED");
 });

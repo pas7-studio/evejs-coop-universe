@@ -13,11 +13,16 @@ function inventory(items,characterID,stationID,hangarFlag){
  if(!Array.isArray(items)||items.length>10000)return null;
  const ids=new Set(),counts=new Map();
  for(const item of items){
-  if(!id(item?.itemID)||ids.has(item.itemID)||!id(item.typeID)||
+  // Native/GameStore serialization may represent the same numeric itemID
+  // as a number or decimal string. Normalize BEFORE checking uniqueness.
+  const itemID=id(item?.itemID),typeID=id(item?.typeID);
+  if(!itemID||ids.has(itemID)||!typeID||
      item.ownerID!==characterID||item.locationID!==stationID||
      item.flagID!==hangarFlag||qty(item)===null)return null;
-  ids.add(item.itemID);
-  counts.set(item.typeID,(counts.get(item.typeID)||0)+qty(item));
+  ids.add(itemID);
+  const total=(counts.get(typeID)||0)+qty(item);
+  if(!Number.isSafeInteger(total))return null;
+  counts.set(typeID,total);
  }
  return {counts,ids};
 }
@@ -26,7 +31,20 @@ function expectedItems(mission,agent,iskDelta){
  const base=Number(rewards.isk||0),bonus=Number(rewards.bonusIsk||0);
  if(!Number.isFinite(iskDelta)||!Number.isFinite(base)||!Number.isFinite(bonus)||
     base<0||bonus<0)return null;
- const eps=0.011,withBonus=bonus>0&&Math.abs(iskDelta-(base+bonus))<eps;
+ const eps=0.011;
+ // Native isMissionBonusRewardAvailable() always permits untimed
+ // bonuses, even if bonusIsk=0 and only bonusItemRewards are present.
+ // For timed zero-ISK bonuses the wallet journal cannot distinguish
+ // bonus availability: refuse to certify inventory without a native
+ // transaction-scoped bonus flag rather than silently ignore items.
+ const bonusItemRows=Array.isArray(rewards.bonusItemRewards)?
+  rewards.bonusItemRewards:[];
+ const zeroIskBonus=bonus===0&&bonusItemRows.length>0;
+ const interval=Number(rewards.bonusTimeIntervalMinutes||0);
+ if(zeroIskBonus&&(!Number.isSafeInteger(interval)||interval<0||
+   interval>0))return null;
+ const withBonus=zeroIskBonus||
+  (bonus>0&&Math.abs(iskDelta-(base+bonus))<eps);
  if(Math.abs(iskDelta-base)>=eps&&!withBonus)return null;
  const entries=[
   ...(Array.isArray(rewards.itemRewards)?rewards.itemRewards:[]),
@@ -124,13 +142,14 @@ function verify({before,after,mission,characterID,agentID,personalReward}={}){
   if(delta!==(wanted.counts.get(type)||0))
    return fail("NATIVE_REWARD_ITEM_CUSTODY_MISMATCH");
  }
- const originalByID=new Map(before.inventory.map(x=>[x.itemID,x]));
+ const originalByID=new Map(before.inventory.map(x=>[id(x.itemID),x]));
  const itemIDs=[];
  for(const item of after.inventory){
-  const old=originalByID.get(item.itemID);
-  if(old&&old.typeID!==item.typeID)
+  const canonicalID=id(item.itemID);
+  const old=originalByID.get(canonicalID);
+  if(old&&id(old.typeID)!==id(item.typeID))
    return fail("NATIVE_INVENTORY_ITEM_ID_REUSED");
-  if(!old)itemIDs.push(item.itemID);
+  if(!old)itemIDs.push(canonicalID);
   if(old&&item.stacksize<old.stacksize)
    return fail("NATIVE_REWARD_HANGAR_SOURCE_DECREMENTED");
  }
@@ -155,7 +174,10 @@ function verify({before,after,mission,characterID,agentID,personalReward}={}){
   }
   const directRows=newRows.filter(x=>Number(x.eventTypeID)===Number(expected.eventTypeID));
   if(directRows.length!==1||!Number.isFinite(directRows[0].modification)||
-      Math.abs(directRows[0].modification)<=1e-9)
+      Math.abs(directRows[0].modification)<=1e-9||
+      // A loss may not certify a positive mission-standing reward (or vice versa).
+      // Native application may scale magnitude, but it cannot invert direction.
+      Math.sign(directRows[0].modification)!==Math.sign(expected.rawChange))
    return fail("NATIVE_PERSONAL_STANDING_TRANSACTION_UNVERIFIED");
   standingReceipts.push({ownerID:owner,eventTypeID:Number(expected.eventTypeID),
    eventDateTime:directRows[0].eventDateTime,
