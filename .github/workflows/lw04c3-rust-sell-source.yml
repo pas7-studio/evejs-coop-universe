@@ -1,0 +1,41 @@
+name: LW04C3 Rust Sell Escrow Source
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04c2-original-manufacturing-executor-20261026
+    paths:
+      - 'integration/coopNpcIndustryOriginalRustSell.cjs'
+      - 'integration/coopNpcPendingMarketEscrow.cjs'
+      - 'tests/coop-npc-industry-original-rust-sell.test.mjs'
+      - 'tests/coop-npc-pending-market-escrow.test.mjs'
+      - 'tests/scenarios/lw04c3-rust-npc-sell-e2e.json'
+      - '.github/workflows/lw04c3-rust-sell-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rust-sell-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check original Rust sell source syntax
+        run: |
+          node --check integration/coopNpcIndustryOriginalRustSell.cjs
+          node --check integration/coopNpcPendingMarketEscrow.cjs
+      - name: Test exact original Rust pending order and ItemStore escrow source
+        run: |
+          node --test \
+            tests/coop-npc-industry-original-rust-sell.test.mjs \
+            tests/coop-npc-pending-market-escrow.test.mjs \
+            tests/coop-npc-industry-original-stage-executor.test.mjs \
+            tests/coop-npc-industry-original-game-store-kernel.test.mjs \
+            tests/coop-npc-industry-recovery-fence.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs
+      - name: Preserve honest physical Rust E2E status
+        run: |
+          node -e 'const m=require("./tests/scenarios/lw04c3-rust-npc-sell-e2e.json");if(m.scenarios.length!==12||m.scenarios.some(x=>x.status!=="NOT_RUN"))process.exit(1)'
