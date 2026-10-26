@@ -598,11 +598,11 @@ itemStore deltas and native standing transaction row(s) where
 applicable, and run two real network clients. It must not overstate
 completion from a successful agent dialogue.
 
-**Code evidence:** 14/14 original-source isolated cases (35 assertions)
+**Code evidence:** 15/15 original-source isolated cases (36 assertions)
 for wallet journal references, balances, bonus branches, LP issuer,
 new personal history, wrong agent/character, stale or duplicate journal,
 no-standing change, partial payout, and zero-LP missions; plus 7/7
-wiring ordering checks (22 assertions). **21/21 isolated checks, 57
+wiring ordering checks (22 assertions). **22/22 isolated checks, 58
 assertions**. Full Node/SQLite/Rust, pinned overlay reversibility,
 real payout receipt vs mission balance, live two-person gameplay,
 crashes and actual item custody **NOT RUN**. The flag remains OFF.
