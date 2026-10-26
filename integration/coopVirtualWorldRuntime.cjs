@@ -134,11 +134,26 @@ function advanceNativeWarDemobilization(){
 }
 // FW-003C: real patrol mobilization on the SAME existing A-Life tick. Any
 // failed source proof results in zero military assignments, never free ships.
+// A war phase that returns silently cannot be diagnosed from the outside: the
+// reason is reported once per change instead, with a real event.
+const warSkipReasons={};
+function warSkip(phase,reason){
+ if(warSkipReasons[phase]===reason)return;
+ warSkipReasons[phase]=reason;
+ console.log(`[CoopFactionWar] ${phase} skipped: ${reason}`);
+ try{
+  require("./coopRuntimeProbe").observe("living-native-war-skip",null,null,
+   {phase,reason,status:"SKIPPED",evidence:"EXPLICIT_PRECONDITION_NOT_MET"});
+ }catch(_error){/* probe is best effort */}
+}
 function advanceNativeWarMobilization(){
  const {enabled,createWarMobilizer}=require("./coopWarMobilizer");
- if(!enabled(process.env)||!visitedSystems.size||!identityRegistry)return;
+ if(!enabled(process.env))return warSkip("mobilization","WAR_FLAGS_OFF");
+ if(!visitedSystems.size)return warSkip("mobilization","NO_VISITED_SYSTEMS");
+ if(!identityRegistry)return warSkip("mobilization","NO_IDENTITY_REGISTRY");
  const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
- if(!registry||!guard)return;
+ if(!registry)return warSkip("mobilization","NO_WAR_FLEET_REGISTRY");
+ if(!guard)return warSkip("mobilization","NO_ORDER_BRIDGE");
  if(!warMobilizer){
   const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
    controllers=require("./npc/npcRegistry"),
@@ -291,9 +306,12 @@ function advanceNativeWarGateStaging(){
 }
 function advanceNativeWarCombat(){
  const api=require("./coopWarCombatAuthority");
- if(!api.combatEnabled()||!api.ammoEnabled()||!visitedSystems.size)return;
+ if(!api.combatEnabled())return warSkip("combat","COMBAT_FLAGS_OFF");
+ if(!api.ammoEnabled())return warSkip("combat","AMMO_FLAGS_OFF");
+ if(!visitedSystems.size)return warSkip("combat","NO_VISITED_SYSTEMS");
  const guard=npcOrderBridge();
- if(!guard||!nativeWarFleetRegistry())return;
+ if(!guard)return warSkip("combat","NO_ORDER_BRIDGE");
+ if(!nativeWarFleetRegistry())return warSkip("combat","NO_WAR_FLEET_REGISTRY");
  const runtime=require("./runtime");
  if(!warBattleDirector){
   const npc=require("./npc/npcRuntime");
