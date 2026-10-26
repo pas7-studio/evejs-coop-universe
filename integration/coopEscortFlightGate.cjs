@@ -261,7 +261,7 @@ function createEscortFlightGate({root,io=fs,clock=()=>Date.now(),
   if(!Array.isArray(files)||files.length>512)
    return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
   const names=files.filter(x=>typeof x==="string"&&
-   /^\\d+-\\d+-\\d+\\.jsonl$/.test(x)).sort();
+   /^\d+-\d+-\d+\.jsonl$/.test(x)).sort();
   if(names.length>512)return blocked("FLIGHT_SCAN_CAP_EXCEEDED");
   const found=[];
   // Check ALL original journals before returning even the first page:
