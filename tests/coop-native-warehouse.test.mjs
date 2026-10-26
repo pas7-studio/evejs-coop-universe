@@ -258,3 +258,58 @@ test('P0: missing hangar flag authority prevents a false completed receipt',()=>
  f.config.items.ITEM_FLAGS=flags;
  assert.equal(w.deposit(f.arg).status,'ALREADY_COMMITTED');
 }));
+
+test('P0: warehouse DEBIT repair cannot create stock with missing fleet or system receipt authority',()=> {
+ for(const [name,change] of [
+  ['missing fleet',r=>{delete r.fleetID}],
+  ['zero fleet',r=>{r.fleetID=0}],
+  ['negative fleet',r=>{r.fleetID=-1}],
+  ['missing system',r=>{delete r.systemID}],
+  ['zero system',r=>{r.systemID=0}],
+  ['invalid system',r=>{r.systemID='not-a-system'}]
+ ]){
+  withF(f=>{
+   f.set({failGrant:true});
+   assert.equal(f.make().deposit(f.arg).status,'TARGET_WRITE_UNCERTAIN');
+   assert.equal(f.cargo.size,0,'original physical cargo already debited');
+   assert.equal(f.issued,0);
+   const file=path.join(f.root,'receipts','8001.json');
+   const record=JSON.parse(fs.readFileSync(file,'utf8'));
+   assert.equal(record.phase,'SOURCE_DEBIT_PROVEN');
+   change(record);
+   const corrupt=JSON.stringify(record);
+   fs.writeFileSync(file,corrupt);
+   f.set({failGrant:false});
+   assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR',name);
+   assert.equal(f.make().deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR',name);
+   assert.equal(f.make().audit().status,'NEEDS_RECONCILIATION',name);
+   assert.equal(f.owned.size,0,'no new stock from a corrupt original journal');
+   assert.equal(f.issued,0,name);
+   assert.equal(fs.readFileSync(file,'utf8'),corrupt,'no automatic journal rewrite');
+  });
+ }
+});
+
+test('P0: a COMMITTED receipt without original fleet/system must fail audit',()=>withF(f=>{
+ assert.equal(f.make().deposit(f.arg).status,'COMMITTED');
+ const file=path.join(f.root,'receipts','8001.json'),record=JSON.parse(fs.readFileSync(file,'utf8'));
+ delete record.fleetID;
+ fs.writeFileSync(file,JSON.stringify(record));
+ assert.equal(f.make().deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(f.issued,1,'never mint a second ItemStore stack');
+}));
+
+test('P0: valid original fleet/system DEBIT can still be recovered exactly once',()=>withF(f=>{
+ f.set({failGrant:true});
+ assert.equal(f.make().deposit(f.arg).status,'TARGET_WRITE_UNCERTAIN');
+ const record=JSON.parse(fs.readFileSync(path.join(f.root,'receipts','8001.json'),'utf8'));
+ assert.equal(record.fleetID,77);
+ assert.equal(record.systemID,30000144);
+ f.set({failGrant:false});
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'COMMITTED');
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'ALREADY_COMMITTED');
+ assert.equal(f.issued,1);
+ assert.equal(f.make().audit().status,'OK');
+}));

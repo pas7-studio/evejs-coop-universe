@@ -453,3 +453,13 @@ Evidence: Previous main exact-source source reproduction showed four invalid ori
 Why: Test foreign/missing owners, wrong/missing system, transient/unknown persistence, missing miner, wrong carrier, module-bound cargo, malformed quantity/type, duplicate cargoID, wrong live ship/scene and mixed valid-invalid original batch. Preserve unrelated fleet cargo and valid exactly-once unload.
 Where: tests/coop-native-haul-unload-readback.test.mjs
 Evidence: Previous main exact-source source reproduction showed four invalid original cargo variants all returned DELIVERED and depot COMMITTED. Patched 23/23 exact-source isolated V8 unload/depot callbacks PASS. Full native Node 22/SQLite WAL cold restart, Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T15:32Z · 94bfc92 · L2 · fix(P0): reject missing original fleet/system provenance during warehouse credit recovery
+
+Why: Old native warehouse load() did not validate fleetID or systemID from an original receipt. An authorized DEBIT-stage resume created a real ItemStore station stack and durably marked COMMITTED from a journal missing fleetID. Require both original fleet and system authority on every receipt load before any recovery, completion, or audit.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: Pre-fix exact-source reproduction: authorized SOURCE_DEBIT_PROVEN receipt with missing fleetID returned COMMITTED and granted one native ItemStore warehouse item. Patched 26/26 exact-source isolated V8 warehouse tests PASS with simulated native fs and ItemStore. Full pinned Node 22, SQLite WAL/FULL cold restart, Rust and two authenticated EVE clients NOT_RUN.
+### 2026-10-26T15:32Z · 0fdcbc1 · TEST · test(P0): missing original fleet/system journal provenance blocks physical ItemStore recovery
+
+Why: Reproduce missing/zero/negative fleet, absent/zero/invalid system in a durable DEBIT receipt, require no ItemStore grant and no journal rewrite; invalid COMMITTED receipt fails audit; unchanged legitimate DEBIT recovery still credits only once.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: Pre-fix exact-source reproduction: authorized SOURCE_DEBIT_PROVEN receipt with missing fleetID returned COMMITTED and granted one native ItemStore warehouse item. Patched 26/26 exact-source isolated V8 warehouse tests PASS with simulated native fs and ItemStore. Full pinned Node 22, SQLite WAL/FULL cold restart, Rust and two authenticated EVE clients NOT_RUN.
