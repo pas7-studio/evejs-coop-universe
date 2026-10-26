@@ -113,12 +113,13 @@ test("restart with persisted flight records restores original IDs without any ne
  assert.equal(f.cargo()[0].deployedProbe.probeID,980200000001);
  assert.equal(f.cargo()[0].quantity,0);
 });
-test("native scene itemID collision quarantines row; never replaces unrelated ship",()=>{
+test("native scene itemID collision blocks before debit; never replaces unrelated ship",()=>{
  const f=fixture();f.sceneMap.set(980200000001,{itemID:980200000001,kind:"ship"});
- f.failSpawn();const r=f.tick();
- assert.equal(r.status,"NATIVE_PROBE_PENDING_RECONCILIATION");
- f.clearSpawn();const after=f.tick();assert.equal(after.status,"BLOCKED");
- assert.equal(after.reason,"NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
+ const r=f.tick();
+ assert.equal(r.status,"BLOCKED");
+ assert.equal(r.reason,"NPC_PROBE_CANDIDATE_PHYSICAL_ID_COLLISION");
+ assert.equal(f.writes(),0);assert.equal(f.spawns(),0);
+ assert.equal(f.cargo()[0].quantity,1);
  assert.equal(f.sceneMap.get(980200000001).kind,"ship");
 });
 test("missing original online launcher, foreign corp and fake pilot never debit",()=>{
@@ -233,7 +234,7 @@ test("STOWED original cargoID is refused if physical probe remains in space",()=
  row.quantity=1;row.deployedProbe={...row.deployedProbe,status:"STOWED",recoveredAtMs:1000000};
  const writes=f.writes(),spawns=f.spawns(),second=f.tick();
  assert.equal(second.status,"BLOCKED");
- assert.equal(second.reason,"NPC_PROBE_STOWED_PHYSICAL_ID_COLLISION");
+ assert.equal(second.reason,"NPC_PROBE_CANDIDATE_PHYSICAL_ID_COLLISION");
  assert.equal(f.writes(),writes);assert.equal(f.spawns(),spawns);
 });
 test("incomplete or forged STOWED receipts cannot mint same-ID probe on relaunch",()=>{
