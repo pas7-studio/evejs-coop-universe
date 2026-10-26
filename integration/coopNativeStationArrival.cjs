@@ -991,6 +991,14 @@ function getRuntimeDirector(){
 }
 // Which ore this system should prefer, from real belt ore crossed with real
 // buyers. Read-only: it advises the next haul, it never spawns or moves a ship.
+// Stage E1: read-only ORIGINAL fsynced warehouse receipt. Never builds a
+// scene, schedules a haul, or materializes stock for the completion gate.
+function getOriginalWarehouseReceipt(cargoID){
+ if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1"||
+   !Number.isSafeInteger(cargoID)||cargoID<=0||!runtimeDirector)return null;
+ try{return runtimeDirector.warehouse?.getReceipt?.(cargoID)||null}
+ catch{return null;}
+}
 function observePreferredOre({systemID,reason="periodic"}={}){
  if(process.env.EVEJS_COOP_ECONOMY_DESTINATION!=="1")return null;
  const director=getRuntimeDirector();
@@ -1080,4 +1088,4 @@ function checkReturn(scene,fleet,now,director=null){
   arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
  return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress};
+module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress,getOriginalWarehouseReceipt};
