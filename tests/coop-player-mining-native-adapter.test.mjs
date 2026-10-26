@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {createAdapter}=require('../integration/coopPlayerMiningFleetTick.cjs');
+const {createAdapter,getMountedScene}=require('../integration/coopPlayerMiningFleetTick.cjs');
 const {FLEET_INDEX,CONTRACT}=require('../integration/coopPlayerMiningCompany.cjs');
 const OP='coop-mining-shift:'+'b'.repeat(32),CORP=7101,NPC=7201,SYSTEM=30000144,FLEET=960004609;
 function fixture(bound=true){
@@ -66,4 +66,21 @@ test('HAUL never calls native warp with forged or transient cargo',()=>{
 test('missing physical contracted hauler quarantines native think',()=>{
  const x=fixture();x.assign('HOLD');x.ships.delete(1003);
  assert.equal(x.run(),true);assert.equal(x.records.get(CONTRACT(OP)).commandState,'PENDING');
+});
+
+test('trusted agent accesses only already-mounted original EveJS scene Map',()=>{
+ let spawned=0;
+ const live={systemID:SYSTEM,getEntityByID:()=>null};
+ const runtime={scenes:new Map([[SYSTEM,live]]),
+  ensureScene:()=>{spawned++;throw Error('UNSAFE_WORLD_MATERIALIZATION');}};
+ assert.equal(getMountedScene(runtime,SYSTEM),live);
+ assert.equal(getMountedScene(runtime,SYSTEM+1),null);
+ assert.equal(getMountedScene(runtime,0),null);
+ assert.equal(getMountedScene({scenes:new Map([[SYSTEM,{systemID:SYSTEM+1}]])},SYSTEM),null);
+ assert.equal(spawned,0);
+});
+test('agent cannot use nonexistent getScene callback or fabricate a native scene',()=>{
+ const runtime={getScene:()=>{throw Error('UNEXPECTED_GET_SCENE');},
+  ensureScene:()=>{throw Error('UNSAFE_WORLD_MATERIALIZATION');}};
+ assert.equal(getMountedScene(runtime,SYSTEM),null);
 });
