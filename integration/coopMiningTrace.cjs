@@ -137,6 +137,26 @@ function noteTargetMismatch(fleetRecord, scene, minerEntity, entry, activeEffect
   });
 }
 
+// A mining module that activates and is stopped again inside the same tick looks
+// exactly like "no ore": the snapshot at tick end shows no effects and the next
+// tick pays the activation cost again. This records who stopped it, with the
+// reason string the caller passed and whether it was a mining effect.
+function noteModuleStop(scene, entity, moduleID, reason, via) {
+  if (!entity || entity.nativeNpc !== true) return;
+  const effects = entity.activeModuleEffects;
+  const effect = effects instanceof Map ? effects.get(Number(moduleID) || 0) : null;
+  if (!effect) return;
+  note("MODULE_STOP_" + String(via || "unknown").toUpperCase(), {
+    systemID: Number(scene && scene.systemID) || 0,
+    fleetID: 0,
+    shipID: Number(entity.itemID) || 0,
+    moduleID: Number(moduleID) || 0,
+    stopReason: String(reason || ""),
+    mining: effect.miningEffect === true,
+    ageMs: Math.round(Date.now() - (Number(effect.startedAtMs) || 0)),
+  });
+}
+
 // One snapshot per fleet think. The think interval is minutes, so this is the only
 // place that reliably describes every ship: mode, active module effects, capacitor
 // and whether a runtime controller exists. Emitting it from the module-assignment
@@ -154,6 +174,7 @@ function noteTick(fleetRecord, scene, now, thinkIntervalMs) {
 module.exports = {
   note,
   noteTick,
+  noteModuleStop,
   noteActivationFailure,
   noteTargetSelected,
   noteTargetMismatch,

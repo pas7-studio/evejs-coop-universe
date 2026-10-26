@@ -163,7 +163,16 @@ const specs=[
   ]},
  {"file":"server/src/space/modules/localCycleReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
- {file:"server/src/space/runtime.js",patches:[]},
+ {file:"server/src/space/runtime.js",patches:[
+    // A co-op mining module stopped by anything (state change, cargo, warp, NPC
+    // combat, sessionless finalize) is invisible in every other trace: the tick-end
+    // snapshot only shows that no effect exists. These two entry hooks record the
+    // caller's own reason string next to the module id.
+    {anchor:'  deactivateGenericModule(session, moduleID, options = {}) {\n    const entity = this.getShipEntityForSession(session);',after:true,
+     line:'   require("./coopMiningTrace").noteModuleStop(this,this.getShipEntityForSession(session),moduleID,(options&&options.reason)||"manual","session");'},
+    {anchor:'function finalizeGenericModuleDeactivationWithoutSession(\n  scene,\n  entity,\n  effectState,\n  options = {},\n) {',after:true,
+     line:'  require("./coopMiningTrace").noteModuleStop(scene,entity,effectState&&effectState.moduleID,(options&&options.reason)||"state","nosession");'}
+  ]},
  {file:"server/src/space/movement/warp/movementWarpState.js",patches:[]},
  {file:"server/src/space/npc/nativeNpcService.js",patches:[]},
  {file:"server/index.js",patches:[]},
