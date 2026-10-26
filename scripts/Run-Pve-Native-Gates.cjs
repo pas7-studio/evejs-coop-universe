@@ -96,9 +96,14 @@ function gatePinned(root,nativeCode){
 function main(args=process.argv.slice(2)){
  const root=path.resolve(__dirname,".."),flag=args.indexOf("--upstream-code");
  if(flag!==-1&&!args[flag+1])crash("MISSING_UPSTREAM_CODE_PATH");
- if(args.some((x,i)=>x!=="--source"&&x!=="--upstream-code"&&(i===0||args[i-1]!=="--upstream-code")))
+ if(args.some((x,i)=>x!=="--source"&&x!=="--pinned-only"&&
+    x!=="--upstream-code"&&(i===0||args[i-1]!=="--upstream-code")))
   crash("UNKNOWN_OPTION");
- const result={source:gateSource(root),pinned:flag<0?
+ if(args.includes("--pinned-only")&&flag<0)
+  crash("PINNED_ONLY_REQUIRES_DISPOSABLE_PATH");
+ const result={source:args.includes("--pinned-only")?
+  {status:"NOT_RUN",reason:"SEPARATE_CI_NODE_SOURCE_JOB"}:
+  gateSource(root),pinned:flag<0?
   {status:"NOT_RUN",reason:"NO_DISPOSABLE_PINNED_UPSTREAM"}:
   gatePinned(root,args[flag+1]),
   liveTwoClients:{status:"NOT_RUN",reason:"NO_CONNECTED_GAME_CLIENT_SESSION"},
