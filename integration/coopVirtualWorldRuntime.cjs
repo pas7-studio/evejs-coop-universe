@@ -2108,6 +2108,11 @@ function advanceNativePveObjectiveDoctrine(){
      structure:Number(actual.structure)/Number(max.structure)};
    },
    isScrambled:ship=>scramble.isEntityWarpScrambled(ship),
+   getStructureHP:obj=>{
+    const max=damage.getEntityMaxHealthLayers(obj),
+     actual=damage.getEntityCurrentHealthLayers(obj,max);
+    return Number(actual?.structure);
+   },
    attack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
    warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options),
    orbit:(id,targetID,distance,options)=>npc.orbit(id,targetID,distance,options)
