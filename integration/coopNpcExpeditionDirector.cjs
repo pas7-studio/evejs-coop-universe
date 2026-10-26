@@ -28,6 +28,10 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>3)
   throw Error("NPC_EXPEDITION_NATIVE_AUTHORITIES_REQUIRED");
  const intel=new Map(),pending=new Map();
+ // EX-03B10: bounded, rotating hardware checks avoid starvation when the
+ // genuinely equipped scout is beyond the ordinary per-tick patrol cap.
+ let scannerCursor=0;
+ const SCANNER_PREFLIGHT_BUDGET=128;
  let currentScene=null,currentAssignments=[],currentCatalog=null;
  const nativeSite=(systemID,siteID,fresh=false)=>{
   let sites;
@@ -84,8 +88,35 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   const candidateIDs=[...new Set(assignments.filter(a=>
    pos(a?.entityID)&&named(a?.pilotID)&&roles[a.pilotID]==="patrol")
    .map(a=>a.entityID))].sort((a,b)=>a-b);
-  const all=candidateIDs.slice(0,maxPilotsPerTick)
-   .map(id=>readPilot(scene,id,assignments)).filter(Boolean);
+  // Scanner admission must happen BEFORE filling the ordinary pilot budget.
+  // Otherwise a valid scanner behind 32 un-equipped patrols never ticks.
+  // Only original native hardware may admit a scout. A missing authority or
+  // a failing store lookup is not permission to scan with a virtual pilot.
+  const equipped=[];
+  if(nativeProbeScan&&isNativeProbeScout&&candidateIDs.length){
+   const checks=Math.min(candidateIDs.length,SCANNER_PREFLIGHT_BUDGET);
+   for(let step=0;step<checks;step++){
+    const id=candidateIDs[(scannerCursor+step)%candidateIDs.length];
+    let admitted=false;
+    try{admitted=isNativeProbeScout(id,scene.systemID)===true}
+    catch{continue}
+    if(!admitted)continue;
+    const pilot=readPilot(scene,id,assignments);
+    if(!pilot)continue;
+    equipped.push(pilot);
+    if(equipped.length>=2)break;
+   }
+   // Advance a FULL bounded window even if two scouts were admitted early.
+   // This makes every patrol eligible eventually, with no new timer.
+   scannerCursor=(scannerCursor+checks)%candidateIDs.length;
+  }
+  const all=[...equipped],selected=new Set(equipped.map(p=>p.entityID));
+  for(const id of candidateIDs){
+   if(all.length>=maxPilotsPerTick)break;
+   if(selected.has(id))continue;
+   const pilot=readPilot(scene,id,assignments);
+   if(pilot)all.push(pilot);
+  }
   let sites;
   try{sites=listNativeSites(scene.systemID)}catch{
    return {status:"NATIVE_SITE_CATALOG_UNAVAILABLE",observed:0,orders:0};
@@ -130,20 +161,9 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   // source probeScanRuntime result, backed by original NPC cargo flight
   // receipts and in-scene probe entities. No synthetic catalog discovery.
   let remoteScans=0;
-  // EX-03B9: choose from ALL bounded patrols by original fitted scanner
-  // source, not the first two patrol hulls (which might lack a launcher).
-  // Read-only and fail-closed; never infer scout status from virtual role.
-  const equipped=[];
-  if(nativeProbeScan)for(const scout of all){
-   if(isNativeProbeScout){
-    let admitted=false;
-    try{admitted=isNativeProbeScout(scout.entityID,scene.systemID)===true}
-    catch{continue}
-    if(!admitted)continue;
-   }
-   equipped.push(scout);
-   if(equipped.length>=2)break;
-  }
+  // EX-03B10: the scan cohort was admitted by original native scanner
+  // equipment BEFORE the ordinary patrol cap; never fall back to scanning
+  // unverified patrols if the hardware authority is missing or fails.
   if(nativeProbeScan)for(const scout of equipped){
    let scan;
    try{scan=nativeProbeScan({scene,entityID:scout.entityID,assignments})}
