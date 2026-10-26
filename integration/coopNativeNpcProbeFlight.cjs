@@ -137,7 +137,9 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
   if(spawn?.success!==true)return deny("NPC_PROBE_NATIVE_SPAWN_FAILED");
   const landed=ctx.scene.getEntityByID(p.probeID);
   if(!landed||landed.itemID!==p.probeID||landed.kind!=="probe"||
+   landed.nativeNpcProbe!==true||landed.nativeNpcCargoID!==row.cargoID||
    landed.typeID!==row.typeID||landed.ownerID!==ctx.native.ownerID||
+   landed.systemID!==ctx.scene.systemID||
    !vec(landed.position)||dist(landed.position,p.position)>1)
    return deny("NPC_PROBE_NATIVE_SPAWN_UNCONFIRMED");
   return {status:"NATIVE_PROBE_MATERIALIZED",cargoID:row.cargoID};
