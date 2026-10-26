@@ -33,7 +33,12 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   if(!Array.isArray(sites)||sites.length>2048)return null;
   const found=sites.filter(s=>s&&s.siteID===siteID&&
    (s.systemID===systemID||s.solarSystemID===systemID)&&vector(s.actualPosition));
-  return found.length===1?{...found[0],systemID}:null;
+  if(found.length!==1)return null;
+  const physical=currentScene?.systemID===systemID?
+   currentScene.getEntityByID?.(siteID):null;
+  if(!physical||physical.itemID!==siteID||!vector(physical.position)||
+     distance(physical.position,found[0].actualPosition)>1)return null;
+  return {...found[0],systemID};
  };
  const readPilot=(scene,entityID,assignments)=>{
   const matches=assignments.filter(a=>a.entityID===entityID&&
