@@ -94,4 +94,30 @@ function contestedSystemIDs(options = {}) {
   return [...ids].sort((a, b) => a - b);
 }
 
-module.exports = { borderEdges, buildFronts, contestedSystemIDs, ownerOf };
+// Territory from real presence: a faction holds a system when its own ships are
+// actually there. This is the missing input for the front builder - no invented
+// ownership map, only what the world really contains.
+function territoriesFromPresence({ pilots = [], minShips = 1 } = {}) {
+  const counts = new Map();
+  for (const pilot of Array.isArray(pilots) ? pilots : []) {
+    const systemID = num(pilot && pilot.systemID);
+    const factionID = String((pilot && pilot.factionID) || "");
+    if (!positive(systemID) || !factionID) continue;
+    if (!counts.has(systemID)) counts.set(systemID, new Map());
+    const perFaction = counts.get(systemID);
+    perFaction.set(factionID, (perFaction.get(factionID) || 0) + 1);
+  }
+  const threshold = Math.max(1, Math.trunc(num(minShips) || 1));
+  const territories = {};
+  for (const [systemID, perFaction] of counts) {
+    const ranked = [...perFaction.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const [factionID, ships] = ranked[0];
+    const runnerUp = ranked[1] ? ranked[1][1] : 0;
+    // A tie is contested, not owned: never hand a system to a coin flip.
+    if (ships < threshold || ships === runnerUp) continue;
+    territories[systemID] = factionID;
+  }
+  return territories;
+}
+
+module.exports = { borderEdges, buildFronts, contestedSystemIDs, ownerOf, territoriesFromPresence };

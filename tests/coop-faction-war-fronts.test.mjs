@@ -59,3 +59,20 @@ test('contested systems are exactly the systems on a border',()=>{
  assert.deepEqual(contestedSystemIDs({territories,...world()}),[2,3,5]);
  assert.deepEqual(contestedSystemIDs({territories}),[]);
 });
+
+test('territory comes from real presence, never from a coin flip',()=>{
+ const {territoriesFromPresence}=require('../integration/coopFactionWarFronts.cjs');
+ const pilots=[
+  {systemID:1,factionID:'caldari'},{systemID:1,factionID:'caldari'},
+  {systemID:2,factionID:'gallente'},{systemID:2,factionID:'gallente'},{systemID:2,factionID:'gallente'},
+  {systemID:3,factionID:'caldari'},{systemID:3,factionID:'gallente'},
+  {systemID:4,factionID:'caldari'},
+ ];
+ const territories=territoriesFromPresence({pilots});
+ assert.equal(territories[1],'caldari');
+ assert.equal(territories[2],'gallente');
+ assert.equal(territories[3],undefined);   // tie is contested, not owned
+ assert.equal(territories[4],'caldari');
+ assert.equal(territoriesFromPresence({pilots,minShips:2})[4],undefined);
+ assert.deepEqual(territoriesFromPresence({pilots:[{systemID:0,factionID:'x'},{systemID:1}]}),{});
+});
