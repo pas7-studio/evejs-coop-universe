@@ -239,8 +239,34 @@ function adopt(scene,fleet,options={}){
   // The original custody must be re-flushed after compensation, not just
   // restored to an in-memory table. Unknown rollback means operator hold.
   const durable=flushCargo();
-  if(!restored||!durable){
+  // Upsert and flush ACKs do not prove that the original cargo rows were
+  // restored. Some adapters can acknowledge a write yet silently keep the
+  // replacement-hauler row. Read back every original cargoID globally and
+  // confirm exact source custody before permitting a later retry.
+  let verified=false;
+  if(restored&&durable){
+   try{
+    const all=cargoRows({store,cargoTable:options.cargoTable,database});
+    const target=store.listNativeCargoForEntity(haulerID);
+    const custodyFields=["cargoID","entityID","ownerID","typeID","quantity",
+     "moduleID","transient","coopHaulFleetID","coopHaulSystemID",
+     "coopHaulFromMinerID","coopHaulLoadedAt","coopHaulAdoptedAt",
+     "coopHaulAdoptedFrom"];
+    const same=(actual,original)=>custodyFields.every(field=>
+     Object.hasOwn(actual,field)===Object.hasOwn(original,field)&&
+     Object.is(actual[field],original[field]));
+    verified=Array.isArray(all)&&Array.isArray(target)&&
+     touched.every(original=>{
+      const hits=all.filter(row=>pos(row?.cargoID)===pos(original.cargoID));
+      return hits.length===1&&same(hits[0],original)&&
+       !target.some(row=>pos(row?.cargoID)===pos(original.cargoID));
+     });
+   }catch(_error){verified=false}
+  }
+  if(!restored||!durable||!verified){
    fleet.coopHaulNeedsOperatorRepair=true;
+   hauler.coopHaulNeedsOperatorRepair="ADOPTION_RECOVERY_UNVERIFIED";
+   doneSlots.add(key);
    noteOnce(noted,key+":recovery",probe,"living-haul-cargo-adoption-skipped",
     {systemID},{fleetID,status:"ADOPTION_RECOVERY_UNVERIFIED",reason:status});
    return {status:"ADOPTION_RECOVERY_UNVERIFIED",detail,adopted:0};
