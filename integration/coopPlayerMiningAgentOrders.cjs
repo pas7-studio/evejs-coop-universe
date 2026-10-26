@@ -18,9 +18,20 @@ function availableCommands(row){
    !Number.isSafeInteger(row.commandSeq)||row.commandSeq<0||
    !SAFE_STATES.has(row.commandState))return [];
  if(row.commandState==="IDLE")
-  return row.directive==="MINE"?["MINE"]:[];
- if(row.directive==="MINE")return ["HOLD","HAUL","RETREAT"];
- if(row.directive==="HOLD")return ["MINE","RETREAT"];
+  return row.directive==="MINE"&&
+   (row.nativeState===undefined||row.nativeState==="mining")?["MINE"]:[];
+ if(row.directive==="MINE"){
+  if(["hauling","loaded","haulereturn"].includes(row.nativeState))
+   return ["HOLD"]; // safe deferral, never abort original cargo custody
+  if(["aggressed","panic"].includes(row.nativeState))
+   return ["RETREAT"]; // original NPC combat owns all other actions
+  if(row.nativeState!==undefined&&row.nativeState!=="mining")return [];
+  return ["HOLD","HAUL","RETREAT"];
+ }
+ if(row.directive==="HOLD"){
+  if(row.nativeState!==undefined&&row.nativeState!=="coop-hold")return [];
+  return ["MINE","RETREAT"];
+ }
  return []; // HAUL/RETREAT native outcome not independently reconciled yet.
 }
 function createMiningAgentOrderMenu({assignOrder,access,clock=()=>Date.now(),
