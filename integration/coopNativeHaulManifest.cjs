@@ -148,7 +148,8 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
     if(receipt?.version!==1||receipt.phase!=="COMMITTED"||
      id(receipt.cargoID)!==row.cargoID||id(receipt.haulerID)!==row.haulerID||
      id(receipt.typeID)!==row.typeID||
-     id(receipt.stationID)!==m.stationID||id(receipt.corporationID)!==m.corporationID||
+     id(receipt.stationID)!==m.stationID||
+     (!saleFill&&id(receipt.corporationID)!==m.corporationID)||
      id(receipt.systemID)!==m.systemID||id(receipt.fleetID)!==m.fleetID||
      (saleFill?!saleFillCoversRow(receipt,row,m):
       (id(receipt.quantity)!==row.quantity||!valid(receipt.itemID))))

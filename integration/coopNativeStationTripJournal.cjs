@@ -134,7 +134,10 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
   if(!r||r.version!==1||r.phase!=="COMMITTED"||r.source!=="NPC_MARKET_FILL")return false;
   if(r.cargoID!==row.cargoID||r.haulerID!==row.haulerID||r.typeID!==row.typeID)return false;
   if(r.systemID!==m.systemID||r.fleetID!==m.fleetID)return false;
-  if(Number(r.corporationID)!==Number(m.corporationID))return false;
+  // The receipt records the ore OWNER (used by the deposit path); the manifest names
+ // the station corporation. Ownership was proven when the cargo was transferred, so
+ // the fill proof itself is about units, station and time - not about the corporation.
+ if(!pos(r.corporationID))return false;
   const left=Number(remaining);
   if(!Number.isSafeInteger(left)||left<0)return false;
   // Only fills that happened during THIS trip at THIS manifest's station can prove

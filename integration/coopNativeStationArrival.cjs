@@ -109,6 +109,9 @@ function recordSaleReceipt({root,probe,systemID,cargoID,haulerID,typeID,quantity
  }
 }
 const warehouseBlockedAt=new Map();
+// cargoID -> quantity BEFORE the fill was requested, per station:hauler. The sale
+// settles asynchronously, so the tick that reads SOLD already sees an emptied hull.
+const saleBaseline=new Map();
   const saleSkippedNoted=new Set();
  const strictMotion=()=>escortEnabled&&
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
@@ -892,6 +895,10 @@ const warehouseBlockedAt=new Map();
    // arrival pauses until it settles instead of blocking the native tick.
    let sale=null;
    if(typeof beforeDeposit==="function"&&cargo.length){
+    const baselineKey=Number(trip.stationID)+":"+Number(id);
+    if(!saleBaseline.has(baselineKey))
+     saleBaseline.set(baselineKey,new Map(cargo.map(row=>
+      [Number(row.cargoID),Number(row.quantity)])));
     try{sale=beforeDeposit({scene,systemID:trip.systemID,stationID:trip.stationID,
      fleetID:trip.fleetID,haulerID:id,corporationID:trip.corporationID,
      cargoIDs:cargo.map(row=>Number(row.cargoID)),
@@ -933,7 +940,13 @@ const warehouseBlockedAt=new Map();
     }
     const remaining=new Map();
     for(const row of deliverable)remaining.set(Number(row.cargoID),Number(row.quantity));
-    const moved=cargo.map(row=>({row,left:Number(row.quantity)-
+    // Prefer the snapshot taken when the fill was requested; the hull may already be
+    // empty by the time the asynchronous settlement is readable.
+    const baselineKey=Number(trip.stationID)+":"+Number(id);
+    const beforeMap=saleBaseline.get(baselineKey)||null;
+    const sourceRows=beforeMap?cargo.filter(row=>beforeMap.has(Number(row.cargoID)))
+     .map(row=>({...row,quantity:beforeMap.get(Number(row.cargoID))})):cargo;
+    const moved=sourceRows.map(row=>({row,left:Number(row.quantity)-
      (remaining.has(Number(row.cargoID))?remaining.get(Number(row.cargoID)):0)}))
      .filter(entry=>entry.left>0);
     // A sale receipt is the proof that a row is GONE. A partly sold row is still on
@@ -969,6 +982,8 @@ const warehouseBlockedAt=new Map();
     }
    }
    for(const item of deliverable){
+    // The settled fill is fully recorded: the next visit starts its own snapshot.
+    saleBaseline.delete(baselineKey);
     // The ore belongs to the fleet corporation (the seller), not to the station
     // operator. Crediting the station would claim title to cargo it never owned, so
     // the deposit goes into the OWNER’s own hangar at that station: the receipt
