@@ -95,7 +95,12 @@ function createAdapter({gameStore,store,access,getFleetRecord,getScene,
    startHaul:()=>startHaul()===true,
    retreat:()=>retreat()
   };
-  const result=orders.dispatch({fleet,native});
+  // The physical stock mining record owns all actual phase changes.
+  const liveFleet=Object.defineProperties({...fleet},{
+   state:{get:()=>fleetRecord.state,set:v=>{fleetRecord.state=v;},enumerable:true},
+   nextThinkAtMs:{get:()=>fleetRecord.nextThinkAtMs,
+    set:v=>{fleetRecord.nextThinkAtMs=v;},enumerable:true}});
+  const result=orders.dispatch({fleet:liveFleet,native});
   if(result.status==="BLOCKED"&&result.reason!=="MINING_SHIFT_NATIVE_FLEET_CHANGED")
    try{observe("player-mining-shift-blocked",{systemID:scene.systemID,
     fleetID:fleet.fleetID,status:"BLOCKED",reason:result.reason});}catch{}
