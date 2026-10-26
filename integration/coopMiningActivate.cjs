@@ -28,7 +28,28 @@ function activate(deps = {}) {
     noteFailure(deps, result);
     return {attempted: true, success: false};
   }
-  return {attempted: true, success: true};
+  // A successful activation is not proof that the module mines: the runtime flags
+  // the effect as a mining effect only when resolveMiningActivation matched the
+  // module and its target. An effect that activates without that flag runs and
+  // produces nothing, which looks exactly like "active modules, no ore".
+  const miningEffect = readBackMiningEffect(scene, minerEntity, entry);
+  if (miningEffect === false) note(deps, "ACTIVATED_NOT_MINING", {moduleID: Number(entry.moduleItem.itemID) || 0});
+  return {attempted: true, success: true, miningEffect};
+}
+
+function readBackMiningEffect(scene, minerEntity, entry) {
+  try {
+    const entity = minerEntity && scene && typeof scene.getEntityByID === "function"
+      ? scene.getEntityByID(minerEntity.itemID)
+      : null;
+    const effects = entity && entity.activeModuleEffects;
+    if (!(effects instanceof Map)) return null;
+    const effect = effects.get(Number(entry.moduleItem.itemID)) || null;
+    if (!effect) return null;
+    return effect.miningEffect === true;
+  } catch (_error) {
+    return null;
+  }
 }
 
 function trace(deps) {
