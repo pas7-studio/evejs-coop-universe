@@ -106,3 +106,41 @@ test("arbitrary unknown client agent action cannot issue a different order",()=>
  const x=make();x.open(234);x.open(9);x.open(6);
  assert.equal(x.orders.length,0);
 });
+
+test("original paid mining Agent shows market expenses only from audited corporate native receipts",()=>{
+ const session={characterID:778,userid:14,corporationID:CORP,socket:{destroyed:false}};
+ const shift={version:1,status:"FUNDED",operationID:"coop-mining-shift:"+"a".repeat(32),
+  corporationID:CORP,employerCorpID:EMPLOYER,systemID:SYSTEM,fleetID:FLEET,
+  minerIDs:[201],haulerIDs:[202],wageCents:75000,commandSeq:0,
+  directive:"MINE",commandState:"IDLE"};
+ let auditCalls=0,orders=0;
+ const svc=createMiningAgent({enabled:()=>true,getAgent:()=>({agentID:AGENT,
+  corporationID:EMPLOYER,solarSystemID:SYSTEM,stationID:STATION,isInSpace:false}),
+  getMission:()=>null,getSessions:()=>[session],
+  getFleetRecords:()=>[{source:"startup",fleetID:FLEET,systemID:SYSTEM}],
+  inspectShift:()=>shift,assignOrder:()=>{orders++;throw Error("MUTATION");},
+  access:{isMember:()=>true,canIndustry:()=>true},
+  getMarketStatus:()=>{auditCalls++;return {status:"NATIVE_CORPORATE_SELL_UNSUPPORTED",
+   verifiedCashOutflowCents:87000,realizedRevenueCents:null,netProfitCents:null}}});
+ const result=svc.doAction({session,agentID:AGENT,actionID:1});
+ assert.match(result.data.agentSays[0],/Verified scoped cash expenses: 870.00 ISK/);
+ assert.match(result.data.agentSays[0],/net profit remain unverified/);
+ assert.equal(auditCalls,1);assert.equal(orders,0);
+});
+test("agent never displays guessed profit from missing original native market audit",()=>{
+ const session={characterID:778,userid:14,corporationID:CORP};
+ const shift={version:1,status:"FUNDED",operationID:"coop-mining-shift:"+"a".repeat(32),
+  corporationID:CORP,employerCorpID:EMPLOYER,systemID:SYSTEM,fleetID:FLEET,
+  minerIDs:[201],haulerIDs:[202],wageCents:75000,commandSeq:0,
+  directive:"MINE",commandState:"IDLE"};
+ const svc=createMiningAgent({enabled:()=>true,getAgent:()=>({agentID:AGENT,
+  corporationID:EMPLOYER,solarSystemID:SYSTEM,stationID:STATION,isInSpace:false}),
+  getMission:()=>null,getSessions:()=>[session],
+  getFleetRecords:()=>[{source:"startup",fleetID:FLEET,systemID:SYSTEM}],
+  inspectShift:()=>shift,assignOrder:()=>null,
+  access:{isMember:()=>true,canIndustry:()=>true},
+  getMarketStatus:()=>{throw Error("NATIVE_MARKET_UNAVAILABLE")}});
+ const response=svc.doAction({session,agentID:AGENT,actionID:1});
+ assert.doesNotMatch(response.data.agentSays[0],/Verified scoped cash expenses/);
+ assert.doesNotMatch(response.data.agentSays[0],/profit: [0-9]/);
+});
