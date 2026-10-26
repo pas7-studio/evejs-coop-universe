@@ -36,6 +36,12 @@ test("real analyzer initiation returns one-use, session-bound canonical stats",(
 test("direct RPC never fabricates an analyzer admission",()=>{
  const f=fixture();assert.equal(f.guard.consume(f.session,f.rpc),null);
 });
+test("valid hacking continues after 5s admission but not beyond 3min",()=>{
+ const f=fixture();assert.equal(f.guard.issue(f.session,f.request).status,"ISSUED");
+ const entry=f.guard.consume(f.session,f.rpc);assert.ok(entry);
+ f.advance(6000);assert.equal(f.guard.validate(f.session,entry),true);
+ f.advance(175000);assert.equal(f.guard.validate(f.session,entry),false);
+});
 test("wrong module or game type consumes ticket and prevents replay",()=>{
  const f=fixture();f.guard.issue(f.session,f.request);
  assert.equal(f.guard.consume(f.session,{...f.rpc,moduleTypeID:232}),null);
