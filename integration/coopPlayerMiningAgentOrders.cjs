@@ -117,7 +117,7 @@ function createMiningAgentOrderMenu({assignOrder,access,clock=()=>Date.now(),
    createdAt:now,expiresAt:now+TTL_MS});
   return show(chosen,index,choices.length,next?"SELECTED":"PREVIEW");
  }
- return Object.freeze({interact,availableCommands,mode:"STOCK_AGENT_EXPLICIT_SELECTION"});
+ return Object.freeze({interact,availableCommands,enabled,mode:"STOCK_AGENT_EXPLICIT_SELECTION"});
 }
 function native(){
  const fleet=require("./coopPlayerMiningFleetTick"),flags=require("./coopFlags");
