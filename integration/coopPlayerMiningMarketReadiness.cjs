@@ -203,6 +203,16 @@ function inspectNative(input){
   return native().inspectShift(input);
  }catch{return null;}
 }
+// Exact source-bound cargo lookup for native market orders; inventory may
+// contain several owned cargo rows and only the selected item is for sale.
+// Never scan all title rows as one indivisible order.
+function inspectCargoNative(input){
+ try{
+  if(!require("./coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ")||
+   !Number.isSafeInteger(input?.cargoID)||input.cargoID<=0)return null;
+  return native().inspect({...input,cargoIDs:[input.cargoID]});
+ }catch{return null;}
+}
 module.exports={createCorporateMiningMarketReadiness,matchingWallet,iskCents,
- inspectNative};
+ inspectNative,inspectCargoNative};
 
