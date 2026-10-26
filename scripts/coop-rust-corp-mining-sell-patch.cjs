@@ -168,8 +168,8 @@ function patch(source,which,remove=false){
   put(GUARD,"    let wallet_division = request.wallet_division.unwrap_or(1000);");
   for(const [kind,anchor,block] of [
    ["fill","fn fill_order_in_db(database_path: &Path, request: FillOrderRequest) -> Result<FillOrderResponse> {",STANDARD_ORDER_GUARDS.fill],
-   ["cancel","fn cancel_order_in_db(","",STANDARD_ORDER_GUARDS.cancel],
-   ["modify","fn modify_order_in_db(","",STANDARD_ORDER_GUARDS.modify]
+   ["cancel","fn cancel_order_in_db(",STANDARD_ORDER_GUARDS.cancel],
+   ["modify","fn modify_order_in_db(",STANDARD_ORDER_GUARDS.modify]
   ]){
    if(remove){
     if(unique(text,block)!==1)throw Error("CORP_RUST_STOCK_GUARD_REMOVE_DRIFT:"+kind);
