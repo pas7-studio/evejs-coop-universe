@@ -57,7 +57,7 @@ function fixture(){
   clock:()=>now,enabled:()=>enabled});
  const get=(t,k)=>data[t].get(k),run=()=>settlement.settle({orderID:ORDER,cycle:claim.cycle});
  const next=()=>{claim={...claim,cycle:2,volumeBefore:5,quantity:5,volumeAfter:0}};
- return {settlement,run,next,get,claim:()=>claim,
+ return {settlement,gameStore,run,next,get,claim:()=>claim,
   source:()=>get("items",String(ITEM)),
   corp:()=>get("corporationRuntime","corporations"+SEP+CORP),
   buyer:()=>get("characters",String(BUYER)),
@@ -192,4 +192,21 @@ test("a fake native Rust claim with out-of-order volume cannot bypass previous f
  x.next();x.tamperClaim(c=>({...c,cycle:3}));
  assert.equal(x.run().reason,"CORP_FILL_NATIVE_SETTLEMENT_OUTCOME_UNKNOWN");
  assert.equal(x.receipt(3),undefined);
+});
+
+test("asynchronous original Rust GetCorpFillClaim + native fee rule precede one atomic GameStore commit",async()=>{
+ const x=fixture(),steps=[];
+ const live=createCorporateSellFillSettlement({
+  gameStore:x.gameStore,
+  readNativeClaim:async()=>{steps.push("RustRead");return x.claim()},
+  quoteNativeFees:async()=>{steps.push("NativeTaxPolicy");return {
+   verifiedNative:true,transactionTaxCents:30,brokerFeeCents:15}},
+  clock:()=>1793030000000,enabled:()=>true
+ });
+ const done=await live.settleAsync({orderID:ORDER,cycle:1});
+ assert.equal(done.phase,"GAMESTORE_COMMITTED");
+ assert.deepEqual(steps,["RustRead","NativeTaxPolicy"]);
+ assert.equal(x.buyer().balance,192.50);
+ assert.equal(x.corp().wallet.divisions["1000"].balance,127.05);
+ assert.equal(x.receipt(1).receiptKey,"coopPlayerMiningCorpFill"+SEP+ORDER+":1");
 });
