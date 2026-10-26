@@ -207,3 +207,21 @@ test("broken native scanner equipment lookup fails closed per hull",()=>{
  d.tick(f.input());
  assert.deepEqual(scanned,[24]);
 });
+
+test("long miner and hauler assignment prefix cannot starve real NPC scout",()=>{
+ const f=fixture(),seen=[];
+ const fillers=Array.from({length:40},(_,i)=>({
+  pilotID:"coop-pilot-"+String(i+1000),entityID:1000+i,systemID:30000142
+ }));
+ for(const assignment of fillers)f.roles[assignment.pilotID]="miner";
+ f.assignments.unshift(...fillers);
+ const d=f.create({
+  isNativeProbeScout:id=>id===23,
+  nativeProbeScan:({entityID})=>{
+   seen.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }
+ });
+ d.tick(f.input());
+ assert.deepEqual(seen,[23]);
+});
