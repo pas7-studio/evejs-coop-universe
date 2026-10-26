@@ -69,11 +69,18 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     Number(station.solarSystemID)===record.systemID);
  }
  function checkTarget(record){
-  const result=items.findWarehouseItem({ownerID:record.corporationID,stationID:record.stationID,
-    cargoID:record.cargoID});
+  // The pinned ItemStore lookup is global by the original cargo tag.
+  // A target is proven as station stock only while it is the *same*
+  // physical, unsplit stack in the receiving corporation's hangar.
+  const result=items.findWarehouseItem({cargoID:record.cargoID});
   if(result&&(!pos(result.itemID)||Number(result.typeID)!==record.typeID||
      Number(result.quantity)!==record.quantity||Number(result.ownerID)!==record.corporationID||
-     Number(result.locationID)!==record.stationID||String(result.customInfo)!==marker(record.cargoID)))
+     Number(result.locationID)!==record.stationID||
+     !Number.isSafeInteger(items.ITEM_FLAGS?.HANGAR)||
+     Number(result.flagID)!==items.ITEM_FLAGS.HANGAR||
+     Number(result.singleton)!==0||
+     Number(result.stacksize)!==record.quantity||
+     String(result.customInfo)!==marker(record.cargoID)))
    throw Error("WAREHOUSE_TARGET_IDENTITY_CONFLICT");
   return result||null;
  }
