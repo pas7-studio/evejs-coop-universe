@@ -13,6 +13,7 @@ import {fileURLToPath} from "node:url";
 const require=createRequire(import.meta.url);
 const self=fileURLToPath(import.meta.url);
 const {createNativeNpcProbeFlight}=require("../integration/coopNativeNpcProbeFlight.cjs");
+const {createNpcProbeHardware}=require("../integration/coopNpcProbeHardware.cjs");
 const {createNativeNpcProbeSweep}=require("../integration/coopNativeNpcProbeSweep.cjs");
 const {createNativeNpcProbeLifecycle}=require("../integration/coopNativeNpcProbeLifecycle.cjs");
 
@@ -102,6 +103,9 @@ function fixture(native,stage){
   clock:()=>stage.startsWith("expire")||stage==="verify"?
    launchNow+3600001:launchNow
  };
+ const hardware=createNpcProbeHardware({...deps,
+  getCompatibleProbeChargeTypeIDs:launcher=>launcher===17938?[30013]:[]
+ });
  const flight=createNativeNpcProbeFlight({...deps,
   compatibleCharges:launcher=>launcher===17938?[30013]:[],
   resolveProbeRange:(_type,step)=>({rangeStep:step,scanRange:1e10}),
@@ -114,7 +118,7 @@ function fixture(native,stage){
  const sweep=createNativeNpcProbeSweep({...deps,cellSpacingMeters:2e10});
  const lifecycle=createNativeNpcProbeLifecycle({...deps,
   removeNativeProbe:(_sys,id)=>{items.delete(id);return {success:true}}});
- return {scene,ship,items,assignments,flight,sweep,lifecycle};
+ return {scene,ship,items,assignments,hardware,flight,sweep,lifecycle};
 }
 function child(stage){
  const {store,native}=nativeModules();
@@ -123,7 +127,7 @@ function child(stage){
   for(const [table,record,method] of [
    ["npcEntities",{entityID,systemID,ownerID,corporationID,transient:false},"upsertNativeEntity"],
    ["npcModules",{moduleID,entityID,ownerID,typeID:17938,groupID:481,
-    categoryID:7,moduleState:{online:true}},"upsertNativeModule"],
+    categoryID:7,flagID:11,moduleState:{online:true}},"upsertNativeModule"],
    ["npcRuntimeControllers",{entityID,systemID},"upsertNativeController"]]){
    const res=native[method](record);
    assert.equal(res.success,true,table+" "+JSON.stringify(res));
@@ -142,6 +146,11 @@ function child(stage){
   assert.equal(sourceBefore.length,4,"EXACTLY_FOUR_ORIGINAL_CARGO_ROWS");
   if(/^launch-[1-4]$/.test(stage)){
    const i=Number(stage.split("-")[1])-1;
+   if(i===0){
+    const ready=runtime.hardware.check(args);
+    assert.equal(ready.status,"NATIVE_SCANNER_HARDWARE_READY",JSON.stringify(ready));
+    assert.equal(ready.availableUnits,4);
+   }
    assert.equal(sourceBefore.filter(r=>r.deployedProbe?.status==="IN_SPACE").length,i);
    const result=runtime.flight.tick(args);
    assert.equal(result.status,"NATIVE_PROBE_LAUNCHED",JSON.stringify(result));
@@ -159,6 +168,9 @@ function child(stage){
    assert.equal(result.status,"NPC_PROBE_RETURNED",JSON.stringify(result));
    assert.equal(result.cargoID,cargoIDs[1]);
   }else if(stage==="relaunch-2"){
+   const ready=runtime.hardware.check(args);
+   assert.equal(ready.status,"NATIVE_SCANNER_HARDWARE_READY",JSON.stringify(ready));
+   assert.equal(ready.availableUnits,1);
    assert.equal(sourceBefore[1]?.deployedProbe?.status,"STOWED");
    assert.equal(sourceBefore[1]?.quantity,1);
    const result=runtime.flight.tick(args);
