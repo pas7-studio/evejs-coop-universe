@@ -1,0 +1,96 @@
+{
+  "schema": "chat19-21-native-pve-live-two-client-e2e-v1",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "releaseStatus": "NOT_VERIFIED",
+  "runtime": "operator-provided disposable pinned EveJS server, original native GameStore/SQLite and two independently authorized EVE clients",
+  "doNotTouch": [
+    "evejs-data",
+    "market.sqlite",
+    "production character wallets",
+    "user client binaries",
+    "licensed assets"
+  ],
+  "proofPolicy": "Unit tests and a source-only CI roundtrip are NOT game-client E2E. A server telemetry chain is NOT proof of client rendering, actual user actions or crash survival.",
+  "scenarios": [
+    {
+      "id": "pve_original_site_spawn",
+      "status": "NOT_RUN",
+      "proof": "Original native dungeon site and authored NPC/boss spawn with matching source IDs"
+    },
+    {
+      "id": "pve_duo_native_accept",
+      "status": "NOT_RUN",
+      "proof": "Two original authenticated players independently request/offer/accept native missions (different sequences)"
+    },
+    {
+      "id": "pve_both_present",
+      "status": "NOT_RUN",
+      "proof": "Original two player ships physically present in the same dungeon, real native shared objective receipt"
+    },
+    {
+      "id": "pve_boss_damage",
+      "status": "NOT_RUN",
+      "proof": "Both eligible pilots physically contribute or a native supported-role rule records contribution without forged damage"
+    },
+    {
+      "id": "pve_boss_tactics",
+      "status": "NOT_RUN",
+      "proof": "Native NPC defend/attack/regroup/retreat orders visibly executed with real hull HP"
+    },
+    {
+      "id": "pve_reinforcement_warp",
+      "status": "NOT_RUN",
+      "proof": "Original authored reinforcement hull physically warps, arrives, responds"
+    },
+    {
+      "id": "pve_original_boss_wreck",
+      "status": "NOT_RUN",
+      "proof": "One original transient native boss dies exactly once and creates one source-backed physical wreck"
+    },
+    {
+      "id": "pve_original_rare_loot",
+      "status": "NOT_RUN",
+      "proof": "Actual loaded NPC profile resolves rare candidate pool; original native RNG creates a real item row, no invented rare drop"
+    },
+    {
+      "id": "pve_two_player_item_pickup",
+      "status": "NOT_RUN",
+      "proof": "Both original clients collect genuine wreck cargo into independent physical ship holds with source decrement"
+    },
+    {
+      "id": "pve_two_personal_native_turnin",
+      "status": "NOT_RUN",
+      "proof": "Original captain and wingman independently close their accepted native missions using the stock agent RPC"
+    },
+    {
+      "id": "pve_two_personal_wallet_lp",
+      "status": "NOT_RUN",
+      "proof": "Each character has distinct real original agent wallet journal txn + correct ISK and LP balance movement"
+    },
+    {
+      "id": "pve_two_personal_items_standing",
+      "status": "NOT_RUN",
+      "proof": "Original station hangar itemIDs/stack quantities and standing transaction rows verified independently for both recipients"
+    },
+    {
+      "id": "pve_no_double_payout",
+      "status": "NOT_RUN",
+      "proof": "Repeat agent completion and retry same wreckItemID cannot duplicate ISK LP item custody or standing"
+    },
+    {
+      "id": "pve_restart_between_awards",
+      "status": "NOT_RUN",
+      "proof": "Intentionally restart between native captain and wingman awards; durable journal requires manual reconciliation, no blind replay"
+    },
+    {
+      "id": "pve_partial_item_grant_crash",
+      "status": "NOT_RUN",
+      "proof": "Intentionally crash after destination grant but before original wreck source decrement; quarantine/recovery manual, no second grant"
+    },
+    {
+      "id": "pve_client_render_target_lock",
+      "status": "NOT_RUN",
+      "proof": "Both authorized clients independently confirm visible NPCs, real target lock, damage, wreck open and inventory update"
+    }
+  ]
+}

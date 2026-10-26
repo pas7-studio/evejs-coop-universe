@@ -153,3 +153,21 @@ test("failure of the FINAL directory fsync cannot return a successful pregrant A
  assert.equal(JSON.parse(fs.readFileSync(f.file,"utf8"))
   .entries["9551:9901:3"].phase,"PENDING");
 }));
+
+test("after restart an original overseer wreck cannot bypass strict pregrant without live witness",()=>fixture(f=>{
+ const overseer={...f.native,profileID:"deadspace-overseer",
+  lootTableID:"parity_deadspace_overseer_pending_loot"};
+ const a=f.make({getBossWreck:()=>null,getNativeWreck:()=>overseer});
+ assert.equal(a.begin(f.args).status,"BOSS_LOOT_LIVE_WITNESS_REQUIRED");
+ assert.equal(fs.existsSync(f.file),false);
+}));
+test("ordinary original native wreck with no boss evidence continues the unmodified transfer",()=>fixture(f=>{
+ const regular={...f.native,profileID:"belt-guristas-frigate",
+  lootTableID:"loot_belt_normal_small"};
+ const a=f.make({getBossWreck:()=>null,getNativeWreck:()=>regular});
+ assert.equal(a.begin(f.args).status,"NOT_VERIFIED_BOSS_WRECK");
+}));
+test("missing original wreck API does not silently treat a verified boss as an unclassified NPC",()=>fixture(f=>{
+ const a=f.make({getNativeWreck:()=>{throw Error("original native db offline")}});
+ assert.equal(a.begin(f.args).status,"BOSS_LOOT_AUTHORITY_UNAVAILABLE");
+}));
