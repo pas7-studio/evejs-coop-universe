@@ -364,6 +364,15 @@ function run({codePath,remove=false,dryRun=false}){
    plan.push({file,before,after:null});
   }
  }
+ // A hook that requires a module the overlay never installs throws inside stock
+ // code and aborts the native tick it was attached to, which looks exactly like an
+ // idle feature. Fail the install instead of shipping that. Checked before the plan
+ // is written, so a refused install leaves the tree untouched.
+ const requires=require("./coop-hook-requires.cjs").audit({
+  names,specs,integrationsDir:path.join(project,"integration"),checkout:code});
+ if(requires.violations.length>0)
+  throw Error("HOOK_REQUIRE_UNRESOLVED: "+requires.violations[0].code+" "+
+   requires.violations[0].from+" -> "+requires.violations[0].specifier);
  const changed=plan.filter(p=>p.before!==p.after);
  if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};

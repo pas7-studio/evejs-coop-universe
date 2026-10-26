@@ -72,6 +72,8 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopHaulCargoAdoption");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningCapacitorGate");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningActivate");
+// An idle native NPC must not clear a mining hull's target locks (default OFF).
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningTargetGuard");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -312,8 +314,11 @@ const specs=[
  {file:"server/src/space/npc/npcBehaviorLoop.js",patches:[
    // A hull that is mining is not idle: the idle path clears every target lock, and
    // that stops the mining module before its first cycle. Env-gated, default OFF.
-   {anchor:"  if (options.clearTargets !== false) {\n    clearNpcTargetLocks(scene, entity);",line:'  if (options.clearTargets !== false && require("../coopMiningTargetGuard").keepTargetLock(entity)) options = {...options, clearTargets: false};',after:false},
-  // A durable NPC whose controller is dropped vanishes from every fleet that
+   {anchor:"  if (options.clearTargets !== false) {\n    clearNpcTargetLocks(scene, entity);",line:'  if (options.clearTargets !== false) { let coopMining=false; try { coopMining=require("../coopMiningTargetGuard").keepTargetLock(entity)===true; } catch (_coopError) { console.warn("[CoopMiningLockGuard]", _coopError.message); } if (coopMining) options = {...options, clearTargets: false}; }',after:false},
+   // A hook must never throw into stock code: a missing or broken co-op module
+   // aborts the whole native tick it was attached to (measured: "NPC tick failed
+   // ... Cannot find module ../coopMiningTargetGuard" while the guard module was
+   // simply not registered for install).  // A durable NPC whose controller is dropped vanishes from every fleet that
   {"anchor":"    if (activeEffect) {\n      logNpcCombatDebug(\"npc.weapons.module-already-active\"","line":"    if (!require(\"../coopNpcWeaponAmmoGate\").check({entity,moduleItem,bankModuleIDs}).allowed) { if (activeEffect) scene.deactivateGenericModule(pseudoSession, activeEffect.moduleID || moduleItem.itemID, { reason: \"npc-ammo-empty\", deferUntilCycle: false }); continue; }","after":false},
   {anchor:"  if (sourceClass === \"npc\" && targetClass === \"npc\") {",line:"    if ((process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" || process.env.EVEJS_COOP_FACTION_WAR_COMBAT === \"1\") && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",after:true},
   {anchor:"      if (launchResult && launchResult.success) {",line:"        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",after:true},
