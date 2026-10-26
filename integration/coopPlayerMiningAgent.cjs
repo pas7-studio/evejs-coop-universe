@@ -12,12 +12,13 @@ const say=(text,actions=[])=>({success:true,data:{agentSays:[String(text).slice(
 const safe=x=>String(x??"").replace(/[<>\x00-\x1f]/g," ").slice(0,130);
 function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
  inspectShift,assignOrder,getHirePreview=null,acceptHire=null,
- orderMenu=null,access,enabled=()=>false}={}){
+ orderMenu=null,getMarketStatus=null,access,enabled=()=>false}={}){
  if([getAgent,getMission,getSessions,getFleetRecords,inspectShift,assignOrder,
   access?.isMember,access?.canIndustry,enabled].some(x=>typeof x!=="function")||
   (getHirePreview!==null&&typeof getHirePreview!=="function")||
   (acceptHire!==null&&typeof acceptHire!=="function")||
-  (orderMenu!==null&&[orderMenu.enabled,orderMenu.interact].some(x=>typeof x!=="function")))
+  (orderMenu!==null&&[orderMenu.enabled,orderMenu.interact].some(x=>typeof x!=="function"))||
+  (getMarketStatus!==null&&typeof getMarketStatus!=="function"))
   throw Error("PLAYER_MINING_AGENT_NATIVE_AUTHORITIES_REQUIRED");
  function selected({session,agentID}={},options={}){
   if(enabled()!==true||!pos(agentID)||!pos(session?.characterID)||
@@ -86,10 +87,23 @@ function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
    " | revision "+seq+".";
   const money=manager?" Paid wage: "+(r.wageCents/100).toFixed(2)+
    " ISK (shift funding, NOT ore ownership).":"";
+  let cashFlow="";
+  if(manager&&getMarketStatus){try{
+   const report=getMarketStatus({session,corporationID:r.corporationID,
+    operationID:r.operationID});
+   if(report?.status==="NATIVE_CORPORATE_SELL_UNSUPPORTED"&&
+      Number.isSafeInteger(report.verifiedCashOutflowCents)&&
+      report.verifiedCashOutflowCents>=0){
+    cashFlow=" Verified scoped cash expenses: "+
+     (report.verifiedCashOutflowCents/100).toFixed(2)+
+     " ISK. Native corporation market SELL unavailable; "+
+     "realized revenue and net profit remain unverified.";
+   }
+  }catch{/* A read-only market status failure must not change NPC orders. */}}
   const controls=manager&&canActivate?
    "\nAccept = request MINE/resume through the original native NPC tick. View = refresh. No automatic ore or ISK payout.":
    "\nView = refresh. Only a corporation industry manager may order the NPC fleet.";
-  return say(state+money+controls+(detail?"\n"+safe(detail):""),
+  return say(state+money+cashFlow+controls+(detail?"\n"+safe(detail):""),
     canActivate?[[3,3],[1,1]]:[[1,1]]);
  }
  function doAction({session,agentID,actionID}={}){
@@ -193,13 +207,14 @@ function native(){
    mining=require("../services/mining/miningNpcOperations"),
    fleet=require("./coopPlayerMiningFleetTick"),
    hiring=require("./coopPlayerMiningHiring"),
+   marketReadiness=require("./coopPlayerMiningMarketReadiness"),
    orderMenu=require("./coopPlayerMiningAgentOrders");
   singleton=createMiningAgent({access,getAgent:agents.getAgentByID,
    getMission:missions.getMissionRecord,getSessions:sessions.getSessions,
    getFleetRecords:id=>mining.getMiningFleetsForSystem(id),
    inspectShift:fleet.inspect,assignOrder:fleet.assign,
    getHirePreview:hiring.preview,acceptHire:hiring.accept,
-   orderMenu,
+   getMarketStatus:marketReadiness.inspectNative,orderMenu,
    enabled:()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_AGENT==="1"&&
     process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY==="1"});
  }
