@@ -118,3 +118,21 @@ test("duplicate IDs, player-occupied hull and absent durable pilot fail closed",
   assert.equal(f.tick().status,"BLOCKED");assert.equal(f.writes(),0);
  }
 });
+
+test("stale nearby physical probe cannot refund original remote durable charge",()=>{
+ const f=fixture();
+ f.rows()[0].deployedProbe.position={x:1e10,y:0,z:0};
+ // Physical entity is still near ship. A fake/misordered move may not
+ // override the original source of truth to mint a returned charge.
+ assert.equal(f.tick({requestRecall:true}).status,"NPC_PROBE_RECALL_COMMITTED");
+ assert.equal(f.rows()[0].deployedProbe.status,"IN_SPACE");
+ assert.equal(f.rows()[0].quantity,0);
+});
+test("expired source with physical object absent is idempotently cleaned after restart",()=>{
+ const f=fixture();f.advance(3600000);f.tick();
+ f.entities.delete(980200000001);
+ f.restart();
+ assert.equal(f.tick().status,"NPC_PROBE_EXPIRY_COMMITTED");
+ assert.equal(f.rows()[0].quantity,0);
+ assert.equal(f.rows()[0].deployedProbe.status,"EXPIRED");
+});
