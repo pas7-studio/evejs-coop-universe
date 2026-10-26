@@ -69,7 +69,6 @@ function fixture({sold=3,returned=false}={}){
  const sourceItem={itemID:ITEM,ownerID:CORP,typeID:34,quantity:8-sold,
   stacksize:8-sold,singleton:0,customInfo:"coop-warehouse:v1:cargo:"+CARGO,
   locationID:returned?64001:9200000000+Number(ORDER),flagID:returned?115:4};
- if(sold===0){sourceItem.locationID=64001;sourceItem.flagID=115}
  const service=createMiningCorporatePnl({
   gameStore,findOriginalItemById:()=>sourceItem,access:{isMember:()=>role,canIndustry:()=>role,canWallet:()=>role},
   readNativeReleased:async({orderID,cycle})=>{
