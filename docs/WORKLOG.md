@@ -380,3 +380,9 @@ Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS 
 Why: Regressions verify an already-existing valid item with the same cargoID prevents any source debit or PREPARED journal, and unavailable hangar flags fail closed.
 Where: tests/coop-native-warehouse.test.mjs
 Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:44Z · 7d0fb0f · DOCS · coop: make hook length part of the measured debt, and document the dormancy root cause
+
+Why: hook length was a convention; the dormancy root cause was not written down for the next session
+Detail: The inventory now counts hooks longer than 400 characters and records the longest one, so 'a hook is one call into a module' is enforced by a test instead of by intent. Today: 3 long hooks (822 tradeMgrService, 501 agentMgrService, 451 nativeNpcWreckService) and zero in miningNpcOperations after the extraction. docs/NATIVE_NPC_DURABILITY.md records why a durable NPC must never be combat dormant, w
+Where: docs/NATIVE_NPC_DURABILITY.md, docs/coop-hook-inventory.json, scripts/coop-hook-inventory.cjs, tests/coop-hook-inventory.test.mjs
+Evidence: HOOKS longHooks=3 longest=822 enforced by tests/coop-hook-inventory.test.mjs 3/3; docs section with the 21582-restore and 0-cycle measurement
