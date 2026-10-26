@@ -185,7 +185,7 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
    try{w=nativeStore.getNativeWreck(receipt.wreckID)}catch{w=null}
    phase=item.locationID===receipt.wreckID&&item.ownerID===receipt.corpID&&
      item.flagID===itemStore.ITEM_FLAGS.HANGAR&&w?.wreckID===receipt.wreckID&&
-     w.sourceEntityID===receipt.shipID&&w.corporationID===receipt.corpID?
+     w.sourceEntityID===receipt.shipID&&w.coopNpcExpeditionSourceCorpID===receipt.corpID?
       "IN_NATIVE_WRECK":"NEEDS_OPERATOR_REPAIR";
   }
   if(phase==="IN_SHIP"){
