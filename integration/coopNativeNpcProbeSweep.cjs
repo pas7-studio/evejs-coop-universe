@@ -87,6 +87,7 @@ function createNativeNpcProbeSweep({getNativeEntity,getController,
   }
   const next=flights.slice().sort((a,b)=>
    a.deployedProbe.sweepStep-b.deployedProbe.sweepStep||a.cargoID-b.cargoID)[0];
+  if(quarantine.has(next.cargoID))return denied("SWEEP_OPERATOR_REPAIR_REQUIRED");
   const step=next.deployedProbe.sweepStep+1;
   if(step>maxSteps)return {status:"SWEEP_COMPLETE",moved:0};
   // Spiral is strictly a function of public ship-launch location and
@@ -108,8 +109,6 @@ function createNativeNpcProbeSweep({getNativeEntity,getController,
    return denied("SWEEP_CARGO_DURABILITY_UNCONFIRMED")}
   if(flush?.success!==true){quarantine.add(next.cargoID);
    return denied("SWEEP_CARGO_DURABILITY_UNCONFIRMED")}
-  if(quarantine.has(next.cargoID))
-   return denied("SWEEP_OPERATOR_REPAIR_REQUIRED");
   const live=scene.getEntityByID(next.cargoID);
   if(!live||live.nativeNpcProbe!==true||live.nativeNpcCargoID!==next.cargoID||
    live.ownerID!==native.ownerID||live.typeID!==next.typeID||
