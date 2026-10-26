@@ -1,36 +1,60 @@
-﻿## Restart resilience — measured 2026-10-26 10:34 UTC
+﻿## Restart resilience (path B) — implemented 2026-10-26
 
-Test: `docker compose -p evejs restart server` on the co-op project only.
+### The gap, precisely
+Startup mining fleets run in the proven **transient** mode. On a restart the
+native rows (`npcEntities`, `npcRuntimeControllers`, `npcModules`, `npcCargo`)
+are gone, the slot is re-seeded with new hull IDs, and the fleet starts its
+cycle from zero.
 
-**What comes back by itself (verified in the log after the restart):**
-- Headless boot re-entered every configured system within ~5 s:
-  `living-headless-boot-system 30000144 / 30000145 / 30100032` at 10:34:08-10.
-- The startup mining fleet re-seeded per slot: `fleet 1 mining miners 2 haulers 1`.
-- Durable files on `/var/lib/evejs` survive: `coop-economy.json`, `coop-npc-links.json`,
-  `coop-npc-life.json`, `coop-factions.json`, `coop-courier-flights.json`,
-  `coop-courier-history.json`, `coop-courier-notices.json`, `coop-loss-ledger.json`,
-  `coop-native-warehouse/` receipts. Market orders live in the Rust market service.
-  Pilot ledgers and warehouse stock therefore do NOT reset.
+The hauled ore itself is already durable: `coopNativeHaulCargo.transferCargo`
+writes the hauler row with `transient:false`, `coopHaulFleetID` and
+`coopHaulFromMinerID`, then flushes `npcCargo`. After a restart that row keeps
+its native `cargoID` but still points at the **old** hauler entity, so it
+becomes an invisible orphan and the new fleet never sees it.
 
-**What does NOT survive (the real gap):**
-- The startup fleet's native rows (`npcEntities`, `npcRuntimeControllers`, `npcModules`,
-  `npcCargo`) are transient: after the restart the log shows new ship IDs and
-  `lastHauledVolumeM3=0`. Ore sitting in a miner's hold, a partially filled hauler and a
-  haul trip in progress are all lost; the fleet restarts its cycle from zero.
-- Only cargo that `coopNativeHaulCargo` marked non-transient during a real haul survives
-  restarts.
+### What is now implemented
+`integration/coopHaulCargoAdoption.cjs` (default **OFF**, flag
+`EVEJS_COOP_HAUL_CARGO_ADOPTION=1`), hooked once per `tickMiningFleet`:
 
-**Closing the gap (path B, chosen because path A needs entity transience beaten too):**
-1. At haul load time persist a small journal per fleet slot: loaded stacks (typeID,
-   quantity) and the chosen destination station, fsynced next to the other coop state.
-2. On boot, after the slot's new wing is verified, adopt the journal onto the new hauler:
-   grant the same stacks as durable native cargo tagged with the new entity IDs, keep the
-   existing warehouse receipt identity rules untouched, then clear the journal only after
-   the receipt is COMMITTED (or the ore is proven gone).
-3. Never invent ore: the journal may only be re-attached once, and an unclaimed journal
-   older than a configured TTL is archived, not credited.
+1. `plan()` selects only durable, non-module rows where
+   `coopHaulFleetID` and `coopHaulSystemID` both match this exact fleet slot,
+   the row is younger than `EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS`
+   (default 45 min), and its original `entityID` is neither a live ship in the
+   scene nor still present in the native entity registry.
+2. `adopt()` requires one live hauler, an idle `mining` fleet and a hauler that
+   carries no durable haul cargo yet, then re-points each row to that hauler,
+   preserving `cargoID` (so manifests, receipts and the ALIFE-13 audit keep
+   their identity), stamping `coopHaulAdoptedAt` / `coopHaulAdoptedFrom`.
+3. The write is only accepted after `flushTableSync("npcCargo")` succeeds;
+   otherwise every row is restored to its original owner (no partial state).
+4. The fleet is handed back to the normal `loaded -> routeFromHaul -> checkReturn
+   -> warehouse -> sell` pipeline with `lastHauledVolumeM3` set from the real
+   adopted volume, and `living-haul-cargo-adopted` records rows/quantity/volume
+   with `invented:false`.
 
-**Also fixed in this window:** a physically arrived hauler may deposit using the trip's own
-`arrivedAtMs` dwell proof while the live stability check still applies (the in-memory
-`arrivals` record could be lost across a trip rebuild and blocked every sale with
-`ARRIVAL_NOT_VERIFIED`).
+Never: new cargo IDs, granted station stock, invented destination, double
+adoption (per-slot attempt counter, terminal after success).
+
+`coopHaulSystemID` is now written at load time in both haul paths
+(`coopNativeHaulCargo.transferCargo` and `coopNativeHaulTransferAtomic`).
+Rows written before this change have no system field and are deliberately
+skipped — provenance is not guessed.
+
+### Measured restart behaviour (before this change)
+`docker compose -p evejs restart server`, 10:34 UTC: all 4 systems
+`NATIVE_SCENE_READY` within ~2 s, slot re-seeded (`fleet 1 mining miners 2
+haulers 1`), warehouse receipts 18 before → 18 after, but
+`lastHauledVolumeM3=0` and new ship IDs (in-flight state lost).
+
+### Deploy note
+The overlay installer is idempotent when the checkout contains *our* previous
+overlay, but refuses a file that still carries an older overlay revision
+(`DRIFTED`). The revert step is now:
+`git -C <checkout> checkout -- server/src/services/mining/miningNpcOperations.js`
+(only the drifted file), then `node scripts/patch-evejs-coop.cjs --code-path ...`
+and confirm `OVERLAY_OK` (`patched 54`, `anchorMismatch 0`) before building.
+
+### Tests
+`tests/coop-haul-cargo-adoption.test.mjs`: 10/10 — disabled flag, real adoption,
+registry-guard, cross-system/cross-fleet refusal, once-only, active-trip refusal,
+already-loaded hauler, flush rollback, TTL expiry, hauler uniqueness.
