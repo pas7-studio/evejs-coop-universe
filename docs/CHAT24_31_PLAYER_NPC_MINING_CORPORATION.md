@@ -64,7 +64,7 @@ node --test tests/coop-player-mining-company.test.mjs
 
 - **Stage C1 implemented** in `coopPlayerMiningOreTitle.cjs`: original tagged NPC warehouse itemID/cargoID, verified post-shift source receipt, native player corporation office divisions 115-121, wallet TAKE/QUERY and atomic item title + both corp wallets + receipt in one original GameStore transaction. No new item mint or shadow wallet.
 - **Stage C1 warehouse audit seam implemented**: `coopNativeWarehouse` provides read-only `getReceipt` and optional strict `verifyTransferredTitle`; the source-only `createPlayerMiningOreAudit` checks title receipt, both ISK journals, item owner and exact native office. `coopNativeStationArrival` accepts the optional trusted callback.
-- **C1 isolated local tests:** combined CH24+31 suite **60/60 PASS**. Real GameStore SQLite and deployed warehouse audit binding still **NOT_RUN**.
+- **C1 isolated local tests:** combined CH24+31 suite **61/61 PASS**. Real GameStore SQLite and deployed warehouse audit binding still **NOT_RUN**. Stage B now polls via native read-only `gameStore.read`, not a `BEGIN IMMEDIATE` transaction per mining tick.
 - **C2 not implemented:** trusted native office and price quote callback adapters, title verifier injection in deployed station runtime, native chain conservation integration, client action API, sale and reprocessing consumption receipts. The feature remains **OFF**; source alone is not a live working corporate purchase.
 - Read [CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md](CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md) for exact authority contracts, evidence and manual acceptance checks.
 
