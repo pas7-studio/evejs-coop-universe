@@ -15,13 +15,13 @@ function fixture(){
   transactionID:op,referenceID:op,ownerID1:owner,ownerID2:other,
   accountKey:1000,amount:cents(amount),balance:cents(after)});
  const shift={version:1,status:"FUNDED",operationID:SHIFT,corporationID:PLAYER,
-  employerCorpID:NPC,systemID:SYSTEM,fleetID:FLEET,wageCents:75000,
+  employerCorpID:NPC,systemID:SYSTEM,fleetID:FLEET,createdAt:1793030000000,wageCents:75000,
   buyerAfterCents:425000,employerAfterCents:875000};
  const title={version:1,status:"COMMITTED",operationID:TITLE,shiftID:SHIFT,
   cargoID:CARGO,itemID:ITEM,typeID:34,quantity:60,
   sourceCorpID:NPC,buyerCorpID:PLAYER,stationID:STATION,
   officeFolderID:OFFICE,division:115,priceCents:12000,
-  buyerAfterCents:413000,sourceAfterCents:887000};
+  buyerAfterCents:413000,sourceAfterCents:887000,committedAt:1793030001000};
  const account=(owner,after,rows)=>({corporationID:owner,wallet:{divisions:{
   "1000":{balance:cents(after),transactions:rows,journal:rows.map(x=>({...x}))}
  }}});
@@ -36,12 +36,21 @@ function fixture(){
   ["corporations"+SEP+PLAYER,buyer],["corporations"+SEP+NPC,employer],
   ["coopPlayerMiningShift"+SEP+SHIFT,shift],
   ["coopPlayerMiningFleet"+SEP+SYSTEM+":"+FLEET,{
-   operationID:SHIFT,corporationID:PLAYER,employerCorpID:NPC}],
+   operationID:SHIFT,corporationID:PLAYER,employerCorpID:NPC,
+   systemID:SYSTEM,fleetID:FLEET}],
   ["coopPlayerMiningOreTitle"+SEP+CARGO,title]
  ]);
  const svc=createCorporateMiningMarketReadiness({
   gameStore:{read(table,p){if(readBroken)return {success:false,errorMsg:"READ_ERROR"};
    assert.equal(table,"corporationRuntime");
+   if(p==="/coopPlayerMiningOreTitle"){
+    const group={};
+    for(const [key,value] of records)
+     if(key.startsWith("coopPlayerMiningOreTitle"+SEP))
+      group[key.split(SEP)[1]]=structuredClone(value);
+    return Object.keys(group).length?{success:true,data:group}:
+     {success:false,errorMsg:"ENTRY_NOT_FOUND"};
+   }
    const val=records.get(p.slice(1).replace("/",SEP));
    return val?{success:true,data:structuredClone(val)}:
     {success:false,errorMsg:"ENTRY_NOT_FOUND"};},
@@ -53,6 +62,7 @@ function fixture(){
  });
  return {svc,session,records,buyer,employer,shift,title,item,
   inspect:ids=>svc.inspect({session,corporationID:PLAYER,operationID:SHIFT,cargoIDs:ids||[CARGO]}),
+  inspectShift:()=>svc.inspectShift({session,corporationID:PLAYER,operationID:SHIFT}),
   enabled:v=>enabled=v,allow:v=>allowed=v,take:v=>take=v,
   office:v=>office=v,readBroken:v=>readBroken=v,writes:()=>writes};
 }
@@ -141,4 +151,24 @@ test("one original ore item cannot be counted as two different cargo purchases",
  x.records.set("coopPlayerMiningOreTitle"+SEP+(CARGO+1),clone);
  const r=x.inspect([CARGO,CARGO+1]);
  assert.equal(r.status,"BLOCKED");
+});
+
+test("server scans original title group for exact shift, never trusts client-supplied incomplete cost list",()=>{
+ const x=fixture();const result=x.inspectShift();
+ assert.equal(result.status,"NATIVE_CORPORATE_SELL_UNSUPPORTED");
+ assert.equal(result.verifiedCashOutflowCents,87000);
+ assert.equal(result.originalCorporateOre.length,1);
+ assert.equal(x.writes(),0);
+});
+test("missing title group scans as wage-only scope, not a fictional market sale",()=>{
+ const x=fixture();x.records.delete("coopPlayerMiningOreTitle"+SEP+CARGO);
+ const r=x.inspectShift();
+ assert.equal(r.status,"NATIVE_CORPORATE_SELL_UNSUPPORTED");
+ assert.equal(r.wagePaidCents,75000);
+ assert.equal(r.orePurchasedCents,0);
+ assert.equal(r.realizedRevenueCents,null);
+});
+test("tampered original title group cannot silently omit foreign corporate expense",()=>{
+ const x=fixture();x.title.cargoID=CARGO+1;
+ assert.equal(x.inspectShift().reason,"MINING_MARKET_TITLE_INDEX_CONFLICT");
 });
