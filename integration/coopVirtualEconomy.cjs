@@ -122,7 +122,23 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
    sys.demand=cap(Math.max(0,sys.demand-1)+(sys.goods<25?1:0));
   }
  }
+ // NPC roster is untrusted input. Validate the complete roster BEFORE
+ // register() mutates balances or state.pilots, including zero-step ticks.
+ // "__proto__" / inherited names otherwise modify Object.prototype.role.
+ function validPilots(pilots){
+  if(!Array.isArray(pilots))return false;
+  const seen=new Set();
+  for(const pilot of pilots){
+   const id=pilot?.id,systemID=Number(pilot?.systemID);
+   if(typeof id!=="string"||!id.trim()||id.length>256||
+      id==="prototype"||Object.prototype.hasOwnProperty.call(Object.prototype,id)||
+      seen.has(id)||!Number.isSafeInteger(systemID)||systemID<=0)return false;
+   seen.add(id);
+  }
+  return true;
+ }
  function advance(pilots){
+  if(!validPilots(pilots))return {status:"INVALID_PILOTS",steps:0};
   beforeMutation();
   const now=clock();if(now<state.lastAt)return {status:"CLOCK_REWIND",steps:0};
   register(pilots);
