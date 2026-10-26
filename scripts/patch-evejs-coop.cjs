@@ -82,6 +82,7 @@ names.splice(names.indexOf("coopNativeScanProof")+1,0,"coopWormholeJumpFence");
 names.push(
  "coopCloneActionFence", "coopCloneNativeGuard", "coopCloneNativeReceipts", "coopEconomyConservationAudit", "coopFwEnlistmentGate", "coopFwInsurgencyVisibility", "coopMoonExtractionReadAccess", "coopMoonFuelOutputFence", "coopMoonNativeCycleAudit", "coopNativeContractMutationFence", "coopPiIntegrityGuard", "coopPlayerCorporationAccess", "coopPlayerIndustryFence", "coopPlayerIndustryGuard", "coopPlayerIndustryReceipts", "coopPlayerMiningCustody", "coopPlayerOreReprocessing", "coopPrivateHostSafety", "coopSkillEtaEvidence", "coopSkillRateCutover", "coopSocialRoomAuthority", "coopStructureAllianceAuthority"
 );
+names.splice(names.indexOf("coopPlayerIndustryFence")+1,0,"coopPlayerIndustryRuntime");
 // Late native module reconciliation after parallel merges: copy-only.
 // Keep NPE and Living World behavior behind their existing native hooks.
 names.push("coopNpeSafety", "coopLivingAgentRuntime");
@@ -101,6 +102,7 @@ const SOCIAL_PATCH_PATHS=new Set([
  "server/src/services/mail/mailState.js"
 ]);
 const specs=[
+ {file:"server/src/services/industry/industryManagerService.js",patches:[]},
  {file:"server/src/services/reprocessing/reprocessingRuntime.js",patches:[]},
  {file:"server/src/services/station/reprocessingService.js",patches:[]},
  {file:"server/src/services/corporation/allianceRegistryRuntime.js",patches:[]},
@@ -283,6 +285,8 @@ function strip(source){
 }
 function transform(source,spec,remove){
  let text=strip(source);
+ if(spec.file==="server/src/services/industry/industryManagerService.js")
+  text=require("./coop-player-industry-native-patch.cjs").patch(text,spec.file,remove);
  // Undo late Chat 25/32/39 hooks BEFORE the existing itemStore and
  // other native transforms so ownership/export adjacency remains unchanged.
  if(remove){
