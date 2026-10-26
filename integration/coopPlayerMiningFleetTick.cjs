@@ -61,8 +61,9 @@ function createAdapter({gameStore,store,access,getFleetRecord,getScene,
    JSON.stringify(current.haulerIDs)===JSON.stringify(f.haulerIDs);},
   clock,enabled,observe,completionEnabled,
   captureHaul:({fleet})=>completionOracle?.captureHaul({fleet})||null,
-  captureRetreat:({fleet})=>completionOracle?.captureRetreat({
-   fleetRecord:getFleetRecord(fleet.systemID,fleet.fleetID)})||null,
+  captureRetreat:({fleet})=>completionOracle?.captureRetreat({fleet,
+   fleetRecord:getFleetRecord(fleet.systemID,fleet.fleetID),
+   scene:getScene(fleet.systemID)})||null,
   verifyCompletion:({row,fleet})=>completionOracle?.verify({row,fleet,
    fleetRecord:getFleetRecord(fleet.systemID,fleet.fleetID),
    scene:getScene(fleet.systemID)})||null});
