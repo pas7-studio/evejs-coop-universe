@@ -192,3 +192,50 @@ test("EX-03B20 native wreck expiry cannot hide corrupted original item flag or p
  f.rows.get(itemID).flagID=5;
  assert.equal(c.canDestroy(wreckID),false,"pending original ship intent blocks wreck expiry");
 });
+
+test("EX-03B21 invalid native cargo flag cannot silently discard original expedition loot",()=>{
+ const f=fixture(),bridge=f.make();
+ f.rows.get(itemID).flagID=777;
+ const denied=bridge.stage({wreckID,shipID,corporationID:corp});
+ assert.equal(denied.success,false);
+ assert.equal(denied.errorMsg,"EX03_WRECK_CUSTODY_UNVERIFIED");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.get(itemID).ownerID,corp);
+ assert.equal(f.flushCount,0,"no durable mutation before mismatch is rejected");
+ assert.equal(bridge.canDestroy(wreckID),false,"source-hull loot still blocks wreck expiry");
+});
+
+test("EX-03B21 original source with damaged marker cannot proceed through ordinary NPC death",()=>{
+ const f=fixture(),bridge=f.make();
+ f.rows.get(itemID).customInfo="coop-npc-expedition:v1:corrupt";
+ const denied=bridge.stage({wreckID,shipID,corporationID:corp});
+ assert.equal(denied.success,false);
+ assert.equal(denied.errorMsg,"EX03_WRECK_CUSTODY_UNVERIFIED");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(bridge.canDestroy(wreckID),false);
+});
+
+test("EX-03B21 operator recovery rejects intent on source ship with corrupted flag",()=>{
+ const f=fixture(),first=f.make();
+ f.setFail(2);
+ assert.equal(first.stage({wreckID,shipID,corporationID:corp}).success,false);
+ f.setFail(0);
+ f.rows.get(itemID).flagID=777;
+ const recovered=f.make().reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(recovered.success,false);
+ assert.equal(recovered.errorMsg,"EX03_WRECK_RECOVERY_INVALID_ORIGINAL_RECEIPT");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.size,2,"invalid recovery does not mint or move the item");
+});
+
+test("EX-03B21 expiry refuses any tagged cargo still on the original source hull",()=>{
+ const f=fixture(),bridge=f.make();
+ f.rows.get(itemID).customInfo=tag+":wreck:"+(wreckID+99);
+ assert.equal(bridge.canDestroy(wreckID),false,
+  "foreign-looking but tagged item still belongs to a quarantined loss domain");
+ f.rows.get(itemID).customInfo="coop-npc-expedition:v1:container:1:ship:"+
+   shipID+":corp:"+(corp+1);
+ assert.equal(bridge.canDestroy(wreckID),false,
+  "plausible corrupt corporation provenance must not allow expiry");
+});
