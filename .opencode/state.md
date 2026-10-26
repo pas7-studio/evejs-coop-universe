@@ -252,3 +252,29 @@ weakening any gate:
 
 Dirty files deliberately left alone: `scripts/coop-supervise.ps1` (supervisor),
 `state/digests/*` (generated), `NUL` (stray).
+
+## Buyers for the ore — what actually exists (checked 23:57Z)
+
+`living-economy-destination` on the live world reports **`HOLD_NO_BUYER`** with
+`revenue 0, filled 0, unfilled 183 747` for every candidate station, for ore types
+17463/17464/17470/1230. The native seed market simply has no buy orders for those ores
+in these systems, so the sale path (`coopNativeNpcMarket`, which only fills EXISTING
+native orders) correctly reports `NO_SEEDED_COUNTERPARTY`.
+
+Three buyer layers exist in the repo, and only the first one pays today:
+
+1. **Seed-market book** (`coopNativeNpcMarket`) — real native orders, finite; this is
+   what produced the three live sales (113 350 ISK).
+2. **Demand model** (`coop-economy.json` `systems.demand`, `living-economy-ore`,
+   `EVEJS_COOP_ECONOMY_DESTINATION=1`) — computes where ore is wanted; right now it
+   honestly says there is no buyer.
+3. **Industrial consumers / manufacturers** (`coopAlifeNativeManufacturingRuntime`,
+   `coopNpcIndustryNativeBindings`, `coopNpcManufacturingPlanner`, `coopNpcRefinery`) —
+   present but **deliberately OFF**: the native bindings declare
+   `supportsLiveRuntime:false`, so the runtime refuses with
+   `ALIFE_MANUFACTURING_SOURCE_UNVERIFIED` until the native industry path is verified
+   live. That is the missing "manufacturer buys ore for its own needs" leg.
+
+Placing NPC buy orders without backing is forbidden by the repo rules, so the only
+honest ways forward are: verify+enable the native industry consumer, or seed genuinely
+backed ore demand (market daemon), or sell in regions where real orders exist.
