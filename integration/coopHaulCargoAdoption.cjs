@@ -179,7 +179,42 @@ function adopt(scene,fleet,options={}){
  if(failed!==null)return restore(attempted,"ADOPTION_REJECTED",failed);
  // The entire original cargo batch must be durable before sailing.
  if(!flushCargo())return restore(attempted,"CARGO_FLUSH_FAILED",null);
- hauler.nativeCargoItems=store.buildNativeCargoItems(haulerID);
+ // A successful flush is not yet evidence the replacement ship can read
+ // every original source cargoID. The writer could silently omit one
+ // row, or the post-commit inventory adapter could throw. Do not put a
+ // half-observed loaded ship into the live hauling / selling lifecycle.
+ let cargoItems,readback;
+ try{
+  readback=store.listNativeCargoForEntity(haulerID);
+  if(!Array.isArray(readback)||planned.rows.some(row=>{
+   const matches=readback.filter(x=>pos(x?.cargoID)===pos(row.cargoID));
+   return matches.length!==1||
+    pos(matches[0].entityID)!==haulerID||
+    pos(matches[0].ownerID)!==ownerID||
+    pos(matches[0].typeID)!==pos(row.typeID)||
+    pos(matches[0].quantity)!==pos(row.quantity)||
+    pos(matches[0].coopHaulFleetID)!==fleetID||
+    pos(matches[0].coopHaulSystemID)!==systemID||
+    pos(matches[0].coopHaulAdoptedFrom)!==pos(row.entityID)||
+    Number(matches[0].coopHaulAdoptedAt)!==now;
+  }))throw Error("ORIGINAL_CARGO_READBACK_MISMATCH");
+  cargoItems=store.buildNativeCargoItems(haulerID);
+  if(!Array.isArray(cargoItems)||
+     cargoItems.length<planned.rows.length)
+   throw Error("NATIVE_HAULER_CARGO_VIEW_UNAVAILABLE");
+ }catch(error){
+  // The original GameStore mutation is already durable. Blind rollback
+  // or a second delivery attempt could duplicate custody. Quarantine
+  // both actors for source-backed operator reconciliation.
+  fleet.coopHaulNeedsOperatorRepair="ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED";
+  hauler.coopHaulNeedsOperatorRepair="ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED";
+  attempts.set(key,{tries:state.tries,at:now,done:true});
+  observe(probe,"living-haul-cargo-adoption-skipped",null,
+   {fleetID,status:"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",
+    reason:String(error?.message||error).slice(0,80)},systemID);
+  return {status:"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",adopted:0};
+ }
+ hauler.nativeCargoItems=cargoItems;
  fleet.lastHauledVolumeM3=volume;
  fleet.lastHauledAtMs=now;
  fleet.state="loaded";
