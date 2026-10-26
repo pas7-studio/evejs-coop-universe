@@ -218,6 +218,13 @@ such a wreck with its actual source-backed native loot.
 The new phase `native-pve-boss-wreck` is part of the existing Living
 World combat group, with no independent timer and one overlay installer.
 
+**Terminal instance reconciliation:** a source-verified boss may die and
+cause the native instance to complete or rotate immediately. A previously
+witnessed original boss is still eligible for native wreck reconciliation
+in the SAME process after that site leaves the active list. A completed
+site with no prior live witness is never newly accepted as proof. This
+is a read-only terminal check; it cannot recreate the original boss.
+
 **Limitations:** Original boss wave must explicitly expose its source
 label/loot tags and uniquely identify a single live ship; existing
 multi-ship overseer waves cannot be guessed. Wreck witness history and
@@ -228,7 +235,7 @@ coverage, actual native boss behavior, destruction events and two-client
 payouts still require tests and further stages.
 
 **Evidence:** Exact-branch isolated V8 original-source verification
-46/46 cases across P0-2, P0-3A, P0-3B and P0-4A, 227 assertions, and
+48/48 cases across P0-2, P0-3A, P0-3B and P0-4A, 232 assertions, and
 14/14 source-wiring checks PASS. Full `node --test`, pinned overlay
 roundtrip, Node/SQLite/Rust native gameplay and real two-client E2E
 NOT_RUN. Do not enable in persistent game before those checks.
