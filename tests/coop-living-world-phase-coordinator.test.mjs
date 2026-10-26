@@ -122,7 +122,7 @@ test("existing Living World still has ONE 30s tick and separate observational sa
  assert.doesNotMatch(coordinator,/\bsetTimeout\s*\(/);
  assert.match(source,/livingWorldPhases\(\)/);
 });
-test("all legacy 30s phases are registered exactly once in unchanged source order",()=>{
+test("registered original-clock phases preserve order amid separately owned war and admin phases",()=>{
  const source=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
  const start=source.indexOf("timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{");
  const end=source.indexOf(" }),30000);",start);
@@ -141,8 +141,12 @@ test("all legacy 30s phases are registered exactly once in unchanged source orde
   "native-civilians","native-market-schedule","economy-destination-ore",
   "native-activity","npc-reconcile:"
  ];
- assert.deepEqual(actual,expected);
- assert.equal(actual.length,28);
+ // Other workstreams add native war/admin phases to this shared tick.
+ // Keep their ownership untouched; verify our 28 registered phases remain
+ // an exact ordered subsequence without requiring unrelated phases to vanish.
+ assert.deepEqual(actual.filter(name=>expected.includes(name)),expected);
+ assert.equal(expected.length,28);
+ assert.ok(actual.length>=expected.length);
  assert.match(block,/EVEJS_COOP_ALIFE_SALVAGE_MARKET/);
  assert.match(block,/EVEJS_COOP_NATIVE_NPC_MARKET/);
  assert.match(block,/EVEJS_COOP_ALIFE_ECONOMY/);
