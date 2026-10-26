@@ -148,3 +148,8 @@ Evidence: 4/4 exact source V8 isolated before/after checks PASS; Node/SQLite/Rus
 Why: Guard the native GameStore response contract; failed reads must not be mistaken for no orphan cargo.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 4/4 exact source V8 isolated before/after checks PASS; Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T12:03Z · 0a64ff3 · L1 · fix(repo): version the L1 patch series (upstream/ in .gitignore hid patches/upstream entirely)
+
+Why: gitignore's 'upstream/' rule silently excluded patches/upstream, so the whole atomic L1 series existed only on disk; 0003 also now carries the hull recharge-rate half of the NPC capacitor defect
+Where: .gitignore, docs/UPSTREAM_PATCH_SERIES.md, patches/upstream/0001-native-npc-store-export-list-cargo.patch, patches/upstream/0002-native-npc-capacitor-recharge.patch, patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json, scripts/apply-upstream-patches.cjs, scripts/restart-acceptance.sh
+Evidence: git ls-files patches was empty while the docs claimed the series is versioned; files now tracked; series PRESENT x3 CHECK_OK; fleet2 live proof pending on the new image
