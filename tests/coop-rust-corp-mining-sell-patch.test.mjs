@@ -52,6 +52,17 @@ test("original Rust overlay handles CRLF without changing bytes on uninstall",()
   assert.equal(patch(patch(src,which),which,true),src);
  }
 });
+test("corporate Rust buyer quote and cancellation RPC params derive Deserialize exactly once",()=>{
+ const installed=patch(rpc,"rpc");
+ for(const name of ["CoopCorpBuyerQuoteParams","CoopCorpCancelParams"]){
+  const match=installed.match(new RegExp(
+   "#\\[derive\\(Debug,Deserialize\\)\\]\\nstruct "+name+" \\{","g"));
+  assert.equal(match?.length,1,name);
+ }
+ assert.doesNotMatch(installed,
+  /#\\[derive\\(Debug,Deserialize\\)\\]\\n#\\[derive\\(Debug,Deserialize\\)\\]/);
+});
+
 test("Rust client cannot use normal PlaceOrder to forge coop-corporation stock",()=>{
  const installed=patch(state,"state");
  assert.ok(installed.includes(GUARD));
