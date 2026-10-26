@@ -447,9 +447,10 @@ function advanceNativeNpcExpeditions(){
   const scene=native.scenes instanceof Map?native.scenes.get(systemID):null;
   if(!scene)continue;
   const result=npcExpeditionDirector.tick({scene,assignments,roles});
-  if(result.orders||result.observed||result.blocked&&backgroundTicks%10===0)
+  if(result.orders||result.observed||result.observedPlayers||result.contested||result.blocked&&backgroundTicks%10===0)
    probe.observe("living-npc-expedition",null,{spaceState:{systemID}},
     {status:result.status,orders:result.orders,observed:result.observed,
+     observedPlayers:result.observedPlayers||0,contested:result.contested||0,
      blocked:result.blocked||0,source:result.source||"NATIVE_SITE_OBSERVE",
      nativeLootGranted:false,nativeWalletMutation:false});
  }
