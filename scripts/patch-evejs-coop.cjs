@@ -40,6 +40,9 @@ names.splice(names.indexOf("coopNpcAmmoBankAtomic")+1,0,"coopNpcFireOutcomeWitne
 names.splice(names.indexOf("coopNpcFireOutcomeWitness")+1,0,"coopEconomyDestination");
 names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNpcCapacitor");
+// Restart resilience: re-attach durable haul cargo orphans to the re-seeded
+// hauler of the same system/slot (default OFF, never invents ore).
+names.splice(names.indexOf("coopNpcCapacitor")+1,0,"coopHaulCargoAdoption");
 // Stage J native salvage: preserve all currently deployed A-Life/industry modules.
 names.splice(names.indexOf("coopNativeWarehouse")+1,0,"coopSalvageProvenance","coopSalvageAtomicCustody","coopSalvageDeathAtomic","coopSalvageNativeTransfer","coopSalvageGameAuthority","coopSalvageGameMount","coopSalvageNativeOffers","coopSalvageNativeConsent","coopSalvageNativeRewards","coopSalvageNpcRivals");
 // Stage J: ship the already-used physical rival warehouse module and the
@@ -191,6 +194,11 @@ const specs=[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
  ]},
  {file:"server/src/services/mining/miningNpcOperations.js",patches:[
+  // Restart resilience: a previous process may leave durable haul cargo on a
+  // hauler that no longer exists. Re-attach it once, then let the normal
+  // loaded -> station -> sell pipeline continue. Telemetry never decides.
+  {anchor:"function tickMiningFleet(scene, fleetRecord, now, hooks) {",after:true,
+   line:'  if (process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION === "1") { try { require("../../space/coopHaulCargoAdoption").adopt(scene, fleetRecord); } catch (_coopAdoptError) { console.warn("[CoopHaulCargoAdoption]", _coopAdoptError.message); } }'},
   // Why a "mining" fleet can produce nothing: the stock loop `continue`s
   // silently at each of these points. Trace-only, nothing destructive.
   {anchor:"    if (miningModules.length <= 0) {",after:true,
