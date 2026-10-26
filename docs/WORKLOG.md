@@ -300,6 +300,12 @@ Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/R
 Why: Preserve source-specific prior cargo receipt denial without requiring optional audit to produce a more useful error.
 Where: integration/coopHaulCargoAdoption.cjs
 Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.
+### 2026-10-26T13:47Z · 16bdb43 · L2 · feat(mcp): in-process admin bridge and real ESI market price sync
+
+Why: Admin actions (board/fit/give/remove/move/chat) and the agent state probe must run inside the server process; the ESI sync makes market prices real instead of seeded.
+Detail: - integration/coopAdminBridge.cjs: admin actions that must run inside the server process (chat_command, give_item, remove_item, board_ship, fit_ship, fit_slots, move_item); a separate docker exec node has its own empty session registry, so those actions cannot work from outside. - mcp/lib/serverTools.cjs: expose admin_command, admin_give_item, admin_remove_item, admin_board_ship, admin_fit_ship an
+Where: integration/coopAdminBridge.cjs, mcp/lib/probe-admin-command.cjs, mcp/lib/probe-agent-state.cjs, mcp/lib/serverTools.cjs, mcp/server-mcp.cjs, scripts/sync-market-prices-esi.cjs
+Evidence: admin_* MCP tools answered live (Venture 9988400101159 boarded offline, fittingId=1157 11/11 slots); sync wrote 15413 ESI anchors, 378274 seed_stock rows + 14549 base_price, backups 12-31-42/12-41-48/12-50-52; Tritanium 3.51-3.95 across 26 stations
 ### 2026-10-26T13:46Z · 75cc4f7 · L2 · fix(P0): refuse incomplete tagged NPC orphan batches before any original cargo move
 
 Why: Tagged original NPC cargo from the same fleet/system with invalid quantity/type/identity/module/transience was silently skipped while valid sibling cargoIDs were reparented and delivered, causing incomplete partial original-cargo custody.
