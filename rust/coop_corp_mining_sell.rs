@@ -44,7 +44,7 @@ fn coop_corp_sell_schema(db:&Connection)->Result<()>{
           type_id INTEGER NOT NULL,
           quantity INTEGER NOT NULL,
           price_cents INTEGER NOT NULL,
-          phase TEXT NOT NULL CHECK (phase IN ('prepared','published','cancelling','cancelled')),
+          phase TEXT NOT NULL CHECK (phase IN ('prepared','published','cancelled')),
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );"
@@ -914,12 +914,6 @@ fn coop_corp_cancel_lock_db(path:&Path,token:&str,order:i64)->Result<serde_json:
       params![order,now,state,remaining]
     )?;
     if n!=1{bail!("CORP_CANCEL_EXCLUSIVE_ORDER_LOCK_FAILED");}
-    let n=tx.execute(
-      "UPDATE coop_corp_sell_prepared SET phase='cancelling',updated_at=?2
-       WHERE order_id=?1 AND phase=?3",
-      params![order,now,phase]
-    )?;
-    if n!=1{bail!("CORP_CANCEL_PREPARED_PHASE_CAS_FAILED");}
     tx.execute(
       "INSERT INTO coop_corp_sell_cancel_intents
        (order_id,owner_id,cargo_id,source_item_id,
@@ -1008,7 +1002,7 @@ fn coop_corp_cancel_finalize_db(path:&Path,token:&str,order:i64)->Result<serde_j
     if n!=1{bail!("CORP_CANCEL_ORDER_CAS_FAILED");}
     let n=tx.execute(
       "UPDATE coop_corp_sell_prepared SET phase='cancelled',updated_at=?2
-       WHERE order_id=?1 AND phase='cancelling'",
+       WHERE order_id=?1 AND phase IN ('prepared','published')",
       params![order,now]
     )?;
     if n!=1{bail!("CORP_CANCEL_PREPARED_CAS_FAILED");}
