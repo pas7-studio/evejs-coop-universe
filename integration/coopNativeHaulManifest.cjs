@@ -99,6 +99,19 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
   return {status:"MANIFEST_DURABLY_PREPARED",key,cargoIDs:cargo.map(x=>x.cargoID),
    expectedStacks:cargo.length,expectedQuantity:cargo.reduce((n,x)=>n+x.quantity,0)};
  }
+ // A market fill leaves no station item, so it proves a row only through its own
+ // recorded fills for THIS manifest's station. Receipts written before the breakdown
+ // existed carry a single quantity and one station.
+ function saleFillCoversRow(receipt,row,mSpec){
+  const fills=Array.isArray(receipt.fills)?receipt.fills:null;
+  if(fills)
+   return fills.filter(x=>id(x&&x.stationID)===id(mSpec.stationID)&&
+    Number(x&&x.at)>=Number(mSpec.startedAt))
+    .reduce((sum,x)=>sum+(id(x.quantity)||0),0)===id(row.quantity);
+  return id(receipt.stationID)===id(mSpec.stationID)&&
+   id(receipt.quantity)===id(row.quantity)&&
+   Number(receipt.quantity)===Number(receipt.marketQuantity);
+ }
  function verify({key,systemID,fleetID,stationID,corporationID,haulerIDs}={}){
   const loaded=read(key);if(loaded.status!=="READY")return loaded;
   const m=loaded.record;
@@ -137,8 +150,7 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
      id(receipt.typeID)!==row.typeID||
      id(receipt.stationID)!==m.stationID||id(receipt.corporationID)!==m.corporationID||
      id(receipt.systemID)!==m.systemID||id(receipt.fleetID)!==m.fleetID||
-     (saleFill?!(id(receipt.quantity)>0&&id(receipt.quantity)<=row.quantity&&
-       Number(receipt.quantity)===Number(receipt.marketQuantity)):
+     (saleFill?!saleFillCoversRow(receipt,row,m):
       (id(receipt.quantity)!==row.quantity||!valid(receipt.itemID))))
      return {status:"MANIFEST_WAREHOUSE_RECEIPT_CONFLICT",cargoID:row.cargoID};
     if(saleFill)continue;

@@ -71,18 +71,36 @@ function recordSaleReceipt({root,probe,systemID,cargoID,haulerID,typeID,quantity
     Number(marketQuantity)!==Number(quantity))return {status:"SALE_RECEIPT_INVALID"};
  const dir=path.join(root,"receipts");
  const file=path.join(dir,id+".json");
- if(fs.existsSync(file))return {status:"SALE_RECEIPT_ALREADY_PRESENT"};
+ let prior=null;
+ try{prior=JSON.parse(fs.readFileSync(file,"utf8"))}catch(_error){prior=null}
+ if(prior&&(Number(prior.cargoID)!==id||String(prior.source)!=="NPC_MARKET_FILL"))
+  return {status:"SALE_RECEIPT_FOREIGN"};
+ if(prior&&(Number(prior.haulerID)!==pos(haulerID)||Number(prior.typeID)!==pos(typeID)||
+    Number(prior.fleetID)!==pos(fleetID)||Number(prior.corporationID)!==pos(corporationID)))
+  return {status:"SALE_RECEIPT_IDENTITY_CONFLICT"};
+ // Fills are attributed to the station that paid for them: a route can only prove the
+ // units that left the hull during ITS visit, so the receipt keeps one entry per fill
+ // instead of a single running total.
+ const priorFills=Array.isArray(prior&&prior.fills)?prior.fills.filter(x=>
+  pos(x&&x.stationID)&&pos(x&&x.quantity)).map(x=>({stationID:pos(x.stationID),
+  quantity:pos(x.quantity),at:Number(x.at)||0})):[];
  const record={version:1,phase:"COMMITTED",source:"NPC_MARKET_FILL",
-  cargoID:id,haulerID:pos(haulerID),typeID:pos(typeID),quantity:pos(quantity),
+  sequence:(Number(prior&&prior.sequence)||0)+1,
+  cargoID:id,haulerID:pos(haulerID),typeID:pos(typeID),
+  quantity:(Number(prior&&prior.quantity)||0)+pos(quantity),
+  fills:[...priorFills,{stationID:pos(stationID),quantity:pos(quantity),at:Number(at)||0}],
   systemID:pos(systemID),fleetID:pos(fleetID),stationID:pos(stationID),
   corporationID:pos(corporationID),marketQuantity:Number(marketQuantity),
-  isk:Number.isFinite(Number(isk))?Number(isk):0,at:Number(at)};
+  isk:(Number(prior&&prior.isk)||0)+(Number.isFinite(Number(isk))?Number(isk):0),
+  at:Number(at)};
  try{
   fs.mkdirSync(dir,{recursive:true});
-  const fd=fs.openSync(file,"wx",0o600);
+  const tmp=file+".tmp-"+process.pid;
+  const fd=fs.openSync(tmp,"w",0o600);
   try{fs.writeFileSync(fd,JSON.stringify(record));fs.fsyncSync(fd)}
   finally{fs.closeSync(fd)}
-  return {status:"SALE_RECEIPT_WRITTEN",cargoID:id};
+  fs.renameSync(tmp,file);
+  return {status:"SALE_RECEIPT_WRITTEN",cargoID:id,sequence:record.sequence};
  }catch(error){
   try{probe?.observe?.("living-npc-station-sale-receipt-failed",null,
    {spaceState:{systemID:pos(systemID)}},{fleetID:pos(fleetID),cargoID:id,

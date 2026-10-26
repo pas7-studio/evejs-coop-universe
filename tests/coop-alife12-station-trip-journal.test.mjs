@@ -69,7 +69,21 @@ function fixture(t,{two=false,now=101000}={}){
    haulerID:SHIP,typeID:row.typeID,quantity:units,systemID:SYSTEM,fleetID:FLEET,
    stationID:STATION,corporationID:CORP,marketQuantity:units,isk:100,at:123}));
  }
- return {root,cargo,stock,ship,m,args,journal,recover,confirm,deliver,sell,sellPart,
+ function sellAt(id,units,{stationID=STATION,at=200000}={}){
+  const row=cargo.get(id);assert.ok(row);
+  row.quantity=row.quantity-units;
+  const file=path.join(root,"receipts",id+".json");
+  let prior=null;
+  try{prior=JSON.parse(fs.readFileSync(file,"utf8"))}catch(_error){prior=null}
+  const fills=[...(prior&&Array.isArray(prior.fills)?prior.fills:[]),
+   {stationID,quantity:units,at}];
+  fs.writeFileSync(file,JSON.stringify({version:1,phase:"COMMITTED",
+   source:"NPC_MARKET_FILL",sequence:fills.length,cargoID:id,haulerID:SHIP,
+   typeID:row.typeID,quantity:fills.reduce((sum,x)=>sum+x.quantity,0),fills,
+   systemID:SYSTEM,fleetID:FLEET,stationID,corporationID:CORP,
+   marketQuantity:units,isk:100,at}));
+ }
+ return {root,cargo,stock,ship,m,args,journal,recover,confirm,deliver,sell,sellPart,sellAt,
   setClock:value=>clockNow=value,store,getNativeEntity};
 }
 test("unacknowledged original manifest blocks any unattended rewarp",t=>{
@@ -275,4 +289,30 @@ test("a partial receipt that does not match the missing units proves nothing",t=
  const got=f.recover();
  assert.equal(got.status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(got.reason,"ALIFE12_SOURCE_CARGO_CHANGED");
+});
+
+// A route can only prove the units that left the hull during ITS visit at ITS station.
+test("a fill during this trip at this station proves the missing units",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sellAt(CARGO,5,{at:200000});
+ const r=f.recover();
+ assert.equal(r.status,"RECOVERED_NATIVE_TRIP");
+ assert.equal(f.cargo.get(CARGO).quantity,8);
+});
+test("a fill at ANOTHER station never proves this route",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sellAt(CARGO,5,{stationID:60010999,at:200000});
+ const r=f.recover();
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.reason,"ALIFE12_SOURCE_CARGO_CHANGED");
+});
+test("a fill from BEFORE the departure belongs to another manifest",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sellAt(CARGO,5,{at:START-1000});
+ const r=f.recover();
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.reason,"ALIFE12_SOURCE_CARGO_CHANGED");
 });

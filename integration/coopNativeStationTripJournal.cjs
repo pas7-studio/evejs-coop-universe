@@ -129,17 +129,31 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
  // this exact row and the exact units the market paid for, so recovery can prove a
  // fully sold row (nothing left aboard) and a partly sold one (the remainder must be
  // declared minus sold). No inference, no averaging, no invented receipt.
- function saleReceiptCovers(row,m,remaining){
+  function saleReceiptCovers(row,m,remaining){
   const r=saleReceipt(row);
   if(!r||r.version!==1||r.phase!=="COMMITTED"||r.source!=="NPC_MARKET_FILL")return false;
   if(r.cargoID!==row.cargoID||r.haulerID!==row.haulerID||r.typeID!==row.typeID)return false;
-  if(r.systemID!==m.systemID||r.fleetID!==m.fleetID||r.stationID!==m.stationID||
-     r.corporationID!==m.corporationID)return false;
-  const sold=Number(r.quantity),left=Number(remaining);
-  return Number.isSafeInteger(sold)&&sold>0&&Number.isSafeInteger(left)&&left>=0&&
-   sold===Number(row.quantity)-left;
+  if(r.systemID!==m.systemID||r.fleetID!==m.fleetID)return false;
+  if(Number(r.corporationID)!==Number(m.corporationID))return false;
+  const left=Number(remaining);
+  if(!Number.isSafeInteger(left)||left<0)return false;
+  // Only fills that happened during THIS trip at THIS manifest's station can prove
+  // the units that are missing now. A fill at another station, or before the trip
+  // departed, belongs to another manifest and is never credited here.
+  const fills=Array.isArray(r.fills)?r.fills:null;
+  let sold=0;
+  if(fills){
+   sold=fills.filter(x=>Number(x&&x.stationID)===Number(m.stationID)&&
+    Number(x&&x.at)>=Number(m.startedAt))
+    .reduce((sum,x)=>sum+(Number(x.quantity)||0),0);
+  }else{
+   // Receipts written before the breakdown existed: one fill at one station.
+   if(Number(r.stationID)!==Number(m.stationID))return false;
+   sold=Number(r.quantity);
+  }
+  return Number.isSafeInteger(sold)&&sold>0&&sold===Number(row.quantity)-left;
  }
- function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
+function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
  function receiptMatches(row,m){
  if(saleReceiptMatches(row,m))return true;
  const r=readJSON(path.join(receiptDir,row.cargoID+".json"));
