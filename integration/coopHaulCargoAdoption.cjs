@@ -60,9 +60,58 @@ function stillRegistered(store,entityID){
  try{return store.getNativeEntity(Number(entityID))||null}
  catch(_error){return REGISTRY_UNVERIFIED}
 }
+// On a second restart, a prior adoption marker is not by itself proof
+// that original cargo was delivered. However, deleting that marker alone
+// would also allow a sold stack to be hauled and paid a second time.
+// This read-only check must verify ALL settlement authorities before a
+// single source row can move. Missing authority is never an empty ledger.
+function verifyReAdoptionCustody(row, options={}) {
+ const cargoID=pos(row?.cargoID);
+ if(!cargoID)return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+ try{
+  const path=require("node:path");
+  const io=options.custodyIo||require("node:fs");
+  // No guessed default: the path must match the actual native warehouse
+  // writer. Missing configuration is unknown settlement, not no receipt.
+  const root=options.warehouseRoot||
+   process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
+  if(typeof root!=="string"||!path.isAbsolute(root)||
+     typeof io?.readdirSync!=="function")
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  const names=io.readdirSync(path.join(root,"receipts"));
+  if(!Array.isArray(names))return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  const target=cargoID+".json";
+  // Any completed or in-progress warehouse receipt means no automatic
+  // recovery, even if source cargo still appears in the native table.
+  if(names.some(name=>name===target||name.startsWith(target+".tmp-")))
+   return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
+  const items=options.custodyItems||
+   require("../services/inventory/itemStore");
+  if(typeof items?.findWarehouseItem!=="function")
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  // findWarehouseItem searches the unique original physical cargoID tag.
+  // Any matching item may have been paid, sold, or reserved; never replay.
+  if(items.findWarehouseItem({cargoID}))
+   return "RE_ADOPTION_WAREHOUSE_ITEM_EXISTS";
+  const depot=options.custodyDepot||
+   require("./coopNativeDepot").getNativeDepot();
+  if(typeof depot?.snapshot!=="function")
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  const state=depot.snapshot();
+  if(state?.version!==1||!state.receipts||!state.pending||
+     typeof state.receipts!=="object"||typeof state.pending!=="object"||
+     Array.isArray(state.receipts)||Array.isArray(state.pending))
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  if(Object.hasOwn(state.receipts,String(cargoID))||
+     Object.hasOwn(state.pending,String(cargoID)))
+   return "RE_ADOPTION_DEPOT_RECEIPT_EXISTS";
+  return "CLEAR";
+ }catch(_error){return "RE_ADOPTION_SETTLEMENT_UNVERIFIED"}
+}
 // Which orphans may this exact fleet slot adopt? Every condition is an
 // independent refusal, so a missing or odd field never guesses ownership.
-function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,cargoTable,database}={}){
+function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
+ cargoTable,database,enableReAdoption=false,custodyOptions}={}){
  const pid=pos(systemID),fid=pos(fleetID);
  if(!pid||!fid||!scene)return {status:"INVALID_AUTHORITIES",rows:[]};
  let all;try{all=cargoRows({store,cargoTable,database})}
@@ -83,15 +132,23 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,cargoTable,
   if(Number(row.coopHaulFleetID)!==fid||Number(row.coopHaulSystemID)!==pid)continue;
   if(cargoIDCount.get(pos(row.cargoID))!==1)
    return {status:"NATIVE_CARGO_ID_COLLISION",rows:[]};
-  if(pos(row.coopHaulAdoptedAt))continue;
+  const adoptedAt=pos(row.coopHaulAdoptedAt);
+  if(adoptedAt&&!enableReAdoption)continue;
   const loadedAt=Number(row.coopHaulLoadedAt);
   if(!Number.isFinite(loadedAt)||loadedAt<=0||loadedAt>now)continue;
-  if(now-loadedAt>ttlMs)continue;
+  const witnessAt=adoptedAt?Math.max(adoptedAt,loadedAt):loadedAt;
+  if(witnessAt>now||now-witnessAt>ttlMs)continue;
   if(liveShip(scene,row.entityID))continue;
   const registered=stillRegistered(store,row.entityID);
   if(registered===REGISTRY_UNVERIFIED)
    return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
   if(registered)continue;
+  if(adoptedAt){
+   if(!pos(row.coopHaulAdoptedFrom)||adoptedAt<loadedAt)
+    return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
+   const custody=verifyReAdoptionCustody(row,custodyOptions);
+   if(custody!=="CLEAR")return {status:custody,rows:[]};
+  }
   rows.push(row);
  }
  return {status:rows.length?"ADOPTABLE":"NO_ORPHAN_CARGO",rows};
@@ -110,7 +167,9 @@ function adopt(scene,fleet,options={}){
  if(doneSlots.has(key))return {status:"ALREADY_ATTEMPTED"};
  const ttlMs=flags.number("EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS",DEFAULT_TTL_MS);
  const planned=plan({store,scene,systemID,fleetID,now,ttlMs,
-  cargoTable:options.cargoTable,database});
+  cargoTable:options.cargoTable,database,
+  enableReAdoption:flags.on("EVEJS_COOP_HAUL_CARGO_RE_ADOPTION"),
+  custodyOptions:options});
  if(planned.status!=="ADOPTABLE"){
   // One status line per slot, not one per native tick.
   if(planned.status!=="NO_ORPHAN_CARGO")
