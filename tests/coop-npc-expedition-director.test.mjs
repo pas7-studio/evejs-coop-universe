@@ -92,7 +92,8 @@ test("oversized catalog cannot exhaust NPC tick",()=>{
  const f=fixture();f.setSites(Array.from({length:2050},(_,i)=>({...f.site(),siteID:i+1})));
  assert.equal(f.create().tick(f.input()).status,"NATIVE_SITE_CATALOG_INVALID");
 });
-\ntest("catalog-only phantom site cannot grant NPC expedition intel",()=>{
+
+test("catalog-only phantom site cannot grant NPC expedition intel",()=>{
  const f=fixture();f.siteEntity.itemID=900;
  const r=f.create().tick(f.input());assert.equal(r.orders,0);assert.equal(r.observed,0);
 });
