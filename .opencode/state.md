@@ -1,40 +1,36 @@
-﻿## Durable mining fleet / ore stall — state 2026-10-25 23:35 UTC
+﻿## Restart resilience — measured 2026-10-26 10:34 UTC
 
-**World mode:** `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE` is OFF in the live compose file
-(the flag was removed after the durable roster kept decaying). Slot reconcile, trip
-recovery, haul manifest, haul cargo, station delivery, mining trace stay ON. The durable
-code (witness reconcile / repair / widen / controller re-attach) is committed and green
-(25/25) but dormant until the flag is turned back on.
+Test: `docker compose -p evejs restart server` on the co-op project only.
 
-**Hard fact about restarts:** `npcCargo` is empty after a restart and the startup fleet's
-ship rows are gone, so the whole startup-fleet state is transient. Only cargo that
-`coopNativeHaulCargo` marks non-transient during a real haul survives. Therefore path B
-(durable haul-cargo journal + adoption onto a freshly spawned hauler) is the short path;
-path A (durable hulls) also has to beat entity transience.
+**What comes back by itself (verified in the log after the restart):**
+- Headless boot re-entered every configured system within ~5 s:
+  `living-headless-boot-system 30000144 / 30000145 / 30100032` at 10:34:08-10.
+- The startup mining fleet re-seeded per slot: `fleet 1 mining miners 2 haulers 1`.
+- Durable files on `/var/lib/evejs` survive: `coop-economy.json`, `coop-npc-links.json`,
+  `coop-npc-life.json`, `coop-factions.json`, `coop-courier-flights.json`,
+  `coop-courier-history.json`, `coop-courier-notices.json`, `coop-loss-ledger.json`,
+  `coop-native-warehouse/` receipts. Market orders live in the Rust market service.
+  Pilot ledgers and warehouse stock therefore do NOT reset.
 
-**Current gameplay blocker (not durability):** the fleet reaches `state=mining` with real
-asteroid targets, ticks run every second (`TICK_mining`), but the miners sit `STOP` with
-`targets []`, `qty 0` and mining modules `active:false / online:true`. No `NO_MINING_MODULE`,
-`NO_MINING_SNAPSHOT`, `TARGET_OUT_OF_RANGE` or `TARGET_LOCK_FAILED` reason was ever recorded,
-so the loop is not skipping on those. Last `living-hauler-loaded` is 21:56; economy director
-is healthy (ranks ore 17464 at 5203.7 ISK, station 60014935 for 30000144/30000145).
+**What does NOT survive (the real gap):**
+- The startup fleet's native rows (`npcEntities`, `npcRuntimeControllers`, `npcModules`,
+  `npcCargo`) are transient: after the restart the log shows new ship IDs and
+  `lastHauledVolumeM3=0`. Ore sitting in a miner's hold, a partially filled hauler and a
+  haul trip in progress are all lost; the fleet restarts its cycle from zero.
+- Only cargo that `coopNativeHaulCargo` marked non-transient during a real haul survives
+  restarts.
 
-**Instrumentation added (overlay patches, not a fork):**
-- `MINER_TARGET` — modules/fitted/activeEffects counts, distance, chosen target, once per
-  2 min per fleet.
-- `NO_MINEABLE_TARGET` — the silent `if (!targetEntity)` branch that never logged.
-- `coopStuckWarpRecovery.release()` now also completes a **sessionless** warp whose own
-  `completeAtMs` elapsed (`WARP_INGRESS_COMPLETED`); before this only `warpState` warps were
-  landed and miners stayed `mode=WARP` forever (`MINER_NOT_IN_SCENE_OR_WARPING`).
+**Closing the gap (path B, chosen because path A needs entity transience beaten too):**
+1. At haul load time persist a small journal per fleet slot: loaded stacks (typeID,
+   quantity) and the chosen destination station, fsynced next to the other coop state.
+2. On boot, after the slot's new wing is verified, adopt the journal onto the new hauler:
+   grant the same stacks as durable native cargo tagged with the new entity IDs, keep the
+   existing warehouse receipt identity rules untouched, then clear the journal only after
+   the receipt is COMMITTED (or the ore is proven gone).
+3. Never invent ore: the journal may only be re-attached once, and an unclaimed journal
+   older than a configured TTL is archived, not credited.
 
-**Anchor lesson:** the patch engine matches anchors after trimming indentation, so
-`    if (!targetEntity) {` was "unknown or duplicate". Multi-line anchors that include the
-body line are unique. Always require `OVERLAY_OK` with `patched: 53 / anchorMismatch: 0`
-before building an image; a failed install still lets the build stage run on half-patched
-sources.
-
-**Next step:** Docker Desktop died mid-deploy (engine pipe gone). Restart it, rebuild
-`evejs-local` from the verified overlay, `compose up -d`, wait ~3 min, then read
-`living-mining-blocker` reasons for `MINER_TARGET` / `NO_MINEABLE_TARGET`. That answer
-decides the fix: if `activeEffects` stays 0 while `modules > 0`, activation does not stick;
-if `NO_MINEABLE_TARGET`, target selection is the blocker.
+**Also fixed in this window:** a physically arrived hauler may deposit using the trip's own
+`arrivedAtMs` dwell proof while the live stability check still applies (the in-memory
+`arrivals` record could be lost across a trip rebuild and blocked every sale with
+`ARRIVAL_NOT_VERIFIED`).

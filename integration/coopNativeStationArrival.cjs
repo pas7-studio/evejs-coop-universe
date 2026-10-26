@@ -359,10 +359,9 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    // The trip itself just proved stability + dwell before it asks for a deposit,
    // so a vanished in-memory record must not block a physically arrived hauler:
    // accept the trip's own arrivedAt only together with a live stability check.
-   const dwelled=active
-    ?(active.fleetID===args.fleetID&&active.stationID===args.stationID&&
-      active.arrivedAt>0&&clock()-active.arrivedAt>=ARRIVAL_DWELL_MS)
-    :(pos(args.arrivedAtMs)&&clock()-Number(args.arrivedAtMs)>=ARRIVAL_DWELL_MS);
+   const dwelled=(active&&active.fleetID===args.fleetID&&active.stationID===args.stationID&&
+      active.arrivedAt>0&&clock()-active.arrivedAt>=ARRIVAL_DWELL_MS)||
+    (pos(args.arrivedAtMs)&&clock()-Number(args.arrivedAtMs)>=ARRIVAL_DWELL_MS);
    return Boolean(point&&point.stationID===args.stationID&&stableAt(ship,point)&&dwelled);
   },
   verifyDurableCargo:(cargo,args)=>cargo.transient!==true&&
