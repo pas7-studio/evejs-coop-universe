@@ -183,3 +183,8 @@ Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLi
 Why: Correct the isolated exact-source test count to include the missing-root regression.
 Where: docs/HAUL_CARGO_SECOND_RESTART.md
 Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLite/Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T12:12Z · bed41ba · L2 · chore(trace): report capacitor tau and last-recharge time on every fleet tick
+
+Why: fleet miners sit at 1-5% charge with no recharge even after the L1 rate fix, and FLEET_POST_TICK could not show whether the ship carries tau or when it was last advanced, so the cause was pure guesswork
+Where: scripts/overlay-spec.cjs
+Evidence: event now carries tau and reAt per miner; OVERLAY_OK patched 54 anchorMismatch 0; no behaviour change (telemetry only)
