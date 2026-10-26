@@ -58,7 +58,11 @@ function createMiningHiring({gameStore,access,getFleet,verifyNativeFleet,
    "/coopPlayerMiningFleet/"+systemID+":"+fleetID);
   if(indexed?.success===true||indexed?.errorMsg!=="ENTRY_NOT_FOUND")return null;
   const rate=getPolicy(employerCorpID);
-  if(!rate||rate.maxCycles<CYCLES)return null;
+  if(!rate||!pos(rate.revision)||
+   !pos(rate.minerCycleCents)||!pos(rate.haulerCycleCents)||
+   rate.minerCycleCents>100000000||rate.haulerCycleCents>100000000||
+   !Number.isSafeInteger(rate.maxCycles)||rate.maxCycles<CYCLES||
+   rate.maxCycles>120)return null;
   const wageCents=(fleet.minerIDs.length*rate.minerCycleCents+
    fleet.haulerIDs.length*rate.haulerCycleCents)*CYCLES;
   if(!pos(wageCents)||wageCents>1000000000000)return null;
