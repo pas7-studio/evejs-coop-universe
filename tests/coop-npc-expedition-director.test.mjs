@@ -121,3 +121,51 @@ test("fake player session with no original ship cannot observe a native site",()
   _space:{shipID:88,systemID:30000142,initialStateSent:true}}]]);
  assert.equal(f.create().tick(input).observedPlayers,0);
 });
+
+test("EX-03B physically verified native probe scan reveals remote site to same corp patrol",()=>{
+ const f=fixture();
+ f.site().actualPosition.x=1e9;
+ f.siteEntity.itemID=888; // remote signatures need not be on scout grid
+ const site=f.site();
+ const proof={source:"ORIGINAL_PHYSICAL_NPC_PROBE_SCAN",
+   nativeScanCertainty:1,originalProbeCount:4,
+   systemID:30000142,scoutEntityID:21,pilotID:"coop-pilot-021",
+   corporationID:700,siteID:site.siteID,targetID:site.targetID,
+   actualPosition:{...site.actualPosition},
+   siteFingerprint:JSON.stringify([site.siteID,site.targetID,site.siteKind,
+    site.family,site.typeID??null,site.instanceID??null,site.pairID??null,
+    site.actualPosition.x,site.actualPosition.y,site.actualPosition.z])};
+ const d=f.create({nativeProbeScan:({entityID})=>({status:"NATIVE_PROBE_SCANNED",
+   proofs:entityID===21?[proof]:[]})});
+ const result=d.tick(f.input());
+ assert.equal(result.remoteScans,1);
+ assert.equal(result.orders,1);
+ assert.equal(f.commands[0].owner,"EXPEDITION");
+ assert.equal(f.commands[0].entityID,23);
+ assert.deepEqual(f.commands[1].point,site.actualPosition);
+ assert.equal(d.tick(f.input()).orders,0);
+});
+test("EX-03B rejects invented perfect probe proof even if catalog contains site",()=>{
+ const f=fixture();f.site().actualPosition.x=1e9;f.siteEntity.itemID=999;
+ const invalid={source:"ORIGINAL_PHYSICAL_NPC_PROBE_SCAN",
+  nativeScanCertainty:1,originalProbeCount:4,systemID:30000142,
+  scoutEntityID:21,pilotID:"coop-pilot-021",corporationID:700,
+  siteID:f.site().siteID,targetID:f.site().targetID,
+  actualPosition:{...f.site().actualPosition},siteFingerprint:"WRONG"};
+ const d=f.create({nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[invalid]})});
+ assert.equal(d.tick(f.input()).remoteScans,0);
+ assert.equal(f.commands.length,0);
+});
+test("EX-03B cross-corporation native proof cannot issue another corp warp",()=>{
+ const f=fixture();f.site().actualPosition.x=1e9;f.siteEntity.itemID=999;
+ const s=f.site();
+ const proof={source:"ORIGINAL_PHYSICAL_NPC_PROBE_SCAN",
+  nativeScanCertainty:1,originalProbeCount:4,systemID:30000142,
+  scoutEntityID:21,pilotID:"coop-pilot-021",corporationID:701,
+  siteID:s.siteID,targetID:s.targetID,actualPosition:{...s.actualPosition},
+  siteFingerprint:JSON.stringify([s.siteID,s.targetID,s.siteKind,
+   s.family,s.typeID??null,s.instanceID??null,s.pairID??null,
+   s.actualPosition.x,s.actualPosition.y,s.actualPosition.z])};
+ const d=f.create({nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[proof]})});
+ const r=d.tick(f.input());assert.equal(r.remoteScans,0);assert.equal(r.orders,0);
+});
