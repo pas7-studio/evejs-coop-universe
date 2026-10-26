@@ -19,6 +19,11 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
       (Object.prototype.hasOwnProperty.call(entry,"nativeDelivered")&&
        (!Number.isSafeInteger(entry.nativeDelivered)||entry.nativeDelivered<0)))
     throw Error("ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID");
+   for(const key of ["ore","goods","demand","security","losses"]){
+    const value=entry[key],limit=key==="security"?100:1000000;
+    if(!Number.isSafeInteger(value)||value<0||value>limit)
+     throw Error("ECONOMY_SYSTEM_BALANCE_INVALID");
+   }
   }
   journalPresent=true;
  }catch(e){if(e.code!=="ENOENT")throw e;}
