@@ -83,6 +83,19 @@ ${start}
     }
     // COOP_EX04_HACK_CONTINUATION_END`;
  s=swap(s,hook,withGuard,remove);
+ const quitHook=`  Handle_QuitHackingAttempt(args = [], session = null) {
+    normalizeCallArgs(args);
+    const key = getAttemptKey(session);
+    const attempt = ACTIVE_ATTEMPTS.get(key);
+    if (!attempt || attempt.completed) {
+      return null;
+    }`;
+ const guardedQuit=`${quitHook}
+    // COOP_EX04_HACK_QUIT_IDENTITY
+    if (process.env.EVEJS_COOP_NATIVE_HACKING_ADMISSION === "1" &&
+        attempt.nativeAdmission?.session !== session) return null;
+    // COOP_EX04_HACK_QUIT_IDENTITY_END`;
+ s=swap(s,quitHook,guardedQuit,remove);
  return s;
 }
 module.exports={patch,DOGMA,HACK};
