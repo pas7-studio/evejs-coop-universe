@@ -1050,3 +1050,81 @@ impl MarketRuntime {
        Ok(result)
     }
 }
+
+// CH24+31 E2B6: independently grounded ORIGINAL corporate buyer quote.
+// No matching, reservation, order publication or wallet write.
+fn coop_corp_buyer_quote_db(path:&Path,token:&str,order:i64,buyer:i64,
+ qty:i64,max_price:i64)->Result<serde_json::Value>{
+ coop_corp_sell_guard(token)?;
+ if std::env::var("EVEJS_COOP_RUST_CORP_BUYER_QUOTE").ok().as_deref()!=Some("1"){
+  bail!("CORP_BUYER_QUOTE_DISABLED");
+ }
+ if order<=0||buyer<=0||qty<=0||max_price<=0||
+ order>9_007_199_254_740_991_i64-9_200_000_000_i64{
+  bail!("CORP_BUYER_QUOTE_INVALID");
+ }
+ let db=load_connection(path)?;
+ coop_corp_sell_schema(&db)?;
+ let record=db.query_row(
+ "SELECT p.operation_id,p.cargo_id,p.item_id,p.owner_id,
+  p.station_id,p.type_id,p.price_cents,p.phase,m.state,m.source,
+  m.is_corp,m.bid,m.vol_remaining
+  FROM coop_corp_sell_prepared p JOIN market_orders m
+  ON p.order_id=m.order_id WHERE p.order_id=?1",
+ params![order],|r|Ok((
+  r.get::<_,String>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,
+  r.get::<_,i64>(3)?,r.get::<_,i64>(4)?,r.get::<_,i64>(5)?,
+  r.get::<_,i64>(6)?,r.get::<_,String>(7)?,r.get::<_,String>(8)?,
+  r.get::<_,String>(9)?,r.get::<_,i64>(10)?,r.get::<_,i64>(11)?,
+  r.get::<_,i64>(12)?
+ ))).optional()?.ok_or_else(||anyhow!("CORP_BUYER_ORDER_MISSING"))?;
+ let (op,cargo,item,seller,station,ty,price,phase,state,source,corp,bid,left)=record;
+ if phase!="published"||state!="open"||source!="coop-corporation"||
+ corp!=1||bid!=0||seller<=0||buyer==seller||price<=0||
+ qty>left||left<=0||price>max_price{
+  bail!("CORP_BUYER_ORDER_UNAVAILABLE");
+ }
+ let gross=price.checked_mul(qty).ok_or_else(||anyhow!("CORP_BUYER_PRICE_OVERFLOW"))?;
+ if gross>9_007_199_254_740_991_i64{bail!("CORP_BUYER_PRICE_UNSAFE");}
+ let gs=coop_corp_sell_gamestore()?;
+ gs.execute_batch("BEGIN DEFERRED TRANSACTION")?;
+ let person=coop_corp_sell_json(&gs,"characters",&buyer.to_string())?;
+ let wallet=coop_corp_fill_signed_cents(&person["balance"])?;
+ if person["characterID"]!=buyer||wallet<gross{
+  bail!("CORP_BUYER_REAL_FUNDS_MISSING");
+ }
+ let sale=coop_corp_sell_json(&gs,"corporationRuntime",
+  &format!("coopPlayerMiningCorpSell\u{001f}{}",cargo))?;
+ let escrow=coop_corp_sell_json(&gs,"marketEscrow",&order.to_string())?;
+ let physical=coop_corp_sell_json(&gs,"items",&item.to_string())?;
+ let location=order+9_200_000_000_i64;
+ if sale["orderID"]!=order.to_string()||sale["corporationID"]!=seller||
+ sale["itemID"]!=item||sale["cargoID"]!=cargo||
+ (sale["remainingQuantity"].as_i64().unwrap_or(left))!=left||
+ escrow["remainingQuantity"]!=left||escrow["ownerId"]!=seller||
+ escrow["isCorp"]!=true||escrow["sourceItemIDs"]!=serde_json::json!([item])||
+ physical["ownerID"]!=seller||physical["itemID"]!=item||
+ physical["locationID"]!=location||physical["quantity"]!=left||
+ physical["customInfo"]!=format!("coop-warehouse:v1:cargo:{}",cargo){
+  bail!("CORP_BUYER_ESCROW_OR_TITLE_DRIFT");
+ }
+ Ok(serde_json::json!({
+  "verifiedNative":true,"status":"ELIGIBLE_NOT_RESERVED",
+  "operationID":op,"orderID":order.to_string(),
+  "buyerCharacterID":buyer,"sellerCorpID":seller,
+  "cargoID":cargo,"sourceItemID":item,"stationID":station,
+  "typeID":ty,"priceCents":price,"volumeBefore":left,
+  "quantity":qty,"grossCents":gross,"buyerWalletCentsAtQuote":wallet,
+  "source":"coop-corporation","is_corp":true,"bid":false,
+  "nativeMutation":false,"buyerFundsReserved":false
+ }))
+}
+impl MarketRuntime{
+ pub async fn coop_corp_buyer_quote(&self,token:String,order:i64,
+ buyer:i64,qty:i64,max_price:i64)->Result<serde_json::Value>{
+  let path=self.database_path.clone();
+  tokio::task::spawn_blocking(move||
+   coop_corp_buyer_quote_db(&path,&token,order,buyer,qty,max_price))
+   .await.context("corporate buyer quote failed")?
+ }
+}
