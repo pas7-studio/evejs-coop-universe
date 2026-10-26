@@ -183,3 +183,46 @@ Do not automatically move these to PASS just because source Node tests,
 installer roundtrip or telemetry correlation passed. Keep all native
 PvE economy/order flags OFF until full live acceptance is independently
 recorded, reviewed and the stacked PRs are merged in dependency order.
+
+## Final source-authored boss loot proof and CI status (2026-10-26)
+
+The original pinned EveJS catalogue contains **171** authored NPC profiles
+whose `lootTableID` is `parity_deadspace_overseer_pending_loot`.
+That rule table has **four** weighted native selectors (special overseer
+personal effects, faction ammo, faction modules and deadspace modules),
+with a source-authored non-empty expectation. This establishes actual
+profile-to-rule configuration; it is not a proof of physical drops.
+
+The pinned-run gate includes
+`tests/coop-pve-native-rare-candidates.test.mjs`: it looks up the
+original native `npcData` definition, resolves original item-type pools
+with `npcLoot._testing.getRuleCandidatePool`, then calls the **original**
+`npcLoot.rollNpcLootEntries(table)` 32 times with a deterministic
+locally restored random stream and checks selected item IDs against
+native candidate pools. This is algorithm/in-memory candidate evidence,
+**not** a real spawned wreck, a native inventory grant, or a completed
+EVE client pickup. Keep live rare-drop scenario `NOT_RUN` until
+original native itemStore + wreck source and two clients are witnessed.
+
+The optional boss-loot pregrant fence additionally blocks native wrecks
+whose source profile/rule names unmistakably identify an overseer,
+officer, boss or commander after server restart when the in-process
+boss witness is lost. It does **not** auto-replay an uncertain item grant;
+non-boss wrecks retain their original native transfer path.
+
+For duo personal agent rewards, zero-ISK **untimed** bonus item grants
+are now recognized according to the original native reward function.
+A timed bonus with zero ISK cannot be inferred from a wallet delta and
+is deliberately rejected until explicit native timing/receipt proof is
+available. This protects against false payout-success claims.
+
+**Test evidence at this point:** isolated source-executed suites for
+personal reward custody (15/15), event correlation (14/14) and static
+catalog checks (6/6), **35/35 PASS**; 171 original profile bindings
+and four selector rules inspected. GitHub Actions has returned **zero
+runs** for the final feature branch, so actual Node22 full source suite,
+full disposable original overlay install/reapply/remove, native rare
+candidate/RNG execution against pinned checkout, two-client game play,
+SQLite/Rust and crash/restart are **NOT_VERIFIED/NOT_RUN**. No claim
+of release-readiness or merged code is made. The final PvE PR stays
+Draft and all game flags remain OFF by default.
