@@ -45,3 +45,4 @@ Thumbs.db
 
 # Local two-client test diagnostics
 /test-results/
+.opencode/tmp/

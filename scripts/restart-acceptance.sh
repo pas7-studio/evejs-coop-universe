@@ -33,7 +33,12 @@ done
 CONTAINER=$(docker compose -p "$PROJECT" ps -q "$SERVICE" 2>/dev/null | head -1)
 if [ -z "$CONTAINER" ]; then echo "CONTAINER_NOT_RUNNING project=$PROJECT service=$SERVICE"; exit 3; fi
 NAME=$(docker inspect -f '{{.Name}}' "$CONTAINER" | sed 's#^/##')
-TMP=${TMPDIR:-/tmp}/evejs-acceptance-$(date -u +%H%M%S)
+# Git Bash and node disagree about /tmp, and MSYS path conversion is off here,
+# so use one Windows-style temp path that both see.
+# Keep artifacts inside the repo: /tmp means different things to Git Bash and
+# to node here (MSYS path conversion is off), which silently broke a comparison.
+BASE="$REPO/.opencode/tmp"
+TMP="$BASE/evejs-acceptance-$(date -u +%H%M%S)"
 mkdir -p "$TMP"
 START=$(date -u +%s)
 echo "CONTEXT container=$NAME project=$PROJECT start=$(date -u -d @$START +%Y-%m-%dT%H:%M:%SZ)"
