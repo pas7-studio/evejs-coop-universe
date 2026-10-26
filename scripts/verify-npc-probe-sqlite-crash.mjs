@@ -20,7 +20,33 @@ const flight=id=>({status:"IN_SPACE",probeID:id,entityID,ownerID,
  systemID,typeID:30013,launchedAtMs:1000000,
  position:{x:1000,y:0,z:1000},originPosition:{x:0,y:0,z:0},
  sweepStep:0,rangeStep:4,scanRange:1e10});
+function assertDisposableNativeStore(){
+ const root=process.env.EVEJS_TEST_STORE_ROOT;
+ const data=process.env.EVEJS_GAMESTORE_DATA_DIR;
+ assert.equal(process.env.EVEJS_TEST_STORE_ISOLATED,"1",
+  "EX03_DISPOSABLE_ISOLATION_FLAG_REQUIRED");
+ assert(root&&data,"EX03_DISPOSABLE_DATA_ROOT_REQUIRED");
+ const absoluteRoot=path.resolve(root),absoluteData=path.resolve(data);
+ assert.equal(absoluteData,path.join(absoluteRoot,"data"),
+  "EX03_MUST_USE_DEDICATED_DATA_CHILD");
+ assert.equal(path.dirname(absoluteRoot),path.resolve(os.tmpdir()),
+  "EX03_STORE_MUST_BE_CREATED_UNDER_OS_TEMPDIR");
+ assert(path.basename(absoluteRoot).startsWith("evejs-ex03b6-"),
+  "EX03_UNEXPECTED_TEST_ROOT_PREFIX");
+ assert.equal(fs.realpathSync(absoluteRoot),absoluteRoot,
+  "EX03_TEST_ROOT_SYMLINK_FORBIDDEN");
+ assert.equal(fs.realpathSync(absoluteData),absoluteData,
+  "EX03_TEST_DATA_SYMLINK_FORBIDDEN");
+ const att=JSON.parse(fs.readFileSync(
+  path.join(absoluteRoot,".evejs-test-store-attestation.json"),"utf8"));
+ assert.equal(att.kind,"evejs-test-store");
+ assert.equal(att.schemaVersion,1);
+ assert.equal(att.createdBy,"server/tests/helpers/isolatedGameStore.js");
+ assert.equal(path.resolve(att.storeRoot),absoluteRoot);
+ assert.equal(path.resolve(att.dataDir),absoluteData);
+}
 function appModules(){
+ assertDisposableNativeStore();
  const root=process.env.EVEJS_PINNED_SERVER;
  const data=process.env.EVEJS_GAMESTORE_DATA_DIR;
  assert(root&&data&&fs.existsSync(root)&&fs.existsSync(data),
