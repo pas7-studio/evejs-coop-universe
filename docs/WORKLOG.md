@@ -213,3 +213,8 @@ Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOP
 Why: Verify preflight and global readback use the same original cargoIDs; stale or duplicated post-commit global native rows require quarantining the entire fleet, and tests must emulate actual GameStore post-commit readbacks.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOPTED despite duplicated global cargoID, now ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED. Full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:27Z · 8c02b08 · L1 · fix(l1): recharge every sessionless ship each scene tick; record the runtime-controller churn
+
+Why: the capacitor advance only ran for controllers whose think was due and co-op mining hulls carry none: live telemetry showed tau set but capacitorRechargedAtMs stuck at 0, so charge only fell
+Where: .opencode/state.md, patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json
+Evidence: 0003 extended (one patch per file) with a 1s scene sweep; live after rebuild reAt is set and caps read 0.04-0.05 with tau 125-187s; series PRESENT x3 CHECK_OK; OVERLAY_OK patched 54
