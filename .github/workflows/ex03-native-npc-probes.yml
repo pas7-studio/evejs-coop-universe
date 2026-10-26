@@ -7,6 +7,7 @@ on:
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
+      - 'integration/coopNativeNpcProbeLifecycle.cjs'
       - 'integration/coopNpcScoutLoadout.cjs'
       - 'integration/coopNativeHackingAdmission.cjs'
       - 'integration/coopVirtualWorldRuntime.cjs'
@@ -25,6 +26,7 @@ on:
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
+      - 'integration/coopNativeNpcProbeLifecycle.cjs'
       - 'integration/coopNpcScoutLoadout.cjs'
       - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
       - 'scripts/coop-npc-scout-loadout-patch.cjs'
@@ -53,6 +55,7 @@ jobs:
             integration/coopNpcProbeScanEvidence.cjs \
             integration/coopNativeNpcProbeFlight.cjs \
             integration/coopNativeNpcProbeSweep.cjs \
+            integration/coopNativeNpcProbeLifecycle.cjs \
             integration/coopNpcScoutLoadout.cjs \
             scripts/coop-npc-scout-loadout-patch.cjs \
             integration/coopNativeHackingAdmission.cjs \
@@ -96,6 +99,7 @@ jobs:
             tests/coop-npc-probe-pinned-native-source.test.mjs \
             tests/coop-native-npc-probe-flight.test.mjs \
             tests/coop-native-npc-probe-sweep.test.mjs \
+            tests/coop-native-npc-probe-lifecycle.test.mjs \
             tests/coop-npc-scout-loadout.test.mjs \
             tests/coop-native-hacking-admission.test.mjs
       - name: Keep native SQLite kill/restart and two-client gameplay blocked
