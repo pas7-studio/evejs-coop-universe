@@ -97,7 +97,7 @@ test("faction/store/physical NPC identity and conflicting orders cannot be hijac
   f=>f.original.delete(101),
   f=>{f.original.get(101).typeID=123;},
   f=>{f.original.get(101).corporationID=11;},
-  f=>{f.original.get(101).createdAtMs=800000;},
+  f=>{f.original.get(101).createdAtMs=700000;},
   f=>{f.npcShip.nativeNpc=false;},
   f=>{f.npcShip.position.x=600000;},
   f=>{f.ctrl.get(101).runtimeKind="nativeAmbient";}
