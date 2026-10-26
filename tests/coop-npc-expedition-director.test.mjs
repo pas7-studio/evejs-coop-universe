@@ -136,7 +136,8 @@ test("EX-03B physically verified native probe scan reveals remote site to same c
    siteFingerprint:JSON.stringify([site.siteID,site.targetID,site.siteKind,
     site.family,site.typeID??null,site.instanceID??null,site.pairID??null,
     site.actualPosition.x,site.actualPosition.y,site.actualPosition.z])};
- const d=f.create({nativeProbeScan:({entityID})=>({status:"NATIVE_PROBE_SCANNED",
+ const d=f.create({isNativeProbeScout:id=>id===21,
+  nativeProbeScan:({entityID})=>({status:"NATIVE_PROBE_SCANNED",
    proofs:entityID===21?[proof]:[]})});
  const result=d.tick(f.input());
  assert.equal(result.remoteScans,1);
@@ -153,7 +154,8 @@ test("EX-03B rejects invented perfect probe proof even if catalog contains site"
   scoutEntityID:21,pilotID:"coop-pilot-021",corporationID:700,
   siteID:f.site().siteID,targetID:f.site().targetID,
   actualPosition:{...f.site().actualPosition},siteFingerprint:"WRONG"};
- const d=f.create({nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[invalid]})});
+ const d=f.create({isNativeProbeScout:id=>id===21,
+  nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[invalid]})});
  assert.equal(d.tick(f.input()).remoteScans,0);
  assert.equal(f.commands.length,0);
 });
@@ -167,7 +169,8 @@ test("EX-03B cross-corporation native proof cannot issue another corp warp",()=>
   siteFingerprint:JSON.stringify([s.siteID,s.targetID,s.siteKind,
    s.family,s.typeID??null,s.instanceID??null,s.pairID??null,
    s.actualPosition.x,s.actualPosition.y,s.actualPosition.z])};
- const d=f.create({nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[proof]})});
+ const d=f.create({isNativeProbeScout:id=>id===21,
+  nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[proof]})});
  const r=d.tick(f.input());assert.equal(r.remoteScans,0);assert.equal(r.orders,0);
 });
 
@@ -224,4 +227,68 @@ test("long miner and hauler assignment prefix cannot starve real NPC scout",()=>
  });
  d.tick(f.input());
  assert.deepEqual(seen,[23]);
+});
+
+test("EX-03B10 native scanner authority is mandatory, not an optional fallback",()=>{
+ const f=fixture(),scanned=[];
+ const d=f.create({nativeProbeScan:({entityID})=>{
+  scanned.push(entityID);
+  return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+ }});
+ const r=d.tick(f.input());
+ assert.equal(r.status,"NATIVE_EXPEDITION_TICK");
+ assert.deepEqual(scanned,[]);
+});
+
+test("EX-03B10 43 ordinary patrols cannot starve fitted scout beyond tiny pilot cap",()=>{
+ const f=fixture(),scanned=[];
+ for(let i=0;i<40;i++){
+  const id=1000+i,pilotID="coop-pilot-"+id;
+  f.assignments.push({pilotID,entityID:id,systemID:30000142});
+  f.roles[pilotID]="patrol";
+ }
+ const scoutID=5000,pilotID="coop-pilot-5000";
+ f.assignments.push({pilotID,entityID:scoutID,systemID:30000142});
+ f.roles[pilotID]="patrol";
+ f.native.set(scoutID,{entityID:scoutID,systemID:30000142,corporationID:700});
+ f.controllers.set(scoutID,{entityID:scoutID,systemID:30000142});
+ f.ships.set(scoutID,{kind:"ship",nativeNpc:true,itemID:scoutID,
+  corporationID:700,systemID:30000142,position:{x:1e7,y:0,z:0}});
+ const d=f.create({maxPilotsPerTick:2,
+  isNativeProbeScout:id=>id===scoutID,
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }});
+ d.tick(f.input());
+ assert.deepEqual(scanned,[scoutID]);
+});
+
+test("EX-03B10 rotating bounded scanner preflight eventually visits late scouts",()=>{
+ const f=fixture(),scanned=[],checks=[];
+ for(let i=0;i<140;i++){
+  const id=1000+i,pilotID="coop-pilot-"+id;
+  f.assignments.push({pilotID,entityID:id,systemID:30000142});
+  f.roles[pilotID]="patrol";
+ }
+ const scoutID=5000,pilotID="coop-pilot-5000";
+ f.assignments.push({pilotID,entityID:scoutID,systemID:30000142});
+ f.roles[pilotID]="patrol";
+ f.native.set(scoutID,{entityID:scoutID,systemID:30000142,corporationID:700});
+ f.controllers.set(scoutID,{entityID:scoutID,systemID:30000142});
+ f.ships.set(scoutID,{kind:"ship",nativeNpc:true,itemID:scoutID,
+  corporationID:700,systemID:30000142,position:{x:1e7,y:0,z:0}});
+ const d=f.create({maxPilotsPerTick:2,
+  isNativeProbeScout:id=>{checks.push(id);return id===scoutID;},
+  nativeProbeScan:({entityID})=>{
+   scanned.push(entityID);
+   return {status:"NATIVE_PROBE_SCANNED",proofs:[]};
+  }});
+ d.tick(f.input());
+ assert.deepEqual(scanned,[]);
+ assert.equal(checks.length,128,"bounded native hardware checks per tick");
+ checks.length=0;
+ d.tick(f.input());
+ assert.deepEqual(scanned,[scoutID]);
+ assert.equal(checks.length,128,"second bounded window wraps safely");
 });
