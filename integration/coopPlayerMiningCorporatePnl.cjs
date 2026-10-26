@@ -25,9 +25,10 @@ const entryAmount=(row,id,ref,amount)=>{
   iskCents(row.amount)===amount;
 };
 function createMiningCorporatePnl({
- gameStore,access,readNativeReleased,enabled=()=>false
+ gameStore,access,readNativeReleased,findOriginalItemById,enabled=()=>false
 }={}){
  if(typeof gameStore?.read!=="function"||typeof readNativeReleased!=="function"||
+   typeof findOriginalItemById!=="function"||
   [access?.isMember,access?.canIndustry,access?.canWallet,enabled]
    .some(f=>typeof f!=="function"))
   throw Error("MINING_PL_ORIGINAL_AUTHORITIES_REQUIRED");
@@ -205,6 +206,20 @@ function createMiningCorporatePnl({
       return blocked("MINING_PL_ORIGINAL_INVENTORY_NOT_CONSERVED");
     }
     // Exact integer cost-basis apportionment, rounded only once per cargo.
+    const unsoldQty=title.quantity-sold;
+    if(unsoldQty>0){
+     const item=findOriginalItemById(title.itemID),
+      folder=sale&&sale.phase!=="RETURNED_UNSOLD"?
+        sale.escrowLocationID:title.officeFolderID,
+      flag=sale&&sale.phase!=="RETURNED_UNSOLD"?4:title.division;
+     if(!POS(folder)||!POS(flag)||item?.itemID!==title.itemID||
+        item.ownerID!==corporationID||item.locationID!==folder||
+        item.flagID!==flag||item.typeID!==title.typeID||
+        item.quantity!==unsoldQty||item.stacksize!==unsoldQty||
+        item.singleton!==0||item.customInfo!==
+           "coop-warehouse:v1:cargo:"+id)
+      return blocked("MINING_PL_ORIGINAL_UNSOLD_INVENTORY_NOT_PRESENT");
+    }
     const cogs=Number(BigInt(title.priceCents)*BigInt(sold)/BigInt(title.quantity));
     const remainingBasis=title.priceCents-cogs;
     realizedCost=add(realizedCost,cogs);inventoryCost=add(inventoryCost,remainingBasis);
