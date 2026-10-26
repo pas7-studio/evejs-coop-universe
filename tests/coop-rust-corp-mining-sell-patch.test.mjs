@@ -115,9 +115,37 @@ test("Rust private claim CAS isolates market order and preserves single in-fligh
  assert.match(extension,/vol_remaining=\?3/);
  assert.match(extension,/CORP_FILL_EXCLUSIVE_LOCK_FAILED/);
 });
-test("Rust E2B3 does not finalize or release before wallet settlement",()=>{
+test("Rust E2B4 finalizes and releases only after independent durable native GameStore proof",()=>{
  assert.match(extension,/EVEJS_COOP_RUST_CORP_FILL_CLAIM/);
- assert.match(extension,/CORP_FILL_NATIVE_CLAIM_NO_LONGER_LOCKED/);
- assert.doesNotMatch(extension,/fn coop_corp_fill_finalize_db/);
- assert.doesNotMatch(extension,/fn coop_corp_fill_release_db/);
+ assert.match(extension,/fn coop_corp_fill_finalize_db/);
+ assert.match(extension,/fn coop_corp_fill_release_db/);
+ assert.match(extension,/coop_corp_fill_game_store_witness\(&witness\)/);
+ assert.match(extension,/coop_corp_fill_audit\(&original,claim_proof\)/);
+ assert.match(extension,/CORP_FILL_RELEASE_DURABLE_PAYMENT_NO_LONGER_VERIFIED/);
+ assert.match(extension,/UPDATE market_orders SET state=\?3,updated_at=\?4/);
+});
+
+test("private Rust fill finalize and release RPCs use server token and exact order cycle",()=>{
+ const installed=patch(rpc,"rpc");
+ assert.match(installed,/"FinalizeCorpFill" =>/);
+ assert.match(installed,/"ReleaseCorpFill" =>/);
+ assert.match(installed,/runtime\.coop_corp_fill_finalize\(p.access_token,p.order_id,p.cycle\)/);
+ assert.match(installed,/runtime\.coop_corp_fill_release\(p.access_token,p.order_id,p.cycle\)/);
+});
+test("independent read-only GameStore audit checks both wallet journals and delivered physical item",()=>{
+ for(const witness of [
+ "coop_corp_fill_signed_cents",'"buyerJournalID"', '"sellerJournalID"',
+ '"feeJournalID"','"walletJournal"','"transactions"',
+ '"deliveredItemID"','"sourceCargoID"','"sourceItemID"',
+ '"remainingQuantity"','"lastSettledCycle"','"native_receipt_key"'])
+  assert.ok(extension.includes(witness),witness);
+ assert.match(extension,/CORP_FILL_ORIGINAL_WALLET_DEBIT_CREDIT_NOT_FOUND/);
+ assert.match(extension,/CORP_FILL_ORIGINAL_MARKET_FEES_NOT_DEBITED/);
+ assert.match(extension,/CORP_FILL_PARTIAL_ORIGINAL_REMAINDER_NOT_PRESERVED/);
+});
+test("no public corporate sale can be published before verified native full lifecycle",()=>{
+ const publish=extension.slice(extension.indexOf("fn coop_corp_sell_publish_db("),
+  extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
+ assert.match(publish,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
+ assert.doesNotMatch(publish,/UPDATE market_orders/);
 });
