@@ -2,6 +2,11 @@
 // Original EVEJS GameStore BUY escrow refund. No Rust order changes here.
 // A terminal Rust order readback is required for an irreversible wallet credit.
 // Unknown outcomes remain blocked; replay never issues a second credit.
+// Reuse the same original paid BUY reserve debit authority used for both
+// Rust order binding and seller settlement. Refund cannot accept a weaker
+// receipt than the payout that previously consumed its escrow.
+const {validDebitReceipt}=require("./coopPlayerMarketBuyReserve"+
+ (__filename.endsWith(".cjs")?".cjs":""));
 const TABLES=Object.freeze(["characters","marketEscrow","playerMarketFills","identityState"]);
 const pos=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>0;
 const nonneg=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>=0;
@@ -52,7 +57,7 @@ function assertBound(tx,p){
     typeof escrow.coopReserveOperationID!=="string")
   throw Error("P2P_BUY_REFUND_NATIVE_ESCROW_NOT_FUNDED");
  const original=tx.get("playerMarketFills",escrow.coopReserveReceiptKey);
- if(!original||original.kind!=="P2P_BUY_RESERVE"||
+ if(!validDebitReceipt(original)||
     original.phase!=="BOUND"||
     original.key!==escrow.coopReserveReceiptKey||
     original.orderID!==p.orderID||
