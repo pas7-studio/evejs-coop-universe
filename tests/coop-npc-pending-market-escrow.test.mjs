@@ -5,19 +5,24 @@ const require=createRequire(import.meta.url);
 const {createNpcPendingMarketEscrow,ESCROW_BASE}=require("../integration/coopNpcPendingMarketEscrow.cjs");
 const OP="npc-manufacture:abcdef1234567890abcdef1234567890";
 const X={operationID:OP,ownerID:1000010,stationID:60000001,itemID:1990000200,typeID:215,quantity:100};
-function fixture({reserveFail=false,activationFails=false,escrowFault=false}={}){
+function fixture({reserveFail=false,activationFails=false,escrowFault=false,
+  unitPrice=12,stacksize=X.quantity,afterReserve=null,
+  reserveOverride=null,activateOverride=null,readbackOverride=null}={}){
  const items=new Map([[String(X.itemID),{itemID:X.itemID,ownerID:X.ownerID,locationID:X.stationID,
-   flagID:4,typeID:X.typeID,quantity:X.quantity,singleton:0,customInfo:"coop-industry:v1:970000000000000"}]]);
+   flagID:4,typeID:X.typeID,quantity:X.quantity,stacksize,singleton:0,
+   customInfo:"coop-industry:v1:970000000000000"}]]);
  const escrow=new Map(),callCounts={reserve:0,activate:0,get:0},id=456,clone=x=>structuredClone(x);
  const order=(state)=>({operation_id:OP,source_item_id:String(X.itemID),order_id:String(id),
-  owner_id:X.ownerID,station_id:X.stationID,type_id:X.typeID,quantity:X.quantity,price:12,
-  bid:false,is_corp:true,state});
+  owner_id:X.ownerID,station_id:X.stationID,type_id:X.typeID,quantity:X.quantity,
+  price:Math.round(unitPrice*100)/100,source:"coop-npc",
+  vol_remaining:X.quantity,bid:false,is_corp:true,state});
  const call=async(type,p)=>{
   if(type==="ReserveNpcSellOrder"){callCounts.reserve++;if(reserveFail)return{state:"open"};
-   return order("pending");}
+   if(afterReserve)afterReserve(items);
+   return {...order("pending"),...reserveOverride};}
   if(type==="ActivateNpcSellOrder"){callCounts.activate++;if(activationFails)throw Error("RUST_ACTIVATION_ACK_LOST");
-   return order("open");}
-  if(type==="GetNpcSellOrder"){callCounts.get++;return order("open");}
+   return {...order("open"),...activateOverride};}
+  if(type==="GetNpcSellOrder"){callCounts.get++;return {...order("open"),...readbackOverride};}
   throw Error("UNEXPECTED_RUST_RPC");
  };
  const tx={get:(table,key)=>(table==="items"?items:escrow).get(key)??null,
@@ -32,7 +37,8 @@ function fixture({reserveFail=false,activationFails=false,escrowFault=false}={})
    for(const [k,v]of beforeEscrow)escrow.set(k,v);throw error}
  }}};
  const adapter=createNpcPendingMarketEscrow({call,gameStore,verifyNativeCorporation:owner=>owner===X.ownerID,
-  verifyStation:station=>station===X.stationID,resolvePrice:()=>12,getNativeItem:itemID=>items.get(String(itemID)),
+  verifyStation:station=>station===X.stationID,resolvePrice:()=>unitPrice,
+  getNativeItem:itemID=>items.get(String(itemID)),
   getNativeEscrow:orderID=>escrow.get(String(orderID)),clock:()=>1761390000000});
  return {adapter,items,escrow,callCounts,id};
 }
@@ -85,3 +91,77 @@ test("malformed or overlarge quantity never reserves sell order",()=>withFixture
  assert.equal((await f.adapter.listOnce({...X,quantity:9999999})).error,"NPC_MARKET_IDENTITY_UNVERIFIED");
  assert.equal(f.callCounts.reserve,0);
 }));
+
+
+test("sub-cent quotes do not issue free or rounded Rust orders",()=>withFixture(async f=>{
+ await assert.rejects(f.adapter.listOnce(X),/NPC_MARKET_PRICE_UNVERIFIED/);
+ assert.equal(f.callCounts.reserve,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+}, {unitPrice:0.004}));
+test("fractional-cent positive quotes never silently round to another unit price",()=>withFixture(async f=>{
+ await assert.rejects(f.adapter.listOnce(X),/NPC_MARKET_PRICE_UNVERIFIED/);
+ assert.equal(f.callCounts.reserve,0);
+ assert.equal(f.escrow.size,0);
+}, {unitPrice:12.003}));
+test("exact fractional dollar-cent quote remains valid",()=>withFixture(async f=>{
+ assert.equal((await f.adapter.listOnce(X)).status,"LISTED");
+ assert.equal(f.callCounts.reserve,1);
+}, {unitPrice:12.05}));
+test("quantity with mismatching native stacksize is not eligible for Rust reserve",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_MARKET_UNBACKED_SOURCE");
+ assert.equal(f.callCounts.reserve,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+}, {stacksize:0}));
+test("stacksize tampering after Rust reserve but before GameStore commit rolls back",()=>withFixture(async f=>{
+ await assert.rejects(f.adapter.listOnce(X),/NPC_NATIVE_SOURCE_CHANGED/);
+ assert.equal(f.callCounts.reserve,1);
+ assert.equal(f.callCounts.activate,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+}, {afterReserve:items=>{
+ const old=items.get(String(X.itemID));
+ items.set(String(X.itemID),{...old,stacksize:old.stacksize+1});
+}}));
+
+
+test("Rust reserve for player source cannot escrow real NPC manufactured stock",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_PENDING_ORDER_NOT_VERIFIED");
+ assert.equal(f.callCounts.reserve,1);
+ assert.equal(f.callCounts.activate,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+},{reserveOverride:{source:"player"}}));
+
+test("depleted Rust pending order cannot move 100 original NPC items into escrow",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_PENDING_ORDER_NOT_VERIFIED");
+ assert.equal(f.callCounts.reserve,1);
+ assert.equal(f.callCounts.activate,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+},{reserveOverride:{vol_remaining:0}}));
+
+test("partial Rust pending order cannot attest full physical manufacturing quantity",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_PENDING_ORDER_NOT_VERIFIED");
+ assert.equal(f.items.get(String(X.itemID)).locationID,X.stationID);
+ assert.equal(f.escrow.size,0);
+},{reserveOverride:{vol_remaining:X.quantity-1}}));
+
+test("Rust activation source mismatch is never reported as confirmed listing",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_RUST_ACTIVATION_UNVERIFIED");
+ assert.equal(f.callCounts.get,0);
+ assert.equal(f.items.get(String(X.itemID)).locationID,ESCROW_BASE+456);
+},{activateOverride:{source:"player"}}));
+
+test("Rust readback with depleted volume is not reported as confirmed sale listing",()=>withFixture(async f=>{
+ const result=await f.adapter.listOnce(X);
+ assert.equal(result.error,"NPC_MARKET_LISTING_NOT_RECONCILED");
+ assert.equal(f.callCounts.get,1);
+ assert.equal(f.items.get(String(X.itemID)).locationID,ESCROW_BASE+456);
+},{readbackOverride:{vol_remaining:0}}));

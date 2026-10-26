@@ -541,6 +541,8 @@ function start(){
     space:require("./runtime"),
     sceneForSystem:id=>require("./runtime").ensureScene(id,{refreshStargates:false}),
     pilots:String(process.env.EVEJS_COOP_COURIER_PILOTS||"140000100,140000101,140000102,140000103,140000104,140000105,140000106").split(","),
+    sendMail:mail=>require("../services/mail/mailState").sendMail({
+     senderID:mail.senderID,toCharacterIDs:mail.toCharacterIDs,saveSenderCopy:false,title:mail.title,body:mail.body}),
     log:console.log
    });
    courierDispatch.tick();
@@ -2733,7 +2735,7 @@ function noteSaleSkip(systemID,stationID,haulerID,reason){
     reason:String(reason||"").slice(0,80)});
  }catch(_error){/* telemetry must never break a delivery */}
 }
-function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
+function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  if(process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL!=="1")return {status:"DISABLED"};
  if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET!=="1")return {status:"MARKET_OFF"};
  const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
@@ -2749,9 +2751,34 @@ function sellOnArrival({systemID,stationID,haulerID,types=[]}={}){
   }
   return {status:"PENDING"};
  }
- const link=Object.values(identityRegistry?.snapshot()?.links||{})
+ // Reuse the identity mechanism that already names the mining fleet: a real
+// fleet hauler is adopted by a free miner/hauler resident exactly the way
+// coopNativeIndustry.observe does, so it keeps a NORMAL coop-pilot identity and
+// ledger instead of inventing a second identifier scheme.
+ function adoptMerchant(scene,haulerID,systemID){
+  const registry=identityRegistry;
+  if(!registry||typeof registry.link!=="function"||typeof registry.get!=="function")
+   return null;
+  const pilots=(world?.snapshot()?.pilots||[]).filter(p=>p?.role==="hauler"||p?.role==="miner");
+  const links=Object.values(registry.snapshot()?.links||{});
+  if(links.some(x=>Number(x.entityID)===Number(haulerID)))return null;
+  for(const pilot of pilots){
+    if(registry.get(pilot.id))continue;
+    let linked=null;
+    try{linked=registry.link(pilot,Number(systemID),Number(haulerID));}
+    catch(_error){continue;}
+    if(!linked||Number(linked.entityID)!==Number(haulerID))continue;
+    try{require("./coopNpcPresentation").presentVirtualPilot(scene,Number(haulerID),pilot);}
+    catch(_error){/* a failed name broadcast must not block the sale */}
+    return linked;
+  }
+  return null;
+ }
+ let link=Object.values(identityRegistry?.snapshot()?.links||{})
   .find(entry=>Number(entry.entityID)===Number(haulerID)&&
    Number(entry.systemID)===Number(systemID));
+ if(!link)link=adoptMerchant(scene||require("./runtime").ensureScene(Number(systemID),
+  {refreshStargates:false}),haulerID,systemID);
  if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
  const trader=ensureMarketTrader();
  if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}

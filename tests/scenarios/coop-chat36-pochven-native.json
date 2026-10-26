@@ -1,0 +1,27 @@
+{
+  "scenarioID": "CHAT36-POCHVEN-2PLAYER-NATIVE",
+  "status": "NOT_RUN",
+  "upstreamSHA": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "requires": [
+    "authorized compatible EVE client x2",
+    "disposable backed-up native world with original SDE Pochven region 10000070",
+    "real reciprocal Pochven Conduit gate entities and destination system pairs",
+    "two independent authenticated characters and persisted real subcapital ship items",
+    "EVEJS_COOP_POCHVEN_CONDUIT_GUARD=1 opt-in only after source roundtrip",
+    "native original standing 500026: A=6.00 B=5.99"
+  ],
+  "cases": [
+    {"id": "P36-01", "action": "A jumps from Internal to Home through verified native paired Conduit", "expect": "physical native transition and same original shipID in destination; no new items/rewards"},
+    {"id": "P36-02", "action": "B attempts same Conduit with raw standing 5.99", "expect": "denied before native beginTransition, remains in source system; inventory unchanged"},
+    {"id": "P36-03", "action": "A and B each traverse Internal/Border real native Conduits", "expect": "both physically arrive independently with original shipIDs"},
+    {"id": "P36-04", "action": "A exits Home to Internal after native standing falls below 6", "expect": "Home-origin imposes no Home-destination standing requirement"},
+    {"id": "P36-05", "action": "attempt an old/disconnected ordinary stargate between k-space and Pochven", "expect": "Pochven cross-region stargate jump rejected"},
+    {"id": "P36-06", "action": "attempt as native capital hull", "expect": "Conduit denied; no ship/ISK/position mutation"},
+    {"id": "P36-07", "action": "reconnect A/B and restart from disposable saved original world state", "expect": "native standing re-read and original ship/system/cargo unchanged; no cached access token"},
+    {"id": "P36-08", "action": "jump an original mass-limited Pochven wormhole under Chat23", "expect": "only native wormholeMgr + mass/polarization decides; no stargate guard override"},
+    {"id": "P36-09", "action": "seek Pochven-specific NPC/site/rewards on actual scene", "expect": "if source-backed native site absent, mark UNSUPPORTED, do not award loot or faction points"},
+    {"id": "P36-10", "action": "attempt Pochven station fitting/industry/jump clone services", "expect": "individually inspect current service standings policy; NOT VERIFIED by Conduit guard"}
+  ],
+  "evidenceRequired": ["native worldData SDE region+gate rows", "pre/post character raw standings and factionID", "two separate session IDs", "pre/post native shipID and real location/scene/system", "world and client logs", "restart read-back"],
+  "expectedResult": "LIVE_NOT_TESTED"
+}

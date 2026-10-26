@@ -10,8 +10,17 @@ const JOB_ID_START=970000000000000;
 const INSTALLED_LOCATION=2003;
 const MAX_RUN_SECONDS=30*86400;
 const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):null;
-const roundCents=x=>Math.round(Number(x)*100);
-const safeMoney=x=>Number.isFinite(Number(x))&&Number(x)>=0&&Number(x)<=1e12&&Number.isSafeInteger(roundCents(x));
+// Persisted native wallet balances and market quotes must already be exact
+// cents. Rounding existing balances/quotes while atomically moving original
+// minerals or blueprint custody silently destroys or invents ISK.
+const exactCents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x)||x<0||x>1e12)return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
+const roundCents=x=>exactCents(x);
+const safeMoney=x=>exactCents(x)!==null;
 const tableNames=Object.freeze(['items','corporationRuntime','industryBlueprintState','industryJobs']);
 function validateInput(plan,quote,operationID){
  if(typeof operationID!=="string"||!/^npc-manufacture:[A-Za-z0-9_-]{8,90}$/.test(operationID))throw Error('INVALID_OPERATION_ID');
@@ -22,7 +31,7 @@ function validateInput(plan,quote,operationID){
  const seen=new Set();
  for(const m of plan.materials){if(!pos(m.typeID)||!pos(m.quantity)||seen.has(m.typeID))throw Error('INVALID_MATERIAL_BILL');seen.add(m.typeID)}
  if(!safeMoney(quote.totalCost)||!safeMoney(quote.cost)||!safeMoney(quote.tax)||
-    Math.abs((Number(quote.cost)+Number(quote.tax))-Number(quote.totalCost))>0.011||
+    exactCents(quote.cost)+exactCents(quote.tax)!==exactCents(quote.totalCost)||
     !pos(quote.timeInSeconds)||quote.timeInSeconds>MAX_RUN_SECONDS||
     Number(quote.activityID)!==1||Number(quote.runs)!==plan.runs||
     Number(quote.ownerID)!==plan.ownerID||Number(quote.blueprintID)!==plan.blueprintItemID||
@@ -83,7 +92,10 @@ function createOfflineAtomicInstaller({db,offlineExclusive=false,verifyNativeQuo
    for(const mat of plan.materials){
     let remaining=mat.quantity;
     const candidates=grouped.filter(x=>x.item.typeID===mat.typeID&&x.item.ownerID===plan.ownerID&&x.item.locationID===plan.stationID&&
-        x.item.flagID===4&&x.item.singleton===0&&pos(x.item.quantity)).sort((a,b)=>Number(a.item.itemID)-Number(b.item.itemID));
+        x.item.flagID===4&&x.item.singleton===0&&
+        Number.isSafeInteger(x.item.quantity)&&x.item.quantity>0&&
+        x.item.stacksize===x.item.quantity)
+      .sort((a,b)=>Number(a.item.itemID)-Number(b.item.itemID));
     for(const item of candidates){
      if(remaining===0)break;
      const removed=Math.min(remaining,item.item.quantity);
@@ -110,7 +122,7 @@ function createOfflineAtomicInstaller({db,offlineExclusive=false,verifyNativeQuo
    const now=clock();if(!Number.isSafeInteger(now)||now<=0)throw Error('INVALID_CLOCK');
    const filetime=(BigInt(now)*10000n+116444736000000000n);
    if(amount>0){
-    const next=Math.round((balance-amount))/100;
+    const next=(balance-amount)/100;
     const entry={transactionID:jobID,transactionDate:String(filetime),referenceID:jobID,entryTypeID:10,
       ownerID1:plan.ownerID,ownerID2:0,accountKey:1000,amount:-amount/100,balance:next,
       description:`NPC industry install ${operationID}`,currency:1,sortValue:1};

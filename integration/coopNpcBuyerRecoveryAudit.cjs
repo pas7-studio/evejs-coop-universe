@@ -49,7 +49,17 @@ function verifyReceipt(r,e,fillID){
     !nn(r.taxCents)||r.taxCents>r.grossCents||
     !nn(r.netCents)||r.netCents!==r.grossCents-r.taxCents||
     r.taxPolicy!=="EVEJS_NATIVE_MARKET_RULES"||
-    !pos(r.itemID)||!nn(r.committedAt))return false;
+    !pos(r.itemID)||!pos(r.committedAt)||
+    // Read-only recovery must hold the same financial standard as the
+    // native transactional replay; never suggest finalizing fake paid rows.
+    !nn(r.buyerBeforeCents)||!nn(r.buyerAfterCents)||
+    !nn(r.sellerBeforeCents)||!nn(r.sellerAfterCents)||
+    r.buyerBeforeCents<r.grossCents||
+    r.buyerAfterCents!==r.buyerBeforeCents-r.grossCents||
+    !nn(r.sellerBeforeCents+r.grossCents)||
+    r.sellerAfterCents!==r.sellerBeforeCents+r.netCents||
+    r.taxTransactionID!==(r.taxCents>0?fillID+100000000000000:null))
+    return false;
  return true;
 }
 async function auditNativeNpcBuyerRecovery({journal,inspectRustClaim,

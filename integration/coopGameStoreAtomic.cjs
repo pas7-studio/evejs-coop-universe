@@ -3,7 +3,7 @@
  * COOP-032D. In-process native SQLite/GameStore atomic row bridge.
  * Infrastructure only, never exports supportsAtomicInstall/Delivery.
  */
-const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","npcEntities","npcModules","npcCargo","miningRuntimeState","npcWreckItems","npcWrecks"]);
+const ALLOWED=new Set(["items","characters","corporationRuntime","industryBlueprintState","industryJobs","identityState","marketEscrow","npcMarketFills","playerMarketFills","npcEntities","npcModules","npcCargo","miningRuntimeState","npcWreckItems","npcWrecks"]);
 const SEP="\u001f",hasOwn=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 function assertTables(names){
  if(!Array.isArray(names)||names.length<1||names.length>ALLOWED.size||
@@ -29,17 +29,17 @@ function createSqliteAdapter(getDb){
   const mining=tables.includes("miningRuntimeState");
   const hauling=tables.includes("npcCargo") &&
     process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC==="1";
-  if(mining||hauling){
-    if(mining&&process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
-      throw Error("ALIFE07_MINING_ATOMIC_DISABLED");
-    // Both the asteroid debit and the original cargo reparent/receipt must
-    // survive a process crash: FULL is set BEFORE BEGIN IMMEDIATE.
-    db.exec("PRAGMA synchronous = FULL");
-    const pragma=db.prepare("PRAGMA synchronous").get();
-    if(!pragma || Number(pragma.synchronous)!==2)
-      throw Error(mining?"ALIFE07_SQLITE_DURABILITY_NOT_FULL":
-        "ALIFE10_SQLITE_DURABILITY_NOT_FULL");
-  }
+  if(mining&&process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC!=="1")
+    throw Error("ALIFE07_MINING_ATOMIC_DISABLED");
+  // Require a durable SQLite acknowledgement for every native economic
+  // mutation, including inventory, wallet, contract, escrow and industry rows.
+  // This pragma must be set BEFORE BEGIN IMMEDIATE.
+  db.exec("PRAGMA synchronous = FULL");
+  const pragma=db.prepare("PRAGMA synchronous").get();
+  if(!pragma || Number(pragma.synchronous)!==2)
+    throw Error(mining?"ALIFE07_SQLITE_DURABILITY_NOT_FULL":
+      hauling?"ALIFE10_SQLITE_DURABILITY_NOT_FULL":
+      "NATIVE_SQLITE_DURABILITY_NOT_FULL");
   const scope=new Set(tables),changed=new Map();
   const tbl=t=>{if(!scope.has(t))throw Error("UNDECLARED_NATIVE_TABLE");return '"'+t+'"';};
   let begun=false;inside=true;
@@ -80,7 +80,7 @@ function reconcileObject(target,source){
 }
 function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flushTableSync,
  cache,dirty,flushTimers,inFlightFlushes,transientPaths,dirtyRowKeys,fullDirty,
- rebuildFlushBaselineFromDisk,invalidateNativeItems,fatal}={}){
+ rebuildFlushBaselineFromDisk,invalidateNativeItems,invalidateNativeAccounts,fatal}={}){
  if(!sqliteStore||typeof sqliteStore.coopAtomicNativeRows?.claimTransactor!=="function"||
     typeof sqliteStore.loadTableObject!=="function"||typeof ensureSqliteReady!=="function"||
     typeof ensureCached!=="function"||typeof flushTableSync!=="function"||
@@ -121,6 +121,11 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
    }
    if(tables.includes("items")&&invalidateNativeItems("probe")!==true)
      throw Error("NATIVE_INVENTORY_INDEX_INVALIDATOR_UNAVAILABLE");
+   const accountsTouched=tables.includes("characters")||tables.includes("corporationRuntime");
+   // Probe stock character/corporation cache invalidators BEFORE mutation.
+   if(accountsTouched&&(typeof invalidateNativeAccounts!=="function"||
+     invalidateNativeAccounts("probe",tables)!==true))
+     throw Error("NATIVE_ACCOUNT_CACHE_INVALIDATOR_UNAVAILABLE");
    const result=sqliteWriter.transact(tables,cargoWitness?
      tx=>{
       const guarded=isolation.guardMutation(tx,cargoWitness);
@@ -149,6 +154,10 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
    }
    if(tables.includes("items")&&invalidateNativeItems("commit")!==true)
      throw Error("NATIVE_INVENTORY_INDEX_INVALIDATION_FAILED");
+   // A failed cache refresh AFTER durable COMMIT is an unsafe served-state
+   // outcome. Poison and exit, never retry a possibly completed settlement.
+   if(accountsTouched&&invalidateNativeAccounts("commit",tables)!==true)
+     throw Error("NATIVE_ACCOUNT_CACHE_INVALIDATION_FAILED");
    return result.result;
   }catch(e){
    if(committed||e?.coopCommitOutcomeUnknown===true){poisoned=true;fatal(e);

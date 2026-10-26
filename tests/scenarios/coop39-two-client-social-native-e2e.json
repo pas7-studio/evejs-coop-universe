@@ -1,0 +1,162 @@
+{
+  "id": "coop39-native-social-two-client",
+  "pinnedUpstream": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "status": "NOT_RUN",
+  "prerequisites": [
+    "Original compatible EVE client x2 authenticated as different characters A/B",
+    "Disposable EveJS persistent GameStore world and full original Chat 01 overlay",
+    "No proprietary client binary modifications or invented RPC",
+    "EVEJS_COOP_SOCIAL_NATIVE_GUARDS=1 only after native source patch checked",
+    "Two corporations and actual fleet membership, optional alliance and bookmark sharing"
+  ],
+  "stages": [
+    {
+      "key": "local",
+      "action": "Two clients join one actual solar system; A writes local; B receives original chat stanza",
+      "verify": [
+        "Native selected character IDs, one message per active client",
+        "Local membership list excludes logged-out session",
+        "Timestamp and sender match original server entry"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "local-transition",
+      "action": "B jumps to a different solar system; A remains; test wormhole delayed local separately",
+      "verify": [
+        "Old-room members no longer see B where not authorized",
+        "No stale session phantom in previous local room",
+        "Delayed local obeys original visibility rules"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "fleet",
+      "action": "A creates real fleet, invites B; both join fleet chat and A sends broadcast via Handle_SendBroadcast",
+      "verify": [
+        "Both have actual native fleet membership and valid chat room",
+        "Broadcast UI accepts original protocol; no new unsupported method",
+        "Nonmember C cannot read fleet messages"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "fleet-leave",
+      "action": "B leaves fleet; replay stale XMPP send or join with previous fleetid",
+      "verify": [
+        "Authoritative fleetRuntime no longer maps B to old fleet",
+        "Old fleet messages and backlog blocked for B",
+        "No unauthorized message delivered to A"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "corp-alliance",
+      "action": "Use two different real corporations; invite to shared alliance, then B leaves alliance",
+      "verify": [
+        "Corporation messages remain private",
+        "Only genuine alliance member receives alliance messages",
+        "After membership change stale allianceid cannot send/read"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "moderation",
+      "action": "Authorized channel admin mutes B, then removes mute and changes room settings",
+      "verify": [
+        "Mute/ban/password/invite-only native rules enforced",
+        "Permissions effective after reconnect",
+        "No hard-coded admin bypass or changed client opcode"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "chat-write-fault",
+      "action": "Inject native chatBacklog write/flush failure before XMPP fan-out",
+      "verify": [
+        "No live success message from failed save",
+        "Original backlog cache not announced before durable write",
+        "Error and quarantine until operator reconciles native SQLite"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "mail",
+      "action": "A sends B real EVEmail; B reads, labels and trashes; A verifies own sent mail",
+      "verify": [
+        "Recipient B has mail record, sender A matches original character",
+        "Original native OnMailSent/GetBody/SyncMail shape",
+        "Read, trash, labels and unread counts agree after reconnect"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "mail-flush-fault",
+      "action": "Inject native mail table flush failure",
+      "verify": [
+        "No OnMailSent or NewMail notification on unknown commit",
+        "No blind retry while uncertain",
+        "Operator compares original mail and notification tables before unlock"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "contacts",
+      "action": "A adds/removes B personal contact, B adjusts corp/alliance contacts if authorized",
+      "verify": [
+        "Correct native owner and permissions",
+        "Settings persist after cold restart",
+        "A/B contact lists remain isolated"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "notifications",
+      "action": "Trigger a legitimate fleet/mail/corporation notification and mark processed on B",
+      "verify": [
+        "Original notification ID/type, receiver, sender, timestamps",
+        "Offline events discoverable after SyncMail/GetUnprocessed",
+        "No duplicate or wrong-character notification"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "bookmarks",
+      "action": "A creates native bookmark folder and shares where real corp access permits; B attempts view/edit",
+      "verify": [
+        "Original bookmarkID and ownership",
+        "Corporation membership and folder ACL enforced",
+        "No bookmarks visible for unauthorized outsider"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "map-overview",
+      "action": "A/B open native maps, inspect system Intel/history/sov data, save/retrieve overview preset link",
+      "verify": [
+        "Map data grounded in actual server events, no fake intel",
+        "Overview preset stays per native owner/access",
+        "Client displays supported settings without unknown RPC"
+      ],
+      "restartAndReconnect": true
+    },
+    {
+      "key": "reconnect",
+      "action": "Kill B client socket during mail, chat, broadcast and settings transition; restart server then reconnect both clients",
+      "verify": [
+        "No ghost room, duplicate message or mailbox status",
+        "Fleet membership restored only where original native fleet persists",
+        "B sees same durable original mail/notification status as server",
+        "No new packets incompatible with original client"
+      ],
+      "restartAndReconnect": true
+    }
+  ],
+  "runtimeEvidence": {
+    "clients": "NOT_RUN",
+    "realSQLite": "NOT_RUN",
+    "proprietaryClientUI": "NOT_RUN",
+    "liveEveRpc": "NOT_RUN"
+  },
+  "instruction": "Cold restart and reconnect both independent clients between all consecutive steps. Inspect original SQLite/GameStore and session identities. Preserve world volumes; never zero or seed user inboxes. Unknown write outcomes require manual reconciliation, not compensating messages."
+}

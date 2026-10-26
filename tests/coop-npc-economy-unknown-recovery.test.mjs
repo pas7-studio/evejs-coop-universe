@@ -6,7 +6,7 @@ const {reconcileUnknown}=require('../integration/coopNpcEconomyUnknownRecovery.c
 const OP='npc-manufacture:'+'a'.repeat(32),OWNER=1000010,STATION=60000001,TYPE=215,BPO=91,JOBID=970000000000000,ITEMID=1990000200;
 function setup(phase='INSTALL_UNKNOWN'){
  const plan={ownerID:OWNER,stationID:STATION,productTypeID:TYPE,blueprintItemID:BPO,outputQuantity:100,runs:1};
- const quote={verifiedNative:true,totalCost:10,ownerID:OWNER,facilityID:STATION,blueprintID:BPO,productTypeID:TYPE};
+ const quote={verifiedNative:true,cost:9,tax:1,totalCost:10,ownerID:OWNER,facilityID:STATION,blueprintID:BPO,productTypeID:TYPE};
  const entry={operationID:OP,phase,ownerID:OWNER,stationID:STATION,typeID:TYPE,plan,quote,jobID:JOBID,installCostCents:1000};
  const job={jobID:JOBID,coopOperationID:OP,ownerID:OWNER,stationID:STATION,facilityID:STATION,activityID:1,blueprintID:BPO,productTypeID:TYPE,runs:1,outputLocationID:STATION,outputFlagID:4,totalCost:10,coopQuoteSignature:JSON.stringify(quote),status:phase==='INSTALL_UNKNOWN'?1:4,coopDelivery:{operationID:OP,itemID:ITEMID,typeID:TYPE,quantity:100}};
  const item={itemID:ITEMID,typeID:TYPE,ownerID:OWNER,locationID:STATION,flagID:4,quantity:100,stacksize:100,singleton:0,customInfo:'coop-industry:v1:'+JOBID};
@@ -82,4 +82,44 @@ test('lost delivery ACK still requires original paid wallet debit',()=>{
  const f=setup('DELIVERY_UNKNOWN');
  f.native.getIndustryDebit=()=>null;
  assert.equal(reconcileUnknown(f).reason,'NATIVE_RECOVERY_INDUSTRY_DEBIT_NOT_ATTESTED');
+});
+
+
+test('unknown install never rounds an original sub-cent quote into a paid job',()=>{
+ const f=setup();
+ f.entry.quote.totalCost=10.004;f.job.totalCost=10.004;
+ f.job.coopQuoteSignature=JSON.stringify(f.entry.quote);
+ assert.equal(reconcileUnknown(f).reason,
+  'NATIVE_RECOVERY_INSTALL_QUOTE_OR_STATUS_INVALID');
+});
+test('unknown install rejects a self-consistent but unpaid cost plus tax quote',()=>{
+ const f=setup();
+ f.entry.quote.cost=8.99;
+ f.job.coopQuoteSignature=JSON.stringify(f.entry.quote);
+ assert.equal(reconcileUnknown(f).reason,
+  'NATIVE_RECOVERY_INSTALL_QUOTE_OR_STATUS_INVALID');
+});
+test('unknown delivery requires original signed quote and exact cost, even with a physical output',()=>{
+ const changes=[
+  f=>{f.job.totalCost=8.5},
+  f=>{f.job.coopQuoteSignature='untrusted'},
+  f=>{f.entry.quote.totalCost=10.004;f.job.totalCost=10.004;f.job.coopQuoteSignature=JSON.stringify(f.entry.quote)},
+  f=>{f.entry.quote.tax=0.5;f.job.coopQuoteSignature=JSON.stringify(f.entry.quote)},
+  f=>{f.entry.installCostCents=900}
+ ];
+ for(const mutate of changes){
+  const f=setup('DELIVERY_UNKNOWN');mutate(f);
+  assert.equal(reconcileUnknown(f).reason,'NATIVE_RECOVERY_DELIVERY_JOB_NOT_ATTESTED');
+ }
+});
+test('normal zero-cost quote with real zero debit still reconciles both recovery phases',()=>{
+ for(const phase of ['INSTALL_UNKNOWN','DELIVERY_UNKNOWN']){
+  const f=setup(phase);
+  f.entry.quote.cost=0;f.entry.quote.tax=0;f.entry.quote.totalCost=0;
+  f.job.totalCost=0;f.entry.installCostCents=0;
+  f.job.coopQuoteSignature=JSON.stringify(f.entry.quote);
+  f.native.getIndustryDebit=()=>({verifiedNative:true,jobID:JOBID,ownerID:OWNER,
+   amountCents:0,transactionID:JOBID});
+  assert.equal(reconcileUnknown(f).ok,true);
+ }
 });

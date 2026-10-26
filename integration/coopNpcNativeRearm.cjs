@@ -18,9 +18,13 @@ function createNativeRearm({store,registry,sceneForSystem,getController,getStati
   typeof compatible!=="function"||typeof verifyCombatCharge!=="function"||
   typeof root!=="string"||!path.isAbsolute(root)||typeof clock!=="function")
   throw Error("INVALID_NPC_NATIVE_REARM_DEPENDENCIES");
- const locks=new Set();
+ const locks=new Set(),moduleLocks=new Set();
  const receiptPath=cargoID=>path.join(root,"purchases",String(cargoID)+".json");
  const lockPath=cargoID=>path.join(root,"rearm-locks",String(cargoID)+".lock");
+ // Distinct cargo stacks must never be loaded into the same native weapon
+ // concurrently, including across independent adapter instances/processes.
+ const moduleLockPath=(shipID,moduleID)=>path.join(root,"rearm-module-locks",
+  String(shipID)+"-"+String(moduleID)+".lock");
  function receiptFor(cargo,pilotID,entityID,systemID){
   if(!id(cargo?.cargoID)||!id(cargo?.typeID)||!id(cargo?.quantity)||
    !id(entityID)||!id(systemID)||!named(pilotID))return null;
@@ -120,18 +124,30 @@ function createNativeRearm({store,registry,sceneForSystem,getController,getStati
  function load({pilotID,entityID,systemID,stationID,cargoID,moduleID}={}){
   const shipID=id(entityID),cargoKey=id(cargoID),moduleKey=id(moduleID);
   if(!shipID||!cargoKey||!moduleKey)return {status:"INVALID_REARM_REQUEST"};
-  if(locks.has(cargoKey))return {status:"NATIVE_REARM_BUSY"};
-  locks.add(cargoKey);
-  let descriptor=null;
+  const moduleLease=shipID+":"+moduleKey;
+  if(locks.has(cargoKey)||moduleLocks.has(moduleLease))
+   return {status:"NATIVE_REARM_BUSY"};
+  locks.add(cargoKey);moduleLocks.add(moduleLease);
+  let descriptor=null,moduleDescriptor=null,cargoOwned=false,moduleOwned=false;
   try{
    fs.mkdirSync(path.dirname(lockPath(cargoKey)),{recursive:true});
    descriptor=fs.openSync(lockPath(cargoKey),"wx",0o600);
+   cargoOwned=true;
    fs.writeFileSync(descriptor,JSON.stringify({version:1,pid:process.pid,
     at:clock(),cargoID:cargoKey,moduleID:moduleKey}));
    fs.fsyncSync(descriptor);
+   fs.mkdirSync(path.dirname(moduleLockPath(shipID,moduleKey)),{recursive:true});
+   moduleDescriptor=fs.openSync(moduleLockPath(shipID,moduleKey),"wx",0o600);
+   moduleOwned=true;
+   fs.writeFileSync(moduleDescriptor,JSON.stringify({version:1,pid:process.pid,
+    at:clock(),shipID,moduleID:moduleKey,cargoID:cargoKey}));
+   fs.fsyncSync(moduleDescriptor);
   }catch(_){
+   if(moduleDescriptor!==null){try{fs.closeSync(moduleDescriptor);}catch(_){}}
    if(descriptor!==null){try{fs.closeSync(descriptor);}catch(_){}}
-   locks.delete(cargoKey);
+   if(moduleOwned){try{fs.unlinkSync(moduleLockPath(shipID,moduleKey));}catch(_){}}
+   if(cargoOwned){try{fs.unlinkSync(lockPath(cargoKey));}catch(_){}}
+   locks.delete(cargoKey);moduleLocks.delete(moduleLease);
    return {status:"NATIVE_REARM_LOCK_UNSAFE"};
   }
   try{
@@ -153,8 +169,27 @@ function createNativeRearm({store,registry,sceneForSystem,getController,getStati
     compatible(module,Number(row.typeID))!==true)
     return {status:"NATIVE_PURCHASE_RECEIPT_NOT_VERIFIED"};
    const allLoaded=ctx.cargo.filter(c=>Number(c.moduleID)===moduleKey);
-   if(Number(row.moduleID)===moduleKey&&allLoaded.length===1)
+   if(Number(row.moduleID)===moduleKey&&allLoaded.length===1){
+    if(Number(row.flagID)!==Number(module.flagID))
+     return {status:"NATIVE_REARM_OUTCOME_UNVERIFIED"};
+    // After a crash or cache failure, a stored moduleID alone does not
+    // attest that the real fitted weapon can see and consume this charge.
+    const cachedCargo=store.buildNativeCargoItems(shipID),
+     cachedFitted=store.buildNativeFittedItems(shipID);
+    if(!Array.isArray(cachedCargo)||!Array.isArray(cachedFitted))
+     return {status:"NATIVE_REARM_CACHE_UNVERIFIED"};
+    ctx.ship.nativeCargoItems=cachedCargo;ctx.ship.fittedItems=cachedFitted;
+    const exactlyOne=cachedCargo.filter(c=>Number(c.itemID)===cargoKey&&
+     Number(c.moduleID)===moduleKey&&Number(c.typeID)===Number(row.typeID)&&
+     Number(c.quantity)===Number(row.quantity)&&
+     Number(c.ownerID)===Number(row.ownerID));
+    const fitted=cachedFitted.filter(m=>Number(m.itemID)===moduleKey);
+    const charge=fitted.length===1&&verifyCombatCharge(ctx.ship,fitted[0]);
+    if(exactlyOne.length!==1||!charge||Number(charge.itemID)!==cargoKey||
+       Number(charge.typeID)!==Number(row.typeID))
+     return {status:"NATIVE_REARM_COMBAT_VISIBILITY_UNVERIFIED"};
     return {status:"ALREADY_LOADED",cargoID:cargoKey,moduleID:moduleKey};
+   }
    if(Number(row.moduleID||0)!==0||allLoaded.length)
     return {status:"NATIVE_MODULE_ALREADY_LOADED"};
    const update={...row,moduleID:moduleKey,flagID:Number(module.flagID)};
@@ -187,9 +222,11 @@ function createNativeRearm({store,registry,sceneForSystem,getController,getStati
    return {status:"NATIVE_REARM_REPAIR_REQUIRED",
     reason:String(error?.message||error).slice(0,100)};
   }finally{
+   try{fs.closeSync(moduleDescriptor);}catch(_){}
    try{fs.closeSync(descriptor);}catch(_){}
-   try{fs.unlinkSync(lockPath(cargoKey));}catch(_){}
-   locks.delete(cargoKey);
+   if(moduleOwned){try{fs.unlinkSync(moduleLockPath(shipID,moduleKey));}catch(_){}}
+   if(cargoOwned){try{fs.unlinkSync(lockPath(cargoKey));}catch(_){}}
+   locks.delete(cargoKey);moduleLocks.delete(moduleLease);
   }
  }
  return {candidates,load,receiptFor};
