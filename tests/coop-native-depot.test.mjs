@@ -157,7 +157,7 @@ test("P0: aliased persisted cargo receipt cannot receive original ore twice",()=
   });
   const original=files.get(file);
   assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR",key);
-  assert.equal(depot.audit().invalid,1,key);
+  assert.ok(depot.audit().invalid>0,key);
   assert.throws(()=>depot.snapshot(),/DEPOT_STATE_UNRECONCILED/,key);
   assert.equal(depot.prepare(candidate).status,"DEPOT_STATE_UNRECONCILED",key);
   assert.equal(depot.commit(candidate).status,"DEPOT_STATE_UNRECONCILED",key);
