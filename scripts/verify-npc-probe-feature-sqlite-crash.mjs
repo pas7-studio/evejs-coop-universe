@@ -58,7 +58,7 @@ function nativeModules(){
 }
 function fixture(native,stage){
  const existing=native.listNativeCargoForEntity(entityID);
- const recall=stage==="recall-2";
+ const recall=stage==="recall-2"||stage==="recall-again-2";
  const recalledPosition=existing.find(x=>x.cargoID===cargoIDs[1])?.deployedProbe?.position;
  const ship={itemID:entityID,kind:"ship",nativeNpc:true,ownerID,
   corporationID,systemID,position:recall&&recalledPosition?
@@ -154,9 +154,19 @@ function child(stage){
    const result=runtime.lifecycle.tick({...args,requestRecall:true});
    assert.equal(result.status,"NPC_PROBE_RECALL_COMMITTED",JSON.stringify(result));
    assert.equal(result.cargoID,cargoIDs[1]);
-  }else if(stage==="stow-2"){
+  }else if(stage==="stow-2"||stage==="stow-again-2"){
    const result=runtime.lifecycle.tick(args);
    assert.equal(result.status,"NPC_PROBE_RETURNED",JSON.stringify(result));
+   assert.equal(result.cargoID,cargoIDs[1]);
+  }else if(stage==="relaunch-2"){
+   assert.equal(sourceBefore[1]?.deployedProbe?.status,"STOWED");
+   assert.equal(sourceBefore[1]?.quantity,1);
+   const result=runtime.flight.tick(args);
+   assert.equal(result.status,"NATIVE_PROBE_LAUNCHED",JSON.stringify(result));
+   assert.equal(result.cargoID,cargoIDs[1],"NO_NEW_CARGO_ID_ON_RELAUNCH");
+  }else if(stage==="recall-again-2"){
+   const result=runtime.lifecycle.tick({...args,requestRecall:true});
+   assert.equal(result.status,"NPC_PROBE_RECALL_COMMITTED",JSON.stringify(result));
    assert.equal(result.cargoID,cargoIDs[1]);
   }else if(stage==="expire-1"){
    const result=runtime.lifecycle.tick(args);
@@ -199,7 +209,8 @@ function parent(){
   EVEJS_PINNED_SERVER:path.resolve(server)};
  try{
   const stages=["seed","launch-1","launch-2","launch-3","launch-4",
-   "sweep-1","recall-2","stow-2","expire-1","verify"];
+   "sweep-1","recall-2","stow-2","relaunch-2","recall-again-2",
+   "stow-again-2","expire-1","verify"];
   for(const stage of stages){
    const r=spawnSync(process.execPath,[self,"--child",stage],{
     cwd:server,env,encoding:"utf8",timeout:30000,maxBuffer:2*1024*1024});
