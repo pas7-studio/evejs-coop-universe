@@ -145,6 +145,7 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
    const station=getStation(stationID);
    if(!station||station.stationID!==stationID||
     station.solarSystemID!==scene.systemID||
+    (station.corporationID||station.ownerID)!==ctx.native.corporationID||
     verifyNativeArrival({scene,entityID,ship:ctx.ship,controller:ctx.controller,
      stationID,corporationID:ctx.native.corporationID})!==true)
     return deny("EX03_LOOT_NATIVE_STATION_ARRIVAL_MISSING");
