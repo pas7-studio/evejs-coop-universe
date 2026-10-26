@@ -37,6 +37,10 @@ EVEJS_COOP_PLAYER_NPC_MINING_AGENT=1
 - **D2 source addition:** server-authorized NPC wage tariff and in-client **View → Accept hiring** now implemented separately in `coopPlayerMiningHiring`; see [CHAT24_31_NATIVE_MINING_HIRING.md](CHAT24_31_NATIVE_MINING_HIRING.md). Still unimplemented: actual live-client verification, **HOLD**, **HAUL**, **RETREAT** buttons/choice, multi-fleet selection, EVEmail alerts, payroll exhaustion/renewal and native ore sale/P&L.
 - Stock client button labels are **View** and **Accept**. They cannot express four different freeform orders; D1 deliberately implements only **MINE** via Accept. Do not advertise full NPC mining corporation in-client gameplay yet.
 
+## E2A manager-only native wallet and original ore expenses
+
+The existing stock Agent can now optionally show genuinely verified **wages + purchased corporate ore** paid from the original corporation wallet, derived from the original GameStore contracts/title receipts and both ISK journals, without suggesting that the ore has been sold. Status says native corporation SELL is unsupported and realized revenue/profit is unverified; no order is created. See [CHAT24_31_NATIVE_CORPORATE_ORE_MARKET.md](CHAT24_31_NATIVE_CORPORATE_ORE_MARKET.md). The `EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ` flag remains OFF by default.
+
 ## Next acceptance gate
 
 Run `node --test tests/coop-player-mining-*.test.mjs` and `node scripts/patch-evejs-coop.cjs --code-path /path/to/EveJS/Code --check` against a disposable exact pinned checkout, followed by actual Node/SQLite crash-at-each-COMMIT test, one original physical mining trip and two real clients. Verify one corp manager sees Accept and a second member sees View only; normal agent missions and the priced convoy job remain unchanged. A gated D3 stock Agent selector now exists in source: View Mission previews, Request Mission browses, Accept commits one actual native command. See [CHAT24_31_NATIVE_MINING_FLEET_ORDERS.md](CHAT24_31_NATIVE_MINING_FLEET_ORDERS.md); physical original EVE client verification remains NOT_RUN.
