@@ -87,6 +87,7 @@ Evidence: round trip proved: 3 reversed then 3 applied; second --apply reports P
 Why: the same five repair flags were written by two failure paths, and the capacitor root cause plus live proof had to be recorded before the next session
 Where: .opencode/state.md, integration/coopNativeHaulCargo.cjs
 Evidence: transfer suites 15 pass/10 pre-existing failures identical with and without the change; live cap1 on fleet2 miners and climbing on fleet1
+D
 ### 2026-10-26T11:33Z · 91e1ce6 · L2 · fix(haul): fail closed on native preflight ambiguity and attest actual item cache after commit
 
 Why: An unreadable preflight was treated as an empty hauler, and the post-commit ship cache accepted wrong original items when its length looked correct.
@@ -97,3 +98,8 @@ Evidence: source diff reviewed; local Node/SQLite and gameplay NOT_RUN (remote G
 Why: Source-backed regression coverage must use the native itemID cache shape and exercise ambiguous inventory and cargo readback.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: source diff reviewed; local Node/SQLite and gameplay NOT_RUN (remote GitHub CI prohibited; local checkout unavailable).
+### 2026-10-26T11:36Z · dfb0af0 · L2 · refactor(adoption): idempotence by cargo state instead of a time throttle; restart simulation tests
+
+Why: the throttle returned THROTTLED for legitimate retries and hid the real blocker (registry/custody), and there was no test proving a load survives a restart end to end
+Where: integration/coopAdminBridge.cjs, integration/coopHaulCargoAdoption.cjs, tests/coop-haul-cargo-adoption.test.mjs, tests/coop-restart-haul-adoption.test.mjs
+Evidence: adoption 26/26 incl. owner's custody/registry suites, new restart simulation 4/4 (durable row -> new hauler -> loaded), OVERLAY_OK patched 54
