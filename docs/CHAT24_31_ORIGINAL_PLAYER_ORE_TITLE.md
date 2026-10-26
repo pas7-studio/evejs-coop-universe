@@ -32,10 +32,14 @@ Run:
 node --test tests/coop-player-mining-*.test.mjs
 ```
 
-At this source revision: **60/60 PASS** locally across Stage A/B and 21 Stage C tests, including identical itemID/title, exact two-wallet cents, confirmed post-shift cargo, invalid membership/office/quote, mixed owner, duplicated marker, insufficient ISK, transaction failure rollback in mock, replay after item consumption, legacy title collision, forged receipts and read-only warehouse reconciliation. This **does not** establish native deployed SQLite, warehouse `fsync`, client display or two authenticated pilots. The warehouse integration itself needs an additional disposable native test before claim of runtime PASS.
+At this source revision: **61/61 PASS** locally across Stage A/B and 21 Stage C tests plus a read-only polling performance regression, including identical itemID/title, exact two-wallet cents, confirmed post-shift cargo, invalid membership/office/quote, mixed owner, duplicated marker, insufficient ISK, transaction failure rollback in mock, replay after item consumption, legacy title collision, forged receipts and read-only warehouse reconciliation. This **does not** establish native deployed SQLite, warehouse `fsync`, client display or two authenticated pilots. The warehouse integration itself needs an additional disposable native test before claim of runtime PASS.
 
 ## Remaining stages
 
 - Stage C2: production native adapter for trusted server office/market quote, GameStore read-only title verifier binding, strict original warehouse audit acceptance plus a crash/restart matrix; no fake stock.
 - Stage D: in-client corporation commands + shift management, actual ore hangar views and permission-scoped sell/reprocess through existing native market/industry, real payroll/revenue ledger derived from GameStore.
 - Stage E: physical multiplayer E2E with miner, hauler, escort defense/retreat, actual warp/docking, same itemID from NPC warehouse to corp and native wallet conservation across server restart.
+
+### Extra native warehouse integration tests
+
+Added `tests/coop-player-mining-warehouse-integration.test.mjs` (5 cases: title acceptance, replay, missing proof, source cargo still present, read-only receipt cloning). **NOT_RUN against the actual warehouse module in this session**; these require the complete working checkout. They are excluded from 61/61 local mock count.
