@@ -180,12 +180,25 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
   state.events.push(entry);if(state.events.length>100)state.events.shift();persist();return entry;
  }
  function syncNativeDeliveries(totals={}){
+  // Validate the entire original depot totals batch before even touching
+  // state. A later Symbol/throwing value used to leave early entries credited
+  // only in memory; replay then said UNCHANGED despite no durable journal.
+  if(!totals||typeof totals!=="object"||Array.isArray(totals))
+   return {status:"INVALID_TOTALS",quantity:0};
+  const entries=[],seen=new Set();
+  try{
+   for(const [rawID,total] of Object.entries(totals)){
+    const systemID=Number(rawID),count=Number(total);
+    if(!Number.isSafeInteger(systemID)||systemID<=0||
+       !Number.isSafeInteger(count)||count<0||seen.has(systemID))
+     return {status:"INVALID_TOTALS",quantity:0};
+    seen.add(systemID);
+    entries.push([systemID,count]);
+   }
+  }catch(_error){return {status:"INVALID_TOTALS",quantity:0};}
   beforeMutation();
   let accepted=0,modified=false;
-  for(const [id,total] of Object.entries(totals)){
-   const systemID=Number(id),count=Number(total);
-   if(!Number.isSafeInteger(systemID)||systemID<=0||
-      !Number.isSafeInteger(count)||count<0)continue;
+  for(const [systemID,count] of entries){
    const existing=state.systems[String(systemID)];
    const before=Math.max(0,Number(existing?.nativeDelivered)||0);
    if(count<=before)continue;
