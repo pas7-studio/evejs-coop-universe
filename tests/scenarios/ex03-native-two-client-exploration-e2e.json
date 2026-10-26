@@ -101,6 +101,31 @@
       "id": "full_live_restart_and_no_dupe",
       "status": "NOT_RUN",
       "proof": "Restart whole isolated EveJS server between confirmed pickup/warehouse/wormhole events; original SQLite item row count remains one, no duplicated probeID, NPC module ID or hull ID."
+    },
+    {
+      "id": "npc_original_wreck_item_custody",
+      "status": "NOT_RUN",
+      "proof": "Two authenticated players independently witness a real native NPC scout death, stock nativeNpcWreckService source emits true wreckID, and the SAME ItemStore itemID moves from shipID to wreckID with original provenance and no generated wreckItemID."
+    },
+    {
+      "id": "both_players_native_wreck_inventory_visibility",
+      "status": "NOT_RUN",
+      "proof": "Two live clients independently open the same original native NPC wreck, see the single original itemID and quantity in stock inventory, and one may attempt a stock authorized loot action; original source list includes the item without duplicating nativeNpcWreckItems."
+    },
+    {
+      "id": "one_client_original_wreck_pickup_other_observes",
+      "status": "NOT_RUN",
+      "proof": "Player A transfers that exact original itemID into its real ship cargo via stock API; Player B sees the wreck inventory update/isEmpty from the native source, and a repeat pickup by either player cannot allocate or transfer a duplicate ID."
+    },
+    {
+      "id": "wreck_source_death_crash_window",
+      "status": "NOT_RUN",
+      "proof": "Real Node22 pinned original GameStore SQLite OS SIGKILL between durable death-to-wreck intent, original ItemStore move, native ship remove and client pickup; recovery requires operator for ambiguous state, no recreated hull or leaked/minted ItemStore row."
+    },
+    {
+      "id": "native_wreck_expiry_does_not_destroy_original_loot",
+      "status": "NOT_RUN",
+      "proof": "An original native wreck carrying tagged expedition ItemStore cargo cannot expire or cascade-delete those original items; after pickup, original wreck may be cleaned normally."
     }
   ],
   "acceptance": "GO only after ALL steps have source-backed server log + two authenticated client observation where required; local V8 assertions, workflow registration, and JSON fixtures alone are NOT acceptance."
