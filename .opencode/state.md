@@ -158,3 +158,50 @@ mining resumes instead of stalling forever.
   not by our overlay. Do not delete or reset it.
 - Next: read `living-mining-cycle-result` (temp probe in runtime.js, reverted
   after measurement) to name why the stock yield never commits for NPCs.
+
+## 2026-10-26 15:00Z — three root causes found and patched (L1 0003/0004/0005)
+
+1. **Durable identity** (0002 second hunk): dematerialize wrote transient:true,
+   which strips the row from every later flush -> durable ships vanished from
+   disk. Fixed; 9 durable rows persist across scene rebuilds.
+2. **Combat dormancy** (0005): dematerializeDormantCombatControllers matched our
+   durable nativeCombat controllers (operatorKind) on every no-session scene and
+   unregistered them ~2x/s; the durable owner restored each one, giving 21 582
+   restores and zero completed mining cycles. Dormancy now skips non-transient
+   controllers.
+3. **Capacitor interval** (0003 second hunk): advanceSessionlessCapacitor used the
+   shared capacitorRechargedAtMs stamp for its own dt, so it advanced a few ms per
+   call (53x slow: +0.0109 ratio over 121 s vs 0.0048/s). Now uses
+   coopCapacitorAdvancedAtMs; test extracts the function from the patch.
+
+Fleet retention (0004) keeps an actor whose stored controller row still exists.
+Overlay: CHECK_OK series=5, OVERLAY_OK patched 54, anchorMismatch 0.
+Mechanism debt is gated: hooks legacy=65 wired=48 longHooks=3 specEntries=45.
+Next: confirm cap climbs at ~0.0048/s live, then look for the first
+living-hauler-loaded -> living-native-haul-delivered -> living-npc-station-sold.
+
+## 2026-10-26 15:40Z — capacitor starvation loop, measured
+
+Probe living-capacitor-advance-values (temporary, removed) showed the advance is
+correct: dt 0.535 s per call, tau 187500 ms, capacity 625, before 0.0191 ->
+after 0.0225 (+0.0034 per call, ~0.006/s, matches the CCP curve).
+
+Yet the visible ratio stayed at 0.00-0.02 and one hull reached exactly 0.000.
+Conclusion: the stock loop retries the activation every tick, and the retry
+consumes the charge, so a hull that falls below the 23 GJ module cost never
+recovers. MODULE_TARGET_MISMATCH = 0, so it is not the target-change branch.
+
+New co-op layer (default behaviour for players unchanged):
+- integration/coopMiningCapacitorGate.cjs - shouldWait(entity, 30 GJ): only
+  sessionless nativeNpc ships; player and session-owned ships are never gated.
+- integration/coopMiningActivate.cjs - one attempt: wait, activate, report.
+- overlay hook is now a single call (338 -> 171 chars); mining has zero hooks
+  longer than 400 characters.
+Both modules are unit-tested (4/4 + 4/4).
+
+Also fixed infrastructure: the overlay now treats a file changed by a pinned L1
+patch as its install baseline (runtime.js + 0006 no longer trips OVERLAY_DRIFT).
+
+Next: after the deploy, read CAPACITOR_WAIT / caps: caps must climb to ~0.5, then
+expect living-hauler-loaded -> living-native-haul-delivered ->
+living-npc-station-sold, then scripts/restart-acceptance.sh.
