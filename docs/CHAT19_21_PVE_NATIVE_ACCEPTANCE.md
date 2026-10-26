@@ -267,3 +267,22 @@ EveJS attested isolated GameStore harness with original NPC and
 itemTypes authority; run the pinned native test in that disposable
 environment, capture actual roll/candidate evidence, then execute the
 separate real two-client item custody acceptance scenario.
+
+
+### Separating executable pinned CI from rare-data authority (follow-up)
+
+A clean original checkout does not contain the verified populated itemTypes
+GameStore needed by `npcLoot.getRuleCandidatePool`. Accordingly, the normal
+pinned overlay CI can check install/check/reapply/remove and source-only native
+contracts without importing protected production GameStore. Its final
+`rareNativeRng.status` is **`NOT_RUN`**. This does NOT clear the rare-loot
+acceptance gate or allow a release.
+
+To execute the additional native rare gate on an explicitly isolated original
+test store, supply an upstream-valid attested test store and genuine NPC,
+lootTable and itemTypes authority, set
+`EVEJS_PVE_RUN_NATIVE_RARE_RNG=1`, and re-run the disposable pinned gate.
+Any attestation error, missing original reference rows, zero native candidates,
+or no valid rare roll must make that explicit run FAIL. The upstream isolation
+safety check must remain active; it is never acceptable to point the test at
+a real game server database.
