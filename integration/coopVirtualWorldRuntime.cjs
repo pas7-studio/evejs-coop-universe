@@ -2103,6 +2103,15 @@ function advanceNativeTactics(){
     ()=>npc.resumeBehavior(id)),
    stopOrder:id=>npcNativeOrder("TACTICS",id,"stop",
     ()=>npc.issueOrder(id,{type:"stop"})),
+   authorizePlayerDefense:({systemID,scene,victim,helper,attacker,session})=>{
+    if(process.env.EVEJS_COOP_PVE_NPC_RETALIATION!=="1")return false;
+    const verified=require("./coopNativeConsequences").resolveVerifiedPlayerID(scene,attacker);
+    const aggression=controllers.getControllerByEntityID(Number(victim?.itemID));
+    return require("./coopPveRetaliationGuard").authorize({
+     systemID,scene,victim,helper,attacker,session,
+     verifiedCharacterID:verified,aggression,now:Date.now()
+    });
+   },
    notify:event=>{
     require("./coopRuntimeProbe").observe("living-npc-tactical-event",null,
      {spaceState:{systemID:event.systemID}},{...event});
