@@ -5,7 +5,7 @@ const require=createRequire(import.meta.url);
 const {createNativeNpcProbeFlight}=require("../integration/coopNativeNpcProbeFlight.cjs");
 const sid=30000142,entityID=980000000011,ownerID=901,corpID=700;
 function fixture(){
- let now=1000000,failFlush=false,failSpawn=false,flushes=0,writes=0,spawns=0;
+ let now=1000000,failFlush=false,failSpawn=false,failProjection=false,flushes=0,writes=0,spawns=0;
  const ship={itemID:entityID,kind:"ship",nativeNpc:true,systemID:sid,
   ownerID,corporationID:corpID,position:{x:0,y:0,z:0}};
  const native={entityID,systemID:sid,ownerID,corporationID:corpID};
@@ -34,6 +34,7 @@ function fixture(){
   flushNpcCargo:()=>{flushes++;ops.push("flush");return {success:!failFlush}},
   refreshNativeCargoProjection:(ship,id)=>{
    assert.equal(id,entityID);
+   if(failProjection)return false;
    ship.nativeCargoItems=cargo.filter(x=>x.quantity>0)
     .map(x=>({itemID:x.cargoID,quantity:x.quantity}));
    return true;
@@ -51,6 +52,7 @@ function fixture(){
  return {tick,ops,sceneMap,ship,native,module,assignments,api,
   cargo:()=>cargo,writes:()=>writes,flushes:()=>flushes,spawns:()=>spawns,
   failFlush:()=>{failFlush=true},clearFlush:()=>{failFlush=false},
+  failProjection:()=>{failProjection=true},clearProjection:()=>{failProjection=false},
   failSpawn:()=>{failSpawn=true},clearSpawn:()=>{failSpawn=false},
   advance:ms=>{now+=ms}};
 }
@@ -137,4 +139,22 @@ test("NPC warp or lost original pilot link prohibits native launch",()=>{
  assert.equal(f.tick().status,"BLOCKED");
  const g=fixture();g.assignments.length=0;
  assert.equal(g.tick().status,"BLOCKED");
+});
+
+test("duplicate original cargo IDs are refused before any native custody mutation",()=>{
+ const f=fixture();f.cargo()[1].cargoID=f.cargo()[0].cargoID;
+ assert.equal(f.tick().status,"BLOCKED");
+ assert.equal(f.writes(),0);assert.equal(f.spawns(),0);
+});
+test("failed native cargo projection leaves durable source receipt pending, no free probe",()=>{
+ const f=fixture();f.failProjection();
+ const first=f.tick();
+ assert.equal(first.status,"NATIVE_PROBE_PENDING_RECONCILIATION");
+ assert.equal(first.nativeCargoDebited,true);
+ assert.equal(f.spawns(),0);
+ f.clearProjection();
+ const recovered=f.tick();
+ assert.equal(recovered.status,"NATIVE_PROBE_LAUNCHED");
+ assert.equal(f.sceneMap.get(980200000001).kind,"probe");
+ assert.equal(f.cargo()[0].quantity,0);
 });
