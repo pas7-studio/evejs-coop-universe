@@ -2,8 +2,10 @@
 /**
  * CH24+31 E2B1 — original corporation-owned SELL escrow BIND.
  *
- * Source-only: assumes an independently authenticated original native Rust
- * corporate SELL order already exists. It NEVER places that order, creates
+ * Source-only: requires an independently attested PREPARED_UNPUBLISHED
+ * original Rust corporate SELL intent. This upstream state does not yet
+ * exist; active OPEN orders are forbidden before native custody.
+ * It NEVER publishes a market order, creates
  * a new item/owner/ISK, records a fill, or pays revenue. Until a safe Rust
  * reserve-before-publish protocol exists this must remain OFF.
  */
@@ -44,14 +46,16 @@ function createOriginalCorporateSellCustody({gameStore,access,readiness,verifyNa
  }
  function validAttestedOrder({proof,orderID,corporationID,ore}){
   const o=proof?.order;
-  return proof?.verifiedNative===true&&proof?.phase==="OPEN"&&
+  return proof?.verifiedNative===true&&
+   proof?.phase==="PREPARED_UNPUBLISHED"&&proof.isPublished===false&&
+   proof.totalFilled===0&&proof.totalPaidCents===0&&
    proof.orderID===orderID&&o?.order_id===orderID&&
    o.is_corp===true&&o.owner_id===corporationID&&
    o.bid===false&&o.station_id===ore.stationID&&
    o.type_id===ore.typeID&&o.vol_remaining===ore.quantity&&
    o.vol_entered===ore.quantity&&
    o.source==="coop-corporation"&&pos(o.price_cents)&&
-   !o.escrowed&&o.state==="open";
+   !o.escrowed&&o.state==="prepared";
  }
  function scope({session,corporationID,operationID,cargoID,orderID}){
   if(enabled()!==true)return {error:"CORP_SELL_CUSTODY_DISABLED"};
