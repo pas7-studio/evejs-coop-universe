@@ -137,8 +137,23 @@ function noteTargetMismatch(fleetRecord, scene, minerEntity, entry, activeEffect
   });
 }
 
+// One snapshot per fleet think. The think interval is minutes, so this is the only
+// place that reliably describes every ship: mode, active module effects, capacitor
+// and whether a runtime controller exists. Emitting it from the module-assignment
+// path (as before) missed almost every tick.
+function noteTick(fleetRecord, scene, now, thinkIntervalMs) {
+  note("TICK_" + String((fleetRecord && fleetRecord.state) || "unknown"), {
+    fleetID: Number(fleetRecord && fleetRecord.fleetID) || 0,
+    systemID: Number(scene && scene.systemID) || 0,
+    activeAsteroidID: Number(fleetRecord && fleetRecord.activeAsteroidID) || 0,
+    nextThinkInMs: Number(thinkIntervalMs) || 0,
+  });
+  noteFleetPostTick(fleetRecord, scene);
+}
+
 module.exports = {
   note,
+  noteTick,
   noteActivationFailure,
   noteTargetSelected,
   noteTargetMismatch,
