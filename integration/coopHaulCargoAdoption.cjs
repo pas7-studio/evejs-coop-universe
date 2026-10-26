@@ -95,16 +95,26 @@ function verifyReAdoptionCustody(row, options={}) {
    return "RE_ADOPTION_WAREHOUSE_ITEM_EXISTS";
   const depot=options.custodyDepot||
    require("./coopNativeDepot").getNativeDepot();
-  if(typeof depot?.snapshot!=="function")
+  if(typeof depot?.snapshot!=="function"||typeof depot?.audit!=="function")
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   const state=depot.snapshot();
-  if(state?.version!==1||!state.receipts||!state.pending||
+  if(state?.version!==1||!state.receipts||!state.pending||!state.totals||
      typeof state.receipts!=="object"||typeof state.pending!=="object"||
-     Array.isArray(state.receipts)||Array.isArray(state.pending))
+     typeof state.totals!=="object"||Array.isArray(state.receipts)||
+     Array.isArray(state.pending)||Array.isArray(state.totals))
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   if(Object.hasOwn(state.receipts,String(cargoID))||
      Object.hasOwn(state.pending,String(cargoID)))
    return "RE_ADOPTION_DEPOT_RECEIPT_EXISTS";
+  // Absence of an individual receipt is NOT evidence that no credit was
+  // committed if the global depot journal is inconsistent. In particular,
+  // an empty receipts map with positive persisted totals may mean a receipt
+  // disappeared after a prior settlement. Never resurrect such cargo.
+  const audit=depot.audit();
+  if(audit?.status!=="OK"||audit.invalid!==0||
+     audit.unresolved!==0||!Number.isSafeInteger(audit.committed)||
+     audit.committed<0)
+   return "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED";
   return "CLEAR";
  }catch(_error){return "RE_ADOPTION_SETTLEMENT_UNVERIFIED"}
 }
