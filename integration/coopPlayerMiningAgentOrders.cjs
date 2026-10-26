@@ -8,7 +8,7 @@
  */
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const COMMAND_PRIORITY=Object.freeze(["MINE","HOLD","HAUL","RETREAT"]);
-const SAFE_STATES=new Set(["IDLE","NATIVE_REQUESTED"]);
+const SAFE_STATES=new Set(["IDLE","NATIVE_REQUESTED","NATIVE_COMPLETED"]);
 const TTL_MS=120000;
 function availableCommands(row){
  if(!row||row.version!==1||row.status!=="FUNDED"||
@@ -17,6 +17,15 @@ function availableCommands(row){
    !/^coop-mining-shift:[0-9a-f]{32}$/.test(row.operationID||"")||
    !Number.isSafeInteger(row.commandSeq)||row.commandSeq<0||
    !SAFE_STATES.has(row.commandState))return [];
+ if(row.commandState==="NATIVE_COMPLETED"){
+  // This is the only HAUL/RETREAT replay gate: the original native tick
+  // atomically stored independent warehouse/warp physical evidence.
+  if(row.directive==="HAUL"&&
+    (row.nativeState===undefined||row.nativeState==="mining"))return ["MINE"];
+  if(row.directive==="RETREAT"&&
+    (row.nativeState===undefined||row.nativeState==="retreating"))return ["MINE"];
+  return [];
+ }
  if(row.commandState==="IDLE")
   return row.directive==="MINE"&&
    (row.nativeState===undefined||row.nativeState==="mining")?["MINE"]:[];
