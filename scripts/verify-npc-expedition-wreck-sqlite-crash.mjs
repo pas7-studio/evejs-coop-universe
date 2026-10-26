@@ -60,6 +60,30 @@ function child(stage){
    transient:false,typeID:26520,createdAtMs:1,expiresAtMs:10000000});
   assert.equal(write.success,true,JSON.stringify(write));
   assert.equal(gameStore.flushTableSync("npcWrecks").success,true);
+ }else if(stage==="intent"){
+  // Reproduce the durable post-intent/pre-ItemStore-move crash window with
+  // the REAL pinned itemStore and ORIGINAL npcWrecks SQLite store.
+  const marker=tag+":wreck:"+wreckID;
+  assert.equal(gameStore.flushTableSync("npcWrecks").success,true);
+  assert.equal(get().customInfo,tag);
+  const marked=items.updateInventoryItem(id,item=>({...item,customInfo:marker}));
+  assert.equal(marked.success,true,JSON.stringify(marked));
+  assert.equal(gameStore.flushTableSync("items").success,true);
+  assert.equal(get().locationID,shipID);
+ }else if(stage==="recover"){
+  const forbidden=custody().reconcile({wreckID,shipID,corporationID:corpID});
+  assert.equal(forbidden.success,false);
+  assert.equal(forbidden.errorMsg,"EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+  const recovered=custody().reconcile({wreckID,shipID,corporationID:corpID,
+   operatorApproved:true});
+  assert.equal(recovered.success,true,JSON.stringify(recovered));
+  assert.equal(recovered.status,"ORIGINAL_WRECK_CUSTODY_RECOVERED");
+  assert.equal(recovered.movedCount,1);
+  assert.deepEqual(recovered.itemIDs,[id]);
+  const replay=custody().reconcile({wreckID,shipID,corporationID:corpID,
+   operatorApproved:true});
+  assert.equal(replay.success,true);
+  assert.equal(replay.movedCount,0,"repeat does not replay original item transfer");
  }else if(stage==="stage"){
   const receipt=custody().stage({wreckID,shipID,corporationID:corpID});
   assert.equal(receipt.status,"ORIGINAL_ITEMSTORE_LOOT_IN_WRECK",
@@ -112,6 +136,9 @@ function parent(){
  const server=process.env.EVEJS_PINNED_SERVER;
  assert(server&&fs.existsSync(path.join(server,"src/gameStore/index.js")),
   "EX03B19_ORIGINAL_PINNED_SERVER_REQUIRED");
+ const scenarios=[["seed","stage","witness","claim","verify"],
+  ["seed","intent","recover","witness","claim","verify"]];
+ for(const stages of scenarios){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-ex03b19-"));
  const data=path.join(root,"data");fs.mkdirSync(data);
  fs.writeFileSync(path.join(root,".evejs-test-store-attestation.json"),
@@ -121,7 +148,7 @@ function parent(){
   EVEJS_TEST_STORE_ROOT:root,EVEJS_GAMESTORE_DATA_DIR:data,
   EVEJS_PINNED_SERVER:path.resolve(server)};
  try{
-  for(const stage of ["seed","stage","witness","claim","verify"]){
+  for(const stage of stages){
    const r=spawnSync(process.execPath,[self,"--child",stage],
     {cwd:server,env,encoding:"utf8",timeout:45000,maxBuffer:2*1024*1024});
    if(stage==="verify"){
@@ -131,5 +158,6 @@ function parent(){
   }
   process.stdout.write("EX03B19 ORIGINAL NPC WRECK ITEMSTORE SQLITE PASS\n");
  }finally{fs.rmSync(root,{recursive:true,force:true})}
+ }
 }
 if(process.argv[2]==="--child")child(process.argv[3]);else parent();
