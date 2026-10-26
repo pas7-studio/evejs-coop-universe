@@ -18,7 +18,7 @@ const iskCents=x=>{
  return Number.isSafeInteger(n)&&Math.abs(y-n)<1e-6?n:null;
 };
 const add=(a,b)=>{const r=a+b;if(!Number.isSafeInteger(r))throw Error("MINING_PL_OVERFLOW");return r};
-const grouping=(name,id)=>"/"+name+(id==null?"":"/"+id);
+const grouping=(name,id)=>name==null?"/"+id:"/"+name+(id==null?"":"/"+id);
 const entryAmount=(row,id,ref,amount)=>{
  return row?.transactionID===id&&row.referenceID===ref&&
   row.accountKey===1000&&row.ownerID1!=null&&
@@ -170,6 +170,7 @@ function createMiningCorporatePnl({
       // gameStore.read path for a root table is "/<id>", not "//<id>".
       if(!person||!Array.isArray(person.walletJournal)||
        person.walletJournal.filter(e=>e?.transactionID===r.buyerJournalID&&
+        e.ownerID1===r.buyerCharacterID&&e.ownerID2===corporationID&&
         entryAmount(e,r.buyerJournalID,r.receiptKey,-r.grossCents))
         .length!==1)
        return blocked("MINING_PL_ORIGINAL_BUYER_DEBIT_NOT_VERIFIED");
