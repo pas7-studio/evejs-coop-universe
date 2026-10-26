@@ -17,6 +17,76 @@ With `EVEJS_COOP_NATIVE_TACTICS=1` **and** `EVEJS_COOP_PVE_NPC_RETALIATION=1`, t
 
 **Known limitation:** this is retaliation for named physical A-Life ships, not yet authenticated ownership of a static pirate base. The next stage must bind those ships to original site IDs before a site can direct reinforcements.
 
+## Stage 2 — native authored-site defensive response (this dependent PR)
+
+**State:** SOURCE_REVIEWED / ISOLATED_V8_TESTS_PASSED / INTEGRATION_HOOK_PREPARED / NATIVE_SERVER_AND_TWO_CLIENT_NOT_RUN.
+
+The pinned EveJS dungeon site engine stores each physical encounter's genuine ship IDs in
+`instance.spawnState.encounterStatesByKey[planKey].spawnedEntityIDs` after
+`npcSpawnService.spawnNpcBatchInSystem` succeeds. It also creates physical
+`universeAnomalySite` / `universeSignatureSite` beacons carrying
+`dungeonSiteID` and `dungeonSiteInstanceID`. These fields, the full native
+`dungeonRuntime.listActiveInstancesBySystem(systemID, {full:true})`, the actual
+`nativeNpcStore.getNativeEntity` entry, and the native combat controller are the
+authority for the new `coopPveNativeSiteDefense`; there is **no separate site registry**.
+
+Only an active, shared, explicitly authored anomaly or signature with a live
+matching beacon and at least two physically materialized, original **transient
+nativeCombat** NPC hulls can request assistance. Source identity, system,
+`typeID`, original spawn timestamp, encounter wave, faction/corporation, and
+native controller must agree. Collision across two sites or waves, any already
+claimed named A-Life/war NPC, abandoned spawn, or reused entity ID fails closed.
+No original `spawnedEntityIDs` means **no defenders**, not free ships.
+
+When a live controller proves that a real logged-in player ship attacked one of
+these defenders within 120 seconds, one other *idle* same-site allied native NPC
+may receive an original `npcRuntime.issueAttackOrder`. The native NPC service
+still owns targeting, ammunition, locking, Dogma damage, kill and wreck. A
+strict native `success:true` is recorded only as `NATIVE_SITE_DEFENSE_ORDER_ACCEPTED`,
+**not** a hit/kill/wallet payout. Orders are limited to two/site/tick and four
+overall/tick, with 120-second per-NPC cooldown. Ambiguous native ACKs halt
+automated retry **for the lifetime of the process**. The controller must be idle;
+this module never steals an existing native or named NPC manual order.
+
+`EVEJS_COOP_PVE_SITE_DEFENSE=1` is an additional, default-OFF gate in the
+**existing 30-second A-Life phase sequence**. It requires the normal Living World
+tick already running; no separate timer, spawn engine, mission RPC, wallet or
+inventory mutator. It does not automatically imply the earlier named-NPC
+`EVEJS_COOP_PVE_NPC_RETALIATION` gate.
+
+**Exact-source isolated tests:** 11 cases include native site-to-wave ownership,
+real NPC order ACK, active/completed lifecycle, beacon mismatch, cross-site and
+cross-wave ownership collision, recycled native entity identity, stale
+aggression, fake/disconnected players, occupied controllers, ambiguous ACK,
+per-tick replay control and reserved named hulls. They are NOT a full local
+Node suite, installed pinned-code dry run, Docker/SQLite or client validation.
+
+**Remaining risks:** No durable post-restart native attack-order journal;
+after a crash, original native controller and encounter state must be inspected
+before an operator authorizes resume. A native attack order success is not
+damage or observed two-client gameplay. Original dungeon encounter triggers
+already own finite waves; this PR does not add artificial waves, bosses,
+escalations, wreck items or mission payouts.
+
+### Manual P0-2 gate
+
+1. Against an untouched pinned checkout run `node --test tests/coop-pve-native-site-defense.test.mjs`,
+   original crossstream installer dry-run, byte-exact overlay roundtrip and
+   `node scripts/patch-evejs-coop.cjs --check --code-path <Code>`.
+2. Keep the flag OFF on the persistent world. In an approved disposable world,
+   confirm an authentic dungeon anomaly materializes the site beacon and two
+   original NPCs with matching native entity rows/controllers.
+3. Enable the flag and have **player A** attack a proven defender. Confirm
+   exactly one same-instance existing ally issues a native attack with real
+   lock/shot/HP evidence. **Player B** must not be targeted merely by proximity.
+4. Repeat with expired damage, site rotation/completion, two different sites,
+   NPC death/reused entity ID, missing native store, existing manual orders,
+   disconnect and unknown ACK. No extra ships or synthetic payouts.
+5. Restart while the site remains active, verify reconciliation and absence of
+   incorrect replay or duplicate NPC identity. Do not clean `evejs-data`.
+6. Capture client-visible entry, NPC target selection, physical warp/attack,
+   native wreck custody and two-player session evidence separately.
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
