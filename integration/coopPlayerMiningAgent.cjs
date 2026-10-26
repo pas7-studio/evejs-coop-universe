@@ -12,11 +12,12 @@ const say=(text,actions=[])=>({success:true,data:{agentSays:[String(text).slice(
 const safe=x=>String(x??"").replace(/[<>\x00-\x1f]/g," ").slice(0,130);
 function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
  inspectShift,assignOrder,getHirePreview=null,acceptHire=null,
- access,enabled=()=>false}={}){
+ orderMenu=null,access,enabled=()=>false}={}){
  if([getAgent,getMission,getSessions,getFleetRecords,inspectShift,assignOrder,
   access?.isMember,access?.canIndustry,enabled].some(x=>typeof x!=="function")||
   (getHirePreview!==null&&typeof getHirePreview!=="function")||
-  (acceptHire!==null&&typeof acceptHire!=="function"))
+  (acceptHire!==null&&typeof acceptHire!=="function")||
+  (orderMenu!==null&&[orderMenu.enabled,orderMenu.interact].some(x=>typeof x!=="function")))
   throw Error("PLAYER_MINING_AGENT_NATIVE_AUTHORITIES_REQUIRED");
  function selected({session,agentID}={},options={}){
   if(enabled()!==true||!pos(agentID)||!pos(session?.characterID)||
@@ -62,8 +63,13 @@ function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
     proposal.quote.employerCorpID===agent.corporationID?
      {offer:proposal.quote,agent}:null;
   }
-  // Stock agent has no native multi-fleet selector. Refuse ambiguous
-  // selection rather than silently issuing commands to the wrong ships.
+  // New D3 stock Agent protocol keeps View read-only, Request Mission as
+  // browse/selection, and Accept as explicit server-verified confirmation.
+  // OFF by default; legacy D1 one-fleet behavior is unchanged when OFF.
+  if(orderMenu?.enabled()===true&&
+   access.canIndustry(session,session.corporationID)===true)
+   return {menu:jobs,agent};
+  // D1 fallback: refuse multi-fleet ambiguity without an authorized selector.
   if(jobs.length!==1)return {blocked:true,message:"Multiple verified mining shifts belong to this agent. No fleet was selected; no command was issued."};
   return {row:jobs[0],agent};
  }
@@ -91,6 +97,14 @@ function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
   const j=selected({session,agentID},{view});
   if(!j)return null; // stock missions and other existing agent jobs win
   if(j.blocked)return say(j.message);
+  if(j.menu){
+   let outcome;
+   try{outcome=orderMenu.interact({session,agent:j.agent,rows:j.menu,actionID})}
+   catch{return say("Native mining fleet selector unavailable. No order sent.",[[1,1]]);}
+   return say(outcome?.description||
+    "Native mining order refused: "+safe(outcome?.reason||outcome?.status||"UNAVAILABLE"),
+    Array.isArray(outcome?.actions)?outcome.actions:[[1,1]]);
+  }
   if(j.offer){
    const q=j.offer,manager=access.canIndustry(session,q.corporationID)===true;
    const intro="NPC employer "+q.employerCorpID+" offers "+q.minerCount+
@@ -145,6 +159,13 @@ function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
  function briefing({session,agentID}={}){
   const j=selected({session,agentID},{view:false});
   if(!j||j.blocked)return null;
+  if(j.menu)return {"ContentID":null,"Mission Title ID":"NPC Mining Fleet Orders",
+   "Mission Briefing ID":"A live native mining fleet order selector is available. "+
+    "View Mission previews the selection, Request Mission browses exact "+
+    "fleet and order pairs, Accept confirms only the currently previewed "+
+    "order. Physical ships and GameStore command revision are rechecked.",
+   "Mission Keywords":{},"Mission Image":null,"Decline Time":null,
+   "Expiration Time":null,"AcceptTimestamp":null,"Mission ID":null};
   if(j.offer)return {"ContentID":null,"Mission Title ID":"NPC Mining Hire",
    "Mission Briefing ID":"NPC employer "+j.offer.employerCorpID+
     " offers original mining fleet "+j.offer.fleetID+
@@ -171,12 +192,14 @@ function native(){
    sessions=require("../services/chat/sessionRegistry"),
    mining=require("../services/mining/miningNpcOperations"),
    fleet=require("./coopPlayerMiningFleetTick"),
-   hiring=require("./coopPlayerMiningHiring");
+   hiring=require("./coopPlayerMiningHiring"),
+   orderMenu=require("./coopPlayerMiningAgentOrders");
   singleton=createMiningAgent({access,getAgent:agents.getAgentByID,
    getMission:missions.getMissionRecord,getSessions:sessions.getSessions,
    getFleetRecords:id=>mining.getMiningFleetsForSystem(id),
    inspectShift:fleet.inspect,assignOrder:fleet.assign,
    getHirePreview:hiring.preview,acceptHire:hiring.accept,
+   orderMenu,
    enabled:()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_AGENT==="1"&&
     process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY==="1"});
  }
