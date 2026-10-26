@@ -26,7 +26,7 @@ function fixture(){
   customInfo:"coop-warehouse:v1:cargo:"+CARGO};
  const ships=new Map();
  for(const id of [MINER,HAULER])ships.set(id,{kind:"ship",itemID:id,
-  nativeNpc:true,transient:false,position:{...origin},
+  nativeNpc:true,transient:false,position:{...origin,x:origin.x+12000},
   mode:"STOP",isWarping:false,pendingWarp:null,warpState:null});
  const scene={systemID:SYS,getEntityByID:id=>ships.get(id)||null};
  const oracle=createPhysicalCompletionOracle({
@@ -37,8 +37,9 @@ function fixture(){
   contents.get(MINER).length=0;
   record.state="mining";record.lastHauledAtMs=ISSUED+1000;
  };
+ const landed=()=>{for(const ship of ships.values())ship.position={...origin}};
  return {oracle,fleet,record,row,ships,scene,origin,contents,
-  delivered,receipt:()=>committed,item:()=>warehouseItem,
+  delivered,landed,receipt:()=>committed,item:()=>warehouseItem,
   setReceipt:x=>committed=x,setItem:x=>warehouseItem=x,
   proof:()=>oracle.verify({row,fleet,fleetRecord:record,scene})};
 }
@@ -95,25 +96,27 @@ test("stock native still hauling or premature timestamp never claims delivered",
 });
 test("original retreat target is captured from physical fleet origin, not client input",()=>{
  const x=fixture();
- assert.deepEqual(x.oracle.captureRetreat({fleetRecord:x.record}),x.origin);
+ assert.deepEqual(x.oracle.captureRetreat({fleetRecord:x.record,scene:x.scene,fleet:x.fleet}),
+  {origin:x.origin,departureShipIDs:[MINER,HAULER]});
 });
 test("RETREAT requires all original NPC hulls physically landed at the original anchor",()=>{
  const x=fixture();x.row.directive="RETREAT";
- x.row.retreatAnchor={...x.origin};
+ x.row.retreatAnchor={...x.origin};x.row.retreatDepartureShipIDs=[MINER,HAULER];
  x.record.state="retreating";
+ assert.equal(x.proof(),null);x.landed();
  const proof=x.proof();
  assert.equal(proof.kind,"ORIGINAL_FLEET_WARP_ARRIVED");
  assert.deepEqual(proof.shipIDs,[MINER,HAULER]);
 });
 test("warp only requested, one ship still warping => RETREAT never completed",()=>{
  const x=fixture();x.row.directive="RETREAT";x.row.retreatAnchor={...x.origin};x.record.state="retreating";
- x.ships.get(HAULER).isWarping=true;assert.equal(x.proof(),null);
+ x.landed();x.ships.get(HAULER).isWarping=true;assert.equal(x.proof(),null);
  x.ships.get(HAULER).isWarping=false;x.ships.get(HAULER).pendingWarp={};
  assert.equal(x.proof(),null);
 });
 test("original NPC ship outside physical arrival radius cannot satisfy retreat",()=>{
  const x=fixture();x.row.directive="RETREAT";x.row.retreatAnchor={...x.origin};
- x.record.state="retreating";x.ships.get(HAULER).position.x+=3000;
+ x.record.state="retreating";x.landed();x.ships.get(HAULER).position.x+=3000;
  assert.equal(x.proof(),null);
 });
 test("forged origin target, wrong fleet identity or missing hull blocks retreat",()=>{
@@ -121,12 +124,22 @@ test("forged origin target, wrong fleet identity or missing hull blocks retreat"
   x=>x.row.fleetID+=1,x=>x.ships.delete(MINER),
   x=>x.record.state="mining",x=>x.ships.get(MINER).nativeNpc=false]){
   const x=fixture();x.row.directive="RETREAT";
-  x.row.retreatAnchor={...x.origin};x.record.state="retreating";
-  mutate(x);assert.equal(x.proof(),null);
+  x.row.retreatAnchor={...x.origin};x.row.retreatDepartureShipIDs=[MINER,HAULER];x.record.state="retreating";
+  x.landed();mutate(x);assert.equal(x.proof(),null);
  }
 });
 test("DISPATCH_UNKNOWN can never be reconciled just because ships are at origin",()=>{
  const x=fixture();x.row.directive="RETREAT";x.row.retreatAnchor={...x.origin};
  x.record.state="retreating";x.row.commandState="DISPATCH_UNKNOWN";
  assert.equal(x.proof(),null);
+});
+
+test("already-at-origin native hulls cannot manufacture a retreat departure witness",()=>{
+ const x=fixture();x.landed();
+ assert.equal(x.oracle.captureRetreat({fleetRecord:x.record,scene:x.scene,fleet:x.fleet}),null);
+});
+test("original retreat completion cannot be faked with missing departure IDs",()=>{
+ const x=fixture();x.landed();x.row.directive="RETREAT";
+ x.row.retreatAnchor={...x.origin};x.row.retreatDepartureShipIDs=[];
+ x.record.state="retreating";assert.equal(x.proof(),null);
 });
