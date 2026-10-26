@@ -507,4 +507,44 @@ function start(args){
    spawn,register,getFleets,ensureState,log:message=>console.warn("[ALIFE08]",message)
  }).start({scene,fleetCount});
 }
-module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot};
+// A durable actor outlives the in-memory controller registry: a rebuilt scene
+// drops the controller while the persisted row still owns the ship. The stock
+// fleet tick prunes any actor it cannot see a controller for, so a fleet quietly
+// stops mining while its ships are alive. Re-attach from the store first.
+// One hook line calls this; the logic and its tests live here, not in a string.
+function healFleetActors(fleetRecord,deps={}){
+ const npcService=deps.npcService||require("./npc");
+ const store=deps.store||require("./npc/nativeNpcStore");
+ let observe=deps.observe||null;
+ if(!observe){
+  try{observe=require("./coopRuntimeProbe").observe}catch(_error){observe=null}
+ }
+ const healed=[];
+ const actors=[].concat(
+  Array.isArray(fleetRecord&&fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[],
+  Array.isArray(fleetRecord&&fleetRecord.haulerEntityIDs)?fleetRecord.haulerEntityIDs:[]);
+ for(const entityID of actors){
+  const id=Number(entityID)||0;
+  if(id<=0)continue;
+  if(typeof npcService.getControllerByEntityID==="function"&&npcService.getControllerByEntityID(id))continue;
+  const stored=store&&typeof store.getNativeController==="function"?store.getNativeController(id):null;
+  if(!stored)continue;
+  try{
+   npcService.wakeNpcController(id);
+  }catch(error){
+   if(observe)observe("living-mining-fleet-selfheal-blocked",null,
+    {spaceState:{systemID:Number(fleetRecord&&fleetRecord.systemID)||0}},
+    {fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,entityID:id,
+     reason:String(error&&error.message||error).slice(0,120)});
+   continue;
+  }
+  if(typeof npcService.getControllerByEntityID!=="function"||!npcService.getControllerByEntityID(id))continue;
+  healed.push(id);
+  if(observe)observe("living-mining-fleet-selfheal",null,
+   {spaceState:{systemID:Number(fleetRecord&&fleetRecord.systemID)||0}},
+   {fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,entityID:id,
+    operatorKind:String(stored.operatorKind||"")});
+ }
+ return healed;
+}
+module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot,healFleetActors};

@@ -247,7 +247,7 @@ const specs=[
   // the store first, then let the stock filter decide.
   {anchor:"function pruneMiningFleet(fleetRecord) {\n  if (!fleetRecord) {\n    return null;\n  }",
    after:true,
-   line:"if (process.env.EVEJS_COOP_NATIVE_MINING_SLOT_SELFHEAL === \"1\") { try { const coopActors=[].concat(Array.isArray(fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[], Array.isArray(fleetRecord.haulerEntityIDs)?fleetRecord.haulerEntityIDs:[]); for (const coopID of coopActors) { if (npcService.getControllerByEntityID(coopID)) continue; const coopStored=require(\"../../space/npc/nativeNpcStore\").getNativeController(coopID); if (!coopStored) continue; npcService.wakeNpcController(coopID); if (npcService.getControllerByEntityID(coopID)) require(\"../../space/coopRuntimeProbe\").observe(\"living-mining-fleet-selfheal\",null, {spaceState:{systemID:fleetRecord.systemID}}, {fleetID:toInt(fleetRecord.fleetID,0),entityID:toInt(coopID,0), operatorKind:String(coopStored.operatorKind||\"\")}); } } catch (_coopHealError) { console.warn(\"[CoopMiningSelfHeal]\",_coopHealError.message); } }"},
+   line:"if (process.env.EVEJS_COOP_NATIVE_MINING_SLOT_SELFHEAL === \"1\") { try { require(\"../../space/coopNativeMiningFleetDurable\").healFleetActors(fleetRecord,{npcService}); } catch (_coopHealError) { console.warn(\"[CoopFleetSelfHeal]\",_coopHealError.message); } }"},
   // The fleet silently drops a miner when its runtime controller disappears.
   // Report WHICH authority was lost (persisted row vs runtime registry) BEFORE
   // the record is pruned, so the cause is measurable instead of guessed.
