@@ -64,9 +64,11 @@ function validate(s){
  return s;
 }
 function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
- verifyRelease,clock=()=>Date.now(),env=process.env}={}){
+ verifyRelease,verifyDemobOrderIdle=()=>false,
+ clock=()=>Date.now(),env=process.env}={}){
  if(typeof gameStore?.coopAtomicNativeRows?.transact!=="function"||
-  [verifyNativeShip,verifyCampaign,verifyRelease,clock].some(x=>typeof x!=="function"))
+  [verifyNativeShip,verifyCampaign,verifyRelease,verifyDemobOrderIdle,clock]
+   .some(x=>typeof x!=="function"))
    throw Error("FW_FLEET_NATIVE_AUTHORITIES_REQUIRED");
  const enabled=()=>env.EVEJS_COOP_FACTION_WAR==="1"&&
   env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1";
@@ -102,7 +104,8 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
  function execute(command){
   if(!enabled())return {status:"DISABLED"};
   if(inWrite)return {status:"BLOCKED",reason:"FW_FLEET_REENTRANT"};
-  if(!command||!valid(command.eventID)||!["ASSIGN","RELEASE"].includes(command.type))
+  if(!command||!valid(command.eventID)||
+   !["ASSIGN","RELEASE","DEMOBILIZE"].includes(command.type))
    return {status:"BLOCKED",reason:"INVALID_COMMAND"};
   inWrite=true;
   try{
@@ -127,6 +130,49 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
      if(!ok)return {status:"BLOCKED",reason:"NATIVE_SHIP_OR_CAMPAIGN_UNVERIFIED"};
      s.ships[id]={...details,assignedAt:clock()};
      receipt={type:"ASSIGN",entityID,pilotID,systemID,fleetID,warID,campaignID};
+    }else if(command.type==="DEMOBILIZE"){
+     // Terminal campaign and physical ship must be proved against the
+     // SAME SQLite snapshot in which exclusive fleet custody is released.
+     // A caller cannot force this with a chat-supplied proofID or a stale
+     // read of ACTIVE/PREPARING/ASSAULT.
+     if(env.EVEJS_COOP_FACTION_WAR_DEMOBILIZE!=="1")
+      return {status:"DISABLED"};
+     if(!priorShip||!pos(command.entityID)||
+      command.entityID!==priorShip.entityID||
+      command.pilotID!==priorShip.pilotID||
+      command.fleetID!==priorShip.fleetID||
+      command.campaignID!==priorShip.campaignID||
+      command.warID!==priorShip.warID||
+      command.systemID!==priorShip.systemID||
+      !pos(command.campaignRevision)||!valid(command.proofID)||
+      command.proofID!=="native-demob:"+command.campaignID+":"+command.entityID)
+      return {status:"BLOCKED",reason:"WAR_DEMOB_IDENTITY_OR_PROOF_INVALID"};
+     if(s.transfers?.[id])
+      return {status:"BLOCKED",reason:"WAR_DEMOB_TRANSFER_NOT_RETIRED"};
+     const warRecord=tx.get(TABLE,"coop-faction-war\u001fstate-v1");
+     const campaign=warRecord?.campaigns?.[command.campaignID],
+      war=warRecord?.wars?.[command.warID];
+     if(warRecord?.version!==1||!campaign||!war||
+      campaign.warID!==command.warID||
+      campaign.revision!==command.campaignRevision||
+      !["OCCUPIED","CANCELLED"].includes(campaign.state)||
+      !["ACTIVE","ENDED"].includes(war.state)||
+      (campaign.state==="CANCELLED"&&war.state!=="ENDED")||
+      ![war.attackerFactionID,war.defenderFactionID].includes(priorShip.factionID))
+      return {status:"BLOCKED",reason:"WAR_CAMPAIGN_NOT_TERMINAL"};
+     let nativeOK=false;
+     try{
+      nativeOK=verifyNativeShip({...priorShip,proofID:command.proofID})===true&&
+       verifyRelease({...priorShip,proofID:command.proofID})===true&&
+       verifyDemobOrderIdle({...priorShip,proofID:command.proofID})===true;
+     }catch{}
+     if(!nativeOK)return {status:"BLOCKED",reason:"WAR_DEMOB_NATIVE_HULL_BUSY_OR_UNVERIFIED"};
+     delete s.ships[id];
+     receipt={type:"DEMOBILIZE",entityID:priorShip.entityID,
+      pilotID:priorShip.pilotID,systemID:priorShip.systemID,
+      fleetID:priorShip.fleetID,campaignID:priorShip.campaignID,
+      campaignRevision:campaign.revision,warID:priorShip.warID,
+      nativeShipPreserved:true};
     }else{
      // Even a COMPLETE transfer remains forensic evidence. The native
      // transfer ledger must first retire it after verifying journal

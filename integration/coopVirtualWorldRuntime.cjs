@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -44,10 +44,74 @@ function nativeWarFleetRegistry(){
    getFactionForCorporation:id=>factions.getFactionIDForCorporation(id)
   });
   warFleetRegistry=require("./coopWarFleetRegistry").createWarFleetRegistry({
-   gameStore:require("../gameStore"),...proofs
+   gameStore:require("../gameStore"),...proofs,
+   // A terminal campaign is NOT permission to hijack a busy NPC. The
+   // native hull and a nonambiguous arbiter idle state are mandatory.
+   verifyDemobOrderIdle:d=>{
+    const arbiter=nativeOrderBridge;
+    if(!arbiter||!d?.entityID||!d?.pilotID)return false;
+    let scene,ctrl,leases;
+    try{
+     scene=runtime.scenes instanceof Map?runtime.scenes.get(d.systemID):null;
+     ctrl=controllers.getControllerByEntityID(d.entityID);
+     leases=arbiter.snapshot()?.leases;
+    }catch{return false}
+    const ship=scene?.getEntityByID?.(d.entityID);
+    if(!Array.isArray(leases)||!ship||ship.nativeNpc!==true||
+     ship.itemID!==d.entityID||ship.session?.characterID||
+     ctrl?.entityID!==d.entityID||ctrl.systemID!==d.systemID||
+     ctrl.manualOrder||ctrl.currentTargetID||ship.pendingWarp||
+     ship.warpState||ship.isWarping||
+     !["STOP","IDLE"].includes(String(ship.mode||"").toUpperCase()))
+     return false;
+    const now=Date.now();
+    if(leases.some(l=>l.entityID===d.entityID&&
+     (l.phase==="ISSUING"||l.phase==="OUTCOME_UNKNOWN"||
+      l.phase==="ACTIVE"&&(!Number.isSafeInteger(l.expiresAt)||
+       l.expiresAt>now))))return false;
+    try{
+     if(tacticsDirector?.activeIDs()?.has(d.entityID)===true||
+      nativeAmmoSupply?.activeIDs(d.systemID)?.has(d.entityID)===true)
+      return false;
+    }catch{return false}
+    return true;
+   }
   });
  }
  return warFleetRegistry;
+}
+// FW-008: terminal war campaigns demobilize BEFORE the existing native
+// recruiter evaluates new adjacent wars. No second tick or physical ship
+// movement. All custody changes are rechecked inside native SQLite.
+function advanceNativeWarDemobilization(){
+ const {enabled,createWarDemobilizer}=require("./coopWarDemobilizer");
+ if(!enabled(process.env)||!visitedSystems.size||!identityRegistry)return;
+ const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
+ if(!registry||!guard)return;
+ if(!warDemobilizer){
+  const gameStore=require("../gameStore"),
+   warStore=require("./coopFactionWarStore"),
+   warCore=require("./coopFactionWarCore");
+  warDemobilizer=createWarDemobilizer({
+   registry,
+   readWarState:()=>{
+    const result=gameStore.read(warStore.TABLE,"/"+warStore.KEY);
+    if(result?.success!==true)return null;
+    warCore.validateState(result.data);return result.data;
+   },
+   readLinks:()=>Object.values(identityRegistry.snapshot()?.links||{}),
+   getOrderLeases:()=>guard.snapshot().leases
+  });
+ }
+ const result=warDemobilizer.tick({
+  systemIDs:[...visitedSystems].slice(0,12)
+ });
+ if(result.demobilized.length)
+  require("./coopRuntimeProbe").observe(
+   "living-native-war-demobilized",null,null,{
+    status:result.status,ships:result.demobilized,
+    evidence:"TERMINAL_NATIVE_WAR_FLEET_RELEASE_NO_HULL_OR_CARGO_MUTATION"
+   });
 }
 // FW-003C: real patrol mobilization on the SAME existing A-Life tick. Any
 // failed source proof results in zero military assignments, never free ships.
@@ -456,6 +520,7 @@ function start(){
   else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
   safeNpcPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   safeNpcPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
   safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);

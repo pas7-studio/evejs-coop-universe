@@ -560,6 +560,84 @@ Rust/Docker/two-client acceptance has not yet been verified**.
 All flags remain OFF by default; this code does not authorize
 production war fleets.
 
+## FW-008 — terminal campaign demobilization and physical hull reuse
+
+**No second war outcome oracle.** The existing FW-001 authoritative
+war core sets `OCCUPIED` only after a verified native objective and
+capture; `END_WAR` with verified ceasefire cancels ongoing campaigns
+as `CANCELLED`. FW-008 consumes **only these persisted outcomes**;
+it never declares capture, assigns a victory, fabricates wrecks, pays
+ISK, changes native SDE sovereignty, declares another war or cancels an
+active campaign without evidence.
+
+- A new `DEMOBILIZE` native fleet command is guarded inside
+  `coopWarFleetRegistry.execute` (the SAME authoritative
+  `coopAtomicNativeRows.transact(["corporationRuntime"])` as fleet
+  custody). The campaign must still be `OCCUPIED` or `CANCELLED`
+  at the exact given revision; CANCELLED additionally requires the
+  actual native war be `ENDED`. The fleet's war, campaign, original
+  pilot, faction, corporation, system, entityID and fleetID must match.
+- A trusted physical ship proof is mandatory. The old `verifyRelease`
+  permits confirmed destroyed hulls in specific cases, but this
+  command **also** requires `verifyNativeShip === true`, so
+  demobilization cannot accidentally treat a missing physical NPC as
+  an intact hull available for immediate reuse. No fake resurrection,
+  replacement ships, loot, refunds or payroll changes.
+- The native order-arbiter proof must confirm that the original
+  controller and ship are STOP/IDLE, not in combat, warping, on
+  manual orders, in tactical retreat or under a pending/unknown
+  native order. Other directors may not force a release during
+  a pending native gate handoff.
+- If **any** transfer entry still exists (including terminal but not
+  explicitly retired to `transferHistory`), demobilization is
+  rejected until FW-007D has positively verified and retired it.
+- `coopWarDemobilizer.cjs` scans at most 512 current warship
+  assignments, admits only uniquely linked named pilot/physical
+  entity associations in up to 20 *already visited* systems, and
+  issues at most **2** native demobilizations per existing 30-second
+  A-Life tick. Unknown writer outcomes stop the tick immediately;
+  idempotent event IDs include campaign revision and entityID.
+- The original `coopVirtualWorldRuntime` executes
+  **war demobilization BEFORE war mobilization**. Freed ships remain
+  untouched in native EveJS. A genuinely idle and equipped patrol
+  may be selected by the existing FW-003C recruiter for another
+  independent active `PREPARING`/`ASSAULT` campaign in that very
+  same tick, using the existing corp/faction/real ammo/supply/
+  source-system proofs. No new spawn, entityID, wallet entry or
+  physical relocation is ever created by demobilization.
+
+**Additional default-OFF flag:**
+`EVEJS_COOP_FACTION_WAR_DEMOBILIZE=1` requires
+`EVEJS_COOP_FACTION_WAR=1`,
+`EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`, and
+`EVEJS_COOP_ALIFE=1` (or
+`EVEJS_COOP_NPC_ORDER_ARBITER=1`).
+For immediate new fleet recruitment the independent FW-003C
+mobilization/ammo flags must ALSO be enabled. Keep disabled until
+native acceptance.
+
+**Limits requiring subsequent work:** actual strategic campaign
+result adjudication relies on existing FW-001 verified `CAPTURE_TERRITORY`
+/`END_WAR` producers; these are NOT automatically produced in
+FW-008. A native battle-loss witness and finite supply-loss policy
+are still necessary before an autonomous defeat/cancel/retreat can
+be resolved without a ceasefire. Physical movement to a new
+campaign's source remains the separately guarded FW-007 mechanism,
+not a teleport granted by re-enlistment.
+
+**Test gates:** source tests
+`node --test tests/coop-war-demobilizer.test.mjs
+tests/coop-war-fleet-demobilization.test.mjs`;
+the latter uses the actual native fleet registry plus both
+demobilization and mobilization directors to confirm one
+`entityID` returns to a second campaign in the same tick, with
+negative cases for busy orders, stale campaign revision, unretired
+transfers, missing native hull, CANCELLED while the war is active,
+and default-off configuration. Full pinned Node + SQLite FULL,
+Rust, restart/SIGKILL, actual SDE corp identity and two-client
+fleet behavior must pass before enabling or merging.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
