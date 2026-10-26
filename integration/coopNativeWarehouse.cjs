@@ -78,7 +78,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     Number(cargo.moduleID||0)!==Number(global[0]?.moduleID||0)||
     Number(cargo.coopHaulFleetID)!==Number(global[0]?.coopHaulFleetID)||
     Number(cargo.coopHaulFromMinerID)!==Number(global[0]?.coopHaulFromMinerID)||
-    Number(cargo.coopHaulSystemID)!==Number(global[0]?.coopHaulSystemID)||
+    Number(cargo.coopHaulSystemID||0)!==Number(global[0]?.coopHaulSystemID||0)||
     cargo.transient!==global[0]?.transient))
    throw Error("WAREHOUSE_SOURCE_VIEWS_DISAGREE");
   return cargo;
