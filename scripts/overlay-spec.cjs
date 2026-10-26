@@ -48,6 +48,8 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 // Restart resilience: re-attach durable haul cargo orphans to the re-seeded
 // hauler of the same system/slot (default OFF, never invents ore).
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopHaulCargoAdoption");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningCapacitorGate");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningActivate");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -242,7 +244,7 @@ const specs=[
    // The stock loop discards the activation result, so a module that refuses to
    // start leaves the fleet "mining" forever with activeEffects=0.
    {anchor:"      if (!activeEffect) {\n      scene.activateGenericModule(pseudoSession, entry.moduleItem, entry.effectRecord.name, {\n        targetID: targetEntity.itemID,\n      });\n      }",
-    line:'      if (!activeEffect) { const coopAct = scene.activateGenericModule(pseudoSession, entry.moduleItem, entry.effectRecord.name, { targetID: targetEntity.itemID }); if (!coopAct || coopAct.success !== true) require("../../space/coopMiningTrace").noteActivationFailure(fleetRecord,scene,minerEntity,entry,coopAct); continue; }'},
+    line:"      if (!activeEffect) { require(\"../../space/coopMiningActivate\").activate({scene,pseudoSession,minerEntity,entry,targetEntity,fleetRecord}); continue; }"},
    {anchor:"    if (!minerEntity || minerEntity.mode === \"WARP\" || minerEntity.pendingWarp) {",after:true,
    line:'      require("../../space/coopMiningTrace").note("MINER_NOT_IN_SCENE_OR_WARPING",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntityID,0),found:Boolean(minerEntity),mode:String((minerEntity&&minerEntity.mode)||""),pendingWarp:Boolean(minerEntity&&minerEntity.pendingWarp)});'},
   {anchor:"  fleetRecord.nextThinkAtMs = now + thinkIntervalMs;",after:true,
