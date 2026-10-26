@@ -486,7 +486,20 @@ const warehouseBlockedAt=new Map();
   if(cargo.some(row=>row.transient===true))return pause("CARGO_NOT_DURABLE");
   if(routeJournal){
    const previous=recover(scene,fleet,now);
-   if(previous.status==="ROUTE_EXPIRED"){
+   // A trip that ran past its deadline and whose cargo no longer matches the hull is
+   // a stale route: close it durably and plan a fresh manifest from what the ships
+   // really carry. A fresh trip re-verifies the hull, and every warehouse or sale
+   // receipt keeps its grip on the ore, so nothing is dropped and nothing is faked.
+   const staleOverdue=previous.status!=="NO_PENDING_TRIP"&&
+    previous.status!=="ROUTE_EXPIRED"&&previous.overdue&&
+    pos(previous.overdue.manifestID?1:0)&&Number.isFinite(Number(previous.overdue.startedAt));
+   if(staleOverdue){
+    const closed=routeJournal.expire({manifestKey:String(previous.overdue.manifestID),
+     systemID,fleetID,now});
+    if(!["ROUTE_EXPIRED","ALREADY_EXPIRED"].includes(closed?.status))
+     return pause("ALIFE12_"+String(closed?.reason||closed?.status||"EXPIRY_UNVERIFIED"));
+    noteRouteStatus(fleet,"ROUTE_EXPIRED_STALE_CARGO");
+   }else if(previous.status==="ROUTE_EXPIRED"){
     // The route outlived its deadline. Record that durably, then plan a new trip:
     // the ore is still aboard and the ships are alive, and a closed route must not
     // strand the fleet in "loaded" forever (measured: a restart mid-haul).

@@ -39,6 +39,11 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
    return values.filter(x=>typeof x==="string"&&x.endsWith(".json"));
   }catch(e){if(e.code==="ENOENT")return[];throw e}
  };
+ function overdueOf(key,m){
+  const startedAt=Number(m&&m.startedAt);
+  if(!exact(startedAt)||Number(clock())-startedAt<=ROUTE_DEADLINE_MS)return {};
+  return {overdue:{manifestID:key,startedAt}};
+ }
  function sourceRecord(key){
   const m=manifest.read(key);
   if(m?.status!=="READY"||m.record?.key!==key||
@@ -179,7 +184,7 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
     for(const [id,rows] of ships){
      if(rows.some(row=>Number(row.coopHaulFleetID)===fleetID&&
         !declared.has(Number(row.cargoID))))
-      return fail("ALIFE12_UNDECLARED_HAUL_CARGO");
+      return fail("ALIFE12_UNDECLARED_HAUL_CARGO",overdueOf(key,m));
     }
     for(const row of m.cargo){
      const rows=ships.get(row.haulerID)||[];
@@ -191,10 +196,10 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
          c.coopHaulFromMinerID!==row.fromMinerID||
          c.typeID!==row.typeID||c.quantity!==row.quantity||
          Number(c.moduleID||0)!==0||c.transient===true)
-       return fail("ALIFE12_SOURCE_CARGO_CHANGED");
+       return fail("ALIFE12_SOURCE_CARGO_CHANGED",overdueOf(key,m));
       active++;
      }else if(!receiptMatches(row,m))
-      return fail("ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF");
+      return fail("ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF",overdueOf(key,m));
     }
     // A completed manifest is historical, not a new route to replay.
     if(active===0)continue;
