@@ -133,6 +133,10 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
   if(Number(row.coopHaulFleetID)!==fid||Number(row.coopHaulSystemID)!==pid)continue;
   if(cargoIDCount.get(pos(row.cargoID))!==1)
    return {status:"NATIVE_CARGO_ID_COLLISION",rows:[]};
+  // A cargo still on a physical live ship is not an orphan. This includes
+  // the current replacement hauler: its existing load is rejected below
+  // by HAULER_ALREADY_LOADED, not mistaken for a corrupt orphan batch.
+  if(liveShip(scene,row.entityID))continue;
   // Never reinterpret a damaged historical adoption as a first adoption:
   // that would bypass the warehouse/ItemStore/depot replay guards.
   const adoptedAt=pos(row.coopHaulAdoptedAt);
@@ -149,7 +153,6 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
    return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
   const witnessAt=adoptedAt||loadedAt;
   if(witnessAt>now||now-witnessAt>ttlMs)continue;
-  if(liveShip(scene,row.entityID))continue;
   const registered=stillRegistered(store,row.entityID);
   if(registered===REGISTRY_UNVERIFIED)
    return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
