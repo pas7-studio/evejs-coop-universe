@@ -65,13 +65,18 @@ test("new private corporate RPC methods do not rewrite stock FillOrder or GetOrd
   assert.ok(installed.includes('"'+method+'"'));
  assert.ok(!installed.includes('"FillOrder" =>'));
 });
-test("published corporate orders are categorically unavailable until native settlement",()=>{
- assert.match(extension,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
- assert.match(extension,/fn coop_corp_sell_publish_db/);
+test("private corporate SELL publish requires all settlement gates and original physical escrow",()=>{
  const publish=extension.slice(extension.indexOf("fn coop_corp_sell_publish_db("),
   extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
- assert.ok(!publish.includes("state='open'"));
- assert.ok(!publish.includes("state = 'open'"));
+ for(const flag of ["EVEJS_COOP_RUST_CORP_PUBLISH",
+  "EVEJS_COOP_RUST_CORP_BUYER_QUOTE",
+  "EVEJS_COOP_RUST_CORP_FILL_CLAIM","EVEJS_COOP_RUST_CORP_CANCEL"])
+  assert.ok(publish.includes(flag),flag);
+ assert.match(publish,/coop_corp_sell_verify_escrow\(&tx,op\)/);
+ assert.match(publish,/CORP_SELL_PUBLISH_DURABLE_CUSTODY_NOT_VERIFIED/);
+ assert.match(publish,/UPDATE market_orders SET state='open'/);
+ assert.match(publish,/CORP_SELL_PUBLISH_ORDER_CAS_FAILED/);
+ assert.match(publish,/CORP_SELL_PUBLISH_SOURCE_CAS_FAILED/);
 });
 test("Rust verifies exact same physical corporate stock and GameStore receipt before any publish",()=>{
  for(const term of ["SQLITE_OPEN_READ_ONLY","coopPlayerMiningCorpSell",
@@ -155,11 +160,15 @@ test("independent read-only GameStore audit checks both wallet journals and deli
  assert.match(extension,/CORP_FILL_ORIGINAL_MARKET_FEES_NOT_DEBITED/);
  assert.match(extension,/CORP_FILL_PARTIAL_ORIGINAL_REMAINDER_NOT_PRESERVED/);
 });
-test("no public corporate sale can be published before verified native full lifecycle",()=>{
+test("corporate publish is private, source-guarded and invalidates orderbook caches",()=>{
  const publish=extension.slice(extension.indexOf("fn coop_corp_sell_publish_db("),
   extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
- assert.match(publish,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
- assert.doesNotMatch(publish,/UPDATE market_orders/);
+ assert.match(publish,/CORP_SELL_PUBLISH_PIPELINE_NOT_ARMED/);
+ assert.match(publish,/CORP_SELL_PUBLISH_ORDER_ALREADY_LOCKED_OR_CANCELLED/);
+ assert.match(publish,/state='prepared'/);
+ assert.match(publish,/source='coop-corporation'/);
+ assert.match(extension,/corporate sell publish failed/);
+ assert.match(extension,/self.invalidate_scope_caches\(row.row.region_id/);
 });
 
 test("Rust private GetCorpFillClaim can inspect all durable claim phases after restart",()=>{
@@ -242,12 +251,13 @@ test("Rust corporate private cancellation RPCs are separate from stock CancelOrd
   assert.ok(source.includes('"'+method+'"'),method);
  assert.match(source,/struct CoopCorpCancelParams/);
 });
-test("Rust corporate market still refuses publication and rejects stock FillOrder",()=>{
+test("Rust corporate publication cannot run without explicit operational gates; stock FillOrder remains denied",()=>{
  const source=patch(state,"state");
  assert.match(source,/CORP_SELL_STOCK_FILL_DENIED/);
  const body=extension.slice(extension.indexOf("fn coop_corp_sell_publish_db("),
   extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
- assert.match(body,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
+ assert.match(body,/EVEJS_COOP_RUST_CORP_PUBLISH/);
+ assert.match(body,/CORP_SELL_PUBLISH_PIPELINE_NOT_ARMED/);
 });
 
 test("Rust private original corporate buyer quote is authenticated, read-only and default-off",()=>{
