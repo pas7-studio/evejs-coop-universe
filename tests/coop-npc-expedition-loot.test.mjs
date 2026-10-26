@@ -20,9 +20,9 @@ function fixture(){
  const itemStore={ITEM_FLAGS:{CARGO_HOLD:5,HANGAR:4},
   findItemById:id=>rows.has(id)?{...rows.get(id)}:null,
   listContainerItems:(_owner,loc)=>[...rows.values()].filter(x=>x.locationID===loc).map(x=>({...x})),
-  writeItemCustomInfo:(id,value)=>{
+  updateInventoryItem:(id,fn)=>{
    const item=rows.get(id);if(!item)return {success:false};
-   rows.set(id,{...item,customInfo:value});return {success:true};
+   rows.set(id,fn({...item}));return {success:true};
   },
   transferItemToOwnerLocation:(id,owner,location,flag)=>{
    const item=rows.get(id);if(!item)return {success:false};
