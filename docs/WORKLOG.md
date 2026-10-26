@@ -354,6 +354,12 @@ Why: a 900-character behaviour hook cannot be tested or reviewed; hooks must be 
 Detail: The prune-time heal that re-attached durable controllers was 900 characters of inline logic inside a string insertion: untestable, unreviewable, and exactly the shape that produced the earlier double-activation bug. It is now coopNativeMiningFleetDurable.healFleetActors, called by a 257-character hook that only passes the service it needs. Behaviour is unchanged and covered: the function dedupes a
 Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs
 Evidence: healFleetActors extracted; hook 900->257 chars; tests/coop-native-mining-fleet-durable 34/34 with durable-slot-heal and retained-actor suites
+### 2026-10-26T14:41Z · e084bec · L1 · L1 0005: a durable NPC is never combat-dormant; mining hooks become module calls
+
+Why: combat dormancy dematerialised durable co-op NPCs on every no-session scene, resetting module effects ~2x/s so no mining cycle could complete
+Detail: Root cause of 'modules active, no ore': a scene with no attached sessions runs dematerializeDormantCombatControllers, whose predicate matches any nativeCombat controller carrying a startup rule OR an operator kind. A durable co-op ship is runtimeKind=nativeCombat with operatorKind=coop-mining-*, so the sweep unregistered its controller; the durable owner restored it immediately and the loop repeat
+Where: docs/coop-flags.json, integration/coopMiningTrace.cjs, integration/coopNativeMiningFleetDurable.cjs, patches/upstream/0005-native-npc-durable-not-dormant.patch, patches/upstream/MANIFEST.json, scripts/overlay-spec.cjs, tests/coop-mining-trace-shape.test.mjs, tests/coop-native-npc-durable-not-dormant.test.mjs
+Evidence: unregister stack: npcCombatDormancy.dematerializeDormantCombatControllersForScene -> dematerializeNativeController -> unregisterController; 21582 restores; 0 mining cycle results; controllers runtimeKind=nativeCombat operatorKind=coop-mining-* transient=false
 ### 2026-10-26T14:32Z · 38c3570 · L2 · fix(P0): verify physical original tagged ore remains in native station hangar stack
 
 Why: A previously COMMITTED native warehouse item moved out of the original station HANGAR, split, or changed singleton still passed checkTarget, replay status ALREADY_COMMITTED and audit OK. Exact physical item flag/stacksize/singleton now required.
