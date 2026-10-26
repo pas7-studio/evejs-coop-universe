@@ -10,10 +10,10 @@ const named=s=>typeof s==="string"&&/^coop-pilot-[0-9]{3,}$/.test(s);
 const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function createNativeNpcProbeFlight({getNativeEntity,getController,
  listNativeModulesForEntity,listNativeCargoForEntity,upsertNativeCargo,
- flushNpcCargo,refreshNativeCargoProjection,compatibleCharges,resolveProbeRange,buildProbeSceneEntity,
+ flushNpcCargo,refreshNativeCargoProjection,relocateNativeProbe,compatibleCharges,resolveProbeRange,buildProbeSceneEntity,
  clock=()=>Date.now(),flightTtlMs=3600000,maxProbes=8}={}){
  const funcs=[getNativeEntity,getController,listNativeModulesForEntity,
-  listNativeCargoForEntity,upsertNativeCargo,flushNpcCargo,refreshNativeCargoProjection,compatibleCharges,
+  listNativeCargoForEntity,upsertNativeCargo,flushNpcCargo,refreshNativeCargoProjection,relocateNativeProbe,compatibleCharges,
   resolveProbeRange,buildProbeSceneEntity,clock];
  if(funcs.some(f=>typeof f!=="function")||
     !Number.isSafeInteger(flightTtlMs)||flightTtlMs<60000||flightTtlMs>3600000||
@@ -106,9 +106,12 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
     existing.typeID===row.typeID&&existing.ownerID===ctx.native.ownerID&&
     existing.systemID===ctx.scene.systemID&&vec(existing.position);
    if(!resumable)return deny("NPC_PROBE_NATIVE_SCENE_ID_COLLISION");
-   existing.position={...p.position};
-   existing.targetPoint={...p.position};
-   return {status:"NATIVE_PROBE_RECONCILED",cargoID:row.cargoID};
+   let projected;
+   try{projected=relocateNativeProbe({scene:ctx.scene,row})}
+   catch{return deny("NPC_PROBE_SCENE_RELOCATION_FAILED")}
+   return projected?.success===true?
+    {status:"NATIVE_PROBE_RECONCILED",cargoID:row.cargoID}:
+    deny("NPC_PROBE_SCENE_RELOCATION_UNCONFIRMED");
   }
   let physical;
   try{
