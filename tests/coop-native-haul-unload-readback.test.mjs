@@ -10,7 +10,8 @@ function fixture({before=null,after,global=undefined,throwAfter=false,
  flushResult,throwFlush=false}={}){
  const hasFlushResult=Object.hasOwn(arguments[0]||{},"flushResult");
  const cargo={cargoID:333,typeID:34,quantity:50,moduleID:0,
-  entityID:500,coopHaulFleetID:44,coopHaulFromMinerID:111};
+  entityID:500,ownerID:1000035,transient:false,coopHaulFleetID:44,
+  coopHaulSystemID:30000144,coopHaulFromMinerID:111};
  let removed=false,prepared=0,committed=0,removeCalls=0,reads=0,flushes=0;
  const store={
   listNativeCargoForEntity(){
@@ -32,8 +33,9 @@ function fixture({before=null,after,global=undefined,throwAfter=false,
   prepare(){prepared++;return {status:"PREPARED"}},
   commit(){committed++;return {status:"COMMITTED"}}
  };
- const ship={kind:"ship",itemID:500,nativeCargoItems:[{itemID:333,volume:0.1}]};
- const scene={getEntityByID:id=>id===500?ship:null};
+ const ship={kind:"ship",itemID:500,ownerID:1000035,
+  nativeCargoItems:[{itemID:333,volume:0.1}]};
+ const scene={systemID:30000144,getEntityByID:id=>id===500?ship:null};
  const fleet={fleetID:44,systemID:30000144,haulerEntityIDs:[500]};
  const database={flushTableSync:table=>{
   assert.equal(table,"npcCargo");
