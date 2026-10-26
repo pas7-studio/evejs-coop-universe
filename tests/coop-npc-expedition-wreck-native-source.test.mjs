@@ -78,7 +78,7 @@ test("EX-03B18 stock nativeNpcStore source returns ORIGINAL itemID row on visibl
   if(p.includes("gameStore"))return gameStore;
   if(p.includes("services/inventory/itemStore"))return items;
   if(p.includes("coopNpcExpeditionWreckCustody"))return adapter;
-  if(p.includes("nativeNpcStore"))return module.exports;
+  if(p.includes("nativeNpcStore"))return m.exports;
   throw Error("UNEXPECTED_PINNED_NATIVE_REQUIRE:"+p);
  };
  const m={exports:{}};
