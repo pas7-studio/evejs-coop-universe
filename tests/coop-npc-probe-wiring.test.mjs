@@ -283,7 +283,7 @@ test("EX-03B15/B16 original native hack, ItemStore title and wormhole source wir
  assert.match(operations,/loot\.deliver/);
  assert.match(loot,/transferItemToOwnerLocation/);
  assert.match(loot,/moveItemToLocation/);
- assert.match(loot,/writeItemCustomInfo/);
+ assert.match(loot,/updateInventoryItem/);
  assert.match(loot,/flushTableSync\("items"\)/);
  assert.match(wormholes,/wormholes\.prepareJump/);
  assert.match(wormholes,/wormholes\.commitJump/);
