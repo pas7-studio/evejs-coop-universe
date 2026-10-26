@@ -110,7 +110,7 @@ test("wrong character, agent, mission or unverifiable upstream wallet LP cannot 
 test("duplicate or reused native item IDs are fail closed",()=>{
  const f=fixture();f.credit();
  f.now().items.push({...f.now().items[0]});
- assert.equal(f.report().status,"NATIVE_HANGAR_SOURCE_UNAVAILABLE");
+ assert.equal(f.report().status,"NATIVE_PERSONAL_CUSTODY_IDENTITY_MISMATCH");
 });
 test("native reward receiver is not another agent or issuer corporation",()=>{
  const f=fixture();
