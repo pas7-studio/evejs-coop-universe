@@ -207,4 +207,7 @@ Evidence: Exact-branch isolated V8 original-source 34/34 tests PASS, 172 asserti
 
 Why: P0-4A identifies only source-proven authored unique overseer/boss hulls, reads actual native damage layers, and after observed disappearance verifies original native wreck/source and actual wreck item rows without minting loot or grants.
 Where: integration/coopPveNativeBossDirector.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopLivingWorldPhaseRegistry.cjs, scripts/overlay-spec.cjs, docs/coop-flags.json, tests/coop-pve-native-boss-director.test.mjs, tests/coop-living-world-phase-coordinator.test.mjs, docs/CHAT19_21_ADVANCED_PVE_ALIFE.md.
-Evidence: 46/46 isolated original GitHub source tests PASS, 227 assertions; 14/14 source wiring PASS. Full native/Node/SQLite/Rust, pinned installer roundtrip, actual wreck item pickup, two clients and durable restart replay NOT_RUN. New flag OFF.
+Evidence: 48/48 isolated original GitHub source tests PASS, 232 assertions; 14/14 source wiring PASS. Full native/Node/SQLite/Rust, pinned installer roundtrip, actual wreck item pickup, two clients and durable restart replay NOT_RUN. New flag OFF.
+
+Why (terminal fix): Original boss instances may complete before the next PvE phase. In-process source-verified boss receipts can still reconcile one physical native wreck after original dungeon completion; no prior original live witness means no new claimed kill.
+Evidence (terminal fix): Both terminal-instance and no-witness restart tests included in 48/48 isolated V8 passes. Full Node and actual native gameplay NOT_RUN.
