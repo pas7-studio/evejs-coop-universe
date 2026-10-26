@@ -136,3 +136,14 @@ test("hardware failure is non-mutating and fails closed",()=>{
  assert.deepEqual(f.scan().proofs,[]);
  assert.equal(f.getScanCalls(),0);
 });
+
+test("deployed singleton charge that would still render stacksize=1 is refused",()=>{
+ const f=fixture();f.cargo[0].singleton=true;
+ assert.equal(f.scan().status,"BLOCKED");
+ assert.equal(f.getScanCalls(),0);
+});
+test("player-occupied NPC hull cannot impersonate a real autonomous scout",()=>{
+ const f=fixture();f.ship.session={characterID:88};
+ assert.equal(f.scan().status,"BLOCKED");
+ assert.equal(f.getScanCalls(),0);
+});
