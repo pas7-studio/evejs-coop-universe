@@ -23,7 +23,8 @@ const sameFleet=(row,fleet)=>row&&fleet&&row.systemID===fleet.systemID&&
 const blocked=(reason,skipNativeTick=false)=>({status:"BLOCKED",reason,skipNativeTick,nativeMutation:false});
 function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
  clock=()=>Date.now(),enabled=()=>false,observe=()=>{}}={}){
- if(gameStore?.coopAtomicNativeRows?.mode!=="SERVER_INTERNAL_FLAGGED"||
+ if(typeof gameStore?.read!=="function"||
+    gameStore?.coopAtomicNativeRows?.mode!=="SERVER_INTERNAL_FLAGGED"||
     typeof gameStore.coopAtomicNativeRows.transact!=="function"||
     typeof gameStore.coopAtomicNativeRows.isPoisoned!=="function"||
     [access?.isMember,access?.canIndustry,getFleet,verifyNativeFleet,clock,enabled,observe]
@@ -31,23 +32,33 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
    throw Error("PLAYER_MINING_ORDERS_AUTHORITIES_REQUIRED");
  const atomic=gameStore.coopAtomicNativeRows;
  function txDo(action){return atomic.transact(TABLES,action);}
+ // Native GameStore read-only access avoids BEGIN IMMEDIATE + PRAGMA FULL on
+ // every stock NPC think (including fleets with no corporate shift). Writes
+ // still use the original guarded atomic GameStore transaction exclusively.
+ function readOnly(path){
+  const result=gameStore.read("corporationRuntime",path);
+  if(result?.success===true&&result.data!=null)return result.data;
+  if(result?.errorMsg==="ENTRY_NOT_FOUND")return null;
+  throw Error("MINING_SHIFT_NATIVE_READ_UNAVAILABLE");
+ }
  function lookup(systemID,fleetID){
-  return txDo(tx=>{
-   const index=tx.get("corporationRuntime",FLEET_INDEX(systemID,fleetID));
-   if(!index)return null;
-   if(index.version!==1||!pos(index.corporationID)||!pos(index.employerCorpID)||
-      index.systemID!==systemID||index.fleetID!==fleetID||
-      typeof index.operationID!=="string")throw Error("MINING_SHIFT_INDEX_CORRUPT");
-   const row=tx.get("corporationRuntime",CONTRACT(index.operationID));
-   if(!row||row.version!==1||row.status!=="FUNDED"||
-      row.operationID!==index.operationID||row.corporationID!==index.corporationID||
-      row.employerCorpID!==index.employerCorpID||row.systemID!==systemID||
-      row.fleetID!==fleetID||!COMMANDS.has(row.directive)||
-      !VALID_STATES.has(row.commandState)||!Number.isSafeInteger(row.commandSeq)||
-      row.commandSeq<0||row.commandSeq>1000000)
-    throw Error("MINING_SHIFT_BINDING_CORRUPT");
-   return structuredClone(row);
-  });
+  if(!pos(systemID)||!pos(fleetID))throw Error("MINING_SHIFT_INVALID_FLEET_REFERENCE");
+  const index=readOnly("/coopPlayerMiningFleet/"+systemID+":"+fleetID);
+  if(!index)return null;
+  if(index.version!==1||!pos(index.corporationID)||!pos(index.employerCorpID)||
+     index.systemID!==systemID||index.fleetID!==fleetID||
+     typeof index.operationID!=="string"||
+     !/^coop-mining-shift:[0-9a-f]{32}$/.test(index.operationID))
+   throw Error("MINING_SHIFT_INDEX_CORRUPT");
+  const row=readOnly("/coopPlayerMiningShift/"+index.operationID);
+  if(!row||row.version!==1||row.status!=="FUNDED"||
+     row.operationID!==index.operationID||row.corporationID!==index.corporationID||
+     row.employerCorpID!==index.employerCorpID||row.systemID!==systemID||
+     row.fleetID!==fleetID||!COMMANDS.has(row.directive)||
+     !VALID_STATES.has(row.commandState)||!Number.isSafeInteger(row.commandSeq)||
+     row.commandSeq<0||row.commandSeq>1000000)
+   throw Error("MINING_SHIFT_BINDING_CORRUPT");
+  return structuredClone(row);
  }
  function assign({session,corporationID,systemID,fleetID,operationID,command,expectedSeq}={}){
   if(enabled()!==true)return blocked("MINING_COMPANY_DISABLED");
