@@ -145,3 +145,78 @@ fs.writeFileSync(
 console.log("WROTE", fs.readdirSync(OUT).join(", "));
 
 
+
+// --- 0003: sessionless native NPC capacitor advance -------------------------
+const loop = "server/src/space/npc/npcBehaviorLoop.js";
+const loopBefore = pristine(loop);
+let loopAfter = replaceOnce(
+  loopBefore,
+  "    if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {\n      continue;\n    }\n    tickController(scene, controller, now);\n    processed += 1;\n",
+  "    if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {\n      continue;\n    }\n    advanceSessionlessCapacitor(scene.getEntityByID(controller.entityID), now);\n    tickController(scene, controller, now);\n    processed += 1;\n",
+  "loop-main",
+);
+loopAfter = replaceOnce(
+  loopAfter,
+  "    tickController(scene, controller, now);\n  }\n}\n",
+  "    advanceSessionlessCapacitor(scene.getEntityByID(controller.entityID), now);\n    tickController(scene, controller, now);\n  }\n}\n",
+  "loop-secondary",
+);
+loopAfter = replaceOnce(
+  loopAfter,
+  "module.exports = {\n",
+  [
+    "// CCP non-linear capacitor recharge (dC/dt = (10*Cmax/tau)*(sqrt(r)-r)) for a",
+    "// native NPC that has no session. runtime.js advances capacitor only inside",
+    "// active module cycle bookkeeping, so an idle NPC never recovered and a",
+    "// cap-hungry module could activate exactly once. The same curve is used, with",
+    "// the 1% floor CCP keeps so a fully drained ship still recovers.",
+    "function advanceSessionlessCapacitor(entity, now) {",
+    "  if (!entity || entity.kind !== \"ship\" || entity.session) {",
+    "    return;",
+    "  }",
+    "  const capacity = toFiniteNumber(entity.capacitorCapacity, 0);",
+    "  const tauMs = toFiniteNumber(entity.capacitorRechargeRate, 0);",
+    "  if (capacity <= 0 || tauMs <= 0 || !Number.isFinite(Number(now))) {",
+    "    return;",
+    "  }",
+    "  const previousAtMs = toFiniteNumber(entity.capacitorRechargedAtMs, 0);",
+    "  entity.capacitorRechargedAtMs = now;",
+    "  if (previousAtMs <= 0 || now <= previousAtMs) {",
+    "    return;",
+    "  }",
+    "  const dtSeconds = Math.min(5000, now - previousAtMs) / 1000;",
+    "  const tauSeconds = tauMs / 1000;",
+    "  let ratio = Math.min(1, Math.max(0, toFiniteNumber(entity.capacitorChargeRatio, 1)));",
+    "  if (ratio >= 1) {",
+    "    return;",
+    "  }",
+    "  const steps = Math.max(1, Math.ceil(dtSeconds));",
+    "  const stepSeconds = dtSeconds / steps;",
+    "  for (let step = 0; step < steps && ratio < 1; step += 1) {",
+    "    const bounded = Math.max(0.01, ratio);",
+    "    ratio += ((10 / tauSeconds) * (Math.sqrt(bounded) - bounded)) * stepSeconds;",
+    "  }",
+    "  entity.capacitorChargeRatio = Math.min(1, Math.max(0, ratio));",
+    "  if (entity.conditionState && typeof entity.conditionState === \"object\") {",
+    "    entity.conditionState.charge = entity.capacitorChargeRatio;",
+    "  }",
+    "}",
+    "",
+    "module.exports = {\n",
+  ].join("\n"),
+  "loop-helper",
+);
+fs.writeFileSync(
+  path.join(OUT, "0003-native-npc-sessionless-capacitor.patch"),
+  header(
+    "0003/0003",
+    "npcBehaviorLoop: recharge native NPC capacitor without a session",
+    "Patch 0002 gives NPC hulls a real recharge rate, but the only place that",
+    "advances capacitor is runtime.js module-cycle bookkeeping. A native NPC has no",
+    "session and, after its first activation, no active cycle, so nothing ever",
+    "ticked its capacitor: a strip miner activated once and then failed with",
+    "NOT_ENOUGH_CAPACITOR forever. Advance the same CCP curve in the NPC controller",
+    "tick, which already runs for every controller.",
+  ) + diff(loop, loopBefore, loopAfter),
+);
+console.log("WROTE 0003");

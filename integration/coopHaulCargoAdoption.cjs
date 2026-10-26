@@ -7,6 +7,8 @@
 // once, then hands the fleet back to the normal loaded -> station -> sell
 // pipeline. It never creates cargo, never grants station stock and never
 // invents a destination.
+const load=name=>{try{return require("./"+name)}catch(_error){return require("./"+name+".cjs")}};
+const {observe,noteOnce}=load("coopObserve");
 const pos=v=>{const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:0;};
 const DEFAULT_TTL_MS=45*60*1000;
 const MAX_ATTEMPTS=120;
@@ -77,9 +79,6 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,cargoTable,
  }
  return {status:rows.length?"ADOPTABLE":"NO_ORPHAN_CARGO",rows};
 }
-function observe(probe,event,entity,payload,systemID){
- try{probe?.observe?.(event,entity,{spaceState:{systemID}},payload)}catch(_error){/* telemetry never blocks */}
-}
 // adopt() is idempotent per process and per fleet slot. A row may only be
 // re-pointed while its original hauler is provably gone, and its cargoID is
 // preserved so every existing receipt/audit identity still matches.
@@ -102,12 +101,9 @@ function adopt(scene,fleet,options={}){
   cargoTable:options.cargoTable,database});
  if(planned.status!=="ADOPTABLE"){
   // One status line per slot, not one per native tick.
-  const noteKey=key+":"+planned.status;
-  if(planned.status!=="NO_ORPHAN_CARGO"&&!noted.has(noteKey)){
-   noted.add(noteKey);
-   observe(probe,"living-haul-cargo-adoption-skipped",null,
-    {fleetID,status:planned.status},systemID);
-  }
+  if(planned.status!=="NO_ORPHAN_CARGO")
+   noteOnce(noted,key,probe,"living-haul-cargo-adoption-skipped",
+    {systemID},{fleetID,status:planned.status});
   return {status:planned.status,adopted:0};
  }
  // A fresh slot may keep mining; an active trip or a fleet already holding
@@ -155,12 +151,12 @@ function adopt(scene,fleet,options={}){
   const durable=flushCargo();
   if(!restored||!durable){
    fleet.coopHaulNeedsOperatorRepair=true;
-   observe(probe,"living-haul-cargo-adoption-skipped",null,
-    {fleetID,status:"ADOPTION_RECOVERY_UNVERIFIED",reason:status},systemID);
+   noteOnce(noted,key+":recovery",probe,"living-haul-cargo-adoption-skipped",
+    {systemID},{fleetID,status:"ADOPTION_RECOVERY_UNVERIFIED",reason:status});
    return {status:"ADOPTION_RECOVERY_UNVERIFIED",detail,adopted:0};
   }
-  observe(probe,"living-haul-cargo-adoption-skipped",null,
-   {fleetID,status,rows:touched.length},systemID);
+  noteOnce(noted,key+":"+status,probe,"living-haul-cargo-adoption-skipped",
+   {systemID},{fleetID,status,rows:touched.length});
   return {status,detail,adopted:0};
  };
  let adopted=0,quantity=0,volume=0,failed=null;
@@ -187,10 +183,10 @@ function adopt(scene,fleet,options={}){
  fleet.nextThinkAtMs=fleet.loadedUntilMs;
  fleet.coopHaulAdoptedAt=now;
  fleet.coopHaulAdoptedVolumeM3=volume;
- observe(probe,"living-haul-cargo-adopted",null,
-  {fleetID,rows:adopted,quantity,volumeM3:volume,haulerID,
+ noteOnce(noted,key+":adopted",probe,"living-haul-cargo-adopted",
+  {systemID},{fleetID,rows:adopted,quantity,volumeM3:volume,haulerID,
    fromEntityIDs:planned.rows.map(row=>pos(row.entityID)).slice(0,16),
-   carriage:"native",invented:false},systemID);
+   carriage:"native",invented:false});
  const result={status:"ADOPTED",adopted,quantity,volumeM3:volume,haulerID};
  attempts.set(key,{tries:state.tries,at:now,done:true});
  return result;
