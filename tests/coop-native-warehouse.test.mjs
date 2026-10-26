@@ -11,6 +11,7 @@ function fixture(options={}){
  const cargo=new Map([[8001,{cargoID:8001,entityID:9001,ownerID:1000035,typeID:1230,quantity:250,moduleID:0,coopHaulFleetID:77,coopHaulFromMinerID:800}]]);
  const owned=new Map();let issued=0,failRemove=false,failCargoFlush=false,failItemsFlush=false,failGrant=false,acceptArrival=true,durableCargo=true;
  const store={listNativeCargoForEntity:id=>[...cargo.values()].filter(c=>c.entityID===id),
+  listNativeCargo:()=>[...cargo.values()],
   removeNativeCargo(id){if(failRemove)return {success:false};return {success:cargo.delete(id)};}};
  // The patched native ItemStore exposes global cargo-tag lookup and
  // original physical hangar identity, including stacksize/singleton/flagID.
@@ -312,4 +313,74 @@ test('P0: valid original fleet/system DEBIT can still be recovered exactly once'
  assert.equal(f.make().resume(8001,{authorize:true}).status,'ALREADY_COMMITTED');
  assert.equal(f.issued,1);
  assert.equal(f.make().audit().status,'OK');
+}));
+
+
+test('P0: global original cargo on another ship blocks DEBIT recovery and real item grant',()=>withF(f=>{
+ f.set({failGrant:true});
+ assert.equal(f.make().deposit(f.arg).status,'TARGET_WRITE_UNCERTAIN');
+ assert.equal(f.cargo.size,0);
+ const file=path.join(f.root,'receipts','8001.json');
+ const originalReceipt=fs.readFileSync(file,'utf8');
+ const foreign={cargoID:8001,entityID:9909,ownerID:1000035,quantity:250,typeID:1230,
+  moduleID:0,coopHaulFleetID:77,coopHaulSystemID:30000144,coopHaulFromMinerID:800,
+  transient:false};
+ f.cargo.set(8001,foreign);
+ f.set({failGrant:false});
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(f.issued,0,'globally surviving original may never receive duplicate station stock');
+ assert.equal(f.owned.size,0);
+ assert.equal(fs.readFileSync(file,'utf8'),originalReceipt);
+ f.cargo.delete(8001);
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'COMMITTED');
+ assert.equal(f.issued,1);
+ assert.equal(f.make().audit().status,'OK');
+}));
+
+test('P0: extra original cargoID in global native store blocks initial warehouse debit',()=>withF(f=>{
+ const original=f.config.store.listNativeCargo;
+ f.config.store.listNativeCargo=()=>[...original(),{
+  ...f.cargo.get(8001),entityID:9999
+ }];
+ const w=f.make();
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.cargo.size,1,'original hauler cargo may not be debited');
+ assert.equal(f.owned.size,0);
+ assert.equal(f.issued,0);
+ assert.equal(fs.existsSync(path.join(f.root,'receipts','8001.json')),false);
+ f.config.store.listNativeCargo=original;
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.issued,1);
+}));
+
+test('P0: missing or corrupted global native cargo view cannot attest original source',()=>withF(f=>{
+ const original=f.config.store.listNativeCargo,originalLocal=f.config.store.listNativeCargoForEntity;
+ const w=f.make(),file=path.join(f.root,'receipts','8001.json');
+ for(const corrupted of [null,undefined,{},false,'not an array']){
+  f.config.store.listNativeCargo=()=>corrupted;
+  assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+  assert.equal(f.issued,0);
+  assert.equal(f.cargo.size,1);
+  assert.equal(fs.existsSync(file),false);
+ }
+ f.config.store.listNativeCargo=()=>[];
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR','global/local missing row disagreement');
+ assert.equal(f.cargo.size,1);
+ f.config.store.listNativeCargo=()=>[{
+  ...f.cargo.get(8001),quantity:9999
+ }];
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR','global/local original quantity disagreement');
+ assert.equal(f.issued,0);
+ f.config.store.listNativeCargo=original;
+ f.config.store.listNativeCargoForEntity=originalLocal;
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.issued,1);
+}));
+
+test('P0: warehouse cannot initialize without global native cargo uniqueness authority',()=>withF(f=>{
+ delete f.config.store.listNativeCargo;
+ assert.throws(()=>f.make(),/WAREHOUSE_DEPENDENCIES_REQUIRED/);
+ assert.equal(f.cargo.size,1);
+ assert.equal(f.issued,0);
 }));
