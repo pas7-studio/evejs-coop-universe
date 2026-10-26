@@ -50,3 +50,28 @@ test("probe evidence remains explicit opt-in, requires exploration and A-Life",(
  assert.match(deploy,/EVEJS_COOP_NPC_PROBE_SCAN: '1'/);
  assert.doesNotMatch(deploy,/if \(\$LivingCoop\) \{[^}]*EVEJS_COOP_NPC_PROBE_SCAN/s);
 });
+
+test("EX-03B2 original cargo debit is flushed before materializing the physical probe",()=>{
+ const flight=read("integration/coopNativeNpcProbeFlight.cjs");
+ const debit=flight.indexOf("persisted=upsertNativeCargo(changed)");
+ const flush=flight.indexOf("flushed=flushNpcCargo()");
+ const spawn=flight.indexOf("const physical=materialize(ctx,changed,now)");
+ assert.ok(debit>=0&&flush>debit&&spawn>flush);
+ assert.match(flight,/probeID:row\.cargoID/);
+ assert.match(flight,/quantity:0,deployedProbe/);
+ assert.match(flight,/refreshNativeCargoProjection/);
+ assert.doesNotMatch(flight,/launchCharacterProbes\s*\(/);
+ assert.doesNotMatch(flight,/grantItemToCharacterLocation\s*\(/);
+});
+test("EX-03B2 is separately disabled unless explicit native probe launch flag",()=>{
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
+ const overlay=read("scripts/overlay-spec.cjs");
+ assert.match(runtime,/EVEJS_COOP_NPC_PROBE_LAUNCH==="1"/);
+ assert.match(runtime,/gameStore\.flushTableSync\("npcCargo"\)/);
+ assert.match(runtime,/ship\.nativeCargoItems=cargo\.filter/);
+ assert.match(deploy,/\[switch\]\$EnableNpcProbeLaunch/);
+ assert.match(deploy,/-not \$EnableNpcProbeScan/);
+ assert.match(deploy,/EVEJS_COOP_NPC_PROBE_LAUNCH: '1'/);
+ assert.match(overlay,/"coopNpcProbeScanEvidence","coopNativeNpcProbeFlight"/);
+});
