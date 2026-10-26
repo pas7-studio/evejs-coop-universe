@@ -168,7 +168,10 @@ function verify({before,after,mission,characterID,agentID,personalReward}={}){
   }
   const directRows=newRows.filter(x=>Number(x.eventTypeID)===Number(expected.eventTypeID));
   if(directRows.length!==1||!Number.isFinite(directRows[0].modification)||
-      Math.abs(directRows[0].modification)<=1e-9)
+      Math.abs(directRows[0].modification)<=1e-9||
+      // A loss may not certify a positive mission-standing reward (or vice versa).
+      // Native application may scale magnitude, but it cannot invert direction.
+      Math.sign(directRows[0].modification)!==Math.sign(expected.rawChange))
    return fail("NATIVE_PERSONAL_STANDING_TRANSACTION_UNVERIFIED");
   standingReceipts.push({ownerID:owner,eventTypeID:Number(expected.eventTypeID),
    eventDateTime:directRows[0].eventDateTime,
