@@ -35,7 +35,7 @@ function siteEntries(systemID,scene,instances){
    for(const entityID of unique){
     if(!id(entityID))continue;
     const owner=owners.get(entityID)||[];
-    owner.push({site,encounterKey:key});
+    owner.push({site,encounterKey:key,spawnedAtMs:wave.spawnedAtMs});
     owners.set(entityID,owner);
     site.defenderIDs.push(entityID);
    }
@@ -53,10 +53,12 @@ function createDirector({clock=()=>Date.now(),getController,getNativeEntity,reso
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>8)
   throw Error("INVALID_PVE_SITE_DEFENSE_CONFIG");
  const issued=new Map();
- function tick({systemID,scene,instances=[]}={}){
+ function tick({systemID,scene,instances=[],excludedIDs=[]}={}){
   const now=clock(),out={status:"NO_NATIVE_SITES",sites:0,defenders:0,events:[],orders:0};
   if(!Number.isSafeInteger(now)||now<=0)return {...out,status:"INVALID_CLOCK"};
   if(issued.size>=8192)return {...out,status:"ORDER_JOURNAL_CAP_REACHED"};
+  if(!Array.isArray(excludedIDs)||excludedIDs.length>1024)return {...out,status:"INVALID_EXCLUSIONS"};
+  const excluded=new Set(excludedIDs);
   const proof=siteEntries(systemID,scene,instances);
   if(proof.status!=="OK")return {...out,status:proof.status};
   out.sites=proof.sites.length;
@@ -64,16 +66,18 @@ function createDirector({clock=()=>Date.now(),getController,getNativeEntity,reso
   out.status="OBSERVED_NATIVE_SITES";
   const validNpc=entityID=>{
    const ship=scene.getEntityByID(entityID);
-   if(!ship||ship.itemID!==entityID||ship.kind!=="ship"||
+   if(excluded.has(entityID)||!ship||ship.itemID!==entityID||ship.kind!=="ship"||
       ship.nativeNpc!==true||ship.session?.characterID||!point(ship.position)||
       (id(ship.systemID)&&ship.systemID!==systemID))return null;
    // Recycled IDs, two waves, and cross-site collisions cannot get ownership.
    if(proof.owners.get(entityID)?.length!==1)return null;
    const original=getNativeEntity(entityID),c=getController(entityID);
+   const bornAt=proof.owners.get(entityID)[0].spawnedAtMs;
    if(!original||original.entityID!==entityID||original.systemID!==systemID||
       original.nativeNpc!==true||original.transient!==true||
       !id(original.typeID)||original.typeID!==ship.typeID||
-      !Number.isFinite(original.createdAtMs)||original.createdAtMs<=0||
+      !Number.isSafeInteger(original.createdAtMs)||original.createdAtMs<=0||
+      original.createdAtMs>bornAt+2000||bornAt-original.createdAtMs>120000||
       !c||c.entityID!==entityID||c.systemID!==systemID||
       c.runtimeKind!=="nativeCombat")return null;
    return {ship,controller:c};
