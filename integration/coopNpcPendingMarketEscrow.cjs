@@ -28,21 +28,32 @@ function createNpcPendingMarketEscrow({
  }
  function checkItem(x,item,locationID=x.stationID){
   return Boolean(item&&item.itemID===x.itemID&&item.ownerID===x.ownerID&&
-    item.typeID===x.typeID&&item.quantity===x.quantity&&item.singleton===0&&
+    item.typeID===x.typeID&&item.quantity===x.quantity&&
+    item.stacksize===x.quantity&&item.singleton===0&&
     item.locationID===locationID&&item.flagID===4&&
     /^coop-industry:v1:[0-9]+$/.test(String(item.customInfo||"")));
  }
  function price(x){
   const p=resolvePrice(x);
-  if(!Number.isFinite(p)||p<=0||p>1000000||
-      !Number.isSafeInteger(Math.round(p*100)))throw Error("NPC_MARKET_PRICE_UNVERIFIED");
-  return Math.round(p*100)/100;
+  // Rust sells in integer cents. Never turn a positive sub-cent quote into
+  // a free order or silently round a different price from the native quote.
+  if(typeof p!=="number"||!Number.isFinite(p)||p<=0||p>1000000)
+   throw Error("NPC_MARKET_PRICE_UNVERIFIED");
+  const exact=p*100,whole=Math.round(exact);
+  if(!Number.isSafeInteger(whole)||whole<1||
+     Math.abs(exact-whole)>1e-7)
+   throw Error("NPC_MARKET_PRICE_UNVERIFIED");
+  return whole/100;
  }
  function sameOrder(row,x,p,state){
   return Boolean(row&&row.operation_id===x.operationID&&Number(row.source_item_id)===x.itemID&&
    Number(row.owner_id)===x.ownerID&&Number(row.station_id)===x.stationID&&
    Number(row.type_id)===x.typeID&&Number(row.quantity)===x.quantity&&
    Number(row.price)===p&&row.bid===false&&row.is_corp===true&&
+   // Manufacturing and NPC salvage use the same Rust pending sell API.
+   // A foreign-source or already consumed order is NOT a reserve receipt
+   // for this original physical output stack.
+   row.source==="coop-npc"&&Number(row.vol_remaining)===x.quantity&&
    (state===null||row.state===state)&&good(Number(row.order_id)));
  }
  function receipt(x,orderID){

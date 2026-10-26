@@ -33,11 +33,10 @@ test('a queued warp is never cancelled',()=>{
  assert.equal(s.mode,'WARP');
 });
 
-test('a WARP mode with no warp state at all heals in place',()=>{
+test('a bare WARP mode is never landed without a provable warp clock',()=>{
  const s=ship({warpState:null,targetPoint:null});
- assert.equal(release(s,scene,now),'WARP_STATE_LOST');
- assert.equal(s.mode,'STOP');
- assert.deepEqual(s.position,{x:1,y:2,z:3});
+ assert.equal(release(s,scene,now),null);
+ assert.equal(s.mode,'WARP');
 });
 
 test('a landed ship is left alone',()=>{

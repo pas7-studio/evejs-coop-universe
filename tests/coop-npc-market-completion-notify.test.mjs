@@ -13,7 +13,9 @@ const receipt=()=>({phase:"NATIVE_NPC_BUY_COMMITTED",claimKey:KEY,
  stationID:STATION,typeID:TYPE,itemID:1990000200,
  quantity:20,priceCents:125,grossCents:2500,taxCents:200,
  netCents:2300,taxPolicy:"EVEJS_NATIVE_MARKET_RULES",
- sellerAfterCents:12300,buyerAfterCents:97500,committedAt:1000001});
+ buyerBeforeCents:100000,buyerAfterCents:97500,
+ sellerBeforeCents:10000,sellerAfterCents:12300,
+ taxTransactionID:FILL+100000000000000,committedAt:1000001});
 const rust=()=>({claim_key:KEY,state:"filled",fill_phase:"finalized",
  history_recorded:true,history_day:"2026-10-25",
  fill_id:String(FILL),order_id:String(ORDER),owner_id:String(SELLER),
@@ -273,4 +275,53 @@ test("previous partial player order sales do not suppress correct final NPC fill
  assert.equal(result.status,"NOTIFIED");
  assert.equal(f.events.filter(x=>x.name==="OnOwnOrdersChanged").length,1);
  assert.equal(f.events.filter(x=>x.name==="OnAccountChange").length,1);
+}));
+
+
+test("seller must not receive an NPC paid notice based on a missing or fabricated wallet debit",()=>run(async f=>{
+ const cases=[
+  {buyerBeforeCents:undefined},
+  {buyerAfterCents:100000},
+  {sellerAfterCents:10000},
+  {taxTransactionID:null},
+  {committedAt:0}
+ ];
+ for(const corruption of cases){
+  const key="corp-buy\u001f"+FILL;
+  const original=f.read();
+  f.dependencies.gameStore.transact(["npcMarketFills"],tx=>
+   tx.put("npcMarketFills",key,{...original,...corruption}));
+  assert.equal((await f.notify()).reason,"GAMESTORE_RECEIPT_INVALID");
+  assert.equal(f.events.length,0);
+  assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+  f.dependencies.gameStore.transact(["npcMarketFills"],tx=>
+   tx.put("npcMarketFills",key,original));
+ }
+ assert.equal((await f.notify()).status,"NOTIFIED");
+}));
+test("seller catch-up cannot claim a forged receipt and skips it without Rust calls",()=>run(async f=>{
+ const key="corp-buy\u001f"+FILL,original=f.read();
+ f.dependencies.gameStore.transact(["npcMarketFills"],tx=>tx.put(
+  "npcMarketFills",key,{...original,buyerAfterCents:100000}));
+ const result=await f.notifier.notifyPendingForSeller({sellerID:SELLER});
+ assert.equal(result.status,"CATCHUP_CHECKED");
+ assert.equal(result.attempted,0);
+ assert.equal(f.calls.length,0);
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+},{catchup:true}));
+test("canonical market price and wallet balance are required for seller notification",()=>run(async f=>{
+ f.ownerOrder.row.price=1.254;
+ assert.equal((await f.notify()).reason,"RUST_FINALIZE_OR_ORDER_UNVERIFIED");
+ f.ownerOrder.row.price=1.25;
+ f.dependencies.walletState.getCharacterWallet=()=>({
+  characterID:SELLER,balance:123.004});
+ assert.equal((await f.notify()).reason,"NATIVE_WALLET_UNVERIFIED");
+ assert.equal(f.read().sellerNotifyClaimedAt,undefined);
+}));
+test("zero-tax completed native receipt remains notifyable without artificial tax ledger",()=>run(async f=>{
+ const key="corp-buy\u001f"+FILL,r=f.read();
+ f.dependencies.gameStore.transact(["npcMarketFills"],tx=>
+  tx.put("npcMarketFills",key,{...r,taxCents:0,netCents:2500,
+   sellerAfterCents:12500,taxTransactionID:null}));
+ assert.equal((await f.notify()).status,"NOTIFIED");
 }));

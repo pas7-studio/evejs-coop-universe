@@ -9,6 +9,7 @@ const compiled={exports:{}};
 new Function('require','module','exports',source)(id=>{
  if(id==='./coopNativeWarehouse')return {createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}};
  if(id==='./coopEconomyDestination')return require('../integration/coopEconomyDestination.cjs');
+ if(id==='./coopStuckWarpRecovery')return require('../integration/coopStuckWarpRecovery.cjs');
  return require(id);
 },compiled,compiled.exports);
 const {createStationArrival}=compiled.exports;

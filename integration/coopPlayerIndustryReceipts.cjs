@@ -1,6 +1,6 @@
 "use strict";
 // Pure native-store receipts for Chat 27. Never mint, debit or transfer items.
-const {ACT,STATUS}=require("./coopPlayerIndustryGuard.cjs");
+const {ACT,STATUS}=require("./coopPlayerIndustryGuard" + (__filename.endsWith(".cjs") ? ".cjs" : ".js"));
 const id=x=>{const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:0};
 const nonneg=x=>typeof x==="number"&&Number.isFinite(x)&&x>=0;
 function makePlayerIndustryReceipts({
@@ -47,6 +47,18 @@ function makePlayerIndustryReceipts({
     proof.outputLocationID,proof.outputFlagID),
     blueprint:{...getInventoryItem(proof.blueprintID)},
     blueprintState:{...getBlueprintState(proof.blueprintID)}};
+  }
+  if(proof?.kind==="CANCEL"){
+   const job=getJobByID(proof.jobID);
+   const bp=getInventoryItem(proof.blueprintID);
+   const state=getBlueprintState(proof.blueprintID);
+   if(!job||id(job.jobID)!==id(proof.jobID)||
+    ![STATUS.INSTALLED,STATUS.PAUSED,STATUS.READY].includes(Number(job.status))||
+    !bp||id(bp.ownerID)!==id(proof.ownerID)||
+    id(bp.locationID)!==2003||id(state?.jobID)!==id(proof.jobID))
+    throw Error("NATIVE_CANCEL_CUSTODY_UNAVAILABLE");
+   return {kind:"CANCEL",job:{...job},blueprint:{...bp},
+    blueprintState:{...state}};
   }
   throw Error("INVALID_NATIVE_INDUSTRY_RECEIPT_ACTION");
  }
@@ -138,6 +150,29 @@ function makePlayerIndustryReceipts({
   }else if(bp||current)return false;
   return true;
  }
+ function verifyCancel({proof,nativeResult,before}={}){
+  if(before?.kind!=="CANCEL"||nativeResult?.success!==true||
+   id(nativeResult?.data?.jobID)!==id(proof?.jobID))
+   return false;
+  const job=getJobByID(proof.jobID),bp=getInventoryItem(proof.blueprintID),
+   state=getBlueprintState(proof.blueprintID);
+  if(!job||id(job.jobID)!==id(proof.jobID)||
+   Number(job.status)!==STATUS.CANCELLED||
+   id(job.ownerID)!==id(proof.ownerID)||
+   id(job.completedCharacterID)!==id(proof.characterID)||
+   id(job.blueprintID)!==id(proof.blueprintID)||
+   !bp||id(bp.itemID)!==id(proof.blueprintID)||
+   id(bp.ownerID)!==id(proof.ownerID)||
+   id(bp.locationID)!==id(before.job.blueprintLocationID)||
+   Number(bp.flagID)!==Number(before.job.blueprintLocationFlagID)||
+   !state||id(state.jobID)||
+   id(before.blueprint.locationID)!==2003||
+   id(before.blueprintState.jobID)!==id(proof.jobID))
+   return false;
+  // This verifies original job transition, original blueprint owner/location,
+  // and the exact native actor. No compensation or free materials are minted.
+  return true;
+ }
  function captureHandoff({fromOwnerID,toOwnerID,sourceLocationID,sourceFlagID,
   destinationLocationID,destinationFlagID,typeID,quantity}={}){
   if(!id(fromOwnerID)||!id(toOwnerID)||fromOwnerID===toOwnerID||
@@ -160,6 +195,6 @@ function makePlayerIndustryReceipts({
   const newReceiver=totals(receiver).get(typeID)||0;
   return oldSender-newSender===qty&&newReceiver-oldReceiver===qty;
  }
- return {capture,verifyInstall,verifyDeliver,captureHandoff,verifyHandoff};
+ return {capture,verifyInstall,verifyDeliver,verifyCancel,captureHandoff,verifyHandoff};
 }
 module.exports={makePlayerIndustryReceipts};

@@ -1,8 +1,19 @@
 "use strict";
 // Native-only bridge to the COOP-032D/E/F transaction kernels. No auto scheduler.
-const {createNpcIndustryScopedProof}=require("./coopNpcIndustryGameStoreScope.cjs");
-const {createNpcIndustryReadyProof}=require("./coopNpcIndustryReady.cjs");
+// Source checkout stores .cjs; the pinned installer deploys siblings as .js.
+const siblingSuffix=typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs";
+const {createNpcIndustryScopedProof}=require("./coopNpcIndustryGameStoreScope"+siblingSuffix);
+const {createNpcIndustryReadyProof}=require("./coopNpcIndustryReady"+siblingSuffix);
 const pos=x=>Number.isSafeInteger(x)&&x>0;
+// Read-only industry payment evidence must match canonical original wallet
+// cents: rounding an existing journal amount would forge a paid witness.
+const signedCents=x=>{
+ if(typeof x!=="number"||!Number.isFinite(x))return null;
+ const scaled=x*100,whole=Math.round(scaled);
+ return Number.isSafeInteger(whole)&&Math.abs(scaled-whole)<=1e-6?
+  whole:null;
+};
+const nonnegCents=x=>typeof x==="number"&&x>=0?signedCents(x):null;
 function createNativeIndustryBindings({gameStore,itemStore,resolveCanonicalQuote,
  verifyNativeQuote,verifyNativeOwner,verifyNativeOutput,verifyNativeIdFloor,
  buildNativeOutputItem,clock=()=>Date.now()}={}){
@@ -47,11 +58,12 @@ function createNativeIndustryBindings({gameStore,itemStore,resolveCanonicalQuote
   if(corp?.corporationID!==job.ownerID||!Array.isArray(division?.transactions))return null;
   const matches=division.transactions.filter(row=>row?.transactionID===jobID);
   if(matches.length!==1)throw Error("NATIVE_INDUSTRY_DEBIT_DUPLICATE_OR_MISSING");
-  const r=matches[0],expected=Math.round(Number(job.totalCost)*100);
-  if(!Number.isSafeInteger(expected)||expected<0||r.entryTypeID!==10||
-     r.ownerID1!==job.ownerID||r.referenceID!==jobID||r.accountKey!==1000||
-     Math.round(Number(r.amount)*100)!==-expected||Number(r.amount)>0||
-     !Number.isFinite(Number(r.balance))||Number(r.balance)<0)
+  const r=matches[0],expected=nonnegCents(job.totalCost),
+   actual=signedCents(r.amount),balance=nonnegCents(r.balance);
+  if(expected===null||actual===null||balance===null||
+     r.entryTypeID!==10||r.ownerID1!==job.ownerID||
+     r.referenceID!==jobID||r.accountKey!==1000||
+     actual!==-expected)
    throw Error("NATIVE_INDUSTRY_DEBIT_MISMATCH");
   return {verifiedNative:true,jobID,ownerID:job.ownerID,amountCents:expected,
    transactionID:r.transactionID};

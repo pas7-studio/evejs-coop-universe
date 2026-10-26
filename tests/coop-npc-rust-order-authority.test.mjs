@@ -63,3 +63,33 @@ test("new OPEN Rust order cannot have zero items or unknown state",()=>{
  const unknown=owner();unknown.state="cancelled";
  assert.throws(()=>normalizeNativeOrderForCoordinator(unknown),/SCHEMA_DRIFT/);
 });
+
+
+test("fractional-cent Rust player ASK book is not a payable offer",()=>{
+ for(const price of [1.254,1.256,0.004]){
+  const b={...book(),price};
+  const detail=owner();detail.row.price=price;
+  assert.equal(verifyNativeBookAsk(b,detail,
+   {stationID:60000001,typeID:34}).ok,false);
+  assert.equal(decodeNativeGetOrder(detail).ok,false);
+  assert.throws(()=>normalizeNativeOrderForCoordinator(detail),
+   /RUST_NATIVE_GET_ORDER_SCHEMA_DRIFT/);
+ }
+});
+test("original native Rust integer-cent ask prices remain valid",()=>{
+ for(const [price,priceCents] of [[1.25,125],[1.2,120],[0.01,1]]){
+  const b={...book(),price};
+  const detail=owner();detail.row.price=price;
+  assert.equal(verifyNativeBookAsk(b,detail,
+   {stationID:60000001,typeID:34}).price_cents,priceCents);
+  assert.equal(decodeNativeGetOrder(detail).price_cents,priceCents);
+  assert.equal(normalizeNativeOrderForCoordinator(detail).price,price);
+ }
+});
+test("non-numeric Rust order price is not coerced into original wallet authority",()=>{
+ const detail=owner();detail.row.price="1.25";
+ const b={...book(),price:"1.25"};
+ assert.equal(decodeNativeGetOrder(detail).ok,false);
+ assert.equal(verifyNativeBookAsk(b,detail,{stationID:60000001,typeID:34}).ok,false);
+ assert.throws(()=>normalizeNativeOrderForCoordinator(detail),/SCHEMA_DRIFT/);
+});

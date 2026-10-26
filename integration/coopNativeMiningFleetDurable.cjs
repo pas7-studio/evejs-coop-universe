@@ -57,6 +57,145 @@ function markers(store,systemID,slot){
  }
  return {miners,haulers,invalid};
 }
+// A witness can survive a whole scene generation whose ships were never durable:
+// the record says ACTIVE, the hulls are gone and nothing will ever match it again.
+// That is abandonment, not a crash, and it is provable read-only: no durable row,
+// no physical ship, no cargo row and no module row may refer to those IDs.
+// Anything a provably absent hull left behind (fitted items, and ore it mined)
+// is unreachable by any live ship. It is archived verbatim under the slot's key
+// instead of being deleted or silently ignored, so the audit trail survives.
+function archiveOrphanRows({db,store,key,entityID}){
+ const out={modules:0,cargo:0};
+ const modules=store.listNativeModulesForEntity(entityID);
+ if(!Array.isArray(modules)||!Array.isArray(store.listNativeCargoForEntity(entityID)))
+  throw Error("ALIFE08_ORPHAN_ROW_LIST_UNAVAILABLE:"+entityID);
+ const cargo=store.listNativeCargoForEntity(entityID);
+ for(const [kind,rows] of [["modules",modules],["cargo",cargo]]){
+  if(!rows.length)continue;
+  const target="/coopMiningFleetSlotsArchive/"+key+"-"+kind+"-"+entityID+"-"+Date.now();
+  if(db.write("npcEntities",target,rows)?.success!==true)
+   throw Error("ALIFE08_ORPHAN_ARCHIVE_WRITE_FAILED:"+kind+":"+entityID);
+  if(db.flushTableSync("npcEntities",{log:false})?.success!==true)
+   throw Error("ALIFE08_ORPHAN_ARCHIVE_FLUSH_FAILED:"+kind+":"+entityID);
+  // The archive is durable, so custody can now move: the orphan rows are
+  // removed from the live store instead of lingering as unreachable ghosts.
+  for(const row of rows){
+   const removed=kind==="modules"
+    ? store.removeNativeModule(row.moduleID)
+    : store.removeNativeCargo(row.cargoID);
+   if(removed?.success!==true&&removed!==true)
+    throw Error("ALIFE08_ORPHAN_REMOVE_FAILED:"+kind+":"+entityID);
+  }
+  out[kind]=rows.length;
+ }
+ return out;
+}
+function slotIsAbandoned({scene,store,systemID,slot,entityIDs}){
+ if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1")return false;
+ if(!Array.isArray(entityIDs)||!entityIDs.length)return false;
+ const found=markers(store,systemID,slot);
+ if(found.miners.length||found.haulers.length||found.invalid.length)return false;
+ for(const id of entityIDs){
+  if(store.getNativeEntity(id)||store.getNativeController(id))return false;
+  if(scene?.getEntityByID?.(id))return false;
+  if(!Array.isArray(store.listNativeCargoForEntity(id))||
+     !Array.isArray(store.listNativeModulesForEntity(id)))
+   throw Error("ALIFE08_ORPHAN_ROW_LIST_UNAVAILABLE:"+id);
+ }
+ return true;
+}
+// The old witness is archived, never deleted, so an operator can still see what
+// the slot claimed before it was re-seeded.
+function archiveSlot(db,key,record){
+ const data=clone(record);
+ if(db.write("npcEntities","/coopMiningFleetSlotsArchive/"+key+"-"+Date.now(),data)?.success!==true)
+  throw Error("ALIFE08_SLOT_ARCHIVE_WRITE_FAILED");
+ if(db.flushTableSync("npcEntities",{log:false})?.success!==true)
+  throw Error("ALIFE08_SLOT_ARCHIVE_FLUSH_FAILED");
+ return true;
+}
+// A runtime fleet record can outlive some or all of its physical ships. Any
+// listed ship that is NOT the survivor set and no longer exists (no durable row,
+// no physical entity) is simply stale: re-point the record at the ships that
+// really exist. A record that still owns a live foreign ship is never touched.
+function adoptStaleRuntimeFleet({scene,store,fleet,key,minerIDs,haulerIDs}){
+ const listed=[...(fleet.minerEntityIDs||[]),...(fleet.haulerEntityIDs||[])]
+  .map(pos).filter(Boolean);
+ const target=new Set([...minerIDs,...haulerIDs]);
+ const foreign=listed.filter(id=>!target.has(id));
+ // No foreign ship at all: the record is merely incomplete (the native tick
+ // prunes a ship it has no controller for). Widen it to the verified witness.
+ if(!foreign.length){
+  fleet.startupKey=key;
+  fleet.minerEntityIDs=[...minerIDs];
+  fleet.haulerEntityIDs=[...haulerIDs];
+  return {adopted:true,detached:[]};
+ }
+ if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1"){
+  // Without the reconcile flag a foreign ship is still treated as a real owner.
+  if(foreign.some(id=>scene.getEntityByID(id)))return {adopted:false,detached:[]};
+ }
+ // The witness was verified against the native store and the scene, so it is the
+ // authority. A stale record is re-pointed at it; any old hull that is still
+ // physically here is only DETACHED (reported, never destroyed).
+ const detached=foreign.filter(id=>scene.getEntityByID(id));
+ fleet.startupKey=key;
+ fleet.minerEntityIDs=[...minerIDs];
+ fleet.haulerEntityIDs=[...haulerIDs];
+ return {adopted:true,detached};
+}
+// A slot can lose SOME ships while the rest survive (a hull that was never
+// durable, or a failed restore). The survivors keep their cargo and custody, so
+// the slot must not be re-seeded wholesale and must not stay blocked forever:
+// only the provably missing roles are allocated again, and the witness is merged.
+// A missing ID that still owns cargo or modules is never replaced.
+function repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,minerIDs,haulerIDs}){
+ if(process.env.EVEJS_COOP_NATIVE_MINING_SLOT_RECONCILE!=="1")return null;
+ const aliveMin=minerIDs.filter(id=>store.getNativeEntity(id)||scene.getEntityByID(id));
+ const aliveHau=haulerIDs.filter(id=>store.getNativeEntity(id)||scene.getEntityByID(id));
+ const missingMin=minerIDs.length-aliveMin.length;
+ const missingHau=haulerIDs.length-aliveHau.length;
+ if(!missingMin&&!missingHau)return null;
+ let archivedModules=0,archivedCargo=0;
+ for(const id of [...minerIDs,...haulerIDs]){
+  if(aliveMin.includes(id)||aliveHau.includes(id))continue;
+  const archived=archiveOrphanRows({db,store,key,entityID:id});
+  archivedModules+=archived.modules;
+  archivedCargo+=archived.cargo;
+ }
+ // The scene mining state must exist BEFORE allocating, exactly like a first
+ // seed: without it the fresh hulls are created as scene-only actors and their
+ // durable rows never reach the store.
+ ensureState();
+ const born=spawn(slot,{miners:missingMin,haulers:missingHau});
+ if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
+     born.data.haulerSpawnResult?.data?.partialFailure)
+  throw Error("ALIFE08_PARTIAL_NATIVE_SPAWN");
+ const newMin=ids(born.data.minerEntityIDs||[]),newHau=ids(born.data.haulerEntityIDs||[]);
+ if(!newMin||!newHau||newMin.length!==missingMin||newHau.length!==missingHau)
+  throw Error("ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH");
+ const merged={minerEntityIDs:[...aliveMin,...newMin],haulerEntityIDs:[...aliveHau,...newHau]};
+ if(merged.minerEntityIDs.length+merged.haulerEntityIDs.length>MAX_WING)
+  throw Error("ALIFE08_REPAIR_WING_TOO_LARGE");
+ const found=markers(store,systemID,slot);
+ const sameSet=(a,b)=>a.length===b.length&&a.every(x=>b.includes(x));
+ if(found.invalid.length||!sameSet(found.miners,merged.minerEntityIDs)||
+     !sameSet(found.haulers,merged.haulerEntityIDs))
+  throw Error("ALIFE08_REPAIR_MARKER_MISMATCH");
+ const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
+ if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
+ const notStored=[...merged.minerEntityIDs,...merged.haulerEntityIDs]
+  .filter(id=>!store.getNativeEntity(id));
+ if(notStored.length)throw Error("ALIFE08_REPAIR_NOT_IN_STORE:"+notStored.join(","));
+ const previous=readSlot(db,key)||{};
+ saveSlot(db,key,{...previous,version:1,status:"ACTIVE",systemID,slot,
+  fleetID:previous.fleetID||fleetIDForSlot(systemID,slot),
+  minerEntityIDs:merged.minerEntityIDs,haulerEntityIDs:merged.haulerEntityIDs,
+  repairedAtMs:Date.now(),archivedModules,archivedCargo,
+  replacedEntityIDs:[...minerIDs,...haulerIDs].filter(id=>
+   !merged.minerEntityIDs.includes(id)&&!merged.haulerEntityIDs.includes(id))});
+ return merged;
+}
 function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
  const expected=[...minerIDs,...haulerIDs];
  if(new Set(expected).size!==expected.length)throw Error("ALIFE08_DUPLICATE_SHIP_ID");
@@ -96,7 +235,7 @@ function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
  minerIDs.forEach(id=>check(id,"miner"));
  haulerIDs.forEach(id=>check(id,"hauler"));
 }
-function registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAnchor}){
+function registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,originAnchor,log}){
  const existing=getFleets();
  const key=scene.systemID+":"+slot;
  const stableFleetID=fleetIDForSlot(scene.systemID,slot);
@@ -110,8 +249,15 @@ function registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAn
     throw Error("ALIFE09_RUNTIME_FLEET_ID_CONFLICT");
   const a=ids(fleet.minerEntityIDs),b=ids(fleet.haulerEntityIDs);
   if(!a||!b||JSON.stringify(a)!==JSON.stringify(minerIDs)||
-     JSON.stringify(b)!==JSON.stringify(haulerIDs))
-    throw Error("ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT");
+     JSON.stringify(b)!==JSON.stringify(haulerIDs)){
+   const adoption=adoptStaleRuntimeFleet({scene,store:store,fleet,key,minerIDs,haulerIDs});
+   if(adoption.adopted){
+    if(adoption.detached.length&&typeof log==="function")
+     log("ALIFE08 slot "+key+" re-pointed; detached old hulls: "+adoption.detached.join(","));
+    return false;
+   }
+   throw Error("ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT");
+  }
   return false;
  }
  const answer=register(slot,{minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor});
@@ -166,9 +312,60 @@ function createService({db,store,nativeService,ensureState,spawn,register,
   if(busy.has(systemID))return {status:"BLOCKED",reason:"ALIFE08_REENTRANT",slots:[]};
   busy.add(systemID);
   const reports=[];
+  // Runtime controller lookup is a native authority; when it is not present (for
+  // example in a plain unit-test host) the legacy scene-only rule is kept.
+  const runtimeControllerOf=(()=>{
+   try{
+    const registry=require("./npc/npcRegistry");
+    return typeof registry.getControllerByEntityID==="function"
+     ?registry.getControllerByEntityID:null;
+   }catch(_error){return null;}
+  })();
+  // The native mining tick prunes any ship it has no runtime controller for, so
+  // every ship this module vouches for must have one before the slot is declared
+  // healthy - freshly spawned ones included.
+  const ensureControllers=ids=>{
+   let attached=0;
+   for(const id of ids){
+    const live=scene.getEntityByID(id);
+    if(live&&(!runtimeControllerOf||runtimeControllerOf(id)))continue;
+    const out=nativeService.materializeStoredNativeController(scene,id,{broadcast:false});
+    if(out?.success!==true||pos(scene.getEntityByID(id)?.itemID)!==id)
+     throw Error("ALIFE08_NATIVE_CONTROLLER_FAILED:"+id);
+    attached++;
+   }
+   return attached;
+  };
   try{
    for(let slot=1;slot<=fleetCount;slot++){
     const key=slotKey(systemID,slot);
+    // Allocate and verify one slot's native actors. Used for a brand new slot
+    // and for a slot whose previous witness proved abandoned.
+    const seedSlot=()=>{
+     saveSlot(db,key,{version:1,status:"PREPARING",systemID,slot,createdAtMs:Date.now()});
+     // The PREPARING witness is flushed BEFORE any native actor allocation.
+     ensureState();
+     const born=spawn(slot);
+     if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
+         born.data.haulerSpawnResult?.data?.partialFailure)
+      throw Error("ALIFE08_PARTIAL_NATIVE_SPAWN");
+     const minerIDs=ids(born.data.minerEntityIDs),haulerIDs=ids(born.data.haulerEntityIDs);
+     if(!minerIDs||minerIDs.length===0||!haulerIDs||
+        minerIDs.length+haulerIDs.length>MAX_WING)
+      throw Error("ALIFE08_NATIVE_SPAWN_LIST_INVALID");
+     verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     // Flush original native entities, controllers, fitting and cargo first.
+     const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
+     if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
+     verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
+     const controllers=ensureControllers([...minerIDs,...haulerIDs]);
+     const active=saveSlot(db,key,{version:1,status:"ACTIVE",systemID,slot,
+      fleetID:fleetIDForSlot(systemID,slot),
+      minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor:born.data.originAnchor||null});
+     registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
+      originAnchor:active.originAnchor});
+     return result("SPAWNED",slot,{minerIDs,haulerIDs,controllers});
+    };
     try{
      const record=readSlot(db,key);
      const discovered=markers(store,systemID,slot);
@@ -177,27 +374,7 @@ function createService({db,store,nativeService,ensureState,spawn,register,
        reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason:"ORPHAN_NATIVE_SLOT_WITHOUT_MANIFEST"}));
        continue;
       }
-      saveSlot(db,key,{version:1,status:"PREPARING",systemID,slot,createdAtMs:Date.now()});
-      // The PREPARING witness is flushed BEFORE any native actor allocation.
-      ensureState();
-      const born=spawn(slot);
-      if(!born?.success||!born.data||born.data.minerSpawnResult?.data?.partialFailure||
-          born.data.haulerSpawnResult?.data?.partialFailure)
-       throw Error("ALIFE08_PARTIAL_NATIVE_SPAWN");
-      const minerIDs=ids(born.data.minerEntityIDs),haulerIDs=ids(born.data.haulerEntityIDs);
-      if(!minerIDs||minerIDs.length===0||!haulerIDs||
-         minerIDs.length+haulerIDs.length>MAX_WING)
-       throw Error("ALIFE08_NATIVE_SPAWN_LIST_INVALID");
-      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
-      // Flush original native entities, controllers, fitting and cargo first.
-      const synced=db.flushTablesSync(["npcEntities","npcRuntimeControllers","npcModules","npcCargo"]);
-      if(synced?.success!==true)throw Error("ALIFE08_NATIVE_ACTOR_FLUSH_FAILED");
-      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
-      const active=saveSlot(db,key,{version:1,status:"ACTIVE",systemID,slot,
-       fleetID:fleetIDForSlot(systemID,slot),
-       minerEntityIDs:minerIDs,haulerEntityIDs:haulerIDs,originAnchor:born.data.originAnchor||null});
-      registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,originAnchor:active.originAnchor});
-      reports.push(result("SPAWNED",slot,{minerIDs,haulerIDs}));
+      reports.push(seedSlot());
       continue;
      }
      if(record.version!==1||record.status!=="ACTIVE"||
@@ -206,10 +383,30 @@ function createService({db,store,nativeService,ensureState,spawn,register,
       reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason:"NONACTIVE_OR_INVALID_SLOT_WITNESS"}));
       continue;
      }
-     const minerIDs=ids(record.minerEntityIDs),haulerIDs=ids(record.haulerEntityIDs);
+     let minerIDs=ids(record.minerEntityIDs),haulerIDs=ids(record.haulerEntityIDs);
      if(!minerIDs||!minerIDs.length||!haulerIDs||
         minerIDs.length+haulerIDs.length>MAX_WING)
       throw Error("ALIFE08_ACTIVE_MANIFEST_INVALID");
+     // A slot whose ships were never durable is not a lost fleet: nothing that
+     // could hold cargo exists any more. Archive that witness and seed again.
+     if(slotIsAbandoned({scene,store,systemID,slot,entityIDs:[...minerIDs,...haulerIDs]})){
+      const orphans=[...minerIDs,...haulerIDs].reduce((acc,id)=>{
+       const a=archiveOrphanRows({db,store,key,entityID:id});
+       return {modules:acc.modules+a.modules,cargo:acc.cargo+a.cargo};
+      },{modules:0,cargo:0});
+      archiveSlot(db,key,record);
+      log("ALIFE08 slot "+key+" witness archived as abandoned; seeding again");
+      reports.push({...seedSlot(),reseededFrom:"ABANDONED_WITNESS",...orphans});
+      continue;
+     }
+     // A slot that lost only some ships keeps the survivors and their cargo.
+     const healed=repairPartialSlot({scene,store,systemID,slot,key,db,spawn,ensureState,
+      minerIDs,haulerIDs});
+     if(healed){
+      minerIDs=healed.minerEntityIDs;
+      haulerIDs=healed.haulerEntityIDs;
+      ensureControllers([...minerIDs,...haulerIDs]);
+     }
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
      // ALIFE-13: verify ALL original cargo transfers and historical manifests
      // before restoring ANY physical hull or registering a mining state.
@@ -221,25 +418,28 @@ function createService({db,store,nativeService,ensureState,spawn,register,
        String(audit?.reason||audit?.status||"UNKNOWN").slice(0,105));
      }
      // Validate ALL native rows before materializing ANY physical ship.
-     let restored=0;
-     for(const id of [...minerIDs,...haulerIDs]){
-      if(scene.getEntityByID(id))continue;
-      const out=nativeService.materializeStoredNativeController(scene,id,{broadcast:false});
-      if(out?.success!==true||pos(scene.getEntityByID(id)?.itemID)!==id)
-       throw Error("ALIFE08_NATIVE_RESTORE_FAILED:"+id);
-      restored++;
-     }
+     // Some boot paths materialize a durable ship without registering a runtime
+     // controller; the native mining tick then prunes it from its own fleet
+     // record and that role silently stops working. Re-attach the controller.
+     const restored=ensureControllers([...minerIDs,...haulerIDs]);
      verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs});
-     const registered=registerOnce({scene,getFleets,register,slot,minerIDs,haulerIDs,
+     const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:record.originAnchor||null});
      const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
-      minerIDs,haulerIDs,restored,pendingStationCargo}));
+      minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed}));
     }catch(error){
      const reason=String(error?.message||error).slice(0,160);
      reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason}));
      log("ALIFE08 slot "+key+" blocked: "+reason);
     }
+   }
+   for(const report of reports){
+    const detail=["miners="+(report.minerIDs||[]).length,"haulers="+(report.haulerIDs||[]).length,
+     report.controllers!==undefined?"ctrl=+"+report.controllers:"","restored="+(report.restored||0),
+     report.reseededFrom||"",report.repaired?"repaired":"",report.reason||""]
+     .filter(Boolean).join(" ");
+    log("ALIFE08 slot "+systemID+"-"+report.slot+" -> "+report.status+" "+detail);
    }
    return {status:reports.some(x=>x.status==="NEEDS_OPERATOR_REPAIR")?
     "NEEDS_OPERATOR_REPAIR":"OK",systemID,slots:reports};
