@@ -157,7 +157,7 @@ test("EX-03B6 native probe position changes are source-first broadcast transitio
  assert.match(move,/nativeNpcCargoID!==id/);
  assert.match(move,/allowSessionOwned:false,broadcast:true/);
  assert.match(sweep,/relocateNativeProbe\(\{scene,row:changed\}\)/);
- assert.match(sweep,/flushed=flushNpcCargo\(\)/);
+ assert.match(sweep,/flush=flushNpcCargo\(\)/);
  assert.match(flight,/relocateNativeProbe\(\{scene:ctx\.scene,row\}\)/);
  assert.match(world,/createNativeNpcProbeSceneTransition/);
  assert.match(world,/npcProbeSceneTransition\.move\(payload\)/);
