@@ -881,3 +881,9 @@ Why: A transient spawn is invisible to the war opener, which counts real identit
 Detail: The war opener counts only real identity links, so a transient hull nobody flies is invisible to it. spawn_native_npc spawns real native hulls from a real SDE profile through the same spawnBatchInSystem + scene anchor the materializer uses, reports the resulting entity/corporation/faction, and optionally links the ship to an UNLINKED roster pilot through the runtime's own registry (linkSpawnedIden
 Where: integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-admin-bridge-structure.test.mjs
 Evidence: admin result spawn_native_npc -> ok:true LINKED entityID 980000016607 corp 1000138 faction 500011; living-native-war-opened OPENED war:500011-500014 with 2 PREPARING campaigns
+### 2026-10-26T23:56Z · 457b0ef · L2 · feat(war): name the real mobilization blocker and allow a reserve pilot's role
+
+Why: Mobilization answered OBSERVED with no reason, and the real blocker was invisible
+Detail: tick({dryRun:true}) runs every mobilization check through the same code path, reports the first failed check per candidate and never calls registry.execute; the runtime exposes diagnoseMobilization() and the admin bridge a read-only war_diagnose action. Live diagnosis for war:500011-500014 (Angel Cartel vs ORE) at 23:53Z: - DEFENDER (30000144, ORE 500014): every patrol candidate is WRONG_FACTION. 
+Where: docs/WORKLOG.md, integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs, tests/coop-war-mobilization.test.mjs
+Evidence: war_diagnose DRY_RUN rejected: DEFENDER WRONG_FACTION (ORE has no armed profile), ATTACKER NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON; coop-war-mobilization 8/8

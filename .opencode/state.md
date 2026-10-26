@@ -210,3 +210,45 @@ client snapshot emits it.
 ринку закінчились ордери на ці типи руди в цих станціях (ми викупили їх кілька разів).
 Це реальна межа ринку, не дефект циклу. Щоб продавати далі, треба нове сіяння
 маркету (окремий потік) або інші системи/типи.
+
+## 2026-10-27 loop — items 1/2/5 status, real blocker proven
+
+**Item 1 PASS** (52b28db1, live 2276157c): factory + 2 real Astrahus structures
+deployed (1030000000000 Perimeter, 1030000000001 New Caldari, faction 500014 /
+corp 1000129), verified through worldData.getStructuresForSystem.
+
+**Item 2 code PASS** (71551c99): campaignSnapshots emits the bound
+`structure:<id>` objective instead of 0; flag
+EVEJS_COOP_WAR_OBJECTIVE_STRUCTURE_TYPE_IDS=35832 is live. The objective can
+only bind inside an ASSAULT campaign, which is blocked (below).
+
+**Item 5 partial** (3fc8e73c): the first real front OPENED —
+`living-native-war-opened OPENED war:500011-500014` with campaigns for 30000144
+and 30000145, after one real Angel Cartel hull linked to coop-pilot-041 broke
+Jita's 3-3 tie.
+
+**Exact blocker for BEGIN_ASSAULT** (457b0ef0, read-only war_diagnose):
+- war pair is Angel Cartel (500011) vs ORE (500014);
+- DEFENDER side (30000144, ORE): every patrol candidate is WRONG_FACTION —
+  corp 1000129 has 11 real profiles, all miners/haulers, so ORE can never
+  field an armed patrol;
+- ATTACKER side (Jita): the only 500011 patrol (980000000113) fails
+  `NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON`.
+Conclusion: this faction pair cannot muster. A progressing assault needs an
+armed faction to own the defending border system.
+
+**NEXT (decided, owner defaults allow it):** make the border fightable without
+weakening any gate:
+1. spawn ~10 real Serpentis (500020, corp 1000135) armed patrols in New Caldari
+   30000145 (currently ORE 9) so an ARMED faction owns it;
+2. spawn 2 real armed Angel patrols in Jita with role patrol (linkSpawnedIdentity
+   role="patrol") so the attacker side is ready;
+3. a campaign whose target is no longer held by its war's defender faction is
+   void by construction — add an explicit core transition (EXPIRE_CAMPAIGN with
+   a reason) and let the opening phase void such campaigns before planning,
+   otherwise TARGET_ALREADY_CONTESTED blocks the new front forever;
+4. verify: war opens 500011-500020, mobilization assigns real patrols on BOTH
+   sides, then BEGIN_ASSAULT fires and the objective director binds the Astrahus.
+
+Dirty files deliberately left alone: `scripts/coop-supervise.ps1` (supervisor),
+`state/digests/*` (generated), `NUL` (stray).

@@ -7,3 +7,36 @@ overlay: OVERLAY_OK
 live: not run at commit time (deploy probe ran after 52b28db1 and is recorded in the next block)
 metrics: tests_total=12 modules_added=1 modules_changed=1 live_events=0
 next: queue item 2 (structures as war objectives)
+
+## 2026-10-27T03:38Z - queue item 1 live acceptance + admin bridge - 2276157c
+done: deployed 2 real Astrahus structures through the in-process admin action deploy_structure (faction 500014, corp 1000129, typeID 35832).
+tests: node --test tests/coop-admin-bridge-structure.test.mjs -> 4/0 (plus coop-structure-factory 12/0)
+overlay: OVERLAY_OK
+live: docker exec -w /app/server/src evejs-server-1 node /tmp/p2.cjs -> SYSTEM 30000144 count=1 [{"id":1030000000000,"typeID":35832,"name":"Perimeter Anchor Keep","ownerCorpID":1000129,"state":110,"x":132940071200,"faction":500014}]
+live: admin results -> {"id":"structure-1",...,"ok":true,"status":"DEPLOYED","structureID":1030000000000,"verified":"PRESENT"} and {"id":"structure-2",...,"structureID":1030000000001,"systemID":30000145,"verified":"PRESENT"}
+metrics: tests_total=16 modules_added=0 modules_changed=1 live_events=2
+next: queue item 2 (campaign objective = real structure id, stop emitting structureID 0)
+
+## 2026-10-27T03:44Z - queue item 2 (code part) - 71551c99
+done: coopWarClientView.campaignSnapshots derives structureID from campaign.objectiveEvidence ("structure:<id>", latest valid); flag EVEJS_COOP_WAR_OBJECTIVE_STRUCTURE_TYPE_IDS=35832 enabled; two real Astrahus structures already live (1030000000000 in 30000144, 1030000000001 in 30000145).
+tests: node --test tests/coop-war-client-view.test.mjs -> 5/0
+overlay: OVERLAY_OK
+live: not yet - the objective can only bind inside an ASSAULT campaign, and no front exists yet (war state: opening skipped NO_FRONT). Live binding proof moves to the front item.
+metrics: tests_total=21 modules_added=0 modules_changed=1 live_events=0
+next: create the first real front (Jita is a 3-3 tie between 500010 and 500011) by adding real NPCs of one faction, then prove war opened -> campaign -> objective bound.
+
+## 2026-10-27T03:47Z - queue item 5 (first real front) - 3fc8e73c
+done: admin action spawn_native_npc (real SDE profile + native spawnBatchInSystem) and runtime linkSpawnedIdentity (unlinked roster pilot only). One Angel Cartel hull (corp 1000138, faction 500011) linked to coop-pilot-041 in Jita broke the 3-3 tie.
+tests: node --test tests/coop-admin-bridge-structure.test.mjs -> 5/0
+overlay: OVERLAY_OK
+live: coop-events living-native-war-opened -> {"status":"OPENED","warIDs":["war:500011-500014"],"campaignIDs":["war:500011-500014:campaign:30000144","war:500011-500014:campaign:30000145"]}
+metrics: tests_total=26 modules_added=0 modules_changed=2 live_events=1
+next: mobilization/assault could not start; diagnose the exact blocker
+
+## 2026-10-27T03:55Z - blocker diagnosis (mobilization) - 457b0ef0
+done: coopWarMobilizer.tick({dryRun:true}) reports the first failed check per candidate and never writes; runtime diagnoseMobilization(); admin action war_diagnose; linkSpawnedIdentity accepts a role from a fixed set.
+tests: node --test tests/coop-war-mobilization.test.mjs -> 8/0 ; node --test tests/coop-admin-bridge-structure.test.mjs -> 5/0
+overlay: OVERLAY_OK
+live: admin result war_diagnose -> {"status":"DRY_RUN","mobilized":[],"rejected":[{"entityID":980000000113,"pilotID":"coop-pilot-013","side":"ATTACKER","reason":"NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON"},...{"side":"DEFENDER","reason":"WRONG_FACTION"}],"activeCampaignCount":2}
+metrics: tests_total=39 modules_added=0 modules_changed=3 live_events=1
+next: the defender faction ORE (500014) has no armed profile, so this front can never muster; a fightable front needs an armed faction to own a border system
