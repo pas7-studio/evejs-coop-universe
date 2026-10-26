@@ -147,7 +147,7 @@ function verify({before,after,mission,characterID,agentID,personalReward}={}){
  for(const item of after.inventory){
   const canonicalID=id(item.itemID);
   const old=originalByID.get(canonicalID);
-  if(old&&old.typeID!==item.typeID)
+  if(old&&id(old.typeID)!==id(item.typeID))
    return fail("NATIVE_INVENTORY_ITEM_ID_REUSED");
   if(!old)itemIDs.push(canonicalID);
   if(old&&item.stacksize<old.stacksize)
