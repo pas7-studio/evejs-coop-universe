@@ -68,6 +68,17 @@ node --test tests/coop-player-mining-company.test.mjs
 - **C2 read-only native bindings implemented in source:** original active office, authentic corporation and docked membership, original native item/wallet title audit and guarded station-arrival mount. **Still pending:** seller-authorized native quote, client action API, native chain conservation, sale and reprocessing consumption receipts. The feature remains **OFF**; source alone is not a live working corporate purchase.
 - Read [CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md](CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md) for exact authority contracts, evidence and manual acceptance checks.
 
+## Stage D1 — in-game native Agent control (source implementation)
+
+- Existing native agentMgr dialogue now shows a **verified already-funded** player-owned NPC fleet to an authenticated player corp member through real stock SDE station agents. Original missions, paid convoy and militia agent contacts have precedence.
+- Industry managers see wage details and can press the actual native **Accept** button to queue the existing `MINE` order with original GameStore command CAS. Members with no industry role see only `View`, without finance details. Multiple matching fleets refuse implicit selection.
+- The Agent uses the original startup native fleet, real corp access and an already-mounted scene. The feature does **not** create an agent, ship, mission, extra salary or ore and is **OFF** by default.
+- Critical durable SQLite fix: explicitly register `coopPlayerMiningShift`, `coopPlayerMiningFleet` and `coopPlayerMiningOreTitle` in the pinned `corporationRuntime` row group map, so ordinary stock flush cannot regroup atomic source-key rows. New reversible native patch has been tested against the exact pinned source.
+- Regression source results: **17/17** isolated Agent JS cases, **6/6** agent+SQLite patch cases; pinned Agent source and SQLite source both exact reversible after source transformation. Full Node/SQLite and two-client runtime remains **NOT_RUN**.
+- Next: real seller-authorized NPC wage offer/hire UI, native multi-fleet selector, separate in-game HOLD/HAUL/RETREAT commands without hijacking stock button meanings, player corporation market sale, expiry, recovery and two-person acceptance.
+
+See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
