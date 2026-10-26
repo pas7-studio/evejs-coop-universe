@@ -473,6 +473,13 @@ function advanceNativeNpcExpeditions(){
        listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
        upsertNativeCargo:row=>store.upsertNativeCargo(row),
        flushNpcCargo:()=>gameStore.flushTableSync("npcCargo"),
+       refreshNativeCargoProjection:(ship,id)=>{
+        const cargo=store.buildNativeCargoItems(id);
+        if(!Array.isArray(cargo))return false;
+        ship.nativeCargoItems=cargo.filter(item=>
+         Number.isSafeInteger(item?.quantity)&&item.quantity>0);
+        return true;
+       },
        compatibleCharges:typeID=>auth.getCompatibleProbeChargeTypeIDs(typeID),
        resolveProbeRange:(typeID,step,range)=>
         probeState.resolveProbeRangeContract(typeID,step,range),
