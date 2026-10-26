@@ -130,6 +130,11 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    if(!cargo||Number(cargo.entityID)!==args.haulerID||!pos(cargo.typeID)||!pos(cargo.quantity)||
       Number(cargo.moduleID||0)!==0||Number(cargo.coopHaulFleetID)!==args.fleetID||
       !pos(cargo.coopHaulFromMinerID))return answer("CARGO_NOT_PROVEN");
+   // Station/corporation existence does not establish title to this actual
+   // native cargo item. Always verify the ORIGINAL physical cargo owner
+   // before durable PREPARED, debit or credit, independent of injected proofs.
+   if(pos(cargo.ownerID)!==args.corporationID)
+    return answer("ORIGINAL_CARGO_OWNER_MISMATCH");
    if(verifyDurableCargo(cargo,args)!==true)return answer("CARGO_NOT_DURABLE");
    record={version:1,...args,typeID:Number(cargo.typeID),quantity:Number(cargo.quantity),
     phase:statuses.PREPARED,at:clock(),updatedAt:clock()};
