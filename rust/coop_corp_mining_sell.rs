@@ -1068,7 +1068,7 @@ fn coop_corp_buyer_quote_db(path:&Path,token:&str,order:i64,buyer:i64,
  let record=db.query_row(
  "SELECT p.operation_id,p.cargo_id,p.item_id,p.owner_id,
   p.station_id,p.type_id,p.price_cents,p.phase,m.state,m.source,
-  m.is_corp,m.bid,m.vol_remaining
+  m.is_corp,m.bid,m.vol_remaining,m.price,p.quantity
   FROM coop_corp_sell_prepared p JOIN market_orders m
   ON p.order_id=m.order_id WHERE p.order_id=?1",
  params![order],|r|Ok((
@@ -1076,12 +1076,14 @@ fn coop_corp_buyer_quote_db(path:&Path,token:&str,order:i64,buyer:i64,
   r.get::<_,i64>(3)?,r.get::<_,i64>(4)?,r.get::<_,i64>(5)?,
   r.get::<_,i64>(6)?,r.get::<_,String>(7)?,r.get::<_,String>(8)?,
   r.get::<_,String>(9)?,r.get::<_,i64>(10)?,r.get::<_,i64>(11)?,
-  r.get::<_,i64>(12)?
+  r.get::<_,i64>(12)?,r.get::<_,f64>(13)?,r.get::<_,i64>(14)?
  ))).optional()?.ok_or_else(||anyhow!("CORP_BUYER_ORDER_MISSING"))?;
- let (op,cargo,item,seller,station,ty,price,phase,state,source,corp,bid,left)=record;
+ let (op,cargo,item,seller,station,ty,price,phase,state,source,corp,bid,left,rust_price,entered)=record;
  if phase!="published"||state!="open"||source!="coop-corporation"||
- corp!=1||bid!=0||seller<=0||buyer==seller||price<=0||
- qty>left||left<=0||price>max_price{
+ corp!=1||bid!=0||seller<=0||buyer==seller||price<=0||entered<=0||
+ qty>left||left<=0||left>entered||price>max_price||
+ !rust_price.is_finite()||
+ (rust_price*100.0-price as f64).abs()>0.000001{
   bail!("CORP_BUYER_ORDER_UNAVAILABLE");
  }
  let gross=price.checked_mul(qty).ok_or_else(||anyhow!("CORP_BUYER_PRICE_OVERFLOW"))?;
