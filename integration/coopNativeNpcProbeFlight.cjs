@@ -46,7 +46,9 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
    ship.corporationID!==native.corporationID||
    !controller||controller.entityID!==entityID||controller.systemID!==scene.systemID||
    !Array.isArray(modules)||modules.length>256||
-   !Array.isArray(cargo)||cargo.length>512)return null;
+   !Array.isArray(cargo)||cargo.length>512||
+   new Set(cargo.map(row=>row?.cargoID)).size!==cargo.length||
+   new Set(modules.map(row=>row?.moduleID)).size!==modules.length)return null;
   return {native,ship,scene,controller,modules,cargo,pilotID:links[0].pilotID};
  }
  function launcherFor(ctx,row){
