@@ -134,7 +134,7 @@ test("all legacy 30s phases are registered exactly once in unchanged source orde
   "courier-observe","courier-dispatch","virtual-travel","virtual-economy",
   "native-depot","alife-native-mining-proof","alife-native-economy-observe",
   "faction","native-ammo-readiness","native-ammo-survival",
-  "native-ammo-supply","native-raids","native-tactics","native-ammo-observe",
+  "native-ammo-supply","native-raids","native-tactics","native-expeditions","native-ammo-observe",
   "native-wreck-recovery","native-salvage-rivals","native-salvage-market",
   "native-wreck-custody","native-loot-station-delivery",
   "native-gate-approach","native-patrols","npc-recognition",
@@ -142,7 +142,7 @@ test("all legacy 30s phases are registered exactly once in unchanged source orde
   "native-activity","npc-reconcile:"
  ];
  assert.deepEqual(actual,expected);
- assert.equal(actual.length,27);
+ assert.equal(actual.length,28);
  assert.match(block,/EVEJS_COOP_ALIFE_SALVAGE_MARKET/);
  assert.match(block,/EVEJS_COOP_NATIVE_NPC_MARKET/);
  assert.match(block,/EVEJS_COOP_ALIFE_ECONOMY/);
@@ -157,11 +157,11 @@ test("promise-returning WHOLE world tick is forbidden and releases the guard",()
  assert.equal(f.coordinator.tick(run=>run("virtual-travel",()=>null)).status,"COMPLETED");
 });
 
-test("LW-03B static catalog defines all 27 original phases exactly once",()=>{
+test("LW-03B static catalog defines all 28 registered phases exactly once",()=>{
  const c=catalog();
- assert.equal(c.phases.length,27);
+ assert.equal(c.phases.length,28);
  assert.deepEqual(c.phases.map(x=>x.name),[...phaseNames]);
- assert.equal(new Set(c.phases.map(x=>x.name)).size,27);
+ assert.equal(new Set(c.phases.map(x=>x.name)).size,28);
  assert.deepEqual(c.groupOrder,["opportunities","world-state","alife-strategy",
   "combat","salvage","movement","market","activity","reconciliation"]);
  assert.equal(c.phases.every(x=>x.mode==="EXISTING_NATIVE_OWNER_ONLY"),true);
