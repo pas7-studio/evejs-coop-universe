@@ -22,6 +22,7 @@ on:
       - 'tests/coop-npc-*'
       - 'tests/coop-native-npc-probe-*.test.mjs'
       - 'scripts/verify-npc-probe-*.mjs'
+      - 'scripts/verify-npc-expedition-loot-sqlite-crash.mjs'
       - 'tests/coop-native-npc-probe-flight.test.mjs'
       - 'tests/coop-native-hacking-admission.test.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
@@ -47,6 +48,7 @@ on:
       - 'tests/coop-npc-*'
       - 'tests/coop-native-npc-probe-*.test.mjs'
       - 'scripts/verify-npc-probe-*.mjs'
+      - 'scripts/verify-npc-expedition-loot-sqlite-crash.mjs'
       - 'tests/coop-native-npc-probe-flight.test.mjs'
       - 'tests/coop-native-hacking-admission.test.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
@@ -73,6 +75,7 @@ jobs:
             integration/coopNpcExpeditionCompetition.cjs \
             integration/coopNpcExpeditionDirector.cjs \
             scripts/coop-npc-expedition-hacking-patch.cjs \
+            scripts/verify-npc-expedition-loot-sqlite-crash.mjs \
             integration/coopNpcWormholeTransit.cjs \
             integration/coopNpcExpeditionOperations.cjs \
             integration/coopNpcExpeditionLoot.cjs \
@@ -164,8 +167,10 @@ jobs:
           set -euo pipefail
           node --check scripts/verify-npc-probe-sqlite-crash.mjs
           node --check scripts/verify-npc-probe-feature-sqlite-crash.mjs
+          node --check scripts/verify-npc-expedition-loot-sqlite-crash.mjs
           node scripts/verify-npc-probe-sqlite-crash.mjs
           node scripts/verify-npc-probe-feature-sqlite-crash.mjs
+          node scripts/verify-npc-expedition-loot-sqlite-crash.mjs
       - name: Two-client/bubble gameplay remains a separate required gate
         run: |
           echo "EX-03 pinned native SQLite process-kill acceptance runs above. Native live two-client bubble movement and expedition fitting must still be run before production enablement."
