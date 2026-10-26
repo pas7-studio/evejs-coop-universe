@@ -207,9 +207,27 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
    if(!site||fingerprint(site)!==tip.fingerprint){intel.delete(id);continue}
    const scout=all.find(p=>p.pilotID===tip.scoutPilotID&&p.corpID===tip.corpID);
    if(!scout){blocked++;continue}
-   for(const p of all){
+   // EX-03B11: a perfect original scan must send the equipped scout itself
+   // to the site BEFORE summoning any same-corp patrol. Previously the
+   // rendezvous loop skipped the scout, so it could never arrive and hack.
+   // Followers require the scout's physically witnessed on-grid arrival.
+   let scoutWarpFirst=false;
+   if(tip.source==="NATIVE_PROBE_SCAN"){
+    const scoutDistance=distance(scout.ship.position,site.actualPosition);
+    if(scoutDistance>150000)scoutWarpFirst=true;
+    else{
+     const liveSite=nativeSite(tip.systemID,tip.siteID,true);
+     if(!liveSite||fingerprint(liveSite)!==tip.fingerprint){blocked++;continue}
+     const witness=competition.observe({scene,siteID:tip.siteID,shipID:scout.entityID});
+     if(witness.status!=="NATIVE_SITE_OBSERVED"&&witness.status!=="ALREADY_OBSERVED"){
+      blocked++;continue;
+     }
+    }
+   }
+   const warpCandidates=scoutWarpFirst?[scout]:all;
+   for(const p of warpCandidates){
     if(orders>=maxOrdersPerTick)break;
-    if(p.pilotID===scout.pilotID||p.corpID!==tip.corpID)continue;
+    if((p.pilotID===scout.pilotID&&!scoutWarpFirst)||p.corpID!==tip.corpID)continue;
     const d=distance(p.ship.position,site.actualPosition);
     if(d<150000||d>2e13)continue;
     const moveKey=p.entityID+":"+id;
@@ -219,7 +237,8 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
      blocked++;continue;
     }
     const result=orderBridge.issue({entityID:p.entityID,systemID:scene.systemID,
-     owner:"EXPEDITION",action:"expedition-rendezvous",execute:()=>{
+     owner:"EXPEDITION",action:scoutWarpFirst?
+      "expedition-scout-rendezvous":"expedition-rendezvous",execute:()=>{
       // Re-read original native signatures immediately before a remote warp.
       // Remote coordinates are only allowed for an existing perfect scan.
       const live=tip.source==="NATIVE_PROBE_SCAN"?
@@ -234,7 +253,8 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
       if(!live||fingerprint(live)!==tip.fingerprint||!native||native.corpID!==tip.corpID)
        return {success:false,errorMsg:"EXPEDITION_NATIVE_INTEL_STALE"};
       return warpToPoint(p.entityID,{...live.actualPosition},
-       {reason:"coop-npc-expedition",scheduleWake:true});
+       {reason:scoutWarpFirst?"coop-npc-expedition-scout":"coop-npc-expedition",
+        scheduleWake:true});
      }});
     if(result?.success===true){pending.set(moveKey,{fingerprint:tip.fingerprint,at:now});orders++;}
     else blocked++;
