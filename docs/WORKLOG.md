@@ -193,3 +193,8 @@ Evidence: event now carries tau and reAt per miner; OVERLAY_OK patched 54 anchor
 Why: Link actual authored native dungeon encounter IDs, physical site beacon, original NPC store and combat controller before a helper ship can receive a retaliatory attack order; avoid cross-site/hull collision and replay.
 Where: integration/coopPveNativeSiteDefense.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, docs/coop-flags.json, tests/coop-pve-native-site-defense.test.mjs
 Evidence: Exact-source V8 isolated test callbacks 12/12 PASS (61 assertions), nine overlay wiring checks PASS. Full Node suite, pinned overlay roundtrip, Docker native combat, two clients NOT_RUN; feature default OFF.
+### 2026-10-26T12:51Z · dd46891 · L2 · docs(pve): physical native-wave rescue, safeguards and missing live acceptance
+
+Why: Add physical tactical reserve response using original dungeon encounter waves, existing native npcRuntime warp and attack, and source-bound site/player identity without early spawning or second scheduler.
+Where: integration/coopPveWaveReinforcements.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopLivingWorldPhaseRegistry.cjs, scripts/overlay-spec.cjs, docs/coop-flags.json, tests/coop-pve-wave-reinforcements.test.mjs, tests/coop-living-world-phase-coordinator.test.mjs, docs/CHAT19_21_ADVANCED_PVE_ALIFE.md
+Evidence: 22/22 exact-source isolated V8 test cases PASS, 116 assertions PASS, 12/12 source-wiring checks PASS. Full Node, pinned overlay roundtrip, Rust/SQLite, Docker native behavior and two client gameplay NOT_RUN. Default OFF; dependent draft.
