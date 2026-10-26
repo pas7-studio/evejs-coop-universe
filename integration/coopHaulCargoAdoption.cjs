@@ -113,7 +113,8 @@ function verifyReAdoptionCustody(row, options={}) {
 function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
  cargoTable,database,enableReAdoption=false,custodyOptions}={}){
  const pid=pos(systemID),fid=pos(fleetID);
- if(!pid||!fid||!scene)return {status:"INVALID_AUTHORITIES",rows:[]};
+ if(!pid||!fid||!scene||!Number.isSafeInteger(now)||now<=0)
+  return {status:"INVALID_AUTHORITIES",rows:[]};
  let all;try{all=cargoRows({store,cargoTable,database})}
  catch(_error){return {status:"CARGO_UNAVAILABLE",rows:[]}}
  if(!Array.isArray(all))return {status:"CARGO_UNAVAILABLE",rows:[]};
@@ -132,11 +133,21 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
   if(Number(row.coopHaulFleetID)!==fid||Number(row.coopHaulSystemID)!==pid)continue;
   if(cargoIDCount.get(pos(row.cargoID))!==1)
    return {status:"NATIVE_CARGO_ID_COLLISION",rows:[]};
+  // Never reinterpret a damaged historical adoption as a first adoption:
+  // that would bypass the warehouse/ItemStore/depot replay guards.
   const adoptedAt=pos(row.coopHaulAdoptedAt);
+  const adoptedFrom=pos(row.coopHaulAdoptedFrom);
+  const hasHistory=Object.hasOwn(row,"coopHaulAdoptedAt")||
+   Object.hasOwn(row,"coopHaulAdoptedFrom");
+  if(hasHistory&&(!adoptedAt||!adoptedFrom||
+     adoptedFrom===pos(row.entityID)||adoptedAt>now))
+   return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
   if(adoptedAt&&!enableReAdoption)continue;
   const loadedAt=Number(row.coopHaulLoadedAt);
   if(!Number.isFinite(loadedAt)||loadedAt<=0||loadedAt>now)continue;
-  const witnessAt=adoptedAt?Math.max(adoptedAt,loadedAt):loadedAt;
+  if(adoptedAt&&adoptedAt<loadedAt)
+   return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
+  const witnessAt=adoptedAt||loadedAt;
   if(witnessAt>now||now-witnessAt>ttlMs)continue;
   if(liveShip(scene,row.entityID))continue;
   const registered=stillRegistered(store,row.entityID);
@@ -144,8 +155,6 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
    return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
   if(registered)continue;
   if(adoptedAt){
-   if(!pos(row.coopHaulAdoptedFrom)||adoptedAt<loadedAt)
-    return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
    const custody=verifyReAdoptionCustody(row,custodyOptions);
    if(custody!=="CLEAR")return {status:custody,rows:[]};
   }
@@ -161,6 +170,8 @@ function adopt(scene,fleet,options={}){
  const {store,probe,database,clock}=dependenciesOf(options);
  const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID);
  const now=Number(clock());
+ if(!Number.isSafeInteger(now)||now<=0)
+  return {status:"INVALID_CLOCK",adopted:0};
  if(!systemID||!fleetID||systemID!==pos(fleet?.systemID))
   return {status:"INVALID_FLEET"};
  const key=systemID+":"+fleetID;
