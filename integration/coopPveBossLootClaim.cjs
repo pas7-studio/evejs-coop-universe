@@ -99,9 +99,20 @@ function createFence({file,storage=fs,clock=()=>Date.now(),getBossWreck,
   return write(state=>{
    if(Object.keys(state.entries).length>=maxEntries)
     return {changed:false,output:{status:"BOSS_LOOT_JOURNAL_FULL"}};
-   if(Object.values(state.entries).some(row=>row.wreckID===w&&row.wreckItemID===i&&
-      (row.phase==="PENDING"||row.beforeQuantity===before)))
+   const prior=Object.values(state.entries).filter(row=>
+    row.wreckID===w&&row.wreckItemID===i);
+   if(prior.some(row=>row.phase==="PENDING"||row.beforeQuantity===before))
     return {changed:false,output:{status:"BOSS_LOOT_REPLAY_BLOCKED"}};
+   // Exactly the original native source remainder is authorized, not an
+   // accidentally resurrected or inflated stack after an earlier pickup.
+   if(prior.length){
+    const previousRemainders=prior.map(row=>row.beforeQuantity-row.quantity);
+    if(previousRemainders.some(q=>!Number.isSafeInteger(q)||q<0))
+     return {changed:false,output:{status:"BOSS_LOOT_JOURNAL_UNSAFE"}};
+    const lastRemaining=Math.min(...previousRemainders);
+    if(lastRemaining!==before)
+     return {changed:false,output:{status:"BOSS_LOOT_SOURCE_SEQUENCE_MISMATCH"}};
+   }
    const now=clock();
    if(!id(now))return {changed:false,output:{status:"BOSS_LOOT_CLOCK_INVALID"}};
    state.entries[key]={key,wreckID:w,wreckItemID:i,characterID:ch,
