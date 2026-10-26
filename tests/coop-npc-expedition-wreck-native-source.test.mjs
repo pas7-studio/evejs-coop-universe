@@ -4,6 +4,7 @@ import fs from "node:fs";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {patch,WRECK,STORE}=require("../scripts/coop-npc-expedition-wreck-patch.cjs");
+const {patch:salvagePatch}=require("../scripts/coop-salvage-death-native-patch.cjs");
 const nativeWreck=process.env.EVEJS_PINNED_NPC_WRECK_SOURCE;
 const nativeStore=process.env.EVEJS_PINNED_NPC_STORE_SOURCE;
 function source(file){
@@ -97,4 +98,16 @@ test("EX-03B18 stock nativeNpcStore source returns ORIGINAL itemID row on visibl
   if(previous===undefined)delete process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK;
   else process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK=previous;
  }
+});
+
+test("EX-03B19 actual pinned NPC wreck and native salvage hooks are composable, idempotent and reversible",
+ {skip:!nativeWreck},()=>{
+ const original=source(nativeWreck);
+ assert(original,"EX03_EXACT_NATIVE_WRECK_SOURCE_REQUIRED");
+ const installed=salvagePatch(patch(original,WRECK),false);
+ assert.equal(patch(installed,WRECK),installed);
+ assert.equal(salvagePatch(installed,false),installed);
+ assert.doesNotThrow(()=>new Function("require","module","exports","__dirname",installed));
+ const cleaned=patch(salvagePatch(installed,true),WRECK,true);
+ assert.equal(cleaned,original,"must restore exact pinned stock source bytes");
 });
