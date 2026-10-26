@@ -88,6 +88,24 @@ function createShiftOrders({gameStore,access,getFleet,verifyNativeFleet,
       throw Error("MINING_SHIFT_PENDING_NATIVE_OUTCOME");
     if(row.commandState==="PENDING")
       throw Error("MINING_SHIFT_PREVIOUS_COMMAND_PENDING");
+    // Unknown completion of a real HAUL/RETREAT must never be overwritten.
+    // No second order can be issued until an independent original-native
+    // arrival/recovery receipt is introduced in a later stage.
+    if(row.commandState==="NATIVE_REQUESTED"&&
+       ["HAUL","RETREAT"].includes(row.directive)&&row.directive!==command)
+      throw Error("MINING_SHIFT_PREVIOUS_NATIVE_ORDER_ACTIVE");
+    const nativePhase=fleet.state;
+    if(["hauling","loaded","haulereturn"].includes(nativePhase)&&
+       command!=="HOLD")
+      throw Error("MINING_SHIFT_PHYSICAL_CARGO_TRANSIT_ACTIVE");
+    if(command==="HAUL"&&nativePhase!=="mining")
+      throw Error("MINING_SHIFT_HAUL_NOT_READY_IN_NATIVE_PHASE");
+    if(command==="RETREAT"&&
+       !["mining","coop-hold","aggressed","panic"].includes(nativePhase))
+      throw Error("MINING_SHIFT_RETREAT_NOT_SAFE_IN_NATIVE_PHASE");
+    if(command==="MINE"&&row.directive==="HOLD"&&
+       row.commandState==="NATIVE_REQUESTED"&&nativePhase!=="coop-hold")
+      throw Error("MINING_SHIFT_HOLD_NOT_YET_PHYSICALLY_ENFORCED");
     if(row.directive===command&&row.commandState!=="IDLE")
       return {status:"ALREADY_ORDERED",command,commandSeq:row.commandSeq};
     const next={...row,directive:command,commandSeq:row.commandSeq+1,
