@@ -182,3 +182,19 @@ test("hardware recognizes recovered STOWED original unit without granting a synt
  assert.equal(r.originalCargoIDs.includes(row.cargoID),true);
  assert.equal(f.scan().status,"BLOCKED");
 });
+
+test("scanner hardware refuses original stacks and singleton cargo before expedition",()=>{
+ const f=fixture();
+ for(const charge of f.cargo){charge.quantity=10;delete charge.deployedProbe}
+ assert.equal(f.hardware().ready,false);
+ for(const charge of f.cargo){charge.quantity=1;charge.singleton=true}
+ assert.equal(f.hardware().ready,false);
+});
+test("scanner hardware refuses incomplete recovered probe receipts",()=>{
+ const f=fixture();
+ for(const charge of f.cargo){
+  charge.quantity=1;
+  charge.deployedProbe={...charge.deployedProbe,status:"STOWED",recoveredAtMs:1};
+ }
+ assert.equal(f.hardware().ready,false);
+});
