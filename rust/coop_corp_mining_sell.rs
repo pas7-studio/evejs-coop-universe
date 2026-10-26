@@ -434,7 +434,29 @@ fn coop_corp_fill_inspect_db(path:&Path,token:&str,order:i64,cycle:i64)
     let db=load_connection(path)?;
     coop_corp_sell_schema(&db)?;
     coop_corp_fill_schema(&db)?;
-    coop_corp_fill_read(&db,order,cycle)
+    let state=db.query_row(
+      "SELECT phase,ack_json,native_receipt_key FROM coop_corp_sell_fills
+       WHERE order_id=?1 AND cycle=?2",
+      params![order,cycle],
+      |r|Ok((r.get::<_,String>(0)?,r.get::<_,Option<String>>(1)?,
+              r.get::<_,Option<String>>(2)?))
+    ).optional()?.ok_or_else(||anyhow!("CORP_FILL_GET_CLAIM_NOT_FOUND"))?;
+    if state.0=="claimed"{return coop_corp_fill_read(&db,order,cycle);}
+    if !["finalized","released"].contains(&state.0.as_str()){
+        bail!("CORP_FILL_GET_UNEXPECTED_PHASE");
+    }
+    let receipt=state.2.ok_or_else(||anyhow!("CORP_FILL_GET_RECEIPT_NOT_PERSISTED"))?;
+    let ack:serde_json::Value=serde_json::from_str(
+      state.1.as_deref().ok_or_else(||anyhow!("CORP_FILL_GET_ACK_NOT_PERSISTED"))?)?;
+    if ack["phase"]!=state.0||ack["receiptKey"]!=receipt||
+       ack["orderID"]!=order.to_string()||ack["cycle"]!=cycle{
+        bail!("CORP_FILL_GET_PERSISTED_ACK_MISMATCH");
+    }
+    Ok(serde_json::json!({
+      "orderID":order.to_string(),"cycle":cycle,"phase":state.0,
+      "nativeReceiptKey":receipt,"ack":ack,"verifiedNative":true,
+      "readOnly":true
+    }))
 }
 impl MarketRuntime{
     pub async fn coop_corp_fill_claim(&self,token:String,order:i64,cycle:i64,
