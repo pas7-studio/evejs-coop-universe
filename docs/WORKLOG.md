@@ -264,3 +264,13 @@ Evidence: 51/51 exact-source isolated V8 test callbacks PASS; before-fix origina
 Why: Regression coverage for an unplanned cargoID introduced after preflight in global, local or ship-cache views, plus a phantom physical row remaining after partial compensation.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 51/51 exact-source isolated V8 test callbacks PASS; before-fix original module accepted ADOPTED with cargoIDs 7001 and 7999 on the new hauler. Full native Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:28Z · 563f4d5 · L2 · fix(P0): preserve original miner and load-time provenance after native cargo adoption
+
+Why: The native upsert could silently change the original minerID or original load timestamp while retaining cargoID/type/quantity. Existing post-commit checks accepted ADOPTED with altered provenance, compromising source-backed custody.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 54/54 isolated exact-source V8 test callbacks PASS, old main reproduced ADOPTED after miner/load-time mutation. Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:28Z · 3252730 · TEST · test(P0): refuse mutated miner and original load-time provenance after commit
+
+Why: Cover global and per-hauler post-commit mutation of original minerID and loadedAt, ensuring the fleet holds rather than warping.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 54/54 isolated exact-source V8 test callbacks PASS, old main reproduced ADOPTED after miner/load-time mutation. Node/SQLite/Rust/two-client gameplay NOT_RUN.
