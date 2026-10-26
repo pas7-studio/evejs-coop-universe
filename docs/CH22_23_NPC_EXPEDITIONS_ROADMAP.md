@@ -226,3 +226,19 @@ The scanner hardware readiness probe now accepts **only physically launchable, n
 An additional original-source test scenario in `verify-npc-probe-feature-sqlite-crash.mjs` validates scanner hardware availability **4 original charges before the first launch, exactly 1 recovered original charge before re-launch**, and follows `STOWED → IN_SPACE → RECALLING → STOWED` through pinned native SQLite across separate SIGKILL-restarted processes. **The CI execution of this script is not yet verified.**
 
 Isolated JS fixture results after these changes: scanner hardware/native evidence **21/21 PASS**, launch/recovery **19/19 PASS**, full original lifecycle **3/3 PASS**, native scene transition **6/6 PASS**, blind sweep **8/8 PASS**, lifecycle **13/13 PASS**. Separate real GameStore process-kill and live two-client gates remain open.
+
+## EX-03B9 — Bounded native NPC scout scheduling (2026-10-26)
+
+**Implemented as opt-in A-Life integration on PR #286, still Draft.**
+
+A source-level scheduling review found an actual gameplay bug: the original expedition director scanned only `all.slice(0,2)` patrols, even though only a minority of fresh patrols are source-authored with a genuine probe launcher. Two ordinary patrols could occupy these slots permanently, preventing the already-materialized probe scout from ever launching, sweeping or scanning. A separate pre-cap `assignments.slice(0,32)` allowed miners and haulers to starve patrol discovery.
+
+The director now:
+- Filters by original verified named pilot + `patrol` role **before** the per-tick `maxPilotsPerTick` cap.
+- Accepts a read-only `isNativeProbeScout(entityID,systemID)` native-store authority; the world injects the source `npcModules` check for a durable original NPC with a real fitted, online group 481/category 7 launcher, matching owner and system.
+- Selects **up to two real equipped patrol hulls** for native probe scan per existing 30-second A-Life tick. Unfitted NPCs do not consume those two scan slots; lookup errors fail closed, and no new scheduler, non-native scanner or fake intel is created.
+- Keeps the original read/list native site witness and order-bridge arbitration; even a successful scan never bypasses original cargo/physical probe evidence checks for private signature coordinates.
+
+**Source test evidence**: `tests/coop-npc-expedition-director.test.mjs` 23/23 isolated PASS (including 40 earlier miners/haulers, wrong first two patrols, store exception and bounded native scanner selection); `tests/coop-npc-probe-wiring.test.mjs` 17/17 isolated PASS. Source workflow now additionally accepts push on the specific PR feature branch, so the source gate can be scheduled without first merging the workflow into main. As of this update GitHub Actions reports **0 runs** on this branch; no CI PASS or real player/NPC two-client runtime can be claimed.
+
+**Live acceptance still required**: actual spawned patrol fitting and inventory, sighting of first physical NPC probes by two authenticated clients and after scene bubble movement, original native 100%-certainty on a real site, real SQLite SIGKILL process recovery, then hacking + physical loot. All feature flags remain OFF.
