@@ -558,3 +558,50 @@ test("a duplicate cargoID outside the target fleet still invalidates its physica
  assert.equal(result.status,"NATIVE_CARGO_ID_COLLISION");
  assert.equal(store.writes.length,0);
 });
+
+test("pinned GameStore result envelope exposes original durable npcCargo rows",()=>{
+ const row=orphan();
+ const store=fakeStore([row]);delete store.listNativeCargo;
+ let reads=0,flushes=0;
+ const db={
+  read:(table,path)=>{reads++;assert.equal(table,"npcCargo");assert.equal(path,"/cargo");
+   return {success:true,data:{[row.cargoID]:{...row}}};},
+  flushTableSync:()=>{flushes++;return {success:true};}
+ };
+ const target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{store,database:db,clock:()=>NOW});
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(result.adopted,1);
+ assert.equal(reads,1);
+ assert.equal(flushes,1);
+ assert.equal(store.listNativeCargoForEntity(hauler.itemID).length,1);
+ assert.equal(target.state,"loaded");
+});
+
+test("failed/malformed native GameStore read is not proof orphan cargo vanished",()=>{
+ for(const data of [
+  {success:false,data:{7001:orphan()}},{success:true,data:null},
+  {success:true,data:[]},{success:true,data:"oops"},null
+ ]){
+  resetForTests();
+  const store=fakeStore([orphan()]);delete store.listNativeCargo;
+  let flushes=0;
+  const db={read:()=>data,flushTableSync:()=>{flushes++;return {success:true}}};
+  const target=fleet();
+  const result=adopt(sceneWith([hauler]),target,{store,database:db,clock:()=>NOW});
+  assert.equal(result.status,"CARGO_UNAVAILABLE",JSON.stringify(data));
+  assert.equal(store.writes.length,0);
+  assert.equal(flushes,0);
+  assert.equal(target.state,"mining");
+ }
+});
+test("authoritatively empty GameStore cargo table remains a genuine no-op",()=>{
+ const store=fakeStore([]);delete store.listNativeCargo;
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,database:{read:()=>({success:true,data:{}})},clock:()=>NOW
+ });
+ assert.equal(result.status,"NO_ORPHAN_CARGO");
+ assert.equal(store.writes.length,0);
+ assert.equal(target.state,"mining");
+});
