@@ -160,3 +160,25 @@ test("a forged preflight or changed fleet blocks paying the wingman",()=>{
   preflight:good,...f.deps}).status,
   "PVE_DUO_NATIVE_RECIPIENT_CHANGED_AFTER_LEADER");
 });
+
+test("native mission content IDs may be numeric but must match after normalization",()=>{
+ const f=fixture();
+ f.leaderMission.contentID=9000;f.peerMission.contentID="9000";
+ const a=validate({ticket:f.ticket,...f.deps});
+ assert.equal(a.ok,true);
+ assert.equal(a.contentID,"9000");
+ assert.equal(checkPeerBeforeNativePayout({ticket:f.ticket,currentPeer:f.peerMission,
+  preflight:a,...f.deps}).ok,true);
+});
+test("two native sequences with different encodings still refer to one mission and are rejected",()=>{
+ const f=fixture();
+ f.peerMission.missionSequence="11";
+ assert.equal(validate({ticket:f.ticket,...f.deps}).status,
+  "PVE_DUO_NOT_TWO_INDEPENDENT_COMPLETED_NATIVE_MISSIONS");
+});
+test("peer socket disappeared after leader payout cannot authorize second mission payment",()=>{
+ const f=fixture(),first=validate({ticket:f.ticket,...f.deps});
+ f.ticket.peer.socket=null;
+ assert.equal(checkPeerBeforeNativePayout({ticket:f.ticket,currentPeer:f.peerMission,
+  preflight:first,...f.deps}).status,"PVE_DUO_NATIVE_RECIPIENT_CHANGED_AFTER_LEADER");
+});
