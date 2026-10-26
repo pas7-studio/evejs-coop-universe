@@ -129,10 +129,16 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
   return {status:due>steps?"CATCHUP_REMAINING":"OK",steps,remaining:due-steps};
  }
  function recordLoss(systemID,amount=1){
+  // An unverified loss cannot turn native system security into NaN/null
+  // or create non-geolocatable phantom economic systems/events.
+  const id=Number(systemID),rawAmount=Number(amount);
+  if(!Number.isSafeInteger(id)||id<=0||
+     !Number.isFinite(rawAmount)||rawAmount<0)
+   throw Error("ECONOMY_INVALID_LOSS");
   beforeMutation();
-  const s=ensure(systemID);const n=Math.max(1,Math.min(100,Math.floor(amount)));
+  const s=ensure(id),n=Math.max(1,Math.min(100,Math.floor(rawAmount)));
   s.losses=cap(s.losses+n);s.security=Math.max(0,s.security-n);s.demand=cap(s.demand+n*4);
-  const entry={type:"loss",systemID:Number(systemID),amount:n,at:clock()};
+  const entry={type:"loss",systemID:id,amount:n,at:clock()};
   state.events.push(entry);if(state.events.length>100)state.events.shift();persist();return entry;
  }
  function syncNativeDeliveries(totals={}){
@@ -152,7 +158,9 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
    accepted+=gained;modified=true;
    state.events.push({type:"real-ore-delivery",systemID,amount:gained,at:clock()});
   }
-  if(state.events.length>100)state.events=state.events.slice(-100);
+  // A no-op sync must never change in-memory history without persisting
+  // it; otherwise the next read fence flags the same instance as stale.
+  if(modified&&state.events.length>100)state.events=state.events.slice(-100);
   if(modified)persist();
   return {status:modified?"UPDATED":"UNCHANGED",quantity:accepted};
  }
