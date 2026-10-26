@@ -6,9 +6,12 @@ on:
       - 'integration/coopNpcExpedition*.cjs'
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
+      - 'integration/coopNativeNpcProbeSweep.cjs'
+      - 'integration/coopNpcScoutLoadout.cjs'
       - 'integration/coopNativeHackingAdmission.cjs'
       - 'integration/coopVirtualWorldRuntime.cjs'
       - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
+      - 'scripts/coop-npc-scout-loadout-patch.cjs'
       - 'scripts/coop-native-hacking-admission-patch.cjs'
       - 'scripts/patch-evejs-coop.cjs'
       - 'scripts/overlay-spec.cjs'
@@ -21,7 +24,10 @@ on:
     paths:
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
+      - 'integration/coopNativeNpcProbeSweep.cjs'
+      - 'integration/coopNpcScoutLoadout.cjs'
       - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
+      - 'scripts/coop-npc-scout-loadout-patch.cjs'
       - 'tests/coop-npc-probe-*'
       - '.github/workflows/ex03-native-npc-probes.yml'
   workflow_dispatch:
@@ -46,6 +52,9 @@ jobs:
             integration/coopNpcProbeHardware.cjs \
             integration/coopNpcProbeScanEvidence.cjs \
             integration/coopNativeNpcProbeFlight.cjs \
+            integration/coopNativeNpcProbeSweep.cjs \
+            integration/coopNpcScoutLoadout.cjs \
+            scripts/coop-npc-scout-loadout-patch.cjs \
             integration/coopNativeHackingAdmission.cjs \
             scripts/coop-npc-probe-loadout-split-patch.cjs \
             scripts/coop-native-hacking-admission-patch.cjs \
@@ -86,6 +95,8 @@ jobs:
             tests/coop-npc-probe-loadout-source.test.mjs \
             tests/coop-npc-probe-pinned-native-source.test.mjs \
             tests/coop-native-npc-probe-flight.test.mjs \
+            tests/coop-native-npc-probe-sweep.test.mjs \
+            tests/coop-npc-scout-loadout.test.mjs \
             tests/coop-native-hacking-admission.test.mjs
       - name: Keep native SQLite kill/restart and two-client gameplay blocked
         run: |
