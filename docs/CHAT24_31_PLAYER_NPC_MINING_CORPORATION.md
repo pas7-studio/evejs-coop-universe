@@ -1,6 +1,6 @@
 # Chat 24 + Chat 31 — Player-owned NPC mining company
 
-**Status 2026-10-26:** Stages A+B CODE_READY in draft PR #287; original native stock mining tick is hooked behind a default-OFF flag, with a durable command journal and zero autonomous timers. **NOT deployed or live-verified:** stock GameStore SQLite, original client commands, actual ore/hauling/arrival, and two-client UI remain untested. Native wallets and ore remain authoritative; no duplicate stock, no second corporation registry.
+**Status 2026-10-26:** Stages A+B and C1 source-only CODE_READY in draft PR #287; original native stock mining tick is hooked behind a default-OFF flag, with a durable command journal and zero autonomous timers. **NOT deployed or live-verified:** stock GameStore SQLite, original client commands, actual ore/hauling/arrival, and two-client UI remain untested. Native wallets and ore remain authoritative; no duplicate stock, no second corporation registry.
 
 ## Gameplay loop (target)
 
@@ -60,12 +60,13 @@ node --test tests/coop-player-mining-company.test.mjs
 - Verify GameStore/SQLite original native corp wallets, native miner effect shutdown, original hauler warp, native controller/fleet state after forced restart and ambiguous lost ACK on a disposable world.
 - Add role-specific safety and escort allocation with the existing arbitration authority, not a second combat scheduler.
 
-## Stage C — corporate ore ownership and shared warehouse
+## Stage C — corporate ore ownership and shared warehouse (C1 implemented in source)
 
-- Extend the existing original-item title-transfer path to NPC-employer-to-player-corp, with native `items` + `corporationRuntime` transaction and a durable receipt for the **same itemID and original cargoID**. Do not copy a depot quantity.
-- A genuine shared player hangar is the **native rented corporate office**, with divisions 115–121 and independent QUERY/TAKE rights; no extra virtual storage.
-- Each cargoID can end at most one place: miner, hauler, wreck, employer warehouse, player warehouse, reserved industry or market escrow. Cross-feature reconciliation blocks duplicate titles.
-- Decide contract economics explicitly: wage-only service (NPC keeps ore), output purchase (player pays for delivered ore), or owner-supplied ships and ore rights. For V1 use **paid service + separately priced original ore delivery**, so corporate and NPC ownership remain auditable.
+- **Stage C1 implemented** in `coopPlayerMiningOreTitle.cjs`: original tagged NPC warehouse itemID/cargoID, verified post-shift source receipt, native player corporation office divisions 115-121, wallet TAKE/QUERY and atomic item title + both corp wallets + receipt in one original GameStore transaction. No new item mint or shadow wallet.
+- **Stage C1 warehouse audit seam implemented**: `coopNativeWarehouse` provides read-only `getReceipt` and optional strict `verifyTransferredTitle`; the source-only `createPlayerMiningOreAudit` checks title receipt, both ISK journals, item owner and exact native office. `coopNativeStationArrival` accepts the optional trusted callback.
+- **C1 isolated local tests:** combined CH24+31 suite **60/60 PASS**. Real GameStore SQLite and deployed warehouse audit binding still **NOT_RUN**.
+- **C2 not implemented:** trusted native office and price quote callback adapters, title verifier injection in deployed station runtime, native chain conservation integration, client action API, sale and reprocessing consumption receipts. The feature remains **OFF**; source alone is not a live working corporate purchase.
+- Read [CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md](CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md) for exact authority contracts, evidence and manual acceptance checks.
 
 ## Stage D — native sale, profit and 2-player gameplay
 
