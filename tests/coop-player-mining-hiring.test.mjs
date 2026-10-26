@@ -134,3 +134,27 @@ test("noninteger or unversioned operator salary is never treated as an NPC wage"
   assert.equal(x.writeCount(),0);
  }
 });
+
+test("corrupt, null or forged server wage policy cannot advertise NPC workers",()=>{
+ for(const data of ["{}",'{"version":1,"employers":null}',
+  '{"version":1,"employers":[]}',"not-json",
+  '{"version":1,"employers":{"8011":{"enabled":true,"revision":-1}}}']){
+  const reader=readServerWagePolicy({root:"/world",io:{readFileSync:()=>data}});
+  assert.equal(reader(EMPLOYER),null);
+ }
+});
+test("throwing telemetry probe can never roll back an already committed company wage",()=>{
+ const x=fixture();x.base.observe=()=>{throw Error("DIAGNOSTICS_BROKEN")};x.reinit();
+ x.preview();assert.equal(x.accept().status,"FUNDED");
+ assert.equal(x.wallet(BUYER).balance,450);
+ assert.equal(x.wallet(EMPLOYER).balance,750);
+});
+test("hire reports the real native mutation receipt with status without extra wallet write",()=>{
+ const x=fixture(),events=[];x.base.observe=(name,payload)=>events.push({name,payload});x.reinit();
+ x.preview();const r=x.accept();
+ assert.equal(r.status,"FUNDED");assert.equal(events.length,1);
+ assert.equal(events[0].name,"player-mining-hire");
+ assert.equal(events[0].payload.status,"FUNDED");
+ assert.equal(events[0].payload.operationID,r.operationID);
+ assert.equal(x.writeCount(),4);
+});
