@@ -14,7 +14,7 @@ suites; with one it also runs the structural overlay gates (require resolution,
 flag baseline) and the isolated real-engine GameStore gate
 (`Verify-Coop-GameStore-Atomic-Isolated.cjs`, `PASS COOP_032D_PINNED_GAMESTORE_DISPOSABLE`).
 
-`scripts/coop-deploy.cjs --checkout <Code>` must print `CHECK_OK series=6` and
+`scripts/coop-deploy.cjs --checkout 'C:\Games\EveCoop\upstream-evejs\Code'` must print `CHECK_OK series=6` and
 `OVERLAY_OK`, and it now refuses three classes of silent failure: a module that
 keeps a `.cjs` sibling require, a hook that requires a module the overlay never
 installs, and a drifted managed file.
