@@ -278,3 +278,29 @@ Three buyer layers exist in the repo, and only the first one pays today:
 Placing NPC buy orders without backing is forbidden by the repo rules, so the only
 honest ways forward are: verify+enable the native industry consumer, or seed genuinely
 backed ore demand (market daemon), or sell in regions where real orders exist.
+
+## Варіант (а): нативна індустрія як покупець руди — що знайдено (00:05Z)
+
+Читав нативний codebase і живий store:
+
+* `server/src/services/industry/*` існує (12 сервісів), у store є таблиці
+  `industryJobs`, `industryBlueprintState`, `industryFacilityState`, `industryRuntime`.
+* **Усі вони порожні**: jobs 0, blueprintState 0, facilityState 0 (industryRuntime 2 —
+  лише метадані). Тобто у світі немає ні фабрики, ні креслення, ні матеріалів.
+* `industryChatCommands.js` експортує `executeBlueprintCommand` і
+  `executeBlueprintAutoCommand`, і всередині вже є `seedMaterialsForBlueprint` та
+  `topUpWalletForBuild` — тобто нативний шлях «зробити реальний білд» у чекауті є, і він
+  вміє сам посіяти матеріали й докинути гаманець.
+* Але весь co-op стек індустрії **свідомо зафенсований** `supportsLiveRuntime:false`
+  (bindings, executor, rust-sell, title-transfer, recovery fence...), а `planner`
+  вимагає онлайн-фасиліті + `blueprintState.records`.
+
+Висновок: (а) — це не перемикач, а bootstrap: треба створити NPC-виробника (фасиліті на
+станції, креслення з нашою рудою в матеріалах, гаманець+матеріали через нативні
+команди), прогнати один реальний джоб із доказами, і лише потім атестувати рантайм.
+
+Наступний крок, який я роблю без ризику: підняти нативний білд через
+`executeBlueprintAutoCommand` для NPC-корпи (нативний шлях, не вигадані записи), з
+окремим журналом доказів. Якщо для цього потрібна сесія, якої в headless-світі немає —
+це і буде першим точним блокером, і тоді рішення: невеликий L2-міст «NPC factory
+bootstrap» або L1-пропозиція вгору.
