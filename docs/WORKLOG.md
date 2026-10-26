@@ -163,3 +163,23 @@ Evidence: new living-npc-station-sale-skipped event once per trip with status/re
 Why: the new sale-skip telemetry had no regression test, and the compiled-module harness did not know coopObserve
 Where: tests/coop-native-station-arrival.test.mjs
 Evidence: station arrival 16/16 pass; the new case asserts exactly one living-npc-station-sale-skipped with status NO_BID, the given reason, and the cargo still deposited
+### 2026-10-26T12:08Z · 668df2e · L2 · fix(P0): source-backed original cargo recovery across repeated restarts
+
+Why: An original cargo row re-adopted after one restart was ignored forever after another restart. A second recovery must prove no original native warehouse, ItemStore or depot settlement before reparenting.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLite/Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T12:08Z · 890d57d · TEST · test(P0): block second adoption on warehouse receipts, ItemStore stock and depot ledger
+
+Why: Guard repeat adoption with tests for original cargo identity, explicit warehouse root, pending/committed native receipts, tagged ItemStore stock, depot state, and failure-before-write semantics.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLite/Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T12:08Z · d8cced8 · DOCS · docs(P0): operator-gated second restart custody protocol and NOT_RUN native gates
+
+Why: Document default-off activation, authoritative warehouse root, single-writer requirement and native physical NOT_RUN gates.
+Where: docs/HAUL_CARGO_SECOND_RESTART.md
+Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLite/Rust and two-client gameplay NOT_RUN.
+### 2026-10-26T12:08Z · 05aaa20 · DOCS · docs(test): record 38 exact-source adoption regression scenarios
+
+Why: Correct the isolated exact-source test count to include the missing-root regression.
+Where: docs/HAUL_CARGO_SECOND_RESTART.md
+Evidence: 38/38 exact-source isolated V8 test callbacks PASS; original Node/SQLite/Rust and two-client gameplay NOT_RUN.
