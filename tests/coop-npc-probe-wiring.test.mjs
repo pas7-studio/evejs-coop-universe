@@ -225,3 +225,19 @@ test("EX-03B9 native scanner priority cannot be starved by virtual miners",()=>{
  assert.match(push,/integration\/coopNpcExpedition\*\.cjs/);
  assert.match(push,/tests\/coop-npc-\*/);
 });
+
+test("EX-03B11 native scanner handoff orders the scout before escorted patrols",()=>{
+ const director=read("integration/coopNpcExpeditionDirector.cjs");
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ const pinned=read("tests/coop-npc-probe-pinned-native-source.test.mjs");
+ assert.match(director,/const warpCandidates=scoutWarpFirst\?\[scout\]:all/);
+ assert.match(director,/action:scoutWarpFirst\?/);
+ assert.match(director,/competition\.observe\(\{scene,siteID:tip\.siteID,shipID:scout\.entityID\}\)/);
+ assert.match(director,/nativeSite\(tip\.systemID,tip\.siteID,true\)/);
+ assert.match(director,/scoutWarpOrders,patrolWarpOrders,scoutOnGridVerified/);
+ assert.match(runtime,/scoutWarpOrders:result\.scoutWarpOrders\|\|0/);
+ assert.match(runtime,/patrolWarpOrders:result\.patrolWarpOrders\|\|0/);
+ assert.match(runtime,/sourceScoutOnGridVerified:result\.scoutOnGridVerified\|\|0/);
+ assert.match(pinned,/pinned native certainty 1 flows from real original probes/);
+ assert.match(pinned,/EX-03B11/);
+});
