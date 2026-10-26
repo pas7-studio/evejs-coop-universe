@@ -119,10 +119,15 @@ async function main() {
   // typeID -> { real, stationFactor } where stationFactor scales the real average
   // by this station's own deviation from the type median, clamped.
   const anchors = new Map();
+  const basePriceByType = new Map(typeRows.map((row) => [Number(row.type_id), Number(row.base_price)]));
   let anchored = 0;
   let skipped = 0;
   for (const [typeID, values] of byType) {
-    const real = prices.get(typeID);
+    // Types the public ESI no longer quotes (SKINs, apparel, blueprints,
+    // deprecated modules) still need a consistent board, so fall back to the
+    // base price we already store instead of leaving stale seed rows behind.
+    const esiPrice = prices.get(typeID);
+    const real = esiPrice > 0 ? esiPrice : basePriceByType.get(typeID);
     if (!(real > 0)) { skipped += 1; continue; }
     const current = median(values);
     if (!(current > 0)) { skipped += 1; continue; }
@@ -163,13 +168,18 @@ async function main() {
     for (const row of stationRows) {
       const anchor = anchors.get(Number(row.type_id));
       if (!anchor) continue;
-      const deviation = Number(row.price) / anchor.current;
-      const spread = Math.min(MAX_SPREAD, Math.max(MIN_SPREAD, deviation));
+      const stationID = Number(row.station_id);
+      const typeID = Number(row.type_id);
+      // Derive the local spread deterministically from the station/type pair
+      // instead of scaling the previous price. Scaling the old price kept
+      // whatever legacy artefact the seed happened to contain, so a re-sync
+      // could never fully clean the board.
+      const spread = MIN_SPREAD + (MAX_SPREAD - MIN_SPREAD) * hashFraction(stationID, typeID, "spread");
       const nextPrice = Math.max(
         1,
-        Math.round(anchor.real * spread * hashJitter(Number(row.station_id), Number(row.type_id)) * 100) / 100,
+        Math.round(anchor.real * spread * hashJitter(stationID, typeID) * 100) / 100,
       );
-      stockUpdates += updateStock.run(nextPrice, now, Number(row.station_id), Number(row.type_id)).changes;
+      stockUpdates += updateStock.run(nextPrice, now, stationID, typeID).changes;
     }
     for (const row of typeRows) {
       const typeID = Number(row.type_id);
