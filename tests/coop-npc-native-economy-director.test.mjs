@@ -20,8 +20,15 @@ function fixture({target=100}={}) {
  const native={
   quote:p=>({verifiedNative:true,cost:9,tax:1,totalCost:10,
    ownerID:OWNER,blueprintID:BPO,productTypeID:TYPE,facilityID:STATION}),
-  installOnce:(p,q,id)=>{installCalls++;if(job)throw Error("DUP_INSTALL");wallet-=10;
-    debit={verifiedNative:true,jobID:970000000000000,ownerID:OWNER,amountCents:1000};
+  installOnce:(p,q,id)=>{installCalls++;if(job)throw Error("DUP_INSTALL");
+    // The fake native authority must debit the exact canonical source
+    // quote, including legitimate zero-cost jobs. Hardcoded 10 ISK makes
+    // the zero-cost original director regression fail for the wrong reason.
+    assert.equal(typeof q.totalCost,"number");
+    const amountCents=Math.round(q.totalCost*100);
+    assert.equal(Number.isSafeInteger(amountCents),true);
+    wallet-=q.totalCost;
+    debit={verifiedNative:true,jobID:970000000000000,ownerID:OWNER,amountCents};
     job={jobID:970000000000000,ownerID:OWNER,coopOperationID:id,productTypeID:TYPE,blueprintID:BPO,status:1};
     return{status:"INSTALLED",jobID:job.jobID}},
   markReadyOnce:id=>{if(!elapsed)return{status:"BLOCKED",error:"NATIVE_JOB_NOT_YET_READY"};job.status=3;return{status:"READY"}},
