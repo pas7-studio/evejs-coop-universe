@@ -7,6 +7,11 @@
 //
 // The ranking is pure so it can be tested without a market or a socket; the
 // oracle only adds a small cache in front of the real market daemon.
+// Telemetry must never change gameplay: one guarded entry point, same shape.
+const load = (name) => {
+  try { return require("./" + name); } catch (_error) { return require("./" + name + ".cjs"); }
+};
+const { observe } = load("coopObserve");
 const positive = value => {
   const numeric = Math.trunc(Number(value) || 0);
   return numeric > 0 && Number.isSafeInteger(numeric) ? numeric : 0;
@@ -244,7 +249,7 @@ function createDestinationOracle({ call, getOreTypes, getSystemRegion, clock = (
     const ore = preferredOre({ systemID });
     if (ore.status === "WARMING") return ore;
     const best = ore.best || null;
-    probe.observe("living-economy-ore", null, { spaceState: { systemID } }, {
+    observe(probe, "living-economy-ore", { systemID }, {
       reason,
       status: ore.status,
       systemID,

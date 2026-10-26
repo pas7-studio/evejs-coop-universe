@@ -322,7 +322,7 @@ function unloadCargo(scene,fleet,options={}){
    }
    hauler.nativeCargoItems=store.buildNativeCargoItems(hauler.itemID);
   }
-  if(stacks)probe.observe("living-hauler-delivered",null,{spaceState:{systemID:fleet.systemID}},
+  if(stacks)safeObserve(probe,"living-hauler-delivered",{systemID:fleet.systemID},
     {fleetID:fleet.fleetID,stacks,quantity,volumeM3,destination:"durable-virtual-depot",blocked});
   return {status:blocked?"NEEDS_REPAIR":stacks?"DELIVERED":"NO_CARGO",stacks,quantity,volumeM3,blocked};
  }catch(error){console.warn("[CoopHaul] unload",error.message);return {status:"ERROR",stacks:0};}
