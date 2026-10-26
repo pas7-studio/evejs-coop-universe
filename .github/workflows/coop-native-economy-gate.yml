@@ -38,13 +38,8 @@ jobs:
       - name: Confirm real node:sqlite is available
         run: |
           node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE ci(value INTEGER);INSERT INTO ci VALUES(1)');if(db.prepare('SELECT value FROM ci').get().value!==1)process.exit(1);db.close()"
-      - name: Execute COOP-060 real SQLite E2E when included in branch
-        run: |
-          if test -f tests/coop-npc-buyer-two-session-sqlite-e2e.test.mjs; then
-            node --test tests/coop-npc-buyer-two-session-sqlite-e2e.test.mjs
-          else
-            echo "COOP-060 E2E is not present on this base commit; candidate PR requires it."
-          fi
+      - name: Execute two-session NPC market backend E2E on durable SQLite
+        run: node --test tests/coop-npc-buyer-two-session-sqlite-e2e.test.mjs
       - name: Escort real-source durable replay and wallet regression
         run: |
           node --check integration/coopEscortFlightGate.cjs

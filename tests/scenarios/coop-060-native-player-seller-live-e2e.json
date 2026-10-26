@@ -1,0 +1,87 @@
+{
+  "schema": "coop-060-native-player-seller-live-e2e/v1",
+  "source": "gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "environment": "disposable-local-world-only",
+  "status": "NOT_RUN",
+  "requiredEvidence": [
+    "two independent gameplay client recordings",
+    "Rust order and price_history before/after",
+    "GameStore original item and five-table wallet/escrow receipt before/after",
+    "native seller event stream and observer negative proof",
+    "journal, approval audit log and restart timestamps"
+  ],
+  "scenarios": [
+    {
+      "id": "C060-01",
+      "description": "Real player A opens a genuine sell order; original item physically enters native marketEscrow; player B is connected independently.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-02",
+      "description": "NPC corporate trader independently verifies SDE material shortage and native player sell order; no synthetic goods or ISK appear.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-03",
+      "description": "Real Rust market claim settles original item from seller escrow into corporate hangar; one five-table GameStore SQLite commit conserves gross, seller net, tax.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-04",
+      "description": "Real pinned Rust price_history row reflects exactly +20 volume and +1 trade count; no RecordTrade duplicate; native order is filled.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-05",
+      "description": "Seller A receives one native Filled order and wallet event; observer player B receives neither A's market event nor wallet amount.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-06",
+      "description": "Native market/wallet UI refreshed independently by both real clients agrees with original GameStore/Rust; source item ID is unique.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-07",
+      "description": "Repeat finalization ACK against native Rust daemon and same claim key leaves buyer wallet, seller wallet, item owner and price history unchanged.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-08",
+      "description": "Seller logs out before NPC fills; reconnect delivers one eligible missed Filled+wallet event to seller only, and no duplicate on second login.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-09",
+      "description": "Kill and restart actual separate Rust market and GameStore services after GameStore COMMIT before journal ACK; ordinary A-Life tick blocks; authenticated operator ACK uses original key with no second ISK or item transfer.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-10",
+      "description": "Unknown or corrupted Rust claim/history, escrow owner or sales tax is fail-closed with no additional item, wallet or client event.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-11",
+      "description": "Wrong operator action, stale lock, replayed HMAC request or missing auth cannot perform recovery on the real isolated server.",
+      "status": "NOT_RUN",
+      "evidence": []
+    },
+    {
+      "id": "C060-12",
+      "description": "Disable all opt-in flags, restart isolated world and confirm no native NPC player purchase/recovery behavior and no protected data mutations.",
+      "status": "NOT_RUN",
+      "evidence": []
+    }
+  ]
+}
