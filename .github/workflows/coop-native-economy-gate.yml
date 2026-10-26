@@ -45,6 +45,12 @@ jobs:
           else
             echo "COOP-060 E2E is not present on this base commit; candidate PR requires it."
           fi
+      - name: Escort real-source durable replay and wallet regression
+        run: |
+          node --check integration/coopEscortFlightGate.cjs
+          node --check integration/coopEscortRuntime.cjs
+          node --check integration/coopEscortNativeBootstrap.cjs
+          node --test tests/coop-escort-durable-flight-recovery.test.mjs tests/coop-escort-peaceful-durable-replay.test.mjs tests/coop-escort-native-funds.test.mjs tests/coop-escort-peaceful-real-sqlite-restart.test.mjs tests/coop-escort-terminal-attendance.test.mjs
       - name: Verify real Node SQLite and all COOP A-Life regressions
         shell: pwsh
         run: ./scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests -ReportDir "${{ runner.temp }}/evejs-alife-economy-gates"

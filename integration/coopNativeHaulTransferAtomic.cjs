@@ -108,7 +108,8 @@ function createAtomicHaulMover({gameStore,nativeStore,resolveType,clock=()=>Date
    return failed(miner,hauler,fleet,"ALIFE10_TIMESTAMP_INVALID");
   const after={...before,entityID:haulerID,ownerID:pos(hauler.ownerID),
     transient:false,coopHaulFleetID:fleetID,coopHaulFromMinerID:minerID,
-    coopHaulOriginalOwnerID:pos(miner.ownerID),coopHaulLoadedAt:timestamp};
+    coopHaulOriginalOwnerID:pos(miner.ownerID),coopHaulSystemID:systemID,
+    coopHaulLoadedAt:timestamp};
   const beforeHash=sha(before),afterHash=sha(after);
   const proof={version:1,status:"COMMITTED",cargoID:id,systemID,fleetID,
     minerID,haulerID,sourceOwnerID:pos(miner.ownerID),
