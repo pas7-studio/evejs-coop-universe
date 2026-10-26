@@ -77,3 +77,8 @@ Evidence: tests/coop-haul-cargo-adoption.test.mjs 16/16 (owner's expanded suite 
 Why: the L1 recharge rate alone did not help: runtime.js only advances capacitor inside active module cycles, so a sessionless NPC that failed one activation never recovered; adoption telemetry also had to use the shared guarded entry point
 Where: integration/coopHaulCargoAdoption.cjs, scripts/gen-upstream-patches.cjs
 Evidence: 0003 applies clean, OVERLAY_OK patched 54 anchorMismatch 0, npcBehaviorLoop node --check, adoption 16/16, patch-series tests 4/4; live cap proof pending
+### 2026-10-26T11:28Z · bb7672b · OPS · refactor(patches): make the series applier idempotent and selectable
+
+Why: re-running the series failed on already-applied patches and forced a manual git apply for 0003, which is exactly the second mechanism the doctrine forbids
+Where: scripts/apply-upstream-patches.cjs
+Evidence: round trip proved: 3 reversed then 3 applied; second --apply reports PRESENT for all 3; OVERLAY_OK patched 54 after the round trip
