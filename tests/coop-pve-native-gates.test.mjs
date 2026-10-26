@@ -53,3 +53,11 @@ test("CI pinned original gameplay limitations are explicit",()=>{
  assert.match(code,/PINNED_ROUNDTRIP_NOT_BYTE_EXACT/);
  assert.match(code,/PINNED_OVERLAY_NOT_IDEMPOTENT/);
 });
+
+test("clean pinned overlay CI cannot silently certify unseeded original native rare RNG",()=>{
+ const code=fs.readFileSync(path.join(root,"scripts/Run-Pve-Native-Gates.cjs"),"utf8");
+ assert.match(code,/rareNativeRng=\{status:"NOT_RUN"/);
+ assert.match(code,/EVEJS_PVE_RUN_NATIVE_RARE_RNG==="1"/);
+ assert.match(code,/rareNativeRng=\{status:"PASS"/);
+ assert.match(code,/tests\/coop-pve-native-rare-candidates\.test\.mjs/);
+});
