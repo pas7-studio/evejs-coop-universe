@@ -95,7 +95,7 @@ function verifyReAdoptionCustody(row, options={}) {
    return "RE_ADOPTION_WAREHOUSE_ITEM_EXISTS";
   const depot=options.custodyDepot||
    require("./coopNativeDepot").getNativeDepot();
-  if(typeof depot?.snapshot!=="function"||typeof depot?.audit!=="function")
+  if(typeof depot?.snapshot!=="function")
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   const state=depot.snapshot();
   if(state?.version!==1||!state.receipts||!state.pending||
@@ -107,8 +107,8 @@ function verifyReAdoptionCustody(row, options={}) {
   if(Object.hasOwn(state.receipts,String(cargoID))||
      Object.hasOwn(state.pending,String(cargoID)))
    return "RE_ADOPTION_DEPOT_RECEIPT_EXISTS";
-  if(!state.totals||typeof state.totals!=="object"||
-     Array.isArray(state.totals))
+  if(typeof depot.audit!=="function"||!state.totals||
+     typeof state.totals!=="object"||Array.isArray(state.totals))
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   // Absence of an individual receipt is NOT evidence that no credit was
   // committed if the global depot journal is inconsistent. In particular,
