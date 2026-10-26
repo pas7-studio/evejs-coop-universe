@@ -204,3 +204,16 @@ test("EX-03 strict source provenance is checked by both scanner and launch repla
  assert.match(flight,/existing\.nativeNpcProbe===true/);
  assert.match(flight,/existing\.nativeNpcCargoID===row\.cargoID/);
 });
+
+test("EX-03B9 native scanner priority cannot be starved by virtual miners",()=>{
+ const director=read("integration/coopNpcExpeditionDirector.cjs");
+ const world=read("integration/coopVirtualWorldRuntime.cjs");
+ const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ assert.match(director,/roles\[a\.pilotID\]==="patrol"/);
+ assert.match(director,/isNativeProbeScout\(scout\.entityID,scene\.systemID\)/);
+ assert.match(director,/if\(equipped\.length>=2\)break/);
+ assert.match(world,/isNativeProbeScout:\(id,systemID\)=>/);
+ assert.match(world,/store\.listNativeModulesForEntity\(id\)/);
+ assert.match(world,/m\.groupID===481&&m\.categoryID===7/);
+ assert.match(workflow,/feat\/ch22-23-npc-expedition-competition-20261026/);
+});
