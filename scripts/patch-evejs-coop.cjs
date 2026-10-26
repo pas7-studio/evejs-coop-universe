@@ -202,6 +202,8 @@ const specs=[
    line:'      require("../../space/coopMiningTrace").note("TARGET_LOCK_FAILED",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),errorMsg:String((targetLockResult&&targetLockResult.errorMsg)||"NONE")});'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
+   {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
+    line:'    if (minerEntity) { try { require("../../space/coopNpcCapacitor").topUp(minerEntity); } catch (_coopCapError) { /* capacitor top-up must never break the mining tick */ } }'},
    {anchor:"    if (!targetEntity) {\n      delete assignmentMap[toInt(minerEntity.itemID, 0)];",after:true,
     line:'      require("../../space/coopMiningTrace").note("NO_MINEABLE_TARGET",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),rocks:(Array.isArray(availableTargetEntries)?availableTargetEntries.length:-1),claims:(claimCounts instanceof Map?claimCounts.size:-1),activeAsteroidID:toInt(fleetRecord&&fleetRecord.activeAsteroidID,0)});'},
    {anchor:"    const distanceToTarget = hooks.getSurfaceDistance(minerEntity, targetEntity);",after:true,
