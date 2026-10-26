@@ -88,6 +88,11 @@ test("original standing transaction must be new with correct event type",()=>{
  f.now().standing[0].eventTypeID=74;
  assert.equal(f.report().status,"NATIVE_PERSONAL_STANDING_TRANSACTION_UNVERIFIED");
 });
+test("opposite-sign original standing receipt cannot certify mission reputation gain",()=>{
+ const f=fixture();f.credit();
+ f.now().standing[0].modification=-0.015;
+ assert.equal(f.report().status,"NATIVE_PERSONAL_STANDING_TRANSACTION_UNVERIFIED");
+});
 test("stale standing history or unchanged raw value alone cannot replace actual mission receipt",()=>{
  const f=fixture();f.credit();
  f.now().standing=[f.older];
