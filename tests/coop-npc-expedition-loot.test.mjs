@@ -150,3 +150,14 @@ test("EX-03B15 valid station location but foreign corporate owner refuses native
  assert.equal(other.deliver(f.args).reason,"EX03_LOOT_NATIVE_STATION_ARRIVAL_MISSING");
  assert.equal(f.rows.get(itemID).locationID,entityID);
 });
+
+test("EX-03B15 original item on destroyed or non-native NPC hull reports repair, never delivery",()=>{
+ const f=fixture(),d=f.make();
+ assert.equal(d.collect(f.args).status,"NATIVE_ORIGINAL_LOOT_IN_SHIP");
+ assert.equal(d.inspectReceipt(itemID,{scene:f.args.scene}).status,"IN_SHIP");
+ f.ship.nativeNpc=false;
+ assert.equal(d.inspectReceipt(itemID,{scene:f.args.scene}).status,
+  "NEEDS_OPERATOR_REPAIR");
+ assert.equal(f.rows.size,1,"original cargo item remains in ItemStore");
+ assert.equal(f.rows.get(itemID).itemID,itemID);
+});
