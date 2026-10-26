@@ -54,8 +54,8 @@ function createMiningAgent({getAgent,getMission,getSessions,getFleetRecords,
   const r=j.row,manager=access.canIndustry(session,r.corporationID)===true;
   const seq=Number.isSafeInteger(r.commandSeq)?r.commandSeq:0;
   const started=r.directive==="MINE"&&r.commandState==="IDLE";
-  const canActivate=manager&&(started||r.directive==="HOLD"||
-   r.directive==="MINE"&&r.commandState!=="PENDING");
+  const canActivate=manager&&(started||
+   r.directive==="HOLD"&&r.commandState==="NATIVE_REQUESTED");
   const state="NPC mining fleet "+r.fleetID+" | original system "+r.systemID+
    " | miners "+(Array.isArray(r.minerIDs)?r.minerIDs.length:0)+
    " | haulers "+(Array.isArray(r.haulerIDs)?r.haulerIDs.length:0)+
