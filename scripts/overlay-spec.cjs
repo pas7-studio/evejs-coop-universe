@@ -65,6 +65,8 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopNativeMiningCycleConserva
 names.splice(names.indexOf("coopNativeMiningCycleConservation")+1,0,"coopNativeMiningAtomic");
 // ALIFE-08 durable native miner/hauler identity (opt-in).
 names.splice(names.indexOf("coopNativeMiningAtomic")+1,0,"coopNativeMiningFleetDurable");
+// CH24+31: original mining fleet shift, default OFF and no parallel tick.
+names.splice(names.indexOf("coopNativeMiningFleetDurable")+1,0,"coopPlayerMiningCompany","coopPlayerMiningShiftOrders","coopPlayerMiningFleetTick");
 // Durable cargo write is the single owner of "make this row survive a restart".
 names.splice(names.indexOf("coopNativeHaulCargo")+1,0,"coopDurableCargoWrite");
 // ALIFE-10 strict native miner->hauler original cargoID atomic handoff.
