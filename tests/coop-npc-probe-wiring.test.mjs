@@ -117,7 +117,7 @@ test("EX-03B4 original scout hardware is a conditional source-authored fitting",
  assert.match(deploy,/\[switch\]\$EnableNpcScoutLoadout/);
  assert.match(deploy,/EVEJS_COOP_NPC_SCOUT_LOADOUT: '1'/);
  const manifest=read("scripts/overlay-spec.cjs");
- assert.match(manifest,/"coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle","coopNpcScoutLoadout"/);
+ assert.match(manifest,/"coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle","coopNativeNpcProbeSceneTransition","coopNpcScoutLoadout"/);
 });
 
 test("EX-03B5 source expiry and recovery use original gameStore single-table durability barrier",()=>{
@@ -144,4 +144,34 @@ test("EX-03B5 cannot produce player/client inventory or synthetic ISK during pro
  assert.doesNotMatch(lifecycle,/grantItemToCharacterLocation|transferISK|wallet|launchCharacterProbes|resolveNativeSite/);
  assert.match(lifecycle,/p\.probeID!==row\.cargoID/);
  assert.match(lifecycle,/dist\(physical\.position,p\.position\)<=1/);
+});
+
+test("EX-03B6 native probe position changes are source-first broadcast transitions",()=>{
+ const move=read("integration/coopNativeNpcProbeSceneTransition.cjs");
+ const sweep=read("integration/coopNativeNpcProbeSweep.cjs");
+ const flight=read("integration/coopNativeNpcProbeFlight.cjs");
+ const world=read("integration/coopVirtualWorldRuntime.cjs");
+ const manifest=read("scripts/overlay-spec.cjs");
+ assert.match(move,/removeDynamicEntity\(scene\.systemID,id/);
+ assert.match(move,/scene\.spawnDynamicEntity\(candidate,\{broadcast:true\}\)/);
+ assert.match(move,/nativeNpcCargoID!==id/);
+ assert.match(move,/allowSessionOwned:false,broadcast:true/);
+ assert.match(sweep,/relocateNativeProbe\(\{scene,row:changed\}\)/);
+ assert.match(sweep,/flushed=flushNpcCargo\(\)/);
+ assert.match(flight,/relocateNativeProbe\(\{scene:ctx\.scene,row\}\)/);
+ assert.match(world,/createNativeNpcProbeSceneTransition/);
+ assert.match(world,/npcProbeSceneTransition\.move\(payload\)/);
+ assert.match(manifest,/"coopNativeNpcProbeSceneTransition"/);
+ assert.doesNotMatch(sweep,/live\.position=\{\.\.\.position\}/);
+});
+test("EX-03B6 CI includes real SQLite SIGKILL and native scene acceptance fixtures",()=>{
+ const ci=read(".github/workflows/ex03-native-npc-probes.yml");
+ const script=read("scripts/verify-npc-probe-sqlite-crash.mjs");
+ assert.match(ci,/npm ci --no-audit --no-fund/);
+ assert.match(ci,/node scripts\/verify-npc-probe-sqlite-crash\.mjs/);
+ assert.match(ci,/coop-native-npc-probe-scene-transition\.test\.mjs/);
+ assert.match(script,/process\.kill\(process\.pid,"SIGKILL"\)/);
+ assert.match(script,/EVEJS_GAMESTORE_DATA_DIR:data/);
+ assert.match(script,/EVEJS_PINNED_SERVER/);
+ assert.match(script,/flushTableSync\("npcCargo"\)/);
 });
