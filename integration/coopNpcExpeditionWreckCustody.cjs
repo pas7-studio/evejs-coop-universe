@@ -60,9 +60,12 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
    return deny("EX03_WRECK_SOURCE_UNAVAILABLE");
   const candidates=rows.filter(x=>String(x.customInfo||"").startsWith(
    "coop-npc-expedition:v1:"));
+  // Even with no current cargo, a previous durable wreck for the same ship
+  // means an incomplete earlier death and must never be silently replaced.
+  if(other.some(x=>x?.sourceEntityID===shipID&&x.wreckID!==wreckID))
+   return deny("EX03_WRECK_PREVIOUS_DEATH_OR_UNBOUNDED");
   if(candidates.length===0)return {success:true,status:"NO_EXPEDITION_LOOT",itemIDs:[]};
-  if(candidates.length>maxItems||
-   other.some(x=>x?.sourceEntityID===shipID&&x.wreckID!==wreckID))
+  if(candidates.length>maxItems)
    return deny("EX03_WRECK_PREVIOUS_DEATH_OR_UNBOUNDED");
   if(candidates.some(x=>{
    const r=parse(x.customInfo);
@@ -146,7 +149,18 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
      ...((result.data?.changes)||[])]},originalItemID:itemID,
    nativeItemMinted:false};
  }
- function canDestroy(wreckID){return list({wreckID}).length===0}
+ function canDestroy(wreckID){
+  const w=verifiedWreck(wreckID);
+  if(!w)return false;
+  // Never delete a live native wreck when original ItemStore cannot be read,
+  // or when a corrupt/partial tag may hide custody from public inventory.
+  let present;
+  try{present=cargo(wreckID,items.ITEM_FLAGS.HANGAR)}
+  catch{return false}
+  if(!present)return false;
+  return !present.some(x=>String(x?.customInfo||"").startsWith(
+   "coop-npc-expedition:v1:"));
+ }
  return Object.freeze({stage,list,claim,canDestroy});
 }
 module.exports={createNpcExpeditionWreckCustody,parse};
