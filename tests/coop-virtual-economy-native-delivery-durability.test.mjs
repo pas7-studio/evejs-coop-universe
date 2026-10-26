@@ -100,3 +100,56 @@ test("P0: no-op sync and zero-step tick never make memory diverge from disk",()=
  assert.equal(e.syncNativeDeliveries({[system]:0}).quantity,0);
  assert.equal(createEconomy({file}).snapshot().systems[system].nativeDelivered,undefined);
 }));
+
+test("P0: corrupted durable native-delivery checkpoint never re-credits original source ore",()=>scoped(({file})=>{
+ const base={version:1,lastAt:100,systems:{[system]:{
+  ore:200,goods:200,demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{},events:[]};
+ for(const bad of [-100,-1,null,"0","100",1.5,Number.MAX_SAFE_INTEGER+1]){
+  const original=structuredClone(base);
+  original.systems[system].nativeDelivered=bad;
+  const bytes=JSON.stringify(original);
+  fs.writeFileSync(file,bytes);
+  assert.throws(()=>createEconomy({file,clock:()=>100}),
+   /ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID/,String(bad));
+  assert.equal(fs.readFileSync(file,"utf8"),bytes,
+   "must preserve original journal untouched for operator reconciliation");
+ }
+}));
+
+test("P0: corrupt economy systems cannot be accepted as legitimate native balance",()=>scoped(({file})=>{
+ const base={version:1,lastAt:0,systems:{},pilots:{},events:[]};
+ for(const invalid of [null,[],true,{"30000144":null},
+  {"30000144":[]},{"30000144":"not-a-native-balance"}]){
+  fs.writeFileSync(file,JSON.stringify({...base,systems:invalid}));
+  assert.throws(()=>createEconomy({file,clock:()=>0}),
+   /ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID/);
+ }
+}));
+
+test("P0: legitimate zero, prior and absent native high-water values remain compatible",()=>scoped(({file})=>{
+ const base={version:1,lastAt:100,systems:{[system]:{
+  ore:200,goods:100,demand:100,security:50,losses:0
+ }},pilots:{},events:[]};
+ for(const marker of [undefined,0,100]){
+  const state=structuredClone(base);
+  if(marker!==undefined)state.systems[system].nativeDelivered=marker;
+  fs.writeFileSync(file,JSON.stringify(state));
+  const e=createEconomy({file,clock:()=>100});
+  const response=e.syncNativeDeliveries({[system]:100});
+  assert.equal(response.quantity,marker===100?0:100);
+  assert.equal(e.snapshot().systems[system].nativeDelivered,100);
+  assert.equal(createEconomy({file}).syncNativeDeliveries({[system]:100}).quantity,0);
+ }
+}));
+
+test("P0: externally damaged native high-water fails read fence before it can be overwritten",()=>scoped(({file})=>{
+ const e=createEconomy({file,clock:()=>0});
+ assert.equal(e.syncNativeDeliveries({[system]:100}).quantity,100);
+ const snapshot=JSON.parse(fs.readFileSync(file,"utf8"));
+ snapshot.systems[system].nativeDelivered=-100;
+ fs.writeFileSync(file,JSON.stringify(snapshot));
+ assert.throws(()=>e.syncNativeDeliveries({[system]:100}),/ECONOMY_CONCURRENT_JOURNAL_DRIFT/);
+ assert.throws(()=>e.snapshot(),/ECONOMY_PERSISTENCE_UNVERIFIED/);
+ assert.throws(()=>createEconomy({file}),/ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID/);
+}));

@@ -9,6 +9,17 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
  try{
   state=JSON.parse(fsApi.readFileSync(file,"utf8"));
   if(state.version!==1)throw Error("incompatible economy state");
+  // nativeDelivered is a durable monotone high-water mark of original
+  // depot receipts. Treating a malformed value as zero would re-credit
+  // historical cargo on the next syncNativeDeliveries() call.
+  if(!state.systems||typeof state.systems!=="object"||Array.isArray(state.systems))
+   throw Error("ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID");
+  for(const entry of Object.values(state.systems)){
+   if(!entry||typeof entry!=="object"||Array.isArray(entry)||
+      (Object.prototype.hasOwnProperty.call(entry,"nativeDelivered")&&
+       (!Number.isSafeInteger(entry.nativeDelivered)||entry.nativeDelivered<0)))
+    throw Error("ECONOMY_NATIVE_DELIVERY_CHECKPOINT_INVALID");
+  }
   journalPresent=true;
  }catch(e){if(e.code!=="ENOENT")throw e;}
  if(!state)state={version:1,lastAt:clock(),systems:{},pilots:{},events:[]};
