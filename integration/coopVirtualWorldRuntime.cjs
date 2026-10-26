@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -498,7 +498,32 @@ function advanceNativeNpcExpeditions(){
         source:"ORIGINAL_NPC_CARGO_DURABLE_BEFORE_SCENE",
         nativeWalletMutation:false,nativeLootGranted:false});
     }
-    return npcProbeEvidence.scan({scene,entityID,assignments});
+    const result=npcProbeEvidence.scan({scene,entityID,assignments});
+    // EX-03B4: independently opt-in blind sweep, AFTER native result
+    // certainty is checked, never use system-private site coordinates.
+    if(process.env.EVEJS_COOP_NPC_PROBE_SWEEP==="1" &&
+       process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1" &&
+       result.status==="NATIVE_PROBE_SCANNED" &&
+       !result.proofs.length){
+     if(!npcProbeSweep){
+      const gameStore=require("../gameStore");
+      npcProbeSweep=require("./coopNativeNpcProbeSweep").createNativeNpcProbeSweep({
+       getNativeEntity:id=>store.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       listNativeCargoForEntity:id=>store.listNativeCargoForEntity(id),
+       upsertNativeCargo:row=>store.upsertNativeCargo(row),
+       flushNpcCargo:()=>gameStore.flushTableSync("npcCargo")
+      });
+     }
+     const moved=npcProbeSweep.tick({scene,entityID,assignments});
+     if(moved.moved||moved.status==="BLOCKED"&&backgroundTicks%10===0)
+      probe.observe("living-npc-native-probe-sweep",null,
+       {spaceState:{systemID:scene.systemID}},
+       {entityID,status:moved.status,reason:moved.reason||null,
+        originalCargoID:moved.originalCargoID||null,
+        nativeWalletMutation:false,nativeLootGranted:false});
+    }
+    return result;
    }
   });
  const roles=Object.fromEntries((world.snapshot()?.pilots||[])
