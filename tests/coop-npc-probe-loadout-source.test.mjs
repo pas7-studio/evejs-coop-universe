@@ -54,8 +54,8 @@ function evaluator(code, env={},opts={}){
     categoryID:8,name:"Scanner Probe"});
  const fn=new Function("nativeNpcStore","resolveItemByTypeID","toPositiveInt",
   "isNpcChargeCompatibleWithModule","resolveNativeCargoSingleton","normalizeModuleState",
-  segment+"return buildNativeCargoRecords;")(
-  store,type,toPositiveInt,()=>true,()=>false,()=>({}));
+  "process",segment+"return buildNativeCargoRecords;")(
+  store,type,toPositiveInt,()=>true,()=>false,()=>({}),process);
  const oldLaunch=process.env.EVEJS_COOP_NPC_PROBE_LAUNCH,
   oldSplit=process.env.EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT;
  try{
