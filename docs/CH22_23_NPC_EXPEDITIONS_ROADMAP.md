@@ -1,6 +1,6 @@
 # Chat 22 + 23 — Exploration, wormholes and competing NPC expeditions
 
-**2026-10-26 status: EX-01 CODE_READY / ISOLATED_TESTED / NOT_NATIVE_WIRED / NOT_GAMEPLAY_READY.** This branch adds a read-only expedition rivalry policy and negative tests. It does not deploy or merge into `main`.
+**2026-10-26 status: EX-01/EX-02/EX-03 PARTIAL CODE_READY / ISOLATED_TESTED / OPT-IN NATIVE WIRING / LIVE_UNVERIFIED.** This branch adds a read-only expedition rivalry policy and negative tests. It does not deploy or merge into `main`.
 
 ## Reuse the original authorities
 
@@ -43,3 +43,17 @@ This PR deliberately does **not** add the module to `overlay-spec.cjs`, grant an
 - `coopWormholeJumpFence` remains opt-in and needs actual two-client + Node/SQLite crash window acceptance.
 - NPC scan modules, materialized native exploration destinations, active controller/registry adapter, real loot and market movement, runtime persistence and two-client native E2E are **not yet done** by this PR.
 - Run `node --test tests/coop-npc-expedition-competition.test.mjs` on a normal checkout, then pinned native source preflight and host acceptance in EX-02. No merge, deployment, CI success or live game demonstration is claimed here.
+
+## Follow-on implementation: EX-02 physical scouting and same-corp rendezvous
+
+- `integration/coopNpcExpeditionDirector.cjs` is registered by the **existing central overlay manifest** and receives `signatureRuntime.listSystemSignatureSites`, original `nativeNpcStore`, native controllers, `coopNpcOrderBridge`, and `npcRuntime.warpToPoint` from the existing `coopVirtualWorldRuntime`.
+- In the existing **30-second world tick only**, the opt-in `native-expeditions` phase samples at most 2 previously active scenes. No second interval, independent scheduler, synthetic site or NPC spawn.
+- Source-backed NPC scanning is still limited to physically observing **already materialized original sites**, at most 150 km away. Both the native signature catalog and the original in-scene site entity must agree on exact ID and position. This is **not** a remote NPC probe-scanning implementation.
+- Only an original, durable named NPC-to-hull mapping and matching native controller/physical corporation ID can claim a scout observation. Intelligences are transient, per-corporation, site-fingerprinted, expired after 10 minutes. NPCs of other corporations, player characters and private bookmarks cannot access an expedition tip.
+- A second authorized `patrol` NPC of the same corporation may receive **one** true native warp order per scene tick to the revealed site, through the shared `EXPEDITION` order-arbiter owner. Active warp, combat, patrol and war leases, manual native orders, corrupt IDs and unverified scene or controller block. The target and native corporation are re-read immediately before invoking native warp.
+- A source-level wiring regression suite covers the original arbiter semantics: existing patrol leases refuse expedition retasking, and emergency `TACTICS` can preempt an idle expedition order. No loot grants, hacking completion, bookmark changes or wallet writes are added.
+- All runtime switches default OFF. Explicit `EVEJS_COOP_ALIFE=1` and `EVEJS_COOP_NPC_EXPEDITIONS=1` are both required. Other existing native ecosystem prerequisites still apply.
+
+**Evidence:** 27 isolated source/fixture Node tests executed locally, PASS; additional native-bridge/wiring tests committed but their execution in a real checkout is pending. The deployed pinned upstream EveJS host, real NPC movement, scanned signatures, active modules, secure hacking and original SQLite/2-client E2E remain NOT VERIFIED. Do not classify EX-02/03 as gameplay-complete.
+
+**Next:** strict native probe launch + scanning for owned NPC vessels (not server-catalog omniscience), safer analyzer/hacking entry point, durable corporate intel/restart reconciliation, and guarded wormhole escort/hauler transport.
