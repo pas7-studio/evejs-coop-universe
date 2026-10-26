@@ -237,15 +237,90 @@ fn coop_corp_sell_verify_db(path:&Path,token:&str,op:&str)
     coop_corp_sell_verify_escrow(&db,op)
 }
 fn coop_corp_sell_publish_db(path:&Path,token:&str,op:&str)
-  ->Result<serde_json::Value>{
-    coop_corp_sell_guard(token)?;
-    let db=load_connection(path)?;
-    coop_corp_sell_schema(&db)?;
-    let evidence=coop_corp_sell_verify_escrow(&db,op)?;
-    // DO NOT expose this order to stock FillOrder; original pinned
-    // market + P2P settlement only know character-owned or NPC-backed
-    // trades. A prepared corporate SELL cannot be consumed yet.
-    bail!("CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED: {:?}",evidence)
+ ->Result<serde_json::Value>{
+ coop_corp_sell_guard(token)?;
+ // The original market-service and the original Node GameStore are separate
+ // processes. Every applicable guard must be deliberately enabled by the
+ // operator, and stock Fill/Modify/Cancel are permanently denied for this
+ // source by the same pinned reversible Rust patch.
+ for flag in ["EVEJS_COOP_RUST_CORP_PUBLISH",
+    "EVEJS_COOP_RUST_CORP_BUYER_QUOTE",
+    "EVEJS_COOP_RUST_CORP_FILL_CLAIM",
+    "EVEJS_COOP_RUST_CORP_CANCEL"]{
+    if std::env::var(flag).ok().as_deref()!=Some("1"){
+      bail!("CORP_SELL_PUBLISH_PIPELINE_NOT_ARMED: {}",flag);
+    }
+ }
+ let mut db=load_connection(path)?;
+ coop_corp_sell_schema(&db)?;
+ coop_corp_fill_schema(&db)?;
+ coop_corp_cancel_schema(&db)?;
+ let tx=db.transaction()?;
+ let data=coop_corp_sell_row(&tx,op)?
+    .ok_or_else(||anyhow!("CORP_SELL_PUBLISH_PREPARE_MISSING"))?;
+ let order_id=data["orderID"].as_str()
+    .ok_or_else(||anyhow!("CORP_SELL_PUBLISH_ORDER_INVALID"))?;
+ let order:i64=order_id.parse()?;
+ let active:i64=tx.query_row(
+    "SELECT COUNT(*) FROM coop_corp_sell_fills
+     WHERE order_id=?1 AND phase!='released'",
+    params![order],|r|r.get(0)
+ )?;
+ let cancelled:i64=tx.query_row(
+    "SELECT COUNT(*) FROM coop_corp_sell_cancel_intents WHERE order_id=?1",
+    params![order],|r|r.get(0)
+ )?;
+ if active!=0||cancelled!=0{
+   bail!("CORP_SELL_PUBLISH_ORDER_ALREADY_LOCKED_OR_CANCELLED");
+ }
+ if data["phase"]=="OPEN"{
+   if data["order"]["state"]!="open"||
+     data["order"]["is_corp"]!=true||
+     data["order"]["source"]!="coop-corporation"||
+     data["order"]["bid"]!=false{
+       bail!("CORP_SELL_PUBLISH_REPLAY_STATE_DRIFT");
+   }
+   tx.commit()?;
+   return Ok(serde_json::json!({
+      "status":"ALREADY_PUBLISHED","phase":"OPEN",
+      "orderID":order_id,"nativeMutation":false,
+      "verifiedNative":true
+   }));
+ }
+ if data["phase"]!="PREPARED_UNPUBLISHED"||
+    data["order"]["state"]!="prepared"{
+   bail!("CORP_SELL_PUBLISH_NOT_PREPARED");
+ }
+ // The GameStore source is independently read as SQLite, not a passed
+ // boolean. The original stock escrow must predate the OPEN transition.
+ let evidence=coop_corp_sell_verify_escrow(&tx,op)?;
+ if evidence["status"]!="ESCROW_PROVEN_NOT_PUBLISHED"||
+    evidence["orderID"]!=order_id||
+    evidence["verifiedGameStore"]!=true{
+   bail!("CORP_SELL_PUBLISH_DURABLE_CUSTODY_NOT_VERIFIED");
+ }
+ let now=now_rfc3339();
+ let moved=tx.execute(
+   "UPDATE market_orders SET state='open',
+    updated_at=?2,last_state_change_at=?2
+    WHERE order_id=?1 AND state='prepared' AND
+      source='coop-corporation' AND is_corp=1 AND bid=0",
+   params![order,now]
+ )?;
+ if moved!=1{bail!("CORP_SELL_PUBLISH_ORDER_CAS_FAILED");}
+ let moved=tx.execute(
+   "UPDATE coop_corp_sell_prepared SET phase='published',updated_at=?2
+    WHERE operation_id=?1 AND phase='prepared' AND order_id=?3",
+   params![op,now,order]
+ )?;
+ if moved!=1{bail!("CORP_SELL_PUBLISH_SOURCE_CAS_FAILED");}
+ tx.commit()?;
+ Ok(serde_json::json!({
+   "status":"PUBLISHED_ORIGINAL_CORP_SELL",
+   "phase":"OPEN","orderID":order_id,
+   "verifiedNative":true,"nativeMutation":true,
+   "verifiedGameStore":true
+ }))
 }
 impl MarketRuntime{
     pub async fn coop_corp_sell_prepare(&self,token:String,op:String,shift:String,
@@ -271,8 +346,17 @@ impl MarketRuntime{
     pub async fn coop_corp_sell_publish(&self,token:String,op:String)
        ->Result<serde_json::Value>{
        let path=self.database_path.clone();
-       tokio::task::spawn_blocking(move||coop_corp_sell_publish_db(&path,&token,&op))
-         .await.context("corporate sell publish failed")?
+       let result=tokio::task::spawn_blocking(move||
+          coop_corp_sell_publish_db(&path,&token,&op))
+          .await.context("corporate sell publish failed")??;
+       let order: i64=result["orderID"].as_str()
+          .ok_or_else(||anyhow!("CORP_SELL_PUBLISH_ACK_ORDER_MISSING"))?
+          .parse()?;
+       let row=self.get_order(order).await?;
+       self.invalidate_scope_caches(row.row.region_id,
+          row.row.solar_system_id,row.row.station_id,row.row.type_id).await;
+       self.refresh_region_summary_row(row.row.region_id,row.row.type_id).await?;
+       Ok(result)
     }
 }
 
