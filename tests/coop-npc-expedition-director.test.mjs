@@ -123,7 +123,7 @@ test("fake player session with no original ship cannot observe a native site",()
  assert.equal(f.create().tick(input).observedPlayers,0);
 });
 
-test("EX-03B physically verified native probe scan reveals remote site to same corp patrol",()=>{
+test("EX-03B11 source-scanned scout warps first; patrols wait for physical scout arrival",()=>{
  const f=fixture();
  f.site().actualPosition.x=1e9;
  f.siteEntity.itemID=888; // remote signatures need not be on scout grid
@@ -143,9 +143,22 @@ test("EX-03B physically verified native probe scan reveals remote site to same c
  assert.equal(result.remoteScans,1);
  assert.equal(result.orders,1);
  assert.equal(f.commands[0].owner,"EXPEDITION");
- assert.equal(f.commands[0].entityID,23);
+ assert.equal(f.commands[0].entityID,21,"scanner scout must get the FIRST warp");
+ assert.equal(f.commands[0].action,"expedition-scout-rendezvous");
  assert.deepEqual(f.commands[1].point,site.actualPosition);
- assert.equal(d.tick(f.input()).orders,0);
+ assert.equal(d.tick(f.input()).orders,0,"no duplicate scout warp or premature patrol warp");
+ assert.equal(f.commands.length,2);
+ f.ships.get(21).position={...site.actualPosition};
+ assert.equal(d.tick(f.input()).orders,0,"same-location claim without physical site is not proof");
+ assert.equal(f.commands.length,2);
+ f.siteEntity.itemID=site.siteID;
+ f.siteEntity.position={...site.actualPosition};
+ const arrived=d.tick(f.input());
+ assert.equal(arrived.orders,1);
+ assert.equal(f.commands[2].entityID,23,"same-corp patrol follows witnessed scout");
+ assert.equal(f.commands[2].action,"expedition-rendezvous");
+ assert.deepEqual(f.commands[3].point,site.actualPosition);
+ assert.equal(d.tick(f.input()).orders,0,"rendezvous cannot replay");
 });
 test("EX-03B rejects invented perfect probe proof even if catalog contains site",()=>{
  const f=fixture();f.site().actualPosition.x=1e9;f.siteEntity.itemID=999;
@@ -291,4 +304,30 @@ test("EX-03B10 rotating bounded scanner preflight eventually visits late scouts"
  d.tick(f.input());
  assert.deepEqual(scanned,[scoutID]);
  assert.equal(checks.length,128,"second bounded window wraps safely");
+});
+
+test("EX-03B11 remote scan cannot warp a scout with stale native controller",()=>{
+ const f=fixture();
+ f.site().actualPosition.x=1e9;f.siteEntity.itemID=999;
+ const site=f.site(),proof={source:"ORIGINAL_PHYSICAL_NPC_PROBE_SCAN",
+  nativeScanCertainty:1,originalProbeCount:4,
+  systemID:30000142,scoutEntityID:21,pilotID:"coop-pilot-021",
+  corporationID:700,siteID:site.siteID,targetID:site.targetID,
+  actualPosition:{...site.actualPosition},
+  siteFingerprint:JSON.stringify([site.siteID,site.targetID,site.siteKind,
+   site.family,site.typeID??null,site.instanceID??null,site.pairID??null,
+   site.actualPosition.x,site.actualPosition.y,site.actualPosition.z])};
+ let admitted=false;
+ const originalIssue=f.create;
+ const d=originalIssue({isNativeProbeScout:id=>id===21,
+  nativeProbeScan:()=>({status:"NATIVE_PROBE_SCANNED",proofs:[proof]}),
+  orderBridge:{
+   blocked:()=>false,
+   issue:({execute})=>{f.controllers.delete(21);admitted=true;return execute();}
+  }});
+ const r=d.tick(f.input());
+ assert.equal(admitted,true,"rendezvous went through the original order arbiter");
+ assert.equal(r.orders,0,"losing native controller before execution blocks warp");
+ assert.equal(d.snapshot().pending,0);
+ assert.equal(f.commands.length,0);
 });
