@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import http from "node:http";
+import crypto from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
@@ -10,6 +12,8 @@ const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
 const {createNativeNpcBuyerBindings}=require("../integration/coopNpcBuyerNativeBindings.cjs");
 const {createNpcMarketCompletionNotifier}=
  require("../integration/coopNpcMarketCompletionNotify.cjs");
+const {createLocalNpcBuyerRecoveryControl,signRequest}=
+ require("../integration/coopNpcBuyerAdminControl.cjs");
 // COOP-060: backend two-session E2E using real SQLite+real integration modules.
 // Rust is a protocol-accurate, disk-persisted RPC simulator, NOT a Rust daemon
 // or a running two-client game. The latter is a separate NOT_RUN acceptance gate.
@@ -25,7 +29,7 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
  const dbFile=path.join(dir,"gamestore.sqlite"),journal=path.join(dir,"buyer.json");
  const rustFile=path.join(dir,"market-rpc-replica.json");
  let db=new DatabaseSync(dbFile),writer,loss=dropAck,corruptWitness=corruptHistory;
- let sessions=[],calls=[],grantIDs=new Set(),clock=AT;
+ let sessions=[],calls=[],grantIDs=new Set(),clock=AT,operatorAuthorizer=null;
  const get=(t,k)=>{
   const record=db.prepare('SELECT json FROM "'+t+'" WHERE key=?').get(String(k));
   return record?JSON.parse(record.json):null;
@@ -159,6 +163,7 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
   readNeeds:()=>({authoritativeNative:true,ownerID:CORP,stationID:STATION,
    typeID:TYPE,required:80,available:10,shortage:70,observedAt:clock}),
   authorizeRecoveryOperator:async approval=>{
+   if(operatorAuthorizer)return operatorAuthorizer(approval);
    if(!grantIDs.has(approval.approvalID))return false;
    grantIDs.delete(approval.approvalID);return true;
   }
@@ -192,7 +197,8 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
   sellerSession,observerSession,login:()=>{if(!sessions.includes(sellerSession))
    sessions.push(sellerSession)},logout:()=>{sessions=sessions.filter(s=>s!==sellerSession)},
   events:()=>({seller:sellerSession.events,observer:observerSession.events}),
-  failAck:()=>{loss=true},corruptWitness:()=>{corruptWitness=true},setClock:v=>clock=v,
+  failAck:()=>{loss=true},corruptWitness:()=>{corruptWitness=true},
+  setOperatorAuthorizer:fn=>{operatorAuthorizer=fn},setClock:v=>clock=v,
   close:()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
 async function run(fn,opts={}){
@@ -308,3 +314,69 @@ test("COOP-060 / forged missing Rust history witness blocks reconnect UI after a
  assert.equal(f.paidSnapshot().fill.sellerNotifyClaimedAt,undefined);
  assert.equal(f.paidSnapshot().seller.balance,123);
 },{offline:true}));
+
+test("COOP-060 / signed localhost admin audit to original Rust/GameStore recovery through two sessions",()=>run(async f=>{
+ f.failAck();await assert.rejects(f.tick(),/LOST_RUST_FINAL_ACK/);
+ const before=f.paidSnapshot();
+ const secret=path.join(path.dirname(f.journal),"operator.key");
+ const log=path.join(path.dirname(f.journal),"operator-audit.jsonl");
+ const key=crypto.randomBytes(48);
+ fs.writeFileSync(secret,key,{mode:0o600});fs.chmodSync(secret,0o600);
+ const control=createLocalNpcBuyerRecoveryControl({
+  getBinding:()=>f.bridge,secretFile:secret,auditLogFile:log,port:0,
+  clock:()=>AT,env:{
+   EVEJS_COOP_NPC_BUY_ADMIN_LOCAL:"1",
+   EVEJS_COOP_NPC_BUY_RECOVERY_OPERATOR:"1",
+   EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",
+   EVEJS_COOP_NPC_BUY_PLAYER_ASK:"1"
+  }
+ });
+ f.setOperatorAuthorizer(control.authorizeRecoveryOperator);
+ const {port}=await control.start();
+ async function post(route,payload){
+  const body=JSON.stringify(payload),timestamp=String(AT);
+  const nonce=crypto.randomBytes(18).toString("hex");
+  const signature=signRequest(key,{timestamp,nonce,path:route,body});
+  return await new Promise((resolve,reject)=>{
+   const request=http.request({
+    hostname:"127.0.0.1",port,path:route,method:"POST",
+    headers:{"Content-Type":"application/json",
+     "X-Evejs-Timestamp":timestamp,"X-Evejs-Nonce":nonce,
+     "X-Evejs-Signature":signature}
+   },response=>{
+    let text="";response.on("data",chunk=>text+=chunk);
+    response.on("end",()=>resolve({code:response.statusCode,data:JSON.parse(text)}));
+   });
+   request.on("error",reject);request.end(body);
+  });
+ }
+ try{
+  f.restart();
+  const keyOriginal=f.bridge.inspect().entries[CORP+":"+ORDER].claimKey;
+  const audited=await post("/v1/recovery/audit",{claimKey:keyOriginal});
+  assert.equal(audited.code,200);
+  assert.equal(audited.data.action,"ACK_JOURNAL_SAME_CLAIM");
+  const approved=await post("/v1/recovery/execute",{
+   ticket:audited.data.ticket,claimKey:keyOriginal,
+   action:audited.data.action,actorID:100,
+   reason:"Verified persistent native Rust history and original GameStore payout"
+  });
+  assert.equal(approved.code,200);
+  assert.equal(approved.data.status,"NPC_BUY_OPERATOR_RECOVERED");
+  assert.equal(f.bridge.inspect().entries[CORP+":"+ORDER].phase,"SETTLED");
+  verifyPaidOnce(f);
+  assert.equal(f.paidSnapshot().rust.historyOrders,before.rust.historyOrders);
+  assert.deepEqual(f.events().observer,[]);
+  assert.deepEqual(f.events().seller.map(e=>e[0]),
+   ["OnOwnOrdersChanged","OnAccountChange"]);
+  assert.deepEqual(fs.readFileSync(log,"utf8").trim().split("\n")
+   .map(x=>JSON.parse(x).stage),["APPROVED","RESULT"]);
+  const replay=await post("/v1/recovery/execute",{
+   ticket:audited.data.ticket,claimKey:keyOriginal,
+   action:audited.data.action,actorID:100,
+   reason:"Verified persistent native Rust history and original GameStore payout"
+  });
+  assert.equal(replay.code,409);
+  verifyPaidOnce(f);
+ }finally{await control.close()}
+}));
