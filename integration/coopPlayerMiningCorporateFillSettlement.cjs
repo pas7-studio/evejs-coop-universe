@@ -97,6 +97,9 @@ function createCorporateSellFillSettlement({gameStore,readNativeClaim,quoteNativ
      receipt.cargoID!==claim.cargoID||receipt.corporationID!==claim.sellerCorpID||
      receipt.typeID!==claim.typeID||receipt.stationID!==claim.stationID||
      receipt.escrowLocationID!==claim.escrowLocationID||
+     !pos(receipt.quantity)||receipt.quantity<claim.volumeBefore||
+     (receipt.remainingQuantity??receipt.quantity)!==claim.volumeBefore||
+     (receipt.lastSettledCycle??0)!==cycle-1||
      escrow?.escrowType!=="sell"||escrow.isCorp!==true||
      escrow.ownerId!==claim.sellerCorpID||
      escrow.orderId!==orderID||escrow.typeId!==claim.typeID||
