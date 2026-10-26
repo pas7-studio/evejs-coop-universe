@@ -333,6 +333,7 @@ test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and 
  assert.match(deploy,/EnableNpcExpeditionWreck/);
  assert.match(deploy,/EnableNpcExpeditionWormholes/);
  assert.match(deploy,/EnableNpcExpeditionLoot -and -not \$EnableNpcExpeditionWreck/);
+ assert.match(deploy,/\$LivingCoop -and \$Alife -and \$EnableNativeExploration/);
 
  const source=read("integration/coopNpcExpeditionWreckCustody.cjs");
  const patch=read("scripts/coop-npc-expedition-wreck-patch.cjs");
