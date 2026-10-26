@@ -39,6 +39,11 @@ For an already-adopted source row, all must hold:
   physical item carrying that original warehouse marker.
 - The authoritative `coopNativeDepot.snapshot()` finds no pending or
   committed record for this original `cargoID`.
+- The full depot `audit()` must return a reconciled `OK` result with
+  `invalid=0` and `unresolved=0`, and the snapshot must include a valid
+  totals object. A missing receipt with nonzero totals but no source-backed
+  receipts is **not** evidence that previously credited cargo vanished:
+  it blocks repeat adoption for operator reconciliation.
 - All rows of a planned batch are eligible. Any unknown ledger, receipt,
   registry or ItemStore result refuses the entire batch, with **zero**
   partial reparent writes. Existing commit/readback and compensation holds

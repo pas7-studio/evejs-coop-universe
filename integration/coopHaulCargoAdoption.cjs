@@ -102,9 +102,23 @@ function verifyReAdoptionCustody(row, options={}) {
      typeof state.receipts!=="object"||typeof state.pending!=="object"||
      Array.isArray(state.receipts)||Array.isArray(state.pending))
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  // An explicit prior receipt denies the second haul even if unrelated
+  // journal fields are malformed; preserve this stronger direct witness.
   if(Object.hasOwn(state.receipts,String(cargoID))||
      Object.hasOwn(state.pending,String(cargoID)))
    return "RE_ADOPTION_DEPOT_RECEIPT_EXISTS";
+  if(typeof depot.audit!=="function"||!state.totals||
+     typeof state.totals!=="object"||Array.isArray(state.totals))
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  // Absence of an individual receipt is NOT evidence that no credit was
+  // committed if the global depot journal is inconsistent. In particular,
+  // an empty receipts map with positive persisted totals may mean a receipt
+  // disappeared after a prior settlement. Never resurrect such cargo.
+  const audit=depot.audit();
+  if(audit?.status!=="OK"||audit.invalid!==0||
+     audit.unresolved!==0||!Number.isSafeInteger(audit.committed)||
+     audit.committed<0)
+   return "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED";
   return "CLEAR";
  }catch(_error){return "RE_ADOPTION_SETTLEMENT_UNVERIFIED"}
 }
