@@ -61,7 +61,15 @@ function fixture(t,{two=false,now=101000}={}){
    marketQuantity:marketQuantity===null?row.quantity:marketQuantity,
    isk:100,at:123}));
  }
- return {root,cargo,stock,ship,m,args,journal,recover,confirm,deliver,sell,
+ function sellPart(id,units){
+  const row=cargo.get(id);assert.ok(row);assert.ok(units>0&&units<row.quantity);
+  row.quantity=row.quantity-units;
+  fs.writeFileSync(path.join(root,"receipts",id+".json"),JSON.stringify({
+   version:1,phase:"COMMITTED",source:"NPC_MARKET_FILL",sequence:1,cargoID:id,
+   haulerID:SHIP,typeID:row.typeID,quantity:units,systemID:SYSTEM,fleetID:FLEET,
+   stationID:STATION,corporationID:CORP,marketQuantity:units,isk:100,at:123}));
+ }
+ return {root,cargo,stock,ship,m,args,journal,recover,confirm,deliver,sell,sellPart,
   setClock:value=>clockNow=value,store,getNativeEntity};
 }
 test("unacknowledged original manifest blocks any unattended rewarp",t=>{
@@ -141,7 +149,7 @@ test("source manifest mutation invalidates fsynced ACK, never silently reparents
  const p=path.join(f.root,"trip-manifests",f.m.key+".json");
  const row=JSON.parse(fs.readFileSync(p));row.cargo[0].quantity+=1;
  fs.writeFileSync(p,JSON.stringify(row));
- assert.ok(["ALIFE12_SOURCE_CARGO_CHANGED","ALIFE12_WARP_ACK_PROVENANCE_INVALID"].includes(f.recover().reason));
+ const got=f.recover();assert.ok(["ALIFE12_SOURCE_CARGO_CHANGED","ALIFE12_WARP_ACK_PROVENANCE_INVALID"].includes(got.reason),JSON.stringify(got).slice(0,160));
 });
 test("wrong station/corporation cannot be falsely confirmed",t=>{
  const f=fixture(t);f.args.stationID++;
@@ -243,4 +251,28 @@ test("a warehouse receipt and a sale receipt cannot both claim the same row",t=>
  // A second, warehouse-style receipt for the same cargoID must not change the
  // verdict: the recover still sees exactly one accounted row and no active cargo.
  assert.equal(f.recover().status,"NO_PENDING_TRIP");
+});
+
+// The market fills what its order supports, so a hull row is usually PARTLY sold. The
+// receipt then proves exactly which units left, and the remainder stays declared aboard.
+test("a partly sold row keeps the trip alive with its remainder",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sellPart(CARGO,5);
+ const r=f.recover();
+ assert.equal(r.status,"RECOVERED_NATIVE_TRIP");
+ assert.equal(f.cargo.get(CARGO).quantity,8,"the remainder never leaves the hull");
+});
+test("a partial receipt that does not match the missing units proves nothing",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sellPart(CARGO,5);
+ // Rewrite the receipt so it claims a different amount than the hull actually lost.
+ const file=path.join(f.root,"receipts",CARGO+".json");
+ const r=JSON.parse(fs.readFileSync(file,"utf8"));
+ r.quantity=3;r.marketQuantity=3;
+ fs.writeFileSync(file,JSON.stringify(r));
+ const got=f.recover();
+ assert.equal(got.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(got.reason,"ALIFE12_SOURCE_CARGO_CHANGED");
 });

@@ -122,20 +122,24 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
    }catch(error){return fail("ALIFE12_EXPIRY_WRITE_OUTCOME_UNKNOWN",{
     details:String(error?.message||error).slice(0,120)})}
   }
- function saleReceiptMatches(row,m){
- // A sold row left the hull through a REAL market fill at that station; it never
- // becomes a station item, so the warehouse proof cannot see it. The sale receipt
- // names this exact cargo row, its own quantity and the settled market quantity,
- // and must agree with the manifest row in full - no partial inference.
- let r;
- try{r=readJSON(path.join(receiptDir,row.cargoID+".json"))}catch(_error){return false}
- if(!r||r.version!==1||r.phase!=="COMMITTED"||r.source!=="NPC_MARKET_FILL")return false;
- return r.cargoID===row.cargoID&&r.haulerID===row.haulerID&&
-  r.typeID===row.typeID&&r.quantity===row.quantity&&
-  Number(r.marketQuantity)===Number(row.quantity)&&
-  r.systemID===m.systemID&&r.fleetID===m.fleetID&&
-  r.stationID===m.stationID&&r.corporationID===m.corporationID;
+ function saleReceipt(row){
+  try{return readJSON(path.join(receiptDir,row.cargoID+".json"))}catch(_error){return null}
  }
+ // A sale removes units from a hull row through a REAL market fill. The receipt names
+ // this exact row and the exact units the market paid for, so recovery can prove a
+ // fully sold row (nothing left aboard) and a partly sold one (the remainder must be
+ // declared minus sold). No inference, no averaging, no invented receipt.
+ function saleReceiptCovers(row,m,remaining){
+  const r=saleReceipt(row);
+  if(!r||r.version!==1||r.phase!=="COMMITTED"||r.source!=="NPC_MARKET_FILL")return false;
+  if(r.cargoID!==row.cargoID||r.haulerID!==row.haulerID||r.typeID!==row.typeID)return false;
+  if(r.systemID!==m.systemID||r.fleetID!==m.fleetID||r.stationID!==m.stationID||
+     r.corporationID!==m.corporationID)return false;
+  const sold=Number(r.quantity),left=Number(remaining);
+  return Number.isSafeInteger(sold)&&sold>0&&Number.isSafeInteger(left)&&left>=0&&
+   sold===Number(row.quantity)-left;
+ }
+ function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
  function receiptMatches(row,m){
  if(saleReceiptMatches(row,m))return true;
  const r=readJSON(path.join(receiptDir,row.cargoID+".json"));
@@ -179,13 +183,14 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
     const m=sourceRecord(key);
     if(m.systemID!==systemID||m.fleetID!==fleetID||
        !equal(m.haulerIDs,sorted))return fail("ALIFE12_MANIFEST_FLEET_CONFLICT");
-    let active=0;
+    // A closed route is closed for good: never re-account a manifest the operator or
+    // the deadline already expired, or a stale sale would block the fleet forever.
+    if(expiryOf(key))continue;
+    let active=0,accounted=0,undeclared=null;
     const declared=new Set(m.cargo.map(x=>x.cargoID));
-    for(const [id,rows] of ships){
-     if(rows.some(row=>Number(row.coopHaulFleetID)===fleetID&&
-        !declared.has(Number(row.cargoID))))
-      return fail("ALIFE12_UNDECLARED_HAUL_CARGO",overdueOf(key,m));
-    }
+    for(const [id,rows] of ships)
+     if(!undeclared)undeclared=rows.find(row=>Number(row.coopHaulFleetID)===fleetID&&
+      !declared.has(Number(row.cargoID)))||null;
     for(const row of m.cargo){
      const rows=ships.get(row.haulerID)||[];
      const hits=rows.filter(x=>Number(x.cargoID)===row.cargoID);
@@ -194,18 +199,31 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
       const c=hits[0];
       if(c.entityID!==row.haulerID||c.coopHaulFleetID!==fleetID||
          c.coopHaulFromMinerID!==row.fromMinerID||
-         c.typeID!==row.typeID||c.quantity!==row.quantity||
-         Number(c.moduleID||0)!==0||c.transient===true)
+         c.typeID!==row.typeID||
+         Number(c.moduleID||0)!==0||c.transient===true||
+         !(c.quantity===row.quantity||
+           c.quantity<row.quantity&&saleReceiptCovers(row,m,c.quantity)))
        return fail("ALIFE12_SOURCE_CARGO_CHANGED",overdueOf(key,m));
-      active++;
-     }else if(!receiptMatches(row,m))
-      return fail("ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF",overdueOf(key,m));
-    }
+      // Still aboard, in full or as the proven remainder of a sale: the trip is live.
+      active++;accounted++;
+      }else if(receiptMatches(row,m))accounted++;
+      else return fail("ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF",overdueOf(key,m));
+      }
+      // The hull carries ore this manifest never declared, so the route is out of date.
+      // Supersede it ONLY when every row it did declare is proven - still aboard exactly,
+      // or covered by a warehouse/sale receipt. Then a fresh manifest declares exactly
+      // what the ships carry now, and nothing is dropped or invented.
+      if(undeclared){
+       if(accounted!==m.cargo.length)
+        return fail("ALIFE12_UNDECLARED_HAUL_CARGO",overdueOf(key,m));
+       return {status:"ROUTE_SUPERSEDED",reason:"ALIFE12_UNDECLARED_HAUL_CARGO",
+        trip:{systemID,fleetID,stationID:m.stationID,corporationID:m.corporationID,
+         startedAt:m.startedAt,manifestID:key,
+         expectedCargoIDs:m.cargo.map(x=>x.cargoID),
+         haulers:Object.fromEntries(sorted.map(id=>[id,{arrivedAt:0}]))}};
+      }
     // A completed manifest is historical, not a new route to replay.
     if(active===0)continue;
-    // An expired trip is closed for good: recover() must not offer it again, so the
-    // fleet can plan a fresh route with the ore it still carries.
-    if(expiryOf(key))continue;
     const ack=readJSON(path.join(dir,key+".json"));
     if(!ack)return fail("ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED");
     if(ack.version!==1||ack.status!=="WARP_ACK_CONFIRMED"||

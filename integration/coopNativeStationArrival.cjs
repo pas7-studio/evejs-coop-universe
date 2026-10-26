@@ -499,7 +499,8 @@ const warehouseBlockedAt=new Map();
     if(!["ROUTE_EXPIRED","ALREADY_EXPIRED"].includes(closed?.status))
      return pause("ALIFE12_"+String(closed?.reason||closed?.status||"EXPIRY_UNVERIFIED"));
     noteRouteStatus(fleet,"ROUTE_EXPIRED_STALE_CARGO");
-   }else if(previous.status==="ROUTE_EXPIRED"){
+   }else if(previous.status==="ROUTE_EXPIRED"||
+    previous.status==="ROUTE_SUPERSEDED"){
     // The route outlived its deadline. Record that durably, then plan a new trip:
     // the ore is still aboard and the ships are alive, and a closed route must not
     // strand the fleet in "loaded" forever (measured: a restart mid-haul).
