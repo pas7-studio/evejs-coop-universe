@@ -136,6 +136,9 @@ function createNpcWormholeTransit({store,service,registry,gameStore,
   if(before?.state!=="active"||!POS(before.remainingMass)||
     before.maxJumpMass>0&&mass>before.maxJumpMass)
    return refuse("EX03_WORMHOLE_MASS_OR_PAIR_UNAVAILABLE");
+  // Snapshot providers may return a live reference; freeze the pre-debit
+  // primitive BEFORE calling native commitJump (which mutates the same pair).
+  const beforeMass=before.remainingMass;
   const pose=wormholes.buildJumpSpawnState(pair,d.role,{
    shipMass:mass,characterID:entityID,nowMs:now});
   if(pose?.anchorType!=="wormhole"||pose.anchorID!==d.destinationEndpointID||
@@ -159,7 +162,7 @@ function createNpcWormholeTransit({store,service,registry,gameStore,
    const after=wormholeState.getStateSnapshot();
    const state=after?.pairsByID?.[String(d.pairID)];
    const polar=after?.polarizationByCharacter?.[String(entityID)]?.[String(endpointID)];
-   if(!state||state.remainingMass!==Math.max(0,before.remainingMass-mass)||
+   if(!state||state.remainingMass!==Math.max(0,beforeMass-mass)||
     !POS(polar?.endAtMs)||polar.endAtMs<=now)
     throw Error("EX03_ORIGINAL_MASS_OR_POLARIZATION_UNCONFIRMED");
    ticket.phase="MASS_COMMITTED";write(ticket);
