@@ -149,3 +149,28 @@ test("no public corporate sale can be published before verified native full life
  assert.match(publish,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
  assert.doesNotMatch(publish,/UPDATE market_orders/);
 });
+
+test("Rust private GetCorpFillClaim can inspect all durable claim phases after restart",()=>{
+ assert.match(extension,/fn coop_corp_fill_inspect_db/);
+ assert.match(extension,/state\.0=="claimed"/);
+ assert.match(extension,/\["finalized","released"\]/);
+ assert.match(extension,/CORP_FILL_GET_PERSISTED_ACK_MISMATCH/);
+});
+test("Rust finalization caches exact GameStore verified ACK and repeats do not double-spend",()=>{
+ const f=extension.slice(extension.indexOf("fn coop_corp_fill_finalize_db("),
+  extension.indexOf("fn coop_corp_fill_release_db("));
+ assert.match(f,/phase=="finalized"\|\|phase=="released"/);
+ assert.match(f,/ack_json/);
+ assert.match(f,/coop_corp_fill_game_store_witness\(&witness\)/);
+ assert.match(f,/CORP_FILL_FINALIZE_ORDER_CAS_FAILED/);
+ assert.match(f,/CORP_FILL_FINALIZE_RECEIPT_CAS_FAILED/);
+});
+test("release remains locked until finalized original GameStore settlement",()=>{
+ const f=extension.slice(extension.indexOf("fn coop_corp_fill_release_db("),
+  extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_fill_release_db(")));
+ assert.match(f,/phase!="finalized"/);
+ assert.match(f,/coop_corp_fill_audit\(&original,claim_proof\)/);
+ assert.match(f,/state='settling'/);
+ assert.match(f,/phase='released'/);
+ assert.match(f,/CORP_FILL_RELEASE_DURABLE_PAYMENT_NO_LONGER_VERIFIED/);
+});
