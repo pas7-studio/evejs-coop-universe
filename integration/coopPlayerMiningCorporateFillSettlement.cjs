@@ -85,6 +85,8 @@ function createCorporateSellFillSettlement({gameStore,readNativeClaim,quoteNativ
       existing.transactionTaxCents!==fees.transactionTaxCents||
       existing.brokerFeeCents!==fees.brokerFeeCents||
       existing.netRevenueCents!==net||
+      !pos(existing.buyerJournalID)||!pos(existing.sellerJournalID)||
+      (totalFees>0?!pos(existing.feeJournalID):existing.feeJournalID!==null)||
       !pos(existing.committedAt))
       throw Error("CORP_FILL_COMMITTED_REPLAY_MISMATCH");
      return {...existing,replayed:true,nativeMutation:false};
@@ -210,6 +212,8 @@ function createCorporateSellFillSettlement({gameStore,readNativeClaim,quoteNativ
      volumeAfter:claim.volumeAfter,priceCents:claim.priceCents,
      grossCents:gross,transactionTaxCents:fees.transactionTaxCents,
      brokerFeeCents:fees.brokerFeeCents,netRevenueCents:net,
+     buyerJournalID:next,sellerJournalID:next+1,
+     feeJournalID:totalFees?next+2:null,
      buyerBeforeCents:a,buyerAfterCents:a-gross,
      sellerBeforeCents:b,sellerAfterCents:b+net,
      committedAt:now,nativeMutation:true};
