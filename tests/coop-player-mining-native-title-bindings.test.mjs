@@ -128,6 +128,7 @@ test("native price and warehouse receipts are prerequisites for composing writer
 test("composed original GameStore title writer is explicitly OFF until both flags on",()=>{
  const x=make();let writes=0;
  const service=createTrustedTitleService({...x.depend,
+  nativeNpcStore:{listNativeCargoForEntity:()=>[]},
   warehouse:{getReceipt:()=>x.receipt},
   priceQuote:()=>null,env:{EVEJS_COOP_NATIVE_ATOMIC_ROWS:"1",
     EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE:"0"},
@@ -149,4 +150,21 @@ test("runtime warehouse verifier remains absent while new feature flag OFF",()=>
   if(previous===undefined)delete process.env.EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE;
   else process.env.EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE=previous;
  }
+});
+
+test("real paid title binding rejects stale warehouse receipt if original cargoID still on hauler",()=>{
+ const x=make(),cargo=[{cargoID:CID,entityID:9999}];
+ const b=x.build({getWarehouseReceipt:()=>({...x.receipt,haulerID:9999}),
+  getHaulerCargo:()=>cargo});
+ assert.equal(b.getWarehouseReceipt(CID),null);
+ cargo.length=0;
+ assert.equal(b.getWarehouseReceipt(CID).cargoID,CID);
+});
+test("unavailable native cargo reader cannot authorize paid item transfer",()=>{
+ const x=make();
+ const b=x.build({getWarehouseReceipt:()=>({...x.receipt,haulerID:9999})});
+ assert.equal(b.getWarehouseReceipt(CID),null);
+ assert.throws(()=>createTrustedTitleService({...x.depend,
+  warehouse:{getReceipt:()=>x.receipt},priceQuote:()=>null}),
+  /TRUSTED_SELLER/);
 });
