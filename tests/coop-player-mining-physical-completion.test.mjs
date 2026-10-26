@@ -143,3 +143,12 @@ test("original retreat completion cannot be faked with missing departure IDs",()
  x.row.retreatAnchor={...x.origin};x.row.retreatDepartureShipIDs=[];
  x.record.state="retreating";assert.equal(x.proof(),null);
 });
+
+test("physical retreat departure and arrival never bind to a different original system",()=>{
+ const x=fixture();x.scene.systemID=SYS+1;
+ assert.equal(x.oracle.captureRetreat({fleetRecord:x.record,scene:x.scene,fleet:x.fleet}),null);
+ x.row.directive="RETREAT";x.row.retreatAnchor={...x.origin};
+ x.row.retreatDepartureShipIDs=[MINER,HAULER];
+ x.record.state="retreating";x.landed();
+ assert.equal(x.proof(),null);
+});
