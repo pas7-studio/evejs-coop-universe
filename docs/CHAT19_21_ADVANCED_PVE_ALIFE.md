@@ -167,6 +167,78 @@ P0-5 independent duo mission acceptance and native reward settlement
 remain pending.
 
 
+
+## Stage P0-4A — source-authored native overseer/boss, real HP phases and wreck witness
+
+**State:** Source-reviewed / implementation in dependent Draft / isolated tests PASS;
+full server and two-client live **NOT_RUN**. This is not yet the complete P0-4
+boss-and-loot gameplay acceptance.
+
+Pinned EveJS `dungeonUniverseSiteService` is the **only** authority to
+materialize a dungeon encounter. It writes original `encounterStatesByKey`
+with `spawnedEntityIDs`, `spawnedAtMs`, `waveIndex`, `label` and
+`lootTags`. This P0-4A module selects only a uniquely identified native
+combat ship in an explicitly boss-, overseer-, officer- or commander-tagged
+original encounter. Ambiguous multi-NPC waves, missing tags, foreign
+instances and missing native transient controller/ship/store evidence are
+NOT interpreted as bosses. No self-allocated NPC, new encounter trigger,
+manual spawn, loot table edit, synthetic HP or bonus bounty.
+
+`coopPveNativeBossDirector` samples genuine
+`damage.getEntityCurrentHealthLayers` against native maximum HP and
+recognizes **GUARD** (healthy), **PRESSURE** (armor/structure at or below
+65%) and **LAST_STAND** (armor/structure at or below 30%). These are
+A-Life threat-policy *observations*, not alterations to native hull
+resistances, firing rate, shield repair or authored dungeon wave
+progression. When in PRESSURE/LAST_STAND and the original controller has
+a fresh, independently authenticated attacker nearby, an otherwise
+idle native boss can receive at most one
+`npcRuntime.issueAttackOrder` per phase. A receipt means
+**native order ACK only**. In-progress or ambiguous orders are not retried
+automatically. Protected original boss hulls are excluded from overlapping
+site, wave and objective directors.
+
+For a boss actually witnessed alive in the current process, disappearance
+of both physical hull and native entity record is NOT proof of a kill.
+The module searches **nativeNpcStore.listNativeWrecks** for exactly one
+physical `nativeNpcWreck` whose stored `sourceEntityID`,
+`sourceTypeID`, `launcherID`, `systemID`, `transient` state and
+creation time match the original observed boss. It then reads
+`listNativeWreckItemsForWreck` and verifies unique native item IDs,
+source wreck IDs, locations, item types and positive quantities.
+An original wreck with **zero** items is explicitly reported as
+*empty*; unknown, duplicate or inconsistent records are NOT promoted to
+loot proof. There are no item grants, wallet transfers, LP/ISK credits,
+or special rare drops in this module. Only original engine
+`nativeNpcWreckService.destroyNativeNpcEntityWithWreck` can create
+such a wreck with its actual source-backed native loot.
+
+**Gates:** `EVEJS_COOP_PVE_NATIVE_BOSSES=1` (default OFF) and
+`EVEJS_COOP_PVE_SITE_DEFENSE=1`; otherwise no P0-4A work.
+The new phase `native-pve-boss-wreck` is part of the existing Living
+World combat group, with no independent timer and one overlay installer.
+
+**Limitations:** Original boss wave must explicitly expose its source
+label/loot tags and uniquely identify a single live ship; existing
+multi-ship overseer waves cannot be guessed. Wreck witness history and
+order fences are process-local; a server restart needs stronger original
+persisted kill/event reconciliation. Observation of a wreck is not
+item custody or a verified loot transfer to either player. Loot table
+coverage, actual native boss behavior, destruction events and two-client
+payouts still require tests and further stages.
+
+**Evidence:** Exact-branch isolated V8 original-source verification
+46/46 cases across P0-2, P0-3A, P0-3B and P0-4A, 227 assertions, and
+14/14 source-wiring checks PASS. Full `node --test`, pinned overlay
+roundtrip, Node/SQLite/Rust native gameplay and real two-client E2E
+NOT_RUN. Do not enable in persistent game before those checks.
+
+**Next P0-4B:** original loot table coverage and owned item pickup E2E,
+proving one death -> one actual wreck -> exactly the native items
+available through original inventory service, no cloned drop or repeat
+grant. Then P0-5 lawful separate two-player reward eligibility.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
