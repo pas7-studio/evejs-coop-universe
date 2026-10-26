@@ -60,7 +60,12 @@ function createAdapter({gameStore,store,access,getFleetRecord,getScene,
   const fleet=verified({systemID:scene.systemID,fleetID:fleetRecord.fleetID});
   // An unbound fleet is never changed by this feature: dispatch checks
   // its native GameStore index before writing any shift command.
-  if(!fleet)return true;
+  if(!fleet){
+   // Do not freeze unrelated stock fleets just because their native witness
+   // is temporarily incomplete. Only a bound shift owns this fail-closed gate.
+   try{return orders.lookup(scene.systemID,fleetRecord.fleetID)!==null;}
+   catch{return true;}
+  }
   const miners=fleet.minerIDs.map(id=>scene.getEntityByID(id));
   const ships=[...fleet.minerIDs,...fleet.haulerIDs].map(id=>scene.getEntityByID(id));
   const native={
