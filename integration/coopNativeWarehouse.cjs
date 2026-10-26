@@ -39,8 +39,13 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
  function load(id){
   let row;try{row=JSON.parse(fsApi.readFileSync(receiptPath(id),"utf8"));}
   catch(e){if(e.code==="ENOENT")return null;throw Error("WAREHOUSE_JOURNAL_UNREADABLE");}
+  // A DEBIT-stage recovery can create a real station item without the
+  // original hauler row. Refuse incomplete receipt provenance: station and
+  // corporation alone cannot prove which fleet/system owned the source.
   if(!row||row.version!==1||row.cargoID!==id||!Object.values(statuses).includes(row.phase)||
-     !pos(row.typeID)||!pos(row.quantity)||!pos(row.haulerID)||!pos(row.stationID)||!pos(row.corporationID))
+     !pos(row.typeID)||!pos(row.quantity)||!pos(row.haulerID)||
+     !pos(row.fleetID)||!pos(row.systemID)||!pos(row.stationID)||
+     !pos(row.corporationID))
    throw Error("WAREHOUSE_JOURNAL_INVALID");
   return row;
  }
