@@ -123,34 +123,52 @@ function adopt(scene,fleet,options={}){
   return {status:"ORIGINAL_CARGO_OWNER_MISMATCH",adopted:0};
  const existing=(store.listNativeCargoForEntity(haulerID)||[]);
  if(existing.some(x=>pos(x?.coopHaulFleetID)))return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // Upserts are not a GameStore transaction. A failed second write
+ // cannot turn a partially transferred batch into an authorised haul.
+ // Include the failing row: an adapter may mutate then return failure.
+ const flushCargo=()=>{
+  try{
+   const db=database||require("../gameStore");
+   return db?.flushTableSync?.("npcCargo")?.success===true;
+  }catch(_error){return false}
+ };
+ const restore=(touched,status,detail)=>{
+  let restored=true;
+  for(const row of [...touched].reverse()){
+   try{
+    const result=store.upsertNativeCargo({...row},{transient:false});
+    if(result?.success!==true)restored=false;
+   }catch(_error){restored=false}
+  }
+  // The original custody must be re-flushed after compensation, not just
+  // restored to an in-memory table. Unknown rollback means operator hold.
+  const durable=flushCargo();
+  if(!restored||!durable){
+   fleet.coopHaulNeedsOperatorRepair=true;
+   observe(probe,"living-haul-cargo-adoption-skipped",null,
+    {fleetID,status:"ADOPTION_RECOVERY_UNVERIFIED",reason:status},systemID);
+   return {status:"ADOPTION_RECOVERY_UNVERIFIED",detail,adopted:0};
+  }
+  observe(probe,"living-haul-cargo-adoption-skipped",null,
+   {fleetID,status,rows:touched.length},systemID);
+  return {status,detail,adopted:0};
+ };
  let adopted=0,quantity=0,volume=0,failed=null;
+ const attempted=[];
  for(const row of planned.rows){
   const next={...row,entityID:haulerID,ownerID,
    coopHaulFleetID:fleetID,coopHaulSystemID:systemID,
    coopHaulAdoptedAt:now,coopHaulAdoptedFrom:pos(row.entityID)};
+  attempted.push(row);
   let result;try{result=store.upsertNativeCargo(next,{transient:false})}
   catch(error){failed=String(error?.message||error).slice(0,80);break}
   if(!result||result.success!==true){failed=String(result?.errorMsg||"UPSERT_REJECTED");break}
   adopted+=1;quantity+=pos(next.quantity);
   volume+=pos(next.quantity)*Math.max(0,Number(row.volume)||0);
  }
- if(!adopted)return {status:"ADOPTION_REJECTED",detail:failed,adopted:0};
- // The write must be durable BEFORE the trip starts, exactly as a real load.
- let flushed=false;
- try{
-  const db=database||require("../gameStore");
-  if(typeof db?.flushTableSync==="function")flushed=db.flushTableSync("npcCargo")?.success===true;
- }catch(_error){flushed=false}
- if(!flushed){
-  // Roll the re-point back inside this process only; the rows stay orphans.
-  for(const row of planned.rows){
-   if(!pos(row.cargoID))continue;
-   try{store.upsertNativeCargo({...row},{transient:false})}catch(_error){/* best effort */}
-  }
-  observe(probe,"living-haul-cargo-adoption-skipped",null,
-   {fleetID,status:"CARGO_FLUSH_FAILED",rows:adopted},systemID);
-  return {status:"CARGO_FLUSH_FAILED",adopted:0};
- }
+ if(failed!==null)return restore(attempted,"ADOPTION_REJECTED",failed);
+ // The entire original cargo batch must be durable before sailing.
+ if(!flushCargo())return restore(attempted,"CARGO_FLUSH_FAILED",null);
  hauler.nativeCargoItems=store.buildNativeCargoItems(haulerID);
  fleet.lastHauledVolumeM3=volume;
  fleet.lastHauledAtMs=now;
