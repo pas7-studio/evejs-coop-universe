@@ -16,7 +16,7 @@ const goodSource=q=>q?.verifiedNative===true&&
  q.nativeMutation===false&&q.buyerFundsReserved===false;
 function createNativeCorporateBuyerMatch({
  marketClient,getActiveSessions,isDockedAtMarket,readNextFillCycle,
- token,enabled=()=>false,clock=()=>Date.now(),ttlMs=30000
+ token,enabled=()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_BUYER_MATCH==="1",clock=()=>Date.now(),ttlMs=30000
 }={}){
  if(typeof marketClient?.call!=="function"||
   [getActiveSessions,isDockedAtMarket,readNextFillCycle,enabled,clock]
