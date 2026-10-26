@@ -9,6 +9,24 @@ let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoal
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
 let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null,npcWormholeApproaches=new Set();
+// The courier roster is data, not a constant: every seeded "Haul ..." character
+// is a real carrier with its own hull and balance. A hardcoded id list silently
+// ignored any courier added later, so a new carrier never accepted a contract.
+function courierPilotIDs(){
+try{
+const result=require("../gameStore").read("characters","/");
+const rows=result&&result.success&&result.data?result.data:{};
+const ids=[];
+for(const key of Object.keys(rows)){
+const record=rows[key];
+const name=String(record&&(record.characterName||record.name)||"");
+const id=Number(record&&record.characterID)||Number(key);
+if(/^Haul /.test(name)&&id>0)ids.push(id);
+}
+if(ids.length)return ids.sort((left,right)=>left-right);
+}catch(_error){/* fall back to the known seed below */}
+return [140000100,140000101,140000102,140000103,140000104,140000105,140000106];
+}
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -940,7 +958,7 @@ function start(){
     transitions:require("./transitions"),
     space:require("./runtime"),
     sceneForSystem:id=>require("./runtime").ensureScene(id,{refreshStargates:false}),
-    pilots:String(process.env.EVEJS_COOP_COURIER_PILOTS||"140000100,140000101,140000102,140000103,140000104,140000105,140000106").split(","),
+    pilots:String(process.env.EVEJS_COOP_COURIER_PILOTS||courierPilotIDs().join(",")).split(","),
     sendMail:mail=>require("../services/mail/mailState").sendMail({
      senderID:mail.senderID,toCharacterIDs:mail.toCharacterIDs,saveSenderCopy:false,title:mail.title,body:mail.body}),
     log:console.log
