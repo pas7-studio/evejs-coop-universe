@@ -72,3 +72,8 @@ Evidence: tests 30 pass (4 pre-existing manifest failures unchanged); OVERLAY_OK
 Why: after reconciling with the owner's refactor of the same module, a failed batch left the throttle state set, so a legitimate retry was reported as THROTTLED
 Where: integration/coopHaulCargoAdoption.cjs
 Evidence: tests/coop-haul-cargo-adoption.test.mjs 16/16 (owner's expanded suite incl. partial multi-orphan rollback)
+### 2026-10-26T11:26Z · 04bd0b5 · L1 · feat(capacitor): native sessionless NPC recharge patch; unify adoption telemetry
+
+Why: the L1 recharge rate alone did not help: runtime.js only advances capacitor inside active module cycles, so a sessionless NPC that failed one activation never recovered; adoption telemetry also had to use the shared guarded entry point
+Where: integration/coopHaulCargoAdoption.cjs, scripts/gen-upstream-patches.cjs
+Evidence: 0003 applies clean, OVERLAY_OK patched 54 anchorMismatch 0, npcBehaviorLoop node --check, adoption 16/16, patch-series tests 4/4; live cap proof pending
