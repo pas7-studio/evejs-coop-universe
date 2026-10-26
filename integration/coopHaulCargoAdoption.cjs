@@ -80,11 +80,17 @@ function verifyReAdoptionCustody(row, options={}) {
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   const names=io.readdirSync(path.join(root,"receipts"));
   if(!Array.isArray(names))return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
-  const target=cargoID+".json";
-  // Any completed or in-progress warehouse receipt means no automatic
-  // recovery, even if source cargo still appears in the native table.
-  if(names.some(name=>name===target||name.startsWith(target+".tmp-")))
-   return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
+  // Warehouse uses <cargoID>.lock BEFORE writing PREPARED. A concurrent
+  // or crash-abandoned lock is already custody evidence, even without a
+  // receipt. Noncanonical numeric aliases must not disguise a claimed
+  // original cargoID either (the warehouse audit treats them as corrupt).
+  if(names.some(name=>typeof name!=="string"))
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  const warehouseClaim=names.some(name=>{
+   const match=/^(\d+)\.(?:json(?:\.tmp-[^/\\]*)?|lock)$/.exec(name);
+   return match&&Number(match[1])===cargoID;
+  });
+  if(warehouseClaim)return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
   const items=options.custodyItems||
    require("../services/inventory/itemStore");
   if(typeof items?.findWarehouseItem!=="function")
