@@ -15,11 +15,11 @@ function fixture(){
   typeID:34,quantity:75,stacksize:75,customInfo:`coop-warehouse:v1:cargo:${CID}`};
  rows.set('items'+SEP+ITEM,item);
  rows.set('corporationRuntime'+SEP+'coopPlayerMiningShift'+SEP+SHIFT,{version:1,status:'FUNDED',operationID:SHIFT,
-  corporationID:CORP,employerCorpID:NPC,systemID:SYSTEM,fleetID:FLEET,haulerIDs:[1003]});
+  corporationID:CORP,employerCorpID:NPC,systemID:SYSTEM,fleetID:FLEET,createdAt:1000,haulerIDs:[1003]});
  rows.set('corporationRuntime'+SEP+'coopPlayerMiningFleet'+SEP+SYSTEM+':'+FLEET,{version:1,operationID:SHIFT,
  corporationID:CORP,employerCorpID:NPC});
  const proof={version:1,phase:'COMMITTED',cargoID:CID,itemID:ITEM,typeID:34,
-  quantity:75,systemID:SYSTEM,fleetID:FLEET,corporationID:NPC,stationID:STATION,haulerID:1003,updatedAt:179000};
+  quantity:75,systemID:SYSTEM,fleetID:FLEET,corporationID:NPC,stationID:STATION,haulerID:1003,at:1500,updatedAt:179000};
  let allowed=true,office=true,validProof=true,validQuote=true,flag=true,poisoned=false,throwAfter=-1,
  writes=0,now=1793030000000;
  const native={coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>poisoned,
@@ -159,4 +159,10 @@ test('warehouse reconciliation rejects tampered native buyer wallet after title'
 test('warehouse reconciliation rejects tampered conserved price witness',()=>{
  const a=auditFixture();a.x.rows.get('corporationRuntime'+SEP+RECEIPT(CID)).sourceAfterCents++;
  assert.equal(a.audit.transferred(a.receipt),false);
+});
+
+test('warehouse ore predating the funded mining shift is not counted as shift output',()=>{
+ const x=fixture();x.proof.at=500;
+ assert.match(x.request().reason,/FUNDED_FLEET_RECEIPT_MISMATCH/);
+ assert.equal(x.writes(),0);
 });
