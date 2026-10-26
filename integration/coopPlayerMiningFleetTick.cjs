@@ -11,6 +11,11 @@ function load(name){
 }
 const {createShiftOrders}=load("coopPlayerMiningShiftOrders");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
+function getMountedScene(runtime,systemID){
+ if(!pos(systemID)||!(runtime?.scenes instanceof Map))return null;
+ const found=runtime.scenes.get(systemID);
+ return found?.systemID===systemID?found:null;
+}
 const array=x=>Array.isArray(x)&&x.length>0&&x.length<=32&&
  x.every(pos)&&new Set(x).size===x.length;
 function createAdapter({gameStore,store,access,getFleetRecord,getScene,
@@ -129,9 +134,7 @@ function native(){
     // Exact pinned SpaceRuntime owns a public Map, NOT getScene().
     // Do not call ensureScene(): that would materialize a world in response
     // to a player order, bypassing physical fleet and awake-world authority.
-    const existing=runtime.scenes instanceof Map?
-     runtime.scenes.get(systemID):null;
-    return existing?.systemID===systemID?existing:null;},
+    return getMountedScene(runtime,systemID);},
    enabled:()=>load("coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY"),
    observe:(event,payload)=>{
     const key=[payload?.systemID,payload?.fleetID,payload?.operationID,
@@ -170,4 +173,4 @@ function inspect({systemID,fleetID}={}){
   return fleet&&row.employerCorpID===fleet.ownerID?row:null;
  }catch{return null;}
 }
-module.exports={createAdapter,beforeTick,assign,inspect};
+module.exports={createAdapter,getMountedScene,beforeTick,assign,inspect};
