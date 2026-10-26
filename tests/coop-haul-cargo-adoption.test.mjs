@@ -68,6 +68,7 @@ function fleet(over = {}) {
 test.beforeEach(() => {
   resetForTests();
   process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION = "1";
+  delete process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION;
 });
 
 test("stays disabled unless the adoption flag is on", () => {
@@ -604,4 +605,159 @@ test("authoritatively empty GameStore cargo table remains a genuine no-op",()=>{
  assert.equal(result.status,"NO_ORPHAN_CARGO");
  assert.equal(store.writes.length,0);
  assert.equal(target.state,"mining");
+});
+
+function secondCrashCargo(over={}) {
+ return orphan({coopHaulAdoptedAt:NOW-30_000,
+  coopHaulAdoptedFrom:900000000100,...over});
+}
+function clearCustody(over={}) {
+ return {
+  warehouseRoot:"/tmp/evejs-warehouse-proof",
+  custodyIo:{readdirSync:()=>[]},
+  custodyItems:{findWarehouseItem:()=>null},
+  custodyDepot:{snapshot:()=>({version:1,receipts:{},pending:{}})},
+  ...over
+ };
+}
+function secondCrashAttempt(row=secondCrashCargo(),over={}) {
+ const ship={...hauler,nativeCargoItems:undefined};
+ const store=fakeStore([row]);
+ const target=fleet();
+ let flushes=0;
+ const result=adopt(sceneWith([ship,miner]),target,{
+  store,clock:()=>NOW,probe:{},
+  database:{flushTableSync:()=>{flushes++;return {success:true}}},
+  ...clearCustody(),...over
+ });
+ return {result,ship,store,target,flushes};
+}
+test("second restart cannot re-adopt an existing cargo without separate opt-in",()=>{
+ const f=secondCrashAttempt();
+ assert.equal(f.result.status,"NO_ORPHAN_CARGO");
+ assert.equal(f.store.writes.length,0);
+ assert.equal(f.target.state,"mining");
+});
+test("second restart reattaches the SAME original cargoID when all original settlement authorities attest absence",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const f=secondCrashAttempt();
+ assert.equal(f.result.status,"ADOPTED");
+ assert.equal(f.flushes,1);
+ assert.equal(f.result.adopted,1);
+ assert.equal(f.target.state,"loaded");
+ assert.equal(f.store.listNativeCargo().length,1);
+ const original=f.store.listNativeCargo()[0];
+ assert.equal(original.cargoID,7001);
+ assert.equal(original.entityID,hauler.itemID);
+ assert.equal(original.ownerID,hauler.ownerID);
+ assert.equal(original.coopHaulAdoptedFrom,900000000111);
+ assert.equal(f.ship.nativeCargoItems[0].itemID,7001);
+});
+test("prior live/registered hauler always blocks second restart without querying settlement",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const f=secondCrashAttempt(undefined,{
+  custodyIo:{readdirSync:()=>{throw Error("SHOULD_NOT_READ")}}
+ });
+ assert.equal(f.result.status,"RE_ADOPTION_SETTLEMENT_UNVERIFIED");
+ // A physically registered previous carrier is stronger than any absence proof.
+ resetForTests();
+ const row=secondCrashCargo(),store=fakeStore([row],{
+  entities:[{itemID:row.entityID}]
+ });
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,probe:{},...clearCustody(),
+  database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"NO_ORPHAN_CARGO");
+ assert.equal(store.writes.length,0);
+});
+test("any original warehouse receipt, in-progress temp, ItemStore stock, or depot ledger blocks replay",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const cases=[
+  ["committed receipt",{custodyIo:{readdirSync:()=>["7001.json"]}},
+   "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
+  ["pending file",{custodyIo:{readdirSync:()=>["7001.json.tmp-101-2"]}},
+   "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS"],
+  ["original native stock",{custodyItems:{findWarehouseItem:()=>({itemID:55})}},
+   "RE_ADOPTION_WAREHOUSE_ITEM_EXISTS"],
+  ["depot committed",{custodyDepot:{snapshot:()=>({version:1,receipts:{"7001":{status:"COMMITTED"}},pending:{}})}},
+   "RE_ADOPTION_DEPOT_RECEIPT_EXISTS"],
+  ["depot pending",{custodyDepot:{snapshot:()=>({version:1,receipts:{},pending:{"7001":{status:"PREPARED"}}})}},
+   "RE_ADOPTION_DEPOT_RECEIPT_EXISTS"]
+ ];
+ for(const [name,over,status] of cases){
+  resetForTests();
+  const f=secondCrashAttempt(secondCrashCargo(),over);
+  assert.equal(f.result.status,status,name);
+  assert.equal(f.store.writes.length,0,name);
+  assert.equal(f.flushes,0,name);
+  assert.equal(f.target.state,"mining",name);
+ }
+});
+test("unreadable original warehouse/depot/ItemStore or corrupt lineage never authorizes second adoption",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const faults=[
+  {custodyIo:{readdirSync:()=>{throw Error("EIO")}}},
+  {custodyIo:{readdirSync:()=>null}},
+  {custodyItems:{findWarehouseItem:()=>{throw Error("EIO")}}},
+  {custodyItems:{}},
+  {custodyDepot:{snapshot:()=>{throw Error("EIO")}}},
+  {custodyDepot:{snapshot:()=>null}},
+  {warehouseRoot:"relative/untrusted"}
+ ];
+ for(const over of faults){
+  resetForTests();
+  const f=secondCrashAttempt(secondCrashCargo(),over);
+  assert.equal(f.result.status,"RE_ADOPTION_SETTLEMENT_UNVERIFIED");
+  assert.equal(f.store.writes.length,0);
+  assert.equal(f.target.state,"mining");
+ }
+ resetForTests();
+ const invalid=secondCrashAttempt(secondCrashCargo({coopHaulAdoptedFrom:0}));
+ assert.equal(invalid.result.status,"RE_ADOPTION_HISTORY_UNVERIFIED");
+ assert.equal(invalid.store.writes.length,0);
+});
+test("one committed warehouse receipt blocks an entire mixed fresh and second-restart batch",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const store=fakeStore([
+  orphan({cargoID:7002,entityID:900000000112}),
+  secondCrashCargo({cargoID:7001})
+ ]);
+ let flushes=0;
+ const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+ const result=adopt(sceneWith([ship,miner]),target,{
+  store,clock:()=>NOW,probe:{},...clearCustody({
+   custodyIo:{readdirSync:()=>["7001.json"]}
+  }),database:{flushTableSync:()=>{flushes++;return {success:true}}}
+ });
+ assert.equal(result.status,"RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS");
+ assert.equal(store.writes.length,0);
+ assert.equal(flushes,0);
+ assert.equal(target.state,"mining");
+});
+test("a third restart can only recover once with a new warehouse/depot check and preserves the cargoID",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const first=secondCrashAttempt();
+ assert.equal(first.result.status,"ADOPTED");
+ resetForTests(); // Simulated fresh process; same original durable record.
+ const rows=first.store.listNativeCargo();
+ const nextShip={...hauler,itemID:hauler.itemID+100,nativeCargoItems:undefined};
+ const store=fakeStore(rows);
+ const target=fleet({haulerEntityIDs:[nextShip.itemID]});
+ let checks=0;
+ const opts=clearCustody({
+  custodyIo:{readdirSync:()=>{checks++;return []}}
+ });
+ const result=adopt(sceneWith([nextShip,miner]),target,{
+  ...opts,store,clock:()=>NOW+10_000,probe:{},
+  database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(checks,1);
+ assert.equal(store.listNativeCargo().length,1);
+ assert.equal(store.listNativeCargo()[0].cargoID,7001);
+ assert.equal(store.listNativeCargo()[0].entityID,nextShip.itemID);
+ assert.equal(store.listNativeCargo()[0].coopHaulAdoptedFrom,hauler.itemID);
+ assert.equal(target.state,"loaded");
 });
