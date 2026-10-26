@@ -29,7 +29,7 @@ function setup({wrongCorp=false,stale=false,duplicate=false,warpOutcome="yes",
    lastAggressorID:901,lastAggressedAtMs:stale?800000:now-1000}],
   [102,{entityID:102,systemID,runtimeKind:"nativeCombat"}]]);
  const native=new Map([101,102].map((entityID,i)=>[entityID,{entityID,systemID,
-  typeID:30001,nativeNpc:true,transient:true,createdAtMs:899999+i}]));
+  typeID:30001,corporationID:5001,nativeNpc:true,transient:true,createdAtMs:899999+i}]));
  const calls=[];
  const director=createWaveReinforcements({
   clock:()=>now,getNativeEntity:id=>native.get(id),getController:id=>ctrl.get(id),
@@ -99,6 +99,7 @@ test("occupied native hull, missing store and reserved A-Life hull fail closed",
   f=>{f.ctrl.get(102).currentTargetID=9;},
   f=>{f.native.delete(102);},
   f=>{f.native.get(102).typeID=42;},
+  f=>{f.native.get(102).corporationID=9999;},
   f=>{f.native.get(102).createdAtMs=990000;},
   f=>{f.reserve.mode="WARP";}
  ]){
