@@ -325,3 +325,71 @@ test("P0: repeated same native NPC ID cannot mine twice or manufacture virtual o
  assert.equal(createEconomy({file,clock:()=>now,stepMs:10000})
   .snapshot().pilots[npc.id].completed,3);
 }));
+
+test("P0: malformed persisted tick cursor never replays phantom native economy catch-up",()=>scoped(({file})=>{
+ const base={version:1,lastAt:100000,systems:{[system]:{
+  ore:200,goods:200,demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{"npc-miner":{role:"miner",cargo:0,credits:100,completed:0}},events:[],rolesVersion:2};
+ for(const bad of [null,"not-a-time",-1,1.5,Number.MAX_SAFE_INTEGER+1,{}]){
+  const data=structuredClone(base);data.lastAt=bad;
+  const bytes=JSON.stringify(data);fs.writeFileSync(file,bytes);
+  assert.throws(()=>createEconomy({file,clock:()=>120000,stepMs:10000}),
+   /ECONOMY_TICK_JOURNAL_INVALID/,String(bad));
+  assert.equal(fs.readFileSync(file,"utf8"),bytes);
+ }
+ fs.writeFileSync(file,JSON.stringify(base));
+ const e=createEconomy({file,clock:()=>120000,stepMs:10000});
+ assert.equal(e.advance([{id:"npc-miner",systemID:30000144}]).steps,2);
+ assert.equal(e.snapshot().systems[system].ore,206);
+ assert.equal(e.snapshot().systems[system].nativeDelivered,100);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({[system]:100}).quantity,0);
+}));
+
+test("P0: persisted pilot and event journal must be complete before any economy mutation",()=>scoped(({file})=>{
+ const base={version:1,lastAt:100000,systems:{[system]:{
+  ore:200,goods:200,demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{"npc-miner":{role:"miner",cargo:0,credits:100,completed:3}},events:[],rolesVersion:2};
+ const corrupt=[
+  s=>{s.pilots=null},
+  s=>{s.pilots=[]},
+  s=>{s.pilots="not-pilots"},
+  s=>{s.events=null},
+  s=>{s.events={}},
+  s=>{s.pilots["npc-miner"].role="fraud"},
+  s=>{s.pilots["npc-miner"].credits="100"},
+  s=>{s.pilots["npc-miner"].credits=-1},
+  s=>{s.pilots["npc-miner"].cargo=null},
+  s=>{s.pilots["npc-miner"].completed=1.5}
+ ];
+ for(const mutate of corrupt){
+  const s=structuredClone(base);mutate(s);
+  const encoded=JSON.stringify(s);fs.writeFileSync(file,encoded);
+  assert.throws(()=>createEconomy({file,clock:()=>120000}),
+   /ECONOMY_TICK_JOURNAL_INVALID/);
+  assert.equal(fs.readFileSync(file,"utf8"),encoded);
+ }
+ const prototypeEntry=JSON.parse(JSON.stringify(base));
+ Object.defineProperty(prototypeEntry.pilots,"__proto__",{
+  value:{role:"miner",cargo:0,credits:100,completed:0},
+  enumerable:true,configurable:true
+ });
+ const encoded=JSON.stringify(prototypeEntry);fs.writeFileSync(file,encoded);
+ assert.throws(()=>createEconomy({file}),/ECONOMY_TICK_JOURNAL_INVALID/);
+ assert.equal(fs.readFileSync(file,"utf8"),encoded);
+}));
+
+test("P0: previous valid persisted NPC role and native checkpoint survive restart",()=>scoped(({file})=>{
+ const old={version:1,lastAt:100000,systems:{[system]:{
+  ore:203,goods:200,demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{"npc-miner":{role:"miner",cargo:0,credits:100,completed:3}},
+  events:[],rolesVersion:2};
+ fs.writeFileSync(file,JSON.stringify(old));
+ const e=createEconomy({file,clock:()=>120000,stepMs:10000});
+ assert.equal(e.advance([{id:"npc-miner",systemID:30000144}]).steps,2);
+ assert.equal(e.snapshot().pilots["npc-miner"].completed,9);
+ assert.equal(e.snapshot().systems[system].ore,209);
+ assert.equal(e.snapshot().systems[system].nativeDelivered,100);
+ const restored=createEconomy({file,clock:()=>120000,stepMs:10000});
+ assert.equal(restored.advance([{id:"npc-miner",systemID:30000144}]).steps,0);
+ assert.equal(restored.syncNativeDeliveries({[system]:100}).quantity,0);
+}));
