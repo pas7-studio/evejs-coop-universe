@@ -183,10 +183,24 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
   if(receipt.wreckID!==null){
    let w;
    try{w=nativeStore.getNativeWreck(receipt.wreckID)}catch{w=null}
-   phase=item.locationID===receipt.wreckID&&item.ownerID===receipt.corpID&&
+   if(item.locationID===receipt.wreckID&&item.ownerID===receipt.corpID&&
      item.flagID===itemStore.ITEM_FLAGS.HANGAR&&w?.wreckID===receipt.wreckID&&
-     w.sourceEntityID===receipt.shipID&&w.coopNpcExpeditionSourceCorpID===receipt.corpID?
-      "IN_NATIVE_WRECK":"NEEDS_OPERATOR_REPAIR";
+     w.sourceEntityID===receipt.shipID&&
+     w.coopNpcExpeditionSourceCorpID===receipt.corpID)
+    phase="IN_NATIVE_WRECK";
+   else {
+    // A whole original item may already have been legitimately claimed into
+    // an original player-owned ship. Verify that SAME player owns that ship.
+    let destination=null;
+    try{destination=itemStore.findItemById(item.locationID)}catch{}
+    phase=w?.sourceEntityID===receipt.shipID&&
+     w.coopNpcExpeditionSourceCorpID===receipt.corpID&&
+     item.ownerID!==receipt.corpID&&POS(item.ownerID)&&
+     destination?.itemID===item.locationID&&
+     destination.ownerID===item.ownerID&&
+     item.flagID===itemStore.ITEM_FLAGS.CARGO_HOLD?
+      "CLAIMED_BY_PLAYER":"NEEDS_OPERATOR_REPAIR";
+   }
   }
   if(phase==="IN_SHIP"){
    let native,physical=null;
