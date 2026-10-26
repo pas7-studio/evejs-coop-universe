@@ -35,13 +35,16 @@ function listPinnedSceneShips(scene){
 
 function createNativeStructureControlWitness({sceneForSystem,
  listAllPhysicalShips,getNativeEntity,getController,
- getFactionForCorporation,rangeM=RANGE}={}){
+ getFactionForCorporation,
+ getLivePlayerSessions=()=>[],
+ allowMilitiaPlayers=false,rangeM=RANGE}={}){
  if([sceneForSystem,listAllPhysicalShips,getNativeEntity,getController,
-  getFactionForCorporation].some(fn=>typeof fn!=="function")||
+  getFactionForCorporation,getLivePlayerSessions]
+  .some(fn=>typeof fn!=="function")||
   !Number.isSafeInteger(rangeM)||rangeM<5000||rangeM>50000)
   throw Error("FW_STRUCTURE_CONTROL_NATIVE_AUTHORITIES_REQUIRED");
  function observe({systemID,position,warID,campaignID,
-  attackerFactionID,defenderFactionID,fleetState}={}){
+  attackerFactionID,defenderFactionID,fleetState,warState}={}){
   const unknown=reason=>({status:"NATIVE_CONTROL_UNKNOWN",reason});
   if(!POS(systemID)||!VEC(position)||!POS(attackerFactionID)||
    !POS(defenderFactionID)||attackerFactionID===defenderFactionID||
@@ -55,7 +58,46 @@ function createNativeStructureControlWitness({sceneForSystem,
   if(scene?.systemID!==systemID||typeof scene.getEntityByID!=="function"||
    all?.complete!==true||!Array.isArray(all.ships)||all.ships.length>4096)
    return unknown("INCOMPLETE_SCENE_ENUMERATION");
-  const seen=new Set();let attackerCount=0,defenderCount=0;
+  // Exact login uniqueness and native scene binding. Even non-enlisted
+  // players MUST be represented in the complete scene. A duplicate live
+  // session for one character can never manufacture more capture votes.
+  let liveSessions=[];
+  const sessionsByShip=new Map(),sessionsByCharacter=new Map();
+  if(allowMilitiaPlayers){
+   if(warState?.version!==1||!warState.enlistments||
+    typeof warState.enlistments!=="object"||!Array.isArray(all.ships))
+    return unknown("MILITIA_WAR_STATE_UNAVAILABLE");
+   try{liveSessions=getLivePlayerSessions()}catch{return unknown("NATIVE_PLAYER_REGISTRY_UNAVAILABLE")}
+   if(!Array.isArray(liveSessions)||liveSessions.length>2048)
+    return unknown("NATIVE_PLAYER_REGISTRY_INCOMPLETE");
+   for(const session of liveSessions){
+    const cid=session?.characterID,shipID=Number(session?._space?.shipID),
+     sid=Number(session?._space?.systemID);
+    // Character-selection / login sessions have no in-space ship
+    // and are not combat actors. They must not stop every siege.
+    if(!POS(cid))continue;
+    if(!session.socket||session.socket.destroyed||
+     sessionsByCharacter.has(cid))
+     return unknown("DUPLICATE_OR_INVALID_LIVE_CHARACTER");
+    sessionsByCharacter.set(cid,session);
+    if(sid!==systemID)continue;
+    // In-space presence must be hydrated and must exist exactly once
+    // in the same scene registered for this solar system.
+    if(!POS(shipID)||session._space.initialStateSent!==true||
+     Number(session.shipID||session.shipid||session.activeShipID)!==shipID||
+     !(scene.sessions instanceof Map)||
+     ![...scene.sessions.values()].includes(session)||
+     typeof scene.getShipEntityForSession!=="function"||
+     scene.getShipEntityForSession(session)?.itemID!==shipID||
+     sessionsByShip.has(shipID))
+     return unknown("LIVE_PLAYER_SHIP_NOT_NATIVE_READY");
+    sessionsByShip.set(shipID,session);
+    if(!all.ships.some(x=>x?.itemID===shipID))
+     return unknown("MISSING_LIVE_PLAYER_SHIP_IN_PHYSICAL_CENSUS");
+   }
+  }
+  const seen=new Set();let attackerCount=0,defenderCount=0,
+   playerAttackers=0,playerDefenders=0,unaffiliatedPlayers=0;
   for(const ship of all.ships){
    const id=ship?.itemID;
    if(!POS(id)||seen.has(id)||!VEC(ship.position)||
@@ -66,10 +108,34 @@ function createNativeStructureControlWitness({sceneForSystem,
     ship.position.y-position.y,ship.position.z-position.z);
    if(!Number.isFinite(d))return unknown("INVALID_DISTANCE");
    if(d>rangeM)continue;
-   // Unknown or player ships in a siege radius are contested until
-   // proper militia-character identity/consent witnesses exist.
    if(ship.nativeNpc!==true||ship.session?.characterID){
-    defenderCount++;continue;
+    if(!allowMilitiaPlayers){
+     defenderCount++;unaffiliatedPlayers++;continue;
+    }
+    const session=sessionsByShip.get(id);
+    if(!session||session.socket?.destroyed===true||
+     ship.nativeNpc===true||
+     Number(session._space?.systemID)!==systemID||
+     session._space?.initialStateSent!==true||
+     scene.getShipEntityForSession(session)!==ship||
+     Number(session._space?.shipID)!==id||
+     ship.pendingWarp||ship.warpState||ship.isWarping){
+     defenderCount++;unaffiliatedPlayers++;continue;
+    }
+    const enlistment=warState.enlistments[String(session.characterID)];
+    if(enlistment?.status!=="ACTIVE"||
+     enlistment.characterID!==session.characterID||
+     !POS(enlistment.enlistedAt)||!POS(enlistment.factionID)){
+     defenderCount++;unaffiliatedPlayers++;continue;
+    }
+    if(enlistment.factionID===attackerFactionID){
+     attackerCount++;playerAttackers++;
+    }else if(enlistment.factionID===defenderFactionID){
+     defenderCount++;playerDefenders++;
+    }else{
+     defenderCount++;unaffiliatedPlayers++;
+    }
+    continue;
    }
    const assignment=fleetState.ships[String(id)];
    if(!assignment||assignment.systemID!==systemID||
@@ -96,7 +162,8 @@ function createNativeStructureControlWitness({sceneForSystem,
   return {status:attackerCount>0&&defenderCount===0?
    "UNCONTESTED_NATIVE_ATTACKER":"CONTESTED_NATIVE_OBJECTIVE",
    systemID,attackerFactionID,defenderFactionID,
-   attackerCount,defenderCount,physicalProof:true};
+   attackerCount,defenderCount,playerAttackers,playerDefenders,
+   unaffiliatedPlayers,physicalProof:true};
  }
  return Object.freeze({observe});
 }

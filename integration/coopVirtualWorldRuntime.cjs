@@ -332,7 +332,9 @@ function advanceNativeWarObjectives(){
    listAllPhysicalShips:structure.listPinnedSceneShips,
    getNativeEntity:id=>npcStore.getNativeEntity(id),
    getController:id=>controllers.getControllerByEntityID(id),
-   getFactionForCorporation
+   getFactionForCorporation,
+   allowMilitiaPlayers:process.env.EVEJS_COOP_FACTION_WAR_PLAYER_CAPTURE==="1",
+   getLivePlayerSessions:()=>require("../services/chat/sessionRegistry").getSessions()
   });
   const adjudicator=adjudicatorApi.createWarObjectiveAdjudicator({
    gameStore,getNativeStructure,getFactionForCorporation,

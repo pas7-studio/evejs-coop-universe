@@ -838,6 +838,108 @@ overlay `--check` and install/remove round-trip; two real
 authenticated clients and Rust combat behavior. No live
 deployment, client validation or `evejs-data` mutation in this PR.
 
+## FW-009C — authenticated militia capsuleers in live war sieges
+
+**Server source implementation, default OFF; no production or two-client
+acceptance yet.** FW-009B physically verified stock structure combat
+killmail, complete native scene census and 4 consecutive live samples
+before FW-001 `CAPTURE_TERRITORY` could change **military control only**.
+FW-009C adds genuine volunteer capsuleers to these observations.
+
+### Live militia consent, never a client-chosen faction
+
+The original stock militia agent (FW-002) writes `ENLIST` and
+`LEAVE_MILITIA` through `coopFactionWarCore` using an authenticated,
+uniquely connected docked character. The exact `war.enlistments`
+record (same authoritative native SQLite transaction as siege
+adjudication) is the ONLY source of the player's militia faction.
+The player corporationID, faction display fields, chat text,
+ship name, UI payloads and locally cached character shipID are
+**not** accepted as their war allegiance.
+
+The existing native `coopWarNativeStructureControl` now:
+
+- Re-resolves every active pilot via the pinned
+  `sessionRegistry.getSessions()`, `scene.sessions:Map`,
+  `scene.getShipEntityForSession(session)`, original `_space.shipID`,
+  `_space.systemID` and fully sent initial state.
+- Matches that exact native ship to the exhaustive pinned
+  `scene.dynamicEntities:Map` and `staticEntities:Array` census,
+  not a virtual NPC, cached shipID or guessed position.
+- Requires exactly one live character session and one native ship
+  in the source scene. A disconnected, duplicated, unhydrated,
+  warping or cross-system pilot cannot produce a valid attacker vote.
+  Character-selection sockets with no characterID are skipped.
+- Requires `enlistments[characterID]` to be `ACTIVE` with the
+  same immutable player ID, a positive actual `enlistedAt` and
+  faction matching the actual active war's attacker/defender.
+- An authenticated **attacker** in original physical range counts
+  toward active occupancy. A **defender** interrupts capture.
+  Unenlisted players, unknown and third-faction vessels also
+  contest until explicit authorization is available.
+- Deregistration or leaving militia is reflected in the next
+  native sample; 4-sample occupancy is reset if the zone is
+  contested. Empty, missing, duplicate, partial or unloaded scenes
+  are never interpreted as "zero defenders".
+- Never modifies physical player positions, ship fittings, inventory,
+  native corporation IDs, PvP eligibility, wallets, bounty, standings
+  or character records. Native user identity comes exclusively
+  from live session + original scene; only FW-001 enlistment
+  and war control state is read under the existing SQLite tx.
+
+Feature gate:
+`EVEJS_COOP_FACTION_WAR_PLAYER_CAPTURE=1` additionally requires
+the FW-009B objective gates
+`EVEJS_COOP_FACTION_WAR_NATIVE_OBJECTIVES=1`,
+`EVEJS_COOP_FACTION_WAR_FLEETS=1`,
+`EVEJS_COOP_FACTION_WAR=1`,
+`EVEJS_COOP_NATIVE_ATOMIC_ROWS=1`,
+`EVEJS_COOP_ALIFE=1`, and native militia agent setup.
+When the new player flag is OFF, all player vessels continue to
+contest capture as in FW-009B and cannot be counted as attackers.
+This is intentionally a controlled opt-in.
+
+### In-game progress through the existing faction agent
+
+`coopWarMilitiaIntel` is read-only and uses the same native
+SQLite `corporationRuntime` snapshot of war enlistment, wars,
+campaigns, and objective/capture progress. An authenticated active
+militia member who visits their authorized station agent sees
+ATTACK/DEFEND, native target system, actual ASSAULT status,
+structure destroyed/held and `0/4`–`4/4` occupation samples
+directly in the original agent conversation and mission briefing.
+No GM text commands or new client RPC are used. The agent itself
+also rechecks current native enlistment before displaying this
+intel; non-members and disconnected sessions cannot read it.
+
+This is **mission briefing visibility**, not yet an in-space
+capture HUD with a progress bar. Player enlistment does not
+automatically change their EVE corporation or activate native
+PvP flags: explicit corporation/PvP legality, capture-zone UI and
+two-client battle testing remain future integration slices.
+
+### Test and release gates
+
+Tested source suites:
+`tests/coop-war-player-militia-presence.test.mjs`,
+`tests/coop-war-militia-intel.test.mjs`,
+`tests/coop-war-militia-agent-frontline.test.mjs`,
+and previous FW-009B tests; Node 22 CI workflow is updated.
+
+Negative scenarios: duplicate login, stale shipID, disconnect,
+ship warp, not-yet-hydrated scene, absent original player ship,
+missing/LEFT enlistment, third-faction ship, contested defender,
+login-screen socket, stale capture revision, source-only non-GM
+killmail and 90-second four-tick uncontested presence.
+
+**Still required before merge/deploy:** real native PvP and
+structure killmail E2E, properly loaded second client and
+disconnection during the capture interval, two real player
+characters joining opposing militias, GM structure kill negative
+test, SQLite FULL crash/replay/recovery, Rust native parity,
+actual updated agent dialogue in the client, and explicit
+approval of valid structure typeIDs. Feature flag stays OFF.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 
