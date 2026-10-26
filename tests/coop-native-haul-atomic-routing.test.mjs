@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
 const source=fs.readFileSync(new URL("../integration/coopNativeHaulCargo.cjs",import.meta.url),"utf8");
 function fixture(t,mode="COMMITTED"){
  const flags=["EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE","EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC",
@@ -12,8 +14,24 @@ function fixture(t,mode="COMMITTED"){
   if(v===undefined)delete process.env[k];else process.env[k]=v;
  }});
  const container={exports:{}};
+ // The module loads three co-op helpers at load time (cargo promotion, telemetry
+ // and flag reading). Audit every *other* dependency strictly, but give those
+ // three faithful stubs so the test keeps looking at behaviour, not require paths.
+ const stubs={
+  // The durable-write helper and the flag reader are real: the legacy branch must
+  // actually write through the fixture's store. Only telemetry is stubbed, so the
+  // event still reaches the fixture's probe.
+  "./coopDurableCargoWrite":require("../integration/coopDurableCargoWrite.cjs"),
+  "./coopFlags":require("../integration/coopFlags.cjs"),
+  "./coopObserve":{observe:(probe,event)=>{try{probe?.observe?.(event);return true}catch{return false}}},
+ };
+ const resolve=id=>{
+  const name=id.replace(/\.c?js$/,"");
+  if(stubs[name])return stubs[name];
+  throw Error("Unexpected live dependency: "+id);
+ };
  new Function("module","exports","require","process",source)(container,container.exports,
-  id=>{throw Error("Unexpected live dependency: "+id)},process);
+  resolve,process);
  const ore={cargoID:980200000102,entityID:9001,ownerID:1234,
   typeID:34,categoryID:25,quantity:13,moduleID:0,transient:false};
  const miner={itemID:9001,kind:"ship",ownerID:1234,nativeNpc:true,transient:false,

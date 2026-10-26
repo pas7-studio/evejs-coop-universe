@@ -173,11 +173,14 @@ for(const [name,source] of [["miningRuntime.js",runtime],["miningRuntimeState.js
  }
 }
 test("wiring deploys cycle helper and modifies both stock mining authorities",()=>{
- const src=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
- assert.match(src,/coopNativeMiningCycleConservation/);
- assert.match(src,/coop-native-mining-cycle-conservation-patch/);
- assert.match(src,/server\/src\/services\/mining\/miningRuntimeState\.js/);
- assert.match(src,/server\/src\/services\/mining\/miningRuntime\.js/);
+ // Module registration lives in the one overlay module list; the installer still
+ // has to carry the pinned L1-style patch for the two stock mining authorities.
+ const installer=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
+ const spec=fs.readFileSync(new URL("../scripts/overlay-spec.cjs",import.meta.url),"utf8");
+ assert.match(spec,/"coopNativeMiningCycleConservation"/);
+ assert.match(installer,/coop-native-mining-cycle-conservation-patch/);
+ assert.match(installer,/server\/src\/services\/mining\/miningRuntimeState\.js/);
+ assert.match(installer,/server\/src\/services\/mining\/miningRuntime\.js/);
 });
 
 test("unresolved asteroid debit blocks another miner on the same rock after restart",t=>{

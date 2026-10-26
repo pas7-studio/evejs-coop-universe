@@ -143,28 +143,43 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  let totalMoved=0,quantity=0,count=0;
  // Pick the first physical, in-range hull with VERIFIED remaining capacity;
  // never merge, split, or invent an ore stack to satisfy a capacity deficit.
+ // Every hauler that is not chosen leaves a reason: the loop used to fall through
+ // silently, so a fleet could report "loaded" with nothing moved and no way to
+ // tell whether the hull was out of range, full, warping or unresolvable in SDE.
  for(const {item,volume} of cargo){
-  let selected=null;
+  let selected=null,why="",skipped=[];
   for(const haulerID of fleet.haulerEntityIDs){
-   if(!integer(haulerID)||haulerID===minerID)continue;
+   if(!integer(haulerID)||haulerID===minerID){skipped.push({haulerID,why:"invalid-id"});continue;}
    const ship=scene.getEntityByID(haulerID),native=store.getNativeEntity(haulerID);
-   if(!ship||ship.itemID!==haulerID||ship.kind!=="ship"||
-    ship.nativeNpc!==true||ship.transient!==false||ship.coopHaulNeedsOperatorRepair||
-    ship.destroyed===true||ship.isDestroyed===true||isWarping(ship)||
-    !vector(ship.position)||Number(ship.ownerID)!==minerOwner||
-    !native||Number(native.entityID)!==haulerID||Number(native.ownerID)!==minerOwner||
-    Number(native.systemID)!==systemID||native.transient!==false)continue;
+   if(!ship||ship.itemID!==haulerID||ship.kind!=="ship")why="ship-missing";
+   else if(ship.nativeNpc!==true||ship.transient!==false)why="not-durable-native";
+   else if(ship.coopHaulNeedsOperatorRepair)why="needs-repair";
+   else if(ship.destroyed===true||ship.isDestroyed===true)why="destroyed";
+   else if(isWarping(ship))why="warping";
+   else if(!vector(ship.position))why="no-position";
+   else if(Number(ship.ownerID)!==minerOwner)why="owner-mismatch";
+   else if(!native||Number(native.entityID)!==haulerID||
+    Number(native.ownerID)!==minerOwner||Number(native.systemID)!==systemID||
+    native.transient!==false)why="native-identity";
+   if(why){skipped.push({haulerID,why});why="";continue;}
    const range=Math.max(0,Math.hypot(
     miner.position.x-ship.position.x,miner.position.y-ship.position.y,
     miner.position.z-ship.position.z)-Math.max(0,Number(miner.radius)||0)-
     Math.max(0,Number(ship.radius)||0));
-   if(!Number.isFinite(range)||range>2500)continue;
+   if(!Number.isFinite(range)||range>2500){
+    skipped.push({haulerID,why:"out-of-range",rangeMeters:Number.isFinite(range)?Math.round(range):null});
+    continue;
+   }
    const hull=resolveType(Number(ship.typeID));
    const capacity=Number(options.resolveCargoCapacityM3?
     options.resolveCargoCapacityM3(ship,hull):hull?.capacity);
-   if(!Number.isFinite(capacity)||capacity<=0)continue;
+   if(!Number.isFinite(capacity)||capacity<=0){
+    skipped.push({haulerID,why:"no-capacity",typeID:Number(ship.typeID)||0});continue;
+   }
    const existing=store.listNativeCargoForEntity(haulerID);
-   if(!Array.isArray(existing)||existing.length>1000)continue;
+   if(!Array.isArray(existing)||existing.length>1000){
+    skipped.push({haulerID,why:"cargo-unreadable"});continue;
+   }
    let used=0,valid=true;
    for(const row of existing){
     const type=resolveType(Number(row?.typeID));
@@ -175,8 +190,17 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
     used+=unit*Number(row.quantity);
    }
    if(valid&&Number.isFinite(used)&&used+volume<=capacity+1e-6){selected=ship;break;}
+   skipped.push({haulerID,why:valid?"full":"cargo-invalid",
+    usedM3:Number.isFinite(used)?Math.round(used*100)/100:null,
+    capacityM3:Math.round(capacity*100)/100,needM3:Math.round(volume*1000)/1000});
   }
-  if(!selected)continue; // Leave the original persistent cargo on the miner.
+  if(!selected){
+   safeObserve(probe,"living-haul-no-hauler",{itemID:miner.itemID,systemID},
+    {fleetID,minerID,cargoID:Number(item.cargoID),quantity:Number(item.quantity),
+     volumeM3:Math.round(volume*1000)/1000,haulers:fleet.haulerEntityIDs.length,
+     skipped:skipped.slice(0,8)});
+   continue; // Leave the original persistent cargo on the miner.
+  }
   const cargoID=Number(item.cargoID),key=systemID+":"+cargoID;
   if(strictInFlight.has(key))return stop("HAUL_TRANSFER_REENTRANT",true,selected,cargoID);
   strictInFlight.add(key);
