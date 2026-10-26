@@ -168,3 +168,17 @@ test("probe missing native systemID cannot validate source-system scan proof",()
  assert.equal(f.scan().reason,"NPC_SCANNER_PHYSICAL_PROBE_UNVERIFIED");
  assert.equal(f.getScanCalls(),0);
 });
+
+test("hardware recognizes recovered STOWED original unit without granting a synthetic probe",()=>{
+ const f=fixture();
+ const row=f.cargo[0];
+ row.quantity=1;
+ row.deployedProbe={...row.deployedProbe,status:"STOWED",
+  recoveredAtMs:1000000};
+ for(const other of f.cargo.slice(1)){other.quantity=1;delete other.deployedProbe}
+ const r=f.hardware();
+ assert.equal(r.status,"NATIVE_SCANNER_HARDWARE_READY");
+ assert.equal(r.availableUnits,4);
+ assert.equal(r.originalCargoIDs.includes(row.cargoID),true);
+ assert.equal(f.scan().status,"BLOCKED");
+});
