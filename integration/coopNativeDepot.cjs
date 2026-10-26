@@ -106,6 +106,13 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
      (!legacy&&!haulerID)||!Number.isSafeInteger(quantity)||quantity<=0)return null;
   return {cargoID,typeID,quantity,haulerID:haulerID||null,systemID:Number(systemID),fleetID:Number(fleetID)};
  };
+ // A valid receipt is made from positive native integer identities. Numeric
+ // strings are not trusted physical cargo provenance, even when Number()
+ // would make their totals appear internally consistent in audit().
+ const nativePositive=v=>typeof v==="number"&&Number.isSafeInteger(v)&&v>0;
+ const nativeReceipt=row=>row&&typeof row==="object"&&!Array.isArray(row)&&
+   ["cargoID","typeID","quantity","haulerID","systemID","fleetID"].every(
+     key=>nativePositive(row[key]));
  const same=(a,b)=>a&&b&&a.cargoID===b.cargoID&&a.typeID===b.typeID&&
    a.quantity===b.quantity&&a.haulerID===b.haulerID&&
    a.systemID===b.systemID&&a.fleetID===b.fleetID;
@@ -157,11 +164,8 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
    // the same original cargoID as canonical "777". An audit must NEVER
    // certify multiple receipts for the same physical source item.
    if(!positive(key)||key!==String(Number(key))||
-      Number(key)!==Number(entry?.cargoID)||
-      !positive(entry?.systemID)||!positive(entry?.fleetID)||
-      !positive(entry?.haulerID)||!positive(entry?.typeID)||
-      !Number.isSafeInteger(Number(entry?.quantity))||
-      Number(entry.quantity)<=0||state.pending[key]){invalid++;continue;}
+      !nativeReceipt(entry)||Number(key)!==entry.cargoID||
+      state.pending[key]){invalid++;continue;}
    const system=String(entry.systemID),type=String(entry.typeID),amount=Number(entry.quantity);
    bySystemType[system]??={};
    const previous=Number(bySystemType[system][type]||0);
@@ -173,18 +177,19 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
   }
   const keys=new Set([...Object.keys(derived),...Object.keys(state.totals)]);
   for(const key of keys){
-   if(!positive(key)||Number(derived[key]||0)!==Number(state.totals[key]||0))invalid++;
+   if(!positive(key)||key!==String(Number(key))||
+      (Object.hasOwn(state.totals,key)&&
+       (typeof state.totals[key]!=="number"||
+        !Number.isSafeInteger(state.totals[key])||state.totals[key]<0))||
+      Number(derived[key]||0)!==Number(state.totals[key]||0))invalid++;
   }
   const unresolved=Object.keys(state.pending).length;
   for(const [key,entry] of Object.entries(state.pending)){
    // Pending may be legitimate source debits, but a malformed or aliased
    // key is NOT proof the receipt is unique and safe to finalize.
    if(!positive(key)||key!==String(Number(key))||
-      Number(key)!==Number(entry?.cargoID)||
-      !positive(entry?.systemID)||!positive(entry?.fleetID)||
-      !positive(entry?.haulerID)||!positive(entry?.typeID)||
-      !Number.isSafeInteger(Number(entry?.quantity))||
-      Number(entry.quantity)<=0||state.receipts[key])invalid++;
+      !nativeReceipt(entry)||Number(key)!==entry.cargoID||
+      state.receipts[key])invalid++;
   }
   return {status:invalid?'NEEDS_OPERATOR_REPAIR':unresolved?'PENDING_CUSTODY_RECONCILIATION':'OK',
    committed,unresolved,invalid,bySystemType,totals:derived};
