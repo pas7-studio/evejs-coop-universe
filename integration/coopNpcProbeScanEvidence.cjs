@@ -75,7 +75,7 @@ function createNpcProbeScanEvidence({getNativeEntity,getController,listNativeMod
       flight.ownerID!==entity.ownerID||flight.typeID!==row.typeID||
       !positive(row.moduleID)||!Number.isSafeInteger(flight.launchedAtMs)||
       flight.launchedAtMs>now||now-flight.launchedAtMs>maxAgeMs||
-      !vec(flight.position)||!positive(flight.rangeStep)||!finite(flight.scanRange)||
+      !vec(flight.position)||!positive(flight.rangeStep)||flight.rangeStep>8||!finite(flight.scanRange)||
       flight.scanRange<=0)continue;
    const launcher=mods.find(m=>m.moduleID===row.moduleID&&m.entityID===entityID&&
        m.ownerID===entity.ownerID&&m.groupID===481&&m.categoryID===7&&
