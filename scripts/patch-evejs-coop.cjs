@@ -65,6 +65,8 @@ function transform(source,spec,remove){
    text=require("./coop-player-market-buy-refund-patch.cjs").patch(text,{remove:false});
   }
  }
+ if(spec.file==="server/src/services/market/marketProxyService.js")
+  text=require("./coop-player-mining-corp-market-isolation-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/runtime.js")
   text=require("./coop-native-npc-fire-debit-patch.cjs").patch(text,{remove});
  if(spec.file==="server/src/space/movement/warp/movementWarpState.js")
