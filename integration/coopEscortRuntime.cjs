@@ -340,19 +340,25 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    return blocked("NATIVE_REFUND_CONTRACT_NOT_REPLAYABLE");
   return contracts.refund(c.contractID);
  }
- function reconcilePeacefulDeliveries({systemID=null,maxTrips=32}={}){
+ function reconcilePeacefulDeliveries({systemID=null,maxTrips=32,afterKey=null}={}){
   if(!ready()||process.env.EVEJS_COOP_ESCORT_PEACEFUL_REPLAY!=="1"||
    process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT!=="1"||
    process.env.EVEJS_COOP_ESCORT_ROUTE_WITNESS!=="1")
    return blocked("DISABLED");
   if(systemID!==null&&!pos(systemID)||
-   !Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>32)
+   !Number.isSafeInteger(maxTrips)||maxTrips<1||maxTrips>32||
+   afterKey!==null&&(typeof afterKey!=="string"||!/^[0-9]+-[0-9]+-[0-9]+$/.test(afterKey)))
    return blocked("PEACEFUL_REPLAY_SCAN_OPTIONS_INVALID");
-  let entries;try{entries=flight.listDelivered({systemID,maxTrips})}
+  let entries;try{entries=flight.listDelivered({systemID,maxTrips,afterKey})}
   catch{return blocked("PEACEFUL_REPLAY_FLIGHT_SCAN_UNAVAILABLE")}
   if(entries?.status!=="READY"||!Array.isArray(entries.manifestKeys)||
    entries.manifestKeys.length>maxTrips)
    return blocked(entries?.status||"PEACEFUL_REPLAY_SCAN_INVALID");
+  if(entries.hasMore!==undefined&&typeof entries.hasMore!=="boolean"||
+     entries.hasMore===true&&(entries.manifestKeys.length===0||
+     entries.nextAfterKey!==entries.manifestKeys[entries.manifestKeys.length-1]||
+     afterKey!==null&&entries.nextAfterKey<=afterKey))
+   return blocked("PEACEFUL_REPLAY_SCAN_INVALID_CURSOR");
   const outcomes=[];let paid=0,alreadyPaid=0,pending=0,blockedCount=0;
   for(const key of entries.manifestKeys){
    if(typeof key!=="string"||!/^\d+-\d+-\d+$/.test(key))
@@ -366,7 +372,9 @@ function createEscortRuntime({root,io,clock=()=>Date.now(),atomicRows,isNpcCorpo
    else blockedCount++;
   }
   return {status:"NATIVE_PEACEFUL_REPLAY_CHECKED",paid,alreadyPaid,
-   pending,blocked:blockedCount,outcomes};
+   pending,blocked:blockedCount,outcomes,
+   hasMore:entries.hasMore===true,
+   nextAfterKey:entries.hasMore===true?entries.nextAfterKey:null};
  }
  function settlePeacefulFlight(manifestKey,scene){
   if(!ready())return blocked("DISABLED");

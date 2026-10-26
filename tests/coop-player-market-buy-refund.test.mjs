@@ -27,10 +27,13 @@ function fixture({filled=3}={}){
    kind:"P2P_BUY_RESERVE",phase:"BOUND",key:receiptKey,orderID:"23",
    operationID,buyerID:201,stationID:60001234,typeID:34,
    priceCents:1234,quantity:7,reservedCents:8638,
+   minVolume:2,durationDays:30,orderRange:0,
    spentCents:filled*1234,filledQuantity:filled,
    remainingReserveCents:remaining*1234,
    brokerCents:123,sccCents:45,totalCents:8806,
-   buyerBeforeCents:100000,buyerAfterCents:91194
+   buyerBeforeCents:100000,buyerAfterCents:91194,
+   journalIDs:[5000000000000000,5000000000000001,5000000000000002],
+   createdAt:123456
   }},
   identityState:{coopP2PMarketJournal:{next:5000000000000000}}
  };
@@ -161,4 +164,67 @@ test("financial BUY refund flags default OFF, no native mutation",()=>{
   /FLAGS_DISABLED/);
  assert.equal(x.commits,0);
  }finally{keys.forEach((k,i)=>original[i]===undefined?delete process.env[k]:process.env[k]=original[i])}
+});
+
+
+test("refund rejects corrupted original native debit receipt without wallet mutation",()=>{
+ const reset=flags();
+ try{
+  const changes=[
+   r=>delete r.journalIDs,
+   r=>{r.journalIDs=[1,2,3]},
+   r=>{r.journalIDs=[5000000000000000,5000000000000002,5000000000000003]},
+   r=>delete r.createdAt,
+   r=>{r.createdAt=0},
+   r=>{r.minVolume=0},
+   r=>{r.durationDays=0},
+   r=>{r.orderRange=-1}
+  ];
+  for(const change of changes){
+   const x=fixture();
+   change(x.db.playerMarketFills[receiptKey]);
+   const snapshot=structuredClone(x.db);
+   const svc=createBuyRefund({gameStore:x.store,clock:()=>123456});
+   assert.throws(()=>svc.preflight(original("open")),
+    /P2P_BUY_REFUND_DURABLE_ORIGINAL_RESERVE_NOT_VERIFIED/);
+   assert.throws(()=>svc.refund(original(),"cancelled"),
+    /P2P_BUY_REFUND_DURABLE_ORIGINAL_RESERVE_NOT_VERIFIED/);
+   assert.equal(x.commits,0);
+   assert.deepEqual(x.db,snapshot);
+  }
+ }finally{reset()}
+});
+
+
+test("paid BUY refund replay rejects forged durable credit or original reserve without another ISK credit",()=>{
+ const reset=flags();
+ try{
+  const tamper=[
+   data=>{delete data.playerMarketFills["buy-refund:23"].journalID},
+   data=>{data.playerMarketFills["buy-refund:23"].journalID=1},
+   data=>{data.playerMarketFills["buy-refund:23"].committedAt=0},
+   data=>{data.playerMarketFills["buy-refund:23"].originalReservedCents=1},
+   data=>{data.playerMarketFills[receiptKey].closedReason="forged"},
+   data=>{data.playerMarketFills[receiptKey].closedAt=1},
+   data=>{data.playerMarketFills[receiptKey].stationID=999},
+   data=>{data.playerMarketFills[receiptKey].buyerID=202},
+   data=>{delete data.playerMarketFills[receiptKey].journalIDs},
+   data=>{data.playerMarketFills[receiptKey].minVolume=0}
+  ];
+  for(const change of tamper){
+   const x=fixture(),svc=createBuyRefund({gameStore:x.store,clock:()=>123456});
+   svc.refund(original(),"cancelled");
+   change(x.db);
+   const before=structuredClone(x.db),commits=x.commits;
+   assert.throws(()=>svc.refund(original(),"cancelled"),
+    /P2P_BUY_REFUND_(REPLAY_IDENTITY_CONFLICT|COMMITTED_RESERVE_EVIDENCE_MISSING)/);
+   assert.deepEqual(x.db,before);
+   assert.equal(x.commits,commits);
+  }
+  const x=fixture(),svc=createBuyRefund({gameStore:x.store,clock:()=>123456});
+  svc.refund(original(),"cancelled");
+  const snapshot=structuredClone(x.db);
+  assert.equal(svc.refund(original(),"cancelled").replayed,true);
+  assert.deepEqual(x.db,snapshot);
+ }finally{reset()}
 });

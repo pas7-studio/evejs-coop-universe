@@ -1,0 +1,187 @@
+{
+  "schema": "evejs-coop/lw04-native-manufacturing-source-to-act/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW04-01",
+      "title": "Existing source A-Life shortage generates exact native MANUFACTURE intent",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Original ItemStore snapshot + SDE BPO proof"
+      ]
+    },
+    {
+      "id": "LW04-02",
+      "title": "Physical original NPC at station, verified under attack then retreated",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "No native factory debit"
+      ]
+    },
+    {
+      "id": "LW04-03",
+      "title": "Competing original native corp market writer enabled",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "No second issuer"
+      ]
+    },
+    {
+      "id": "LW04-04",
+      "title": "Complete existing native READY job with zero ISK",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Exactly one source item output"
+      ]
+    },
+    {
+      "id": "LW04-05",
+      "title": "Native PAUSED job then resumed",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "No second job or duplicate material debit"
+      ]
+    },
+    {
+      "id": "LW04-06",
+      "title": "Restart after original INSTALL SQLite COMMIT but before client ACK",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Same operationID + one debit"
+      ]
+    },
+    {
+      "id": "LW04-07",
+      "title": "Restart after original delivery COMMIT but before ACK",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Exactly one output stack"
+      ]
+    },
+    {
+      "id": "LW04-08",
+      "title": "Original produced item listed to Rust once, lost Rust ACK",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Same original escrow/one order"
+      ]
+    },
+    {
+      "id": "LW04-09",
+      "title": "Two different NPC corporations share one station",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Separate wallet + stock + journal"
+      ]
+    },
+    {
+      "id": "LW04-10",
+      "title": "Native player buys entire NPC output through original Rust market",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "One settled wallet + escrow"
+      ]
+    },
+    {
+      "id": "LW04-11",
+      "title": "NPC ammunition consumption creates finite real shortage on second cycle",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Native ammo receipt → bounded replenish"
+      ]
+    },
+    {
+      "id": "LW04-12",
+      "title": "Two actual clients observe named trader and in-game items/market activity",
+      "status": "NOT_RUN",
+      "mode": "LOCAL_E2E",
+      "destructive": false,
+      "requiredEvidence": [
+        "pinned original upstream SHA",
+        "original SQLite/GameStore journal",
+        "ItemStore original item IDs",
+        "Rust GetOrder and fill receipts",
+        "two-client visual proof if applicable",
+        "Identical physical native state"
+      ]
+    }
+  ]
+}

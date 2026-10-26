@@ -1,0 +1,137 @@
+{
+  "schema": "evejs-coop/lw04c2-original-manufacturing-stage/v1",
+  "mode": "DISPOSABLE_PINNED_NATIVE_ONLY",
+  "protectedVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW04C2-01",
+      "title": "Exact native GameStore COOP-032E INSTALL consumes real ore and corporation ISK once",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-02",
+      "title": "Crash after INSTALL SQLite COMMIT and before manual ACK: same operation ID never debits twice",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-03",
+      "title": "Native READY only after exact FILETIME endDate, including paused production",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-04",
+      "title": "Crash after DELIVER COMMIT: identical itemID, blueprint restored and no second item output",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-05",
+      "title": "Poisoned original GameStore cache or in-flight async flush blocks native writer",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-06",
+      "title": "Two NPC corporations at one station retain separate original wallet, blueprint and output owner",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-07",
+      "title": "Manual INSTALL blocked when regular A-Life or another native market scheduler is active",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-08",
+      "title": "Read original Rust listing and sale with one escrow, conserved qty and one wallet settlement",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-09",
+      "title": "Two real clients observe manufacturing NPC and native hangar/market order after cold restart",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    },
+    {
+      "id": "LW04C2-10",
+      "title": "Protected evejs-data never mounted for destructive test; original pinned overlay reversible",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "native GameStore sqlite transaction and journal",
+        "original ItemStore cargo itemIDs and blueprint location",
+        "native NPC corporation wallet before/after",
+        "source operationID and elapsed time",
+        "Rust order/fill receipts when applicable",
+        "two-client gameplay confirmation when applicable"
+      ]
+    }
+  ]
+}

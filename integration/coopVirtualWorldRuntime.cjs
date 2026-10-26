@@ -7,7 +7,8 @@ const initializedNativeMiningScenes=new WeakSet();
 let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
-let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
+let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
+let worldPhaseCoordinator=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -516,12 +517,20 @@ function start(){
    factionDirector.advance(economy.snapshot().systems);
   });
  }
- timer=setInterval(()=>{
+ worldPhaseCoordinator=require("./coopLivingWorldPhaseCoordinator").createPhaseCoordinator({
+ execute:safeNpcPhase,onCycle:row=>{
+  if(row.sequence%10!==0&&!row.unknownNames.length)return;
+  require("./coopRuntimeProbe").observe("living-world-phase-cycle",null,null,{
+   status:row.status,sequence:row.sequence,phaseCount:row.phaseCount,
+   groups:row.groups,unknownNames:row.unknownNames,
+   source:row.source,nativeSettlementVerified:false});
+ }});
+ timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{
   backgroundTicks++;
   // Read-only courier pass (COOP-024). It never mutates a contract: it only
   // reports what the decision core thinks of the outstanding courier contracts,
   // so the live wiring can be verified before anything is accepted.
-  if(process.env.EVEJS_COOP_COURIER_OBSERVE==="1")safeNpcPhase("courier-observe",()=>{
+  if(process.env.EVEJS_COOP_COURIER_OBSERVE==="1")runPhase("courier-observe",()=>{
    const {listContractRecords}=require("../services/contracts/contractRuntimeState");
    const {evaluateContract}=require("./coopCourierDispatch");
    for(const record of listContractRecords()){
@@ -533,7 +542,10 @@ function start(){
   // Real courier dispatch (COOP-024). Opt-in and default OFF: it accepts the
   // owner's genuine native courier contract with a seeded courier character,
   // flies it natively and completes it. Observe above stays read-only.
-  if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")safeNpcPhase("courier-dispatch",()=>{
+  if(process.env.EVEJS_COOP_ADMIN_BRIDGE==="1")runPhase("admin-bridge",()=>{
+    require("./coopAdminBridge").drain({log:console.log});
+  });
+  if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")runPhase("courier-dispatch",()=>{
    if(!courierDispatch)courierDispatch=require("./coopCourierRuntime").createCourierDispatch({
     contracts:require("../services/contracts/contractRuntimeState"),
     gameStore:require("../gameStore"),
@@ -549,7 +561,7 @@ function start(){
    });
    courierDispatch.tick();
   });
-  safeNpcPhase("virtual-travel",()=>{
+  runPhase("virtual-travel",()=>{
    // A real physical EveJS ship is pinned to its actual system.
    const pins={};
    if(bridge)for(const entry of bridge.snapshot())pins[entry.pilotID]=entry.systemID;
@@ -559,43 +571,43 @@ function start(){
    if(process.env.EVEJS_COOP_HEADLESS_WORLD_BOOT!=="1"||identityRegistry)
     world.advance(pins);
   });
-  if(economy)safeNpcPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
-  safeNpcPhase("native-depot",syncNativeDeliveries);
+  if(economy)runPhase("virtual-economy",()=>economy.advance(world.snapshot().pilots));
+  runPhase("native-depot",syncNativeDeliveries);
   // ALIFE-04: existing 30s tick only; original native mining rock locks,
   // active module effects, and real nativeNpcStore cargo identity.
   if(process.env.EVEJS_COOP_ALIFE==="1"&&
    process.env.EVEJS_COOP_NATIVE_MINING==="1"&&
    process.env.EVEJS_COOP_ALIFE_MINING_PROOF==="1")
-   safeNpcPhase("alife-native-mining-proof",observeNativeMiningProof);
+   runPhase("alife-native-mining-proof",observeNativeMiningProof);
   // COOP-042: one A-Life 30-second tick; READ ONLY, no extra scheduler.
   if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_ALIFE_ECONOMY==="1")
-   safeNpcPhase("alife-native-economy-observe",()=>{
+   runPhase("alife-native-economy-observe",()=>{
     void observeAlifeEconomy().catch(error=>console.warn("[CoopAlifeEconomy] observation",error.message));
    });
-  if(factionDirector&&economy)safeNpcPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
+  if(factionDirector&&economy)runPhase("faction",()=>factionDirector.advance(economy.snapshot().systems));
   // Opt-in normal ammo orders flow from native A-Life decisions; survival
   // still receives an immediate authoritative native retreat attempt.
   if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled()){
-   safeNpcPhase("native-ammo-readiness",()=>
+   runPhase("native-ammo-readiness",()=>
     advanceNativeAmmoSupply({mode:"MONITOR_ONLY"}));
-   safeNpcPhase("native-ammo-survival",()=>
+   runPhase("native-ammo-survival",()=>
     advanceNativeAmmoSupply({mode:"SURVIVAL"}));
   }
-  else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
-  safeNpcPhase("native-raids",advanceNativeRaids);
-  safeNpcPhase("native-tactics",advanceNativeTactics);
-  safeNpcPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
-  safeNpcPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
-  safeNpcPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
-  safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);
-  safeNpcPhase("native-faction-war-objectives",advanceNativeWarObjectives);
-  safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
-  safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
-  safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
+  else runPhase("native-ammo-supply",advanceNativeAmmoSupply);
+  runPhase("native-raids",advanceNativeRaids);
+  runPhase("native-tactics",advanceNativeTactics);
+  runPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
+  runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
+  runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
+  runPhase("native-faction-war-battle",advanceNativeWarCombat);
+  runPhase("native-faction-war-objectives",advanceNativeWarObjectives);
+  runPhase("native-ammo-observe",observeNativeAmmoConsumption);
+  runPhase("native-wreck-recovery",advanceNativeWreckRecovery);
+  runPhase("native-salvage-rivals",advanceNativeSalvageRivals);
   // Source-backed market decisions share this tick and never start a second
   // scheduler. Awaiting Rust does not stall NPC physics or fleet movement.
   if(process.env.EVEJS_COOP_ALIFE_SALVAGE_MARKET==="1")
-   safeNpcPhase("native-salvage-market",()=>{
+   runPhase("native-salvage-market",()=>{
     void require("./coopAlifeSalvageMarketRuntime").advance({
      systems:()=>new Set(visitedSystems)
     }).then(result=>{
@@ -609,26 +621,26 @@ function start(){
         virtualISK:false});
     }).catch(error=>console.warn("[CoopSalvageMarket] tick",error.message));
    });
-  safeNpcPhase("native-wreck-custody",advanceNativeWreckCustody);
-  safeNpcPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
-  safeNpcPhase("native-gate-approach",advanceNativeGateApproach);
-  safeNpcPhase("native-patrols",advanceNativePatrolRoutes);
-  safeNpcPhase("npc-recognition",advanceNpcRecognition);
-  safeNpcPhase("native-civilians",advanceNativeCivilianOrders);
+  runPhase("native-wreck-custody",advanceNativeWreckCustody);
+  runPhase("native-loot-station-delivery",advanceNativeLootStationDelivery);
+  runPhase("native-gate-approach",advanceNativeGateApproach);
+  runPhase("native-patrols",advanceNativePatrolRoutes);
+  runPhase("npc-recognition",advanceNpcRecognition);
+  runPhase("native-civilians",advanceNativeCivilianOrders);
   // Real NPC market RPC is async: explicitly handle rejection, never fire
   // overlapping economy transactions from the 30-second timer.
   if(process.env.EVEJS_COOP_NATIVE_NPC_MARKET==="1")
-   safeNpcPhase("native-market-schedule",()=>{
+   runPhase("native-market-schedule",()=>{
     void advanceNativeMarket().catch(error=>console.warn("[CoopNativeMarket] tick",error.message));
    });
   // Which ore really has a buyer here. Pure advice for the next haul.
   if(process.env.EVEJS_COOP_ECONOMY_DESTINATION==="1")
-   safeNpcPhase("economy-destination-ore",observeEconomyOre);
-  safeNpcPhase("native-activity",observeNativeActivity);
+   runPhase("economy-destination-ore",observeEconomyOre);
+  runPhase("native-activity",observeNativeActivity);
   if(backgroundTicks%4===0&&process.env.EVEJS_COOP_MATERIALIZE_NPCS==="1")
-   for(const systemID of visitedSystems)safeNpcPhase("npc-reconcile:"+systemID,
+   for(const systemID of visitedSystems)runPhase("npc-reconcile:"+systemID,
     ()=>observeSession(null,{itemID:0,spaceState:{systemID}}));
- },30000);
+ }),30000);
  timer.unref?.();
  // NPC fights can end before the ordinary 30s economy tick. A read-only
  // 5s sampling loop captures HP changes without altering EveJS combat.
@@ -1365,6 +1377,38 @@ async function observeAlifeEconomy(){
     }
    }
    const decision=alifeEconomyObserver.tick(snap);
+   // LW-04B: use this existing A-Life authority tick for manufacturing
+   // admission only. Shipped native industry bindings are NOT live-safe.
+   if(process.env.EVEJS_COOP_ALIFE_ECONOMY_ACT==="1"){
+    // Manufacturing admission is independent of the remaining A-Life phases.
+    // A failed native source callback cannot suppress NPC resupply or buyer
+    // observations in this 30-second world cycle; never retry the intent.
+    try{
+     if(!alifeManufacturingRuntime)alifeManufacturingRuntime=
+      require("./coopAlifeNativeManufacturingRuntime").createRuntimeAlifeManufacturing({
+       getNativeEntity:id=>npcStore.getNativeEntity(id),
+       getController:id=>controllers.getControllerByEntityID(id),
+       sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+       getStation:id=>worldData.getStationByID(id)
+      });
+     const result=await alifeManufacturingRuntime.tick({
+      snapshot:snap,decision,registry:identityRegistry});
+     if(result.status==="BLOCKED"||result.status==="ADMISSION_EVALUATED")
+      probe.observe("alife-native-manufacturing-admission",null,
+       {spaceState:{systemID}},
+       {status:result.status,reason:result.reason||null,
+        count:result.count||0,
+        directorReportedNativeAction:result.results?.some(x=>x.nativeMutation===true)===true,
+        nativeSettlementVerified:false,
+        source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
+    }catch(_error){
+     probe.observe("alife-native-manufacturing-admission",null,
+      {spaceState:{systemID}},
+      {status:"BLOCKED",reason:"NATIVE_MANUFACTURING_ADMISSION_EXCEPTION",
+       nativeSettlementVerified:false,
+       source:"NATIVE_SOURCE_ADMISSION_NOT_NATIVE_SETTLEMENT"});
+    }
+   }
    if(require("./coopAlifeNativeResupplyBridge").nativeResupplyActEnabled())
     safeNpcPhase("alife-native-resupply-act",()=>
      advanceNativeAmmoSupply({mode:"PLANNED",systemIDFilter:systemID,decision}));
@@ -2833,4 +2877,5 @@ function createWarRecoveryAdmin({authorizeOperator}={}){
  if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
  return warGateHandoff.recovery({authorizeOperator});
 }
-module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};
+function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:false,sequence:0,last:null}}
+module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};

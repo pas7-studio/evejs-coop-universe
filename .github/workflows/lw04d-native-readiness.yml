@@ -1,0 +1,40 @@
+name: LW04D Original Native Economy Source Gate
+on:
+  pull_request:
+    branches:
+      - main
+      - feat/lw04c4-authoritative-sold-finalization-20261026
+    paths:
+      - 'integration/coopLivingWorldNativeChainProof.cjs'
+      - 'integration/coopNpcIndustryOfflineAtomic.cjs'
+      - 'scripts/lw04d-native-readiness.cjs'
+      - 'tests/coop-lw04d-*.test.mjs'
+      - 'tests/coop-npc-industry-original-game-store-kernel.test.mjs'
+      - 'tests/scenarios/lw04d-original-native-e2e.json'
+      - '.github/workflows/lw04d-native-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify native source syntax
+        run: |
+          node --check integration/coopLivingWorldNativeChainProof.cjs
+          node --check integration/coopNpcIndustryOfflineAtomic.cjs
+          node --check scripts/lw04d-native-readiness.cjs
+      - name: Run full native economy source regression suite
+        run: |
+          node scripts/lw04d-native-readiness.cjs --source
+      - name: Validate pinned preflight command contract
+        run: |
+          node --test tests/coop-lw04d-native-readiness.test.mjs
+      - name: Reject falsely completed native SQLite/Rust/gameplay evidence
+        run: |
+          node -e 'const m=require("./tests/scenarios/lw04d-original-native-e2e.json");if(m.scenarios.length!==19||m.scenarios.some(s=>s.status!=="NOT_RUN")||m.releaseStatus!=="NOT_VERIFIED")process.exit(1)'

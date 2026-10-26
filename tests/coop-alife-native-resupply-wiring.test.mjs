@@ -18,7 +18,7 @@ test("COOP-043 Rust/GameStore station authority is preserved after native resupp
  assert.match(overlay,/"coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime"/);
 });
 test("there remains exactly one native 30 second world tick and no extra A-Life timer",()=>{
- assert.equal((runtime.match(/timer=setInterval\(\(\)=>\{/g)||[]).length,1);
+ assert.equal((runtime.match(/timer=setInterval\(\(\)=>worldPhaseCoordinator\.tick\(runPhase=>\{/g)||[]).length,1);
  assert.doesNotMatch(bridge,/setInterval|setTimeout|marketDaemonClient|transact\(/);
  assert.doesNotMatch(bridge,/issueAttackOrder|warpToEntity|issueOrder/);
  assert.equal((runtime.match(/advanceNativeAmmoSupply\(\{mode:"PLANNED"/g)||[]).length,1);
@@ -30,9 +30,9 @@ test("native order admission is common for raids, squad scouting and rescue",()=
  assert.match(runtime,/!alifeOrderArbitrationEnabled\(process\.env\)/);
 });
 test("native resupply only follows verified decision and retains urgent survival",()=>{
- const normal=runtime.indexOf('safeNpcPhase("native-ammo-readiness"');
- const survival=runtime.indexOf('safeNpcPhase("native-ammo-survival"');
- const raid=runtime.indexOf('safeNpcPhase("native-raids"');
+ const normal=runtime.indexOf('runPhase("native-ammo-readiness"');
+ const survival=runtime.indexOf('runPhase("native-ammo-survival"');
+ const raid=runtime.indexOf('runPhase("native-raids"');
  const observer=runtime.indexOf("const decision=alifeEconomyObserver.tick(snap)");
  const planned=runtime.indexOf('safeNpcPhase("alife-native-resupply-act"');
  assert.ok(normal>0&&survival>normal&&raid>survival);

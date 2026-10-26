@@ -40,6 +40,12 @@ jobs:
           node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE ci(value INTEGER);INSERT INTO ci VALUES(1)');if(db.prepare('SELECT value FROM ci').get().value!==1)process.exit(1);db.close()"
       - name: Execute two-session NPC market backend E2E on durable SQLite
         run: node --test tests/coop-npc-buyer-two-session-sqlite-e2e.test.mjs
+      - name: Escort real-source durable replay and wallet regression
+        run: |
+          node --check integration/coopEscortFlightGate.cjs
+          node --check integration/coopEscortRuntime.cjs
+          node --check integration/coopEscortNativeBootstrap.cjs
+          node --test tests/coop-escort-durable-flight-recovery.test.mjs tests/coop-escort-peaceful-durable-replay.test.mjs tests/coop-escort-native-funds.test.mjs tests/coop-escort-peaceful-real-sqlite-restart.test.mjs tests/coop-escort-terminal-attendance.test.mjs
       - name: Verify real Node SQLite and all COOP A-Life regressions
         shell: pwsh
         run: ./scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests -ReportDir "${{ runner.temp }}/evejs-alife-economy-gates"
