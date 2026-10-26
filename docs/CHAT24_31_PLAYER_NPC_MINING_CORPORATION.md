@@ -1,6 +1,6 @@
 # Chat 24 + Chat 31 — Player-owned NPC mining company
 
-**Status 2026-10-26:** Stages A+B and C1 source-only CODE_READY in draft PR #287; original native stock mining tick is hooked behind a default-OFF flag, with a durable command journal and zero autonomous timers. **NOT deployed or live-verified:** stock GameStore SQLite, original client commands, actual ore/hauling/arrival, and two-client UI remain untested. Native wallets and ore remain authoritative; no duplicate stock, no second corporation registry.
+**Status 2026-10-26:** Stages A+B, C1 and C2 read-only bindings source-only CODE_READY in draft PR #287; original native stock mining tick is hooked behind a default-OFF flag, with a durable command journal and zero autonomous timers. **NOT deployed or live-verified:** stock GameStore SQLite, original client commands, actual ore/hauling/arrival, and two-client UI remain untested. Native wallets and ore remain authoritative; no duplicate stock, no second corporation registry.
 
 ## Gameplay loop (target)
 
@@ -65,7 +65,7 @@ node --test tests/coop-player-mining-company.test.mjs
 - **Stage C1 implemented** in `coopPlayerMiningOreTitle.cjs`: original tagged NPC warehouse itemID/cargoID, verified post-shift source receipt, native player corporation office divisions 115-121, wallet TAKE/QUERY and atomic item title + both corp wallets + receipt in one original GameStore transaction. No new item mint or shadow wallet.
 - **Stage C1 warehouse audit seam implemented**: `coopNativeWarehouse` provides read-only `getReceipt` and optional strict `verifyTransferredTitle`; the source-only `createPlayerMiningOreAudit` checks title receipt, both ISK journals, item owner and exact native office. `coopNativeStationArrival` accepts the optional trusted callback.
 - **C1 isolated local tests:** combined CH24+31 suite **61/61 PASS**. Real GameStore SQLite and deployed warehouse audit binding still **NOT_RUN**. Stage B now polls via native read-only `gameStore.read`, not a `BEGIN IMMEDIATE` transaction per mining tick.
-- **C2 not implemented:** trusted native office and price quote callback adapters, title verifier injection in deployed station runtime, native chain conservation integration, client action API, sale and reprocessing consumption receipts. The feature remains **OFF**; source alone is not a live working corporate purchase.
+- **C2 read-only native bindings implemented in source:** original active office, authentic corporation and docked membership, original native item/wallet title audit and guarded station-arrival mount. **Still pending:** seller-authorized native quote, client action API, native chain conservation, sale and reprocessing consumption receipts. The feature remains **OFF**; source alone is not a live working corporate purchase.
 - Read [CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md](CHAT24_31_ORIGINAL_PLAYER_ORE_TITLE.md) for exact authority contracts, evidence and manual acceptance checks.
 
 ## Stage D — native sale, profit and 2-player gameplay
