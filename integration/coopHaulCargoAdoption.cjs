@@ -300,6 +300,32 @@ function adopt(scene,fleet,options={}){
   return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
  if(globalBefore.some(row=>pos(row?.entityID)===haulerID))
   return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // Repeat-adoption requires the SAME warehouse writer lock across the
+ // second settlement check, native upsert, flush and final readback.
+ const needsReAdoption=planned.rows.some(row=>pos(row.coopHaulAdoptedAt));
+ const custodyLock=needsReAdoption?acquireReAdoptionLocks(planned.rows,options):null;
+ if(custodyLock&&custodyLock.status!=="HELD")
+  return {status:custodyLock.status,adopted:0};
+ try{
+  if(custodyLock){
+   const current=plan({store,scene,systemID,fleetID,now,ttlMs,
+    cargoTable:options.cargoTable,database,enableReAdoption:true,
+    custodyOptions:options,ownedLocks:custodyLock.held});
+   if(current.status!=="ADOPTABLE")
+    return {status:current.status,adopted:0};
+   const originals=new Map(planned.rows.map(row=>[pos(row.cargoID),JSON.stringify(row)]));
+   if(current.rows.length!==planned.rows.length||current.rows.some(row=>
+      originals.get(pos(row.cargoID))!==JSON.stringify(row)))
+    return {status:"RE_ADOPTION_SOURCE_CHANGED",adopted:0};
+   try{
+    const local=store.listNativeCargoForEntity(haulerID);
+    const global=cargoRows({store,cargoTable:options.cargoTable,database});
+    if(!Array.isArray(local)||!Array.isArray(global))
+     return {status:"RE_ADOPTION_PREFLIGHT_UNVERIFIED",adopted:0};
+    if(local.length||global.some(row=>pos(row?.entityID)===haulerID))
+     return {status:"HAULER_ALREADY_LOADED",adopted:0};
+   }catch(_error){return {status:"RE_ADOPTION_PREFLIGHT_UNVERIFIED",adopted:0};}
+  }
  // Upserts are not a GameStore transaction. A failed second write
  // cannot turn a partially transferred batch into an authorised haul.
  // Include the failing row: an adapter may mutate then return failure.
@@ -471,6 +497,16 @@ function adopt(scene,fleet,options={}){
    carriage:"native",invented:false});
  doneSlots.add(key);
  return {status:"ADOPTED",adopted,quantity,volumeM3:volume,haulerID};
+ }finally{
+  if(custodyLock&&!custodyLock.release()){
+   fleet.coopHaulNeedsOperatorRepair="RE_ADOPTION_LOCK_RELEASE_UNVERIFIED";
+   hauler.coopHaulNeedsOperatorRepair="RE_ADOPTION_LOCK_RELEASE_UNVERIFIED";
+   doneSlots.add(key);
+   noteOnce(noted,key+":lock",probe,"living-haul-cargo-adoption-skipped",
+    {systemID},{fleetID,status:"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED"});
+   return {status:"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED",adopted:0};
+  }
+ }
 }
 function resetForTests(){doneSlots.clear();noted.clear();}
 module.exports={adopt,plan,resetForTests};
