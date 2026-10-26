@@ -26,6 +26,8 @@ names.splice(names.indexOf("coopWarGateHandoff")+1,0,"coopWarRecoveryConsole","c
 names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
 // FW-009A: native confirmed faction-war casualties, never synthetic victory.
 names.splice(names.indexOf("coopWarDemobilizer")+1,0,"coopWarCasualtyLedger");
+// FW-009B: source-gated real structure objectives; no GM/admin damage hook.
+names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarObjectiveAdjudicator","coopWarNativeStructureControl","coopWarNativeStructureCombatProof");
 // FW-003: native-proof-only war hull custody; no added timer or native ship factory.
 names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody","coopPlayerMarketFill","coopPlayerMarketSettlementFence","coopPlayerMarketRustClaim","coopPlayerMarketAtomicSettlement","coopPlayerMarketAtomicRuntime","coopPlayerMarketBuyReserve","coopPlayerMarketBuyReserveRuntime","coopPlayerMarketBuySettlement","coopPlayerMarketBuyRefund","coopPlayerMarketBuyRefundRuntime");
@@ -506,8 +508,17 @@ function transform(source,spec,remove){
    text=require("./coop-native-contract-mutation-fence-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/evermarks/lpStoreMgrService.js")
   text=require("./coop-native-lp-standing-patch.cjs").patch(text,spec.file,remove);
- if(spec.file.endsWith("/space/combat/killmailTracker.js"))
-  text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove});
+ if(spec.file.endsWith("/space/combat/killmailTracker.js")){
+  // Install order: existing player damage patch, THEN native war
+  // structure killmail witness. Remove in the exact inverse order.
+  if(remove){
+   text=require("./coop-war-structure-killmail-patch.cjs").patch(text,{remove:true});
+   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove:true});
+  }else{
+   text=require("./coop-player-damage-native-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-war-structure-killmail-patch.cjs").patch(text,{remove:false});
+  }
+ }
  // CH31: native corporate custody/role fences; default OFF, reversible.
  if(["industry/industryAccess.js","inventory/invBrokerService.js",
      "corporation/corpRegistryRuntime.js","corporation/corpMemberActionState.js",
