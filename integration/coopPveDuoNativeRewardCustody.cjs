@@ -26,7 +26,20 @@ function expectedItems(mission,agent,iskDelta){
  const base=Number(rewards.isk||0),bonus=Number(rewards.bonusIsk||0);
  if(!Number.isFinite(iskDelta)||!Number.isFinite(base)||!Number.isFinite(bonus)||
     base<0||bonus<0)return null;
- const eps=0.011,withBonus=bonus>0&&Math.abs(iskDelta-(base+bonus))<eps;
+ const eps=0.011;
+ // Native isMissionBonusRewardAvailable() always permits untimed
+ // bonuses, even if bonusIsk=0 and only bonusItemRewards are present.
+ // For timed zero-ISK bonuses the wallet journal cannot distinguish
+ // bonus availability: refuse to certify inventory without a native
+ // transaction-scoped bonus flag rather than silently ignore items.
+ const bonusItemRows=Array.isArray(rewards.bonusItemRewards)?
+  rewards.bonusItemRewards:[];
+ const zeroIskBonus=bonus===0&&bonusItemRows.length>0;
+ const interval=Number(rewards.bonusTimeIntervalMinutes||0);
+ if(zeroIskBonus&&(!Number.isSafeInteger(interval)||interval<0||
+   interval>0))return null;
+ const withBonus=zeroIskBonus||
+  (bonus>0&&Math.abs(iskDelta-(base+bonus))<eps);
  if(Math.abs(iskDelta-base)>=eps&&!withBonus)return null;
  const entries=[
   ...(Array.isArray(rewards.itemRewards)?rewards.itemRewards:[]),

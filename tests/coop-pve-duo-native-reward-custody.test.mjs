@@ -127,3 +127,21 @@ test("two different recipients can prove original personal hangar and standing i
  assert.equal(a.report().status,"NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED");
  assert.equal(bReport.status,"NATIVE_PERSONAL_CUSTODY_IDENTITY_MISMATCH");
 });
+
+test("untimed bonus-only native item rewards with zero bonus ISK are still actual item custody",()=>{
+ const f=fixture({base:100000,bonus:0,items:[],
+  bonusItems:[{typeID:9301,quantity:2}],standingChange:false});
+ f.credit(true);
+ const r=f.report({iskDelta:100000});
+ assert.equal(r.status,"NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED");
+ assert.equal(r.itemCount,2);
+ assert.equal(r.expectedTypes[0].typeID,9301);
+});
+test("timed zero-ISK bonus item availability is ambiguous from wallet receipt and fails closed",()=>{
+ const f=fixture({base:100000,bonus:0,items:[],
+  bonusItems:[{typeID:9301,quantity:1}],standingChange:false});
+ f.mission.rewards.bonusTimeIntervalMinutes=12;
+ f.credit(true);
+ assert.equal(f.report({iskDelta:100000}).status,
+  "NATIVE_ITEM_REWARD_CONFIGURATION_UNSUPPORTED");
+});
