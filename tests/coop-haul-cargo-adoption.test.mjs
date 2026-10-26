@@ -155,16 +155,33 @@ test("never stacks a second batch on a hauler that already carries durable haul 
   assert.equal(store.writes.length, 0);
 });
 
-test("rolls back and reports when the durable flush fails", () => {
+test("rolls back and re-flushes the original cargo if first durable flush fails", () => {
   const store = fakeStore([orphan()]);
-  const result = adopt(sceneWith([hauler]), fleet(), {
+  let flushes=0;
+  const target=fleet();
+  const result = adopt(sceneWith([hauler]), target, {
     store,
     clock: () => NOW,
-    database: { flushTableSync: () => ({ success: false }) },
+    database: { flushTableSync: () => ({ success: ++flushes === 2 }) },
   });
   assert.equal(result.status, "CARGO_FLUSH_FAILED");
   assert.equal(result.adopted, 0);
+  assert.equal(flushes,2);
+  assert.equal(target.state,"mining");
+  assert.equal(target.coopHaulNeedsOperatorRepair,undefined);
   assert.equal(store.listNativeCargo()[0].entityID, 900000000111);
+});
+test("failed durable compensation quarantines the fleet for operator repair",()=>{
+ const store=fakeStore([orphan()]);
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,
+  database:{flushTableSync:()=>({success:false})}
+ });
+ assert.equal(result.status,"ADOPTION_RECOVERY_UNVERIFIED");
+ assert.equal(result.adopted,0);
+ assert.equal(target.state,"mining");
+ assert.equal(target.coopHaulNeedsOperatorRepair,true);
 });
 
 test("expired orphans are archived by policy, never credited", () => {
@@ -233,4 +250,59 @@ test("same-owner orphan batch can be attached only to its original corporate fle
  assert.equal(result.adopted,2);
  assert.deepEqual(store.listNativeCargo().map(x=>x.ownerID),[hauler.ownerID,hauler.ownerID]);
  assert.deepEqual(store.listNativeCargo().map(x=>x.entityID),[hauler.itemID,hauler.itemID]);
+});
+
+
+test("partial multi-orphan cargo upsert failure restores all attempted original rows",()=>{
+ for(const failure of ["reject","throw","mutate-then-reject"]){
+  const store=fakeStore([
+   orphan({cargoID:7001}),
+   orphan({cargoID:7002,entityID:900000000112})
+  ]);
+  const originals=structuredClone(store.listNativeCargo());
+  const originalWrite=store.upsertNativeCargo;
+  let writes=0,flushes=0;
+  store.upsertNativeCargo=row=>{
+   writes++;
+   if(writes===2){
+    if(failure==="throw")throw Error("ORIGINAL_STORE_FAILED");
+    if(failure==="mutate-then-reject")originalWrite(row);
+    return {success:false,errorMsg:"NATIVE_CARGO_WRITE_FAILED"};
+   }
+   return originalWrite(row);
+  };
+  const target=fleet(),result=adopt(sceneWith([hauler,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"ADOPTION_REJECTED",failure);
+  assert.equal(result.adopted,0);
+  assert.equal(target.state,"mining");
+  assert.equal(target.coopHaulNeedsOperatorRepair,undefined);
+  assert.equal(flushes,1);
+  assert.deepEqual(store.listNativeCargo(),originals);
+ }
+});
+test("failed original cargo rollback never starts a half-loaded transport trip",()=>{
+ const store=fakeStore([
+  orphan({cargoID:7001}),
+  orphan({cargoID:7002,entityID:900000000112})
+ ]);
+ const write=store.upsertNativeCargo;
+ let attempts=0,flushes=0;
+ store.upsertNativeCargo=row=>{
+  attempts++;
+  if(attempts===2||attempts===4)return {success:false,errorMsg:"NATIVE_WRITE_FAIL"};
+  return write(row);
+ };
+ const target=fleet(),result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,
+  database:{flushTableSync:()=>{flushes++;return {success:true}}}
+ });
+ assert.equal(result.status,"ADOPTION_RECOVERY_UNVERIFIED");
+ assert.equal(result.adopted,0);
+ assert.equal(target.state,"mining");
+ assert.equal(target.coopHaulNeedsOperatorRepair,true);
+ assert.equal(target.lastHauledVolumeM3,undefined);
+ assert.equal(flushes,1);
 });
