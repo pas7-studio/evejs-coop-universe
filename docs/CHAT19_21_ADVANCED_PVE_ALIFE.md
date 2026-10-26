@@ -246,6 +246,111 @@ available through original inventory service, no cloned drop or repeat
 grant. Then P0-5 lawful separate two-player reward eligibility.
 
 
+
+## Stage P0-4B-1 — original boss wreck → original player cargo pickup
+
+**Implementation:** dependent Draft; **safe to deploy only after** full
+native Node, pinned overlay, actual two-client inventory and restart
+acceptance. There are NO new spawns, loot rolls, item grants, ISK/LP
+payouts or invented item types.
+
+### Source of truth
+
+Pinned EveJS `nativeNpcWreckService.destroyNativeNpcEntityWithWreck`
+creates the original wreck + item rows, then deletes the source NPC,
+spawns its actual physical wreck, and calls the existing co-op destruction
+hook. The P0-4A `coopPveNativeBossDirector` now uses that **native post-death
+hook** to capture the exact original item manifest as soon as it is
+available, after a prior live authored-boss witness. The boss witness
+requires the exact original dungeon encounter, transient nativeCombat NPC
+and its source hull/type/site IDs. A never-seen boss or unmatched wreck
+cannot be retroactively certified.
+
+The existing `nativeNpcWreckService.transferNativeWreckItemToCharacterLocation`
+uses the game's real `grantItemToCharacterLocation`. Its existing
+`coopNativeLootPickupEvidence.verify` checks the post-transfer source
+debit, destination inventory delta, a physical original wreck, exact
+character session and current in-space ship. P0-4B-1 reuses that
+existing verified result and checks `wreckItemID`, `typeID`, exact
+source NPC/wreck and quantity against the *original pre-loot boss manifest*.
+Only this complete chain produces
+`ORIGINAL_BOSS_ITEM_PICKUP_VERIFIED`. Item pickup is never inferred
+from a kill, reward-container creation or a player opening the wreck.
+
+### Durable pre-grant replay fence (separate OFF gate)
+
+The original native transfer grants a new inventory item BEFORE it
+removes/decrements the wreck's source row. It is not a single atomic
+debit/credit transaction. To avoid a second blind grant of the same
+original boss item after a crash/unknown debit, this PR adds an optional
+`coopPveBossLootClaim` pre-grant hook in the single pinned native
+`nativeNpcWreckService`. The hook is source-literal checked and
+reversible through the existing overlay installer.
+
+The claim is keyed by `wreckID:wreckItemID:sourceBeforeQuantity`,
+written to a persistent, fsync'd journal and directory with an
+interprocess non-stealable writer lock **before** the original itemStore
+grant. A PENDING or ambiguous claim cannot be replayed, even after
+restart or by another pilot. On an independently verified native source
+debit and authenticated destination inventory delta, the exact claim is
+marked SETTLED. A legitimate subsequent partial pickup can use the
+next, smaller actual source quantity; the first source slice cannot
+be issued again. A disk error, stale lock, incomplete temp file,
+journal corruption or unknown outcome blocks the claim pending
+explicit operator inspection. The claim module never manipulates
+original EveJS items or player wallets.
+
+**Limitations:** this is fail-closed replay prevention, **not** a native
+atomic transfer or rollback. If an original initial grant succeeds
+but the source debit fails, one already-granted mismatch may still
+exist; the fence prevents another retry but cannot restore inventory.
+A boss dying before any live A-Life witness, or a world restarted before
+a boss death receipt, is **not** protected by the boss-specific claim:
+such unclassified wrecks stay on the original native transfer path.
+A durable, original transaction boundary and replay-recovery tooling
+remain release blockers. Do not sell this as global item dup protection.
+
+### Flags
+
+All default OFF, with exact `"1"` enablement:
+
+- `EVEJS_COOP_PVE_SITE_DEFENSE=1`
+- `EVEJS_COOP_PVE_NATIVE_BOSSES=1`
+- `EVEJS_COOP_NATIVE_LOOT_EVIDENCE=1`
+- `EVEJS_COOP_PVE_BOSS_LOOT_PICKUP=1` (observation only)
+- `EVEJS_COOP_PVE_BOSS_LOOT_FENCE=1` (durable pre-grant barrier; requires the observation gates)
+- Recommended existing `EVEJS_COOP_NATIVE_LOOT_QUARANTINE=1`, to block known original source mismatches
+
+Journal path defaults to
+`/var/lib/evejs/coop-pve-boss-loot-claims.json`; override only
+with a persistent, writable absolute path via
+`EVEJS_COOP_PVE_BOSS_LOOT_FENCE_FILE`. Do not auto-delete
+`.writer.lock` or `.tmp-*` after a failure.
+
+### Evidence / next acceptance
+
+62/62 **isolated V8** exact-branch PvE / boss / original-loot-witness
+test cases, 282 assertions, plus 10/10 isolated durable-claim tests,
+34 assertions with a simulated fsync-capable filesystem; total
+72/72 and 316 assertions. Pinned upstream source confirmed one
+original `grantItemToCharacterLocation` anchor, post-native wreck
+spawn-before-death hook, and one original source-debit order.
+No full local Node suite, actual disk power-failure test, pinned
+overlay roundtrip, real inventory RPC, two-client play or restart
+acceptance has run.
+
+Pinned source includes the genuine
+`parity_deadspace_overseer_pending_loot` rule table with nonempty
+overseer/faction selectors. This does **not** establish that the
+requested NPC profile binds to it or that any rare item actually
+dropped. Native item IDs and loot rolls remain unchanged.
+
+**Next:** P0-4B-2 original profile/loot-table coverage and two-client
+item pickup E2E, native GameStore atomic settlement or recovery operator
+verification. P0-5 independent mission acceptance and lawful
+per-player reward are still pending.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
