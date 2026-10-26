@@ -118,3 +118,8 @@ Evidence: source review; targeted Node 22 tests authored, NOT_RUN on owner's che
 Why: the live (non-strict) transfer accepted a row with the right cargoID but a wrong entity, quantity or transient marker and then deleted the ore from the miner, so a corrupt write could destroy cargo instead of failing closed
 Where: integration/coopNativeHaulCargo.cjs, tests/coop-haul-load-verification.test.mjs
 Evidence: new tests/coop-haul-load-verification.test.mjs 4/4 pass with the fix and 4/4 fail on the previous implementation; haul+adoption suites 46 pass / 19 pre-existing failures identical by name before and after; OVERLAY_OK patched 54
+### 2026-10-26T11:50Z · e51569c · L2 · test(haul): fresh fixture per custody fault; loops get their own attempt slot
+
+Why: 149 modules read 310 EVEJS_* keys inline and nobody could say which gates were on; module roles and the single owner per record were undocumented, which is how a second recovery heuristic and a duplicate cargo check appeared
+Where: tests/coop-haul-cargo-adoption.test.mjs, tests/coop-restart-haul-adoption.test.mjs
+Evidence: coopFlags + scripts/coop-flags.cjs --check FLAGS_OK declared=311; --live on the probe compose shows 103 set / 52 on; flag tests 4/4; docs/COOP_ARCHITECTURE_BOUNDARIES.md; haul+adoption suites 27/27 and 45 pass
