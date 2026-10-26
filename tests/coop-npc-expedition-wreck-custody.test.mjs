@@ -318,3 +318,22 @@ test("EX-03B22 intent durability uncertainty never advances the newly sealed ite
  assert.equal(replay.stampedCount,0);
  assert.equal(f.rows.get(itemID).locationID,wreckID);
 });
+
+test("EX-03B23 native wreck store read exception fails closed without aborting A-Life phase",()=>{
+ const f=fixture();
+ const c=createNpcExpeditionWreckCustody({items:f.items,
+  gameStore:{flushTableSync:()=>({success:true})},
+  npcStore:{
+   getNativeWreck:()=>{throw Error("SQLITE_READ_TEMPORARILY_UNAVAILABLE")},
+   listNativeWrecks:()=>[]
+  }});
+ assert.deepEqual(c.list({wreckID}),[]);
+ assert.equal(c.canDestroy(wreckID),false);
+ assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,false);
+ assert.equal(c.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true}).success,false);
+ assert.equal(c.claim({characterID,wreckID,itemID,
+  destinationLocationID:playerShipID,destinationFlagID:5}).status,
+  "NOT_EXPEDITION_ITEM");
+ assert.equal(f.rows.get(itemID).locationID,shipID,"read error cannot touch original loot");
+});
