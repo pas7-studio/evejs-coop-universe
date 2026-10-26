@@ -51,7 +51,7 @@ reconciliation**, never an automatic new cargo, new ISK, or second sale.
 ## Verification
 
 Isolated exact-source V8 harness executed the existing plus new adoption
-regression tests: **37/37 PASS**. This proves source paths under deterministic
+regression tests: **38/38 PASS**. This proves source paths under deterministic
 injected native adapters, **not** pinned SQLite or gameplay.
 
 ```bash
