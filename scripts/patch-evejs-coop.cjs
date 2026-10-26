@@ -94,7 +94,7 @@ names.splice(names.indexOf("coopAlifeNativeBuyerRuntime")+1,0,
 names.splice(names.indexOf("coopNpcIndustryNativeBindings")+1,0,
  "coopNpcIndustryRecoveryFence","coopNpcLiveFactoryReadiness",
  "coopNpcIndustryOriginalGameStorePreflight","coopNpcIndustryOriginalStageExecutor","coopNpcIndustryOriginalRustSell",
- "coopNpcIndustryOriginalSaleAudit","coopNpcIndustryOriginalWalletWitness","coopNpcIndustryOriginalBuyerSettlement");
+ "coopNpcIndustryOriginalSaleAudit","coopNpcIndustryOriginalWalletWitness","coopNpcIndustryOriginalBuyerSettlement","coopLivingWorldNativeChainProof");
 names.splice(names.indexOf("coopPlayerIndustryFence")+1,0,"coopPlayerIndustryRuntime");
 // Late native module reconciliation after parallel merges: copy-only.
 // Keep NPE and Living World behavior behind their existing native hooks.
