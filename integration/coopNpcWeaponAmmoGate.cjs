@@ -8,7 +8,8 @@ const requiring = new Set([
   "precursorTurret", "laserTurret",
 ]);
 
-function createAmmoGate({ store, dogma, capability, env = process.env } = {}) {
+function createAmmoGate({ store, dogma, capability, env = process.env,
+  isWarHull = null } = {}) {
   function check({ entity, moduleItem, bankModuleIDs = [] } = {}) {
     const allowed = (status, details = {}) => ({ allowed: true, status, ...details });
     const refused = (status, details = {}) => ({ allowed: false, status, ...details });
@@ -20,6 +21,17 @@ function createAmmoGate({ store, dogma, capability, env = process.env } = {}) {
     // EveJS synthetic hull weapons are not fitted items and have no charge
     // stacks. Do not pretend that they fired a normal ammo-consuming module.
     if (moduleItem?.npcSyntheticHullWeapon === true) {
+      // Warship fire MUST use genuine fitted modules and physical charges.
+      // An NPC synthetic hull weapon is deliberately exempt in legacy PvE,
+      // but cannot silently fire free ammunition in native faction war.
+      if (env.EVEJS_COOP_FACTION_WAR_COMBAT === "1" &&
+          env.EVEJS_COOP_FACTION_WAR === "1" &&
+          env.EVEJS_COOP_FACTION_WAR_FLEETS === "1") {
+        let fleet = "UNKNOWN";
+        try { fleet = isWarHull?.(entity?.itemID) ?? "UNKNOWN"; } catch (_error) {}
+        if (fleet !== "UNASSIGNED")
+          return refused("WAR_SYNTHETIC_WEAPON_FORBIDDEN");
+      }
       return allowed("SYNTHETIC_HULL_WEAPON");
     }
 
@@ -126,6 +138,15 @@ function check(args = {}) {
       store: require("./npc/nativeNpcStore"),
       dogma: require("./combat/weaponDogma"),
       capability: require("./npc/npcCapabilityResolver"),
+      isWarHull: entityID => {
+        const { TABLE, KEY } = require("./coopWarFleetRegistry");
+        const result = require("../gameStore").read(TABLE, "/" + KEY);
+        if (result?.success !== true || result.data?.version !== 1 ||
+            !result.data.ships || typeof result.data.ships !== "object")
+          return "UNKNOWN";
+        return Object.prototype.hasOwnProperty.call(result.data.ships,String(entityID))?
+          "ASSIGNED":"UNASSIGNED";
+      },
     }).check(args);
   } catch (_error) {
     return { allowed: false, status: "NATIVE_AMMO_PROOF_UNAVAILABLE" };
