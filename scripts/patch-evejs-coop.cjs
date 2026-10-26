@@ -61,7 +61,13 @@ names.push(
 );
 // Late native module reconciliation after parallel merges: copy-only.
 // Keep NPE and Living World behavior behind their existing native hooks.
-names.push("coopNpeSafety", "coopLivingAgentRuntime");
+// coopLivingAgentRuntime is already in base names; never install twice.
+names.push("coopNpeSafety");
+// LW-04B current-main native manufacturing admission: one existing 30s A-Life source.
+const nativeBuyerIndex=names.indexOf("coopAlifeNativeBuyerRuntime");
+if(nativeBuyerIndex<0||names.includes("coopAlifeNativeManufacturingRuntime"))
+ throw Error("LW04B_NATIVE_MANUFACTURING_REGISTRATION_CONFLICT");
+names.splice(nativeBuyerIndex+1,0,"coopAlifeNativeManufacturingRuntime");
 // Chats 25/32/39: original native source hooks; all feature flags stay OFF.
 const ORE_PATCH_PATHS=new Set([
  "server/src/services/inventory/itemStore.js",
