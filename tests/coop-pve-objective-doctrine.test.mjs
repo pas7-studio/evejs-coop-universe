@@ -40,6 +40,7 @@ function fixture({lowHealth=false,wrongSite=false,uncertain=false,missingObjecti
   getNativeEntity:id=>original.get(id),getController:id=>ctrl.get(id),
   resolveVerifiedPlayer:(s,e)=>e===player?77:null,
   getHealth:()=>lowHealth?{armor:0.2,structure:0.65}:{armor:0.9,structure:1},
+  getStructureHP:e=>e.conditionState?.damage>=e.structureHP?0:e.structureHP,
   isScrambled:()=>false,
   attack:(source,target)=>{callbacks.push({type:"attack",source,target});
    if(uncertain)throw Error("unknown");return {success:true};},
@@ -81,6 +82,8 @@ test("a missing/forged, finished, or wrong-site structure cannot order defense",
   f=>{f.structure.kind="siteObjectiveMarker";},
   f=>{f.structure.dungeonMaterializedKillableStructure=false;},
   f=>{f.structure.conditionState.incapacitated=true;},
+  f=>{f.structure.conditionState.damage=f.structure.structureHP;},
+  f=>{f.entities.set(5200,{...f.structure});},
   f=>{f.instance.lifecycleState="completed";},
   f=>{f.instance.spawnState.encounterStatesByKey["wave-a"].spawnedEntityIDs=[101];}
  ];
