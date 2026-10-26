@@ -374,3 +374,13 @@ Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS 
 Why: Regressions verify an already-existing valid item with the same cargoID prevents any source debit or PREPARED journal, and unavailable hangar flags fail closed.
 Where: tests/coop-native-warehouse.test.mjs
 Evidence: 23/23 exact-source isolated V8 warehouse callbacks PASS (simulated FS and ItemStore). Pre-fix code reported ALREADY_COMMITTED and audit OK after changing flagID to 5. Real pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:40Z · 8c7ce29 · L2 · fix(P0): poison native depot after ambiguous journal flush and refuse stale snapshots
+
+Why: After the original depot COMMITTED or PREPARED journal rename succeeded but directory fsync threw EIO, the in-memory state remained older than the disk file. A subsequent prepare persisted the stale receipts map and erased a committed receipt and system supply totals. All uncertain writes now poison the instance and fail-closed prepare/commit/audit/snapshot until a fresh reopen verifies disk state.
+Where: integration/coopNativeDepot.cjs
+Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:41Z · f1c16bd · TEST · test(P0): post-rename fsync failures must not erase disk committed or pending depot receipts
+
+Why: Add deterministic fake-fs tests: post-rename COMMITTED directory fsync error, no overwrite of persisted receipt/totals on next request, blocked stale snapshot, and successful audit/credit after fresh reopen; also PREPARED rename failure and preserved pending cargo.
+Where: tests/coop-native-depot.test.mjs
+Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
