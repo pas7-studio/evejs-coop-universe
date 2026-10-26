@@ -112,10 +112,13 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  function prepare({systemID,fleetID,item}={}){
   if(persistenceUnverified)return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   if(stateUnreconciled)return {status:"DEPOT_STATE_UNRECONCILED"};
+  // Even ALREADY_COMMITTED and PREPARED are custody decisions: validate
+  // the disk journal BEFORE consulting in-memory receipt/pending entries.
+  if(!verifyCurrentRead())return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   const candidate=normalize({systemID,fleetID,item});
   if(!candidate)return {status:"INVALID"};
   const key=String(candidate.cargoID);
-  if(state.receipts[key])return {status:"ALREADY_COMMITTED"};
+  if(state.receipts[key])return {status:same(state.receipts[key],candidate)?"ALREADY_COMMITTED":"CONFLICT"};
   if(state.pending[key])return {status:same(state.pending[key],candidate)?"PREPARED":"CONFLICT"};
   persist({...state,pending:{...state.pending,[key]:{...candidate,at:clock()}}});
   return {status:"PREPARED"};
@@ -123,10 +126,11 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  function commit({systemID,fleetID,item}={}){
   if(persistenceUnverified)return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   if(stateUnreconciled)return {status:"DEPOT_STATE_UNRECONCILED"};
+  if(!verifyCurrentRead())return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   const candidate=normalize({systemID,fleetID,item});
   if(!candidate)return {status:"INVALID"};
   const key=String(candidate.cargoID);
-  if(state.receipts[key])return {status:"ALREADY_COMMITTED"};
+  if(state.receipts[key])return {status:same(state.receipts[key],candidate)?"ALREADY_COMMITTED":"CONFLICT"};
   if(!same(state.pending[key],candidate))return {status:"NOT_PREPARED_OR_MISMATCH"};
   const previous=Number(state.totals[String(systemID)]||0);
   if(!Number.isSafeInteger(previous)||previous<0||
