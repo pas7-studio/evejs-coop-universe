@@ -19,6 +19,30 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   throw Error("WAREHOUSE_DEPENDENCIES_REQUIRED");
  const dir=path.join(root,"receipts"),busy=new Set();
  const receiptPath=id=>path.join(dir,`${id}.json`);
+ const lockPath=id=>path.join(dir,`${id}.lock`);
+ // The in-process busy set cannot serialize independent Node workers using
+ // the same native warehouse. Fence *before* the initial receipt read,
+ // through the last native debit, ItemStore grant and COMMITTED receipt.
+ function withCustodyLock(id,action){
+  let fd=null,held=false,result;
+  try{
+   fsApi.mkdirSync(dir,{recursive:true});
+   fd=fsApi.openSync(lockPath(id),"wx",0o600);held=true;
+   fsApi.writeFileSync(fd,String(process.pid));fsApi.fsyncSync(fd);
+   fsApi.closeSync(fd);fd=null;
+   result=action();
+  }catch(error){
+   result=answer(error?.code==="EEXIST"?"WAREHOUSE_CUSTODY_LOCKED":
+    "NEEDS_OPERATOR_REPAIR",{cargoID:id},
+    {reason:String(error?.message||error).slice(0,95)});
+  }finally{
+   if(fd!==null)try{fsApi.closeSync(fd);}catch(_ignored){}
+   if(held)try{fsApi.unlinkSync(lockPath(id));}
+   catch(_error){result=answer("NEEDS_OPERATOR_REPAIR",{cargoID:id},
+    {reason:"WAREHOUSE_LOCK_RELEASE_UNVERIFIED"});}
+  }
+  return result;
+ }
  function syncDir(location){
   // Best effort on platforms where directory fsync is unsupported. File fsync
   // is compulsory; a failed file fsync is never reported as durable.
@@ -146,6 +170,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   if(busy.has(id))return answer("IN_PROGRESS");
   busy.add(id);
   try{
+   return withCustodyLock(id,()=>{
    let record=load(id);
    if(record){
     if(Object.keys(args).some(k=>args[k]!==record[k]))return answer("RECEIPT_IDENTITY_CONFLICT",record);
@@ -185,6 +210,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    if(findCargo(record))return answer("SOURCE_STILL_PRESENT",record);
    record={...record,phase:statuses.DEBIT,updatedAt:clock()};persist(id,record);
    return commitCredit(record);
+   });
   }catch(e){return answer("NEEDS_OPERATOR_REPAIR",{cargoID:id},{reason:String(e.message).slice(0,95)});}
   finally{busy.delete(id);}
  }
@@ -192,6 +218,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   const id=pos(cargoID);if(!id||!authorize)return answer("REPAIR_AUTHORIZATION_REQUIRED");
   if(busy.has(id))return answer("IN_PROGRESS");busy.add(id);
   try{
+   return withCustodyLock(id,()=>{
    const record=load(id);if(!record)return answer("RECEIPT_NOT_FOUND");
    if(record.phase===statuses.COMMITTED){const t=checkTarget(record);return t&&!findCargo(record)?answer("ALREADY_COMMITTED",record):answer("COMMITTED_STATE_INVALID",record);}
    if(record.phase===statuses.PREPARED)return answer(findCargo(record)?"PREPARED_SOURCE_PRESENT":"PREPARED_SOURCE_UNKNOWN",record);
@@ -204,13 +231,17 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     return answer("COMMITTED",committed,{itemID:t.itemID});
    }
    return answer("NEEDS_OPERATOR_REPAIR",record);
+   });
   }catch(e){return answer("NEEDS_OPERATOR_REPAIR",{cargoID:id},{reason:String(e.message).slice(0,95)});}
   finally{busy.delete(id);}
  }
  function audit(){
-  let files;try{files=fsApi.readdirSync(dir).filter(x=>/^\d+\.json$/.test(x));}
+  let entries;try{entries=fsApi.readdirSync(dir);}
   catch(e){if(e.code==="ENOENT")return {status:"EMPTY",committed:0,pending:0,problems:[]};throw e;}
-  let committed=0,pending=0;const problems=[];
+  const files=entries.filter(x=>/^\d+\.json$/.test(x));
+  let committed=0,pending=0;const problems=entries
+   .filter(x=>/^\d+\.lock$/.test(x))
+   .map(x=>({cargoID:Number(x.slice(0,-5)),reason:"WAREHOUSE_CUSTODY_LOCKED"}));
   for(const file of files){const id=Number(file.slice(0,-5));try{
    const row=load(id),target=checkTarget(row),source=findCargo(row);
    if(row.phase===statuses.COMMITTED){if(!target||source||Number(target.itemID)!==row.itemID)problems.push({cargoID:id,reason:"COMMITTED_MISMATCH"});else committed++;}
