@@ -75,3 +75,17 @@ test("EX-03B2 is separately disabled unless explicit native probe launch flag",(
  assert.match(deploy,/EVEJS_COOP_NPC_PROBE_LAUNCH: '1'/);
  assert.match(overlay,/"coopNpcProbeScanEvidence","coopNativeNpcProbeFlight"/);
 });
+
+test("EX-03B3 original NPC cargo unitization is pinned-source opt-in only",()=>{
+ const installer=read("scripts/patch-evejs-coop.cjs");
+ const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
+ const patch=read("scripts/coop-npc-probe-loadout-split-patch.cjs");
+ assert.match(installer,/coop-npc-probe-loadout-split-patch\.cjs/);
+ assert.match(deploy,/\[switch\]\$EnableNpcProbeLoadoutSplit/);
+ assert.match(deploy,/if \(\$EnableNpcProbeLoadoutSplit -and -not \$EnableNpcProbeLaunch\)/);
+ assert.match(deploy,/EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '1'/);
+ assert.match(patch,/EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT === "1"/);
+ assert.match(patch,/EVEJS_COOP_NPC_PROBE_LAUNCH === "1"/);
+ assert.match(patch,/quantity: splitNativeScannerCharges \? 1 : quantityPerModule/);
+ assert.match(patch,/const originalUnits = splitNativeScannerCharges \? quantityPerModule : 1/);
+});
