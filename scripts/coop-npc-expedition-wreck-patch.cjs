@@ -17,11 +17,11 @@ const edits={
     },
     {
       "before": "  entity.isEmpty = nativeNpcStore.listNativeWreckItemsForWreck(normalizedWreckID).length === 0;",
-      "after": "  // EX03B18_NATIVE_WRECK_SLIM_REFRESH\n  entity.isEmpty = nativeNpcStore.listNativeWreckItemsForWreck(normalizedWreckID).length === 0 &&\n    (!process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\" || require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).list({wreckID:normalizedWreckID}).length===0);"
+      "after": "  // EX03B18_NATIVE_WRECK_SLIM_REFRESH\n  entity.isEmpty = nativeNpcStore.listNativeWreckItemsForWreck(normalizedWreckID).length === 0 &&\n    (process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK!==\"1\" || require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).list({wreckID:normalizedWreckID}).length===0);"
     },
     {
       "before": "    ).length === 0;\n  entity.launcherID =",
-      "after": "    ).length === 0 &&\n    (!process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\" || require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).list({wreckID:wreckRecord.wreckID}).length===0);\n  entity.launcherID ="
+      "after": "    ).length === 0 &&\n    (process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK!==\"1\" || require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).list({wreckID:wreckRecord.wreckID}).length===0);\n  entity.launcherID ="
     },
     {
       "before": "  if (!removeResult.success) {\n    nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);\n    return removeResult;\n  }",
