@@ -271,6 +271,33 @@ function adopt(scene,fleet,options={}){
  // half-observed loaded ship into the live hauling / selling lifecycle.
  let cargoItems,readback;
  try{
+  // The target ship's local view is not global custody proof. A broken
+  // upsert could leave the original row visible on the former hauler while
+  // returning a correct-looking new-hauler view. Check the original cargoID
+  // across the WHOLE native store after durable flush, before starting warp.
+  const allCommitted=cargoRows({store,cargoTable:options.cargoTable,database});
+  if(!Array.isArray(allCommitted))
+   throw Error("ORIGINAL_CARGO_GLOBAL_READBACK_UNAVAILABLE");
+  const intended=new Set(planned.rows.map(row=>pos(row.cargoID)));
+  const globalHits=new Map();
+  for(const entry of allCommitted){
+   const id=pos(entry?.cargoID);
+   if(intended.has(id)){
+    const group=globalHits.get(id)||[];
+    group.push(entry);
+    globalHits.set(id,group);
+   }
+  }
+  if(planned.rows.some(row=>{
+   const matches=globalHits.get(pos(row.cargoID))||[];
+   return matches.length!==1||
+    pos(matches[0].entityID)!==haulerID||
+    pos(matches[0].ownerID)!==ownerID||
+    pos(matches[0].typeID)!==pos(row.typeID)||
+    pos(matches[0].quantity)!==pos(row.quantity)||
+    matches[0].transient!==false||
+    Number(matches[0].moduleID||0)!==0;
+  }))throw Error("ORIGINAL_CARGO_GLOBAL_READBACK_MISMATCH");
   readback=store.listNativeCargoForEntity(haulerID);
   if(!Array.isArray(readback)||planned.rows.some(row=>{
    const matches=readback.filter(x=>pos(x?.cargoID)===pos(row.cargoID));
