@@ -37,4 +37,6 @@ jobs:
           node --test tests/coop-war-transfer-ledger.test.mjs \
             tests/coop-war-gate-handoff.test.mjs \
             tests/coop-war-recovery-console.test.mjs \
-            tests/coop-war-recovery-socket.test.mjs
+            tests/coop-war-recovery-socket.test.mjs \
+            tests/coop-war-fleet-registry.test.mjs \
+            tests/coop-war-gate-staging.test.mjs

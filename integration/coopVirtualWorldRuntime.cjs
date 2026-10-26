@@ -158,8 +158,16 @@ function advanceNativeWarGateStaging(){
  if(!gate(process.env))return;
  const guard=npcOrderBridge();
  if(!guard||!nativeWarFleetRegistry())return;
- if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1")
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"){
   ensureNativeWarGateHandoff(require("./runtime"));
+  const finished=warGateHandoff?.retireCompleted({max:2});
+  if(finished?.retired?.length)
+   require("./coopRuntimeProbe").observe(
+    "living-native-war-transit-retired",null,null,{
+     status:finished.status,retired:finished.retired,
+     evidence:"PROVEN_TERMINAL_TRANSFER_ARCHIVED_NO_SHIP_MOVEMENT"
+    });
+ }
  if(!warGateStaging){
   const native=require("./runtime"),npc=require("./npc/npcRuntime"),
    controllers=require("./npc/npcRegistry"),worldData=require("./worldData"),

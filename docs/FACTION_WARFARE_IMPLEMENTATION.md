@@ -499,6 +499,67 @@ sync, actual Docker socket permissions, SIGKILL after **each** native
 handoff phase, native ammo and cargo conservation, and two-client
 observation before any production enablement. All flags default OFF.
 
+## FW-007D — replay-safe multiple physical transfers, proven retirement
+
+The previous military transfer ledger could store only the most recent
+handoff and rejected any later `BEGIN` for that same ship. FW-007D
+removes this dead end **without weakening the physical custody gate**.
+
+- Every `BEGIN` allocates a **global monotonic transfer serial inside
+  the native SQLite fleet transaction**. Its trusted ID format is
+  `fw:<entityID>:<fromSystemID>:<toSystemID>:<serial>`. A caller
+  cannot supply an old or arbitrary serial to reset the replay gate.
+  Ambiguous commits are still fenced and must be reconciled, never
+  repeated with a new ID.
+- Terminal `COMPLETE` or `ABORTED` transfers are immutable until a
+  fresh two-scene native `witness` confirms exactly one physical
+  ship, its original `entityID`, corporation, controller, unique
+  durable pilot ID, original module and cargo SHA256 fingerprints.
+- The original native gate journal must be **absent** (after normal
+  verified cleanup or operator archival). Unknown, partial or
+  unreadable journal files do not qualify. Only then may the
+  terminal flight be copied to `transferHistory` (max 512,
+  append-only until cap) and removed from the active `transfers`
+  map **in one native SQLite transaction**.
+- The same existing A-Life 30-second tick now retires up to two
+  fully proven terminal flights. This changes no physical ship,
+  pilot location, item, ammo, wallet, war objective, kill or
+  original native route. Uncertain and nonterminal flights are
+  never auto-retired.
+- Recovery `review` now offers a **separate audited**
+  `RETIRE_TRANSFER` action when the physical transfer is terminal
+  and the journal is closed. It requires a new review witness
+  after any `CLEANUP_JOURNAL`; no silent deletion of the former
+  flight evidence. The CLI accepts this exact action.
+- Native fleet `RELEASE` cannot delete ANY active transfer record.
+  It must first be retired with physical/journal verification.
+  This preserves history when ships demobilize and re-enlist in
+  the next independently authorized campaign.
+
+**Important route boundary:** existing `START_CAMPAIGN` **requires
+native-verified adjacency** between its source and target. FW-007D
+allows the same real NPC to travel again on later independently
+authorized adjacent campaigns; it does **not** introduce fictional
+waypoints, direct travel across nonadjacent systems, artificial
+supply or unattended multi-system campaigns. Future automatic
+demobilization/redeployment should reuse the fleet-release/native
+recruitment proofs, not erase war ownership or teleport.
+
+**CI and QA:** updated `.github/workflows/fw-war-recovery-source.yml`
+to run both military fleet registry and native gate staging tests
+alongside recovery. In particular test (a) two sequential legitimate
+transits of the same entity, (b) globally distinct serial IDs, (c)
+one native hull across all scenes, (d) unchanged native cargo and
+modules, (e) journal-not-clean refusal, (f) damaged/duplicated ship
+quarantine, (g) history cap, (h) release blocked before retirement,
+(i) server crash before and after SQLite history transaction, and
+(j) two-client observation of crossing a reciprocal gate.
+
+The new source tests were authored but **real pinned EveJS SQLite/
+Rust/Docker/two-client acceptance has not yet been verified**.
+All flags remain OFF by default; this code does not authorize
+production war fleets.
+
 ## Security and native authority
 This core **never mutates** NPC ships, native station or SDE ownerID, standings, corp membership, wallets, items or combat. `militaryControllerFactionID` is only an independent military-control field, NOT native station sovereignty, docking permission or client political map.
 

@@ -27,8 +27,24 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
    .some(x=>typeof x!=="function")||
   typeof nativeTransferFactory!=="function"||
   !service||!nativeStore)throw Error("WAR_NATIVE_TRANSFER_AUTHORITIES_REQUIRED");
+ // Only an absent original native journal permits a later hop. Any
+ // orphan temp, symlink, unreadable directory or pending other transfer
+ // makes this a repair case; it is NEVER interpreted as success.
+ function journalClosed({pilotID}={}){
+  if(!/^coop-pilot-[0-9]{3,}$/.test(String(pilotID)))return false;
+  const fs=require("node:fs");
+  try{
+   const st=fs.lstatSync(journalDir);
+   if(!st.isDirectory()||st.isSymbolicLink())return false;
+   const names=fs.readdirSync(journalDir);
+   if(names.length>500||
+    names.some(n=>!/^coop-pilot-[0-9]{3,}\\.json$/.test(n)))return false;
+   return !names.includes(pilotID+".json");
+  }catch{return false}
+ }
  const ledger=createWarTransferLedger({
-  gameStore,identityRegistry,sceneForSystem,nativeStore,getController,clock,env
+  gameStore,identityRegistry,sceneForSystem,nativeStore,getController,clock,env,
+  verifyJournalClosed:journalClosed
  });
  let active=null;
  const facade={
@@ -87,11 +103,27 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
    sourceScene?.systemID!==from||ship?.itemID!==entityID||
    controller?.entityID!==entityID)
    return {success:false,errorMsg:"WAR_HANDOFF_INVALID_REQUEST"};
-  const transferID="fw:"+entityID+":"+from+":"+to;
-  const start=ledger.begin({transferID,entityID,
+  // Old terminal handoff is archived only after a fresh, fully
+  // consistent source/destination/pilot/cargo/journal witness.
+  const previous=ledger.witness(entityID);
+  if(previous.status==="VERIFIED"&&
+   previous.action==="CLEANUP_JOURNAL"){
+   if(previous.physicalSystemID!==from)
+    return {success:false,errorMsg:"WAR_HANDOFF_OLD_DESTINATION_MISMATCH"};
+   const retired=ledger.retire({
+    entityID,transferID:previous.transferID});
+   if(retired.status!=="RETIRED")
+    return {success:false,errorMsg:retired.reason||
+     "WAR_HANDOFF_PREVIOUS_TRANSFER_NOT_RETIRED"};
+  }else if(previous.status!=="NO_ACTIVE_TRANSFER")
+   return {success:false,errorMsg:"WAR_HANDOFF_PREVIOUS_STATE_UNVERIFIED"};
+  const start=ledger.begin({entityID,
    sourceSystemID:from,destinationSystemID:to});
   if(start.status!=="PREPARED")
    return {success:false,errorMsg:start.reason||"WAR_HANDOFF_PREPARE_FAILED"};
+  const transferID=start.transferID;
+  if(typeof transferID!=="string")
+   return {success:false,errorMsg:"WAR_HANDOFF_TRANSFER_ID_MISSING"};
   active={transferID,entityID,sourceSystemID:from,
    destinationSystemID:to,pilotID};
   let answer;
@@ -124,6 +156,29 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
   }catch{return {success:false,errorMsg:"WAR_HANDOFF_NEEDS_OPERATOR_REPAIR"}}
   return {success:false,errorMsg:answer?.errorMsg||"WAR_NATIVE_TRANSFER_NOT_APPLIED"};
  }
+ // On each EXISTING A-Life tick, archive only fully proven terminal
+ // flights. A failed/corrupt/cargo-drifted flight is left quarantined for
+ // authenticated recovery; it is NEVER auto-rolled-back or reissued.
+ function retireCompleted({max=2}={}){
+  if(!flag(env))return {status:"DISABLED",retired:[]};
+  if(!Number.isSafeInteger(max)||max<1||max>4)
+   return {status:"INVALID_LIMIT",retired:[]};
+  let candidates;
+  try{candidates=ledger.terminalCandidates()}
+  catch{return {status:"NATIVE_SQL_UNAVAILABLE",retired:[]}}
+  const retired=[],blocked=[];
+  for(const row of candidates.slice(0,max)){
+   let result;
+   try{result=ledger.retire(row)}
+   catch{return {status:"NATIVE_RETIRE_OUTCOME_UNKNOWN",retired,blocked}}
+   if(result?.status==="RETIRED"){
+    retired.push({entityID:row.entityID,transferID:row.transferID,
+     historyCount:result.historyCount});
+   }else blocked.push({entityID:row.entityID,
+    reason:result?.reason||result?.status||"NOT_VERIFIED"});
+  }
+  return {status:blocked.length?"PARTIAL":"OBSERVED",retired,blocked};
+ }
  function recovery({authorizeOperator,io}={}){
   if(typeof authorizeOperator!=="function")
    throw Error("WAR_RECOVERY_TRUSTED_OPERATOR_AUTH_REQUIRED");
@@ -133,6 +188,7 @@ function createWarGateHandoff({gameStore,identityRegistry,sceneForSystem,
     ...(io?{io}:{})
    });
  }
- return Object.freeze({transfer,auditStartup,pending:ledger.pending,recovery});
+ return Object.freeze({transfer,auditStartup,pending:ledger.pending,
+  retireCompleted,recovery});
 }
 module.exports={createWarGateHandoff,flag};
