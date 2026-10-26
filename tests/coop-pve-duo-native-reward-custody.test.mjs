@@ -117,6 +117,23 @@ test("duplicate or reused native item IDs are fail closed",()=>{
  f.now().items.push({...f.now().items[0]});
  assert.equal(f.report().status,"NATIVE_PERSONAL_CUSTODY_IDENTITY_MISMATCH");
 });
+test("numeric and decimal-string forms of an original item ID cannot evade duplicate detection",()=>{
+ const f=fixture({originalStacks:[
+  {itemID:8201,typeID:9001,ownerID:101,locationID:60001234,flagID:4,stacksize:1},
+  {itemID:"8201",typeID:9001,ownerID:101,locationID:60001234,flagID:4,stacksize:1}
+ ]});
+ assert.equal(f.before.status,"NATIVE_HANGAR_SOURCE_UNAVAILABLE");
+});
+test("native stack repr change cannot forge a second new reward item ID",()=>{
+ const f=fixture({originalStacks:[{itemID:8001,typeID:9001,ownerID:101,
+  locationID:60001234,flagID:4,stacksize:3,singleton:0}]});
+ f.credit();
+ f.now().items[0].itemID="8001";
+ f.now().items[0].typeID="9001";
+ const r=f.report();
+ assert.equal(r.status,"NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED");
+ assert.deepEqual(r.newItemIDs,[]);
+});
 test("native reward receiver is not another agent or issuer corporation",()=>{
  const f=fixture();
  const wrong={...f.adapters,getAgent:()=>({agentID:51,corporationID:1000123})};
