@@ -37,6 +37,15 @@
       ],
       "status": "not-sent",
       "note": "a durable fleet actor is pruned while its stored controller row still exists, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0005-native-npc-durable-not-dormant.patch",
+      "sha256": "8269126357cb137fccb277c0cb8892d0e0b29da526cc8a3d8440dbc14fcb5eae",
+      "files": [
+        "server/src/space/npc/npcCombatDormancy.js"
+      ],
+      "status": "not-sent",
+      "note": "a durable co-op NPC is dematerialised by the combat-dormancy sweep on every no-session scene, candidate for an atomic upstream PR"
     }
   ]
 }

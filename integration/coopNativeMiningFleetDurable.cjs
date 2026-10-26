@@ -547,4 +547,37 @@ function healFleetActors(fleetRecord,deps={}){
  }
  return healed;
 }
-module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot,healFleetActors};
+// Forensics for a fleet that loses an actor: the stock filter drops an id as soon
+// as the in-memory controller is gone, while the persisted row may still own the
+// ship. Reporting both authorities per removed id is what turned "miners vanish"
+// into a measured cause, so the shape lives here instead of in the hook.
+function noteDroppedFleetActors(fleetRecord,deps={}){
+ const npcService=deps.npcService||require("./npc");
+ const store=deps.store||require("./npc/nativeNpcStore");
+ let observe=deps.observe||null;
+ if(!observe){
+  try{observe=require("./coopRuntimeProbe").observe}catch(_error){observe=null}
+ }
+ if(!observe)return [];
+ const dropped=[];
+ const actors=[].concat(
+  Array.isArray(fleetRecord&&fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[],
+  Array.isArray(fleetRecord&&fleetRecord.haulerEntityIDs)?fleetRecord.haulerEntityIDs:[]);
+ for(const entityID of actors){
+  const id=Number(entityID)||0;
+  if(id<=0)continue;
+  if(typeof npcService.getControllerByEntityID==="function"&&npcService.getControllerByEntityID(id))continue;
+  const entity=store&&typeof store.getNativeEntity==="function"?store.getNativeEntity(id):null;
+  const controller=store&&typeof store.getNativeController==="function"?store.getNativeController(id):null;
+  dropped.push(id);
+  observe("living-mining-fleet-pruned",null,
+   {spaceState:{systemID:Number(fleetRecord&&fleetRecord.systemID)||0}},
+   {fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,entityID:id,
+    storedEntity:Boolean(entity),storedController:Boolean(controller),
+    entityTransient:Boolean(entity&&entity.transient===true),
+    controllerTransient:Boolean(controller&&controller.transient===true),
+    operatorKind:String((controller&&controller.operatorKind)||(entity&&entity.operatorKind)||"")});
+ }
+ return dropped;
+}
+module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot,healFleetActors,noteDroppedFleetActors};
