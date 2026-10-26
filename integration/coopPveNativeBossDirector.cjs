@@ -190,7 +190,7 @@ function createNativeBossDirector({clock=()=>Date.now(),getNativeEntity,getContr
   for(const event of out.events)try{notify(event)}catch{}
   return out;
  }
- return {tick,activeIDs:()=>new Set([...orders.values()].map(x=>x.entityID)),
+ return {tick,activeIDs:()=>new Set([...seen.values()].map(x=>x.entityID)),
   snapshot:()=>[...seen.values()].map(x=>({...x}))};
 }
 module.exports={createNativeBossDirector,explicitBoss,phaseFor};
