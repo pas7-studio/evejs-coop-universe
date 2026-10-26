@@ -1,29 +1,40 @@
-﻿## Durable mining fleet: where it stands (2026-10-25 23:05 UTC)
+﻿## Durable mining fleet / ore stall — state 2026-10-25 23:35 UTC
 
-**Working:** witness reconciliation. Every boot logs a full slot:
-`ALIFE08 slot 30000145-1 -> RESTORED miners=2 haulers=1 restored=2`. Abandoned
-witnesses are archived (never wiped), orphan cargo/fitting of provably absent hulls is
-archived then released, partly lost slots are repaired in place, and incomplete runtime
-records are widened instead of raising `ALIFE08_RUNTIME_FLEET_SLOT_CONFLICT`.
+**World mode:** `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE` is OFF in the live compose file
+(the flag was removed after the durable roster kept decaying). Slot reconcile, trip
+recovery, haul manifest, haul cargo, station delivery, mining trace stay ON. The durable
+code (witness reconcile / repair / widen / controller re-attach) is committed and green
+(25/25) but dormant until the flag is turned back on.
 
-**Still broken:** the roster does not survive the native tick. Within ~1-2 minutes the
-mining fleet state shows `miners 0 haulers 1` or `miners 1 haulers 1`, and the ships sit
-`STOP` with 0 ore. `pruneMiningFleet` drops any ship without a runtime controller; we
-re-attach controllers at startup (`ensureControllers`, logged as `restored=N`), yet the
-roster still decays. Next suspects, in order: (1) something unregisters the controller
-after startup, (2) the fleet record is rebuilt from another path, (3) the ships are
-destroyed and re-created with new IDs.
+**Hard fact about restarts:** `npcCargo` is empty after a restart and the startup fleet's
+ship rows are gone, so the whole startup-fleet state is transient. Only cargo that
+`coopNativeHaulCargo` marks non-transient during a real haul survives. Therefore path B
+(durable haul-cargo journal + adoption onto a freshly spawned hauler) is the short path;
+path A (durable hulls) also has to beat entity transience.
 
-**Proven alternative (path B):** with `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE` OFF the
-transient fleet mines reliably (26 153 ore mined, haul loaded, station chosen, sale
-attempted at 21:57). It only loses state when the container restarts.
+**Current gameplay blocker (not durability):** the fleet reaches `state=mining` with real
+asteroid targets, ticks run every second (`TICK_mining`), but the miners sit `STOP` with
+`targets []`, `qty 0` and mining modules `active:false / online:true`. No `NO_MINING_MODULE`,
+`NO_MINING_SNAPSHOT`, `TARGET_OUT_OF_RANGE` or `TARGET_LOCK_FAILED` reason was ever recorded,
+so the loop is not skipping on those. Last `living-hauler-loaded` is 21:56; economy director
+is healthy (ranks ore 17464 at 5203.7 ISK, station 60014935 for 30000144/30000145).
 
-**Open decision for the owner:** keep pushing path A (durable hulls), or switch to path B -
-keep the fleet transient and make the ECONOMY durable: journal the hauler cargo and the
-station trip, then re-attach that cargo to the freshly spawned hauler after a restart.
-Path B is shorter and does not fight native lifecycle code.
+**Instrumentation added (overlay patches, not a fork):**
+- `MINER_TARGET` — modules/fitted/activeEffects counts, distance, chosen target, once per
+  2 min per fleet.
+- `NO_MINEABLE_TARGET` — the silent `if (!targetEntity)` branch that never logged.
+- `coopStuckWarpRecovery.release()` now also completes a **sessionless** warp whose own
+  `completeAtMs` elapsed (`WARP_INGRESS_COMPLETED`); before this only `warpState` warps were
+  landed and miners stayed `mode=WARP` forever (`MINER_NOT_IN_SCENE_OR_WARPING`).
 
-Flags currently ON in compose.coop-probe.yaml: durable=1, slot reconcile=1, trip recovery=1,
-haul manifest=1. Turning durable OFF restores the previously proven mining behaviour.
+**Anchor lesson:** the patch engine matches anchors after trimming indentation, so
+`    if (!targetEntity) {` was "unknown or duplicate". Multi-line anchors that include the
+body line are unique. Always require `OVERLAY_OK` with `patched: 53 / anchorMismatch: 0`
+before building an image; a failed install still lets the build stage run on half-patched
+sources.
 
-**New fact (23:10 UTC):** `npcCargo` currently holds 0 rows and the fleet entity rows are gone too, so a restart loses the whole startup-fleet state, not just hulls. Only the hauler cargo that `coopNativeHaulCargo` marks non-transient during a real haul can survive. That makes path B concrete: journal the haul cargo durably at load time and adopt those rows onto the new fleet's hauler at boot.
+**Next step:** Docker Desktop died mid-deploy (engine pipe gone). Restart it, rebuild
+`evejs-local` from the verified overlay, `compose up -d`, wait ~3 min, then read
+`living-mining-blocker` reasons for `MINER_TARGET` / `NO_MINEABLE_TARGET`. That answer
+decides the fix: if `activeEffects` stays 0 while `modules > 0`, activation does not stick;
+if `NO_MINEABLE_TARGET`, target selection is the blocker.
