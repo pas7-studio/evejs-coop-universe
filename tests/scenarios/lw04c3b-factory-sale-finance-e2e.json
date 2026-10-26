@@ -1,0 +1,175 @@
+{
+  "schema": "evejs-coop/lw04c3b-original-npc-sale-finance-e2e/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW04C3B-01",
+      "title": "Original authenticated player buys whole NPC factory stack and receives exact native item",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-02",
+      "title": "NPC corporation wallet earns sale ISK exactly once; buyer wallet debited once",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-03",
+      "title": "Lost ACK after GameStore COMMIT before Rust finalize never charges wallet twice",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-04",
+      "title": "Rust finalize persisted but GameStore receipt missing: stop, no fabricated settlement",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-05",
+      "title": "Physical partial Rust fill splits original ItemStore stack without duplication",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-06",
+      "title": "Second partial buyer consumes remaining original escrow and closes order",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-07",
+      "title": "Two concurrent buyers cannot both claim same Rust order quantity",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-08",
+      "title": "Full rust order ID, fill ID, original source ItemStore ID and NPC owner conserved",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-09",
+      "title": "Buyer wallet insufficient: original GameStore item escrow and both balances unchanged",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-10",
+      "title": "Buyer disconnects or undocks during Rust CLAIM: no unauthorized settlement",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-11",
+      "title": "Cold restart from pending/settling Rust claim and durable GameStore receipts",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-12",
+      "title": "Corrupt original corporation journal must fail seller payment audit",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-13",
+      "title": "Protected evejs-data not mounted; disposable pinned original SQLite/Rust proof",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    },
+    {
+      "id": "LW04C3B-14",
+      "title": "Two authenticated EveJS clients see source item ownership/market and wallet state",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "original GameStore npcMarketFills and wallet journal receipt",
+        "Rust CLAIM + FINALIZE state and fill ID",
+        "original ItemStore source/buyer itemID and escrow after COMMIT",
+        "two client observations when applicable",
+        "pre/post real SQLite WAL and Rust database snapshot"
+      ]
+    }
+  ]
+}
