@@ -117,3 +117,10 @@ test('unknown native atomic state blocks the shift before debit',()=>{
  const r=x.hire(service,OP,{systemID:0});
  assert.equal(r.reason,'INVALID_SHIFT_REQUEST');assert.equal(x.balanceOf(CORP),200);
 });
+
+test('native player wallet row without redundant isNPC field is accepted',()=>{
+ const x=company(),corp=x.wallets.get('corporations\u001f'+CORP);
+ delete corp.isNPC;
+ assert.equal(x.hire(x.service(true)).status,'FUNDED');
+ assert.equal(x.balanceOf(CORP),76.55);
+});
