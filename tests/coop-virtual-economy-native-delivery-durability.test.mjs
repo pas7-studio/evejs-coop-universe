@@ -759,11 +759,18 @@ test("P0: abandoned virtual economy temp from a reused PID never gets truncated"
 
 test("P0: economy only unlinks an exclusively created own temp on write failure",()=>scoped(({file})=>{
  const tmp=file+".tmp-"+process.pid;
- const io={...fs,fsyncSync(fd){
-  const p=fs.readlinkSync("/proc/self/fd/"+fd);
-  if(p===tmp)throw Object.assign(Error("ECONOMY_TEMP_FSYNC_EIO"),{code:"EIO"});
-  return fs.fsyncSync(fd);
- }};
+ const owned=new Set();
+ const io={...fs,
+  openSync(p,mode,...rest){
+   const fd=fs.openSync(p,mode,...rest);
+   if(p===tmp)owned.add(fd);
+   return fd;
+  },
+  fsyncSync(fd){
+   if(owned.has(fd))throw Object.assign(Error("ECONOMY_TEMP_FSYNC_EIO"),{code:"EIO"});
+   return fs.fsyncSync(fd);
+  }
+ };
  const e=createEconomy({file,clock:()=>100,fsApi:io});
  assert.throws(()=>e.recordLoss(30000142,1),/ECONOMY_TEMP_FSYNC_EIO/);
  assert.equal(fs.existsSync(tmp),false);
