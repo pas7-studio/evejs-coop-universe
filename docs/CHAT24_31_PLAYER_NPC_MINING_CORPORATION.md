@@ -114,6 +114,14 @@ See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
 - **15/15** isolated original market-readiness scenarios and **19/19** Agent regressions PASS. No actual corporate native SELL runtime or Rust/SQLite E2E exists yet. The `EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ` flag remains default OFF.
 - See [CHAT24_31_NATIVE_CORPORATE_ORE_MARKET.md](CHAT24_31_NATIVE_CORPORATE_ORE_MARKET.md) for the precise pinned market incompatibility and the next corporate escrow, Rust claim, wallet settlement and crash/recovery gates.
 
+## Stage E2B1 — original corporation-owned SELL custody primitive (source implemented)
+
+- Added original source-bound `coopPlayerMiningCorporateSellCustody`: one actual native `items + corporationRuntime + marketEscrow` transaction moves **the same original ore itemID** into the real `9,200,000,000 + orderID` SELL escrow location without changing its corporate owner. Writes authenticated `isCorp:true` escrow and persistent `coopPlayerMiningCorpSell\u001fcargoID` receipt.
+- An original native Rust corporate SELL must first exist in **`PREPARED_UNPUBLISHED`** state with no fill and binding source quote. This Rust state is **NOT implemented upstream**, so this isolated writer remains **NOT LIVE**; already-open orders are rejected to avoid unbacked fills.
+- A native `CANCELLED/EXPIRED` and **zero-fill** witness permits the original item to return to the same corporate office in one transaction. Unknown commits and partial fills fail closed; no duplicate cargo, synthetic ore or fake ISK credit.
+- Registered `coopPlayerMiningCorpSell` in the reversible pinned native SQLite group mapping, plus a default-OFF feature flag. **20/20** isolated escrow/return tests and exact pinned SQLite row-group roundtrip PASS. Actual Rust corporate order publication and corporate settlement remain future engineering.
+- See [CHAT24_31_CORPORATE_SELL_ESCROW.md](CHAT24_31_CORPORATE_SELL_ESCROW.md) for source contract, tests and next actual native `PrepareCorpSell → escrow → PublishCorpSell → ClaimFill` requirements.
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
