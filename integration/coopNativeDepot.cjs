@@ -9,6 +9,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  // After an uncertain rename/directory fsync the in-memory state may be
  // OLDER than the just-replaced disk journal. No further write may use it.
  let persistenceUnverified=false;
+ let journalPresent=false;
  // Damaged loaded journals cannot be amended or presented as valid supply.
  let stateUnreconciled=false;
  try{
@@ -19,34 +20,57 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
      (saved.pending!=null&&(typeof saved.pending!=="object"||Array.isArray(saved.pending))))
    throw Error("bad depot state");
   state={...saved,pending:saved.pending||{}};
+  journalPresent=true;
  }catch(e){if(e.code!=="ENOENT")throw e;}
  function persist(next){
   if(persistenceUnverified)throw Error("DEPOT_PERSISTENCE_UNVERIFIED");
-  const tmp=file+".tmp-"+process.pid;
+  const folder=path.dirname(file),lock=file+".lock",tmp=file+".tmp-"+process.pid;
+  let lockFd=null,locked=false;
   try{
-   fsApi.mkdirSync(path.dirname(file),{recursive:true});
-   const fd=fsApi.openSync(tmp,'w');
-   try{fsApi.writeFileSync(fd,JSON.stringify(next));fsApi.fsyncSync(fd);}finally{fsApi.closeSync(fd);}
+   fsApi.mkdirSync(folder,{recursive:true});
+   // Cross-process exclusive creation: no writer may enter the compare/rename
+   // window while another instance is persisting this same depot journal.
+   // An abandoned lock after a crash intentionally requires operator review;
+   // silently breaking it could credit original ore twice.
+   lockFd=fsApi.openSync(lock,"wx",0o600);
+   locked=true;
+   fsApi.writeFileSync(lockFd,String(process.pid));
+   fsApi.fsyncSync(lockFd);
+   let disk=null;
+   try{disk=JSON.parse(fsApi.readFileSync(file,"utf8"));}
+   catch(error){
+    if(error?.code!=="ENOENT")throw error;
+   }
+   if((disk!==null)!==journalPresent||
+      (journalPresent&&JSON.stringify({...disk,pending:disk?.pending||{}})!==JSON.stringify(state)))
+    throw Error("DEPOT_CONCURRENT_JOURNAL_DRIFT");
+   const encoded=JSON.stringify(next);
+   const fd=fsApi.openSync(tmp,"w");
+   try{fsApi.writeFileSync(fd,encoded);fsApi.fsyncSync(fd);}
+   finally{fsApi.closeSync(fd);}
    fsApi.renameSync(tmp,file);
-   // Directory fsync makes the atomic rename survive host power failure on
-   // supported (POSIX) filesystems only. Windows refuses to fsync a directory
-   // handle with EPERM/EACCES, so that single step stays best-effort instead
-   // of making every depot write fail on a developer machine or on NTFS.
+   // File fsync is compulsory. Directory fsync is best effort on platforms
+   // where the directory handle is explicitly unsupported (Windows).
    try{
-    const dirfd=fsApi.openSync(path.dirname(file),'r');
+    const dirfd=fsApi.openSync(folder,"r");
     try{fsApi.fsyncSync(dirfd);}finally{fsApi.closeSync(dirfd);}
    }catch(error){
     if(!["EPERM","EACCES","EISDIR","EINVAL","EBADF"].includes(error?.code))throw error;
    }
-  }catch(e){
-   // The rename may already have changed on-disk receipts/totals. Treat
-   // ALL write failures as ambiguous instead of overwriting the new disk
-   // image with older in-memory state on the next prepare/commit.
+  }catch(error){
+   // A failed CAS, lock, rename or fsync makes THIS stale instance untrusted.
+   // Never retry an older in-memory receipts/totals map over a newer disk.
    persistenceUnverified=true;
    try{fsApi.unlinkSync(tmp);}catch(_ignored){}
-   throw e;
+   throw error;
+  }finally{
+   let unlockError=null;
+   if(lockFd!==null)try{fsApi.closeSync(lockFd);}catch(e){unlockError=e;}
+   if(locked)try{fsApi.unlinkSync(lock);}catch(e){unlockError=unlockError||e;}
+   if(unlockError){persistenceUnverified=true;throw unlockError;}
   }
   state=next;
+  journalPresent=true;
  }
  const normalize=({systemID,fleetID,item,legacy=false}={})=>{
   const cargoID=positive(item?.cargoID),typeID=positive(item?.typeID),

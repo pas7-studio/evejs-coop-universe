@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
-import {mkdtempSync,rmSync} from "node:fs";
+import {mkdtempSync,rmSync,openSync,closeSync,unlinkSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 const require=createRequire(import.meta.url);
@@ -219,4 +219,51 @@ test("P0: invalid depot index containers cannot become mutable live journals",()
   assert.throws(()=>createDepot({file:f.file,fsApi:f.fsApi}),/bad depot state/,name);
   assert.equal(f.writes(),0,name);
  }
+});
+
+test("P0: stale second native depot instance cannot erase first original receipt",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-cross-instance-"));
+ try{
+  const file=join(dir,"depot.json"),fresh=createDepot({file,clock:()=>101}),
+   stale=createDepot({file,clock:()=>102});
+  const arg=id=>({systemID:30000144,fleetID:77,
+   item:{cargoID:id,haulerID:9001,typeID:34,quantity:100}});
+  assert.equal(fresh.prepare(arg(777)).status,"PREPARED");
+  assert.equal(fresh.commit(arg(777)).status,"COMMITTED");
+  assert.equal(fresh.snapshot().totals["30000144"],100);
+  assert.throws(()=>stale.prepare(arg(778)),/DEPOT_CONCURRENT_JOURNAL_DRIFT/);
+  assert.equal(stale.prepare(arg(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(stale.commit(arg(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+  assert.equal(stale.audit().status,"NEEDS_OPERATOR_REPAIR");
+  const recovered=createDepot({file,clock:()=>103});
+  assert.equal(recovered.audit().status,"OK");
+  assert.equal(recovered.snapshot().receipts["777"].cargoID,777);
+  assert.equal(recovered.snapshot().totals["30000144"],100);
+  assert.equal(recovered.prepare(arg(777)).status,"ALREADY_COMMITTED");
+  assert.equal(recovered.prepare(arg(778)).status,"PREPARED");
+  assert.equal(recovered.commit(arg(778)).status,"COMMITTED");
+  assert.equal(createDepot({file}).snapshot().totals["30000144"],200);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: an active or crash-abandoned depot lock blocks writes until operator inspection",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-writer-lock-"));
+ try{
+  const file=join(dir,"depot.json"),lock=file+".lock",depot=createDepot({file});
+  const arg={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  const fd=openSync(lock,"wx");
+  closeSync(fd);
+  try{
+   assert.throws(()=>depot.prepare(arg),error=>error?.code==="EEXIST");
+   assert.equal(depot.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+   assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR");
+   assert.throws(()=>depot.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+  }finally{unlinkSync(lock)}
+  const recovered=createDepot({file});
+  assert.equal(recovered.prepare(arg).status,"PREPARED");
+  assert.equal(recovered.commit(arg).status,"COMMITTED");
+  assert.equal(createDepot({file}).snapshot().totals["30000144"],100);
+ }finally{rmSync(dir,{recursive:true,force:true})}
 });
