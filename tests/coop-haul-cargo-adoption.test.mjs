@@ -1051,3 +1051,69 @@ test("unavailable global inventory on empty-hauler preflight must block every or
   assert.equal(target.state,"mining");
  }
 });
+
+test("post-commit unplanned cargo on target hauler cannot silently join original ore",()=>{
+ for(const mode of ["global-only","local-only","cache-only","physical-global-and-local"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const phantom=orphan({cargoID:7999,entityID:hauler.itemID,coopHaulFleetID:0,
+   coopHaulFromMinerID:98765,quantity:50});
+  const list=store.listNativeCargo;
+  const perEntity=store.listNativeCargoForEntity;
+  const builder=store.buildNativeCargoItems;
+  let writes=0,flushes=0;
+  const upsert=store.upsertNativeCargo;
+  store.upsertNativeCargo=row=>{writes++;return upsert(row)};
+  store.listNativeCargo=()=>writes&&["global-only","physical-global-and-local"].includes(mode)?
+   [...list(),{...phantom}]:list();
+  store.listNativeCargoForEntity=id=>writes&&id===hauler.itemID&&
+   ["local-only","physical-global-and-local"].includes(mode)?
+   [...perEntity(id),{...phantom}]:perEntity(id);
+  store.buildNativeCargoItems=id=>writes&&id===hauler.itemID&&mode==="cache-only"?
+   [...builder(id),{itemID:phantom.cargoID,typeID:phantom.typeID,quantity:phantom.quantity}]:
+   builder(id);
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
+  const outcome=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return{success:true}}}
+  });
+  assert.equal(outcome.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",mode);
+  assert.equal(outcome.adopted,0);
+  assert.equal(writes,1);
+  assert.equal(flushes,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(target.coopHaulNeedsOperatorRepair,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+ }
+});
+
+test("rollback with unknown extra cargo on supposedly empty replacement hauler requires operator",()=>{
+ const store=fakeStore([
+  orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112})
+ ]);
+ const phantom=orphan({cargoID:7999,entityID:hauler.itemID,coopHaulFleetID:0});
+ const original=store.listNativeCargo;
+ const upsert=store.upsertNativeCargo;
+ let write=0,flush=0;
+ store.upsertNativeCargo=row=>{
+  write++;
+  if(write===2)return {success:false,errorMsg:"SECOND_ROW_REJECTED"};
+  return upsert(row);
+ };
+ store.listNativeCargo=()=>write>=2?[...original(),{...phantom}]:original();
+ const read=store.listNativeCargoForEntity;
+ store.listNativeCargoForEntity=id=>write>=2&&id===hauler.itemID?
+  [...read(id),{...phantom}]:read(id);
+ const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+ const outcome=adopt(sceneWith([ship,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>{flush++;return{success:true}}}
+ });
+ assert.equal(outcome.status,"ADOPTION_RECOVERY_UNVERIFIED");
+ assert.equal(outcome.adopted,0);
+ assert.equal(flush,1);
+ assert.equal(target.state,"mining");
+ assert.equal(target.coopHaulNeedsOperatorRepair,true);
+ assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+ assert.equal(ship.nativeCargoItems,undefined);
+ assert.deepEqual(original().map(r=>r.entityID),[900000000111,900000000112]);
+});

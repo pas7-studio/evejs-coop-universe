@@ -254,3 +254,13 @@ Why: the mining loop activated the same module twice per tick, and durable slot 
 Detail: The overlay inserts lines before an anchor, so the traced activation was added in front of the stock activateGenericModule call instead of replacing it: every fleet tick with no cached effect spent the module capacitor twice. Measured live on a 250 GJ hull: charge pinned at 0.003-0.013 against a 0.092 requirement, so the fleet never mined again after its first cycle. The traced call now continues 
 Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs, tests/coop-native-durable-slot-heal.test.mjs
 Evidence: live FLEET_POST_TICK: miners now hold ratio 0.72-0.96 with both strip miners active (was 0.003-0.013); living-native-durable-slot reports SPAWNED/../RESTORED with miners=2 haulers=1 per slot; OVERLAY_OK patched 54; durable suites 28/28 + new slot test 3/3
+### 2026-10-26T13:23Z · 69cb8c3 · L2 · fix(P0): prove exact native cargo membership after commit and rollback
+
+Why: The post-commit guard accepted a correct subset of planned cargo on a replacement hauler while unrelated native cargoIDs remained in the same physical hold. The rollback guard likewise accepted an otherwise restored batch with additional cargo still on the target.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 51/51 exact-source isolated V8 test callbacks PASS; before-fix original module accepted ADOPTED with cargoIDs 7001 and 7999 on the new hauler. Full native Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:24Z · 435737e · TEST · test(P0): reject post-commit phantom inventory and incomplete empty-hold rollback
+
+Why: Regression coverage for an unplanned cargoID introduced after preflight in global, local or ship-cache views, plus a phantom physical row remaining after partial compensation.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 51/51 exact-source isolated V8 test callbacks PASS; before-fix original module accepted ADOPTED with cargoIDs 7001 and 7999 on the new hauler. Full native Node/SQLite/Rust/two-client gameplay NOT_RUN.
