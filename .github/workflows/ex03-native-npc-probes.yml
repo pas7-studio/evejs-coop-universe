@@ -1,16 +1,151 @@
-# CI registration only: main deliberately carries no experimental EX-03 code.
-# When dispatched on the EX-03 feature branch, GitHub runs that branch's
-# full native probe/SQLite workflow (same path), not this sentinel job.
 name: EX-03 Native NPC Probe Source Gate
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'integration/coopNpcExpedition*.cjs'
+      - 'integration/coopNpcProbe*.cjs'
+      - 'integration/coopNativeNpcProbeFlight.cjs'
+      - 'integration/coopNativeNpcProbeSweep.cjs'
+      - 'integration/coopNativeNpcProbeLifecycle.cjs'
+      - 'integration/coopNativeNpcProbeSceneTransition.cjs'
+      - 'integration/coopNpcScoutLoadout.cjs'
+      - 'integration/coopNativeHackingAdmission.cjs'
+      - 'integration/coopVirtualWorldRuntime.cjs'
+      - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
+      - 'scripts/coop-npc-scout-loadout-patch.cjs'
+      - 'scripts/coop-native-hacking-admission-patch.cjs'
+      - 'scripts/patch-evejs-coop.cjs'
+      - 'scripts/overlay-spec.cjs'
+      - 'tests/coop-npc-*'
+      - 'tests/coop-native-npc-probe-*.test.mjs'
+      - 'scripts/verify-npc-probe-*.mjs'
+      - 'tests/coop-native-npc-probe-flight.test.mjs'
+      - 'tests/coop-native-hacking-admission.test.mjs'
+      - '.github/workflows/ex03-native-npc-probes.yml'
+  push:
+    branches: [feat/ch22-23-npc-expedition-competition-20261026]
+    paths:
+      - 'integration/coopNpcExpedition*.cjs'
+      - 'integration/coopNpcProbe*.cjs'
+      - 'integration/coopNativeNpcProbeFlight.cjs'
+      - 'integration/coopNativeNpcProbeSweep.cjs'
+      - 'integration/coopNativeNpcProbeLifecycle.cjs'
+      - 'integration/coopNativeNpcProbeSceneTransition.cjs'
+      - 'integration/coopNpcScoutLoadout.cjs'
+      - 'integration/coopNativeHackingAdmission.cjs'
+      - 'integration/coopVirtualWorldRuntime.cjs'
+      - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
+      - 'scripts/coop-npc-scout-loadout-patch.cjs'
+      - 'scripts/coop-native-hacking-admission-patch.cjs'
+      - 'scripts/patch-evejs-coop.cjs'
+      - 'scripts/overlay-spec.cjs'
+      - 'tests/coop-npc-*'
+      - 'tests/coop-native-npc-probe-*.test.mjs'
+      - 'scripts/verify-npc-probe-*.mjs'
+      - 'tests/coop-native-npc-probe-flight.test.mjs'
+      - 'tests/coop-native-hacking-admission.test.mjs'
+      - '.github/workflows/ex03-native-npc-probes.yml'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  registration-only:
+  native-npc-probe-source:
+    # The default-branch registration must not run experimental tests on main.
+    # For PR checks, Actions checks out the PR merge ref containing EX-03.
+    if: ${{ github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/main' }}
+    name: Original NPC probe source, data custody and restart fixtures
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
-      - name: Select the EX-03 feature branch when dispatching
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: All new source parses
         run: |
-          echo "Registration sentinel: no experimental code is present on main."
-          echo "For real source and SQLite tests, choose feat/ch22-23-npc-expedition-competition-20261026."
+          set -euo pipefail
+          for f in \
+            integration/coopNpcExpeditionCompetition.cjs \
+            integration/coopNpcExpeditionDirector.cjs \
+            integration/coopNpcProbeHardware.cjs \
+            integration/coopNpcProbeScanEvidence.cjs \
+            integration/coopNativeNpcProbeFlight.cjs \
+            integration/coopNativeNpcProbeSweep.cjs \
+            integration/coopNativeNpcProbeLifecycle.cjs \
+            integration/coopNativeNpcProbeSceneTransition.cjs \
+            integration/coopNpcScoutLoadout.cjs \
+            scripts/coop-npc-scout-loadout-patch.cjs \
+            integration/coopNativeHackingAdmission.cjs \
+            scripts/coop-npc-probe-loadout-split-patch.cjs \
+            scripts/coop-native-hacking-admission-patch.cjs \
+            scripts/patch-evejs-coop.cjs; do
+            node --check "$f"
+          done
+      - name: Retrieve the exact pinned upstream native NPC cargo authoring source
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/space/npc/nativeNpcService.js' \
+            --output "${RUNNER_TEMP}/pinned-nativeNpcService.js"
+          test -s "${RUNNER_TEMP}/pinned-nativeNpcService.js"
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/services/exploration/probes/probeScanRuntime.js' \
+            --output "${RUNNER_TEMP}/pinned-probeScanRuntime.js"
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/services/exploration/probes/probeSceneRuntime.js' \
+            --output "${RUNNER_TEMP}/pinned-probeSceneRuntime.js"
+          test -s "${RUNNER_TEMP}/pinned-probeScanRuntime.js"
+          test -s "${RUNNER_TEMP}/pinned-probeSceneRuntime.js"
+      - name: Run actual Node 22 tests with the source pin
+        env:
+          EVEJS_PINNED_NPC_SERVICE_SOURCE: ${{ runner.temp }}/pinned-nativeNpcService.js
+          EVEJS_PINNED_PROBE_SCAN_SOURCE: ${{ runner.temp }}/pinned-probeScanRuntime.js
+          EVEJS_PINNED_PROBE_SCENE_SOURCE: ${{ runner.temp }}/pinned-probeSceneRuntime.js
+          EVEJS_COOP_NPC_PROBE_SCAN: '0'
+          EVEJS_COOP_NPC_PROBE_LAUNCH: '0'
+          EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '0'
+          EVEJS_COOP_NATIVE_HACKING_ADMISSION: '0'
+        run: |
+          node --test --test-concurrency=1 \
+            tests/coop-npc-expedition-competition.test.mjs \
+            tests/coop-npc-expedition-director.test.mjs \
+            tests/coop-npc-expedition-native-bridge.test.mjs \
+            tests/coop-npc-probe-evidence.test.mjs \
+            tests/coop-npc-probe-wiring.test.mjs \
+            tests/coop-npc-probe-loadout-source.test.mjs \
+            tests/coop-npc-probe-pinned-native-source.test.mjs \
+            tests/coop-native-npc-probe-flight.test.mjs \
+            tests/coop-native-npc-probe-sweep.test.mjs \
+            tests/coop-native-npc-probe-lifecycle.test.mjs \
+            tests/coop-native-npc-probe-full-cycle.test.mjs \
+            tests/coop-native-npc-probe-scene-transition.test.mjs \
+            tests/coop-npc-scout-loadout.test.mjs \
+            tests/coop-native-hacking-admission.test.mjs
+      - name: Download exact pinned native source with SQLite GameStore
+        run: |
+          set -euo pipefail
+          PINNED_SHA=c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+          PINNED_ROOT="${RUNNER_TEMP}/evejs-native-pinned"
+          mkdir -p "$PINNED_ROOT"
+          git -C "$PINNED_ROOT" init -q
+          git -C "$PINNED_ROOT" remote add origin https://github.com/gameboys84/EveJS.git
+          git -C "$PINNED_ROOT" -c protocol.version=2 fetch -q --depth=1 --filter=blob:none origin "$PINNED_SHA"
+          git -C "$PINNED_ROOT" sparse-checkout init --cone
+          git -C "$PINNED_ROOT" sparse-checkout set Code/server
+          git -C "$PINNED_ROOT" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$PINNED_ROOT" rev-parse HEAD)" = "$PINNED_SHA"
+          cd "$PINNED_ROOT/Code/server"
+          npm ci --no-audit --no-fund
+      - name: Real native npcCargo SQLite crash/restart (SIGKILL)
+        env:
+          EVEJS_PINNED_SERVER: ${{ runner.temp }}/evejs-native-pinned/Code/server
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-npc-probe-sqlite-crash.mjs
+          node --check scripts/verify-npc-probe-feature-sqlite-crash.mjs
+          node scripts/verify-npc-probe-sqlite-crash.mjs
+          node scripts/verify-npc-probe-feature-sqlite-crash.mjs
+      - name: Two-client/bubble gameplay remains a separate required gate
+        run: |
+          echo "EX-03 pinned native SQLite process-kill acceptance runs above. Native live two-client bubble movement and expedition fitting must still be run before production enablement."
