@@ -161,3 +161,10 @@ test("fake cargo seal pointing at another original itemID cannot scan",()=>{
  assert.equal(f.scan().reason,"NPC_SCANNER_PHYSICAL_PROBE_UNVERIFIED");
  assert.equal(f.getScanCalls(),0);
 });
+
+test("probe missing native systemID cannot validate source-system scan proof",()=>{
+ const f=fixture();
+ delete f.probes.get(f.cargo[0].cargoID).systemID;
+ assert.equal(f.scan().reason,"NPC_SCANNER_PHYSICAL_PROBE_UNVERIFIED");
+ assert.equal(f.getScanCalls(),0);
+});
