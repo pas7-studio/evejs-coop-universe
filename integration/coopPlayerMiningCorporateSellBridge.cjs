@@ -12,10 +12,11 @@ const sourceOperation=({corporationID,operationID,cargoID,itemID,priceCents})=>
   .update([corporationID,operationID,cargoID,itemID,priceCents].join(":"))
   .digest("hex").slice(0,32);
 function createNativeCorporateSellBridge({marketClient,gameStore,access,readiness,
- quotePrice,token,clock=()=>Date.now(),enabled=()=>false,observe=()=>{}}={}){
+ quotePrice,token,clock=()=>Date.now(),enabled=()=>false,
+ publishEnabled=()=>false,observe=()=>{}}={}){
  if(typeof marketClient?.call!=="function"||
   [readiness?.inspect,quotePrice,access?.isMember,access?.canIndustry,
-   access?.canWallet,access?.canTake,clock,enabled,observe].some(f=>typeof f!=="function")||
+   access?.canWallet,access?.canTake,clock,enabled,publishEnabled,observe].some(f=>typeof f!=="function")||
   typeof token!=="string"||token.length<32||token.length>256)
   throw Error("CORP_SELL_NATIVE_RUST_AUTHORITIES_REQUIRED");
  const proofByOrder=new Map(),inFlight=new Set(),uncertain=new Set();
@@ -120,9 +121,74 @@ function createNativeCorporateSellBridge({marketClient,gameStore,access,readines
    inFlight.delete(cargoID);
   }
  }
- return Object.freeze({prepareAndBind,sourceOperation,
+
+ async function publishPrepared({session,corporationID,operationID,cargoID,
+   itemID,priceCents,orderID}={}){
+  if(enabled()!==true||publishEnabled()!==true)
+   return rejected("CORP_SELL_PUBLISH_DISABLED");
+  if(!pos(session?.characterID)||session.socket?.destroyed===true||
+    session.corporationID!==corporationID||
+    !pos(corporationID)||!pos(cargoID)||!pos(itemID)||
+    !pos(priceCents)||priceCents>100000000||
+    !/^coop-mining-shift:[a-f0-9]{32}$/.test(operationID||"")||
+    typeof orderID!=="string"||!/^[1-9][0-9]{0,17}$/.test(orderID)||
+    BigInt(orderID)+9200000000n>BigInt(Number.MAX_SAFE_INTEGER)||
+    uncertain.has(cargoID)||inFlight.has(cargoID))
+   return rejected("CORP_SELL_PUBLISH_SCOPE_OR_UNKNOWN");
+  if(access.isMember(session,corporationID)!==true||
+     access.canIndustry(session,corporationID)!==true||
+     access.canWallet(session,corporationID,1000)!==true)
+   return rejected("CORP_SELL_PUBLISH_CORPORATION_ROLE_REVOKED");
+  const op=sourceOperation({corporationID,operationID,cargoID,
+    itemID,priceCents});
+  const args={access_token:token,operation_id:op};
+  inFlight.add(cargoID);
+  let published=false;
+  try{
+   const order=await marketClient.call("GetCorpSell",args);
+   if(order?.verifiedNative!==true||
+     order.phase!=="PREPARED_UNPUBLISHED"||
+     order.isPublished!==false||
+     order.operationID!==op||order.shiftID!==operationID||
+     order.cargoID!==cargoID||order.itemID!==itemID||
+     order.orderID!==orderID||order.order?.order_id!==orderID||
+     order.order?.owner_id!==corporationID||
+     order.order?.is_corp!==true||order.order?.bid!==false||
+     order.order?.price_cents!==priceCents||
+     order.order?.state!=="prepared"||
+     order.order?.source!=="coop-corporation")
+     return rejected("CORP_SELL_PUBLISH_NATIVE_PREPARE_MISMATCH",op);
+   const physical=await marketClient.call("VerifyCorpSellEscrow",args);
+   if(physical?.status!=="ESCROW_PROVEN_NOT_PUBLISHED"||
+     physical.orderID!==orderID||physical.itemID!==itemID||
+     physical.cargoID!==cargoID||
+     physical.corporationID!==corporationID||
+     physical.verifiedGameStore!==true||
+     physical.nativeMarketMutation!==false)
+     return rejected("CORP_SELL_PUBLISH_ORIGINAL_ESCROW_UNVERIFIED",op);
+   // From this point the Rust publisher is the sole mutation authority.
+   // An unknown ACK fences this cargo from speculative reposting.
+   published=true;
+   const ack=await marketClient.call("PublishCorpSell",args);
+   if(ack?.status!=="PUBLISHED_ORIGINAL_CORP_SELL"||
+     ack.phase!=="OPEN"||ack.orderID!==orderID||
+     ack.verifiedNative!==true||ack.verifiedGameStore!==true||
+     ack.nativeMutation!==true)
+     throw Error("CORP_SELL_PUBLISH_RUST_ACK_UNVERIFIED");
+   try{observe("corp-mining-original-sell-published",{
+     status:ack.status,corporationID,operationID,cargoID,itemID,orderID})}catch{}
+   return {status:"CORPORATE_SELL_PUBLISHED",orderID,
+     originalItemID:itemID,cargoID,corporationID,
+     nativeMutation:true,marketOrderCreated:true,
+     realizedRevenueCents:null,netProfitCents:null};
+  }catch{
+   if(published)uncertain.add(cargoID);
+   return rejected("CORP_SELL_PUBLISH_RUST_OUTCOME_UNKNOWN",op);
+  }finally{inFlight.delete(cargoID)}
+ }
+ return Object.freeze({prepareAndBind,publishPrepared,sourceOperation,
   inspectUncertain:()=>[...uncertain],
-  supportsNativeCorporatePublish:false,
+  supportsNativeCorporatePublish:true,
   supportsNativeCorporateSettlement:false});
 }
 module.exports={createNativeCorporateSellBridge,sourceOperation};
