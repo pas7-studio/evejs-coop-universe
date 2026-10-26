@@ -5,6 +5,7 @@ import vm from "node:vm";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createNpcProbeScanEvidence}=require("../integration/coopNpcProbeScanEvidence.cjs");
+const {createExpeditionDirector}=require("../integration/coopNpcExpeditionDirector.cjs");
 
 const scanPath=process.env.EVEJS_PINNED_PROBE_SCAN_SOURCE;
 const scenePath=process.env.EVEJS_PINNED_PROBE_SCENE_SOURCE;
@@ -111,4 +112,101 @@ test("pinned original scanner and physical probe entity can generate one real ce
  assert.equal(result.proofs.length,1);
  assert.equal(result.proofs[0].nativeScanCertainty,1);
  assert.equal(result.proofs[0].siteID,250);
+});
+
+test("EX-03B11 pinned native certainty 1 flows from real original probes to scout-first warp and witnessed follower",
+ {skip:!requirePinned},()=>{
+ const pinned=pinnedModules();
+ const systemID=30000142,ownerID=901,corporationID=700;
+ const scoutID=980000000021,patrolID=980000000022,moduleID=980100000221;
+ const rows=Array.from({length:4},(_,i)=>{
+  const cargoID=980200000021+i;
+  const position={x:site.actualPosition.x+(i+1)*1000,
+   y:site.actualPosition.y,z:site.actualPosition.z};
+  return {cargoID,entityID:scoutID,ownerID,moduleID,typeID:3001,
+   groupID:479,categoryID:8,quantity:0,singleton:false,
+   deployedProbe:{status:"IN_SPACE",probeID:cargoID,entityID:scoutID,
+    ownerID,systemID,typeID:3001,launchedAtMs:995000,
+    rangeStep:4,scanRange:1e10,position}};
+ });
+ const entities=new Map([
+  [scoutID,{itemID:scoutID,kind:"ship",nativeNpc:true,
+   ownerID,corporationID,systemID,position:{x:0,y:0,z:0}}],
+  [patrolID,{itemID:patrolID,kind:"ship",nativeNpc:true,
+   ownerID,corporationID,systemID,position:{x:1000000,y:0,z:0}}]
+ ]);
+ for(const row of rows){
+  const p=row.deployedProbe;
+  const probe=pinned.scene.buildProbeSceneEntity({
+   probeID:p.probeID,typeID:row.typeID,
+   pos:[p.position.x,p.position.y,p.position.z],
+   destination:[p.position.x,p.position.y,p.position.z],
+   scanRange:p.scanRange,rangeStep:p.rangeStep,state:1
+  },{ownerID,systemID});
+  assert.equal(probe.itemID,row.cargoID);
+  probe.nativeNpcProbe=true;probe.nativeNpcCargoID=row.cargoID;
+  entities.set(row.cargoID,probe);
+ }
+ const native=new Map([
+  [scoutID,{entityID:scoutID,ownerID,corporationID,systemID}],
+  [patrolID,{entityID:patrolID,ownerID,corporationID,systemID}]
+ ]);
+ const controllers=new Map([...native.keys()].map(entityID=>
+  [entityID,{entityID,systemID}]));
+ const scene={systemID,getEntityByID:id=>entities.get(id),sessions:new Map()};
+ const assignments=[
+  {entityID:scoutID,pilotID:"coop-pilot-321",systemID},
+  {entityID:patrolID,pilotID:"coop-pilot-322",systemID}
+ ];
+ const roles={"coop-pilot-321":"patrol","coop-pilot-322":"patrol"};
+ const evidence=createNpcProbeScanEvidence({
+  getNativeEntity:id=>native.get(id),getController:id=>controllers.get(id),
+  listNativeModulesForEntity:id=>id===scoutID?[{
+   entityID:scoutID,moduleID,ownerID,typeID:1001,
+   groupID:481,categoryID:7,moduleState:{online:true}
+  }]:[],
+  listNativeCargoForEntity:id=>id===scoutID?rows:[],
+  getCompatibleProbeChargeTypeIDs:()=>[3001],
+  resolveProbeRangeContract:pinned.range.resolveProbeRangeContract,
+  scanNativeResults:(sid,probes)=>pinned.scan.buildSignatureScanResults(sid,probes),
+  listNativeSites:()=>[site],clock:()=>1000000
+ });
+ const warps=[],orders=[];
+ const director=createExpeditionDirector({
+  listNativeSites:()=>[site],getNativeEntity:id=>native.get(id),
+  getController:id=>controllers.get(id),
+  isNativeProbeScout:id=>id===scoutID,
+  nativeProbeScan:args=>evidence.scan(args),
+  orderBridge:{blocked:()=>false,issue:order=>{
+   orders.push({entityID:order.entityID,action:order.action});
+   return order.execute();
+  }},
+  warpToPoint:(id,point)=>{
+   warps.push({id,point});
+   return {success:true};
+  },clock:()=>1000000
+ });
+ const first=director.tick({scene,assignments,roles});
+ assert.equal(first.remoteScans,1,"pinned engine certainty=1 must admit physical NPC proof");
+ assert.equal(first.scoutWarpOrders,1);
+ assert.equal(first.patrolWarpOrders,0);
+ assert.equal(first.scoutOnGridVerified,0);
+ assert.deepEqual(orders,[{entityID:scoutID,action:"expedition-scout-rendezvous"}]);
+ assert.deepEqual(warps,[{id:scoutID,point:site.actualPosition}]);
+ const inTransit=director.tick({scene,assignments,roles});
+ assert.equal(inTransit.orders,0,"no premature patrol warp before scout is on grid");
+ entities.get(scoutID).position={...site.actualPosition};
+ assert.equal(director.tick({scene,assignments,roles}).orders,0,
+  "an unmaterialized catalog-only site cannot verify scout arrival");
+ entities.set(site.siteID,{itemID:site.siteID,kind:"signature",
+  position:{...site.actualPosition}});
+ const arrived=director.tick({scene,assignments,roles});
+ assert.equal(arrived.scoutOnGridVerified,1);
+ assert.equal(arrived.scoutWarpOrders,0);
+ assert.equal(arrived.patrolWarpOrders,1);
+ assert.deepEqual(orders[1],
+  {entityID:patrolID,action:"expedition-rendezvous"});
+ assert.deepEqual(warps[1],{id:patrolID,point:site.actualPosition});
+ assert.equal(director.tick({scene,assignments,roles}).orders,0,
+  "same original site cannot cause a repeated native patrol warp");
 });
