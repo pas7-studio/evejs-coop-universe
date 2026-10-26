@@ -2,6 +2,11 @@
 // Original EVEJS GameStore BUY escrow refund. No Rust order changes here.
 // A terminal Rust order readback is required for an irreversible wallet credit.
 // Unknown outcomes remain blocked; replay never issues a second credit.
+// Reuse the same original paid BUY reserve debit authority used for both
+// Rust order binding and seller settlement. Refund cannot accept a weaker
+// receipt than the payout that previously consumed its escrow.
+const {validDebitReceipt}=require("./coopPlayerMarketBuyReserve"+
+ (__filename.endsWith(".cjs")?".cjs":""));
 const TABLES=Object.freeze(["characters","marketEscrow","playerMarketFills","identityState"]);
 const pos=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>0;
 const nonneg=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>=0;
@@ -52,7 +57,7 @@ function assertBound(tx,p){
     typeof escrow.coopReserveOperationID!=="string")
   throw Error("P2P_BUY_REFUND_NATIVE_ESCROW_NOT_FUNDED");
  const original=tx.get("playerMarketFills",escrow.coopReserveReceiptKey);
- if(!original||original.kind!=="P2P_BUY_RESERVE"||
+ if(!validDebitReceipt(original)||
     original.phase!=="BOUND"||
     original.key!==escrow.coopReserveReceiptKey||
     original.orderID!==p.orderID||
@@ -107,17 +112,37 @@ function createBuyRefund({gameStore,clock=()=>Date.now()}={}){
        past.refundCents!==p.remainingCents||
        past.phase!=="GAMESTORE_COMMITTED"||
        !nonneg(past.walletBeforeCents)||
-       past.walletAfterCents!==past.walletBeforeCents+past.refundCents)
+       !nonneg(past.walletAfterCents)||
+       !nonneg(past.walletBeforeCents+past.refundCents)||
+       past.walletAfterCents!==past.walletBeforeCents+past.refundCents||
+       !pos(past.originalReservedCents)||!nonneg(past.spentCents)||
+       past.originalReservedCents!==past.spentCents+past.refundCents||
+       !pos(past.journalID)||past.journalID<5000000000000000||
+       !pos(past.committedAt))
      throw Error("P2P_BUY_REFUND_REPLAY_IDENTITY_CONFLICT");
     const reserved=tx.get("playerMarketFills",past.reserveReceiptKey);
+    // A refunded reserve must preserve its ORIGINAL paid debit proof;
+    // compare the immutable witness without requiring a current wallet
+    // balance, which may have changed after a legitimate refund.
     if(!reserved||reserved.phase!=="REFUNDED"||
+       !validDebitReceipt({...reserved,phase:"BOUND"})||
        reserved.orderID!==p.orderID||
        reserved.key!==past.reserveReceiptKey||
        reserved.operationID!==past.reserveOperationID||
+       reserved.buyerID!==p.buyerID||
+       reserved.stationID!==p.stationID||
+       reserved.typeID!==p.typeID||
+       reserved.priceCents!==p.priceCents||
+       reserved.quantity-reserved.filledQuantity!==p.volumeRemaining||
+       reserved.spentCents!==reserved.priceCents*reserved.filledQuantity||
+       reserved.closedReason!==reason||
+       reserved.closedAt!==past.committedAt||
        reserved.refundedCents!==past.refundCents||
        reserved.remainingReserveCents!==0||
        reserved.spentCents!==past.spentCents||
-       reserved.reservedCents!==reserved.spentCents+reserved.refundedCents)
+       reserved.reservedCents!==past.originalReservedCents||
+       reserved.reservedCents!==reserved.spentCents+reserved.refundedCents||
+       past.journalID<=reserved.journalIDs[2])
      throw Error("P2P_BUY_REFUND_COMMITTED_RESERVE_EVIDENCE_MISSING");
     if(tx.get("marketEscrow",p.orderID)!==null)
      throw Error("P2P_BUY_REFUND_REPLAY_ESCROW_STILL_EXISTS");
