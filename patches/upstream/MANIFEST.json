@@ -13,12 +13,12 @@
     },
     {
       "file": "0002-native-npc-capacitor-recharge.patch",
-      "sha256": "00a2ca6b90ab7e1ac9bae4afc5a8398cca597fe3bb45280c4cd6a391f5554b19",
+      "sha256": "e749acbeb655ec98e58dada68e7ea16173ce77e22d9e00f49f484ce7cfab94ba",
       "files": [
         "server/src/space/npc/nativeNpcService.js"
       ],
       "status": "not-sent",
-      "note": "native NPC capacitor recharge rate, candidate for an atomic upstream PR"
+      "note": "native NPC capacitor recharge rate + durable identity on state save, candidate for an atomic upstream PR"
     },
     {
       "file": "0003-native-npc-sessionless-capacitor.patch",

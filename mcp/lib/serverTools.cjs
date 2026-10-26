@@ -18,6 +18,21 @@ function createServerTools({
   clock = () => Date.now(),
 } = {}) {
   const docker = (args, options = {}) => exec(["docker", ...args], { timeoutMs: 60000, ...options });
+  // The overlay installer's own module list is the single source of truth for
+  // "what must be in the container", so the tools cannot drift from it.
+  const nodePath = require("node:path");
+  const repoRoot = nodePath.resolve(__dirname, "..", "..");
+  const integrationDir = nodePath.join(repoRoot, "integration");
+  const expected = (() => {
+    try {
+      const source = require("node:fs").readFileSync(nodePath.join(repoRoot, "scripts", "patch-evejs-coop.cjs"), "utf8");
+      const block = source.match(/const names=\[([\s\S]*?)\];/);
+      if (!block) return [];
+      return [...new Set([...block[1].matchAll(/"([A-Za-z0-9_]+)"/g)].map((row) => row[1]))];
+    } catch (_error) {
+      return [];
+    }
+  })();
   const inContainer = (script, { timeoutMs = 30000 } = {}) =>
     docker(["exec", container, "sh", "-c", script], { timeoutMs });
 
@@ -265,6 +280,281 @@ function createServerTools({
           result.stdout ? `--- stdout ---\n${cap(result.stdout, 8000)}` : "",
           result.stderr ? `--- stderr ---\n${cap(result.stderr, 4000)}` : "",
         ].filter(Boolean).join("\n");
+      },
+    },
+    {
+      name: "agent_state",
+      description: "One read-only probe of a player-like NPC: contract, package location/flag, courier station, hull, persisted leg and delivery history.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          contractID: { type: "integer", description: "Contract to inspect (default: first in-progress courier contract)." },
+        },
+      },
+      async handler(args) {
+        const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-agent-state.cjs"), "utf8");
+        const contractID = Number(args && args.contractID) || 0;
+        const execArgs = ["exec", "-i"];
+        if (contractID > 0) execArgs.push("-e", "Q_CONTRACT=" + contractID);
+        execArgs.push(container, "node", "-");
+        const result = docker(execArgs, { input: script, timeoutMs: 90000 });
+        if (!result.ok) return "agent_state failed:\n" + cap(result.stderr || result.stdout, 3000);
+        const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+        let probe = {};
+        try { probe = JSON.parse(line); } catch (error) { return "agent_state returned non-JSON:\n" + cap(line, 2000); }
+        const rows = [];
+        if (!probe.contract) {
+          rows.push("contract: none", ...(probe.notes || []));
+          return rows.join("\n");
+        }
+        const c = probe.contract;
+        rows.push(`contract ${c.contractID}: status=${c.status} (1=IN_PROGRESS, 4=COMPLETED) ${c.volumeM3} m3, reward ${c.reward}, collateral ${c.collateral}`);
+        rows.push(`  route: ${c.startStationID} -> ${c.endStationID}, issuer ${c.issuerID}, acceptor ${c.acceptorID}`);
+        rows.push(probe.package
+          ? `  package ${probe.package.itemID}: owner=${probe.package.ownerID} location=${probe.package.locationID} flag=${probe.package.flagID} (4=station hangar, 5=cargo hold)`
+          : "  package: not found");
+        if (probe.courier) rows.push(`  courier ${probe.courier.characterName || probe.courier.characterID}: stationID=${probe.courier.stationID} system=${probe.courier.solarSystemID}`);
+        if (probe.ship) rows.push(`  hull ${probe.ship.itemID}: location=${probe.ship.locationID} flag=${probe.ship.flagID} capacity=${probe.ship.capacity} m3`);
+        rows.push(probe.leg ? `  leg: step=${probe.leg.step} system=${probe.leg.systemID} entity=${probe.leg.entityID}` : "  leg: none persisted");
+        if (probe.history) {
+          const last = probe.history.lastIncident;
+          rows.push(`  history: incidents=${probe.history.incidents}${last ? " (last: " + last.kind + ")" : ""}`);
+        }
+        return rows.join("\n");
+      },
+    },
+    {
+      name: "overlay_status",
+      description: "Which co-op overlay modules are actually present in the running container, plus the coop env flags. Read-only.",
+      inputSchema: { type: "object", properties: {} },
+      async handler() {
+        const present = must(inContainer(`ls -1 /app/server/src/space/coop*.js 2>/dev/null | wc -l`), "count overlay modules");
+        const missing = must(inContainer(`cd /app/server/src/space && for m in ${expected.join(" ")}; do [ -f \$m.js ] || echo \$m; done`), "list missing modules");
+        const env = inContainer("env | grep -E '^EVEJS_COOP' | sort");
+        const uptime = must(docker(["ps", "--filter", `name=${container}`, "--format", "{{.Status}}"]), "docker ps").trim();
+        const missingList = String(missing || "").split(/\r?\n/).filter(Boolean);
+        return [
+          `container ${container}: ${uptime || "not running"}`,
+          `overlay modules in container: ${String(present || "").trim()} (expected ${expected.length})`,
+          missingList.length ? `missing: ${missingList.join(", ")}` : "missing: none",
+          "coop env:",
+          ...String(env.stdout || "").split(/\r?\n/).filter(Boolean).map((line) => "  " + line),
+        ].join("\n");
+      },
+    },
+    {
+      name: "deploy_overlay",
+      description: "Copy this repository's co-op overlay modules into the running container and optionally restart it (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          modules: { type: "array", items: { type: "string" }, description: "Module names without extension (default: every module registered in scripts/patch-evejs-coop.cjs)." },
+          restart: { type: "boolean", description: "Restart the container afterwards (default true)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to deploy overlay modules";
+        const wanted = Array.isArray(args.modules) && args.modules.length ? args.modules.map(String) : expected;
+        const copied = [];
+        const skipped = [];
+        for (const name of wanted) {
+          if (!SAFE_NAME.test(name)) { skipped.push(name + " (unsafe name)"); continue; }
+          const source = require("node:path").join(integrationDir, name + ".cjs");
+          if (!require("node:fs").existsSync(source)) { skipped.push(name + " (no source)"); continue; }
+          const result = docker(["cp", source, `${container}:/app/server/src/space/${name}.js`], { timeoutMs: 60000 });
+          if (result.ok) copied.push(name); else skipped.push(name + " (" + cap(result.stderr, 120) + ")");
+        }
+        let restartLine = "restart: skipped";
+        if (args.restart !== false) {
+          const result = docker(["restart", container], { timeoutMs: 180000 });
+          restartLine = `restart: exit=${result.code}`;
+        }
+        return [
+          `deployed ${copied.length}/${wanted.length} modules into ${container}`,
+          skipped.length ? `skipped: ${skipped.join(", ")}` : "skipped: none",
+          restartLine,
+        ].join("\n");
+      },
+    },
+    {
+      name: "admin_command",
+      description: "Run one native chat/GM command as a live character (requires confirm: true). Executed inside the server process by coopAdminBridge, so the real session and space runtime are used.",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Character that must be logged in." },
+          command: { type: "string", description: "Slash command, e.g. /where, /miner, /tr me pos=x,y,z.", maxLength: 200 },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 15000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "command", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to run a command as a live character";
+        const characterID = Number(args.characterID) || 0;
+        const command = String(args.command || "").trim();
+        if (!(characterID > 0) || !command) return "characterID and command are required";
+        const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-admin-command.cjs"), "utf8");
+        const result = docker(
+          ["exec", "-i", "-e", "Q_CHAR=" + characterID, "-e", "Q_ACTION=chat_command", "-e", "Q_CMD_B64=" + Buffer.from(command, "utf8").toString("base64"), "-e", "Q_WAIT_MS=" + (Number(args.waitMs) || 20000), container, "node", "-"],
+          { input: script, timeoutMs: 90000 },
+        );
+        const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+        let answer = {};
+        try { answer = JSON.parse(line); } catch (error) { return "admin_command returned non-JSON: " + cap(result.stderr || line, 2000); }
+        if (!answer.ok) return `refused: ${answer.error || "unknown error"}`;
+        return [`command: ${answer.command}`, `handled: ${answer.handled}`, answer.message ? `message: ${answer.message}` : "message: (none)"].join("\n");
+      },
+    },
+    {
+      name: "admin_remove_item",
+      description: "Delete one item a character really owns, inside the server process (requires confirm: true). Refuses the active hull.",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Owner character; must be logged in." },
+          itemID: { type: "integer", description: "Item to delete." },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 20000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "itemID", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to delete an item";
+        const characterID = Number(args.characterID) || 0;
+        const itemID = Number(args.itemID) || 0;
+        if (!(characterID > 0) || !(itemID > 0)) return "characterID and itemID are required";
+        const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-admin-command.cjs"), "utf8");
+        const result = docker(
+          ["exec", "-i", "-e", "Q_CHAR=" + characterID, "-e", "Q_ACTION=remove_item", "-e", "Q_ITEM_ID=" + itemID, "-e", "Q_WAIT_MS=" + (Number(args.waitMs) || 20000), container, "node", "-"],
+          { input: script, timeoutMs: 90000 },
+        );
+        const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+        let answer = {};
+        try { answer = JSON.parse(line); } catch (error) { return "admin_remove_item returned non-JSON: " + cap(result.stderr || line, 2000); }
+        if (!answer.ok) return `refused: ${answer.error || "unknown error"}`;
+        return `removed item ${answer.item && answer.item.itemID} (${answer.item && answer.item.name || "unknown"}, type ${answer.item && answer.item.typeID})`;
+      },
+    },
+    {
+      name: "admin_give_item",
+      description: "Grant an item or ship hull to a character's station hangar, inside the server process. Works while the character is offline (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Receiving character." },
+          typeID: { type: "integer", description: "Item type to grant (32880 = Venture)." },
+          quantity: { type: "integer", description: "How many (default 1)." },
+          stationID: { type: "integer", description: "Optional station override; defaults to where the character is docked." },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 20000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "typeID", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to grant an item";
+        const characterID = Number(args.characterID) || 0;
+        const typeID = Number(args.typeID) || 0;
+        if (!(characterID > 0) || !(typeID > 0)) return "characterID and typeID are required";
+        const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-admin-command.cjs"), "utf8");
+        const execArgs = ["exec", "-i", "-e", "Q_CHAR=" + characterID, "-e", "Q_ACTION=give_item", "-e", "Q_TYPE_ID=" + typeID];
+        if (Number(args.quantity) > 0) execArgs.push("-e", "Q_QUANTITY=" + Number(args.quantity));
+        if (Number(args.stationID) > 0) execArgs.push("-e", "Q_STATION_ID=" + Number(args.stationID));
+        execArgs.push("-e", "Q_WAIT_MS=" + (Number(args.waitMs) || 20000), container, "node", "-");
+        const result = docker(execArgs, { input: script, timeoutMs: 90000 });
+        const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+        let answer = {};
+        try { answer = JSON.parse(line); } catch (error) { return "admin_give_item returned non-JSON: " + cap(result.stderr || line, 2000); }
+        if (!answer.ok) return `refused: ${answer.error || "unknown error"}`;
+        return [
+          `granted ${answer.name || "item"} (type ${answer.typeID}) x${answer.quantity} to station ${answer.stationID}`,
+          answer.itemID ? `itemID: ${answer.itemID}` : "itemID: (not reported)",
+          `online: ${answer.online}${answer.notified ? ", client notified" : ""}`,
+        ].join("\n");
+      },
+    },
+    {
+      name: "admin_board_ship",
+      description: "Make an owned, docked ship the active hull. Native and session-free, so it works while the character is offline (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Owning character." },
+          itemID: { type: "integer", description: "Ship item to board." },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 20000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "itemID", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to switch the active hull";
+        const characterID = Number(args.characterID) || 0;
+        const itemID = Number(args.itemID) || 0;
+        if (!(characterID > 0) || !(itemID > 0)) return "characterID and itemID are required";
+        const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-admin-command.cjs"), "utf8");
+        const result = docker(
+          ["exec", "-i", "-e", "Q_CHAR=" + characterID, "-e", "Q_ACTION=board_ship", "-e", "Q_ITEM_ID=" + itemID, "-e", "Q_WAIT_MS=" + (Number(args.waitMs) || 20000), container, "node", "-"],
+          { input: script, timeoutMs: 90000 },
+        );
+        const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+        let answer = {};
+        try { answer = JSON.parse(line); } catch (error) { return "admin_board_ship returned non-JSON: " + cap(result.stderr || line, 2000); }
+        if (!answer.ok) return `refused: ${answer.error || "unknown error"}`;
+        return `boarded ${answer.name || "ship"} (item ${answer.itemID}) for character ${answer.characterID}`;
+      },
+    },
+    {
+      name: "admin_fit_ship",
+      description: "Fit modules onto an owned, docked hull: grants each module to the hangar and fits it natively. Works while the character is offline (requires confirm: true).",
+      mutating: true,
+      inputSchema: {
+        type: "object",
+        properties: {
+          characterID: { type: "integer", description: "Owning character." },
+          itemID: { type: "integer", description: "Hull item to fit." },
+          modules: {
+            type: "array",
+            description: "Modules to grant and fit, e.g. [{name:'Miner II', count:2}].",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Module name (or use typeID)." },
+                typeID: { type: "integer", description: "Module type ID." },
+                count: { type: "integer", description: "How many (default 1)." },
+              },
+            },
+          },
+          grant: { type: "boolean", description: "Grant missing modules first (default true). Set false to fit only items already in the hangar." },
+          waitMs: { type: "integer", description: "How long to wait for the in-server answer (default 30000)." },
+          confirm: { type: "boolean", description: "Must be true." },
+        },
+        required: ["characterID", "itemID", "modules", "confirm"],
+      },
+      async handler(args) {
+        if (args.confirm !== true) return "refused: pass confirm: true to fit a ship";
+        const characterID = Number(args.characterID) || 0;
+        const itemID = Number(args.itemID) || 0;
+        const modules = Array.isArray(args.modules) ? args.modules : [];
+        if (!(characterID > 0) || !(itemID > 0) || !modules.length) return "characterID, itemID and modules[] are required";
+        const script = require("node:fs").readFileSync(require("node:path").join(__dirname, "probe-admin-command.cjs"), "utf8");
+        const payload = Buffer.from(JSON.stringify(modules), "utf8").toString("base64");
+        const result = docker(
+          ["exec", "-i", "-e", "Q_CHAR=" + characterID, "-e", "Q_ACTION=fit_ship", "-e", "Q_ITEM_ID=" + itemID, "-e", "Q_MODULES_B64=" + payload, "-e", "Q_GRANT=" + (args.grant === false ? "0" : "1"), "-e", "Q_WAIT_MS=" + (Number(args.waitMs) || 30000), container, "node", "-"],
+          { input: script, timeoutMs: 120000 },
+        );
+        const line = String(result.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop() || "{}";
+        let answer = {};
+        try { answer = JSON.parse(line); } catch (error) { return "admin_fit_ship returned non-JSON: " + cap(result.stderr || line, 2000); }
+        if (!answer.ok) return `refused: ${answer.error || "nothing fitted"}`;
+        const rows = (answer.results || []).map((row) => `  ${row.ok ? "OK  " : "FAIL"} ${row.name}${row.fitted ? " x" + row.fitted : ""}${row.error ? " - " + row.error : ""}`);
+        return [`fitted ${answer.fitted}/${answer.attempted} modules on hull ${answer.itemID}`, ...rows].join("\n");
       },
     },
     {

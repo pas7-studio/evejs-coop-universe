@@ -242,6 +242,17 @@ const specs=[
    line:'      require("../../space/coopMiningTrace").note("MINER_NOT_IN_SCENE_OR_WARPING",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntityID,0),found:Boolean(minerEntity),mode:String((minerEntity&&minerEntity.mode)||""),pendingWarp:Boolean(minerEntity&&minerEntity.pendingWarp)});'},
   {anchor:"  fleetRecord.nextThinkAtMs = now + thinkIntervalMs;",after:true,
     line:'  require("../../space/coopMiningTrace").note("TICK_"+String(fleetRecord.state||"unknown"),{fleetID:toInt(fleetRecord.fleetID,0),systemID:toInt(scene.systemID,0),activeAsteroidID:toInt(fleetRecord.activeAsteroidID,0)});'},
+  // A durable ship must never leave the fleet just because its runtime
+  // controller was rebuilt: the persisted row still owns the hull. Heal it from
+  // the store first, then let the stock filter decide.
+  {anchor:"function pruneMiningFleet(fleetRecord) {\n  if (!fleetRecord) {\n    return null;\n  }",
+   after:true,
+   line:"if (process.env.EVEJS_COOP_NATIVE_MINING_SLOT_SELFHEAL === \"1\") { try { const coopActors=[].concat(Array.isArray(fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[], Array.isArray(fleetRecord.haulerEntityIDs)?fleetRecord.haulerEntityIDs:[]); for (const coopID of coopActors) { if (npcService.getControllerByEntityID(coopID)) continue; const coopStored=require(\"../../space/npc/nativeNpcStore\").getNativeController(coopID); if (!coopStored) continue; npcService.wakeNpcController(coopID); if (npcService.getControllerByEntityID(coopID)) require(\"../../space/coopRuntimeProbe\").observe(\"living-mining-fleet-selfheal\",null, {spaceState:{systemID:fleetRecord.systemID}}, {fleetID:toInt(fleetRecord.fleetID,0),entityID:toInt(coopID,0), operatorKind:String(coopStored.operatorKind||\"\")}); } } catch (_coopHealError) { console.warn(\"[CoopMiningSelfHeal]\",_coopHealError.message); } }"},
+  // The fleet silently drops a miner when its runtime controller disappears.
+  // Report WHICH authority was lost (persisted row vs runtime registry) BEFORE
+  // the record is pruned, so the cause is measurable instead of guessed.
+  {anchor:"  fleetRecord.minerEntityIDs = (Array.isArray(fleetRecord.minerEntityIDs) ? fleetRecord.minerEntityIDs : [])",
+   line:'  if (process.env.EVEJS_COOP_MINING_TRACE_PRUNE === "1") { try { const coopStore=require("../../space/npc/nativeNpcStore"); const coopIDs=[].concat(fleetRecord.minerEntityIDs||[],fleetRecord.haulerEntityIDs||[]); for (const coopID of coopIDs) { if (npcService.getControllerByEntityID(coopID)) continue; const coopEntity=coopStore.getNativeEntity?coopStore.getNativeEntity(coopID):null; const coopController=coopStore.getNativeController?coopStore.getNativeController(coopID):null; require("../../space/coopRuntimeProbe").observe("living-mining-fleet-pruned",null,{spaceState:{systemID:fleetRecord.systemID}}, {fleetID:toInt(fleetRecord.fleetID,0),entityID:toInt(coopID,0),storedEntity:Boolean(coopEntity),storedController:Boolean(coopController), entityTransient:Boolean(coopEntity&&coopEntity.transient===true),controllerTransient:Boolean(coopController&&coopController.transient===true), operatorKind:String((coopController&&coopController.operatorKind)||(coopEntity&&coopEntity.operatorKind)||"")}); } } catch (_coopError) { console.warn("[CoopMiningPrune]",_coopError.message); } }'},
   {anchor:'  if (startupSceneSeedSet.has(startupKey)) {',line:'  if (process.env.EVEJS_COOP_CONVOY_RENEWAL === "1") { const renewal = require("../../space/coopNativeConvoyRenewal").inspect({scene,systemID:scene.systemID,slotCount:resolveStartupFleetCount(),seeded:startupSceneSeedSet.has(startupKey),fleets:getMiningFleetsForSystem(scene.systemID)}); if (!renewal.allowed) return; if (renewal.renewal) startupSceneSeedSet.delete(startupKey); }'},
   {anchor:'  const responsePlan = resolveResponsePlan(scene, fleetRecord, aggressorEntity, {',
    line:'  if (process.env.EVEJS_COOP_PLAYER_CONSEQUENCES === "1") { try { require("../../space/coopNativeConsequences").noteMiningAggression(scene, fleetRecord, aggressorEntity, aggressionEventAtMs); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); } }'}
@@ -261,7 +272,7 @@ const specs=[
   {anchor:"    logNpcCombatDebug(\"npc.weapons.module-activate\", () => ({",line:"    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }"}
  ]}
 ];
-// EX-04A opt-in native hacking admission reversible source patch targets.
+// EX-04A server-authorized hacking admission, opt-in default OFF.
 specs.push({file:"server/src/services/dogma/dogmaService.js",patches:[]},
  {file:"server/src/services/exploration/hackingMgrService.js",patches:[]});
 const oldLines=[
