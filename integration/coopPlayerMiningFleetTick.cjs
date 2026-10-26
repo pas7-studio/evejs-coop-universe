@@ -126,7 +126,11 @@ function native(){
     // Trusted player action only: inspect an ALREADY mounted native scene.
     // Never create a scene or spawn NPCs to satisfy a client command.
     const runtime=require("./runtime");
-    const existing=runtime.getScene?.(systemID);
+    // Exact pinned SpaceRuntime owns a public Map, NOT getScene().
+    // Do not call ensureScene(): that would materialize a world in response
+    // to a player order, bypassing physical fleet and awake-world authority.
+    const existing=runtime.scenes instanceof Map?
+     runtime.scenes.get(systemID):null;
     return existing?.systemID===systemID?existing:null;},
    enabled:()=>load("coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY"),
    observe:(event,payload)=>{
