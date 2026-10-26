@@ -205,7 +205,10 @@ test("falls back to the gameStore cargo table when the store cannot enumerate", 
     store,
     clock: () => NOW,
     database: { flushTableSync: () => ({ success: true }) },
-    cargoTable: () => ({ [row.cargoID]: row }),
+    cargoTable: () => {
+      const current=store.listNativeCargoForEntity(hauler.itemID)[0]||row;
+      return { [row.cargoID]: current };
+    },
   });
   assert.equal(result.status, "ADOPTED");
   assert.equal(store.listNativeCargoForEntity(hauler.itemID).length, 1);
@@ -566,14 +569,15 @@ test("pinned GameStore result envelope exposes original durable npcCargo rows",(
  let reads=0,flushes=0;
  const db={
   read:(table,path)=>{reads++;assert.equal(table,"npcCargo");assert.equal(path,"/cargo");
-   return {success:true,data:{[row.cargoID]:{...row}}};},
+   const current=store.listNativeCargoForEntity(hauler.itemID)[0]||row;
+   return {success:true,data:{[row.cargoID]:{...current}}};},
   flushTableSync:()=>{flushes++;return {success:true};}
  };
  const target=fleet();
  const result=adopt(sceneWith([hauler,miner]),target,{store,database:db,clock:()=>NOW});
  assert.equal(result.status,"ADOPTED");
  assert.equal(result.adopted,1);
- assert.equal(reads,1);
+ assert.equal(reads,3,"planning, empty-hauler preflight and post-commit consult original cargo");
  assert.equal(flushes,1);
  assert.equal(store.listNativeCargoForEntity(hauler.itemID).length,1);
  assert.equal(target.state,"loaded");
@@ -616,7 +620,10 @@ function clearCustody(over={}) {
   warehouseRoot:"/tmp/evejs-warehouse-proof",
   custodyIo:{readdirSync:()=>[]},
   custodyItems:{findWarehouseItem:()=>null},
-  custodyDepot:{snapshot:()=>({version:1,receipts:{},pending:{}})},
+  custodyDepot:{
+   snapshot:()=>({version:1,receipts:{},pending:{},totals:{}}),
+   audit:()=>({status:"OK",committed:0,unresolved:0,invalid:0})
+  },
   ...over
  };
 }
@@ -776,4 +783,513 @@ test("second restart requires explicitly configured authoritative warehouse root
   if(previous===undefined)delete process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
   else process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT=previous;
  }
+});
+
+test("damaged persisted adoption history never falls back to first-time custody",()=>{
+ for(const enabled of [false,true]){
+  for(const [label,changes] of [
+   ["zero timestamp",{coopHaulAdoptedAt:0}],
+   ["negative timestamp",{coopHaulAdoptedAt:-100}],
+   ["invalid timestamp",{coopHaulAdoptedAt:"not-a-date"}],
+   ["null timestamp",{coopHaulAdoptedAt:null}],
+   ["missing timestamp",{coopHaulAdoptedAt:undefined}],
+   ["future timestamp",{coopHaulAdoptedAt:NOW+10_000}],
+   ["no source",{coopHaulAdoptedFrom:0}],
+   ["bad source",{coopHaulAdoptedFrom:"unknown"}],
+   ["same ship as predecessor",{coopHaulAdoptedFrom:900000000111}],
+   ["no predecessor",{coopHaulAdoptedFrom:undefined}],
+  ]){
+   resetForTests();
+   if(enabled)process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+   else delete process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION;
+   const row=secondCrashCargo(changes),store=fakeStore([row]);
+   const original=structuredClone(store.listNativeCargo());
+   let reads=0,flushes=0;
+   const target=fleet();
+   const result=adopt(sceneWith([hauler,miner]),target,{
+    store,clock:()=>NOW,
+    database:{flushTableSync:()=>{flushes++;return {success:true}}},
+    ...clearCustody({custodyIo:{readdirSync:()=>{reads++;return []}}})
+   });
+   assert.equal(result.status,"RE_ADOPTION_HISTORY_UNVERIFIED",label+" enabled="+enabled);
+   assert.equal(store.writes.length,0,label);
+   assert.equal(reads,0,"corrupt source must be refused before receipt lookup");
+   assert.equal(flushes,0,label);
+   assert.equal(target.state,"mining");
+   assert.deepEqual(store.listNativeCargo(),original);
+  }
+ }
+});
+
+test("malformed history in one row blocks adoption of an entire fresh/old batch",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const store=fakeStore([
+  orphan({cargoID:7002,entityID:900000000112}),
+  secondCrashCargo({cargoID:7001,coopHaulAdoptedAt:"invalid"})
+ ]);
+ const original=structuredClone(store.listNativeCargo()),target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})},
+  ...clearCustody()
+ });
+ assert.equal(result.status,"RE_ADOPTION_HISTORY_UNVERIFIED");
+ assert.equal(store.writes.length,0);
+ assert.deepEqual(store.listNativeCargo(),original);
+ assert.equal(target.state,"mining");
+});
+
+test("missing or non-finite clock cannot certify physical cargo custody",()=>{
+ for(const currentTime of [NaN,Infinity,-Infinity,0,-100,"invalid"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const target=fleet();
+  const result=adopt(sceneWith([hauler]),target,{
+   store,clock:()=>currentTime,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"INVALID_CLOCK",String(currentTime));
+  assert.equal(store.writes.length,0);
+  assert.equal(target.state,"mining");
+ }
+ const store=fakeStore([orphan()]);
+ assert.equal(plan({store,scene:sceneWith([hauler]),systemID:30000145,
+  fleetID:1,now:NaN}).status,"INVALID_AUTHORITIES");
+});
+
+test("fresh orphan cargo with NO historical markers is still adoptable",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const store=fakeStore([orphan()]),target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(store.listNativeCargo()[0].cargoID,7001);
+ assert.equal(target.state,"loaded");
+});
+
+test("post-commit global duplicate original cargoID must never start a loaded NPC trip",()=>{
+ for(const mode of ["old-and-new","stale-original","missing","throw","null"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const listing=store.listNativeCargo;
+  let listingCount=0,flushes=0;
+  store.listNativeCargo=()=>{
+   listingCount++;
+   if(listingCount<=2)return listing();
+   if(mode==="throw")throw Error("GLOBAL_INVENTORY_UNAVAILABLE");
+   if(mode==="null")return null;
+   if(mode==="missing")return [];
+   if(mode==="stale-original")return [orphan()];
+   return [orphan(),...listing()];
+  };
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",mode);
+  assert.equal(result.adopted,0);
+  assert.equal(flushes,1,"the original transfer happened once");
+  assert.equal(store.writes.length,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(ship.coopHaulNeedsOperatorRepair,
+   "ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+ }
+});
+test("globally unique original cargoID post-commit permits one physical NPC haul",()=>{
+ const store=fakeStore([orphan()]);
+ const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+ let flushes=0,globalReads=0;
+ const listing=store.listNativeCargo;
+ store.listNativeCargo=()=>{globalReads++;return listing()};
+ const result=adopt(sceneWith([ship]),target,{
+  store,clock:()=>NOW,
+  database:{flushTableSync:()=>{flushes++;return {success:true}}}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(globalReads,3,"planning, empty hold and post-commit verify native cargoIDs");
+ assert.equal(flushes,1);
+ assert.equal(store.listNativeCargo().length,1);
+ assert.equal(target.state,"loaded");
+ assert.equal(ship.nativeCargoItems[0].itemID,7001);
+});
+
+test("silent native compensation ACK cannot hide cargo stranded on replacement hauler",()=>{
+ for(const mode of ["silent-ack","wrong-owner","wrong-quantity","stale-adoption-marker"]){
+  resetForTests();
+  const source=[orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112})];
+  const store=fakeStore(source);
+  const upsert=store.upsertNativeCargo;
+  let writes=0,flushes=0;
+  store.upsertNativeCargo=row=>{
+   writes++;
+   // First source upsert succeeds; second is written but rejected.
+   if(writes===2){upsert(row);return {success:false,errorMsg:"ADOPTION_SECOND_ROW_REJECTED"}}
+   // Compensation of the second row acknowledges but leaves wrong state.
+   if(writes===3){
+    if(mode==="silent-ack")return {success:true};
+    const corrupt={...row};
+    if(mode==="wrong-owner")corrupt.ownerID=9999;
+    if(mode==="wrong-quantity")corrupt.quantity+=1;
+    if(mode==="stale-adoption-marker")corrupt.coopHaulAdoptedAt=NOW;
+    upsert(corrupt);
+    return {success:true};
+   }
+   return upsert(row);
+  };
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const out=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(out.status,"ADOPTION_RECOVERY_UNVERIFIED",mode);
+  assert.equal(flushes,1,mode);
+  assert.equal(out.adopted,0);
+  assert.equal(target.state,"mining");
+  assert.equal(target.coopHaulNeedsOperatorRepair,true);
+  assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(adopt(sceneWith([ship]),fleet(),{store,clock:()=>NOW+1}).status,
+   "ALREADY_ATTEMPTED");
+ }
+});
+
+test("rollback must fail closed if global original readback is missing or throws",()=>{
+ for(const mode of ["null","throw","target-read-error"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const upsert=store.upsertNativeCargo;
+  let writes=0,reads=0;
+  store.upsertNativeCargo=row=>{
+   if(++writes===1)return {success:false};
+   return upsert(row);
+  };
+  const list=store.listNativeCargo;
+  store.listNativeCargo=()=>{
+   if(++reads>=3){
+    if(mode==="null")return null;
+    if(mode==="throw")throw Error("READBACK_UNAVAILABLE");
+   }
+   return list();
+  };
+  if(mode==="target-read-error"){
+   const perEntity=store.listNativeCargoForEntity;
+   let targetReads=0;
+   store.listNativeCargoForEntity=id=>{
+    if(id===hauler.itemID&&++targetReads>1)throw Error("READBACK_UNAVAILABLE");
+    return perEntity(id);
+   };
+  }
+  const ship={...hauler},target=fleet();
+  const result=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_RECOVERY_UNVERIFIED",mode);
+  assert.equal(store.writes.length,1,"only original compensation was written");
+  assert.equal(target.coopHaulNeedsOperatorRepair,true);
+  assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+ }
+});
+
+test("same-owner untagged physical cargo cannot be mixed into restart-adopted haul",()=>{
+ for(const fleetTag of [0,undefined,null]){
+  resetForTests();
+  const preexisting=orphan({cargoID:8001,entityID:hauler.itemID,
+   coopHaulFleetID:fleetTag,coopHaulAdoptedAt:undefined});
+  const store=fakeStore([orphan(),preexisting]);
+  const before=structuredClone(store.listNativeCargo());
+  let flushes=0;
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"HAULER_ALREADY_LOADED");
+  assert.equal(result.adopted,0);
+  assert.equal(store.writes.length,0);
+  assert.equal(flushes,0);
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.state,"mining");
+  assert.deepEqual(store.listNativeCargo(),before);
+ }
+});
+
+test("global cargo proves a supposedly empty hauler is occupied even if local adapter hides it",()=>{
+ const old=orphan({cargoID:8001,entityID:hauler.itemID,
+  coopHaulFleetID:0,coopHaulAdoptedAt:undefined});
+ const store=fakeStore([orphan(),old]);
+ const read=store.listNativeCargoForEntity;
+ store.listNativeCargoForEntity=id=>id===hauler.itemID?[]:read(id);
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"HAULER_ALREADY_LOADED");
+ assert.equal(store.writes.length,0);
+ assert.equal(target.state,"mining");
+});
+
+test("unavailable global inventory on empty-hauler preflight must block every original cargo write",()=>{
+ for(const mode of ["throw","null"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargo;
+  let count=0,flushes=0;
+  store.listNativeCargo=()=>{
+   if(++count===2){
+    if(mode==="throw")throw Error("ORIGINAL_STORE_NOT_AVAILABLE");
+    return null;
+   }
+   return read();
+  };
+  const target=fleet();
+  const result=adopt(sceneWith([hauler]),target,{
+   store,clock:()=>NOW,
+   // Do not allow a broken store to turn into a proof that the hold is empty.
+   database:{read:()=>({success:false}),flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"HAULER_CARGO_PREFLIGHT_UNVERIFIED",mode);
+  assert.equal(store.writes.length,0);
+  assert.equal(flushes,0);
+  assert.equal(target.state,"mining");
+ }
+});
+
+test("post-commit unplanned cargo on target hauler cannot silently join original ore",()=>{
+ for(const mode of ["global-only","local-only","cache-only","physical-global-and-local"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const phantom=orphan({cargoID:7999,entityID:hauler.itemID,coopHaulFleetID:0,
+   coopHaulFromMinerID:98765,quantity:50});
+  const list=store.listNativeCargo;
+  const perEntity=store.listNativeCargoForEntity;
+  const builder=store.buildNativeCargoItems;
+  let writes=0,flushes=0;
+  const upsert=store.upsertNativeCargo;
+  store.upsertNativeCargo=row=>{writes++;return upsert(row)};
+  store.listNativeCargo=()=>writes&&["global-only","physical-global-and-local"].includes(mode)?
+   [...list(),{...phantom}]:list();
+  store.listNativeCargoForEntity=id=>writes&&id===hauler.itemID&&
+   ["local-only","physical-global-and-local"].includes(mode)?
+   [...perEntity(id),{...phantom}]:perEntity(id);
+  store.buildNativeCargoItems=id=>writes&&id===hauler.itemID&&mode==="cache-only"?
+   [...builder(id),{itemID:phantom.cargoID,typeID:phantom.typeID,quantity:phantom.quantity}]:
+   builder(id);
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
+  const outcome=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return{success:true}}}
+  });
+  assert.equal(outcome.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",mode);
+  assert.equal(outcome.adopted,0);
+  assert.equal(writes,1);
+  assert.equal(flushes,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+  assert.equal(target.coopHaulNeedsOperatorRepair,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+ }
+});
+
+test("rollback with unknown extra cargo on supposedly empty replacement hauler requires operator",()=>{
+ const store=fakeStore([
+  orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112})
+ ]);
+ const phantom=orphan({cargoID:7999,entityID:hauler.itemID,coopHaulFleetID:0});
+ const original=store.listNativeCargo;
+ const upsert=store.upsertNativeCargo;
+ let write=0,flush=0;
+ store.upsertNativeCargo=row=>{
+  write++;
+  if(write===2)return {success:false,errorMsg:"SECOND_ROW_REJECTED"};
+  return upsert(row);
+ };
+ store.listNativeCargo=()=>write>=2?[...original(),{...phantom}]:original();
+ const read=store.listNativeCargoForEntity;
+ store.listNativeCargoForEntity=id=>write>=2&&id===hauler.itemID?
+  [...read(id),{...phantom}]:read(id);
+ const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+ const outcome=adopt(sceneWith([ship,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>{flush++;return{success:true}}}
+ });
+ assert.equal(outcome.status,"ADOPTION_RECOVERY_UNVERIFIED");
+ assert.equal(outcome.adopted,0);
+ assert.equal(flush,1);
+ assert.equal(target.state,"mining");
+ assert.equal(target.coopHaulNeedsOperatorRepair,true);
+ assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+ assert.equal(ship.nativeCargoItems,undefined);
+ assert.deepEqual(original().map(r=>r.entityID),[900000000111,900000000112]);
+});
+
+test("post-commit native source may not silently change original miner or load time",()=>{
+ for(const field of ["coopHaulFromMinerID","coopHaulLoadedAt"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const upsert=store.upsertNativeCargo;
+  store.upsertNativeCargo=row=>upsert({
+   ...row,[field]:Number(row[field])+(field==="coopHaulFromMinerID"?1:1000)
+  });
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
+  const original=orphan();
+  let flushes=0;
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return{success:true}}}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",field);
+  assert.equal(result.adopted,0);
+  assert.equal(store.writes.length,1);
+  assert.equal(flushes,1);
+  assert.equal(store.listNativeCargo()[0].cargoID,original.cargoID);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.coopHaulNeedsOperatorRepair,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+ }
+});
+
+test("local hauler post-commit source claim must match independently verified global custody",()=>{
+ for(const field of ["coopHaulFromMinerID","coopHaulLoadedAt"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargoForEntity;
+  let targetReads=0;
+  store.listNativeCargoForEntity=id=>{
+   const rows=read(id);
+   if(id!==hauler.itemID||++targetReads===1)return rows;
+   return rows.map(row=>({...row,[field]:Number(row[field])+1}));
+  };
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",field);
+  assert.equal(store.writes.length,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+ }
+});
+
+test("global post-commit source claim cannot disagree with original cargo provenance",()=>{
+ for(const field of ["coopHaulFromMinerID","coopHaulLoadedAt"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargo;
+  let reads=0;
+  store.listNativeCargo=()=>{
+   const rows=read();
+   if(++reads!==3)return rows;
+   return rows.map(row=>({...row,[field]:Number(row[field])+1}));
+  };
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
+  const result=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",field);
+  assert.equal(store.writes.length,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+ }
+});
+
+test("second restart refuses a depot with missing audit, corrupted totals or unresolved custody",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ const clear={version:1,receipts:{},pending:{},totals:{}};
+ const cases=[
+  ["no-audit",{snapshot:()=>clear},"RE_ADOPTION_SETTLEMENT_UNVERIFIED"],
+  ["missing-totals",{snapshot:()=>({version:1,receipts:{},pending:{}}),
+   audit:()=>({status:"OK",committed:0,unresolved:0,invalid:0})},
+   "RE_ADOPTION_SETTLEMENT_UNVERIFIED"],
+  ["stale-credit-totals",{snapshot:()=>({...clear,totals:{"30000145":9000}}),
+   audit:()=>({status:"NEEDS_OPERATOR_REPAIR",committed:0,unresolved:0,invalid:1})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["unresolved",{snapshot:()=>clear,
+   audit:()=>({status:"PENDING_CUSTODY_RECONCILIATION",committed:0,unresolved:1,invalid:0})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["misleading-status",{snapshot:()=>clear,
+   audit:()=>({status:"OK",committed:0,unresolved:0,invalid:1})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["missing-counts",{snapshot:()=>clear,
+   audit:()=>({status:"OK"})},
+   "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED"],
+  ["audit-throws",{snapshot:()=>clear,
+   audit:()=>{throw Error("DEPO_REPLAY_AUDIT_READ_FAILURE")}},
+   "RE_ADOPTION_SETTLEMENT_UNVERIFIED"]
+ ];
+ for(const [label,custodyDepot,status] of cases){
+  resetForTests();
+  const f=secondCrashAttempt(secondCrashCargo(),{custodyDepot});
+  assert.equal(f.result.status,status,label);
+  assert.equal(f.store.writes.length,0,label);
+  assert.equal(f.flushes,0,label);
+  assert.equal(f.target.state,"mining",label);
+ }
+});
+
+test("second restart requires reconciled native depot audit before any physical reparent",()=>{
+ process.env.EVEJS_COOP_HAUL_CARGO_RE_ADOPTION="1";
+ let audited=0;
+ const f=secondCrashAttempt(secondCrashCargo(),{custodyDepot:{
+  snapshot:()=>({version:1,receipts:{},pending:{},totals:{}}),
+  audit:()=>{audited++;return {status:"OK",committed:0,invalid:0,unresolved:0}}
+ }});
+ assert.equal(f.result.status,"ADOPTED");
+ assert.equal(audited,1);
+ assert.equal(f.flushes,1);
+ assert.equal(f.store.writes.length,1);
+ assert.equal(f.target.state,"loaded");
+});
+
+test("first-time orphan cargo adoption does not require an unrelated repeat-adoption depot audit",()=>{
+ const store=fakeStore([orphan()]),target=fleet();
+ const result=adopt(sceneWith([hauler,miner]),target,{
+  store,clock:()=>NOW,
+  custodyDepot:{snapshot:()=>{throw Error("MUST_NOT_QUERY_DEPOT")},
+   audit:()=>{throw Error("MUST_NOT_AUDIT_DEPOT")}},
+  database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(target.state,"loaded");
+});
+
+test("one invalid tagged original cargo row blocks the entire NPC mining haul batch",()=>{
+ for(const [label,patch] of [
+  ["zero quantity",{quantity:0}],
+  ["negative quantity",{quantity:-1}],
+  ["zero type",{typeID:0}],
+  ["bad cargo identity",{cargoID:0}],
+  ["missing miner",{coopHaulFromMinerID:undefined}],
+  ["zero native carrier",{entityID:0}],
+  ["transient source",{transient:true}],
+  ["module-bound source",{moduleID:17}]
+ ]){
+  resetForTests();
+  const source=[orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112,...patch})];
+  const store=fakeStore(source);
+  const before=structuredClone(store.listNativeCargo()),target=fleet();
+  let flushes=0;
+  const result=adopt(sceneWith([hauler,miner]),target,{
+   store,clock:()=>NOW,
+   database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"ORIGINAL_HAUL_CARGO_UNVERIFIED",label);
+  assert.equal(result.adopted,0,label);
+  assert.equal(store.writes.length,0,label);
+  assert.equal(flushes,0,label);
+  assert.equal(target.state,"mining",label);
+  assert.deepEqual(store.listNativeCargo(),before,label);
+ }
+});
+
+test("corrupt cargo tagged to another system/fleet cannot block a clean original haul",()=>{
+ const unrelated=orphan({cargoID:8111,entityID:900000000123,
+  quantity:-100,coopHaulFleetID:999,coopHaulSystemID:30000146});
+ const store=fakeStore([orphan(),unrelated]);
+ const target=fleet(),ship={...hauler};
+ const result=adopt(sceneWith([ship,miner]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"ADOPTED");
+ assert.equal(result.adopted,1);
+ assert.equal(store.writes.length,1);
+ assert.equal(target.state,"loaded");
+ assert.equal(store.listNativeCargo().find(x=>x.cargoID===8111).quantity,-100);
 });

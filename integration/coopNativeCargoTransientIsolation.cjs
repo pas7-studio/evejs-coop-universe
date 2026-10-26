@@ -10,6 +10,44 @@ const numeric=x=>typeof x==="string"&&/^[1-9]\d{0,15}$/.test(x)&&
  Number.isSafeInteger(Number(x))&&Number(x)>0;
 const clone=x=>JSON.parse(JSON.stringify(x));
 const error=why=>{throw Error("ALIFE11_"+why)};
+
+/**
+ * A cargo-bearing transaction may mix with transient cache cargo only under a
+ * declared contract. Each contract fixes three things and nothing else may vary:
+ *  - the exact table set (order-insensitive),
+ *  - the feature flags that must be on,
+ *  - the exact set of rows it may write.
+ * A set that is not listed here keeps the original NATIVE_TRANSIENT_STATE_UNSAFE
+ * behaviour. Adding a contract is a reviewable change, not a configuration.
+ */
+const HAUL_TRANSFER=Object.freeze({
+ name:"haul-transfer",
+ tables:Object.freeze(["npcCargo"]),
+ flags:Object.freeze(["EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC"]),
+ cargoRootWrites:Object.freeze({min:1,max:1}),
+ cargoOtherKeys:"receipt",
+ journal:null,
+});
+// ALIFE-07: one mining cycle commits the rock source, the miner's ore stack and
+// its own immutable journal row in a single native transaction. An all-waste
+// cycle legitimately moves no cargo, so zero cargo-root writes is valid there.
+const MINING_CYCLE=Object.freeze({
+ name:"mining-cycle",
+ tables:Object.freeze(["miningRuntimeState","npcCargo"]),
+ flags:Object.freeze(["EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC"]),
+ cargoRootWrites:Object.freeze({min:0,max:1}),
+ cargoOtherKeys:"forbid",
+ journal:Object.freeze({table:"miningRuntimeState",status:"COMMITTED",
+  requires:Object.freeze(["op","fingerprint","cargoID","nextCargo"])}),
+});
+const CONTRACTS=Object.freeze([HAUL_TRANSFER,MINING_CYCLE]);
+function contractForTables(tables){
+ if(!Array.isArray(tables)||tables.length<1)return null;
+ const wanted=[...new Set(tables)].sort();
+ if(wanted.length!==tables.length)return null;
+ return CONTRACTS.find(c=>c.tables.length===wanted.length&&
+  [...c.tables].sort().every((table,index)=>table===wanted[index]))||null;
+}
 function getCargo(root){
  if(!root||typeof root!=="object"||Array.isArray(root)||
     !root.cargo||typeof root.cargo!=="object"||Array.isArray(root.cargo))
@@ -52,19 +90,25 @@ function capture({paths,live,durable}={}){
   error("CACHE_AND_SQLITE_DURABLE_PREIMAGE_CONFLICT");
  return Object.freeze({ids:Object.freeze(Object.keys(shadows)),shadows});
 }
-function guardMutation(tx,witness){
+function guardMutation(tx,witness,contract){
  if(!witness)return tx;
+ const policy=contract||HAUL_TRANSFER;
  const ids=witness.ids,deny=()=>error("TRANSIENT_CARGO_SQL_WRITE_FORBIDDEN");
- let cargoWrites=0,receiptWrites=0;
+ let cargoWrites=0,receiptWrites=0,journalWrites=0,cargoRoot=null,journalRow=null;
  const guarded=Object.freeze({
   get:(table,key)=>tx.get(table,key),
   scan:table=>tx.scan(table),
   put(table,key,value){
    if(table==="npcCargo"){
     if(key==="cargo"){
-     if(cargoWrites!==0||!value||typeof value!=="object"||Array.isArray(value)||
+     if(cargoWrites>=policy.cargoRootWrites.max||
+        !value||typeof value!=="object"||Array.isArray(value)||
         ids.some(id=>own(value,id)))deny();
-     cargoWrites++;
+     cargoWrites++;cargoRoot=value;
+    }else if(policy.cargoOtherKeys==="forbid"){
+     // A mining cycle owns exactly one cargo row update and no side rows; a haul
+     // receipt or allocator counter in the same transaction is not that cycle.
+     error("UNEXPECTED_MIXED_CARGO_SQL_KEY");
     }else{
      const match=typeof key==="string"&&
        /^coopNativeHaulTransfer:([1-9]\d{0,15})$/.exec(key);
@@ -74,13 +118,38 @@ function guardMutation(tx,witness){
       error("UNEXPECTED_MIXED_CARGO_SQL_RECEIPT");
      receiptWrites++;
     }
+   }else if(policy.journal&&table===policy.journal.table&&
+    value&&value.status===policy.journal.status&&
+    policy.journal.requires.every(field=>own(value,field))){
+    journalWrites++;journalRow=value;
    }
    tx.put(table,key,value);
   },
   del(){deny();},
-  assertTransferComplete(){
-   if(cargoWrites!==1||receiptWrites!==1)
-    error("INCOMPLETE_NATIVE_HAUL_WRITE_SET");
+  assertTransferComplete(){return this.assertWriteSetComplete();},
+  assertWriteSetComplete(){
+   if(policy.cargoOtherKeys==="receipt"){
+    // ALIFE-10 contract, unchanged: exactly one cargo root rewrite plus exactly one
+    // matching immutable COMMITTED receipt.
+    if(cargoWrites!==1||receiptWrites!==1)
+     error("INCOMPLETE_NATIVE_HAUL_WRITE_SET");
+    return;
+   }
+   if(cargoWrites<policy.cargoRootWrites.min||cargoWrites>policy.cargoRootWrites.max)
+    error("INCOMPLETE_NATIVE_CARGO_WRITE_SET");
+   if(policy.journal){
+    // One committed journal entry authorizes the cycle, and it must describe the
+    // cargo row the same transaction wrote. Without this the cargo delta and the
+    // rock/receipt would be two independent claims.
+    if(journalWrites!==1)error("INCOMPLETE_NATIVE_MINING_CYCLE_JOURNAL");
+    if(cargoWrites===1){
+     const cargoID=String(journalRow?.cargoID||"");
+     const written=cargoID&&cargoRoot?cargoRoot[cargoID]:null;
+     if(!written||!own(cargoRoot,cargoID)||
+        Number(written.quantity)!==Number(journalRow?.nextCargo))
+      error("MINING_CYCLE_JOURNAL_CARGO_MISMATCH");
+    }
+   }
   }
  });
  return guarded;
@@ -107,4 +176,5 @@ function rehydrate({persisted,live,paths,witness}={}){
  }
  return result;
 }
-module.exports={capture,guardMutation,rehydrate};
+module.exports={capture,guardMutation,rehydrate,contractForTables,
+ CONTRACTS,HAUL_TRANSFER,MINING_CYCLE};

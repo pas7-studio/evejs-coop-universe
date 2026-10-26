@@ -11,7 +11,7 @@ function loadNpcPendingEscrow(){
   if(error?.code!=="MODULE_NOT_FOUND"||
    !String(error.message).includes("Cannot find module './coopNpcPendingMarketEscrow'"))
    throw error;
-  return require("./coopNpcPendingMarketEscrow.cjs");
+  return require("./coopNpcPendingMarketEscrow");
  }
 }
 const {ESCROW_BASE}=loadNpcPendingEscrow();

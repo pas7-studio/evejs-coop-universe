@@ -5,12 +5,12 @@ const {createWarehouse} = require("./coopNativeWarehouse");
 // A refused sale used to be silent: the fleet deposited the cargo and went back
 // to mining with no record of why no ISK arrived. Telemetry is the only way an
 // operator learns that, so the decision is reported once per trip.
-const observeGuard=()=>{try{return require("./coopObserve")}catch(_error){return require("./coopObserve.cjs")}};
+const observeGuard=()=>{try{return require("./coopObserve")}catch(_error){return require("./coopObserve")}};
 // The resolver deploys as .js next to this file, but is stored as .cjs in the
 // orchestration repo, so resolve either spelling instead of keeping a stale copy.
 function loadEconomyDestination(){
  try{return require("./coopEconomyDestination");}
- catch(error){return require("./coopEconomyDestination.cjs");}
+ catch(error){return require("./coopEconomyDestination");}
 }
 const pos = value => Number.isSafeInteger(Number(value)) && Number(value)>0 ? Number(value) : 0;
 const vector = value => value && ["x","y","z"].every(k => typeof value[k]==="number" && Number.isFinite(value[k]));

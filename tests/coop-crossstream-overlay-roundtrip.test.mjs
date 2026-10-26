@@ -13,10 +13,11 @@ const {specs,transform,names}=require("../scripts/patch-evejs-coop.cjs");
 const installer=fs.readFileSync(path.join(project,"scripts/patch-evejs-coop.cjs"),"utf8");
 
 test("single native overlay has all cross-stream modules and no missing source files",()=>{
- const match=installer.match(/const names=\[([\s\S]*?)\];/);
- assert.ok(match,"Installer module list must be declared");
- const declaredNames=JSON.parse("["+match[1]+"]");
- assert.ok(names.length>=declaredNames.length,"Effective registry must include inline and spliced modules");
+ // The module registry lives in scripts/overlay-spec.cjs; the installer must not
+ // keep a second, hand-maintained list.
+ assert.equal((installer.match(/const names=\[/)||[]).length,0,
+  "module registration belongs to the overlay module list, not the installer");
+ assert.ok(names.length>0,"Effective registry must include inline and spliced modules");
  assert.equal(names.length,new Set(names).size,"Duplicate deployed overlay modules");
  for(const name of names)
   assert.ok(fs.existsSync(path.join(project,"integration",name+".cjs")),"Missing module: "+name);

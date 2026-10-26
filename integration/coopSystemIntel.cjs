@@ -5,7 +5,7 @@ const {waypoints}=(()=>{
  try { return require("./coopNpcTopology"); } // deployed .js overlay
  catch (error) {
   if(error.code!=="MODULE_NOT_FOUND"||!String(error.message).includes("coopNpcTopology"))throw error;
-  return require("./coopNpcTopology.cjs"); // standalone repository tests
+  return require("./coopNpcTopology"); // standalone repository tests
  }
 })();
 const positive=v=>{const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:null;};

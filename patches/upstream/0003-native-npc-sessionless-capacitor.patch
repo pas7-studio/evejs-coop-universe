@@ -15,14 +15,34 @@ Two halves of the same defect:
     is now resolved lazily from the same dogma attribute the fitting service
     uses and cached on the entity.
 
+Every sessionless ship in the scene is recharged once a second by the scene
+tick, not only ships that happen to carry an NPC controller: co-op mining hulls
+have none, and live telemetry showed tau set but capacitorRechargedAtMs = 0
+forever, so their charge only ever fell.
+
 No capacitor is granted out of thin air: the same curve real ships use.
+
+The advance measured its own interval against capacitorRechargedAtMs, a shared
+client-visible stamp that other code also refreshes. The interval therefore
+collapsed to milliseconds per call: measured 0.00009/s of charge against the
+0.0048/s the CCP curve implies, so a hull that fell to 2% never recovered and
+every mining activation failed with NOT_ENOUGH_CAPACITOR. A private stamp
+records the interval this advance actually covers.
 
 Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
 Local overlay: integration/* is NOT part of this patch series.
 ---
 --- a/server/src/space/npc/npcBehaviorLoop.js
 +++ b/server/src/space/npc/npcBehaviorLoop.js
-@@ -4513,6 +4513,7 @@ function tickScene(scene, now) {
+@@ -4474,6 +4474,7 @@ function tickController(scene, controller, now) {
+ }
+ 
+ function tickScene(scene, now) {
++  sweepSessionlessCapacitors(scene, now);
+   if (!scene) {
+     return;
+   }
+@@ -4513,6 +4514,7 @@ function tickScene(scene, now) {
      if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {
        continue;
      }
@@ -30,7 +50,7 @@ Local overlay: integration/* is NOT part of this patch series.
      tickController(scene, controller, now);
      processed += 1;
    }
-@@ -4547,6 +4548,7 @@ function tickControllersByEntityID(scene, entityIDs, now) {
+@@ -4547,6 +4549,7 @@ function tickControllersByEntityID(scene, entityIDs, now) {
      if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {
        continue;
      }
@@ -38,7 +58,7 @@ Local overlay: integration/* is NOT part of this patch series.
      tickController(scene, controller, now);
    }
  }
-@@ -4646,6 +4648,81 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
+@@ -4646,6 +4649,114 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
    };
  }
  
@@ -85,6 +105,28 @@ Local overlay: integration/* is NOT part of this patch series.
 +  }
 +}
 +
++// A capacitor belongs to the SHIP, not to an NPC controller. The advance above
++// only runs for controllers whose next think is due, and co-op mining hulls
++// have no such controller: live evidence showed tau set (125-187 s) and
++// reAt = 0 forever, so their charge only ever fell. Recharge every sessionless
++// ship in the scene, the way CCP recharges every ship, at most once a second.
++let lastSessionlessCapacitorSweepAtMs = 0;
++function sweepSessionlessCapacitors(scene, now) {
++  if (!scene || typeof scene.getDynamicEntities !== "function") {
++    return;
++  }
++  const at = Number(now);
++  if (!Number.isFinite(at) || at - lastSessionlessCapacitorSweepAtMs < 1000) {
++    return;
++  }
++  lastSessionlessCapacitorSweepAtMs = at;
++  for (const entity of scene.getDynamicEntities()) {
++    if (entity && entity.kind === "ship" && !entity.session) {
++      advanceSessionlessCapacitor(entity, at);
++    }
++  }
++}
++
 +function advanceSessionlessCapacitor(entity, now) {
 +  if (!entity || entity.kind !== "ship" || entity.session) {
 +    return;
@@ -94,7 +136,18 @@ Local overlay: integration/* is NOT part of this patch series.
 +  if (capacity <= 0 || tauMs <= 0 || !Number.isFinite(Number(now))) {
 +    return;
 +  }
-+  const previousAtMs = toFiniteNumber(entity.capacitorRechargedAtMs, 0);
++  // capacitorRechargedAtMs is a shared, client-visible stamp that other paths
++  // also refresh, so measuring our own dt against it collapsed the advance to a
++  // few milliseconds per call: measured 0.00009/s of charge against 0.0048/s
++  // expected, and the fleet starved at 2% capacitor. Keep a private stamp for
++  // the interval this function is responsible for.
++  const previousAtMs = toFiniteNumber(
++    entity.coopCapacitorAdvancedAtMs !== undefined
++      ? entity.coopCapacitorAdvancedAtMs
++      : entity.capacitorRechargedAtMs,
++    0,
++  );
++  entity.coopCapacitorAdvancedAtMs = now;
 +  entity.capacitorRechargedAtMs = now;
 +  if (previousAtMs <= 0 || now <= previousAtMs) {
 +    return;

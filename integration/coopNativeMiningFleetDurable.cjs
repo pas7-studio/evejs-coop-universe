@@ -9,6 +9,35 @@
  */
 const MAX_SLOTS=16, MAX_WING=32;
 const busy=new Set();
+// Slot status used to be invisible: start() was called without a log callback and
+// its result was discarded, so a blocked slot looked exactly like a healthy one in
+// the event log. One event per real status change, never per scene tick.
+const lastSlotStatus=new Map();
+function noteSlotStatus(systemID,reports){
+ let guard=null;
+ try{
+  guard={observe:require("./coopObserve"),probe:require("./coopRuntimeProbe")};
+ }catch(_error){return;}
+ for(const report of reports||[]){
+  const key=systemID+"-"+report.slot;
+  const signature=[report.status,report.reason||"",
+   (report.minerIDs||[]).length,(report.haulerIDs||[]).length].join("|");
+  if(lastSlotStatus.get(key)===signature)continue;
+  lastSlotStatus.set(key,signature);
+  try{
+   guard.observe.observe(guard.probe,"living-native-durable-slot",{systemID},{
+    status:String(report.status),slot:Number(report.slot)||0,
+    reason:report.reason?String(report.reason).slice(0,160):null,
+    miners:(report.minerIDs||[]).length,haulers:(report.haulerIDs||[]).length,
+    liveMiners:Number.isInteger(report.liveMiners)?report.liveMiners:-1,
+    liveHaulers:Number.isInteger(report.liveHaulers)?report.liveHaulers:-1,
+    restored:Number(report.restored)||0,controllers:Number(report.controllers)||0,
+    reseededFrom:report.reseededFrom?String(report.reseededFrom):null,
+    repaired:report.repaired===true,
+   });
+  }catch(_error){}
+ }
+}
 const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):0;
 const clone=x=>JSON.parse(JSON.stringify(x));
 function slotKey(systemID,slot){return systemID+"-"+slot;}
@@ -426,14 +455,22 @@ function createService({db,store,nativeService,ensureState,spawn,register,
      const registered=registerOnce({scene,store,getFleets,register,slot,minerIDs,haulerIDs,log,
       originAnchor:record.originAnchor||null});
      const pendingStationCargo=resumePendingStationCargo(scene,slot,haulerIDs);
+     // The witness alone is not proof that the live fleet record still owns the
+     // ships: the native tick prunes any actor it has no controller for. Reporting
+     // both lists makes a hauler-less fleet visible instead of silently idle.
+     const liveRecord=(typeof getFleets==="function"?(getFleets()||[]):[])
+      .find(x=>Number(x&&x.fleetID)===fleetIDForSlot(systemID,slot));
      reports.push(result(restored?"RESTORED":registered?"RELINKED":"ALREADY_ACTIVE",slot,{
-      minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed}));
+      minerIDs,haulerIDs,restored,pendingStationCargo,repaired:!!healed,
+      liveMiners:Array.isArray(liveRecord&&liveRecord.minerEntityIDs)?liveRecord.minerEntityIDs.length:-1,
+      liveHaulers:Array.isArray(liveRecord&&liveRecord.haulerEntityIDs)?liveRecord.haulerEntityIDs.length:-1}));
     }catch(error){
      const reason=String(error?.message||error).slice(0,160);
      reports.push(result("NEEDS_OPERATOR_REPAIR",slot,{reason}));
      log("ALIFE08 slot "+key+" blocked: "+reason);
     }
    }
+   noteSlotStatus(systemID,reports);
    for(const report of reports){
     const detail=["miners="+(report.minerIDs||[]).length,"haulers="+(report.haulerIDs||[]).length,
      report.controllers!==undefined?"ctrl=+"+report.controllers:"","restored="+(report.restored||0),
@@ -470,4 +507,77 @@ function start(args){
    spawn,register,getFleets,ensureState,log:message=>console.warn("[ALIFE08]",message)
  }).start({scene,fleetCount});
 }
-module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot};
+// A durable actor outlives the in-memory controller registry: a rebuilt scene
+// drops the controller while the persisted row still owns the ship. The stock
+// fleet tick prunes any actor it cannot see a controller for, so a fleet quietly
+// stops mining while its ships are alive. Re-attach from the store first.
+// One hook line calls this; the logic and its tests live here, not in a string.
+function healFleetActors(fleetRecord,deps={}){
+ const npcService=deps.npcService||require("./npc");
+ const store=deps.store||require("./npc/nativeNpcStore");
+ let observe=deps.observe||null;
+ if(!observe){
+  try{observe=require("./coopRuntimeProbe").observe}catch(_error){observe=null}
+ }
+ const healed=[];
+ const actors=[].concat(
+  Array.isArray(fleetRecord&&fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[],
+  Array.isArray(fleetRecord&&fleetRecord.haulerEntityIDs)?fleetRecord.haulerEntityIDs:[]);
+ for(const entityID of actors){
+  const id=Number(entityID)||0;
+  if(id<=0)continue;
+  if(typeof npcService.getControllerByEntityID==="function"&&npcService.getControllerByEntityID(id))continue;
+  const stored=store&&typeof store.getNativeController==="function"?store.getNativeController(id):null;
+  if(!stored)continue;
+  try{
+   npcService.wakeNpcController(id);
+  }catch(error){
+   if(observe)observe("living-mining-fleet-selfheal-blocked",null,
+    {spaceState:{systemID:Number(fleetRecord&&fleetRecord.systemID)||0}},
+    {fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,entityID:id,
+     reason:String(error&&error.message||error).slice(0,120)});
+   continue;
+  }
+  if(typeof npcService.getControllerByEntityID!=="function"||!npcService.getControllerByEntityID(id))continue;
+  healed.push(id);
+  if(observe)observe("living-mining-fleet-selfheal",null,
+   {spaceState:{systemID:Number(fleetRecord&&fleetRecord.systemID)||0}},
+   {fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,entityID:id,
+    operatorKind:String(stored.operatorKind||"")});
+ }
+ return healed;
+}
+// Forensics for a fleet that loses an actor: the stock filter drops an id as soon
+// as the in-memory controller is gone, while the persisted row may still own the
+// ship. Reporting both authorities per removed id is what turned "miners vanish"
+// into a measured cause, so the shape lives here instead of in the hook.
+function noteDroppedFleetActors(fleetRecord,deps={}){
+ const npcService=deps.npcService||require("./npc");
+ const store=deps.store||require("./npc/nativeNpcStore");
+ let observe=deps.observe||null;
+ if(!observe){
+  try{observe=require("./coopRuntimeProbe").observe}catch(_error){observe=null}
+ }
+ if(!observe)return [];
+ const dropped=[];
+ const actors=[].concat(
+  Array.isArray(fleetRecord&&fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[],
+  Array.isArray(fleetRecord&&fleetRecord.haulerEntityIDs)?fleetRecord.haulerEntityIDs:[]);
+ for(const entityID of actors){
+  const id=Number(entityID)||0;
+  if(id<=0)continue;
+  if(typeof npcService.getControllerByEntityID==="function"&&npcService.getControllerByEntityID(id))continue;
+  const entity=store&&typeof store.getNativeEntity==="function"?store.getNativeEntity(id):null;
+  const controller=store&&typeof store.getNativeController==="function"?store.getNativeController(id):null;
+  dropped.push(id);
+  observe("living-mining-fleet-pruned",null,
+   {spaceState:{systemID:Number(fleetRecord&&fleetRecord.systemID)||0}},
+   {fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,entityID:id,
+    storedEntity:Boolean(entity),storedController:Boolean(controller),
+    entityTransient:Boolean(entity&&entity.transient===true),
+    controllerTransient:Boolean(controller&&controller.transient===true),
+    operatorKind:String((controller&&controller.operatorKind)||(entity&&entity.operatorKind)||"")});
+ }
+ return dropped;
+}
+module.exports={createService,start,roleMarker,slotKey,fleetIDForSlot,healFleetActors,noteDroppedFleetActors};

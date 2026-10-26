@@ -145,3 +145,42 @@ test('strict gate requires native persistent mining and haul flags and remains f
   assert.equal(f.run(),0,k);assert.equal(f.actions.length,0,k);
  }
 });
+
+function lastNoHauler(f){
+  const found=f.events.filter(x=>x.event==='living-haul-no-hauler');
+  return found[found.length-1];
+}
+test('an out-of-range hauler leaves a named reason instead of silent zero',()=>{
+ const f=fixture();
+ f.hauler.position={x:9000,y:0,z:0};
+ assert.equal(f.run(),0);
+ const event=lastNoHauler(f);
+ assert.ok(event,'no living-haul-no-hauler event');
+ assert.equal(event.rest[event.rest.length-1].skipped[0].why,'out-of-range');
+ assert.equal(event.rest[event.rest.length-1].skipped[0].rangeMeters,8800);
+ assert.equal(f.actions.filter(x=>x.name==='upsert').length,0);
+});
+test('a hull whose SDE capacity is unknown is reported, never guessed',()=>{
+ const f=fixture();
+ f.sde.set(typeIDs.hauler,{typeID:typeIDs.hauler});
+ assert.equal(f.run(),0);
+ const event=lastNoHauler(f);
+ assert.ok(event);
+ assert.equal(event.rest[event.rest.length-1].skipped[0].why,'no-capacity');
+ assert.equal(event.rest[event.rest.length-1].skipped[0].typeID,typeIDs.hauler);
+});
+test('a full hauler reports the volumes it compared',()=>{
+ const f=fixture();
+ f.rows().push({cargoID:1010,entityID:92,ownerID:1000035,typeID:34,
+   quantity:2490,moduleID:0,categoryID:25,transient:false});
+ assert.equal(f.run(),0);
+ const event=lastNoHauler(f);
+ assert.ok(event);
+ assert.equal(event.rest[event.rest.length-1].skipped[0].why,'full');
+ assert.equal(event.rest[event.rest.length-1].skipped[0].capacityM3,250);
+});
+test('a successful transfer reports no skip event',()=>{
+ const f=fixture();
+ assert.equal(f.run(),1.3);
+ assert.equal(f.events.filter(x=>x.event==='living-haul-no-hauler').length,0);
+});

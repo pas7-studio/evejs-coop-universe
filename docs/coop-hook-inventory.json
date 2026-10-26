@@ -1,0 +1,56 @@
+{
+ "version": 1,
+ "legacyFiles": 65,
+ "wiredModules": 48,
+ "specFiles": 15,
+ "specEntries": 50,
+ "longHooks": 3,
+ "longestHook": 822,
+ "overlap": 5,
+ "overlaps": [
+  {
+   "file": "coop-native-exploration-patch.cjs",
+   "shared": [
+    "server/src/services/ship/beyonceService.js"
+   ]
+  },
+  {
+   "file": "coop-native-station-arrival-patch.cjs",
+   "shared": [
+    "server/src/services/mining/miningNpcOperations.js"
+   ]
+  },
+  {
+   "file": "coop-native-trade-custody-patch.cjs",
+   "shared": [
+    "server/src/services/trade/tradeMgrService.js"
+   ]
+  },
+  {
+   "file": "coop-pochven-conduit-patch.cjs",
+   "shared": [
+    "server/src/space/transitions.js"
+   ]
+  },
+  {
+   "file": "coop-salvage-death-native-patch.cjs",
+   "shared": [
+    "server/src/space/npc/nativeNpcWreckService.js"
+   ]
+  }
+ ],
+ "long": [
+  {
+   "file": "server/src/services/trade/tradeMgrService.js",
+   "chars": 822
+  },
+  {
+   "file": "server/src/services/agent/agentMgrService.js",
+   "chars": 501
+  },
+  {
+   "file": "server/src/space/npc/nativeNpcWreckService.js",
+   "chars": 451
+  }
+ ]
+}

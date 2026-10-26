@@ -13,21 +13,48 @@
     },
     {
       "file": "0002-native-npc-capacitor-recharge.patch",
-      "sha256": "00a2ca6b90ab7e1ac9bae4afc5a8398cca597fe3bb45280c4cd6a391f5554b19",
+      "sha256": "e749acbeb655ec98e58dada68e7ea16173ce77e22d9e00f49f484ce7cfab94ba",
       "files": [
         "server/src/space/npc/nativeNpcService.js"
       ],
       "status": "not-sent",
-      "note": "native NPC capacitor recharge rate, candidate for an atomic upstream PR"
+      "note": "native NPC capacitor recharge rate + durable identity on state save, candidate for an atomic upstream PR"
     },
     {
       "file": "0003-native-npc-sessionless-capacitor.patch",
-      "sha256": "4bd6fd13fa074c855121bb362ad44d814ddf7926190cae8fd0763723b2eceeb3",
+      "sha256": "948596bad2dd98d0fc21f5cf7939c0a3a0ae677f7456d1a9b3fffb460b0cb990",
       "files": [
         "server/src/space/npc/npcBehaviorLoop.js"
       ],
       "status": "not-sent",
-      "note": "sessionless capacitor advance AND the hull recharge rate resolved at use, so every NPC spawn path recharges; candidate for an atomic upstream PR"
+      "note": "sessionless capacitor advance for native NPCs (shared-stamp interval fix), candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0004-native-mining-fleet-retained-actor.patch",
+      "sha256": "d9efc88018688939b8260fb96d5e36b90f33fd6e541ac6a35085d08d2d4a510c",
+      "files": [
+        "server/src/services/mining/miningNpcOperations.js"
+      ],
+      "status": "not-sent",
+      "note": "a durable fleet actor is pruned while its stored controller row still exists, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0005-native-npc-durable-not-dormant.patch",
+      "sha256": "8269126357cb137fccb277c0cb8892d0e0b29da526cc8a3d8440dbc14fcb5eae",
+      "files": [
+        "server/src/space/npc/npcCombatDormancy.js"
+      ],
+      "status": "not-sent",
+      "note": "a durable co-op NPC is dematerialised by the combat-dormancy sweep on every no-session scene, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0006-native-npc-live-capacitor-wins.patch",
+      "sha256": "9a5cbc78c1e90982f85112a05e27011eb5b6789a2dff904717cccb26fb7b6932",
+      "files": [
+        "server/src/space/runtime.js"
+      ],
+      "status": "not-sent",
+      "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, candidate for an atomic upstream PR"
     }
   ]
 }

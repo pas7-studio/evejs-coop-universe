@@ -14,8 +14,9 @@ const server = createServer({
   version: "1.0.0",
   instructions: [
     "Live view of the local EveJS co-op server.",
-    "Read-only by default: status, logs, events, alife_summary, alife_timeline, fleet_state, economy, world_data.",
-    "Mutating tools (container_exec, restart_server) refuse unless confirm: true; only ever target the co-op project.",
+    "Read-only by default: status, logs, events, alife_summary, alife_timeline, fleet_state, economy, world_data, agent_state, overlay_status.",
+    "agent_state is the fastest way to see a player-like NPC: contract, package flag, courier station, hull and persisted leg.",
+    "Mutating tools (container_exec, deploy_overlay, restart_server) refuse unless confirm: true; only ever target the co-op project.",
     "Never kill processes or containers you did not start: report instead.",
   ].join(" "),
   tools,

@@ -16,8 +16,13 @@ function fixture(t,options={}){
   if(v===undefined)delete process.env[k];else process.env[k]=v;
  }});
  const miner={kind:"ship",itemID:minerID,ownerID:1000035,nativeNpc:true,transient:false,
+   position:{x:0,y:0,z:0},velocity:{x:0,y:0,z:0},radius:60,mode:"STOP",
    nativeCargoItems:[{itemID:cargoID,quantity:25,typeID:34,volume:0.1}]};
- const hauler={kind:"ship",itemID:haulerID,ownerID:1000035,nativeNpc:true,transient:false,nativeCargoItems:[]};
+ // The atomic writer refuses a transfer between ships that are not physically
+ // co-located, so the fixture has to place them in the same spot: 500 m apart,
+ // well inside the 2500 m surface separation the writer allows.
+ const hauler={kind:"ship",itemID:haulerID,ownerID:1000035,nativeNpc:true,transient:false,
+   position:{x:500,y:0,z:0},velocity:{x:0,y:0,z:0},radius:60,mode:"STOP",nativeCargoItems:[]};
  const scene={systemID,getEntityByID:id=>id===minerID?miner:id===haulerID?hauler:null};
  const fleet={systemID,fleetID,startupKey:systemID+":"+slot,
   minerEntityIDs:[minerID],haulerEntityIDs:[haulerID]};
@@ -161,4 +166,31 @@ test("postcommit in-memory cargo builder fails closed without another debit or p
  assert.equal(f.hauler.nativeCargoItems.length,0);
  assert.equal(f.transfer().status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(f.txCalls(),1);
+});
+
+test("ships that are not co-located never touch the cargo table",t=>{
+ const f=fixture(t);
+ f.hauler.position={x:25000,y:0,z:0};
+ const result=f.transfer();
+ assert.equal(result.status,"BLOCKED_PHYSICAL_RANGE");
+ assert.equal(result.reason,"ALIFE10_SHIPS_NOT_COLOCATED");
+ assert.equal(f.txCalls(),0,"a range refusal must not open a transaction");
+ assert.equal(f.getOre().entityID,minerID);
+});
+
+test("a warping hull blocks the transfer even at zero separation",t=>{
+ const f=fixture(t);
+ f.hauler.mode="WARP";
+ const result=f.transfer();
+ assert.equal(result.status,"BLOCKED_PHYSICAL_RANGE");
+ assert.equal(f.txCalls(),0);
+ assert.equal(f.getOre().entityID,minerID);
+});
+
+test("a hull without a physical position fails closed",t=>{
+ const f=fixture(t);
+ delete f.miner.position;
+ const result=f.transfer();
+ assert.equal(result.status,"BLOCKED_PHYSICAL_RANGE");
+ assert.equal(f.txCalls(),0);
 });

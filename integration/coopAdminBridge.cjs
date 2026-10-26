@@ -21,7 +21,7 @@ const fs = require("node:fs");
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -373,6 +373,85 @@ function fitShip(request) {
   return { ok: fitted > 0, fitted, attempted: results.length, results, characterID, itemID: shipItemID };
 }
 
+// Fits modules into explicit slot flags: [typeID, flag, count]. This is the
+// data-level truth of a fit (items sitting in their slots) and is used when the
+// auto-slot planner cannot place a hull it has never seen fitted.
+function fitSlots(request) {
+  const characterID = Number(request.characterID) || 0;
+  const shipItemID = Number(request.itemID) || 0;
+  const slots = Array.isArray(request.modules) ? request.modules : [];
+  if (!(shipItemID > 0) || !slots.length) return { ok: false, error: "itemID and modules[] are required" };
+  const character = readRow("characters", characterID);
+  if (!character) return { ok: false, error: "character " + characterID + " not found" };
+  const stationID = Number(character.stationID) || 0;
+  const shipItem = readRow("items", shipItemID);
+  if (!shipItem) return { ok: false, error: "ship " + shipItemID + " not found" };
+  if (Number(shipItem.ownerID) !== characterID) return { ok: false, error: "ship is not owned by " + characterID };
+
+  const store = require("../services/inventory/itemStore");
+  const registry = require("../services/inventory/itemTypeRegistry");
+
+  // Every hangar item of a type, oldest first, so recovered items are reused.
+  const hangarItemsOfType = (typeID) => {
+    const rows = [];
+    let table = require("../gameStore").read("items");
+    if (table && table.success !== false && table.data !== undefined) table = table.data;
+    if (typeof table === "string") table = JSON.parse(table);
+    const walk = (value, depth) => {
+      if (!value || depth > 4 || rows.length > 4000) return;
+      if (Array.isArray(value)) { for (const child of value) walk(child, depth + 1); return; }
+      if (typeof value !== "object") return;
+      if (value.itemID !== undefined && value.typeID !== undefined) {
+        if (Number(value.ownerID) === characterID &&
+            Number(value.typeID) === typeID &&
+            Number(value.locationID) === stationID &&
+            Number(value.flagID) === 4) {
+          rows.push(value);
+        }
+        return;
+      }
+      for (const child of Object.values(value)) walk(child, depth + 1);
+    };
+    walk(table, 0);
+    return rows.sort((left, right) => Number(left.itemID) - Number(right.itemID));
+  };
+
+  const results = [];
+  for (const slot of slots) {
+    const typeID = Number(slot && slot.typeID) || 0;
+    const flagID = Number(slot && slot.flag) || 0;
+    const count = Math.max(1, Number(slot && slot.count) || 1);
+    if (!(typeID > 0) || !(flagID > 0)) {
+      results.push({ typeID, flag: flagID, ok: false, error: "typeID and flag are required" });
+      continue;
+    }
+    for (let index = 0; index < count; index += 1) {
+      let candidates = hangarItemsOfType(typeID);
+      if (!candidates.length) {
+        const lookup = registry.resolveItemByTypeID(typeID);
+        const itemType = lookup && lookup.match ? lookup.match : lookup;
+        if (!itemType) { results.push({ typeID, flag: flagID, ok: false, error: "unknown typeID" }); break; }
+        const granted = store.grantItemToCharacterStationHangar(characterID, stationID, itemType, 1);
+        if (!granted || granted.success === false) {
+          results.push({ typeID, flag: flagID, ok: false, error: String(granted && granted.errorMsg || "grant refused") });
+          break;
+        }
+        candidates = hangarItemsOfType(typeID);
+      }
+      const item = candidates[0];
+      if (!item) { results.push({ typeID, flag: flagID, ok: false, error: "no item available" }); break; }
+      const moved = store.moveItemToLocation(item.itemID, shipItemID, flagID, null);
+      if (moved && moved.success === false) {
+        results.push({ typeID, flag: flagID, ok: false, error: String(moved.errorMsg || "move refused") });
+        break;
+      }
+      results.push({ typeID, flag: flagID, itemID: item.itemID, ok: true });
+    }
+  }
+  const fitted = results.filter((row) => row.ok).length;
+  return { ok: fitted > 0, fitted, attempted: results.length, results, characterID, itemID: shipItemID };
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
@@ -384,6 +463,7 @@ function executeRequest(request) {
   if (action === "remove_item") return removeItem(request);
   if (action === "fit_ship") return fitShip(request);
   if (action === "move_item") return moveItem(request);
+  if (action === "fit_slots") return fitSlots(request);
   return boardShip(request);
 }
 

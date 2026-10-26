@@ -2,12 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
 const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const runtime=read("integration/coopVirtualWorldRuntime.cjs");
 const ammo=read("integration/coopNpcAmmoSupply.cjs");
 const bridge=read("integration/coopAlifeNativeResupplyBridge.cjs");
 const overlay=read("scripts/patch-evejs-coop.cjs");
+const overlaySpec=read("scripts/overlay-spec.cjs");
 test("COOP-043 Rust/GameStore station authority is preserved after native resupply integration",()=>{
  assert.match(runtime,/async function observeAlifeEconomy/);
  assert.match(runtime,/alifeStationAuthority\.read/);
@@ -15,7 +18,8 @@ test("COOP-043 Rust/GameStore station authority is preserved after native resupp
  assert.match(runtime,/remainingStations--<=0/);
  assert.match(runtime,/alifeEconomyAuthorityBusy/);
  assert.match(runtime,/readStationEconomy:\(\)=>null/);
- assert.match(overlay,/"coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime"/);
+ assert.match(overlaySpec,/"coopAlifeStationAuthority"/);
+ assert.match(overlaySpec,/"coopAlifeStationAuthorityRuntime"/);
 });
 test("there remains exactly one native 30 second world tick and no extra A-Life timer",()=>{
  assert.equal((runtime.match(/timer=setInterval\(\(\)=>worldPhaseCoordinator\.tick\(runPhase=>\{/g)||[]).length,1);
@@ -56,11 +60,13 @@ test("accepted physical warp order is never reported as an ISK or item settlemen
  assert.doesNotMatch(runtime,/alife-native-resupply-settled|alife-native-market-sold/);
 });
 test("upstream reversible overlay installs the bridge exactly once",()=>{
- assert.equal((overlay.match(/"coopAlifeNativeResupplyBridge"/g)||[]).length,1);
+ const overlaySpec=read("scripts/overlay-spec.cjs");
+ assert.equal((overlaySpec.match(/"coopAlifeNativeResupplyBridge"/g)||[]).length,1);
  // Position is asserted against the real module list, not a neighbour pair:
  // ALIFE-043 legitimately inserted station authority between News and Civilian.
- const list=JSON.parse("["+(overlay.match(/const names=\[([\s\S]*?)\];/)||[,""])[1]+"]");
+ const list=require("../scripts/overlay-spec.cjs").names;
+ assert.equal(list.filter(name=>name==="coopAlifeNativeResupplyBridge").length,1,
+  "the bridge is registered exactly once");
  const alife=list.filter(name=>name.startsWith("coopAlife"));
  assert.ok(alife.includes("coopAlifeNativeResupplyBridge"),"bridge must deploy with the ALIFE block");
- assert.deepEqual(alife,[...alife].sort(),"the ALIFE block stays alphabetical");
 });

@@ -102,9 +102,23 @@ function verifyReAdoptionCustody(row, options={}) {
      typeof state.receipts!=="object"||typeof state.pending!=="object"||
      Array.isArray(state.receipts)||Array.isArray(state.pending))
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  // An explicit prior receipt denies the second haul even if unrelated
+  // journal fields are malformed; preserve this stronger direct witness.
   if(Object.hasOwn(state.receipts,String(cargoID))||
      Object.hasOwn(state.pending,String(cargoID)))
    return "RE_ADOPTION_DEPOT_RECEIPT_EXISTS";
+  if(typeof depot.audit!=="function"||!state.totals||
+     typeof state.totals!=="object"||Array.isArray(state.totals))
+   return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
+  // Absence of an individual receipt is NOT evidence that no credit was
+  // committed if the global depot journal is inconsistent. In particular,
+  // an empty receipts map with positive persisted totals may mean a receipt
+  // disappeared after a prior settlement. Never resurrect such cargo.
+  const audit=depot.audit();
+  if(audit?.status!=="OK"||audit.invalid!==0||
+     audit.unresolved!==0||!Number.isSafeInteger(audit.committed)||
+     audit.committed<0)
+   return "RE_ADOPTION_DEPOT_AUDIT_UNVERIFIED";
   return "CLEAR";
  }catch(_error){return "RE_ADOPTION_SETTLEMENT_UNVERIFIED"}
 }
@@ -113,7 +127,8 @@ function verifyReAdoptionCustody(row, options={}) {
 function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
  cargoTable,database,enableReAdoption=false,custodyOptions}={}){
  const pid=pos(systemID),fid=pos(fleetID);
- if(!pid||!fid||!scene)return {status:"INVALID_AUTHORITIES",rows:[]};
+ if(!pid||!fid||!scene||!Number.isSafeInteger(now)||now<=0)
+  return {status:"INVALID_AUTHORITIES",rows:[]};
  let all;try{all=cargoRows({store,cargoTable,database})}
  catch(_error){return {status:"CARGO_UNAVAILABLE",rows:[]}}
  if(!Array.isArray(all))return {status:"CARGO_UNAVAILABLE",rows:[]};
@@ -126,26 +141,43 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
  }
  const rows=[];
  for(const row of all){
-  if(!row||row.transient!==false||Number(row.moduleID||0)!==0)continue;
-  if(!pos(row.cargoID)||!pos(row.typeID)||!pos(row.quantity)||
-     !pos(row.coopHaulFromMinerID)||!pos(row.entityID))continue;
-  if(Number(row.coopHaulFleetID)!==fid||Number(row.coopHaulSystemID)!==pid)continue;
+  // A row tagged for this fleet/system belongs to its original haul batch.
+  // Never silently skip a damaged sibling and adopt/sell only the valid
+  // portion. The whole tagged batch needs operator reconciliation instead.
+  if(!row||typeof row!=="object"||
+     Number(row.coopHaulFleetID)!==fid||
+     Number(row.coopHaulSystemID)!==pid)continue;
+  if(row.transient!==false||Number(row.moduleID||0)!==0||
+     !pos(row.cargoID)||!pos(row.typeID)||!pos(row.quantity)||
+     !pos(row.coopHaulFromMinerID)||!pos(row.entityID))
+   return {status:"ORIGINAL_HAUL_CARGO_UNVERIFIED",rows:[]};
   if(cargoIDCount.get(pos(row.cargoID))!==1)
    return {status:"NATIVE_CARGO_ID_COLLISION",rows:[]};
+  // A cargo still on a physical live ship is not an orphan. This includes
+  // the current replacement hauler: its existing load is rejected below
+  // by HAULER_ALREADY_LOADED, not mistaken for a corrupt orphan batch.
+  if(liveShip(scene,row.entityID))continue;
+  // Never reinterpret a damaged historical adoption as a first adoption:
+  // that would bypass the warehouse/ItemStore/depot replay guards.
   const adoptedAt=pos(row.coopHaulAdoptedAt);
+  const adoptedFrom=pos(row.coopHaulAdoptedFrom);
+  const hasHistory=Object.hasOwn(row,"coopHaulAdoptedAt")||
+   Object.hasOwn(row,"coopHaulAdoptedFrom");
+  if(hasHistory&&(!adoptedAt||!adoptedFrom||
+     adoptedFrom===pos(row.entityID)||adoptedAt>now))
+   return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
   if(adoptedAt&&!enableReAdoption)continue;
   const loadedAt=Number(row.coopHaulLoadedAt);
   if(!Number.isFinite(loadedAt)||loadedAt<=0||loadedAt>now)continue;
-  const witnessAt=adoptedAt?Math.max(adoptedAt,loadedAt):loadedAt;
+  if(adoptedAt&&adoptedAt<loadedAt)
+   return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
+  const witnessAt=adoptedAt||loadedAt;
   if(witnessAt>now||now-witnessAt>ttlMs)continue;
-  if(liveShip(scene,row.entityID))continue;
   const registered=stillRegistered(store,row.entityID);
   if(registered===REGISTRY_UNVERIFIED)
    return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
   if(registered)continue;
   if(adoptedAt){
-   if(!pos(row.coopHaulAdoptedFrom)||adoptedAt<loadedAt)
-    return {status:"RE_ADOPTION_HISTORY_UNVERIFIED",rows:[]};
    const custody=verifyReAdoptionCustody(row,custodyOptions);
    if(custody!=="CLEAR")return {status:custody,rows:[]};
   }
@@ -161,6 +193,8 @@ function adopt(scene,fleet,options={}){
  const {store,probe,database,clock}=dependenciesOf(options);
  const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID);
  const now=Number(clock());
+ if(!Number.isSafeInteger(now)||now<=0)
+  return {status:"INVALID_CLOCK",adopted:0};
  if(!systemID||!fleetID||systemID!==pos(fleet?.systemID))
   return {status:"INVALID_FLEET"};
  const key=systemID+":"+fleetID;
@@ -204,7 +238,21 @@ function adopt(scene,fleet,options={}){
     !pos(x?.cargoID)||pos(x?.entityID)!==haulerID||
     pos(x?.ownerID)!==ownerID||x?.transient===true))
   return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
- if(existing.some(x=>pos(x?.coopHaulFleetID)))return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // A recovery hauler must be truly empty. An untagged same-owner
+ // stack (salvage, old ore, or another job) is still physical cargo: mixing
+ // it into the loaded NPC route could deliver or account for someone else's
+ // goods. A fleet tag is NOT the definition of an empty hold.
+ if(existing.length>0)return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // A partial per-ship adapter can claim empty while the original global
+ // table still assigns cargo to this hauler. Both views must agree before
+ // reparenting the first cargoID.
+ let globalBefore;
+ try{globalBefore=cargoRows({store,cargoTable:options.cargoTable,database})}
+ catch(_error){return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0}}
+ if(!Array.isArray(globalBefore))
+  return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
+ if(globalBefore.some(row=>pos(row?.entityID)===haulerID))
+  return {status:"HAULER_ALREADY_LOADED",adopted:0};
  // Upserts are not a GameStore transaction. A failed second write
  // cannot turn a partially transferred batch into an authorised haul.
  // Include the failing row: an adapter may mutate then return failure.
@@ -225,8 +273,37 @@ function adopt(scene,fleet,options={}){
   // The original custody must be re-flushed after compensation, not just
   // restored to an in-memory table. Unknown rollback means operator hold.
   const durable=flushCargo();
-  if(!restored||!durable){
+  // Upsert and flush ACKs do not prove that the original cargo rows were
+  // restored. Some adapters can acknowledge a write yet silently keep the
+  // replacement-hauler row. Read back every original cargoID globally and
+  // confirm exact source custody before permitting a later retry.
+  let verified=false;
+  if(restored&&durable){
+   try{
+    const all=cargoRows({store,cargoTable:options.cargoTable,database});
+    const target=store.listNativeCargoForEntity(haulerID);
+    const custodyFields=["cargoID","entityID","ownerID","typeID","quantity",
+     "moduleID","transient","coopHaulFleetID","coopHaulSystemID",
+     "coopHaulFromMinerID","coopHaulLoadedAt","coopHaulAdoptedAt",
+     "coopHaulAdoptedFrom"];
+    const same=(actual,original)=>custodyFields.every(field=>
+     Object.hasOwn(actual,field)===Object.hasOwn(original,field)&&
+     Object.is(actual[field],original[field]));
+    // Initial preflight proved an empty hold: compensation must restore it.
+    verified=Array.isArray(all)&&Array.isArray(target)&&
+     target.length===0&&
+     all.every(row=>pos(row?.entityID)!==haulerID)&&
+     touched.every(original=>{
+      const hits=all.filter(row=>pos(row?.cargoID)===pos(original.cargoID));
+      return hits.length===1&&same(hits[0],original)&&
+       !target.some(row=>pos(row?.cargoID)===pos(original.cargoID));
+     });
+   }catch(_error){verified=false}
+  }
+  if(!restored||!durable||!verified){
    fleet.coopHaulNeedsOperatorRepair=true;
+   hauler.coopHaulNeedsOperatorRepair="ADOPTION_RECOVERY_UNVERIFIED";
+   doneSlots.add(key);
    noteOnce(noted,key+":recovery",probe,"living-haul-cargo-adoption-skipped",
     {systemID},{fleetID,status:"ADOPTION_RECOVERY_UNVERIFIED",reason:status});
    return {status:"ADOPTION_RECOVERY_UNVERIFIED",detail,adopted:0};
@@ -257,14 +334,52 @@ function adopt(scene,fleet,options={}){
  // half-observed loaded ship into the live hauling / selling lifecycle.
  let cargoItems,readback;
  try{
+  // The target ship's local view is not global custody proof. A broken
+  // upsert could leave the original row visible on the former hauler while
+  // returning a correct-looking new-hauler view. Check the original cargoID
+  // across the WHOLE native store after durable flush, before starting warp.
+  const allCommitted=cargoRows({store,cargoTable:options.cargoTable,database});
+  if(!Array.isArray(allCommitted))
+   throw Error("ORIGINAL_CARGO_GLOBAL_READBACK_UNAVAILABLE");
+  const intended=new Set(planned.rows.map(row=>pos(row.cargoID)));
+  const globalHits=new Map();
+  for(const entry of allCommitted){
+   const id=pos(entry?.cargoID);
+   if(intended.has(id)){
+    const group=globalHits.get(id)||[];
+    group.push(entry);
+    globalHits.set(id,group);
+   }
+  }
+  // Exact global membership matters: other physical cargoIDs cannot ride
+  // the recovered ore under the same loaded/settlement lifecycle.
+  const targetGlobal=allCommitted.filter(row=>pos(row?.entityID)===haulerID);
+  if(targetGlobal.length!==planned.rows.length||
+     targetGlobal.some(row=>!intended.has(pos(row?.cargoID))))
+   throw Error("ORIGINAL_CARGO_GLOBAL_HOLD_CONTAINS_UNPLANNED_ITEMS");
+  if(planned.rows.some(row=>{
+   const matches=globalHits.get(pos(row.cargoID))||[];
+   return matches.length!==1||
+    pos(matches[0].entityID)!==haulerID||
+    pos(matches[0].ownerID)!==ownerID||
+    pos(matches[0].typeID)!==pos(row.typeID)||
+    pos(matches[0].quantity)!==pos(row.quantity)||
+    pos(matches[0].coopHaulFromMinerID)!==pos(row.coopHaulFromMinerID)||
+    Number(matches[0].coopHaulLoadedAt)!==Number(row.coopHaulLoadedAt)||
+    matches[0].transient!==false||
+    Number(matches[0].moduleID||0)!==0;
+  }))throw Error("ORIGINAL_CARGO_GLOBAL_READBACK_MISMATCH");
   readback=store.listNativeCargoForEntity(haulerID);
-  if(!Array.isArray(readback)||planned.rows.some(row=>{
+  if(!Array.isArray(readback)||readback.length!==planned.rows.length||
+     planned.rows.some(row=>{
    const matches=readback.filter(x=>pos(x?.cargoID)===pos(row.cargoID));
    return matches.length!==1||
     pos(matches[0].entityID)!==haulerID||
     pos(matches[0].ownerID)!==ownerID||
     pos(matches[0].typeID)!==pos(row.typeID)||
     pos(matches[0].quantity)!==pos(row.quantity)||
+    pos(matches[0].coopHaulFromMinerID)!==pos(row.coopHaulFromMinerID)||
+    Number(matches[0].coopHaulLoadedAt)!==Number(row.coopHaulLoadedAt)||
     pos(matches[0].coopHaulFleetID)!==fleetID||
     pos(matches[0].coopHaulSystemID)!==systemID||
     pos(matches[0].coopHaulAdoptedFrom)!==pos(row.entityID)||
@@ -274,7 +389,8 @@ function adopt(scene,fleet,options={}){
   // buildNativeCargoItems produces itemID (the original cargoID), not
   // cargoID. A view with the right length but wrong items must never sail.
   cargoItems=store.buildNativeCargoItems(haulerID);
-  if(!Array.isArray(cargoItems)||planned.rows.some(row=>{
+  if(!Array.isArray(cargoItems)||cargoItems.length!==planned.rows.length||
+     planned.rows.some(row=>{
    const matches=cargoItems.filter(x=>pos(x?.itemID)===pos(row.cargoID));
    return matches.length!==1||
     pos(matches[0].typeID)!==pos(row.typeID)||

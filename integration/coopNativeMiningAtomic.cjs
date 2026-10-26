@@ -11,13 +11,72 @@ const positive = value => Number.isSafeInteger(Number(value)) && Number(value) >
 const integer = value => Number.isSafeInteger(Number(value)) && Number(value) >= 0;
 const clone = value => JSON.parse(JSON.stringify(value));
 
+// Blocking has two very different meanings and both used to overwrite the same
+// field, so the original reason was lost and a pure configuration refusal looked
+// exactly like an uncertain native mutation:
+//  - the co-op rules are not enabled (or the rock/ship is not durable): nothing
+//    was read or written, so the hull stays usable and must NOT be marked for
+//    operator repair - otherwise enabling the flags later can never start the loop;
+//  - a real custody question (yield, identities, post-commit readback): keep the
+//    first reason verbatim and require an operator.
+const CONFIG_ONLY = new Set([
+  "ALIFE07_ATOMIC_FLAGS_REQUIRED",
+  "ALIFE07_PERSISTENT_NPC_REQUIRED",
+  "ALIFE07_PERSISTENT_ROCK_REQUIRED",
+]);
+// The store can also refuse *before* the transaction begins: it will not mix a
+// durable write with transient cache cargo, or a table is not cached, or a flush
+// is still in flight. Nothing was journaled and nothing was written, so those are
+// the same class as a missing flag - and marking a hull for operator repair here
+// produced a clear/re-block loop (measured: 52 repair-cleared events in 5 min on a
+// world whose image predated the cargo contract).
+const PRE_MUTATION = /NATIVE_TRANSIENT_STATE_UNSAFE|NATIVE_GAMESTORE_TABLE_UNAVAILABLE|NATIVE_GAMESTORE_PERSISTENCE_NOT_QUIESCENT|NATIVE_GAMESTORE_ATOMIC_REENTRANT|ALIFE07_MINING_ATOMIC_DISABLED|NATIVE_GAMESTORE_ATOMIC_DISABLED/;
 function blocked(entity, reason) {
   if (entity && typeof entity === "object") {
-    entity.coopMiningCargoNeedsOperatorRepair = reason;
-    entity.coopMiningCargoLastError = reason;
+    if (CONFIG_ONLY.has(reason) || PRE_MUTATION.test(String(reason || ""))) {
+      entity.coopMiningCargoLastError = reason;
+    } else {
+      entity.coopMiningCargoNeedsOperatorRepair =
+        entity.coopMiningCargoNeedsOperatorRepair || reason;
+      entity.coopMiningCargoLastError = reason;
+    }
   }
   return {success:false,stopReason:"cargo",reason};
 }
+// A durable hull can carry a sticky "needs operator repair" marker from a commit
+// that was refused *before* anything was written: the atomic store refuses while
+// the native npcCargo table still has transient paths
+// (NATIVE_TRANSIENT_STATE_UNSAFE), which happens in assertTables/flush, i.e. ahead
+// of the journal and the SQLite transaction. Such a marker is not an uncertain
+// custody state, and leaving it set stops the hull forever - across restarts, so
+// the world would never mine again. Only that exact pre-mutation refusal is
+// cleared; every other marker still requires an operator.
+const PRE_MUTATION_BLOCK = /^ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED.*NATIVE_TRANSIENT_STATE_UNSAFE/;
+function clearProvablePreMutationBlock(entity) {
+  const reason = String(entity.coopMiningCargoNeedsOperatorRepair || "");
+  if (!reason || !PRE_MUTATION_BLOCK.test(reason)) return false;
+  entity.coopMiningCargoNeedsOperatorRepair = undefined;
+  entity.coopMiningCargoLastError = undefined;
+  console.warn("[CoopNativeMiningAtomic] cleared pre-mutation block: " + reason);
+  try {
+    require("./coopRuntimeProbe").observe("living-mining-cargo-repair-cleared", null,
+      {spaceState: {systemID: Number(entity.systemID) || 0}},
+      {status: "CLEARED", reason, shipID: Number(entity.itemID) || 0, nativeMutation: false});
+  } catch (_error) { /* telemetry never authorizes custody */ }
+  return true;
+}
+
+// A zero-quantity cycle still settles the rock (all waste), but it must not look
+// like ore was produced, so `quantity` is reported verbatim and the verdict only
+// counts it when it is positive.
+function noteSettled(scene, entity, detail) {
+  try {
+    require("./coopRuntimeProbe").observe("living-mining-cycle-settled", null,
+      {spaceState: {systemID: Number(detail.systemID) || 0}},
+      {status: "COMMITTED", ...detail});
+  } catch (_error) { /* telemetry never authorizes custody */ }
+}
+
 function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
   if (!gameStore || !nativeStore || typeof resolveType !== "function")
     throw Error("ALIFE07_NATIVE_AUTHORITIES_REQUIRED");
@@ -25,8 +84,11 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
   function settle(input) {
     const {scene,entity,targetEntity,mineableState,miningResult,transferredQuantity,
       cycleBoundaryMs,moduleItem,commitScene,readState} = input || {};
+    if (entity) clearProvablePreMutationBlock(entity);
     if (!entity || entity.coopMiningCargoNeedsOperatorRepair)
-      return blocked(entity,"ALIFE07_REPAIR_REQUIRED");
+      return blocked(entity, entity && entity.coopMiningCargoNeedsOperatorRepair
+        ? "ALIFE07_REPAIR_REQUIRED:" + String(entity.coopMiningCargoNeedsOperatorRepair)
+        : "ALIFE07_REPAIR_REQUIRED");
     if (process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC !== "1" ||
         process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS !== "1" ||
         process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY !== "1" ||
@@ -47,15 +109,39 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     const moduleID=Number(moduleItem?.itemID), before=Number(mineableState?.remainingQuantity);
     const normal=Number(miningResult?.normalQuantity), wasted=Number(miningResult?.wastedQuantity);
     const quantity=Number(transferredQuantity), consumed=quantity+wasted;
-    const cycle=Number(cycleBoundaryMs);
-    if (![systemID,rockID,shipID,ownerID,oreTypeID,moduleID,cycle].every(positive) ||
-        ![before,normal,wasted,quantity,consumed].every(integer) ||
-        consumed<=0 || consumed>before || quantity>MAX_QTY || quantity<normal ||
-        normal>MAX_QTY || wasted>MAX_QTY ||
-        !scene || typeof scene.getEntityByID !== "function" ||
-        scene.getEntityByID(rockID)!==targetEntity ||
-        typeof commitScene!=="function" || typeof readState!=="function")
-      return blocked(entity,"ALIFE07_YIELD_INVALID");
+    // A cycle boundary is a millisecond instant, but the runtime hands it over as
+    // a float (effect timing math), so a strict safe-integer check rejected every
+    // real cycle with ALIFE07_YIELD_INVALID:cycleBoundaryMs. Round it once; the
+    // value is only used to build the journal operation key.
+    const cycleRaw = Number(cycleBoundaryMs);
+    const cycle = Number.isFinite(cycleRaw) ? Math.round(cycleRaw) : NaN;
+    // Every refusal names the input that failed. A single ALIFE07_YIELD_INVALID
+    // for eleven different checks meant a stuck fleet with no way to tell whether
+    // the ship id, the ore type, the owner or the scene preimage was wrong.
+    const invalid = field => blocked(entity, "ALIFE07_YIELD_INVALID:" + field);
+    if (!scene || typeof scene.getEntityByID !== "function")
+      return invalid("scene");
+    if (!positive(systemID)) return invalid("systemID");
+    if (!positive(rockID)) return invalid("rockID");
+    if (!positive(shipID)) return invalid("shipID");
+    if (!positive(ownerID)) return invalid("ownerID");
+    if (!positive(oreTypeID)) return invalid("oreTypeID");
+    if (!positive(moduleID)) return invalid("moduleID");
+    if (!positive(cycle)) return invalid("cycleBoundaryMs");
+    if (!integer(before)) return invalid("remainingQuantity");
+    if (!integer(normal)) return invalid("normalQuantity");
+    if (!integer(wasted)) return invalid("wastedQuantity");
+    if (!integer(quantity)) return invalid("transferredQuantity");
+    if (!integer(consumed)) return invalid("consumed");
+    if (consumed <= 0) return invalid("consumedZero");
+    if (consumed > before) return invalid("consumedOverRock");
+    if (quantity > MAX_QTY || normal > MAX_QTY || wasted > MAX_QTY)
+      return invalid("quantityOverLimit");
+    if (quantity < normal) return invalid("quantityBelowNormal");
+    if (scene.getEntityByID(rockID) !== targetEntity)
+      return invalid("sceneRockIdentity");
+    if (typeof commitScene !== "function") return invalid("commitScene");
+    if (typeof readState !== "function") return invalid("readState");
     const snapshot=readState();
     if (!snapshot || ![before,before-consumed].includes(Number(snapshot.remainingQuantity)) ||
         Number(snapshot.yieldTypeID)!==oreTypeID)
@@ -220,6 +306,15 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
       if (old) Object.assign(old,localRow);
       else if (Array.isArray(entity.nativeCargoItems)) entity.nativeCargoItems.push(localRow);
       else entity.nativeCargoItems=[localRow];
+      // The one product proof of a mining cycle: this native transaction really
+      // took ore off the rock and really put it in the hull. Everything else we can
+      // observe (module active, lock held, cycle attempted) is an input.
+      noteSettled(scene, entity, {
+        shipID,rockID,systemID,moduleID,oreTypeID,
+        quantity,wasted,beforeRock:receipt.beforeRock,afterRock:receipt.afterRock,
+        cargoID:receipt.cargoID,nextCargo:receipt.nextCargo,
+        replayed:receipt.replayed===true,
+      });
       return {success:true,deltaResult,receipt};
     }catch(_){return blocked(entity,"ALIFE07_POSTCOMMIT_RECONCILIATION_UNKNOWN");}
   }

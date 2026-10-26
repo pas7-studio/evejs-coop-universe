@@ -35,10 +35,13 @@ test("both hooks are installed once and stay env-gated and default OFF",{skip:!c
 });
 
 test("the installed module is shipped by the installer, not hand-copied",()=>{
+ // Module membership lives in the one overlay module list; the installer only
+ // carries the pinned source hook (and its exact rollback).
+ const {names}=require("../scripts/overlay-spec.cjs");
+ assert.ok(names.includes("coopAgentDialogue"),"coopAgentDialogue must be a registered overlay module");
  const script=fs.readFileSync(path.join(import.meta.dirname,"..","scripts","patch-evejs-coop.cjs"),"utf8");
- // The installer ships a long names array; assert membership, not position.
- assert.match(script,/const names=\[[^\]]*"coopAgentDialogue"/);
- assert.match(script,/coop-agent-dialogue-patch\.cjs"\)\.patch\(text,\{remove\}\)/);
+ assert.match(script,/coop-agent-dialogue-patch\.cjs"\)\.patch\(text,\{remove:true\}\)/);
+ assert.match(script,/coop-agent-dialogue-patch\.cjs"\)\.patch\(text,\{remove:false\}\)/);
 });
 
 test("a real DoAction tuple keeps the pilot name and stays reversible",()=>{

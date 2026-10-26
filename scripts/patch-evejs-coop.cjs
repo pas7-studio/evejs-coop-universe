@@ -360,6 +360,14 @@ function run({codePath,remove=false,dryRun=false}){
   if(!remove){
    const after=fs.readFileSync(src,"utf8");
    new vm.Script(after,{filename:src});
+   // Modules are installed as <name>.js, so require("./sibling.cjs") resolves to
+   // nothing in the running server. The hook then throws on every call and the
+   // caller swallows it per tick, so the feature silently never runs - exactly how
+   // the mining fleet spent hours "charged, stopped, nothing mined".
+   const sibling=after.match(/require\("\.\/[A-Za-z][A-Za-z0-9]*\.cjs"\)/);
+   if(sibling)
+    throw Error("INSTALL_REQUIRE_EXTENSION: "+name+" keeps "+sibling[0]+
+     " but overlay modules are installed as .js; require it without an extension");
    plan.push({file,before:fs.existsSync(file)?fs.readFileSync(file,"utf8"):null,after});
   }else if(fs.existsSync(file)){
    const before=fs.readFileSync(file,"utf8");
@@ -368,17 +376,45 @@ function run({codePath,remove=false,dryRun=false}){
    plan.push({file,before,after:null});
   }
  }
+ // A hook that requires a module the overlay never installs throws inside stock
+ // code and aborts the native tick it was attached to, which looks exactly like an
+ // idle feature. Fail the install instead of shipping that. Checked before the plan
+ // is written, so a refused install leaves the tree untouched.
+ const requires=require("./coop-hook-requires.cjs").audit({
+  names,specs,integrationsDir:path.join(project,"integration"),checkout:code});
+ if(requires.violations.length>0)
+  throw Error("HOOK_REQUIRE_UNRESOLVED: "+requires.violations[0].code+" "+
+   requires.violations[0].from+" -> "+requires.violations[0].specifier);
  const changed=plan.filter(p=>p.before!==p.after);
  if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};
 }
+function l1CoveredFiles(){
+ // L1 runs before this overlay: a file that legitimately differs from the pinned
+ // commit because a pinned patch changed it is our baseline, not drift. The
+ // applier refuses any sha256 or pin mismatch, so the patch content itself is
+ // verified before this overlay is ever installed.
+ if(l1CoveredFiles.cache)return l1CoveredFiles.cache;
+ const covered=new Set();
+ try{
+  const manifest=JSON.parse(fs.readFileSync(
+   path.join(__dirname,"..","patches","upstream","MANIFEST.json"),"utf8"));
+  for(const entry of manifest.patches||[])
+   for(const file of entry.files||[])covered.add(file);
+ }catch(_error){/* no manifest: no L1 files to allow */}
+ l1CoveredFiles.cache=covered;
+ return covered;
+}
+
 function classifyFile(text,spec,code){
+ const l1=false;
  try{
   const pristine=transform(text,spec,true);
   if(pristine!==text)return transform(pristine,spec,false)===text?"PATCHED":"DRIFTED";
   transform(text,spec,false);
   return spec.patches.some(p=>text.includes(p.line))?"DRIFTED":"PRISTINE";
  }catch(_error){
+  if(l1CoveredFiles().has(spec.file))return "PRISTINE";
   // Chained patch modules legitimately refuse to REMOVE a hook that a pristine
   // file never had. Falling back to git HEAD tells the truth: a file identical
   // to HEAD is pristine, and a HEAD that our patches reproduce exactly is
@@ -444,4 +480,4 @@ if(require.main===module){
   }else console.log(JSON.stringify(result,null,2));
  }catch(error){console.error("[COOP PATCH ERROR]",error.message);process.exitCode=1;}
 }
-module.exports={run,check,executePlan,classifyFile,transform,strip,specs,names,PIN};
+module.exports={run,check,executePlan,classifyFile,transform,strip,specs,names,PIN,l1CoveredFiles};

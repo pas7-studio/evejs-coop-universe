@@ -8,6 +8,28 @@
 // (docs/UPSTREAM_PATCH_SERIES.md).
 const PIN="c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f";
 const names=["coopAlifeStartupCargoAudit","coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","coopAlifeNativeBuyerDispatch","coopAlifeNativeBuyerRuntime","coopAlifeNativeDeliveryEvidence","coopAlifeNativeEconomyAct","coopAlifeNativeMiningWitness","coopAlifeNativeResupplyBridge","coopAlifeNews","coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime","coopCivilianOrders","coopCombatProbe","coopConvoyOperations","coopConvoyOutcomeProof","coopCourierDispatch","coopCourierFlight","coopCourierFlightDriver","coopCourierNativeAccept","coopCourierNotices","coopCourierRuntime","coopDroneFighterAuthority","coopDuoCoordinator","coopDuoPresence","coopDuoRaidTactics","coopEncounterDirector","coopEscortContractSettlement","coopEscortFlightGate","coopEscortNativeBinding","coopEscortNativeBootstrap","coopEscortNativeFunds","coopEscortNativeMount","coopEscortNativeRescue","coopEscortNativeTactics","coopEscortPricedOffers","coopEscortReputation","coopEscortRescueNavigation","coopEscortRuntime","coopEscortTacticalGame","coopEscortTerminalAttendance","coopEscortVolunteers","coopEscortWarpFence","coopEwarDogmaCorrections","coopFactionDirector","coopFactionPatrolRuntime","coopFleetDungeonCredit","coopFleetMissionJoin","coopFleetMissionTurnin","coopFleetTradeSafety","coopFleetWarpArrival","coopFleetWarpSafety","coopGameStoreAtomic","coopHeadlessScenePolicy","coopIdentityRegistry","coopIndustryPacing","coopMarketCatalog","coopMissionInstanceProvenance","coopNativeActivity","coopNativeAgentMotion","coopLivingAgentRuntime","coopAdminBridge","coopNativeCombatEvidence","coopNativeConsequences","coopNativeConvoyRenewal","coopNativeDepot","coopNativeFittingSlotGuard","coopNativeFittingSourceGuard","coopNativeFleetParty","coopNativeGateTransfer","coopNativeHaulCargo","coopNativeHaulManifest","coopNativeIndustry","coopNativeLootPickupEvidence","coopNativeLootQuarantine","coopNativeLpStandings","coopNativeMiningReadiness","coopNativeNpcDemo","coopNativeNpcMarket","coopNativePveObjectiveGuard","coopNativeRaidEligibility","coopNativeRaids","coopNativeRestore","coopNativeScanProof","coopNativeStationArrival","coopNativeStationOreSettlement","coopNativeTradeAtomic","coopNativeTradeCustody","coopNativeWarehouse","coopNpcAmmoConservation","coopNpcAmmoDebitJournal","coopNpcAmmoSupply","coopNpcAmmoWitness","coopNpcBuyerCoordinator","coopNpcBuyerNativeBindings","coopNpcBuyerRecoveryAudit","coopNpcBuyerAdminControl","coopNpcChatter","coopNpcCorporateBuyRuntime","coopNpcCorporateBuyerAtomic","coopNpcCorporateSettlement","coopNpcDemandAuthority","coopNpcDestructionAttacker","coopNpcEconomyScheduler","coopNpcEconomyUnknownRecovery","coopNpcFireDebitProof","coopNpcGateTravel","coopNpcHostility","coopNpcHuntPolicy","coopNpcIndustryGameStoreScope","coopNpcIndustryNativeBindings","coopNpcIndustryOfflineAtomic","coopNpcIndustryOfflineDelivery","coopNpcIndustryReady","coopNpcIntelLedger","coopNpcLife","coopNpcLootCommerce","coopNpcLossBridge","coopNpcManufacturingJournal","coopNpcManufacturingNative","coopNpcManufacturingPlanner","coopNpcMarketCompletionNotify","coopNpcMarketPolicy","coopNpcMaterializer","coopNpcMemory","coopNpcNativeEconomyDirector","coopNpcNativeRearm","coopNpcOpportunityPlanner","coopNpcOrderArbiter","coopNpcOrderBridge","coopNpcPartialFillAtomic","coopNpcPersonalGoals","coopNpcPresentation","coopNpcRecognition","coopNpcRefinery","coopNpcRefineryRuntime","coopNpcRolePriority","coopNpcRustOrderAuthority","coopNpcSellPricing","coopNpcSellerTaxAuthority","coopNpcSpawnPools","coopNpcSquadDirector","coopNpcStockWreckProof","coopNpcTactics","coopNpcTopology","coopNpcWeaponAmmoGate","coopNpcWeaponEvidence","coopNpcWreckClaims","coopNpcWreckCustody","coopNpcWreckRecovery","coopPartyNotices","coopPatrolNavigator","coopPatrolOrders","coopPlayerCombatWitness","coopPlayerTravelGuard","coopRescueContracts","coopRescueNativeGame","coopRescueNativeTransfer","coopRescueNativeWarehouse","coopRescueNpcDepot","coopRescueNpcRivalry","coopRuntimeProbe","coopSceneObserverIntegrity","coopSessionPresence","coopSkillGrant","coopStationShipGuard","coopStockFleetCombatEvidence","coopStockFleetWreckEvidence","coopStoryMissionGuard","coopStoryMissionSettlementFence","coopStuckWarpRecovery","coopSystemIntel","coopVirtualEconomy","coopVirtualWorld","coopVirtualWorldRuntime","coopWorldOpportunityBoard","coopWorldSignals"];
+// Chat 19+21 P0-5B-2: native station itemStore and standing transaction custody.
+names.splice(names.indexOf("coopPveDuoNativeRewardEvidence")+1,0,"coopPveDuoNativeRewardCustody");
+// Chat 19+21 P0-5B: native wallet, LP, standing and mission history evidence.
+names.splice(names.indexOf("coopPveDuoNativeRewardGuard")+1,0,"coopPveDuoNativeRewardEvidence");
+// Chat 19+21 P0-5A: original two-person mission native reward authorization.
+names.splice(names.indexOf("coopPveBossLootProfileAudit")+1,0,"coopPveDuoNativeRewardGuard");
+// Chat 19+21 P0-4B-2: original NPC profile to loaded loot rule source audit.
+names.splice(names.indexOf("coopPveBossLootClaim")+1,0,"coopPveBossLootProfileAudit");
+// Chat 19+21 P0-4B: original boss item pre-grant durable custody fence.
+names.splice(names.indexOf("coopPveBossLootPickup")+1,0,"coopPveBossLootClaim");
+// Chat 19+21 P0-4B: exact original boss wreck item pickup witness (read-only).
+names.splice(names.indexOf("coopPveNativeBossDirector")+1,0,"coopPveBossLootPickup");
+// Chat 19+21 P0-4A: source-tagged native boss HP and original wreck witness.
+names.splice(names.indexOf("coopPveObjectiveDoctrine")+1,0,"coopPveNativeBossDirector");
+// Chat 19+21 P0-3B: exact native killable objective defend, regroup and retreat.
+names.splice(names.indexOf("coopPveWaveReinforcements")+1,0,"coopPveObjectiveDoctrine");
+// Chat 19+21 P0-3A: native authored-wave warp and physical arrival handoff.
+names.splice(names.indexOf("coopPveNativeSiteDefense")+1,0,"coopPveWaveReinforcements");
+// Chat 19+21 P0-2: native dungeon defender authority, independent OFF gate.
+names.splice(names.indexOf("coopPveRetaliationGuard")+1,0,"coopPveNativeSiteDefense");
+// Chat 19+21 stage 1: existing native tactics retaliate only on verified aggression.
+names.splice(names.indexOf("coopNpcTactics")+1,0,"coopPveRetaliationGuard");
 // Chat 29: source-level buy cancellation custody, default OFF.
 // FW-001: source-only authoritative war state; default OFF.
 names.splice(names.indexOf("coopFactionDirector")+1,0,"coopFactionWarCore","coopFactionWarStore");
@@ -48,6 +70,10 @@ names.splice(names.indexOf("coopEconomyDestination")+1,0,"coopMiningTrace");
 // Restart resilience: re-attach durable haul cargo orphans to the re-seeded
 // hauler of the same system/slot (default OFF, never invents ore).
 names.splice(names.indexOf("coopMiningTrace")+1,0,"coopHaulCargoAdoption");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningCapacitorGate");
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningActivate");
+// An idle native NPC must not clear a mining hull's target locks (default OFF).
+names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningTargetGuard");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -152,7 +178,13 @@ const specs=[
  {file:"server/src/services/chat/sessionRegistry.js",patches:[
   {anchor:'    addToIndex(session, characterID);',line:"    if (process.env.EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP === \"1\") setImmediate(() => { if (isLiveSession(session) && resolveSessionCharacterID(session) === characterID) Promise.resolve().then(() => require(\"../../space/coopNpcMarketCompletionNotify\").notifyPendingSellerOnLogin(characterID)).catch(error => console.warn(\"[CoopMarketSellerCatchup]\", error.message)); });",after:true}
  ]},
- {file:"server/src/services/mining/miningRuntime.js",patches:[]},
+ {file:"server/src/services/mining/miningRuntime.js",patches:[
+    // The runtime stops a mining module with the reason the mining runtime
+    // returned; "target" covers four different checks. Note the state they read
+    // (rock present, ore left, real lock, pending locks) for native NPCs only.
+    {anchor:'  const targetID = toInt(effectState.targetID, 0);\n  const targetEntity = scene.getEntityByID(targetID);\n  const mineableState = getMineableState(scene, targetID);',after:true,
+     line:'  require("../../space/coopMiningTrace").noteCycleAttempt(scene, entity, effectState, {targetID, found: Boolean(targetEntity), remaining: mineableState && mineableState.remainingQuantity, locked: getTargetsForEntity(scene, entity).includes(targetID)}, cycleBoundaryMs);'}
+  ]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
@@ -163,7 +195,16 @@ const specs=[
   ]},
  {"file":"server/src/space/modules/localCycleReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
  {"file":"server/src/space/combat/missiles/missileReloads.js","patches":[{"anchor":"function canUseVirtualNativeNpcReloadReserve(entity, moduleItem, chargeTypeID) {","line":"  if (require(\"../../coopNpcAmmoConservation\").isStrict(entity)) return false;","after":true}]},
- {file:"server/src/space/runtime.js",patches:[]},
+ {file:"server/src/space/runtime.js",patches:[
+    // A co-op mining module stopped by anything (state change, cargo, warp, NPC
+    // combat, sessionless finalize) is invisible in every other trace: the tick-end
+    // snapshot only shows that no effect exists. These two entry hooks record the
+    // caller's own reason string next to the module id.
+    {anchor:'  deactivateGenericModule(session, moduleID, options = {}) {\n    const entity = this.getShipEntityForSession(session);',after:true,
+     line:'   require("./coopMiningTrace").noteModuleStop(this,this.getShipEntityForSession(session),moduleID,(options&&options.reason)||"manual","session");'},
+    {anchor:'function finalizeGenericModuleDeactivationWithoutSession(\n  scene,\n  entity,\n  effectState,\n  options = {},\n) {',after:true,
+     line:'  require("./coopMiningTrace").noteModuleStop(scene,entity,effectState&&effectState.moduleID,(options&&options.reason)||"state","nosession");'}
+  ]},
  {file:"server/src/space/movement/warp/movementWarpState.js",patches:[]},
  {file:"server/src/space/npc/nativeNpcService.js",patches:[]},
  {file:"server/index.js",patches:[]},
@@ -208,6 +249,11 @@ const specs=[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
  ]},
  {file:"server/src/services/mining/miningNpcOperations.js",patches:[
+  // A module stopped for a target change and restarted next tick pays the
+  // activation cost forever and never completes a cycle. Observation only.
+  {anchor:"      if (activeEffect && toInt(activeEffect.targetID, 0) !== toInt(targetEntity.itemID, 0)) {",
+   after:true,
+   line:"require(\"../../space/coopMiningTrace\").noteTargetMismatch(fleetRecord,scene,minerEntity,entry,activeEffect,targetEntity);"},
   // Restart resilience: a previous process may leave durable haul cargo on a
   // hauler that no longer exists. Re-attach it once, then let the normal
   // loaded -> station -> sell pipeline continue. Telemetry never decides.
@@ -225,25 +271,41 @@ const specs=[
    line:'      require("../../space/coopMiningTrace").note("TARGET_LOCK_FAILED",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),errorMsg:String((targetLockResult&&targetLockResult.errorMsg)||"NONE")});'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
-   {anchor:"  const primaryTargetEntry = [...targetAssignmentCounts.entries()]",after:false,
-    line:"  require(\"../../space/coopMiningTrace\").note(\"FLEET_POST_TICK\",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),state:String(fleetRecord.state||\"\"),miners:(Array.isArray(fleetRecord.minerEntityIDs)?fleetRecord.minerEntityIDs:[]).map(function(id){var e=scene.getEntityByID(id);return id+\"|\"+String((e&&e.mode)||\"none\")+\"|act\"+(e&&e.activeModuleEffects instanceof Map?e.activeModuleEffects.size:-1)+\"|cap\"+(e?Number(e.capacitorChargeRatio):\"none\")+\"|capmax\"+(e?Number(e.capacitorCapacity):0)+\"|tau\"+(e?Number(e.capacitorRechargeRate)||0:0)+\"|reAt\"+(e?Number(e.capacitorRechargedAtMs)||0:0);}).join(\" ; \")});"},
    {anchor:"    if (!targetEntity) {\n      delete assignmentMap[toInt(minerEntity.itemID, 0)];",after:true,
-    line:'      require("../../space/coopMiningTrace").note("NO_MINEABLE_TARGET",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),rocks:(Array.isArray(availableTargetEntries)?availableTargetEntries.length:-1),claims:(claimCounts instanceof Map?claimCounts.size:-1),activeAsteroidID:toInt(fleetRecord&&fleetRecord.activeAsteroidID,0)});'},
+  line:"require(\"../../space/coopMiningTrace\").noteNoMineableTarget(fleetRecord,scene,minerEntity,availableTargetEntries,claimCounts);"},
    {anchor:"    const distanceToTarget = hooks.getSurfaceDistance(minerEntity, targetEntity);",after:true,
-    line:'    require("../../space/coopMiningTrace").note("MINER_TARGET",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),targetID:toInt(targetEntity.itemID,0),modules:miningModules.length,fitted:getNpcFittedModuleItems(minerEntity).length,activeEffects:(minerEntity.activeModuleEffects instanceof Map?minerEntity.activeModuleEffects.size:-1),distance:Math.round(hooks.getSurfaceDistance(minerEntity,targetEntity))});'},
+    line:'    require("../../space/coopMiningTrace").noteTargetSelected(fleetRecord,scene,minerEntity,targetEntity,miningModules,hooks);'},
+   // The overlay only inserts *before* an anchor, so the traced call ends with
+   // `continue`: without it the stock call below also runs, activating the same
+   // module twice per fleet tick and spending its capacitor twice. Measured: a
+   // 250 GJ hull sat at ratio 0.003-0.013 against a 0.092 requirement, so the
+   // fleet never mined again after its first cycle.
    // The stock loop discards the activation result, so a module that refuses to
    // start leaves the fleet "mining" forever with activeEffects=0.
    {anchor:"      if (!activeEffect) {\n      scene.activateGenericModule(pseudoSession, entry.moduleItem, entry.effectRecord.name, {\n        targetID: targetEntity.itemID,\n      });\n      }",
-    line:'      if (!activeEffect) { const coopAct = scene.activateGenericModule(pseudoSession, entry.moduleItem, entry.effectRecord.name, { targetID: targetEntity.itemID }); if (!coopAct || coopAct.success !== true) require("../../space/coopMiningTrace").note("MODULE_ACTIVATE_FAILED",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),moduleID:toInt(entry.moduleItem.itemID,0),typeID:toInt(entry.moduleItem.typeID,0),locationID:toInt(entry.moduleItem.locationID,0),shipID:toInt(minerEntity.itemID,0),cap:Number(minerEntity.capacitorCapacity)||0,ratio:Number(minerEntity.capacitorChargeRatio),native:(minerEntity.nativeNpc===true),hasSession:Boolean(minerEntity.session),errorMsg:String((coopAct&&coopAct.errorMsg)||"NONE")}); }'},
+    line:"      if (!activeEffect) { require(\"../../space/coopMiningActivate\").activate({scene,pseudoSession,minerEntity,entry,targetEntity,fleetRecord}); continue; }"},
    {anchor:"    if (!minerEntity || minerEntity.mode === \"WARP\" || minerEntity.pendingWarp) {",after:true,
    line:'      require("../../space/coopMiningTrace").note("MINER_NOT_IN_SCENE_OR_WARPING",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntityID,0),found:Boolean(minerEntity),mode:String((minerEntity&&minerEntity.mode)||""),pendingWarp:Boolean(minerEntity&&minerEntity.pendingWarp)});'},
   {anchor:"  fleetRecord.nextThinkAtMs = now + thinkIntervalMs;",after:true,
-    line:'  require("../../space/coopMiningTrace").note("TICK_"+String(fleetRecord.state||"unknown"),{fleetID:toInt(fleetRecord.fleetID,0),systemID:toInt(scene.systemID,0),activeAsteroidID:toInt(fleetRecord.activeAsteroidID,0)});'},
+   line:"  require(\"../../space/coopMiningTrace\").noteTick(fleetRecord,scene,now,thinkIntervalMs);"},
+  // A durable ship must never leave the fleet just because its runtime
+  // controller was rebuilt: the persisted row still owns the hull. Heal it from
+  // the store first, then let the stock filter decide.
+  {anchor:"function pruneMiningFleet(fleetRecord) {\n  if (!fleetRecord) {\n    return null;\n  }",
+   after:true,
+   line:"if (process.env.EVEJS_COOP_NATIVE_MINING_SLOT_SELFHEAL === \"1\") { try { require(\"../../space/coopNativeMiningFleetDurable\").healFleetActors(fleetRecord,{npcService}); } catch (_coopHealError) { console.warn(\"[CoopFleetSelfHeal]\",_coopHealError.message); } }"},
+  // The fleet silently drops a miner when its runtime controller disappears.
+  // Report WHICH authority was lost (persisted row vs runtime registry) BEFORE
+  // the record is pruned, so the cause is measurable instead of guessed.
+  {anchor:"  fleetRecord.minerEntityIDs = (Array.isArray(fleetRecord.minerEntityIDs) ? fleetRecord.minerEntityIDs : [])",
+   line:"if (process.env.EVEJS_COOP_MINING_TRACE_PRUNE === \"1\") require(\"../../space/coopNativeMiningFleetDurable\").noteDroppedFleetActors(fleetRecord,{npcService});"},
   {anchor:'  if (startupSceneSeedSet.has(startupKey)) {',line:'  if (process.env.EVEJS_COOP_CONVOY_RENEWAL === "1") { const renewal = require("../../space/coopNativeConvoyRenewal").inspect({scene,systemID:scene.systemID,slotCount:resolveStartupFleetCount(),seeded:startupSceneSeedSet.has(startupKey),fleets:getMiningFleetsForSystem(scene.systemID)}); if (!renewal.allowed) return; if (renewal.renewal) startupSceneSeedSet.delete(startupKey); }'},
   {anchor:'  const responsePlan = resolveResponsePlan(scene, fleetRecord, aggressorEntity, {',
    line:'  if (process.env.EVEJS_COOP_PLAYER_CONSEQUENCES === "1") { try { require("../../space/coopNativeConsequences").noteMiningAggression(scene, fleetRecord, aggressorEntity, aggressionEventAtMs); } catch (_coopError) { console.warn("[CoopConsequences]", _coopError.message); } }'}
  ]},
  {file:"server/src/space/npc/nativeNpcWreckService.js",patches:[
+  // Persist the source slice before the original native itemStore grant.
+  {anchor:'  const grantResult = grantItemToCharacterLocation(',line:'  if (process.env.EVEJS_COOP_PVE_BOSS_LOOT_FENCE === "1") { const claim = require("../coopPveBossLootClaim").begin({wreck:wreckRecord,wreckItem:wreckItemRecord,characterID,destinationLocationID,requestedQuantity}); if (claim.status !== "NOT_VERIFIED_BOSS_WRECK" && claim.status !== "BOSS_LOOT_CLAIMED") return {success:false,errorMsg:"COOP_BOSS_LOOT_CLAIM_BLOCKED"}; }'},
   {anchor:'  const itemType = resolveItemByTypeID(wreckItemRecord.typeID) || {',line:"  if (process.env.EVEJS_COOP_NATIVE_LOOT_QUARANTINE === \"1\") { const guard = require(\"../coopNativeLootQuarantine\").check({wreckID,wreckItemID}); if (guard.status !== \"ALLOW\") return {success:false,errorMsg:\"COOP_LOOT_QUARANTINED\"}; }"},
   {anchor:'  refreshNativeWreckRuntimeEntity(wreckRecord.systemID, wreckRecord.wreckID, { broadcast: true });',line:"  if (process.env.EVEJS_COOP_NATIVE_LOOT_EVIDENCE === \"1\") { try { require(\"../coopNativeLootPickupEvidence\").note({scene:spaceRuntime.ensureScene(wreckRecord.systemID),wreck:wreckRecord,characterID,wreckItemID,destinationLocationID,sourceBefore:wreckItemRecord,sourceAfter:nativeNpcStore.getNativeWreckItem(wreckItemID),availableQuantity,requestedQuantity,grantResult}); } catch (_coopError) { console.warn(\"[CoopNativeLoot]\",_coopError.message); } }",after:false},
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:'  try { require("../coopVirtualWorldRuntime").confirmedNativeNpcWreck(normalizedSystemID, entityID, wreckRecord.wreckID, shipEntity); } catch (_coopError) { /* optional integration */ }'},
@@ -252,6 +314,13 @@ const specs=[
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:"  try { require(\"../coopNpcDestructionAttacker\").note(scene, shipEntity, options, wreckRecord); } catch (_coopError) { console.warn(\"[CoopNpcDestructionAttacker]\", _coopError.message); }"}
  ]},
  {file:"server/src/space/npc/npcBehaviorLoop.js",patches:[
+   // A hull that is mining is not idle: the idle path clears every target lock, and
+   // that stops the mining module before its first cycle. Env-gated, default OFF.
+   {anchor:"  if (options.clearTargets !== false) {\n    clearNpcTargetLocks(scene, entity);",line:'  if (options.clearTargets !== false) { let coopMining=false; try { coopMining=require("../coopMiningTargetGuard").keepTargetLock(entity)===true; } catch (_coopError) { console.warn("[CoopMiningLockGuard]", _coopError.message); } if (coopMining) options = {...options, clearTargets: false}; }',after:false},
+   // A hook must never throw into stock code: a missing or broken co-op module
+   // aborts the whole native tick it was attached to (measured: "NPC tick failed
+   // ... Cannot find module ../coopMiningTargetGuard" while the guard module was
+   // simply not registered for install).  // A durable NPC whose controller is dropped vanishes from every fleet that
   {"anchor":"    if (activeEffect) {\n      logNpcCombatDebug(\"npc.weapons.module-already-active\"","line":"    if (!require(\"../coopNpcWeaponAmmoGate\").check({entity,moduleItem,bankModuleIDs}).allowed) { if (activeEffect) scene.deactivateGenericModule(pseudoSession, activeEffect.moduleID || moduleItem.itemID, { reason: \"npc-ammo-empty\", deferUntilCycle: false }); continue; }","after":false},
   {anchor:"  if (sourceClass === \"npc\" && targetClass === \"npc\") {",line:"    if ((process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" || process.env.EVEJS_COOP_FACTION_WAR_COMBAT === \"1\") && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",after:true},
   {anchor:"      if (launchResult && launchResult.success) {",line:"        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",after:true},
