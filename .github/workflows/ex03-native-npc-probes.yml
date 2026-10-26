@@ -24,7 +24,7 @@ on:
       - 'tests/coop-native-hacking-admission.test.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
   push:
-    branches: [main, feat/ch22-23-npc-expedition-competition-20261026]
+    branches: [feat/ch22-23-npc-expedition-competition-20261026]
     paths:
       - 'integration/coopNpcExpedition*.cjs'
       - 'integration/coopNpcProbe*.cjs'
@@ -51,6 +51,9 @@ permissions:
   contents: read
 jobs:
   native-npc-probe-source:
+    # The default-branch registration must not run experimental tests on main.
+    # For PR checks, Actions checks out the PR merge ref containing EX-03.
+    if: ${{ github.event_name != 'workflow_dispatch' || github.ref != 'refs/heads/main' }}
     name: Original NPC probe source, data custody and restart fixtures
     runs-on: ubuntu-24.04
     timeout-minutes: 15
