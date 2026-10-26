@@ -23,7 +23,8 @@ function capture({characterID,agentID,getWallet,getJournal,getLP,getAgent,
  try{
   const authority=getAgent(agent);
   const corporationID=id(authority?.corporationID);
-  if(!corporationID)return {status:"REWARD_AGENT_CORPORATION_UNKNOWN"};
+  if(id(authority?.agentID)!==agent||!corporationID)
+   return {status:"REWARD_AGENT_CORPORATION_UNKNOWN"};
   const wallet=getWallet(char),history=getMissionState(char);
   const journal=getJournal(char),lp=getLP(char,corporationID);
   if(!wallet||!Number.isFinite(wallet.balance)||

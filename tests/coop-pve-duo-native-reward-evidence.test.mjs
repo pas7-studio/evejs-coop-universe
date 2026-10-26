@@ -128,3 +128,10 @@ test("two different native characters remain independent recipients",()=>{
  assert.equal(b.assessNow().characterID,102);
  assert.notEqual(a.assessNow().originalMissionJournalTransactionID,null);
 });
+
+test("native agent lookup must resolve exact requested agent, not some other corporation",()=>{
+ const f=fixture();
+ const wrong={...f.adapters,getAgent:()=>({agentID:51,corporationID:1000123})};
+ assert.equal(capture({characterID:101,agentID:50,...wrong}).status,
+  "REWARD_AGENT_CORPORATION_UNKNOWN");
+});
