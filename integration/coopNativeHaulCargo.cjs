@@ -315,6 +315,18 @@ function unloadCargo(scene,fleet,options={}){
     const cached=(hauler.nativeCargoItems||[]).find(x=>Number(x.itemID)===Number(item.cargoID));
     const removed=store.removeNativeCargo(item.cargoID);
     if(!removed?.success){blocked++;continue;}
+    // The virtual depot journal is durable. A native cargo deletion that
+    // exists only in memory is NOT a durable debit: after a server restart
+    // the original cargoID would reappear alongside the committed credit.
+    // Flush original npcCargo BEFORE verifying absence or depot.commit().
+    let durableSourceDebit=false;
+    try{
+     const database=options.database||require("../gameStore");
+     durableSourceDebit=database?.flushTableSync?.("npcCargo")?.success===true;
+    }catch(error){
+     console.warn("[CoopHaul] native cargo debit flush uncertain",error.message);
+    }
+    if(!durableSourceDebit){blocked++;continue;}
     // A mutation ACK is not proof of physical source debit. Require a
     // verified native cargo inventory array after removal; null/errors
     // leave the durable PREPARED intent for operator reconciliation.
