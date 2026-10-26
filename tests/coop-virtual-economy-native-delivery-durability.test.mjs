@@ -680,3 +680,52 @@ test("P0: miner with completed MAX_SAFE_INTEGER can keep mining without bricking
  assert.equal(again.advance(miners).steps,0);
  assert.equal(again.snapshot().systems["30000142"].ore,209);
 }));
+
+
+test("P0: corrupt saved role schema cannot silently reassign NPC trader to ore miner",()=>scoped(({file})=>{
+ const base={version:1,lastAt:0,rolesVersion:2,
+  systems:{"30000142":{ore:200,goods:100,demand:100,security:50,losses:0,nativeDelivered:100}},
+  pilots:{"npc-trader":{role:"trader",cargo:0,credits:100,completed:0}},events:[]};
+ for(const bad of ["2","1",3,-1,null,true,false,{},1.5,Number.MAX_SAFE_INTEGER]){
+  const state=structuredClone(base);
+  state.rolesVersion=bad;
+  const bytes=JSON.stringify(state);fs.writeFileSync(file,bytes);
+  assert.throws(()=>createEconomy({file,clock:()=>10000,stepMs:10000}),
+   /ECONOMY_TICK_JOURNAL_INVALID/,String(bad));
+  assert.equal(fs.readFileSync(file,"utf8"),bytes,
+   "saved cargo and NPC employment should remain intact for operator repair");
+ }
+ const valid=structuredClone(base);fs.writeFileSync(file,JSON.stringify(valid));
+ const e=createEconomy({file,clock:()=>10000,stepMs:10000});
+ assert.equal(e.advance([{id:"npc-trader",systemID:30000142}]).steps,1);
+ assert.equal(e.snapshot().pilots["npc-trader"].role,"trader");
+ assert.equal(e.snapshot().systems["30000142"].ore,200,
+  "original role must not be reset to the first-entry miner");
+ assert.equal(e.snapshot().systems["30000142"].goods,98);
+ assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.equal(createEconomy({file,clock:()=>10000}).snapshot()
+  .pilots["npc-trader"].role,"trader");
+}));
+
+test("P0: supported legacy role schemas migrate once, never accidentally re-upgrade on next restart",()=>scoped(({file})=>{
+ const base={version:1,lastAt:0,
+  systems:{"30000142":{ore:200,goods:100,demand:100,security:50,losses:0,nativeDelivered:100}},
+  pilots:{"npc-old":{role:"trader",cargo:0,credits:100,completed:0}},
+  events:[]};
+ for(const marker of [undefined,0,1,2]){
+  const state=structuredClone(base);
+  if(marker!==undefined)state.rolesVersion=marker;
+  fs.writeFileSync(file,JSON.stringify(state));
+  const e=createEconomy({file,clock:()=>10000,stepMs:10000});
+  const pilots=[{id:"npc-old",systemID:30000142}];
+  assert.equal(e.advance(pilots).steps,1);
+  const expected=marker===2?"trader":"miner";
+  assert.equal(e.snapshot().pilots["npc-old"].role,expected);
+  assert.equal(e.snapshot().rolesVersion,2);
+  assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+  const reopened=createEconomy({file,clock:()=>20000,stepMs:10000});
+  assert.equal(reopened.advance(pilots).steps,1);
+  assert.equal(reopened.snapshot().pilots["npc-old"].role,expected);
+  assert.equal(createEconomy({file,clock:()=>20000}).syncNativeDeliveries({"30000142":100}).quantity,0);
+ }
+}));
