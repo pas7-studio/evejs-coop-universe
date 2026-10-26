@@ -267,6 +267,7 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/agent/agentMgrService.js"){
   // Remove job hooks first, then existing dialogue patch. Install in reverse.
   if(remove){
+   text=require("./coop-player-mining-agent-patch.cjs").patch(text,true);
    text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:true});
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:true});
@@ -274,6 +275,7 @@ function transform(source,spec,remove){
    text=require("./coop-agent-dialogue-patch.cjs").patch(text,{remove:false});
    text=require("./coop-native-job-agent-patch.cjs").patch(text,{remove:false});
    text=require("./coop-faction-war-agent-patch.cjs").patch(text,{remove:false});
+   text=require("./coop-player-mining-agent-patch.cjs").patch(text,false);
   }
  }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
