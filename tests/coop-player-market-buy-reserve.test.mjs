@@ -345,3 +345,51 @@ test("partially filled original Rust BUY must conserve recorded spend and unspen
   assert.equal(s.assertExisting([current],201),true);
  }finally{reset()}
 });
+
+
+test("bound native BUY must retain original min-volume, duration, range and entered volume",()=>{
+ const reset=flags();
+ try{
+  const x=fixture(),svc=createBuyReserve({gameStore:x.gameStore,
+   makeID:()=>id,clock:()=>123456});
+  const pending=svc.begin(quote());
+  svc.bind(pending,order());
+  const source=structuredClone(x.db);
+  for(const drift of [
+   {min_volume:1},
+   {duration_days:365},
+   {range_value:9},
+   {vol_entered:8},
+   {vol_entered:6}
+  ]){
+   const rust={...order(),row:{...order().row,...drift}};
+   const commits=x.commits,snapshot=structuredClone(x.db);
+   assert.throws(()=>svc.assertExisting([rust],201),
+    /P2P_BUY_RESERVE_LEGACY_OR_UNFUNDED_BUY_ORDER/);
+   assert.equal(x.commits,commits);
+   assert.deepEqual(x.db,snapshot);
+  }
+  assert.deepEqual(x.db,source);
+  assert.equal(svc.assertExisting([{
+   ...order(),row:{...order().row,vol_entered:7}
+  }],201),true);
+ }finally{reset()}
+});
+test("genuine partially filled Rust BUY retains original funded placement terms",()=>{
+ const reset=flags();
+ try{
+  const x=fixture(),svc=createBuyReserve({gameStore:x.gameStore,
+   makeID:()=>id,clock:()=>123456});
+  svc.bind(svc.begin(quote()),order());
+  const reserve=x.db.playerMarketFills["buy-reserve:"+id];
+  reserve.filledQuantity=3;reserve.spentCents=3702;
+  reserve.remainingReserveCents=4936;
+  x.db.marketEscrow["23"].remainingQuantity=4;
+  x.db.marketEscrow["23"].escrowAmount=49.36;
+  const rust={...order(),row:{...order().row,vol_remaining:4,vol_entered:7}};
+  assert.equal(svc.assertExisting([rust],201),true);
+  const mutated={...rust,row:{...rust.row,min_volume:1}};
+  assert.throws(()=>svc.assertExisting([mutated],201),
+   /P2P_BUY_RESERVE_LEGACY_OR_UNFUNDED_BUY_ORDER/);
+ }finally{reset()}
+});

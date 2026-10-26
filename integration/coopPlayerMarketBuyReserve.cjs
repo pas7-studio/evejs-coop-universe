@@ -265,6 +265,14 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
        escrow.coopReserveReceiptKey!==receipt.key||
        toCents(escrow.price)!==receipt.priceCents||
        toCents(order.row.price)!==receipt.priceCents||
+       // A funded Rust BUY cannot silently change the accepted original
+       // minVolume/duration/range. Some pinned order readers omit
+       // vol_entered; when supplied, it must match the funded quantity.
+       order.row.min_volume!==receipt.minVolume||
+       order.row.duration_days!==receipt.durationDays||
+       order.row.range_value!==receipt.orderRange||
+       (order.row.vol_entered!==undefined&&
+        order.row.vol_entered!==receipt.quantity)||
        escrow.remainingQuantity!==order.row.vol_remaining||
        !positive(escrow.remainingQuantity)||
        escrow.remainingQuantity>receipt.quantity||
