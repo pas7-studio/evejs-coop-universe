@@ -53,4 +53,4 @@ EVEJS_COOP_PLAYER_NPC_MINING_ORDERS_UI=1
 
 On an approved disposable checkout run `node --test tests/coop-player-mining-*.test.mjs`, install/check the pinned overlay, and capture original native fleet cargo, warp and GameStore command receipts before/during/after two real player sessions. Confirm mission/convoy/militia agent priority and UI labels, then perform a deliberate crash/restart with HAUL in progress; no duplicate warp or ore/ISK is acceptable.
 
-**Remaining:** true native production market seller authorization, corporate ore inventory sale and revenue; NPC wage-cycle completion/replenishment; HAUL/RETREAT completion reconciliation; dedicated polished fleet manager (instead of stock Agent button labels).
+**E1 source addition:** the strict read-only physical HAUL/RETREAT completion verifier and one native `NATIVE_COMPLETED` GameStore receipt have been implemented behind a separate default-OFF flag. See [CHAT24_31_PHYSICAL_MINING_COMPLETION.md](CHAT24_31_PHYSICAL_MINING_COMPLETION.md). Remaining: native seller-authorized market sale and ISK revenue; payroll cycles; two-client physical E2E and smoother fleet management UI.
