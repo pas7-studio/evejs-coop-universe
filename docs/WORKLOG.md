@@ -203,3 +203,13 @@ Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after
 Why: A cargo still on a physical live ship is not an orphan; preserve existing HAULER_ALREADY_LOADED protection for the replacement hauler.
 Where: integration/coopHaulCargoAdoption.cjs
 Evidence: 42/42 exact-source isolated V8 regression callbacks PASS; before/after reproduction confirms INVALID/MISSING timestamp previously ADOPTABLE and now RE_ADOPTION_HISTORY_UNVERIFIED; Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:22Z · 48bbf2f · L2 · fix(P0): prove exactly one original cargoID globally after durable NPC haul adoption
+
+Why: The new hauler's local item cache could be correct while the native global inventory still retained an old copy of the exact original cargoID; the fleet previously started a potentially duplicate haul after durable commit.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOPTED despite duplicated global cargoID, now ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED. Full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:23Z · a594f77 · TEST · test(P0): global post-commit duplicate and stale original cargoID fail closed
+
+Why: Verify preflight and global readback use the same original cargoIDs; stale or duplicated post-commit global native rows require quarantining the entire fleet, and tests must emulate actual GameStore post-commit readbacks.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 44/44 exact-source isolated V8 test callbacks PASS; original main ADOPTED despite duplicated global cargoID, now ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED. Full Node/SQLite/Rust/gameplay NOT_RUN.
