@@ -85,17 +85,51 @@ function validate({ticket,getInstance,verifyLink,sharedObjectiveMatches,flags={}
   evidence:"ORIGINAL_DUNGEON_AND_TWO_ACCEPTED_NATIVE_MISSIONS_AND_DURABLE_SHARED_OBJECTIVE"};
 }
 function checkPeerBeforeNativePayout({ticket,currentPeer,preflight,
- getInstance,verifyLink,sharedObjectiveMatches,flags={}}={}){
- if(!preflight?.ok||preflight.status!=="PVE_DUO_NATIVE_REWARD_PREFLIGHT_READY")
+ verifyLink,sharedObjectiveMatches,flags={}}={}){
+ // Native leader DoAction purges its own original dungeon instance after
+ // reward! Requiring a *live instance* again here would strand the peer.
+ // Instead preserve pre-LEADER-payout proof and independently revalidate
+ // the durable immutable source link and native peer shared receipt.
+ const configured=checkConfiguration(flags);
+ if(!configured.ok)return configured;
+ if(!preflight?.ok||preflight.status!=="PVE_DUO_NATIVE_REWARD_PREFLIGHT_READY"||
+    !ticket?.ok||typeof verifyLink!=="function"||
+    typeof sharedObjectiveMatches!=="function"||!currentPeer)
   return {ok:false,status:"PVE_DUO_PREFLIGHT_NOT_PRESENT"};
- const rerun=validate({ticket:{...ticket,peerMission:currentPeer},
-  getInstance,verifyLink,sharedObjectiveMatches,flags});
- if(!rerun.ok)return rerun;
- const identity=["fleetID","leaderID","peerID","agentID","stationID",
-  "sourceInstanceID","missionSystemID","leaderSequence","peerSequence",
-  "contentID","missionTemplateID"];
- if(identity.some(k=>preflight[k]!==rerun[k]))
+ const leader=ticket.leaderMission;
+ if(id(ticket.leader)!==preflight.leaderID||
+    id(ticket.peerID)!==preflight.peerID||
+    id(ticket.fleetID)!==preflight.fleetID||
+    id(ticket.agentID)!==preflight.agentID||
+    id(ticket.station)!==preflight.stationID||
+    id(leader?.dungeonInstanceID)!==preflight.sourceInstanceID||
+    id(leader?.missionSequence)!==preflight.leaderSequence||
+    id(currentPeer?.missionSequence)!==preflight.peerSequence||
+    id(currentPeer?.agentID)!==preflight.agentID||
+    id(currentPeer?.missionSystemID)!==preflight.missionSystemID||
+    currentPeer.contentID!==preflight.contentID||
+    currentPeer.missionTemplateID!==preflight.missionTemplateID||
+    currentPeer.runtimeStatus!=="accepted"||
+    currentPeer.objectiveMode!=="dungeon"||
+    currentPeer.objectiveCompleted!==true||
+    currentPeer.gmCompleted===true||
+    ticket.session===ticket.peer||
+    id(ticket.session?.characterID)!==preflight.leaderID||
+    id(ticket.peer?.characterID)!==preflight.peerID||
+    ticket.session?.socket?.destroyed===true||
+    ticket.peer?.socket?.destroyed===true)
   return {ok:false,status:"PVE_DUO_NATIVE_RECIPIENT_CHANGED_AFTER_LEADER"};
+ const request={ownerID:preflight.leaderID,peerID:preflight.peerID,
+  agentID:preflight.agentID,leaderMission:leader,peerMission:currentPeer,
+  sourceInstanceID:preflight.sourceInstanceID};
+ let link,shared=false;
+ try{
+  link=verifyLink(request);
+  shared=sharedObjectiveMatches(request)===true;
+ }catch{return {ok:false,status:"PVE_DUO_PROVENANCE_AUTHORITY_UNAVAILABLE"}}
+ if(!link?.ok||!shared)return {ok:false,
+  status:!link?.ok?"PVE_DUO_DURABLE_INSTANCE_LINK_UNVERIFIED":
+   "PVE_DUO_PEER_NATIVE_SHARED_OBJECTIVE_UNVERIFIED"};
  return {ok:true,status:"PVE_DUO_PEER_NATIVE_REWARD_ALLOWED",
   sourceInstanceID:preflight.sourceInstanceID};
 }
