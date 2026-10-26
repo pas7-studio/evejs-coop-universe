@@ -248,3 +248,29 @@ Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED w
 Why: the churn diagnosis needed to know whether a miner is durable and whether it owns a runtime controller, which the previous event could not show
 Where: scripts/overlay-spec.cjs
 Evidence: live after rebuild every miner reads tr0 ctl1 (durable and controlled); caps now rise 0.021 -> 0.031 with reAt advancing; OVERLAY_OK patched 54
+### 2026-10-26T13:08Z · 20aca65 · L2 · fix(mining): stop double module activation and make durable slot status visible
+
+Why: the mining loop activated the same module twice per tick, and durable slot status was invisible in the event log
+Detail: The overlay inserts lines before an anchor, so the traced activation was added in front of the stock activateGenericModule call instead of replacing it: every fleet tick with no cached effect spent the module capacitor twice. Measured live on a 250 GJ hull: charge pinned at 0.003-0.013 against a 0.092 requirement, so the fleet never mined again after its first cycle. The traced call now continues 
+Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs, tests/coop-native-durable-slot-heal.test.mjs
+Evidence: live FLEET_POST_TICK: miners now hold ratio 0.72-0.96 with both strip miners active (was 0.003-0.013); living-native-durable-slot reports SPAWNED/../RESTORED with miners=2 haulers=1 per slot; OVERLAY_OK patched 54; durable suites 28/28 + new slot test 3/3
+### 2026-10-26T13:23Z · 69cb8c3 · L2 · fix(P0): prove exact native cargo membership after commit and rollback
+
+Why: The post-commit guard accepted a correct subset of planned cargo on a replacement hauler while unrelated native cargoIDs remained in the same physical hold. The rollback guard likewise accepted an otherwise restored batch with additional cargo still on the target.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 51/51 exact-source isolated V8 test callbacks PASS; before-fix original module accepted ADOPTED with cargoIDs 7001 and 7999 on the new hauler. Full native Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:24Z · 435737e · TEST · test(P0): reject post-commit phantom inventory and incomplete empty-hold rollback
+
+Why: Regression coverage for an unplanned cargoID introduced after preflight in global, local or ship-cache views, plus a phantom physical row remaining after partial compensation.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 51/51 exact-source isolated V8 test callbacks PASS; before-fix original module accepted ADOPTED with cargoIDs 7001 and 7999 on the new hauler. Full native Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:28Z · 563f4d5 · L2 · fix(P0): preserve original miner and load-time provenance after native cargo adoption
+
+Why: The native upsert could silently change the original minerID or original load timestamp while retaining cargoID/type/quantity. Existing post-commit checks accepted ADOPTED with altered provenance, compromising source-backed custody.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 54/54 isolated exact-source V8 test callbacks PASS, old main reproduced ADOPTED after miner/load-time mutation. Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T13:28Z · 3252730 · TEST · test(P0): refuse mutated miner and original load-time provenance after commit
+
+Why: Cover global and per-hauler post-commit mutation of original minerID and loadedAt, ensuring the fleet holds rather than warping.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 54/54 isolated exact-source V8 test callbacks PASS, old main reproduced ADOPTED after miner/load-time mutation. Node/SQLite/Rust/two-client gameplay NOT_RUN.
