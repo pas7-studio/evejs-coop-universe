@@ -128,7 +128,9 @@ jobs:
         run: |
           set -euo pipefail
           node --check scripts/verify-npc-probe-sqlite-crash.mjs
+          node --check scripts/verify-npc-probe-feature-sqlite-crash.mjs
           node scripts/verify-npc-probe-sqlite-crash.mjs
+          node scripts/verify-npc-probe-feature-sqlite-crash.mjs
       - name: Two-client/bubble gameplay remains a separate required gate
         run: |
           echo "EX-03 pinned native SQLite process-kill acceptance runs above. Native live two-client bubble movement and expedition fitting must still be run before production enablement."
