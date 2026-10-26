@@ -218,7 +218,21 @@ function adopt(scene,fleet,options={}){
     !pos(x?.cargoID)||pos(x?.entityID)!==haulerID||
     pos(x?.ownerID)!==ownerID||x?.transient===true))
   return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
- if(existing.some(x=>pos(x?.coopHaulFleetID)))return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // A recovery hauler must be truly empty. An untagged same-owner
+ // stack (salvage, old ore, or another job) is still physical cargo: mixing
+ // it into the loaded NPC route could deliver or account for someone else's
+ // goods. A fleet tag is NOT the definition of an empty hold.
+ if(existing.length>0)return {status:"HAULER_ALREADY_LOADED",adopted:0};
+ // A partial per-ship adapter can claim empty while the original global
+ // table still assigns cargo to this hauler. Both views must agree before
+ // reparenting the first cargoID.
+ let globalBefore;
+ try{globalBefore=cargoRows({store,cargoTable:options.cargoTable,database})}
+ catch(_error){return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0}}
+ if(!Array.isArray(globalBefore))
+  return {status:"HAULER_CARGO_PREFLIGHT_UNVERIFIED",adopted:0};
+ if(globalBefore.some(row=>pos(row?.entityID)===haulerID))
+  return {status:"HAULER_ALREADY_LOADED",adopted:0};
  // Upserts are not a GameStore transaction. A failed second write
  // cannot turn a partially transferred batch into an authorised haul.
  // Include the failing row: an adapter may mutate then return failure.

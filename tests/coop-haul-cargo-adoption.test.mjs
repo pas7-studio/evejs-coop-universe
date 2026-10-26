@@ -577,7 +577,7 @@ test("pinned GameStore result envelope exposes original durable npcCargo rows",(
  const result=adopt(sceneWith([hauler,miner]),target,{store,database:db,clock:()=>NOW});
  assert.equal(result.status,"ADOPTED");
  assert.equal(result.adopted,1);
- assert.equal(reads,2,"preflight and post-commit both consult the original table");
+ assert.equal(reads,3,"planning, empty-hauler preflight and post-commit consult original cargo");
  assert.equal(flushes,1);
  assert.equal(store.listNativeCargoForEntity(hauler.itemID).length,1);
  assert.equal(target.state,"loaded");
@@ -871,7 +871,7 @@ test("post-commit global duplicate original cargoID must never start a loaded NP
   let listingCount=0,flushes=0;
   store.listNativeCargo=()=>{
    listingCount++;
-   if(listingCount===1)return listing();
+   if(listingCount<=2)return listing();
    if(mode==="throw")throw Error("GLOBAL_INVENTORY_UNAVAILABLE");
    if(mode==="null")return null;
    if(mode==="missing")return [];
@@ -906,7 +906,7 @@ test("globally unique original cargoID post-commit permits one physical NPC haul
   database:{flushTableSync:()=>{flushes++;return {success:true}}}
  });
  assert.equal(result.status,"ADOPTED");
- assert.equal(globalReads,2,"preflight and post-commit both verify all native cargoIDs");
+ assert.equal(globalReads,3,"planning, empty hold and post-commit verify native cargoIDs");
  assert.equal(flushes,1);
  assert.equal(store.listNativeCargo().length,1);
  assert.equal(target.state,"loaded");
@@ -964,7 +964,7 @@ test("rollback must fail closed if global original readback is missing or throws
   };
   const list=store.listNativeCargo;
   store.listNativeCargo=()=>{
-   if(++reads>=2){
+   if(++reads>=3){
     if(mode==="null")return null;
     if(mode==="throw")throw Error("READBACK_UNAVAILABLE");
    }
@@ -986,5 +986,68 @@ test("rollback must fail closed if global original readback is missing or throws
   assert.equal(store.writes.length,1,"only original compensation was written");
   assert.equal(target.coopHaulNeedsOperatorRepair,true);
   assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+ }
+});
+
+test("same-owner untagged physical cargo cannot be mixed into restart-adopted haul",()=>{
+ for(const fleetTag of [0,undefined,null]){
+  resetForTests();
+  const preexisting=orphan({cargoID:8001,entityID:hauler.itemID,
+   coopHaulFleetID:fleetTag,coopHaulAdoptedAt:undefined});
+  const store=fakeStore([orphan(),preexisting]);
+  const before=structuredClone(store.listNativeCargo());
+  let flushes=0;
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"HAULER_ALREADY_LOADED");
+  assert.equal(result.adopted,0);
+  assert.equal(store.writes.length,0);
+  assert.equal(flushes,0);
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.state,"mining");
+  assert.deepEqual(store.listNativeCargo(),before);
+ }
+});
+
+test("global cargo proves a supposedly empty hauler is occupied even if local adapter hides it",()=>{
+ const old=orphan({cargoID:8001,entityID:hauler.itemID,
+  coopHaulFleetID:0,coopHaulAdoptedAt:undefined});
+ const store=fakeStore([orphan(),old]);
+ const read=store.listNativeCargoForEntity;
+ store.listNativeCargoForEntity=id=>id===hauler.itemID?[]:read(id);
+ const target=fleet();
+ const result=adopt(sceneWith([hauler]),target,{
+  store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+ });
+ assert.equal(result.status,"HAULER_ALREADY_LOADED");
+ assert.equal(store.writes.length,0);
+ assert.equal(target.state,"mining");
+});
+
+test("unavailable global inventory on empty-hauler preflight must block every original cargo write",()=>{
+ for(const mode of ["throw","null"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargo;
+  let count=0,flushes=0;
+  store.listNativeCargo=()=>{
+   if(++count===2){
+    if(mode==="throw")throw Error("ORIGINAL_STORE_NOT_AVAILABLE");
+    return null;
+   }
+   return read();
+  };
+  const target=fleet();
+  const result=adopt(sceneWith([hauler]),target,{
+   store,clock:()=>NOW,
+   // Do not allow a broken store to turn into a proof that the hold is empty.
+   database:{read:()=>({success:false}),flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(result.status,"HAULER_CARGO_PREFLIGHT_UNVERIFIED",mode);
+  assert.equal(store.writes.length,0);
+  assert.equal(flushes,0);
+  assert.equal(target.state,"mining");
  }
 });

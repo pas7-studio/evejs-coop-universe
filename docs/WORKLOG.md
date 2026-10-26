@@ -233,3 +233,13 @@ Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/S
 Why: Simulate silent ACK, wrong owner/quantity, stale adoption history, missing/throwing global readback and unavailable target inventory after compensation.
 Where: tests/coop-haul-cargo-adoption.test.mjs
 Evidence: 46/46 exact-source isolated V8 test callbacks PASS; real pinned Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:32Z · d0755b4 · L2 · fix(P0): require globally empty native hauler before orphan cargo adoption
+
+Why: Replacement NPC hauler with same-owner untagged physical cargo was accepted because preflight checked only coopHaulFleetID. The loaded fleet mixed unrelated cargoIDs and could misroute inventory.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED with unrelated physical cargoIDs [7001,8001] on one hauler; full Node/SQLite/Rust/gameplay NOT_RUN.
+### 2026-10-26T12:32Z · e4ead0d · TEST · test(P0): reject mixed untagged cargo and globally occupied replacement hauler
+
+Why: Require both local native cargo inventory and global NPC cargo view to prove a replacement hauler empty; regression covers untagged stacks, hidden global stacks, and read failures.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED with unrelated physical cargoIDs [7001,8001] on one hauler; full Node/SQLite/Rust/gameplay NOT_RUN.
