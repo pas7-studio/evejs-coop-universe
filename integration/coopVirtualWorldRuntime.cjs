@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -596,6 +596,7 @@ function start(){
   else runPhase("native-ammo-supply",advanceNativeAmmoSupply);
   runPhase("native-raids",advanceNativeRaids);
   runPhase("native-tactics",advanceNativeTactics);
+  runPhase("native-pve-site-defense",advanceNativePveSiteDefense);
   runPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
@@ -2074,6 +2075,44 @@ function advanceNativeRaids(){
    require("./coopRuntimeProbe").observe("living-pirate-raid",null,
     {spaceState:{systemID}},{actions:result.actions});
   }
+ }
+}
+// PVE-002: no scheduler, spawn, wallet, or objective side effects.
+// Only existing transient native-combat defenders recorded in an exact
+// authored dungeon encounter are allowed to assist after verified aggression.
+function advanceNativePveSiteDefense(){
+ if(process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1"||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),dungeon=require("../services/dungeon/dungeonRuntime"),
+  npc=require("./npc/npcRuntime"),controllers=require("./npc/npcRegistry"),
+  nativeStore=require("./npc/nativeNpcStore");
+ if(!(runtime.scenes instanceof Map))return;
+ if(!pveSiteDefenseDirector){
+  pveSiteDefenseDirector=require("./coopPveNativeSiteDefense").createDirector({
+   getController:id=>controllers.getControllerByEntityID(id),
+   getNativeEntity:id=>nativeStore.getNativeEntity(id),
+   resolveVerifiedPlayer:(scene,ship)=>
+    require("./coopNativeConsequences").resolveVerifiedPlayerID(scene,ship),
+   issueAttack:(npcID,playerID,options)=>
+    npc.issueAttackOrder(npcID,playerID,options)
+  });
+ }
+ const reserved=new Set([...(bridge.snapshot()||[]),
+  ...Object.values(identityRegistry?.snapshot()?.links||{})]
+  .map(x=>Number(x.entityID)).filter(x=>Number.isSafeInteger(x)&&x>0));
+ for(const systemID of [...visitedSystems].slice(0,12)){
+  const scene=runtime.scenes.get(systemID);
+  if(!scene||Number(scene.systemID)!==Number(systemID))continue;
+  const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
+  const result=pveSiteDefenseDirector.tick({
+   systemID,scene,instances,excludedIDs:[...reserved].slice(0,1024)
+  });
+  if(result.events.length)for(const event of result.events){
+   require("./coopObserve").observe(require("./coopRuntimeProbe"),
+    "living-pve-site-defense",{systemID},{...event,
+     evidence:"NATIVE_ORDER_ACK_NOT_WEAPON_OR_DAMAGE_PROOF"});
+  }
+  if(result.status==="ORDER_JOURNAL_CAP_REACHED")
+   console.warn("[CoopLivingWorld] PVE native order replay fence full");
  }
 }
 function advanceNativeTactics(){
