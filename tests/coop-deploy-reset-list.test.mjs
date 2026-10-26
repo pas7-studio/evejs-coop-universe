@@ -33,3 +33,20 @@ test('the reset list never includes a file we do not manage', ()=>{
     assert.match(file, /^server\/src\//, 'unexpected path: ' + file);
   }
 });
+
+test('the reset list covers every file a legacy patch script edits', ()=>{
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const scripts = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', 'scripts');
+  const managed = deploy.managedFiles();
+  const targets = new Set();
+  for (const name of fs.readdirSync(scripts).filter((file) => /-patch\.cjs$/.test(file))) {
+    const text = fs.readFileSync(path.join(scripts, name), 'utf8');
+    // Any quoted "server/src/....js" literal is a stock file this script edits,
+    // whether it is a map key, a const or an object value.
+    for (const match of text.matchAll(/["'](server\/src\/[^"']+\.js)["']/g)) targets.add(match[1]);
+  }
+  for (const target of targets) {
+    assert.ok(managed.includes(target), 'legacy patch target missing from the reset list: ' + target);
+  }
+});

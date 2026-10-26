@@ -21,7 +21,7 @@ const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
- getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null,deliveryEvidence=null}={}){
+ getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,verifyTransferredTitle=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null,deliveryEvidence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
     typeof getCorporation!=="function"||typeof isNpcCorporation!=="function"||
     typeof getNativeEntity!=="function"||typeof getScene!=="function"||
@@ -356,7 +356,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
  const routeJournal=recoverEnabled?(tripJournal||
   require("./coopNativeStationTripJournal").createJournal({
    root,manifest:manifestDirector,store,items,getNativeEntity,clock})):null;
- const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,
+ const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,verifyTransferredTitle,
   verifyArrival:args=>{
    const scene=getScene(args.systemID),point=scene&&isValidStation(scene,getStation(args.stationID),args.systemID);
    const ship=scene&&findShip(scene,args.haulerID,args.systemID);
@@ -970,6 +970,10 @@ function getRuntimeDirector(){
   warpToPoint:(id,p,opts)=>require("./npc/npcRuntime").warpToPoint(id,p,opts),
   root:process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR||"/var/lib/evejs/coop-native-warehouse",
   probe:require("./coopRuntimeProbe"),
+  // Audit only: original GameStore + ItemStore + live rented office witness.
+  // OFF by default, NEVER authorizes or performs an ore title mutation.
+  verifyTransferredTitle:process.env.EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE==="1"?
+   require("./coopPlayerMiningOreNativeBindings").createRuntimeTitleVerifier():null,
   // Option A: sell at the station before the warehouse takes the cargo.
   beforeDeposit:process.env.EVEJS_COOP_NPC_MARKET_SELL_ON_ARRIVAL==="1"?
    args=>require("./coopVirtualWorldRuntime").sellOnArrival(args):null,
@@ -987,6 +991,14 @@ function getRuntimeDirector(){
 }
 // Which ore this system should prefer, from real belt ore crossed with real
 // buyers. Read-only: it advises the next haul, it never spawns or moves a ship.
+// Stage E1: read-only ORIGINAL fsynced warehouse receipt. Never builds a
+// scene, schedules a haul, or materializes stock for the completion gate.
+function getOriginalWarehouseReceipt(cargoID){
+ if(process.env.EVEJS_COOP_NPC_STATION_DELIVERY!=="1"||
+   !Number.isSafeInteger(cargoID)||cargoID<=0||!runtimeDirector)return null;
+ try{return runtimeDirector.warehouse?.getReceipt?.(cargoID)||null}
+ catch{return null;}
+}
 function observePreferredOre({systemID,reason="periodic"}={}){
  if(process.env.EVEJS_COOP_ECONOMY_DESTINATION!=="1")return null;
  const director=getRuntimeDirector();
@@ -1076,4 +1088,4 @@ function checkReturn(scene,fleet,now,director=null){
   arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
  return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress};
+module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress,getOriginalWarehouseReceipt};

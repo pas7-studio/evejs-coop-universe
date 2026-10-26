@@ -9,11 +9,12 @@ const marker = cargoID => `coop-warehouse:v1:cargo:${cargoID}`;
 const copy = value => JSON.parse(JSON.stringify(value));
 const statuses = Object.freeze({PREPARED:"PREPARED", DEBIT:"SOURCE_DEBIT_PROVEN", CREDIT:"TARGET_CREDIT_PROVEN", COMMITTED:"COMMITTED"});
 
-function createWarehouse({root, store, items, flush, getStation, getCorporation, isNpcCorporation, verifyArrival, verifyDurableCargo, clock=()=>Date.now(), fsApi=fs}={}) {
+function createWarehouse({root, store, items, flush, getStation, getCorporation, isNpcCorporation, verifyArrival, verifyDurableCargo, verifyTransferredTitle=null, clock=()=>Date.now(), fsApi=fs}={}) {
  if(!root || !path.isAbsolute(root) || !store || !items || typeof flush!=="function" ||
     typeof getStation!=="function" || typeof getCorporation!=="function" ||
     typeof isNpcCorporation!=="function" || typeof verifyArrival!=="function" ||
     typeof verifyDurableCargo!=="function" ||
+    (verifyTransferredTitle!==null&&typeof verifyTransferredTitle!=="function") ||
     !["listNativeCargoForEntity","listNativeCargo","removeNativeCargo"].every(x=>typeof store[x]==="function") ||
     !["findWarehouseItem","grantUniqueNpcDepotItem"].every(x=>typeof items[x]==="function"))
   throw Error("WAREHOUSE_DEPENDENCIES_REQUIRED");
@@ -160,6 +161,20 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   }
   return answer("COMMITTED",record,{itemID:record.itemID,quantity:record.quantity});
  }
+ // Only independently verified native GameStore ownership and payment
+ // may justify an item transferred out of the original warehouse.
+ function titleTransferred(record){
+  if(record?.phase!==statuses.COMMITTED||typeof verifyTransferredTitle!=="function")
+   return false;
+  if(findCargo(record))return false;
+  return verifyTransferredTitle(copy(record))===true;
+ }
+ function getReceipt(cargoID){
+  const id=pos(cargoID);
+  if(!id)return null;
+  const saved=load(id);
+  return saved?copy(saved):null;
+ }
  function deposit({cargoID,haulerID,fleetID,systemID,stationID,corporationID,arrivedAtMs}={}){
   const id=pos(cargoID),args={cargoID:id,haulerID:pos(haulerID),fleetID:pos(fleetID),
    systemID:pos(systemID),stationID:pos(stationID),corporationID:pos(corporationID)};
@@ -175,6 +190,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    if(record){
     if(Object.keys(args).some(k=>args[k]!==record[k]))return answer("RECEIPT_IDENTITY_CONFLICT",record);
     if(record.phase===statuses.COMMITTED){
+     if(titleTransferred(record))return answer("TITLE_TRANSFERRED",record,{itemID:record.itemID});
      const target=checkTarget(record);
      return target&&Number(target.itemID)===record.itemID&&!findCargo(record)?answer("ALREADY_COMMITTED",record,{itemID:target.itemID}):answer("COMMITTED_STATE_INVALID",record);
     }
@@ -220,7 +236,11 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   try{
    return withCustodyLock(id,()=>{
    const record=load(id);if(!record)return answer("RECEIPT_NOT_FOUND");
-   if(record.phase===statuses.COMMITTED){const t=checkTarget(record);return t&&!findCargo(record)?answer("ALREADY_COMMITTED",record):answer("COMMITTED_STATE_INVALID",record);}
+   if(record.phase===statuses.COMMITTED){
+    if(titleTransferred(record))return answer("TITLE_TRANSFERRED",record,{itemID:record.itemID});
+    const t=checkTarget(record);
+    return t&&!findCargo(record)?answer("ALREADY_COMMITTED",record):answer("COMMITTED_STATE_INVALID",record);
+   }
    if(record.phase===statuses.PREPARED)return answer(findCargo(record)?"PREPARED_SOURCE_PRESENT":"PREPARED_SOURCE_UNKNOWN",record);
    if(record.phase===statuses.DEBIT)return commitCredit(record);
    if(record.phase===statuses.CREDIT){
@@ -242,7 +262,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   // An alias like 0008001.json must NOT resolve through load(8001) and
   // count the same COMMITTED native ore a second time.
   const files=entries.filter(x=>x.endsWith(".json"));
-  let committed=0,pending=0;const problems=entries
+  let committed=0,transferred=0,pending=0;const problems=entries
    .filter(x=>/^\d+\.lock$/.test(x))
    .map(x=>({cargoID:Number(x.slice(0,-5)),reason:"WAREHOUSE_CUSTODY_LOCKED"}));
   for(const temp of entries.filter(x=>/^\d+\.json\.tmp-/.test(x)))
@@ -256,12 +276,16 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     continue;
    }
    try{
-   const row=load(id),target=checkTarget(row),source=findCargo(row);
+   const row=load(id);
+   if(row.phase===statuses.COMMITTED&&titleTransferred(row)){
+    committed++;transferred++;continue;
+   }
+   const target=checkTarget(row),source=findCargo(row);
    if(row.phase===statuses.COMMITTED){if(!target||source||Number(target.itemID)!==row.itemID)problems.push({cargoID:id,reason:"COMMITTED_MISMATCH"});else committed++;}
    else{pending++;problems.push({cargoID:id,reason:row.phase+(source?"_SOURCE_PRESENT":"_SOURCE_ABSENT")});}
   }catch(e){problems.push({cargoID:id,reason:String(e.message).slice(0,95)});}}
-  return {status:problems.length?"NEEDS_RECONCILIATION":"OK",committed,pending,problems};
+  return {status:problems.length?"NEEDS_RECONCILIATION":"OK",committed,transferred,pending,problems};
  }
- return {deposit,resume,audit,marker};
+ return {deposit,resume,audit,getReceipt,marker};
 }
 module.exports={createWarehouse,marker};

@@ -32,6 +32,19 @@ const PLAN = [
   { systemID: 30002659, hullName: "Obelisk", name: "Haul Dodixie Obelisk", balance: 12000000 },  // Obelisk (Gallente freighter)
   { systemID: 30002510, hullName: "Badger", name: "Haul Rens Badger", balance: 2500000 },     // Badger (Caldari industrial)
   { systemID: 30002053, hullName: "Mammoth", name: "Haul Hek Mammoth", balance: 2500000 },     // Mammoth (Minmatar industrial)
+  // A carrier market needs real choice: different hulls in the same hub mean
+  // different volume ceilings, and different balances mean different collateral
+  // ceilings, so an issuer (or a bot renting capacity) can pick the terms that
+  // fit instead of taking whatever single courier happens to exist.
+  { systemID: 30000145, hullName: "Charon", name: "Haul New Caldari Charon", balance: 60000000 }, // big hull, deep collateral
+  { systemID: 30000145, hullName: "Badger", name: "Haul New Caldari Badger", balance: 1000000 },  // small hull, cheap runs
+  { systemID: 30000142, hullName: "Obelisk", name: "Haul Jita Obelisk", balance: 25000000 },      // second freighter in Jita
+  { systemID: 30000142, hullName: "Badger", name: "Haul Jita Badger", balance: 1500000 },         // short Jita hops
+  { systemID: 30002187, hullName: "Bestower", name: "Haul Amarr Bestower", balance: 4000000 },    // mid capacity, mid collateral
+  { systemID: 30002659, hullName: "Providence", name: "Haul Dodixie Providence", balance: 18000000 },
+  { systemID: 30002510, hullName: "Mammoth", name: "Haul Rens Mammoth", balance: 5000000 },
+  { systemID: 30002053, hullName: "Fenrir", name: "Haul Hek Fenrir", balance: 15000000 },
+  { systemID: 30000144, hullName: "Bestower", name: "Haul Perimeter Bestower", balance: 2000000 },
 ];
 
 function fail(message) {

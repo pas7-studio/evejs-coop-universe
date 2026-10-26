@@ -36,11 +36,25 @@ function overlayFiles() {
   return files;
 }
 
-// Union of every stock file the pipeline edits. Anything outside this list is not
-// ours to reset.
+// Legacy patch scripts that are not spec blocks also edit stock files. Their targets
+// are derived from the scripts themselves, so the reset list can never drift from the
+// code that edits those files: an unreset file keeps the previous overlay text, the
+// installer refuses it as drift and a deploy stops (measured today on
+// sqliteStore.js and marketProxyService.js).
+function legacyPatchTargets() {
+  const targets = new Set();
+  const dir = path.join(ROOT, "scripts");
+  for (const name of fs.readdirSync(dir).filter((file) => /-patch\.cjs$/.test(file))) {
+    const text = fs.readFileSync(path.join(dir, name), "utf8");
+    for (const match of text.matchAll(/["'](server\/src\/[^"']+\.js)["']/g)) targets.add(match[1]);
+  }
+  return targets;
+}
+
 function managedFiles() {
   const {files} = manifestFiles();
   for (const file of overlayFiles()) files.add(file);
+  for (const file of legacyPatchTargets()) files.add(file);
   return [...files].sort();
 }
 

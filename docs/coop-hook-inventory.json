@@ -1,12 +1,12 @@
 {
  "version": 1,
- "legacyFiles": 65,
- "wiredModules": 48,
+ "legacyFiles": 70,
+ "wiredModules": 52,
  "specFiles": 15,
  "specEntries": 50,
  "longHooks": 3,
  "longestHook": 822,
- "overlap": 5,
+ "overlap": 7,
  "overlaps": [
   {
    "file": "coop-native-exploration-patch.cjs",
@@ -24,6 +24,18 @@
    "file": "coop-native-trade-custody-patch.cjs",
    "shared": [
     "server/src/services/trade/tradeMgrService.js"
+   ]
+  },
+  {
+   "file": "coop-player-mining-agent-patch.cjs",
+   "shared": [
+    "server/src/services/agent/agentMgrService.js"
+   ]
+  },
+  {
+   "file": "coop-player-mining-shift-native-patch.cjs",
+   "shared": [
+    "server/src/services/mining/miningNpcOperations.js"
    ]
   },
   {

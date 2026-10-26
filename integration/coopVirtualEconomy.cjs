@@ -131,21 +131,26 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
    // An empty registration is not a durable schema upgrade.
    if(pilots.length)state.rolesVersion=2;
  }
+ function addCompleted(agent,quantity){
+  // Progress is telemetry, not source-of-truth ore. Saturate before it
+  // exceeds Number.MAX_SAFE_INTEGER and poisons the persisted journal.
+  agent.completed=Math.min(Number.MAX_SAFE_INTEGER,agent.completed+quantity);
+ }
  function step(pilots){
   // Accumulate decisions first, then commit. No negative or infinite balances.
   const ordered=[...pilots].sort((a,b)=>a.id.localeCompare(b.id));
   for(const p of ordered){
    const sys=ensure(p.systemID),agent=state.pilots[p.id];
    if(!agent)continue;
-   if(agent.role==="miner"){const produced=Math.min(3,1000000-sys.ore);sys.ore+=produced;agent.completed+=produced;}
-   if(agent.role==="hauler"){const qty=Math.min(2,sys.ore,1000000-sys.goods);sys.ore-=qty;sys.goods+=qty;agent.credits=cap(agent.credits+qty);agent.completed+=qty;}
-   if(agent.role==="trader"){const qty=Math.min(2,sys.goods);sys.goods-=qty;sys.demand=cap(sys.demand+qty);agent.credits=cap(agent.credits+qty*3);agent.completed+=qty;}
-   if(agent.role==="patrol"){sys.security=Math.min(100,sys.security+1);agent.completed++;}
+   if(agent.role==="miner"){const produced=Math.min(3,1000000-sys.ore);sys.ore+=produced;addCompleted(agent,produced);}
+   if(agent.role==="hauler"){const qty=Math.min(2,sys.ore,1000000-sys.goods);sys.ore-=qty;sys.goods+=qty;agent.credits=cap(agent.credits+qty);addCompleted(agent,qty);}
+   if(agent.role==="trader"){const qty=Math.min(2,sys.goods);sys.goods-=qty;sys.demand=cap(sys.demand+qty);agent.credits=cap(agent.credits+qty*3);addCompleted(agent,qty);}
+   if(agent.role==="patrol"){sys.security=Math.min(100,sys.security+1);addCompleted(agent,1);}
    if(agent.role==="pirate"){
      const stolen=Math.min(2,sys.goods);
      sys.goods-=stolen;
      agent.credits=cap(agent.credits+stolen*2);
-     agent.completed+=stolen;
+     addCompleted(agent,stolen);
      sys.security=Math.max(0,sys.security-1);
      sys.demand=cap(sys.demand+stolen);
    }
