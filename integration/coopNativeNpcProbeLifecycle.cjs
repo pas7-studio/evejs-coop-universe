@@ -82,7 +82,10 @@ function createNativeNpcProbeLifecycle({getNativeEntity,getController,
      let removed;
      try{removed=removeNativeProbe(scene.systemID,row.cargoID)}
      catch{return denied("NPC_PROBE_NATIVE_REMOVAL_FAILED")}
-     if(removed?.success!==true&&scene.getEntityByID(row.cargoID))
+     // A successful removal ACK alone is insufficient for a refund.
+     // Re-read the live scene: a stale probe must never coexist with
+     // a returned original cargo item after an ambiguous native update.
+     if(removed?.success!==true||scene.getEntityByID(row.cargoID))
       return denied("NPC_PROBE_NATIVE_REMOVAL_UNCONFIRMED");
     }
     if(p.status==="EXPIRED"){
