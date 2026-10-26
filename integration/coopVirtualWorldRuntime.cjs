@@ -512,7 +512,7 @@ function advanceNativeNpcExpeditions(){
     // Neither a player session nor a new scheduler is ever constructed.
     if(process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
      if(!npcProbeSceneTransition){
-      const nativeSpace=require("../runtime");
+      const nativeSpace=require("./runtime");
       const nativeProbeScene=require("../services/exploration/probes/probeSceneRuntime");
       npcProbeSceneTransition=require("./coopNativeNpcProbeSceneTransition")
        .createNativeNpcProbeSceneTransition({
@@ -567,7 +567,7 @@ function advanceNativeNpcExpeditions(){
        process.env.EVEJS_COOP_NPC_PROBE_LAUNCH==="1"){
      if(!npcProbeLifecycle){
       const gameStore=require("../gameStore");
-      const runtime=require("../runtime");
+      const runtime=require("./runtime");
       npcProbeLifecycle=require("./coopNativeNpcProbeLifecycle").createNativeNpcProbeLifecycle({
        getNativeEntity:id=>store.getNativeEntity(id),
        getController:id=>controllers.getControllerByEntityID(id),

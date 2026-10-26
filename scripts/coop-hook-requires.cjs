@@ -112,6 +112,13 @@ function installedFileViolations({ plan, checkout } = {}) {
     const from = path.resolve(item.file);
     for (const specifier of requiresIn(item.after)) {
       if (!/^\.\.?\//.test(specifier)) continue;
+      // The adaptive pattern (try "./x", fall back to "./x.cjs") resolves in both the
+      // repo and the installed .js tree, so a .cjs fallback is not a defect by itself.
+      if (/\.cjs$/.test(specifier)) {
+        const extensionless = specifier.slice(0, -4);
+        if (new RegExp('require\\(["\']' + extensionless.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + '["\']\\)')
+          .test(item.after)) continue;
+      }
       const base = path.dirname(from);
       const target = path.resolve(base, specifier);
       const candidates = [target, target + ".js", target + ".cjs", target + ".mjs",

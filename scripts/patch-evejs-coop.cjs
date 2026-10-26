@@ -437,13 +437,24 @@ function l1CoveredFiles(){
 
 function classifyFile(text,spec,code){
  const l1=false;
+ // A file the pinned L1 series edits legitimately differs from the pinned commit, and
+ // this overlay's own removal chain cannot always reproduce those exact bytes. The L1
+ // applier verifies the sha256 and the pin, so for such a file the L1 result IS the
+ // baseline; only a file carrying overlay hooks on top of it is "patched". Measured:
+ // nativeNpcService.js (capacitor recharge L1) was refused as DRIFTED on every deploy,
+ // which silently blocked the whole install.
+ const l1Covered=l1CoveredFiles().has(spec.file);
  try{
   const pristine=transform(text,spec,true);
-  if(pristine!==text)return transform(pristine,spec,false)===text?"PATCHED":"DRIFTED";
+  if(pristine!==text){
+   if(transform(pristine,spec,false)===text)return "PATCHED";
+   if(l1Covered&&!spec.patches.some(p=>text.includes(p.line)))return "PRISTINE";
+   return "DRIFTED";
+  }
   transform(text,spec,false);
   return spec.patches.some(p=>text.includes(p.line))?"DRIFTED":"PRISTINE";
  }catch(_error){
-  if(l1CoveredFiles().has(spec.file))return "PRISTINE";
+  if(l1Covered)return "PRISTINE";
   // Chained patch modules legitimately refuse to REMOVE a hook that a pristine
   // file never had. Falling back to git HEAD tells the truth: a file identical
   // to HEAD is pristine, and a HEAD that our patches reproduce exactly is

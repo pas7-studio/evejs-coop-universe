@@ -70,7 +70,11 @@ function run(argv) {
   const report = {reset: [], patches: "", overlay: "", verify: "", build: ""};
 
   for (const file of managedFiles()) {
-    git(checkout, ["checkout", "--", file]);
+    // Restore from HEAD, not from the index: this checkout is shared with other
+    // sessions, and `git checkout -- <path>` restores whatever they staged. A staged
+    // half-patched file then survives the reset and the installer refuses it as drift
+    // (measured: nativeNpcService.js came back with one hook instead of three).
+    git(checkout, ["checkout", "HEAD", "--", file]);
     report.reset.push(file);
   }
 

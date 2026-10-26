@@ -7,6 +7,9 @@ const pos=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):0;
 const exact=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>0;
 const hash=x=>crypto.createHash("sha256").update(JSON.stringify(x)).digest("hex");
 const marker=id=>"coop-warehouse:v1:cargo:"+id;
+// Same 15 minute budget the arrival gate enforces; a route older than this cannot
+// be resumed anyway, so its cargo mismatch is a stale route, not a live conflict.
+const ROUTE_DEADLINE_MS=15*60*1000;
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const fail=(reason,extra={})=>({status:"NEEDS_OPERATOR_REPAIR",reason,...extra});
 function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()=>Date.now()}={}){
@@ -114,7 +117,23 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
    }catch(error){return fail("ALIFE12_EXPIRY_WRITE_OUTCOME_UNKNOWN",{
     details:String(error?.message||error).slice(0,120)})}
   }
- function receiptMatches(row,m){  const r=readJSON(path.join(receiptDir,row.cargoID+".json"));
+ function saleReceiptMatches(row,m){
+ // A sold row left the hull through a REAL market fill at that station; it never
+ // becomes a station item, so the warehouse proof cannot see it. The sale receipt
+ // names this exact cargo row, its own quantity and the settled market quantity,
+ // and must agree with the manifest row in full - no partial inference.
+ let r;
+ try{r=readJSON(path.join(receiptDir,row.cargoID+".json"))}catch(_error){return false}
+ if(!r||r.version!==1||r.phase!=="COMMITTED"||r.source!=="NPC_MARKET_FILL")return false;
+ return r.cargoID===row.cargoID&&r.haulerID===row.haulerID&&
+  r.typeID===row.typeID&&r.quantity===row.quantity&&
+  Number(r.marketQuantity)===Number(row.quantity)&&
+  r.systemID===m.systemID&&r.fleetID===m.fleetID&&
+  r.stationID===m.stationID&&r.corporationID===m.corporationID;
+ }
+ function receiptMatches(row,m){
+ if(saleReceiptMatches(row,m))return true;
+ const r=readJSON(path.join(receiptDir,row.cargoID+".json"));
   if(!r||r.version!==1||r.phase!=="COMMITTED"||
      r.cargoID!==row.cargoID||r.haulerID!==row.haulerID||
      r.typeID!==row.typeID||r.quantity!==row.quantity||

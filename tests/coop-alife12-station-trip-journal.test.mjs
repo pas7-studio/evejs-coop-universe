@@ -51,7 +51,17 @@ function fixture(t,{two=false,now=101000}={}){
    fleetID:FLEET,systemID:SYSTEM,stationID:STATION,corporationID:CORP,
    typeID:row.typeID,quantity:row.quantity}));
  }
- return {root,cargo,stock,ship,m,args,journal,recover,confirm,deliver,
+ function sell(id,{quantity=null,marketQuantity=null}={}){
+  const row=cargo.get(id);assert.ok(row);
+  cargo.delete(id);
+  fs.writeFileSync(path.join(root,"receipts",id+".json"),JSON.stringify({
+   version:1,phase:"COMMITTED",source:"NPC_MARKET_FILL",cargoID:id,haulerID:SHIP,
+   typeID:row.typeID,quantity:quantity===null?row.quantity:quantity,
+   systemID:SYSTEM,fleetID:FLEET,stationID:STATION,corporationID:CORP,
+   marketQuantity:marketQuantity===null?row.quantity:marketQuantity,
+   isk:100,at:123}));
+ }
+ return {root,cargo,stock,ship,m,args,journal,recover,confirm,deliver,sell,
   setClock:value=>clockNow=value,store,getNativeEntity};
 }
 test("unacknowledged original manifest blocks any unattended rewarp",t=>{
@@ -207,4 +217,30 @@ test("the expiry record keeps the original trip identity and cannot be rewritten
  const changed=f.journal().expire({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:600000});
  assert.equal(changed.status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(changed.reason,"ALIFE12_EXPIRY_ALREADY_RECORDED_DIFFERENTLY");
+});
+
+// A real market fill removes the hull row but never creates a station item, so the
+// warehouse proof cannot see it. The sale receipt is the proof, and it must agree
+// with the manifest row exactly: no partial inference.
+test("a sold row is proven by its own market fill receipt",t=>{
+ const f=fixture(t);
+ assert.equal(f.confirm().status,"DURABLE_DEPARTURE_CONFIRMED");
+ f.sell(CARGO);
+ assert.equal(f.recover().status,"NO_PENDING_TRIP","the whole trip is accounted");
+});
+test("a sale receipt whose quantity disagrees with the manifest never proves it",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sell(CARGO,{quantity:12,marketQuantity:12});
+ const r=f.recover();
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.reason,"ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF");
+});
+test("a warehouse receipt and a sale receipt cannot both claim the same row",t=>{
+ const f=fixture(t);
+ f.confirm();
+ f.sell(CARGO);
+ // A second, warehouse-style receipt for the same cargoID must not change the
+ // verdict: the recover still sees exactly one accounted row and no active cargo.
+ assert.equal(f.recover().status,"NO_PENDING_TRIP");
 });

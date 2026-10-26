@@ -1,6 +1,8 @@
 "use strict";
 // Source-of-truth physical station arrival gate for NPC mining haulers.
 // A warp order or elapsed timer is NEVER proof of an arrival or a delivery.
+const fs = require("node:fs");
+const path = require("node:path");
 const {createWarehouse} = require("./coopNativeWarehouse");
 // A refused sale used to be silent: the fleet deposited the cargo and went back
 // to mining with no record of why no ISK arrived. Telemetry is the only way an
@@ -54,7 +56,41 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
  const arrivals=new Map(),activeNativeEscortWarps=new Map();
-  const warehouseBlockedAt=new Map();
+  // A sold row leaves the hull through a REAL market fill, but it never becomes a
+// station item, so the warehouse receipt the route journal reads could never prove
+// it: after a restart the trip looked like its cargo had changed and the fleet sat
+// in "loaded" forever. The fill is recorded as its own durable receipt, under the
+// same receipts directory, naming the exact cargo row and the exact quantity the
+// market paid for in that settled trade.
+function recordSaleReceipt({root,probe,systemID,cargoID,haulerID,typeID,quantity,
+ stationID,corporationID,fleetID,marketQuantity,isk,at}={}){
+ const id=pos(cargoID);
+ if(typeof root!=="string"||!path.isAbsolute(root)||!id||!pos(haulerID)||
+    !pos(typeID)||!pos(quantity)||!pos(stationID)||!pos(corporationID)||
+    !pos(fleetID)||!Number.isFinite(Number(marketQuantity))||
+    Number(marketQuantity)!==Number(quantity))return {status:"SALE_RECEIPT_INVALID"};
+ const dir=path.join(root,"receipts");
+ const file=path.join(dir,id+".json");
+ if(fs.existsSync(file))return {status:"SALE_RECEIPT_ALREADY_PRESENT"};
+ const record={version:1,phase:"COMMITTED",source:"NPC_MARKET_FILL",
+  cargoID:id,haulerID:pos(haulerID),typeID:pos(typeID),quantity:pos(quantity),
+  systemID:pos(systemID),fleetID:pos(fleetID),stationID:pos(stationID),
+  corporationID:pos(corporationID),marketQuantity:Number(marketQuantity),
+  isk:Number.isFinite(Number(isk))?Number(isk):0,at:Number(at)};
+ try{
+  fs.mkdirSync(dir,{recursive:true});
+  const fd=fs.openSync(file,"wx",0o600);
+  try{fs.writeFileSync(fd,JSON.stringify(record));fs.fsyncSync(fd)}
+  finally{fs.closeSync(fd)}
+  return {status:"SALE_RECEIPT_WRITTEN",cargoID:id};
+ }catch(error){
+  try{probe?.observe?.("living-npc-station-sale-receipt-failed",null,
+   {spaceState:{systemID:pos(systemID)}},{fleetID:pos(fleetID),cargoID:id,
+   status:String(error?.code||error?.message||"UNKNOWN").slice(0,80)})}catch(_error){}
+  return {status:"SALE_RECEIPT_UNWRITTEN"};
+ }
+}
+const warehouseBlockedAt=new Map();
   const saleSkippedNoted=new Set();
  const strictMotion=()=>escortEnabled&&
   process.env.EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT==="1"&&
@@ -746,7 +782,20 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      delete fleet.coopEscortPredepartureEventID;
    }catch{/* informational repair remains pending, cargo route unaffected */}
   }
-  if(now-trip.startedAt>DEADLINE_MS)return pause("ARRIVAL_TIMED_OUT_REPAIR_REQUIRED");
+  // A trip that outlived its deadline can never be "waited out": the old code paused
+  // here on every tick, so the fleet stayed in "loaded" forever and stopped mining
+  // (measured live after a restart mid-haul). Close the route durably and drop the
+  // in-memory trip, so the next tick plans a fresh one with the ore still aboard.
+  if(now-trip.startedAt>DEADLINE_MS){
+   const expired=routeJournal?routeJournal.expire({manifestKey:trip.manifestID,
+    systemID:trip.systemID,fleetID:trip.fleetID,now}):{status:"ROUTE_EXPIRED"};
+   if(!["ROUTE_EXPIRED","ALREADY_EXPIRED"].includes(expired?.status))
+    return pause("ALIFE12_"+String(expired?.reason||expired?.status||"EXPIRY_UNVERIFIED"));
+   for(const [haulerID,record] of arrivals)
+    if(record&&Number(record.fleetID)===Number(trip.fleetID))arrivals.delete(haulerID);
+   delete fleet.coopStationArrival;
+   return {status:"ROUTE_EXPIRED_REPLANNED",terminal:false,expired:true};
+  }
   const point=isValidStation(scene,getStation(trip.stationID),trip.systemID);
   if(!point||point.corporationID!==trip.corporationID)return pause("STATION_IDENTITY_CHANGED");
   // Trusted native server tick only: observe the physical NPC + both real
@@ -841,6 +890,52 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     (store.listNativeCargoForEntity(id)||[]).filter(row=>
      pos(row.cargoID)&&Number(row.coopHaulFleetID)===trip.fleetID&&
      Number(row.moduleID||0)===0):cargo;
+   if(sale?.status==="SOLD"){
+    // The market paid for exactly the quantity that left the hull. A row counts as
+    // sold only when its own decrease equals a settled quantity of its own type: no
+    // inference, no averaging, no invented row.
+    const soldByType=new Map();
+    for(const entry of Array.isArray(sale.sold)?sale.sold:[]){
+     const typeID=pos(entry?.typeID),quantity=pos(entry?.quantity);
+     if(typeID&&quantity)soldByType.set(typeID,(soldByType.get(typeID)||0)+quantity);
+    }
+    const remaining=new Map();
+    for(const row of deliverable)remaining.set(Number(row.cargoID),Number(row.quantity));
+    const moved=cargo.map(row=>({row,left:Number(row.quantity)-
+     (remaining.has(Number(row.cargoID))?remaining.get(Number(row.cargoID)):0)}))
+     .filter(entry=>entry.left>0);
+    // A sale receipt is the proof that a row is GONE. A partly sold row is still on
+    // the hull, so it must never get a receipt: the next trip will declare it.
+    const fullySold=moved.filter(entry=>entry.left===Number(entry.row.quantity));
+    const movedByType=new Map();
+    for(const entry of moved)movedByType.set(Number(entry.row.typeID),
+     (movedByType.get(Number(entry.row.typeID))||0)+entry.left);
+    let reconciled=soldByType.size>0;
+    for(const [typeID,quantity] of soldByType)
+     if((movedByType.get(typeID)||0)!==quantity)reconciled=false;
+    if(reconciled&&fullySold.length){
+     const ownerCorporationID=pos(moved[0].row.ownerID);
+     for(const entry of fullySold){
+      if(pos(entry.row.ownerID)!==ownerCorporationID)continue;
+      const receipt=recordSaleReceipt({root,probe,systemID:trip.systemID,
+       cargoID:entry.row.cargoID,haulerID:id,typeID:entry.row.typeID,
+       quantity:entry.left,stationID:trip.stationID,
+       corporationID:ownerCorporationID,fleetID:trip.fleetID,
+       marketQuantity:entry.left,
+       isk:sale.sold.find(x=>Number(x.typeID)===Number(entry.row.typeID))?.isk||0,
+       at:Number(clock())});
+      if(receipt.status!=="SALE_RECEIPT_WRITTEN"&&
+         receipt.status!=="SALE_RECEIPT_ALREADY_PRESENT")continue;
+     }
+    }else if(fullySold.length){
+     const key=trip.fleetID+":"+trip.stationID+":SALE_NOT_RECONCILED";
+     observeGuard().noteOnce(saleSkippedNoted,key,probe,
+      "living-npc-station-sale-unreconciled",{systemID:trip.systemID},
+      {fleetID:trip.fleetID,stationID:trip.stationID,
+       soldByType:[...soldByType.entries()].slice(0,8),
+       movedByType:[...movedByType.entries()].slice(0,8)});
+    }
+   }
    for(const item of deliverable){
     // The ore belongs to the fleet corporation (the seller), not to the station
     // operator. Crediting the station would claim title to cargo it never owned, so
