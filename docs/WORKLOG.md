@@ -386,6 +386,12 @@ Why: hook length was a convention; the dormancy root cause was not written down 
 Detail: The inventory now counts hooks longer than 400 characters and records the longest one, so 'a hook is one call into a module' is enforced by a test instead of by intent. Today: 3 long hooks (822 tradeMgrService, 501 agentMgrService, 451 nativeNpcWreckService) and zero in miningNpcOperations after the extraction. docs/NATIVE_NPC_DURABILITY.md records why a durable NPC must never be combat dormant, w
 Where: docs/NATIVE_NPC_DURABILITY.md, docs/coop-hook-inventory.json, scripts/coop-hook-inventory.cjs, tests/coop-hook-inventory.test.mjs
 Evidence: HOOKS longHooks=3 longest=822 enforced by tests/coop-hook-inventory.test.mjs 3/3; docs section with the 21582-restore and 0-cycle measurement
+### 2026-10-26T14:49Z · a5e5f72 · L1 · L1 0003: measure the sessionless capacitor interval on a private stamp
+
+Why: sessionless capacitor advance reused a shared timestamp so its dt was milliseconds, leaving NPC hulls starved at 2% and every mining activation failing
+Detail: advanceSessionlessCapacitor took its own dt from capacitorRechargedAtMs, a shared client-visible stamp that other code also refreshes. Each call therefore saw a few milliseconds instead of the interval it covers, so a sessionless hull charged 53x slower than the CCP curve: measured +0.0109 ratio over 121 s against the 0.0048/s expected. The hulls drifted to 2-3% capacitor, every mining activation 
+Where: patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json
+Evidence: measured +0.0109 charge ratio over 121 s vs 0.0048/s expected (53x slow); MODULE_ACTIVATE_FAILED NOT_ENOUGH_CAPACITOR at ratio 0.0023-0.0126; patch 0003 sha256 refreshed in MANIFEST
 ### 2026-10-26T14:40Z · 8c7ce29 · L2 · fix(P0): poison native depot after ambiguous journal flush and refuse stale snapshots
 
 Why: After the original depot COMMITTED or PREPARED journal rename succeeded but directory fsync threw EIO, the in-memory state remained older than the disk file. A subsequent prepare persisted the stale receipts map and erased a committed receipt and system supply totals. All uncertain writes now poison the instance and fail-closed prepare/commit/audit/snapshot until a fresh reopen verifies disk state.
