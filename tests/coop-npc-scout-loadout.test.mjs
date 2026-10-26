@@ -55,3 +55,34 @@ test("pinned original nativeNpcService loadout authoring patch is reversible",()
 test("EX-03B4 source patch fails closed when original NPC source drifts",()=>{
  assert.throws(()=>patch("bogus",FILE),/ANCHOR_DRIFT/);
 });
+
+test("EX-03B15 original native analyzer static metadata adds real data/relic modules",()=>{
+ const types=new Map([[17938,{typeID:17938,groupID:481,categoryID:7}],
+  [30013,{typeID:30013,groupID:479,categoryID:8}],
+  [22175,{typeID:22175,groupID:538,categoryID:7,name:"Data Analyzer I"}],
+  [22177,{typeID:22177,groupID:538,categoryID:7,name:"Relic Analyzer I"}],
+  [1001,{typeID:1001,groupID:53,categoryID:7}]]);
+ const d=createNpcScoutLoadout({
+  resolveItemByTypeID:id=>types.get(id)||null,
+  resolveItemByName:name=>({success:true,match:
+   name==="Data Analyzer I"?types.get(22175):types.get(22177)}),
+  compatibleCharges:()=>[30013],
+  typeHasEffectName:(type,effect)=>[22175,22177].includes(type)&&effect==="doHacking",
+  withAnalyzers:true
+ }).apply(original());
+ assert.equal(d.success,true);
+ assert.equal(d.originalAnalyzerModules,2);
+ assert.deepEqual(d.definition.loadout.modules.map(x=>x.typeID),[1001,17938,22175,22177]);
+ assert.equal(d.definition.loadout.charges.length,1);
+});
+test("EX-03B15 fake analyzer static effects never authorize extra NPC modules",()=>{
+ const fail=createNpcScoutLoadout({
+  resolveItemByTypeID:id=>id===17938?{typeID:id,groupID:481,categoryID:7}:
+   id===30013?{typeID:id,groupID:479,categoryID:8}:
+   {typeID:id,groupID:538,categoryID:7,name:"Relic Analyzer I"},
+  resolveItemByName:()=>({success:true,match:{typeID:22177}}),
+  compatibleCharges:()=>[30013],
+  typeHasEffectName:()=>false,withAnalyzers:true
+ }).apply(original());
+ assert.equal(fail.errorMsg,"EX03_ANALYZER_NATIVE_TYPE_INVALID");
+});
