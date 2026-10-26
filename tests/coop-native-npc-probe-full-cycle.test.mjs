@@ -36,7 +36,15 @@ function world(){
    .map(c=>({itemID:c.cargoID,quantity:c.quantity}));
   return true;
  };
- const flightOptions={...source,
+ const relocateNativeProbe=({scene,row})=>{
+  const present=scene.getEntityByID(row.cargoID);
+  if(!present||present.nativeNpcProbe!==true||
+     present.nativeNpcCargoID!==row.cargoID)return {success:false};
+  present.position={...row.deployedProbe.position};
+  present.targetPoint={...row.deployedProbe.position};
+  return {success:true};
+ };
+ const flightOptions={...source,relocateNativeProbe,
   listNativeModulesForEntity:()=>modules,compatibleCharges:()=>[30013],
   resolveProbeRange:(_type,step)=>({rangeStep:step,scanRange:1e10}),
   refreshNativeCargoProjection,
@@ -49,7 +57,7 @@ function world(){
   removeNativeProbe:(_system,id)=>{physical.delete(id);return {success:true}},
   refreshNativeCargoProjection
  };
- const sweepOptions={...source,maxSteps:32,cellSpacingMeters:2e10};
+ const sweepOptions={...source,relocateNativeProbe,maxSteps:32,cellSpacingMeters:2e10};
  let flight=createNativeNpcProbeFlight(flightOptions);
  let sweep=createNativeNpcProbeSweep(sweepOptions);
  let lifecycle=createNativeNpcProbeLifecycle(lifecycleOptions);
