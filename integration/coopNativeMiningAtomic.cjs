@@ -59,6 +59,17 @@ function clearProvablePreMutationBlock(entity) {
   return true;
 }
 
+// A zero-quantity cycle still settles the rock (all waste), but it must not look
+// like ore was produced, so `quantity` is reported verbatim and the verdict only
+// counts it when it is positive.
+function noteSettled(scene, entity, detail) {
+  try {
+    require("./coopRuntimeProbe").observe("living-mining-cycle-settled", null,
+      {spaceState: {systemID: Number(detail.systemID) || 0}},
+      {status: "COMMITTED", ...detail});
+  } catch (_error) { /* telemetry never authorizes custody */ }
+}
+
 function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
   if (!gameStore || !nativeStore || typeof resolveType !== "function")
     throw Error("ALIFE07_NATIVE_AUTHORITIES_REQUIRED");
@@ -288,6 +299,15 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
       if (old) Object.assign(old,localRow);
       else if (Array.isArray(entity.nativeCargoItems)) entity.nativeCargoItems.push(localRow);
       else entity.nativeCargoItems=[localRow];
+      // The one product proof of a mining cycle: this native transaction really
+      // took ore off the rock and really put it in the hull. Everything else we can
+      // observe (module active, lock held, cycle attempted) is an input.
+      noteSettled(scene, entity, {
+        shipID,rockID,systemID,moduleID,oreTypeID,
+        quantity,wasted,beforeRock:receipt.beforeRock,afterRock:receipt.afterRock,
+        cargoID:receipt.cargoID,nextCargo:receipt.nextCargo,
+        replayed:receipt.replayed===true,
+      });
       return {success:true,deltaResult,receipt};
     }catch(_){return blocked(entity,"ALIFE07_POSTCOMMIT_RECONCILIATION_UNKNOWN");}
   }

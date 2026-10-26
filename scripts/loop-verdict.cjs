@@ -21,6 +21,7 @@ const SALE_SOLD = "living-npc-station-sold";
 const SALE_SKIPPED = "living-npc-station-sale-skipped";
 const FLEET_STATE = "living-mining-fleet-state";
 const CYCLE_ATTEMPT = "MINING_CYCLE_ATTEMPT";
+const CYCLE_SETTLED = "living-mining-cycle-settled";
 
 const num = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
 
@@ -48,13 +49,19 @@ function verdict(rows, options = {}) {
   const byName = (name) => window.filter((row) => String(row.event || "") === name || String(row.reason || "") === name);
   const stages = {};
 
+  // Mining is proven by ore that actually left a rock inside a committed native
+  // transaction. A cycle *attempt* and a fleet holding ore are inputs, so they are
+  // reported as ATTEMPTED and the verdict refuses to call that mining.
+  const settled = byName(CYCLE_SETTLED).filter((row) => num(row.quantity) > 0);
   const cycles = byName(CYCLE_ATTEMPT);
   const fleetWithOre = byName(FLEET_STATE).filter((row) => fleetOre(row) > 0);
-  stages.mining = cycles.length
-    ? {status: "PROVEN", evidence: CYCLE_ATTEMPT + " x" + cycles.length, detail: "lock=" + Boolean(cycles[cycles.length - 1].locked) + " oreLeft=" + num(cycles[cycles.length - 1].oreLeft)}
-    : fleetWithOre.length
-      ? {status: "PROVEN", evidence: FLEET_STATE, detail: "fleetOre=" + fleetOre(fleetWithOre[fleetWithOre.length - 1])}
-      : {status: "MISSING", evidence: "", detail: "no mining cycle and no fleet holding ore in this window"};
+  stages.mining = settled.length
+    ? {status: "PROVEN", evidence: CYCLE_SETTLED, detail: "quantity=" + num(settled[settled.length - 1].quantity) + " rock=" + num(settled[settled.length - 1].beforeRock) + "->" + num(settled[settled.length - 1].afterRock)}
+    : cycles.length
+      ? {status: "ATTEMPTED", evidence: CYCLE_ATTEMPT + " x" + cycles.length, detail: "cycles ran but none settled ore (see MODULE_STOP_* for the refusal)"}
+      : fleetWithOre.length
+        ? {status: "ATTEMPTED", evidence: FLEET_STATE, detail: "fleet holds ore=" + fleetOre(fleetWithOre[fleetWithOre.length - 1]) + " but no settled cycle in this window"}
+        : {status: "MISSING", evidence: "", detail: "no mining cycle and no fleet holding ore in this window"};
 
   const loads = byName(HAUL_LOAD).filter((row) => num(row.cargoQuantity) > 0 && num(row.haulerID) > 0);
   stages.haul = loads.length
