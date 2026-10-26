@@ -386,3 +386,13 @@ Why: hook length was a convention; the dormancy root cause was not written down 
 Detail: The inventory now counts hooks longer than 400 characters and records the longest one, so 'a hook is one call into a module' is enforced by a test instead of by intent. Today: 3 long hooks (822 tradeMgrService, 501 agentMgrService, 451 nativeNpcWreckService) and zero in miningNpcOperations after the extraction. docs/NATIVE_NPC_DURABILITY.md records why a durable NPC must never be combat dormant, w
 Where: docs/NATIVE_NPC_DURABILITY.md, docs/coop-hook-inventory.json, scripts/coop-hook-inventory.cjs, tests/coop-hook-inventory.test.mjs
 Evidence: HOOKS longHooks=3 longest=822 enforced by tests/coop-hook-inventory.test.mjs 3/3; docs section with the 21582-restore and 0-cycle measurement
+### 2026-10-26T14:40Z · 8c7ce29 · L2 · fix(P0): poison native depot after ambiguous journal flush and refuse stale snapshots
+
+Why: After the original depot COMMITTED or PREPARED journal rename succeeded but directory fsync threw EIO, the in-memory state remained older than the disk file. A subsequent prepare persisted the stale receipts map and erased a committed receipt and system supply totals. All uncertain writes now poison the instance and fail-closed prepare/commit/audit/snapshot until a fresh reopen verifies disk state.
+Where: integration/coopNativeDepot.cjs
+Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:41Z · f1c16bd · TEST · test(P0): post-rename fsync failures must not erase disk committed or pending depot receipts
+
+Why: Add deterministic fake-fs tests: post-rename COMMITTED directory fsync error, no overwrite of persisted receipt/totals on next request, blocked stale snapshot, and successful audit/credit after fresh reopen; also PREPARED rename failure and preserved pending cargo.
+Where: tests/coop-native-depot.test.mjs
+Evidence: 4/4 exact-source isolated V8 depot test callbacks PASS with simulated filesystem and real virtual-economy module; old source reproduced committed original cargo receipt plus 100 supply erased by the next stale prepare. Full pinned Node/SQLite/Rust/two-client gameplay NOT_RUN.

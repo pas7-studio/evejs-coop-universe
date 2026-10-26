@@ -51,3 +51,76 @@ test("bad or repeated native cargo IDs cannot invent virtual goods",()=>{
   assert.deepEqual(depot.snapshot().totals,{});
  }finally{rmSync(dir,{recursive:true,force:true});}
 });
+
+test("P0: directory fsync error after COMMITTED rename cannot erase durable cargo receipt",()=>{
+ const file="/test/native-depot.json",files=new Map(),fds=new Map();
+ let fd=0,failNextDirSync=false,writes=0;
+ const fsApi={
+  readFileSync(p){if(!files.has(p))throw Object.assign(Error("ENOENT"),{code:"ENOENT"});return files.get(p);},
+  mkdirSync(){},
+  openSync(p,mode){fds.set(++fd,{path:p,dir:mode==="r"});return fd;},
+  writeFileSync(id,value){files.set(fds.get(id).path,String(value));},
+  fsyncSync(id){
+   if(fds.get(id).dir&&failNextDirSync){
+    failNextDirSync=false;throw Object.assign(Error("EIO"),{code:"EIO"});
+   }
+  },
+  closeSync(id){fds.delete(id);},
+  renameSync(from,to){files.set(to,files.get(from));files.delete(from);writes++;},
+  unlinkSync(p){files.delete(p);}
+ };
+ const request=id=>({systemID:30000142,fleetID:9,
+  item:{cargoID:id,haulerID:201,typeID:34,quantity:100}});
+ const depot=createDepot({file,fsApi,clock:()=>123});
+ assert.equal(depot.prepare(request(777)).status,"PREPARED");
+ failNextDirSync=true;
+ assert.throws(()=>depot.commit(request(777)),/EIO/);
+ const committed=JSON.parse(files.get(file));
+ assert.equal(committed.receipts["777"].cargoID,777);
+ assert.equal(committed.totals["30000142"],100);
+ const writesBefore=writes;
+ assert.equal(depot.prepare(request(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(depot.commit(request(777)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(writes,writesBefore,"no later call can overwrite the newer disk journal");
+ assert.throws(()=>depot.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+ assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(depot.audit().reason,"DEPOT_PERSISTENCE_UNVERIFIED");
+ const reopened=createDepot({file,fsApi,clock:()=>124});
+ assert.equal(reopened.audit().status,"OK");
+ assert.equal(reopened.prepare(request(777)).status,"ALREADY_COMMITTED");
+ assert.equal(reopened.prepare(request(778)).status,"PREPARED");
+ assert.equal(reopened.commit(request(778)).status,"COMMITTED");
+ assert.equal(reopened.snapshot().totals["30000142"],200);
+});
+
+test("P0: post-rename PREPARED failure blocks stale in-memory state from dropping pending",()=>{
+ const file="/test/depot-prepare.json",files=new Map(),fds=new Map();
+ let fd=0,failNextDirSync=true,writes=0;
+ const fsApi={
+  readFileSync(p){if(!files.has(p))throw Object.assign(Error("ENOENT"),{code:"ENOENT"});return files.get(p);},
+  mkdirSync(){},
+  openSync(p,mode){fds.set(++fd,{path:p,dir:mode==="r"});return fd;},
+  writeFileSync(id,value){files.set(fds.get(id).path,String(value));},
+  fsyncSync(id){
+   if(fds.get(id).dir&&failNextDirSync){
+    failNextDirSync=false;throw Object.assign(Error("EIO"),{code:"EIO"});
+   }
+  },
+  closeSync(id){fds.delete(id);},
+  renameSync(a,b){files.set(b,files.get(a));files.delete(a);writes++;},
+  unlinkSync(p){files.delete(p);}
+ };
+ const payload=id=>({systemID:30000142,fleetID:9,
+  item:{cargoID:id,haulerID:201,typeID:34,quantity:100}});
+ const depot=createDepot({file,fsApi,clock:()=>123});
+ assert.throws(()=>depot.prepare(payload(777)),/EIO/);
+ assert.equal(JSON.parse(files.get(file)).pending["777"].cargoID,777);
+ const writesBefore=writes;
+ assert.equal(depot.prepare(payload(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(depot.commit(payload(777)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ assert.equal(writes,writesBefore);
+ const restored=createDepot({file,fsApi,clock:()=>124});
+ assert.equal(restored.prepare(payload(777)).status,"PREPARED");
+ assert.equal(restored.commit(payload(777)).status,"COMMITTED");
+ assert.equal(restored.audit().status,"OK");
+});
