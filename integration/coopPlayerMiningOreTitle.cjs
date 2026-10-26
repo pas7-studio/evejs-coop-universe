@@ -1,5 +1,6 @@
 "use strict";
 // CH24+31 Stage C1: one original warehouse ore item -> native player corp office.
+// Future trusted native adapter enables only EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE=1.
 // A payroll receipt NEVER transfers ore ownership. This is a separate, paid,
 // source-bound atomic GameStore transaction, with no item grant/clone/split.
 const SEP="\u001f";
