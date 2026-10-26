@@ -16,7 +16,7 @@ function fixture(){
   locationID:999,flagID:4,singleton:1,stacksize:1,quantity:-1,customInfo:""}]
  ]);
  const wrecks=new Map([[wreckID,{wreckID,sourceEntityID:shipID,
-  corporationID:corp,systemID:30000142,transient:false}]]);
+  corporationID:999,coopNpcExpeditionSourceCorpID:corp,systemID:30000142,transient:false}]]);
  const items={ITEM_FLAGS:{HANGAR:4,CARGO_HOLD:5},
   findItemById:id=>rows.get(id)?{...rows.get(id)}:null,
   listContainerItems:(_owner,loc,flag)=>[...rows.values()]
@@ -107,7 +107,7 @@ test("EX-03B18 previously allocated native wreck blocks second death even when o
  const f=fixture(),c=f.make();
  assert.equal(c.stage({wreckID,shipID,corporationID:corp}).success,true);
  f.wrecks.set(980300000322,{wreckID:980300000322,
-  sourceEntityID:shipID,corporationID:corp,transient:false});
+  sourceEntityID:shipID,corporationID:999,coopNpcExpeditionSourceCorpID:corp,transient:false});
  assert.equal(c.stage({wreckID:980300000322,shipID,corporationID:corp}).success,false);
  assert.equal(f.rows.size,2);
 });
