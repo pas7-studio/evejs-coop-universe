@@ -183,7 +183,8 @@ function native(){
  const token=process.env.EVEJS_COOP_RUST_CORP_SELL_TOKEN;
  singleton=createCorporateMarketRuntime({
   gameStore,marketClient:market.marketDaemonClient,access,
-  readiness:{inspect:input=>readiness.inspectNative(input)},
+  readiness:{inspect:input=>readiness.inspectCargoNative({
+    ...input,cargoID:input.cargoIDs?.[0]})},
   getActiveSessions:sessions.getSessions,
   getDockedLocationID:location.getDockedLocationID,
   getCharacterRecord:char.getCharacterRecord,
