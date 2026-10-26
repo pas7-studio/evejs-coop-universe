@@ -128,3 +128,8 @@ Evidence: coopFlags + scripts/coop-flags.cjs --check FLAGS_OK declared=311; --li
 Why: the acceptance run measured durability by reading the legacy JSON store while the live world had moved to gamestore.sqlite, which produced a false DURABLE_HAUL_ROWS 0
 Where: docs/WORKLOG.md
 Evidence: scripts/coop-cargo-probe.cjs reads npcCargo read-only from SQLite; first correct reading 2 durable rows fleet1 sys30000145; scripts/restart-acceptance.sh prints VERDICT/RESTART_PASS
+### 2026-10-26T11:54Z · 056c354 · L2 · refactor(telemetry): two more probe call sites go through coopObserve so telemetry cannot break a haul or a destination choice
+
+Why: a throwing runtime probe could still break the haul delivery event and the economy destination telemetry because those two call sites bypassed the guarded entry point
+Where: integration/coopEconomyDestination.cjs, integration/coopNativeHaulCargo.cjs
+Evidence: economy-destination 12/12; haul/adoption sets identical failure names by name; OVERLAY_OK patched 54
