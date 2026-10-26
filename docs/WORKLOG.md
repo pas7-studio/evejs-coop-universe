@@ -248,3 +248,9 @@ Evidence: 49/49 exact-source isolated V8 test callbacks PASS; old main ADOPTED w
 Why: the churn diagnosis needed to know whether a miner is durable and whether it owns a runtime controller, which the previous event could not show
 Where: scripts/overlay-spec.cjs
 Evidence: live after rebuild every miner reads tr0 ctl1 (durable and controlled); caps now rise 0.021 -> 0.031 with reAt advancing; OVERLAY_OK patched 54
+### 2026-10-26T13:08Z · 20aca65 · L2 · fix(mining): stop double module activation and make durable slot status visible
+
+Why: the mining loop activated the same module twice per tick, and durable slot status was invisible in the event log
+Detail: The overlay inserts lines before an anchor, so the traced activation was added in front of the stock activateGenericModule call instead of replacing it: every fleet tick with no cached effect spent the module capacitor twice. Measured live on a 250 GJ hull: charge pinned at 0.003-0.013 against a 0.092 requirement, so the fleet never mined again after its first cycle. The traced call now continues 
+Where: integration/coopNativeMiningFleetDurable.cjs, scripts/overlay-spec.cjs, tests/coop-native-durable-slot-heal.test.mjs
+Evidence: live FLEET_POST_TICK: miners now hold ratio 0.72-0.96 with both strip miners active (was 0.003-0.013); living-native-durable-slot reports SPAWNED/../RESTORED with miners=2 haulers=1 per slot; OVERLAY_OK patched 54; durable suites 28/28 + new slot test 3/3
