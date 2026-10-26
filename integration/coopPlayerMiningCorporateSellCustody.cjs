@@ -25,7 +25,7 @@ const originalLocation=id=>{
  return location<=BigInt(Number.MAX_SAFE_INTEGER)?Number(location):null;
 };
 function createOriginalCorporateSellCustody({gameStore,access,readiness,verifyNativeSellOrder,
- readCancelProof,clock=()=>Date.now(),enabled=()=>false}={}){
+ readCancelProof,clock=()=>Date.now(),enabled=()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_CORP_SELL_ESCROW==="1"}={}){
  const atomic=gameStore?.coopAtomicNativeRows;
  if(atomic?.mode!=="SERVER_INTERNAL_FLAGGED"||
   typeof atomic.transact!=="function"||typeof atomic.isPoisoned!=="function"||
