@@ -789,7 +789,7 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
    // arrival pauses until it settles instead of blocking the native tick.
    let sale=null;
    if(typeof beforeDeposit==="function"&&cargo.length){
-    try{sale=beforeDeposit({systemID:trip.systemID,stationID:trip.stationID,
+    try{sale=beforeDeposit({scene,systemID:trip.systemID,stationID:trip.stationID,
      fleetID:trip.fleetID,haulerID:id,corporationID:trip.corporationID,
      cargoIDs:cargo.map(row=>Number(row.cargoID)),
      types:[...new Set(cargo.map(row=>Number(row.typeID)))]});}

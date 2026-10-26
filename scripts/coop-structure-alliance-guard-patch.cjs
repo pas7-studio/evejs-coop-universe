@@ -19,7 +19,7 @@ function patch(source,file,remove=false){
    ];
    const anchor=alternatives.find(a=>source.includes(a+eol));
    if(!anchor)throw Error("CHAT32_MISSING_ALLIANCE_METHOD_"+action);
-   const guard='    if ('+flag+' && !'+helper+'.admitAlliance({action:"'+action+'",'+allianceParameters+'}).ok) return null;';
+   const guard='    if ('+flag+' && !'+helper+'.admitAlliance({action:"'+action+'",'+allianceParameters+'}).ok) return require(path.join(__dirname, "../../common/machoErrors")).throwWrappedUserError("CrpAccessDenied",{reason:"Native alliance authority not verified"});';
    return {anchor,guard};
   });
  }else{

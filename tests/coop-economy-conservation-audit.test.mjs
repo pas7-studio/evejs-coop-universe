@@ -85,3 +85,20 @@ test("two simultaneously active Rust orders cannot reserve one native item ID", 
   check("ITEM_CLAIMED_BY_MULTIPLE_MARKET_ORDERS", d => d.marketEscrows.push({ ...d.marketEscrows[0], orderID: 61 })));
 test("NPC cargo and market escrow cannot claim the same live native item", () =>
   check("NPC_CARGO_AND_MARKET_ESCROW_DOUBLE_CLAIM", d => d.marketEscrows.push({ orderID: 99, itemID: 501, ownerID: 900, typeID: 35, quantity: 12, locationID: 60001 })));
+
+test('market escrow and courier contract cannot both reserve the same native item', () =>
+  check('NATIVE_ITEM_MULTIPLE_ACTIVE_CUSTODIANS', d => {
+    d.contractReceipts.push({contractID:77,itemID:502,ownerID:900,typeID:36,quantity:3,locationID:9200000060});
+  }));
+test('finished manufacturing output cannot remain a simultaneously active contract escrow', () =>
+  check('NATIVE_ITEM_MULTIPLE_ACTIVE_CUSTODIANS', d => {
+    d.contractReceipts.push({contractID:78,itemID:503,ownerID:901,typeID:37,quantity:2,locationID:60001});
+  }));
+test('NPC cargo and any active native contract must not claim one original item', () =>
+  check('NATIVE_ITEM_MULTIPLE_ACTIVE_CUSTODIANS', d => {
+    d.contractReceipts.push({contractID:79,itemID:501,ownerID:900,typeID:35,quantity:12,locationID:60001});
+  }));
+test('inactive historical custody receipt is not a live double-claim', () => {
+  const d=valid();d.contractReceipts.push({contractID:77,itemID:502,ownerID:900,typeID:36,quantity:3,locationID:9200000060,active:false});
+  assert.equal(auditEconomyEvidence(d).status,'SNAPSHOT_CONSISTENT');
+});

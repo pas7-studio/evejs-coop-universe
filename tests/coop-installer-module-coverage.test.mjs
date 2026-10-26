@@ -28,6 +28,17 @@ test("every bundled coop integration source is installed by the native overlay",
   "some native integration modules are missing from the installer or source tree");
 });
 
+test("native NPE and Living World copies keep original hook dependencies",()=>{
+ for(const required of ["coopNpeSafety","coopLivingAgentRuntime","coopNativeAgentMotion"])
+  assert.equal(names.filter(x=>x===required).length,1,"missing or duplicate native module "+required);
+ for(const file of [
+  "server/src/services/npe/airNpeService.js",
+  "server/src/services/npe/nesIntroService.js",
+  "server/src/services/account/tutorialSvcService.js",
+  "server/src/services/character/achievementTrackerMgrService.js"
+ ])assert.ok(source.includes('file:"'+file+'"'),"native NPE source hook missing: "+file);
+});
+
 test("critical atomic buyer, salvage and seller login modules are shipped",()=>{
  for(const required of [
   "coopNpcBuyerCoordinator","coopNpcCorporateBuyerAtomic",

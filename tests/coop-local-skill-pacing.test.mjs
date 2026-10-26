@@ -31,9 +31,9 @@ test("progression profile requires a recognized positive rate and realistic attr
  assert.throws(()=>durationHours({rank:4,fromLevel:5,toLevel:4}),/INVALID_SKILL_RANGE/);
  assert.throws(()=>durationHours({rank:4,primary:0}),/INVALID_PRIMARY_ATTRIBUTE/);
 });
-test("LivingCoop uses authoritative 48x native skill speed and refuses silent rate migrations",()=>{
+test("LivingCoop currently defaults to 100x, supports explicit 48x, and refuses silent rate migrations",()=>{
  const deploy=fs.readFileSync(path.join(root,"scripts/Deploy-Coop-RuntimeProbe.ps1"),"utf8");
- assert.match(deploy,/\[ValidateSet\(6,12,24,48\)\]\[int\]\$CoopSkillTrainingSpeed = 48/);
+ assert.match(deploy,/\[ValidateSet\(6,12,24,48,100\)\]\[int\]\$CoopSkillTrainingSpeed = 100/);
  assert.match(deploy,/EVEJS_SKILL_TRAINING_SPEED: '\$CoopSkillTrainingSpeed'/);
  assert.match(deploy,/\$priorSpeed -ne \$CoopSkillTrainingSpeed -and -not \$ConfirmActiveTrainingRebased/);
  assert.match(deploy,/Training rate .* BLOCKED/);

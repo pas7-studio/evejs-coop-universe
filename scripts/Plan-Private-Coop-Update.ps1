@@ -2,13 +2,13 @@
 [CmdletBinding()]
 param(
   [string]$CodePath = 'C:\Games\EveCoop\upstream-evejs\Code',
-  [Parameter(Mandatory=$true)][string]$BackupPath,
-  [string]$ExpectedUpstreamSha = 'c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
+  [Parameter(Mandatory=$true)][string]$BackupPath
 )
 # Read-only upgrade gate; does not build, deploy, restart, snapshot or install.
 $ErrorActionPreference = 'Stop'
 $code = (Resolve-Path -LiteralPath $CodePath -ErrorAction Stop).Path
-if ($ExpectedUpstreamSha -notmatch '^[0-9a-f]{40}$') { throw 'Pinned upstream SHA required.' }
+$ExpectedUpstreamSha = 'c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'
+# Never let the caller override the audited pinned upstream commit.
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) { throw 'Git required.' }
 $actual = (@(& git -C $code rev-parse HEAD) | Select-Object -First 1)
 if ($LASTEXITCODE -ne 0 -or $actual -ne $ExpectedUpstreamSha) {
