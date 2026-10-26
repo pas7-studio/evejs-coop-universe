@@ -8,11 +8,11 @@ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const receipt=s=>typeof s==="string"&&
  /^coop-npc-expedition:v1:container:[1-9]\d*:ship:[1-9]\d*:corp:[1-9]\d*$/.test(s);
 function createNpcExpeditionOperations({nativeStore,getController,itemStore,gameStore,
- getStation,getStationsForSystem,siteService,hackingService,typeHasEffectName,
+ getStation,getStationsForSystem,isNpcCorporation,siteService,hackingService,typeHasEffectName,
  resolveItemByTypeID,orderBridge,warpToPoint,clock=()=>Date.now()}={}){
  if(!nativeStore||!itemStore||!gameStore||!siteService||
   !hackingService||typeof hackingService.nativeNpcTurn!=="function"||
-  [getController,getStation,getStationsForSystem,typeHasEffectName,
+  [getController,getStation,getStationsForSystem,isNpcCorporation,typeHasEffectName,
    resolveItemByTypeID,warpToPoint,clock].some(f=>typeof f!=="function")||
   typeof siteService.listMaterializedUniverseSiteContentEntities!=="function"||
   !orderBridge||typeof orderBridge.issue!=="function"||
@@ -22,7 +22,7 @@ function createNpcExpeditionOperations({nativeStore,getController,itemStore,game
  const stable=new Map(),returnOrders=new Map(),quarantine=new Set();
  const loot=createNpcExpeditionLoot({
   nativeStore,itemStore,gameStore,getController,getStation,
-  isNpcCorporation:()=>true, // Only reached for exact durable native NPC pilot+corp below.
+  isNpcCorporation,
   isNativeSiteOwner:(owner,target)=>owner===1&&target?.ownerID===1,
   verifyNativeArrival:({scene,entityID,ship,controller,stationID})=>{
    const station=scene.getEntityByID?.(stationID);
@@ -73,9 +73,11 @@ function createNpcExpeditionOperations({nativeStore,getController,itemStore,game
   }
  }
  function tick({scene,assignments=[],tips=[],flags={}}={}){
-  if(!POS(scene?.systemID)||!Array.isArray(assignments)||!Array.isArray(tips)||
-   !Array.isArray(getStationsForSystem(scene.systemID)))
+  if(!POS(scene?.systemID)||!Array.isArray(assignments)||!Array.isArray(tips))
    return {status:"BLOCKED",reason:"EX03_OPERATIONS_SOURCE_MISSING"};
+  let stations;
+  try{stations=getStationsForSystem(scene.systemID)}catch{return {status:"BLOCKED",reason:"EX03_STATION_SOURCE_UNAVAILABLE"}}
+  if(!Array.isArray(stations))return {status:"BLOCKED",reason:"EX03_STATION_SOURCE_INVALID"};
   let hacked=0,picked=0,delivered=0,orderedReturn=0,blocked=0;
   // Bounded source-proven scout cohort. No unscanned site knowledge.
   for(const tip of tips.filter(t=>t?.systemID===scene.systemID).slice(0,16)){
@@ -83,7 +85,8 @@ function createNpcExpeditionOperations({nativeStore,getController,itemStore,game
    if(!link||quarantine.has(link.entityID)){blocked++;continue}
    const p=pilot(scene,assignments,link.entityID);
    if(!p||p.native.corporationID!==tip.corpID){blocked++;continue}
-   const sourceSite=scene.getEntityByID(tip.siteID);
+   let sourceSite;
+   try{sourceSite=scene.getEntityByID(tip.siteID)}catch{blocked++;continue}
    if(!sourceSite||sourceSite.itemID!==tip.siteID||
       !vec(sourceSite.position)||dist(sourceSite.position,p.entity.position)>150000)
     continue;
@@ -113,8 +116,12 @@ function createNpcExpeditionOperations({nativeStore,getController,itemStore,game
      }):null;
      if(m){
       const result=issue({scene,id:link.entityID,action:"expedition-hack",
-       execute:()=>({success:true,data:hackingService.nativeNpcTurn({
-        scene,entityID:link.entityID,targetID:target.itemID,moduleID:m.moduleID})})});
+       execute:()=>{
+        const data=hackingService.nativeNpcTurn({scene,entityID:link.entityID,
+         targetID:target.itemID,moduleID:m.moduleID});
+        return data?.status==="BLOCKED"?{success:false,errorMsg:data.reason||"EX03_HACK_REJECTED"}:
+         {success:true,data};
+       }});
       if(result?.success===true&&
          result.data?.status==="NATIVE_NPC_HACK_SUCCESS")hacked++;
       else if(result?.success!==true)blocked++;
@@ -148,12 +155,12 @@ function createNpcExpeditionOperations({nativeStore,getController,itemStore,game
     if(!Array.isArray(cargo))continue;
     const originals=cargo.filter(x=>receipt(x?.customInfo)).slice(0,4);
     if(!originals.length)continue;
-    const stations=getStationsForSystem(scene.systemID);
     const station=stations.find(s=>POS(s?.stationID)&&
       (s.corporationID===p.native.corporationID||s.ownerID===p.native.corporationID)&&
       getStation(s.stationID)?.stationID===s.stationID);
     if(!station){blocked++;continue}
-    const entity=scene.getEntityByID(station.stationID);
+    let entity;
+    try{entity=scene.getEntityByID(station.stationID)}catch{blocked++;continue}
     if(!entity||entity.kind!=="station"||!vec(entity.position)){blocked++;continue}
     const gap=Math.max(0,dist(p.entity.position,entity.position)-
      Math.max(0,Number(p.entity.radius)||0)-Math.max(0,Number(entity.radius)||0));
