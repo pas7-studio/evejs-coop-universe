@@ -48,7 +48,7 @@ test("expiration durably seals original cargo before any physical removal",()=>{
  assert.equal(f.tick().status,"NPC_PROBE_EXPIRY_COMMITTED");
  assert.equal(f.rows()[0].deployedProbe.status,"EXPIRED");
  assert.equal(f.rows()[0].quantity,0);assert.equal(f.removes(),0);
- assert.equal(f.tick().status,"NO_LIFECYCLE_ACTION");
+ assert.equal(f.tick().status,"NPC_PROBE_EXPIRED");
  assert.equal(f.removes(),1);assert.equal(f.entities.has(980200000001),false);
 });
 test("expiry never refunds original probe, even after process-style controller recreation",()=>{
@@ -58,10 +58,12 @@ test("expiry never refunds original probe, even after process-style controller r
 });
 test("four expired original probes clear independently without starvation",()=>{
  const f=fixture();f.advance(3600000);
- for(let i=0;i<4;i++)assert.equal(f.tick().status,"NPC_PROBE_EXPIRY_COMMITTED");
- assert.equal(f.removes(),0);
- assert.equal(f.tick().status,"NO_LIFECYCLE_ACTION");
+ for(let i=0;i<4;i++){
+  assert.equal(f.tick().status,"NPC_PROBE_EXPIRY_COMMITTED");
+  assert.equal(f.tick().status,"NPC_PROBE_EXPIRED");
+ }
  assert.equal(f.removes(),4);
+ assert.equal(f.tick().status,"NO_LIFECYCLE_ACTION");
  assert.equal(f.rows().every(r=>r.quantity===0),true);
 });
 test("nearby recall is two durable transitions, no simultaneous ship and space charge",()=>{
@@ -88,8 +90,11 @@ test("removal failure blocks refund and preserves original durable RECALLING",()
 });
 test("out-of-range probe cannot teleport back and produce free charge",()=>{
  const f=fixture();f.entities.get(980200000001).position.x=1e10;
- assert.equal(f.tick({requestRecall:true}).status,"NO_LIFECYCLE_ACTION");
- assert.equal(f.rows()[0].quantity,0);assert.equal(f.writes(),0);
+ assert.equal(f.tick({requestRecall:true}).status,"NPC_PROBE_RECALL_COMMITTED");
+ // Other nearby probe may be legitimately recalled, but the distant
+ // original source ID must NEVER be credited to native ship cargo.
+ assert.equal(f.rows()[0].quantity,0);
+ assert.equal(f.rows()[0].deployedProbe.status,"IN_SPACE");
 });
 test("foreign physical item identity collision fails closed before any deletion",()=>{
  const f=fixture();f.entities.get(980200000001).nativeNpcCargoID=77;
