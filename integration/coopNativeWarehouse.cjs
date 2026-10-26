@@ -44,8 +44,21 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    throw Error("WAREHOUSE_JOURNAL_INVALID");
   return row;
  }
+ // A missing/failed native cargo read cannot attest source debit.
+ // In particular, authorized DEBIT repair must NEVER mint a station item
+ // just because a disconnected adapter returned null instead of an array.
+ function lookupCargo(haulerID,cargoID){
+  const rows=store.listNativeCargoForEntity(haulerID);
+  if(!Array.isArray(rows))throw Error("WAREHOUSE_SOURCE_CUSTODY_UNAVAILABLE");
+  const matches=rows.filter(row=>Number(row?.cargoID)===cargoID);
+  if(matches.length>1)throw Error("WAREHOUSE_DUPLICATE_SOURCE_CARGO");
+  const cargo=matches[0]||null;
+  if(cargo&&Number(cargo.entityID)!==haulerID)
+   throw Error("WAREHOUSE_SOURCE_ENTITY_MISMATCH");
+  return cargo;
+ }
  function findCargo(record){
-  return (store.listNativeCargoForEntity(record.haulerID)||[]).find(x=>Number(x.cargoID)===record.cargoID)||null;
+  return lookupCargo(record.haulerID,record.cargoID);
  }
  function validateOwner(record){
   const corp=getCorporation(record.corporationID);
@@ -113,7 +126,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
    }
    if(!validateOwner(args))return answer("OWNER_OR_STATION_MISSING");
    if(verifyArrival({...args,arrivedAtMs:arrivalAtMs})!==true)return answer("ARRIVAL_NOT_VERIFIED");
-   const cargo=(store.listNativeCargoForEntity(args.haulerID)||[]).find(x=>Number(x.cargoID)===id);
+   const cargo=lookupCargo(args.haulerID,id);
    if(!cargo||Number(cargo.entityID)!==args.haulerID||!pos(cargo.typeID)||!pos(cargo.quantity)||
       Number(cargo.moduleID||0)!==0||Number(cargo.coopHaulFleetID)!==args.fleetID||
       !pos(cargo.coopHaulFromMinerID))return answer("CARGO_NOT_PROVEN");

@@ -107,3 +107,57 @@ test('transient hauler cargo cannot turn into a durable native inventory item',(
  assert.equal(w.deposit(f.arg).status,'CARGO_NOT_DURABLE');
  assert.equal(w.audit().status,'EMPTY');assert.equal(f.cargo.size,1);assert.equal(f.owned.size,0);
 }));
+
+test('P0: authorized DEBIT recovery cannot credit ore if native cargo source read is missing',()=>withF(f=>{
+ f.set({failGrant:true});
+ const warehouse=f.make();
+ assert.equal(warehouse.deposit(f.arg).status,'TARGET_WRITE_UNCERTAIN');
+ assert.equal(f.issued,0);
+ f.set({failGrant:false});
+ const original=f.config.store.listNativeCargoForEntity;
+ const file=path.join(f.root,'receipts','8001.json');
+ for(const unreadable of [null,undefined,false,{},'not-an-array']){
+  f.config.store.listNativeCargoForEntity=()=>unreadable;
+  assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR');
+  assert.equal(f.issued,0,'unknown source cannot create real ItemStore ore');
+  assert.equal(f.owned.size,0);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).phase,'SOURCE_DEBIT_PROVEN');
+ }
+ f.config.store.listNativeCargoForEntity=original;
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'COMMITTED');
+ assert.equal(f.issued,1,'recovered only after authoritative native absence proof');
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'ALREADY_COMMITTED');
+ assert.equal(f.issued,1);
+}));
+
+test('P0: committed warehouse status and audit refuse unavailable native source custody',()=>withF(f=>{
+ const warehouse=f.make();
+ assert.equal(warehouse.deposit(f.arg).status,'COMMITTED');
+ const original=f.config.store.listNativeCargoForEntity;
+ f.config.store.listNativeCargoForEntity=()=>null;
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(f.issued,1,'no duplicate native station stack');
+ f.config.store.listNativeCargoForEntity=original;
+ assert.equal(f.make().audit().status,'OK');
+}));
+
+test('P0: duplicate or wrong-ship original native cargo never receives source debit',()=>withF(f=>{
+ const warehouse=f.make();
+ const original=f.config.store.listNativeCargoForEntity;
+ for(const scenario of ['duplicated','wrong-ship']){
+  f.config.store.listNativeCargoForEntity=id=>{
+   const rows=original(id);
+   return scenario==='duplicated'?[...rows,...rows]:rows.map(row=>({...row,entityID:id+1}));
+  };
+  const outcome=warehouse.deposit(f.arg);
+  assert.equal(outcome.status,'NEEDS_OPERATOR_REPAIR',scenario);
+  assert.equal(f.issued,0);
+  assert.equal(f.cargo.size,1);
+  assert.equal(warehouse.audit().status,'EMPTY');
+ }
+ f.config.store.listNativeCargoForEntity=original;
+ assert.equal(warehouse.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.issued,1);
+}));
