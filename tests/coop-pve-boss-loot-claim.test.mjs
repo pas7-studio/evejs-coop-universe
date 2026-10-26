@@ -91,7 +91,9 @@ test("uncommitted temp row and corrupt durable data are fail-closed",()=>fixture
  assert.equal(f.make().begin(f.args).status,"BOSS_LOOT_JOURNAL_UNSAFE");
  fs.unlinkSync(f.file+".tmp-12345");
  fs.writeFileSync(f.file,"{corrupt");
- assert.equal(f.make().begin(f.args).status,"BOSS_LOOT_JOURNAL_UNSAFE");
+ // A previous unsafe write leaves a non-stealable writer lock in place;
+ // this is a stronger block, never an automatic retry.
+ assert.equal(f.make().begin(f.args).status,"BOSS_LOOT_WRITER_BUSY");
 }));
 test("fsync failure before durable claim must not authorize a native item grant",()=>fixture(f=>{
  const store={...fs,fsyncSync:()=>{throw Error("disk unavailable")}};
