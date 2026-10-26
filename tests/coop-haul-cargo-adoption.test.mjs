@@ -1117,3 +1117,72 @@ test("rollback with unknown extra cargo on supposedly empty replacement hauler r
  assert.equal(ship.nativeCargoItems,undefined);
  assert.deepEqual(original().map(r=>r.entityID),[900000000111,900000000112]);
 });
+
+test("post-commit native source may not silently change original miner or load time",()=>{
+ for(const field of ["coopHaulFromMinerID","coopHaulLoadedAt"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const upsert=store.upsertNativeCargo;
+  store.upsertNativeCargo=row=>upsert({
+   ...row,[field]:Number(row[field])+(field==="coopHaulFromMinerID"?1:1000)
+  });
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
+  const original=orphan();
+  let flushes=0;
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return{success:true}}}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",field);
+  assert.equal(result.adopted,0);
+  assert.equal(store.writes.length,1);
+  assert.equal(flushes,1);
+  assert.equal(store.listNativeCargo()[0].cargoID,original.cargoID);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(target.coopHaulNeedsOperatorRepair,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED");
+ }
+});
+
+test("local hauler post-commit source claim must match independently verified global custody",()=>{
+ for(const field of ["coopHaulFromMinerID","coopHaulLoadedAt"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargoForEntity;
+  let targetReads=0;
+  store.listNativeCargoForEntity=id=>{
+   const rows=read(id);
+   if(id!==hauler.itemID||++targetReads===1)return rows;
+   return rows.map(row=>({...row,[field]:Number(row[field])+1}));
+  };
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const result=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",field);
+  assert.equal(store.writes.length,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+ }
+});
+
+test("global post-commit source claim cannot disagree with original cargo provenance",()=>{
+ for(const field of ["coopHaulFromMinerID","coopHaulLoadedAt"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const read=store.listNativeCargo;
+  let reads=0;
+  store.listNativeCargo=()=>{
+   const rows=read();
+   if(++reads!==3)return rows;
+   return rows.map(row=>({...row,[field]:Number(row[field])+1}));
+  };
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
+  const result=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",field);
+  assert.equal(store.writes.length,1);
+  assert.equal(target.state,"mining");
+  assert.equal(ship.nativeCargoItems,undefined);
+ }
+});

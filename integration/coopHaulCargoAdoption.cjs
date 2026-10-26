@@ -344,6 +344,8 @@ function adopt(scene,fleet,options={}){
     pos(matches[0].ownerID)!==ownerID||
     pos(matches[0].typeID)!==pos(row.typeID)||
     pos(matches[0].quantity)!==pos(row.quantity)||
+    pos(matches[0].coopHaulFromMinerID)!==pos(row.coopHaulFromMinerID)||
+    Number(matches[0].coopHaulLoadedAt)!==Number(row.coopHaulLoadedAt)||
     matches[0].transient!==false||
     Number(matches[0].moduleID||0)!==0;
   }))throw Error("ORIGINAL_CARGO_GLOBAL_READBACK_MISMATCH");
@@ -356,6 +358,8 @@ function adopt(scene,fleet,options={}){
     pos(matches[0].ownerID)!==ownerID||
     pos(matches[0].typeID)!==pos(row.typeID)||
     pos(matches[0].quantity)!==pos(row.quantity)||
+    pos(matches[0].coopHaulFromMinerID)!==pos(row.coopHaulFromMinerID)||
+    Number(matches[0].coopHaulLoadedAt)!==Number(row.coopHaulLoadedAt)||
     pos(matches[0].coopHaulFleetID)!==fleetID||
     pos(matches[0].coopHaulSystemID)!==systemID||
     pos(matches[0].coopHaulAdoptedFrom)!==pos(row.entityID)||
