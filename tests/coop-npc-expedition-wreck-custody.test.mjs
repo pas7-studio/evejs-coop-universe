@@ -133,3 +133,47 @@ test("EX-03B18 foreign wreck rights never replace NPC source ownership",()=>{
  assert.equal(claimed.success,true);
  assert.equal(f.rows.get(itemID).ownerID,characterID);
 });
+
+test("EX-03B20 operator-approved recovery resumes SAME original itemID after durable intent without duplicating",()=>{
+ const f=fixture(),first=f.make();
+ f.setFail(2);
+ assert.equal(first.stage({wreckID,shipID,corporationID:corp}).success,false);
+ const tagged=f.rows.get(itemID);
+ assert.equal(tagged.locationID,shipID);
+ assert.match(tagged.customInfo,/:wreck:/);
+ f.setFail(0);
+ const restarted=f.make();
+ const denied=restarted.reconcile({wreckID,shipID,corporationID:corp});
+ assert.equal(denied.errorMsg,"EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ const recovered=restarted.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(recovered.success,true);
+ assert.equal(recovered.movedCount,1);
+ assert.deepEqual(recovered.itemIDs,[itemID]);
+ assert.equal(f.rows.get(itemID).locationID,wreckID);
+ assert.equal(f.rows.size,2);
+ assert.equal(restarted.list({wreckID}).length,1);
+ const replay=restarted.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(replay.success,true);
+ assert.equal(replay.movedCount,0);
+ assert.equal(f.rows.size,2,"same original ID after idempotent recovery");
+});
+test("EX-03B20 recovery rejects a forged source corporation and inconsistent item before any mutation",()=>{
+ const f=fixture(),d=f.make();
+ f.setFail(2);
+ assert.equal(d.stage({wreckID,shipID,corporationID:corp}).success,false);
+ f.setFail(0);
+ const wrong=d.reconcile({wreckID,shipID,corporationID:999,
+  operatorApproved:true});
+ assert.equal(wrong.success,false);
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ f.rows.get(itemID).customInfo=f.rows.get(itemID).customInfo.replace(
+  ":corp:"+corp,":corp:999");
+ const forged=d.reconcile({wreckID,shipID,corporationID:corp,
+  operatorApproved:true});
+ assert.equal(forged.success,false);
+ assert.equal(f.rows.get(itemID).locationID,shipID);
+ assert.equal(f.rows.size,2);
+});
