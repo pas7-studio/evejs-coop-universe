@@ -155,11 +155,28 @@ function createNativeNpcProbeFlight({getNativeEntity,getController,
   if(flights.length>=maxProbes)return {status:"NATIVE_PROBE_CAPACITY_REACHED",active:flights.length};
   // Only original distinct singleton *units* of non-singleton scanner charges
   // can be deployed. Stacked cargo needs separate authoritative split support.
+  // EX-03B8: a native probe durably returned to the SAME original
+  // cargoID may be launched again. An unfinished/expired flight can never
+  // masquerade as available stock. No new cargoID is allocated.
+  const returned=(row)=>{
+   const p=row?.deployedProbe;
+   return p?.status==="STOWED"&&p.probeID===row.cargoID&&
+    p.entityID===entityID&&p.ownerID===ctx.native.ownerID&&
+    p.typeID===row.typeID&&positive(p.systemID)&&
+    Number.isSafeInteger(p.launchedAtMs)&&p.launchedAtMs>0&&
+    Number.isSafeInteger(p.recoveredAtMs)&&
+    p.recoveredAtMs>=p.launchedAtMs&&p.recoveredAtMs<=now;
+  };
   const candidates=ctx.cargo.filter(row=>row?.entityID===entityID&&
    row.ownerID===ctx.native.ownerID&&positive(row.cargoID)&&
    row.groupID===479&&row.categoryID===8&&row.quantity===1&&
-   row.singleton!==true&&row.transient!==true&&!row.deployedProbe&&
+   row.singleton!==true&&row.transient!==true&&
+   (!row.deployedProbe||returned(row))&&
    !blocked.has(row.cargoID)&&launcherFor(ctx,row));
+  // A STOWED receipt must have NO still-visible probe in the scene before
+  // its original cargoID is reissued. Treat collisions as a hard failure.
+  if(candidates.some(row=>ctx.scene.getEntityByID(row.cargoID)))
+   return deny("NPC_PROBE_STOWED_PHYSICAL_ID_COLLISION");
   if(!candidates.length)return {status:"NO_NATIVE_PROBE_CHARGE",active:flights.length};
   const row=candidates.sort((a,b)=>a.cargoID-b.cargoID)[0];
   // The probe is launched close to the REAL ship, not a secret site position.
