@@ -37,7 +37,8 @@ const MINING_CYCLE=Object.freeze({
  flags:Object.freeze(["EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC"]),
  cargoRootWrites:Object.freeze({min:0,max:1}),
  cargoOtherKeys:"forbid",
- journal:Object.freeze({table:"miningRuntimeState",status:"COMMITTED"}),
+ journal:Object.freeze({table:"miningRuntimeState",status:"COMMITTED",
+  requires:Object.freeze(["op","fingerprint","cargoID","nextCargo"])}),
 });
 const CONTRACTS=Object.freeze([HAUL_TRANSFER,MINING_CYCLE]);
 function contractForTables(tables){
@@ -118,7 +119,8 @@ function guardMutation(tx,witness,contract){
      receiptWrites++;
     }
    }else if(policy.journal&&table===policy.journal.table&&
-    value&&value.status===policy.journal.status){
+    value&&value.status===policy.journal.status&&
+    policy.journal.requires.every(field=>own(value,field))){
     journalWrites++;journalRow=value;
    }
    tx.put(table,key,value);

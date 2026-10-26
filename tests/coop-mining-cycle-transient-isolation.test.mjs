@@ -27,7 +27,8 @@ const rockKey = "systems" + SEP + systemID;
 const opKey = [systemID, rockID, shipID, 77, 1793031234567].join(":");
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const journal = (overrides = {}) => ({
-  version: 1, status: "COMMITTED", cargoID, nextCargo: 47, quantity: 10, ...overrides,
+  version: 1, status: "COMMITTED", op: "op-key", fingerprint: "fp-1",
+  cargoID, nextCargo: 47, quantity: 10, ...overrides,
 });
 const rock = {entityID: rockID, yieldTypeID: oreTypeID, remainingQuantity: 1000, updatedAtMs: 1};
 
@@ -152,6 +153,35 @@ test("a mining cycle can never smuggle a transient row into SQLite", (t) => {
   assert.equal(f.disk()[String(transientID)], undefined);
 });
 
+test("a first cycle creates the durable stack while transient cargo stays separate", (t) => {
+  const f = fixture(t);
+  // A hull with no ore stack yet: the settler reserves a new cargoID and writes it
+  // inside the same guarded transaction.
+  const newID = 980200000077;
+  f.put("npcCargo", "cargo", {});
+  f.cache.npcCargo = f.load("npcCargo");
+  f.cache.npcCargo.cargo[String(transientID)] = {cargoID: transientID, entityID: 980000000401,
+    ownerID, typeID: 34, categoryID: 25, quantity: 2, moduleID: 0, transient: true};
+  const ghost = copy(f.transient());
+  f.bridge.transact(["miningRuntimeState", "npcCargo"], (tx) => {
+    const source = tx.get("miningRuntimeState", rockKey);
+    const cargo = tx.get("npcCargo", "cargo");
+    const row = {cargoID: newID, entityID: shipID, ownerID, moduleID: 0, typeID: oreTypeID,
+      categoryID: 25, quantity: 10, singleton: false, transient: false};
+    tx.put("miningRuntimeState", rockKey, {
+      ...source,
+      entities: {...source.entities, [String(rockID)]: {...rock, remainingQuantity: 990}},
+    });
+    tx.put("npcCargo", "cargo", {...cargo, [String(newID)]: row});
+    tx.put("miningRuntimeState", opKey, {...journal(), cargoID: newID, nextCargo: 10, quantity: 10});
+    return true;
+  });
+  assert.equal(f.disk()[String(newID)].quantity, 10);
+  assert.equal(f.disk()[String(transientID)], undefined);
+  assert.equal(f.cache.npcCargo.cargo[String(newID)].quantity, 10);
+  assert.deepEqual(f.transient(), ghost);
+});
+
 test("an all-waste cycle commits its journal with no cargo write", (t) => {
   const f = fixture(t);
   f.cycle(() => 0);
@@ -241,4 +271,15 @@ test("the real ALIFE-07 settler commits one cycle next to transient stock cargo"
   assert.equal(committed.length, 1, "exactly one committed journal row authorizes the cargo delta");
   assert.equal(f.disk()[String(transientID)], undefined);
   assert.deepEqual(f.transient(), ghost);
+});
+
+test("a journal-shaped row missing its identifying fields does not count as one", (t) => {
+  const f = fixture(t);
+  assert.throws(() => f.bridge.transact(["miningRuntimeState", "npcCargo"], (tx) => {
+    const cargo = tx.get("npcCargo", "cargo");
+    cargo[String(cargoID)] = {...cargo[String(cargoID)], quantity: 47};
+    tx.put("npcCargo", "cargo", cargo);
+    tx.put("miningRuntimeState", opKey, {status: "COMMITTED", cargoID, nextCargo: 47});
+  }), /ALIFE11_INCOMPLETE_NATIVE_MINING_CYCLE_JOURNAL/);
+  assert.equal(f.disk()[String(cargoID)].quantity, 37);
 });
