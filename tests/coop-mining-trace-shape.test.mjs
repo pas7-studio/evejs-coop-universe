@@ -133,3 +133,20 @@ test("one think emits both the tick marker and the fleet snapshot", ()=>{
   assert.ok(snapshot, "noteTick must also emit the fleet snapshot");
   assert.match(snapshot.detail.miners, /^980000016052\|ORBIT\|act2/);
 });
+
+test("a stopped mining module is reported with the caller reason", ()=>{
+  const entity = {nativeNpc: true, itemID: 980000016144, activeModuleEffects: new Map([[77, {moduleID: 77, miningEffect: true, startedAtMs: Date.now() - 900}]])};
+  trace.noteModuleStop({systemID: 30000144}, entity, 77, "state", "session");
+  const stop = take("MODULE_STOP_SESSION");
+  assert.ok(stop, "no MODULE_STOP_SESSION event");
+  assert.equal(stop.detail.stopReason, "state");
+  assert.equal(stop.detail.mining, true);
+  assert.equal(stop.detail.shipID, 980000016144);
+});
+
+test("a stop for a hull without that effect, or for a player ship, is not reported", ()=>{
+  const before = observed.length;
+  trace.noteModuleStop({systemID: 30000144}, {nativeNpc: true, itemID: 1, activeModuleEffects: new Map()}, 77, "state", "session");
+  trace.noteModuleStop({systemID: 30000144}, {itemID: 2, activeModuleEffects: new Map([[77, {miningEffect: true}]])}, 77, "state", "session");
+  assert.equal(observed.length, before);
+});

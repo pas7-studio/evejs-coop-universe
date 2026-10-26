@@ -10,7 +10,7 @@ function nativeRefineryModule(){
   if(error?.code!=="MODULE_NOT_FOUND"||
      !String(error.message).includes("Cannot find module './coopNpcRefinery'"))
    throw error;
-  return require("./coopNpcRefinery.cjs");
+  return require("./coopNpcRefinery");
  }
 }
 const {createRefinery}=nativeRefineryModule();

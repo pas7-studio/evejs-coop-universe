@@ -356,6 +356,14 @@ function run({codePath,remove=false,dryRun=false}){
   if(!remove){
    const after=fs.readFileSync(src,"utf8");
    new vm.Script(after,{filename:src});
+   // Modules are installed as <name>.js, so require("./sibling.cjs") resolves to
+   // nothing in the running server. The hook then throws on every call and the
+   // caller swallows it per tick, so the feature silently never runs - exactly how
+   // the mining fleet spent hours "charged, stopped, nothing mined".
+   const sibling=after.match(/require\("\.\/[A-Za-z][A-Za-z0-9]*\.cjs"\)/);
+   if(sibling)
+    throw Error("INSTALL_REQUIRE_EXTENSION: "+name+" keeps "+sibling[0]+
+     " but overlay modules are installed as .js; require it without an extension");
    plan.push({file,before:fs.existsSync(file)?fs.readFileSync(file,"utf8"):null,after});
   }else if(fs.existsSync(file)){
    const before=fs.readFileSync(file,"utf8");
