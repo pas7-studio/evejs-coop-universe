@@ -165,3 +165,32 @@ test("financial BUY refund flags default OFF, no native mutation",()=>{
  assert.equal(x.commits,0);
  }finally{keys.forEach((k,i)=>original[i]===undefined?delete process.env[k]:process.env[k]=original[i])}
 });
+
+
+test("refund rejects corrupted original native debit receipt without wallet mutation",()=>{
+ const reset=flags();
+ try{
+  const changes=[
+   r=>delete r.journalIDs,
+   r=>{r.journalIDs=[1,2,3]},
+   r=>{r.journalIDs=[5000000000000000,5000000000000002,5000000000000003]},
+   r=>delete r.createdAt,
+   r=>{r.createdAt=0},
+   r=>{r.minVolume=0},
+   r=>{r.durationDays=0},
+   r=>{r.orderRange=-1}
+  ];
+  for(const change of changes){
+   const x=fixture();
+   change(x.db.playerMarketFills[receiptKey]);
+   const snapshot=structuredClone(x.db);
+   const svc=createBuyRefund({gameStore:x.store,clock:()=>123456});
+   assert.throws(()=>svc.preflight(original("open")),
+    /P2P_BUY_REFUND_DURABLE_ORIGINAL_RESERVE_NOT_VERIFIED/);
+   assert.throws(()=>svc.refund(original(),"cancelled"),
+    /P2P_BUY_REFUND_DURABLE_ORIGINAL_RESERVE_NOT_VERIFIED/);
+   assert.equal(x.commits,0);
+   assert.deepEqual(x.db,snapshot);
+  }
+ }finally{reset()}
+});
