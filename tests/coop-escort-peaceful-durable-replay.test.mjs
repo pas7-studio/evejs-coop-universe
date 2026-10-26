@@ -19,7 +19,7 @@ const booking=()=>({manifestKey:key,contractID,systemID:30000144,
 const stock=()=>({status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED",key,
  stationID:6001001,haulerIDs:[901],cargoIDs:[5501,5502],stacks:2,quantity:50});
 function fixture({terminal=true,route=true,departure=true,reserved=true,
-  walletPaid=false,unknownAck=false,delivery=true,listKeys=[key]}={}){
+  walletPaid=false,unknownAck=false,delivery=true,listKeys=[key],paged=false}={}){
  const b=booking(),full=stock();
  const f={status:"READY",phase:delivery?"DELIVERED":"FUNDED",booking:b,
   delivery:delivery?{status:"DELIVERED",terminal:true,
@@ -46,7 +46,12 @@ function fixture({terminal=true,route=true,departure=true,reserved=true,
     "NATIVE_PREFUNDED_BOOKING_VERIFIED":"FLIGHT_NATIVE_RESERVATION_NOT_VERIFIED"}),
    readNativeDelivery:()=>({status:"DELIVERED",terminal:true,
     nativeFullManifestProof:stock()}),
-   listDelivered:()=>{scan++;return {status:"READY",manifestKeys:listKeys}},
+   listDelivered:({afterKey=null}={})=>{scan++;
+    if(paged)return afterKey===null?
+     {status:"READY",manifestKeys:[key],hasMore:true,nextAfterKey:key}:
+     {status:"READY",manifestKeys:[],hasMore:false,nextAfterKey:null};
+    return {status:"READY",manifestKeys:listKeys}
+   },
    fundBeforeWarp:()=>{throw Error("NO_FUNDING_DURING_REPLAY")},
    recordDelivered:()=>({status:"DURABLE_NATIVE_DELIVERY_RECORDED"})})},
   "./coopEscortContractSettlement":{createEscortContractSettlement:()=>({
@@ -168,6 +173,24 @@ test("invalid operator scan cap is rejected without opening any journal",()=>{
  assert.equal(f.runtime.reconcilePeacefulDeliveries({maxTrips:1000}).status,
   "PEACEFUL_REPLAY_SCAN_OPTIONS_INVALID");
  assert.equal(f.scans(),0);
+});
+test("peaceful payout scans a bounded cursor page then advances without re-crediting",()=>{
+ const f=fixture({paged:true});
+ const first=f.runtime.reconcilePeacefulDeliveries({maxTrips:1});
+ assert.equal(first.status,"NATIVE_PEACEFUL_REPLAY_CHECKED");
+ assert.equal(first.paid,1);
+ assert.equal(first.hasMore,true);
+ assert.equal(first.nextAfterKey,key);
+ const second=f.runtime.reconcilePeacefulDeliveries({maxTrips:1,afterKey:first.nextAfterKey});
+ assert.equal(second.status,"NATIVE_PEACEFUL_REPLAY_CHECKED");
+ assert.equal(second.paid,0);
+ assert.equal(second.hasMore,false);
+ assert.equal(second.nextAfterKey,null);
+ assert.equal(f.debits(),1);
+ assert.equal(f.scans(),2);
+ assert.equal(f.runtime.reconcilePeacefulDeliveries({afterKey:"../bad"}).status,
+  "PEACEFUL_REPLAY_SCAN_OPTIONS_INVALID");
+ assert.equal(f.scans(),2);
 });
 process.on("exit",()=>{for(const [k,v] of Object.entries(prev))
  if(v===undefined)delete process.env[k];else process.env[k]=v});
