@@ -51,3 +51,8 @@ Evidence: 4/4 — hash, pin, atomic file list, and "the capacitor hack must stay
 Why: the "make this row survive a restart" sequence was duplicated in both transfer paths and a broken copy is exactly how ore disappeared.
 Where: integration/coopDurableCargoWrite.cjs, integration/coopNativeHaulCargo.cjs, tests/coop-durable-cargo-write.test.mjs
 Evidence: 5/5 new tests; manifest suite unchanged at its 12 pre-existing failures; OVERLAY_OK.
+### 2026-10-26T11:15Z · 240d374 · DOCS · docs(worklog): trace every change to its commit, files, reason and UTC time
+
+Why: traceability: changes lived only in chat and commit subjects, so a bot could not tell what changed, why, when or by which commit
+Where: AGENTS.md, docs/WORKLOG.md, scripts/log-change.cjs, tests/worklog-format.test.mjs
+Evidence: tests/worklog-format.test.mjs 4/4; scripts/log-change.cjs --check OK

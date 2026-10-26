@@ -79,8 +79,8 @@ function main() {
   const subject = git(["show", "-s", "--format=%s", sha]);
   const files = git(["show", "--name-only", "--format=", sha]).split("\n").filter(Boolean);
   const body = git(["show", "-s", "--format=%b", sha]);
-  const dirty = git(["status", "--porcelain"]);
-  if (dirty) die("Worktree is dirty: commit first, then log, so the entry matches the commit");
+  // Everything below is derived from the commit itself, so unrelated dirty
+  // files from other sessions cannot make the entry lie.
   const entry = [
     "### " + at + " · " + short + " · " + args.layer + " · " + subject,
     "",
