@@ -117,6 +117,14 @@ function note(args){
   if(!recorded&&result.status==="VERIFIED_NATIVE_LOOT_PICKUP")
    return {...result,status:"TELEMETRY_NOT_RECORDED",nativeTransferVerified:true};
  }
+ // Follow the existing authoritative native transfer, AFTER generic
+ // source debit + real destination delta are independently verified.
+ // Boss-specific evidence is read-only; it must never replay the grant.
+ if(result.status==="VERIFIED_NATIVE_LOOT_PICKUP"&&
+    process.env.EVEJS_COOP_PVE_BOSS_LOOT_PICKUP==="1"){
+  try{require("./coopPveBossLootPickup").note(args,result);}
+  catch(error){console.warn("[CoopPveBossLoot] observer",String(error?.code||"UNAVAILABLE"));}
+ }
  return result;
 }
 module.exports={verify,note,destinationDelta};

@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
@@ -596,6 +596,7 @@ function start(){
   else runPhase("native-ammo-supply",advanceNativeAmmoSupply);
   runPhase("native-raids",advanceNativeRaids);
   runPhase("native-tactics",advanceNativeTactics);
+  runPhase("native-pve-boss-wreck",advanceNativePveBossWreck);
   runPhase("native-pve-site-defense",advanceNativePveSiteDefense);
   runPhase("native-pve-wave-reinforcements",advanceNativePveWaveReinforcements);
   runPhase("native-pve-objective-doctrine",advanceNativePveObjectiveDoctrine);
@@ -2086,6 +2087,60 @@ function advanceNativeRaids(){
 // No new site, native NPC spawn, reward, or timer.
 // PVE-003B: original destructible dungeon objectives + native combat
 // target / warp / orbit commands, never virtual HP, damage or payouts.
+// PVE-004A: never spawn boss NPCs, mint drops or advance missions here.
+// Verify original authored combat hull/HP, native death and existing wreck rows.
+function advanceNativePveBossWreck(){
+ if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES!=="1"||
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1"||!bridge||!visitedSystems.size)return;
+ const runtime=require("./runtime"),dungeon=require("../services/dungeon/dungeonRuntime"),
+  npc=require("./npc/npcRuntime"),ctrl=require("./npc/npcRegistry"),
+  store=require("./npc/nativeNpcStore"),damage=require("./combat/damage");
+ if(!(runtime.scenes instanceof Map))return;
+ if(!pveNativeBossDirector)
+  pveNativeBossDirector=require("./coopPveNativeBossDirector").createNativeBossDirector({
+   getNativeEntity:id=>store.getNativeEntity(id),
+   getController:id=>ctrl.getControllerByEntityID(id),
+   resolveVerifiedPlayer:(scene,ship)=>
+    require("./coopNativeConsequences").resolveVerifiedPlayerID(scene,ship),
+   getHealth:ship=>{
+    const max=damage.getEntityMaxHealthLayers(ship),
+     hp=damage.getEntityCurrentHealthLayers(ship,max);
+    if(!max||!hp||[max.shield,max.armor,max.structure].some(n=>Number(n)<=0))return null;
+    return {shield:Number(hp.shield)/Number(max.shield),
+     armor:Number(hp.armor)/Number(max.armor),
+     structure:Number(hp.structure)/Number(max.structure)};
+   },
+   issueAttack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
+   listWrecks:()=>store.listNativeWrecks(),
+   listWreckItems:id=>store.listNativeWreckItemsForWreck(id)
+  });
+ const reserved=new Set([...(bridge.snapshot()||[]),
+  ...Object.values(identityRegistry?.snapshot()?.links||{})]
+  .map(x=>Number(x.entityID)).filter(x=>Number.isSafeInteger(x)&&x>0));
+ for(const systemID of [...visitedSystems].slice(0,12)){
+  const scene=runtime.scenes.get(systemID);
+  if(!scene||Number(scene.systemID)!==Number(systemID))continue;
+  const excluded=new Set(reserved);
+  for(const id of pveObjectiveDoctrineDirector?.activeIDs()||[])excluded.add(id);
+  for(const lease of pveWaveReinforcementsDirector?.snapshot()||[])
+   if(Number(lease.systemID)===Number(systemID)&&Number.isSafeInteger(lease.helperID))
+    excluded.add(lease.helperID);
+  for(const id of tacticsDirector?.activeIDs()||[])excluded.add(id);
+  for(const lease of nativeOrderBridge?.snapshot()?.leases||[])
+   if(Number(lease.systemID)===Number(systemID)&&
+      ["ACTIVE","ISSUING","OUTCOME_UNKNOWN"].includes(lease.phase)&&
+      Number.isSafeInteger(lease.entityID)&&lease.entityID>0)
+    excluded.add(lease.entityID);
+  if(excluded.size>1024)continue;
+  const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
+  const output=pveNativeBossDirector.tick({systemID,scene,instances,
+   excludedIDs:[...excluded]});
+  for(const event of output.events)
+   require("./coopObserve").observe(require("./coopRuntimeProbe"),
+    "living-pve-native-boss-wreck",{systemID},{...event,
+     evidence:"NATIVE_HP_OR_WRECK_SOURCE_OBSERVATION_NOT_NEW_LOOT_OR_PAYOUT"});
+ }
+}
 function advanceNativePveObjectiveDoctrine(){
  if(process.env.EVEJS_COOP_PVE_OBJECTIVE_DOCTRINE!=="1"||
     process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1"||!bridge||!visitedSystems.size)return;
@@ -2132,6 +2187,7 @@ function advanceNativePveObjectiveDoctrine(){
    if(Number.isSafeInteger(id)&&id>0)excluded.add(id);
   }
   for(const id of tacticsDirector?.activeIDs()||[])excluded.add(id);
+  for(const id of pveNativeBossDirector?.activeIDs()||[])excluded.add(id);
   // Do not override any native lease owned by the already shared A-Life
   // arbiter. This remains read-only; original owners keep order authority.
   for(const lease of nativeOrderBridge?.snapshot()?.leases||[])
@@ -2178,6 +2234,7 @@ function advanceNativePveWaveReinforcements(){
   if(!scene||Number(scene.systemID)!==Number(systemID))continue;
   const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
   const excluded=new Set(reserved);
+  for(const id of pveNativeBossDirector?.activeIDs()||[])excluded.add(id);
   for(const id of pveObjectiveDoctrineDirector?.activeIDs()||[])excluded.add(id);
   if(excluded.size>1024)continue;
   const output=pveWaveReinforcementsDirector.tick({
@@ -2217,6 +2274,7 @@ function advanceNativePveSiteDefense(){
   // Never let the closer-range site director preempt the warp/attack handoff.
   const waveLeases=pveWaveReinforcementsDirector?.snapshot()||[];
   const excluded=new Set(reserved);
+  for(const id of pveNativeBossDirector?.activeIDs()||[])excluded.add(id);
   for(const lease of waveLeases)
    if(Number(lease.systemID)===Number(systemID)&&Number.isSafeInteger(lease.helperID)&&
       lease.helperID>0)excluded.add(lease.helperID);
@@ -2758,6 +2816,29 @@ function confirmedWreck(session,ship,npcID,wreckID){
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
 function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
+ // Native service calls this only AFTER original source rows are written
+ // and a physical wreck is spawned; do not wait for the next A-Life tick.
+ if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES==="1"&&
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE==="1"&&pveNativeBossDirector){
+  try{
+   const native=require("./runtime");
+   const system=Number(systemID);
+   const scene=native.scenes instanceof Map?native.scenes.get(system):null;
+   const result=pveNativeBossDirector.confirmNativeWreck({
+    systemID:system,scene,entityID:Number(npcID),wreckID:Number(wreckID)
+   });
+   if(result.status==="ORIGINAL_BOSS_WRECK_CONFIRMED"&&
+      process.env.EVEJS_COOP_PVE_BOSS_LOOT_PROFILE_AUDIT==="1")
+    try{require("./coopPveBossLootProfileAudit").note(result.witness)}
+    catch(error){console.warn("[CoopPveBoss] loot table audit",String(error?.code||"UNAVAILABLE"))}
+   if(result.status==="ORIGINAL_BOSS_WRECK_CONFIRMED")
+    require("./coopRuntimeProbe").observe("living-pve-native-boss-death",null,
+     {spaceState:{systemID:system}},{status:result.status,
+      instanceID:result.witness.instanceID,wreckID:result.witness.wreckID,
+      itemCount:result.witness.originalItems.length,
+      evidence:"NATIVE_ORIGINAL_WRECK_AND_ITEMS_AFTER_DEATH"});
+  }catch(error){console.warn("[CoopPveBoss] native death witness",String(error?.code||"UNAVAILABLE"));}
+ }
  if(process.env.EVEJS_COOP_VIRTUAL_WORLD!=="1")return;
  try{
   // A real wreck is the ONLY authority to mark a named pilot as defeated.
@@ -3044,5 +3125,12 @@ function createWarRecoveryAdmin({authorizeOperator}={}){
  if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
  return warGateHandoff.recovery({authorizeOperator});
 }
+// Read-only: an original native boss was observed alive and its single
+// original wreck + initial item records were verified in this process.
+function witnessedNativeBossWreck(wreckID){
+ if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES!=="1"||
+    process.env.EVEJS_COOP_PVE_SITE_DEFENSE!=="1")return null;
+ return pveNativeBossDirector?.witnessedWreck(Number(wreckID))||null;
+}
 function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:false,sequence:0,last:null}}
-module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases};
