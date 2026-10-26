@@ -1,0 +1,124 @@
+{
+  "schema": "evejs-coop/lw03-unified-phase-gameplay/v1",
+  "execution": "DISPOSABLE_LOCAL_ONLY",
+  "preserveDockerVolume": "evejs-data",
+  "scenarios": [
+    {
+      "id": "LW03-01",
+      "title": "Existing feature flags OFF: one 30s loop and no unexpected NPC action",
+      "expected": "NO_EXTRA_NATIVE_ACTION",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-02",
+      "title": "Read-only native 5s combat sampler remains independent",
+      "expected": "OBSERVED_ONLY",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-03",
+      "title": "Two concurrent NPC raids + patrol request same hull: original arbiter decides",
+      "expected": "ONE_NATIVE_ORDER_OWNER",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-04",
+      "title": "Actual native factory/refinery/market writes follow existing journals only",
+      "expected": "NO_SECOND_NATIVE_WRITER",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-05",
+      "title": "Cold restart while native market Rust RPC outcome unknown",
+      "expected": "NO_DUPLICATE_NATIVE_ISK",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-06",
+      "title": "Physical mining and station cargo delivery survive same world tick",
+      "expected": "ORIGINAL_CARGOID_CONSERVED",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-07",
+      "title": "Real native salvage rival and original wreck custody across phase boundary",
+      "expected": "NO_DUPLICATE_WRECK_ITEMS",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-08",
+      "title": "Two authenticated clients observe same named physical NPC through 30s cycle",
+      "expected": "SAME_NATIVE_ACTOR",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    },
+    {
+      "id": "LW03-09",
+      "title": "Native phase error does not suppress independent native phases; no second timer",
+      "expected": "FAIL_CLOSED_NO_DUPLICATE_TICK",
+      "status": "NOT_RUN",
+      "requiredEvidence": [
+        "main and PR SHA",
+        "pinned upstream SHA",
+        "original native actor/cargo/ISK receipts",
+        "Node/SQLite/Rust logs",
+        "2-client visual result when relevant"
+      ]
+    }
+  ]
+}

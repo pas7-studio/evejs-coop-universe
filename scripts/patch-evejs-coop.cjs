@@ -103,6 +103,8 @@ const SOCIAL_PATCH_PATHS=new Set([
  "server/src/_secondary/chat/chatStore.js",
  "server/src/services/mail/mailState.js"
 ]);
+names.splice(names.indexOf("coopVirtualWorldRuntime")+1,0,
+ "coopLivingWorldPhaseCoordinator","coopLivingWorldPhaseRegistry");
 const specs=[
  {file:"server/src/services/industry/industryManagerService.js",patches:[]},
  {file:"server/src/services/reprocessing/reprocessingRuntime.js",patches:[]},
