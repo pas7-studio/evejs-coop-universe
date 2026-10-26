@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -416,6 +416,44 @@ function npcRealPoints(scene){
   beltCount:points.filter(p=>p.kind==="asteroidBelt").length,
   stationCount:points.filter(p=>p.kind==="station").length};
 }
+// EX-02/03. Exactly one new phase in the EXISTING 30s A-Life tick; never
+// enumerate private bookmarks, spawn sites, or derive NPC knowledge from the
+// full native signature catalog without a physical on-grid witness.
+function advanceNativeNpcExpeditions(){
+ if(process.env.EVEJS_COOP_ALIFE!=="1"||
+    process.env.EVEJS_COOP_NPC_EXPEDITIONS!=="1"||
+    !alifeOrderArbitrationEnabled(process.env)||
+    !world||!identityRegistry||!visitedSystems.size)return;
+ const native=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  controllers=require("./npc/npcRegistry"),
+  signatures=require("../services/exploration/signatures/signatureRuntime"),
+  npc=require("./npc/npcRuntime"),probe=require("./coopRuntimeProbe");
+ const guard=npcOrderBridge();
+ if(!guard)return;
+ if(!npcExpeditionDirector)
+  npcExpeditionDirector=require("./coopNpcExpeditionDirector").createExpeditionDirector({
+   listNativeSites:systemID=>signatures.listSystemSignatureSites(systemID),
+   getNativeEntity:id=>store.getNativeEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id),
+   orderBridge:guard,
+   warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options)
+  });
+ const roles=Object.fromEntries((world.snapshot()?.pilots||[])
+  .filter(p=>typeof p?.id==="string").map(p=>[p.id,p.role]));
+ // Only the durable NPC materialization registry authorizes named hulls.
+ const assignments=Object.values(identityRegistry.snapshot()?.links||{});
+ for(const systemID of [...visitedSystems].sort((a,b)=>a-b).slice(0,2)){
+  // A read-only observer must never instantiate an absent native scene.
+  const scene=native.scenes instanceof Map?native.scenes.get(systemID):null;
+  if(!scene)continue;
+  const result=npcExpeditionDirector.tick({scene,assignments,roles});
+  if(result.orders||result.observed||result.blocked&&backgroundTicks%10===0)
+   probe.observe("living-npc-expedition",null,{spaceState:{systemID}},
+    {status:result.status,orders:result.orders,observed:result.observed,
+     blocked:result.blocked||0,source:result.source||"NATIVE_SITE_OBSERVE",
+     nativeLootGranted:false,nativeWalletMutation:false});
+ }
+}
 function observeNativeMiningProof(){
  if(!world||!visitedSystems.size)return;
  const runtime=require("./runtime"),mining=require("../services/mining/miningNpcOperations"),
@@ -596,6 +634,8 @@ function start(){
   else runPhase("native-ammo-supply",advanceNativeAmmoSupply);
   runPhase("native-raids",advanceNativeRaids);
   runPhase("native-tactics",advanceNativeTactics);
+  if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_NPC_EXPEDITIONS==="1")
+   runPhase("native-expeditions",advanceNativeNpcExpeditions);
   runPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
