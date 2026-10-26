@@ -106,3 +106,38 @@ test('an uncertain custody block is never cleared automatically', ()=>{
   settler.settle({entity});
   assert.equal(entity.coopMiningCargoNeedsOperatorRepair, 'ALIFE07_POSTCOMMIT_SCENE_DIVERGED');
 });
+
+test("a store refusal before the transaction never marks the hull for repair", ()=>{
+  for (const flag of ["EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC", "EVEJS_COOP_NATIVE_ATOMIC_ROWS",
+    "EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY", "EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION"]){
+    process.env[flag] = "1";
+  }
+  const failing = atomic.createAtomicMiningSettler({
+    gameStore: {coopAtomicNativeRows: {transact(){ throw new Error("NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo"); }}},
+    nativeStore: {allocateCargoID: () => ({success: true, data: 980200000077}), listNativeCargoForEntity: () => []},
+    resolveType: (id) => ({typeID: id, groupID: 465, categoryID: 25, name: "Veldspar", volume: 0.1}),
+  });
+  const entity = hull();
+  const rock = {itemID: 5020484726789, yieldTypeID: 1230, remainingQuantity: 1000};
+  const result = failing.settle({
+    scene: {systemID: 30000144, getEntityByID: (id) => (id === rock.itemID ? rock : null)},
+    entity,
+    targetEntity: rock,
+    mineableState: {entityID: rock.itemID, yieldTypeID: 1230, originalQuantity: 1000, remainingQuantity: 1000},
+    miningResult: {normalQuantity: 10, wastedQuantity: 0},
+    transferredQuantity: 10,
+    cycleBoundaryMs: 1793031234567,
+    moduleItem: {itemID: 77},
+    readState: () => ({remainingQuantity: 1000, yieldTypeID: 1230}),
+    commitScene: () => ({success: true}),
+  });
+  assert.equal(result.success, false);
+  assert.match(String(result.reason), /NATIVE_TRANSIENT_STATE_UNSAFE/);
+  assert.equal(entity.coopMiningCargoNeedsOperatorRepair, undefined,
+    "a pre-transaction refusal must not poison the hull");
+  assert.match(String(entity.coopMiningCargoLastError), /NATIVE_TRANSIENT_STATE_UNSAFE/);
+  for (const flag of ["EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC", "EVEJS_COOP_NATIVE_ATOMIC_ROWS",
+    "EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY", "EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION"]){
+    delete process.env[flag];
+  }
+});

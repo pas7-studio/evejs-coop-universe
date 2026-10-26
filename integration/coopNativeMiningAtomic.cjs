@@ -24,9 +24,16 @@ const CONFIG_ONLY = new Set([
   "ALIFE07_PERSISTENT_NPC_REQUIRED",
   "ALIFE07_PERSISTENT_ROCK_REQUIRED",
 ]);
+// The store can also refuse *before* the transaction begins: it will not mix a
+// durable write with transient cache cargo, or a table is not cached, or a flush
+// is still in flight. Nothing was journaled and nothing was written, so those are
+// the same class as a missing flag - and marking a hull for operator repair here
+// produced a clear/re-block loop (measured: 52 repair-cleared events in 5 min on a
+// world whose image predated the cargo contract).
+const PRE_MUTATION = /NATIVE_TRANSIENT_STATE_UNSAFE|NATIVE_GAMESTORE_TABLE_UNAVAILABLE|NATIVE_GAMESTORE_PERSISTENCE_NOT_QUIESCENT|NATIVE_GAMESTORE_ATOMIC_REENTRANT|ALIFE07_MINING_ATOMIC_DISABLED|NATIVE_GAMESTORE_ATOMIC_DISABLED/;
 function blocked(entity, reason) {
   if (entity && typeof entity === "object") {
-    if (CONFIG_ONLY.has(reason)) {
+    if (CONFIG_ONLY.has(reason) || PRE_MUTATION.test(String(reason || ""))) {
       entity.coopMiningCargoLastError = reason;
     } else {
       entity.coopMiningCargoNeedsOperatorRepair =
