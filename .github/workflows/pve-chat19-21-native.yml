@@ -1,0 +1,89 @@
+name: PVE Chat19-21 Native CI Gate
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - integrate/chat19-21-pve-main-20261026
+      - feat/chat19-21-pve-native-integration-gates
+      - feat/chat19-21-pve-final-readiness-20261026
+    paths:
+      - integration/**
+      - tests/**
+      - scripts/**
+      - docs/coop-flags.json
+      - .github/workflows/pve-chat19-21-native.yml
+  pull_request:
+    branches:
+      - main
+      - feat/chat19-21-pve-native-duo-item-standing-custody
+      - feat/chat19-21-pve-native-integration-gates
+    paths:
+      - integration/**
+      - tests/**
+      - scripts/**
+      - docs/coop-flags.json
+      - .github/workflows/pve-chat19-21-native.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pve-chat19-21-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node-original-source:
+    name: Original source Node 22 mission, loot and two-recipient regressions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check node:sqlite available on actual Node runtime
+        run: |
+          node -e "const {DatabaseSync}=require('node:sqlite');const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE native(value INTEGER);INSERT INTO native VALUES(1)');if(db.prepare('SELECT value FROM native').get().value!==1)process.exit(1);db.close()"
+      - name: Run all tracked PVE original-source Node tests
+        run: node scripts/Run-Pve-Native-Gates.cjs --source
+
+  pinned-evejs-roundtrip:
+    name: Disposable pinned original EveJS full overlay dryrun-install-reapply-remove
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout current PvE integration code
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Checkout EXACT original EveJS source into disposable directory
+        uses: actions/checkout@v4
+        with:
+          repository: gameboys84/EveJS
+          ref: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+          path: isolated-upstream
+          persist-credentials: false
+      - name: Verify native pin before touching any files
+        run: |
+          test "$(git -C isolated-upstream rev-parse HEAD)" = "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f"
+          test -f isolated-upstream/Code/compose.yaml
+          test -z "$(git -C isolated-upstream status --porcelain)"
+      - name: Install original pinned server dependencies (isolated, lockfile-verified)
+        working-directory: isolated-upstream/Code/server
+        run: npm ci --no-audit --no-fund
+      - name: Run original source installer + native pinned no-server contracts
+        env:
+          EVEJS_PVE_DISPOSABLE_CHECKOUT: "1"
+        run: node scripts/Run-Pve-Native-Gates.cjs --pinned-only --upstream-code isolated-upstream/Code
+      - name: Disallow any residual changes to original pinned checkout
+        if: always()
+        run: |
+          test -z "$(git -C isolated-upstream status --porcelain --untracked-files=all)"
+          git -C isolated-upstream diff --exit-code
+
+# This workflow never logs in clients, starts the game or accesses any
+# real player account / production wallet / shared volume. Two actual EVE
+# clients, actual payouts, rare drop, network RPC and crash-resume are
+# deliberately NOT_RUN until an operator provides disposable test access.
