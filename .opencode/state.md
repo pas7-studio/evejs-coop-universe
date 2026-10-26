@@ -32,6 +32,14 @@
    a pre-mutation refusal no longer blocks forever (`22ec6968`), yield refusals name
    the failing field (`3bba6d12`), float cycle boundaries are rounded (`f294b647`),
    the installer refuses `.cjs` sibling requires (`d75dea53`, `d9a4b629`).
+   **`c7a24889` — the lock guard was never installed.** It was written, hooked into
+   `clearNpcCombatState`, and missing from the install list, so every NPC think threw
+   `Cannot find module ../coopMiningTargetGuard`; mining survived only because that
+   throw aborted the lock clearing the guard was meant to do (right outcome, wrong
+   reason, NPC controller interrupted every second). Now: module registered, the hook
+   cannot throw into stock code, and `scripts/coop-hook-requires.cjs` resolves all 984
+   requires of hooks and installed modules - the installer refuses
+   `HOOK_REQUIRE_UNRESOLVED` / `HOOK_REQUIRE_EXTENSION`.
    Next: one deploy, then measure `loaded -> delivered -> sold` and a restart
    acceptance (`DURABLE_BEFORE>0`).
 
