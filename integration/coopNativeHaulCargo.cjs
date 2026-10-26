@@ -290,7 +290,9 @@ function transferCargo(scene,fleet,miner,options={}){
 }
 function unloadCargo(scene,fleet,options={}){
  try{
-  if(!scene||!positive(fleet?.fleetID)||!positive(fleet?.systemID))return {status:"INVALID",stacks:0};
+  if(!scene||!positive(fleet?.fleetID)||!positive(fleet?.systemID)||
+     positive(scene.systemID)!==positive(fleet.systemID))
+   return {status:"INVALID",stacks:0};
   const {store,probe,depot}=dependenciesOf(options);
   // No depot -> no removal. Do not silently destroy NPC ore.
   if(!depot||typeof depot.prepare!=="function"||typeof depot.commit!=="function")
@@ -299,11 +301,28 @@ function unloadCargo(scene,fleet,options={}){
   for(const rawID of fleet.haulerEntityIDs||[]){
    const hauler=scene.getEntityByID(Number(rawID));
    if(hauler?.kind!=="ship")continue;
+   const haulerID=positive(hauler.itemID),ownerID=positive(hauler.ownerID);
+   // Fleet membership is not corporate title. The live ship must be the
+   // original requested hauler with an attested native corporate owner.
+   if(!haulerID||haulerID!==positive(rawID)||!ownerID||
+      hauler.coopHaulNeedsOperatorRepair){blocked++;continue;}
    // "Unknown" is not an empty hold. A failed native inventory adapter
    // must not make original ore silently disappear from the unloading plan.
-   const before=store.listNativeCargoForEntity(hauler.itemID);
+   const before=store.listNativeCargoForEntity(haulerID);
    if(!Array.isArray(before)){blocked++;continue;}
-   const manifest=before.filter(x=>mineable(x)&&Number(x[haulFlag])===Number(fleet.fleetID));
+   // Do not silently omit corrupt siblings tagged for the same fleet:
+   // partial unload would credit good stacks while stranding suspicious ore.
+   const manifest=before.filter(x=>Number(x?.[haulFlag])===Number(fleet.fleetID));
+   const seenCargoIDs=new Set();
+   if(manifest.some(item=>{
+    const id=positive(item?.cargoID);
+    if(!id||seenCargoIDs.has(id))return true;
+    seenCargoIDs.add(id);
+    return !mineable(item)||Number(item.entityID)!==haulerID||
+      positive(item.ownerID)!==ownerID||
+      Number(item.coopHaulSystemID)!==Number(fleet.systemID)||
+      !positive(item.coopHaulFromMinerID)||item.transient!==false;
+   })){blocked++;continue;}
    for(const item of manifest){
     const delivery={cargoID:Number(item.cargoID),typeID:Number(item.typeID),
       quantity:Number(item.quantity),fromMinerID:positive(item.coopHaulFromMinerID),
