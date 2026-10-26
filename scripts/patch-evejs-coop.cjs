@@ -10,6 +10,8 @@ const names=["coopAgentDialogue","coopAlifeEconomy","coopAlifeEconomySensor","co
 names.splice(names.indexOf("coopFactionDirector")+1,0,"coopFactionWarCore","coopFactionWarStore");
 // FW-002: native militia agent, default OFF.
 names.splice(names.indexOf("coopFactionWarStore")+1,0,"coopFactionWarNativeProofs","coopFactionWarAgent");
+// FW-003: native-proof-only war hull custody; no added timer or native ship factory.
+names.splice(names.indexOf("coopFactionWarAgent")+1,0,"coopWarFleetRegistry","coopWarFleetNativeProofs");
 names.splice(names.indexOf("coopMarketCatalog")+1,0,"coopMarketCancelCustody","coopMarketSellCustody","coopPlayerMarketFill","coopPlayerMarketSettlementFence","coopPlayerMarketRustClaim","coopPlayerMarketAtomicSettlement","coopPlayerMarketAtomicRuntime","coopPlayerMarketBuyReserve","coopPlayerMarketBuyReserveRuntime","coopPlayerMarketBuySettlement","coopPlayerMarketBuyRefund","coopPlayerMarketBuyRefundRuntime");
 // P0 staged modules registered separately to avoid conflicts in the shared list.
 names.splice(names.indexOf("coopNpcAmmoDebitJournal")+1,0,"coopNpcAmmoBankAtomic");
