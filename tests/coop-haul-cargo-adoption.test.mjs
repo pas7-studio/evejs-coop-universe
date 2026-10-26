@@ -359,6 +359,7 @@ test("original registry confirms ship is gone before same-owner cargo changes ha
 
 test("native cargo view failure after durable adoption quarantines both hauler and fleet",()=>{
  for(const fault of ["throw","empty"]){
+  resetForTests();
   const store=fakeStore([
    orphan({cargoID:7001}),
    orphan({cargoID:7002,entityID:900000000112})
@@ -392,6 +393,7 @@ test("native cargo view failure after durable adoption quarantines both hauler a
 });
 test("a silently missing or falsely owned post-flush cargo row blocks loaded fleet",()=>{
  for(const fault of ["missing","foreign-owner"]){
+  resetForTests();
   const store=fakeStore([
    orphan({cargoID:7001}),
    orphan({cargoID:7002,entityID:900000000112})
@@ -404,7 +406,8 @@ test("a silently missing or falsely owned post-flush cargo row blocks loaded fle
    if(fault==="missing")return rows.slice(0,1);
    return rows.map((r,i)=>i===1?{...r,ownerID:9999}:r);
   };
-  const ship={...hauler},target=fleet();
+  // Fresh ship view: an earlier scenario may have loaded the shared fixture.
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
   const result=adopt(sceneWith([ship]),target,{
    store,clock:()=>NOW,
    database:{flushTableSync:()=>({success:true})}

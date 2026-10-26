@@ -21,7 +21,7 @@ const fs = require("node:fs");
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -119,12 +119,19 @@ function giveItem(request) {
   }
   try {
     const characterState = require("../services/character/characterState");
+    const itemStore = require("../services/inventory/itemStore");
     const registry = require("../services/inventory/itemTypeRegistry");
-    const resolved = typeof registry.resolveItemByTypeID === "function"
+    const lookup = typeof registry.resolveItemByTypeID === "function"
       ? registry.resolveItemByTypeID(typeID)
       : null;
+    // resolveItemByTypeID returns {success, match} in this codebase; the grant
+    // primitive wants the record itself.
+    const resolved = lookup && lookup.match ? lookup.match : lookup;
     if (!resolved) return { ok: false, error: "unknown typeID " + typeID };
-    const granted = characterState.grantItemToCharacterStationHangar(characterID, stationID, resolved, quantity);
+    if (typeof itemStore.grantItemToCharacterStationHangar !== "function") {
+      return { ok: false, error: "itemStore.grantItemToCharacterStationHangar is missing" };
+    }
+    const granted = itemStore.grantItemToCharacterStationHangar(characterID, stationID, resolved, quantity);
     if (!granted || granted.success === false) {
       return { ok: false, error: String(granted && granted.errorMsg || "grant refused") };
     }
@@ -232,6 +239,140 @@ function boardShip(request) {
   }
 }
 
+// Moves an owned item to another location: the native primitive behind looting a
+// wreck or putting a module back in the hangar.
+function moveItem(request) {
+  const characterID = Number(request.characterID) || 0;
+  const itemID = Number(request.itemID) || 0;
+  const toLocationID = Number(request.toLocationID) || 0;
+  const toFlagID = Number(request.toFlagID) || 4;
+  if (!(itemID > 0) || !(toLocationID > 0)) return { ok: false, error: "itemID and toLocationID are required" };
+  const item = readRow("items", itemID);
+  if (!item) return { ok: false, error: "item " + itemID + " does not exist" };
+  if (Number(item.ownerID) !== characterID) {
+    return { ok: false, error: "item " + itemID + " is not owned by " + characterID };
+  }
+  try {
+    const store = require("../services/inventory/itemStore");
+    if (typeof store.moveItemToLocation !== "function") return { ok: false, error: "moveItemToLocation is missing" };
+    const moved = store.moveItemToLocation(itemID, toLocationID, toFlagID, null);
+    if (moved && moved.success === false) return { ok: false, error: String(moved.errorMsg || "move refused") };
+    return {
+      ok: true,
+      itemID,
+      name: String(item.itemName || item.shipName || ""),
+      from: Number(item.locationID) || 0,
+      toLocationID,
+      toFlagID,
+    };
+  } catch (error) {
+    return { ok: false, error: "move failed: " + String(error && error.message || error) };
+  }
+}
+
+// Fits modules onto an owned, docked hull using the same native fitting path as
+// the dev ship commands: grant each module to the hangar, then fit it. Works
+// without a live session, so a bare hull can be made flyable offline.
+function fitShip(request) {
+  const characterID = Number(request.characterID) || 0;
+  const shipItemID = Number(request.itemID) || 0;
+  const modules = Array.isArray(request.modules) ? request.modules : [];
+  if (!(shipItemID > 0)) return { ok: false, error: "itemID (the hull) is required" };
+  if (!modules.length) return { ok: false, error: "modules[] is required" };
+  const character = readRow("characters", characterID);
+  if (!character) return { ok: false, error: "character " + characterID + " not found" };
+  const stationID = Number(character.stationID) || 0;
+  if (!(stationID > 0)) return { ok: false, error: "character is not docked" };
+  const shipItem = readRow("items", shipItemID);
+  if (!shipItem) return { ok: false, error: "ship " + shipItemID + " not found" };
+  if (Number(shipItem.ownerID) !== characterID) {
+    return { ok: false, error: "ship " + shipItemID + " is not owned by " + characterID };
+  }
+  if (Number(shipItem.categoryID) !== 6) {
+    return { ok: false, error: "item " + shipItemID + " is not a ship hull" };
+  }
+  if (Number(shipItem.locationID) !== stationID || Number(shipItem.flagID) !== 4) {
+    return { ok: false, error: "ship " + shipItemID + " is not in the hangar of station " + stationID };
+  }
+
+  let registry = null;
+  let characterState = null;
+  let dev = null;
+  try {
+    registry = require("../services/inventory/itemTypeRegistry");
+    characterState = require("../services/character/characterState");
+    dev = require("../services/ship/devCommandShipRuntime");
+  } catch (error) {
+    return { ok: false, error: "fitting modules unavailable: " + String(error && error.message || error) };
+  }
+  if (typeof dev.fitGrantedItemTypeToShip !== "function") {
+    return { ok: false, error: "fitGrantedItemTypeToShip is missing" };
+  }
+
+  // The native fitting planner needs the real session: with a bare identity it
+  // answers "no valid slot" for every module, which would be a lie to report.
+  const identity = liveSessionFor(characterID);
+  if (!identity) {
+    return { ok: false, error: "fitting needs a live session: log the character in first" };
+  }
+
+  const results = [];
+  for (const module of modules) {
+    const name = String(module && module.name || "").trim();
+    const typeID = Number(module && module.typeID) || 0;
+    const count = Math.max(1, Number(module && module.count) || 1);
+    let itemType = null;
+    try {
+      const lookup = typeID > 0
+        ? registry.resolveItemByTypeID(typeID)
+        : registry.resolveItemByName(name);
+      itemType = lookup && lookup.match ? lookup.match : lookup;
+    } catch (_error) {
+      itemType = null;
+    }
+    if (!itemType) {
+      results.push({ name: name || String(typeID), ok: false, error: "item type not found" });
+      continue;
+    }
+    // grant:false means the modules already sit in the hangar (for example after
+    // being recovered from a wreck), so fitting consumes those real items
+    // instead of minting new ones.
+    if (request.grant !== false) {
+      let granted = null;
+      try {
+        const store = require("../services/inventory/itemStore");
+        granted = store.grantItemToCharacterStationHangar(characterID, stationID, itemType, count);
+      } catch (error) {
+        results.push({ name, ok: false, error: "grant failed: " + String(error && error.message || error) });
+        continue;
+      }
+      if (!granted || granted.success === false) {
+        results.push({ name, ok: false, error: String(granted && granted.errorMsg || "grant refused") });
+        continue;
+      }
+    }
+    try {
+      const fitted = dev.fitGrantedItemTypeToShip(identity, stationID, shipItem, itemType, count, {
+        syncToSession: false,
+        forceFit: true,
+      });
+      const fittedCount = Number(fitted && fitted.fittedCount) || 0;
+      results.push({
+        name: itemType.name || itemType.typeName || name,
+        ok: fittedCount > 0,
+        fitted: fittedCount,
+        forced: Number(fitted && fitted.forcedCount) || 0,
+        error: fittedCount > 0 ? "" : "no valid slot for this module",
+      });
+    } catch (error) {
+      results.push({ name, ok: false, error: "fit failed: " + String(error && error.message || error) });
+    }
+  }
+
+  const fitted = results.filter((row) => row.ok).length;
+  return { ok: fitted > 0, fitted, attempted: results.length, results, characterID, itemID: shipItemID };
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
@@ -241,6 +382,8 @@ function executeRequest(request) {
   if (action === "chat_command") return executeChatCommand(request);
   if (action === "give_item") return giveItem(request);
   if (action === "remove_item") return removeItem(request);
+  if (action === "fit_ship") return fitShip(request);
+  if (action === "move_item") return moveItem(request);
   return boardShip(request);
 }
 

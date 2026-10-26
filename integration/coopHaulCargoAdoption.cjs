@@ -11,9 +11,10 @@ const load=name=>{try{return require("./"+name)}catch(_error){return require("./
 const {observe,noteOnce}=load("coopObserve");
 const pos=v=>{const n=Number(v);return Number.isSafeInteger(n)&&n>0?n:0;};
 const DEFAULT_TTL_MS=45*60*1000;
-const MAX_ATTEMPTS=120;
-const THROTTLE_MS=2000;
-const attempts=new Map();
+// Adoption is idempotent by cargo state (an adopted row carries
+// coopHaulAdoptedAt and is no longer an orphan), so no time throttle is needed
+// and a failure must never consume the slot: only a real ADOPTED is final.
+const doneSlots=new Set();
 const noted=new Set();
 function enableFlag(){return process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION==="1";}
 function dependenciesOf(options={}){
@@ -90,11 +91,7 @@ function adopt(scene,fleet,options={}){
  if(!systemID||!fleetID||systemID!==pos(fleet?.systemID))
   return {status:"INVALID_FLEET"};
  const key=systemID+":"+fleetID;
- const state=attempts.get(key)||{tries:0,at:0,done:false};
- if(state.done)return {status:"ALREADY_ATTEMPTED"};
- if(now-state.at<THROTTLE_MS)return {status:"THROTTLED"};
- if(state.tries>=MAX_ATTEMPTS){state.done=true;attempts.set(key,state);return {status:"ALREADY_ATTEMPTED"}}
- state.tries+=1;state.at=now;attempts.set(key,state);
+ if(doneSlots.has(key))return {status:"ALREADY_ATTEMPTED"};
  const ttlMs=Number(process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS)>0?
   Number(process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS):DEFAULT_TTL_MS;
  const planned=plan({store,scene,systemID,fleetID,now,ttlMs,
@@ -144,9 +141,6 @@ function adopt(scene,fleet,options={}){
   }catch(_error){return false}
  };
  const restore=(touched,status,detail)=>{
-  // A failed batch must not consume the once-only slot: the rows were put back,
-  // so a later tick may legitimately try again.
-  attempts.delete(systemID+":"+fleetID);
   let restored=true;
   for(const row of [...touched].reverse()){
    try{
@@ -218,10 +212,12 @@ function adopt(scene,fleet,options={}){
   // both actors for source-backed operator reconciliation.
   fleet.coopHaulNeedsOperatorRepair="ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED";
   hauler.coopHaulNeedsOperatorRepair="ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED";
-  attempts.set(key,{tries:state.tries,at:now,done:true});
-  observe(probe,"living-haul-cargo-adoption-skipped",null,
-   {fleetID,status:"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",
-    reason:String(error?.message||error).slice(0,80)},systemID);
+  // Rows are durable and the fleet is quarantined; the slot stays burned so a
+  // later tick reports ALREADY_ATTEMPTED instead of retrying custody.
+  doneSlots.add(key);
+  noteOnce(noted,key+":custody",probe,"living-haul-cargo-adoption-skipped",
+   {systemID},{fleetID,status:"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",
+    reason:String(error?.message||error).slice(0,80)});
   return {status:"ADOPTION_POST_COMMIT_CUSTODY_UNVERIFIED",adopted:0};
  }
  hauler.nativeCargoItems=cargoItems;
@@ -236,9 +232,8 @@ function adopt(scene,fleet,options={}){
   {systemID},{fleetID,rows:adopted,quantity,volumeM3:volume,haulerID,
    fromEntityIDs:planned.rows.map(row=>pos(row.entityID)).slice(0,16),
    carriage:"native",invented:false});
- const result={status:"ADOPTED",adopted,quantity,volumeM3:volume,haulerID};
- attempts.set(key,{tries:state.tries,at:now,done:true});
- return result;
+ doneSlots.add(key);
+ return {status:"ADOPTED",adopted,quantity,volumeM3:volume,haulerID};
 }
-function resetForTests(){attempts.clear();noted.clear();}
+function resetForTests(){doneSlots.clear();noted.clear();}
 module.exports={adopt,plan,resetForTests};
