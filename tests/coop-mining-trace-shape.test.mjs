@@ -150,3 +150,20 @@ test("a stop for a hull without that effect, or for a player ship, is not report
   trace.noteModuleStop({systemID: 30000144}, {itemID: 2, activeModuleEffects: new Map([[77, {miningEffect: true}]])}, 77, "state", "session");
   assert.equal(observed.length, before);
 });
+
+test("a mining cycle attempt explains the target checks it ran", ()=>{
+  const entity = {nativeNpc: true, itemID: 980000016144, pendingTargetLocks: new Map([[5020484726789, {}]]), activeModuleEffects: new Map()};
+  trace.noteCycleAttempt({systemID: 30000144}, entity, {moduleID: 77}, {targetID: 5020484726789, found: true, remaining: 12000, locked: false}, 1700000000000);
+  const attempt = take("MINING_CYCLE_ATTEMPT");
+  assert.ok(attempt, "no MINING_CYCLE_ATTEMPT event");
+  assert.equal(attempt.detail.rockFound, true);
+  assert.equal(attempt.detail.oreLeft, 12000);
+  assert.equal(attempt.detail.locked, false);
+  assert.equal(attempt.detail.pendingLocks, 1);
+});
+
+test("a cycle attempt for a player ship is never reported", ()=>{
+  const before = observed.length;
+  trace.noteCycleAttempt({systemID: 30000144}, {itemID: 2}, {moduleID: 77}, {targetID: 5, found: true}, 1);
+  assert.equal(observed.length, before);
+});

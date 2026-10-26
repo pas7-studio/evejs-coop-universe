@@ -152,7 +152,13 @@ const specs=[
  {file:"server/src/services/chat/sessionRegistry.js",patches:[
   {anchor:'    addToIndex(session, characterID);',line:"    if (process.env.EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP === \"1\") setImmediate(() => { if (isLiveSession(session) && resolveSessionCharacterID(session) === characterID) Promise.resolve().then(() => require(\"../../space/coopNpcMarketCompletionNotify\").notifyPendingSellerOnLogin(characterID)).catch(error => console.warn(\"[CoopMarketSellerCatchup]\", error.message)); });",after:true}
  ]},
- {file:"server/src/services/mining/miningRuntime.js",patches:[]},
+ {file:"server/src/services/mining/miningRuntime.js",patches:[
+    // The runtime stops a mining module with the reason the mining runtime
+    // returned; "target" covers four different checks. Note the state they read
+    // (rock present, ore left, real lock, pending locks) for native NPCs only.
+    {anchor:'  const targetID = toInt(effectState.targetID, 0);\n  const targetEntity = scene.getEntityByID(targetID);\n  const mineableState = getMineableState(scene, targetID);',after:true,
+     line:'  require("../../space/coopMiningTrace").noteCycleAttempt(scene, entity, effectState, {targetID, found: Boolean(targetEntity), remaining: mineableState && mineableState.remainingQuantity, locked: getTargetsForEntity(scene, entity).includes(targetID)}, cycleBoundaryMs);'}
+  ]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
@@ -280,6 +286,9 @@ const specs=[
   {anchor:"  try {\n    const dungeonUniverseSiteService = require(path.join(",line:"  try { require(\"../coopNpcDestructionAttacker\").note(scene, shipEntity, options, wreckRecord); } catch (_coopError) { console.warn(\"[CoopNpcDestructionAttacker]\", _coopError.message); }"}
  ]},
  {file:"server/src/space/npc/npcBehaviorLoop.js",patches:[
+   // A hull that is mining is not idle: the idle path clears every target lock, and
+   // that stops the mining module before its first cycle. Env-gated, default OFF.
+   {anchor:"  if (options.clearTargets !== false) {\n    clearNpcTargetLocks(scene, entity);",line:'  if (options.clearTargets !== false && require("../coopMiningTargetGuard").keepTargetLock(entity)) options = {...options, clearTargets: false};',after:false},
   // A durable NPC whose controller is dropped vanishes from every fleet that
   {"anchor":"    if (activeEffect) {\n      logNpcCombatDebug(\"npc.weapons.module-already-active\"","line":"    if (!require(\"../coopNpcWeaponAmmoGate\").check({entity,moduleItem,bankModuleIDs}).allowed) { if (activeEffect) scene.deactivateGenericModule(pseudoSession, activeEffect.moduleID || moduleItem.itemID, { reason: \"npc-ammo-empty\", deferUntilCycle: false }); continue; }","after":false},
   {anchor:"  if (sourceClass === \"npc\" && targetClass === \"npc\") {",line:"    if ((process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" || process.env.EVEJS_COOP_FACTION_WAR_COMBAT === \"1\") && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",after:true},
@@ -287,7 +296,7 @@ const specs=[
   {anchor:"    logNpcCombatDebug(\"npc.weapons.module-activate\", () => ({",line:"    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }"}
  ]}
 ];
-// EX-04A opt-in original Dogma/hacking source admission; flags default OFF.
+// EX-04A opt-in native Dogma/hacking admission (flags OFF by default).
 specs.push({file:"server/src/services/dogma/dogmaService.js",patches:[]},
  {file:"server/src/services/exploration/hackingMgrService.js",patches:[]});
 const oldLines=[

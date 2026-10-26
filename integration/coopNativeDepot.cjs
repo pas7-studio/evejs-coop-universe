@@ -10,6 +10,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  // OLDER than the just-replaced disk journal. No further write may use it.
  let persistenceUnverified=false;
  let journalPresent=false;
+ let readFailure=null;
  // Damaged loaded journals cannot be amended or presented as valid supply.
  let stateUnreconciled=false;
  try{
@@ -22,6 +23,32 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
   state={...saved,pending:saved.pending||{}};
   journalPresent=true;
  }catch(e){if(e.code!=="ENOENT")throw e;}
+ // A writer CAS prevents stale writes, but without a read fence an old
+ // instance still advertises stale original cargo supply via audit/snapshot.
+ // Verify the same journal image before EVERY trusted read. An active or
+ // crash-abandoned writer lock makes that read uncertain, too.
+ function verifyCurrentRead(){
+  if(persistenceUnverified)return false;
+  try{
+   try{
+    fsApi.readFileSync(file+".lock","utf8");
+    throw Error("DEPOT_JOURNAL_WRITE_IN_PROGRESS");
+   }catch(error){if(error?.code!=="ENOENT")throw error;}
+   let disk=null;
+   try{disk=JSON.parse(fsApi.readFileSync(file,"utf8"));}
+   catch(error){if(error?.code!=="ENOENT")throw error;}
+   if((disk!==null)!==journalPresent||
+      (journalPresent&&JSON.stringify({...disk,pending:disk?.pending||{}})!==JSON.stringify(state)))
+    throw Error("DEPOT_CONCURRENT_JOURNAL_DRIFT");
+   return true;
+  }catch(error){
+   // Do not return an apparently valid supply figure from a stale,
+   // unreadable or actively changing journal. Require a fresh reopen.
+   persistenceUnverified=true;
+   readFailure=String(error?.message||error).slice(0,95);
+   return false;
+  }
+ }
  function persist(next){
   if(persistenceUnverified)throw Error("DEPOT_PERSISTENCE_UNVERIFIED");
   const folder=path.dirname(file),lock=file+".lock",tmp=file+".tmp-"+process.pid;
@@ -85,10 +112,13 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  function prepare({systemID,fleetID,item}={}){
   if(persistenceUnverified)return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   if(stateUnreconciled)return {status:"DEPOT_STATE_UNRECONCILED"};
+  // Even ALREADY_COMMITTED and PREPARED are custody decisions: validate
+  // the disk journal BEFORE consulting in-memory receipt/pending entries.
+  if(!verifyCurrentRead())return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   const candidate=normalize({systemID,fleetID,item});
   if(!candidate)return {status:"INVALID"};
   const key=String(candidate.cargoID);
-  if(state.receipts[key])return {status:"ALREADY_COMMITTED"};
+  if(state.receipts[key])return {status:same(state.receipts[key],candidate)?"ALREADY_COMMITTED":"CONFLICT"};
   if(state.pending[key])return {status:same(state.pending[key],candidate)?"PREPARED":"CONFLICT"};
   persist({...state,pending:{...state.pending,[key]:{...candidate,at:clock()}}});
   return {status:"PREPARED"};
@@ -96,10 +126,11 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  function commit({systemID,fleetID,item}={}){
   if(persistenceUnverified)return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   if(stateUnreconciled)return {status:"DEPOT_STATE_UNRECONCILED"};
+  if(!verifyCurrentRead())return {status:"DEPOT_PERSISTENCE_UNVERIFIED"};
   const candidate=normalize({systemID,fleetID,item});
   if(!candidate)return {status:"INVALID"};
   const key=String(candidate.cargoID);
-  if(state.receipts[key])return {status:"ALREADY_COMMITTED"};
+  if(state.receipts[key])return {status:same(state.receipts[key],candidate)?"ALREADY_COMMITTED":"CONFLICT"};
   if(!same(state.pending[key],candidate))return {status:"NOT_PREPARED_OR_MISMATCH"};
   const previous=Number(state.totals[String(systemID)]||0);
   if(!Number.isSafeInteger(previous)||previous<0||
@@ -114,8 +145,8 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  // invent virtual ore without a witnessed removal from native hauler cargo.
  function record(){return {status:'UNVERIFIED_DIRECT_CREDIT_DISABLED',accepted:0,quantity:0};}
  function audit(){
-  if(persistenceUnverified)return {status:"NEEDS_OPERATOR_REPAIR",
-   reason:"DEPOT_PERSISTENCE_UNVERIFIED",committed:0,unresolved:0,invalid:1,
+  if(!verifyCurrentRead())return {status:"NEEDS_OPERATOR_REPAIR",
+   reason:readFailure||"DEPOT_PERSISTENCE_UNVERIFIED",committed:0,unresolved:0,invalid:1,
    bySystemType:{},totals:{}};
   // Derive physical input quantities from immutable committed cargo receipts.
   // Never use synthetic system totals as the source of item/type provenance.
@@ -162,7 +193,7 @@ function createDepot({file,clock=()=>Date.now(),fsApi=fs}){
  // Any invalid receipt/totals/pending index freezes new writes instead.
  if(audit().invalid!==0)stateUnreconciled=true;
  return {record,prepare,commit,audit,snapshot:()=>{
-  if(persistenceUnverified)throw Error("DEPOT_PERSISTENCE_UNVERIFIED");
+  if(!verifyCurrentRead())throw Error("DEPOT_PERSISTENCE_UNVERIFIED");
   if(stateUnreconciled)throw Error("DEPOT_STATE_UNRECONCILED");
   return structuredClone(state);
  }};

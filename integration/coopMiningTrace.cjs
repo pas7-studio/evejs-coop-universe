@@ -157,6 +157,28 @@ function noteModuleStop(scene, entity, moduleID, reason, via) {
   });
 }
 
+// Why a mining cycle refused to yield. The runtime stops the module with the
+// reason the mining runtime returned ("target", "range", "module"), which says
+// nothing about which of the four target checks failed. This notes the state the
+// checks read: the rock, its remaining ore, whether the ship really holds a lock
+// and how many locks are still pending.
+function noteCycleAttempt(scene, entity, effectState, info, boundaryMs) {
+  if (!entity || entity.nativeNpc !== true) return;
+  const pending = entity.pendingTargetLocks instanceof Map ? entity.pendingTargetLocks.size : -1;
+  note("MINING_CYCLE_ATTEMPT", {
+    systemID: Number(scene && scene.systemID) || 0,
+    fleetID: 0,
+    shipID: Number(entity.itemID) || 0,
+    moduleID: Number(effectState && effectState.moduleID) || 0,
+    targetID: Number(info && info.targetID) || 0,
+    rockFound: Boolean(info && info.found),
+    oreLeft: Number(info && info.remaining) || 0,
+    locked: Boolean(info && info.locked),
+    pendingLocks: pending,
+    cycleMs: Math.round(Number(boundaryMs) || 0),
+  });
+}
+
 // One snapshot per fleet think. The think interval is minutes, so this is the only
 // place that reliably describes every ship: mode, active module effects, capacitor
 // and whether a runtime controller exists. Emitting it from the module-assignment
@@ -175,6 +197,7 @@ module.exports = {
   note,
   noteTick,
   noteModuleStop,
+  noteCycleAttempt,
   noteActivationFailure,
   noteTargetSelected,
   noteTargetMismatch,
