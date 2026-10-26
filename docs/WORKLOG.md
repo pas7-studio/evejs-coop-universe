@@ -821,3 +821,9 @@ Why: The market partly fills a row (5000 of 54999), so a sale left the trip unre
 Detail: The market fills what its order supports, so rows are usually partly sold (measured: 5 000 of a 54 999 row). The receipt now records the units the hull actually lost and accumulates over successive fills; the journal accepts a row whose remainder equals declared minus sold, counts it as still aboard, and only treats a row as delivered when nothing is left. A closed route is skipped before any acco
 Where: integration/coopNativeStationArrival.cjs, integration/coopNativeStationTripJournal.cjs, tests/coop-alife12-station-trip-journal.test.mjs
 Evidence: tests coop-alife12-station-trip-journal 25 pass; live: living-npc-station-sold isk=36250 x5 after the fix
+### 2026-10-26T22:49Z · d89f114 · L3 · coop: a market fill closes a manifest row exactly like a warehouse deposit
+
+Why: Manifest verification required an exact warehouse receipt and a matching hangar item, so a raw market fill could never close a row and the next trip was blocked after every sale.
+Detail: verify() required receipt.quantity === row.quantity and a matching hangar item, which a sale can never satisfy: the market fills what its order supports, so a fill may cover part of a row and leaves no station item at all. A fill receipt is now proven by its own recorded quantity and type (quantity equals the settled market quantity and never exceeds the row) and skips the hangar check; a warehous
+Where: .opencode/state.md, integration/coopNativeHaulManifest.cjs, scripts/overlay-spec.cjs
+Evidence: deploy OVERLAY_OK reset=49; live: mining 28 settled cycles and haulers reloaded after the fix
