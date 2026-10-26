@@ -145,8 +145,7 @@ function createNpcExpeditionWreckCustody({items,npcStore,gameStore,maxItems=128}
     after.customInfo!==originalRow.customInfo)
    return {status:"HANDLED",...deny("EX03_WRECK_TRANSFER_UNCERTAIN")};
   return {status:"HANDLED",success:true,data:{
-   quantity:available,changes:[{removed:true,previousData:{...originalRow},item:null},
-     ...((result.data?.changes)||[])]},originalItemID:itemID,
+   quantity:available,changes:[...((result.data?.changes)||[])]},originalItemID:itemID,
    nativeItemMinted:false};
  }
  function canDestroy(wreckID){
