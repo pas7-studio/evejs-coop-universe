@@ -74,7 +74,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     Number(cargo.cargoID)!==Number(global[0]?.cargoID)||
     Number(cargo.typeID)!==Number(global[0]?.typeID)||
     Number(cargo.quantity)!==Number(global[0]?.quantity)||
-    Number(cargo.ownerID)!==Number(global[0]?.ownerID)||
+    String(cargo.ownerID??"")!==String(global[0]?.ownerID??"")||
     Number(cargo.moduleID||0)!==Number(global[0]?.moduleID||0)||
     Number(cargo.coopHaulFleetID)!==Number(global[0]?.coopHaulFleetID)||
     Number(cargo.coopHaulFromMinerID)!==Number(global[0]?.coopHaulFromMinerID)||
