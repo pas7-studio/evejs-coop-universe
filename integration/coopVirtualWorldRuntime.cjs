@@ -2412,6 +2412,14 @@ function observeSession(session,ship){
             return npc.spawnBatchInSystem(system,{
               ...anchor,amount:1,entityType:"npc",
               transient:process.env.EVEJS_COOP_DURABLE_NPC_SHIPS!=="1",
+              // EX-03B4: one in four newly materialized named patrols may
+              // author genuine original scanner hardware. Non-patrols,
+              // existing hulls and generic spawns remain unchanged.
+              coopExpeditionScout:process.env.EVEJS_COOP_NPC_SCOUT_LOADOUT==="1"&&
+               process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"&&
+               pilot.role==="patrol"&&
+               /^coop-pilot-[0-9]{3,}$/.test(pilot.id)&&
+               Number(pilot.id.split("-").pop())%4===0,
               broadcast:true,
               ...pool,
               // Pirates actively hunt players and rival NPCs; civilians and
