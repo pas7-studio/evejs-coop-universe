@@ -14,7 +14,7 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     typeof getStation!=="function" || typeof getCorporation!=="function" ||
     typeof isNpcCorporation!=="function" || typeof verifyArrival!=="function" ||
     typeof verifyDurableCargo!=="function" ||
-    !["listNativeCargoForEntity","removeNativeCargo"].every(x=>typeof store[x]==="function") ||
+    !["listNativeCargoForEntity","listNativeCargo","removeNativeCargo"].every(x=>typeof store[x]==="function") ||
     !["findWarehouseItem","grantUniqueNpcDepotItem"].every(x=>typeof items[x]==="function"))
   throw Error("WAREHOUSE_DEPENDENCIES_REQUIRED");
  const dir=path.join(root,"receipts"),busy=new Set();
@@ -53,13 +53,34 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
  // In particular, authorized DEBIT repair must NEVER mint a station item
  // just because a disconnected adapter returned null instead of an array.
  function lookupCargo(haulerID,cargoID){
+  // A per-entity empty hold is NOT global proof that the original cargoID
+  // disappeared. The same original ID may have moved to another NPC or
+  // survived a failed reparent, making a new ItemStore grant a duplicate.
   const rows=store.listNativeCargoForEntity(haulerID);
-  if(!Array.isArray(rows))throw Error("WAREHOUSE_SOURCE_CUSTODY_UNAVAILABLE");
+  const all=store.listNativeCargo();
+  if(!Array.isArray(rows)||!Array.isArray(all))
+   throw Error("WAREHOUSE_SOURCE_CUSTODY_UNAVAILABLE");
   const matches=rows.filter(row=>Number(row?.cargoID)===cargoID);
-  if(matches.length>1)throw Error("WAREHOUSE_DUPLICATE_SOURCE_CARGO");
+  const global=all.filter(row=>Number(row?.cargoID)===cargoID);
+  if(matches.length>1||global.length>1)
+   throw Error("WAREHOUSE_DUPLICATE_SOURCE_CARGO");
+  if(global.length&&Number(global[0].entityID)!==haulerID)
+   throw Error("WAREHOUSE_SOURCE_CARGO_ELSEWHERE");
+  if(matches.length!==global.length)
+   throw Error("WAREHOUSE_SOURCE_VIEWS_DISAGREE");
   const cargo=matches[0]||null;
-  if(cargo&&Number(cargo.entityID)!==haulerID)
-   throw Error("WAREHOUSE_SOURCE_ENTITY_MISMATCH");
+  if(cargo&&(
+    Number(cargo.entityID)!==haulerID||
+    Number(cargo.cargoID)!==Number(global[0]?.cargoID)||
+    Number(cargo.typeID)!==Number(global[0]?.typeID)||
+    Number(cargo.quantity)!==Number(global[0]?.quantity)||
+    Number(cargo.ownerID)!==Number(global[0]?.ownerID)||
+    Number(cargo.moduleID||0)!==Number(global[0]?.moduleID||0)||
+    Number(cargo.coopHaulFleetID)!==Number(global[0]?.coopHaulFleetID)||
+    Number(cargo.coopHaulFromMinerID)!==Number(global[0]?.coopHaulFromMinerID)||
+    Number(cargo.coopHaulSystemID)!==Number(global[0]?.coopHaulSystemID)||
+    cargo.transient!==global[0]?.transient))
+   throw Error("WAREHOUSE_SOURCE_VIEWS_DISAGREE");
   return cargo;
  }
  function findCargo(record){
