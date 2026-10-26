@@ -103,8 +103,10 @@ test('launch fence does not stop other owner or other planet',()=>{
  assert.equal(v.guard.assertLaunchReady({session:v.b,planetID:planet,launches}).ok,true);
  assert.equal(v.guard.assertLaunchReady({session:v.a,planetID:otherPlanet,launches}).ok,true);
 });
-test('seven-day stale legacy launches and deleted launches are excluded from active fence',()=>{
- const v=f();assert.equal(v.guard.assertLaunchReady({session:v.a,planetID:planet,launches:[{launchID:23,ownerID:101,planetID:planet,deleted:true,createdAt:'2026-10-25T14:59:00Z'},{launchID:24,ownerID:101,planetID:planet,createdAt:'2026-10-01T00:00:00Z'}]}).ok,true);
+test('aged or future-dated unresolved launch still blocks until native reconciliation',()=>{
+ const v=f();assert.equal(v.guard.assertLaunchReady({session:v.a,planetID:planet,launches:[{launchID:23,ownerID:101,planetID:planet,deleted:true,createdAt:'2026-10-25T14:59:00Z'}]}).ok,true);
+ for(const createdAt of ['2026-10-01T00:00:00Z','2030-10-25T14:59:00Z'])
+  verify(()=>v.guard.assertLaunchReady({session:v.a,planetID:planet,launches:[{launchID:24,ownerID:101,planetID:planet,createdAt}]}),CODE.LAUNCH);
 });
 test('physical container cargo must match native launch record by owner, type, quantity',()=>{
  const v=f();const launch={launchID:55,ownerID:101,planetID:planet,solarSystemID:system,contents:{2267:120,2268:30}};

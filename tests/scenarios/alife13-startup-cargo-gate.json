@@ -1,0 +1,168 @@
+{
+  "schema": "evejs-coop/alife13-original-startup-cargo/v1",
+  "version": 1,
+  "status": "NOT_RUN",
+  "scope": "Disposable native EveJS / original GameStore SQLite, physical NPC mining ships, two real clients",
+  "scenarios": [
+    {
+      "id": "ALIFE13-01",
+      "title": "Empty restored hauler; previously delivered cargo has exact original COMMITTED warehouse and ItemStore proof",
+      "expected": "ALLOW_RESTORED_NO_DUPLICATE",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-02",
+      "title": "Empty restored hauler after original removeNativeCargo but warehouse journal PREPARED",
+      "expected": "BLOCK_NEEDS_OPERATOR_REPAIR",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-03",
+      "title": "Two-stack manifest: one original stack COMMITTED, second missing without proof",
+      "expected": "BLOCK_NO_NEW_MINING",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-04",
+      "title": "Two-stack manifest: one COMMITTED, other still original hauler with valid transfer and ACK",
+      "expected": "RECOVER_SAME_ROUTE",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-05",
+      "title": "Crash after original ALIFE10 GameStore SQL COMMIT with lost acknowledgement",
+      "expected": "ONE_TRANSFER_RECEIPT_NO_SECOND_CARGO",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-06",
+      "title": "Corrupt source hash, changed itemStore quantity or duplicate cargo ownership",
+      "expected": "BLOCK_NO_NATIVE_WRITE",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-07",
+      "title": "Missing/corrupt original immutable warp ACK after accepted native warp",
+      "expected": "BLOCK_NO_REWARP",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-08",
+      "title": "Crash before/after each original warehouse receipt phase, followed by two cold restarts",
+      "expected": "NO_DUPLICATES_AND_NO_SILENT_REPAIR",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-09",
+      "title": "Transient nativeNpc cargo present on same GameStore table alongside persisted original cargo",
+      "expected": "ONLY_ORIGINAL_DURABLE_ROWS",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    },
+    {
+      "id": "ALIFE13-10",
+      "title": "Two real authenticated clients observe restored miner/hauler and warehouse item, without duplicate ISK/item after restart",
+      "expected": "ORIGINAL_CLIENT_GAMEPLAY_EVIDENCE",
+      "status": "NOT_RUN",
+      "evidenceRequired": [
+        "original receiptIDs",
+        "original cargoIDs",
+        "GameStore/SQLite row evidence",
+        "ItemStore itemIDs",
+        "native actor IDs",
+        "project SHA",
+        "upstream PIN",
+        "restart log"
+      ]
+    }
+  ]
+}

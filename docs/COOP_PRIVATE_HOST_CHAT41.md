@@ -139,3 +139,16 @@ The user-facing state only graduates from `CODE_READY` to `LIVE_TWO_CLIENT_PASS`
 ## Automated isolated regression evidence
 
 `node --test tests/coop-private-host-safety.test.mjs` checks malicious Compose host publishing, wildcard IPv4/IPv6 listeners, extra market RPC port, missing GameStore mounts, source/dev auth bypass, endpoint redirects, hostile peer/SSH options, and valid pinned shape. It is an isolated pure test; PowerShell and Docker on the owner's Windows machine remain unexecuted in this session. No GitHub Actions/CI introduced.
+
+
+## Chat 41 post-merge reconciliation (2026-10-26)
+
+Changes relative to Chat 41 baseline `b6e590406658a18d7884051d90d9642713002ea9`:
+
+- **Advertising**: private Compose audit now verifies exact host-local TCP target ports `26001` and `26002`, not merely a loopback hostname. This prevents advertising a loopback-only but unforwarded or administrative port to the second client.
+- **Auth overrides**: deny `EVEJS_DEV_SKIP_PASSWORD_VALIDATION` / `EVEJS_DEV_AUTO_CREATE_ACCOUNTS` when set to `true`, `1`, `yes` or `on`, in addition to native config checks. Only two distinct, intentionally provisioned accounts may be used.
+- **Partial backups**: a missing named `evejs-images` portrait volume now blocks a mutable backup unless the operator explicitly passes `-AllowMissingPortraitVolume`. The manifest records `portraitsIncluded`, and the script checks volume consumers before/after each archive. A read-only planning warning is not complete portrait recovery.
+- **Restore archive validation**: the offline `coop-private-tar-audit.cjs` checks checksums, TAR entry paths, types and duplicate names before a new volume is created. Only plain ustar regular files/directories are supported; old archives with links, PAX or GNU extension records are **rejected for manual safe migration**, not silently extracted. Archive SHA-256 alone was insufficient.
+- **Upgrade pin**: the preflight no longer accepts a caller-overridden `ExpectedUpstreamSha`; cross-chat overlay upgrades require the fixed audited pinned EveJS commit and a fresh native source/installer review.
+
+**Do not call this a live deployment.** Native Docker Desktop, Windows firewall, SSH/TLS, original client and cross-machine reconnect were not exercised in this change. The central installer is still owned by Chat 01 and deployment remains a separately approved operator action. A backup/restore run must be completed on an isolated Windows test host before release acceptance.

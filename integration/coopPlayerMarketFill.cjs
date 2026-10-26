@@ -62,7 +62,7 @@ function checkSellMatch({order,bookRow,escrow,items,buyerCharacterID,
   quantity:tradedQuantity,price});
  try{assertSellEscrow({order,escrow,items})}
  catch(e){deny("SELL_PHYSICAL_ESCROW_UNVERIFIED:"+String(e.message).slice(0,100))}
- return proof;
+ return Object.freeze({...proof,sellerSourceLocationID:escrow.escrowLocationID});
 }
 function checkBuyMatch({order,bookRow,escrow,sellerCharacterID,
  fillableQuantity,price,sourceItem,sourceOrder,sourceEscrow,sourceItems,
@@ -93,7 +93,9 @@ function checkBuyMatch({order,bookRow,escrow,sellerCharacterID,
      !pos(qty(sourceItem))||qty(sourceItem)<fillableQuantity)
    deny("SELLER_NATIVE_HANGAR_ITEM_UNAVAILABLE");
  }
- return proof;
+ return Object.freeze({...proof,
+  sellerSourceLocationID:sourceOrder?
+   sourceEscrow.escrowLocationID:sourceStationID});
 }
 function assertFillAck({proof,ack}={}){
  if(!proof||!Object.isFrozen(proof)||!ack||
