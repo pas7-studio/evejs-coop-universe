@@ -26,6 +26,7 @@ param(
   [switch]$EnableMissionJoin,
   [switch]$EnableNativeExploration,
   [switch]$EnableNpcExpeditions,
+  [switch]$EnableNpcProbeScan,
   [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
@@ -61,6 +62,9 @@ if ($EnableNpcExpeditions -and (-not $Alife -or -not $LivingCoop)) {
 }
 if ($EnableNativeHackingAdmission -and -not $EnableNativeExploration) {
   throw 'Native hacking admission requires -EnableNativeExploration'
+}
+if ($EnableNpcProbeScan -and (-not $EnableNpcExpeditions -or -not $EnableNativeExploration)) {
+  throw 'NPC physical probe scan requires -EnableNpcExpeditions -EnableNativeExploration'
 }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
@@ -194,6 +198,12 @@ if ($EnableNativeExploration) {
 # by the generic exploration or LivingCoop switches.
 if ($EnableNpcExpeditions) {
   $yamlLines += "      EVEJS_COOP_NPC_EXPEDITIONS: '1'"
+}
+# EX-03B read-only probe-evidence admission only. This does NOT deploy
+# a native launcher/charge writer; it denies scans until genuine original
+# flight receipts and materialized physical probes can be verified.
+if ($EnableNpcProbeScan) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_SCAN: '1'"
 }
 if ($EnableNativeHackingAdmission) {
   $yamlLines += "      EVEJS_COOP_NATIVE_HACKING_ADMISSION: '1'"
