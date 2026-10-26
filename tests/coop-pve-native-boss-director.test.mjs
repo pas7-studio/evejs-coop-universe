@@ -146,3 +146,17 @@ test("protected helper or invalid scene blocks native boss orders",()=>{
  assert.equal(f.dir.tick({systemID,scene:{systemID},instances:[f.instance]}).status,"INVALID_NATIVE_CONTEXT");
  assert.equal(f.calls.length,0);
 });
+
+test("completed or rotated original anomaly still reconciles a previously witnessed native boss wreck",()=>{
+ for(const removeActive of [false,true]){
+  const f=fixture();f.tick();f.kill();
+  if(removeActive)f.instance.lifecycleState="completed";
+  else f.instance.spawnState.encounterStatesByKey={};
+  const r=f.tick();assert.equal(r.wrecksVerified,1);
+  assert.equal(r.events[0].bossEntityID,101);
+ }
+});
+test("completed source after restart cannot fabricate an unwitnessed boss kill",()=>{
+ const f=fixture();f.kill();f.instance.lifecycleState="completed";
+ assert.equal(f.tick().wrecksVerified,0);
+});
