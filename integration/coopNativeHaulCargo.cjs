@@ -30,6 +30,33 @@ const integer=x=>typeof x==="number"&&Number.isSafeInteger(x)&&x>0;
 const vector=x=>x&&["x","y","z"].every(k=>Number.isFinite(x[k]));
 const isWarping=x=>Boolean(x?.isWarping||x?.pendingWarp||x?.warpState||
  String(x?.mode||"").toUpperCase()==="WARP");
+// One owner for the question "did the ore really become the hauler's cargo?".
+// Both transfer paths ask it after the commit, so the strict and the normal
+// path cannot drift apart again: the normal path used to accept a row that had
+// the right cargoID but the wrong entity, owner, quantity or transience flag,
+// and then removed the ore from the miner. A non-null result is a reason the
+// caller must treat as "commit not proven"; the ore must stay where it was.
+function verifyLoad({store,haulerID,minerID,cargoID,quantity,typeID,ownerID,fleetID,strict=false}={}){
+ const rows=typeof store.listNativeCargo==="function"?store.listNativeCargo():
+  (store.listNativeCargoForEntity?store.listNativeCargoForEntity(haulerID):[]);
+ const hits=(Array.isArray(rows)?rows:[]).filter(x=>Number(x?.cargoID)===Number(cargoID));
+ if(hits.length!==1)return "CARGO_ROW_MISSING_OR_DUPLICATED";
+ const row=hits[0];
+ if(Number(row.entityID)!==Number(haulerID))return "CARGO_ON_WRONG_ENTITY";
+ if(Number(row.quantity)!==Number(quantity))return "CARGO_QUANTITY_CHANGED";
+ if(row.transient===true)return "CARGO_STILL_TRANSIENT";
+ if(strict&&row.transient!==false)return "CARGO_TRANSIENT_UNKNOWN";
+ if(typeof store.listNativeCargoForEntity==="function"&&
+    store.listNativeCargoForEntity(minerID).some(x=>Number(x?.cargoID)===Number(cargoID)))
+  return "CARGO_STILL_ON_MINER";
+ if(strict){
+  if(Number(row.ownerID)!==Number(ownerID))return "CARGO_OWNER_CHANGED";
+  if(Number(row.typeID)!==Number(typeID))return "CARGO_TYPE_CHANGED";
+  if(Number(row[haulFlag])!==Number(fleetID))return "CARGO_FLEET_UNSET";
+  if(Number(row.coopHaulFromMinerID)!==Number(minerID))return "CARGO_SOURCE_UNSET";
+ }
+ return null;
+}
 function strictTransferCargo(scene,fleet,miner,options,store,probe){
  const stop=(reason,uncertain=false,hauler=null,cargoID=0)=>{
   if(uncertain){
@@ -175,15 +202,9 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
      return stop("HAUL_SOURCE_MOVE_UNCERTAIN",true,selected,cargoID);
     if(promoted.status!== "DURABLE")
      return stop("HAUL_SOURCE_FLUSH_UNCERTAIN",true,selected,cargoID);
-    const after=store.listNativeCargo();
-    const hits=Array.isArray(after)?after.filter(x=>Number(x?.cargoID)===cargoID):[];
-    if(hits.length!==1||Number(hits[0].entityID)!==selected.itemID||
-       Number(hits[0].ownerID)!==minerOwner||Number(hits[0].typeID)!==Number(item.typeID)||
-       Number(hits[0].quantity)!==Number(item.quantity)||
-       Number(hits[0][haulFlag])!==fleetID||
-       Number(hits[0].coopHaulFromMinerID)!==minerID||hits[0].transient!==false||
-       store.listNativeCargoForEntity(minerID).some(x=>Number(x?.cargoID)===cargoID))
-     return stop("HAUL_POSTCOMMIT_IDENTITY_UNKNOWN",true,selected,cargoID);
+    const unproven=verifyLoad({store,haulerID:selected.itemID,minerID,cargoID,
+     quantity:item.quantity,typeID:item.typeID,ownerID:minerOwner,fleetID,strict:true});
+    if(unproven)return stop("HAUL_POSTCOMMIT_IDENTITY_UNKNOWN",true,selected,cargoID);
     miner.nativeCargoItems=miner.nativeCargoItems.filter(x=>Number(x.itemID)!==cargoID);
     selected.nativeCargoItems=store.buildNativeCargoItems(selected.itemID);
    }
@@ -237,7 +258,15 @@ function transferCargo(scene,fleet,miner,options={}){
      continue;
     }
    }else if(!store.upsertNativeCargo(next,{transient:hauler.transient===true})?.success)continue;
-   if(!(store.listNativeCargoForEntity(hauler.itemID)||[]).some(x=>Number(x.cargoID)===Number(item.cargoID)))continue;
+   const unproven=verifyLoad({store,haulerID:hauler.itemID,minerID:miner.itemID,
+    cargoID:item.cargoID,quantity:item.quantity,typeID:item.typeID,
+    ownerID:next.ownerID,fleetID:next[haulFlag]});
+   if(unproven){
+    safeObserve(probe,"living-hauler-cargo-persist-failed",
+     {itemID:hauler.itemID,systemID:fleet.systemID},
+     {fleetID:fleet.fleetID,cargoID:item.cargoID,status:unproven});
+    continue;
+   }
    miner.nativeCargoItems=(miner.nativeCargoItems||[]).filter(x=>Number(x.itemID)!==Number(item.cargoID));
    quantity+=amount;volume+=amount*Math.max(0,Number(cached?.volume)||0);moved++;
   }
