@@ -264,7 +264,7 @@ function adopt(scene,fleet,options={}){
    }catch(_error){verified=false}
   }
   if(!restored||!durable||!verified){
-   fleet.coopHaulNeedsOperatorRepair="ADOPTION_RECOVERY_UNVERIFIED";
+   fleet.coopHaulNeedsOperatorRepair=true;
    hauler.coopHaulNeedsOperatorRepair="ADOPTION_RECOVERY_UNVERIFIED";
    doneSlots.add(key);
    noteOnce(noted,key+":recovery",probe,"living-haul-cargo-adoption-skipped",
