@@ -101,7 +101,10 @@ function createNativeNpcProbeLifecycle({getNativeEntity,getController,
     return {status:"NPC_PROBE_RETURNED",cargoID:row.cargoID,quantity:1};
    }
    const expired=now-p.launchedAtMs>=flightTtlMs;
-   const near=physical&&dist(physical.position,ship.position)<=maxReturnMeters;
+   // Do not refund based on stale/teleported in-memory geometry; the
+   // original durable flight position must agree with the scene first.
+   const near=physical&&dist(physical.position,p.position)<=1&&
+    dist(physical.position,ship.position)<=maxReturnMeters;
    if(!expired&&!(requestRecall===true&&near))
     continue;
    // No free refund on expiry. A probe becomes a durable EXPIRED tombstone
