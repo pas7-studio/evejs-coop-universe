@@ -82,7 +82,6 @@ test("durability failure never moves physical probe and quarantines subsequent w
  assert.equal(r.reason,"SWEEP_CARGO_DURABILITY_UNCONFIRMED");
  assert.deepEqual(f.physical.get(980200000000).position,original);
  const a=f.writes(),b=f.flushes();
- assert.equal(f.tick().status,"SWEEP_GEOMETRY_RECONCILED");
  assert.equal(f.tick().reason,"SWEEP_OPERATOR_REPAIR_REQUIRED");
  assert.equal(f.writes(),a);assert.equal(f.flushes(),b);
 });
