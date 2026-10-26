@@ -604,6 +604,9 @@ function advanceNativeNpcExpeditions(){
     {status:result.status,orders:result.orders,observed:result.observed,
      observedPlayers:result.observedPlayers||0,contested:result.contested||0,
      remoteNativeProbeScans:result.remoteScans||0,
+     scoutWarpOrders:result.scoutWarpOrders||0,
+     patrolWarpOrders:result.patrolWarpOrders||0,
+     sourceScoutOnGridVerified:result.scoutOnGridVerified||0,
      blocked:result.blocked||0,source:result.source||"NATIVE_SITE_OBSERVE",
      nativeLootGranted:false,nativeWalletMutation:false});
  }
