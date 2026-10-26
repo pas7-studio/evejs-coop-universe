@@ -4,7 +4,9 @@
 const pos = x => Number.isSafeInteger(Number(x)) && Number(x)>0 ? Number(x) : null;
 const named = x => typeof x === "string" && /^coop-pilot-[0-9]{3,}$/.test(x);
 const PEACEFUL = new Set(["PATROL","CIVILIAN","GATE"]);
-function createOrderBridge({arbiter, assignments, sceneForSystem, getController}={}) {
+function createOrderBridge({arbiter, assignments, sceneForSystem, getController,
+ warShipClaim=null}={}) {
+ if(warShipClaim!==null&&typeof warShipClaim!=="function")throw Error("WAR_SHIP_CLAIM_AUTHORITY_INVALID");
  if(!arbiter?.issue || !arbiter?.blocksForSystem || !arbiter?.blocked ||
     !arbiter?.retainWithNativeProof || !arbiter?.snapshot ||
     [assignments,sceneForSystem,getController].some(x=>typeof x!=="function"))
@@ -63,6 +65,18 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController}
   const state=nativeState(link);
   if(!state)return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_PROOF_MISSING"};
   retain(link,state);
+  // WAR can only command an exclusively registered real native ship.
+  // Existing directors cannot retask a reserved warship after a lease TTL.
+  // Unknown durable registry state fails closed until operator repairs it.
+  let warClaim="UNASSIGNED";
+  if(warShipClaim)try{warClaim=warShipClaim(link)}catch{warClaim="UNKNOWN"}
+  if(owner==="WAR"&&(!warShipClaim||warClaim!=="ASSIGNED"))
+   return {success:false,errorMsg:"COOP_NPC_ORDER_WAR_SHIP_UNVERIFIED"};
+  if(warShipClaim&&owner!=="WAR"&&owner!=="TACTICS"&&
+     (warClaim==="ASSIGNED"||warClaim==="UNKNOWN"))
+   return {success:false,errorMsg:"COOP_NPC_ORDER_WAR_SHIP_RESERVED"};
+  if(warShipClaim&&!["UNASSIGNED","ASSIGNED","UNKNOWN"].includes(warClaim))
+   return {success:false,errorMsg:"COOP_NPC_ORDER_WAR_REGISTRY_INVALID"};
   // Even emergency tactics cannot override an in-flight native Destiny warp.
   if(state.warp)return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_WARP_ACTIVE"};
   if(state.combat&&PEACEFUL.has(owner))
@@ -73,7 +87,7 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController}
   // cannot be silently claimed by a new route, gate or raiding planner.
   if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&(!lease||lease.owner!==owner))
    return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE"};
-  if(state.combat&&owner==="RAID"&&(!lease||lease.owner!=="RAID"))
+  if(state.combat&&(owner==="RAID"||owner==="WAR")&&(!lease||lease.owner!==owner))
    return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE"};
   return {success:true};
  }

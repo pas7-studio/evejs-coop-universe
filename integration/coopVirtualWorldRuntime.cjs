@@ -4,6 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -23,6 +24,348 @@ function safeNpcPhase(phase,run){
 function alifeOrderArbitrationEnabled(env={}){
  return env.EVEJS_COOP_ALIFE==="1"||env.EVEJS_COOP_NPC_ORDER_ARBITER==="1";
 }
+// FW-003: use the very same native GameStore and physical identity as
+// existing living-world orders. A missing/corrupt registry is UNKNOWN and
+// cannot silently surrender a warship to a civilian/raid planner.
+function nativeWarFleetRegistry(){
+ if(process.env.EVEJS_COOP_FACTION_WAR!=="1"||
+    process.env.EVEJS_COOP_FACTION_WAR_FLEETS!=="1"||
+    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1")return null;
+ if(!warFleetRegistry){
+  const runtime=require("./runtime"),controllers=require("./npc/npcRegistry"),
+   entityStore=require("./npc/nativeNpcStore"),
+   factions=require("../services/faction/factionState");
+  const proofs=require("./coopWarFleetNativeProofs").createWarFleetNativeProofs({
+   sceneForSystem:id=>runtime.scenes instanceof Map?runtime.scenes.get(id):null,
+   getController:id=>controllers.getControllerByEntityID(id),
+   getNativeEntity:id=>entityStore.getNativeEntity(id),
+   assignments:()=>[...(bridge?.snapshot()||[]),
+    ...Object.values(identityRegistry?.snapshot()?.links||{})],
+   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id)
+  });
+  warFleetRegistry=require("./coopWarFleetRegistry").createWarFleetRegistry({
+   gameStore:require("../gameStore"),...proofs,
+   // A terminal campaign is NOT permission to hijack a busy NPC. The
+   // native hull and a nonambiguous arbiter idle state are mandatory.
+   verifyDemobOrderIdle:d=>{
+    const arbiter=nativeOrderBridge;
+    if(!arbiter||!d?.entityID||!d?.pilotID)return false;
+    let scene,ctrl,leases;
+    try{
+     scene=runtime.scenes instanceof Map?runtime.scenes.get(d.systemID):null;
+     ctrl=controllers.getControllerByEntityID(d.entityID);
+     leases=arbiter.snapshot()?.leases;
+    }catch{return false}
+    const ship=scene?.getEntityByID?.(d.entityID);
+    if(!Array.isArray(leases)||!ship||ship.nativeNpc!==true||
+     ship.itemID!==d.entityID||ship.session?.characterID||
+     ctrl?.entityID!==d.entityID||ctrl.systemID!==d.systemID||
+     ctrl.manualOrder||ctrl.currentTargetID||ship.pendingWarp||
+     ship.warpState||ship.isWarping||
+     !["STOP","IDLE"].includes(String(ship.mode||"").toUpperCase()))
+     return false;
+    const now=Date.now();
+    if(leases.some(l=>l.entityID===d.entityID&&
+     (l.phase==="ISSUING"||l.phase==="OUTCOME_UNKNOWN"||
+      l.phase==="ACTIVE"&&(!Number.isSafeInteger(l.expiresAt)||
+       l.expiresAt>now))))return false;
+    try{
+     if(tacticsDirector?.activeIDs()?.has(d.entityID)===true||
+      nativeAmmoSupply?.activeIDs(d.systemID)?.has(d.entityID)===true)
+      return false;
+    }catch{return false}
+    return true;
+   }
+  });
+ }
+ return warFleetRegistry;
+}
+// FW-008: terminal war campaigns demobilize BEFORE the existing native
+// recruiter evaluates new adjacent wars. No second tick or physical ship
+// movement. All custody changes are rechecked inside native SQLite.
+function advanceNativeWarDemobilization(){
+ const {enabled,createWarDemobilizer}=require("./coopWarDemobilizer");
+ if(!enabled(process.env)||!visitedSystems.size||!identityRegistry)return;
+ const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
+ if(!registry||!guard)return;
+ if(!warDemobilizer){
+  const gameStore=require("../gameStore"),
+   warStore=require("./coopFactionWarStore"),
+   warCore=require("./coopFactionWarCore");
+  warDemobilizer=createWarDemobilizer({
+   registry,
+   readWarState:()=>{
+    const result=gameStore.read(warStore.TABLE,"/"+warStore.KEY);
+    if(result?.success!==true)return null;
+    warCore.validateState(result.data);return result.data;
+   },
+   readLinks:()=>Object.values(identityRegistry.snapshot()?.links||{}),
+   getOrderLeases:()=>guard.snapshot().leases
+  });
+ }
+ const result=warDemobilizer.tick({
+  systemIDs:[...visitedSystems].slice(0,12)
+ });
+ if(result.demobilized.length)
+  require("./coopRuntimeProbe").observe(
+   "living-native-war-demobilized",null,null,{
+    status:result.status,ships:result.demobilized,
+    evidence:"TERMINAL_NATIVE_WAR_FLEET_RELEASE_NO_HULL_OR_CARGO_MUTATION"
+   });
+}
+// FW-003C: real patrol mobilization on the SAME existing A-Life tick. Any
+// failed source proof results in zero military assignments, never free ships.
+function advanceNativeWarMobilization(){
+ const {enabled,createWarMobilizer}=require("./coopWarMobilizer");
+ if(!enabled(process.env)||!visitedSystems.size||!identityRegistry)return;
+ const registry=nativeWarFleetRegistry(),guard=npcOrderBridge();
+ if(!registry||!guard)return;
+ if(!warMobilizer){
+  const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
+   controllers=require("./npc/npcRegistry"),
+   factions=require("../services/faction/factionState"),
+   gameStore=require("../gameStore"),
+   {KEY,TABLE}=require("./coopFactionWarStore"),
+   core=require("./coopFactionWarCore"),
+   dogma=require("./combat/weaponDogma"),
+   capability=require("./npc/npcCapabilityResolver");
+  const readiness=require("./coopWarMusterReadiness").createWarMusterReadiness({
+   store:npcStore,resolveFamily:dogma.resolveWeaponFamily,
+   isOptional:dogma.isChargeOptionalTurretWeapon,
+   compatible:capability.isNpcChargeCompatibleWithModule
+  });
+  warMobilizer=createWarMobilizer({
+   registry,
+   readWarState:()=>{
+    const r=gameStore.read(TABLE,"/"+KEY);
+    if(r?.success!==true)return null;
+    core.validateState(r.data);
+    return r.data;
+   },
+   readLinks:()=>Object.values(identityRegistry.snapshot().links||{}),
+   // Existing scenes only: a military director must never manufacture an
+   // enemy or force NPC materialization by observing an unvisited system.
+   sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+   getNativeEntity:id=>npcStore.getNativeEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id),
+   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
+   inspectReadiness:context=>readiness.inspect(context),
+   getOrderLeases:()=>guard.snapshot().leases,
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
+  });
+ }
+ const result=warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ if(result.mobilized.length)require("./coopRuntimeProbe").observe(
+  "living-native-war-mobilization",null,null,
+  {status:result.status,ships:result.mobilized,
+   evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
+}
+// FW-007B: recover/audit native military handoff BEFORE the materializer
+// may prune old pilot links or rebuild another physical hull.
+function ensureWarRecoverySocket(){
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_SOCKET!=="1")return;
+ if(warRecoverySocket)return;
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_ADMIN!=="1")
+  throw Error("WAR_RECOVERY_ADMIN_FLAG_REQUIRED");
+ const instance=require("./coopWarRecoverySocket").createWarRecoverySocket({
+  createConsole:({authorizeOperator})=>
+   createWarRecoveryAdmin({authorizeOperator}),
+  socketPath:process.env.EVEJS_COOP_WAR_RECOVERY_SOCKET_PATH||
+   "/run/evejs/coop-war-recovery.sock",
+  secretFile:process.env.EVEJS_COOP_WAR_RECOVERY_SECRET_FILE||
+   "/run/secrets/evejs-war-recovery-key"
+ });
+ const result=instance.start();
+ if(result.status!=="LISTENING_INITIATED")
+  throw Error("WAR_RECOVERY_SOCKET_NOT_LISTENING:"+result.status);
+ warRecoverySocket=instance;
+}
+function ensureNativeWarGateHandoff(runtime){
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER!=="1")return;
+ const {flag,createWarGateHandoff}=require("./coopWarGateHandoff");
+ if(!flag(process.env))
+  throw Error("WAR_GATE_HANDOFF_FLAGS_INCOMPLETE");
+ if(warGateHandoff){
+  const audit=warGateHandoff.auditStartup();
+  if(audit.status!=="CLEAN")
+   throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
+  return;
+ }
+ if(!identityRegistry)throw Error("WAR_GATE_IDENTITY_MISSING");
+ const worldData=require("./worldData"),controllers=require("./npc/npcRegistry"),
+  store=require("./npc/nativeNpcStore"),service=require("./npc/nativeNpcService"),
+  scramble=require("./modules/hostileModuleRuntime");
+ const instance=createWarGateHandoff({
+  gameStore:require("../gameStore"),identityRegistry,
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getGate:id=>worldData.getStargateByID(id),
+  nativeStore:store,service,
+  getController:id=>controllers.getControllerByEntityID(id),
+  isScrambled:ship=>scramble.isEntityWarpScrambled(ship),
+  journalDir:process.env.EVEJS_COOP_WAR_TRANSFER_JOURNAL_DIR||
+   "/var/lib/evejs/coop-war-native-transfers"
+ });
+ // Keep the controller available to the privileged local operator
+ // even if startup is intentionally blocked by an unresolved warship.
+ warGateHandoff=instance;
+ // The protected recovery channel must stay reachable after quarantine
+ // blocks normal world materialization.
+ ensureWarRecoverySocket();
+ const audit=instance.auditStartup();
+ if(audit.status!=="CLEAN")
+  throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
+}
+function advanceNativeWarGateStaging(){
+ if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1"||
+    !visitedSystems.size)return;
+ const {createWarGateStaging,gate}=require("./coopWarGateStaging");
+ if(!gate(process.env))return;
+ const guard=npcOrderBridge();
+ if(!guard||!nativeWarFleetRegistry())return;
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"){
+  ensureNativeWarGateHandoff(require("./runtime"));
+  const finished=warGateHandoff?.retireCompleted({max:2});
+  if(finished?.retired?.length)
+   require("./coopRuntimeProbe").observe(
+    "living-native-war-transit-retired",null,null,{
+     status:finished.status,retired:finished.retired,
+     evidence:"PROVEN_TERMINAL_TRANSFER_ARCHIVED_NO_SHIP_MOVEMENT"
+    });
+ }
+ if(!warGateStaging){
+  const native=require("./runtime"),npc=require("./npc/npcRuntime"),
+   controllers=require("./npc/npcRegistry"),worldData=require("./worldData"),
+   gameStore=require("../gameStore"),
+   warStore=require("./coopFactionWarStore"),
+   fleetStore=require("./coopWarFleetRegistry"),
+   treasuryStore=require("./coopWarTreasury"),
+   warCore=require("./coopFactionWarCore");
+  function readRow(table,key,validate){
+   const read=gameStore.read(table,"/"+key);
+   if(read?.success!==true)return null;
+   validate(read.data);return read.data;
+  }
+  warGateStaging=createWarGateStaging({
+   readWar:()=>readRow(warStore.TABLE,warStore.KEY,warCore.validateState),
+   readFleet:()=>readRow(fleetStore.TABLE,fleetStore.KEY,fleetStore.validate),
+   readTreasury:()=>readRow(treasuryStore.TABLE,treasuryStore.KEY,treasuryStore.validate),
+   sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+   getGate:id=>worldData.getStargateByID(id),
+   warpToEntity:(id,targetID,opts)=>npc.warpToEntity(id,targetID,opts),
+   getController:id=>controllers.getControllerByEntityID(id),
+   bridge:guard,
+   transfer:warGateHandoff?(args=>warGateHandoff.transfer(args)):null,
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true,
+   isAmmoRetreat:(systemID,id)=>nativeAmmoSupply?.activeIDs(systemID)?.has(id)===true
+  });
+ }
+ const result=warGateStaging.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ for(const moved of result.orders){
+  if(moved.action==="VERIFIED_NATIVE_GATE_TRANSFER")
+   visitedSystems.add(Number(moved.targetSystemID));
+ }
+ if(result.orders.length||result.observations.length)
+  require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
+   null,null,{status:result.status,orders:result.orders,
+    observations:result.observations,
+    evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
+}
+function advanceNativeWarCombat(){
+ const api=require("./coopWarCombatAuthority");
+ if(!api.combatEnabled()||!api.ammoEnabled()||!visitedSystems.size)return;
+ const guard=npcOrderBridge();
+ if(!guard||!nativeWarFleetRegistry())return;
+ const runtime=require("./runtime");
+ if(!warBattleDirector){
+  const npc=require("./npc/npcRuntime");
+  const authority=api.createWarCombatAuthority({
+   gameStore:require("../gameStore"),
+   getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
+   getNativeEntity:id=>require("./npc/nativeNpcStore").getNativeEntity(id),
+   getFactionForCorporation:id=>
+    require("../services/faction/factionState").getFactionIDForCorporation(id)
+  });
+  warBattleDirector=require("./coopWarBattleDirector").createWarBattleDirector({
+   authority,bridge:guard,
+   sceneForSystem:id=>runtime.scenes instanceof Map?runtime.scenes.get(id):null,
+   issueNativeAttack:(id,targetID,options)=>npc.issueAttackOrder(id,targetID,options),
+   getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
+   isAmmoDepleted:(sys,id)=>nativeAmmoSupply?.activeIDs(sys)?.has(id)===true,
+   isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
+  });
+ }
+ const result=warBattleDirector.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ if(result.orders.length)require("./coopRuntimeProbe").observe(
+  "living-native-war-attack-orders",null,null,{
+   status:result.status,orders:result.orders,
+   evidence:"ACK_ONLY_NOT_DAMAGE_OR_KILL"
+  });
+}
+// FW-009B: original stocked native structures, real killmail combat
+// proof, fully enumerated physical ships. No independent scheduler and
+// no virtual capture. A missing source, unknown scene or absent explicit
+// objective-type allowlist keeps military control unchanged.
+function advanceNativeWarObjectives(){
+ const {enabled,createWarObjectiveDirector}=require("./coopWarObjectiveDirector");
+ if(!enabled(process.env)||!visitedSystems.size)return;
+ if(!require("./coopWarObjectiveDirector").typesFromEnv(process.env).size)return;
+ if(!warObjectiveDirector){
+  const gameStore=require("../gameStore"),
+   worldData=require("./worldData"),
+   runtime=require("./runtime"),
+   controllers=require("./npc/npcRegistry"),
+   npcStore=require("./npc/nativeNpcStore"),
+   factions=require("../services/faction/factionState"),
+   structure=require("./coopWarNativeStructureControl"),
+   proofApi=require("./coopWarNativeStructureCombatProof"),
+   adjudicatorApi=require("./coopWarObjectiveAdjudicator");
+  const getNativeStructure=id=>worldData.getStructureByID(id),
+   getFactionForCorporation=id=>factions.getFactionIDForCorporation(id);
+  const proof=proofApi.createWarStructureCombatProof({
+   gameStore,getNativeStructure,getFactionForCorporation,
+   getNativeKillmail:id=>
+    require("../services/killmail/killmailState").getKillmailRecord(id)
+  });
+  const occupancy=structure.createNativeStructureControlWitness({
+   sceneForSystem:id=>runtime.scenes instanceof Map?
+    runtime.scenes.get(id):null,
+   listAllPhysicalShips:structure.listPinnedSceneShips,
+   getNativeEntity:id=>npcStore.getNativeEntity(id),
+   getController:id=>controllers.getControllerByEntityID(id),
+   getFactionForCorporation,
+   allowMilitiaPlayers:process.env.EVEJS_COOP_FACTION_WAR_PLAYER_CAPTURE==="1",
+   getLivePlayerSessions:()=>require("../services/chat/sessionRegistry").getSessions()
+  });
+  const adjudicator=adjudicatorApi.createWarObjectiveAdjudicator({
+   gameStore,getNativeStructure,getFactionForCorporation,
+   verifyNativeCombatDestruction:d=>
+    proof.verifyNativeCombatDestruction(d),
+   observeNativeControl:d=>occupancy.observe(d)
+  });
+  warObjectiveDirector=createWarObjectiveDirector({
+   adjudicator,combatProof:proof,
+   getFactionForCorporation,
+   listNativeStructures:systemID=>worldData.getStructuresForSystem(systemID),
+   readWarState:()=>{
+    const row=gameStore.read("corporationRuntime",
+     "/coop-faction-war\u001fstate-v1");
+    if(row?.success!==true)return null;
+    require("./coopFactionWarCore").validateState(row.data);
+    return row.data;
+   }
+  });
+ }
+ const result=warObjectiveDirector.tick({
+  systemIDs:[...visitedSystems].slice(0,12)
+ });
+ if(result.events?.length)
+  require("./coopRuntimeProbe").observe(
+   "living-native-war-objectives",null,null,{
+    status:result.status,events:result.events,
+    evidence:"PHYSICAL_STRUCTURE_COMBAT_KILLMAIL_AND_UNCONTESTED_NATIVE_OCCUPANCY"
+   });
+}
+// One existing A-Life 30-second scheduler, no faction-war timer.
 function npcOrderBridge(){
  if(!alifeOrderArbitrationEnabled(process.env))return null;
  if(!nativeOrderBridge){
@@ -34,14 +377,21 @@ function npcOrderBridge(){
     ...Object.values(identityRegistry?.snapshot()?.links||{})
    ],
    sceneForSystem:id=>native.ensureScene(id,{refreshStargates:false}),
-   getController:id=>controllers.getControllerByEntityID(id)
+   getController:id=>controllers.getControllerByEntityID(id),
+   // Dynamic callback prevents enabling WAR after the bridge was created
+   // without its registry guard. Disabled war never grants WAR orders.
+   warShipClaim:link=>(
+    process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
+    process.env.EVEJS_COOP_FACTION_WAR==="1"&&
+    process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1")?
+    (nativeWarFleetRegistry()?.claim(link)||"UNKNOWN"):"UNASSIGNED"
   });
  }
  return nativeOrderBridge;
 }
 function npcNativeOrder(owner,entityID,action,execute,systemID){
  const guard=npcOrderBridge();
- if(!guard)return execute();
+ if(!guard)return owner==="WAR"?{success:false,errorMsg:"COOP_NPC_ORDER_WAR_ARBITER_REQUIRED"}:execute();
  return guard.issue({owner,entityID,action,execute,systemID});
 }
 function addNpcOrderBlocks(blockedIDs,systemID,owner){
@@ -234,6 +584,11 @@ function start(){
   else safeNpcPhase("native-ammo-supply",advanceNativeAmmoSupply);
   safeNpcPhase("native-raids",advanceNativeRaids);
   safeNpcPhase("native-tactics",advanceNativeTactics);
+  safeNpcPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
+  safeNpcPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
+  safeNpcPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
+  safeNpcPhase("native-faction-war-battle",advanceNativeWarCombat);
+  safeNpcPhase("native-faction-war-objectives",advanceNativeWarObjectives);
   safeNpcPhase("native-ammo-observe",observeNativeAmmoConsumption);
   safeNpcPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   safeNpcPhase("native-salvage-rivals",advanceNativeSalvageRivals);
@@ -1848,6 +2203,7 @@ function observeSession(session,ship){
         // Recover an interrupted native gate movement first; then restore
         // saved real NPC hulls before the materializer may prune stale links.
         ensureNativeGateTransfer(runtime);
+        ensureNativeWarGateHandoff(runtime);
         if(process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"){
           const recovered=require("./coopNativeRestore").restoreNamedShips({
             registry:identityRegistry,sceneForSystem:id=>
@@ -2268,6 +2624,49 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
     {spaceState:{systemID}},proof);
    return;
   }
+  // FW-009A: native casualty evidence uses the same verified physical
+  // wreck callback, never combat orders, hit counters or missing NPCs.
+  // This is a SQLite ledger of actual victim ships, NOT victory or kill
+  // credit. Any ambiguous SQLite commit is inspected on next callback
+  // with this SAME physical wreck ID, never a synthetic replacement ID.
+  if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_CASUALTIES==="1"&&
+     process.env.EVEJS_COOP_FACTION_WAR==="1"&&
+     process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
+     process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"){
+   try{
+    if(!warCasualtyLedger)
+     warCasualtyLedger=require("./coopWarCasualtyLedger").createWarCasualtyLedger({
+      gameStore:require("../gameStore"),
+      getFactionForCorporation:id=>
+       require("../services/faction/factionState").getFactionIDForCorporation(id),
+      verifyNativeWreck:({systemID:sys,entityID:id,wreckID:wid,pilotID:pid})=>{
+       // The authoritative callback already read the on-disk native
+       // pilot link; do not require the virtual A-Life registry to be
+       // initialized before this synchronous physical wreck hook.
+       const links=Object.values(registry.links||{});
+       return require("./coopNativeCombatEvidence").verifyWreck({
+        systemID:sys,npcID:id,wreckID:wid,
+        scene:runtime.ensureScene(sys,{refreshStargates:false}),
+        links:links.filter(x=>x?.pilotID===pid),
+        getWreck:w=>store.getNativeWreck(w),
+        getWreckItems:w=>store.listNativeWreckItemsForWreck(w)
+       });
+      }
+     });
+    const casualty=warCasualtyLedger.record({
+     systemID:Number(systemID),entityID:Number(npcID),
+     wreckID:Number(wreckID),pilotID:link.pilotID
+    });
+    if(casualty.status==="RECORDED"||
+       casualty.status==="DUPLICATE")
+     require("./coopRuntimeProbe").observe(
+      "living-native-war-casualty",null,{spaceState:{systemID}},
+      {status:casualty.status,receipt:casualty.receipt,
+       captureAuthorized:false,killCreditAssigned:false});
+   }catch(error){
+    console.warn("[CoopNativeWarCasualty] strict native evidence",error.message);
+   }
+  }
   // The ship is already removed from the EveJS scene at this point,
   // but its authoritative source object is still held by the wreck
   // service. Capture a missed final HP delta only against a fresh
@@ -2423,4 +2822,15 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  });
  return {status:"PENDING"};
 }
-module.exports={start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival};
+// This is deliberately NOT an EveJS client RPC or HTTP admin endpoint.
+// The caller must be trusted in-process server code providing a separately
+// authenticated admin/RBAC decision for every inspection and mutation.
+function createWarRecoveryAdmin({authorizeOperator}={}){
+ if(process.env.EVEJS_COOP_WAR_RECOVERY_ADMIN!=="1")
+  throw Error("WAR_RECOVERY_ADMIN_DISABLED");
+ if(typeof authorizeOperator!=="function")
+  throw Error("WAR_RECOVERY_AUTHORITY_MISSING");
+ if(!warGateHandoff)throw Error("WAR_GATE_HANDOFF_NOT_INITIALIZED");
+ return warGateHandoff.recovery({authorizeOperator});
+}
+module.exports={createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry};

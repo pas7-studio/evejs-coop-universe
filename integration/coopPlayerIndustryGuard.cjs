@@ -186,6 +186,39 @@ function makePlayerIndustryGuard({
    outputLocationID:pos(job.outputLocationID),outputFlagID:Number(job.outputFlagID),
    runs:pos(job.runs),cost:job.totalCost};
  }
- return {checkInstall,checkDeliver,actor};
+ function checkCancel(session,jobID){
+  const ctx=actor(session);if(!ctx.ok)return ctx;
+  const id=pos(jobID);if(!id)return deny("INVALID_NATIVE_CANCEL_JOB_ID");
+  let job,item,state;
+  try{
+   job=getJobByID(id);
+   if(job){
+    item=getInventoryItem(job.blueprintID);
+    state=getBlueprintState(job.blueprintID);
+   }
+  }catch{return deny("NATIVE_CANCEL_STATE_UNAVAILABLE")}
+  if(!job||pos(job.jobID)!==id||!pos(job.ownerID)||
+   !pos(job.blueprintID)||!pos(job.facilityID)||
+   !pos(job.blueprintLocationID))
+   return deny("NATIVE_CANCEL_JOB_IDENTITY_INVALID");
+  // The stock native cancel implementation accepts completed jobs again.
+  // Never let a replay restore a blueprint twice or rewrite terminal jobs.
+  if(![STATUS.INSTALLED,STATUS.PAUSED,STATUS.READY].includes(Number(job.status)))
+   return deny("NATIVE_CANCEL_JOB_NOT_ACTIVE");
+  const access=verifyOwner(session,job.ownerID,ctx,
+   job.blueprintLocationID,job.blueprintLocationFlagID,false);
+  if(!access.ok)return access;
+  if(!item||pos(item.itemID)!==pos(job.blueprintID)||
+   pos(item.ownerID)!==pos(job.ownerID)||
+   pos(item.locationID)!==2003||
+   !state||pos(state.jobID)!==id)
+   return deny("NATIVE_CANCEL_BLUEPRINT_NOT_INSTALLED");
+  return {ok:true,kind:"CANCEL",jobID:id,ownerID:pos(job.ownerID),
+   characterID:ctx.characterID,blueprintID:pos(job.blueprintID),
+   activityID:Number(job.activityID),facilityID:pos(job.facilityID),
+   blueprintLocationID:pos(job.blueprintLocationID),
+   blueprintLocationFlagID:Number(job.blueprintLocationFlagID)};
+ }
+ return {checkInstall,checkDeliver,checkCancel,actor};
 }
 module.exports={makePlayerIndustryGuard,ACT,STATUS};

@@ -19,8 +19,8 @@ function makePlayerIndustryFence({file,storage=fs,clock=()=>Date.now()}={}){
    return null;
   if(proof.kind==="INSTALL"&&!proof.jobID)
    return JSON.stringify(["INSTALL",proof.ownerID,proof.blueprintID]);
-  if(proof.kind==="DELIVER"&&pos(proof.jobID))
-   return JSON.stringify(["DELIVER",proof.ownerID,proof.jobID]);
+  if(["DELIVER","CANCEL"].includes(proof.kind)&&pos(proof.jobID))
+   return JSON.stringify([proof.kind,proof.ownerID,proof.jobID]);
   return null;
  };
  function read(){
@@ -114,8 +114,9 @@ function makePlayerIndustryFence({file,storage=fs,clock=()=>Date.now()}={}){
    const latest=read().get(scope);
    if(latest&&latest.status!=="SETTLED")
     return {status:"NATIVE_INDUSTRY_MANUAL_RECONCILIATION"};
-   if(latest&&proof.kind==="DELIVER")
-    return {status:"NATIVE_DELIVERY_ALREADY_SETTLED"};
+   if(latest&&["DELIVER","CANCEL"].includes(proof.kind))
+    return {status:proof.kind==="CANCEL"?"NATIVE_CANCEL_ALREADY_SETTLED":
+     "NATIVE_DELIVERY_ALREADY_SETTLED"};
    if(latest&&proof.kind==="INSTALL"){
     if(typeof readPreviousJob!=="function")
      return {status:"PREVIOUS_NATIVE_JOB_AUTHORITY_REQUIRED"};
