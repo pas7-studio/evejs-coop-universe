@@ -234,3 +234,27 @@ test('P0: a successful item grant cannot claim completed credit without native h
  assert.equal(JSON.parse(fs.readFileSync(path.join(f.root,'receipts','8001.json'),'utf8')).phase,
   'SOURCE_DEBIT_PROVEN');
 }));
+
+test('P0: existing genuine cargo-tagged station item blocks source debit before PREPARED',()=>withF(f=>{
+ f.owned.set(8001,{itemID:777,ownerID:1000035,locationID:6001,
+  flagID:4,singleton:0,stacksize:250,typeID:1230,quantity:250,customInfo:marker(8001)});
+ const w=f.make(),receipt=path.join(f.root,'receipts','8001.json');
+ assert.equal(w.deposit(f.arg).status,'WAREHOUSE_SOURCE_TARGET_COLLISION');
+ assert.equal(f.cargo.size,1,'source ore remains physically on original NPC ship');
+ assert.equal(f.owned.size,1,'existing native warehouse item is unchanged');
+ assert.equal(f.issued,0,'no new grant');
+ assert.equal(fs.existsSync(receipt),false,'do not write PREPARED for colliding cargoID');
+ assert.equal(w.audit().status,'EMPTY');
+}));
+
+test('P0: missing hangar flag authority prevents a false completed receipt',()=>withF(f=>{
+ const w=f.make(),stock=f.owned;
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ const flags=f.config.items.ITEM_FLAGS;
+ delete f.config.items.ITEM_FLAGS;
+ assert.equal(w.deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(w.audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(stock.size,1,'preserve original physical stock without guessing');
+ f.config.items.ITEM_FLAGS=flags;
+ assert.equal(w.deposit(f.arg).status,'ALREADY_COMMITTED');
+}));
