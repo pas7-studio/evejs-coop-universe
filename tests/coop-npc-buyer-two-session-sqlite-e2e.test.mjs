@@ -24,7 +24,7 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop060-e2e-"));
  const dbFile=path.join(dir,"gamestore.sqlite"),journal=path.join(dir,"buyer.json");
  const rustFile=path.join(dir,"market-rpc-replica.json");
- let db=new DatabaseSync(dbFile),writer,loss=dropAck;
+ let db=new DatabaseSync(dbFile),writer,loss=dropAck,corruptWitness=corruptHistory;
  let sessions=[],calls=[],grantIDs=new Set(),clock=AT;
  const get=(t,k)=>{
   const record=db.prepare('SELECT json FROM "'+t+'" WHERE key=?').get(String(k));
@@ -88,7 +88,7 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
    owner_id:String(SELLER),station_id:STATION,type_id:TYPE,
    quantity:QUANTITY,price_cents:PRICE,
    vol_remaining:r.state==="filled"?0:QUANTITY,
-   history_recorded:r.phase==="finalized"&&!corruptHistory,
+   history_recorded:r.phase==="finalized"&&!corruptWitness,
    history_day:r.phase==="finalized"?r.historyDay:null};
  };
  const marketClient={call:async(method,args)=>{
@@ -192,7 +192,7 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
   sellerSession,observerSession,login:()=>{if(!sessions.includes(sellerSession))
    sessions.push(sellerSession)},logout:()=>{sessions=sessions.filter(s=>s!==sellerSession)},
   events:()=>({seller:sellerSession.events,observer:observerSession.events}),
-  failAck:()=>{loss=true},setClock:v=>clock=v,
+  failAck:()=>{loss=true},corruptWitness:()=>{corruptWitness=true},setClock:v=>clock=v,
   close:()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
 async function run(fn,opts={}){
@@ -295,12 +295,16 @@ test("COOP-060 / insufficient buyer ISK cannot publish fake Rust history or a se
  assert.equal(f.paidSnapshot().seller.balance,100);
  assert.deepEqual(f.events().seller,[]);
 },{initialISK:0}));
-test("COOP-060 / forged missing Rust history witness blocks seller UI even after real SQLite purchase",()=>run(async f=>{
+test("COOP-060 / forged missing Rust history witness blocks reconnect UI after a durable sale",()=>run(async f=>{
  const result=await f.tick();
  assert.equal(result.status,"NPC_PLAYER_PURCHASE_SETTLED");
- assert.equal(result.notification,"NOT_SENT");
+ assert.equal(result.notification,"SELLER_OFFLINE");
+ f.corruptWitness();f.login();
+ const missed=await f.notifier.notifyPendingForSeller({sellerID:SELLER});
+ assert.equal(missed.results[0].status,"NOT_SENT");
+ assert.equal(missed.results[0].reason,"RUST_FINALIZE_OR_ORDER_UNVERIFIED");
  assert.equal(f.events().seller.length,0);
  assert.equal(f.events().observer.length,0);
  assert.equal(f.paidSnapshot().fill.sellerNotifyClaimedAt,undefined);
  assert.equal(f.paidSnapshot().seller.balance,123);
-},{corruptHistory:true}));
+},{offline:true}));
