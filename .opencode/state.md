@@ -1,5 +1,30 @@
 ﻿## Session state — 2026-10-26 (latest)
 
+### Test baseline, 2026-10-26 evening (measured, not guessed)
+- Loop suites (23 files, mining + haul + atomic store + overlay gates): **247/247 PASS**
+  after fixing four stale fixtures; this is the gate to watch before any deploy.
+- Full `node --test`: **4898 tests, ~437 failures** that predate this work and belong
+  to other streams: escort/funding (`FLIGHT_FUNDING_PREPARE_UNCERTAIN`,
+  `NATIVE_REFUND_FLIGHT_NOT_FUNDED_OR_ALREADY_DELIVERED`), ALIFE-13 station/payout
+  journals, and installer-coverage suites that still parse a module list out of the
+  old installer. Fixed today in that area: hauler fixture positions, three
+  assertions that had stopped testing anything, module-list readers, and 33 missing
+  repo `.js` shims that made ten files unloadable.
+- `scripts/loop-verdict.cjs` (8 unit tests) is the only thing allowed to say the loop
+  closed: it needs mining, a real hauler load, a delivery to a station != 0 and a
+  sale, and it prints the runtime reason when a stage is skipped.
+
+### NEEDS OWNER DECISION — `.github/workflows` exists again
+`tests/coop-crossstream-overlay-roundtrip.test.mjs` fails with the explicit guard
+"Owner prohibited remote GitHub CI for this game": twelve workflows are back on
+`main` (`coop-native-economy-gate`, `ex03-native-npc-probes`, `fw-war-recovery-source`,
+`lw04*`, `pve-chat19-21-native`), added by `e1747f2d`, `30eb6f3e`, `f3f413fa` and
+siblings, which AGENTS.md forbids ("Do not add, restore, enable or run GitHub
+Actions workflows... The entire `.github/workflows` directory was deliberately
+removed"). Nothing here was deleted: another session's work is not mine to
+remove, and the test is telling the truth. Owner decides: delete the directory
+(restores the documented rule) or amend the rule.
+
 ### MINING WORKS (18:20Z) — three stacked blockers, each measured
 1. **`d75dea53` overlay modules required `.cjs` siblings.** Installed as `.js`, so
    `coopMiningActivate` threw `MODULE_NOT_FOUND` on every tick and SpaceRuntime

@@ -513,3 +513,123 @@ test("P0: multiple NPCs with equivalent solar system spellings share a single du
  assert.equal(createEconomy({file,clock:()=>now,stepMs:10000})
   .advance(pilots).steps,0);
 }));
+
+
+test("P0: alternating NPC id getter cannot bypass validation and poison global Object.prototype",()=>scoped(({file})=>{
+ let reads=0;
+ const pilot={get id(){return ++reads===1?"safe-pilot":"__proto__"},systemID:30000142};
+ const originalRole=Object.prototype.role,e=createEconomy({file,clock:()=>0});
+ assert.equal(e.advance([pilot]).status,"OK");
+ assert.equal(reads,1,"input id must be captured exactly once");
+ assert.equal(Object.prototype.role,originalRole,"untrusted getter cannot pollute process");
+ assert.ok(Object.hasOwn(e.snapshot().pilots,"safe-pilot"));
+ assert.equal(Object.hasOwn(e.snapshot().pilots,"__proto__"),false);
+ assert.equal(e.snapshot().systems["30000142"].ore,200);
+ const reloaded=createEconomy({file,clock:()=>0});
+ assert.ok(Object.hasOwn(reloaded.snapshot().pilots,"safe-pilot"));
+ assert.equal(Object.prototype.role,originalRole);
+}));
+
+test("P0: changing NPC system getter cannot create a second virtual warehouse after preflight",()=>scoped(({file})=>{
+ let reads=0;
+ const pilot={id:"miner",get systemID(){return ++reads===1?30000142:"030000144"}};
+ let now=0;
+ const e=createEconomy({file,clock:()=>now,stepMs:10000});
+ assert.equal(e.advance([pilot]).steps,0);
+ assert.equal(reads,1,"NPC solar system must be captured once");
+ assert.deepEqual(Object.keys(e.snapshot().systems),["30000142"]);
+ now=10000;
+ const fresh={id:"miner",systemID:30000142};
+ assert.equal(e.advance([fresh]).steps,1);
+ assert.deepEqual(Object.keys(e.snapshot().systems),["30000142"]);
+ assert.equal(e.snapshot().systems["30000142"].ore,203);
+ assert.deepEqual(Object.keys(createEconomy({file}).snapshot().systems),["30000142"]);
+}));
+
+test("P0: throwing NPC getter and symbolic system are rejected before original ore state mutation",()=>scoped(({file})=>{
+ const e=createEconomy({file,clock:()=>0});
+ for(const input of [
+  {get id(){throw Error("unstable NPC id")},systemID:30000142},
+  {id:"npc",get systemID(){throw Error("unstable system id")}},
+  {id:"npc",systemID:Symbol("unreadable-system")},
+  {id:"npc",systemID:{valueOf(){throw Error("unsafe coercion")}}}
+ ]){
+  assert.deepEqual(e.advance([input]),{status:"INVALID_PILOTS",steps:0});
+  assert.equal(fs.existsSync(file),false);
+  assert.deepEqual(e.snapshot().pilots,{});
+  assert.deepEqual(e.snapshot().systems,{});
+ }
+ assert.equal(e.syncNativeDeliveries({"30000142":100}).quantity,100);
+ assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({"30000142":100}).quantity,0);
+}));
+
+
+test("P0: one timestamp for multi-system original supply prevents post-credit clock failure",()=>scoped(({file})=>{
+ let reads=0;
+ const clock=()=>{if(++reads===3)throw Error("CLOCK_FAILED_SECOND_DELIVERY");return 1000};
+ const e=createEconomy({file,clock});
+ assert.deepEqual(e.syncNativeDeliveries({"30000142":100,"30000144":30}),
+  {status:"UPDATED",quantity:130});
+ assert.equal(reads,2,"clock must be read once per atomic batch, not once per credit");
+ const state=e.snapshot();
+ assert.equal(state.systems["30000142"].nativeDelivered,100);
+ assert.equal(state.systems["30000144"].nativeDelivered,30);
+ assert.equal(state.events.length,2);
+ assert.equal(state.events[0].at,1000);
+ assert.equal(state.events[1].at,1000);
+ assert.equal(createEconomy({file,clock:()=>1000})
+  .syncNativeDeliveries({"30000142":100,"30000144":30}).quantity,0);
+}));
+
+test("P0: failure obtaining original supply timestamp does not create volatile-only high-water",()=>scoped(({file})=>{
+ let reads=0;
+ const clock=()=>{if(++reads===2)throw Error("CLOCK_UNAVAILABLE");return 1000};
+ const e=createEconomy({file,clock});
+ assert.throws(()=>e.syncNativeDeliveries({"30000142":100,"30000144":30}),
+  /CLOCK_UNAVAILABLE/);
+ assert.equal(fs.existsSync(file),false);
+ assert.deepEqual(e.snapshot().systems,{});
+ assert.deepEqual(e.snapshot().events,[]);
+ assert.deepEqual(e.syncNativeDeliveries({"30000142":100,"30000144":30}),
+  {status:"UPDATED",quantity:130});
+ assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({"30000142":100}).quantity,0);
+}));
+
+test("P0: loss timestamp failure cannot strand unsaved native system security and events",()=>scoped(({file})=>{
+ let reads=0;
+ const clock=()=>{if(++reads===2)throw Error("LOSS_CLOCK_UNAVAILABLE");return 1000};
+ const e=createEconomy({file,clock});
+ assert.throws(()=>e.recordLoss(30000142,2),/LOSS_CLOCK_UNAVAILABLE/);
+ assert.equal(fs.existsSync(file),false);
+ assert.deepEqual(e.snapshot().events,[]);
+ assert.deepEqual(e.snapshot().systems,{});
+ assert.equal(e.recordLoss(30000142,2).amount,2);
+ assert.equal(e.snapshot().systems["30000142"].security,48);
+ assert.equal(e.snapshot().events[0].at,1000);
+ assert.equal(createEconomy({file}).snapshot().systems["30000142"].security,48);
+}));
+
+test("P0: non-finite or noninteger clock cannot poison initial or durable NPC economy tick",()=>scoped(({file})=>{
+ for(const invalid of [NaN,Infinity,-Infinity,null,"100",1.5,-1]){
+  assert.throws(()=>createEconomy({file,clock:()=>invalid}),
+   /ECONOMY_CLOCK_INVALID/);
+  assert.equal(fs.existsSync(file),false);
+ }
+ const base=createEconomy({file,clock:()=>1000});
+ assert.equal(base.syncNativeDeliveries({"30000142":100}).quantity,100);
+ const persisted=fs.readFileSync(file,"utf8");
+ for(const invalid of [NaN,Infinity,"now",-1]){
+  const e=createEconomy({file,clock:()=>invalid});
+  assert.throws(()=>e.advance([{id:"miner",systemID:30000142}]),
+   /ECONOMY_CLOCK_INVALID/);
+  assert.throws(()=>e.recordLoss(30000142,2),/ECONOMY_CLOCK_INVALID/);
+  assert.throws(()=>e.syncNativeDeliveries({"30000142":120}),
+   /ECONOMY_CLOCK_INVALID/);
+  assert.equal(fs.readFileSync(file,"utf8"),persisted);
+  assert.equal(e.snapshot().systems["30000142"].nativeDelivered,100);
+ }
+ assert.equal(createEconomy({file,clock:()=>1000})
+  .syncNativeDeliveries({"30000142":100}).quantity,0);
+}));

@@ -248,19 +248,28 @@ test("the real ALIFE-07 settler commits one cycle next to transient stock cargo"
   const settler = createAtomicMiningSettler({gameStore, nativeStore,
     resolveType: (id) => ({typeID: id, groupID: 465, categoryID: 25, name: "Veldspar", volume: 0.1})});
   const ghost = copy(f.transient());
-  const outcome = settler.settle({
-    scene: {systemID, getEntityByID: (id) => (id === rockID ? asteroid : null)},
-    entity: miner,
-    targetEntity: asteroid,
-    mineableState: {...live},
-    miningResult: {normalQuantity: 10, wastedQuantity: 0},
-    transferredQuantity: 10,
-    cycleBoundaryMs: 1793031234567,
-    moduleItem: {itemID: 77},
-    readState: () => live,
-    commitScene: () => { live = {...live, remainingQuantity: live.remainingQuantity - 10};
-      return {success: true, data: {depleted: false}}; },
-  });
+  const probe = require("../integration/coopRuntimeProbe.cjs");
+  const observed = [];
+  const realObserve = probe.observe;
+  probe.observe = (event, session, ship, detail) => { observed.push({event, detail}); };
+  let outcome;
+  try {
+    outcome = settler.settle({
+      scene: {systemID, getEntityByID: (id) => (id === rockID ? asteroid : null)},
+      entity: miner,
+      targetEntity: asteroid,
+      mineableState: {...live},
+      miningResult: {normalQuantity: 10, wastedQuantity: 0},
+      transferredQuantity: 10,
+      cycleBoundaryMs: 1793031234567,
+      moduleItem: {itemID: 77},
+      readState: () => live,
+      commitScene: () => { live = {...live, remainingQuantity: live.remainingQuantity - 10};
+        return {success: true, data: {depleted: false}}; },
+    });
+  } finally {
+    probe.observe = realObserve;
+  }
   assert.equal(outcome.success, true, JSON.stringify(outcome));
   assert.equal(f.disk()[String(cargoID)].quantity, 47);
   assert.equal(f.load("miningRuntimeState")[rockKey].entities[String(rockID)].remainingQuantity, 990);
@@ -271,6 +280,16 @@ test("the real ALIFE-07 settler commits one cycle next to transient stock cargo"
   assert.equal(committed.length, 1, "exactly one committed journal row authorizes the cargo delta");
   assert.equal(f.disk()[String(transientID)], undefined);
   assert.deepEqual(f.transient(), ghost);
+
+  // The one product proof of the cycle: what the committed transaction moved.
+  const settled = observed.filter((entry) => entry.event === "living-mining-cycle-settled");
+  assert.equal(settled.length, 1, "exactly one settled event per committed cycle");
+  assert.equal(settled[0].detail.status, "COMMITTED");
+  assert.equal(settled[0].detail.quantity, 10);
+  assert.equal(settled[0].detail.beforeRock, 1000);
+  assert.equal(settled[0].detail.afterRock, 990);
+  assert.equal(settled[0].detail.nextCargo, 47);
+  assert.equal(settled[0].detail.replayed, false);
 });
 
 test("a journal-shaped row missing its identifying fields does not count as one", (t) => {

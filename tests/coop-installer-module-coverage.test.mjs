@@ -3,21 +3,17 @@ import assert from "node:assert/strict";
 import {readFileSync,readdirSync} from "node:fs";
 import {resolve,dirname} from "node:path";
 import {fileURLToPath} from "node:url";
-import vm from "node:vm";
+import {createRequire} from "node:module";
 
+const require=createRequire(import.meta.url);
 const root=resolve(dirname(fileURLToPath(import.meta.url)),"..");
 const source=readFileSync(resolve(root,"scripts/patch-evejs-coop.cjs"),"utf8");
-const markerStart=source.indexOf("const names=");
-const markerEnd=source.indexOf("const specs=[",markerStart);
-if(markerStart<0||markerEnd<=markerStart)
- throw Error("COOP_INSTALLER_MODULE_REGISTRY_MISSING");
-const declaration=source.slice(markerStart,markerEnd);
-
-// Evaluate only static module list and its ordered splices in an isolated
-// VM context. Never invoke the actual overlay or touch the game checkout.
-const emitted=vm.runInNewContext(
- "(()=>{"+declaration+";return names;})()",Object.create(null),{timeout:2000});
-const names=Array.from(emitted,String);
+const specSource=readFileSync(resolve(root,"scripts/overlay-spec.cjs"),"utf8");
+// One module registry: every bundled integration module must be registered there,
+// or the overlay ships a source file nobody installs. That mistake is invisible at
+// runtime - a hook requiring the missing module throws inside stock code - so it is
+// checked from the source tree on every run.
+const names=Array.from(require(resolve(root,"scripts/overlay-spec.cjs")).names,String);
 const bundled=readdirSync(resolve(root,"integration"))
  .filter(name=>/^coop[A-Za-z0-9]+\.cjs$/.test(name))
  .map(name=>name.slice(0,-4));
@@ -36,7 +32,7 @@ test("native NPE and Living World copies keep original hook dependencies",()=>{
   "server/src/services/npe/nesIntroService.js",
   "server/src/services/account/tutorialSvcService.js",
   "server/src/services/character/achievementTrackerMgrService.js"
- ])assert.ok(source.includes('file:"'+file+'"'),"native NPE source hook missing: "+file);
+ ])assert.ok(specSource.includes('file:"'+file+'"'),"native NPE source hook missing: "+file);
 });
 
 test("critical atomic buyer, salvage and seller login modules are shipped",()=>{
@@ -46,5 +42,5 @@ test("critical atomic buyer, salvage and seller login modules are shipped",()=>{
   "coopNpcPartialFillAtomic","coopNpcMarketCompletionNotify",
   "coopSalvageProvenance","coopRescueNativeGame","coopCourierNotices"
  ])assert.ok(names.includes(required),"missing native module: "+required);
- assert.match(source,/notifyPendingSellerOnLogin/);
+ assert.match(specSource,/notifyPendingSellerOnLogin/);
 });

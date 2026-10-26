@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {createRequire} from "node:module";
+const require=createRequire(import.meta.url);
 const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 test("existing physical stock EveJS runtime reads loaded scenes, never creates a scene for proofs",()=>{
@@ -27,8 +29,14 @@ test("only one native world scheduler, mining witness defaults OFF and has bound
  assert.doesNotMatch(witness,/setInterval|setTimeout|allocateCargoID|upsertNativeCargo|grantItem|adjustBalance|issueAttackOrder/);
 });
 test("reversible pinned overlay includes native witness exactly once",()=>{
- const patch=read("scripts/patch-evejs-coop.cjs");
- assert.equal((patch.match(/"coopAlifeNativeMiningWitness"/g)||[]).length,1);
+ // Module registration lives in the single overlay module list now, not in the
+ // installer, so the invariant is: registered exactly once, and never also wired
+ // by hand in the installer.
+ const spec=read("scripts/overlay-spec.cjs"),patch=read("scripts/patch-evejs-coop.cjs");
+ assert.equal((spec.match(/"coopAlifeNativeMiningWitness"/g)||[]).length,1);
+ const {names}=require(path.join(root,"scripts/overlay-spec.cjs"));
+ assert.equal(names.filter(name=>name==="coopAlifeNativeMiningWitness").length,1);
+ assert.doesNotMatch(patch,/"coopAlifeNativeMiningWitness"/);
 });
 test("six independent physical acceptance scenarios are NOT_RUN and gated",()=>{
  const m=JSON.parse(read("tests/scenarios/alife-native-mining-physical-e2e.json"));

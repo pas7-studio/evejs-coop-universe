@@ -21,11 +21,13 @@ SERVICE=${EVEJS_SERVICE:-server}
 WAIT_LOAD_MIN=${WAIT_LOAD_MIN:-20}
 AFTER=${AFTER_RESTART_SECONDS:-240}
 DEPLOY=0
+REQUIRE_SALE=${REQUIRE_SALE:-1}
 while [ $# -gt 0 ]; do
   case "$1" in
     --deploy) DEPLOY=1; shift ;;
     --wait-load-min) WAIT_LOAD_MIN=$2; shift 2 ;;
     --after-restart) AFTER=$2; shift 2 ;;
+    --no-require-sale) REQUIRE_SALE=0; shift ;;
     *) echo "unknown argument: $1"; exit 2 ;;
   esac
 done
@@ -41,7 +43,8 @@ BASE="$REPO/.opencode/tmp"
 TMP="$BASE/evejs-acceptance-$(date -u +%H%M%S)"
 mkdir -p "$TMP"
 START=$(date -u +%s)
-echo "CONTEXT container=$NAME project=$PROJECT start=$(date -u -d @$START +%Y-%m-%dT%H:%M:%SZ)"
+START_ISO=$(date -u -d @$START +%Y-%m-%dT%H:%M:%SZ)
+echo "CONTEXT container=$NAME project=$PROJECT start=$START_ISO"
 
 events() {
   docker exec "$NAME" node -e '
@@ -59,6 +62,14 @@ for(const r of rows){
 
 probe() {
   docker exec -i "$NAME" node - < "$REPO/scripts/coop-cargo-probe.cjs" 2>/dev/null
+}
+
+# The whole event log is small (JSON lines) and the verdict needs the untruncated
+# rows: mining, haul, delivery and sale are four different producers.
+dump_events() {
+  docker exec "$NAME" node -e '
+const fs=require("fs");
+try{process.stdout.write(fs.readFileSync("/var/lib/evejs/coop-events.jsonl","utf8"))}catch(e){}' 2>/dev/null
 }
 
 echo "=== 0. FLAGS IN THIS WORLD ==="
@@ -122,4 +133,18 @@ console.log(`VERDICT DURABLE_BEFORE=${before.rows.length} SURVIVED=${survived} A
 if (lost.length) console.log("  lost", lost.slice(0, 10).join(","));
 console.log(survived === before.rows.length ? "RESTART_PASS" : "RESTART_FAIL");
 NODE
+
+echo "=== 6. CLOSED-LOOP VERDICT (mining -> haul -> station -> sale) ==="
+dump_events > "$TMP/events.jsonl"
+LOOP_ARGS=""
+if [ "$REQUIRE_SALE" = "0" ]; then LOOP_ARGS="--no-require-sale"; fi
+node "$REPO/scripts/loop-verdict.cjs" "$TMP/events.jsonl" --since "$START_ISO" $LOOP_ARGS > "$TMP/loop.txt" 2>&1
+LOOP_STATUS=$?
+cat "$TMP/loop.txt"
+if [ "$LOOP_STATUS" -ne 0 ]; then
+  echo "LOOP_FAIL (stages above name what is missing; a skipped sale prints its runtime reason)"
+  echo "=== DONE artifacts=$TMP ==="
+  exit 6
+fi
+echo "LOOP_PASS"
 echo "=== DONE artifacts=$TMP ==="

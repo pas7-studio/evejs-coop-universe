@@ -93,7 +93,9 @@ test("undeclared table is not writable",()=>run(f=>{
 }));
 test("invalid or duplicate table lists fail closed",()=>run(f=>{
  assert.throws(()=>f.bridge.transact(["items","items"],install),/ALLOWLIST/);
- assert.throws(()=>f.bridge.transact(["marketEscrow"],install),/ALLOWLIST/);
+ // marketEscrow became a legitimate table when the market work landed, so the
+ // undeclared case needs a name that no allowlist contains.
+ assert.throws(()=>f.bridge.transact(["unknownNativeTable"],install),/ALLOWLIST/);
 }));
 test("reentrancy rejected and outer mutation rolled back",()=>run(f=>{
  const before=f.snapshot();assert.throws(()=>f.bridge.transact(["items"],tx=>{
