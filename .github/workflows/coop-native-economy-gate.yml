@@ -1,7 +1,7 @@
 name: COOP Native Economy Integrity
 on:
   push:
-    branches: [main, test/coop-060-npc-buyer-two-client-e2e-20261026]
+    branches: [main, test/coop-060-npc-buyer-two-client-e2e-20261026, fix/escort-peaceful-replay-paged-reconciliation-20261026]
     paths:
       - 'integration/**'
       - 'tests/**'
