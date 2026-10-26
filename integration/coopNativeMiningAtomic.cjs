@@ -68,14 +68,33 @@ function createAtomicMiningSettler({gameStore,nativeStore,resolveType}={}) {
     const normal=Number(miningResult?.normalQuantity), wasted=Number(miningResult?.wastedQuantity);
     const quantity=Number(transferredQuantity), consumed=quantity+wasted;
     const cycle=Number(cycleBoundaryMs);
-    if (![systemID,rockID,shipID,ownerID,oreTypeID,moduleID,cycle].every(positive) ||
-        ![before,normal,wasted,quantity,consumed].every(integer) ||
-        consumed<=0 || consumed>before || quantity>MAX_QTY || quantity<normal ||
-        normal>MAX_QTY || wasted>MAX_QTY ||
-        !scene || typeof scene.getEntityByID !== "function" ||
-        scene.getEntityByID(rockID)!==targetEntity ||
-        typeof commitScene!=="function" || typeof readState!=="function")
-      return blocked(entity,"ALIFE07_YIELD_INVALID");
+    // Every refusal names the input that failed. A single ALIFE07_YIELD_INVALID
+    // for eleven different checks meant a stuck fleet with no way to tell whether
+    // the ship id, the ore type, the owner or the scene preimage was wrong.
+    const invalid = field => blocked(entity, "ALIFE07_YIELD_INVALID:" + field);
+    if (!scene || typeof scene.getEntityByID !== "function")
+      return invalid("scene");
+    if (!positive(systemID)) return invalid("systemID");
+    if (!positive(rockID)) return invalid("rockID");
+    if (!positive(shipID)) return invalid("shipID");
+    if (!positive(ownerID)) return invalid("ownerID");
+    if (!positive(oreTypeID)) return invalid("oreTypeID");
+    if (!positive(moduleID)) return invalid("moduleID");
+    if (!positive(cycle)) return invalid("cycleBoundaryMs");
+    if (!integer(before)) return invalid("remainingQuantity");
+    if (!integer(normal)) return invalid("normalQuantity");
+    if (!integer(wasted)) return invalid("wastedQuantity");
+    if (!integer(quantity)) return invalid("transferredQuantity");
+    if (!integer(consumed)) return invalid("consumed");
+    if (consumed <= 0) return invalid("consumedZero");
+    if (consumed > before) return invalid("consumedOverRock");
+    if (quantity > MAX_QTY || normal > MAX_QTY || wasted > MAX_QTY)
+      return invalid("quantityOverLimit");
+    if (quantity < normal) return invalid("quantityBelowNormal");
+    if (scene.getEntityByID(rockID) !== targetEntity)
+      return invalid("sceneRockIdentity");
+    if (typeof commitScene !== "function") return invalid("commitScene");
+    if (typeof readState !== "function") return invalid("readState");
     const snapshot=readState();
     if (!snapshot || ![before,before-consumed].includes(Number(snapshot.remainingQuantity)) ||
         Number(snapshot.yieldTypeID)!==oreTypeID)
