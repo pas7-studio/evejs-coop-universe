@@ -32,7 +32,7 @@ function patch(source,{remove=false}={}){
   if(part.split(hook).length===2)return;
   if(part.split(anchor).length!==2||part.includes("CH24+31 PERSONAL_MARKET_CORP_SELL"))
    throw Error("CORP_SELL_STOCK_ANCHOR_DRIFT");
-  s=s.slice(0,i)+part.replace(anchor,anchor+hook)+s.slice(j);
+  s=s.slice(0,i)+part.replace(anchor,hook===BUY_MARK?hook+anchor:anchor+hook)+s.slice(j);
  }
  apply(ROW_START,ROW_END,ROW_ANCHOR,ROW_MARK);
  apply(BUY_START,BUY_END,BUY_ANCHOR,BUY_MARK);
