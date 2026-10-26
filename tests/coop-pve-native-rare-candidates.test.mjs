@@ -7,6 +7,13 @@ const require=createRequire(import.meta.url);
 test("original pinned source resolves actual rare candidate item pools for linked overseer NPCs",(t)=>{
  const code=process.env.EVEJS_CODE_PATH||process.env.EVEJS_COOP_CODE_PATH;
  if(!code){t.skip("not installed in an original pinned EveJS tree");return;}
+ // Original npcData -> GameStore refuses unisolated node:test imports.
+ // Do not bypass that native safety guard or read a live player's DB.
+ // This test remains a HARD release gate, not a silently skipped proof.
+ if(process.env.EVEJS_TEST_STORE_ISOLATED!=="1"||
+    !process.env.EVEJS_TEST_STORE_ROOT||
+    !process.env.EVEJS_GAMESTORE_DATA_DIR)
+  assert.fail("NATIVE_RARE_RNG_NOT_RUN: original EveJS requires an attested isolated GameStore with genuine NPC/itemTypes reference data; the clean pinned checkout alone does not provide an executable native RNG test.");
  const native=path.resolve(code,"server/src/space/npc");
  const npcData=require(path.join(native,"npcData.js"));
  const loot=require(path.join(native,"npcLoot.js"));
