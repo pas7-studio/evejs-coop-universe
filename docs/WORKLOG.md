@@ -158,3 +158,8 @@ Evidence: git ls-files patches was empty while the docs claimed the series is ve
 Why: a live delivery settled (NATIVE_FULL_MANIFEST_WITNESSED) and the fleet went back to mining with no sale and no event explaining it, so the missing ISK link was invisible
 Where: integration/coopNativeStationArrival.cjs
 Evidence: new living-npc-station-sale-skipped event once per trip with status/reason; station arrival 15/15 and trip journal 32/32 pass; OVERLAY_OK patched 54
+### 2026-10-26T12:07Z · 5d04672 · TEST · test(arrival): a refused sale reports once and never blocks the warehouse deposit
+
+Why: the new sale-skip telemetry had no regression test, and the compiled-module harness did not know coopObserve
+Where: tests/coop-native-station-arrival.test.mjs
+Evidence: station arrival 16/16 pass; the new case asserts exactly one living-npc-station-sale-skipped with status NO_BID, the given reason, and the cargo still deposited
