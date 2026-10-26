@@ -132,3 +132,10 @@ test('uncontracted ordinary NPC fleets are never modified',()=>{
  const r=x.svc.dispatch({fleet:x.fleet,native:{...x.native,startHaul:()=>{calls++;return true}}});
  assert.equal(r.status,'UNCONTRACTED');assert.equal(r.skipNativeTick,false);assert.equal(calls,0);
 });
+
+test('native combat reaction outranks peaceful corporate hold',()=>{
+ const x=setup();x.assign('HOLD');x.fleet.state='aggressed';let calls=0;
+ const r=x.svc.dispatch({fleet:x.fleet,native:{...x.native,deactivate:()=>{calls++;return true}}});
+ assert.equal(r.status,'NATIVE_COMBAT_PRIORITY');assert.equal(r.skipNativeTick,false);
+ assert.equal(calls,0);assert.equal(x.state().commandState,'PENDING');
+});
