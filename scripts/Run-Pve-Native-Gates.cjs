@@ -68,6 +68,13 @@ function gatePinned(root,nativeCode){
  if(before.trim())crash("DISPOSABLE_NATIVE_REPO_NOT_CLEAN");
  let installed=false;
  try{
+  // First, original authored content must provide at least one NPC
+  // profile linked to the real overseer rule. Catalog-only rules are
+  // never presented as a playable boss drop.
+  const catalog=require("./audit-pve-native-loot-catalog.cjs").inspectCode(code);
+  process.stdout.write("[PVE_NATIVE_CATALOG] "+JSON.stringify(catalog)+"\\n");
+  if(catalog.status!=="SOURCE_AUTHORED_BOSS_TABLE_LINK_PRESENT")
+   crash("ORIGINAL_NATIVE_BOSS_RARE_TABLE_UNBOUND: "+catalog.status);
   const dry=run({codePath:code,dryRun:true});
   if(dry.status!=="DRY_RUN_OK")crash("PINNED_DRY_RUN_FAILED");
   const applied=run({codePath:code});
