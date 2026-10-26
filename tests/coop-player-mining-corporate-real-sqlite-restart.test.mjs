@@ -169,7 +169,7 @@ function fixture(t,{lostCommitAck=false}={}){
    'const result=service.settle({orderID:claim.orderID,cycle:claim.cycle});',
    'if(result.phase!=="GAMESTORE_COMMITTED")process.exit(13);',
    'process.exit(77);'
-  ].join("\\n");
+  ].join("\n");
   const result=spawnSync(process.execPath,["-e",source],{
    env:{...process.env,CORP_TEST_SQLITE:file,
     CORP_TEST_ATOMIC:require.resolve("../integration/coopGameStoreAtomic.cjs"),
