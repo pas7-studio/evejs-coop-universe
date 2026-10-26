@@ -65,6 +65,15 @@ cargo test
 
 Only a disposable world: confirm Rust prepared order stays **invisible**, original corporate ore has the same owner/item/cargo IDs, \`VerifyCorpSellEscrow\` refuses mismatches, unknown ACK never triggers a second operation, and \`PublishCorpSell\` is **always blocked**. Disable flags and reverse source overlay if any native invariant breaks.
 
+## Stage E2B3 — original Rust partial/full claim and atomic corporate wallet settlement (source implemented)
+
+- Added private original Rust `ClaimCorpFill` / `GetCorpFillClaim` with a unique `orderID+cycle` and exclusive `state='settling'` lock; only originally published, verified corporation-owned orders are eligible. Stock personal/NPC market rules remain separate.
+- Added source-only native GameStore **five-table atomic** settlement for real buyer character debits, real seller corporation Wallet Division 1000 credits, verified taxes/broker fees, and physical original itemID/quantity conservation for full and partial ore sales. Every cycle writes immutable `coopPlayerMiningCorpFillorderID:cycle` and original escrow/source quantity updates.
+- Partial fills retain the exact source itemID and cargo marker in corporate escrow, allocate one new buyer itemID using the native ItemStore allocator and record its source ID. Full fills transfer the same original itemID. Unknown native COMMIT is not automatically retried.
+- Durable corporate fill receipts are supported by pinned reversible SQLite row-group patch. Evidence: **14/14** isolated JS settlement scenarios PASS, **14/14** Rust source/installer tests after scope review, plus reversible source and row-group roundtrips. **Real Rust/Cargo/SQLite/gameplay NOT_RUN.**
+- **NOT YET LIVE:** Rust `FinalizeCorpFill` / `ReleaseCorpFill`, fully proven native fee source and safe `PublishCorpSell` are still absent. All economy flags remain default OFF, and current stock gameplay cannot call this bridge.
+- See [CHAT24_31_CORPORATE_FILL_SETTLEMENT.md](CHAT24_31_CORPORATE_FILL_SETTLEMENT.md) for the remaining E2B4 acceptance gates.
+
 ## E2B3 still needed before real ISK sales
 
 1. Rust **claim/release/finalize of corporate full and partial order fills**, with original orderbook volume and immutable fill generation; no stock buyer credit/debit shortcut.
