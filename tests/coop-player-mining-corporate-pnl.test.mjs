@@ -33,9 +33,9 @@ function fixture({sold=3,returned=false}={}){
   fee=entry(fill.feeJournalID,BUYER,CORP,-tax-broker,100000+net,fillKey),
   debit=entry(fill.buyerJournalID,BUYER,CORP,-gross,100000-gross,fillKey);
  const corpRecords={corporationID:CORP,wallet:{divisions:{"1000":
-    wallet([wageBuyer,purchaseBuyer,...(sold?[credit,fee]:[])])}},
+    wallet([wageBuyer,purchaseBuyer,...(sold?[credit,fee]:[])])}}},
   employerRecords={corporationID:EMPLOYER,wallet:{divisions:{"1000":
-    wallet([wageEmployer,purchaseEmployer])}};
+    wallet([wageEmployer,purchaseEmployer])}}};
  const sale={version:1,phase:returned?"RETURNED_UNSOLD":
   sold===8?"FULLY_SOLD":"ACTIVE_SELL",
   cargoID:CARGO,corporationID:CORP,operationID:SHIFT,
