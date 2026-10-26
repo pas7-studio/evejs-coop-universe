@@ -300,3 +300,51 @@ Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/R
 Why: Preserve source-specific prior cargo receipt denial without requiring optional audit to produce a more useful error.
 Where: integration/coopHaulCargoAdoption.cjs
 Evidence: 57/57 isolated exact-source V8 test callbacks PASS; full Node/SQLite/Rust/physical gameplay NOT_RUN. Repeat-adoption feature remains OFF by default.
+### 2026-10-26T13:47Z · 16bdb43 · L2 · feat(mcp): in-process admin bridge and real ESI market price sync
+
+Why: Admin actions (board/fit/give/remove/move/chat) and the agent state probe must run inside the server process; the ESI sync makes market prices real instead of seeded.
+Detail: - integration/coopAdminBridge.cjs: admin actions that must run inside the server process (chat_command, give_item, remove_item, board_ship, fit_ship, fit_slots, move_item); a separate docker exec node has its own empty session registry, so those actions cannot work from outside. - mcp/lib/serverTools.cjs: expose admin_command, admin_give_item, admin_remove_item, admin_board_ship, admin_fit_ship an
+Where: integration/coopAdminBridge.cjs, mcp/lib/probe-admin-command.cjs, mcp/lib/probe-agent-state.cjs, mcp/lib/serverTools.cjs, mcp/server-mcp.cjs, scripts/sync-market-prices-esi.cjs
+Evidence: admin_* MCP tools answered live (Venture 9988400101159 boarded offline, fittingId=1157 11/11 slots); sync wrote 15413 ESI anchors, 378274 seed_stock rows + 14549 base_price, backups 12-31-42/12-41-48/12-50-52; Tritanium 3.51-3.95 across 26 stations
+### 2026-10-26T13:46Z · 75cc4f7 · L2 · fix(P0): refuse incomplete tagged NPC orphan batches before any original cargo move
+
+Why: Tagged original NPC cargo from the same fleet/system with invalid quantity/type/identity/module/transience was silently skipped while valid sibling cargoIDs were reparented and delivered, causing incomplete partial original-cargo custody.
+Where: integration/coopHaulCargoAdoption.cjs
+Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old main ADOPTED only 1 of 2 original sibling rows while corrupt cargo remained on orphan carrier. Pinned Node/SQLite/Rust/physical gameplay NOT_RUN.
+### 2026-10-26T13:46Z · 9bd05b3 · TEST · test(P0): damaged tagged orphan cannot be silently omitted from physical recovery
+
+Why: Regressions cover eight corrupt sibling variants with no writes/flushes, plus unaffected valid adoption when the invalid native cargo belongs to another fleet/system.
+Where: tests/coop-haul-cargo-adoption.test.mjs
+Evidence: 59/59 exact-source isolated V8 regression test callbacks PASS; old main ADOPTED only 1 of 2 original sibling rows while corrupt cargo remained on orphan carrier. Pinned Node/SQLite/Rust/physical gameplay NOT_RUN.
+### 2026-10-26T14:22Z · 6c95e68 · DOCS · coop: make the number of patch mechanisms countable and non-growing
+
+Why: three overlapping patch mechanisms (65 legacy transformers, 48 wired) made stock files unmanaged and untestable
+Detail: Three mechanisms edit the pinned checkout today: L1 patches, the declarative overlay spec, and 65 hand-written coop-*-patch.cjs transformers, 48 of which patch-evejs-coop.cjs wires in one by one. The last group is invisible to --check and to review; coop-native-npc-fire-debit-patch.cjs alone inserts 172 unmanaged lines into space/runtime.js, which is why adding a normal spec entry for that file tu
+Where: docs/DEVELOPMENT_DOCTRINE.md, docs/coop-hook-inventory.json, scripts/coop-hook-inventory.cjs
+Evidence: HOOKS legacy=65 wired=48 specFiles=13 specEntries=46 overlap=5; baseline docs/coop-hook-inventory.json; --check HOOKS_OK
+### 2026-10-26T14:14Z · 409fe28 · L2 · fix(P0): require authoritative native source cargo array before warehouse credit
+
+Why: An authorized warehouse DEBIT repair treated null/undefined from native source inventory as proof the original cargo was absent; it created a real station item with no verified source debit. Require a native cargo array and reject duplicate/misassigned original rows.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 17/17 exact-source isolated V8 warehouse suite callbacks PASS with simulated FS and itemStore; prior source returned COMMITTED and credited original ore with null source reader. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:14Z · 1bef709 · TEST · test(P0): prove warehouse DEBIT resume and committed audit refuse unverified native cargo
+
+Why: Regression tests cover unreadable native source during DEBIT repair, completed receipt validation/audit under unavailable source, and duplicate or wrong-ship native cargo; clean authorized replay remains exactly once.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 17/17 exact-source isolated V8 warehouse suite callbacks PASS with simulated FS and itemStore; prior source returned COMMITTED and credited original ore with null source reader. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:18Z · 4eccc3a · L2 · fix(P0): verify original native cargo corporate owner before warehouse debit
+
+Why: Original cargo ownerID was never checked against the receiving NPC corporation in native warehouse deposit. A foreign owner's physical cargo could be debited and credited to another corporation despite correct station existence and caller-provided durability proof.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 18/18 exact-source isolated V8 warehouse tests PASS with simulated file IO; previous source reproduced foreign owner's cargo COMMITTED into a different NPC corporation. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:19Z · 1fc55fa · TEST · test(P0): foreign or unverified native cargo owner cannot credit NPC warehouse
+
+Why: Original warehouse suite now uses source-backed ownerID in the native cargo fixture and verifies mismatched, zero, null, unknown corporate owners cannot debit, create a receipt or grant stock; valid owner can still commit once.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 18/18 exact-source isolated V8 warehouse tests PASS with simulated file IO; previous source reproduced foreign owner's cargo COMMITTED into a different NPC corporation. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:27Z · ca95798 · L1 · L1 0004: keep a mining fleet actor the store still owns
+
+Why: a durable fleet actor was pruned while its persisted controller row still existed, so fleets lost live ships and never hauled
+Detail: pruneMiningFleet filtered every fleet list through the in-memory controller registry only. That registry is rebuilt when a scene is torn down while the persisted native controller row survives, so a durable miner or hauler left the fleet with no destruction at all: the prune forensics reported storedEntity=true storedController=true for every removed actor, the fleet reported miners=0 with live sh
+Where: patches/upstream/0004-native-mining-fleet-retained-actor.patch, patches/upstream/MANIFEST.json, tests/coop-native-fleet-retained-actor.test.mjs
+Evidence: prune forensics storedEntity=true storedController=true on every removed actor; fleet miners=0 with live ships; tests/coop-native-fleet-retained-actor.test.mjs 3/3; patch sha256 in MANIFEST

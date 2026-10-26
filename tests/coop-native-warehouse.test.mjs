@@ -8,7 +8,7 @@ const require=createRequire(import.meta.url);
 const {createWarehouse,marker}=require('../integration/coopNativeWarehouse.cjs');
 function fixture(options={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'evejs-warehouse-'));
- const cargo=new Map([[8001,{cargoID:8001,entityID:9001,typeID:1230,quantity:250,moduleID:0,coopHaulFleetID:77,coopHaulFromMinerID:800}]]);
+ const cargo=new Map([[8001,{cargoID:8001,entityID:9001,ownerID:1000035,typeID:1230,quantity:250,moduleID:0,coopHaulFleetID:77,coopHaulFromMinerID:800}]]);
  const owned=new Map();let issued=0,failRemove=false,failCargoFlush=false,failItemsFlush=false,failGrant=false,acceptArrival=true,durableCargo=true;
  const store={listNativeCargoForEntity:id=>[...cargo.values()].filter(c=>c.entityID===id),
   removeNativeCargo(id){if(failRemove)return {success:false};return {success:cargo.delete(id)};}};
@@ -106,4 +106,77 @@ test('transient hauler cargo cannot turn into a durable native inventory item',(
  f.set({durableCargo:false});const w=f.make();
  assert.equal(w.deposit(f.arg).status,'CARGO_NOT_DURABLE');
  assert.equal(w.audit().status,'EMPTY');assert.equal(f.cargo.size,1);assert.equal(f.owned.size,0);
+}));
+
+test('P0: authorized DEBIT recovery cannot credit ore if native cargo source read is missing',()=>withF(f=>{
+ f.set({failGrant:true});
+ const warehouse=f.make();
+ assert.equal(warehouse.deposit(f.arg).status,'TARGET_WRITE_UNCERTAIN');
+ assert.equal(f.issued,0);
+ f.set({failGrant:false});
+ const original=f.config.store.listNativeCargoForEntity;
+ const file=path.join(f.root,'receipts','8001.json');
+ for(const unreadable of [null,undefined,false,{},'not-an-array']){
+  f.config.store.listNativeCargoForEntity=()=>unreadable;
+  assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR');
+  assert.equal(f.issued,0,'unknown source cannot create real ItemStore ore');
+  assert.equal(f.owned.size,0);
+  assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).phase,'SOURCE_DEBIT_PROVEN');
+ }
+ f.config.store.listNativeCargoForEntity=original;
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'COMMITTED');
+ assert.equal(f.issued,1,'recovered only after authoritative native absence proof');
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'ALREADY_COMMITTED');
+ assert.equal(f.issued,1);
+}));
+
+test('P0: committed warehouse status and audit refuse unavailable native source custody',()=>withF(f=>{
+ const warehouse=f.make();
+ assert.equal(warehouse.deposit(f.arg).status,'COMMITTED');
+ const original=f.config.store.listNativeCargoForEntity;
+ f.config.store.listNativeCargoForEntity=()=>null;
+ assert.equal(f.make().resume(8001,{authorize:true}).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().deposit(f.arg).status,'NEEDS_OPERATOR_REPAIR');
+ assert.equal(f.make().audit().status,'NEEDS_RECONCILIATION');
+ assert.equal(f.issued,1,'no duplicate native station stack');
+ f.config.store.listNativeCargoForEntity=original;
+ assert.equal(f.make().audit().status,'OK');
+}));
+
+test('P0: duplicate or wrong-ship original native cargo never receives source debit',()=>withF(f=>{
+ const warehouse=f.make();
+ const original=f.config.store.listNativeCargoForEntity;
+ for(const scenario of ['duplicated','wrong-ship']){
+  f.config.store.listNativeCargoForEntity=id=>{
+   const rows=original(id);
+   return scenario==='duplicated'?[...rows,...rows]:rows.map(row=>({...row,entityID:id+1}));
+  };
+  const outcome=warehouse.deposit(f.arg);
+  assert.equal(outcome.status,'NEEDS_OPERATOR_REPAIR',scenario);
+  assert.equal(f.issued,0);
+  assert.equal(f.cargo.size,1);
+  assert.equal(warehouse.audit().status,'EMPTY');
+ }
+ f.config.store.listNativeCargoForEntity=original;
+ assert.equal(warehouse.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.issued,1);
+}));
+
+
+test('P0: native ore title must equal receiving NPC corporate warehouse owner',()=>withF(f=>{
+ const w=f.make(),source=f.cargo.get(8001),originalOwner=source.ownerID;
+ const file=path.join(f.root,'receipts','8001.json');
+ for(const foreignOwner of [8888,0,null,undefined,'unverified']){
+  source.ownerID=foreignOwner;
+  assert.equal(w.deposit(f.arg).status,'ORIGINAL_CARGO_OWNER_MISMATCH');
+  assert.equal(f.cargo.size,1,'original cargo must not be debited');
+  assert.equal(f.owned.size,0,'no physical stock may be minted');
+  assert.equal(f.issued,0);
+  assert.equal(fs.existsSync(file),false,'no PREPARED receipt for foreign original title');
+ }
+ source.ownerID=originalOwner;
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.cargo.size,0);
+ assert.equal(f.owned.size,1);
+ assert.equal(f.issued,1);
 }));

@@ -28,6 +28,15 @@
       ],
       "status": "not-sent",
       "note": "sessionless capacitor advance AND the hull recharge rate resolved at use, so every NPC spawn path recharges; candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0004-native-mining-fleet-retained-actor.patch",
+      "sha256": "d9efc88018688939b8260fb96d5e36b90f33fd6e541ac6a35085d08d2d4a510c",
+      "files": [
+        "server/src/services/mining/miningNpcOperations.js"
+      ],
+      "status": "not-sent",
+      "note": "a durable fleet actor is pruned while its stored controller row still exists, candidate for an atomic upstream PR"
     }
   ]
 }

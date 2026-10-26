@@ -211,6 +211,18 @@ Rungs 4–6 are evidence, not opinions. Documentation alone never advances a run
 
 ## 10. Known debt and next steps
 
+7. Mechanism count is debt, and it is now measured:
+   `node scripts/coop-hook-inventory.cjs` prints `HOOKS legacy=65 wired=48
+   specEntries=46 overlap=5` (2026-10-26) and `--check` fails if the legacy
+   count or the wired count grows. A new behaviour change therefore goes into
+   `scripts/overlay-spec.cjs` (one-line call + module) or into an L1 patch,
+   never into another `coop-*-patch.cjs`. The five files that both a legacy
+   transformer and the spec edit are the first migration targets, because two
+   mechanisms on one file is exactly how an unmanaged 172-line insertion
+   (`coop-native-npc-fire-debit-patch.cjs` -> `runtime.js`) stayed invisible
+   to `--check`.
+
+
 1. Inline one-liners that violate R2 remain in `tradeMgrService.js`,
    `beyonceService.js`, `agentMgrService.js`, `miningNpcOperations.js`. Convert
    them to one-call hooks, one file per commit.

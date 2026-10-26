@@ -112,3 +112,49 @@ mining resumes instead of stalling forever.
 4. `docs/COOP_ARCHITECTURE_BOUNDARIES.md` now states the module roles and the
    single owner per record; the next split is `coopNativeStationArrival`
    (route / phase / commit) so the sale path becomes testable without Docker.
+
+## 2026-10-26 13:10Z — mining capacitor root cause FIXED (double activation)
+
+- The overlay inserts lines *before* an anchor, so the traced
+  `activateGenericModule` in `miningNpcOperations` was added in front of the
+  stock call instead of replacing it. Every fleet tick without a cached effect
+  spent the module capacitor TWICE. Live CAPTRACE showed dt≈0.5 s, one drain of
+  18 GJ (= type 482 capNeed) per ~1.8 s against a recharge of 0.012/s, so a
+  250 GJ hull sat at ratio 0.003-0.013 vs the 0.092 a Miner I needs.
+- Fix: the traced call now ends with `continue;` (stock call unreachable).
+  After rebuild: miners hold 0.72-0.96 with both strip miners active.
+- Durable slot status was invisible: `start()` was called without `log` and its
+  result discarded. Each slot now emits `living-native-durable-slot` once per
+  status change; live output SPAWNED/RESTORED with `miners=2 haulers=1`.
+- The earlier `haulers:0` fleet records are gone: both fleets now report
+  haulers=1 with the hauler in STOP mode next to the rocks.
+- Deployed: OVERLAY_OK patched 54; commit 20aca65 (+ worklog 70f8c7c).
+- Modules: type 482 capNeed 18 GJ / 15 s; type 17482 capNeed 23 GJ / 45 s;
+  hull 250 GJ tau 125 s -> theoretical equilibrium ratio ~0.88, which is what
+  the live telemetry now shows.
+- Next: wait for `living-hauler-loaded` -> `living-native-haul-delivered` ->
+  `living-npc-station-sold`, then run scripts/restart-acceptance.sh.
+
+## 2026-10-26 14:10Z — mechanism audit (owner question: why patch instead of a real module)
+
+- Live: fleet keeps m2 h1, prunes 27/4.5min -> 0-1/5min, miners orbit a real
+  rock with 2 active strip miners and cap 0.57-0.73. Ore still q0.
+- Durable identity fixed (L1 0002 second hunk) + fleet self-heal hook.
+- Measured with the new probe: `tickController` drops ZERO controllers, so the
+  behaviour loop is NOT the cause of the remaining churn; no patch there.
+- Mechanism audit: deploy path = L1 patches + overlay-spec (45 entries) +
+  `scripts/patch-evejs-coop.cjs`, which itself runs **~70 hardcoded
+  `coop-*-patch.cjs` modules** (65 files, only 2 delegate to the spec). Those
+  edit stock files with bespoke string surgery, e.g.
+  `coop-native-npc-fire-debit-patch.cjs` adds 172 unmanaged lines to
+  `runtime.js`. Consequence: `runtime.js`/`miningRuntime.js` have no spec entry,
+  so the gate cannot see (or check) their content, and adding an entry turns a
+  passing check into OVERLAY_DRIFT immediately.
+- Decision: no new `coop-*-patch.cjs`; new behaviour goes to the spec (one-line
+  call + module) or an L1 patch. Migration of the legacy 70 is the next
+  architecture task, tracked with a visible count.
+- Gate note: `--check` is currently blocked by another session's
+  `server/src/space/coopHaulCargoAdoption.js` = STALE (their in-flight file),
+  not by our overlay. Do not delete or reset it.
+- Next: read `living-mining-cycle-result` (temp probe in runtime.js, reverted
+  after measurement) to name why the stock yield never commits for NPCs.

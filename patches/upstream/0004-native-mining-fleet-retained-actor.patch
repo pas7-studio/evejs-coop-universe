@@ -1,0 +1,53 @@
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0004/0004] miningNpcOperations: keep a fleet actor the store still owns
+
+The mining fleet record dropped any actor whose runtime controller was not in
+the in-memory registry. That registry is rebuilt when a scene is torn down,
+while the persisted native controller row survives, so a durable miner or
+hauler disappeared from its fleet with no destruction at all: the prune
+forensics reported storedEntity=true storedController=true for every removed
+actor, the fleet reported miners=0 while the ships were still alive, and the
+haul leg never started. A destroyed NPC is removed from the store, so real
+losses still prune normally.
+
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+Local overlay: integration/* is NOT part of this patch series.
+---
+--- a/server/src/services/mining/miningNpcOperations.js
++++ b/server/src/services/mining/miningNpcOperations.js
+@@ -1561,20 +1561,33 @@ function getMiningFleetsForSystem(systemID) {
+       fleets.push(fleetRecord);
+     }
+   }
+   return fleets;
+ }
+ 
++// A durable native NPC owns its hull through the persisted controller row, not
++// through the in-memory registry: the registry is rebuilt whenever a scene is
++// torn down, while the row survives. Dropping such an actor from the fleet
++// silently removes a live ship and the fleet mines nothing forever. Keep it
++// while the store still owns it; a destroyed NPC is removed from the store, so
++// real losses still prune normally.
++function isRetainedFleetActor(entityID) {
++  if (npcService.getControllerByEntityID(entityID)) {
++    return true;
++  }
++  return Boolean(nativeNpcStore.getNativeController(entityID));
++}
++
+ function pruneMiningFleet(fleetRecord) {
+   if (!fleetRecord) {
+     return null;
+   }
+   fleetRecord.minerEntityIDs = (Array.isArray(fleetRecord.minerEntityIDs) ? fleetRecord.minerEntityIDs : [])
+-    .filter((entityID) => npcService.getControllerByEntityID(entityID));
++    .filter((entityID) => isRetainedFleetActor(entityID));
+   fleetRecord.haulerEntityIDs = (Array.isArray(fleetRecord.haulerEntityIDs) ? fleetRecord.haulerEntityIDs : [])
+-    .filter((entityID) => npcService.getControllerByEntityID(entityID));
++    .filter((entityID) => isRetainedFleetActor(entityID));
+   fleetRecord.responseEntityIDs = (Array.isArray(fleetRecord.responseEntityIDs) ? fleetRecord.responseEntityIDs : [])
+     .filter((entityID) => npcService.getControllerByEntityID(entityID));
+   if (fleetRecord.haulerEntityIDs.length <= 0) {
+     fleetRecord.haulerNextArrivalAtMs = 0;
+   }
+   if (fleetRecord.responseEntityIDs.length <= 0) {
