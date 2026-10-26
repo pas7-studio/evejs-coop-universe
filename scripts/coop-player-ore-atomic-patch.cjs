@@ -119,6 +119,12 @@ function patch(source,file,remove=false){
   return source;
  if(source.includes(BEGIN)||source.includes(END)||source.includes(exportEntry))
   throw Error("PLAYER_ORE_ITEMSTORE_PARTIAL");
- return source.replace(anchor,text+anchor+exportEntry);
+ // Preserve the native warehouse export block's required adjacency to
+ // module.exports. Inserting before those two exports makes the existing
+ // warehouse patch fail its own reinstall/drift checks.
+ const warehouseExports="  findWarehouseItem,"+eol+"  grantUniqueNpcDepotItem,"+eol;
+ const exportAnchor=source.includes(anchor+warehouseExports)?
+   anchor+warehouseExports:anchor;
+ return source.replace(anchor,text+anchor).replace(exportAnchor,exportAnchor+exportEntry);
 }
 module.exports={patch,ITEMS,RUNTIME,SERVICE,BEGIN,END,RPC_HOOK,SERVICE_HOOK,ITEM_HOOK};

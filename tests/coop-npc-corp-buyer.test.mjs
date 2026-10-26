@@ -249,3 +249,59 @@ test("valid fractional-dollar cent balances preserve exact native debit and sell
  assert.equal(f.data.characters[SELLER].balance,123.05);
  assert.equal(f.data.npcMarketFills[RECEIPT].taxCents,200);
 },{buyerISK:1000.05}));
+
+
+test("paid original NPC receipt with missing wallet witness refuses Rust replay",()=>run(async f=>{
+ await buy(f);
+ const row=f.data.npcMarketFills[RECEIPT];
+ delete row.buyerBeforeCents;
+ const before=structuredClone(f.data);
+ await assert.rejects(f.create().purchaseOnce(f.request),/NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT/);
+ assert.deepEqual(f.data,before);
+ assert.equal(f.data.items[ITEM].ownerID,BUYER);
+}));
+test("forged buyer or seller conservation and tax identity cannot finalize Rust",()=>run(async f=>{
+ await buy(f);
+ const original=structuredClone(f.data.npcMarketFills[RECEIPT]);
+ for(const corrupt of [
+  {buyerAfterCents:original.buyerBeforeCents},
+  {sellerAfterCents:original.sellerBeforeCents},
+  {taxTransactionID:null},
+  {committedAt:0}
+ ]){
+  f.data.npcMarketFills[RECEIPT]={...original,...corrupt};
+  const before=structuredClone(f.data);
+  await assert.rejects(f.create().purchaseOnce(f.request),
+   /NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT/);
+  assert.deepEqual(f.data,before);
+ }
+ f.data.npcMarketFills[RECEIPT]=original;
+ const before=structuredClone(f.data);
+ assert.equal((await f.create().purchaseOnce(f.request)).status,
+  "NPC_PURCHASED_PLAYER_GOODS");
+ assert.deepEqual(f.data,before);
+}));
+test("legitimate zero-tax original native receipt replays with null tax transaction ID",()=>run(async f=>{
+ f.setTaxRate(0);
+ assert.equal((await buy(f)).status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(f.data.npcMarketFills[RECEIPT].taxTransactionID,null);
+ const before=structuredClone(f.data);
+ assert.equal((await f.create().purchaseOnce(f.request)).status,
+  "NPC_PURCHASED_PLAYER_GOODS");
+ assert.deepEqual(f.data,before);
+}));
+
+
+test("native seller row keyed by original player ID can settle without optional characterID",()=>run(async f=>{
+ delete f.data.characters[SELLER].characterID;
+ assert.equal((await buy(f)).status,"NPC_PURCHASED_PLAYER_GOODS");
+ assert.equal(f.data.items[ITEM].ownerID,BUYER);
+ assert.equal(f.data.characters[SELLER].balance,123);
+}));
+test("forged embedded seller identity still blocks original escrow and wallet mutation",()=>run(async f=>{
+ f.data.characters[SELLER].characterID=SELLER+9;
+ const before=structuredClone(f.data);
+ await assert.rejects(buy(f),/NPC_CORP_BUY_NATIVE_WALLET_INVALID/);
+ assert.deepEqual(f.data,before);
+ assert.equal(f.finalizes,0);
+}));

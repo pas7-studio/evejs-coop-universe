@@ -72,7 +72,22 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
        !nonneg(previous.netCents)||
        previous.netCents!==grossCents-previous.taxCents||
        previous.taxPolicy!=="EVEJS_NATIVE_MARKET_RULES"||
-       !pos(previous.itemID))
+       !pos(previous.itemID)||
+       // A replay is only proof of a settled purchase when the original
+       // native buyer debit and seller net credit conserve exact ISK cents.
+       // Current wallets may have changed since settlement; verify receipt
+       // pre/post witnesses, never charge or move the item again.
+       !nonneg(previous.buyerBeforeCents)||
+       !nonneg(previous.buyerAfterCents)||
+       !nonneg(previous.sellerBeforeCents)||
+       !nonneg(previous.sellerAfterCents)||
+       previous.buyerBeforeCents<grossCents||
+       previous.buyerAfterCents!==previous.buyerBeforeCents-grossCents||
+       !nonneg(previous.sellerBeforeCents+grossCents)||
+       previous.sellerAfterCents!==previous.sellerBeforeCents+previous.netCents||
+       previous.taxTransactionID!==(previous.taxCents>0?
+        fillID+100000000000000:null)||
+       !pos(previous.committedAt))
      throw Error("NPC_CORP_BUY_RECEIPT_REPLAY_CONFLICT");
     // A valid committed receipt remains valid if a later consumer used the
     // purchased goods. Never replay wallets or reissue a physical item.
@@ -102,10 +117,16 @@ function createNpcCorporateBuyer({gameStore,market,verifyBuyerCorporation,verify
       !pos(item.itemID)||!pos(item.categoryID)||item.categoryID===9)
     throw Error("NPC_CORP_BUY_PHYSICAL_STACK_UNVERIFIED");
    const division=corporation?.wallet?.divisions?.["1000"];
+   // Pinned native EveJS stores character rows by key. No embedded
+   // characterID is guaranteed, so bind identity to the original keyed
+   // GameStore read plus the Rust claim and verified physical escrow.
+   // If the row DOES contain an embedded ID, it must agree exactly.
+   const sellerEmbedded=seller?.characterID??seller?.charID;
    if(corporation?.corporationID!==request.buyerCorpID||!division||
      !Array.isArray(division.journal)||!Array.isArray(division.transactions)||
      cents(division.balance)===null||!seller||
-     Number(seller.characterID??seller.charID)!==sellerID||
+     (sellerEmbedded!==undefined&&sellerEmbedded!==null&&
+      Number(sellerEmbedded)!==sellerID)||
      cents(seller.balance)===null||
      !Array.isArray(seller.walletJournal)||!Array.isArray(seller.marketTransactions))
     throw Error("NPC_CORP_BUY_NATIVE_WALLET_INVALID");

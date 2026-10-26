@@ -8,6 +8,7 @@
  */
 const fs=require('node:fs');
 const path=require('node:path');
+const {execFileSync}=require('node:child_process');
 const SHA=/^[a-f0-9]{40}$/;
 const DIGEST=/^[a-f0-9]{64}$/;
 const TIERS=['source','unit','integration','runtime','oneClient','twoClient','restart'];
@@ -138,22 +139,32 @@ function assess({matrix,snapshot,claims={schema:'coop-qa42-claims/v1',claims:[]}
   if(!matrix.cases.some(row=>row.id===claim.caseID))throw Error('QA42_UNKNOWN_CASE');
   seen.add(claim.caseID);claimByCase.set(claim.caseID,claim);
  }
- const source=getSourceQuality(snapshot,currentRev||snapshot.auditHeadAtSnapshot);
+ // Missing HEAD must never silently inherit a historical snapshot revision.
+ const verifiedRev=SHA.test(currentRev)?currentRev:null;
+ const source=getSourceQuality(snapshot,verifiedRev);
  const cases=matrix.cases.map(scenario=>{
   const claim=claimByCase.get(scenario.id);
   if(!claim)return {id:scenario.id,owners:scenario.owners,status:'NOT_TESTED',reasons:['NO_CURRENT_OBSERVATION']};
-  const errors=validateClaim(claim,scenario,matrix,currentRev||snapshot.auditHeadAtSnapshot);
+  const errors=validateClaim(claim,scenario,matrix,verifiedRev);
+  if(!verifiedRev)errors.push('CURRENT_REVISION_NOT_VERIFIED');
   if(source.reasons.includes('QA_SNAPSHOT_NOT_CURRENT_FOR_HEAD'))errors.push('QA_SNAPSHOT_NOT_CURRENT_FOR_HEAD');
   return {id:scenario.id,owners:scenario.owners,
     status:errors.length?'REJECTED_EVIDENCE':'REVIEW_REQUIRED',reasons:[...new Set(errors)]};
  });
  const counts=Object.fromEntries(['NOT_TESTED','REJECTED_EVIDENCE','REVIEW_REQUIRED','PASS_VERIFIED'].map(s=>[s,cases.filter(x=>x.status===s).length]));
- return {schema:'coop-qa42-report/v1',auditedRevision:currentRev||snapshot.auditHeadAtSnapshot,
+ return {schema:'coop-qa42-report/v1',auditedRevision:verifiedRev,
   publishedGameRev:snapshot.publishedStateRev,upstreamPin:matrix.upstreamPin,
   ownerDirections:matrix.owners.length,acceptanceCases:cases.length,
   evidencePolicy:'SOURCE_AND_ATTESTATION_ONLY_REQUIRE_HUMAN_INSPECTION',
   source,counts,unitIsolatedReruns:snapshot.independentlyRerunIsolated,
   twoAuthenticatedClientsVerified:false,overall:'NO_GO_NOT_PROVEN_COMPLETE',cases};
+}
+function getGitRevision(projectRoot) {
+ try {
+  const result=execFileSync('git',['-C',projectRoot,'rev-parse','--verify','HEAD'],
+   {encoding:'utf8',timeout:5000,stdio:['ignore','pipe','ignore']}).trim();
+  return SHA.test(result)?result:null;
+ } catch (_error) {return null;}
 }
 function parseArgs(argv){
  const args={};
@@ -173,9 +184,14 @@ if(require.main===module){
   const matrix=JSON.parse(fs.readFileSync(opts.matrix||path.join(dir,'qa/CHAT42_ACCEPTANCE_MATRIX.json'),'utf8'));
   const snapshot=JSON.parse(fs.readFileSync(opts.snapshot||path.join(dir,'qa/CHAT42_SOURCE_SNAPSHOT.json'),'utf8'));
   const claims=opts.claims?JSON.parse(fs.readFileSync(opts.claims,'utf8')):undefined;
-  const result=assess({matrix,snapshot,claims,currentRev:opts['current-rev']});
+  const actualGitRev=getGitRevision(dir);
+  // --current-rev is an expectation, not permission to impersonate checkout HEAD.
+  const suppliedRev=opts['current-rev'];
+  if(suppliedRev&&(!SHA.test(suppliedRev)||actualGitRev&&suppliedRev!==actualGitRev))
+   throw Error('QA42_CURRENT_REVISION_MISMATCH');
+  const result=assess({matrix,snapshot,claims,currentRev:actualGitRev});
   console.log(JSON.stringify(result,null,2));
   if(opts.strict&&result.overall!=='PASS_VERIFIED')process.exitCode=2;
  }catch(e){console.error('QA42_EVIDENCE_VALIDATION_ERROR:',e.message);process.exitCode=2;}
 }
-module.exports={assertMatrix,assertSnapshot,getSourceQuality,validateTwoClients,validateClaim,assess,parseArgs,TIERS};
+module.exports={assertMatrix,assertSnapshot,getSourceQuality,validateTwoClients,validateClaim,assess,getGitRevision,parseArgs,TIERS};

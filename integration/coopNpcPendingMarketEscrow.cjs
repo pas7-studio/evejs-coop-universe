@@ -50,6 +50,10 @@ function createNpcPendingMarketEscrow({
    Number(row.owner_id)===x.ownerID&&Number(row.station_id)===x.stationID&&
    Number(row.type_id)===x.typeID&&Number(row.quantity)===x.quantity&&
    Number(row.price)===p&&row.bid===false&&row.is_corp===true&&
+   // Manufacturing and NPC salvage use the same Rust pending sell API.
+   // A foreign-source or already consumed order is NOT a reserve receipt
+   // for this original physical output stack.
+   row.source==="coop-npc"&&Number(row.vol_remaining)===x.quantity&&
    (state===null||row.state===state)&&good(Number(row.order_id)));
  }
  function receipt(x,orderID){

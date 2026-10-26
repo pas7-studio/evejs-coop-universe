@@ -125,3 +125,18 @@ test('valid TCP+localhost tunnel still never implies gameplay proof',()=>{
  const result=assess({compose:compose(),nativeConfig:config(),tunnel:tunnel()});
  assert.equal(result.ok,true);assert.equal(Object.hasOwn(result,'twoClientGameplayPassed'),false);
 });
+
+test('local redirects must target the exact forwarded port, never admin or unforwarded ports',()=>{
+ const c=compose();c.services.server.environment.EVEJS_IMAGE_SERVER_URL='http://127.0.0.1:40110/';
+ assert.match(errors(validateCompose(c)),/NON_LOOPBACK_ADVERTISEMENT_EVEJS_IMAGE_SERVER_URL/);
+ c.services.server.environment.EVEJS_IMAGE_SERVER_URL='http://localhost:26001/';
+ assert.equal(validateCompose(c).errors.length,0,errors(validateCompose(c)));
+ c.services.server.environment.EVEJS_MICROSERVICES_PUBLIC_BASE_URL='http://127.0.0.1:9999/';
+ assert.match(errors(validateCompose(c)),/NON_LOOPBACK_ADVERTISEMENT_EVEJS_MICROSERVICES_PUBLIC_BASE_URL/);
+});
+test('native auth bypass env accepts numeric true and is still blocked',()=>{
+ const c=compose();c.services.server.environment.EVEJS_DEV_SKIP_PASSWORD_VALIDATION=1;
+ c.services.server.environment.EVEJS_DEV_AUTO_CREATE_ACCOUNTS='ON';
+ assert.match(errors(validateCompose(c)),/UNSAFE_AUTH_ENV_EVEJS_DEV_SKIP_PASSWORD_VALIDATION/);
+ assert.match(errors(validateCompose(c)),/UNSAFE_AUTH_ENV_EVEJS_DEV_AUTO_CREATE_ACCOUNTS/);
+});

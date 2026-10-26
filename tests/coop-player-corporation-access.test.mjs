@@ -9,9 +9,9 @@ const HANGAR=115,TAKE_1=8192n,QUERY_1=1048576n,TAKE_WALLET_1=134217728n;
 function world(){
  const corp=new Map([[CORP,{corporationID:CORP,isNPC:false,ceoID:111,stationID:HQ}],
   [OTHER,{corporationID:OTHER,isNPC:false,ceoID:999,stationID:REMOTE}]]);
- const characters=new Map([[111,{characterID:111,corporationID:CORP}],
-  [222,{characterID:222,corporationID:CORP}],
-  [333,{characterID:333,corporationID:OTHER}]]);
+ const characters=new Map([[111,{accountId:1111,corporationID:CORP}],
+  [222,{accountId:1222,corporationID:CORP}],
+  [333,{accountId:1333,corporationID:OTHER}]]);
  const members=new Map([[111,{characterID:111,corporationID:CORP,roles:'0',isCEO:true,rolesAtHQ:'0'}],
   [222,{characterID:222,corporationID:CORP,roles:'0',rolesAtHQ:'0',rolesAtBase:'0',rolesAtOther:'0',baseID:REMOTE}],
   [333,{characterID:333,corporationID:OTHER,roles:'0',rolesAtHQ:'0'}]]);
@@ -28,7 +28,7 @@ function world(){
   getCharacter:id=>characters.get(id)||null,getOffices:id=>offices.get(id)||[],
   getDockedStation:s=>docked.get(s.characterID),getItem:id=>items.get(id)||null,
   getDirectorRole:()=>1n,getPersonnelRole:()=>2n,getRentRole:()=>4n,getRuntime:id=>runtime.get(id)||null});
- const session=id=>({characterID:id,corporationID:characters.get(id)?.corporationID??0,
+ const session=id=>({characterID:id,charid:id,userid:id+1000,corporationID:characters.get(id)?.corporationID??0,
   corprole:((1n<<60n)-1n).toString(),rolesAtHQ:((1n<<60n)-1n).toString(),
   corpAccountKey:1000,fleetID:777,wingID:1});
  const move=(s,id,dest={locationID:HQ,flagID:4})=>auth.authorizeInventoryMove({session:s,
@@ -266,4 +266,36 @@ test('all additional native corporation source hooks reject torn patch and prese
   assert.equal(patch(transformed,filename),transformed);
   assert.throws(()=>patch(source.slice(0,source.length-8),filename),/CH31_SOURCE_PARTIAL_OR_UNKNOWN|CH31_PINNED_ANCHOR_DRIFT/);
  }
+});
+
+test('pinned native character records without embedded characterID retain rightful member access',()=>{
+ const w=world();
+ assert.equal(w.characters.get(111).characterID,undefined);
+ assert.equal(w.auth.isMember(w.session(111),CORP),true);
+ assert.equal(w.auth.canTake(w.session(111),CORP,HQ,115),true);
+ assert.equal(w.auth.canUpdateApplication(w.session(333),CORP,501,333,2),true);
+});
+test('corporate member account mismatch denies every privileged native route',()=>{
+ const w=world(),s={...w.session(111),userid:999999};
+ assert.equal(w.auth.isMember(s,CORP),false);
+ assert.equal(w.auth.canWallet(s,CORP,1000),false);
+ assert.equal(w.move(s,9000,{locationID:9901,flagID:115}),false);
+ assert.equal(w.auth.canRecruit(s,CORP),false);
+});
+test('conflicting character aliases and disconnected sessions fail closed',()=>{
+ const w=world(),s=w.session(111);
+ assert.equal(w.auth.isMember({...s,charid:222},CORP),false);
+ assert.equal(w.auth.isMember({...s,socket:{destroyed:true}},CORP),false);
+ assert.equal(w.auth.canUpdateApplication({...w.session(333),charid:222},CORP,501,333,2),false);
+});
+test('optional embedded native characterID must match selected session',()=>{
+ const w=world(),s=w.session(111);
+ w.characters.get(111).characterID=222;
+ assert.equal(w.auth.isMember(s,CORP),false);
+ w.characters.get(111).characterID=111;
+ assert.equal(w.auth.isMember(s,CORP),true);
+});
+test('unauthenticated outsider cannot forge personal item donation',()=>{
+ const w=world(),s={...w.session(222),userid:2222};
+ assert.equal(w.move(s,9000,{locationID:9901,flagID:115}),false);
 });

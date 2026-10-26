@@ -9,7 +9,8 @@ param(
   [string]$DestinationSuffix = '',
   [string]$UtilityImage = 'busybox:1.36',
   [string]$ExpectedUtilityImageId = '',
-  [switch]$Apply
+  [switch]$Apply,
+  [switch]$AllowMissingPortraitVolume
 )
 # Fail-closed operator tool; NEVER run a backup while source volumes are in use.
 # Restore can only create distinct new volumes and cannot switch Compose/live data.
@@ -79,6 +80,10 @@ function Get-RequiredVolumes {
 }
 function Verify-Manifest([string]$Folder) {
   $manifestPath = Join-Path $Folder 'manifest.json'
+  $tarValidator = Join-Path $PSScriptRoot 'coop-private-tar-audit.cjs'
+  if (-not (Test-Path -LiteralPath $tarValidator -PathType Leaf) -or -not (Get-Command node -ErrorAction SilentlyContinue)) {
+    throw 'Node 22+ and reviewed offline TAR validation are required for backup/restore.'
+  }
   if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { throw 'Backup manifest missing.' }
   $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
   if ($manifest.schemaVersion -ne 1 -or @($manifest.volumes).Count -lt 1) { throw 'Unsupported/empty backup manifest.' }
@@ -87,12 +92,16 @@ function Verify-Manifest([string]$Folder) {
     Assert-VolumeName ([string]$entry.source)
     $archive = [string]$entry.archive
     if ($archive -notin @('evejs-data.tar','evejs-images.tar') -or $seen.ContainsKey($archive)) { throw 'Unsafe/duplicate archive in manifest.' }
+    $expectedTarget = if ($archive -eq 'evejs-data.tar') { '/var/lib/evejs' } else { '/app/server/src/_secondary/image/generated' }
+    if ([string]$entry.target -ne $expectedTarget) { throw 'Archive target metadata mismatch.' }
     $seen[$archive] = $true
     $full = Join-Path $Folder $archive
     if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { throw "Backup archive missing: $archive" }
     $actual = (Get-FileHash -LiteralPath $full -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actual -ne ([string]$entry.sha256).ToLowerInvariant()) { throw "Backup checksum mismatch: $archive" }
     if ((Get-Item -LiteralPath $full).Length -ne [long]$entry.bytes) { throw "Backup archive size mismatch: $archive" }
+    & node $tarValidator $full | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "Unsafe TAR archive: $archive" }
   }
   if (-not $seen.ContainsKey('evejs-data.tar')) { throw 'GameStore data archive missing.' }
   return $manifest
@@ -131,6 +140,11 @@ try {
     return
   }
   $volumes = @(Get-RequiredVolumes)
+  if ($Action -eq 'Backup' -and $Apply -and 
+      -not @($volumes | Where-Object { $_.Archive -eq 'evejs-images.tar' }).Count -and 
+      -not $AllowMissingPortraitVolume) {
+    throw 'Generated portraits have NO named volume. Backup would silently omit persistent image data; stop, recover image directory or explicitly acknowledge -AllowMissingPortraitVolume (partial snapshot).';
+  }
   foreach ($vol in $volumes) { Assert-VolumeExists $vol.Source; Assert-VolumeStopped $vol.Source }
   Write-Host '[PASS] Source volumes exist and have NO running container consumers.'
   $volumes | Format-Table -AutoSize
@@ -151,18 +165,23 @@ try {
   $records = @()
   try {
     foreach ($entry in $volumes) {
+      Assert-VolumeStopped $entry.Source
       $source = "type=volume,source=$($entry.Source),target=/source,readonly"
       $dest = "type=bind,source=$dir,target=/backup"
       Invoke-Docker @('run','--rm','--pull','never','--network','none','--read-only',
         '--mount',$source,'--mount',$dest,$UtilityImage,'tar','-C','/source','-cf',"/backup/$($entry.Archive)",'.')
       $file = Join-Path $dir $entry.Archive
       if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Archive not produced: $($entry.Archive)" }
+      Assert-VolumeStopped $entry.Source
       $records += [ordered]@{source=$entry.Source; target=$entry.Target; archive=$entry.Archive;
         sha256=(Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant();
         bytes=(Get-Item -LiteralPath $file).Length}
     }
+    # Revalidate every source after all container copies; a concurrent restart
+    # must never yield a silently green inconsistent snapshot.
+    foreach ($entry in $volumes) { Assert-VolumeStopped $entry.Source }
     $manifest = [ordered]@{schemaVersion=1; createdUtc=(Get-Date).ToUniversalTime().ToString('o');
-      consistentStoppedSnapshot=$true; volumes=$records}
+      consistentStoppedSnapshot=$true; portraitsIncluded=[bool]@($records | Where-Object { $_.archive -eq 'evejs-images.tar' }).Count; volumes=$records}
     $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $dir 'manifest.json') -Encoding UTF8
     $null = Verify-Manifest $dir
     Write-Host ("[BACKUP PASS] All archives verified at {0}" -f $dir)

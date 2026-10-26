@@ -18,7 +18,7 @@ function ctx(overrides={}){
    dockSession:(session,stationID)=>{calls.push(['dock',session.characterID,stationID]);return {success:true};},
   },
   space:{
-   warpToPoint:(entityID,pos,options)=>{calls.push(['warp',entityID,pos.x,options.ingressDurationMs]);return true;},
+   warpToPoint:(sessionOrEntity,pos,options)=>{calls.push(['warp',sessionOrEntity,pos.x,options.ingressDurationMs]);return true;},
   },
  },overrides);
 }
@@ -60,7 +60,10 @@ test('warp needs a real station position and a ship actually in space',()=>{
  assert.equal(warp(runtime,flight,null).status,'REFUSED');
  assert.equal(warp(runtime,flight,position).status,'FAILED');
  assert.equal(warp(runtime,{...flight,entityID:980000000999},position).status,'OK');
- assert.deepEqual(runtime.calls.at(-1).slice(0,3),['warp',980000000999,1]);
+ // The stock warp takes a session, not a bare entity id: the identity object is
+// what a client would pass, and the courier id proves it was used.
+assert.equal(runtime.calls.at(-1)[0],'warp');
+assert.equal(runtime.calls.at(-1)[1].characterID,140000100);
 
 });
 

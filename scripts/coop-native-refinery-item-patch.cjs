@@ -30,7 +30,14 @@ function refineNpcWarehouseOreAtomic(plan) {
       return {success:false,errorMsg:"REFINERY_INVALID_OUTPUT"};
     seen.add(Number(out.typeID));
   }
-  const items=JSON.parse(JSON.stringify(readItems())),source=normalizeInventoryItem(items[String(oreItemID)]);
+  const items=JSON.parse(JSON.stringify(readItems()));
+  const rawSource=items[String(oreItemID)];
+  // Validate the ORIGINAL item row before normalization can canonicalize a
+  // conflicting physical stack. Refining must not consume virtual quantity.
+  if(!rawSource||rawSource.quantity!==originalQuantity||
+     rawSource.stacksize!==originalQuantity)
+    return {success:false,errorMsg:"REFINERY_SOURCE_STACK_UNVERIFIED"};
+  const source=normalizeInventoryItem(rawSource);
   const prefix=operationID+":mineral:";
   if(Object.values(items).some(x=>x&&String(x.customInfo||"").startsWith(prefix)))
     return {success:false,errorMsg:"REFINERY_ALREADY_MUTATED_RECONCILE"};
@@ -50,7 +57,11 @@ function refineNpcWarehouseOreAtomic(plan) {
       locationID:stationID,flagID:ITEM_FLAGS.HANGAR,quantity:Number(out.quantity),
       stacksize:Number(out.quantity),singleton:0,
       customInfo:prefix+Number(out.typeID)});
-    if(item.typeID!==Number(out.typeID)||item.quantity!==Number(out.quantity))
+    if(!item||item.itemID!==id||item.typeID!==Number(out.typeID)||
+       item.ownerID!==ownerID||item.locationID!==stationID||
+       item.flagID!==ITEM_FLAGS.HANGAR||item.singleton!==0||
+       item.quantity!==Number(out.quantity)||item.stacksize!==Number(out.quantity)||
+       item.customInfo!==prefix+Number(out.typeID))
       return {success:false,errorMsg:"REFINERY_OUTPUT_MISMATCH"};
     items[String(id)]=item;
     created.push({itemID:id,typeID:item.typeID,quantity:item.quantity,customInfo:item.customInfo});

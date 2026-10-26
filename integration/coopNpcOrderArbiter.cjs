@@ -3,7 +3,8 @@
 // Native EveJS remains authoritative; this does not spawn, attack or move ships.
 const named = value => typeof value === "string" && /^coop-pilot-[0-9]{3,}$/.test(value);
 const id = value => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : null;
-const OWNERS = new Set(["RAID","TACTICS","GATE","PATROL","CIVILIAN"]);
+// WAR is non-preemptive. Only TACTICS may preempt a verified native emergency.
+const OWNERS = new Set(["RAID","TACTICS","GATE","PATROL","CIVILIAN","WAR"]);
 function createOrderArbiter({clock = () => Date.now(), leaseMs = 120000, maxEntries = 512} = {}) {
  if(typeof clock !== "function" || !Number.isSafeInteger(leaseMs) || leaseMs < 10000 ||
    leaseMs > 600000 || !Number.isSafeInteger(maxEntries) || maxEntries < 1 ||

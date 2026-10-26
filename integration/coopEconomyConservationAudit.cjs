@@ -73,6 +73,17 @@ function auditEconomyEvidence(snapshot = {}) {
   const custodian = (r, identity) => positive(r[identity]) && positive(r.itemID) &&
     positive(r.ownerID) && positive(r.typeID) && positive(r.quantity) && positive(r.locationID);
   const activeEscrowItems = new Set();
+  // An original native item cannot simultaneously be the active custody of
+  // independent economic systems. Track the item across market, contract,
+  // manufacturing output and NPC cargo, not only multiple market orders.
+  const activeCustody = new Map();
+  const claimCustody = (nativeItemID, source, claimID) => {
+    const id = String(nativeItemID);
+    const previous = activeCustody.get(id);
+    if (previous && (previous.source !== source || previous.claimID !== claimID))
+      issue("NATIVE_ITEM_MULTIPLE_ACTIVE_CUSTODIANS", source, id);
+    else activeCustody.set(id, {source, claimID});
+  };
   for (const [source, field, label] of [
     ["marketEscrows", "orderID", "GHOST_OR_MISMATCHED_MARKET_ESCROW"],
     ["industryDeliveries", "jobID", "GHOST_OR_MISMATCHED_INDUSTRY_DELIVERY"],
@@ -85,6 +96,7 @@ function auditEconomyEvidence(snapshot = {}) {
       if (seen.has(identity)) issue("DUPLICATE_SETTLEMENT_ID", source, identity);
       seen.add(identity);
       if (r.active === false) continue;
+      claimCustody(r.itemID, source, identity);
       if (source === "marketEscrows") {
         if (activeEscrowItems.has(r.itemID)) issue("ITEM_CLAIMED_BY_MULTIPLE_MARKET_ORDERS", source, r.itemID);
         activeEscrowItems.add(r.itemID);
@@ -105,6 +117,7 @@ function auditEconomyEvidence(snapshot = {}) {
         issue("NPC_CARGO_ITEM_CUSTODY_DIVERGED", "npcCargo", r.cargoID);
       if (activeEscrowItems.has(r.nativeItemID))
         issue("NPC_CARGO_AND_MARKET_ESCROW_DOUBLE_CLAIM", "npcCargo", r.cargoID);
+      claimCustody(r.nativeItemID, "npcCargo", String(r.cargoID));
     }
   }
   const walletOperations = new Set();

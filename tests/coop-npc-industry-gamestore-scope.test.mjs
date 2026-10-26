@@ -5,6 +5,7 @@ import {DatabaseSync} from "node:sqlite";import {createRequire} from "node:modul
 const require=createRequire(import.meta.url);
 const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
 const {createScopedSqlFacade,createNpcIndustryScopedProof}=require("../integration/coopNpcIndustryGameStoreScope.cjs");
+const {createNativeIndustryBindings}=require("../integration/coopNpcIndustryNativeBindings.cjs");
 const OP="npc-manufacture:9e3123226b71e9fe",NOW=1761390000000,SEP="\u001f";
 const ft=ms=>String(BigInt(ms)*10000n+116444736000000000n);
 const plan={ownerID:1000010,stationID:60000001,facilityID:60000001,systemID:30000144,
@@ -102,4 +103,38 @@ test("scope refuses SQL injection, extra tables, and broad industry LIKE scans",
  assert.equal(db.prepare('SELECT json FROM "industryJobs" WHERE key LIKE ?').all("jobs"+SEP+"%").length,1);
  db.exec("COMMIT");assert.equal(db.phase(),"COMMIT_REQUESTED");
  assert.throws(()=>db.exec("COMMIT"),/REJECTED/);
+});
+
+
+test("read-only NPC industry debit witness rejects sub-cent or nonnumeric journal evidence",()=>{
+ const jobID=970000000000000,ownerID=1000010;
+ const job={jobID,ownerID,coopOperationID:OP,totalCost:11.13,blueprintID:91};
+ const row={transactionID:jobID,entryTypeID:10,ownerID1:ownerID,
+  referenceID:jobID,accountKey:1000,amount:-11.13,balance:108.87};
+ const native={read:(table,key)=>{
+  if(table==="industryJobs"&&key==="/jobs")
+   return {success:true,data:{[String(jobID)]:job}};
+  if(table==="corporationRuntime"&&key==="/corporations/"+ownerID)
+   return {success:true,data:{corporationID:ownerID,wallet:{
+    divisions:{"1000":{transactions:[row]}}}}};
+  throw Error("UNEXPECTED_READ:"+table+":"+key);
+ },coopAtomicNativeRows:{transact:()=>{throw Error("NO_WRITES")}}};
+ const binding=createNativeIndustryBindings({gameStore:native,
+  itemStore:{findItemById:()=>null},resolveCanonicalQuote:()=>null,
+  verifyNativeQuote:()=>true,verifyNativeOwner:()=>true,
+  verifyNativeOutput:()=>true,verifyNativeIdFloor:()=>true,
+  buildNativeOutputItem:()=>null});
+ assert.equal(binding.getIndustryDebit(jobID).amountCents,1113);
+ for(const [type,change,restore] of [
+  ["subcent-debit",()=>row.amount=-11.134,()=>row.amount=-11.13],
+  ["string-debit",()=>row.amount="-11.13",()=>row.amount=-11.13],
+  ["subcent-wallet",()=>row.balance=108.874,()=>row.balance=108.87],
+  ["string-wallet",()=>row.balance="108.87",()=>row.balance=108.87],
+  ["subcent-quote",()=>job.totalCost=11.134,()=>job.totalCost=11.13]
+ ]){
+  change();
+  assert.throws(()=>binding.getIndustryDebit(jobID),/NATIVE_INDUSTRY_DEBIT_MISMATCH/,type);
+  restore();
+  assert.equal(binding.getIndustryDebit(jobID).amountCents,1113,type);
+ }
 });
