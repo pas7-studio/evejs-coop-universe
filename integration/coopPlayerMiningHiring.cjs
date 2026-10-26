@@ -6,7 +6,16 @@
  * No source of salary => NO OFFER, never a made-up free miner fleet.
  */
 const crypto=require("node:crypto"),fs=require("node:fs"),path=require("node:path");
-const {createPlayerMiningCompany,canonicalFleet}=require("./coopPlayerMiningCompany");
+function loadCompany(){
+ try{return require("./coopPlayerMiningCompany");}
+ catch(e){
+  if(e?.code!=="MODULE_NOT_FOUND"||
+     !String(e.message).includes("Cannot find module './coopPlayerMiningCompany'"))
+   throw e;
+  return require("./coopPlayerMiningCompany.cjs");
+ }
+}
+const {createPlayerMiningCompany,canonicalFleet}=loadCompany();
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const CYCLES=3,PREVIEW_TTL_MS=120000;
 function readServerWagePolicy({root,io=fs}={}){
