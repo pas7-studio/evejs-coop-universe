@@ -99,3 +99,33 @@ profile now sets EVEJS_COOP_PVE_NPC_RETALIATION=1 (it was absent, so
 self-defence was gated off).
 
 Tests: 96/96 across war + tactics + retaliation + ledger.
+
+## Per-station fills (done, 22c90295)
+
+Sale receipts now carry `fills:[{stationID,quantity,at}]` (accumulating, atomic
+tmp+fsync+rename, identity checked against the prior row). The trip journal and
+`verify()` sum ONLY the fills of the manifest's own station made after its departure, so
+a row sold in two visits can be proven for each visit separately; receipts written
+before the breakdown keep the documented single-station fallback. 28 journal tests pass,
+including "a fill at another station never proves this route" and "a fill from before
+the departure belongs to another manifest".
+
+## Why the current world cannot finish a second trip
+
+Its history predates receipts: rows were sold in several fills with only the first fill
+recorded (the writer used create-only), so those rows are now gone while their receipts
+cover only part of them. That is unprovable by construction and must not be papered over.
+Live proof of the loop itself already exists (two SOLD events with real ISK).
+
+## Decision needed before the next acceptance run
+
+The probe world is blocked by that historic evidence gap. Two honest options:
+
+1. **Clean world, same machine** (recommended): a second compose project with its own
+   volume and remapped ports, run the loop from zero and capture the full cycle. Nothing
+   of the current world is touched.
+2. **Reset the probe world**: stop the project and drop `evejs-data` so the same project
+   starts clean. Destructive; needs an explicit owner decision.
+
+Neither is done automatically: the repo forbids wiping a volume to force a PASS, and a
+second project needs ports 26000-26003/40110/443/5222 that the current one holds.
