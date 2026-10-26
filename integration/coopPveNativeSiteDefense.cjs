@@ -44,9 +44,10 @@ function siteEntries(systemID,scene,instances){
  }
  return {status:"OK",sites,owners};
 }
-function createDirector({clock=()=>Date.now(),getController,resolveVerifiedPlayer,issueAttack,
+function createDirector({clock=()=>Date.now(),getController,getNativeEntity,resolveVerifiedPlayer,issueAttack,
  notify=()=>{},cooldownMs=120000,maxOrdersPerTick=4}={}){
  if(typeof clock!=="function"||typeof getController!=="function"||
+    typeof getNativeEntity!=="function"||
     typeof resolveVerifiedPlayer!=="function"||typeof issueAttack!=="function"||
     typeof notify!=="function"||!Number.isSafeInteger(cooldownMs)||cooldownMs<30000||
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>8)
@@ -55,6 +56,7 @@ function createDirector({clock=()=>Date.now(),getController,resolveVerifiedPlaye
  function tick({systemID,scene,instances=[]}={}){
   const now=clock(),out={status:"NO_NATIVE_SITES",sites:0,defenders:0,events:[],orders:0};
   if(!Number.isSafeInteger(now)||now<=0)return {...out,status:"INVALID_CLOCK"};
+  if(issued.size>=8192)return {...out,status:"ORDER_JOURNAL_CAP_REACHED"};
   const proof=siteEntries(systemID,scene,instances);
   if(proof.status!=="OK")return {...out,status:proof.status};
   out.sites=proof.sites.length;
@@ -67,8 +69,13 @@ function createDirector({clock=()=>Date.now(),getController,resolveVerifiedPlaye
       (id(ship.systemID)&&ship.systemID!==systemID))return null;
    // Recycled IDs, two waves, and cross-site collisions cannot get ownership.
    if(proof.owners.get(entityID)?.length!==1)return null;
-   const c=getController(entityID);
-   if(!c||c.entityID!==entityID||c.systemID!==systemID)return null;
+   const original=getNativeEntity(entityID),c=getController(entityID);
+   if(!original||original.entityID!==entityID||original.systemID!==systemID||
+      original.nativeNpc!==true||original.transient!==true||
+      !id(original.typeID)||original.typeID!==ship.typeID||
+      !Number.isFinite(original.createdAtMs)||original.createdAtMs<=0||
+      !c||c.entityID!==entityID||c.systemID!==systemID||
+      c.runtimeKind!=="nativeCombat")return null;
    return {ship,controller:c};
   };
   const players=[...(scene.sessions?.values?.()||[])];
