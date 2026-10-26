@@ -29,6 +29,7 @@ param(
   [switch]$EnableNpcProbeScan,
   [switch]$EnableNpcProbeLaunch,
   [switch]$EnableNpcProbeLoadoutSplit,
+  [switch]$EnableNpcProbeSweep,
   [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
@@ -73,6 +74,9 @@ if ($EnableNpcProbeLaunch -and -not $EnableNpcProbeScan) {
 }
 if ($EnableNpcProbeLoadoutSplit -and -not $EnableNpcProbeLaunch) {
   throw 'NPC scanner charge unitization requires -EnableNpcProbeLaunch'
+}
+if ($EnableNpcProbeSweep -and -not $EnableNpcProbeLaunch) {
+  throw 'Native NPC blind probe sweep requires -EnableNpcProbeLaunch'
 }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
@@ -220,6 +224,11 @@ if ($EnableNpcProbeLaunch) {
 }
 if ($EnableNpcProbeLoadoutSplit) {
   $yamlLines += "      EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '1'"
+}
+# EX-03B4 blind native geometry sweep, independent explicit opt-in.
+# No source-site coords are consulted to move NPC probes.
+if ($EnableNpcProbeSweep) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_SWEEP: '1'"
 }
 if ($EnableNativeHackingAdmission) {
   $yamlLines += "      EVEJS_COOP_NATIVE_HACKING_ADMISSION: '1'"
