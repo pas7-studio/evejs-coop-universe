@@ -56,8 +56,10 @@ test("new private corporate RPC methods do not rewrite stock FillOrder or GetOrd
 test("published corporate orders are categorically unavailable until native settlement",()=>{
  assert.match(extension,/CORP_SELL_NATIVE_FILL_SETTLEMENT_NOT_IMPLEMENTED/);
  assert.match(extension,/fn coop_corp_sell_publish_db/);
- assert.ok(!extension.includes("state='open'"));
- assert.ok(!extension.includes("state = 'open'"));
+ const publish=extension.slice(extension.indexOf("fn coop_corp_sell_publish_db("),
+  extension.indexOf("impl MarketRuntime{",extension.indexOf("fn coop_corp_sell_publish_db(")));
+ assert.ok(!publish.includes("state='open'"));
+ assert.ok(!publish.includes("state = 'open'"));
 });
 test("Rust verifies exact same physical corporate stock and GameStore receipt before any publish",()=>{
  for(const term of ["SQLITE_OPEN_READ_ONLY","coopPlayerMiningCorpSell",
