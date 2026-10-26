@@ -166,16 +166,31 @@ function createNpcExpeditionLoot({nativeStore,itemStore,gameStore,getController,
  }
  // Read-only restart reconstruction: do not mutate uncertain original rows
  // or "repair" by allocating item IDs. Operators can inspect the same tag.
- function inspectReceipt(itemID){
+ function inspectReceipt(itemID,{scene=null}={}){
   if(!POS(itemID))return {status:"BLOCKED",reason:"EX03_LOOT_ID_INVALID"};
   const item=inspect(itemID),receipt=parseMarker(item?.customInfo);
   if(!item||!receipt||!originalUnit(item))
    return {status:"BLOCKED",reason:"EX03_LOOT_ORIGINAL_RECEIPT_NOT_FOUND"};
-  const phase=item.locationID===receipt.shipID&&
+  let phase=item.locationID===receipt.shipID&&
    item.ownerID===receipt.corpID&&item.flagID===itemStore.ITEM_FLAGS.CARGO_HOLD?
     "IN_SHIP":item.ownerID===receipt.corpID&&
    item.flagID===itemStore.ITEM_FLAGS.HANGAR?"IN_WAREHOUSE":
     item.locationID===receipt.containerID?"INTENT_UNRESOLVED":"OPERATOR_REPAIR";
+  // The original NPC wreck service drops nativeNpcStore cargo, NOT these
+  // separately owned ItemStore rows. A destroyed NPC must never silently
+  // appear to have a safely delivered or retrievable ship cargo item.
+  if(phase==="IN_SHIP"){
+   let native,physical=null;
+   try{
+    native=nativeStore.getNativeEntity(receipt.shipID);
+    if(scene)physical=scene.getEntityByID(receipt.shipID);
+   }catch{native=null}
+   if(!native||native.entityID!==receipt.shipID||
+      native.corporationID!==receipt.corpID||native.transient===true||
+      (scene&&(!physical||physical.kind!=="ship"||
+       physical.nativeNpc!==true||physical.itemID!==receipt.shipID)))
+    phase="NEEDS_OPERATOR_REPAIR";
+  }
   return {status:phase,itemID,originalContainerID:receipt.containerID,
    shipID:receipt.shipID,corporationID:receipt.corpID};
  }
