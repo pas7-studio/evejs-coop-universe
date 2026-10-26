@@ -17,7 +17,10 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
   // after changing in-memory supply. Refuse incomplete persisted metadata.
   if(!Number.isSafeInteger(state.lastAt)||state.lastAt<0||
      !state.pilots||typeof state.pilots!=="object"||
-     Array.isArray(state.pilots)||!Array.isArray(state.events))
+     Array.isArray(state.pilots)||!Array.isArray(state.events)||
+     (state.rolesVersion!==undefined&&
+      (!Number.isSafeInteger(state.rolesVersion)||
+       state.rolesVersion<0||state.rolesVersion>2)))
    throw Error("ECONOMY_TICK_JOURNAL_INVALID");
   for(const [id,pilot] of Object.entries(state.pilots)){
    if(!id.trim()||id.length>256||id==="prototype"||
