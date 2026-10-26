@@ -193,6 +193,7 @@ function advanceNativeWarMobilization(){
   "living-native-war-mobilization",null,null,
   {status:result.status,ships:result.mobilized,
    evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
+ else warSkip("mobilization","NO_MOBILIZED_SHIP:"+String(result.status||"UNKNOWN"));
 }
 // FW-007B: recover/audit native military handoff BEFORE the materializer
 // may prune old pilot links or rebuild another physical hull.
