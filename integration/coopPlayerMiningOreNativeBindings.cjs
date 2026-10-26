@@ -125,4 +125,27 @@ function createRuntimeTitleVerifier(){
   getDockedStation:location.getDockedLocationID});
  return record=>bindings.verifyTransferredTitle(record);
 }
-module.exports={createNativeMiningOreBindings,createRuntimeTitleVerifier,sameOffice};
+// Trusted server composition seam. No public RPC is exposed here. Callers
+// MUST provide the original fsynced warehouse instance and a native seller
+// price authority. An unbound price source cannot create a paid order.
+function createTrustedTitleService({gameStore,corporationState,
+ corporationRuntime,itemStore,getDockedStation,warehouse,access,
+ priceQuote,env=process.env}={}){
+ if(!warehouse||typeof warehouse.getReceipt!=="function"||
+  typeof priceQuote!=="function"||!access||
+  ["isMember","canIndustry","canWallet","canView"].some(k=>typeof access[k]!=="function"))
+  throw Error("MINING_ORE_TRUSTED_SELLER_AND_WAREHOUSE_REQUIRED");
+ const bindings=createNativeMiningOreBindings({gameStore,corporationState,
+  corporationRuntime,itemStore,getDockedStation,access,priceQuote,
+  getWarehouseReceipt:id=>warehouse.getReceipt(id)});
+ const {createPlayerMiningOreTitle}=loadModule("coopPlayerMiningOreTitle");
+ return createPlayerMiningOreTitle({gameStore,access,
+  verifyNpcCorporation:(id,row)=>bindings.verifyNpcCorporation(id)&&
+   (!row||row.corporationID===id),
+  getWarehouseReceipt:bindings.getWarehouseReceipt,
+  verifyOffice:bindings.verifyOffice,quoteOre:bindings.quoteOre,
+  enabled:()=>env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
+   env.EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE==="1"});
+}
+module.exports={createNativeMiningOreBindings,createRuntimeTitleVerifier,
+ createTrustedTitleService,sameOffice};
