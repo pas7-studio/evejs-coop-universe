@@ -2827,6 +2827,10 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
    const result=pveNativeBossDirector.confirmNativeWreck({
     systemID:system,scene,entityID:Number(npcID),wreckID:Number(wreckID)
    });
+   if(result.status==="ORIGINAL_BOSS_WRECK_CONFIRMED"&&
+      process.env.EVEJS_COOP_PVE_BOSS_LOOT_PROFILE_AUDIT==="1")
+    try{require("./coopPveBossLootProfileAudit").note(result.witness)}
+    catch(error){console.warn("[CoopPveBoss] loot table audit",String(error?.code||"UNAVAILABLE"))}
    if(result.status==="ORIGINAL_BOSS_WRECK_CONFIRMED")
     require("./coopRuntimeProbe").observe("living-pve-native-boss-death",null,
      {spaceState:{systemID:system}},{status:result.status,
