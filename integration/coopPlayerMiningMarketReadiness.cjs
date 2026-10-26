@@ -63,11 +63,14 @@ function createCorporateMiningMarketReadiness({
    if(shift?.version!==1||shift.status!=="FUNDED"||
     shift.operationID!==operationID||shift.corporationID!==corporationID||
     !pos(shift.employerCorpID)||!pos(shift.systemID)||!pos(shift.fleetID)||
-    !pos(shift.wageCents)||shift.employerCorpID===corporationID)
+    !pos(shift.createdAt)||!pos(shift.wageCents)||
+    !bound(shift.buyerAfterCents)||!bound(shift.employerAfterCents)||
+    shift.employerCorpID===corporationID)
     return denied("MINING_MARKET_FUNDED_SHIFT_NOT_VERIFIED");
    const index=read("coopPlayerMiningFleet",shift.systemID+":"+shift.fleetID);
    if(index?.operationID!==operationID||index.corporationID!==corporationID||
-    index.employerCorpID!==shift.employerCorpID)
+    index.employerCorpID!==shift.employerCorpID||
+    index.systemID!==shift.systemID||index.fleetID!==shift.fleetID)
     return denied("MINING_MARKET_FLEET_BINDING_CONFLICT");
    const buyer=read("corporations",corporationID);
    const seller=read("corporations",shift.employerCorpID);
@@ -77,15 +80,18 @@ function createCorporateMiningMarketReadiness({
      operationID,shift.wageCents,shift.employerAfterCents))
     return denied("MINING_MARKET_WAGE_WALLET_PROOF_MISSING");
    let purchaseCents=0;
-   const inventory=[];
+   const inventory=[],seenItems=new Set();
    for(const cargoID of [...cargoIDs].sort((a,b)=>a-b)){
     const receipt=read("coopPlayerMiningOreTitle",cargoID);
     if(!receipt)return denied("MINING_MARKET_ORIGINAL_TITLE_RECEIPT_MISSING");
     if(receipt.version!==1||receipt.status!=="COMMITTED"||
+     receipt.operationID!=="coop-mining-ore-title:v1:"+operationID+":"+cargoID||
      receipt.cargoID!==cargoID||receipt.shiftID!==operationID||
+     !pos(receipt.committedAt)||receipt.committedAt<shift.createdAt||
      receipt.buyerCorpID!==corporationID||
      receipt.sourceCorpID!==shift.employerCorpID||
-     !pos(receipt.itemID)||!pos(receipt.typeID)||!pos(receipt.quantity)||
+     !pos(receipt.itemID)||seenItems.has(receipt.itemID)||
+     !pos(receipt.typeID)||!pos(receipt.quantity)||
      !pos(receipt.stationID)||!pos(receipt.officeFolderID)||
      ![115,116,117,118,119,120,121].includes(receipt.division)||
      !pos(receipt.priceCents)||!bound(receipt.buyerAfterCents)||
@@ -112,6 +118,7 @@ function createCorporateMiningMarketReadiness({
     if(!bound(purchaseCents+receipt.priceCents))
      return denied("MINING_MARKET_TOTAL_OVERFLOW");
     purchaseCents+=receipt.priceCents;
+    seenItems.add(receipt.itemID);
     inventory.push(Object.freeze({
      cargoID,itemID:receipt.itemID,typeID:receipt.typeID,
      quantity:receipt.quantity,stationID:receipt.stationID,
@@ -132,9 +139,39 @@ function createCorporateMiningMarketReadiness({
    });
   }catch{return denied("MINING_MARKET_NATIVE_READ_UNAVAILABLE");}
  }
+ // Server-side exact source scan; the client never chooses ore IDs to
+ // hide corporate expenses. A missing table is empty; a broken read blocks.
+ function inspectShift(args={}){
+  const {session,corporationID,operationID}=args;
+  if(enabled()!==true)return denied("NATIVE_MINING_MARKET_READ_DISABLED");
+  if(!session||!pos(corporationID)||!OP.test(operationID||"")||
+   access.isMember(session,corporationID)!==true||
+   access.canIndustry(session,corporationID)!==true||
+   access.canWallet(session,corporationID,1000)!==true)
+   return denied("MINING_MARKET_FINANCE_ROLE_DENIED");
+  let records;
+  try{records=gameStore.read("corporationRuntime","/coopPlayerMiningOreTitle");}
+  catch{return denied("MINING_MARKET_ORIGINAL_TITLE_INDEX_UNAVAILABLE");}
+  if(records?.errorMsg==="ENTRY_NOT_FOUND")
+   return inspect({session,corporationID,operationID,cargoIDs:[]});
+  const group=records?.data;
+  if(records?.success!==true||!group||typeof group!=="object"||
+   Array.isArray(group)||Object.keys(group).length>10000)
+   return denied("MINING_MARKET_ORIGINAL_TITLE_INDEX_UNAVAILABLE");
+  const selected=[];
+  for(const [key,receipt] of Object.entries(group)){
+   if(receipt?.shiftID!==operationID)continue;
+   const id=Number(key);
+   if(!pos(id)||String(id)!==key||receipt.cargoID!==id||
+    receipt.buyerCorpID!==corporationID||selected.length>=100)
+    return denied("MINING_MARKET_TITLE_INDEX_CONFLICT");
+   selected.push(id);
+  }
+  return inspect({session,corporationID,operationID,cargoIDs:selected});
+ }
  // No SELL mutation exists here. Never pass corporate items to the
  // character-owned stock marketProxyService or call the Rust orderbook.
- return Object.freeze({inspect,mode:"NATIVE_CORPORATE_MARKET_READ_ONLY",
+ return Object.freeze({inspect,inspectShift,mode:"NATIVE_CORPORATE_MARKET_READ_ONLY",
   canPlaceNativeCorporateOrder:false});
 }
 module.exports={createCorporateMiningMarketReadiness,matchingWallet,iskCents};
