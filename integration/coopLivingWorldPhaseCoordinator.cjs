@@ -16,7 +16,7 @@ const loadRegistry=()=>{
   if(error?.code!=="MODULE_NOT_FOUND"||
      !String(error.message).includes("Cannot find module './coopLivingWorldPhaseRegistry'"))
    throw error;
-  return require("./coopLivingWorldPhaseRegistry.cjs");
+  return require("./coopLivingWorldPhaseRegistry");
  }
 };
 const {classifyPhase,catalog}=loadRegistry();

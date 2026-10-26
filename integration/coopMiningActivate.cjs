@@ -6,7 +6,7 @@
 // 23 GJ module cost and the fleet reports active modules with no ore (measured:
 // hulls pinned at 0-2% while the recharge advance added its correct ~0.006/s).
 // This module owns the whole decision: wait, activate, or report the failure.
-const gate = require("./coopMiningCapacitorGate.cjs");
+const gate = require("./coopMiningCapacitorGate");
 
 const MODULE_COST_GJ = 30;
 
@@ -58,7 +58,7 @@ function readBackEffect(scene, minerEntity, entry) {
 function trace(deps) {
   if (deps.trace) return deps.trace;
   try {
-    return require("./coopMiningTrace.cjs");
+    return require("./coopMiningTrace");
   } catch (_error) {
     return null;
   }

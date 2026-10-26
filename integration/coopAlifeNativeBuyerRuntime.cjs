@@ -102,7 +102,7 @@ function createRuntimeAlifeBuyer({file,deps=null,createBinding=null,
  function ensureBinding(){
   if(instance)return instance;
   const d=loadDeps();
-  const factory=createBinding||require("./coopNpcBuyerNativeBindings.cjs")
+  const factory=createBinding||require("./coopNpcBuyerNativeBindings")
    .createNativeNpcBuyerBindings;
   // This is a separate loopback-only operator capability, never a player
   // chat command or public game protocol. All gates are OFF by default.
