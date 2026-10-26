@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - 'integration/coopNpcExpedition*.cjs'
+      - 'integration/coopNpcWormholeTransit.cjs'
+      - 'scripts/coop-npc-expedition-hacking-patch.cjs'
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
@@ -27,6 +29,8 @@ on:
     branches: [feat/ch22-23-npc-expedition-competition-20261026]
     paths:
       - 'integration/coopNpcExpedition*.cjs'
+      - 'integration/coopNpcWormholeTransit.cjs'
+      - 'scripts/coop-npc-expedition-hacking-patch.cjs'
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
@@ -68,6 +72,10 @@ jobs:
           for f in \
             integration/coopNpcExpeditionCompetition.cjs \
             integration/coopNpcExpeditionDirector.cjs \
+            scripts/coop-npc-expedition-hacking-patch.cjs \
+            integration/coopNpcWormholeTransit.cjs \
+            integration/coopNpcExpeditionOperations.cjs \
+            integration/coopNpcExpeditionLoot.cjs \
             integration/coopNpcProbeHardware.cjs \
             integration/coopNpcProbeScanEvidence.cjs \
             integration/coopNativeNpcProbeFlight.cjs \
@@ -97,11 +105,19 @@ jobs:
             --output "${RUNNER_TEMP}/pinned-probeSceneRuntime.js"
           test -s "${RUNNER_TEMP}/pinned-probeScanRuntime.js"
           test -s "${RUNNER_TEMP}/pinned-probeSceneRuntime.js"
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/services/exploration/hackingMgrService.js' \
+            --output "${RUNNER_TEMP}/pinned-hackingMgrService.js"
+          test -s "${RUNNER_TEMP}/pinned-hackingMgrService.js"
       - name: Run actual Node 22 tests with the source pin
         env:
           EVEJS_PINNED_NPC_SERVICE_SOURCE: ${{ runner.temp }}/pinned-nativeNpcService.js
           EVEJS_PINNED_PROBE_SCAN_SOURCE: ${{ runner.temp }}/pinned-probeScanRuntime.js
           EVEJS_PINNED_PROBE_SCENE_SOURCE: ${{ runner.temp }}/pinned-probeSceneRuntime.js
+          EVEJS_PINNED_HACKING_SOURCE: ${{ runner.temp }}/pinned-hackingMgrService.js
+          EVEJS_COOP_NPC_EXPEDITION_HACK: '0'
+          EVEJS_COOP_NPC_EXPEDITION_LOOT: '0'
+          EVEJS_COOP_NPC_EXPEDITION_WORMHOLES: '0'
           EVEJS_COOP_NPC_PROBE_SCAN: '0'
           EVEJS_COOP_NPC_PROBE_LAUNCH: '0'
           EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '0'
@@ -110,6 +126,10 @@ jobs:
           node --test --test-concurrency=1 \
             tests/coop-npc-expedition-competition.test.mjs \
             tests/coop-npc-expedition-director.test.mjs \
+            tests/coop-npc-wormhole-transit.test.mjs \
+            tests/coop-npc-expedition-operations.test.mjs \
+            tests/coop-npc-expedition-loot.test.mjs \
+            tests/coop-npc-expedition-hacking.test.mjs \
             tests/coop-npc-expedition-native-bridge.test.mjs \
             tests/coop-npc-probe-evidence.test.mjs \
             tests/coop-npc-probe-wiring.test.mjs \
