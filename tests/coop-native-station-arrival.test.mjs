@@ -10,6 +10,7 @@ new Function('require','module','exports',source)(id=>{
  if(id==='./coopNativeWarehouse')return {createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}};
  if(id==='./coopEconomyDestination')return require('../integration/coopEconomyDestination.cjs');
  if(id==='./coopStuckWarpRecovery')return require('../integration/coopStuckWarpRecovery.cjs');
+ if(id==='./coopObserve')return require('../integration/coopObserve.cjs');
  return require(id);
 },compiled,compiled.exports);
 const {createStationArrival}=compiled.exports;
@@ -127,4 +128,37 @@ test('the station sells what a real buyer pays for before the warehouse takes it
  assert.equal(calls.filter(c=>c[0]==='deposit').length,0,'a sold stack is never deposited');
  assert.equal(result.status,'DELIVERED');
  assert.equal(f.cargo.size,0);
+});
+
+test('a sale the market refuses is reported once with its reason and the cargo is still deposited',()=>{
+ const f=fixture();
+ const events=[];
+ const dir=createStationArrival({getStations:id=>id===f.scene.systemID?[f.station]:[],
+  getStation:id=>id===f.station.stationID?f.station:null,
+  getCorporation:id=>id===1000035?{corporationID:id}:null,
+  isNpcCorporation:id=>id===1000035,
+  getNativeEntity:id=>id===f.ship.itemID?f.nativeEntity:null,
+  getScene:id=>id===f.scene.systemID?f.scene:null,
+  store:{listNativeCargoForEntity:id=>id===f.ship.itemID?[...f.cargo.values()]:[],
+   buildNativeCargoItems:()=>[]},
+  items:{},flush:()=>({success:true}),warpToPoint:()=>({success:true}),
+  root:'/tmp/test-coop-warehouse',
+  warehouse:{deposit:x=>{f.cargo.delete(x.cargoID);return {status:'COMMITTED'}}},
+  // The live world showed a settled delivery with no sale and no reason at all.
+  beforeDeposit:()=>({status:'NO_BID',reason:'NO_BUYER_AT_OR_ABOVE_FLOOR'}),
+  probe:{observe:(event,_item,_space,payload)=>events.push({event,payload})},
+  clock:()=>f.now()});
+ const fleet={fleetID:77,systemID:f.scene.systemID,haulerEntityIDs:[f.ship.itemID]};
+ assert.equal(dir.start(f.scene,fleet,f.now()).status,'EN_ROUTE');
+ arrive(f);
+ dir.tick(f.scene,fleet,f.now());
+ f.setTime(f.now()+3000);
+ const result=dir.tick(f.scene,fleet,f.now());
+ assert.equal(result.status,'DELIVERED','a refused sale must not stop the delivery');
+ const skipped=events.filter((entry)=>entry.event==='living-npc-station-sale-skipped');
+ assert.equal(skipped.length,1,'exactly one report per trip');
+ assert.equal(skipped[0].payload.status,'NO_BID');
+ assert.equal(skipped[0].payload.reason,'NO_BUYER_AT_OR_ABOVE_FLOOR');
+ assert.equal(skipped[0].payload.stationID,f.station.stationID);
+ assert.equal(f.cargo.size,0,'the unsold cargo still reaches the warehouse');
 });
