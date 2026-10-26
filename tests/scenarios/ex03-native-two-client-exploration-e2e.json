@@ -1,0 +1,107 @@
+{
+  "schema": "ex03-native-two-client-exploration-e2e-v1",
+  "upstreamPin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+  "releaseStatus": "NOT_VERIFIED",
+  "runEnvironment": "Disposable native EveJS server on Node 22, original sqlite-backed GameStore, 2 separately authenticated clients and a source-fitted durable NPC scout.",
+  "safety": [
+    "Use isolated attested GameStore only",
+    "Do not enable feature flags on production before signoff",
+    "Do not touch production player items/wallets",
+    "Never infer client visibility from server-only telemetry"
+  ],
+  "requiredFlags": [
+    "EVEJS_COOP_ALIFE",
+    "EVEJS_COOP_NPC_EXPEDITIONS",
+    "EVEJS_COOP_NPC_PROBE_SCAN",
+    "EVEJS_COOP_NPC_PROBE_LAUNCH",
+    "EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT",
+    "EVEJS_COOP_NPC_SCOUT_LOADOUT",
+    "EVEJS_COOP_NPC_EXPEDITION_HACK",
+    "EVEJS_COOP_NPC_EXPEDITION_LOOT",
+    "EVEJS_COOP_NPC_EXPEDITION_WORMHOLES"
+  ],
+  "negativeDefaults": "All flags remain OFF in production compose and during installer validation; turn on only in disposable E2E host.",
+  "steps": [
+    {
+      "id": "two_distinct_authenticated_clients",
+      "status": "NOT_RUN",
+      "proof": "Original server session registry has two different valid characterIDs, shipIDs, same live system, non-destroyed sockets."
+    },
+    {
+      "id": "original_scout_spawn_and_analyzer_fitting",
+      "status": "NOT_RUN",
+      "proof": "NativeNpcStore confirms durable NPC ship, exact original moduleIDs for online scanner launcher and both genuine Data/Relic Analyzers (doHacking effect), four original cargo probeIDs."
+    },
+    {
+      "id": "original_scanner_probe_launch",
+      "status": "NOT_RUN",
+      "proof": "Native NPC cargo records show IN_SPACE and quantity=0 for each of 4 original charges, with identical cargoID to physically materialized probe.itemID; no extra allocated itemIDs."
+    },
+    {
+      "id": "two_client_bubble_visibility",
+      "status": "NOT_RUN",
+      "proof": "Both original clients independently see the same four probe.itemIDs and one original NPC scout in bubble after native scene broadcast; screenshot plus server bubble audit per character."
+    },
+    {
+      "id": "source_scan_certainty",
+      "status": "NOT_RUN",
+      "proof": "Original probeScanRuntime.buildSignatureScanResults yields certainty=1 and exact original siteID/position using four materialized probe IDs; zero player bookmark sharing."
+    },
+    {
+      "id": "npc_native_warp_to_scanned_site",
+      "status": "NOT_RUN",
+      "proof": "Original npcRuntime.warpToPoint success, live Destiny warp state, two-client visibility of departure and genuine on-grid arrival; same-corp followers do not preempt scanner scout."
+    },
+    {
+      "id": "player_competition_for_same_site",
+      "status": "NOT_RUN",
+      "proof": "Both authenticated players receive genuine source site grid, competing against same native NPC corp; no cross-corporation private scan coordinate leak."
+    },
+    {
+      "id": "npc_native_analyzer_and_hacking_turns",
+      "status": "NOT_RUN",
+      "proof": "Source HackingMgrService.nativeNpcTurn uses original online doHacking fitted module, original board state 0 -> 1 -> 2, no client pseudo-session or synthetic loot rewards."
+    },
+    {
+      "id": "itemstore_original_loot_pickup",
+      "status": "NOT_RUN",
+      "proof": "One original original ItemStore itemID with source owner=1 and location=container changes to same itemID owned by NPC corp in NPC ship cargo; original source container has no second item."
+    },
+    {
+      "id": "warehouse_return_and_dwell",
+      "status": "NOT_RUN",
+      "proof": "Original NPC ship physically arrives at its corp-owned station, dwells >=2s, and the exact original ItemStore itemID appears once in corp station hangar; no synthetic warehouse credits."
+    },
+    {
+      "id": "original_wormhole_scanner_witness",
+      "status": "NOT_RUN",
+      "proof": "Original source probe scan and physically matched wormhole pair ID, real source/destination endpoint IDs, two client witnesses, not private catalog omniscience."
+    },
+    {
+      "id": "native_wormhole_mass_and_polarization",
+      "status": "NOT_RUN",
+      "proof": "Native wormholeRuntime.prepareJump and commitJump, durable mass decrement, real polarization keyed by original NPC entityID, native post-jump pose, no mass refund."
+    },
+    {
+      "id": "npc_wormhole_hull_and_cargo_preservation",
+      "status": "NOT_RUN",
+      "proof": "After native dematerialize/materialize and identityRegistry.relocate, identical original hull entityID/moduleIDs/cargoIDs appear only in destination scene; original source absent."
+    },
+    {
+      "id": "wormhole_danger_collapse_and_refusal",
+      "status": "NOT_RUN",
+      "proof": "Expired/collapsed or insufficient-mass wormhole blocks NPC cross without teleport; if source mass was charged and outcome ambiguous, durable operator quarantine prevents repeat."
+    },
+    {
+      "id": "process_kill_original_probe_and_itemstore",
+      "status": "NOT_RUN",
+      "proof": "GitHub Node22 pinned original native GameStore SQLite tests verify real OS SIGKILL after probe flight and all four native ItemStore item custody stages; no alternate JSON-only mock."
+    },
+    {
+      "id": "full_live_restart_and_no_dupe",
+      "status": "NOT_RUN",
+      "proof": "Restart whole isolated EveJS server between confirmed pickup/warehouse/wormhole events; original SQLite item row count remains one, no duplicated probeID, NPC module ID or hull ID."
+    }
+  ],
+  "acceptance": "GO only after ALL steps have source-backed server log + two authenticated client observation where required; local V8 assertions, workflow registration, and JSON fixtures alone are NOT acceptance."
+}
