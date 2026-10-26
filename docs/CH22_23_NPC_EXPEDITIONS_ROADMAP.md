@@ -57,3 +57,9 @@ This PR deliberately does **not** add the module to `overlay-spec.cjs`, grant an
 **Evidence:** 27 isolated source/fixture Node tests executed locally, PASS; additional native-bridge/wiring tests committed but their execution in a real checkout is pending. The deployed pinned upstream EveJS host, real NPC movement, scanned signatures, active modules, secure hacking and original SQLite/2-client E2E remain NOT VERIFIED. Do not classify EX-02/03 as gameplay-complete.
 
 **Next:** strict native probe launch + scanning for owned NPC vessels (not server-catalog omniscience), safer analyzer/hacking entry point, durable corporate intel/restart reconciliation, and guarded wormhole escort/hauler transport.
+
+### EX-03: physical player rivalry (follow-up)
+
+The existing competition witness now observes up to 32 real initialized player sessions per native site tick, using current ships in the same scene. This **does not share player scans or private bookmarks** with NPC corporations. Only the count of newly witnessed players and newly contested sites is added to server-side opt-in telemetry. Repeated sightings do not repeat rivalry alerts. The original server only dispatches a same-corporation patrol if a genuine NPC scout previously physically witnessed the materialized site. Temporary corporate intel is capped to 512 tips, pending ship/site deduplication to 512 records. This is **not** full probe-based NPC scanning, persistent expedition fleet composition or hacking.
+
+**Latest isolated local evidence:** Node 22 `node --test tests/coop-npc-expedition-competition.test.mjs tests/coop-npc-expedition-director.test.mjs`: **29 PASS / 0 FAIL**. Additional native arbiter wiring tests are checked into the repository, but have not run against a deployed native EveJS checkout. No end-to-end gameplay or live two-client acceptance is claimed.
