@@ -84,6 +84,14 @@ const CLAIM_ARMS=[
 '            let p:CoopCorpFillQueryParams=serde_json::from_value(params)?;',
 '            Ok(runtime.coop_corp_fill_get(p.access_token,p.order_id,p.cycle).await?)',
 '        }',
+'        "FinalizeCorpFill" => {',
+'            let p:CoopCorpFillQueryParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_fill_finalize(p.access_token,p.order_id,p.cycle).await?)',
+'        }',
+'        "ReleaseCorpFill" => {',
+'            let p:CoopCorpFillQueryParams=serde_json::from_value(params)?;',
+'            Ok(runtime.coop_corp_fill_release(p.access_token,p.order_id,p.cycle).await?)',
+'        }',
 '        // CH24+31 CORP FILL CLAIM ARMS END',
 ''].join("\n");
 const GUARD=[
