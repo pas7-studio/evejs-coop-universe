@@ -109,6 +109,7 @@ function createAdapter({gameStore,store,access,getFleetRecord,getScene,
  return Object.freeze({assign,beforeTick,lookup:orders.lookup,verified});
 }
 let singleton=null;
+const emitted=new Set();
 function native(){
  if(!singleton){
   const gameStore=require("../gameStore"),
@@ -122,7 +123,14 @@ function native(){
    getScene:systemID=>{
     // Native tick supplies the ONLY permitted live scene for this call.
     return activeScene?.systemID===systemID?activeScene:null;},
-   enabled:()=>load("coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY")
+   enabled:()=>load("coopFlags").on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY"),
+   observe:(event,payload)=>{
+    const key=[payload?.systemID,payload?.fleetID,payload?.operationID,
+     payload?.command,payload?.status||payload?.reason].join(":");
+    load("coopObserve").noteOnce(emitted,key,require("./coopRuntimeProbe"),
+     event,{systemID:payload?.systemID},payload);
+    if(emitted.size>1024)emitted.clear();
+   }
   });
  }
  return singleton;
