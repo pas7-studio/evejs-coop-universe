@@ -141,10 +141,16 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
  }
  const rows=[];
  for(const row of all){
-  if(!row||row.transient!==false||Number(row.moduleID||0)!==0)continue;
-  if(!pos(row.cargoID)||!pos(row.typeID)||!pos(row.quantity)||
-     !pos(row.coopHaulFromMinerID)||!pos(row.entityID))continue;
-  if(Number(row.coopHaulFleetID)!==fid||Number(row.coopHaulSystemID)!==pid)continue;
+  // A row tagged for this fleet/system belongs to its original haul batch.
+  // Never silently skip a damaged sibling and adopt/sell only the valid
+  // portion. The whole tagged batch needs operator reconciliation instead.
+  if(!row||typeof row!=="object"||
+     Number(row.coopHaulFleetID)!==fid||
+     Number(row.coopHaulSystemID)!==pid)continue;
+  if(row.transient!==false||Number(row.moduleID||0)!==0||
+     !pos(row.cargoID)||!pos(row.typeID)||!pos(row.quantity)||
+     !pos(row.coopHaulFromMinerID)||!pos(row.entityID))
+   return {status:"ORIGINAL_HAUL_CARGO_UNVERIFIED",rows:[]};
   if(cargoIDCount.get(pos(row.cargoID))!==1)
    return {status:"NATIVE_CARGO_ID_COLLISION",rows:[]};
   // A cargo still on a physical live ship is not an orphan. This includes
