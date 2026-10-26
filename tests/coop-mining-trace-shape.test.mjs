@@ -106,3 +106,19 @@ test('a belt with no free rock says so explicitly', ()=>{
   assert.equal(event.detail.claims, 0);
   assert.equal(event.detail.activeAsteroidID, 0);
 });
+
+test("a target mismatch names both ids", ()=>{
+  trace.noteTargetMismatch(
+    {fleetID: 960004645},
+    scene,
+    {itemID: 980000016052},
+    {moduleItem: {itemID: 77}},
+    {targetID: 5020484739000},
+    {itemID: 5020484739081},
+  );
+  const event = take("MODULE_TARGET_MISMATCH");
+  assert.ok(event, "no MODULE_TARGET_MISMATCH event");
+  assert.equal(event.detail.effectTargetID, 5020484739000);
+  assert.equal(event.detail.fleetTargetID, 5020484739081);
+  assert.equal(event.detail.moduleID, 77);
+});

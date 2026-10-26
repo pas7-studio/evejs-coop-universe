@@ -206,6 +206,11 @@ const specs=[
   {anchor:"      tidiAutoscaler.init();",line:'      try { require("../../space/coopVirtualWorldRuntime").start(); } catch (error) { console.warn("[CoopVirtualWorld] startup", error.message); }',after:true}
  ]},
  {file:"server/src/services/mining/miningNpcOperations.js",patches:[
+  // A module stopped for a target change and restarted next tick pays the
+  // activation cost forever and never completes a cycle. Observation only.
+  {anchor:"      if (activeEffect && toInt(activeEffect.targetID, 0) !== toInt(targetEntity.itemID, 0)) {",
+   after:true,
+   line:"require(\"../../space/coopMiningTrace\").noteTargetMismatch(fleetRecord,scene,minerEntity,entry,activeEffect,targetEntity);"},
   // Restart resilience: a previous process may leave durable haul cargo on a
   // hauler that no longer exists. Re-attach it once, then let the normal
   // loaded -> station -> sell pipeline continue. Telemetry never decides.
