@@ -61,6 +61,9 @@ function createCorporateSellFillSettlement({gameStore,readNativeClaim,quoteNativ
     fees.verifiedNative!==true)
     return block("CORP_FILL_NATIVE_FEES_UNATTESTED");
   }catch{return block("CORP_FILL_RUST_OR_FEES_UNAVAILABLE")}
+  return commit(claim,fees,orderID,cycle);
+ }
+ function commit(claim,fees,orderID,cycle){
   let called=false;
   try{
    called=true;
@@ -226,7 +229,29 @@ function createCorporateSellFillSettlement({gameStore,readNativeClaim,quoteNativ
    return block("CORP_FILL_NATIVE_SETTLEMENT_OUTCOME_UNKNOWN");
   }
  }
- return Object.freeze({settle,requiresOperatorReconciliation:()=>[...uncertain],
+
+ async function settleAsync({orderID,cycle}={}){
+  if(enabled()!==true)return block("CORP_FILL_DISABLED");
+  if(!validOrder(orderID)||!pos(cycle)||uncertain.has(orderID))
+   return block("CORP_FILL_ORDER_SCOPE_OR_OUTCOME_UNKNOWN");
+  if(atomic.isPoisoned())return block("CORP_FILL_NATIVE_STORE_POISONED");
+  let claim,fees;
+  try{
+   claim=await readNativeClaim({orderID,cycle});
+   if(!isValidClaim(claim)||claim.orderID!==orderID||claim.cycle!==cycle)
+    return block("CORP_FILL_ORIGINAL_RUST_CLAIM_INVALID");
+   const gross=claim.quantity*claim.priceCents;
+   if(!pos(gross))return block("CORP_FILL_GROSS_OVERFLOW");
+   fees=await quoteNativeFees({claim,grossCents:gross});
+   if(!fees||!safe(fees.transactionTaxCents)||!safe(fees.brokerFeeCents)||
+    !safe(fees.transactionTaxCents+fees.brokerFeeCents)||
+    fees.transactionTaxCents+fees.brokerFeeCents>gross||
+    fees.verifiedNative!==true)
+    return block("CORP_FILL_NATIVE_FEES_UNATTESTED");
+  }catch{return block("CORP_FILL_RUST_OR_FEES_UNAVAILABLE")}
+  return commit(claim,fees,orderID,cycle);
+ }
+ return Object.freeze({settle,settleAsync,requiresOperatorReconciliation:()=>[...uncertain],
   mode:"CORPORATE_ORIGINAL_FILL_ATOMIC_GATED",
   supportsLiveRustFill:false});
 }
