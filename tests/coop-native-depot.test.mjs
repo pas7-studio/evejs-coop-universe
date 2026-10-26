@@ -231,7 +231,8 @@ test("P0: stale second native depot instance cannot erase first original receipt
   assert.equal(fresh.prepare(arg(777)).status,"PREPARED");
   assert.equal(fresh.commit(arg(777)).status,"COMMITTED");
   assert.equal(fresh.snapshot().totals["30000144"],100);
-  assert.throws(()=>stale.prepare(arg(778)),/DEPOT_CONCURRENT_JOURNAL_DRIFT/);
+  assert.equal(stale.prepare(arg(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(stale.audit().reason,"DEPOT_CONCURRENT_JOURNAL_DRIFT");
   assert.equal(stale.prepare(arg(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
   assert.equal(stale.commit(arg(778)).status,"DEPOT_PERSISTENCE_UNVERIFIED");
   assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
@@ -256,7 +257,8 @@ test("P0: an active or crash-abandoned depot lock blocks writes until operator i
   const fd=openSync(lock,"wx");
   closeSync(fd);
   try{
-   assert.throws(()=>depot.prepare(arg),error=>error?.code==="EEXIST");
+   assert.equal(depot.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+   assert.equal(depot.audit().reason,"DEPOT_JOURNAL_WRITE_IN_PROGRESS");
    assert.equal(depot.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
    assert.equal(depot.audit().status,"NEEDS_OPERATOR_REPAIR");
    assert.throws(()=>depot.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
@@ -324,5 +326,100 @@ test("P0: externally damaged or removed depot journal cannot yield a trusted old
   assert.equal(audit.reason,"DEPOT_CONCURRENT_JOURNAL_DRIFT");
   assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
   assert.equal(stale.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: old committed receipt must never claim ALREADY_COMMITTED from a stale process",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-committed-stale-"));
+ try{
+  const file=join(dir,"depot.json"),arg={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  const writer=createDepot({file,clock:()=>101});
+  assert.equal(writer.prepare(arg).status,"PREPARED");
+  assert.equal(writer.commit(arg).status,"COMMITTED");
+  const stale=createDepot({file});
+  // A legitimate second writer commits another independent cargoID.
+  const latest=createDepot({file});
+  const extra={systemID:30000144,fleetID:77,
+   item:{cargoID:778,haulerID:9001,typeID:34,quantity:20}};
+  assert.equal(latest.prepare(extra).status,"PREPARED");
+  assert.equal(latest.commit(extra).status,"COMMITTED");
+  // Formerly both of these skipped the disk CAS because cargoID 777 was
+  // already marked COMMITTED in this object's outdated memory.
+  assert.equal(stale.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(stale.commit(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(stale.audit().status,"NEEDS_OPERATOR_REPAIR");
+  assert.equal(stale.audit().reason,"DEPOT_CONCURRENT_JOURNAL_DRIFT");
+  assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+  const recovered=createDepot({file});
+  assert.equal(recovered.audit().status,"OK");
+  assert.equal(recovered.snapshot().totals["30000144"],120);
+  assert.equal(recovered.prepare(arg).status,"ALREADY_COMMITTED");
+  assert.equal(recovered.commit(arg).status,"ALREADY_COMMITTED");
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: a PREPARED response cannot rely on a source receipt removed by another writer",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-pending-stale-"));
+ try{
+  const file=join(dir,"depot.json"),arg={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  const writer=createDepot({file,clock:()=>1});
+  assert.equal(writer.prepare(arg).status,"PREPARED");
+  const stale=createDepot({file});
+  assert.equal(writer.commit(arg).status,"COMMITTED");
+  // Old source returned PREPARED from stale pending and could make the
+  // caller remove original npcCargo for a no-longer-pending receipt.
+  assert.equal(stale.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  assert.equal(stale.commit(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+  const recovered=createDepot({file});
+  assert.equal(recovered.prepare(arg).status,"ALREADY_COMMITTED");
+  assert.equal(recovered.snapshot().totals["30000144"],100);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: committed cargoID is not interchangeable across quantity, type, fleet, hauler or system",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-original-receipt-identity-"));
+ try{
+  const file=join(dir,"depot.json"),base={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  const d=createDepot({file});
+  assert.equal(d.prepare(base).status,"PREPARED");
+  assert.equal(d.commit(base).status,"COMMITTED");
+  for(const bad of [
+   {...base,item:{...base.item,quantity:999}},
+   {...base,item:{...base.item,typeID:35}},
+   {...base,item:{...base.item,haulerID:9002}},
+   {...base,fleetID:78},
+   {...base,systemID:30000145}
+  ]){
+   assert.equal(d.prepare(bad).status,"CONFLICT",JSON.stringify(bad));
+   assert.equal(d.commit(bad).status,"CONFLICT",JSON.stringify(bad));
+  }
+  assert.equal(d.prepare(base).status,"ALREADY_COMMITTED");
+  assert.equal(d.commit(base).status,"ALREADY_COMMITTED");
+  assert.equal(d.audit().status,"OK");
+  assert.equal(d.snapshot().totals["30000144"],100);
+  assert.equal(Object.keys(d.snapshot().receipts).length,1);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: known committed/pending receipt refuses optimistic response while writer holds journal lock",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-locked-replay-"));
+ try{
+  const file=join(dir,"depot.json"),arg={systemID:30000144,fleetID:77,
+   item:{cargoID:777,haulerID:9001,typeID:34,quantity:100}};
+  const writer=createDepot({file});
+  assert.equal(writer.prepare(arg).status,"PREPARED");
+  assert.equal(writer.commit(arg).status,"COMMITTED");
+  const stale=createDepot({file});
+  const holder=openSync(file+".lock","wx");closeSync(holder);
+  try{
+   assert.equal(stale.prepare(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+   assert.equal(stale.commit(arg).status,"DEPOT_PERSISTENCE_UNVERIFIED");
+   assert.throws(()=>stale.snapshot(),/DEPOT_PERSISTENCE_UNVERIFIED/);
+   assert.equal(stale.audit().reason,"DEPOT_JOURNAL_WRITE_IN_PROGRESS");
+  }finally{unlinkSync(file+".lock")}
+  assert.equal(createDepot({file}).prepare(arg).status,"ALREADY_COMMITTED");
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
