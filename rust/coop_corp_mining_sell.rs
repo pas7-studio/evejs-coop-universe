@@ -44,7 +44,7 @@ fn coop_corp_sell_schema(db:&Connection)->Result<()>{
           type_id INTEGER NOT NULL,
           quantity INTEGER NOT NULL,
           price_cents INTEGER NOT NULL,
-          phase TEXT NOT NULL CHECK (phase IN ('prepared','published','cancelled')),
+          phase TEXT NOT NULL CHECK (phase IN ('prepared','published','cancelling','cancelled')),
           created_at TEXT NOT NULL,
           updated_at TEXT NOT NULL
         );"
@@ -777,6 +777,281 @@ impl MarketRuntime{
        let row=self.get_order(order).await?;
        self.invalidate_scope_caches(row.row.region_id,
          row.row.solar_system_id,row.row.station_id,row.row.type_id).await;
+       self.refresh_region_summary_row(row.row.region_id,row.row.type_id).await?;
+       Ok(result)
+    }
+}
+
+
+// CH24+31 E2B5: exclusive ORIGINAL Rust partial-unsold cancellation.
+// Lock original Rust order FIRST. No stock CancelOrder, FillOrder or
+// external buyer action may consume the same physical corporate stock.
+// The GameStore returns only the verified UNSOLD remaining units to the
+// original corporate office; then Rust independently reads that COMMIT.
+fn coop_corp_cancel_gate(token:&str)->Result<()>{
+    coop_corp_sell_guard(token)?;
+    if std::env::var("EVEJS_COOP_RUST_CORP_CANCEL").ok().as_deref()!=Some("1"){
+        bail!("CORP_SELL_RUST_CANCEL_DISABLED");
+    }
+    Ok(())
+}
+fn coop_corp_cancel_schema(db:&Connection)->Result<()>{
+    db.execute_batch(
+      "CREATE TABLE IF NOT EXISTS coop_corp_sell_cancel_intents(
+        order_id INTEGER PRIMARY KEY NOT NULL,
+        owner_id INTEGER NOT NULL,
+        cargo_id INTEGER NOT NULL,
+        source_item_id INTEGER NOT NULL,
+        remaining_quantity INTEGER NOT NULL,
+        settled_cycles INTEGER NOT NULL,
+        phase TEXT NOT NULL CHECK(phase IN ('locked','cancelled')),
+        ack_json TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );"
+    )?;Ok(())
+}
+fn coop_corp_cancel_read(db:&Connection,order:i64)->Result<serde_json::Value>{
+    let v=db.query_row(
+      "SELECT c.owner_id,c.cargo_id,c.source_item_id,c.remaining_quantity,
+              c.settled_cycles,c.phase,c.ack_json,
+              p.station_id,p.type_id,p.shift_id,r.state,r.source,r.is_corp,
+              r.vol_remaining,r.bid
+       FROM coop_corp_sell_cancel_intents c
+       JOIN coop_corp_sell_prepared p ON p.order_id=c.order_id
+       JOIN market_orders r ON r.order_id=c.order_id
+       WHERE c.order_id=?1",
+      params![order],
+      |r|Ok((
+        r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,r.get::<_,i64>(2)?,
+        r.get::<_,i64>(3)?,r.get::<_,i64>(4)?,r.get::<_,String>(5)?,
+        r.get::<_,Option<String>>(6)?,r.get::<_,i64>(7)?,
+        r.get::<_,i64>(8)?,r.get::<_,String>(9)?,
+        r.get::<_,String>(10)?,r.get::<_,String>(11)?,
+        r.get::<_,i64>(12)?,r.get::<_,i64>(13)?,
+        r.get::<_,i64>(14)?
+      ))
+    ).optional()?.ok_or_else(||anyhow!("CORP_CANCEL_INTENT_NOT_FOUND"))?;
+    let (owner,cargo,item,remaining,cycles,phase,ack,station,ty,shift,
+         state,source,corp,order_remaining,bid)=v;
+    if source!="coop-corporation"||corp!=1||bid!=0||
+       order_remaining!=remaining||
+       (phase=="locked"&&state!="cancelling")||
+       (phase=="cancelled"&&state!="cancelled"){
+      bail!("CORP_CANCEL_LOCK_ORIGINAL_ORDER_MISMATCH");
+    }
+    Ok(serde_json::json!({
+      "verifiedNative":true,"phase":if phase=="locked"{"CANCEL_LOCKED"}
+                                   else{"CANCELLED"},
+      "orderID":order.to_string(),"corporationID":owner,
+      "cargoID":cargo,"sourceItemID":item,
+      "stationID":station,"typeID":ty,"shiftID":shift,
+      "remainingQuantity":remaining,"settledCycles":cycles,
+      "cancelled":phase=="cancelled",
+      "ack":ack.and_then(|v|serde_json::from_str::<serde_json::Value>(&v).ok())
+    }))
+}
+fn coop_corp_cancel_lock_db(path:&Path,token:&str,order:i64)->Result<serde_json::Value>{
+    coop_corp_cancel_gate(token)?;
+    if order<=0||order>9_007_199_254_740_991_i64-9_200_000_000_i64{
+      bail!("CORP_CANCEL_INVALID_ORDER");
+    }
+    let mut db=load_connection(path)?;
+    coop_corp_sell_schema(&db)?;coop_corp_fill_schema(&db)?;
+    coop_corp_cancel_schema(&db)?;
+    let tx=db.transaction()?;
+    let old:Option<i64>=tx.query_row(
+      "SELECT order_id FROM coop_corp_sell_cancel_intents WHERE order_id=?1",
+      params![order],|r|r.get(0)
+    ).optional()?;
+    if old.is_some(){
+      let v=coop_corp_cancel_read(&tx,order)?;
+      tx.commit()?;return Ok(v);
+    }
+    let source=tx.query_row(
+      "SELECT p.owner_id,p.cargo_id,p.item_id,p.phase,
+              r.state,r.source,r.is_corp,r.bid,r.vol_remaining
+       FROM coop_corp_sell_prepared p JOIN market_orders r
+         ON r.order_id=p.order_id WHERE p.order_id=?1",
+      params![order],
+      |r|Ok((
+         r.get::<_,i64>(0)?,r.get::<_,i64>(1)?,
+         r.get::<_,i64>(2)?,r.get::<_,String>(3)?,
+         r.get::<_,String>(4)?,r.get::<_,String>(5)?,
+         r.get::<_,i64>(6)?,r.get::<_,i64>(7)?,
+         r.get::<_,i64>(8)?
+      ))
+    ).optional()?.ok_or_else(||anyhow!("CORP_CANCEL_SOURCE_ORDER_NOT_FOUND"))?;
+    let (owner,cargo,item,phase,state,src,corp,bid,remaining)=source;
+    if owner<=0||cargo<=0||item<=0||remaining<=0||
+       src!="coop-corporation"||corp!=1||bid!=0||
+       !((phase=="prepared"&&state=="prepared")||
+         (phase=="published"&&state=="open")){
+       bail!("CORP_CANCEL_NOT_ELIGIBLE_OR_ALREADY_LOCKED");
+    }
+    let active:i64=tx.query_row(
+      "SELECT COUNT(*) FROM coop_corp_sell_fills
+       WHERE order_id=?1 AND phase!='released'",
+      params![order],|r|r.get(0)
+    )?;
+    if active!=0{bail!("CORP_CANCEL_UNSETTLED_OR_ACTIVE_FILL");}
+    let cycles:i64=tx.query_row(
+      "SELECT COALESCE(MAX(cycle),0) FROM coop_corp_sell_fills
+       WHERE order_id=?1 AND phase='released'",
+      params![order],|r|r.get(0)
+    )?;
+    let total:i64=tx.query_row(
+      "SELECT COUNT(*) FROM coop_corp_sell_fills WHERE order_id=?1",
+      params![order],|r|r.get(0)
+    )?;
+    if cycles!=total{bail!("CORP_CANCEL_NONCONTIGUOUS_FILLS");}
+    let now=now_rfc3339();
+    let n=tx.execute(
+      "UPDATE market_orders SET state='cancelling',
+        last_state_change_at=?2,updated_at=?2
+       WHERE order_id=?1 AND state=?3 AND source='coop-corporation'
+         AND is_corp=1 AND bid=0 AND vol_remaining=?4",
+      params![order,now,state,remaining]
+    )?;
+    if n!=1{bail!("CORP_CANCEL_EXCLUSIVE_ORDER_LOCK_FAILED");}
+    let n=tx.execute(
+      "UPDATE coop_corp_sell_prepared SET phase='cancelling',updated_at=?2
+       WHERE order_id=?1 AND phase=?3",
+      params![order,now,phase]
+    )?;
+    if n!=1{bail!("CORP_CANCEL_PREPARED_PHASE_CAS_FAILED");}
+    tx.execute(
+      "INSERT INTO coop_corp_sell_cancel_intents
+       (order_id,owner_id,cargo_id,source_item_id,
+        remaining_quantity,settled_cycles,phase,created_at,updated_at)
+       VALUES(?1,?2,?3,?4,?5,?6,'locked',?7,?7)",
+      params![order,owner,cargo,item,remaining,cycles,now]
+    )?;
+    let v=coop_corp_cancel_read(&tx,order)?;
+    tx.commit()?;Ok(v)
+}
+fn coop_corp_cancel_verify_return(
+   origin:&Connection,witness:&serde_json::Value)->Result<serde_json::Value>{
+    let order=witness["orderID"].as_str()
+      .ok_or_else(||anyhow!("CORP_CANCEL_ORDER_MISSING"))?;
+    let cargo=witness["cargoID"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_CARGO_MISSING"))?;
+    let item=witness["sourceItemID"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_ITEM_MISSING"))?;
+    let owner=witness["corporationID"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_OWNER_MISSING"))?;
+    let qty=witness["remainingQuantity"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_QUANTITY_MISSING"))?;
+    let cycles=witness["settledCycles"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_CYCLE_MISSING"))?;
+    let station=witness["stationID"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_STATION_MISSING"))?;
+    let ty=witness["typeID"].as_i64()
+      .ok_or_else(||anyhow!("CORP_CANCEL_TYPE_MISSING"))?;
+    if qty<=0||cycles<0||owner<=0||item<=0||cargo<=0{bail!("CORP_CANCEL_SCOPE_BAD");}
+    let receipt=coop_corp_sell_json(origin,"corporationRuntime",
+      &format!("coopPlayerMiningCorpSell\u{001f}{}",cargo))?;
+    let escrow=coop_corp_sell_json(origin,"marketEscrow",order)?;
+    let physical=coop_corp_sell_json(origin,"items",&item.to_string())?;
+    if receipt["version"]!=1||receipt["phase"]!="RETURNED_UNSOLD"||
+       receipt["orderID"]!=order||receipt["cargoID"]!=cargo||
+       receipt["corporationID"]!=owner||receipt["itemID"]!=item||
+       receipt["stationID"]!=station||receipt["typeID"]!=ty||
+       receipt["returnedQuantity"]!=qty||
+       receipt["remainingQuantity"]!=0||
+       receipt["lastSettledCycle"]!=cycles||
+       receipt["returnedAt"].as_i64().unwrap_or(0)<=0||
+       escrow["orderId"]!=order||escrow["isCorp"]!=true||
+       escrow["ownerId"]!=owner||escrow["phase"]!="RETURNED_UNSOLD"||
+       escrow["remainingQuantity"]!=0||
+       escrow["sourceItemIDs"]!=serde_json::json!([item])||
+       physical["itemID"]!=item||physical["ownerID"]!=owner||
+       physical["typeID"]!=ty||physical["quantity"]!=qty||
+       physical["stacksize"]!=qty||physical["singleton"]!=0||
+       physical["locationID"]!=receipt["originalLocationID"]||
+       physical["flagID"]!=receipt["originalFlagID"]||
+       physical["customInfo"]!=format!("coop-warehouse:v1:cargo:{}",cargo){
+        bail!("CORP_CANCEL_ORIGINAL_UNSOLD_ITEM_NOT_RETURNED");
+    }
+    Ok(serde_json::json!({
+      "orderID":order,"phase":"CANCELLED","verifiedGameStore":true,
+      "remainingReturned":qty,"settledCycles":cycles,
+      "sourceItemID":item,"corporationID":owner
+    }))
+}
+fn coop_corp_cancel_finalize_db(path:&Path,token:&str,order:i64)->Result<serde_json::Value>{
+    coop_corp_cancel_gate(token)?;
+    let mut db=load_connection(path)?;
+    coop_corp_sell_schema(&db)?;coop_corp_fill_schema(&db)?;
+    coop_corp_cancel_schema(&db)?;
+    let tx=db.transaction()?;
+    let v=coop_corp_cancel_read(&tx,order)?;
+    if v["phase"]=="CANCELLED"{
+       let ack=v["ack"].clone();
+       if ack["phase"]!="CANCELLED"||ack["verifiedGameStore"]!=true{
+          bail!("CORP_CANCEL_FINALIZED_ACK_MISSING");
+       }
+       tx.commit()?;return Ok(ack);
+    }
+    if v["phase"]!="CANCEL_LOCKED"{bail!("CORP_CANCEL_NOT_LOCKED");}
+    let original=coop_corp_sell_gamestore()?;
+    original.execute_batch("BEGIN DEFERRED TRANSACTION")?;
+    let proof=coop_corp_cancel_verify_return(&original,&v)?;
+    let now=now_rfc3339();
+    let n=tx.execute(
+      "UPDATE market_orders SET state='cancelled',
+       last_state_change_at=?2,updated_at=?2 WHERE order_id=?1
+       AND state='cancelling' AND source='coop-corporation'
+       AND is_corp=1 AND vol_remaining=?3",
+      params![order,now,v["remainingQuantity"].as_i64().unwrap_or(-1)]
+    )?;
+    if n!=1{bail!("CORP_CANCEL_ORDER_CAS_FAILED");}
+    let n=tx.execute(
+      "UPDATE coop_corp_sell_prepared SET phase='cancelled',updated_at=?2
+       WHERE order_id=?1 AND phase='cancelling'",
+      params![order,now]
+    )?;
+    if n!=1{bail!("CORP_CANCEL_PREPARED_CAS_FAILED");}
+    let n=tx.execute(
+      "UPDATE coop_corp_sell_cancel_intents SET phase='cancelled',
+        ack_json=?2,updated_at=?3 WHERE order_id=?1 AND phase='locked'",
+      params![order,proof.to_string(),now]
+    )?;
+    if n!=1{bail!("CORP_CANCEL_INTENT_CAS_FAILED");}
+    tx.commit()?;Ok(proof)
+}
+impl MarketRuntime {
+    pub async fn coop_corp_cancel_lock(&self,token:String,order:i64)
+       ->Result<serde_json::Value>{
+       let path=self.database_path.clone();
+       let result=tokio::task::spawn_blocking(move||
+         coop_corp_cancel_lock_db(&path,&token,order))
+         .await.context("corporate unsold cancellation lock failed")??;
+       let row=self.get_order(order).await?;
+       self.invalidate_scope_caches(row.row.region_id,
+          row.row.solar_system_id,row.row.station_id,row.row.type_id).await;
+       self.refresh_region_summary_row(row.row.region_id,row.row.type_id).await?;
+       Ok(result)
+    }
+    pub async fn coop_corp_cancel_get(&self,token:String,order:i64)
+       ->Result<serde_json::Value>{
+       coop_corp_cancel_gate(&token)?;
+       let path=self.database_path.clone();
+       tokio::task::spawn_blocking(move||{
+          let db=load_connection(&path)?;
+          coop_corp_cancel_schema(&db)?;
+          coop_corp_cancel_read(&db,order)
+       }).await.context("corporate unsold cancellation inspect failed")?
+    }
+    pub async fn coop_corp_cancel_finalize(&self,token:String,order:i64)
+       ->Result<serde_json::Value>{
+       let path=self.database_path.clone();
+       let result=tokio::task::spawn_blocking(move||
+          coop_corp_cancel_finalize_db(&path,&token,order))
+          .await.context("corporate unsold cancellation finalize failed")??;
+       let row=self.get_order(order).await?;
+       self.invalidate_scope_caches(row.row.region_id,
+          row.row.solar_system_id,row.row.station_id,row.row.type_id).await;
        self.refresh_region_summary_row(row.row.region_id,row.row.type_id).await?;
        Ok(result)
     }
