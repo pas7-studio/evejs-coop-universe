@@ -1,7 +1,7 @@
 "use strict";
 // PVE-004A: a source-authored, already spawned UNIQUE boss; original NPC
 // combat, death, wreck and loot are authoritative. No spawns/item grants.
-const {siteEntries}=require("./coopPveNativeSiteDefense.cjs");
+const {siteEntries}=require("./coopPveNativeSiteDefense");
 const id=n=>Number.isSafeInteger(n)&&n>0?n:null;
 const point=p=>p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);

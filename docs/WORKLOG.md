@@ -527,3 +527,33 @@ Why: A previously damaged virtual economy journal could contain nativeDelivered=
 Where: integration/coopVirtualEconomy.cjs, tests/coop-virtual-economy-native-delivery-durability.test.mjs
 Evidence: Exact-source old main reproduction: goods="invalid-balance", nativeDelivered=100 -> UPDATE quantity=20, goods=0/nativeDelivered=120 persisted. Patched 15/15 exact-source isolated V8 economy regression callbacks PASS plus 17/17 exact-source isolated depot integration callbacks PASS. Full pinned Node 22 checkout, physical SQLite WAL/FULL cold restart, Rust and authenticated two-player sessions NOT_RUN due to local repo/network constraints. No real native items/ISK, flags, deployments or remote CI modified.
 
+### 2026-10-26T17:47Z · d9a4b62 · L2 · overlay: the PvE boss director needs an extensionless sibling require
+
+Why: Idle native NPC combat state cleared every outgoing target lock on each think, which stopped the just-activated mining module (reason target) before its first cycle; a hull with an active mining effect now keeps its locks behind EVEJS_COOP_MINING_LOCK_GUARD.
+Detail: The new installer guard caught this before the build: the module is installed as .js but required ./coopPveNativeSiteDefense.cjs, so every boss-director hook call would have thrown MODULE_NOT_FOUND inside a swallowed try/catch.
+Where: integration/coopPveNativeBossDirector.cjs, integration/coopPveNativeSiteDefense.js
+Evidence: Stack trace tickController->clearNpcCombatState->clearNpcTargetLocks->scene.clearTargets->clearOutgoingTargetLocks->stopTargetedModuleEffects(target); after the fix MINING_CYCLE_ATTEMPT locked=true, rock ore 162502->151910->143244, ships ORBIT act2 cap0.94, holds q44297..q69336.
+### 2026-10-26T17:00Z · b841982 · L2 · coop: an idle NPC controller must not clear a mining ship's target locks
+
+Why: Idle native NPC combat state cleared every outgoing target lock on each think, which stopped the just-activated mining module (reason target) before its first cycle; a hull with an active mining effect now keeps its locks behind EVEJS_COOP_MINING_LOCK_GUARD.
+Detail: Stack evidence: tickController -> clearNpcCombatState -> clearNpcTargetLocks -> scene.clearTargets -> clearOutgoingTargetLocks -> stopTargetedModuleEffects(reason target). Every idle think therefore stopped the mining module that had just been activated, before its first 15-45 s cycle: MODULE_STOP_NOSESSION stopReason=target, zero MINING_CYCLE_ATTEMPT, empty cargo, drained capacitor. A hull with a
+Where: docs/coop-hook-inventory.json, integration/coopMiningTargetGuard.cjs, scripts/overlay-spec.cjs, tests/coop-mining-target-guard.test.mjs
+Evidence: Stack tickController->clearNpcCombatState->clearNpcTargetLocks->scene.clearTargets->clearOutgoingTargetLocks->stopTargetedModuleEffects(target); after the fix MINING_CYCLE_ATTEMPT locked=true, rock ore 162502->151910->143244, ships ORBIT act2 cap0.94, holds q44297..q69336.
+### 2026-10-26T17:18Z · a4ac029 · L2 · coop: a stopped mining module carries the entity's last cargo error
+
+Why: A stopped mining module now reports the entity's last cargo error so an ALIFE07 atomic refusal is visible instead of looking like an ordinary cargo stop.
+Detail: When the atomic mining settler refuses a cycle it records the ALIFE07 reason on the entity and the runtime stops the module with reason cargo. Without that field the stop looked like an ordinary cargo stop and the actual refusal was invisible.
+Where: docs/coop-flags.json, integration/coopMiningTrace.cjs
+Evidence: MODULE_STOP_NOSESSION why=cargo entityError=ALIFE07_YIELD_INVALID (before: no reason at all).
+### 2026-10-26T17:33Z · bc0a100 · L2 · coop: a config refusal must not poison a durable mining hull
+
+Why: Every blocked() reason overwrote coopMiningCargoNeedsOperatorRepair, so running with the atomic flags off permanently marked all durable miners for operator repair and the short circuit then erased the stored reason.
+Detail: blocked() wrote every reason into coopMiningCargoNeedsOperatorRepair, so simply running with the atomic flags off marked all nine durable miners for operator repair - and the repair short circuit then overwrote the stored reason with ALIFE07_REPAIR_REQUIRED. Configuration and durability preconditions now leave the flag alone (the refusal is still on the entity), a real custody block keeps its firs
+Where: integration/coopNativeMiningAtomic.cjs, tests/coop-native-mining-atomic-blocking.test.mjs
+Evidence: tests/coop-native-mining-atomic-blocking.test.mjs 3/3; live MODULE_STOP entityError now shows ALIFE07_REPAIR_REQUIRED:ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED:NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo.
+### 2026-10-26T17:40Z · 3bba6d1 · L2 · coop: an invalid mining yield names the input that failed
+
+Why: Eleven different yield checks shared one ALIFE07_YIELD_INVALID reason, so a blocked durable fleet could not name the failing input.
+Detail: Eleven different checks shared one ALIFE07_YIELD_INVALID reason, so a durable fleet could be blocked with no way to tell which of scene, rock identity, ore type, owner, quantities or preimage was wrong. Each check now reports its own field.
+Where: integration/coopNativeMiningAtomic.cjs, tests/coop-native-mining-atomic-blocking.test.mjs
+Evidence: tests/coop-native-mining-atomic-blocking.test.mjs asserts ALIFE07_YIELD_INVALID:oreTypeID for a bad ore type.

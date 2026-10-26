@@ -1,5 +1,41 @@
 ﻿## Session state — 2026-10-26 (latest)
 
+### MINING WORKS (18:20Z) — three stacked blockers, each measured
+1. **`d75dea53` overlay modules required `.cjs` siblings.** Installed as `.js`, so
+   `coopMiningActivate` threw `MODULE_NOT_FOUND` on every tick and SpaceRuntime
+   swallowed it (`Mining tick failed for system=...`); the activation path, gate
+   included, never ran once. Extensionless requires + installer guard.
+2. **`b8419823` an idle NPC controller cleared the mining ship's target locks.**
+   Stack: `tickController → clearNpcCombatState → clearNpcTargetLocks →
+   scene.clearTargets → clearOutgoingTargetLocks → stopTargetedModuleEffects(reason
+   "target")`. Every idle think stopped the module that had just been activated, so
+   no 15–45 s cycle could ever complete. `EVEJS_COOP_MINING_LOCK_GUARD=1` keeps the
+   locks of a hull with an active mining effect (default OFF).
+   Measured after: `MINING_CYCLE_ATTEMPT locked=true pending=0`, rock ore falling
+   162502 → 151910 → 143244, ships `ORBIT|act2|cap0.94`, fleet `mining → loaded`,
+   holds `q44297…q69336` and climbing.
+3. **Hauling still refuses: `HAUL_NATIVE_PERSISTENCE_FLAGS_REQUIRED`.** The strict
+   hauler needs `EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC` plus `NATIVE_ATOMIC_ROWS`,
+   `MINING_CARGO_INTEGRITY`, `MINING_CYCLE_CONSERVATION`; none were set, so the
+   hauler delivered `NO_CARGO stationID=0` while the miners kept the ore. Those four
+   flags are now enabled in the probe compose (deploy in flight); the ALIFE07 refusal
+   reason now rides on `MODULE_STOP_*` as `entityError`.
+
+### ROOT CAUSE FOUND 17:20Z — the activation hook never ran (fixed in `d75dea53`)
+`STOP|act0|cap1` for hours was not a capacitor, targeting or cycle problem.
+Overlay modules are installed as `server/src/space/<name>.js` (`patch-evejs-coop.cjs`
+line 345), but eight of them still did `require("./sibling.cjs")`. In the container
+that is `Cannot find module './coopMiningCapacitorGate.cjs'`; `SpaceRuntime` catches
+it per tick (`Mining tick failed for system=...`) and the whole activation path,
+capacitor gate included, never executed once. Repro of the blindness: `MINER_TARGET`
+(6/5 min) and `FLEET_POST_TICK` fired because they are separate hooks, while
+`MODULE_ACTIVATED`, `CAPACITOR_WAIT` and `MODULE_ACTIVATE_FAILED` stayed at 0.
+Fix: extensionless sibling requires + repo `.js` shims, and the installer now throws
+`INSTALL_REQUIRE_EXTENSION` instead of silently shipping a dead hook. Guard:
+`tests/coop-overlay-require-style.test.mjs` (staged `.js`-only install loads the entry).
+Lesson for every future hook: a caught exception per tick looks exactly like an idle
+feature; instrument the entry of a hook, not just its outcomes.
+
 ### Change layering (binding, also in AGENTS.md)
 We own every change in this repo; the EveJS checkout is never the source of truth.
 - **L1** stock bug/omission → `patches/upstream/NNN-*.patch`, applied by
