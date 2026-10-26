@@ -89,3 +89,20 @@ test('a fractional cycle boundary is rounded, not rejected', ()=>{
   delete process.env.EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY;
   delete process.env.EVEJS_COOP_NATIVE_MINING_CYCLE_CONSERVATION;
 });
+
+test('a block that provably happened before any write is cleared', ()=>{
+  const entity = hull();
+  entity.coopMiningCargoNeedsOperatorRepair =
+    'ALIFE07_ATOMIC_COMMIT_UNKNOWN_OR_REJECTED:NATIVE_TRANSIENT_STATE_UNSAFE:npcCargo';
+  entity.coopMiningCargoLastError = entity.coopMiningCargoNeedsOperatorRepair;
+  settler.settle({entity});
+  assert.equal(entity.coopMiningCargoNeedsOperatorRepair, undefined,
+    'a pre-mutation refusal must not block the hull forever');
+});
+
+test('an uncertain custody block is never cleared automatically', ()=>{
+  const entity = hull();
+  entity.coopMiningCargoNeedsOperatorRepair = 'ALIFE07_POSTCOMMIT_SCENE_DIVERGED';
+  settler.settle({entity});
+  assert.equal(entity.coopMiningCargoNeedsOperatorRepair, 'ALIFE07_POSTCOMMIT_SCENE_DIVERGED');
+});
