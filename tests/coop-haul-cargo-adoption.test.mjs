@@ -912,3 +912,79 @@ test("globally unique original cargoID post-commit permits one physical NPC haul
  assert.equal(target.state,"loaded");
  assert.equal(ship.nativeCargoItems[0].itemID,7001);
 });
+
+test("silent native compensation ACK cannot hide cargo stranded on replacement hauler",()=>{
+ for(const mode of ["silent-ack","wrong-owner","wrong-quantity","stale-adoption-marker"]){
+  resetForTests();
+  const source=[orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112})];
+  const store=fakeStore(source);
+  const upsert=store.upsertNativeCargo;
+  let writes=0,flushes=0;
+  store.upsertNativeCargo=row=>{
+   writes++;
+   // First source upsert succeeds; second is written but rejected.
+   if(writes===2){upsert(row);return {success:false,errorMsg:"ADOPTION_SECOND_ROW_REJECTED"}}
+   // Compensation of the second row acknowledges but leaves wrong state.
+   if(writes===3){
+    if(mode==="silent-ack")return {success:true};
+    const corrupt={...row};
+    if(mode==="wrong-owner")corrupt.ownerID=9999;
+    if(mode==="wrong-quantity")corrupt.quantity+=1;
+    if(mode==="stale-adoption-marker")corrupt.coopHaulAdoptedAt=NOW;
+    upsert(corrupt);
+    return {success:true};
+   }
+   return upsert(row);
+  };
+  const target=fleet(),ship={...hauler,nativeCargoItems:undefined};
+  const out=adopt(sceneWith([ship,miner]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
+  });
+  assert.equal(out.status,"ADOPTION_RECOVERY_UNVERIFIED",mode);
+  assert.equal(flushes,1,mode);
+  assert.equal(out.adopted,0);
+  assert.equal(target.state,"mining");
+  assert.equal(target.coopHaulNeedsOperatorRepair,true);
+  assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+  assert.equal(ship.nativeCargoItems,undefined);
+  assert.equal(adopt(sceneWith([ship]),fleet(),{store,clock:()=>NOW+1}).status,
+   "ALREADY_ATTEMPTED");
+ }
+});
+
+test("rollback must fail closed if global original readback is missing or throws",()=>{
+ for(const mode of ["null","throw","target-read-error"]){
+  resetForTests();
+  const store=fakeStore([orphan()]);
+  const upsert=store.upsertNativeCargo;
+  let writes=0,reads=0;
+  store.upsertNativeCargo=row=>{
+   if(++writes===1)return {success:false};
+   return upsert(row);
+  };
+  const list=store.listNativeCargo;
+  store.listNativeCargo=()=>{
+   if(++reads>=2){
+    if(mode==="null")return null;
+    if(mode==="throw")throw Error("READBACK_UNAVAILABLE");
+   }
+   return list();
+  };
+  if(mode==="target-read-error"){
+   const perEntity=store.listNativeCargoForEntity;
+   let targetReads=0;
+   store.listNativeCargoForEntity=id=>{
+    if(id===hauler.itemID&&++targetReads>1)throw Error("READBACK_UNAVAILABLE");
+    return perEntity(id);
+   };
+  }
+  const ship={...hauler},target=fleet();
+  const result=adopt(sceneWith([ship]),target,{
+   store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
+  });
+  assert.equal(result.status,"ADOPTION_RECOVERY_UNVERIFIED",mode);
+  assert.equal(store.writes.length,1,"only original compensation was written");
+  assert.equal(target.coopHaulNeedsOperatorRepair,true);
+  assert.equal(ship.coopHaulNeedsOperatorRepair,"ADOPTION_RECOVERY_UNVERIFIED");
+ }
+});
