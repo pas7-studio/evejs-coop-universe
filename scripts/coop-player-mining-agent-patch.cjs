@@ -30,7 +30,7 @@ function patch(text,remove=false){
  const next='    if (Number(actionID) === agentMissionRuntime.AGENT_DIALOGUE_BUTTON_DECLINE) {';
  if(count(next)!==1||count(job)!==2)throw Error("MINING_AGENT_ACTION_PRIORITY_ANCHOR_MISMATCH");
  text=text.replace(next,ACTION_HOOK+eol+next);
- text=text.replace(BRIEF,BRIEF+eol+BRIEF_HOOK+eol);
+ text=text.replace(BRIEF,BRIEF+eol+BRIEF_HOOK);
  return text;
 }
 module.exports={patch,FILE,ACTION_HOOK,BRIEF_HOOK};
