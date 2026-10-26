@@ -389,14 +389,18 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(outcome?.status==="NO_PENDING_TRIP")return {status:"NO_PENDING_TRIP",terminal:false};
   if(outcome?.status!=="RECOVERED_NATIVE_TRIP")
    return pause("ALIFE12_"+String(outcome?.reason||outcome?.status||"RECOVERY_UNVERIFIED"));
-  const trip=outcome.trip;
-  const station=isValidStation(scene,getStation(trip.stationID),systemID);
+  const trip=outcome.trip;  const station=isValidStation(scene,getStation(trip.stationID),systemID);
+  // A trip whose station, fleet or start time cannot be proven is operator repair.
+  // A trip that merely ran past its deadline is an expired route: report it so the
+  // caller can record the expiry durably and plan a new trip with the ore it still
+  // carries. Never pretend it arrived.
   if(!station||station.corporationID!==trip.corporationID||
      trip.systemID!==systemID||trip.fleetID!==fleetID||
      !Number.isSafeInteger(trip.startedAt)||trip.startedAt<=0||
-     !Number.isFinite(now)||now<trip.startedAt||
-     now-trip.startedAt>DEADLINE_MS)
+     !Number.isFinite(now)||now<trip.startedAt)
    return pause("ALIFE12_RECOVERED_STATION_OR_DEADLINE_INVALID");
+  if(now-trip.startedAt>DEADLINE_MS)
+   return {status:"ROUTE_EXPIRED",terminal:false,trip};
   fleet.coopStationArrival=trip;
   for(const id of haulers)
    arrivals.set(Number(id),{fleetID,stationID:station.stationID,arrivedAt:0});
@@ -446,7 +450,16 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
   if(cargo.some(row=>row.transient===true))return pause("CARGO_NOT_DURABLE");
   if(routeJournal){
    const previous=recover(scene,fleet,now);
-   if(previous.status!=="NO_PENDING_TRIP")return previous;
+   if(previous.status==="ROUTE_EXPIRED"){
+    // The route outlived its deadline. Record that durably, then plan a new trip:
+    // the ore is still aboard and the ships are alive, and a closed route must not
+    // strand the fleet in "loaded" forever (measured: a restart mid-haul).
+    const expired=routeJournal.expire({manifestKey:previous.trip.manifestID,
+     systemID,fleetID,now});
+    if(!["ROUTE_EXPIRED","ALREADY_EXPIRED"].includes(expired?.status))
+     return pause("ALIFE12_"+String(expired?.reason||expired?.status||"EXPIRY_UNVERIFIED"));
+    noteRouteStatus(fleet,"ROUTE_EXPIRED_REPLANNED");
+   }else if(previous.status!=="NO_PENDING_TRIP")return previous;
   }
   if(!cargo.length)return {status:"NO_ORE_TO_DELIVER",terminal:true};
   // The fleet picks the station that really pays for the ore it carries. The
@@ -829,9 +842,27 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
      pos(row.cargoID)&&Number(row.coopHaulFleetID)===trip.fleetID&&
      Number(row.moduleID||0)===0):cargo;
    for(const item of deliverable){
+    // The ore belongs to the fleet corporation (the seller), not to the station
+    // operator. Crediting the station would claim title to cargo it never owned, so
+    // the deposit goes into the OWNER’s own hangar at that station: the receipt
+    // names the corporation that provably owned this very row, and the stored item is
+    // granted under that same owner. Measured live: the station corporation never
+    // matched and every remainder was blocked as ORIGINAL_CARGO_OWNER_MISMATCH.
+    const ownerCorporationID=pos(item.ownerID);
+    const ownerProven=ownerCorporationID>0&&deliverable.every(row=>pos(row.ownerID)===ownerCorporationID);
+    if(!ownerProven){
+     const key=trip.fleetID+":"+Number(item.cargoID)+":DEPOSIT_OWNER_UNPROVEN";
+     const now=Date.now();
+     if(now-(warehouseBlockedAt.get(key)||0)>=120000){
+      warehouseBlockedAt.set(key,now);
+      probe.observe("living-npc-warehouse-blocked",null,{spaceState:{systemID:trip.systemID}},
+       {fleetID:trip.fleetID,cargoID:item.cargoID,reason:"DEPOSIT_OWNER_UNPROVEN"});
+     }
+     continue;
+    }
     const result=factory.deposit({cargoID:Number(item.cargoID),haulerID:id,
       fleetID:trip.fleetID,systemID:trip.systemID,stationID:trip.stationID,
-      corporationID:trip.corporationID,arrivedAtMs:arrival.arrivedAt});
+      corporationID:ownerCorporationID,arrivedAtMs:arrival.arrivedAt});
     if(!["COMMITTED","ALREADY_COMMITTED"].includes(result.status)){
      // A blocked deposit is retried every native tick, so an unthrottled event
      // floods the log (230 lines a minute) and hides every other signal.

@@ -83,9 +83,38 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
    return {status:"DURABLE_DEPARTURE_CONFIRMED",manifestKey:key};
   }catch(error){return fail("ALIFE12_ACK_WRITE_OUTCOME_UNKNOWN",{
    details:String(error?.message||error).slice(0,120)})}
- }
- function receiptMatches(row,m){
-  const r=readJSON(path.join(receiptDir,row.cargoID+".json"));
+  }
+  // A trip that has outlived its deadline is a durable FACT, not a forgotten route.
+  // The original ack stays immutable; the closure is its own fsynced record, and
+  // recover() stops offering that trip so the fleet may plan a new one with the ore
+  // it still carries. Nothing is delivered, nothing is credited, nothing is faked.
+  const expiryFile=key=>path.join(dir,key+".expired.json");
+  function expiryOf(key){try{return readJSON(expiryFile(key))}catch(_error){return null}}
+  function expire({manifestKey,systemID,fleetID,now}={}){
+   try{
+    const key=String(manifestKey||""),m=sourceRecord(key);
+    if(!exact(systemID)||!exact(fleetID)||m.systemID!==systemID||m.fleetID!==fleetID)
+     return fail("ALIFE12_EXPIRY_IDENTITY_CONFLICT");
+    const ack=readJSON(path.join(dir,key+".json"));
+    if(!ack||ack.status!=="WARP_ACK_CONFIRMED")
+     return fail("ALIFE12_EXPIRY_WITHOUT_DEPARTURE");
+    const record={version:1,status:"ROUTE_EXPIRED",manifestKey:key,systemID,fleetID,
+     stationID:ack.stationID,corporationID:ack.corporationID,startedAt:ack.startedAt,
+     manifestHash:ack.manifestHash,expiredAt:Number(now)||Number(clock())};
+    if(!exact(record.expiredAt))return fail("ALIFE12_EXPIRY_TIME_UNVERIFIED");
+    const prior=expiryOf(key);
+    if(prior)return equal(prior,record)?{status:"ALREADY_EXPIRED",manifestKey:key}:
+     fail("ALIFE12_EXPIRY_ALREADY_RECORDED_DIFFERENTLY");
+    io.mkdirSync(dir,{recursive:true});
+    const file=expiryFile(key),fd=io.openSync(file,"wx",0o600);
+    try{io.writeFileSync(fd,JSON.stringify(record));io.fsyncSync(fd)}
+    finally{io.closeSync(fd)}
+    if(!equal(record,expiryOf(key)))return fail("ALIFE12_EXPIRY_READBACK_MISMATCH");
+    return {status:"ROUTE_EXPIRED",manifestKey:key};
+   }catch(error){return fail("ALIFE12_EXPIRY_WRITE_OUTCOME_UNKNOWN",{
+    details:String(error?.message||error).slice(0,120)})}
+  }
+ function receiptMatches(row,m){  const r=readJSON(path.join(receiptDir,row.cargoID+".json"));
   if(!r||r.version!==1||r.phase!=="COMMITTED"||
      r.cargoID!==row.cargoID||r.haulerID!==row.haulerID||
      r.typeID!==row.typeID||r.quantity!==row.quantity||
@@ -150,6 +179,9 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
     }
     // A completed manifest is historical, not a new route to replay.
     if(active===0)continue;
+    // An expired trip is closed for good: recover() must not offer it again, so the
+    // fleet can plan a fresh route with the ore it still carries.
+    if(expiryOf(key))continue;
     const ack=readJSON(path.join(dir,key+".json"));
     if(!ack)return fail("ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED");
     if(ack.version!==1||ack.status!=="WARP_ACK_CONFIRMED"||
@@ -172,6 +204,6 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
   }catch(error){return fail("ALIFE12_JOURNAL_READ_OR_PROVENANCE_UNAVAILABLE",{
    details:String(error?.message||error).slice(0,120)})}
  }
- return Object.freeze({confirm,recover});
+ return Object.freeze({confirm,recover,expire});
 }
 module.exports={createJournal};

@@ -166,3 +166,45 @@ test("invalid ACK record JSON is fail-closed and cargo remains intact",t=>{
  assert.equal(f.recover().status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(f.cargo.get(CARGO).quantity,13);
 });
+
+// A trip that outlived its deadline used to strand the fleet in "loaded" forever:
+// recovery paused on every tick and nothing could move. The expiry is now a durable
+// fact of its own, so a closed route stops being offered and the ore can be re-planned.
+test("an acked trip can be expired durably and is then no longer pending",t=>{
+ const f=fixture(t);
+ assert.equal(f.confirm().status,"DURABLE_DEPARTURE_CONFIRMED");
+ assert.equal(f.recover().status,"RECOVERED_NATIVE_TRIP");
+ const expired=f.journal().expire({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:500000});
+ assert.equal(expired.status,"ROUTE_EXPIRED");
+ assert.equal(f.recover().status,"NO_PENDING_TRIP","the closed route is never offered again");
+ const again=f.journal().expire({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:500000});
+ assert.equal(again.status,"ALREADY_EXPIRED","expiry is idempotent");
+ // Nothing was delivered or credited by closing a route.
+ assert.equal(f.cargo.has(CARGO),true);
+ assert.equal(f.stock.size,0);
+});
+
+test("a trip with no departure acknowledgement cannot be expired",t=>{
+ const f=fixture(t);
+ const refused=f.journal().expire({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:500000});
+ assert.equal(refused.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(refused.reason,"ALIFE12_EXPIRY_WITHOUT_DEPARTURE");
+});
+
+test("the expiry record keeps the original trip identity and cannot be rewritten",t=>{
+ const f=fixture(t);
+ f.confirm();
+ assert.equal(f.journal().expire({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:500000}).status,"ROUTE_EXPIRED");
+ const file=path.join(f.root,"trip-departure-acks",f.m.key+".expired.json");
+ const record=JSON.parse(fs.readFileSync(file,"utf8"));
+ assert.equal(record.status,"ROUTE_EXPIRED");
+ assert.equal(record.systemID,SYSTEM);
+ assert.equal(record.fleetID,FLEET);
+ assert.equal(record.stationID,STATION);
+ assert.equal(record.corporationID,CORP);
+ assert.equal(record.startedAt,START);
+ assert.equal(record.expiredAt,500000);
+ const changed=f.journal().expire({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:600000});
+ assert.equal(changed.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(changed.reason,"ALIFE12_EXPIRY_ALREADY_RECORDED_DIFFERENTLY");
+});

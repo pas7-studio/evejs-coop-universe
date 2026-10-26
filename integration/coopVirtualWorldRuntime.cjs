@@ -3486,7 +3486,17 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
   const registry=identityRegistry;
   if(!registry||typeof registry.link!=="function"||typeof registry.get!=="function")
    return null;
-  const pilots=(world?.snapshot()?.pilots||[]).filter(p=>p?.role==="hauler"||p?.role==="miner");
+  // The role is a virtual label, not a property of the world file: the virtual world
+  // keeps id/name/faction/route and the economy ledger owns the role. Filtering only on
+  // pilot.role matched nothing, so every sale died with HAULER_NOT_NAMED while the
+  // fleet carried real ore to a real station. Read the role from whichever layer has
+  // it, prefer a hauler/miner resident, then any free resident.
+  const ledger=(()=>{try{return economy&&typeof economy.snapshot==="function"?
+   (economy.snapshot().pilots||{}):{}}catch(_error){return {}}})();
+  const roleOf=pilot=>String(pilot?.role||(ledger&&ledger[pilot?.id]&&ledger[pilot.id].role)||"");
+  const residents=(world?.snapshot()?.pilots||[]).filter(p=>p&&p.id);
+  const preferred=residents.filter(p=>["hauler","miner"].includes(roleOf(p)));
+  const pilots=[...preferred,...residents.filter(p=>!preferred.includes(p))];
   const links=Object.values(registry.snapshot()?.links||{});
   if(links.some(x=>Number(x.entityID)===Number(haulerID)))return null;
   for(const pilot of pilots){

@@ -32,7 +32,7 @@ function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
  const cargo=new Map([[CARGO,{cargoID:CARGO,entityID:SHIP,coopHaulFleetID:FLEET,
   coopHaulFromMinerID:MINER,typeID:34,quantity:13,moduleID:0,transient:false}]]);
  const manifestKey=SYSTEM+"-"+FLEET+"-"+START;
- let now=START,acks=0,warps=0,prepares=0,deposits=0,verifies=0;
+ let now=START,acks=0,warps=0,prepares=0,deposits=0,verifies=0,expiries=0;
  let writtenAck=false;
  const originalManifest={
   prepare:()=>{prepares++;return {status:"MANIFEST_DURABLY_PREPARED",
@@ -42,6 +42,7 @@ function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
    stacks:1,quantity:13,convoySaved:false,paidReward:false}}
  };
  const journal={
+  expire:()=>{expiries++;return{status:"ROUTE_EXPIRED"}},
   confirm:()=>{acks++;if(ackFail)return{status:"NEEDS_OPERATOR_REPAIR"};
    writtenAck=true;return{status:"DURABLE_DEPARTURE_CONFIRMED"}},
   recover:()=>!prepares?{status:"NO_PENDING_TRIP"}:
@@ -73,7 +74,8 @@ function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
   setNow:value=>now=value,
   arrive(){ship.position={...point.position};ship.mode="STOP";ship.pendingWarp=null},
   get warps(){return warps},get acks(){return acks},
-  get prepares(){return prepares},get deposits(){return deposits},get verifies(){return verifies}};
+  get prepares(){return prepares},get deposits(){return deposits},get verifies(){return verifies},
+  get expiries(){return expiries}};
 }
 test("original first route prepares immutable manifest then confirms native warp ACK",t=>{
  const f=fixture(t),fleet=f.newFleet(),director=f.director();
@@ -145,11 +147,16 @@ test("a physically absent real station after restart cannot authorize cargo cred
  assert.equal(r.status,"NO_NATIVE_NPC_STATION");
  assert.equal(f.deposits,0);
 });
-test("expired original route never gets a new deadline or automatic rewarp",t=>{
+test("an expired original route is recorded and replanned, never resumed",t=>{
+ // The old behaviour paused forever: a restart mid-haul left the fleet in loaded
+ // with ore aboard and no way out. The stale route is now a durable fact, so the
+ // fleet plans a NEW trip (own manifest, own warp acknowledgement) instead of
+ // resuming it, and nothing is deposited without a physical arrival.
  const f=fixture(t),fleet=f.newFleet();
  f.director().start(f.scene,fleet,START);
  const reboot=f.newFleet(),r=f.director().start(f.scene,reboot,START+16*60*1000);
- assert.equal(r.status,"ALIFE12_RECOVERED_STATION_OR_DEADLINE_INVALID");
- assert.equal(f.warps,1);
- assert.equal(f.deposits,0);
+ assert.equal(f.expiries,1,"the stale route is recorded as expired");
+ assert.equal(r.status,"EN_ROUTE","the ore is replanned on a fresh trip");
+ assert.equal(f.warps,2,"the new trip issues its own native warp");
+ assert.equal(f.deposits,0,"no deposit without a physical arrival");
 });
