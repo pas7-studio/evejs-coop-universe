@@ -37,7 +37,12 @@ function cargoRows({store,cargoTable,database}={}){
  let read=cargoTable;
  if(typeof read!=="function"){
   const db=database||require("../gameStore");
-  read=()=>db.read?.("npcCargo","/cargo");
+  read=()=>{
+   const result=db.read?.("npcCargo","/cargo");
+   // GameStore.read returns a result envelope, not the native table itself.
+   // A failed or malformed read is unverified custody, never "no ore".
+   return result?.success===true?result.data:null;
+  };
  }
  const table=read();
  return table&&typeof table==="object"&&!Array.isArray(table)?
