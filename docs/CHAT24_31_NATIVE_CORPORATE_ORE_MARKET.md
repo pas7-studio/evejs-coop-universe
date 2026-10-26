@@ -52,6 +52,14 @@ EVEJS_COOP_PLAYER_NPC_MINING_MARKET_READ=1
 - Existing D2 Agent hiring 10/10 and D3 Agent fleet selection 8/8 remained green in isolated exact-source JavaScript tests.
 - The whole pinned native Node/SQLite/Rust and two authenticated clients **NOT_RUN**. No native market trade or ISK credit has been executed.
 
+## Stage E2B1 — original corporation-owned SELL custody primitive (source implemented)
+
+- Added original source-bound `coopPlayerMiningCorporateSellCustody`: one actual native `items + corporationRuntime + marketEscrow` transaction moves **the same original ore itemID** into the real `9,200,000,000 + orderID` SELL escrow location without changing its corporate owner. Writes authenticated `isCorp:true` escrow and persistent `coopPlayerMiningCorpSell\u001fcargoID` receipt.
+- An original native Rust corporate SELL must first exist in **`PREPARED_UNPUBLISHED`** state with no fill and binding source quote. This Rust state is **NOT implemented upstream**, so this isolated writer remains **NOT LIVE**; already-open orders are rejected to avoid unbacked fills.
+- A native `CANCELLED/EXPIRED` and **zero-fill** witness permits the original item to return to the same corporate office in one transaction. Unknown commits and partial fills fail closed; no duplicate cargo, synthetic ore or fake ISK credit.
+- Registered `coopPlayerMiningCorpSell` in the reversible pinned native SQLite group mapping, plus a default-OFF feature flag. **20/20** isolated escrow/return tests and exact pinned SQLite row-group roundtrip PASS. Actual Rust corporate order publication and corporate settlement remain future engineering.
+- See [CHAT24_31_CORPORATE_SELL_ESCROW.md](CHAT24_31_CORPORATE_SELL_ESCROW.md) for source contract, tests and next actual native `PrepareCorpSell → escrow → PublishCorpSell → ClaimFill` requirements.
+
 ## Native corporate SELL required before Stage E2B can be truthfully called live
 
 1. Native market service must create a **real corporation-owned SELL order** from the original office warehouse itemID with authentic corporation roles and full order-price/quantity/tax authorization. Character-only SELL admission cannot be reused unchanged.
