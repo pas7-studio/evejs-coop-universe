@@ -59,9 +59,19 @@ jobs:
             'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/space/npc/nativeNpcService.js' \
             --output "${RUNNER_TEMP}/pinned-nativeNpcService.js"
           test -s "${RUNNER_TEMP}/pinned-nativeNpcService.js"
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/services/exploration/probes/probeScanRuntime.js' \
+            --output "${RUNNER_TEMP}/pinned-probeScanRuntime.js"
+          curl --fail --location --silent --show-error --retry 3 \
+            'https://raw.githubusercontent.com/gameboys84/EveJS/c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f/Code/server/src/services/exploration/probes/probeSceneRuntime.js' \
+            --output "${RUNNER_TEMP}/pinned-probeSceneRuntime.js"
+          test -s "${RUNNER_TEMP}/pinned-probeScanRuntime.js"
+          test -s "${RUNNER_TEMP}/pinned-probeSceneRuntime.js"
       - name: Run actual Node 22 tests with the source pin
         env:
           EVEJS_PINNED_NPC_SERVICE_SOURCE: ${{ runner.temp }}/pinned-nativeNpcService.js
+          EVEJS_PINNED_PROBE_SCAN_SOURCE: ${{ runner.temp }}/pinned-probeScanRuntime.js
+          EVEJS_PINNED_PROBE_SCENE_SOURCE: ${{ runner.temp }}/pinned-probeSceneRuntime.js
           EVEJS_COOP_NPC_PROBE_SCAN: '0'
           EVEJS_COOP_NPC_PROBE_LAUNCH: '0'
           EVEJS_COOP_NPC_PROBE_LOADOUT_SPLIT: '0'
@@ -74,6 +84,7 @@ jobs:
             tests/coop-npc-probe-evidence.test.mjs \
             tests/coop-npc-probe-wiring.test.mjs \
             tests/coop-npc-probe-loadout-source.test.mjs \
+            tests/coop-npc-probe-pinned-native-source.test.mjs \
             tests/coop-native-npc-probe-flight.test.mjs \
             tests/coop-native-hacking-admission.test.mjs
       - name: Keep native SQLite kill/restart and two-client gameplay blocked
