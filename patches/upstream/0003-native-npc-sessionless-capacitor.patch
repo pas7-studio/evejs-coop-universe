@@ -15,6 +15,11 @@ Two halves of the same defect:
     is now resolved lazily from the same dogma attribute the fitting service
     uses and cached on the entity.
 
+Every sessionless ship in the scene is recharged once a second by the scene
+tick, not only ships that happen to carry an NPC controller: co-op mining hulls
+have none, and live telemetry showed tau set but capacitorRechargedAtMs = 0
+forever, so their charge only ever fell.
+
 No capacitor is granted out of thin air: the same curve real ships use.
 
 Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
@@ -22,7 +27,15 @@ Local overlay: integration/* is NOT part of this patch series.
 ---
 --- a/server/src/space/npc/npcBehaviorLoop.js
 +++ b/server/src/space/npc/npcBehaviorLoop.js
-@@ -4513,6 +4513,7 @@ function tickScene(scene, now) {
+@@ -4474,6 +4474,7 @@ function tickController(scene, controller, now) {
+ }
+ 
+ function tickScene(scene, now) {
++  sweepSessionlessCapacitors(scene, now);
+   if (!scene) {
+     return;
+   }
+@@ -4513,6 +4514,7 @@ function tickScene(scene, now) {
      if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {
        continue;
      }
@@ -30,7 +43,7 @@ Local overlay: integration/* is NOT part of this patch series.
      tickController(scene, controller, now);
      processed += 1;
    }
-@@ -4547,6 +4548,7 @@ function tickControllersByEntityID(scene, entityIDs, now) {
+@@ -4547,6 +4549,7 @@ function tickControllersByEntityID(scene, entityIDs, now) {
      if (toFiniteNumber(controller.nextThinkAtMs, 0) > now) {
        continue;
      }
@@ -38,7 +51,7 @@ Local overlay: integration/* is NOT part of this patch series.
      tickController(scene, controller, now);
    }
  }
-@@ -4646,6 +4648,81 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
+@@ -4646,6 +4649,103 @@ function noteIncomingAggression(entityID, attackerEntityID, now = Date.now(), op
    };
  }
  
@@ -82,6 +95,28 @@ Local overlay: integration/* is NOT part of this patch series.
 +    return resolved;
 +  } catch (_error) {
 +    return 0;
++  }
++}
++
++// A capacitor belongs to the SHIP, not to an NPC controller. The advance above
++// only runs for controllers whose next think is due, and co-op mining hulls
++// have no such controller: live evidence showed tau set (125-187 s) and
++// reAt = 0 forever, so their charge only ever fell. Recharge every sessionless
++// ship in the scene, the way CCP recharges every ship, at most once a second.
++let lastSessionlessCapacitorSweepAtMs = 0;
++function sweepSessionlessCapacitors(scene, now) {
++  if (!scene || typeof scene.getDynamicEntities !== "function") {
++    return;
++  }
++  const at = Number(now);
++  if (!Number.isFinite(at) || at - lastSessionlessCapacitorSweepAtMs < 1000) {
++    return;
++  }
++  lastSessionlessCapacitorSweepAtMs = at;
++  for (const entity of scene.getDynamicEntities()) {
++    if (entity && entity.kind === "ship" && !entity.session) {
++      advanceSessionlessCapacitor(entity, at);
++    }
 +  }
 +}
 +

@@ -80,6 +80,25 @@ mining resumes instead of stalling forever.
   `tests/coop-overlay-dependencies.test.mjs` now fails if the copy list and the
   require graph disagree.
 
+### Churn is the current blocker (2026-10-26T12:26Z)
+- The capacitor sweep now really runs: `FLEET_POST_TICK` shows real
+  `tau` (125000-187500 ms) and `reAt` set by the scene sweep, so patch 0003's
+  advance is no longer limited to ships that happen to own an NPC controller.
+- But **no ore was produced for 20+ minutes** and the miners are replaced every
+  20-40 s: live IDs 14397 → 14715 → 14780 → 14864, each ship spawning at
+  `cap 1` in `WARP`.
+- Decisive evidence: the SQLite table `npcRuntimeControllers` has 264 rows, and
+  **zero** for any entity above 980000014000 - every newly spawned miner has no
+  runtime controller. The native mining tick prunes ships without a controller,
+  and the startup/boot path spawns them again.
+- `EVEJS_COOP_MINING_STARTUP_RETRY=0` did not stop it, and enabling
+  `EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE=1` did give stable fleet IDs
+  (960004641 = 30000145*32+1) but the ships still had no controller, so the
+  probe compose was restored to its previous state.
+- `living-headless-boot-system NATIVE_SCENE_READY` fires for four systems every
+  minute, so scenes are re-created repeatedly; that plus the missing controller
+  is the loop to break. This is ALIFE-08 territory (owner's active area).
+
 ### Next
 1. `scripts/restart-acceptance.sh` (versioned) snapshots SQLite cargo, restarts,
    and prints `VERDICT`/`RESTART_PASS`; it accepts cargo already in flight

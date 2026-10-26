@@ -22,7 +22,7 @@
     },
     {
       "file": "0003-native-npc-sessionless-capacitor.patch",
-      "sha256": "4bd6fd13fa074c855121bb362ad44d814ddf7926190cae8fd0763723b2eceeb3",
+      "sha256": "07db2f693649ee02dc3231065252b1c3bcd00f03c369951c54000b04979230b6",
       "files": [
         "server/src/space/npc/npcBehaviorLoop.js"
       ],
