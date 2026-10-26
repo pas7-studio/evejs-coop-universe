@@ -4,8 +4,9 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {analyze}=require("../scripts/audit-pve-native-e2e.cjs");
 const at=n=>new Date(Date.UTC(2026,9,26,12,0,n)).toISOString();
+const runtimeRunID="2c03aa9a-1eac-4781-afbe-2a99bbaaaa01";
 function fixture(){
- const base={systemID:30000144},fleetID=77,agentID=50,sourceInstanceID=71001;
+ const base={systemID:30000144,runtimeRunID},fleetID=77,agentID=50,sourceInstanceID=71001;
  const players=[{characterID:101,missionSequence:11,iskDelta:120000,lpDelta:250,
   corporationID:1000123,missionWalletTransactionID:87001},
   {characterID:102,missionSequence:29,iskDelta:120000,lpDelta:250,
@@ -121,4 +122,15 @@ test("an original wreck event without source authority tag is not live wreck pro
  const f=fixture();
  delete f[0].evidence;
  assert.equal(run(f).status,"NATIVE_BOSS_WRECK_NOT_OBSERVED");
+});
+
+test("old or concatenated process logs cannot borrow a boss from another runtime boot",()=>{
+ const f=fixture();f[0].runtimeRunID="2c03aa9a-1eac-4781-afbe-2a99bbaaaa02";
+ assert.notEqual(run(f).status,"SERVER_NATIVE_DUO_CAUSALITY_CORRELATED");
+ const g=fixture();g[1].runtimeRunID="2c03aa9a-1eac-4781-afbe-2a99bbaaaa03";
+ assert.notEqual(run(g).status,"SERVER_NATIVE_DUO_CAUSALITY_CORRELATED");
+});
+test("telemetry without native runtime boot ID is not a current in-game source receipt",()=>{
+ const f=fixture();delete f[3].runtimeRunID;
+ assert.equal(run(f).status,"INVALID_NATIVE_EVENT_LOG");
 });

@@ -13,7 +13,10 @@ function normalize(input){
  if(records.length>100000)return {status:"EVENT_LOG_TOO_LARGE",records:[]};
  const filtered=[];
  for(const [i,row] of records.entries()){
-  if(!row||typeof row.event!=="string")return {status:"INVALID_NATIVE_EVENT_LOG",records:[]};
+  if(!row||typeof row.event!=="string"||
+    typeof row.runtimeRunID!=="string"||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.runtimeRunID))
+   return {status:"INVALID_NATIVE_EVENT_LOG",records:[]};
   const t=Date.parse(row.at);
   if(!Number.isFinite(t))return {status:"INVALID_NATIVE_EVENT_LOG",records:[]};
   filtered.push({...row,_t:t,_seq:i});
@@ -83,7 +86,8 @@ function analyze(input){
   x.status==="TWO_ORIGINAL_REWARD_ITEMS_AND_STANDING_TRANSACTIONS_VERIFIED");
  let duoWithoutBoss=false;
  for(const turnin of [...turnins].reverse()){
-  const matching=(row)=>row.sourceInstanceID===turnin.sourceInstanceID&&
+  const matching=(row)=>row.runtimeRunID===turnin.runtimeRunID&&
+   row.sourceInstanceID===turnin.sourceInstanceID&&
    row.fleetID===turnin.fleetID&&row.agentID===turnin.agentID&&
    row.systemID===turnin.systemID&&row._t<=turnin._t&&
    turnin._t-row._t<=3*60*60*1000;
@@ -91,7 +95,8 @@ function analyze(input){
   const cargo=custody.findLast(x=>matching(x));
   if(!reward||!cargo||!receiptsMatch(reward,cargo,turnin))continue;
   duoWithoutBoss=true;
-  const kill=deaths.findLast(x=>x.instanceID===turnin.sourceInstanceID&&
+  const kill=deaths.findLast(x=>x.runtimeRunID===turnin.runtimeRunID&&
+   x.instanceID===turnin.sourceInstanceID&&
    x.systemID===turnin.systemID&&x._t<=cargo._t&&
    cargo._t-x._t<=3*60*60*1000);
   if(!kill)continue;
