@@ -31,7 +31,8 @@ function readServerWagePolicy({root,io=fs}={}){
 }
 function createMiningHiring({gameStore,access,getFleet,verifyNativeFleet,
  isNpcCorporation,getPolicy,clock=()=>Date.now(),enabled=()=>false}={}){
- if(gameStore?.coopAtomicNativeRows?.mode!=="SERVER_INTERNAL_FLAGGED"||
+ if(typeof gameStore?.read!=="function"||
+  gameStore?.coopAtomicNativeRows?.mode!=="SERVER_INTERNAL_FLAGGED"||
   typeof gameStore.coopAtomicNativeRows.transact!=="function"||
   typeof gameStore.coopAtomicNativeRows.isPoisoned!=="function"||
   [access?.isMember,access?.canIndustry,access?.canWallet,getFleet,
@@ -51,6 +52,11 @@ function createMiningHiring({gameStore,access,getFleet,verifyNativeFleet,
   const f=getFleet({systemID,fleetID});
   const fleet=canonicalFleet(f,systemID,fleetID,employerCorpID);
   if(!fleet||verifyNativeFleet({...fleet,ownerID:employerCorpID})!==true)return null;
+  // Do not advertise a second shift to a fleet bound to any corporation.
+  // A corrupt or missing table is not an available slot.
+  const indexed=gameStore.read("corporationRuntime",
+   "/coopPlayerMiningFleet/"+systemID+":"+fleetID);
+  if(indexed?.success===true||indexed?.errorMsg!=="ENTRY_NOT_FOUND")return null;
   const rate=getPolicy(employerCorpID);
   if(!rate||rate.maxCycles<CYCLES)return null;
   const wageCents=(fleet.minerIDs.length*rate.minerCycleCents+
