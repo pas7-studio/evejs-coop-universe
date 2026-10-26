@@ -87,6 +87,26 @@ escalations, wreck items or mission payouts.
 6. Capture client-visible entry, NPC target selection, physical warp/attack,
    native wreck custody and two-player session evidence separately.
 
+
+## Stage 3A — original authored encounter-wave rally (dependent draft)
+
+**Status:** SOURCE_REVIEWED / EXACT_BRANCH_V8_TESTED / FULL_NATIVE_TWO_CLIENT_NOT_RUN.
+
+The pinned native `dungeonUniverseSiteService.tickSceneSiteBehaviors` already owns timer, visible_countdown, wave_cleared, battleships_destroyed and proximity encounter triggers. It owns NPC spawning, completion, reward containers and native mission progression. P0-3A intentionally does **not** call `triggerSiteEncounter` or `spawnNpcBatchInSystem`: invoking them on generic player attack could bypass original authored prerequisites. Instead it physically rallies an already spawned NPC from a distinct active encounter-wave key within the *same original native dungeon site*.
+
+`coopPveWaveReinforcements` reuses P0-2 `siteEntries` and reads the original `nativeNpcStore` entry, transient nativeCombat controller, typeID, corporation, creation timestamp, authored waveIndex and original spawn timestamp. A helper belongs to no other instance and is not a named A-Life/war-fleet hull. The trigger is a recent exact controller player aggressor admitted by native character, session and ship authority. Reserves must be idle, 250–2,000 km from the attacker.
+
+Tick A orders a genuine `npcRuntime.warpToEntity` (maximum two across sites per existing 30s tick). Tick B+ demands real movement over 150 km from original position, elapsed time, no active warp, same site/hull, still-authenticated attacker and new distance under 200 km before a genuine `npcRuntime.issueAttackOrder`. Warp ACK is not arrival and attack ACK is not damage/loot/reward. Unknown outcomes, native refusals, expired aggression, site completion and ship reuse block further automatic orders. The P0-2 site director now excludes P0-3A leased helpers to avoid fighting for the same native hull.
+
+Enabled ONLY by `EVEJS_COOP_PVE_SITE_DEFENSE=1` AND new default-OFF `EVEJS_COOP_PVE_WAVE_REINFORCEMENTS=1`; uses the original Living World phase registry and overlay installer without another timer or site allocator. Any rewards remain original native custody, not handled here.
+
+**Crash limitation:** order leases and unknown-outcome fences are process-local. After restart, only original native source state and operator reconciliation can authorize safe continuation. Do not enable on a persistent world until durable native-order reconciliation is implemented and tested.
+
+**Evidence:** 10/10 new and 12/12 inherited site tests executed in the exact-branch V8 harness; 11 source-wiring checks verified. Full Node tests, pinned overlay roundtrip, Docker native game and two-client E2E **NOT RUN**. The feature is code-prepared, not gameplay-complete.
+
+**P0-3B next:** authentic static pirate objective defense and NPC hold/regroup/retreat, without unauthorized target creation. P0-4 boss, original wreck/loot and P0-5 per-player lawful mission payouts remain pending.
+
+
 ## Next stages and acceptance
 
 | Stage | Implementation target | Must be evidenced before DONE |
