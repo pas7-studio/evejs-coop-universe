@@ -32,6 +32,8 @@ function transform(source,spec,remove){
  if(spec.file==="server/src/services/dogma/dogmaService.js" ||
     spec.file==="server/src/services/exploration/hackingMgrService.js")
   text=require("./coop-native-hacking-admission-patch.cjs").patch(text,spec.file,remove);
+ if(spec.file==="server/src/services/exploration/hackingMgrService.js")
+  text=require("./coop-npc-expedition-hacking-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js")
   text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js") {
