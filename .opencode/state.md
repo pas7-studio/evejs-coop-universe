@@ -1,60 +1,42 @@
-﻿## Restart resilience (path B) — implemented 2026-10-26
+﻿## Session state — 2026-10-26 (latest)
 
-### The gap, precisely
-Startup mining fleets run in the proven **transient** mode. On a restart the
-native rows (`npcEntities`, `npcRuntimeControllers`, `npcModules`, `npcCargo`)
-are gone, the slot is re-seeded with new hull IDs, and the fleet starts its
-cycle from zero.
+### Change layering (binding, also in AGENTS.md)
+We own every change in this repo; the EveJS checkout is never the source of truth.
+- **L1** stock bug/omission → `patches/upstream/NNN-*.patch`, applied by
+  `scripts/apply-upstream-patches.cjs` (pin + sha256 enforced, `--apply|--reverse|--branch`).
+- **L2** co-op rule → `integration/*.cjs` + one hook line in `scripts/patch-evejs-coop.cjs`.
+- **L3** stateful mechanism → runtime phase/module, never a string patch.
+Order is L1 → L2 → `OVERLAY_OK` → build. `docs/UPSTREAM_PATCH_SERIES.md`.
 
-The hauled ore itself is already durable: `coopNativeHaulCargo.transferCargo`
-writes the hauler row with `transient:false`, `coopHaulFleetID` and
-`coopHaulFromMinerID`, then flushes `npcCargo`. After a restart that row keeps
-its native `cargoID` but still points at the **old** hauler entity, so it
-becomes an invisible orphan and the new fleet never sees it.
+Series now: `0001` export `listNativeCargo`, `0002` native NPC capacitor recharge rate
+(replaces the deleted `coopNpcCapacitor` top-up hack; last good check: `OVERLAY_OK`,
+patched 54, anchorMismatch 0, `tests/upstream-patch-series.test.mjs` 4/4).
 
-### What is now implemented
-`integration/coopHaulCargoAdoption.cjs` (default **OFF**, flag
-`EVEJS_COOP_HAUL_CARGO_ADOPTION=1`), hooked once per `tickMiningFleet`:
+### Restart resilience (path B)
+- Haul cargo is now persisted for transient haulers too **only when**
+  `EVEJS_COOP_HAUL_CARGO_ADOPTION=1`; without the flag the old conservative behaviour stays.
+- `integration/coopHaulCargoAdoption.cjs`: `plan()` accepts only durable rows whose
+  `coopHaulFleetID` **and** `coopHaulSystemID` match the slot, younger than TTL (45 min),
+  whose old entity is neither live in the scene nor in the native registry. `adopt()`
+  needs one live hauler, idle `mining` fleet, empty hauler; re-points preserving `cargoID`,
+  requires `flushTableSync("npcCargo")` success (else rolls back), then hands the fleet to
+  `loaded -> station -> sell`. One line per status (no tick spam), 2 s throttle, 120 tries.
+- Store caveat: the pinned `nativeNpcStore` does **not** export `listNativeCargo`; read the
+  table via `gameStore.read("npcCargo","/cargo")` (patch `0001` fixes the export).
+- 11/11 tests in `tests/coop-haul-cargo-adoption.test.mjs`.
 
-1. `plan()` selects only durable, non-module rows where
-   `coopHaulFleetID` and `coopHaulSystemID` both match this exact fleet slot,
-   the row is younger than `EVEJS_COOP_HAUL_CARGO_ADOPTION_TTL_MS`
-   (default 45 min), and its original `entityID` is neither a live ship in the
-   scene nor still present in the native entity registry.
-2. `adopt()` requires one live hauler, an idle `mining` fleet and a hauler that
-   carries no durable haul cargo yet, then re-points each row to that hauler,
-   preserving `cargoID` (so manifests, receipts and the ALIFE-13 audit keep
-   their identity), stamping `coopHaulAdoptedAt` / `coopHaulAdoptedFrom`.
-3. The write is only accepted after `flushTableSync("npcCargo")` succeeds;
-   otherwise every row is restored to its original owner (no partial state).
-4. The fleet is handed back to the normal `loaded -> routeFromHaul -> checkReturn
-   -> warehouse -> sell` pipeline with `lastHauledVolumeM3` set from the real
-   adopted volume, and `living-haul-cargo-adopted` records rows/quantity/volume
-   with `invented:false`.
+### Evidence so far
+- Restart (10:34): 4 systems `NATIVE_SCENE_READY` in ~2 s, slot re-seeded, warehouse
+  receipts 18 → 18, but `lastHauledVolumeM3=0` (in-flight state was lost).
+- First adoption attempt (10:53): `INVALID_AUTHORITIES` every tick → root cause found
+  (missing export) and fixed. Second attempt (11:01) proved `living-hauler-loaded`
+  happens but the durable table was still empty **before** the persistence change.
+- Acceptance run in flight (`restartAcceptance2.sh`): deploy → wait for a real load →
+  restart → assert `living-haul-cargo-adopted` and durable rows with `coopHaulSystemID`.
 
-Never: new cargo IDs, granted station stock, invented destination, double
-adoption (per-slot attempt counter, terminal after success).
-
-`coopHaulSystemID` is now written at load time in both haul paths
-(`coopNativeHaulCargo.transferCargo` and `coopNativeHaulTransferAtomic`).
-Rows written before this change have no system field and are deliberately
-skipped — provenance is not guessed.
-
-### Measured restart behaviour (before this change)
-`docker compose -p evejs restart server`, 10:34 UTC: all 4 systems
-`NATIVE_SCENE_READY` within ~2 s, slot re-seeded (`fleet 1 mining miners 2
-haulers 1`), warehouse receipts 18 before → 18 after, but
-`lastHauledVolumeM3=0` and new ship IDs (in-flight state lost).
-
-### Deploy note
-The overlay installer is idempotent when the checkout contains *our* previous
-overlay, but refuses a file that still carries an older overlay revision
-(`DRIFTED`). The revert step is now:
-`git -C <checkout> checkout -- server/src/services/mining/miningNpcOperations.js`
-(only the drifted file), then `node scripts/patch-evejs-coop.cjs --code-path ...`
-and confirm `OVERLAY_OK` (`patched 54`, `anchorMismatch 0`) before building.
-
-### Tests
-`tests/coop-haul-cargo-adoption.test.mjs`: 10/10 — disabled flag, real adoption,
-registry-guard, cross-system/cross-fleet refusal, once-only, active-trip refusal,
-already-loaded hauler, flush rollback, TTL expiry, hauler uniqueness.
+### Next
+1. Read `restartAcceptance2.log`: if `DURABLE_HAUL_ROWS 0` after a real load, the
+   `db.setTransientPath` flush path is the blocker (`living-hauler-cargo-persist-failed`).
+2. Then L3 `durable slot journal` (`systemID, slot, fleetID, minerIDs, haulerIDs, cargoIDs,
+   tripPhase, updatedAt`, fsync per phase change) + one boot `reconcile` phase, so adoption
+   becomes journal replay instead of heuristics.
