@@ -24,7 +24,7 @@ on:
       - 'tests/coop-native-hacking-admission.test.mjs'
       - '.github/workflows/ex03-native-npc-probes.yml'
   push:
-    branches: [main]
+    branches: [main, feat/ch22-23-npc-expedition-competition-20261026]
     paths:
       - 'integration/coopNpcProbe*.cjs'
       - 'integration/coopNativeNpcProbeFlight.cjs'
