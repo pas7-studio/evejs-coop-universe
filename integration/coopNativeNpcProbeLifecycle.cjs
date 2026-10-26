@@ -85,8 +85,10 @@ function createNativeNpcProbeLifecycle({getNativeEntity,getController,
      if(removed?.success!==true&&scene.getEntityByID(row.cargoID))
       return denied("NPC_PROBE_NATIVE_REMOVAL_UNCONFIRMED");
     }
-    if(p.status==="EXPIRED")
-     return {status:"NPC_PROBE_EXPIRED",cargoID:row.cargoID,quantity:0};
+    if(p.status==="EXPIRED"){
+     if(physical)return {status:"NPC_PROBE_EXPIRED",cargoID:row.cargoID,quantity:0};
+     continue; // Durable tombstone is already clean; process other probes.
+    }
     // RECALLING is a durable pre-refund fence. No physical probe remains.
     const stowed={...row,quantity:1,deployedProbe:{
      ...p,status:"STOWED",recoveredAtMs:now}};
