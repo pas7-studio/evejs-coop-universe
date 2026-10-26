@@ -85,7 +85,9 @@ names.push(
 names.splice(names.indexOf("coopPlayerIndustryFence")+1,0,"coopPlayerIndustryRuntime");
 // Late native module reconciliation after parallel merges: copy-only.
 // Keep NPE and Living World behavior behind their existing native hooks.
-names.push("coopNpeSafety", "coopLivingAgentRuntime");
+// Living Agent is already present in the initial native module list.
+// Duplicate deployment records would overwrite/verify the same file twice.
+names.push("coopNpeSafety");
 // Chats 25/32/39: original native source hooks; all feature flags stay OFF.
 const ORE_PATCH_PATHS=new Set([
  "server/src/services/inventory/itemStore.js",
