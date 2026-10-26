@@ -18,7 +18,7 @@ function readServerWagePolicy({root,io=fs}={}){
   catch{return null}
   if(typeof contents!=="string"||Buffer.byteLength(contents)>32768)return null;
   let data;try{data=JSON.parse(contents)}catch{return null}
-  if(data?.version!==1||typeof data.employers!=="object"||Array.isArray(data.employers))return null;
+  if(data?.version!==1||!data.employers||typeof data.employers!=="object"||Array.isArray(data.employers))return null;
   const row=data.employers[String(employerCorpID)];
   if(row?.enabled!==true||!Number.isSafeInteger(row.revision)||row.revision<1||
    !pos(row.minerCycleCents)||!pos(row.haulerCycleCents)||
@@ -30,13 +30,13 @@ function readServerWagePolicy({root,io=fs}={}){
  };
 }
 function createMiningHiring({gameStore,access,getFleet,verifyNativeFleet,
- isNpcCorporation,getPolicy,clock=()=>Date.now(),enabled=()=>false}={}){
+ isNpcCorporation,getPolicy,clock=()=>Date.now(),enabled=()=>false,observe=()=>{}}={}){
  if(typeof gameStore?.read!=="function"||
   gameStore?.coopAtomicNativeRows?.mode!=="SERVER_INTERNAL_FLAGGED"||
   typeof gameStore.coopAtomicNativeRows.transact!=="function"||
   typeof gameStore.coopAtomicNativeRows.isPoisoned!=="function"||
   [access?.isMember,access?.canIndustry,access?.canWallet,getFleet,
-   verifyNativeFleet,isNpcCorporation,getPolicy,clock,enabled]
+   verifyNativeFleet,isNpcCorporation,getPolicy,clock,enabled,observe]
    .some(x=>typeof x!=="function"))
   throw Error("MINING_HIRE_NATIVE_AUTHORITIES_REQUIRED");
  const pinned=new WeakMap();
@@ -125,7 +125,12 @@ function createMiningHiring({gameStore,access,getFleet,verifyNativeFleet,
    const result=company.hire({session:args.session,corporationID:q.corporationID,
     employerCorpID:q.employerCorpID,systemID:q.systemID,fleetID:q.fleetID,
     cycles:q.cycles,operationID:q.operationID});
-   return {...result,quote:q};
+   const outcome={...result,quote:q};
+   try{observe("player-mining-hire",{status:result?.status||"UNKNOWN",
+    operationID:q.operationID,systemID:q.systemID,fleetID:q.fleetID,
+    buyerCorpID:q.corporationID,employerCorpID:q.employerCorpID,
+    wageCents:q.wageCents});}catch{}
+   return outcome;
   }catch{return {status:"NATIVE_HIRING_OUTCOME_UNKNOWN",operationID:q.operationID};}
  }
  return Object.freeze({preview,accept,mode:"NATIVE_POLICY_SOURCE_REAL_ISK"});
@@ -135,6 +140,7 @@ function native(){
  if(runtime)return runtime;
  const gameStore=require("../gameStore"),access=require("./coopPlayerCorporationAccess"),
   corp=require("../services/corporation/corporationState"),
+  flags=require("./coopFlags"),
   fleet=require("./coopPlayerMiningFleetTick");
  const getFleet=fleet.verified,verifyNativeFleet=f=>{
   const now=fleet.verified(f);
@@ -146,9 +152,13 @@ function native(){
   isNpcCorporation:id=>corp.isNpcCorporationID(id)===true&&
    corp.getCorporationRecord(id)?.isNPC===true,
   getPolicy:readServerWagePolicy({root:process.env.EVEJS_DATA_ROOT||"/var/lib/evejs"}),
-  enabled:()=>process.env.EVEJS_COOP_PLAYER_NPC_MINING_HIRING==="1"&&
-   process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY==="1"&&
-   process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"});
+  enabled:()=>flags.on("EVEJS_COOP_PLAYER_NPC_MINING_HIRING")&&
+   flags.on("EVEJS_COOP_PLAYER_NPC_MINING_COMPANY")&&
+   flags.on("EVEJS_COOP_NATIVE_ATOMIC_ROWS"),
+  observe:(event,payload)=>{
+   require("./coopObserve").observe(require("./coopRuntimeProbe"),
+    event,{systemID:payload.systemID},payload);
+  }});
  return runtime;
 }
 function preview(args,options){
