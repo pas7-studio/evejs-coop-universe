@@ -34,9 +34,9 @@ function transform(source,spec,remove){
   text=require("./coop-native-hacking-admission-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/exploration/hackingMgrService.js")
   text=require("./coop-npc-expedition-hacking-patch.cjs").patch(text,spec.file,remove);
- if(spec.file==="server/src/space/npc/nativeNpcStore.js" ||
-    spec.file==="server/src/space/npc/nativeNpcWreckService.js")
-  text=require("./coop-npc-expedition-wreck-patch.cjs").patch(text,spec.file,remove);
+ if(!remove && (spec.file==="server/src/space/npc/nativeNpcStore.js" ||
+    spec.file==="server/src/space/npc/nativeNpcWreckService.js"))
+  text=require("./coop-npc-expedition-wreck-patch.cjs").patch(text,spec.file,false);
  if(spec.file==="server/src/services/market/marketProxyService.js")
   text=require("./coop-market-catalog-patch.cjs").patch(text,spec.file,remove);
  if(spec.file==="server/src/services/market/marketProxyService.js") {
@@ -288,7 +288,10 @@ function transform(source,spec,remove){
   }
  }
  if(spec.file==="server/src/space/npc/nativeNpcWreckService.js")
-  text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove);
+  text=require("./coop-salvage-death-native-patch.cjs").patch(text,remove); 
+ if(remove && (spec.file==="server/src/space/npc/nativeNpcStore.js" ||
+    spec.file==="server/src/space/npc/nativeNpcWreckService.js"))
+  text=require("./coop-npc-expedition-wreck-patch.cjs").patch(text,spec.file,true);
  if(!remove)for(const patch of spec.patches){
   const eol=text.includes("\r\n")?"\r\n":"\n";
   const anchor=patch.anchor.replace(/\n/g,eol);
