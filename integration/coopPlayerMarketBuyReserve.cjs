@@ -265,11 +265,33 @@ function createBuyReserve({gameStore,makeID=randomUUID,clock=()=>Date.now()}={})
        escrow.coopReserveReceiptKey!==receipt.key||
        toCents(escrow.price)!==receipt.priceCents||
        toCents(order.row.price)!==receipt.priceCents||
+       // A funded Rust BUY cannot silently change the accepted original
+       // minVolume/duration/range. Some pinned order readers omit
+       // vol_entered; when supplied, it must match the funded quantity.
+       order.row.min_volume!==receipt.minVolume||
+       order.row.duration_days!==receipt.durationDays||
+       order.row.range_value!==receipt.orderRange||
+       (order.row.vol_entered!==undefined&&
+        order.row.vol_entered!==receipt.quantity)||
        escrow.remainingQuantity!==order.row.vol_remaining||
        !positive(escrow.remainingQuantity)||
        escrow.remainingQuantity>receipt.quantity||
        toCents(escrow.escrowAmount)!==
-        receipt.priceCents*escrow.remainingQuantity)
+        receipt.priceCents*escrow.remainingQuantity||
+       // A partially filled Rust BUY is still funded only when its
+       // original durable debit and paid quantity reconcile EXACTLY
+       // with native escrow. Never trust an arbitrary BOUND receipt.
+       !natural(receipt.filledQuantity??0)||
+       (receipt.filledQuantity??0)!==
+        receipt.quantity-escrow.remainingQuantity||
+       !natural(receipt.spentCents??0)||
+       (receipt.spentCents??0)!==
+        receipt.priceCents*(receipt.quantity-escrow.remainingQuantity)||
+       (receipt.remainingReserveCents??receipt.reservedCents)!==
+        receipt.priceCents*escrow.remainingQuantity||
+       receipt.reservedCents!==
+        (receipt.spentCents??0)+
+        (receipt.remainingReserveCents??receipt.reservedCents))
      throw Error("P2P_BUY_RESERVE_LEGACY_OR_UNFUNDED_BUY_ORDER");
    }
    return true;

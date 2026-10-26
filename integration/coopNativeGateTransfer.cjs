@@ -23,13 +23,29 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
    "upsertNativeModule","upsertNativeCargo"]
    .every(k=>typeof store[k]==="function"))throw Error("native gate transfer dependencies required");
  const journalFile=id=>path.join(journalDir,id+".json");
- const save=(id,value)=>{
+ // Crash-persistent intent. A partial temporary write is a repair blocker.
+ const syncDir=()=>{const fd=fs.openSync(journalDir,"r");try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}};
+ const safeDirectory=()=>{
   fs.mkdirSync(journalDir,{recursive:true});
-  const temp=journalFile(id)+".tmp-"+process.pid;
-  fs.writeFileSync(temp,JSON.stringify(value));
-  fs.renameSync(temp,journalFile(id));
+  const st=fs.lstatSync(journalDir);
+  if(!st.isDirectory()||st.isSymbolicLink())throw Error("NATIVE_GATE_JOURNAL_DIRECTORY_UNSAFE");
  };
- const remove=id=>{try{fs.unlinkSync(journalFile(id));}catch(e){if(e.code!=="ENOENT")throw e;}};
+ let journalCounter=0;
+ const save=(id,value)=>{
+  safeDirectory();
+  const final=journalFile(id),temp=final+".tmp-"+process.pid+"-"+(++journalCounter);
+  let fd=null;
+  try{
+   fd=fs.openSync(temp,"wx",0o600);fs.writeFileSync(fd,JSON.stringify(value));
+   fs.fsyncSync(fd);fs.closeSync(fd);fd=null;
+   fs.renameSync(temp,final);syncDir();
+  }finally{if(fd!==null)fs.closeSync(fd);}
+ };
+ const remove=id=>{
+  safeDirectory();
+  try{fs.unlinkSync(journalFile(id));syncDir();}
+  catch(e){if(e.code!=="ENOENT")throw e;}
+ };
  const write=(method,record)=>{
   const result=store[method](record,{transient:record.transient===true});
   if(result?.success!==true)throw Error(method+" failed: "+String(result?.errorMsg||"UNKNOWN"));
@@ -64,6 +80,9 @@ function createNativeGateTransfer({sceneForSystem,getGate,store,service,getContr
   let names=[];
   try{names=fs.readdirSync(journalDir).filter(x=>/^coop-pilot-[0-9]{3,}\.json$/.test(x));}
   catch(e){if(e.code==="ENOENT")return {status:"CLEAN",recovered:0};throw e;}
+  if(names.length!==fs.readdirSync(journalDir).length)
+   return {status:"NEEDS_OPERATOR_REPAIR",recovered:0,
+    pending:[{error:"NATIVE_GATE_UNKNOWN_OR_TEMP_JOURNAL_FILES"}]};
   if(!names.length)return {status:"CLEAN",recovered:0};
   const pending=[],recovered=[];
   for(const filename of names){

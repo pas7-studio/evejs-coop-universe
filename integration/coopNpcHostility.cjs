@@ -40,6 +40,15 @@ function validPair({attacker,target,attackerController,targetController,links=[]
 }
 let cache=null;
 function allowsNativeEngagement(attacker,target){
+ // A registered warship cannot inherit a virtual pirate faction's legacy
+ // attack permission. Active native war always gets the first verdict.
+ if(process.env.EVEJS_COOP_FACTION_WAR==="1"&&
+    process.env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"){
+  try{
+   const war=require("./coopWarCombatAuthority").nativeWarCombatVerdict(attacker,target);
+   if(war.status!=="NOT_WAR")return war.status==="AUTHORIZED";
+  }catch{return false;}
+ }
  if(process.env.EVEJS_COOP_RIVAL_NPC_COMBAT!=="1")return false;
  try{
   const registry=require("./npc/npcRegistry");

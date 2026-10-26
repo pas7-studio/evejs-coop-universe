@@ -11,10 +11,10 @@ const sensor=read("integration/coopAlifeEconomySensor.cjs");
 const news=read("integration/coopAlifeNews.cjs");
 const manifest=JSON.parse(read("tests/scenarios/alife-native-economy-e2e.json"));
 test("A-Life economy is inside existing 30-second world tick and has no competing timer",()=>{
- const tick=runtime.indexOf("timer=setInterval(()=>{");
- const nativeDepot=runtime.indexOf('safeNpcPhase("native-depot",syncNativeDeliveries);',tick);
- const observer=runtime.indexOf('safeNpcPhase("alife-native-economy-observe"',tick);
- const nativeMarket=runtime.indexOf('safeNpcPhase("native-market-schedule"',tick);
+ const tick=runtime.indexOf("timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{");
+ const nativeDepot=runtime.indexOf('runPhase("native-depot",syncNativeDeliveries);',tick);
+ const observer=runtime.indexOf('runPhase("alife-native-economy-observe"',tick);
+ const nativeMarket=runtime.indexOf('runPhase("native-market-schedule"',tick);
  assert.ok(tick>=0&&nativeDepot>tick&&observer>nativeDepot&&nativeMarket>observer);
  assert.match(runtime,/observeAlifeEconomy\(\)\.catch\(/);
  assert.doesNotMatch(brain,/setInterval|setTimeout|marketDaemonClient|issue\(/);

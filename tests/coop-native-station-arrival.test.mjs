@@ -50,7 +50,7 @@ test('actual physical station coordinates and dwell are required before native c
  assert.equal(f.dir.tick(f.scene,f.fleet,1004000).status,'ARRIVAL_DWELL_PENDING');
  f.setTime(1006000);const result=f.dir.tick(f.scene,f.fleet,1006000);
  assert.equal(result.status,'DELIVERED');assert.equal(f.deposits.length,1);
- assert.deepEqual(f.deposits[0],{cargoID:9980,haulerID:980001,fleetID:77,systemID:30000144,stationID:60010001,corporationID:1000035});
+ assert.deepEqual(f.deposits[0],{cargoID:9980,haulerID:980001,fleetID:77,systemID:30000144,stationID:60010001,corporationID:1000035,arrivedAtMs:1003000});
  assert.equal(f.cargo.size,0);assert.equal(f.fleet.coopStationArrival,undefined);
 });
 test('does not teleport ore from distant ship when timer fires',()=>{

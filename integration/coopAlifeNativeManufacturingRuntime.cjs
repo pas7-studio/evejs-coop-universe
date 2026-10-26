@@ -106,8 +106,11 @@ function createRuntimeAlifeManufacturing({
  function resolveNativeDirector(ownerID,stationID){
   if(typeof resolveDirector!=="function")return null;
   const d=resolveDirector(ownerID,stationID);
+  // Live source ACT can only accept a director with a pre-attached
+  // original receipt audit. No live resolver is supplied by production yet.
   return Promise.resolve(d).then(x=>x?.supportsLiveRuntime===true&&
-   x?.mode==="NATIVE_AUTHORITIES_ONLY"&&typeof x.tick==="function"?x:null);
+   x?.mode==="NATIVE_AUTHORITIES_ONLY"&&typeof x.tick==="function"&&
+   typeof x.auditBeforeTick==="function"?x:null);
  }
  function admitted(snapshot,decision,registry){
   if(snapshot?.authoritativeNative!==true||

@@ -1,9 +1,11 @@
 # Chat 27 — native player industry, resource custody and exactly-once safety
 
-**Status:** CODE_READY / LIVE_UNVERIFIED / NOT INSTALLED.
+**Status:** SOURCE_WIRED_IN_PR_177 / NOT_DEPLOYED / LIVE_UNVERIFIED.
 Pinned upstream: `gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f`.
-This commit adds source modules, tests and a native-integration contract only. No changes to
-shared installer, existing industry runtime, GameStore, native persistent volumes or live world.
+Chat 27 originally staged source modules and an integration contract. PR #177 wires
+those existing authorities into the single transactional installer and the original
+industryManager RPC handlers, default OFF. No modifications to GameStore, native
+persistent volumes or live world have been performed.
 
 ## What the client and pinned server actually support
 
@@ -146,12 +148,12 @@ real owner inventories; there are no synthetic trade or inventory rows.
 
 **Integration ownership:** Chat 01 owns `scripts/patch-evejs-coop.cjs`,
 the shared native hook manifest and deployment. Chat 25 handles native
-player transfer/hauling mechanics. Register and wire these modules only
-with Chat 01, behind `EVEJS_COOP_PLAYER_INDUSTRY_GUARD=1`, default OFF,
-at the original native industry RPC action boundaries
-(`Handle_InstallJob`, `Handle_CompleteJob`,
-`Handle_CompleteManyJobs`). No staged code is in active use before
-that integration. Do not modify pinned upstream or deployed world by hand.
+player transfer/hauling mechanics. Central installer integration is now included in draft PR #177 behind
+`EVEJS_COOP_PLAYER_INDUSTRY_GUARD=1` (default OFF) and the absolute persistent
+`EVEJS_COOP_PLAYER_INDUSTRY_JOURNAL_FILE`. Original native RPC actions
+`Handle_InstallJob`, `Handle_CompleteJob`, `Handle_CompleteManyJobs` (each job)
+and `Handle_CancelJob` route through the co-op custody fence only when enabled.
+This remains source-wired, not deployed or live-verified. Do not modify pinned upstream or deployed world by hand.
 
 ## Tests and acceptance
 
@@ -187,5 +189,7 @@ all blueprint metadata after each restart. Test legitimate re-install
 of returned BPO after successful delivery. Never equate simulated
 or source-only tests with gameplay PASS.
 
-**Result of Chat 27 commit: CODE_READY, 42 isolated checks PASS,
-LIVE_UNVERIFIED, NOT WIRED, invention UNIMPLEMENTED in pin.**
+**Original Chat 27 result: CODE_READY (42 isolated checks originally recorded).**
+**PR #177 result: source-wired, default OFF, LIVE_UNVERIFIED.** Native invention
+remains unimplemented in this pin; cancellation now has native ownership and
+terminal blueprint-custody receipts.
