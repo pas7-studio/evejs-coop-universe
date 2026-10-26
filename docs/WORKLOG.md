@@ -153,3 +153,8 @@ Evidence: 4/4 exact source V8 isolated before/after checks PASS; Node/SQLite/Rus
 Why: gitignore's 'upstream/' rule silently excluded patches/upstream, so the whole atomic L1 series existed only on disk; 0003 also now carries the hull recharge-rate half of the NPC capacitor defect
 Where: .gitignore, docs/UPSTREAM_PATCH_SERIES.md, patches/upstream/0001-native-npc-store-export-list-cargo.patch, patches/upstream/0002-native-npc-capacitor-recharge.patch, patches/upstream/0003-native-npc-sessionless-capacitor.patch, patches/upstream/MANIFEST.json, scripts/apply-upstream-patches.cjs, scripts/restart-acceptance.sh
 Evidence: git ls-files patches was empty while the docs claimed the series is versioned; files now tracked; series PRESENT x3 CHECK_OK; fleet2 live proof pending on the new image
+### 2026-10-26T12:05Z · 8bfbeb0 · L2 · fix(arrival): a refused sale now reports status and reason instead of depositing silently
+
+Why: a live delivery settled (NATIVE_FULL_MANIFEST_WITNESSED) and the fleet went back to mining with no sale and no event explaining it, so the missing ISK link was invisible
+Where: integration/coopNativeStationArrival.cjs
+Evidence: new living-npc-station-sale-skipped event once per trip with status/reason; station arrival 15/15 and trip journal 32/32 pass; OVERLAY_OK patched 54
