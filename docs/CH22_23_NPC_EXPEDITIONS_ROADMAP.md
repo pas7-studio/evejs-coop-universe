@@ -279,3 +279,23 @@ Critical end-to-end bug: perfect original NPC scanner proof added a remote corpo
 **CI status:** A prior P0 workflow registration PR #327 merged a manual-dispatch entry onto `main`. No branch runs were visible in the checked GitHub Actions listing. Run the full workflow by choosing the EX-03 feature branch from Actions; registration alone does not prove SQLite or E2E acceptance.
 
 **Do not merge #286 or enable experimental flags** until source Node 22/SQLite, real two-client bubble visibility and cargo custody acceptance pass.
+
+## EX-03B12/B13 — Native NPC failure isolation and original order arbiter end-to-end (2026-10-26)
+
+**Changes committed to feature PR #286; still DRAFT, all experimental feature flags OFF.**
+
+### EX-03B12: fail-closed native reads and ambiguous command recovery
+- In the existing 30-second expedition director, a single `scene.getEntityByID`, `getNativeEntity`, `getController`, physical site/witness or order bridge `blocked()` exception now excludes only the affected actor/action, rather than throwing through the entire A-Life phase.
+- Witnesses are revalidated using the existing original `createExpeditionCompetition.observe`; a second scene lookup that throws returns a rejected witness, not a fabricated observation.
+- A command bridge that throws **after potentially issuing a real native warp**, or explicitly returns `COOP_NPC_ORDER_REPAIR_REQUIRED`, permanently fences that particular hull+original site identity within the running director. `snapshot().unknownOrderOutcomes` reports the count; no automatic replay after TTL, no success claimed, no synthetic order or wallet/inventory mutation.
+- Uncertain orders still require **operator inspection**; in-memory fencing is not a cross-process authoritative transaction. Real native `coopNpcOrderArbiter` has its independent unknown-outcome lease fence for the current process, and the original ship/controller must be checked after a process restart before orders are permitted.
+
+### EX-03B13: true native arbiter integration
+- Expanded `tests/coop-npc-expedition-native-bridge.test.mjs` to wire production `createExpeditionDirector` through production `createOrderBridge` and `createOrderArbiter`, with physical source site and native ship/controller fixtures. This is deliberately stronger than a permissive mock bridge.
+- Test proves genuine source-scanned scout gets the first `EXPEDITION` native warp lease; a live warp blocks duplicate/follower orders; catalog-only arrival is rejected; physical site witness admits the same-corporation patrol on its own native lease; no duplicate commands.
+- Separate test proves a previously held `PATROL` lease cannot be silently preempted by the expedition scout.
+- Extended source-wiring checks to assert the actual exception guards, permanent ambiguous outcome fence and true bridge/arbiter test inclusion in EX-03 CI.
+
+**Executed in isolated V8 with the actual current source modules:** expedition director+competition **34/34 PASS**, native director+bridge+arbiter **2/2 PASS**, dedicated EX-03B12/B13 source-wiring contract **1/1 PASS**. Full pinned Node 22 `node --test`, actual SQLite SIGKILL, genuine server native warp and two authenticated clients are **NOT verified**. The EX-03 feature branch currently had **zero GitHub Actions runs** at review time.
+
+**Remaining release gates:** execute full native Node/SQLite CI, two-player source-verified bubble and ship-fitting/flight test, proper NPC analyzer/hacking integration, real item custody/physical loot and warehouse transfer, and crash-resume proof. Do not merge #286 or turn on NPC exploration flags based only on isolated tests.
