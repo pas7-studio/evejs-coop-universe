@@ -269,7 +269,10 @@ function adopt(scene,fleet,options={}){
     const same=(actual,original)=>custodyFields.every(field=>
      Object.hasOwn(actual,field)===Object.hasOwn(original,field)&&
      Object.is(actual[field],original[field]));
+    // Initial preflight proved an empty hold: compensation must restore it.
     verified=Array.isArray(all)&&Array.isArray(target)&&
+     target.length===0&&
+     all.every(row=>pos(row?.entityID)!==haulerID)&&
      touched.every(original=>{
       const hits=all.filter(row=>pos(row?.cargoID)===pos(original.cargoID));
       return hits.length===1&&same(hits[0],original)&&
@@ -328,6 +331,12 @@ function adopt(scene,fleet,options={}){
     globalHits.set(id,group);
    }
   }
+  // Exact global membership matters: other physical cargoIDs cannot ride
+  // the recovered ore under the same loaded/settlement lifecycle.
+  const targetGlobal=allCommitted.filter(row=>pos(row?.entityID)===haulerID);
+  if(targetGlobal.length!==planned.rows.length||
+     targetGlobal.some(row=>!intended.has(pos(row?.cargoID))))
+   throw Error("ORIGINAL_CARGO_GLOBAL_HOLD_CONTAINS_UNPLANNED_ITEMS");
   if(planned.rows.some(row=>{
    const matches=globalHits.get(pos(row.cargoID))||[];
    return matches.length!==1||
@@ -339,7 +348,8 @@ function adopt(scene,fleet,options={}){
     Number(matches[0].moduleID||0)!==0;
   }))throw Error("ORIGINAL_CARGO_GLOBAL_READBACK_MISMATCH");
   readback=store.listNativeCargoForEntity(haulerID);
-  if(!Array.isArray(readback)||planned.rows.some(row=>{
+  if(!Array.isArray(readback)||readback.length!==planned.rows.length||
+     planned.rows.some(row=>{
    const matches=readback.filter(x=>pos(x?.cargoID)===pos(row.cargoID));
    return matches.length!==1||
     pos(matches[0].entityID)!==haulerID||
@@ -355,7 +365,8 @@ function adopt(scene,fleet,options={}){
   // buildNativeCargoItems produces itemID (the original cargoID), not
   // cargoID. A view with the right length but wrong items must never sail.
   cargoItems=store.buildNativeCargoItems(haulerID);
-  if(!Array.isArray(cargoItems)||planned.rows.some(row=>{
+  if(!Array.isArray(cargoItems)||cargoItems.length!==planned.rows.length||
+     planned.rows.some(row=>{
    const matches=cargoItems.filter(x=>pos(x?.itemID)===pos(row.cargoID));
    return matches.length!==1||
     pos(matches[0].typeID)!==pos(row.typeID)||
