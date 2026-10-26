@@ -1,72 +1,56 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
-Updated: 2026-10-26 ~21:55Z · HEAD `7bc50c6e` (+ this note) · loop gate `LOOP_GATE_PASS`
+Updated: 2026-10-26 ~22:50Z · HEAD `f494bff0` + docs
 
-## The loop now closes (live, own evidence)
+## Proven live, twice
 
-| stage | evidence |
-|---|---|
-| mine | `living-mining-cycle-settled`, `COMMITTED`, every window |
-| fleet | `FLEET_COMPOSITION_OK`, real haulers (Bestower/Badger/Mammoth), no mis-roled hulls |
-| load | `living-hauler-loaded` 14 466 m³ + 14 277 m³, fleet state `loaded` |
-| fly | `living-npc-station-route` (`loaded` → station) |
-| **sell** | **`living-npc-station-sold` `SOLD` `isk: 33 150` (×5), `sold:[{typeID:17470, quantity:5000, price:6.63}]`** |
-| currency | `NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET` — real NPC ledger, never a player wallet |
+`living-npc-station-sold` `SOLD` with **real ISK**: 33 150 (21:30) and **36 250** (22:37),
+`NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET`. The rest of the chain in the same runs:
+`living-mining-cycle-settled` (COMMITTED) → `living-hauler-loaded` (14 466 / 14 277 m³)
+→ fleet state `loaded` → `living-npc-station-route` → sale.
 
-Profit is real but small: 5 000 units of Gneiss at 6.63 ISK/unit.
-
-## Fixed in this stretch (each measured, each with a test)
+## Fixed in this stretch (each measured, each tested where the logic is unit-testable)
 
 1. `HAULER_NOT_NAMED` — `adoptMerchant` filtered world residents on `pilot.role`, but the
-   world file has no roles (the economy ledger owns them), so no hauler was ever named
-   and every sale was skipped. Now the role is read from whichever layer has it and any
+   world file has no roles. Now the role is read from whichever layer has it and any
    free resident is acceptable.
-2. Restart mid-haul stranded the fleet in `loaded` forever — an overdue trip now gets a
-   durable `<manifest>.expired.json` (immutable ack untouched), `recover()` stops
-   offering it, and the fleet plans a NEW trip with the ore it still carries.
-3. `ORIGINAL_CARGO_OWNER_MISMATCH` — the deposit credited the *station* corporation for
-   ore owned by the fleet corporation. It now credits the corporation that provably
-   owned that cargo row (the owner's own hangar at that station).
-4. Earlier in the same chain: cargo-volume fallback (a restart made every fill ratio 0),
-   the `{success,data}` cargo-id allocator, a convergent slot re-composition, and an
-   installer guard for unresolvable relative requires (which found two live instances).
+2. A sale left no provable trace: it removes the hull row through a real market fill and
+   never creates a station item, so recovery read the trip as "cargo changed" forever.
+   A settled sale now writes a durable receipt per row and the trip journal accepts it.
+3. Rows are **partly** sold (5 000 of a 54 999 row). The receipt records the units the
+   hull actually lost (accumulating over fills), and the journal accepts a row whose
+   remainder equals declared − sold, counting it as still aboard.
+4. A closed route is skipped BEFORE accounting — this ordering bug meant the first
+   expiry had no effect and the fleet stayed blocked.
+5. Overdue trips and superseded manifests are closed durably (own fsynced record; the
+   warp ack stays immutable) and re-planned from the hull, never resumed and never faked.
+6. Deploy/installer: the reset now restores from HEAD (not the shared index, which was
+   shipping another session's staged half-patch), an L1-owned file is not "drift", the
+   installer list regained the 14 modules a merge had dropped, and two broken relative
+   requires were found by the new guard and fixed.
 
-## The one open item
+## Open item (named, reproducible)
 
-A restart **after a sale but before the remainder deposit** leaves that trip's manifest
-with cargo rows whose quantities changed by the sale, and recovery refuses it as
-`ALIFE12_SOURCE_CARGO_CHANGED`. The sale is a real market fill but leaves no
-warehouse-style receipt per `cargoID`, so `receiptMatches` cannot prove it.
+`MANIFEST_WAREHOUSE_RECEIPT_CONFLICT` blocks the trip AFTER a sale when the manifest is
+**verified**: `coopNativeHaulManifest.verify` (lines ~123-135) requires
+`receipt.quantity === row.quantity` and a matching warehouse stock item, which a sale
+receipt and a partly sold row can never satisfy. Fix direction: verify must accept a
+sale receipt for the difference (`sold = declared − remaining`, no stock item expected)
+exactly as the trip journal already does, and only for the sold units.
 
-Proposed fix (not implemented): after a `SOLD` settlement, reconcile the hauler's hull
-against the trip's declared cargo per type — Σ(declared − remaining) per typeID must
-equal exactly the quantity the market paid for that type, in that station, in that
-settled trade — then write a durable `receipts/<cargoID>.json` with
-`source:"NPC_MARKET_FILL"` and accept that provenance in `receiptMatches`. Anything that
-does not reconcile exactly stays operator repair. Do NOT just expire the manifest by
-hand: that would drop the only grip on the ore.
+## Operator actions taken (documented, not silent)
 
-## Verification commands
+Two historic trips whose ore was sold before sale receipts existed were closed with the
+journal's own `expire` through an explicit script
+(`node /tmp/expire-trip.cjs <system-fleet-startedAt> HISTORIC_SALE_WITHOUT_RECEIPT --confirm`,
+emitting `living-native-trip-expired-by-operator`). No receipt was invented, no cargo was
+touched, and both manifests remain on disk.
+
+## Commands
 
 ```
-node scripts/coop-deploy.cjs --checkout C:\Games\EveCoop\upstream-evejs\Code    # reset=47 OVERLAY_OK
+node scripts/coop-deploy.cjs --checkout C:\Games\EveCoop\upstream-evejs\Code   # reset=49 OVERLAY_OK
 cd C:\Games\EveCoop\upstream-evejs\Code
 docker build -t evejs-local . && docker compose -f compose.yaml -f compose.coop-probe.yaml up -d
-docker cp scripts/coop-fleet-audit.cjs evejs-server-1:/tmp/
-docker exec evejs-server-1 node /tmp/coop-fleet-audit.cjs --db /var/lib/evejs/gameStore/gamestore.sqlite
 bash scripts/coop-loop-gate.sh --code-path C:\Games\EveCoop\upstream-evejs\Code
 ```
-
-## Environment facts (still true)
-
-- `miningNpcHaulerRepeatDelayMs=600000` (a trip then a 10 min cooldown), threshold 0.2,
-  `EVEJS_COOP_VIRTUAL_POPULATION=48` (naming capacity; grows without wiping history).
-- The pinned wing spawner clamps `minerAmount` to ≥1, so "haulers only" also adds a
-  miner; the re-composition converges on the real marker set and spawns only when a
-  mis-roled hull needs replacing.
-- The world carries extra hulls from the early failed attempts (13 miners / 10 haulers
-  in 144 and 145). Real, consistent, non-destructive; a clean acceptance prefers a
-  fresh world.
-- Pre-existing test noise: `coop-alife12-station-trip-recovery` 2 failures
-  (`./coopStuckWarpRecovery` resolution from `tests/`) and
-  `coop-alife-native-delivery-wiring` 2 failures — identical at HEAD.

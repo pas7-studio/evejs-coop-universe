@@ -126,13 +126,22 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
      path.join(root,"receipts",row.cargoID+".json"),"utf8"))}
     catch(e){return {status:e?.code==="ENOENT"?"MANIFEST_WAREHOUSE_RECEIPT_MISSING":
      "MANIFEST_WAREHOUSE_RECEIPT_INVALID"}}
+    // Two kinds of receipt can close a declared row: a WAREHOUSE deposit, which leaves
+    // the exact stack in the corporation hangar, and a MARKET FILL, which sold the
+    // units outright. A fill never creates a station item, so it is proven by its own
+    // recorded quantity and type - never by inventing stock - and it may cover only
+    // part of the row when the market filled less than the hull carried.
+    const saleFill=String(receipt&&receipt.source)==="NPC_MARKET_FILL";
     if(receipt?.version!==1||receipt.phase!=="COMMITTED"||
      id(receipt.cargoID)!==row.cargoID||id(receipt.haulerID)!==row.haulerID||
-     id(receipt.typeID)!==row.typeID||id(receipt.quantity)!==row.quantity||
+     id(receipt.typeID)!==row.typeID||
      id(receipt.stationID)!==m.stationID||id(receipt.corporationID)!==m.corporationID||
      id(receipt.systemID)!==m.systemID||id(receipt.fleetID)!==m.fleetID||
-     !valid(receipt.itemID))
+     (saleFill?!(id(receipt.quantity)>0&&id(receipt.quantity)<=row.quantity&&
+       Number(receipt.quantity)===Number(receipt.marketQuantity)):
+      (id(receipt.quantity)!==row.quantity||!valid(receipt.itemID))))
      return {status:"MANIFEST_WAREHOUSE_RECEIPT_CONFLICT",cargoID:row.cargoID};
+    if(saleFill)continue;
     const stock=items.findWarehouseItem({ownerID:m.corporationID,
      stationID:m.stationID,cargoID:row.cargoID});
     if(!stock||id(stock.itemID)!==id(receipt.itemID)||
