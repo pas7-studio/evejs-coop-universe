@@ -4,7 +4,7 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createService,roleMarker,slotKey}=require("../integration/coopNativeMiningFleetDurable.cjs");
 const SYSTEM=30000142;
-function fixture(t,shared=null){
+function fixture(t,shared=null,{auditStartupCargo=null}={}){
  const oldFlag=process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE;
  process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE="1";
  t.after(()=>{if(oldFlag===undefined)delete process.env.EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE;
@@ -70,7 +70,7 @@ function fixture(t,shared=null){
     originAnchor:{position:{x:1,y:2,z:3}}}};
  }
  const create=()=>createService({db,store,nativeService,ensureState:()=>{},
-   spawn,register,getFleets:()=>fleets,log:s=>log.push(s)});
+   spawn,register,getFleets:()=>fleets,auditStartupCargo,log:s=>log.push(s)});
  return {world,scene,db,store,nativeService,create,
   start:(count=1)=>create().start({scene,fleetCount:count}),
   getSpawnCalls:()=>spawnCalls,getRestores:()=>restores,
@@ -250,6 +250,51 @@ test("ALIFE-12 original restored cargo with wrong fleet ID quarantines slot",t=>
  assert.equal(result.status,"NEEDS_OPERATOR_REPAIR");
  assert.match(result.slots[0].reason,/ALIFE12_NATIVE_HAUL_CUSTODY_AMBIGUOUS/);
  assert.equal(reboot.getSpawnCalls(),0);
+});
+
+test("ALIFE-13 restored slot quarantines uncertain historical cargo BEFORE physical hull restoration",t=>{
+ const old=process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
+  else process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT=old});
+ const first=fixture(t);assert.equal(first.start().status,"OK");
+ process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT="1";
+ const reboot=fixture(t,first.world,{auditStartupCargo:()=>({
+  status:"NEEDS_OPERATOR_REPAIR",reason:"ALIFE13_WAREHOUSE_PREPARED_SOURCE_ABSENT"})});
+ const result=reboot.start();
+ assert.equal(result.status,"NEEDS_OPERATOR_REPAIR");
+ assert.match(result.slots[0].reason,/ALIFE13_STARTUP_ORIGINAL_CARGO_UNRECONCILED/);
+ assert.equal(reboot.getRestores(),0);
+ assert.equal(reboot.getSpawnCalls(),0);
+ assert.equal(reboot.getFleets().length,0);
+});
+test("ALIFE-13 original source-backed startup audit permits the exact unchanged fleet",t=>{
+ const old=process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
+  else process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT=old});
+ const first=fixture(t);assert.equal(first.start().status,"OK");
+ process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT="1";
+ let audits=0;
+ const reboot=fixture(t,first.world,{auditStartupCargo:params=>{
+  audits++;assert.equal(params.fleetID,SYSTEM*32+1);
+  assert.deepEqual(params.minerIDs,[71001]);
+  assert.deepEqual(params.haulerIDs,[71002]);
+  return{status:"OK",nativeMutation:false};
+ }});
+ const result=reboot.start();
+ assert.equal(result.status,"OK");
+ assert.equal(audits,1);
+ assert.equal(reboot.getRestores(),2);
+ assert.equal(reboot.getSpawnCalls(),0);
+});
+test("ALIFE-13 opt-in with missing auditor cannot create/restore any NPC actor",t=>{
+ const old=process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
+ process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT="1";
+ t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
+  else process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT=old});
+ const f=fixture(t),r=f.start();
+ assert.equal(r.reason,"ALIFE13_STARTUP_AUDITOR_UNAVAILABLE");
+ assert.equal(f.getSpawnCalls(),0);
+ assert.equal(f.getRestores(),0);
 });
 
 test("a witness whose ships were never durable is archived and the slot is seeded again",t=>{
