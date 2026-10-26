@@ -148,23 +148,29 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440,f
  // NPC roster is untrusted input. Validate the complete roster BEFORE
  // register() mutates balances or state.pilots, including zero-step ticks.
  // "__proto__" / inherited names otherwise modify Object.prototype.role.
- function validPilots(pilots){
-  if(!Array.isArray(pilots))return false;
-  const seen=new Set();
-  for(const pilot of pilots){
-   const id=pilot?.id,systemID=Number(pilot?.systemID);
-   if(typeof id!=="string"||!id.trim()||id.length>256||
-      id==="prototype"||Object.prototype.hasOwnProperty.call(Object.prototype,id)||
-      seen.has(id)||!Number.isSafeInteger(systemID)||systemID<=0)return false;
-   seen.add(id);
-  }
-  return true;
+ function canonicalPilotRoster(pilots){
+  if(!Array.isArray(pilots))return null;
+  const seen=new Set(),result=[];
+  try{
+   for(const pilot of pilots){
+    // Read each untrusted property only once. A getter/proxy can otherwise
+    // return a safe ID during validation and "__proto__" during mapping,
+    // bypassing the protection and mutating the process-wide prototype.
+    const id=pilot?.id,rawSystem=pilot?.systemID;
+    const systemID=Number(rawSystem);
+    if(typeof id!=="string"||!id.trim()||id.length>256||
+       id==="prototype"||Object.prototype.hasOwnProperty.call(Object.prototype,id)||
+       seen.has(id)||!Number.isSafeInteger(systemID)||systemID<=0)
+     return null;
+    seen.add(id);
+    result.push({id,systemID});
+   }
+  }catch(_error){return null;}
+  return result;
  }
  function advance(pilots){
-  if(!validPilots(pilots))return {status:"INVALID_PILOTS",steps:0};
-  // Validation already proved these IDs safe. Freeze the representation
-  // used for both role registration and step() to avoid string aliases.
-  const canonicalPilots=pilots.map(p=>({id:p.id,systemID:Number(p.systemID)}));
+  const canonicalPilots=canonicalPilotRoster(pilots);
+  if(!canonicalPilots)return {status:"INVALID_PILOTS",steps:0};
   beforeMutation();
   const now=clock();if(now<state.lastAt)return {status:"CLOCK_REWIND",steps:0};
   register(canonicalPilots);
