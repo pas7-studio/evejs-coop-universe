@@ -117,8 +117,12 @@ function createOriginalCorporateSellCustody({gameStore,access,readiness,verifyNa
      throw Error("CORP_SELL_ITEM_CHANGED");
     // No other corporate item/order may accidentally share this original
     // Rust order-derived location. Never silently mix two owners in escrow.
+    const physicalRows=tx.scan("items");
+    if(physicalRows.filter(r=>r.value?.customInfo===
+      "coop-warehouse:v1:cargo:"+cargoID).length!==1)
+     throw Error("CORP_SELL_DUPLICATE_ORIGINAL_CARGO_MARKER");
     if(tx.get("marketEscrow",ESCROW(orderID))!==null||
-       tx.scan("items").some(r=>r.value?.locationID===escrowLocationID))
+       physicalRows.some(r=>r.value?.locationID===escrowLocationID))
      throw Error("CORP_SELL_ORDER_OR_LOCATION_ALREADY_OCCUPIED");
     if(tx.scan("corporationRuntime").some(r=>String(r.key).startsWith(
        "coopPlayerMiningCorpSell"+SEP)&&
