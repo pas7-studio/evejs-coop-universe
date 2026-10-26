@@ -22,7 +22,7 @@ function patch(text,remove=false){
    count(BRIEF)!==1||!text.includes("buildDoActionResponsePayload"))
   throw Error("MINING_AGENT_PINNED_SOURCE_DRIFT");
  const job='  if (process.env.EVEJS_COOP_NATIVE_JOB_AGENT === "1")';
- const faction='EVEJS_COOP_FACTION_WAR_AGENT';
+ const faction='EVEJS_COOP_FACTION_MILITIA_AGENT';
  if(!text.includes(job)||!text.includes(faction))
   throw Error("MINING_AGENT_EXISTING_IN_GAME_PRIORITY_REQUIRED");
  // Insert immediately before native decline logic, but AFTER the already
