@@ -117,8 +117,9 @@ function checkPeerBeforeNativePayout({ticket,currentPeer,preflight,
     ticket.session===ticket.peer||
     id(ticket.session?.characterID)!==preflight.leaderID||
     id(ticket.peer?.characterID)!==preflight.peerID||
-    ticket.session?.socket?.destroyed===true||
-    ticket.peer?.socket?.destroyed===true)
+    !ticket.session?.socket||!ticket.peer?.socket||
+    ticket.session.socket.destroyed===true||
+    ticket.peer.socket.destroyed===true)
   return {ok:false,status:"PVE_DUO_NATIVE_RECIPIENT_CHANGED_AFTER_LEADER"};
  const request={ownerID:preflight.leaderID,peerID:preflight.peerID,
   agentID:preflight.agentID,leaderMission:leader,peerMission:currentPeer,
