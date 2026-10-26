@@ -34,9 +34,18 @@ node --test tests/coop-player-mining-*.test.mjs
 
 At this source revision: **61/61 PASS** locally across Stage A/B and 21 Stage C tests plus a read-only polling performance regression, including identical itemID/title, exact two-wallet cents, confirmed post-shift cargo, invalid membership/office/quote, mixed owner, duplicated marker, insufficient ISK, transaction failure rollback in mock, replay after item consumption, legacy title collision, forged receipts and read-only warehouse reconciliation. This **does not** establish native deployed SQLite, warehouse `fsync`, client display or two authenticated pilots. The warehouse integration itself needs an additional disposable native test before claim of runtime PASS.
 
+## Stage C2 — trusted original native binding (source implemented)
+
+- `coopPlayerMiningOreNativeBindings.cjs` now binds original EveJS `gameStore.read` corporation wallet rows, real `corporationState.getCorporationRecord` and `isNpcCorporationID`, `corporationRuntime.getCorporationOffices`, `itemStore.findItemById` and `findWarehouseItem`, plus session-docked location and the existing `coopPlayerCorporationAccess`. A forged corporate office folder, impounded office, unauthorized session or wrong division fails closed.
+- The singleton native station-arrival constructor now mounts `verifyTransferredTitle` from the real read-only adapter **only if** `EVEJS_COOP_PLAYER_NPC_MINING_ORE_TITLE=1`; the default remains OFF. Audits cannot create ore, trigger a sell order or touch ISK.
+- `createTrustedTitleService` composes the *existing* C1 atomic transfer with the original warehouse's `getReceipt`, original nativeNpcStore's `listNativeCargoForEntity` and a required trusted seller quote callback. It rejects the transfer if **the same original cargoID remains on the hauler**. Without the actual quote callback and cargo reader the writer cannot be created.
+- There is intentionally **no default native seller price**: a Rust market snapshot does not itself authorize NPC employer sale of warehouse ore. Actual native pricing/offer acceptance and a safe player-facing RPC still remain to be added. Do not claim player ore procurement is live.
+- New C2 regressions: **14/14 PASS in isolated V8 execution of exact repository CJS and test assertions** (not native Node, Docker or gameplay). Earlier 61/61 Node tests still PASS; five actual warehouse integration cases remain unrun on the full original source checkout.
+- `coopNativeWarehouse` title verification is read-only and validates the current original item, both wallet journals, same source and active corporate office. It cannot infer later resale/reprocessing without a separate native consumption receipt.
+
 ## Remaining stages
 
-- Stage C2: production native adapter for trusted server office/market quote, GameStore read-only title verifier binding, strict original warehouse audit acceptance plus a crash/restart matrix; no fake stock.
+- Stage C2 follow-up: **native seller quote/offer execution and role-protected RPC**, disposable original SQLite and fsync crash/restart matrix. Read-only original office/title bindings and the station-arrival audit hook are now implemented in source.
 - Stage D: in-client corporation commands + shift management, actual ore hangar views and permission-scoped sell/reprocess through existing native market/industry, real payroll/revenue ledger derived from GameStore.
 - Stage E: physical multiplayer E2E with miner, hauler, escort defense/retreat, actual warp/docking, same itemID from NPC warehouse to corp and native wallet conservation across server restart.
 
