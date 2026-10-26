@@ -93,6 +93,17 @@ if ($buyer49.schema -ne "coop-049-alife-native-buyer-v1" -or $buyer49.scenarios.
 if (@($buyer49.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
   throw "Do not claim native A-Life buyer E2E without physical receipts"
 }
+$liveBuyerE2EPath = Join-Path $root "tests/scenarios/coop-060-native-player-seller-live-e2e.json"
+if (-not (Test-Path $liveBuyerE2EPath)) { throw "Missing COOP-060 native two-client acceptance matrix" }
+$liveBuyerE2E = Get-Content -Raw -Path $liveBuyerE2EPath | ConvertFrom-Json
+if ($liveBuyerE2E.schema -ne "coop-060-native-player-seller-live-e2e/v1" -or
+    $liveBuyerE2E.scenarios.Count -ne 12 -or $liveBuyerE2E.status -ne "NOT_RUN") {
+  throw "COOP-060 real gameplay E2E matrix invalid"
+}
+if (@($liveBuyerE2E.scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+  throw "Never represent automated backend SQLite/Rust protocol simulation as live two-client gameplay"
+}
+
 $files = @(
   "tests/coop-alife-native-buyer-dispatch.test.mjs",
   "tests/coop-alife-native-buyer-runtime.test.mjs",
