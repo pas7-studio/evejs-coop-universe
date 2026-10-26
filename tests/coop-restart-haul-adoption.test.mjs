@@ -59,7 +59,10 @@ function harness(initialRows) {
       rows = rows.map((x) => (x.cargoID === row.cargoID ? { ...row } : x));
       return { success: true };
     },
-    buildNativeCargoItems: (id) => rows.filter((row) => row.entityID === id).map((row) => ({ itemID: row.cargoID })),
+    // The native item cache carries the original typeID and quantity, not just
+    // the itemID: a view with the right length but wrong items must never sail.
+    buildNativeCargoItems: (id) => rows.filter((row) => row.entityID === id)
+      .map((row) => ({ itemID: row.cargoID, typeID: row.typeID, quantity: row.quantity })),
   };
   const database = {
     setTransientPath: (...values) => actions.push({ name: "transient", values }),

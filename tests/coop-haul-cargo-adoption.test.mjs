@@ -371,7 +371,7 @@ test("native cargo view failure after durable adoption quarantines both hauler a
    return build(id);
   };
   let flushes=0;
-  const ship={...hauler},target=fleet();
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
   const outcome=adopt(sceneWith([ship]),target,{
    store,clock:()=>NOW,
    database:{flushTableSync:()=>{flushes++;return{success:true}}}
@@ -465,6 +465,10 @@ test("native preflight must prove existing hauler inventory before any adoption 
 
 test("native ship item cache cannot substitute or misstate durable original cargoIDs",()=>{
  for(const fault of ["different-itemID","wrong-type","wrong-quantity","duplicated-itemID"]){
+  // Each fault is a fresh first attempt against a fresh store: a custody
+  // failure burns the slot, so without this reset only the first fault can
+  // ever be observed.
+  resetForTests();
   const store=fakeStore([
    orphan({cargoID:7001}),orphan({cargoID:7002,entityID:900000000112})
   ]);
@@ -477,7 +481,7 @@ test("native ship item cache cannot substitute or misstate durable original carg
    if(fault==="duplicated-itemID")result[1]={...result[1],itemID:result[0].itemID};
    return result;
   };
-  const ship={...hauler},target=fleet();
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
   let flushes=0;
   const result=adopt(sceneWith([ship,miner]),target,{
    store,clock:()=>NOW,database:{flushTableSync:()=>{flushes++;return {success:true}}}
@@ -499,6 +503,7 @@ test("native ship item cache cannot substitute or misstate durable original carg
 
 test("post-commit transient or module-conflicted original cargo cannot start hauling",()=>{
  for(const fault of ["transient","module"]){
+  resetForTests();
   const store=fakeStore([orphan()]);
   const read=store.listNativeCargoForEntity;
   let reads=0;
@@ -508,7 +513,7 @@ test("post-commit transient or module-conflicted original cargo cannot start hau
    return rows.map(row=>fault==="transient"
     ?{...row,transient:true}:{...row,moduleID:1234});
   };
-  const ship={...hauler},target=fleet();
+  const ship={...hauler,nativeCargoItems:undefined},target=fleet();
   const result=adopt(sceneWith([ship]),target,{
    store,clock:()=>NOW,database:{flushTableSync:()=>({success:true})}
   });
