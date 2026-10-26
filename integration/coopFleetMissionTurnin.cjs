@@ -242,6 +242,17 @@ function prepare({session,agentID,actionID,fleetRuntime,missionRuntime,
    throw Error("COOP_PVE_REWARD_SOURCE_UNAVAILABLE: "+before.status);
   ticket._pveLeaderRewardBefore=before;
  }
+ // Source custody of physical reward items and standing transactions
+ // must be captured BEFORE original native grant and history mutation.
+ if(process.env.EVEJS_COOP_PVE_DUO_REWARD_CUSTODY==="1"){
+  if(!ticket._pveLeaderRewardBefore||!ticket._pveRewardPreflight)
+   throw Error("COOP_PVE_CUSTODY_REQUIRES_REWARD_EVIDENCE_AND_PREFLIGHT");
+  const before=require("./coopPveDuoNativeRewardCustody").captureNative(
+   leader,agent,ticket.leaderMission);
+  if(before.status!=="NATIVE_PERSONAL_CUSTODY_SNAPSHOT")
+   throw Error("COOP_PVE_LEADER_CUSTODY_UNAVAILABLE: "+before.status);
+  ticket._pveLeaderCustodyBefore=before;
+ }
  if(process.env.EVEJS_COOP_FLEET_LEADER_FENCE==="1"){
   if(process.env.EVEJS_COOP_FLEET_MISSION_TURNIN!=="1")
    throw Error("LEADER_FENCE_REQUIRES_PEER_SETTLEMENT_GUARD");
@@ -276,6 +287,17 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
    return {status:"PVE_LEADER_NATIVE_REWARD_RECONCILIATION_REQUIRED",
     reason:proof.status};
   ticket._pveLeaderRewardVerified=proof;
+ }
+ if(ticket._pveLeaderCustodyBefore){
+  const audit=require("./coopPveDuoNativeRewardCustody");
+  const custody=audit.verify({before:ticket._pveLeaderCustodyBefore,
+   after:audit.captureNative(ticket.leader,ticket.agentID,ticket.leaderMission),
+   mission:ticket.leaderMission,characterID:ticket.leader,
+   agentID:ticket.agentID,personalReward:ticket._pveLeaderRewardVerified});
+  if(custody.status!=="NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED")
+   return {status:"PVE_LEADER_NATIVE_CUSTODY_RECONCILIATION_REQUIRED",
+    reason:custody.status};
+  ticket._pveLeaderCustodyVerified=custody;
  }
  if(ticket._leaderFence){
   // Native original agent completed. Mark AFTER actual mission record deletion
@@ -325,6 +347,14 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
    return {status:"PVE_PEER_NATIVE_REWARD_BEFORE_UNAVAILABLE",
     reason:peerRewardBefore.status};
  }
+ let peerCustodyBefore=null;
+ if(ticket._pveLeaderCustodyBefore){
+  peerCustodyBefore=require("./coopPveDuoNativeRewardCustody").captureNative(
+   ticket.peerID,ticket.agentID,second);
+  if(peerCustodyBefore.status!=="NATIVE_PERSONAL_CUSTODY_SNAPSHOT")
+   return {status:"PVE_PEER_NATIVE_CUSTODY_BEFORE_UNAVAILABLE",
+    reason:peerCustodyBefore.status};
+ }
  // The old native DoAction remains the ONLY reward/standing authority.
  // This durable intent is required only for explicitly opted-in automated
  // two-recipient turn-in; by default this gameplay feature stays OFF.
@@ -363,6 +393,19 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
     reason:peerRewardVerified.status};
   }
  }
+ let peerCustodyVerified=null;
+ if(peerCustodyBefore){
+  const audit=require("./coopPveDuoNativeRewardCustody");
+  peerCustodyVerified=audit.verify({before:peerCustodyBefore,
+   after:audit.captureNative(ticket.peerID,ticket.agentID,second),
+   mission:second,characterID:ticket.peerID,
+   agentID:ticket.agentID,personalReward:peerRewardVerified});
+  if(peerCustodyVerified.status!=="NATIVE_PERSONAL_REWARD_CUSTODY_VERIFIED"){
+   if(safeMode)durableWrite(file,intent.key,"UNKNOWN");
+   return {status:"PVE_PEER_NATIVE_CUSTODY_RECONCILIATION_REQUIRED",
+    reason:peerCustodyVerified.status};
+  }
+ }
  if(safeMode&&!durableWrite(file,intent.key,"AWARDED"))
   return {status:"PEER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION"};
  if(ticket._leaderFence){
@@ -370,6 +413,24 @@ function finish({ticket,missionRuntime,leaderActionResult,fleetRuntime,getDocked
   if(both.status!=="READY")
    return {status:"LEADER_SETTLEMENT_REQUIRES_MANUAL_RECONCILIATION",
     reason:both.status};
+ }
+ // Native itemStore and standing mutation receipts are verified for
+ // each native recipient independently before both durable journals clear.
+ if(ticket._pveLeaderCustodyVerified&&peerCustodyVerified){
+  try{require("./coopRuntimeProbe").observe(
+   "living-pve-duo-native-reward-custody",null,
+   {spaceState:{systemID:ticket._pveRewardPreflight.missionSystemID}},
+   {status:"TWO_ORIGINAL_REWARD_ITEMS_AND_STANDING_TRANSACTIONS_VERIFIED",
+    sourceInstanceID:ticket._pveRewardPreflight.sourceInstanceID,
+    fleetID:ticket.fleetID,agentID:ticket.agentID,
+    recipients:[ticket._pveLeaderCustodyVerified,peerCustodyVerified]
+     .map(row=>({characterID:row.characterID,
+      missionSequence:row.missionSequence,stationID:row.stationID,
+      itemCount:row.itemCount,expectedTypes:row.expectedTypes,
+      newItemIDs:row.newItemIDs,
+      standingTransactions:row.originalStandingTransactions,
+      evidence:row.evidence}))})
+  }catch{}
  }
  // The only source of money/LP/standings remains EveJS. If evidence is
  // enabled, both recipients have separate verified original ISK+LP+history
