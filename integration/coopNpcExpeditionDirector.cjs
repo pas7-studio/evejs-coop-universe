@@ -89,18 +89,34 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   currentCatalog=sites;
   const candidates=sites.filter(s=>pos(s?.siteID)&&vector(s?.actualPosition))
    .slice(0,maxSitesPerTick).map(s=>nativeSite(scene.systemID,s.siteID)).filter(Boolean);
-  let observed=0,orders=0,blocked=0;
+  let observed=0,observedPlayers=0,contested=0,orders=0,blocked=0;
   for(const [id,row] of intel)if(row.at>now||now-row.at>intelTtlMs)intel.delete(id);
   for(const [id,row] of pending)if(row.at>now||now-row.at>intelTtlMs)pending.delete(id);
-  for(const site of candidates)for(const pilot of all){
+  for(const site of candidates){
+   // Native player sessions are competition witnesses, NEVER NPC intel sources.
+   const seenPlayerShips=new Set();
+   for(const session of [...(scene.sessions?.values?.()||[])].slice(0,32)){
+    const shipID=session?._space?.shipID;
+    if(!pos(shipID)||seenPlayerShips.has(shipID))continue;
+    seenPlayerShips.add(shipID);
+    const candidate=scene.getEntityByID(shipID);
+    if(!candidate||!vector(candidate.position)||
+       distance(candidate.position,site.actualPosition)>150000)continue;
+    const witness=competition.observe({scene,siteID:site.siteID,shipID});
+    if(witness.status==="NATIVE_SITE_OBSERVED")observedPlayers++;
+    if(witness.contested===true)contested++;
+   }
+   for(const pilot of all){
    if(distance(pilot.ship.position,site.actualPosition)>150000)continue;
    const result=competition.observe({scene,siteID:site.siteID,shipID:pilot.entityID});
    if(!["NATIVE_SITE_OBSERVED","ALREADY_OBSERVED"].includes(result.status))continue;
    if(result.status==="NATIVE_SITE_OBSERVED")observed++;
+   if(result.contested===true)contested++;
    const id=key(scene.systemID,site.siteID,pilot.corpID),stamp=fingerprint(site),old=intel.get(id);
    if(!old||old.fingerprint!==stamp)
     intel.set(id,{siteID:site.siteID,systemID:scene.systemID,corpID:pilot.corpID,
      scoutPilotID:pilot.pilotID,fingerprint:stamp,at:now});
+   }
   }
   // Scout must have personally arrived on the original grid. Other native
   // same-corp patrol hulls can then approach; never leak player bookmarks.
@@ -134,7 +150,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     else blocked++;
    }
   }
-  return {status:"NATIVE_EXPEDITION_TICK",observed,orders,blocked,
+  return {status:"NATIVE_EXPEDITION_TICK",observed,observedPlayers,contested,orders,blocked,
    source:"LOCAL_NATIVE_SITE_WITNESS",nativeLootGranted:false,nativeWalletMutation:false};
  }
  function snapshot(){
