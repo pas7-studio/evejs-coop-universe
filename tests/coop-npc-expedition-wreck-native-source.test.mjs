@@ -56,7 +56,7 @@ test("EX-03B18 stock nativeNpcStore source returns ORIGINAL itemID row on visibl
   flagID:4,typeID:34,quantity:3,stacksize:3,singleton:0,
   customInfo:"coop-npc-expedition:v1:container:62:ship:980000000321:corp:700:wreck:"+wreckID};
  const rows={npcWrecks:{nextWreckID:0,wrecks:{
-  [wreckID]:{wreckID,sourceEntityID:980000000321,corporationID:700,
+  [wreckID]:{wreckID,sourceEntityID:980000000321,corporationID:999,coopNpcExpeditionSourceCorpID:700,
    systemID:30000142,transient:false}
  }},npcWreckItems:{items:{},nextWreckItemID:0}};
  const items={ITEM_FLAGS:{HANGAR:4,CARGO_HOLD:5},
