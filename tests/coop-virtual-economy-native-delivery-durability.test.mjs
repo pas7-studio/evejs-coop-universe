@@ -204,3 +204,57 @@ test("P0: an unchanged native ore delivery must not trim event history only in m
  assert.equal(restored.snapshot().systems[system].nativeDelivered,120);
  assert.equal(restored.syncNativeDeliveries({[system]:120}).quantity,0);
 }));
+
+test("P0: corrupted stored goods cannot erase original virtual ore during native sync",()=>scoped(({file})=>{
+ const state={version:1,lastAt:100,systems:{[system]:{
+  ore:200,goods:"corrupted",demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{},events:[]};
+ const bytes=JSON.stringify(state);fs.writeFileSync(file,bytes);
+ assert.throws(()=>createEconomy({file,clock:()=>100}),
+  /ECONOMY_SYSTEM_BALANCE_INVALID/);
+ assert.equal(fs.readFileSync(file,"utf8"),bytes);
+ assert.equal(JSON.parse(fs.readFileSync(file,"utf8")).systems[system].nativeDelivered,100);
+ // Only an operator-verified repair can restore the original goods balance.
+ state.systems[system].goods=200;
+ fs.writeFileSync(file,JSON.stringify(state));
+ const recovered=createEconomy({file,clock:()=>100});
+ assert.equal(recovered.syncNativeDeliveries({[system]:120}).quantity,20);
+ assert.equal(recovered.snapshot().systems[system].goods,220);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({[system]:120}).quantity,0);
+}));
+
+test("P0: invalid persisted system balances fail closed without rewriting journal",()=>scoped(({file})=>{
+ const base={version:1,lastAt:100,systems:{[system]:{
+  ore:200,goods:200,demand:100,security:50,losses:0,nativeDelivered:100
+ }},pilots:{},events:[]};
+ const corrupt=[
+  ["ore",-1],["goods",null],["goods","200"],["goods",1.5],
+  ["goods",1000001],["demand",Infinity],["security",-1],
+  ["security",101],["security",null],["losses",-1],["losses",1000001]
+ ];
+ for(const [key,value] of corrupt){
+  const data=structuredClone(base);
+  data.systems[system][key]=value;
+  const encoded=JSON.stringify(data);fs.writeFileSync(file,encoded);
+  assert.throws(()=>createEconomy({file,clock:()=>100}),
+   /ECONOMY_SYSTEM_BALANCE_INVALID/,key);
+  assert.equal(fs.readFileSync(file,"utf8"),encoded,key);
+ }
+ const missing=structuredClone(base);delete missing.systems[system].goods;
+ fs.writeFileSync(file,JSON.stringify(missing));
+ assert.throws(()=>createEconomy({file}),/ECONOMY_SYSTEM_BALANCE_INVALID/);
+}));
+
+test("P0: valid bounded virtual balances and prior delivery checkpoint remain compatible",()=>scoped(({file})=>{
+ const base={version:1,lastAt:100,systems:{[system]:{
+  ore:0,goods:1000000,demand:0,security:100,losses:1000000,nativeDelivered:100
+ }},pilots:{},events:[]};
+ fs.writeFileSync(file,JSON.stringify(base));
+ const e=createEconomy({file,clock:()=>100});
+ assert.equal(e.snapshot().systems[system].goods,1000000);
+ assert.equal(e.syncNativeDeliveries({[system]:100}).quantity,0);
+ assert.equal(e.syncNativeDeliveries({[system]:110}).quantity,10);
+ assert.equal(e.snapshot().systems[system].nativeDelivered,110);
+ assert.equal(e.snapshot().systems[system].goods,1000000);
+ assert.equal(createEconomy({file}).syncNativeDeliveries({[system]:110}).quantity,0);
+}));
