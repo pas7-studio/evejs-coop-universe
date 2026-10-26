@@ -144,6 +144,8 @@ test("EX-03B11 source-scanned scout warps first; patrols wait for physical scout
  assert.equal(result.orders,1);
  assert.equal(f.commands[0].owner,"EXPEDITION");
  assert.equal(f.commands[0].entityID,21,"scanner scout must get the FIRST warp");
+ assert.equal(result.scoutWarpOrders,1);
+ assert.equal(result.patrolWarpOrders,0);
  assert.equal(f.commands[0].action,"expedition-scout-rendezvous");
  assert.deepEqual(f.commands[1].point,site.actualPosition);
  assert.equal(d.tick(f.input()).orders,0,"no duplicate scout warp or premature patrol warp");
@@ -155,6 +157,9 @@ test("EX-03B11 source-scanned scout warps first; patrols wait for physical scout
  f.siteEntity.position={...site.actualPosition};
  const arrived=d.tick(f.input());
  assert.equal(arrived.orders,1);
+ assert.equal(arrived.scoutOnGridVerified,1);
+ assert.equal(arrived.scoutWarpOrders,0);
+ assert.equal(arrived.patrolWarpOrders,1);
  assert.equal(f.commands[2].entityID,23,"same-corp patrol follows witnessed scout");
  assert.equal(f.commands[2].action,"expedition-rendezvous");
  assert.deepEqual(f.commands[3].point,site.actualPosition);
