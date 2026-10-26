@@ -219,7 +219,7 @@ function Ensure-SshdServicePath {
   if (-not (Test-Path -LiteralPath $wanted)) { Write-Step ("service path kept: " + $current); return }
   # The capability build (9.5) and the GitHub build (10.x) generate different
   # host key types; the service must run the binary that matches the keys.
-  if ($current -and (Test-Path -LiteralPath $current) -and ($current -like '*OpenSSH-Win64*')) {
+  if ($current -and ($current -like '*OpenSSH-Win64\sshd.exe*')) {
     Write-Step ("service path OK: " + $current)
     return
   }
