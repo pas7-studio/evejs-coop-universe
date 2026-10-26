@@ -15,9 +15,10 @@ const vector=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinit
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const named=p=>typeof p==="string"&&/^coop-pilot-[0-9]{3,}$/.test(p);
 function createExpeditionDirector({listNativeSites,getNativeEntity,getController,
- orderBridge,warpToPoint,clock=()=>Date.now(),intelTtlMs=600000,
+ orderBridge,warpToPoint,nativeProbeScan=null,clock=()=>Date.now(),intelTtlMs=600000,
  maxSitesPerTick=32,maxPilotsPerTick=32,maxOrdersPerTick=1}={}) {
- if([listNativeSites,getNativeEntity,getController,warpToPoint].some(f=>typeof f!=="function")||
+ if((nativeProbeScan!==null&&typeof nativeProbeScan!=="function")||
+    [listNativeSites,getNativeEntity,getController,warpToPoint].some(f=>typeof f!=="function")||
     !orderBridge||typeof orderBridge.issue!=="function"||
     typeof orderBridge.blocked!=="function"||typeof clock!=="function"||
     !Number.isSafeInteger(intelTtlMs)||intelTtlMs<60000||intelTtlMs>3600000||
@@ -120,12 +121,50 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
    }
    }
   }
+  // EX-03B: remote site coordinates are admitted ONLY after a real native
+  // source probeScanRuntime result, backed by original NPC cargo flight
+  // receipts and in-scene probe entities. No synthetic catalog discovery.
+  let remoteScans=0;
+  if(nativeProbeScan)for(const scout of all.slice(0,2)){
+   let scan;
+   try{scan=nativeProbeScan({scene,entityID:scout.entityID,assignments})}
+   catch{continue}
+   if(scan?.status!=="NATIVE_PROBE_SCANNED"||!Array.isArray(scan.proofs))continue;
+   for(const proof of scan.proofs.slice(0,16)){
+    if(proof?.source!=="ORIGINAL_PHYSICAL_NPC_PROBE_SCAN"||
+       proof.nativeScanCertainty!==1||proof.originalProbeCount<4||
+       proof.systemID!==scene.systemID||proof.scoutEntityID!==scout.entityID||
+       proof.pilotID!==scout.pilotID||proof.corporationID!==scout.corpID)
+     continue;
+    const matches=sites.filter(site=>site?.siteID===proof.siteID&&
+       vector(site.actualPosition)&&
+       (site.systemID===scene.systemID||site.solarSystemID===scene.systemID)&&
+       site.targetID===proof.targetID);
+    if(matches.length!==1)continue;
+    const site=matches[0],stamp=fingerprint(site);
+    if(stamp!==proof.siteFingerprint||
+       !vector(proof.actualPosition)||
+       distance(site.actualPosition,proof.actualPosition)>0.1)continue;
+    const id=key(scene.systemID,site.siteID,scout.corpID);
+    const old=intel.get(id);
+    if(!old&&intel.size>=512)continue;
+    if(!old||old.fingerprint!==stamp){
+     intel.set(id,{siteID:site.siteID,systemID:scene.systemID,
+      corpID:scout.corpID,scoutPilotID:scout.pilotID,
+      fingerprint:stamp,source:"NATIVE_PROBE_SCAN",at:now});
+     remoteScans++;
+    }
+   }
+  }
   // Scout must have personally arrived on the original grid. Other native
   // same-corp patrol hulls can then approach; never leak player bookmarks.
   for(const [id,tip] of intel){
    if(orders>=maxOrdersPerTick)break;
    if(tip.systemID!==scene.systemID)continue;
-   const site=nativeSite(tip.systemID,tip.siteID);
+   const site=tip.source==="NATIVE_PROBE_SCAN"?
+    sites.find(s=>s?.siteID===tip.siteID&&
+     (s.solarSystemID===scene.systemID||s.systemID===scene.systemID)&&
+     vector(s.actualPosition)):nativeSite(tip.systemID,tip.siteID);
    if(!site||fingerprint(site)!==tip.fingerprint){intel.delete(id);continue}
    const scout=all.find(p=>p.pilotID===tip.scoutPilotID&&p.corpID===tip.corpID);
    if(!scout){blocked++;continue}
@@ -142,7 +181,16 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     }
     const result=orderBridge.issue({entityID:p.entityID,systemID:scene.systemID,
      owner:"EXPEDITION",action:"expedition-rendezvous",execute:()=>{
-      const live=nativeSite(tip.systemID,tip.siteID,true);
+      // Re-read original native signatures immediately before a remote warp.
+      // Remote coordinates are only allowed for an existing perfect scan.
+      const live=tip.source==="NATIVE_PROBE_SCAN"?
+       (()=>{try{
+        const matches=listNativeSites(tip.systemID).filter(s=>
+         s?.siteID===tip.siteID&&
+         (s.solarSystemID===tip.systemID||s.systemID===tip.systemID)&&
+         vector(s.actualPosition));
+        return matches.length===1?matches[0]:null;
+       }catch{return null}})():nativeSite(tip.systemID,tip.siteID,true);
       const native=readPilot(scene,p.entityID,assignments);
       if(!live||fingerprint(live)!==tip.fingerprint||!native||native.corpID!==tip.corpID)
        return {success:false,errorMsg:"EXPEDITION_NATIVE_INTEL_STALE"};
@@ -153,7 +201,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     else blocked++;
    }
   }
-  return {status:"NATIVE_EXPEDITION_TICK",observed,observedPlayers,contested,orders,blocked,
+  return {status:"NATIVE_EXPEDITION_TICK",observed,observedPlayers,contested,remoteScans,orders,blocked,
    source:"LOCAL_NATIVE_SITE_WITNESS",nativeLootGranted:false,nativeWalletMutation:false};
  }
  function snapshot(){
