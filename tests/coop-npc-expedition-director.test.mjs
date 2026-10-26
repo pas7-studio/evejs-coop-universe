@@ -35,7 +35,8 @@ function fixture(){
   site:()=>sites[0],setSites:x=>{sites=x},advance:ms=>{now+=ms}};
 }
 test("on-grid scout dispatches same-corp patrol through native order bridge",()=>{
- const f=fixture(),r=f.create().tick(f.input());
+ const f=fixture(),d=f.create(),r=d.tick(f.input());
+ assert.deepEqual(d.operations(),[],"ordinary on-grid patrol cannot impersonate scanner scout");
  assert.equal(r.status,"NATIVE_EXPEDITION_TICK");assert.equal(r.observed,1);
  assert.equal(r.orders,1);assert.equal(f.commands[0].owner,"EXPEDITION");
  assert.equal(f.commands[0].entityID,23);assert.equal(f.commands[1].id,23);
@@ -140,6 +141,7 @@ test("EX-03B11 source-scanned scout warps first; patrols wait for physical scout
   nativeProbeScan:({entityID})=>({status:"NATIVE_PROBE_SCANNED",
    proofs:entityID===21?[proof]:[]})});
  const result=d.tick(f.input());
+ assert.deepEqual(d.operations(),[],"remote scanner proof is NOT an arrival witness");
  assert.equal(result.remoteScans,1);
  assert.equal(result.orders,1);
  assert.equal(f.commands[0].owner,"EXPEDITION");
@@ -156,6 +158,8 @@ test("EX-03B11 source-scanned scout warps first; patrols wait for physical scout
  f.siteEntity.itemID=site.siteID;
  f.siteEntity.position={...site.actualPosition};
  const arrived=d.tick(f.input());
+ assert.deepEqual(d.operations(),[{systemID:30000142,siteID:site.siteID,
+  corpID:700,scoutPilotID:"coop-pilot-021"}],"genuine on-grid proof unlocks operations");
  assert.equal(arrived.orders,1);
  assert.equal(arrived.scoutOnGridVerified,1);
  assert.equal(arrived.scoutWarpOrders,0);
