@@ -150,3 +150,44 @@ test('uncontracted fleet read never opens expensive atomic GameStore writer',()=
  assert.equal(x.svc.dispatch({fleet:x.fleet,native:x.native}).status,'UNCONTRACTED');
  assert.equal(x.writeCount(),before);
 });
+
+test('an already requested native HAUL blocks new HOLD, RETREAT and MINE until true custody completion',()=>{
+ for(const command of ['HOLD','RETREAT','MINE']){
+  const x=setup();x.assign('HAUL');
+  x.svc.dispatch({fleet:x.fleet,native:{...x.native,startHaul:()=>{
+   x.fleet.state='hauling';return true;}}});
+  assert.equal(x.state().commandState,'NATIVE_REQUESTED');
+  assert.equal(x.assign(command,1).reason,'MINING_SHIFT_PREVIOUS_NATIVE_ORDER_ACTIVE');
+  assert.equal(x.state().directive,'HAUL');
+ }
+});
+test('requested native RETREAT cannot become new MINE before independent arrival proof',()=>{
+ const x=setup();x.assign('RETREAT');
+ x.svc.dispatch({fleet:x.fleet,native:{...x.native,retreat:()=>{
+  x.fleet.state='retreating';return 3;}}});
+ assert.equal(x.assign('MINE',1).reason,'MINING_SHIFT_PREVIOUS_NATIVE_ORDER_ACTIVE');
+});
+test('loaded/hauling/haulereturn source phases deny immediate dangerous retreat or haul',()=>{
+ for(const state of ['loaded','hauling','haulereturn']){
+  const x=setup();x.fleet.state=state;
+  assert.equal(x.assign('RETREAT').reason,'MINING_SHIFT_PHYSICAL_CARGO_TRANSIT_ACTIVE');
+  assert.equal(x.assign('HAUL').reason,'MINING_SHIFT_PHYSICAL_CARGO_TRANSIT_ACTIVE');
+  // HOLD remains deferrable without interrupting the original cargo trip.
+  assert.equal(x.assign('HOLD').status,'ORDER_QUEUED');
+ }
+});
+test('HOLD must actually reach native coop-hold phase before MINE resumes',()=>{
+ const x=setup();x.assign('HOLD');x.svc.dispatch({fleet:x.fleet,native:x.native});
+ x.fleet.state='hauling';
+ assert.equal(x.assign('MINE',1).reason,'MINING_SHIFT_PHYSICAL_CARGO_TRANSIT_ACTIVE');
+ x.fleet.state='mining';
+ assert.equal(x.assign('MINE',1).reason,'MINING_SHIFT_HOLD_NOT_YET_PHYSICALLY_ENFORCED');
+ x.fleet.state='coop-hold';
+ assert.equal(x.assign('MINE',1).status,'ORDER_QUEUED');
+});
+test('native HAUL cannot be queued in untrusted non-mining phases',()=>{
+ for(const state of ['panic','aggressed','coop-hold','retreating']){
+  const x=setup();x.fleet.state=state;
+  assert.equal(x.assign('HAUL').reason,'MINING_SHIFT_HAUL_NOT_READY_IN_NATIVE_PHASE');
+ }
+});
