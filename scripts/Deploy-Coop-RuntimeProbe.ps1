@@ -27,6 +27,7 @@ param(
   [switch]$EnableNativeExploration,
   [switch]$EnableNpcExpeditions,
   [switch]$EnableNpcProbeScan,
+  [switch]$EnableNpcProbeLaunch,
   [switch]$EnableNativeHackingAdmission,
   [switch]$EnableAtomicCoopTrade,
   [switch]$EnableDuoMissionSettlement,
@@ -65,6 +66,9 @@ if ($EnableNativeHackingAdmission -and -not $EnableNativeExploration) {
 }
 if ($EnableNpcProbeScan -and (-not $EnableNpcExpeditions -or -not $EnableNativeExploration)) {
   throw 'NPC physical probe scan requires -EnableNpcExpeditions -EnableNativeExploration'
+}
+if ($EnableNpcProbeLaunch -and -not $EnableNpcProbeScan) {
+  throw 'NPC native probe launch requires -EnableNpcProbeScan'
 }
 Assert-Range 'NpcCount' $NpcCount 1 3
 Assert-Range 'EncounterCooldownMinutes' $EncounterCooldownMinutes 1 10080
@@ -204,6 +208,11 @@ if ($EnableNpcExpeditions) {
 # flight receipts and materialized physical probes can be verified.
 if ($EnableNpcProbeScan) {
   $yamlLines += "      EVEJS_COOP_NPC_PROBE_SCAN: '1'"
+}
+# EX-03B2: original cargo debit is an EXTRA opt-in beyond read-only scans.
+# Disable until SQLite fault-injection + physical two-client scene checks pass.
+if ($EnableNpcProbeLaunch) {
+  $yamlLines += "      EVEJS_COOP_NPC_PROBE_LAUNCH: '1'"
 }
 if ($EnableNativeHackingAdmission) {
   $yamlLines += "      EVEJS_COOP_NATIVE_HACKING_ADMISSION: '1'"
