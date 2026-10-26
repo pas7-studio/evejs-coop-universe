@@ -65,7 +65,7 @@ function stillRegistered(store,entityID){
 // would also allow a sold stack to be hauled and paid a second time.
 // This read-only check must verify ALL settlement authorities before a
 // single source row can move. Missing authority is never an empty ledger.
-function verifyReAdoptionCustody(row, options={}) {
+function verifyReAdoptionCustody(row, options={}, ownedLocks=null) {
  const cargoID=pos(row?.cargoID);
  if(!cargoID)return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
  try{
@@ -88,7 +88,8 @@ function verifyReAdoptionCustody(row, options={}) {
    return "RE_ADOPTION_SETTLEMENT_UNVERIFIED";
   const warehouseClaim=names.some(name=>{
    const match=/^(\d+)\.(?:json(?:\.tmp-[^/\\]*)?|lock)$/.exec(name);
-   return match&&Number(match[1])===cargoID;
+   return match&&Number(match[1])===cargoID&&
+    !(name===cargoID+".lock"&&ownedLocks?.has(cargoID)===true);
   });
   if(warehouseClaim)return "RE_ADOPTION_WAREHOUSE_RECEIPT_EXISTS";
   const items=options.custodyItems||
@@ -128,10 +129,50 @@ function verifyReAdoptionCustody(row, options={}) {
   return "CLEAR";
  }catch(_error){return "RE_ADOPTION_SETTLEMENT_UNVERIFIED"}
 }
+// Lock the SAME <cargoID>.lock used by coopNativeWarehouse. No lock
+// removal unless our own exclusive wx acquired it; crashed locks stay put.
+function acquireReAdoptionLocks(rows,options={}){
+ const fs=require("node:fs"),path=require("node:path");
+ const io=options.custodyIo||fs;
+ const root=options.warehouseRoot||process.env.EVEJS_COOP_NATIVE_WAREHOUSE_ROOT;
+ if(typeof root!=="string"||!path.isAbsolute(root)||
+    ["openSync","writeFileSync","fsyncSync","closeSync","unlinkSync","readdirSync"]
+     .some(method=>typeof io?.[method]!=="function"))
+  return {status:"RE_ADOPTION_LOCK_AUTHORITY_UNVERIFIED"};
+ const ids=rows.map(row=>pos(row.cargoID));
+ if(ids.some(id=>!id)||new Set(ids).size!==ids.length)
+  return {status:"RE_ADOPTION_LOCK_AUTHORITY_UNVERIFIED"};
+ const dir=path.join(root,"receipts"),held=new Set();
+ let released=false;
+ function release(){
+  if(released)return true;
+  let ok=true;
+  for(const id of [...held].reverse()){
+   try{io.unlinkSync(path.join(dir,id+".lock"));held.delete(id)}
+   catch(_error){ok=false}
+  }
+  if(ok)released=true;
+  return ok;
+ }
+ try{
+  for(const id of ids.sort((a,b)=>a-b)){
+   const fd=io.openSync(path.join(dir,id+".lock"),"wx",0o600);
+   held.add(id);
+   try{io.writeFileSync(fd,String(process.pid));io.fsyncSync(fd);}
+   finally{io.closeSync(fd);}
+  }
+  return {status:"HELD",held,release};
+ }catch(error){
+  const cleared=release();
+  return {status:!cleared?"RE_ADOPTION_LOCK_RELEASE_UNVERIFIED":
+   error?.code==="EEXIST"?"RE_ADOPTION_WAREHOUSE_LOCKED":
+   "RE_ADOPTION_LOCK_AUTHORITY_UNVERIFIED"};
+ }
+}
 // Which orphans may this exact fleet slot adopt? Every condition is an
 // independent refusal, so a missing or odd field never guesses ownership.
 function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
- cargoTable,database,enableReAdoption=false,custodyOptions}={}){
+ cargoTable,database,enableReAdoption=false,custodyOptions,ownedLocks=null}={}){
  const pid=pos(systemID),fid=pos(fleetID);
  if(!pid||!fid||!scene||!Number.isSafeInteger(now)||now<=0)
   return {status:"INVALID_AUTHORITIES",rows:[]};
@@ -184,7 +225,7 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,
    return {status:"NATIVE_ENTITY_REGISTRY_UNVERIFIED",rows:[]};
   if(registered)continue;
   if(adoptedAt){
-   const custody=verifyReAdoptionCustody(row,custodyOptions);
+   const custody=verifyReAdoptionCustody(row,custodyOptions,ownedLocks);
    if(custody!=="CLEAR")return {status:custody,rows:[]};
   }
   rows.push(row);
