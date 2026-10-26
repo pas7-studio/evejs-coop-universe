@@ -125,3 +125,12 @@ test("seller policy is explicitly configured server-side and never inferred from
  assert.equal(source(BUYER),null);
  data.employers[EMPLOYER].enabled=false;assert.equal(source(EMPLOYER),null);
 });
+
+test("noninteger or unversioned operator salary is never treated as an NPC wage",()=>{
+ for(const mutate of [p=>p.revision=0,p=>p.minerCycleCents=10.25,
+  p=>p.haulerCycleCents=-1,p=>p.maxCycles=130,p=>p.minerCycleCents=100000001]){
+  const x=fixture();mutate(x.policy);
+  assert.equal(x.preview().status,"NO_NATIVE_EMPLOYER_OFFER");
+  assert.equal(x.writeCount(),0);
+ }
+});
