@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -585,6 +585,7 @@ function spawnNativeNpc(request) {
         pilotID,
         systemID,
         entityID: ships[0].entityID,
+        role: String(request.role || ""),
       });
     } catch (error) {
       link = { status: "LINK_UNAVAILABLE", reason: String(error && error.message || error) };
@@ -609,6 +610,15 @@ function executeRequest(request) {
   // the one admin request that legitimately has no characterID.
   if (action === "deploy_structure") return deployStructure(request);
   if (action === "spawn_native_npc") return spawnNativeNpc(request);
+  // Read-only war diagnostics: never reserves, orders or writes anything.
+  if (action === "war_diagnose") {
+    try {
+      const runtimeWorld = require("./coopVirtualWorldRuntime" + siblingSuffix);
+      return { ok: true, mobilization: runtimeWorld.diagnoseMobilization() };
+    } catch (error) {
+      return { ok: false, error: "diagnose failed: " + String(error && error.message || error) };
+    }
+  }
   const characterID = Number(request.characterID) || 0;
   if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
   if (action === "chat_command") return executeChatCommand(request);

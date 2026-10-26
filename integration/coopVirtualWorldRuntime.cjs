@@ -320,6 +320,18 @@ function advanceNativeWarMobilization(){
    evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
  else warSkip("mobilization","NO_MOBILIZED_SHIP:"+String(result.status||"UNKNOWN"));
 }
+// Read-only operator diagnostic: what would mobilization do right now, and why
+// not. Uses the same live authorities and the mobilizer's own dry run, so it can
+// never reserve, order or mutate anything.
+function diagnoseMobilization(){
+ if(!warMobilizer)return {status:"MOBILIZER_NOT_INITIALIZED"};
+ if(!visitedSystems.size)return {status:"NO_VISITED_SYSTEMS"};
+ try{
+  return warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12),dryRun:true});
+ }catch(error){
+  return {status:"DIAGNOSE_FAILED",reason:String(error&&error.message||error)};
+ }
+}
 // FW-007B: recover/audit native military handoff BEFORE the materializer
 // may prune old pilot links or rebuild another physical hull.
 function ensureWarRecoverySocket(){
@@ -3707,16 +3719,24 @@ function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:f
 // registry knows which roster pilot flies it, so this links the pair and refuses
 // unless the native entity really exists in that system and the pilot is a real,
 // still-unlinked roster identity.
-function linkSpawnedIdentity({pilotID,systemID,entityID}={}){
+function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
  if(!identityRegistry)return {status:"IDENTITY_REGISTRY_UNAVAILABLE"};
  const pilotId=String(pilotID||"").trim();
  const system=Number(systemID),entity=Number(entityID);
  if(!pilotId||!Number.isSafeInteger(system)||system<=0||
   !Number.isSafeInteger(entity)||entity<=0)return {status:"INVALID_IDS"};
+ // A reserve roster pilot may carry no role yet. The caller may state the job the
+ // hull really does (a spawned armed interceptor is a patrol), and only these
+ // four labels are accepted - never an arbitrary string.
+ const LINK_ROLES=new Set(["patrol","pirate","miner","hauler","trader"]);
+ const requestedRole=String(role||"").trim();
+ if(requestedRole&&!LINK_ROLES.has(requestedRole))
+  return {status:"INVALID_LINK_ROLE",role:requestedRole};
  let roster=[];
  try{roster=world?.snapshot?.().pilots||[]}catch{roster=[]}
- const pilot=roster.find(p=>String(p?.id)===pilotId);
- if(!pilot)return {status:"UNKNOWN_ROSTER_PILOT",pilotID:pilotId};
+ const found=roster.find(p=>String(p?.id)===pilotId);
+ if(!found)return {status:"UNKNOWN_ROSTER_PILOT",pilotID:pilotId};
+ const pilot=requestedRole?{...found,role:requestedRole}:found;
  let links={};
  try{links=identityRegistry.snapshot()?.links||{}}catch{links={}}
  if(Object.values(links).some(l=>String(l?.pilotID)===pilotId))
@@ -3733,4 +3753,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization};

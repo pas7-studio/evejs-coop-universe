@@ -863,3 +863,21 @@ Why: War objectives need a server-side structure writer; EveJS only exposes clie
 Detail: The pinned EveJS deploys structures only through client RPCs, so the war layer had no honest way to place a real objective. coopStructureFactory plans a normalized structure record (unknown typeID, invalid position, non-numeric faction, owner corporation outside the claimed faction and a missing name are explicit refusals) and writes it through the native writer structureState.createStructure -> p
 Where: integration/coopStructureFactory.cjs, scripts/overlay-spec.cjs, tests/coop-structure-factory.test.mjs
 Evidence: node --test tests/coop-structure-factory.test.mjs 12/12 pass; patch-evejs-coop --apply INSTALLED coopStructureFactory.js; --check OVERLAY_OK
+### 2026-10-26T23:34Z · 2276157 · L2 · feat(admin): deploy_structure admin action for the structure factory
+
+Why: Need an in-process way to invoke the structure factory; a second node process would write behind the server cache
+Detail: coopAdminBridge runs inside the server process (the only place with the real native services and a warm store), so it is the honest way to invoke the factory: a second node process would write SQLite behind the server's cache. The new whitelisted action deploy_structure has no characterID (a structure is owned by a corporation), passes the faction verbatim so the factory's own strict validation an
+Where: .opencode/metrics.md, .opencode/plan.md, .opencode/state.md, docs/WORKLOG.md, integration/coopAdminBridge.cjs, tests/coop-admin-bridge-structure.test.mjs
+Evidence: node --test tests/coop-admin-bridge-structure.test.mjs 4/4; --check OVERLAY_OK; metrics.md created
+### 2026-10-26T23:39Z · 71551c9 · L2 · feat(war): a campaign's real structure objective reaches the client map
+
+Why: Campaign objective structureID was hardcoded 0, so a bound real structure never reached the client map
+Detail: The campaign objective was hardcoded to structureID 0, so even after the adjudicator bound a real native structure the map layer had nothing to draw. campaignSnapshots now derives it from the campaign's own objectiveEvidence (objectiveID "structure:<id>", written by the adjudicator only after native verification): the latest valid bound structure wins, junk or a missing objective yields 0 like sto
+Where: integration/coopWarClientView.cjs, tests/coop-war-client-view.test.mjs
+Evidence: node --test tests/coop-war-client-view.test.mjs 5/5; --check OVERLAY_OK; EVEJS_COOP_WAR_OBJECTIVE_STRUCTURE_TYPE_IDS=35832 in compose.coop-probe.yaml
+### 2026-10-26T23:49Z · 3fc8e73 · L2 · feat(world): spawn and link a real native NPC so a tied system can get a front
+
+Why: A transient spawn is invisible to the war opener, which counts real identity links; the world needs an honest way to add a real second-faction ship
+Detail: The war opener counts only real identity links, so a transient hull nobody flies is invisible to it. spawn_native_npc spawns real native hulls from a real SDE profile through the same spawnBatchInSystem + scene anchor the materializer uses, reports the resulting entity/corporation/faction, and optionally links the ship to an UNLINKED roster pilot through the runtime's own registry (linkSpawnedIden
+Where: integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-admin-bridge-structure.test.mjs
+Evidence: admin result spawn_native_npc -> ok:true LINKED entityID 980000016607 corp 1000138 faction 500011; living-native-war-opened OPENED war:500011-500014 with 2 PREPARING campaigns

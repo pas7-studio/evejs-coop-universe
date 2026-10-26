@@ -27,7 +27,7 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
   !Number.isSafeInteger(maxPerSide)||maxPerSide<1||maxPerSide>4)
   throw Error("WAR_MOBILIZATION_NATIVE_AUTHORITIES_REQUIRED");
  let busy=false;
- function tick({systemIDs=[]}={}){
+ function tick({systemIDs=[],dryRun=false}={}){
   if(!enabled(env))return {status:"DISABLED",mobilized:[]};
   if(busy)return {status:"BUSY",mobilized:[]};
   if(!Array.isArray(systemIDs)||systemIDs.length>20||systemIDs.some(x=>!pos(x)))
@@ -65,6 +65,16 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
    const existing=new Set(Object.keys(assigned.ships).map(Number));
    const usedPilots=new Set(Object.values(assigned.ships).map(x=>x?.pilotID));
    const mobilized=[];
+   // Diagnostics only: the exact first failed check per candidate, so a silent
+   // "nothing mobilized" tick can be explained instead of guessed at.
+   const rejected=[];
+   const rejectedPerSide=new Map();
+   const sideRejects=(side)=>{
+    const key=String(side||"");
+    const count=rejectedPerSide.get(key)||0;
+    rejectedPerSide.set(key,count+1);
+    return count;
+   };
    // Campaign IDs are user-independent server-generated records, never chat
    // input. Sort deterministically to prevent tick-order oscillations.
    const campaigns=Object.values(state.campaigns)
@@ -101,14 +111,25 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
      for(const link of candidateLinks){
       if(existingSide>=maxPerSide||mobilized.length>=maxPerTick)break;
       const id=link?.entityID;
-      if(!pos(id)||!named(link.pilotID)||link.role!=="patrol"||
-       link.systemID!==side.systemID||existing.has(id)||
-       usedPilots.has(link.pilotID)||playerIDs.has(id)||isTactical(id))
+      const cheap=!pos(id)?"INVALID_ENTITY":!named(link.pilotID)?"INVALID_PILOT":
+       link.role!=="patrol"?"NOT_PATROL_ROLE":link.systemID!==side.systemID?"WRONG_SYSTEM":
+       existing.has(id)?"ALREADY_ASSIGNED":usedPilots.has(link.pilotID)?"PILOT_IN_USE":
+       playerIDs.has(id)?"PLAYER_SHIP":isTactical(id)?"TACTICAL_BUSY":"";
+      if(cheap){
+       // WRONG_SYSTEM is per-side noise, not a blocker: report only candidates
+       // that are really in this side's system.
+       if(dryRun&&cheap!=="WRONG_SYSTEM"&&sideRejects(side.role)<8)
+        rejected.push({entityID:id,pilotID:String(link?.pilotID||""),side:side.role,reason:cheap});
        continue;
+      }
       // Uniqueness already proven using the bounded registry index above.
       if(leases.some(x=>x.entityID===id&&x.systemID===side.systemID&&
        (["ISSUING","OUTCOME_UNKNOWN"].includes(x.phase)||
-        (x.phase==="ACTIVE"&&Number(x.expiresAt)>now))))continue;
+        (x.phase==="ACTIVE"&&Number(x.expiresAt)>now)))){
+       if(dryRun&&sideRejects(side.role)<8)
+        rejected.push({entityID:id,pilotID:link.pilotID,side:side.role,reason:"ORDER_LEASE_ACTIVE"});
+       continue;
+      }
       let ship,native,ctrl,ready,faction;
       try{
        ship=scene.getEntityByID(id);native=getNativeEntity(id);
@@ -116,15 +137,32 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
        faction=getFactionForCorporation(native?.corporationID);
        ready=inspectReadiness({entityID:id,ship,
         systemID:side.systemID,corporationID:native?.corporationID});
-      }catch{continue}
+      }catch{
+       if(dryRun&&sideRejects(side.role)<8)
+        rejected.push({entityID:id,pilotID:link.pilotID,side:side.role,reason:"NATIVE_LOOKUP_THREW"});
+       continue;
+      }
+      let fail="";
       if(!ship||ship.kind!=="ship"||ship.nativeNpc!==true||
-       ship.itemID!==id||ship.session?.characterID||warp(ship)||
-       !native||native.entityID!==id||native.systemID!==side.systemID||
-       !pos(native.corporationID)||ship.corporationID!==native.corporationID||
-       faction!==side.factionID||
-       ctrl?.entityID!==id||ctrl.systemID!==side.systemID||
-       ctrl.currentTargetID||ctrl.manualOrder||
-       ready?.ready!==true)continue;
+       ship.itemID!==id||ship.session?.characterID||warp(ship))fail="SHIP_NOT_IDLE_NATIVE";
+      else if(!native||native.entityID!==id||native.systemID!==side.systemID||
+       !pos(native.corporationID)||ship.corporationID!==native.corporationID)fail="NATIVE_RECORD_DRIFT";
+      else if(faction!==side.factionID)fail="WRONG_FACTION";
+      else if(ctrl?.entityID!==id||ctrl.systemID!==side.systemID)fail="NO_CONTROLLER";
+      else if(ctrl.currentTargetID||ctrl.manualOrder)fail="CONTROLLER_BUSY";
+      else if(ready?.ready!==true)fail="NOT_READY:"+String((ready&&ready.reason)||"UNKNOWN");
+      if(fail){
+       if(dryRun&&sideRejects(side.role)<8)
+        rejected.push({entityID:id,pilotID:link.pilotID,side:side.role,reason:fail});
+       continue;
+      }
+      if(dryRun){
+       // Read-only: report what a real tick would mobilize, never write.
+       mobilized.push({status:"DRY_RUN_MOBILIZABLE",entityID:id,
+        pilotID:link.pilotID,systemID:side.systemID,
+        factionID:side.factionID,campaignID:c.campaignID,role:side.role});
+       continue;
+      }
       const command={
        type:"ASSIGN",eventID:"wm:"+c.campaignID+":"+id,
        entityID:id,systemID:side.systemID,pilotID:link.pilotID,
@@ -148,7 +186,8 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
      }
     }
    }
-   return {status:"OBSERVED",mobilized,activeCampaignCount:campaigns.length};
+   return {status:dryRun?"DRY_RUN":"OBSERVED",mobilized,rejected,
+    activeCampaignCount:campaigns.length};
   }finally{busy=false}
  }
  return Object.freeze({tick});

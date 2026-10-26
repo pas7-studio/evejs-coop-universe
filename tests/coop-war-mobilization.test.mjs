@@ -111,3 +111,26 @@ test("disabled or incomplete safety flags do not consult game world",()=>{
  assert.equal(enabled(f.env),false);
  assert.equal(f.tick().status,"DISABLED");
 });
+
+test("a dry run reports what would mobilize and never writes",()=>{
+ const f=fixture();
+ const dry=f.mobilizer.tick({systemIDs:[101,202],dryRun:true});
+ assert.equal(dry.status,"DRY_RUN");
+ assert.equal(f.calls.length,0);                       // no ASSIGN was executed
+ assert.deepEqual(dry.mobilized.map(x=>x.entityID),[503,501]);
+ assert.equal(dry.mobilized.every(x=>x.status==="DRY_RUN_MOBILIZABLE"),true);
+ assert.equal(f.registered.ships && Object.keys(f.registered.ships).length,0);
+});
+
+test("a dry run names the first failed check per candidate",()=>{
+ const f=fixture();
+ f.noAmmo(true);                                      // real ammo gate stays in force
+ const dry=f.mobilizer.tick({systemIDs:[101,202],dryRun:true});
+ assert.equal(dry.status,"DRY_RUN");
+ assert.equal(dry.mobilized.length,0);
+ assert.equal(dry.rejected.length>=1,true);
+ // The ammo gate is the real blocker: it is named, not swallowed.
+ assert.equal(dry.rejected.some(x=>x.reason==="NOT_READY:UNKNOWN"),true);
+ assert.equal(dry.rejected.every(x=>typeof x.reason==="string"&&x.reason.length>0),true);
+ assert.equal(f.calls.length,0);
+});
