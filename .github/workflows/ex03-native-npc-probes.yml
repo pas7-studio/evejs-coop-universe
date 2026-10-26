@@ -8,6 +8,7 @@ on:
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
       - 'integration/coopNativeNpcProbeLifecycle.cjs'
+      - 'integration/coopNativeNpcProbeSceneTransition.cjs'
       - 'integration/coopNpcScoutLoadout.cjs'
       - 'integration/coopNativeHackingAdmission.cjs'
       - 'integration/coopVirtualWorldRuntime.cjs'
@@ -27,6 +28,7 @@ on:
       - 'integration/coopNativeNpcProbeFlight.cjs'
       - 'integration/coopNativeNpcProbeSweep.cjs'
       - 'integration/coopNativeNpcProbeLifecycle.cjs'
+      - 'integration/coopNativeNpcProbeSceneTransition.cjs'
       - 'integration/coopNpcScoutLoadout.cjs'
       - 'scripts/coop-npc-probe-loadout-split-patch.cjs'
       - 'scripts/coop-npc-scout-loadout-patch.cjs'
@@ -56,6 +58,7 @@ jobs:
             integration/coopNativeNpcProbeFlight.cjs \
             integration/coopNativeNpcProbeSweep.cjs \
             integration/coopNativeNpcProbeLifecycle.cjs \
+            integration/coopNativeNpcProbeSceneTransition.cjs \
             integration/coopNpcScoutLoadout.cjs \
             scripts/coop-npc-scout-loadout-patch.cjs \
             integration/coopNativeHackingAdmission.cjs \
@@ -101,8 +104,31 @@ jobs:
             tests/coop-native-npc-probe-sweep.test.mjs \
             tests/coop-native-npc-probe-lifecycle.test.mjs \
             tests/coop-native-npc-probe-full-cycle.test.mjs \
+            tests/coop-native-npc-probe-scene-transition.test.mjs \
             tests/coop-npc-scout-loadout.test.mjs \
             tests/coop-native-hacking-admission.test.mjs
-      - name: Keep native SQLite kill/restart and two-client gameplay blocked
+      - name: Download exact pinned native source with SQLite GameStore
         run: |
-          echo "EX-03 source contracts only; pinned-game SQLite kill/restart, native ship loadout fixture and physical two-client acceptance must still be run before production enablement."
+          set -euo pipefail
+          PINNED_SHA=c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+          PINNED_ROOT="${RUNNER_TEMP}/evejs-native-pinned"
+          mkdir -p "$PINNED_ROOT"
+          git -C "$PINNED_ROOT" init -q
+          git -C "$PINNED_ROOT" remote add origin https://github.com/gameboys84/EveJS.git
+          git -C "$PINNED_ROOT" -c protocol.version=2 fetch -q --depth=1 --filter=blob:none origin "$PINNED_SHA"
+          git -C "$PINNED_ROOT" sparse-checkout init --cone
+          git -C "$PINNED_ROOT" sparse-checkout set Code/server
+          git -C "$PINNED_ROOT" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$PINNED_ROOT" rev-parse HEAD)" = "$PINNED_SHA"
+          cd "$PINNED_ROOT/Code/server"
+          npm ci --no-audit --no-fund
+      - name: Real native npcCargo SQLite crash/restart (SIGKILL)
+        env:
+          EVEJS_PINNED_SERVER: ${{ runner.temp }}/evejs-native-pinned/Code/server
+        run: |
+          set -euo pipefail
+          node --check scripts/verify-npc-probe-sqlite-crash.mjs
+          node scripts/verify-npc-probe-sqlite-crash.mjs
+      - name: Two-client/bubble gameplay remains a separate required gate
+        run: |
+          echo "EX-03 pinned native SQLite process-kill acceptance runs above. Native live two-client bubble movement and expedition fitting must still be run before production enablement."
