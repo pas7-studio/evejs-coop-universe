@@ -130,7 +130,8 @@ function createOriginalCorporateSellCustody({gameStore,access,readiness,verifyNa
      throw Error("CORP_SELL_DUPLICATE_NATIVE_ITEM_OR_ORDER");
     const captured={version:1,phase:"ESCROW_BOUND_UNSETTLED",
      operationID,cargoID,itemID:ore.itemID,typeID:ore.typeID,
-     quantity:ore.quantity,corporationID,stationID:ore.stationID,
+     quantity:ore.quantity,corporationID,
+     sellerRepresentativeCharacterID:session.characterID,stationID:ore.stationID,
      originalLocationID:ore.officeFolderID,originalFlagID:ore.division,
      escrowLocationID,orderID,createdAt:now,
      marketRevenueCents:null,marketOrderCreated:false};
