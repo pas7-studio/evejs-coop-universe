@@ -28,6 +28,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
     !Number.isSafeInteger(maxOrdersPerTick)||maxOrdersPerTick<1||maxOrdersPerTick>3)
   throw Error("NPC_EXPEDITION_NATIVE_AUTHORITIES_REQUIRED");
  const intel=new Map(),pending=new Map(),uncertainOrders=new Set();
+ let physicallyReady=[];
  // EX-03B10: bounded, rotating hardware checks avoid starvation when the
  // genuinely equipped scout is beyond the ordinary per-tick patrol cap.
  let scannerCursor=0;
@@ -91,6 +92,8 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   s.family??null,s.typeID??null,s.instanceID??null,s.pairID??null,
   s.actualPosition.x,s.actualPosition.y,s.actualPosition.z]);
  function tick({scene,assignments=[],roles={}}={}){
+  // Never expose a previous tick's scout/site operation witness.
+  physicallyReady=[];
   const now=clock();
   if(!pos(scene?.systemID)||typeof scene.getEntityByID!=="function"||
      !Number.isSafeInteger(now)||now<=0||!Array.isArray(assignments)||
@@ -242,6 +245,12 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
      scoutOnGridVerified++;
     }
    }
+   // Native operations may proceed ONLY with this tick's verified on-grid
+   // scout witness and original site entity; never with a cached scan alone.
+   if(!scoutWarpFirst&&distance(scout.ship.position,site.actualPosition)<=150000&&
+      nativeSite(tip.systemID,tip.siteID,true)&&physicallyReady.length<64)
+    physicallyReady.push({systemID:tip.systemID,siteID:tip.siteID,
+     corpID:tip.corpID,scoutPilotID:scout.pilotID});
    const warpCandidates=scoutWarpFirst?[scout]:all;
    for(const p of warpCandidates){
     if(orders>=maxOrdersPerTick)break;
@@ -298,6 +307,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   return {tips:[...intel.values()].map(t=>({...t,fingerprint:"[REDACTED]"})),
    pending:pending.size,unknownOrderOutcomes:uncertainOrders.size};
  }
- return Object.freeze({tick,snapshot});
+ function operations(){return physicallyReady.map(x=>({...x}));}
+ return Object.freeze({tick,snapshot,operations});
 }
 module.exports={createExpeditionDirector};
