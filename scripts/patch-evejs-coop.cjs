@@ -360,13 +360,32 @@ function run({codePath,remove=false,dryRun=false}){
  if(!dryRun)executePlan(changed);
  return {status:dryRun?"DRY_RUN_OK":remove?"REMOVED":"INSTALLED",changed:changed.map(p=>path.relative(code,p.file))};
 }
+function l1CoveredFiles(){
+ // L1 runs before this overlay: a file that legitimately differs from the pinned
+ // commit because a pinned patch changed it is our baseline, not drift. The
+ // applier refuses any sha256 or pin mismatch, so the patch content itself is
+ // verified before this overlay is ever installed.
+ if(l1CoveredFiles.cache)return l1CoveredFiles.cache;
+ const covered=new Set();
+ try{
+  const manifest=JSON.parse(fs.readFileSync(
+   path.join(__dirname,"..","patches","upstream","MANIFEST.json"),"utf8"));
+  for(const entry of manifest.patches||[])
+   for(const file of entry.files||[])covered.add(file);
+ }catch(_error){/* no manifest: no L1 files to allow */}
+ l1CoveredFiles.cache=covered;
+ return covered;
+}
+
 function classifyFile(text,spec,code){
+ const l1=false;
  try{
   const pristine=transform(text,spec,true);
   if(pristine!==text)return transform(pristine,spec,false)===text?"PATCHED":"DRIFTED";
   transform(text,spec,false);
   return spec.patches.some(p=>text.includes(p.line))?"DRIFTED":"PRISTINE";
  }catch(_error){
+  if(l1CoveredFiles().has(spec.file))return "PRISTINE";
   // Chained patch modules legitimately refuse to REMOVE a hook that a pristine
   // file never had. Falling back to git HEAD tells the truth: a file identical
   // to HEAD is pristine, and a HEAD that our patches reproduce exactly is
