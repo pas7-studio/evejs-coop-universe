@@ -122,7 +122,7 @@ test("existing Living World still has ONE 30s tick and separate observational sa
  assert.doesNotMatch(coordinator,/\bsetTimeout\s*\(/);
  assert.match(source,/livingWorldPhases\(\)/);
 });
-test("all legacy 30s phases are registered exactly once in unchanged source order",()=>{
+test("existing 30s phases retain deterministic source order, including war and expeditions",()=>{
  const source=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
  const start=source.indexOf("timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{");
  const end=source.indexOf(" }),30000);",start);
@@ -131,10 +131,13 @@ test("all legacy 30s phases are registered exactly once in unchanged source orde
  assert.doesNotMatch(block,/safeNpcPhase\(/);
  const actual=[...block.matchAll(/runPhase\("([^"]+)"/g)].map(x=>x[1]);
  const expected=[
-  "courier-observe","courier-dispatch","virtual-travel","virtual-economy",
+  "courier-observe","admin-bridge","courier-dispatch","virtual-travel","virtual-economy",
   "native-depot","alife-native-mining-proof","alife-native-economy-observe",
   "faction","native-ammo-readiness","native-ammo-survival",
-  "native-ammo-supply","native-raids","native-tactics","native-expeditions","native-ammo-observe",
+  "native-ammo-supply","native-raids","native-tactics","native-expeditions",
+  "native-faction-war-demobilization","native-faction-war-mobilization",
+  "native-faction-war-gate-staging","native-faction-war-battle",
+  "native-faction-war-objectives","native-ammo-observe",
   "native-wreck-recovery","native-salvage-rivals","native-salvage-market",
   "native-wreck-custody","native-loot-station-delivery",
   "native-gate-approach","native-patrols","npc-recognition",
@@ -142,7 +145,7 @@ test("all legacy 30s phases are registered exactly once in unchanged source orde
   "native-activity","npc-reconcile:"
  ];
  assert.deepEqual(actual,expected);
- assert.equal(actual.length,28);
+ assert.equal(actual.length,34);
  assert.match(block,/EVEJS_COOP_ALIFE_SALVAGE_MARKET/);
  assert.match(block,/EVEJS_COOP_NATIVE_NPC_MARKET/);
  assert.match(block,/EVEJS_COOP_ALIFE_ECONOMY/);
