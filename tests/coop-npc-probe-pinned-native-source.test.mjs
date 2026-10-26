@@ -79,6 +79,8 @@ test("pinned original scanner and physical probe entity can generate one real ce
    {ownerID,systemID});
   assert.equal(physical.kind,"probe");
   assert.equal(physical.itemID,row.cargoID);
+  physical.nativeNpcProbe=true;
+  physical.nativeNpcCargoID=row.cargoID;
   sceneObjects.set(row.cargoID,physical);
  }
  const actualResults=native.scan.buildSignatureScanResults(systemID,new Map(rows.map(row=>{
