@@ -149,6 +149,15 @@ See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
 - `PublishCorpSell` still **FAILS CLOSED**. Trusted native buyer matching, verified native fee/tax authority, safe publication and cancelled/partially unsold return remain incomplete; no real in-game ISK sale occurred.
 - See [CHAT24_31_CORPORATE_FILL_FINALIZATION.md](CHAT24_31_CORPORATE_FILL_FINALIZATION.md) for exact source identity checks, restart recovery, flags and release gates.
 
+## Stage E2B5 — partially unsold corporate order cancellation (source implemented)
+
+- Pinned original Rust `FillOrder`, `ModifyOrder`, `CancelOrder` now **reject** original `source='coop-corporation'` orders before stock wallet/item mutations, preserving separation from unsafe character-only settlement.
+- Private original Rust `LockCorpSellCancel/GetCorpSellCancel/FinalizeCorpSellCancel` holds exclusive `cancelling` order lock, refuses active or incomplete prior fills, tracks exact original source item/cargo and unsold quantity, and independently rechecks original GameStore SQLite after the physical return.
+- The original corporate `coopPlayerMiningCorporateUnsoldReturn` atomically returns **only remaining source item quantity** to the same player corporation office, leaving prior bought units, ISK payments and all completed fill receipts unchanged. A terminal `RETURNED_UNSOLD` tombstone protects order/cargo IDs after restart.
+- Private `coopPlayerMiningCorporateCancelLifecycle` protects `Rust Lock → GameStore Return → Rust Finalize` from lost ACK and duplicate cargo return. No new scheduler or public UI. All feature flags and constructor gates remain OFF by default.
+- Source tests: **25/25** Rust safety/patch, **12/12** corporate remainder return, **8/8** original Rust cancellation orchestration isolated PASS. Real Cargo/SQLite and two-client E2E **NOT RUN**.
+- **Still not playable**: original Rust `PublishCorpSell` remains fail-closed because native buyer matching / independent fee authority and full Rust/GameStore E2E are not live-verified. See [CHAT24_31_CORPORATE_UNSOLD_CANCEL.md](CHAT24_31_CORPORATE_UNSOLD_CANCEL.md).
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
