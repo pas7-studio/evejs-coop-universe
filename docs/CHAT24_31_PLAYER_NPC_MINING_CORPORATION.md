@@ -97,6 +97,15 @@ See [CHAT24_31_NATIVE_MINING_AGENT.md](CHAT24_31_NATIVE_MINING_AGENT.md).
 - Evidence: **23/23** isolated menu scenarios, **8/8** Agent integration scenarios, **22/22** Stage B commands, plus **17/17** D1 and **10/10** D2 Agent regressions. Real client UX and SQLite are still untested.
 - See [CHAT24_31_NATIVE_MINING_FLEET_ORDERS.md](CHAT24_31_NATIVE_MINING_FLEET_ORDERS.md). Next: independent original HAUL/RETREAT completion reconciliation, corporate ore sale/realized ISK profits, payroll cycles and fully observed two-client gameplay.
 
+## Stage E1 — real native HAUL/RETREAT completion proof (source implemented)
+
+- **HAUL** is no longer considered complete merely when stock `lastHauledAtMs` advances: before first native haul, persist the original miner cargoID/type/quantity manifest with the `ISSUING` transaction. Clear `NATIVE_REQUESTED` only when every captured cargoID is absent from original miners/haulers, is in a fsynced native warehouse `COMMITTED` receipt, and is still the same tagged original `itemID` at the NPC employer's station.
+- **RETREAT** captures the original physical warp origin and at least one hull visibly away from that origin before requesting the stock warp. All authentic original NPC hulls must later be at that origin, no longer in warp, before the atomically committed `ORIGINAL_FLEET_WARP_ARRIVED` proof.
+- Both paths write exactly one `NATIVE_COMPLETED` command with original GameStore CAS; repeated original ticks cannot replay either original native cargo trip or warp. Agent D3 offers `MINE` only after this receipt and safe native state.
+- **Still pending:** a real original seller-authorized market offer, transfer/sale after completion, corporate wallet revenue and payroll-cycle P&L; the completion evidence requires NPC warehouse title to remain intact until confirmation.
+- Gate `EVEJS_COOP_PLAYER_NPC_MINING_COMPLETION` remains OFF by default. New source-only regression results: **17/17** physical oracle, **14/14** CAS, **22/22** Stage B, **26/26** Agent selector. The full original SQLite/client test is **NOT_RUN**.
+- See [CHAT24_31_PHYSICAL_MINING_COMPLETION.md](CHAT24_31_PHYSICAL_MINING_COMPLETION.md) for safety and acceptance.
+
 ## Stage D — native sale, profit and 2-player gameplay
 
 - Authorized manager chooses native sell order, or approved physical station buyer; sale must be escrow-backed and use stock fees, taxes and market settlement.
