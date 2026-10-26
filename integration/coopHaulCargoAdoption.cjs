@@ -61,12 +61,21 @@ function plan({store,scene,systemID,fleetID,now,ttlMs=DEFAULT_TTL_MS,cargoTable,
  let all;try{all=cargoRows({store,cargoTable,database})}
  catch(_error){return {status:"CARGO_UNAVAILABLE",rows:[]}}
  if(!Array.isArray(all))return {status:"CARGO_UNAVAILABLE",rows:[]};
+ // A corrupt native enumeration may expose the same original cargoID more
+ // than once. Never count it twice or overwrite its custody under two rows.
+ const cargoIDCount=new Map();
+ for(const row of all){
+  const cargoID=pos(row?.cargoID);
+  if(cargoID)cargoIDCount.set(cargoID,(cargoIDCount.get(cargoID)||0)+1);
+ }
  const rows=[];
  for(const row of all){
   if(!row||row.transient!==false||Number(row.moduleID||0)!==0)continue;
   if(!pos(row.cargoID)||!pos(row.typeID)||!pos(row.quantity)||
      !pos(row.coopHaulFromMinerID)||!pos(row.entityID))continue;
   if(Number(row.coopHaulFleetID)!==fid||Number(row.coopHaulSystemID)!==pid)continue;
+  if(cargoIDCount.get(pos(row.cargoID))!==1)
+   return {status:"NATIVE_CARGO_ID_COLLISION",rows:[]};
   if(pos(row.coopHaulAdoptedAt))continue;
   const loadedAt=Number(row.coopHaulLoadedAt);
   if(!Number.isFinite(loadedAt)||loadedAt<=0||loadedAt>now)continue;
