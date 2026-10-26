@@ -39,7 +39,7 @@ function fixture({
    if(outcome==="unknown")return {};
    return {success:outcome==="accepted"};},
   notify:e=>events.push(e)});
- const tick=(instances=[instance])=>director.tick({systemID,scene,instances});
+ const tick=(instances=[instance],excludedIDs=[])=>director.tick({systemID,scene,instances,excludedIDs});
  return {tick,instance,scene,entities,victim,helper,attacker,session,controllers,nativeRecords,orders,events,director,beacon};
 }
 test("native site spawn ledger + physical beacon establish precise owner of two ships",()=>{
@@ -98,6 +98,8 @@ test("recycled hull ID, missing native store/controller and impossible position 
   f=>{f.nativeRecords.get(102).typeID=2;},
   f=>{f.nativeRecords.get(102).nativeNpc=false;},
   f=>{f.nativeRecords.get(102).transient=false;},
+  f=>{f.nativeRecords.get(102).createdAtMs=950000;},
+  f=>{f.nativeRecords.get(102).createdAtMs=700000;},
   f=>{f.controllers.get(102).runtimeKind="nativeAmbient";},
   f=>{f.helper.kind="container";},
   f=>{f.helper.nativeNpc=false;},
@@ -128,4 +130,9 @@ test("invalid input or truncated site catalog fails closed",()=>{
  assert.equal(f.tick(new Array(257).fill(f.instance)).status,"INVALID_SITE_SOURCE");
  assert.equal(siteEntries(systemID,{systemID},[f.instance]).status,"INVALID_SITE_SOURCE");
  assert.equal(f.orders.length,0);
+});
+
+test("named A-Life or war-owned IDs cannot be hijacked by site defense",()=>{
+ const f=fixture();assert.equal(f.tick([f.instance],[102]).orders,0);
+ assert.equal(f.tick([f.instance],new Array(1025).fill(0)).status,"INVALID_EXCLUSIONS");
 });
