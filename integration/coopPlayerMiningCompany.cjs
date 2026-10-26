@@ -83,7 +83,9 @@ function createPlayerMiningCompany({gameStore,access,getFleet,verifyNativeFleet,
     if(!authorized())throw Error("NATIVE_CORPORATION_PERMISSION_REVOKED");
     const buyer=tx.get("corporationRuntime",CORP(corporationID));
     const employer=tx.get("corporationRuntime",CORP(employerCorpID));
-    if(buyer?.isNPC!==false||!verifyNpcCorporation(employerCorpID,employer))
+    // Membership/role authority above proves a native player corporation.
+    // The wallet's persisted runtime row need not duplicate isNPC.
+    if(buyer?.corporationID!==corporationID||!verifyNpcCorporation(employerCorpID,employer))
      throw Error("MINING_COMPANY_OWNER_INVALID");
     const old=tx.get("corporationRuntime",CONTRACT(operationID));
     if(old){
