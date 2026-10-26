@@ -303,3 +303,25 @@ test("EX-03B15/B16 original native hack, ItemStore title and wormhole source wir
  assert.match(workflow,/EVEJS_COOP_NPC_EXPEDITION_HACK: '0'/);
  assert.match(workflow,/EVEJS_COOP_NPC_EXPEDITION_WORMHOLES: '0'/);
 });
+
+test("EX-03B17 native SQLite SIGKILL and two-client live acceptance remain explicit hard gates",()=>{
+ const runtime=read("integration/coopVirtualWorldRuntime.cjs");
+ const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const crash=read("scripts/verify-npc-expedition-loot-sqlite-crash.mjs");
+ const e2e=JSON.parse(read("tests/scenarios/ex03-native-two-client-exploration-e2e.json"));
+ assert.match(runtime,/expedition-wormhole-approach/);
+ assert.match(runtime,/npc\.follow\(link\.entityID,tip\.siteID,2500/);
+ assert.match(runtime,/expedition-wormhole-wingman/);
+ assert.match(runtime,/crossedWingmen>=2/);
+ assert.match(crash,/process\.kill\(process\.pid,"SIGKILL"\)/);
+ assert.match(crash,/store\._sqliteTables\.has\("items"\)/);
+ assert.match(crash,/items\.updateInventoryItem/);
+ assert.match(crash,/items\.transferItemToOwnerLocation/);
+ assert.match(crash,/items\.moveItemToLocation/);
+ assert.match(workflow,/node scripts\/verify-npc-expedition-loot-sqlite-crash\.mjs/);
+ assert.match(workflow,/EVEJS_PINNED_HACKING_SOURCE/);
+ assert.equal(e2e.releaseStatus,"NOT_VERIFIED");
+ assert.ok(e2e.steps.length>=16);
+ assert.ok(e2e.steps.every(x=>x.status==="NOT_RUN"),
+  "source-only tests cannot make a fake two-client E2E pass");
+});
