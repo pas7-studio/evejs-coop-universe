@@ -327,6 +327,13 @@ test("EX-03B17 native SQLite SIGKILL and two-client live acceptance remain expli
 });
 
 test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and CI",()=>{
+ const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
+ assert.match(deploy,/EnableNpcExpeditionHacking/);
+ assert.match(deploy,/EnableNpcExpeditionLoot/);
+ assert.match(deploy,/EnableNpcExpeditionWreck/);
+ assert.match(deploy,/EnableNpcExpeditionWormholes/);
+ assert.match(deploy,/EnableNpcExpeditionLoot -and -not \$EnableNpcExpeditionWreck/);
+
  const source=read("integration/coopNpcExpeditionWreckCustody.cjs");
  const patch=read("scripts/coop-npc-expedition-wreck-patch.cjs");
  const installer=read("scripts/patch-evejs-coop.cjs");
