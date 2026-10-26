@@ -8,7 +8,7 @@ let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStagin
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
-let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null;
+let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null;
 function safeNpcPhase(phase,run){
  try{return run();}
  catch(error){
@@ -609,6 +609,44 @@ function advanceNativeNpcExpeditions(){
      sourceScoutOnGridVerified:result.scoutOnGridVerified||0,
      blocked:result.blocked||0,source:result.source||"NATIVE_SITE_OBSERVE",
      nativeLootGranted:false,nativeWalletMutation:false});
+  // EX-03B15: the same existing native 30-second A-Life tick drives
+  // legitimate hacking turns, original ItemStore pickup and warehouse
+  // delivery. Re-check the scout's CURRENT physical site witness, never
+  // execute from a cached private catalog coordinate.
+  if(process.env.EVEJS_COOP_NPC_EXPEDITION_HACK==="1"||
+     process.env.EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"){
+   if(!npcExpeditionOperations){
+    const items=require("../services/inventory/itemStore"),
+     data=require("./worldData"),
+     fitting=require("../services/fitting/liveFittingState"),
+     types=require("../services/inventory/itemTypeRegistry"),
+     state=require("../services/corporation/corporationState"),
+     gameStore=require("../gameStore");
+    npcExpeditionOperations=
+     require("./coopNpcExpeditionOperations").createNpcExpeditionOperations({
+      nativeStore:store,itemStore:items,gameStore,
+      getController:id=>controllers.getControllerByEntityID(id),
+      getStation:id=>data.getStationByID(id),
+      getStationsForSystem:id=>data.getStationsForSystem(id),
+      isNpcCorporation:id=>state.isNpcCorporationID(id),
+      siteService:require("../services/dungeon/dungeonUniverseSiteService"),
+      hackingService:require("../services/exploration/hackingMgrService"),
+      typeHasEffectName:fitting.typeHasEffectName,
+      resolveItemByTypeID:types.resolveItemByTypeID,
+      orderBridge:guard,
+      warpToPoint:(id,point,options)=>npc.warpToPoint(id,point,options)
+     });
+   }
+   const ops=npcExpeditionOperations.tick({scene,assignments,
+    tips:npcExpeditionDirector.operations(),flags:{
+     hack:process.env.EVEJS_COOP_NPC_EXPEDITION_HACK==="1",
+     loot:process.env.EVEJS_COOP_NPC_EXPEDITION_LOOT==="1"
+    }});
+   if(ops.hacked||ops.picked||ops.delivered||ops.orderedReturn||
+      ops.blocked&&backgroundTicks%10===0)
+    probe.observe("living-npc-original-expedition-loot",null,
+     {spaceState:{systemID}},{...ops,nativeWalletMutation:false});
+  }
  }
 }
 function observeNativeMiningProof(){
