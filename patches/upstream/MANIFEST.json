@@ -22,12 +22,12 @@
     },
     {
       "file": "0003-native-npc-sessionless-capacitor.patch",
-      "sha256": "07db2f693649ee02dc3231065252b1c3bcd00f03c369951c54000b04979230b6",
+      "sha256": "948596bad2dd98d0fc21f5cf7939c0a3a0ae677f7456d1a9b3fffb460b0cb990",
       "files": [
         "server/src/space/npc/npcBehaviorLoop.js"
       ],
       "status": "not-sent",
-      "note": "sessionless capacitor advance AND the hull recharge rate resolved at use, so every NPC spawn path recharges; candidate for an atomic upstream PR"
+      "note": "sessionless capacitor advance for native NPCs (shared-stamp interval fix), candidate for an atomic upstream PR"
     },
     {
       "file": "0004-native-mining-fleet-retained-actor.patch",
