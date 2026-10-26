@@ -98,9 +98,13 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
   if(typeof mutation!=="function")throw Error("NATIVE_ATOMIC_MUTATION_REQUIRED");
   busy=true;let committed=false;
   let cargoWitness=null;
-  const mixedMode=tables.length===1&&tables[0]==="npcCargo"&&
-    process.env.EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC==="1"&&
-    process.env.EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION==="1";
+  // A cargo-bearing transaction may mix with transient cache cargo only under a
+  // declared contract: exact table set, its own flags, exact write set. A table
+  // set that is not declared still fails closed with NATIVE_TRANSIENT_STATE_UNSAFE.
+  const cargoContract=require("./coopNativeCargoTransientIsolation").contractForTables(tables);
+  const mixedMode=Boolean(cargoContract)&&
+    process.env.EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION==="1"&&
+    cargoContract.flags.every(flag=>process.env[flag]==="1");
   const isolation=mixedMode?require("./coopNativeCargoTransientIsolation"):null;
   try{
    ensureSqliteReady();
@@ -128,9 +132,9 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
      throw Error("NATIVE_ACCOUNT_CACHE_INVALIDATOR_UNAVAILABLE");
    const result=sqliteWriter.transact(tables,cargoWitness?
      tx=>{
-      const guarded=isolation.guardMutation(tx,cargoWitness);
+      const guarded=isolation.guardMutation(tx,cargoWitness,cargoContract);
       const returned=mutation(guarded);
-      guarded.assertTransferComplete();
+      guarded.assertWriteSetComplete();
       return returned;
      }:mutation);
    committed=true;

@@ -30,7 +30,8 @@ test('no installed overlay module requires a sibling with a .cjs extension', () 
 
 test('the mining modules load the way the overlay installs them', () => {
   const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'coop-install-'));
-  const modules = ['coopMiningActivate', 'coopMiningCapacitorGate', 'coopMiningTrace'];
+  const modules = ['coopMiningActivate', 'coopMiningCapacitorGate', 'coopMiningTrace',
+    'coopNativeCargoTransientIsolation', 'coopGameStoreAtomic'];
   for (const name of modules) {
     fs.copyFileSync(path.join(integrations, name + '.cjs'), path.join(staging, name + '.js'));
   }
@@ -39,6 +40,11 @@ test('the mining modules load the way the overlay installs them', () => {
     const installed = require(path.join(staging, 'coopMiningActivate.js'));
     assert.equal(typeof installed.activate, 'function');
     assert.ok(installed.MODULE_COST_GJ > 0);
+    // The atomic store picks the cargo contract through an extensionless require.
+    const store = require(path.join(staging, 'coopGameStoreAtomic.js'));
+    assert.equal(typeof store.createGameStoreAdapter, 'function');
+    const isolation = require(path.join(staging, 'coopNativeCargoTransientIsolation.js'));
+    assert.equal(isolation.contractForTables(['miningRuntimeState', 'npcCargo']).name, 'mining-cycle');
   } finally {
     fs.rmSync(staging, {recursive: true, force: true});
   }
