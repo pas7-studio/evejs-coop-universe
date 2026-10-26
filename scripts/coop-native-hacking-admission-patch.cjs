@@ -7,8 +7,13 @@ function swap(text,original,patched,remove){
  if(typeof text!=="string"||!original||!patched||original===patched)
   throw Error("EX04_BAD_PATCH_INPUT");
  const from=remove?patched:original,to=remove?original:patched;
- // Re-applying a complete patch (or removing from pristine) is a no-op.
- if(text.includes(remove?original:patched)&&!text.includes(from))return text;
+ // Anchors can be substrings of inserted code, so check full patched
+ // text before trying a rewrite. This is apply/apply + remove/remove safe.
+ if(!remove&&text.includes(patched))return text;
+ if(remove&&!text.includes(patched)){
+  if(text.includes(original))return text;
+  throw Error("EX04_REMOVAL_DRIFT");
+ }
  const matches=text.split(from).length-1;
  if(matches!==1)throw Error("EX04_ANCHOR_DRIFT_"+matches);
  return text.replace(from,to);
@@ -57,7 +62,11 @@ ${start}
    "key: getAttemptKey(session),\n      nativeAdmission,\n      targetID:"]
  ];
  for(const [a,b] of fields)s=swap(s,a,b,remove);
- const hook=`    if (!attempt || attempt.completed) {
+ const hook=`  Handle_ClickedOnTile(args = [], session = null) {
+    const [tileCoord] = normalizeCallArgs(args);
+    const key = getAttemptKey(session);
+    const attempt = ACTIVE_ATTEMPTS.get(key);
+    if (!attempt || attempt.completed) {
       emitHackingTurn(session, [buildEvent(HACKING_CONSTANTS.EVENT_ACK, {})]);
       return null;
     }`;
