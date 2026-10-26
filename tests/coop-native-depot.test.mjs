@@ -497,3 +497,71 @@ test("P0: valid strictly typed original receipt remains auditable and idempotent
  assert.equal(fx.depot.commit(req).status,"ALREADY_COMMITTED");
  assert.equal(fx.writes(),0);
 });
+
+
+test("P0: committed original cargo with aliased system spelling persists only canonical depot inventory",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-system-key-"));
+ try{
+  const file=join(dir,"depot.json"),d=createDepot({file,clock:()=>123});
+  const arg={systemID:"030000142",fleetID:9,
+   item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+  assert.equal(d.prepare(arg).status,"PREPARED");
+  assert.equal(d.commit(arg).status,"COMMITTED");
+  assert.equal(d.audit().status,"OK","a successful commit must not invalidate its own journal");
+  assert.deepEqual(d.audit().totals,{"30000142":100});
+  const receipt=d.snapshot().receipts["777"];
+  assert.equal(receipt.systemID,30000142);
+  assert.deepEqual(d.snapshot().totals,{"30000142":100});
+  assert.equal(d.prepare({...arg,systemID:30000142}).status,"ALREADY_COMMITTED");
+  assert.equal(d.commit({...arg,systemID:30000142}).status,"ALREADY_COMMITTED");
+  const restored=createDepot({file,clock:()=>124});
+  assert.equal(restored.audit().status,"OK");
+  assert.deepEqual(restored.snapshot().totals,{"30000142":100});
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: equivalent system IDs and independent original cargo stacks share one depot total",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-mixed-system-"));
+ try{
+  const file=join(dir,"depot.json"),d=createDepot({file,clock:()=>123});
+  const requests=[
+   {systemID:"030000142",fleetID:"9",item:{cargoID:777,typeID:34,quantity:100,haulerID:201}},
+   {systemID:30000142,fleetID:9,item:{cargoID:778,typeID:35,quantity:50,haulerID:201}},
+   {systemID:"3.0000142e8",fleetID:9,item:{cargoID:779,typeID:34,quantity:20,haulerID:201}}
+  ];
+  for(const row of requests){
+   assert.equal(d.prepare(row).status,"PREPARED");
+   assert.equal(d.commit(row).status,"COMMITTED");
+   assert.equal(d.audit().status,"OK");
+  }
+  assert.deepEqual(d.snapshot().totals,{"30000142":170});
+  assert.equal(d.audit().committed,3);
+  assert.deepEqual(d.audit().bySystemType,{"30000142":{"34":120,"35":50}});
+  const recovered=createDepot({file,clock:()=>124});
+  assert.equal(recovered.audit().status,"OK");
+  assert.deepEqual(recovered.snapshot().totals,{"30000142":170});
+  for(const row of requests)
+   assert.equal(recovered.commit(row).status,"ALREADY_COMMITTED");
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
+
+test("P0: canonical native totals can synchronize the same original cargo with virtual economy once",()=>{
+ const dir=mkdtempSync(join(tmpdir(),"evejs-depot-canonical-virtual-"));
+ try{
+  const file=join(dir,"depot.json"),ecoFile=join(dir,"economy.json");
+  const d=createDepot({file,clock:()=>100});
+  const arg={systemID:"030000142",fleetID:9,
+   item:{cargoID:777,typeID:34,quantity:100,haulerID:201}};
+  assert.equal(d.prepare(arg).status,"PREPARED");
+  assert.equal(d.commit(arg).status,"COMMITTED");
+  assert.equal(d.audit().status,"OK");
+  const economy=createEconomy({file:ecoFile,clock:()=>100});
+  assert.deepEqual(economy.syncNativeDeliveries(d.audit().totals),
+   {status:"UPDATED",quantity:100});
+  assert.equal(economy.snapshot().systems["30000142"].nativeDelivered,100);
+  assert.equal(economy.snapshot().systems["30000142"].goods,200);
+  assert.equal(createEconomy({file:ecoFile,clock:()=>100})
+   .syncNativeDeliveries(createDepot({file}).audit().totals).quantity,0);
+  assert.deepEqual(Object.keys(createDepot({file}).snapshot().totals),["30000142"]);
+ }finally{rmSync(dir,{recursive:true,force:true})}
+});
