@@ -30,6 +30,12 @@ building. Keep our complete native set on the private branch with
 proposals, and a merged proposal advances the pin instead of drifting. Never add
 a second patching mechanism.
 
+**Log every change, do not remember it.** After committing, run
+`node scripts/log-change.cjs --layer <L1|L2|L3|DOCS|TEST|OPS> --why "..."
+--evidence "..."`. It writes the commit hash, UTC time, files and reason into
+`docs/WORKLOG.md`; `--check` audits format and duplicates. Runtime decisions must
+also emit a `coop-events.jsonl` event with an explicit `status` or `reason`.
+
 ## Primary goal for game-test agents (2026-10-25): prove gameplay, NOT scan dependencies
 
 **MANDATORY FIRST:** Read [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md)
