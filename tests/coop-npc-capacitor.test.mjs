@@ -11,24 +11,28 @@ function sceneWith(...entities) {
 }
 
 function npc(overrides = {}) {
-  return { kind: "ship", itemID: 900, nativeNpc: true, capacitorCapacity: 500, capacitorChargeRatio: 0, ...overrides };
+  return { kind: "ship", itemID: 900, nativeNpc: true, capacitorCapacity: 400, capacitorChargeRatio: 0.2, ...overrides };
 }
 
-test("a drained native NPC miner gets its capacitor back at the next think", () => {
+test("an idle native NPC gets its capacitor back at the next think", () => {
   const ship = npc();
   assert.equal(refill(sceneWith(ship), { entityID: 900 }), true);
   assert.equal(ship.capacitorChargeRatio, 1);
-  assert.equal(ship.conditionState, undefined, "no condition state is invented");
 });
 
-test("a charged NPC is left alone", () => {
-  const ship = npc({ capacitorChargeRatio: 0.6 });
+test("a ship that is running its own modules is left alone", () => {
+  const ship = npc({ activeModuleEffects: new Map([[1, { moduleID: 1 }]]) });
   assert.equal(refill(sceneWith(ship), { entityID: 900 }), false);
-  assert.equal(ship.capacitorChargeRatio, 0.6);
+  assert.equal(ship.capacitorChargeRatio, 0.2);
+});
+
+test("a full capacitor is not rewritten", () => {
+  const ship = npc({ capacitorChargeRatio: 1 });
+  assert.equal(refill(sceneWith(ship), { entityID: 900 }), false);
 });
 
 test("a real player ship is never touched", () => {
-  const ship = npc({ session: { characterID: 1 } });
+  const ship = npc({ session: { characterID: 1 }, capacitorChargeRatio: 0 });
   assert.equal(refill(sceneWith(ship), { entityID: 900 }), false);
   assert.equal(ship.capacitorChargeRatio, 0);
 });
@@ -39,7 +43,7 @@ test("a non-native or capless entity is not refilled", () => {
 });
 
 test("condition state charge is kept in sync when it exists", () => {
-  const ship = npc({ conditionState: { charge: 0 } });
+  const ship = npc({ conditionState: { charge: 0.2 } });
   assert.equal(refill(sceneWith(ship), { entityID: 900 }), true);
   assert.equal(ship.conditionState.charge, 1);
 });
