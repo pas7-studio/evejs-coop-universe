@@ -218,3 +218,11 @@ A real gameplay limitation was found during lifecycle review: EX-03B5's complete
 - Expanded GitHub Actions `paths` triggers to include the crash harnesses and **all** native NPC probe suites, not just the original first-stage test files.
 
 **Verified in isolated JS source fixtures:** native launcher/recovery 19/19 PASS, scanner evidence with STOWED preflight 19/19 PASS, original flight+sweep+lifecycle source-cycle 3/3 PASS, native scene transition 6/6, sweep 8/8, lifecycle 13/13. The SQLite SIGKILL/production test files have been added and syntax-checked but **have not run against pinned SQLite on a GitHub Runner**. Live two-client and real native scout fit acceptance remain unverified. Do not enable any experimental flags in production or merge based on isolated fixture PASS alone.
+
+### EX-03B8 post-review hardening
+
+The scanner hardware readiness probe now accepts **only physically launchable, non-singleton original charge rows with exactly `quantity:1`**. It refuses stacked stock and invalid/unfinished `STOWED` receipts rather than presenting misleading `NATIVE_SCANNER_HARDWARE_READY` status. The launch path also blocks ANY pre-existing scene item with a candidate original cargoID **before** the original source debit. Successful scene-spawn ACKs must revalidate the original source seal and exact systemID.
+
+An additional original-source test scenario in `verify-npc-probe-feature-sqlite-crash.mjs` validates scanner hardware availability **4 original charges before the first launch, exactly 1 recovered original charge before re-launch**, and follows `STOWED → IN_SPACE → RECALLING → STOWED` through pinned native SQLite across separate SIGKILL-restarted processes. **The CI execution of this script is not yet verified.**
+
+Isolated JS fixture results after these changes: scanner hardware/native evidence **21/21 PASS**, launch/recovery **19/19 PASS**, full original lifecycle **3/3 PASS**, native scene transition **6/6 PASS**, blind sweep **8/8 PASS**, lifecycle **13/13 PASS**. Separate real GameStore process-kill and live two-client gates remain open.
