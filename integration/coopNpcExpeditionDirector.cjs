@@ -127,6 +127,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   const candidates=sites.filter(s=>pos(s?.siteID)&&vector(s?.actualPosition))
    .slice(0,maxSitesPerTick).map(s=>nativeSite(scene.systemID,s.siteID)).filter(Boolean);
   let observed=0,observedPlayers=0,contested=0,orders=0,blocked=0;
+  let scoutWarpOrders=0,patrolWarpOrders=0,scoutOnGridVerified=0;
   for(const [id,row] of intel)if(row.at>now||now-row.at>intelTtlMs)intel.delete(id);
   for(const [id,row] of pending)if(row.at>now||now-row.at>intelTtlMs)pending.delete(id);
   for(const site of candidates){
@@ -222,6 +223,7 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
      if(witness.status!=="NATIVE_SITE_OBSERVED"&&witness.status!=="ALREADY_OBSERVED"){
       blocked++;continue;
      }
+     scoutOnGridVerified++;
     }
    }
    const warpCandidates=scoutWarpFirst?[scout]:all;
@@ -256,11 +258,14 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
        {reason:scoutWarpFirst?"coop-npc-expedition-scout":"coop-npc-expedition",
         scheduleWake:true});
      }});
-    if(result?.success===true){pending.set(moveKey,{fingerprint:tip.fingerprint,at:now});orders++;}
-    else blocked++;
+    if(result?.success===true){
+     pending.set(moveKey,{fingerprint:tip.fingerprint,at:now});orders++;
+     if(scoutWarpFirst)scoutWarpOrders++;else patrolWarpOrders++;
+    }else blocked++;
    }
   }
   return {status:"NATIVE_EXPEDITION_TICK",observed,observedPlayers,contested,remoteScans,orders,blocked,
+   scoutWarpOrders,patrolWarpOrders,scoutOnGridVerified,
    source:"LOCAL_NATIVE_SITE_WITNESS",nativeLootGranted:false,nativeWalletMutation:false};
  }
  function snapshot(){
