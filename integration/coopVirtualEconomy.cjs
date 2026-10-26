@@ -5,10 +5,74 @@ const ROLES=["miner","hauler","patrol","trader","pirate"];
 const cap=n=>Math.max(0,Math.min(1000000,Math.floor(Number(n)||0)));
 function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440}){
  if(!file||!Number.isInteger(stepMs)||stepMs<10000||!Number.isInteger(maxCatchup)||maxCatchup<1||maxCatchup>10000)throw Error("invalid economy settings");
- let state;
- try{state=JSON.parse(fs.readFileSync(file,"utf8"));if(state.version!==1)throw Error("incompatible economy state");}catch(e){if(e.code!=="ENOENT")throw e;}
+ let state,journalPresent=false,persistenceUnverified=false;
+ try{
+  state=JSON.parse(fs.readFileSync(file,"utf8"));
+  if(state.version!==1)throw Error("incompatible economy state");
+  journalPresent=true;
+ }catch(e){if(e.code!=="ENOENT")throw e;}
  if(!state)state={version:1,lastAt:clock(),systems:{},pilots:{},events:[]};
- const persist=()=>{fs.mkdirSync(path.dirname(file),{recursive:true});const tmp=file+".tmp-"+process.pid;fs.writeFileSync(tmp,JSON.stringify(state));fs.renameSync(tmp,file);};
+ // Supply receipts can be replayed if a second process overwrites the
+ // 'nativeDelivered' high-water mark. Every mutator, including simulation
+ // and loss events, must share the same durable cross-process write fence.
+ function verifyCurrentRead(){
+  if(persistenceUnverified)throw Error("ECONOMY_PERSISTENCE_UNVERIFIED");
+  try{
+   try{
+    fs.readFileSync(file+".lock","utf8");
+    throw Error("ECONOMY_WRITE_IN_PROGRESS");
+   }catch(e){if(e?.code!=="ENOENT")throw e;}
+   let disk=null;
+   try{disk=JSON.parse(fs.readFileSync(file,"utf8"));}
+   catch(e){if(e?.code!=="ENOENT")throw e;}
+   if((disk!==null)!==journalPresent||
+      (journalPresent&&JSON.stringify(disk)!==JSON.stringify(state)))
+    throw Error("ECONOMY_CONCURRENT_JOURNAL_DRIFT");
+  }catch(error){persistenceUnverified=true;throw error;}
+ }
+ function persist(){
+  if(persistenceUnverified)throw Error("ECONOMY_PERSISTENCE_UNVERIFIED");
+  const folder=path.dirname(file),lock=file+".lock",tmp=file+".tmp-"+process.pid;
+  let lockFd=null,held=false;
+  try{
+   fs.mkdirSync(folder,{recursive:true});
+   lockFd=fs.openSync(lock,"wx",0o600);held=true;
+   fs.writeFileSync(lockFd,String(process.pid));fs.fsyncSync(lockFd);
+   fs.closeSync(lockFd);lockFd=null;
+   let disk=null;
+   try{disk=JSON.parse(fs.readFileSync(file,"utf8"));}
+   catch(e){if(e?.code!=="ENOENT")throw e;}
+   if((disk!==null)!==journalPresent||
+      (journalPresent&&JSON.stringify(disk)!==JSON.stringify(stateBeforeMutation)))
+    throw Error("ECONOMY_CONCURRENT_JOURNAL_DRIFT");
+   const fd=fs.openSync(tmp,"w");
+   try{fs.writeFileSync(fd,JSON.stringify(state));fs.fsyncSync(fd);}
+   finally{fs.closeSync(fd);}
+   fs.renameSync(tmp,file);
+   try{
+    const directoryFd=fs.openSync(folder,"r");
+    try{fs.fsyncSync(directoryFd);}finally{fs.closeSync(directoryFd);}
+   }catch(error){
+    if(!["EPERM","EACCES","EISDIR","EINVAL","EBADF"].includes(error?.code))throw error;
+   }
+   journalPresent=true;
+  }catch(error){
+   persistenceUnverified=true;
+   try{fs.unlinkSync(tmp);}catch(_ignored){}
+   throw error;
+  }finally{
+   let releaseError=null;
+   if(lockFd!==null)try{fs.closeSync(lockFd);}catch(e){releaseError=e;}
+   if(held)try{fs.unlinkSync(lock);}catch(e){releaseError=releaseError||e;}
+   if(releaseError){persistenceUnverified=true;throw releaseError;}
+  }
+ }
+ // The expected disk image is retained *before* any in-memory mutation.
+ let stateBeforeMutation=structuredClone(state);
+ function beforeMutation(){
+  verifyCurrentRead();
+  stateBeforeMutation=structuredClone(state);
+ }
  function ensure(systemID){const id=String(systemID);return state.systems[id]??={ore:200,goods:100,demand:100,security:50,losses:0};}
  function register(pilots){
    const upgradeRoles=state.rolesVersion!==2;
@@ -42,6 +106,7 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
   }
  }
  function advance(pilots){
+  beforeMutation();
   register(pilots);
   const now=clock();if(now<state.lastAt)return {status:"CLOCK_REWIND",steps:0};
   const due=Math.floor((now-state.lastAt)/stepMs);
@@ -52,12 +117,14 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
   return {status:due>steps?"CATCHUP_REMAINING":"OK",steps,remaining:due-steps};
  }
  function recordLoss(systemID,amount=1){
+  beforeMutation();
   const s=ensure(systemID);const n=Math.max(1,Math.min(100,Math.floor(amount)));
   s.losses=cap(s.losses+n);s.security=Math.max(0,s.security-n);s.demand=cap(s.demand+n*4);
   const entry={type:"loss",systemID:Number(systemID),amount:n,at:clock()};
   state.events.push(entry);if(state.events.length>100)state.events.shift();persist();return entry;
  }
  function syncNativeDeliveries(totals={}){
+  beforeMutation();
   let accepted=0,modified=false;
   for(const [id,total] of Object.entries(totals)){
    const systemID=Number(id),count=Number(total);
@@ -76,6 +143,9 @@ function createEconomy({file,clock=()=>Date.now(),stepMs=60000,maxCatchup=1440})
   if(modified)persist();
   return {status:modified?"UPDATED":"UNCHANGED",quantity:accepted};
  }
- return {advance,recordLoss,syncNativeDeliveries,snapshot:()=>structuredClone(state)};
+ return {advance,recordLoss,syncNativeDeliveries,snapshot:()=>{
+  verifyCurrentRead();
+  return structuredClone(state);
+ }};
 }
 module.exports={createEconomy};
