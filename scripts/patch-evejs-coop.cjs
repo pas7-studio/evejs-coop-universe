@@ -88,6 +88,11 @@ names.splice(names.indexOf("coopPlayerIndustryFence")+1,0,"coopPlayerIndustryRun
 // Living Agent is already present in the initial native module list.
 // Duplicate deployment records would overwrite/verify the same file twice.
 names.push("coopNpeSafety");
+// LW-04B source admission only: no second NPC economy timer or live wallet.
+const nativeBuyerIndex=names.indexOf("coopAlifeNativeBuyerRuntime");
+if(nativeBuyerIndex<0||names.includes("coopAlifeNativeManufacturingRuntime"))
+ throw Error("LW04B_NATIVE_MANUFACTURING_REGISTRATION_CONFLICT");
+names.splice(nativeBuyerIndex+1,0,"coopAlifeNativeManufacturingRuntime");
 // Chats 25/32/39: original native source hooks; all feature flags stay OFF.
 const ORE_PATCH_PATHS=new Set([
  "server/src/services/inventory/itemStore.js",
