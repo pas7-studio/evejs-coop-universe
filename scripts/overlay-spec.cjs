@@ -152,7 +152,13 @@ const specs=[
  {file:"server/src/services/chat/sessionRegistry.js",patches:[
   {anchor:'    addToIndex(session, characterID);',line:"    if (process.env.EVEJS_COOP_NPC_BUY_NOTIFY_CATCHUP === \"1\") setImmediate(() => { if (isLiveSession(session) && resolveSessionCharacterID(session) === characterID) Promise.resolve().then(() => require(\"../../space/coopNpcMarketCompletionNotify\").notifyPendingSellerOnLogin(characterID)).catch(error => console.warn(\"[CoopMarketSellerCatchup]\", error.message)); });",after:true}
  ]},
- {file:"server/src/services/mining/miningRuntime.js",patches:[]},
+ {file:"server/src/services/mining/miningRuntime.js",patches:[
+    // The runtime stops a mining module with the reason the mining runtime
+    // returned; "target" covers four different checks. Note the state they read
+    // (rock present, ore left, real lock, pending locks) for native NPCs only.
+    {anchor:'  const targetID = toInt(effectState.targetID, 0);\n  const targetEntity = scene.getEntityByID(targetID);\n  const mineableState = getMineableState(scene, targetID);',after:true,
+     line:'  require("../../space/coopMiningTrace").noteCycleAttempt(scene, entity, effectState, {targetID, found: Boolean(targetEntity), remaining: mineableState && mineableState.remainingQuantity, locked: getTargetsForEntity(scene, entity).includes(targetID)}, cycleBoundaryMs);'}
+  ]},
  {file:"server/src/services/mining/miningRuntimeState.js",patches:[]},
  {file:"server/src/services/chat/chatCommands.js",patches:[
    {anchor:'  "commands",',line:'  "events",',after:true},
