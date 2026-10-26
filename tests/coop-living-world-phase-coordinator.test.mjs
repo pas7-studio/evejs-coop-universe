@@ -135,7 +135,7 @@ test("registered original-clock phases preserve order amid separately owned war 
   "native-depot","alife-native-mining-proof","alife-native-economy-observe",
   "faction","native-ammo-readiness","native-ammo-survival",
   "native-ammo-supply","native-raids","native-tactics","native-pve-site-defense",
-  "native-pve-wave-reinforcements","native-ammo-observe",
+  "native-pve-wave-reinforcements","native-pve-objective-doctrine","native-ammo-observe",
   "native-wreck-recovery","native-salvage-rivals","native-salvage-market",
   "native-wreck-custody","native-loot-station-delivery",
   "native-gate-approach","native-patrols","npc-recognition",
@@ -146,7 +146,7 @@ test("registered original-clock phases preserve order amid separately owned war 
  // Keep their ownership untouched; verify our 28 registered phases remain
  // an exact ordered subsequence without requiring unrelated phases to vanish.
  assert.deepEqual(actual.filter(name=>expected.includes(name)),expected);
- assert.equal(expected.length,29);
+ assert.equal(expected.length,30);
  assert.ok(actual.length>=expected.length);
  assert.match(block,/EVEJS_COOP_ALIFE_SALVAGE_MARKET/);
  assert.match(block,/EVEJS_COOP_NATIVE_NPC_MARKET/);
@@ -162,11 +162,11 @@ test("promise-returning WHOLE world tick is forbidden and releases the guard",()
  assert.equal(f.coordinator.tick(run=>run("virtual-travel",()=>null)).status,"COMPLETED");
 });
 
-test("LW-03B static catalog defines all 29 reviewed phases exactly once",()=>{
+test("LW-03B static catalog defines all 30 reviewed phases exactly once",()=>{
  const c=catalog();
- assert.equal(c.phases.length,29);
+ assert.equal(c.phases.length,30);
  assert.deepEqual(c.phases.map(x=>x.name),[...phaseNames]);
- assert.equal(new Set(c.phases.map(x=>x.name)).size,29);
+ assert.equal(new Set(c.phases.map(x=>x.name)).size,30);
  assert.deepEqual(c.groupOrder,["opportunities","world-state","alife-strategy",
   "combat","salvage","movement","market","activity","reconciliation"]);
  assert.equal(c.phases.every(x=>x.mode==="EXISTING_NATIVE_OWNER_ONLY"),true);
@@ -240,4 +240,9 @@ test("native PvE site defense joins existing combat group, not unclassified",()=
 test("native wave reinforcement stays in existing combat phase group",()=>{
  assert.deepEqual(classifyPhase("native-pve-wave-reinforcements"),{
   status:"KNOWN",group:"combat",canonical:"native-pve-wave-reinforcements"});
+});
+
+test("original pirate objective doctrine is a single owned combat phase",()=>{
+ assert.deepEqual(classifyPhase("native-pve-objective-doctrine"),{
+  status:"KNOWN",group:"combat",canonical:"native-pve-objective-doctrine"});
 });
