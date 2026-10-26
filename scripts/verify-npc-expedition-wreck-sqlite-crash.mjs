@@ -14,6 +14,7 @@ const self=fileURLToPath(import.meta.url);
 const id=730000000812,shipID=980000000812,wreckID=980300000812,
  corpID=700,playerID=802,playerShipID=880000000812;
 const tag="coop-npc-expedition:v1:container:620000000812:ship:"+shipID+":corp:"+corpID;
+const secondID=id+1;
 function original(){
  const root=process.env.EVEJS_TEST_STORE_ROOT,data=process.env.EVEJS_GAMESTORE_DATA_DIR;
  assert.equal(process.env.EVEJS_TEST_STORE_ISOLATED,"1");
@@ -44,7 +45,7 @@ function original(){
 function child(stage){
  const {gameStore,items,npcStore,custody}=original();
  const get=()=>items.findItemById(id);
- if(stage==="seed"){
+ if(stage==="seed"||stage==="seed-two"){
   items.ensureMigrated();
   assert.equal(get(),null);
   const item={itemID:id,typeID:34,ownerID:corpID,locationID:shipID,
@@ -52,6 +53,10 @@ function child(stage){
   const player={itemID:playerShipID,typeID:587,ownerID:playerID,
    locationID:600000001,flagID:4,quantity:-1,stacksize:1,singleton:1};
   assert.equal(gameStore.write("items","/"+id,item).success,true);
+  if(stage==="seed-two"){
+   const second={...item,itemID:secondID};
+   assert.equal(gameStore.write("items","/"+secondID,second).success,true);
+  }
   assert.equal(gameStore.write("items","/"+playerShipID,player).success,true);
   assert.equal(gameStore.flushTableSync("items").success,true);
   const write=npcStore.upsertNativeWreck({wreckID,sourceEntityID:shipID,
@@ -84,6 +89,73 @@ function child(stage){
    operatorApproved:true});
   assert.equal(replay.success,true);
   assert.equal(replay.movedCount,0,"repeat does not replay original item transfer");
+ }else if(stage==="first-only"){
+  // Simulate a mid-batch native death: the first ORIGINAL ItemStore row is
+  // fully sealed and moved, the second original row has no :wreck intent yet.
+  // Each persistent write uses the real pinned ItemStore + SQLite GameStore.
+  assert.equal(get().locationID,shipID);
+  assert.equal(items.findItemById(secondID).locationID,shipID);
+  const stamped=items.updateInventoryItem(id,x=>({...x,
+   customInfo:tag+":wreck:"+wreckID}));
+  assert.equal(stamped.success,true,JSON.stringify(stamped));
+  assert.equal(gameStore.flushTableSync("items").success,true);
+  const moved=items.moveItemToLocation(id,wreckID,items.ITEM_FLAGS.HANGAR);
+  assert.equal(moved.success,true,JSON.stringify(moved));
+  assert.equal(gameStore.flushTableSync("items").success,true);
+  assert.equal(get().locationID,wreckID);
+  assert.equal(items.findItemById(secondID).locationID,shipID);
+ }else if(stage==="recover-two"){
+  const gate=custody().reconcile({wreckID,shipID,corporationID:corpID});
+  assert.equal(gate.errorMsg,"EX03_WRECK_OPERATOR_APPROVAL_REQUIRED");
+  const recovered=custody().reconcile({wreckID,shipID,
+   corporationID:corpID,operatorApproved:true});
+  assert.equal(recovered.success,true,JSON.stringify(recovered));
+  assert.equal(recovered.movedCount,1);
+  assert.equal(recovered.stampedCount,1);
+  assert.deepEqual([...recovered.itemIDs].sort((a,b)=>a-b),[id,secondID]);
+  assert.equal(get().locationID,wreckID);
+  assert.equal(items.findItemById(secondID).locationID,wreckID);
+  const replay=custody().reconcile({wreckID,shipID,
+   corporationID:corpID,operatorApproved:true});
+  assert.equal(replay.success,true);
+  assert.equal(replay.movedCount,0);
+  assert.equal(replay.stampedCount,0);
+ }else if(stage==="witness-two"){
+  const bridge=custody();
+  assert.deepEqual(bridge.list({wreckID}).map(x=>x.itemID).sort((a,b)=>a-b),
+   [id,secondID]);
+  assert.equal(items.listContainerItems(null,shipID,null).length,0);
+  assert.equal(bridge.canDestroy(wreckID),false);
+ }else if(stage==="claim-two"){
+  const bridge=custody();
+  for(const originalID of [id,secondID]){
+   const moved=bridge.claim({characterID:playerID,wreckID,itemID:originalID,
+    destinationLocationID:playerShipID,
+    destinationFlagID:items.ITEM_FLAGS.CARGO_HOLD,quantity:3});
+   assert.equal(moved.success,true,JSON.stringify(moved));
+   assert.equal(items.findItemById(originalID).ownerID,playerID);
+  }
+  assert.equal(gameStore.flushTableSync("items").success,true);
+ }else if(stage==="verify-two"){
+  const bridge=custody();
+  for(const originalID of [id,secondID]){
+   const row=items.findItemById(originalID);
+   assert(row);
+   assert.equal(row.itemID,originalID);
+   assert.equal(row.typeID,34);
+   assert.equal(row.ownerID,playerID);
+   assert.equal(row.locationID,playerShipID);
+   assert.equal(row.flagID,items.ITEM_FLAGS.CARGO_HOLD);
+   assert.equal(row.quantity,3);
+   assert.equal(row.customInfo,tag+":wreck:"+wreckID);
+  }
+  assert.equal(bridge.canDestroy(wreckID),true);
+  assert.deepEqual(items.listContainerItems(playerID,playerShipID)
+   .map(x=>x.itemID).sort((a,b)=>a-b),[id,secondID]);
+  assert.equal(items.listContainerItems(null,shipID,null).length,0);
+  assert.equal(items.listContainerItems(null,wreckID,null).length,0);
+  process.stdout.write("EX03B22_MULTI_ITEM_NATIVE_WRECK_SQLITE_SIGKILL_PASS\\n");
+  return;
  }else if(stage==="stage"){
   const receipt=custody().stage({wreckID,shipID,corporationID:corpID});
   assert.equal(receipt.status,"ORIGINAL_ITEMSTORE_LOOT_IN_WRECK",
@@ -137,7 +209,8 @@ function parent(){
  assert(server&&fs.existsSync(path.join(server,"src/gameStore/index.js")),
   "EX03B19_ORIGINAL_PINNED_SERVER_REQUIRED");
  const scenarios=[["seed","stage","witness","claim","verify"],
-  ["seed","intent","recover","witness","claim","verify"]];
+  ["seed","intent","recover","witness","claim","verify"],
+  ["seed-two","first-only","recover-two","witness-two","claim-two","verify-two"]];
  for(const stages of scenarios){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-ex03b19-"));
  const data=path.join(root,"data");fs.mkdirSync(data);
@@ -151,9 +224,11 @@ function parent(){
   for(const stage of stages){
    const r=spawnSync(process.execPath,[self,"--child",stage],
     {cwd:server,env,encoding:"utf8",timeout:45000,maxBuffer:2*1024*1024});
-   if(stage==="verify"){
+   if(stage==="verify"||stage==="verify-two"){
     assert.equal(r.status,0,stage+": "+r.stderr);
-    assert.match(r.stdout,/EX03B19_NATIVE_WRECK_ITEMSTORE_SQLITE_SIGKILL_PASS/);
+    assert.match(r.stdout,stage==="verify-two"?
+     /EX03B22_MULTI_ITEM_NATIVE_WRECK_SQLITE_SIGKILL_PASS/:
+     /EX03B19_NATIVE_WRECK_ITEMSTORE_SQLITE_SIGKILL_PASS/);
    }else assert.equal(r.signal,"SIGKILL",stage+": "+r.stderr);
   }
   process.stdout.write("EX03B19 ORIGINAL NPC WRECK ITEMSTORE SQLITE PASS\n");
