@@ -5,7 +5,7 @@ const edits={
   "server/src/space/npc/nativeNpcWreckService.js": [
     {
       "before": "  const removeResult = spaceRuntime.removeDynamicEntity(normalizedSystemID, entityID, {",
-      "after": "  // EX03B18_NATIVE_WRECK_STAGE\n  if (process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\") {\n    const staged=require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).stage({\n      wreckID:wreckRecord.wreckID,shipID:entityID,\n      corporationID:wreckRecord.corporationID\n    });\n    if(staged?.success!==true)\n      return {success:false,errorMsg:staged?.errorMsg||\"EX03_WRECK_CUSTODY_REPAIR_REQUIRED\"};\n  }\n  const removeResult = spaceRuntime.removeDynamicEntity(normalizedSystemID, entityID, {"
+      "after": "  // EX03B18_NATIVE_WRECK_STAGE\n  if (process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\") {\n    const staged=require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))}).stage({\n      wreckID:wreckRecord.wreckID,shipID:entityID,\n      corporationID:nativeEntityRecord?.corporationID\n    });\n    if(staged?.success!==true)\n      return {success:false,errorMsg:staged?.errorMsg||\"EX03_WRECK_CUSTODY_REPAIR_REQUIRED\"};\n  }\n  const removeResult = spaceRuntime.removeDynamicEntity(normalizedSystemID, entityID, {"
     },
     {
       "before": "  const wreckItemRecord = nativeNpcStore.getNativeWreckItem(wreckItemID);",
@@ -26,6 +26,10 @@ const edits={
     {
       "before": "  if (!removeResult.success) {\n    nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);\n    return removeResult;\n  }",
       "after": "  if (!removeResult.success) {\n    // EX03B18_NATIVE_DEATH_FAILURE_FENCE: original item IDs may already\n    // be in a durable wreck. Do not cascade-delete their authoritative home.\n    if (process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\" &&\n        !require(path.join(__dirname, \"../coopNpcExpeditionWreckCustody\"))\n          .createNpcExpeditionWreckCustody({\n           items:require(path.join(__dirname, \"../../services/inventory/itemStore\")),\n           npcStore:nativeNpcStore,gameStore:require(path.join(__dirname, \"../../gameStore\"))\n          }).canDestroy(wreckRecord.wreckID))\n      return {success:false,errorMsg:\"EX03_WRECK_DEATH_DESTRUCTION_NEEDS_OPERATOR_REPAIR\"};\n    nativeNpcStore.removeNativeWreckCascade(wreckRecord.wreckID);\n    return removeResult;\n  }"
+    },
+    {
+      "before": "    sourceEntityID: entityID,\n    systemID: normalizedSystemID,",
+      "after": "    sourceEntityID: entityID,\n    // EX03B18_SOURCE_CORPORATION: killer/loot-right corporation may differ\n    // from the original NPC corporation which owns the physical loot.\n    coopNpcExpeditionSourceCorpID: process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK===\"1\"\n      ? Number(nativeEntityRecord?.corporationID)||0 : 0,\n    systemID: normalizedSystemID,"
     }
   ],
   "server/src/space/npc/nativeNpcStore.js": [
