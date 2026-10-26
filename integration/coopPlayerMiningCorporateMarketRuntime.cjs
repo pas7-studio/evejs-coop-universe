@@ -28,13 +28,15 @@ const blocked=r=>({status:"BLOCKED",reason:r});
 function createCorporateMarketRuntime({
  gameStore,marketClient,access,readiness,
  getActiveSessions,getDockedLocationID,
- getCharacterRecord,getMarketContext,computeSalesTaxAmount,computeBrokerFeeInfo,
+ getCharacterRecord,findOriginalItemById,getMarketContext,
+ computeSalesTaxAmount,computeBrokerFeeInfo,
  token,enabledFn=enabled,pnlEnabled=()=>false
 }={}){
  const deps=[gameStore?.read,marketClient?.call,
   access?.isMember,access?.canIndustry,access?.canWallet,access?.canTake,
   readiness?.inspect,getActiveSessions,getDockedLocationID,
-  getCharacterRecord,getMarketContext,computeSalesTaxAmount,computeBrokerFeeInfo,
+  getCharacterRecord,findOriginalItemById,getMarketContext,
+  computeSalesTaxAmount,computeBrokerFeeInfo,
   enabledFn,pnlEnabled];
  if(deps.some(x=>typeof x!=="function")||
   typeof token!=="string"||token.length<32||token.length>256)
@@ -86,7 +88,7 @@ function createCorporateMarketRuntime({
    });
  const pnl=load("coopPlayerMiningCorporatePnl")
    .createMiningCorporatePnl({
-    gameStore,access,enabled:pnlEnabled,
+    gameStore,access,findOriginalItemById,enabled:pnlEnabled,
     readNativeReleased:({orderID,cycle})=>
       marketClient.call("GetCorpFillClaim",{
         access_token:token,order_id:orderID,cycle})
@@ -176,6 +178,7 @@ function native(){
  const market=require("../services/market/marketDaemonClient");
  const marketRules=require("../services/market/marketRules");
  const char=require("../services/character/characterState");
+ const itemStore=require("../services/inventory/itemStore");
  const access=require("./coopPlayerCorporationAccess");
  const readiness=require("./coopPlayerMiningMarketReadiness");
  const sessions=require("../services/chat/sessionRegistry");
@@ -188,6 +191,7 @@ function native(){
   getActiveSessions:sessions.getSessions,
   getDockedLocationID:location.getDockedLocationID,
   getCharacterRecord:char.getCharacterRecord,
+  findOriginalItemById:itemStore.findItemById,
   getMarketContext:marketRules.getMarketContext,
   computeSalesTaxAmount:marketRules.computeSalesTaxAmount,
   computeBrokerFeeInfo:marketRules.computeBrokerFeeInfo,
