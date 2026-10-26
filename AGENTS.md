@@ -9,6 +9,27 @@ from an older document; `node scripts/coop-state.cjs --verify` reports
 
 For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md` and relevant upstream docs as needed.
 
+## Where a change goes (read before editing)
+
+We own every change in **this** repository; the EveJS checkout is never the
+source of truth. Three layers, one rule each — full rules in
+[docs/UPSTREAM_PATCH_SERIES.md](docs/UPSTREAM_PATCH_SERIES.md):
+
+- **L1 stock bug or omission → `patches/upstream/NNN-*.patch`.** Real diff,
+  pinned, reversible. Apply with
+  `node scripts/apply-upstream-patches.cjs --checkout <Code> [--apply|--reverse]`;
+  it refuses a `sha256` or pin mismatch. One atomic patch per fix, plus an entry
+  in `patches/upstream/MANIFEST.json`.
+- **L2 co-op rule → `integration/*.cjs` plus one hook line in
+  `scripts/patch-evejs-coop.cjs`.** Env-gated, default OFF.
+- **L3 stateful mechanism → a new runtime phase/module**, never a string patch.
+
+Order is always **L1 → L2**, then `--check` must print `OVERLAY_OK` before
+building. Keep our complete native set on the private branch with
+`--apply --branch coop/pas7std --commit`. Upstream receives only atomic
+proposals, and a merged proposal advances the pin instead of drifting. Never add
+a second patching mechanism.
+
 ## Primary goal for game-test agents (2026-10-25): prove gameplay, NOT scan dependencies
 
 **MANDATORY FIRST:** Read [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md)

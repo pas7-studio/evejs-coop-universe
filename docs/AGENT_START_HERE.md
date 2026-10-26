@@ -17,8 +17,11 @@ client. The repository is the only shared memory. Read in this order:
 ## How we work
 
 - **No CI, ever.** The owner removed all workflows. Testing is local and manual.
-- **Overlay, not fork.** Upstream EveJS stays byte-identical; we add 19 hooks and
-  copy `integration/*.cjs` modules. Rules: `docs/DEVELOPMENT_DOCTRINE.md`.
+- **Layered changes, owned here.** L1 stock bugs = `patches/upstream/*.patch`
+  (`scripts/apply-upstream-patches.cjs`, refuses hash/pin drift); L2 co-op rules =
+  `integration/*` + one hook line; L3 new mechanisms = a runtime phase. Always
+  L1 → L2 → `OVERLAY_OK` → build. Rules: `docs/UPSTREAM_PATCH_SERIES.md`,
+  `docs/DEVELOPMENT_DOCTRINE.md`.
 - **Evidence ladder:** unit test → dry-run → deployed (`OVERLAY_OK`) → server
   events → one authorized client → two clients. Claim only the rung you reached.
 - **Nothing is "done" from documentation or tests alone.** Real gameplay needs
