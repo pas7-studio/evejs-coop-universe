@@ -1,0 +1,45 @@
+name: LW04B Forward Port — Current Main Source Gates
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'integration/coopAlifeNativeEconomyAct.cjs'
+      - 'integration/coopAlifeNativeManufacturingRuntime.cjs'
+      - 'integration/coopVirtualWorldRuntime.cjs'
+      - 'scripts/patch-evejs-coop.cjs'
+      - 'tests/coop-alife-native-*.test.mjs'
+      - 'tests/lw04b-main-forward-port-regression.test.mjs'
+      - 'tests/coop-native-industry-overlay-graph.test.mjs'
+      - '.github/workflows/lw04b-current-main-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  node-source:
+    name: Node 22 original source integration (no game-data writes)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check current-main source syntax
+        run: |
+          node --check integration/coopAlifeNativeManufacturingRuntime.cjs
+          node --check integration/coopAlifeNativeEconomyAct.cjs
+          node --check integration/coopVirtualWorldRuntime.cjs
+          node --check scripts/patch-evejs-coop.cjs
+      - name: Run original source tests
+        run: |
+          node --test \
+            tests/coop-alife-native-manufacturing-runtime.test.mjs \
+            tests/coop-alife-native-act.test.mjs \
+            tests/coop-native-industry-overlay-graph.test.mjs \
+            tests/lw04b-main-forward-port-regression.test.mjs \
+            tests/coop-npc-native-economy-director.test.mjs \
+            tests/coop-native-economy-overlay-resolution.test.mjs
+      - name: Explicitly preserve real native acceptance NOT_RUN
+        run: |
+          node -e 'const m=require("./tests/scenarios/lw04-native-manufacturing-e2e.json");if(m.scenarios.length<12||m.scenarios.some(s=>s.status!=="NOT_RUN"))process.exit(1)'
