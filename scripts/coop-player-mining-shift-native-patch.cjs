@@ -3,7 +3,7 @@
 // Only touches miningNpcOperations.js; the whole original mining engine remains
 // responsible for laser effects, native cargo, hauling, warp and retreat.
 const TARGET="server/src/services/mining/miningNpcOperations.js";
-const ANCHOR="  const thinkIntervalMs = Math.max(";
+const ANCHOR='  if (fleetRecord.state === "hauling") {';
 const HOOK='  if (process.env.EVEJS_COOP_PLAYER_NPC_MINING_COMPANY === "1" && require("../../space/coopPlayerMiningFleetTick").beforeTick({scene,fleetRecord,now,hooks,startHaul:()=>startHaulCycle(scene,fleetRecord,now,hooks),deactivate:()=>deactivateMiningModulesForFleet(scene,fleetRecord,hooks,"player-mining-shift"),retreat:()=>retreatFleetToOrigin(fleetRecord,{state:"retreating",scene,hooks,reason:"player-mining-shift"})})===true) return;';
 function patch(source,filename=TARGET,remove=false){
  if(filename!==TARGET)throw Error("MINING_SHIFT_UNSUPPORTED_NATIVE_SOURCE");
