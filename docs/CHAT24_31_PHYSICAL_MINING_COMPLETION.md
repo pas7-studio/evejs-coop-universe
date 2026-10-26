@@ -67,7 +67,7 @@ EVEJS_COOP_NPC_STATION_DELIVERY=1
 
 ## Test evidence and acceptance
 
-- **17/17** isolated exact-source cargo and original NPC warp source verifier tests.
+- **18/18** isolated exact-source cargo and original NPC warp source verifier tests.
 - **14/14** isolated original GameStore intent/physical completion CAS tests.
 - **22/22** original Stage B command-safety tests.
 - **26/26** D3 Agent order selector tests, **8/8** in-game Agent integration and **17/17** prior single-fleet Agent tests.
