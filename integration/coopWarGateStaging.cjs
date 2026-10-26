@@ -12,12 +12,13 @@ const gate=env=>env.EVEJS_COOP_FACTION_WAR==="1"&&
  env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
  (env.EVEJS_COOP_ALIFE==="1"||env.EVEJS_COOP_NPC_ORDER_ARBITER==="1");
 function createWarGateStaging({readWar,readFleet,readTreasury,
- sceneForSystem,getGate,warpToEntity,getController,bridge,
+ sceneForSystem,getGate,warpToEntity,getController,bridge,transfer=null,
  isTactical=()=>false,isAmmoRetreat=()=>false,
  clock=()=>Date.now(),env=process.env,maxOrders=1}={}){
  if([readWar,readFleet,readTreasury,sceneForSystem,getGate,
   warpToEntity,getController,isTactical,isAmmoRetreat,clock]
   .some(x=>typeof x!=="function")||typeof bridge?.issue!=="function"||
+  (transfer!==null&&typeof transfer!=="function")||
   !Number.isSafeInteger(maxOrders)||maxOrders<1||maxOrders>3)
   throw Error("WAR_NATIVE_GATE_AUTHORITIES_REQUIRED");
  const travel=createGateTravel({getGate,clock,maxShipsPerTick:maxOrders,
@@ -31,9 +32,13 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
    return bridge.issue({entityID:id,systemID,owner:"WAR",
     action:"warp-to-gate",execute:()=>warpToEntity(id,gateID,options)});
   },
-  // Native transfer is intentionally absent: warship systemID cannot be
-  // changed without an atomic update to TWO native durable registries.
-  transfer:null});
+  // FW-007B: physical transition only through the explicitly enabled
+  // proof-backed SQL + JSON military handoff. No direct stock transfer.
+  transfer:transfer?args=>bridge.issue({
+   owner:"WAR",entityID:args.entityID,systemID:args.gate?.sourceSystemID,
+   action:"native-gate-transfer",
+   execute:()=>transfer(args)
+  }):null});
  function tick({systemIDs=[]}={}){
   if(!gate(env))return {status:"DISABLED",orders:[],observations:[]};
   if(!Array.isArray(systemIDs)||systemIDs.length>20||
@@ -82,9 +87,11 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
    // registry, cargo, SDE faction, war objective or player's wallet.
    for(const o of output.orders){
     if(orders.length>=maxOrders)break;
-    if(o.action==="NATIVE_WARP_TO_REAL_GATE")
+    if(o.action==="NATIVE_WARP_TO_REAL_GATE"||
+       o.action==="VERIFIED_NATIVE_GATE_TRANSFER")
      orders.push({...o,campaignID:campaign.campaignID,
-      phase:"STAGING_ONLY_NOT_TRANSFER"});
+      phase:o.action==="VERIFIED_NATIVE_GATE_TRANSFER"?
+       "NATIVE_TRANSFER_WITH_DURABLE_HANDOFF":"STAGING_ONLY_NOT_TRANSFER"});
    }
    for(const o of output.observations.slice(0,8))
     observations.push({...o,campaignID:campaign.campaignID,

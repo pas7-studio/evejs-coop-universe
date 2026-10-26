@@ -4,7 +4,7 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null;
@@ -96,6 +96,33 @@ function advanceNativeWarMobilization(){
   {status:result.status,ships:result.mobilized,
    evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
 }
+// FW-007B: recover/audit native military handoff BEFORE the materializer
+// may prune old pilot links or rebuild another physical hull.
+function ensureNativeWarGateHandoff(runtime){
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER!=="1")return;
+ const {flag,createWarGateHandoff}=require("./coopWarGateHandoff");
+ if(!flag(process.env))
+  throw Error("WAR_GATE_HANDOFF_FLAGS_INCOMPLETE");
+ if(warGateHandoff)return;
+ if(!identityRegistry)throw Error("WAR_GATE_IDENTITY_MISSING");
+ const worldData=require("./worldData"),controllers=require("./npc/npcRegistry"),
+  store=require("./npc/nativeNpcStore"),service=require("./npc/nativeNpcService"),
+  scramble=require("./modules/hostileModuleRuntime");
+ const instance=createWarGateHandoff({
+  gameStore:require("../gameStore"),identityRegistry,
+  sceneForSystem:id=>runtime.ensureScene(id,{refreshStargates:false}),
+  getGate:id=>worldData.getStargateByID(id),
+  nativeStore:store,service,
+  getController:id=>controllers.getControllerByEntityID(id),
+  isScrambled:ship=>scramble.isEntityWarpScrambled(ship),
+  journalDir:process.env.EVEJS_COOP_WAR_TRANSFER_JOURNAL_DIR||
+   "/var/lib/evejs/coop-war-native-transfers"
+ });
+ const audit=instance.auditStartup();
+ if(audit.status!=="CLEAN")
+  throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
+ warGateHandoff=instance;
+}
 function advanceNativeWarGateStaging(){
  if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1"||
     !visitedSystems.size)return;
@@ -103,6 +130,8 @@ function advanceNativeWarGateStaging(){
  if(!gate(process.env))return;
  const guard=npcOrderBridge();
  if(!guard||!nativeWarFleetRegistry())return;
+ if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1")
+  ensureNativeWarGateHandoff(require("./runtime"));
  if(!warGateStaging){
   const native=require("./runtime"),npc=require("./npc/npcRuntime"),
    controllers=require("./npc/npcRegistry"),worldData=require("./worldData"),
@@ -125,11 +154,16 @@ function advanceNativeWarGateStaging(){
    warpToEntity:(id,targetID,opts)=>npc.warpToEntity(id,targetID,opts),
    getController:id=>controllers.getControllerByEntityID(id),
    bridge:guard,
+   transfer:warGateHandoff?(args=>warGateHandoff.transfer(args)):null,
    isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true,
    isAmmoRetreat:(systemID,id)=>nativeAmmoSupply?.activeIDs(systemID)?.has(id)===true
   });
  }
  const result=warGateStaging.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ for(const moved of result.orders){
+  if(moved.action==="VERIFIED_NATIVE_GATE_TRANSFER")
+   visitedSystems.add(Number(moved.targetSystemID));
+ }
  if(result.orders.length||result.observations.length)
   require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
    null,null,{status:result.status,orders:result.orders,
@@ -2003,6 +2037,7 @@ function observeSession(session,ship){
         // Recover an interrupted native gate movement first; then restore
         // saved real NPC hulls before the materializer may prune stale links.
         ensureNativeGateTransfer(runtime);
+        ensureNativeWarGateHandoff(runtime);
         if(process.env.EVEJS_COOP_DURABLE_NPC_SHIPS==="1"){
           const recovered=require("./coopNativeRestore").restoreNamedShips({
             registry:identityRegistry,sceneForSystem:id=>

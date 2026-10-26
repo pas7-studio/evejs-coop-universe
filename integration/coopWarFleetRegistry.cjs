@@ -12,7 +12,11 @@ function validate(s){
   Array.isArray(s.ships)||!s.processed||typeof s.processed!=="object"||
   Array.isArray(s.processed)||!Array.isArray(s.history)||
   Object.keys(s.ships).length>256||Object.keys(s.processed).length>2048||
-  s.history.length>128)throw Error("FW_FLEET_REGISTRY_INVALID");
+  s.history.length>128||
+  (s.transfers!==undefined&&(!s.transfers||
+   typeof s.transfers!=="object"||Array.isArray(s.transfers)||
+   Object.keys(s.transfers).length>128)))
+  throw Error("FW_FLEET_REGISTRY_INVALID");
  const pilots=new Set();
  for(const [key,v] of Object.entries(s.ships)){
   if(!pos(Number(key))||String(Number(key))!==key||!pos(v?.entityID)||
@@ -21,6 +25,20 @@ function validate(s){
    !valid(v.campaignID)||!pilot(v.pilotID)||pilots.has(v.pilotID))
     throw Error("FW_FLEET_REGISTRY_CORRUPT_SHIP");
   pilots.add(v.pilotID);
+ }
+ for(const [shipID,t] of Object.entries(s.transfers||{})){
+  const hull=s.ships[shipID];
+  if(!hull||String(t?.entityID)!==shipID||
+   hull.pilotID!==t.pilotID||hull.warID!==t.warID||
+   hull.campaignID!==t.campaignID||
+   !["PREPARED","NATIVE_COMMITTED","COMPLETE","ABORTED"].includes(t.phase)||
+   !Number.isSafeInteger(t.sourceSystemID)||t.sourceSystemID<=0||
+   !Number.isSafeInteger(t.destinationSystemID)||t.destinationSystemID<=0||
+   t.sourceSystemID===t.destinationSystemID||
+   (t.phase==="PREPARED"||t.phase==="ABORTED"
+    ?hull.systemID!==t.sourceSystemID
+    :hull.systemID!==t.destinationSystemID))
+   throw Error("FW_FLEET_TRANSFER_LEDGER_CORRUPT");
  }
  return s;
 }
@@ -51,6 +69,11 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
    }else state=snapshot(); // only injectable offline fixtures
    const v=state.ships[String(link?.entityID)];
    if(!v)return "UNASSIGNED";
+   // A physically moving ship is quarantined until native destination,
+   // persistent identity file and SQL fleet custody all agree.
+   const flight=state.transfers?.[String(link.entityID)];
+   if(flight&&!["COMPLETE","ABORTED"].includes(flight.phase))
+    return "UNKNOWN";
    return v.entityID===link.entityID&&v.pilotID===link.pilotID&&
     v.systemID===link.systemID?"ASSIGNED":"UNKNOWN";
   }catch{return "UNKNOWN"}
@@ -84,11 +107,16 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
      s.ships[id]={...details,assignedAt:clock()};
      receipt={type:"ASSIGN",entityID,pilotID,systemID,fleetID,warID,campaignID};
     }else{
+     if(s.transfers?.[id]&&!["ABORTED","COMPLETE"].includes(s.transfers[id].phase))
+      return {status:"BLOCKED",reason:"WAR_HULL_TRANSFER_QUARANTINED"};
      if(!priorShip||!valid(command.proofID)||command.pilotID!==priorShip.pilotID||
       command.fleetID!==priorShip.fleetID)return {status:"BLOCKED",reason:"SHIP_NOT_IN_FLEET"};
      let ok=false;try{ok=verifyRelease({...priorShip,proofID:command.proofID})===true}catch{}
      if(!ok)return {status:"BLOCKED",reason:"NATIVE_RELEASE_UNVERIFIED"};
      delete s.ships[id];
+     // Finished/aborted transfer provenance remains in the processed event
+     // receipts, but cannot dangle after this ship leaves the war fleet.
+     if(s.transfers?.[id])delete s.transfers[id];
      receipt={type:"RELEASE",entityID:priorShip.entityID,fleetID:priorShip.fleetID};
     }
     const at=clock();
