@@ -15,9 +15,10 @@ const vector=p=>p&&["x","y","z"].every(k=>typeof p[k]==="number"&&Number.isFinit
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const named=p=>typeof p==="string"&&/^coop-pilot-[0-9]{3,}$/.test(p);
 function createExpeditionDirector({listNativeSites,getNativeEntity,getController,
- orderBridge,warpToPoint,nativeProbeScan=null,clock=()=>Date.now(),intelTtlMs=600000,
+ orderBridge,warpToPoint,nativeProbeScan=null,isNativeProbeScout=null,clock=()=>Date.now(),intelTtlMs=600000,
  maxSitesPerTick=32,maxPilotsPerTick=32,maxOrdersPerTick=1}={}) {
  if((nativeProbeScan!==null&&typeof nativeProbeScan!=="function")||
+    (isNativeProbeScout!==null&&typeof isNativeProbeScout!=="function")||
     [listNativeSites,getNativeEntity,getController,warpToPoint].some(f=>typeof f!=="function")||
     !orderBridge||typeof orderBridge.issue!=="function"||
     typeof orderBridge.blocked!=="function"||typeof clock!=="function"||
@@ -125,7 +126,21 @@ function createExpeditionDirector({listNativeSites,getNativeEntity,getController
   // source probeScanRuntime result, backed by original NPC cargo flight
   // receipts and in-scene probe entities. No synthetic catalog discovery.
   let remoteScans=0;
-  if(nativeProbeScan)for(const scout of all.slice(0,2)){
+  // EX-03B9: choose from ALL bounded patrols by original fitted scanner
+  // source, not the first two patrol hulls (which might lack a launcher).
+  // Read-only and fail-closed; never infer scout status from virtual role.
+  const equipped=[];
+  if(nativeProbeScan)for(const scout of all){
+   if(isNativeProbeScout){
+    let admitted=false;
+    try{admitted=isNativeProbeScout(scout.entityID,scene.systemID)===true}
+    catch{continue}
+    if(!admitted)continue;
+   }
+   equipped.push(scout);
+   if(equipped.length>=2)break;
+  }
+  if(nativeProbeScan)for(const scout of equipped){
    let scan;
    try{scan=nativeProbeScan({scene,entityID:scout.entityID,assignments})}
    catch{continue}
