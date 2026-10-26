@@ -1,5 +1,33 @@
 ﻿## Session state — 2026-10-26 (latest)
 
+### LIVE 2026-10-26 19:5x — mining is fixed end to end; the hauler hull is the blocker
+The running image was 2 h old (the "deploy" was a restart), so I rebuilt: `OVERLAY_OK`,
+`BUILD_OK`, then `boot_errors=0` — no `Cannot find module ../coopMiningTargetGuard`
+and no `NPC tick failed` (the guard is installed and cannot throw into stock code).
+
+Measured in the first 6.5 minutes after the rebuild:
+- `living-mining-cycle-settled` **×72**, real numbers: qty 963 (rock 38 282 → 36 356),
+  qty 4 917 (rock 117 105 → 112 188), `replayed=false`. Atomic mining commits.
+- `MINING_CYCLE_ATTEMPT` with `locked=true`; `MODULE_ACTIVATED present=true mining=true`.
+- `living-mining-cargo-repair-cleared` is **gone** (was 52 per 5 min before `8e8bc124`).
+- Loop stops at hauling: `living-haul-no-hauler ... skipped[0]={haulerID, why:"full",
+  usedM3:0, capacityM3:50, needM3:9533.3}` and one `why:"out-of-range", rangeMeters:3712`.
+
+Why: **every durable "hauler" slot is a Mining Venture**, `typeID 32880`,
+`profileID ore_mining_venture`, i.e. a 50 m³ mining frigate, while the miners are
+Skiff/Hulk/Retriever. Evidence: 9 durable actors in `npcEntities`, all three
+`coop-mining-<system>-1-hauler` rows are Ventures; the SDE pool
+`npc_mining_hauler_highsec` exists and contains only real haulers
+(`ore_mining_bestower_hauler, ore_mining_badger_hauler, ore_mining_mammoth_hauler,
+ore_mining_bustard_hauler`), so the wing either never used that pool or the slot was
+adopted/re-labelled from a mining-ops hull. A 50 m³ hold can never take an 8 000–12 000
+m³ stack, so the strict transfer correctly refuses and the fleet keeps its ore.
+
+**Needs the owner:** repairing a durable slot destroys a persistent NPC, so either
+(a) set an explicit hauler profile/pool for the fleet (`EVEJS_MINING_NPC_HAULER_PROFILE_OR_POOL=ore_mining_badger_hauler`)
+and reseed the hauler slot through the documented repair path, or (b) investigate the
+marker/adoption path first (no destructive action).
+
 ### Test baseline, 2026-10-26 evening (measured, not guessed)
 - Loop suites (23 files, mining + haul + atomic store + overlay gates): **247/247 PASS**
   after fixing four stale fixtures; this is the gate to watch before any deploy.
