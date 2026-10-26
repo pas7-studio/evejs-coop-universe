@@ -133,3 +133,8 @@ Evidence: scripts/coop-cargo-probe.cjs reads npcCargo read-only from SQLite; fir
 Why: a throwing runtime probe could still break the haul delivery event and the economy destination telemetry because those two call sites bypassed the guarded entry point
 Where: integration/coopEconomyDestination.cjs, integration/coopNativeHaulCargo.cjs
 Evidence: economy-destination 12/12; haul/adoption sets identical failure names by name; OVERLAY_OK patched 54
+### 2026-10-26T11:55Z · ada34cf · L2 · fix(overlay): ship coopWarObjectiveDirector; block the whole class of missing copy-list deps
+
+Why: a live world phase failed on every cycle with Cannot find module './coopWarObjectiveDirector' because the module existed in integration/ but was never added to the overlay copy list, and nothing checked that the copy list and the require graph agree
+Where: scripts/overlay-spec.cjs, tests/coop-overlay-dependencies.test.mjs
+Evidence: new tests/coop-overlay-dependencies.test.mjs fails on the previous overlay (1/3) and passes now (3/3); names 291; OVERLAY_OK patched 54
