@@ -2103,8 +2103,10 @@ function advanceNativePveSiteDefense(){
   const scene=runtime.scenes.get(systemID);
   if(!scene||Number(scene.systemID)!==Number(systemID))continue;
   const instances=dungeon.listActiveInstancesBySystem(systemID,{full:true});
+  // If ownership reservations exceed the bounded audit budget, fail closed.
+  if(reserved.size>1024)continue;
   const result=pveSiteDefenseDirector.tick({
-   systemID,scene,instances,excludedIDs:[...reserved].slice(0,1024)
+   systemID,scene,instances,excludedIDs:[...reserved]
   });
   if(result.events.length)for(const event of result.events){
    require("./coopObserve").observe(require("./coopRuntimeProbe"),
