@@ -326,3 +326,13 @@ Evidence: 17/17 exact-source isolated V8 warehouse suite callbacks PASS with sim
 Why: Regression tests cover unreadable native source during DEBIT repair, completed receipt validation/audit under unavailable source, and duplicate or wrong-ship native cargo; clean authorized replay remains exactly once.
 Where: tests/coop-native-warehouse.test.mjs
 Evidence: 17/17 exact-source isolated V8 warehouse suite callbacks PASS with simulated FS and itemStore; prior source returned COMMITTED and credited original ore with null source reader. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:18Z · 4eccc3a · L2 · fix(P0): verify original native cargo corporate owner before warehouse debit
+
+Why: Original cargo ownerID was never checked against the receiving NPC corporation in native warehouse deposit. A foreign owner's physical cargo could be debited and credited to another corporation despite correct station existence and caller-provided durability proof.
+Where: integration/coopNativeWarehouse.cjs
+Evidence: 18/18 exact-source isolated V8 warehouse tests PASS with simulated file IO; previous source reproduced foreign owner's cargo COMMITTED into a different NPC corporation. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.
+### 2026-10-26T14:19Z · 1fc55fa · TEST · test(P0): foreign or unverified native cargo owner cannot credit NPC warehouse
+
+Why: Original warehouse suite now uses source-backed ownerID in the native cargo fixture and verifies mismatched, zero, null, unknown corporate owners cannot debit, create a receipt or grant stock; valid owner can still commit once.
+Where: tests/coop-native-warehouse.test.mjs
+Evidence: 18/18 exact-source isolated V8 warehouse tests PASS with simulated file IO; previous source reproduced foreign owner's cargo COMMITTED into a different NPC corporation. Full Node/SQLite/Rust/two-client gameplay NOT_RUN.

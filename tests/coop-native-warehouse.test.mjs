@@ -8,7 +8,7 @@ const require=createRequire(import.meta.url);
 const {createWarehouse,marker}=require('../integration/coopNativeWarehouse.cjs');
 function fixture(options={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'evejs-warehouse-'));
- const cargo=new Map([[8001,{cargoID:8001,entityID:9001,typeID:1230,quantity:250,moduleID:0,coopHaulFleetID:77,coopHaulFromMinerID:800}]]);
+ const cargo=new Map([[8001,{cargoID:8001,entityID:9001,ownerID:1000035,typeID:1230,quantity:250,moduleID:0,coopHaulFleetID:77,coopHaulFromMinerID:800}]]);
  const owned=new Map();let issued=0,failRemove=false,failCargoFlush=false,failItemsFlush=false,failGrant=false,acceptArrival=true,durableCargo=true;
  const store={listNativeCargoForEntity:id=>[...cargo.values()].filter(c=>c.entityID===id),
   removeNativeCargo(id){if(failRemove)return {success:false};return {success:cargo.delete(id)};}};
@@ -159,5 +159,24 @@ test('P0: duplicate or wrong-ship original native cargo never receives source de
  }
  f.config.store.listNativeCargoForEntity=original;
  assert.equal(warehouse.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.issued,1);
+}));
+
+
+test('P0: native ore title must equal receiving NPC corporate warehouse owner',()=>withF(f=>{
+ const w=f.make(),source=f.cargo.get(8001),originalOwner=source.ownerID;
+ const file=path.join(f.root,'receipts','8001.json');
+ for(const foreignOwner of [8888,0,null,undefined,'unverified']){
+  source.ownerID=foreignOwner;
+  assert.equal(w.deposit(f.arg).status,'ORIGINAL_CARGO_OWNER_MISMATCH');
+  assert.equal(f.cargo.size,1,'original cargo must not be debited');
+  assert.equal(f.owned.size,0,'no physical stock may be minted');
+  assert.equal(f.issued,0);
+  assert.equal(fs.existsSync(file),false,'no PREPARED receipt for foreign original title');
+ }
+ source.ownerID=originalOwner;
+ assert.equal(w.deposit(f.arg).status,'COMMITTED');
+ assert.equal(f.cargo.size,0);
+ assert.equal(f.owned.size,1);
  assert.equal(f.issued,1);
 }));
