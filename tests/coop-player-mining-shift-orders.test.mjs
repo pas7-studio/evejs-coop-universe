@@ -14,7 +14,10 @@ function setup(){
  data.set(FLEET_INDEX(SYSTEM,FLEET),{version:1,operationID:OP,corporationID:CORP,employerCorpID:NPC,systemID:SYSTEM,fleetID:FLEET});
  data.set(CONTRACT(OP),structuredClone(row));
  let permitted=true,verified=true,enabled=true,poisoned=false,failedWrites=false,writes=0;
- const db={coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>poisoned,transact(tables,fn){
+ const db={read(table,path){assert.equal(table,'corporationRuntime');
+  const key=path.slice(1).replace('/',"\u001f");
+  return data.has(key)?{success:true,data:structuredClone(data.get(key))}:
+   {success:false,errorMsg:'ENTRY_NOT_FOUND'};},coopAtomicNativeRows:{mode:'SERVER_INTERNAL_FLAGGED',isPoisoned:()=>poisoned,transact(tables,fn){
   assert.deepEqual(tables,['corporationRuntime']);
   const backup=new Map([...data].map(([k,v])=>[k,structuredClone(v)]));
   try{return fn({get:(_t,key)=>data.get(key)||null,
@@ -138,4 +141,12 @@ test('native combat reaction outranks peaceful corporate hold',()=>{
  const r=x.svc.dispatch({fleet:x.fleet,native:{...x.native,deactivate:()=>{calls++;return true}}});
  assert.equal(r.status,'NATIVE_COMBAT_PRIORITY');assert.equal(r.skipNativeTick,false);
  assert.equal(calls,0);assert.equal(x.state().commandState,'PENDING');
+});
+
+test('uncontracted fleet read never opens expensive atomic GameStore writer',()=>{
+ const x=setup();x.data.clear();
+ const before=x.writeCount();
+ assert.equal(x.svc.lookup(SYSTEM,FLEET),null);
+ assert.equal(x.svc.dispatch({fleet:x.fleet,native:x.native}).status,'UNCONTRACTED');
+ assert.equal(x.writeCount(),before);
 });
