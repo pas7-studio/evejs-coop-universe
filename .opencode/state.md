@@ -1118,3 +1118,27 @@ next change is one order: when the attacker's fitted weapon (`estimateNpcHostile
 real native orbit at that attribute's range before the attack. No distance constant of
 ours, no scripted damage: the ship flies to its own gun's range and the native cycle
 does the rest.
+
+## 2026-10-27T10:52Z - item 2 step 3 (WIP, committed): the raider flies to its own gun range (1d6a3833, 91f68dde)
+
+**Code.** `integration/coopNpcGunRange.cjs` reads the range from the stock resolver's own
+snapshot (`getNpcWeaponModules` + `buildNpcWeaponModuleSnapshot`: turret `maxRange`,
+launcher `approxRange`); the raid issues the attack with that number as the hull's
+engagement distance via the stock `npcService.setBehaviorOverrides({orbitDistanceMeters})`.
+A standalone manual orbit is NOT used (measured earlier: the native hostility invariant then
+treats the prey as friendly -> mode STOP, currentTargetID 0). `npc_pair_diagnose` now also
+reports `gunRange` and `returningHome`/`leashRangeMeters`/`homeDistanceMeters`.
+Refinery: the journal file name is escaped on win32 (key unchanged).
+
+**Live so far (verbatim, earlier deployed variant):** `living-pirate-raid` 30000145
+`action":"orbit-to-range","pirateID":980000018058` `gunRange":{"status":"RESOLVED",
+"meters":1050,"source":"maxRange","family":"hybridTurret","typeID":13884,"falloffMeters":3000,
+"weaponCount":5}` at `distanceMeters 2251.76`. Sustained fire on a held prey and a real
+wreck are **NOT proven**.
+
+**NEXT ACTION (exact).** After this deploy sample `npc_pair_diagnose 980000018058 -> <its held
+prey>` and require repeated `living-native-weapon-event` plus falling shield/armor on the
+same victim; if the hull still sits outside its own gun range, read the new
+`returningHome`/`leashRangeMeters`/`homeDistanceMeters` fields (a stock NPC beyond its
+leash clears combat state and flies home) instead of guessing. Then wreck -> stored loot ->
+casualty ledger -> merit -> seeded sale -> war chest -> PAYOUT.
