@@ -304,3 +304,39 @@ backed ore demand (market daemon), or sell in regions where real orders exist.
 окремим журналом доказів. Якщо для цього потрібна сесія, якої в headless-світі немає —
 це і буде першим точним блокером, і тоді рішення: невеликий L2-міст «NPC factory
 bootstrap» або L1-пропозиція вгору.
+
+## 2026-10-27 loop — item 3, 4, 10 done; assault blocker narrowed to NPC fitting
+
+**Item 3 PASS** (78fb32ce): rank-driven command cap enforced per campaign side
+(recruit 1 / squad-lead 5 / admiral 25), wired to real merit records (none yet,
+so every side starts at 1). Tests 10/10.
+
+**Item 4 PASS (code)** (3ff71b13): `warFrontChat` sends
+`coopWarClientView.frontReport` to live sessions in the affected systems on war
+opened / assault begun / objective captured, once per event key. Tests 3/3. No
+live chat line was observed (no transition happened with a client connected).
+
+**Item 10 PASS** (f3997b30): full suite HEAD 5712 tests / 5163 pass / 459 fail /
+90 skip vs baseline 49140caa 5680 / 5131 / 459 / 90 — zero new failures, 32 new
+passing tests. The single new failure found was an LF-anchored guard broken by a
+PowerShell rewrite that had converted two modules to CRLF; restored.
+
+**Assault blocker, narrowed twice (both read-only, exact):**
+1. `war_diagnose` -> DEFENDER (ORE 500014) WRONG_FACTION (corp 1000129 has 11
+   real profiles, all miners/haulers) and ATTACKER NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON.
+2. `inspect_npc 980000000113` -> `"modules":[],"moduleCount":0,"cargo":[],"cargoCount":0`
+   even for a durable, armed-profile hull. Cause in the pinned code:
+   `nativeNpcService.buildNativeModuleRecords` fits only `definition.loadout.modules`,
+   and these profiles resolve to an empty authored loadout. So no NPC in this
+   world carries a native fitted weapon/charge and the muster gate can never pass.
+
+**NEXT ACTION (exact):** the assault is blocked BELOW the war layer. Investigate
+why `npcData.buildNpcDefinition(<profileID>)` yields no `loadout.modules` for
+`parity_angel_autocannon_frigate` / `blood_raider_prophecy` (npcProfiles/npcLoadouts
+rows in the static tables vs `npcHardwareCatalog` allowed type IDs), then either
+author a real loadout through the catalog or record it as a stock data gap in
+`patches/upstream/`. Do not relax `coopWarMusterReadiness`.
+
+**Also still open:** queue items 6 (NPC careers), 7 (courier economy), 8
+(industry/salvage loop), 9 (two-client checklist); owner backlog items 1-3
+(sovereignty projection, shipcaster logistics, player ranks).

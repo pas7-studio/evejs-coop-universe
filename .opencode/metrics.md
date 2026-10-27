@@ -64,3 +64,11 @@ overlay: OVERLAY_OK
 live: deployed (docker build + recreate). No live transition occurred while a client was connected, so no chat line was observed - not claimed.
 metrics: tests_total=64 modules_added=0 modules_changed=1 live_events=0
 next: regression sweep of every touched module
+
+## 2026-10-27T00:35Z - queue item 10: regression sweep - f3997b30
+done: full local suite twice (baseline worktree 49140caa vs HEAD) and a per-file diff of the failing test names; the only new failure was an LF-anchored source guard broken by a shell rewrite that had converted two modules to CRLF. Restored LF (content byte-identical apart from EOL).
+tests: node --test "tests/*.test.mjs" -> baseline 5680/5131 pass/459 fail/90 skip ; HEAD 5712/5163 pass/459 fail/90 skip
+overlay: OVERLAY_OK
+live: not run (pure test sweep)
+metrics: tests_total=5712 pass=5163 fail=459 skipped=90 new_tests=32 new_failures=0 modules_changed=2
+next: assault still blocked below the war layer - see the NPC fitting finding

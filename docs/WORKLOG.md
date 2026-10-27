@@ -915,3 +915,9 @@ Why: The front report projector was dead code; players never heard about a real 
 Detail: coopWarClientView.frontReport existed but nothing called it. The runtime now reports the three transitions that really happen - war opened, assault begun, objective captured - to live sessions in the affected systems through chat.sendSystemMessage. Each report is keyed by the event (campaign, or campaign:system:revision) and is sent at most once per process, so a repeating tick can never spam a pl
 Where: integration/coopVirtualWorldRuntime.cjs, tests/coop-war-front-report.test.mjs
 Evidence: coop-war-front-report 3/3; --check OVERLAY_OK
+### 2026-10-27T00:11Z · f3997b3 · TEST · fix(loop): restore LF endings in the two modules a shell rewrite converted to CRLF
+
+Why: A shell rewrite converted two modules to CRLF and broke an LF-anchored guard
+Detail: A PowerShell Set-Content rewrite turned coopVirtualWorldRuntime.cjs and coopWarMobilizer.cjs into CRLF, which broke the LF-anchored source guard in tests/coop-alife-order-authority.test.mjs (the only new failure the regression sweep found: 460 vs 459 at baseline). Content is byte-identical apart from the line endings (git diff --ignore-cr-at-eol is empty). Regression: 5712 tests / 5162 pass / 460 
+Where: .opencode/metrics.md, docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs
+Evidence: full suite 5712/5163/459 (baseline 5680/5131/459): zero regressions, 32 new passing tests
