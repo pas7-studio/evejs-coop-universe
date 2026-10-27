@@ -65,6 +65,11 @@ names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarMeritLedger","co
 // FW-005B/C: a war chest funded only from real earned income, plus the bounty
 // that releases HELD escrow to the pilot who really earned it.
 names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarChestFunding","coopWarBounty");
+// FW-011A: read-only war-control projection into the sovereignty view. A native
+// sov claim is reported only when a real sov structure and claim exist.
+names.splice(names.indexOf("coopWarBounty")+1,0,"coopWarSovereigntyProjection");
+// FW-012A: the faction rank title a pilot really earned (title only).
+names.splice(names.indexOf("coopWarSovereigntyProjection")+1,0,"coopWarRankTitle");
 // FW-003D: a battle-line hull with no compatible charge left releases its slot.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarBattleLineRelief");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.

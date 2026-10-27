@@ -82,6 +82,30 @@ function note({ proof, victim, emit, ledger: injected } = {}) {
     }
   }
   const killer = awards[0];
+  // FW-012A: a real promotion changes the pilot's title and nothing else.
+  let rankTitle = null;
+  if (killer.status === "PROMOTED") {
+    try {
+      const titles = require("./coopWarRankTitle" +
+        (__filename.endsWith(".js") ? "" : ".cjs"))
+        .createRankTitles({gameStore: require("../gameStore")});
+      rankTitle = titles.apply({pilotID: attackerPilotID,
+        record: {rank: killer.rank, merit: killer.merit}});
+      if (rankTitle.status === "CHANGED" && record) {
+        record("living-native-war-rank-title", null,
+          {spaceState: {systemID: Number(p.systemID) || 0}}, {
+            status: rankTitle.status, pilotID: attackerPilotID,
+            rank: rankTitle.rank, title: rankTitle.title,
+            previousRank: rankTitle.previousRank,
+            previousTitle: rankTitle.previousTitle,
+            unlocks: [], evidence: "REAL_PROMOTION_TITLE_ONLY",
+          });
+      }
+    } catch (error) {
+      rankTitle = {status: "UNAVAILABLE",
+        reason: String((error && error.message) || error).slice(0, 120)};
+    }
+  }
   // A real kill can release a real bounty, but only from a HELD escrow that the
   // killer's own faction funded. A refusal is reported, never papered over.
   let bounty = null;
@@ -115,6 +139,7 @@ function note({ proof, victim, emit, ledger: injected } = {}) {
     awards,
     bounty,
     deathBenefit,
+    rankTitle,
     promoted: killer.promoted === true,
     rank: String(killer.rank || ""),
     merit: Number(killer.merit) || 0,

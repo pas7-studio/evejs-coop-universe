@@ -456,6 +456,41 @@ function diagnoseWarFunding(){
     plan:plan({factionID,pilots,ledger,needCents:need})}))})),
  };
 }
+// FW-011A: read-only sovereignty projection. Military control is always
+// reported; a native sov claim is reported only where a real sov structure and
+// a real native claim exist. Nothing is written, so no claim is fabricated.
+let warSovProjection=null;
+function advanceNativeWarSovereigntyProjection(){
+ if(process.env.EVEJS_COOP_WAR_SOVEREIGNTY_PROJECTION!=="1")return;
+ let state=null;
+ try{state=warStateStore().read()}catch(_error){state=null}
+ if(!state||!state.territories)return;
+ let structures=[];
+ try{
+  const worldData=require("./worldData");
+  for(const systemID of Object.keys(state.territories)){
+   const rows=worldData.getStructuresForSystem(Number(systemID));
+   if(Array.isArray(rows))structures=structures.concat(rows);
+  }
+ }catch(_error){structures=[]}
+ let sovState=null;
+ try{sovState=require("../services/sovereignty/sovState")}catch(_error){sovState=null}
+ const plan=require("./coopWarSovereigntyProjection").planProjection({
+  warState:state,structures,
+  getSystemSovClaim:sovState&&typeof sovState.getSystemSovClaim==="function"?
+   id=>sovState.getSystemSovClaim(id):null
+ });
+ if(plan.status!=="PLANNED")return;
+ const signature=JSON.stringify(plan.systems.map(s=>[s.systemID,s.factionID,s.mode]));
+ if(warSovProjection===signature)return;
+ warSovProjection=signature;
+ require("./coopRuntimeProbe").observe("living-native-war-sovereignty-projection",null,null,{
+  status:"PROJECTED_VIEW",counts:plan.counts,
+  systems:plan.systems.map(s=>({systemID:s.systemID,factionID:s.factionID,
+   state:s.state,mode:s.mode,reason:s.reason})),
+  evidence:"MILITARY_CONTROL_REPORTED_NATIVE_CLAIM_ONLY_WHEN_STRUCTURE_BACKED"
+ });
+}
 function advanceNativeWarOpening(){
  const {enabled}=require("./coopWarMobilizer");
  if(!enabled(process.env))return warSkip("opening","WAR_FLAGS_OFF");
@@ -1686,6 +1721,7 @@ function start(){
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   runPhase("native-faction-war-assault",advanceNativeWarAssault);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
+  runPhase("native-faction-war-sovereignty-projection",advanceNativeWarSovereigntyProjection);
   runPhase("native-faction-war-battle",advanceNativeWarCombat);
   runPhase("native-faction-war-objectives",advanceNativeWarObjectives);
   runPhase("native-ammo-observe",observeNativeAmmoConsumption);
