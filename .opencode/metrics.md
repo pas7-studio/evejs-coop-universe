@@ -461,3 +461,19 @@ overlay: unchanged OVERLAY_OK
 live: not run (no code change); last measured live facts kept: war_funding_diagnose every side NO_REAL_FACTION_INCOME, five earned pilots at balance 0
 metrics: tests_total=0 pass=0 fail=0 modules_added=0 modules_changed=0 live_events=0
 next: item 1 title half - coopWarRankTitle.applyToCharacter writes the stock character record title for coop-player-<id>, wired from coopWarKillMerit, with refusal tests
+
+## 2026-10-27T16:35Z - WAR GATE CROSSING: five real blockers named and removed (83a9b3bc..b24a32f2)
+done: gate staging no longer refuses silently (per-campaign skips with the exact precondition); ASSAULT campaigns are staged (the crossing leg was never considered) and the operator's explicit paper waiver is accepted and labelled; a warp the native runtime refuses as too close is closed by a real native follow order; the gate arrival is measured before the retry window; the transfer ledger accepts the ASSAULT leg and a waived campaign that has no treasury row.
+tests: node --test coop-war-gate-staging + coop-war-transfer-ledger + coop-war-gate-handoff + coop-npc-gate-travel + coop-faction-war-core + coop-faction-war-opening + coop-war-battle-director + coop-militia-war-player -> 96 pass / 0 fail
+overlay: OVERLAY_OK (moduleCurrent 380, moduleStale 0)
+live: OWNER STACK NOT RESTARTED AFTER THE DIRECTIVE. Read-only on the running build: living-native-war-gate-staging 16:19:30 -> AT_REAL_GATE + TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED; 15:35 WARP_REFUSED WARP_DISTANCE_TOO_CLOSE at gate 50016294; 16:20 PENDING:TRANSFER_NOT_VERIFIED. Measured: hull 980000023574 really warped to gate 50016294 (50016293 -> 30045344) and drifted ~15 km per 30 s tick afterwards.
+metrics: tests_total=96 pass=96 fail=0 modules_added=0 modules_changed=6 live_events=5
+next: NEEDS_OWNER_RESTART_WINDOW for the FW-037 live crossing proof (the owner's server must be recreated once to carry the ledger fix); meanwhile code-only items 13/15/16 continue.
+
+## 2026-10-27T16:36Z - OWNER DIRECTIVE: the live evejs stack is untouchable (docs only)
+done: recorded the binding rule (never compose up/restart/down/--force-recreate against project evejs; own project/ports/volumes for agent proofs; docker build is fine; NEEDS_OWNER_RESTART_WINDOW instead of a restart) and the consequence for the war proof.
+tests: not run (docs only)
+overlay: unchanged OVERLAY_OK
+live: the owner's evejs-server-1/evejs-market-1 were NOT touched after the directive
+metrics: tests_total=0 pass=0 fail=0 modules_added=0 modules_changed=0 live_events=0
+next: use the evejs-agents stack for any live proof; item 13 next.
