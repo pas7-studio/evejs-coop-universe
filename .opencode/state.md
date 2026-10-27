@@ -866,3 +866,99 @@ mining modules are deactivated for a haul by design. Next exact step is therefor
 narrow: sample the fleet while it is in `mining` and require
 `activeModuleEffects > 0` plus a settled cycle for at least one miner, and explain
 `WAREHOUSE_ARRIVAL_NOT_VERIFIED` for the haulers the deposit gate rejects.
+## 2026-10-27 (FW-015) - item 1 part a: the arrival gate explains itself (3d3eedf1)
+
+**Proven live (verbatim, container evejs-server-1).** The deposit refusal now
+carries its own reason instead of a bare status:
+
+```
+"event":"living-npc-warehouse-blocked","fleetID":960004609,"cargoID":980200001433,
+"reason":"ARRIVAL_NOT_VERIFIED","detail":{"ok":false,"term":"DWELL_PENDING",
+"gapMeters":0,"maxSurfaceGapMeters":2500,"mode":"GOTO","warping":false,
+"arrivedAtMs":1793086116032,"activeArrivedAt":1793086116032,"dwellMs":2000,
+"dwelled":false}
+```
+
+**The explanation (measured, not inferred).** The hauler was physically ON the
+station (surface gap 0 m, not warping) and the receipt was written 3 s later, so
+the gate was not refusing a real arrival. rrivedAtMs 1793086116032 belongs to
+event time 1793086113991: the native tick clock ran **2 041 ms ahead** of
+Date.now(). The trip loop measures dwell with the tick clock (
+ow), the
+deposit gate measured it with clock() = Date.now(), so the second subtraction
+was negative and DWELL_PENDING was reported forever. One clock now decides: the
+tick clock travels into deposit({nowMs}) -> explainArrival.
+
+**Three fixes in the same commit.**
+1. explainArrival + detail on the refusal + rrival_diagnose admin action
+   (read-only, uses the LIVE director's own rrivals map).
+2. A warehouse receipt names the **ore owner** (deposit goes into the owner's
+   hangar); the manifest names the **station corporation**. Both files compared
+   them, so every real deposit was refused as
+   MANIFEST_WAREHOUSE_RECEIPT_CONFLICT (live proof: manifest corp 1000031,
+   receipt corp 1000129, quantity/type/station identical). The owner is now taken
+   from the manifest row (new manifests record the pre-warp cargo owner) or from
+   the physical stack, which the native itemStore check must still prove.
+3. 	ransferCargo never loads ore into a hauler an active manifest declared.
+   Live: new loads at 07:27:03 and 07:30:08 turned the pending trip into
+   ALIFE12_ALIFE12_UNDECLARED_HAUL_CARGO, so it could never close.
+
+**NEXT ACTION (exact).** Item 1 part b: wait for the pending 30000144 manifest to
+close (the journal deadline is 15 min; the trip now cannot gain undeclared cargo),
+then sample mining_fleet_diagnose WHILE state=mining and require
+ctiveModuleEffects > 0 for at least one miner plus a settled cycle
+(living-mining-cycle-settled with 
+extCargo rising). Only then item 2 (real
+pirate kill -> wreck -> loot -> casualty ledger -> merit).
+
+## 2026-10-27 - ITEM 1 CLOSED (live): the fleet mines at the belt, ore really rises
+
+**Proven live (container evejs-server-1, read-only probes, verbatim).**
+
+```
+{"at":"2026-10-27T08:06:01.256Z","fleets":[{"fleet":960004609,"system":30000144,
+ "state":"mining","act":13,"belt":13,
+ "active":["980000016027:2","980000016144:2","980000016145:2"]}]}
+```
+
+13 of 13 miners carry 2 live module effects each and all 13 sit within 200 km of a
+real belt. The settled cycle (ore really rising):
+
+```
+{"at":"2026-10-27T08:01:02.383Z","event":"living-mining-cycle-settled","shipID":980000016470,
+ "systemID":30000144,"status":"COMMITTED","rockID":5020484726851,"moduleID":980100051175,
+ "oreTypeID":17470,"quantity":1874,"beforeRock":228126,"afterRock":226252,
+ "cargoID":980200010837,"nextCargo":3748,"replayed":false}
+```
+
+and the delivery leg really completes now: living-native-haul-delivered fleetID
+960004609 DELIVERED at 07:54:57Z and 07:56:58Z.
+
+**Why the deposit gate kept refusing (the answer to the open question).**
+WAREHOUSE_ARRIVAL_NOT_VERIFIED was DWELL_PENDING with gapMeters 0: the hauler
+was physically on the station, not warping, and the receipt appeared 3 s later.
+The tick clock ran **2 041 ms ahead** of Date.now(), the trip measured dwell with
+the tick clock and the deposit gate with the wall clock. One clock now decides
+(deposit({nowMs})). The manifest side had a second, independent cause: the
+receipt names the **ore owner** and the manifest names the **station corporation**,
+and both files compared them (live: manifest corp 1000031 vs receipt corp 1000129,
+quantity/type/station identical), so every real deposit was rejected.
+
+**Two more deadlocks found and fixed on the way.**
+1. A superseded manifest (all declared rows proven, the hull carrying ore the
+   manifest never declared) lost its identity in the arrival wrapper, so start()
+   answered the same pause on every tick and the fleet sat in "loaded" 20 min
+   (a57aa3ea).
+2. An aggressed stock fleet can never resume: the stock auto-resume delay defaults
+   to 0, so esumeAtMs stays 0 and state stays "aggressed" forever. The live
+   profile now sets the real stock knob EVEJS_MINING_NPC_FLEET_AUTO_RESUME_DELAY_MS=120000
+   (no code change, no gate relaxed). mining_fleet_diagnose publishes
+   esumeInMs/esumeOverdue/esponseWing/lastAggressedAtMs so this is
+   visible instead of inferred.
+
+**NEXT ACTION (exact).** Item 2: the Serpentis cruiser 980000018058 (300 real
+charges, live attack order on miner 980000015943 in New Caldari 30000145) must
+really kill a miner: repeated living-native-weapon-event, measured HP loss, a
+real wreck with stored loot, living-native-war-casualty, and merit. The 30000145
+fleet must leave "aggressed" first (auto-resume 120 s after the last aggression,
+and only when its response wing is gone) - esumeInMs/esponseWing say which.

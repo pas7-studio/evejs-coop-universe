@@ -226,6 +226,12 @@ function createMiningFleetDiagnose({
       haulerNextArrivalInMs: Number(fleet.haulerNextArrivalAtMs)
         ? Math.max(0, Number(fleet.haulerNextArrivalAtMs) - now()) : 0,
       noCargo: fleet.coopStationNoCargo === true,
+      // Why an aggressed fleet never returns to mining: the stock resume needs
+      // now >= resumeAtMs AND no surviving response wing. Both are reported.
+      resumeInMs: Number(fleet.resumeAtMs) ? Math.max(0, Number(fleet.resumeAtMs) - now()) : 0,
+      resumeOverdue: Number(fleet.resumeAtMs) > 0 && now() >= Number(fleet.resumeAtMs),
+      lastAggressedAtMs: Number(fleet.lastAggressedAtMs) || 0,
+      responseWing: Array.isArray(fleet.responseEntityIDs) ? fleet.responseEntityIDs.length : 0,
       trip,
       journal: journal(systemID, pos(fleet.fleetID)),
     };
