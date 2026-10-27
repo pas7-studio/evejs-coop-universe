@@ -2667,3 +2667,33 @@ path is the registry, and that one works.
 Still open: the formation batch warp (FW-030) has no live case yet - garrison hulls
 spawn close enough to the enemy that they engage without a group warp. The next
 natural trigger is a side mustering in its source system and travelling together.
+
+## FW-034: the client advantage panel now answers for OUR pair (2026-10-27T22:50Z)
+
+The owner reported that the faction-warfare window works for the other warzone but
+not for Caldari/Gallente: the map is empty for ours and the "advantages" tab spins
+forever instead of erroring. Measured on the running server:
+
+- The map surface is fine: `fwWarzoneSolarsystem.GetAllWarzonesOccupationStates`
+  returns warzone 2 = {30003837: owner 500004 / occupier 500004 / not contested,
+  30045344: owner 500001 / occupier 500004 / CONTESTED}. So the map data for our
+  pair really exists; an empty client view is a client-side cache, not missing data.
+- The advantage surface was empty: `fwVictoryPointMgr.GetAllVictoryPointStates` and
+  `GetLocalVictoryPointState` are served from `stateBySolarSystemID` /
+  `session.fwVictoryPointStatesBySolarSystemID`, and NOTHING in this build fills
+  them, so the client waits on a system it will never receive. The fw-advantage
+  express gateway (`eve_public.faction.activity.GetSolarSystemScoresRequest`) reads
+  `context.fwAdvantageScoresBySolarSystemID`, which is also never set.
+
+New FW-034 `integration/coopWarAdvantage.cjs` (`EVEJS_COOP_WAR_ADVANTAGE=1`, default
+OFF) derives both surfaces from evidence we already hold and invents nothing:
+`contribution(faction) = 1000 * enemy wrecks that faction took in this system +
+100 * its hulls present`, `score = the larger side`, `threshold = 75 000` (stock).
+Two L2 hooks feed it: `fwVictoryPointMgrService` (both handlers) and the
+`fw-advantage` gateway service.
+
+Live probe in the running container:
+  ALL   {30003837: {0, 75000}, 30045344: {3200, 75000}}
+  LOCAL [30045344, {3200, 75000}]
+  SCORES [{500001, 3200}, {500004, 1100}]
+  snapshot 30045344: Caldari 3 wrecks taken / 2 hulls, Gallente 1 wreck / 1 hull.
