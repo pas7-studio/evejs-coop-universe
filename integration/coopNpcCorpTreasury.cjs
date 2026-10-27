@@ -31,6 +31,15 @@ const pos = (x) => {
 };
 const cents = (isk) => Math.round(Number(isk) * 100);
 
+function loadWallet() {
+  try {
+    return require("./coopCorpWallet.cjs");
+  } catch (error) {
+    if (error && error.code === "MODULE_NOT_FOUND") return require("./coopCorpWallet");
+    throw error;
+  }
+}
+
 function atomicWrite(file, value, fsApi) {
   fsApi.mkdirSync(path.dirname(file), {recursive: true});
   const tmp = file + ".tmp-" + process.pid;
@@ -95,12 +104,14 @@ function run(options = {}) {
   if (!(total > 0)) return {status: "NO_PILOT_EARNINGS", moved: 0};
 
   const gameStore = options.gameStore || require("../gameStore");
-  if (typeof gameStore.read !== "function" || typeof gameStore.write !== "function")
-    return {status: "GAMESTORE_UNAVAILABLE", moved: 0};
-  const pointer = "/corporations/" + corporationID + "/wallet";
-  const current = gameStore.read("corporationRuntime", pointer);
-  const divisions = current && current.success === true ? walletOf(current.data) : null;
-  if (!divisions) return {status: "CORP_WALLET_UNAVAILABLE", moved: 0};
+  // The corporation's wallet is owned by the native corporation runtime. Reading it as a
+  // raw store pointer reported CORP_WALLET_UNAVAILABLE forever on a world whose runtime
+  // table had never been bootstrapped, while the pilots really held earned ISK.
+  const wallet = loadWallet().readWallet({corporationState: options.corporationState,
+    gameStore, corporationID});
+  if (wallet.status !== "OK")
+    return {status: wallet.status, moved: 0, reason: wallet.reason || ""};
+  const divisions = wallet.divisions;
   const before = Number(divisions[DIVISION] && divisions[DIVISION].balance);
   if (!Number.isFinite(before) || before < 0) return {status: "CORP_WALLET_INVALID", moved: 0};
 
@@ -115,24 +126,26 @@ function run(options = {}) {
   try { atomicWrite(ledgerFile, ledger, fsApi); }
   catch (error) { return {status: "LEDGER_WRITE_FAILED", moved: 0, reason: String(error && error.message).slice(0, 80)}; }
 
-  const next = {divisions: {...divisions,
-    [DIVISION]: {...(divisions[DIVISION] || {}), balance: Math.round((before + total) * 100) / 100}}};
-  const written = gameStore.write("corporationRuntime", pointer, next);
-  if (!written || written.success !== true) {
+  const written = loadWallet().applyDelta({corporationState: options.corporationState,
+    gameStore, corporationID, division: DIVISION, delta: total});
+  if (!written || written.status !== "OK") {
     for (const entry of earnings) {
       const record = debited[entry.pilotID] || {};
       debited[entry.pilotID] = {...record, balance: entry.isk};
     }
     try { atomicWrite(ledgerFile, ledger, fsApi); } catch (_error) { /* reported below */ }
-    return {status: "CORP_CREDIT_FAILED", moved: 0,
-      reason: String(written && written.errorMsg || "UNKNOWN").slice(0, 80)};
+    return {status: String((written && written.status) || "CORP_CREDIT_FAILED"), moved: 0,
+      reason: String((written && (written.reason || written.status)) || "UNKNOWN").slice(0, 80)};
   }
+  const after = Number.isFinite(Number(written.balance))
+    ? Number(written.balance)
+    : Math.round((before + total) * 100) / 100;
   if (typeof gameStore.flushTableSync === "function") {
     const flushed = gameStore.flushTableSync("corporationRuntime", {log: false});
     if (!flushed || flushed.success !== true) return {status: "CORP_FLUSH_UNCERTAIN", moved: total};
   }
   const receipt = {version: 1, status: "SWEPT", corporationID, division: DIVISION,
-    amountISK: total, beforeISK: before, afterISK: Math.round((before + total) * 100) / 100,
+    amountISK: total, beforeISK: before, afterISK: after,
     pilots: earnings, at: Number(options.now) || Date.now()};
   try {
     atomicWrite(path.join(root, "corp-treasury", corporationID + ".json"), receipt, fsApi);

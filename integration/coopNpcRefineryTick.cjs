@@ -100,6 +100,17 @@ function loadTreasury() {
   }
 }
 
+// The corporation wallet has exactly one reader/writer pair; both the tunnel above and
+// the fee below must go through it.
+function loadWallet() {
+  try {
+    return require("./coopCorpWallet.cjs");
+  } catch (error) {
+    if (error && error.code === "MODULE_NOT_FOUND") return require("./coopCorpWallet");
+    throw error;
+  }
+}
+
 function fundTreasury({options, env, ownerID}) {
   try {
     const treasury = options.treasury || loadTreasury();
@@ -110,6 +121,7 @@ function fundTreasury({options, env, ownerID}) {
       resolveCorporation: typeof options.pilotCorporation === "function"
         ? options.pilotCorporation : null,
       gameStore: options.gameStore, fsApi: options.fsApi, now: options.now,
+      corporationState: options.corporationState,
       observe: options.observe, probe: options.probe});
   } catch (error) {
     return {status: "TREASURY_UNAVAILABLE", moved: 0,
@@ -119,28 +131,29 @@ function fundTreasury({options, env, ownerID}) {
 
 // Pay a real station fee from the corporation's own wallet and leave a durable
 // receipt the refinery can verify by name. Never creates ISK: the debit is the source.
-function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, fsApi = require("node:fs")}) {
+function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, corporationState, fsApi = require("node:fs")}) {
   const amount = Math.round(Number(amountISK) * 100) / 100;
   if (!(amount > 0)) return {status: "FEE_INVALID"};
-  const pointer = "/corporations/" + ownerID + "/wallet";
-  const current = gameStore.read("corporationRuntime", pointer);
-  const divisions = current && current.success === true && current.data && current.data.divisions;
-  if (!divisions || typeof divisions !== "object") return {status: "CORP_WALLET_UNAVAILABLE"};
+  const wallet = loadWallet().readWallet({corporationState, gameStore,
+    corporationID: ownerID});
+  if (wallet.status !== "OK") return {status: wallet.status};
+  const divisions = wallet.divisions;
   const before = Number(divisions[1000] && divisions[1000].balance);
   if (!Number.isFinite(before) || before < 0) return {status: "CORP_WALLET_INVALID"};
   if (before < amount) return {status: "CORP_WALLET_INSUFFICIENT", iskCost: amount, balanceISK: before};
-  const next = {divisions: {...divisions,
-    [1000]: {...(divisions[1000] || {}), balance: Math.round((before - amount) * 100) / 100}}};
-  const written = gameStore.write("corporationRuntime", pointer, next);
-  if (!written || written.success !== true) return {status: "CORP_DEBIT_FAILED"};
+  const written = loadWallet().applyDelta({corporationState, gameStore,
+    corporationID: ownerID, division: 1000, delta: -amount});
+  if (!written || written.status !== "OK") return {status: String((written && written.status) || "CORP_DEBIT_FAILED")};
   if (typeof gameStore.flushTableSync === "function") {
     const flushed = gameStore.flushTableSync("corporationRuntime", {log: false});
     if (!flushed || flushed.success !== true) return {status: "CORP_DEBIT_FLUSH_UNCERTAIN"};
   }
   const receiptID = pos(oreItemID);
+  const after = Number.isFinite(Number(written.balance))
+    ? Number(written.balance) : Math.round((before - amount) * 100) / 100;
   const receipt = {version: 1, status: "PAID", receiptID, amountISK: amount,
     corporationID: pos(ownerID), stationID: pos(stationID), oreItemID: receiptID,
-    beforeISK: before, afterISK: Math.round((before - amount) * 100) / 100,
+    beforeISK: before, afterISK: after,
     at: Number(now) || Date.now()};
   try {
     const dir = require("node:path").join(root, "refinery-fees");
@@ -205,6 +218,15 @@ function run(options = {}) {
   // its pilots actually earned. Sweep pilot earnings into the corp wallet first; the
   // pilot-ledger debit is the only source of the credit, so nothing is minted.
   const funded = fundTreasury({options, env, ownerID});
+  // Say what the sweep decided instead of failing silently: a corporation that never
+  // receives its pilots' ISK keeps the refinery blocked forever, and "moved 0" with no
+  // reason is indistinguishable from a missing wallet authority.
+  if (String(env.EVEJS_COOP_TREASURY_TRACE || "") === "1" &&
+    !(funded && funded.status === "SWEPT" && Number(funded.moved) > 0))
+    note(options, "living-corp-treasury-skipped", {systemID: options.systemID, ownerID,
+      status: String((funded && funded.status) || "NO_RESULT"),
+      reason: String((funded && (funded.reason || funded.error)) || "").slice(0, 120),
+      moved: Number((funded && funded.moved) || 0)});
   if (funded && funded.status === "SWEPT" && Number(funded.moved) > 0)
     note(options, "living-corp-treasury-swept", {systemID: options.systemID, ownerID,
       movedISK: Number(funded.moved),
@@ -224,7 +246,8 @@ function run(options = {}) {
         const gameStore = options.gameStore || require("../gameStore");
         const root = options.root || env[DIR_FLAG];
         paid = payFee({gameStore, root, ownerID, stationID, oreItemID: Number(row.itemID),
-          amountISK: outcome.iskCost, now: options.now, fsApi: options.fsApi});
+          amountISK: outcome.iskCost, now: options.now, fsApi: options.fsApi,
+          corporationState: options.corporationState});
       } catch (error) {
         paid = {status: "FEE_PAYMENT_UNAVAILABLE", reason: String(error && error.message).slice(0, 80)};
       }
