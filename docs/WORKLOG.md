@@ -1706,3 +1706,8 @@ Evidence: dry-run + apply on coopVirtualWorldRuntime.js: parent 5330->4419, expo
 Why: the faction-warfare window showed 0-0 because the warzone dict carried only the two systems our war state registers, while the client counts every system of the warzone; it now serves the whole warzone derived from the regions the war actually touches (Black Rise + Placid) with militia corporation ids
 Where: docs/WORKLOG.md
 Evidence: fork commits a52cf22, 0260078; live: warzone 2 = 118 systems, byOwner {1000180:47, 1000181:71}, contested [30045344]; GetLocalOccupationState 30045344 owner 1000180 occupier 1000181 contested true; map payload contains our campaign 587443003 covering 30003837+30045344
+### 2026-10-27T23:25Z · 95cd8df · L2 · coop: mirror the every-attempt follow in the archived generator
+
+Why: The hauler follow order was issued only every 24 failed haul attempts while the miners kept being re-accelerated, so the gap never closed inside the ten-minute haul budget.
+Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
+Evidence: agents world: one successful load/deliver/refine/lift, then two fleets stalled in hauling with hauler-to-miner gaps 27930 m and 78969 m; follow now issued every attempt, warp stays behind attempts===1||attempts%24, hauler mid-warp reports ALREADY_WARPING; fork ad1816a; 6 wiring tests pass
