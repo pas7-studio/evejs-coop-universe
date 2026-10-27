@@ -1,6 +1,6 @@
 # EveJS Co-op Universe
 
-**A private, 2+-player "living universe" on top of [EveJS](https://github.com/gameboys84/EveJS):
+**A private, 2++-player "living universe" on top of [EveJS](https://github.com/gameboys84/EveJS):
 one authoritative server, autonomous NPC pilots that really mine, haul, trade, fight
 and die, and persistent consequences two or more players can join in on.**
 
@@ -104,7 +104,7 @@ default OFF unless the runbook says otherwise.
   restart-safe, with an exact refusal reason for every blocked step.
 - **NPC combat with receipts:** native hostility between physically linked rival
   factions, wrecks, stored loot, kills credited only on real weapon + HP evidence.
-- **PvE for 2+ players:** native raids and sites, duo mission
+- **PvE for 2++ players:** native raids and sites, duo mission
   instances, boss loot custody, escort contracts with real warp, attendance,
   rescue and settlement fences.
 - **Market depth:** NPC buyers/sellers, player↔player fills, escrow, refunds, taxes,
