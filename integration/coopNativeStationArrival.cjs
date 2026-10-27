@@ -779,8 +779,12 @@ const saleBaseline=new Map();
   // Nothing departs, so nothing is acknowledged as a departure either.
   let warpedHaulers=0;
   for(const [index,id] of ships.entries()){
-   const alreadyThere=stableAt(findShip(scene,id,systemID),destination);
-   if(alreadyThere){
+   // A hauler that is ALREADY physically at this station needs no warp, and the
+   // native warp refuses one that close (measured WARP_DISTANCE_TOO_CLOSE every
+   // time a new trip was planned while the haulers sat at the station after the
+   // previous trip expired, which deadlocked the fleet in "loaded" for good).
+   // Nothing departs, so nothing is acknowledged as a departure either.
+   if(stableAt(findShip(scene,id,systemID),destination)){
     arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
     continue;
    }
@@ -793,8 +797,20 @@ const saleBaseline=new Map();
     broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
     ingressDurationMs:Math.max(250,Number(options.ingressDurationMs)||250,
      realIngress)});}catch(error){ack=null;warpError=String(error?.message||error).slice(0,120);}
-   if(!truthy(ack)){delete fleet.coopStationArrival;
-    for(const raw of ships)arrivals.delete(raw);
+   if(!truthy(ack)){
+    // The native runtime refuses a warp that is too short. A hauler that close to
+    // its own station is already nearly there, so it flies the last kilometres with
+    // a real subwarp approach and is not counted as a departing hull. Measured:
+    // WARP_DISTANCE_TOO_CLOSE deadlocked every new trip while the haulers sat at
+    // the station after the previous trip expired.
+    if(String(ack?.errorMsg||ack?.error||warpError||"").includes("WARP_DISTANCE_TOO_CLOSE")){
+     try{scene.followShipEntity(findShip(scene,id,systemID),destination.stationID,1_000,
+      {queueHistorySafeContract:true,suppressFreshAcquireReplay:true});}
+     catch(_error){/* the stock movement retries on the next tick */}
+     arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
+     continue;
+    }
+    delete fleet.coopStationArrival;    for(const raw of ships)arrivals.delete(raw);
     // A rejected warp is the difference between "the fleet is working" and
     // "the fleet is silently stuck", so it must never be swallowed.
     const rejection={fleetID,haulerID:id,stationID:destination.stationID,
@@ -979,8 +995,12 @@ const saleBaseline=new Map();
    // the remainder is deposited. The sale is asynchronous (market RPC), so the
    // arrival pauses until it settles instead of blocking the native tick.
    let sale=null;
+   // The pre-sale snapshot key is used again AFTER the sale block (the settled fill
+   // is recorded per hauler), so it must not be block-scoped: "baselineKey is not
+   // defined" threw out of the whole native mining tick and no ore was ever
+   // deposited, which kept the fleet in "loaded" and the belt empty.
+   const baselineKey=Number(trip.stationID)+":"+Number(id);
    if(typeof beforeDeposit==="function"&&cargo.length){
-    const baselineKey=Number(trip.stationID)+":"+Number(id);
     if(!saleBaseline.has(baselineKey))
      saleBaseline.set(baselineKey,new Map(cargo.map(row=>
       [Number(row.cargoID),Number(row.quantity)])));
@@ -1027,7 +1047,6 @@ const saleBaseline=new Map();
     for(const row of deliverable)remaining.set(Number(row.cargoID),Number(row.quantity));
     // Prefer the snapshot taken when the fill was requested; the hull may already be
     // empty by the time the asynchronous settlement is readable.
-    const baselineKey=Number(trip.stationID)+":"+Number(id);
     const beforeMap=saleBaseline.get(baselineKey)||null;
     const sourceRows=beforeMap?cargo.filter(row=>beforeMap.has(Number(row.cargoID)))
      .map(row=>({...row,quantity:beforeMap.get(Number(row.cargoID))})):cargo;
