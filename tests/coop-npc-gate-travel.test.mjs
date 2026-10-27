@@ -99,25 +99,37 @@ test("a refused native transfer is reported with its own adapter reason",()=>{
   [["AT_REAL_GATE",undefined],
    ["TRANSFER_REFUSED","WAR_HANDOFF_PREVIOUS_STATE_UNVERIFIED"]]);
 });
-test("a native warp refused as too close becomes a real subwarp follow to the same gate",()=>{
+test("a native warp refused as too close becomes a real follow order on the same gate",()=>{
  const x=fixture();x.ship.position.x=900000;
  const followed=[];
  const close=createGateTravel({clock:()=>1000,
   warp:()=>({success:false,errorMsg:"WARP_DISTANCE_TOO_CLOSE"}),
   getGate:id=>x.gates.get(id),
-  followEntity:(ship,gateID,range,options)=>{
-   followed.push({entityID:ship.itemID,gateID,range,options:Object.keys(options)});
+  followEntity:()=>{throw Error("the durable order must be preferred")},
+  orderFollow:(entityID,gateID,options)=>{
+   followed.push({entityID,gateID,options});
    return true;
   }});
  const r=close.tick({systemID:A,scene:x.scene,assignments:x.links,
   route:[A,B],roles:{"coop-pilot-005":{role:"trader"}},getController:()=>x.controller});
  assert.deepEqual(r.orders.map(o=>o.action),["NATIVE_SUBWARP_TO_REAL_GATE"]);
  assert.equal(r.orders[0].sourceGateID,x.sourceGate.itemID);
- assert.deepEqual(followed,[{entityID:x.ship.itemID,gateID:x.sourceGate.itemID,range:1000,
-  options:["queueHistorySafeContract","suppressFreshAcquireReplay"]}]);
+ assert.equal(r.orders[0].order,"MANUAL_FOLLOW_ORDER");
+ assert.deepEqual(followed,[{entityID:x.ship.itemID,
+  gateID:x.sourceGate.itemID,options:{rangeMeters:1000}}]);
  assert.equal(close.snapshot()[0].phase,"SUBWARP_APPROACH");
  // the hull never moved: only a real native order was issued
  assert.equal(x.ship.position.x,900000);
+});
+test("a hull already flying our own follow order to the gate stays a candidate",()=>{
+ const x=fixture();x.ship.position.x=0;
+ x.controller.currentTargetID=x.sourceGate.itemID;
+ x.controller.manualOrder={type:"follow",targetID:x.sourceGate.itemID};
+ const r=x.tick();
+ assert.deepEqual(r.orders.map(o=>o.action),["NATIVE_WARP_TO_REAL_GATE"]);
+ // an engaged hull is still refused
+ x.controller.manualOrder=null;
+ assert.equal(x.tick().rejections[0].reason,"CONTROLLER_ENGAGED");
 });
 test("a warp refused for any other reason stays a named refusal",()=>{
  const x=fixture();x.ship.position.x=0;

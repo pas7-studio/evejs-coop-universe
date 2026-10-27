@@ -1087,6 +1087,16 @@ function advanceNativeWarGateStaging(){
    getController:id=>controllers.getControllerByEntityID(id),
    bridge:guard,
    transfer:warGateHandoff?(args=>warGateHandoff.transfer(args)):null,
+   // The durable, behaviour-loop-respecting form: a native manual movement order
+   // on the real gate entity. A one-shot follow loses to the NPC's own loop.
+   orderFollow:(entityID,targetID,options)=>{
+    try{
+     const answer=require("./npc/npcService").issueManualOrder(entityID,{
+      type:"follow",targetID,followRangeMeters:Number(options?.rangeMeters)||1000,
+      allowWeapons:false});
+     return answer?.success===true;
+    }catch{return false}
+   },
    isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true,
    isAmmoRetreat:(systemID,id)=>nativeAmmoSupply?.activeIDs(systemID)?.has(id)===true
   });

@@ -33,7 +33,8 @@ function connectedGates({sourceSystemID,targetSystemID,sourceScene,getGate}={}){
  return result.sort((a,b)=>a.sourceGateID-b.sourceGateID);
 }
 function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
- approachMeters=2500,maxShipsPerTick=2,transfer=null,followEntity=null}={}){
+ approachMeters=2500,maxShipsPerTick=2,transfer=null,followEntity=null,
+ orderFollow=null}={}){
  if(typeof warp!=="function"||typeof getGate!=="function"||typeof clock!=="function"||
   !Number.isSafeInteger(dwellMs)||dwellMs<30000||
   !Number.isFinite(approachMeters)||approachMeters<500||approachMeters>2500||
@@ -54,15 +55,23 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
   if(!gates.length)return {status:"NO_RECIPROCAL_NATIVE_GATE",orders:[],observations:[]};
   const now=clock(),orders=[],observations=[],candidates=[],rejections=[];
   // The native warp refuses a target that is already close (measured
-  // WARP_DISTANCE_TOO_CLOSE) and then the hull would sit at that distance for
-  // ever: the last kilometres are covered by a REAL subwarp follow order to the
-  // same gate entity, never by moving the ship.
-  const followShip=(ship,gateID)=>{try{
-   if(typeof followEntity==="function")return followEntity(ship,gateID,1000,{
-    queueHistorySafeContract:true,suppressFreshAcquireReplay:true})===true;
-   return scene?.followShipEntity?.(ship,gateID,1000,
-    {queueHistorySafeContract:true,suppressFreshAcquireReplay:true})===true;
-  }catch{return false}};
+  // WARP_DISTANCE_TOO_CLOSE) and a ONE-SHOT subwarp follow loses to the NPC's own
+  // behaviour loop, which flies the hull back home. The durable, loop-respecting
+  // form is a native manual movement order (type follow) on the gate, so the
+  // hull closes the last kilometres itself. Nothing is ever moved by hand.
+  const followShip=(ship,gateID)=>{
+   try{
+    if(typeof orderFollow==="function"&&
+     orderFollow(ship.itemID,gateID,{rangeMeters:1000})===true)return "MANUAL_FOLLOW_ORDER";
+    if(typeof followEntity==="function"&&
+     followEntity(ship,gateID,1000,{queueHistorySafeContract:true,
+      suppressFreshAcquireReplay:true})===true)return "SUBWARP_FOLLOW";
+    if(scene?.followShipEntity?.(ship,gateID,1000,
+     {queueHistorySafeContract:true,suppressFreshAcquireReplay:true})===true)
+     return "SUBWARP_FOLLOW";
+   }catch{return null}
+   return null;
+  };
   const reject=(a,id,reason)=>rejections.push({entityID:id,pilotID:a?.pilotID,reason});
   for(const a of assignments){
    const id=pos(a?.entityID);
@@ -82,14 +91,20 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
    if(!c){reject(a,id,"NO_NATIVE_CONTROLLER");continue}
    if(Number(c.entityID)!==id){reject(a,id,"CONTROLLER_ENTITY_MISMATCH");continue}
    if(Number(c.systemID)!==system){reject(a,id,"CONTROLLER_SYSTEM_MISMATCH");continue}
-   if(Number(c.currentTargetID)>0){reject(a,id,"CONTROLLER_ENGAGED");continue}
+   // A hull already flying our own follow order to this gate is NOT engaged: it
+   // is closing on the gate we asked it to reach.
+   const followingGate=c.manualOrder?.type==="follow"&&
+    Number(c.manualOrder.targetID)===Number(c.currentTargetID);
+   if(Number(c.currentTargetID)>0&&!followingGate){
+    reject(a,id,"CONTROLLER_ENGAGED");continue}
    if(Number(c.lastAggressorID)>0&&
       now-Number(c.lastAggressedAtMs)<120000){reject(a,id,"RECENTLY_AGGRESSED");continue}
    if(c.manualOrder?.type==="attack"){reject(a,id,"MANUAL_ATTACK_ORDER");continue}
-   if(String(ship.mode||"").toUpperCase().includes("WARP")){
+   if(String(ship.mode||"").toUpperCase().includes("WARP")&&!followingGate){
     reject(a,id,"SHIP_WARPING:"+String(ship.mode));continue}
-   if(ship.pendingWarp){reject(a,id,"PENDING_WARP");continue}
-   if(ship.warpState){reject(a,id,"WARP_STATE_SET:"+String(ship.warpState));continue}
+   if(ship.pendingWarp&&!followingGate){reject(a,id,"PENDING_WARP");continue}
+   if(ship.warpState&&!followingGate){
+    reject(a,id,"WARP_STATE_SET:"+String(ship.warpState));continue}
    candidates.push({id,pilotID:a.pilotID,role,ship});
   }
   let issued=0;
@@ -118,17 +133,19 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
       action:"NATIVE_WARP_TO_REAL_GATE"});
     }else{
      const reason=String(result?.errorMsg||"NATIVE_WARP_NOT_ACCEPTED");
-     // A real subwarp follow replaces a warp the native runtime refuses because
-     // the hull is already at the gate: same gate entity, real movement, and the
+     // A real follow order replaces a warp the native runtime refuses because the
+     // hull is already at the gate: same gate entity, real movement, and the
      // arrival is still only claimed by a measured surface gap.
-     if(reason.includes("WARP_DISTANCE_TOO_CLOSE")&&followShip(pilot.ship,gate.sourceGateID)){
+     const followed=reason.includes("WARP_DISTANCE_TOO_CLOSE")?
+      followShip(pilot.ship,gate.sourceGateID):null;
+     if(followed){
       pending.set(key,{pilotID:pilot.pilotID,sourceSystemID:system,
        targetSystemID:destination,gateID:gate.sourceGateID,
        nextAt:now+30000,phase:"SUBWARP_APPROACH"});
       issued++;
       orders.push({pilotID:pilot.pilotID,entityID:pilot.id,
        sourceGateID:gate.sourceGateID,targetSystemID:destination,
-       action:"NATIVE_SUBWARP_TO_REAL_GATE"});
+       action:"NATIVE_SUBWARP_TO_REAL_GATE",order:followed});
       continue;
      }
      observations.push({pilotID:pilot.pilotID,entityID:pilot.id,
