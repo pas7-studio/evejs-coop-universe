@@ -1668,3 +1668,8 @@ Evidence: gh api repos/pas7-studio/EveJS default_branch=coop/pas7std; git -C che
 Why: Recorded the three live-proven fixes and the one measured blocker with the exact admin-bridge evidence, so the next session fixes the real next cause instead of re-running the loop.
 Where: docs/WORKLOG.md
 Evidence: agents world: 32 cycles, treasury-swept 38 791 223.64 ISK, 4 refined COMMITTED; mining_fleet_diagnose targetPoint ~1.0e16 m vs 2.5 AU position, hauler gap 24-90 km oscillating
+### 2026-10-27T22:43Z · 7042475 · DOCS · docs: state after the three live fixes and the stranded-hull evidence
+
+Why: The stranded-hull cause is our own order bridge refusing to replace a stuck native movement order and failing miner identity, not a bogus target point; recorded so the next edit goes to the bridge.
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: mining_fleet_diagnose: hauler BLOCKED COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE with movementBusy true and leaseOwner empty, miner BLOCKED COOP_NPC_ORDER_IDENTITY_UNVERIFIED, targetPoint 1.0e16 is a no-target sentinel

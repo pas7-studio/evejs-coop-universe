@@ -1,5 +1,35 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 23:00Z - the last blocker is our own order bridge, and it deadlocks
+
+`mining_fleet_diagnose` (read-only admin bridge) now answers the question exactly:
+
+  miner 980000000030  mode GOTO  belt 53 965 m  targetPoint ghost 1.0e16  order BLOCKED
+                     reason COOP_NPC_ORDER_IDENTITY_UNVERIFIED
+  hauler 980000000032 mode GOTO  ghost 1.0e16   order BLOCKED
+                     reason COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE
+                     state {warp:false, movementBusy:true, manualBusy:false, combat:false}
+                     leaseOwner ""
+
+Reading it: 1.0e16 is a SENTINEL ('no target'), not a computed point - so the earlier
+ghost-target hypothesis was wrong and the guard added in fork commit 0e317d9 fires on
+normal sentinel state (4 living-mining-order-reset, harmless but not the cure).
+The real deadlock: the hauler already owns a native movement command that goes
+nowhere, and the order bridge refuses to replace an ACTIVE movement order, while the
+miners cannot pass identity verification at all. So no hull can be re-aimed at its
+miner, the gap grows by the sentinel drift, and no ore is ever transferred.
+
+Next single step (fork, branch coop/pas7std): in the order bridge allow
+  (a) a mining-fleet movement order to REPLACE a native movement order whose target is
+      the no-target sentinel / whose ship is in the fleet's own minerEntityIDs or
+      haulerEntityIDs (the fleet record IS the identity proof), and
+  (b) the WAR lease rule to keep refusing everything else.
+Then prove: living-hauler-loaded -> delivered -> refined -> mineral lift -> sale.
+
+Already proven on this world today: mining without a client, corp treasury sweep
+(38 791 223.64 ISK), 4 refinery batches COMMITTED with the fee paid from the corp
+wallet. Those three legs need no further work.
+
 ## 2026-10-27 22:45Z - three real fixes landed, one measured blocker left
 
 PROVEN LIVE on `evejs-agents` (never on the owner's play stack):
