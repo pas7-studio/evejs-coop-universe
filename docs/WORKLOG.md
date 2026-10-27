@@ -1678,3 +1678,9 @@ Evidence: mining_fleet_diagnose: hauler BLOCKED COOP_NPC_ORDER_NATIVE_COMMAND_AC
 Why: While a mining fleet is hauling the state machine returns before the per-miner loop, so a hull left with a native full-throttle straight-line target (position + direction * 1.0e16) keeps flying away from its own belt and the hauler can never close on it.
 Where: tests/coop-park-runaway-miner.test.mjs
 Evidence: agents mining_fleet_diagnose: mode GOTO targetPoint 1.0e16, miner->rock 45765 m -> 49487 m in 29 s, hauler follow closed to 4 km then reopened 9536 -> 33406 m, zero living-hauler-loaded; fork commit ec33683 stops such a hull and parks miners in hauling/loaded; 3 wiring tests pass
+### 2026-10-27T23:04Z · deb2a50 · L2 · audit: measure the patch surface instead of guessing, and extract the alliance guard
+
+Why: Extracted the native alliance authority guard into one reusable, env-gated binder (engine commit 4f4ef83) and added the engine patch-surface audit with growth budgets
+Detail: coop-engine-audit.cjs measures co-op code inside stock EveJS files, monkey patching, source rewriting, the frozen legacy transform library and integration/ drift; budgets fail the run on growth (AUDIT_OK / AUDIT_REGRESSION). FORK_PATCH_AUDIT_20261028.md records the numbers: 392 engine modules, 56 stock files with 430 lines, zero runtime patching, 78 frozen patch scripts. First extraction: native a
+Where: AGENTS.md, docs/FORK_PATCH_AUDIT_20261028.md, integration/coopStructureAllianceGuard.cjs, scripts/coop-engine-audit.cjs, tests/coop-structure-alliance-guard-module.test.mjs
+Evidence: node scripts/coop-engine-audit.cjs -> AUDIT_OK exit=0; node --test alliance x3 -> pass 15 / fail 0; before/after chars 16450 -> 1707
