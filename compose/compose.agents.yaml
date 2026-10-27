@@ -50,6 +50,14 @@ services:
       # Temporary, agent-only: name the treasury decision when the corporation is not
       # funded, so "moved 0" can never masquerade as a healthy sweep.
       EVEJS_COOP_TREASURY_TRACE: "1"
+      # Measured 2026-10-27: with no client logged in, a scene that has no native
+      # controller deadline is put to sleep by stock cold-scene sleep, so
+      # `scene.tick()` never runs. The tick profiler then shows our overlay phases
+      # (npc-reconcile:*, observed-native-mining) and NO "mining"/"npc" section:
+      # the stock mining tick cannot fire, ships sit in mode STOP and no ore is
+      # ever cut. This is the stock native switch that keeps a scene ticking
+      # without sessions, which is exactly what a headless work world is.
+      EVEJS_DISABLE_NPC_COLD_SCENE_SLEEP: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.
