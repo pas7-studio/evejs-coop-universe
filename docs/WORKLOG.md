@@ -1455,3 +1455,37 @@ Why: the crossing leg is the ASSAULT attacker and the funding waiver is an expli
 Detail: Measured live, the first real crossing attempt: AT_REAL_GATE then TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED. Two causes, both the same silent rules that had blocked staging: - the ledger only accepted a PREPARING campaign, but the hull that must cross is exactly the ASSAULT attacker still outside the contested system; - it demanded a HELD escrow even for a campaign the operator exp
 Where: integration/coopFactionWarCore.cjs, integration/coopWarGateStaging.cjs, integration/coopWarTransferLedger.cjs, tests/coop-war-transfer-ledger.test.mjs
 Evidence: tests 57/57; live AT_REAL_GATE then TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED
+### 2026-10-27T16:30Z · 39d61fb · OPS · ops: agent work stack is a separate compose project, the owner's server is untouchable
+
+Why: Owner is playing on the evejs stack; agents need their own world so a rebuild never kicks him out
+Detail: compose/compose.agents.yaml overrides ports and volume names with !override so a second project cannot append 26000-26002 or share evejs-data; scripts/Start-Agents-Stack.ps1 always uses -p evejs-agents and refuses to start when an agent port is taken.
+Where: .opencode/state.md, compose/compose.agents.yaml, scripts/Start-Agents-Stack.ps1
+Evidence: docker compose config: project evejs-agents, published 41110/28443/25222/28000-28002, volumes evejs-agents-data/evejs-agents-images; owner stack untouched (evejs-server-1 healthy, 127.0.0.1 ports only)
+### 2026-10-27T16:31Z · b24a32f · L3 · FW-037: a waived campaign has no treasury row, and that is not a missing escrow
+
+Why: a waived campaign has no treasury row; requiring the row before the waiver made the waiver unreachable
+Detail: Live, on the FW-036 build: AT_REAL_GATE then TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED again. Exact cause: the treasury row itself was still required (t?.version===1) before the waiver was consulted, and a waived campaign has no treasury row at all because nothing was ever reserved. The supply verdict is now one expression: the campaign's own explicit waiver, or a complete HELD esc
+Where: integration/coopWarTransferLedger.cjs, tests/coop-war-transfer-ledger.test.mjs
+Evidence: tests/coop-war-transfer-ledger 12/12 + gate-handoff + gate-staging 39/39; live TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED on the FW-036 build
+### 2026-10-27T16:33Z · bf56a34 · OPS · ops: the play server and the work server are written down, work runs x5
+
+Why: Owner asked for a written rule: his play server is never deployed to or merged into without his request; agents get their own server, accelerated 5x for testing
+Detail: docs/TWO_STACKS_PLAY_AND_WORK.md + AGENTS.md pointer: compose project evejs is the owner's live game (deploy/merge only on his explicit restart window), evejs-agents is where agents prove things. The work stack shortens real durations 5x through knobs the code already reads: travel 120s->24s, clone recovery 30m->6m, manufacturing x0.2.
+Where: AGENTS.md, compose/compose.agents.yaml, docs/TWO_STACKS_PLAY_AND_WORK.md
+Evidence: docker exec evejs-agents-server-1 printenv -> EVEJS_COOP_VIRTUAL_TRAVEL_MS=24000, EVEJS_COOP_CLONE_RECOVERY_MS=360000, EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER=0.2, EVEJS_COOP_STACK=agents; play stack untouched: evejs-server-1 healthy on 127.0.0.1:26000
+### 2026-10-27T16:33Z · 6b82bb6 · DOCS · docs(ops): Local-Two-Client-Test.ps1 resolves to the play project, warn before use
+
+Why: Warn that the two-client test script has no -p and therefore targets the owner's play stack
+Where: docs/TWO_STACKS_PLAY_AND_WORK.md
+Evidence: scripts/Local-Two-Client-Test.ps1 Get-ComposeArgs: --project-directory + -f only, no -p; compose.yaml declares name: evejs
+### 2026-10-27T16:34Z · 54ec5bd · L2 · FW-038 (item 13, title half): a real player promotion reaches the character sheet
+
+Why: a co-op ledger title is invisible to the player; the stock character record title is what the client shows
+Detail: coopWarRankTitle.applyToCharacter writes the canonical rank title into the STOCK character record through characterState.updateCharacterRecord (the native writer that invalidates the record cache), so the client's character sheet shows it. It refuses a non coop-player-<characterID> key, an unknown rank, a key/record mismatch, a missing record and any title that is not the canonical text of that ra
+Where: integration/coopWarKillMerit.cjs, integration/coopWarRankTitle.cjs, tests/coop-war-rank-title.test.mjs
+Evidence: tests/coop-war-rank-title 10/10 + merit/kill-merit/bounty 22/22; no live deploy (owner stack not restarted)
+### 2026-10-27T16:35Z · 6733964 · DOCS · docs: state for the gate-crossing work, the restart window and the exact next item
+
+Why: The owner split the machine into a PLAY stack (his live game) and an agent WORK stack; every further proof must run on evejs-agents and the play stack must not be restarted.
+Where: .opencode/state.md
+Evidence: docs/TWO_STACKS_PLAY_AND_WORK.md; evejs-agents-server-1 env TIME_SCALE=5 GOVERNOR=1 FLEET_COUNT=2 MINERAL_LIFT=1; fresh world 448 event lines

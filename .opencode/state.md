@@ -1,5 +1,35 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 16:40Z - stack split: all further proofs run on evejs-agents
+
+Owner changed the rules (docs/TWO_STACKS_PLAY_AND_WORK.md, AGENTS.md): compose project
+`evejs` is the live game shared with his friend. NO deploy/rebuild/recreate/restart/down
+against it unless he explicitly asks for a restart window. Agents prove everything on
+`evejs-agents` (ports 28443/25222/28000-28002/41110, x5 pacing, separate volumes).
+
+Consequences for this session:
+  - my deploy script (compose.yaml + compose.coop-probe.yaml without -p) targets the PLAY
+    project. It is retired; the safe cycle is `docker build -t evejs-local .` (safe while he
+    plays) followed by scripts/Start-Agents-Stack.ps1 -Action Up.
+  - the earlier live evidence (mineral lift 12:47, ore sale, treasury sweep, governor HOLD)
+    was measured on the PLAY stack before the split and stays valid as history, but every
+    NEW proof must name the stack it ran on.
+
+Play-stack side effects already deployed before the split (his next restart would apply them,
+so he must know): EVEJS_COOP_NPC_MINERAL_LIFT=1, EVEJS_COOP_MINING_DEMAND_GOVERNOR=1 with
+FACTOR=1.5 FLOOR=20000 TRICKLE_MS=900000, EVEJS_MINING_NPC_STARTUP_FLEET_COUNT=2, plus the
+overlay modules coopNpcMineralLift and coopMiningDemandGovernor. I touch nothing there now.
+
+Agents stack state (measured 16:36Z): image already carries the current overlay
+(governor fix + liftedTypes present), env has TIME_SCALE=5, GOVERNOR=1, FLEET_COUNT=2,
+MINERAL_LIFT=1. World is FRESH: 448 event lines, no haul yet, slots 30000144/30000145/
+30100032 ALREADY_ACTIVE, mining cycles starting, no lift receipts.
+
+So the remaining proof is a full self-contained loop on a fresh world: mine -> haul ->
+deliver -> ore sale (ISK) -> treasury sweep -> paid refinery -> mineral lift -> mineral sale.
+A watcher on evejs-agents-server-1 records each stage (verdict ladder MINING -> HAULED ->
+DELIVERED -> REFINED -> LIFT -> MINERAL_SALE_PROVEN).
+
 ## 2026-10-27 16:50Z — war gate crossing: five real blockers named and removed
 
 **Done (commits 83a9b3bc, 9f66beec, 466593aa, 18768947, 82f7ca0a, 0fdf15c9,
