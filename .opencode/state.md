@@ -1424,3 +1424,45 @@ coop-pilot-080 with a real balance of **27 121.5 ISK**.
 30000142 Angel vs Maurasi 30000140 Serpentis) and clear the stale 500014 escrow
 journal through the treasury's own recovery, then let the opening reserve 25 000
 ISK from coop-pilot-080's real 27 121.5 and pay the bounty on a real casualty.
+
+## 2026-10-27T12:26Z — kill loop is repeatable; the loot leg needs one uninterrupted boot (d1a30222)
+
+Four real wrecks with stored loot from real native fire in this session
+(980300000008 3/93 450 units, 009 1/3 150, 010 2/91 980, plus the earlier 006), all
+`PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED`. The 5-blaster hull 980000018058 now
+really activates its modules (`living-native-weapon-event kind module-activation`,
+moduleID 980100056949, victim 980000016311) at its own 1050 m gun range.
+
+**The one blocker left on the loot leg is boot churn, not code.** The durable wreck
+row survives a restart but the physical native wreck entity does not, so
+`scene.getEntityByID(wreckID)` is null and `advanceNativeWreckRecovery` correctly
+refuses (`wreckPresent:false`). A claim whose wreck is gone now stops owning the
+pirate (d1a30222), so the raid keeps killing.
+
+**NEXT ACTION (exact).** On a boot nobody recreates, catch the next
+`living-native-stock-fleet-wreck-evidence` and, without a recreate, require
+`living-npc-postraid-wreck-recovery` (real orbit/warp to the wreck) ->
+`advanceNativeWreckCustody` (loot into the pirate's hold) ->
+`living-npc-loot-station` to New Caldari 60000688 -> a real seeded fill for typeID
+482 @ 571 211 ISK -> `coopWarChestFunding` from that fill -> `war_funding_diagnose`
+FUNDED -> `living-native-war-bounty` PAID from HELD escrow. Never mint ISK.
+## 2026-10-27T12:37Z - the war leg: presence is real, the attacker side is the blocker
+
+`war_state` (new, read-only) reports the exact state: territories 2 (Jita 500011,
+Niyabainen 500014), wars 1 (war:500011-500014), campaigns 0, and the per-system
+presence the territories come from - **30000140 Maurasi resolves to 500020 (1/1)**,
+Jita to 500011 (8 of 15), Perimeter/New Caldair to 500014, 30100032 to 500020.
+
+So the Jita->Maurasi front (500011 vs 500020) exists in the derivation, and 500020
+already holds **27 121.5 ISK** of real earned income. The opening refuses because a
+war needs BOTH sides funded and the ATTACKER 500011 has
+`NO_REAL_FACTION_INCOME` (plus 500014's stale escrow journal collision).
+
+**Exact next step.** An Angel pilot must earn real ISK the same way: 601
+(coop-pilot-060, corp 1000138) has no cargo because its wreck 980300000008 is no
+longer in the scene (`living-npc-postraid-wreck-recovery-blocked`:
+`wreckPresent false` for both 980300000008/9). The honest route is a NEW kill in
+this boot -> `living-native-stock-fleet-wreck-evidence` -> `living-npc-wreck-cargo-settled`
+-> `living-npc-loot-station` -> `living-native-loot-market-settled` for an Angel
+pilot, then `war_funding_diagnose` must show 500011 funded and the opening must
+reserve 25 000 ISK before START_CAMPAIGN, then a real casualty pays the bounty.
