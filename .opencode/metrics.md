@@ -72,3 +72,11 @@ overlay: OVERLAY_OK
 live: not run (pure test sweep)
 metrics: tests_total=5712 pass=5163 fail=459 skipped=90 new_tests=32 new_failures=0 modules_changed=2
 next: assault still blocked below the war layer - see the NPC fitting finding
+
+## 2026-10-27T00:45Z - queue item 9: two-client checklist - 21349a8a
+done: docs/TWO_CLIENT_CHECKLIST.md - verified server preconditions, the exact fitting limitation that blocks an assault in this build, human step order and per-step evidence, explicit list of what must not be claimed without the client.
+tests: not run (documentation only)
+overlay: OVERLAY_OK (unchanged)
+live: not run (documentation only)
+metrics: tests_total=not run modules_added=0 modules_changed=0 live_events=0
+next: fix NPC authored loadout so BEGIN_ASSAULT can fire (state.md NEXT ACTION), then owner backlog item 1 (sovereignty projection)

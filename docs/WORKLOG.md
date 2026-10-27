@@ -926,3 +926,9 @@ Evidence: full suite 5712/5163/459 (baseline 5680/5131/459): zero regressions, 3
 Why: Record the regression sweep numbers and the narrowed assault blocker
 Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
 Evidence: metrics.md blocks for 78fb32ce/eeacae5f/3ff71b13/f3997b30; state.md next action
+### 2026-10-27T00:13Z · 21349a8 · DOCS · docs(test): two-client checklist with the verified server preconditions
+
+Why: The owner needs a step order that produces real two-client evidence
+Detail: Lists what this session actually proved (OVERLAY_OK 353 modules, healthy server, two real faction Astrahus structures, war:500011-500014 opened from real presence, front chat wired), the one server-side limitation that blocks an assault in this build (no NPC carries a native fitted weapon), and the exact human step order with the evidence to capture per step. No client success is claimed.
+Where: docs/TWO_CLIENT_CHECKLIST.md, docs/WORKLOG.md
+Evidence: docs/TWO_CLIENT_CHECKLIST.md; preconditions taken from this session's probes
