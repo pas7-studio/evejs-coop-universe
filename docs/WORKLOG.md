@@ -1301,3 +1301,9 @@ Evidence: live reason=SALE_ERROR loaded is not defined at 60000358 and 60003334;
 Why: Live check of the fixed wiring: the lift decision event appears on every arrival and the sale no longer aborts, so the remaining gap is world state (stale manifest), not code.
 Where: .opencode/state.md
 Evidence: living-npc-mineral-lift-skipped 12:45:10; living-npc-station-sale-skipped NOT_SOLD NO_SEEDED_COUNTERPARTY (no SALE_ERROR); 8 refines COMMITTED at 60003334 12:33:05
+### 2026-10-27T12:49Z · 3f290ab · L3 · FW-024: a hold smaller than the wreck stack moves what really fits
+
+Why: the loot could never leave a wreck because the killer's hold was smaller than the stack, and Windows could never acquire the custody writer lock
+Detail: Measured blocker: the Angel killer 980000000601 (Arch Angel Centurion, capacity 120 m3) held a live claim on wreck 980300000008 whose three stored stacks are 4 032 + 2 142 + 5 229 m3, so every custody attempt answered NATIVE_CARGO_FULL and the loot could never leave the wreck. - coopNpcWreckCustody: a stack that does not fit is no longer refused outright. The hull takes floor(free/volume) units an
+Where: integration/coopNpcWreckCustody.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-npc-wreck-custody.test.mjs
+Evidence: tests 54/54, OVERLAY_OK, capacity-bounded partial custody + remainder wreck item + custody-skip telemetry

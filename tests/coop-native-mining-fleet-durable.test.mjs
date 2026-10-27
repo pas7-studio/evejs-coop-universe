@@ -252,6 +252,33 @@ test("ALIFE-12 original restored cargo with wrong fleet ID quarantines slot",t=>
  assert.equal(reboot.getSpawnCalls(),0);
 });
 
+test("ALIFE-12 refinery minerals loaded into a fleet hauler never quarantine its ore trip",t=>{
+ const old=process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY;
+ const oldManifest=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
+ process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY="1";
+ process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST="1";
+ t.after(()=>{
+  if(old===undefined)delete process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY;
+  else process.env.EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY=old;
+  if(oldManifest===undefined)delete process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
+  else process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST=oldManifest;
+ });
+ const first=fixture(t);assert.equal(first.start().status,"OK");
+ const fleetID=first.getFleets()[0].fleetID;
+ first.world.cargo.set(980301,{cargoID:980301,entityID:71002,ownerID:950,
+  typeID:17470,quantity:15,transient:false,coopHaulFleetID:fleetID,
+  coopHaulFromMinerID:71001});
+ // The mineral lift writes its own custody row with a journal tag and no fleet ID.
+ first.world.cargo.set(980302,{cargoID:980302,entityID:71002,ownerID:950,
+  typeID:34,quantity:5000,transient:false,customInfo:"coop-mineral-lift:v1:j1"});
+ const reboot=fixture(t,first.world),result=reboot.start();
+ assert.equal(result.status,"OK");
+ assert.equal(result.slots[0].status,"RESTORED");
+ assert.equal(result.slots[0].pendingStationCargo,true);
+ assert.equal(reboot.getFleets()[0].state,"loaded");
+ assert.equal(reboot.getSpawnCalls(),0);
+ assert.equal(reboot.world.cargo.get(980302).quantity,5000);
+});
 test("ALIFE-13 restored slot quarantines uncertain historical cargo BEFORE physical hull restoration",t=>{
  const old=process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;
  t.after(()=>{if(old===undefined)delete process.env.EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT;

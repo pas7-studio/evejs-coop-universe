@@ -28,7 +28,7 @@ test('minerals are loaded only after a merchant identity really exists', () => {
 test('the lift runs once per arrival and only when its own flag is on', () => {
   const calls = source.split('ensureMineralLift()?.lift').length - 1;
   assert.equal(calls, 1);
-  const block = source.slice(source.indexOf('ensureMineralLift()?.lift') - 400,
+  const block = source.slice(source.indexOf('ensureMineralLift()?.lift') - 900,
     source.indexOf('ensureMineralLift()?.lift'));
   assert.match(block, /EVEJS_COOP_NPC_MINERAL_LIFT==="1"/);
   assert.match(block, /arrivalSales\.has/);
@@ -38,4 +38,17 @@ test('the sale keeps the lifted mineral types even when the allowlist lacks them
   const block = source.slice(source.indexOf('ensureMineralLift()?.lift'),
     source.indexOf('const trader=ensureMarketTrader();', source.indexOf('ensureMineralLift()?.lift')));
   assert.match(block, /sellTypes\.push\(typeID\)/);
+});
+
+test('the caller ore list can never filter out the minerals this arrival loaded', () => {
+  // The arrival passes the ore types it carries, so a plain allowlist filter dropped
+  // the just-lifted minerals and left them aboard (measured: 9 stacks stayed put while
+  // the ore sold). The lifted types must bypass that filter explicitly.
+  const wanted = source.indexOf('const wanted=[...new Set(sellTypes.filter');
+  assert.ok(wanted > 0);
+  const clause = source.slice(wanted, source.indexOf('const job=', wanted));
+  assert.match(clause, /liftedTypes\.has\(Number\(typeID\)\)\|\|/);
+  const decl = source.indexOf('const liftedTypes=new Set();');
+  assert.ok(decl > 0 && decl < wanted, 'the set must exist before the wanted filter');
+  assert.match(source, /liftedTypes\.add\(typeID\)/);
 });

@@ -416,10 +416,14 @@ function createService({db,store,nativeService,ensureState,spawn,register,
   const live=getFleets().filter(x=>x.startupKey===scene.systemID+":"+slot&&
     Number(x.fleetID)===id);
   if(live.length!==1)throw Error("ALIFE12_RUNTIME_FLEET_TO_RESUME_NOT_UNIQUE");
+  // The corporation's own refinery minerals can be loaded into a fleet hauler by
+  // the mineral-lift leg. Those rows carry the lift's own journal tag and never a
+  // coopHaulFleetID, so they are not ambiguous haul custody: the lift account is
+  // their custodian and the fleet must still resume its ore trip.
   const rows=haulerIDs.flatMap(entityID=>{
    const cargo=store.listNativeCargoForEntity(entityID);
    if(!Array.isArray(cargo))throw Error("ALIFE12_NATIVE_HAUL_CARGO_UNAVAILABLE");
-   return cargo;
+   return cargo.filter(x=>!/^coop-mineral-lift:v1:/.test(String(x?.customInfo||"")));
   });
   if(!rows.length)return false;
   if(rows.some(x=>!pos(x.cargoID)||!pos(x.quantity)||

@@ -3564,6 +3564,21 @@ function advanceNativeRaids(){
     .map(c=>Number(c.attackerEntityID))
     .filter(id=>Number.isSafeInteger(id)&&id>0));
   }catch(_error){wreckClaimOwners=new Set();}
+  // FW-025: excluding the hull from new raids is not enough while the raid still
+  // holds its own lease and the native attack order that came with it. The loot
+  // phases cannot issue anything to a hull that is still fighting, so the raid
+  // releases exactly its own order for every hull a live claim now owns.
+  if(wreckClaimOwners.size&&typeof raidDirector.releaseExcluded==="function"){
+   try{
+    const released=raidDirector.releaseExcluded([...wreckClaimOwners],
+     "WRECK_CLAIM_OWNS_HULL");
+    for(const row of released)
+     require("./coopRuntimeProbe").observe("living-native-raid-release",null,
+      {spaceState:{systemID}},{...row,status:row.released?
+       "RAID_ORDER_RELEASED_FOR_LOOT":"RAID_ORDER_RELEASE_REFUSED",
+       iskGranted:false});
+   }catch(_error){/* the recovery phase still publishes its own refusal */}
+  }
   // FW-013B: a hull that was really linked AFTER boot was invisible here. The
   // materializer's assignment map is rebuilt only during boot, while the raid
   // legality gate below already reads the identity registry - the same
@@ -4865,6 +4880,9 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
   // Declared outside the try: the skip telemetry below reads it. As a block-scoped
   // const it raised "loaded is not defined" on every arrival, aborting the sale.
   let loaded=null;
+  // Types this arrival really loaded from the corporation hangar. They must be
+  // sold even though the caller's `types` list only names the ore it carries.
+  const liftedTypes=new Set();
   try{
    loaded=ensureMineralLift()?.lift({systemID,stationID,haulerID,
     cap:Math.max(1,Number(process.env.EVEJS_COOP_NPC_MINERAL_LIFT_MAX_QTY||100000))});
@@ -4872,6 +4890,7 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
     for(const row of loaded.lifted){
      const typeID=Number(row.typeID);
      if(!sellTypes.includes(typeID))sellTypes.push(typeID);
+     liftedTypes.add(typeID);
     }
   }catch(_error){/* a failed lift must never block the ore sale */}
    if(loaded&&loaded.status!=="LIFTED"){
@@ -4888,6 +4907,7 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  const trader=ensureMarketTrader();
  if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
  const wanted=[...new Set(sellTypes.filter(typeID=>
+  liftedTypes.has(Number(typeID))||
   !types.length||types.map(Number).includes(Number(typeID))))];
  if(!wanted.length){noteSaleSkip(systemID,stationID,haulerID,"NO_ALLOWED_ORE");return {status:"NOT_SOLD",reason:"NO_ALLOWED_ORE"};}
  const job={startedAt:Date.now(),settled:null};
