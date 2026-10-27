@@ -1614,3 +1614,8 @@ Evidence: agents tick profiler: only overlay phases (npc-reconcile:*, observed-n
 Why: The corporation wallet was read through a raw store pointer in a table that had never been bootstrapped, so the treasury answered CORP_WALLET_UNAVAILABLE while the pilots held real earned ISK and the refinery could never pay its fee.
 Where: integration/coopCorpWallet.cjs, integration/coopNpcCorpTreasury.cjs, integration/coopNpcRefineryTick.cjs, tests/coop-corp-wallet.test.mjs
 Evidence: agents world: CORP_WALLET_UNAVAILABLE with 26 018 500 ISK in ledger.json and one unrelated corporationRuntime row; after routing through corporationRuntimeState: living-corp-treasury-swept movedISK 38 791 223.64 and 4 living-npc-refined COMMITTED; 7 wallet tests + 27 treasury/refinery tests pass
+### 2026-10-27T22:21Z · e3fad1c · L2 · coop: a stranded hauler is warped to its miner and the answer is recorded
+
+Why: The hauler was told to orbit a miner 37-150 km away: an orbit order never warps and the discarded result made every retry look successful while the range grew.
+Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
+Evidence: agents world: 363 living-haul-no-hauler out-of-range 37857/150280 m with empty living-haul-approach-issued; block now warps to the miner when the measured gap exceeds 10 km, falls back to orbit and publishes WARPED_TO_MINER/WARP_REFUSED/ORBIT_REFUSED; 4 wiring tests pass
