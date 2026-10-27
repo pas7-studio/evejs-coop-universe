@@ -1296,3 +1296,8 @@ Evidence: tests 22/22, OVERLAY_OK patched 59 moduleCurrent 374, coopNpcWreckClai
 Why: A block-scoped const made every station arrival raise 'loaded is not defined', so the mineral lift never ran and the whole sale aborted; hoisted it and pinned the wiring with structural tests.
 Where: .opencode/metrics.md, .opencode/state.md
 Evidence: live reason=SALE_ERROR loaded is not defined at 60000358 and 60003334; coop-mineral-lift-wiring 4/4; coop-npc-mineral-lift 9/9
+### 2026-10-27T12:40Z · 91d9d74 · TEST · docs: the raid is idle because the convoy is on its delivery leg
+
+Why: Live check of the fixed wiring: the lift decision event appears on every arrival and the sale no longer aborts, so the remaining gap is world state (stale manifest), not code.
+Where: .opencode/state.md
+Evidence: living-npc-mineral-lift-skipped 12:45:10; living-npc-station-sale-skipped NOT_SOLD NO_SEEDED_COUNTERPARTY (no SALE_ERROR); 8 refines COMMITTED at 60003334 12:33:05

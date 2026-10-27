@@ -1,5 +1,23 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 12:46Z - the lift path now RUNS live (and one real bug died)
+
+Fixed live bug: the lift result was a block-scoped const used by the skip telemetry, so every
+station arrival aborted with SALE_ERROR 'loaded is not defined' (5 occurrences). After the fix,
+the same arrival reports living-npc-mineral-lift-skipped (12:45:10) followed by the normal
+NOT_SOLD NO_SEEDED_COUNTERPARTY for the perimeter station, i.e. nothing aborts any more.
+
+Still unproven live: one full minerals->ISK settlement. It needs an arrival at a station that
+BOTH holds refinery minerals AND pays for them (60000682 / 60003334 in New Caldari). The New
+Caldari fleet did deliver and refine 8 stacks at 60003334 at 12:33:05, but its next route is
+blocked by ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF: an older manifest declares cargo
+that is no longer aboard and has no warehouse/sale receipt, so the custody gate refuses. That
+gate is correct; the stale manifest needs the documented expire()/abandon() operator recovery
+before a fresh trip can be planned.
+
+Perimeter (30000144) has no bids at all, so nothing sold there can ever earn, no matter the
+code: the demand map is 30000142 Jita (90 000/type) and 30000145 New Caldari (25 000/type).
+
 ## 2026-10-27 12:18Z - the whole picture, measured: where demand really is
 
 Seeded BIDS only exist in two systems of region 10000002:
