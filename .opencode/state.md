@@ -2767,3 +2767,30 @@ Live probe in the running container:
   LOCAL [30045344, {3200, 75000}]
   SCORES [{500001, 3200}, {500004, 1100}]
   snapshot 30045344: Caldari 3 wrecks taken / 2 hulls, Gallente 1 wreck / 1 hull.
+
+## NIGHT 2026-10-28 - N1 landed, next steps (autonomous run)
+
+Plan: `.opencode/night-plan-20261028.md` (13 tasks). Watchdog:
+`.opencode/night-watch-20261028.log` (one line every 15 min, read-only).
+
+DONE tonight:
+- FW-035 `integration/coopWarCaptureByForce.cjs` + 5 tests. A system flips
+  `militaryControllerFactionID` only with: a verified defender wreck in THIS
+  campaign and system, ZERO live defender hulls there, sustained 60 s, then
+  RECORD_OBJECTIVE -> CAPTURE_TERRITORY through the same authoritative core.
+  Fork commit `2cb671c` (module + phase `native-faction-war-capture-by-force` +
+  `EVEJS_COOP_WAR_CAPTURE_BY_FORCE=1` in compose.coop-probe.yaml), repo `747c4701`.
+- Image NOT rebuilt and play stack NOT restarted (night rule). The morning deploy
+  must: `docker build -t evejs-local .` then `up -d --no-deps server`, then verify
+  `living-native-war-capture-by-force`.
+
+BLOCKER discovered: compose/compose.agents.yaml has NO `EVEJS_COOP_FACTION_WAR*`
+flags at all, so the agents stack cannot prove any war behaviour as-is. Options:
+(a) enable the war flags there and seed the war through the sanctioned admin path
+(`spawn_war_fleet` + release/assign identity), or (b) prove live on the play stack
+after the morning deploy. Not yet decided; nothing was changed on the agents stack.
+
+NEXT (in order): N2 formation live proof, N3 restart resilience diff, N4 player as
+target, N5 war economy debit, N6 roster truth, N7 ammo, N8 wreck hygiene,
+N9 militia rank, N10 soak table, N11 FW hook extraction (AUDIT_OK), N12 operator
+guide, N13 morning handover.
