@@ -123,6 +123,34 @@ migration, not on the tool:
 Do not "fix" this by freezing the archived copy at the old text: an archive that
 disagrees with the engine is worse than a big file.
 
+## Performance traps: look for them statically, then prove with a profile
+
+`node scripts/coop-perf-audit.cjs` ranks co-op modules by shapes that are cheap
+once and catastrophic per tick: deep clones at call time, `readFileSync` inside
+a function, `sort()`/quadratic `filter().find()` in a tick phase, `require()`
+inside hot bodies, `JSON.stringify` cache keys. It fails with
+`PERF_REGRESSION` when a class grows past its budget (budgets are freezes, so
+raise one only together with a measurement in this file).
+
+Measured win (`engine ca94bf5`): `advanceNativeSalvageRivals` re-read and
+re-parsed every witness manifest on **every tick**, and
+`confirmedNativeNpcWreck` re-parsed the whole identity registry per wreck. Both
+now use the shared `space/coopJsonFileCache.js` (mtime+size key, no TTL, no
+watcher, `clone: true` for mutating callers): **80 000 reads 1950 ms → 390 ms**.
+
+Traps that are *not* worth fixing and must not be "optimised" blindly:
+`require()` inside a function body (Node caches resolution; 600 edits in a hot
+file for microseconds is a net loss) and `JSON.stringify` over a 3-element array
+of skip reasons.
+
+Next candidates, in measured order, each needing a live CPU profile before a
+change: `space/runtime.js` (95 unbounded `push`, 21 `sort`),
+`services/dungeon/dungeonUniverseRuntime.js` (25 `sort`, 8 `JSON.stringify`
+cache keys), `services/inventory/invBrokerService.js` (quadratic scans).
+Profiling runs on the agent stack only: `compose.agents.yaml` already sets
+`NODE_OPTIONS=--cpu-prof --cpu-prof-dir=/var/lib/evejs/prof`; never profile the
+owner's play stack.
+
 ## Why the 78 legacy transforms were not deleted
 
 They are imported by 45 scripts/tests (`coop-state.cjs`, `coop-test-baseline.cjs`,
