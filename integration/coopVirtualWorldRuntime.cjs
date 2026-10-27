@@ -526,6 +526,11 @@ function advanceNativeWarOpening(){
    readWarState,
    writeWarState:state=>store.write(state),
    reserveBounty:warBountyReserve,
+   // FW-027: a real war fleet is presence too (the roster proves the hulls).
+   fleetPresence:args=>{
+    try{return require("./coopWarFleetRoster").sharedRoster().presence(args)}
+    catch{return []}
+   },
    minShips:Math.max(1,Number(process.env.EVEJS_COOP_WAR_TERRITORY_MIN_SHIPS)||1)
   });
  }

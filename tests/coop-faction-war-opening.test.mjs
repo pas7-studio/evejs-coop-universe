@@ -255,6 +255,30 @@ test('one tick opens the war, and the next tick reports it instead of duplicatin
  assert.equal(Object.keys(state.campaigns).length,1);
 });
 
+test('a real war fleet is presence too, so a fleet-only front can open',()=>{
+ let state=core.empty(),writes=0;
+ const warOpening=opening.createWarOpening({
+  readLinks:()=>[],getNativeEntity,getFactionForCorporation,
+  getStargatesForSystem,getGate,
+  fleetPresence:()=>[
+   {entityID:9001,systemID:1,factionID:500001,corporationID:1000030,role:'patrol'},
+   {entityID:9002,systemID:1,factionID:500001,corporationID:1000030,role:'patrol'},
+   {entityID:9003,systemID:2,factionID:500004,corporationID:1000032,role:'patrol'},
+   {entityID:9004,systemID:2,factionID:500004,corporationID:1000032,role:'patrol'},
+  ],
+  readWarState:()=>state,
+  writeWarState:(next)=>{state=next;writes++;},
+  now:()=>1000,
+ });
+ const first=warOpening.tick({systemIDs:[1,2]});
+ assert.equal(first.status,'OPENED');
+ assert.equal(first.presence.fleetShips,4);
+ assert.equal(writes,1);
+ const open=Object.values(state.campaigns)[0];
+ assert.ok(open);
+ assert.equal(open.targetSystemID,2);
+});
+
 test('a tick with no real faction presence writes nothing',()=>{
  let state=core.empty(),writes=0;
  const warOpening=opening.createWarOpening({

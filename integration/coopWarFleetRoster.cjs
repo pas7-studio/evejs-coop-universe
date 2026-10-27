@@ -403,7 +403,75 @@ function createWarFleetRoster(injected) {
     };
   }
 
-  return Object.freeze({ snapshot, fleet, createFleet, recordLoss, planReconstitution, commitReconstitution });
+  // FW-027: real ships are real presence. Every hull of a live fleet that the
+  // native entity store still places in the system counts, with the faction its
+  // real corporation resolves to. A hull whose native record disagrees about the
+  // system (in flight) counts nowhere.
+  function presence({ systemIDs = [] } = {}) {
+    const getNativeEntity = base.getNativeEntity;
+    const getFactionForCorporation = base.getFactionForCorporation;
+    if (typeof getNativeEntity !== "function" || typeof getFactionForCorporation !== "function") return [];
+    const allowed = Array.isArray(systemIDs) && systemIDs.length
+      ? new Set(systemIDs.map(Number).filter(pos)) : null;
+    const state = read();
+    const ships = [];
+    for (const fleet of Object.values(state.fleets)) {
+      if (fleet.state === "RECONSTITUTED" || fleet.state === "DESTROYED") continue;
+      for (const ship of fleet.ships) {
+        if (ship.state !== "ALIVE" && ship.state !== "ADOPTED") continue;
+        let native = null;
+        try {
+          native = getNativeEntity(ship.entityID);
+        } catch (_error) {
+          native = null;
+        }
+        if (!native) continue;
+        const systemID = Number(native.systemID) || 0;
+        if (!pos(systemID) || (allowed && !allowed.has(systemID))) continue;
+        let factionID = 0;
+        try {
+          factionID = Number(getFactionForCorporation(native.corporationID)) || 0;
+        } catch (_error) {
+          factionID = 0;
+        }
+        if (!pos(factionID)) continue;
+        ships.push({
+          entityID: ship.entityID,
+          systemID,
+          factionID,
+          corporationID: Number(native.corporationID) || 0,
+          pilotID: "coop-fleet-ship-" + ship.entityID,
+          role: "patrol",
+          fleetID: fleet.fleetID,
+          doctrineID: ship.doctrineID,
+          source: "FLEET_ROSTER",
+        });
+      }
+    }
+    return ships;
+  }
+
+  return Object.freeze({ snapshot, fleet, createFleet, recordLoss, planReconstitution, commitReconstitution, presence });
 }
 
-module.exports = { TABLE, KEY, VERSION, empty, validate, createWarFleetRoster, ROLES };
+let shared = null;
+
+// One process-wide roster for the runtime (presence) and the admin bridge
+// (spawn/loss/reconstitution): both read and write the same durable row.
+function sharedRoster() {
+  if (shared) return shared;
+  const gameStore = require("../gameStore");
+  const npcStore = require("./npc/nativeNpcStore");
+  const factions = require("../services/faction/factionState");
+  shared = createWarFleetRoster({
+    gameStore,
+    getNativeEntity: (id) => npcStore.getNativeEntity(id),
+    getFactionForCorporation: (id) => factions.getFactionIDForCorporation(id),
+  });
+  return shared;
+}
+
+module.exports = {
+  TABLE, KEY, VERSION, empty, validate, createWarFleetRoster,
+  sharedRoster, ROLES,
+};

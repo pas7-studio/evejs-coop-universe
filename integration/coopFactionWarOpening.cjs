@@ -360,12 +360,21 @@ function createWarOpening({
   readLinks, getNativeEntity, getFactionForCorporation,
   getStargatesForSystem, getGate, readWarState, writeWarState,
   reserveBounty = null,
+  // FW-027: a real war fleet is presence too. A formation of real armed native
+  // hulls that the fleet roster proves in a system holds that system exactly the
+  // same way a linked pilot does - the ships really exist, are really there, and
+  // their corporation really resolves to a faction. Without the authority the
+  // behaviour is unchanged.
+  fleetPresence = null,
   minShips = 1, balanceISK = 0, maxOpenings = 4,
   now = () => Date.now(), maxLinks = MAX_LINKS,
 } = {}) {
   const required = [readLinks, getNativeEntity, getFactionForCorporation,
     getStargatesForSystem, readWarState, writeWarState];
   if (required.some((fn) => typeof fn !== "function")) throw Error("WAR_OPENING_AUTHORITIES_REQUIRED");
+  if (fleetPresence !== null && typeof fleetPresence !== "function") {
+    throw Error("WAR_OPENING_AUTHORITIES_REQUIRED");
+  }
   let busy = false;
   function tick({ systemIDs = [] } = {}) {
     if (busy) return { status: "BUSY" };
@@ -381,6 +390,33 @@ function createWarOpening({
       try { core.validateState(state); } catch (_error) { return { status: "INVALID_WAR_STATE" }; }
       const presence = collectPresence({ links, systemIDs, getNativeEntity, getFactionForCorporation, maxLinks });
       if (presence.status !== "PRESENCE") return { status: presence.status };
+      let fleetShips = 0;
+      if (typeof fleetPresence === "function") {
+        let extra = [];
+        try {
+          extra = fleetPresence({ systemIDs }) || [];
+        } catch (_error) {
+          extra = [];
+        }
+        const seen = new Set(presence.pilots.map((pilot) => Number(pilot.entityID)));
+        for (const ship of Array.isArray(extra) ? extra : []) {
+          const entityID = num(ship && ship.entityID);
+          const systemID = num(ship && ship.systemID);
+          const factionID = String((ship && ship.factionID) || "");
+          if (!pos(entityID) || !pos(systemID) || !factionID || seen.has(entityID)) continue;
+          seen.add(entityID);
+          presence.pilots.push({
+            pilotID: String((ship && ship.pilotID) || ("coop-fleet-ship-" + entityID)),
+            entityID,
+            systemID,
+            factionID,
+            corporationID: num(ship && ship.corporationID),
+            role: String((ship && ship.role) || "patrol"),
+            source: "FLEET_ROSTER",
+          });
+          fleetShips += 1;
+        }
+      }
       const plan = planWars({
         state, presence, getStargatesForSystem, getGate,
         nowMs: num(now()), minShips, balanceISK, maxOpenings,
@@ -394,7 +430,7 @@ function createWarOpening({
       return {
         status: "OPENED", warIDs: opened.warIDs, campaignIDs: opened.campaignIDs,
         applied: opened.applied, fundings: opened.fundings,
-        presence: { pilots: presence.pilots.length, skipped: presence.skipped },
+        presence: { pilots: presence.pilots.length, skipped: presence.skipped, fleetShips },
         territories: plan.territories, fronts: plan.fronts.length, skipped: plan.skipped,
       };
     } finally { busy = false; }

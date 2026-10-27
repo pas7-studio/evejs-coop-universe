@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist", "spawn_war_fleet", "war_fleet_state", "fleet_reconstitute"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -790,6 +790,289 @@ function militiaEnlist(request) {
   }
 }
 
+// FW-026/027: real doctrine fleets. One call composes a role-complete formation
+// for the commander's real rank, spawns every hull with its authored doctrine
+// row, links the commander (the only identity that may be free), and records the
+// fleet in the durable roster. Nothing is spawned unless the doctrine row really
+// validated and the native spawn really returned a hull.
+function warFleetAuthorities() {
+  const data = require("./npc/npcData");
+  const registry = require("../services/inventory/itemTypeRegistry");
+  const dogma = require("./combat/weaponDogma");
+  const capability = require("./npc/npcCapabilityResolver");
+  const fitting = require("../services/fitting/liveFittingState");
+  const database = require("../gameStore");
+  const profiles = () => {
+    const rows = database.read("npcProfiles", "/");
+    return rows && rows.success && rows.data && Array.isArray(rows.data.profiles)
+      ? rows.data.profiles : [];
+  };
+  const chargeTypes = () => {
+    const rows = database.read("itemTypes", "/");
+    const list = rows && rows.success && rows.data && Array.isArray(rows.data.types)
+      ? rows.data.types : [];
+    return list.filter((row) => Number(row.categoryID) === 8)
+      .map((row) => ({ typeID: Number(row.typeID), name: String(row.name || "") }));
+  };
+  const doctrine = require("./coopWarDoctrine" + siblingSuffix).createWarDoctrine({
+    getProfile: (profileID) => profiles().find((row) => String(row && row.profileID || "") === String(profileID)) || null,
+    resolveItemByTypeID: registry.resolveItemByTypeID,
+    resolveWeaponFamily: (item) => dogma.resolveWeaponFamily(item),
+    isCompatibleCharge: (module, chargeTypeID) =>
+      capability.isNpcChargeCompatibleWithModule(module, chargeTypeID),
+    listCharges: () => chargeTypes(),
+    slotFamilyFor: (typeID) => fitting.getRequiredSlotFamily(typeID),
+    hullSlotsFor: (typeID) => fitting.getShipSlotCounts(typeID),
+    dogmaAttributeCountFor: (typeID) => Object.keys(fitting.getTypeDogmaAttributes(typeID) || {}).length,
+  });
+  const composition = require("./coopWarFleetComposition" + siblingSuffix)
+    .createWarFleetComposition({
+      resolveDoctrine: ({ factionID, role }) => doctrine.resolve({ factionID, role }),
+    });
+  return { doctrine, composition, data };
+}
+
+function freeHullLinks() {
+  const file = process.env.EVEJS_COOP_NPC_LINKS || "/var/lib/evejs/coop-npc-links.json";
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+    return new Set(Object.values((raw && raw.links) || {}).map((link) => Number(link && link.entityID)));
+  } catch (_error) {
+    return new Set();
+  }
+}
+
+// Real free hulls in a system: alive native entities the identity registry does
+// not own, no live fleet owns, whose real corporation resolves to this faction
+// and whose hull really is one of its doctrine hulls.
+function listFreeHullsFor({ factionID, systemID }) {
+  const runtime = require("./runtime");
+  const npcStore = require("./npc/nativeNpcStore");
+  const factions = require("../services/faction/factionState");
+  const roster = require("./coopWarFleetRoster" + siblingSuffix).sharedRoster();
+  const { doctrine } = warFleetAuthorities();
+  const catalog = doctrine.catalog({ factionID: Number(factionID) });
+  const roleByHull = new Map();
+  for (const entry of catalog.doctrines || []) {
+    if (entry.status === "REFUSED" || !entry.hull) continue;
+    if (!roleByHull.has(Number(entry.hull.typeID))) {
+      roleByHull.set(Number(entry.hull.typeID), { role: entry.role, doctrineID: entry.loadoutID });
+    }
+  }
+  const scene = runtime.ensureScene(Number(systemID), { refreshStargates: false });
+  if (!scene || !scene.dynamicEntities) return { status: "NO_SCENE", hulls: [] };
+  const linked = freeHullLinks();
+  const owned = new Set();
+  try {
+    const snapshot = roster.snapshot();
+    for (const fleet of Object.values((snapshot && snapshot.state && snapshot.state.fleets) || {})) {
+      if (fleet.state === "RECONSTITUTED" || fleet.state === "DESTROYED") continue;
+      for (const ship of fleet.ships) {
+        if (ship.state !== "LOST" && ship.state !== "LOST_UNRECORDED") owned.add(Number(ship.entityID));
+      }
+    }
+  } catch (_error) { /* an unreadable roster means nothing is adoptable */ }
+  const hulls = [];
+  for (const entity of scene.dynamicEntities.values()) {
+    const entityID = Number(entity && (entity.itemID || entity.entityID)) || 0;
+    if (!(entityID > 0) || linked.has(entityID) || owned.has(entityID)) continue;
+    let native = null;
+    try { native = npcStore.getNativeEntity(entityID); } catch (_error) { native = null; }
+    if (!native || native.transient === true) continue;
+    if (Number(native.systemID) !== Number(systemID)) continue;
+    let faction = 0;
+    try { faction = Number(factions.getFactionIDForCorporation(native.corporationID)) || 0; } catch (_error) { faction = 0; }
+    if (faction !== Number(factionID)) continue;
+    const match = roleByHull.get(Number(entity.typeID || native.typeID));
+    if (!match) continue;
+    hulls.push({
+      entityID, role: match.role, doctrineID: match.doctrineID,
+      hullTypeID: Number(entity.typeID || native.typeID) || 0,
+    });
+  }
+  return { status: "OK", systemID: Number(systemID), factionID: Number(factionID), hulls };
+}
+
+function spawnWarFleet(request) {
+  const factionID = Number(request.factionID) || 0;
+  const systemID = Number(request.systemID) || 0;
+  if (!(factionID > 0) || !(systemID > 0)) return { ok: false, error: "factionID and systemID are required" };
+  const merit = Math.max(0, Number(request.merit) || 0);
+  const rank = String(request.rank || "");
+  let plan = null;
+  try {
+    plan = warFleetAuthorities().composition.compose({ factionID, merit, rank });
+  } catch (error) {
+    return { ok: false, error: "fleet composition unavailable: " + String(error && error.message || error) };
+  }
+  if (!plan || plan.status !== "COMPOSED") {
+    return {
+      ok: false,
+      error: "FLEET_COMPOSITION_REFUSED:" + String((plan && plan.reason) || "UNKNOWN"),
+      plan,
+    };
+  }
+  const commanderPilotID = String(request.commanderPilotID || "").trim();
+  const spawned = [];
+  for (const ship of plan.ships) {
+    const result = spawnNativeNpc({
+      systemID,
+      profileQuery: ship.profileID,
+      warPatrol: true,
+      durable: true,
+      loadoutID: ship.loadoutID,
+      role: "patrol",
+      ...(spawned.length === 0 && commanderPilotID ? { pilotID: commanderPilotID } : {}),
+    });
+    const entityID = result && result.ok && Array.isArray(result.ships) && result.ships.length
+      ? Number(result.ships[0].entityID) || 0 : 0;
+    spawned.push({
+      role: ship.role,
+      doctrineID: ship.doctrineID,
+      loadoutID: ship.loadoutID,
+      profileID: ship.profileID,
+      hullName: ship.hullName,
+      entityID,
+      ok: Boolean(result && result.ok && entityID > 0),
+      error: result && result.ok ? "" : String((result && result.error) || "SPAWN_REFUSED"),
+      loadout: result && result.loadout ? {
+        status: result.loadout.status, reason: result.loadout.reason,
+        loadoutID: result.loadout.loadoutID, chargeTypeID: result.loadout.chargeTypeID,
+        chargeDepth: result.loadout.chargeDepth, moduleFamily: result.loadout.moduleFamily,
+      } : null,
+    });
+  }
+  const ships = spawned.filter((entry) => entry.ok && entry.entityID > 0)
+    .map((entry) => ({
+      entityID: entry.entityID, role: entry.role, doctrineID: entry.doctrineID,
+      loadoutID: entry.loadoutID, profileID: entry.profileID, hullName: entry.hullName,
+    }));
+  if (!ships.length) {
+    emitEvent("living-war-fleet-spawned", "NO_SHIP_SPAWNED", { factionID, systemID, spawned });
+    return { ok: false, error: "NO_SHIP_SPAWNED", plan, spawned };
+  }
+  let fleet = null;
+  try {
+    fleet = require("./coopWarFleetRoster" + siblingSuffix).sharedRoster().createFleet({
+      factionID,
+      systemID,
+      stagingSystemID: Number(request.stagingSystemID) || systemID,
+      rank, merit,
+      commandCap: plan.commandCap,
+      ships,
+    });
+  } catch (error) {
+    fleet = { status: "BLOCKED", reason: "ROSTER_UNAVAILABLE:" + String(error && error.message || error) };
+  }
+  emitEvent("living-war-fleet-spawned", fleet && fleet.status === "CREATED" ? "FLEET_SPAWNED" : "FLEET_NOT_RECORDED", {
+    factionID, systemID, size: ships.length, commandCap: plan.commandCap,
+    counts: plan.counts, fleetID: String((fleet && fleet.fleetID) || ""),
+    roles: ships.map((ship) => ship.role),
+  });
+  return {
+    ok: Boolean(fleet && fleet.status === "CREATED"),
+    factionID, systemID,
+    commandCap: plan.commandCap,
+    size: ships.length,
+    counts: plan.counts,
+    fleetID: String((fleet && fleet.fleetID) || ""),
+    fleetStatus: String((fleet && fleet.status) || ""),
+    fleetReason: String((fleet && fleet.reason) || ""),
+    ships, spawned,
+  };
+}
+
+function warFleetState(request) {
+  const roster = require("./coopWarFleetRoster" + siblingSuffix).sharedRoster();
+  const fleetID = String(request.fleetID || "").trim();
+  const snapshot = roster.snapshot();
+  if (!snapshot || snapshot.status !== "OK") return { ok: false, error: "FLEET_ROSTER_" + String(snapshot && snapshot.status || "UNAVAILABLE") };
+  if (!fleetID) {
+    return {
+      ok: true,
+      fleets: snapshot.fleets,
+      state: snapshot.state.fleets,
+      presence: roster.presence({ systemIDs: [] }),
+    };
+  }
+  const fleet = roster.fleet(fleetID);
+  if (!fleet) return { ok: false, error: "FLEET_NOT_FOUND", fleetID };
+  let store = null;
+  try { store = require("./npc/nativeNpcStore"); } catch (_error) { store = null; }
+  const ships = fleet.ships.map((ship) => {
+    let modules = [], cargo = [], native = null;
+    try {
+      native = store ? store.getNativeEntity(ship.entityID) : null;
+      modules = store ? (store.listNativeModulesForEntity(ship.entityID) || []) : [];
+      cargo = store ? (store.listNativeCargoForEntity(ship.entityID) || []) : [];
+    } catch (_error) { /* reported as zeroes below */ }
+    return {
+      entityID: ship.entityID,
+      role: ship.role,
+      doctrineID: ship.doctrineID,
+      hullTypeID: ship.hullTypeID,
+      hullName: ship.hullName,
+      state: ship.state,
+      alive: Boolean(native),
+      systemID: Number(native && native.systemID) || 0,
+      moduleCount: modules.length,
+      moduleTypeIDs: modules.map((m) => Number(m.typeID) || 0),
+      chargeStacks: cargo.map((c) => ({ typeID: Number(c.typeID) || 0, quantity: Number(c.quantity) || 0 })),
+      chargeTotal: cargo.reduce((sum, c) => sum + (Number(c.quantity) || 0), 0),
+    };
+  });
+  return { ok: true, fleetID, fleet: { ...fleet, ships }, ships };
+}
+
+function fleetReconstitute(request) {
+  const fleetID = String(request.fleetID || "").trim();
+  if (!fleetID) return { ok: false, error: "fleetID is required" };
+  const roster = require("./coopWarFleetRoster" + siblingSuffix).sharedRoster();
+  const recorded = [];
+  for (const loss of Array.isArray(request.losses) ? request.losses : []) {
+    const entityID = Number(loss && loss.entityID) || 0;
+    const wreckID = Number(loss && loss.wreckID) || 0;
+    if (!(entityID > 0)) { recorded.push({ status: "BLOCKED", reason: "LOSS_ENTITY_REQUIRED" }); continue; }
+    // A loss is only recorded with a real native wreck: never a guessed death.
+    if (!(wreckID > 0)) {
+      recorded.push({ status: "BLOCKED", reason: "LOSS_WRECK_REQUIRED", entityID });
+      continue;
+    }
+    recorded.push(roster.recordLoss({
+      fleetID, entityID, wreckID,
+      casualtyID: String(loss.casualtyID || ""),
+    }));
+  }
+  const stagingSystemID = Number(request.stagingSystemID) || 0;
+  const merit = Math.max(0, Number(request.merit) || 0);
+  const rank = String(request.rank || "");
+  const { composition } = warFleetAuthorities();
+  const plan = roster.planReconstitution({
+    fleetID,
+    stagingSystemID,
+    merit,
+    rank,
+    compose: ({ factionID, merit: m, rank: r }) => composition.compose({ factionID, merit: m, rank: r }),
+  });
+  let committed = null;
+  if (request.commit === true && (plan.status === "RECONSTITUTED" || plan.status === "REDUCED")) {
+    committed = roster.commitReconstitution({ plan, rank });
+  }
+  emitEvent("living-war-fleet-reconstitution",
+    plan.status === "BLOCKED" ? "BLOCKED" : String(committed ? committed.status : plan.status), {
+      fleetID,
+      status: plan.status,
+      reason: String(plan.reason || ""),
+      survivors: Array.isArray(plan.survivors) ? plan.survivors.length : 0,
+      adopted: Array.isArray(plan.adopted) ? plan.adopted.length : 0,
+      missing: Array.isArray(plan.missing) ? plan.missing.length : 0,
+      size: Number(plan.size) || 0,
+      commandCap: Number(plan.commandCap) || 0,
+      newFleetID: String((committed && committed.fleetID) || ""),
+    });
+  return { ok: plan.status !== "BLOCKED", recorded, plan, committed };
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
@@ -798,6 +1081,9 @@ function executeRequest(request) {
   // the one admin request that legitimately has no characterID.
   if (action === "deploy_structure") return deployStructure(request);
   if (action === "spawn_native_npc") return spawnNativeNpc(request);
+  if (action === "spawn_war_fleet") return spawnWarFleet(request);
+  if (action === "war_fleet_state") return warFleetState(request);
+  if (action === "fleet_reconstitute") return fleetReconstitute(request);
   // Read-only war diagnostics: never reserves, orders or writes anything.
   if (action === "inspect_npc") {
     // Read-only: what a native hull really carries right now.
