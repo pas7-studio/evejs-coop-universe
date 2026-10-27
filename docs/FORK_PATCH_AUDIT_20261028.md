@@ -73,6 +73,38 @@ Raising a budget is a decision to write down here, not a side effect of a commit
 4. `services/map/fwWarzoneSolarsystemService.js` — 3 lines but 3 725 chars: the
    same "one pasted statement" smell as the alliance guard.
 
+## Giga files: split, do not let them grow
+
+One file with thousands of lines in a single scope cannot be tested in
+isolation and every edit risks hidden coupling. Engine files above ~1 000 lines
+must be split by responsibility; the tool does the mechanical part and refuses
+to write anything it cannot verify:
+
+```bash
+# dry run: which declarations touch no module state and can move?
+node scripts/coop-split-module.cjs --file space/coopVirtualWorldRuntime.js
+# apply: write the slice, rewrite the parent, require it back, node --check both
+node scripts/coop-split-module.cjs --file <rel> --out <rel> --apply
+```
+
+Rules the tool enforces: only declarations that reference **no** mutable module
+state (`let`/`var`) and no non-movable sibling move; the parent keeps a
+destructuring `require`, so exports and call sites never change; a failed
+`node --check` restores the original file.
+
+Current state of the giant modules:
+
+| File | Lines | Split |
+|---|---|---|
+| `space/coopVirtualWorldRuntime.js` | 5 330 → **4 419** | 55 state-free helpers (911 lines) → `space/coopVirtualWorldPure.js` (engine commit `893c78f`) |
+| `space/coopAdminBridge.js` | 1 518 | not started — next |
+| `space/coopNativeStationArrival.js` | 1 451 | not started |
+| `space/coopCourierRuntime.js` | 975 | not started |
+
+Verified after the split: same 21 exports, and the 26 test files that reference
+the runtime report 188 pass / 20 fail both before and after the change (those 20
+failures are pre-existing in the working tree, from unrelated in-progress work).
+
 ## Why the 78 legacy transforms were not deleted
 
 They are imported by 45 scripts/tests (`coop-state.cjs`, `coop-test-baseline.cjs`,
