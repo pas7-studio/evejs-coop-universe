@@ -119,17 +119,18 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
     // The crossing leg is PREPARING *and* ASSAULT (an attacker that is still
     // outside the contested system is exactly the hull that must cross). Supply
     // follows the ONE rule of the war core: a real HELD escrow, or the campaign's
-    // own explicit `paper-supply:<campaignID>` waiver, which reserves no ISK and
-    // can never pay a bounty. A transfer moves no money either way.
+    // own explicit `paper-supply:<campaignID>` waiver. A waived campaign has NO
+    // treasury row at all (nothing was ever reserved), so the escrow proof is
+    // replaced - not weakened - by that waiver. A transfer moves no money.
     const waived=warCore.paperSupply(campaign);
-    if(w?.version!==1||t?.version!==1||
+    const supplyOk=waived||(t?.version===1&&funds?.status==="HELD"&&
+     funds.warID===row.warID&&funds.campaignID===row.campaignID&&
+     funds.factionID===row.factionID&&pos(funds.cents));
+    if(w?.version!==1||!supplyOk||
      war?.state!=="ACTIVE"||
      !["PREPARING","ASSAULT"].includes(String(campaign?.state))||
      campaign.sourceSystemID!==from||campaign.targetSystemID!==to||
-     row.factionID!==war.attackerFactionID||
-     (!waived&&(funds?.status!=="HELD"||funds.warID!==row.warID||
-      funds.campaignID!==row.campaignID||
-      funds.factionID!==row.factionID||!pos(funds.cents))))
+     row.factionID!==war.attackerFactionID)
      return {status:"BLOCKED",reason:"WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED"};
     const hashes=digests(row);
     if(!hashes.modules||!hashes.cargo)

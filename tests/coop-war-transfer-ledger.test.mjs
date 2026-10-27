@@ -88,6 +88,11 @@ test("the campaign's own paper waiver crosses, a foreign one and a refund do not
  f.rows.get(TREASURY_KEY).reservations={};
  f.rows.get(WAR_KEY).campaigns.c1.supplyReservationID="paper-supply:c1";
  assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
+ // a waived campaign has NO treasury row at all, and that is not a defect
+ const noTreasury=fixture();
+ noTreasury.rows.get(WAR_KEY).campaigns.c1.supplyReservationID="paper-supply:c1";
+ noTreasury.rows.delete(TREASURY_KEY);
+ assert.equal(noTreasury.ledger.begin(noTreasury.cmd).status,"PREPARED");
  const other=fixture();
  other.rows.get(TREASURY_KEY).reservations={};
  other.rows.get(WAR_KEY).campaigns.c1.supplyReservationID="paper-supply:c2";
