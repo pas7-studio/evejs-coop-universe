@@ -732,6 +732,11 @@ function executeRequest(request) {
           quantity: Number(c.quantity) || 0,
           moduleID: Number(c.moduleID) || 0,
           transient: c.transient === true,
+          // Provenance of recovered wreck cargo: the custody writer stamps these,
+          // so "the loot really came from a wreck" is a field, not an assumption.
+          groupID: Number(c.groupID) || 0,
+          sourceWreckID: Number(c.sourceWreckID) || 0,
+          sourceWreckItemID: Number(c.sourceWreckItemID) || 0,
         })),
         cargoCount: cargo.length,
       };
