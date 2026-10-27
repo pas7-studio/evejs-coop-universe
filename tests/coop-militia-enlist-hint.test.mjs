@@ -12,7 +12,7 @@ const station = { stationID: 60000358, stationName: "Perimeter VI - Ytiri Storag
 test("a character docked elsewhere is told exactly where to fly", () => {
   const hint = buildEnlistHint({
     record: { characterID: 140000005, stationID: 60015262 },
-    faction, agents, station,
+    faction, agents, stations: station,
   });
   assert.equal(hint.status, "ENLIST_ELSEWHERE");
   assert.equal(hint.agentID, 3010879);
@@ -25,15 +25,15 @@ test("a character docked elsewhere is told exactly where to fly", () => {
 test("a character already at the agent's station is told to just accept", () => {
   const hint = buildEnlistHint({
     record: { characterID: 140000005, stationID: 60000358 },
-    faction, agents, station,
+    faction, agents, stations: station,
   });
   assert.equal(hint.status, "ENLIST_HERE");
   assert.match(hint.instruction, /accept the enlistment/);
 });
 
 test("no real agent means no hint, never an invented one", () => {
-  assert.equal(buildEnlistHint({ record: { characterID: 1, stationID: 2 }, faction, agents: [], station }), null);
-  assert.equal(buildEnlistHint({ record: { characterID: 1, stationID: 2 }, faction: null, agents, station }), null);
+  assert.equal(buildEnlistHint({ record: { characterID: 1, stationID: 2 }, faction, agents: [], stations: station }), null);
+  assert.equal(buildEnlistHint({ record: { characterID: 1, stationID: 2 }, faction: null, agents, stations: station }), null);
   assert.equal(buildEnlistHint({}), null);
 });
 

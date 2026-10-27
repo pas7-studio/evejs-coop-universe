@@ -751,10 +751,17 @@ function militiaState(request) {
       const militiaCorp = Number(faction && faction.militiaCorporationID) || 0;
       const agents = militiaCorp && typeof agentAuthority.listAgentsByCorporationID === "function"
         ? agentAuthority.listAgentsByCorporationID(militiaCorp) : [];
-      const first = Array.isArray(agents) ? agents.find((a) => Number(a && a.stationID) > 0) : null;
-      const station = first ? stationRecord(Number(first.stationID)) : null;
+      // Every real militia station, so the answer lists the actual venues instead
+      // of sending the player to one arbitrary one (Jita has no militia agent).
+      const stations = new Map();
+      for (const agent of Array.isArray(agents) ? agents : []) {
+        const stationID = Number(agent && agent.stationID) || 0;
+        if (!(stationID > 0) || stations.has(stationID)) continue;
+        const record_ = stationRecord(stationID);
+        if (record_) stations.set(stationID, record_);
+      }
       enlistHint = require("./coopMilitiaEnlistHint" + siblingSuffix)
-        .buildEnlistHint({ record, faction, agents, station });
+        .buildEnlistHint({ record, faction, agents, stations });
     } catch (_error) { enlistHint = null; }
     return {
       ok: true, characterID,

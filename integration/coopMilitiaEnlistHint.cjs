@@ -1,9 +1,13 @@
 "use strict";
 // "Where do I enlist?" was unanswerable from the client: the Factional Warfare
 // window in this build has no enlist button, and nothing pointed from the wish to
-// join to the one station where the militia agent actually stands. The owner had
-// to be told by hand. This module turns the real agent record and the real station
-// record into a concrete instruction, so the answer is data instead of a favour.
+// join to the one station where a militia agent actually stands.
+//
+// The owner then saw a "militia centre" in Jita and reasonably asked why he was
+// sent to Perimeter. The answer is in the data: Jita has no State Protectorate
+// agent at all, the militia agents sit in the warzone systems. So this returns the
+// REAL list of enlistment stations and marks the one the character is already at,
+// instead of pretending there is a single venue or inventing a nearest one.
 //
 // It never invents an agent or a station: no matching agent means null.
 
@@ -12,37 +16,75 @@ function toPositiveInt(value) {
   return n > 0 ? n : 0;
 }
 
-function buildEnlistHint({ record, faction, agents, station } = {}) {
+function stationLookup(stations) {
+  if (stations instanceof Map) return (id) => stations.get(id) || null;
+  if (Array.isArray(stations)) return (id) => stations.find((s) => toPositiveInt(s && s.stationID) === id) || null;
+  if (stations && typeof stations === "object") {
+    // A single station record is accepted as well as an id-keyed map.
+    if (toPositiveInt(stations.stationID)) {
+      const one = stations;
+      return (id) => (toPositiveInt(one.stationID) === id ? one : null);
+    }
+    return (id) => stations[id] || null;
+  }
+  return () => null;
+}
+
+function buildEnlistHint({ record, faction, agents, stations } = {}) {
   const characterID = toPositiveInt(record && record.characterID);
   const factionID = toPositiveInt(faction && faction.factionID);
   const militiaCorporationID = toPositiveInt(faction && faction.militiaCorporationID);
   if (!characterID || !factionID || !militiaCorporationID) return null;
 
-  const list = Array.isArray(agents) ? agents : [];
-  const agent = list.find((row) => toPositiveInt(row && row.stationID) > 0) || null;
-  if (!agent) return null;
-
-  const stationID = toPositiveInt(agent.stationID);
-  const here = station && toPositiveInt(station.stationID) === stationID ? station : null;
+  const lookup = stationLookup(stations);
   const characterStationID = toPositiveInt(record && record.stationID);
+  const characterSystemID = toPositiveInt(record && record.solarSystemID);
+
+  const options = (Array.isArray(agents) ? agents : [])
+    .map((agent) => {
+      const stationID = toPositiveInt(agent && agent.stationID);
+      if (!stationID) return null;
+      const station = lookup(stationID);
+      return {
+        agentID: toPositiveInt(agent.agentID),
+        agentName: String(agent.agentName || agent.name || ""),
+        stationID,
+        stationName: station ? String(station.stationName || "") : "",
+        solarSystemID: station ? toPositiveInt(station.solarSystemID) : toPositiveInt(agent.solarSystemID),
+        solarSystemName: station ? String(station.solarSystemName || "") : "",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a.stationID - b.stationID));
+  if (!options.length) return null;
+
+  const here = options.find((o) => o.stationID === characterStationID) || null;
+  const inSystem = options.find((o) => o.solarSystemID === characterSystemID) || null;
+  const chosen = here || inSystem || options[0];
+
+  const where = chosen.stationName
+    ? chosen.stationName + (chosen.solarSystemName ? " (" + chosen.solarSystemName + ")" : "")
+    : "station " + chosen.stationID;
 
   return {
-    status: characterStationID === stationID ? "ENLIST_HERE" : "ENLIST_ELSEWHERE",
+    status: here ? "ENLIST_HERE" : "ENLIST_ELSEWHERE",
     factionID,
     factionName: String(faction.name || ""),
     militiaCorporationID,
-    agentID: toPositiveInt(agent.agentID),
-    agentName: String(agent.agentName || agent.name || ""),
-    stationID,
-    stationName: here ? String(here.stationName || "") : "",
-    solarSystemID: here ? toPositiveInt(here.solarSystemID) : toPositiveInt(agent.solarSystemID),
-    solarSystemName: here ? String(here.solarSystemName || "") : "",
+    // The chosen venue, kept at the top level for simple consumers.
+    agentID: chosen.agentID,
+    agentName: chosen.agentName,
+    stationID: chosen.stationID,
+    stationName: chosen.stationName,
+    solarSystemID: chosen.solarSystemID,
+    solarSystemName: chosen.solarSystemName,
     characterStationID,
-    instruction: characterStationID === stationID
-      ? `Talk to ${String(agent.agentName || agent.name || "the militia agent")} here and accept the enlistment.`
-      : `Dock at ${here ? String(here.stationName || "") : "station " + stationID}` +
-        `${here && here.solarSystemName ? " (" + here.solarSystemName + ")" : ""} and talk to ` +
-        `${String(agent.agentName || agent.name || "the militia agent")}.`,
+    characterSystemID,
+    optionCount: options.length,
+    options,
+    instruction: here
+      ? `Talk to ${chosen.agentName || "the militia agent"} here and accept the enlistment.`
+      : `Dock at ${where} and talk to ${chosen.agentName || "the militia agent"}.`,
   };
 }
 
