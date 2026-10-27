@@ -1132,3 +1132,21 @@ Why: The native refinery was implemented but never called, so ore could never be
 Detail: integration/coopNpcRefinery.cjs was complete (native SDE quote, one atomic item debit+credit, durable journal) but NOTHING in the server ever called it, so ore could never become minerals. That is why the only buyer stayed the finite seed-market book. integration/coopNpcRefineryTick.cjs is the caller: it lists only the corporation's own tagged warehouse ore in a station hangar, asks the refinery t
 Where: docs/coop-flags.json, docs/coop-hook-inventory.json, integration/coopNpcRefineryTick.cjs, scripts/overlay-spec.cjs, tests/coop-npc-refinery-tick.test.mjs
 Evidence: live: hangar 52 warehouse ore stacks at 60000358, native quotes 4998.33..23760.72 ISK fee; tests coop-npc-refinery-tick 8 pass; deploy OVERLAY_OK reset=53
+### 2026-10-27T09:45Z · 3c46dbb · L1 · FW-017: a real warp point on the raider, and a scramble that really reads back
+
+Why: a live warp scrambler/disruptor must scramble: the passive hull baseline (-2) was returned instead of the live effect sum, so a real point could never stop a real warp
+Detail: A stock mining fleet answers the first aggression with retreatFleetToOrigin, which warps every hull 2.5 AU in one tick; the native loop then finds its prey out of combat range, clears the attacker's manual order (currentTargetID -> 0 within seconds) and shield regeneration outpaces the delivered damage (measured 146.45 -> 225.00 over 5 minutes, 0 wrecks). The stock runtime already refuses a warp f
+Where: integration/coopNativeRaids.cjs, integration/coopNpcWarpPoint.cjs, integration/coopVirtualWorldRuntime.cjs, patches/upstream/0008-warp-scramble-live-effects.patch, patches/upstream/MANIFEST.json, scripts/overlay-spec.cjs, tests/coop-native-raids-gameplay.test.mjs, tests/coop-npc-warp-point.test.mjs
+Evidence: 0008 applied (series=8), OVERLAY_OK; live: Warp Disruptor II fitted on 980000000602/601/058 via nativeNpcStore (moduleID 980100060462-64, flag 19); prey 32880 read warpScrambleStatus -2 with the module active before the fix
+### 2026-10-27T09:57Z · 7efd3e8 · OPS · OPS: the L1 series really applies to Code/, and 0006 also gates an NPC warp
+
+Why: git apply from Code/ silently skipped every L1 path (exit 0), so a coop-deploy reset left managed files unpatched while the tool reported a healthy series; and warpToEntity/warpToPoint resolved the command ship only from a session, so an NPC hull warped while really scrambled
+Detail: `git -C <Code> apply` resolves the patched path against the upstream repository root and then silently SKIPS it as "outside the current directory", exiting 0. Measured 2026-10-27: after a coop-deploy reset, runtime.js had lost its L1 hunks (the live-capacitor fix and the new NPC warp gate) while the applier printed a healthy series count and --check exited 0, so the built image silently ran unpatc
+Where: patches/upstream/0006-native-npc-live-capacitor-wins.patch, patches/upstream/MANIFEST.json, scripts/apply-upstream-patches.cjs
+Evidence: series=8 applies for real: runtime.js resolveCommandShipEntity x3 + liveChargeRatio present, npcBehaviorLoop advanceSessionlessCapacitor x4, npcData requestedLoadoutID x3; OVERLAY_OK; rebuilt image sha256:1f067ef4
+### 2026-10-27T10:04Z · 7b20bf3 · L3 · coop: the corporation is paid for its ore, not just its pilots
+
+Why: Sale proceeds landed only in the pilot ledger while the corporation that owns the ore stayed at 0 ISK, so the refinery's real station fee could never be paid; a treasury sweep now moves earned pilot ISK into the corporation wallet with a compensating write.
+Detail: The NPC market credits a PILOT ledger, so after three live sales the fleet's pilots held 98 402 ISK while the owning corporation's wallet stayed at 0 - and the refinery's real station fee (measured 4 998 / 12 806 / 14 996 / 21 501 / 22 760 / 23 760 ISK per stack) could therefore never be paid. The ore is the corporation's, so the proceeds belong to the corporation. integration/coopNpcCorpTreasury.
+Where: integration/coopNpcCorpTreasury.cjs, scripts/overlay-spec.cjs, tests/coop-npc-corp-treasury.test.mjs
+Evidence: tests coop-npc-corp-treasury 5 pass; live pilots 98402 ISK vs corp wallet 0, refinery fees 4998..23760 ISK
