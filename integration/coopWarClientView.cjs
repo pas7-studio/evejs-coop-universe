@@ -140,6 +140,67 @@ function occupationStates(state) {
   return bySystem;
 }
 
+// Complete warzone picture: the client colours a system by its STATIC owner
+// (`mapSolarSystems.factionID`, e.g. 30045344 Nennamaila = 500001 Caldari), and it
+// lists warzone systems from that same static data. Answering with only the few
+// systems our war state touches left the rest with no entry, so the dashboard read
+// "no data". This fills every system the static table gives the warzone factions,
+// and overlays the live contested state where we really have one.
+function warzoneOccupationStates(state, { factionIDs = [], systems = [], militiaOf = (id) => id } = {}) {
+  const allowed = new Set((factionIDs || []).map(Number).filter((id) => id > 0));
+  const live = occupationStates(state);
+  const out = {};
+  for (const system of systems || []) {
+    const systemID = num(system && system.solarSystemID);
+    const staticOwner = num(system && system.factionID);
+    if (!pos(systemID) || !allowed.has(staticOwner)) continue;
+    const current = live[systemID] || null;
+    out[systemID] = {
+      ownerID: militiaOf(current ? current.ownerID : staticOwner),
+      occupierID: militiaOf(current ? current.occupierID : staticOwner),
+      contested: Boolean(current && current.contested),
+    };
+  }
+  // A front we really have but the static table does not flag still counts.
+  for (const [key, current] of Object.entries(live)) {
+    const systemID = num(key);
+    if (!pos(systemID) || out[systemID]) continue;
+    if (!allowed.has(num(current.ownerID)) && !allowed.has(num(current.occupierID))) continue;
+    out[systemID] = {
+      ownerID: militiaOf(current.ownerID),
+      occupierID: militiaOf(current.occupierID),
+      contested: Boolean(current.contested),
+    };
+  }
+  return out;
+}
+
+// Static system ownership, read once per process: {solarSystemID, factionID}.
+let staticSystemsCache = null;
+function staticWarzoneSystems() {
+  if (staticSystemsCache) return staticSystemsCache;
+  const rows = [];
+  try {
+    const read = require("../gameStore").read("solarSystems");
+    const data = read && read.data !== undefined ? read.data : read;
+    const walk = (value, depth) => {
+      if (!value || depth > 6 || rows.length > 20000) return;
+      if (Array.isArray(value)) { for (const child of value) walk(child, depth + 1); return; }
+      if (typeof value !== "object") return;
+      if (value.solarSystemID !== undefined) {
+        rows.push({ solarSystemID: num(value.solarSystemID), factionID: num(value.factionID) });
+        return;
+      }
+      for (const child of Object.values(value)) walk(child, depth + 1);
+    };
+    walk(data, 0);
+  } catch (_error) {
+    return [];
+  }
+  staticSystemsCache = rows;
+  return rows;
+}
+
 // Chat report from the front. Text is built only from real state, so a report can
 // never claim an action that did not happen.
 function frontReport(kind, details = {}) {
@@ -201,6 +262,7 @@ function liveCampaignSnapshots(options = {}) {
 module.exports = {
   CAMPAIGN_STATE_ACTIVE, DEFAULT_WARZONE_ID, DEFAULT_EXPIRY_MS,
   numericID, filetime, liveCampaigns, campaignSnapshots, occupationStates, frontReport,
+  warzoneOccupationStates, staticWarzoneSystems,
   objectiveStructureID,
   warState, liveCampaignSnapshots,
 };
