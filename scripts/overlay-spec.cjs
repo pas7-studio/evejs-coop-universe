@@ -118,6 +118,8 @@ names.splice(names.indexOf("coopMiningBeltReturn")+1,0,"coopMiningTripRetreatGua
 names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
 // The refinery existed but nothing called it: ore could never become minerals.
 names.splice(names.indexOf("coopCargoVolume")+1,0,"coopNpcRefineryTick");
+// The corporation must be paid for its ore, or it can never afford its own refining fee.
+names.splice(names.indexOf("coopNpcRefineryTick")+1,0,"coopNpcCorpTreasury");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -349,6 +351,12 @@ const specs=[
     line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0});}catch(_coopRefineError){}'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
+   // FW-017: the stock retreat ignores its own warp result and discards nothing
+   // observable, so a hull really held by a warp point looked identical to one that
+   // retreated. The real scramble gate the stock warp uses is read here and
+   // published (throttled); observation only, default OFF.
+   {anchor:"  fleetRecord.state = String(options.state || \"retreating\");",after:false,
+    line:'  if (process.env.EVEJS_COOP_MINING_RETREAT_GUARD === "1") require("../../space/coopMiningTripRetreatGuard").noteRetreatHeld(fleetRecord, options.scene, entityIDs);'},
    {anchor:"    if (!targetEntity) {\n      delete assignmentMap[toInt(minerEntity.itemID, 0)];",after:true,
   line:"require(\"../../space/coopMiningTrace\").noteNoMineableTarget(fleetRecord,scene,minerEntity,availableTargetEntries,claimCounts);"},
    {anchor:"    const distanceToTarget = hooks.getSurfaceDistance(minerEntity, targetEntity);",after:true,
