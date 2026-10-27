@@ -22,18 +22,44 @@ is missing, the agent answers with the stock refusal and nothing is written.
 
 | faction | name | `militiaCorporationID` | agents at a real station | can enlist |
 |---|---|---|---|---|
-| 500011 | Angel Cartel | **1000436** | 193 in 39 systems | **yes** |
+| 500001 | Caldari State | **1000180** | 3041 in 12+ systems | **yes** |
+| 500002 | Minmatar Republic | 1000182 | 1384 | yes |
+| 500003 | Amarr Empire | 1000179 | 2332 | yes |
+| 500004 | Gallente Federation | 1000181 | 2297 | yes |
+| 500010 | Guristas Pirates | 1000437 | 70 | yes (no live front) |
+| 500011 | Angel Cartel | 1000436 | 193 in 39 systems | yes |
 | 500020 | Serpentis | `null` | 82 | **no** — rule 3 fails |
 | 500014 | ORE | `null` | 22 | **no** — rule 3 fails |
-| 500010 | Guristas Pirates | 1000437 | 70 | yes (no live front) |
-| 500001..500004 | the four empires | 1000180/1000182/1000179/1000181 | thousands | yes (not at war here) |
 
-So the only faction of the live war pair (`war:500011-500020`) that can legally
-recruit is **Angel Cartel 500011**. Serpentis cannot recruit in this SDE at all:
-`factions.500020.militiaCorporationID` is `null`, and the agent gate requires a
-positive value. That is a data fact, not a missing feature.
+So the live allowlist is exactly the six factions with a real militia
+corporation: `500001,500002,500003,500004,500010,500011`. Serpentis and ORE
+cannot recruit in this SDE at all: their `factions` row has
+`militiaCorporationID: null`, and the agent gate requires a positive value. That
+is a data fact, not a missing feature.
 
-## The one real enlistment desk
+## The owner's faction (from his own character record)
+
+`characters.140000005` "Sasunok1488": `raceID 1` (Caldari/Civire),
+`bloodlineID 2`, `corporationID 98000001`, **`factionID 500001` Caldari State**.
+Caldari State carries `militiaCorporationID 1000180`, and its wartime opponent in
+the game's own faction-warfare pairing is **Gallente Federation 500004**
+(`fwWarzoneSolarsystemService.js`, `WARZONE_CALDARI_GALLENTE = 2 ->
+[500001, 500004]`).
+
+## The nearest real Caldari enlistment desk (1 jump from Jita)
+
+```
+faction          500001 Caldari State   militiaCorporationID 1000180
+agent            3010879  Okamainen Niuranto  corporationID 1000004 (Ytiri)
+station          60000358  Perimeter VI - Ytiri Storage
+system           30000144  Perimeter (the same station the mining fleet uses)
+```
+
+Other verified desks in the same neighbourhood: 3010986 "Inikko Samanuni" at
+60000682 (New Caldari), 3012018 "Ogyura Unao" at 60003754 (Perimeter), 3008416
+"Antaken Kamola" at 60000004 (Muvolailen, 1 jump).
+
+## The Angel Cartel desk (for the pirate war)
 
 ```
 faction          500011 Angel Cartel      militiaCorporationID 1000436
@@ -66,9 +92,24 @@ Every hop is a real reciprocal stargate from the loaded SDE (`worldData.getStarg
   `ACTIVE`, `factionID 500011`, plus a `history` entry. No ISK, item or
   corporation membership changes.
 
-## Why the allowlist is exactly `500011`
+## Why the allowlist is exactly those six
 
 `EVEJS_COOP_MILITIA_FACTION_IDS` is an operator allowlist on top of the native
 proofs, so it may only contain factions that can actually satisfy all five
 rules. Adding 500020 or 500014 would change nothing except the error path: the
 gate refuses them before the allowlist is even reached.
+
+## Enemy selection is data, never a list
+
+`integration/coopMilitiaWarData.cjs` resolves the opponent in this order:
+
+1. **A war that is really declared in this world** (`warState.wars`), which is
+   only ever opened from real territories and real reciprocal stargates. This is
+   the war the player can actually join, so it wins.
+2. **The game's own faction-warfare pairing** when no war is declared yet:
+   Amarr 500003 <-> Minmatar 500002, Caldari 500001 <-> Gallente 500004
+   (mirrored from `fwWarzoneSolarsystemService.js`; a test re-reads that service
+   source and fails on drift).
+
+A pirate pair such as 500011/500020 is not in the warzone table, but it is a real
+declared war in this world, so it still works — the declared war is authoritative.
