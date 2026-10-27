@@ -6,6 +6,7 @@ const crypto=require("node:crypto");
 const fleet=require("./coopWarFleetRegistry"+(__filename.endsWith(".js")?"":".cjs"));
 const warStore=require("./coopFactionWarStore"+(__filename.endsWith(".js")?"":".cjs"));
 const treasury=require("./coopWarTreasury"+(__filename.endsWith(".js")?"":".cjs"));
+const warCore=require("./coopFactionWarCore"+(__filename.endsWith(".js")?"":".cjs"));
 const {readRow}=require("./coopNativeRowPath"+(__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const owns=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
@@ -115,13 +116,20 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
      t=tx.get(fleet.TABLE,treasury.KEY),
      campaign=w?.campaigns?.[row.campaignID],war=w?.wars?.[row.warID],
      funds=t?.reservations?.[campaign?.supplyReservationID];
+    // The crossing leg is PREPARING *and* ASSAULT (an attacker that is still
+    // outside the contested system is exactly the hull that must cross). Supply
+    // follows the ONE rule of the war core: a real HELD escrow, or the campaign's
+    // own explicit `paper-supply:<campaignID>` waiver, which reserves no ISK and
+    // can never pay a bounty. A transfer moves no money either way.
+    const waived=warCore.paperSupply(campaign);
     if(w?.version!==1||t?.version!==1||
-     war?.state!=="ACTIVE"||campaign?.state!=="PREPARING"||
+     war?.state!=="ACTIVE"||
+     !["PREPARING","ASSAULT"].includes(String(campaign?.state))||
      campaign.sourceSystemID!==from||campaign.targetSystemID!==to||
      row.factionID!==war.attackerFactionID||
-     funds?.status!=="HELD"||funds.warID!==row.warID||
-     funds.campaignID!==row.campaignID||
-     funds.factionID!==row.factionID||!pos(funds.cents))
+     (!waived&&(funds?.status!=="HELD"||funds.warID!==row.warID||
+      funds.campaignID!==row.campaignID||
+      funds.factionID!==row.factionID||!pos(funds.cents))))
      return {status:"BLOCKED",reason:"WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED"};
     const hashes=digests(row);
     if(!hashes.modules||!hashes.cargo)

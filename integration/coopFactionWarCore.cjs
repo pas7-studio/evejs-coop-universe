@@ -131,4 +131,13 @@ function transition(source,command,{now=Date.now(),proofs={}}={}){
  validateState(state);
  return {status:"APPLIED",receipt:result,state};
 }
-module.exports={VERSION,MAX_EVENTS,empty,validateState,transition};
+// The ONE definition of "this campaign's supply was explicitly waived": the
+// opening writes exactly `paper-supply:<campaignID>` when the operator disabled
+// funding (EVEJS_COOP_WAR_REQUIRE_FUNDING=0). Such a campaign may fly and fight,
+// but no escrow exists, so no bounty can ever be paid from it. Every other id
+// must be a real HELD treasury reservation.
+const paperSupplyID=campaignID=>"paper-supply:"+String(campaignID||"");
+const paperSupply=campaign=>
+ campaign?.supplyReservationID===paperSupplyID(campaign?.campaignID);
+module.exports={VERSION,MAX_EVENTS,empty,validateState,transition,
+ paperSupply,paperSupplyID};

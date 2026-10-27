@@ -78,6 +78,26 @@ test("physical source intent is a durable SQL fence, not a fleet teleport",()=>{
  assert.equal(f.ledger.pending().status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(f.ledger.begin(f.cmd).reason,"WAR_HANDOFF_ALREADY_RECORDED");
 });
+test("an ASSAULT attacker that is still outside the target may cross",()=>{
+ const f=fixture();
+ f.rows.get(WAR_KEY).campaigns.c1.state="ASSAULT";
+ assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
+});
+test("the campaign's own paper waiver crosses, a foreign one and a refund do not",()=>{
+ const f=fixture();
+ f.rows.get(TREASURY_KEY).reservations={};
+ f.rows.get(WAR_KEY).campaigns.c1.supplyReservationID="paper-supply:c1";
+ assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");
+ const other=fixture();
+ other.rows.get(TREASURY_KEY).reservations={};
+ other.rows.get(WAR_KEY).campaigns.c1.supplyReservationID="paper-supply:c2";
+ assert.equal(other.ledger.begin(other.cmd).reason,
+  "WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED");
+ const refunded=fixture();
+ refunded.invalidFunds();
+ assert.equal(refunded.ledger.begin(refunded.cmd).reason,
+  "WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED");
+});
 test("native destination then SQL + JSON relocation finish exactly once",()=>{
  const f=fixture();
  assert.equal(f.ledger.begin(f.cmd).status,"PREPARED");

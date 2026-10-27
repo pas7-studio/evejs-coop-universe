@@ -4,6 +4,8 @@
 // native cross-system transfer: custody is never inferred from gate arrival.
 const {createGateTravel}=require("./coopNpcGateTravel"+
  (__filename.endsWith(".js")?"":".cjs"));
+const warCore=require("./coopFactionWarCore"+
+ (__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const REQUIRED_FLAGS=["EVEJS_COOP_FACTION_WAR","EVEJS_COOP_FACTION_WAR_FLEETS",
  "EVEJS_COOP_WAR_TREASURY","EVEJS_COOP_FACTION_WAR_GATE_APPROACH",
@@ -94,8 +96,7 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
    // Such a campaign may still fly a real hull at a real gate; it is labelled
    // PAPER_UNFUNDED_EXPLICIT and never treated as funded. Any OTHER id keeps the
    // full strict escrow proof.
-   const paperSupply=campaign.supplyReservationID===
-    "paper-supply:"+campaign.campaignID;
+   const paperSupply=warCore.paperSupply(campaign);
    if(!paperSupply&&(reserve?.status!=="HELD"||reserve.warID!==campaign.warID||
     reserve.campaignID!==campaign.campaignID||
     reserve.factionID!==w.attackerFactionID||!pos(reserve.cents))){
