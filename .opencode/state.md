@@ -2634,3 +2634,36 @@ NEXT: the front is still operator-seeded (`spawn_war_fleet` needs a free identit
 A durable garrison - a war system refilled by its controller's navy whenever it is
 observed - is the remaining gap before the war runs unattended. The formation warp
 needs one live case where a side of 2+ must close as a group to be seen in-client.
+
+## FW-032/033: the front now heals itself (2026-10-27T22:35Z, live)
+
+Two more measured defects closed, both proven on the play stack.
+
+FW-032 `integration/coopWarLossReconcile.cjs` (`EVEJS_COOP_WAR_LOSS_RECONCILE=1`):
+a confirmed native wreck now RELEASES the hull's exclusive custody slot in the war
+fleet registry (the registry's own release verifier already accepts a
+process-confirmed wreck) and frees the killed pilot's identity. Before this, a dead
+hull stayed ALIVE in the registry forever, so the side looked fully mustered with a
+corpse and the pilot could never fly again. Live: `living-native-war-loss-reconciled`
+status RECONCILED, custody APPLIED, identity RELEASED for 980000036587 / wreck
+980300000037.
+
+FW-033 `integration/coopWarGarrison.cjs` (`EVEJS_COOP_WAR_GARRISON=1`): an ASSAULT
+side with fewer than `garrisonSize` (2) hulls in the campaign target system is
+refilled through the SAME sanctioned path an operator uses - `spawn_war_fleet`
+(real doctrine row, real native ship, real free pilot identity), one hull per tick,
+3 min cooldown per side. Live: two `living-native-war-garrison` GARRISON_APPLIED
+events spawned 980000036587 (fleet coop-fleet-500004-0007, commander
+coop-pilot-038) and 980000036810 (fleet coop-fleet-500004-0008, commander
+coop-pilot-069) - both commanders were identities freed by earlier real kills.
+Minutes later 980000036810 was already receiving a real attack order.
+
+Measured caveat: `coopWarFleetRoster` is EMPTY in this deployment (0 fleets) -
+`spawn_war_fleet` only writes the war fleet registry, not the newer roster. So the
+FW-032 roster half honestly reports NOT_IN_ROSTER, and `planReconstitution`/
+`commitReconstitution` cannot be used for these hulls. The authoritative custody
+path is the registry, and that one works.
+
+Still open: the formation batch warp (FW-030) has no live case yet - garrison hulls
+spawn close enough to the enemy that they engage without a group warp. The next
+natural trigger is a side mustering in its source system and travelling together.

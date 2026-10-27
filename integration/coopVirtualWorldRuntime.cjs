@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
 const raidDiagnose=new Map();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warEngagement=null,warPosture=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
+let warFleetRegistry=null,warBattleDirector=null,warEngagement=null,warPosture=null,warLossReconcile=null,warGarrison=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
 // casualty ledger): the only proof that a registered warship is really gone.
 const destroyedNativeShips=new Set();
@@ -1139,6 +1139,37 @@ function advanceNativeWarGateStaging(){
     evidence:"EXPLICIT_PRECONDITION_NOT_MET"});
  }
 }
+// FW-033: a front that cannot refill is not a war. After real losses a side can
+// hold zero hulls while the campaign stays in ASSAULT, and nothing ever puts a
+// navy back. This refills a side through the SAME sanctioned spawn path an
+// operator uses (`spawn_war_fleet`: real doctrine row, real native ship, real
+// free pilot identity) and reports the native status of every attempt.
+function advanceNativeWarGarrison(){
+ const garrison=require("./coopWarGarrison");
+ if(!garrison.enabled(process.env))return warSkip("garrison","FLAG_OFF");
+ if(!nativeWarFleetRegistry())return warSkip("garrison","NO_WAR_FLEET_REGISTRY");
+ if(!identityRegistry)return warSkip("garrison","NO_IDENTITY_REGISTRY");
+ if(!warGarrison)warGarrison=garrison.createWarGarrison({
+  readWarState:()=>warStateStore().read(),
+  registry:nativeWarFleetRegistry(),
+  listFreePilots:()=>{
+   const linked=new Set(Object.values(identityRegistry.snapshot()?.links||{})
+    .map(l=>String(l?.pilotID)));
+   return (world?.snapshot?.().pilots||[])
+    .map(p=>String(p?.id||"")).filter(id=>id&&!linked.has(id));
+  },
+  spawnFleet:({factionID,systemID,commanderPilotID,merit})=>
+   require("./coopAdminBridge").executeRequest({
+    action:"spawn_war_fleet",factionID,systemID,merit,commanderPilotID})
+ });
+ const result=warGarrison.tick();
+ if(result.applied.length)require("./coopRuntimeProbe").observe(
+  "living-native-war-garrison",null,null,{
+   status:result.status,applied:result.applied,
+   evidence:"SANCTIONED_WAR_FLEET_SPAWN_NO_INVENTED_HULL"});
+ else if(result.skips.length)warSkip("garrison",
+  String(result.skips[0].reason||result.status));
+}
 function advanceNativeWarCombat(){
  const api=require("./coopWarCombatAuthority");
  if(!api.combatEnabled())return warSkip("combat","COMBAT_FLAGS_OFF");
@@ -2027,6 +2058,8 @@ function start(){
   // that can really fire.
   runPhase("native-faction-war-battle-line-relief",advanceNativeWarBattleLineRelief);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
+  // FW-033: refill a side that lost its garrison, before the assault phase counts it.
+  runPhase("native-faction-war-garrison",advanceNativeWarGarrison);
   runPhase("native-faction-war-assault",advanceNativeWarAssault);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);
   runPhase("native-faction-war-sovereignty-projection",advanceNativeWarSovereigntyProjection);
@@ -4943,6 +4976,30 @@ function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
       "living-native-war-casualty",null,{spaceState:{systemID}},
       {status:casualty.status,receipt:casualty.receipt,
        captureAuthorized:false,killCreditAssigned:false});
+    // FW-032: a confirmed wreck must actually leave the war. Otherwise the dead
+    // hull keeps its exclusive custody slot and roster entry, the side looks
+    // mustered with a corpse, and the killed pilot can never man a replacement.
+    if(casualty.status==="RECORDED"||casualty.status==="DUPLICATE"){
+     try{
+      if(!warLossReconcile)
+       warLossReconcile=require("./coopWarLossReconcile")
+        .createWarLossReconcile({
+         registry:nativeWarFleetRegistry(),
+         roster:require("./coopWarFleetRoster").sharedRoster(),
+         releaseIdentity:({pilotID,entityID:releaseEntity,reason})=>
+          releaseSpawnedIdentity({pilotID,entityID:releaseEntity,reason})
+        });
+      const reconciled=warLossReconcile.reconcile({
+       entityID:Number(npcID),wreckID:Number(wreckID),pilotID:link.pilotID
+      });
+      require("./coopRuntimeProbe").observe(
+       "living-native-war-loss-reconciled",null,{spaceState:{systemID}},
+       {...reconciled,
+        evidence:"NATIVE_WRECK_RELEASES_CUSTODY_AND_PILOT"});
+     }catch(error){
+      console.warn("[CoopNativeWarLossReconcile]",error.message);
+     }
+    }
    }catch(error){
     console.warn("[CoopNativeWarCasualty] strict native evidence",error.message);
    }
