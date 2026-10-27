@@ -2236,3 +2236,20 @@ Next concrete step: stage BOTH factions` fleets in ONE warzone system (Caldari v
 Gallente) so the owner can fly there and watch the fight, and make sure the front chat
 line reaches him there. Evidence required: real weapon success, measured HP loss, real
 wreck + stored loot on the same victim. No map work, no FW tab work.
+
+## TWO MORE CLIENT TABS (owner report 2026-10-27): diagnosis
+
+1. "Gallente 2 systems / Caldari 0" — that number comes from OUR war state, not the
+   client: the campaign seed made Gallente the occupier in two systems and Caldari in
+   none. It is real data, just unbalanced. Fix is in the war/campaign seed, not the UI.
+2. "War zone" tab = black screen and "details about the combat zone: loading advantage
+   data" forever — the client asks for warzone advantage/summary data that THIS SERVER
+   NEVER IMPLEMENTS: `grep -rn Advantage /app/server/src/services/` returns nothing, and
+   fwWarzoneSolarsystemService only exposes GetAllWarzonesOccupationStates(+Uncached),
+   GetAllWarzones, GetHQSystemIDs, GetLocalOccupationState. The client gets no answer and
+   keeps loading. This is fixable server-side: implement the advantage/summary handler
+   with real values (occupation counts, contested systems) instead of nothing.
+   Unknown eve_public requests in the last 3h are only payment.schedule.GetActiveByType
+   and stargate.lock.GetRestrictedSystems — neither is the warzone tab.
+Next: (a) rebalance the campaign seed so both factions hold systems, (b) add the
+advantage handler. No client patching, no map work.
