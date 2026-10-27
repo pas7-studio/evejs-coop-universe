@@ -175,3 +175,27 @@ raid at the belt is the one that can really fire.
 3. Report what the map campaign layer and the FW front tab show; the server
    projection is EVEJS_COOP_WAR_CLIENT_VIEW=1.
 4. Nothing in this document claims any of that is client-verified.
+
+## Refresh 2026-10-27T13:35Z - the loot leg is real end to end; the client half is still unverified
+
+Server-side facts proven since the last refresh (verbatim evidence in `.opencode/state.md`):
+
+| Fact | Evidence |
+| --- | --- |
+| Overlay installs and matches the pin | `coop-deploy --checkout <Code>` -> `reset=53 patches=series=8 overlay=OVERLAY_OK` |
+| A wreck a restart dropped is restored from its own durable row | `living-npc-wreck-claim-restored` wreck 980300000008, 3 stacks / 93 450 units, `STOCK_SPAWN_NATIVE_WRECK` |
+| A claim that can never be looted is closed with its reason | `living-npc-wreck-claim-closed` wreck 980300000009 `WRECK_HAS_NO_STORED_ITEMS` `CLAIM_CLOSED` |
+| A real hull takes exactly the loot its hold can carry | `living-npc-wreck-cargo-settled` 1 200 units of 17471, remainder 75 660 kept as a real wreck item |
+| That loot is sold to a real seeded buyer | `living-native-loot-market-settled` `TRADE_SETTLED` balance 10 332, `marketOrderSource EVEJS_SEED`, `marketRPC FillOrder` |
+
+BLOCKED_CLIENT_CHECK: none of the above is visible without the EVE client. The
+tester steps stay the same: two authorized characters, both undocked in New
+Caldari 30000145, one on grid with the Angel hull `980000000601` while it loots
+wreck `980300000010`, then the same character docked at station `60014935` after
+the sale.
+
+Known open item for the two-client run: the war chest cannot be funded yet
+because the corporation treasury sweep moves an armed faction pilot's ISK into
+corporation 1000129 (measured: `corp-treasury/1000129.json` `SWEPT 10 332` from
+`coop-pilot-060`), so `war_funding_diagnose` reads `NO_REAL_FACTION_INCOME`. No
+war bounty is paid until that is fixed; no ISK is minted in the meantime.
