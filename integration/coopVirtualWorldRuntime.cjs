@@ -721,6 +721,35 @@ function advanceNativeWarBattleLineRelief(){
 // Read-only operator diagnostic: what would mobilization do right now, and why
 // not. Uses the same live authorities and the mobilizer's own dry run, so it can
 // never reserve, order or mutate anything.
+// Read-only: the war state as the phases really see it. Territories, wars and
+// campaigns are the exact rows the opening/assault phases read, so "no front" and
+// "0 campaigns" stop being guesses. It never writes, reserves or plans.
+function diagnoseWarState(){
+ let state;
+ try{state=warStateStore().read();}
+ catch(error){return {status:"WAR_STATE_UNAVAILABLE",
+  reason:String(error&&error.message||error).slice(0,120)};}
+ if(!state||typeof state!=="object")return {status:"NO_WAR_STATE"};
+ const territories=state.territories&&typeof state.territories==="object"?
+  state.territories:{};
+ const wars=Object.values(state.wars||{}).map(war=>({
+  warID:String(war?.warID||""),
+  attackerFactionID:Number(war?.attackerFactionID)||0,
+  defenderFactionID:Number(war?.defenderFactionID)||0,
+  status:String(war?.status||""),
+ }));
+ const campaigns=Object.values(state.campaigns||{}).map(campaign=>({
+  campaignID:String(campaign?.campaignID||""),
+  warID:String(campaign?.warID||""),
+  targetSystemID:Number(campaign?.targetSystemID)||0,
+  status:String(campaign?.status||""),
+  structureID:Number(campaign?.structureID)||0,
+ }));
+ return {status:"OK",version:Number(state.version)||0,
+  territories,wars,campaigns,
+  counts:{territories:Object.keys(territories).length,wars:wars.length,
+   campaigns:campaigns.length}};
+}
 function diagnoseMobilization(){
  if(!warMobilizer)return {status:"MOBILIZER_NOT_INITIALIZED"};
  if(!visitedSystems.size)return {status:"NO_VISITED_SYSTEMS"};
@@ -2822,7 +2851,7 @@ function sellPricing(){
 // into the hauler's real native cargo hold (durable receipt per lift), and the
 // proven sale path above then liquidates it against the seeded bids of the very
 // station the hauler is docked at. OFF by default.
-let mineralLiftEngine=null,mineralLiftBlocked=false;
+let mineralLiftEngine=null,mineralLiftBlocked=false;const mineralLiftNotes=new Map();
 function ensureMineralLift(){
  if(mineralLiftEngine||mineralLiftBlocked)return mineralLiftEngine;
  try{
@@ -4680,6 +4709,16 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
      if(!sellTypes.includes(typeID))sellTypes.push(typeID);
     }
   }catch(_error){/* a failed lift must never block the ore sale */}
+   if(loaded&&loaded.status!=="LIFTED"){
+    const note="lift:"+Number(stationID)+":"+String(loaded.status);
+    const now=Date.now();
+    if(now-(mineralLiftNotes.get(note)||0)>300000){
+     mineralLiftNotes.set(note,now);
+     try{require("./coopRuntimeProbe").observe("living-npc-mineral-lift-skipped",null,
+      {spaceState:{systemID:Number(systemID),stationID:Number(stationID),
+       haulerID:Number(haulerID),status:String(loaded.status||"UNKNOWN")}});}catch(_error){}
+    }
+   }
  }
  const trader=ensureMarketTrader();
  if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
@@ -4779,4 +4818,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,diagnoseNativeRaids,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};

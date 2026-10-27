@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -954,6 +954,16 @@ function executeRequest(request) {
       return { ok: true, mobilization: runtimeWorld.diagnoseMobilization() };
     } catch (error) {
       return { ok: false, error: "diagnose failed: " + String(error && error.message || error) };
+    }
+  }
+  // Read-only: the war state exactly as the phases read it (territories, wars,
+  // campaigns), so "no front" and "0 campaigns" are measurements.
+  if (action === "war_state") {
+    try {
+      const runtimeWorld = require("./coopVirtualWorldRuntime" + siblingSuffix);
+      return { ok: true, warState: runtimeWorld.diagnoseWarState() };
+    } catch (error) {
+      return { ok: false, error: "war state diagnose failed: " + String(error && error.message || error) };
     }
   }
   if (action === "war_funding_diagnose") {
