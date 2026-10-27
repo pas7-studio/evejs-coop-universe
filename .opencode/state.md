@@ -1,5 +1,34 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 14:30Z - production governor LIVE, and two world-caused blocks
+
+Owner decision: throttle extraction to real demand (not reseeding, not industry).
+integration/coopMiningDemandGovernor.cjs is now deployed with
+EVEJS_COOP_MINING_DEMAND_GOVERNOR=1 FACTOR=1.5 FLOOR=20000 TRICKLE_MS=900000.
+
+Live proof of the throttle (14:16-14:26 UTC):
+  living-mining-demand-governor TRICKLE_ALLOWED sys30000144 held=4159021 want=45000
+  living-mining-demand-governor HOLD           sys30000144 held=4159021 want=45000
+  mining cycles dropped from ~100+ per 5 min to ~34 (trickle windows only).
+It holds ONLY a fleet in state "mining", never a live station trip, and an unreadable
+stock or unread bid book can never stop the world (both fall back to ALLOW).
+
+Deployment traps hit today, all real:
+  - `docker build` once reused a stale COPY layer; verify a changed module INSIDE the
+    image (md5sum) instead of trusting the build exit code.
+  - the shared container was recreated by another session with an older compose config,
+    which silently dropped the governor env flags. Re-check printenv after any restart.
+  - overlay --apply aborted once on another session's half-written hook
+    (HOOK_REQUIRE_UNRESOLVED npcBehaviorLoop -> ../coopMilitiaWarPlayer).
+
+Two blocks that are world state, not code:
+  1. Hauler 980000016300 (which carried the 5000+5000 lifted minerals) no longer exists:
+     the ship and its 9 mineral cargo rows were destroyed during the raid/war activity.
+     So the mineral SALE is still unproven end to end.
+  2. Durable slot 30000145-1 reports NEEDS_OPERATOR_REPAIR
+     ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH since 14:21:14, so that fleet cannot run another
+     station trip until the native repair succeeds. Nothing was wiped to force it.
+
 ## 2026-10-27 13:35Z - the loop's real ceiling, measured with a new read-only audit
 
 scripts/coop-economy-balance.cjs (+5 tests) answers the only question that decides whether

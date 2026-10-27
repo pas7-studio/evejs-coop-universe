@@ -1396,3 +1396,8 @@ Why: one war per faction pair and one campaign per target; identity reassignment
 Detail: Three real opening defects found while trying to open the Caldari/Gallente front: 1. two borders of the SAME faction pair in one tick produced campaigns with opposite orientations, so the core refused START_CAMPAIGN with CAMPAIGN_PREREQUISITES_NOT_MET and the whole batch was discarded. Campaigns now follow the single war record's orientation (the edge is flipped). 2. a second border naming a targe
 Where: integration/coopAdminBridge.cjs, integration/coopFactionWarOpening.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-faction-war-opening.test.mjs
 Evidence: tests 18/18; OVERLAY_OK; live war:500001-500004 opened
+### 2026-10-27T14:22Z · 0f54902 · TEST · docs: FW-026/027 metrics, live doctrine-fleet proof and the exact assault blocker
+
+Why: Verified the demand governor live and recorded two world-caused blocks: the hull carrying the lifted minerals was destroyed, and slot 30000145-1 awaits a native repair.
+Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
+Evidence: governor HOLD held=4159021 want=45000, cycles 100+/5min -> ~34; hauler 980000016300 gone with 9 mineral rows; ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH at 14:21:14
