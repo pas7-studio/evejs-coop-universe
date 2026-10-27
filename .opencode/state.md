@@ -1108,3 +1108,13 @@ this order:
    order while the prey is pinned, which is already implemented via
    `preyScrambled`, and make sure the lease is not released while pinned).
 Do NOT script damage, do not touch distance constants, do not mint ISK.
+
+**Concrete lever found for the DPS gap (same run, 10:15Z).** `npcRuntime.orbit(entityID,
+targetEntityID, distance, options)` is a real native order and the raid director does
+not use it. The blaster cruiser's behaviour profile parks it at ~9 km, which is far
+outside a blaster's own optimal range, so its 300 real charges hit nothing. The honest
+next change is one order: when the attacker's fitted weapon (`estimateNpcHostileEffectiveRange`
+/ the module's own `maxRange` attribute) is shorter than the current distance, issue a
+real native orbit at that attribute's range before the attack. No distance constant of
+ours, no scripted damage: the ship flies to its own gun's range and the native cycle
+does the rest.
