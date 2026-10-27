@@ -48,6 +48,9 @@ names.splice(names.indexOf("coopWarFleetNativeProofs")+1,0,"coopWarCombatPolicy"
 names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarPatrolLoadout","coopWarMobilizer");
 // FW-003C ammo depth: the authored multi-charge war-patrol loadout row.
 names.splice(names.indexOf("coopWarPatrolLoadout")+1,0,"coopWarPatrolLoadoutRow");
+// FW-026: real fleet doctrines (one authored npcLoadouts row per role) and the
+// rank-driven role-complete fleet composition that fields them.
+names.splice(names.indexOf("coopWarPatrolLoadoutRow")+1,0,"coopWarDoctrine","coopWarFleetComposition");
 // FW-017: the real warp point a raider fits and engages on its prey, so a fleet
 // retreat cannot invalidate every attack order at 2.5 AU.
 names.splice(names.indexOf("coopNativeRaids")+1,0,"coopNpcWarpPoint");

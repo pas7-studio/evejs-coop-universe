@@ -239,7 +239,17 @@ module.exports = {
   // npcData, which only needs this one synchronous read-only entry point.
   resolveRow: (loadoutID) => {
     if (!singleton) singleton = createWarPatrolLoadoutRow();
-    return singleton.resolveRow(loadoutID);
+    const own = singleton.resolveRow(loadoutID);
+    if (own) return own;
+    // FW-026: a doctrine row (`coop_war_doctrine_<faction>_<role>`) is authored by
+    // coopWarDoctrine and served through this same single native hook, so the
+    // deployed overlay still has exactly one loadout resolver.
+    try {
+      return require("./coopWarDoctrine" + (__filename.endsWith(".js") ? "" : ".cjs"))
+        .resolveRow(loadoutID) || null;
+    } catch (_error) {
+      return null;
+    }
   },
   authoredIDFor,
   parseAuthoredID,
