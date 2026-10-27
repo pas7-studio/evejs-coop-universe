@@ -54,7 +54,16 @@ function nextTitle({existing=null,pilotID,record,at}={}){
   previousRank:String(existing?.rank||""),previousTitle:String(existing?.title||""),
   merit:Number(record?.merit)||0,unlocks:[]};
 }
-function createRankTitles({gameStore,clock=()=>Date.now(),env=process.env}={}){
+// A real player pilot key is `coop-player-<characterID>`: the ONLY shape that has
+// a stock character record behind it, so the title can be made client-visible.
+const player=x=>typeof x==="string"&&/^coop-player-[0-9]{3,}$/.test(x);
+const characterIDOf=pilotID=>{
+ if(!player(pilotID))return 0;
+ const id=Number(String(pilotID).slice("coop-player-".length));
+ return Number.isSafeInteger(id)&&id>0?id:0;
+};
+function createRankTitles({gameStore,clock=()=>Date.now(),env=process.env,
+ characters=null}={}){
  if(typeof gameStore?.coopAtomicNativeRows?.transact!=="function")
   throw Error("WAR_TITLE_AUTHORITIES_REQUIRED");
  const enabled=()=>env.EVEJS_COOP_FACTION_WAR==="1"&&
@@ -81,6 +90,53 @@ function createRankTitles({gameStore,clock=()=>Date.now(),env=process.env}={}){
    return next;
   });
  }
- return Object.freeze({read,apply});
+ // The co-op ledger title is only visible in co-op telemetry. A real player's
+ // title must be in the stock character record, which is what the client's
+ // character sheet shows. Nothing else is written: no skill, no item, no ISK.
+ function applyToCharacter({pilotID,characterID,rank,title}={}){
+  if(!enabled())return {status:"DISABLED"};
+  const expected=titleForRank(String(rank||""));
+  if(!expected)return {status:"REFUSED",reason:"UNKNOWN_RANK"};
+  const keyID=characterIDOf(pilotID);
+  if(!keyID)return {status:"REFUSED",reason:"NOT_A_PLAYER_PILOT_KEY"};
+  const charID=Number(characterID)||keyID;
+  if(!pos(charID))return {status:"REFUSED",reason:"CHARACTER_ID_REQUIRED"};
+  // The key and the record must be the same person, and the text must be the
+  // canonical title of that rank: an invented or mismatched title is refused.
+  if(charID!==keyID)return {status:"REFUSED",reason:"CHARACTER_KEY_MISMATCH"};
+  if(String(title||expected)!==expected)
+   return {status:"REFUSED",reason:"TITLE_NOT_CANONICAL_FOR_RANK"};
+  let api=characters;
+  if(!api){
+   try{api=require("../services/character/characterState");}
+   catch(error){
+    return {status:"UNAVAILABLE",
+     reason:String((error&&error.message)||error).slice(0,120)};
+   }
+  }
+  if(typeof api?.updateCharacterRecord!=="function"||
+   typeof api?.getCharacterRecord!=="function")
+   return {status:"UNAVAILABLE",reason:"CHARACTER_STATE_UNAVAILABLE"};
+  let record=null;
+  try{record=api.getCharacterRecord(charID);}catch{record=null}
+  if(!record)return {status:"REFUSED",reason:"CHARACTER_RECORD_MISSING"};
+  if(String(record.title||"")===expected)
+   return {status:"UNCHANGED",characterID:charID,rank:String(rank),title:expected};
+  let written=null;
+  try{
+   written=api.updateCharacterRecord(charID,current=>
+    Object.assign({},current,{title:expected}));
+  }catch(error){
+   return {status:"FAILED",
+    reason:String((error&&error.message)||error).slice(0,120)};
+  }
+  if(written?.success!==true)
+   return {status:"FAILED",reason:String(written?.errorMsg||"WRITE_REFUSED")};
+  return {status:"APPLIED",characterID:charID,rank:String(rank),title:expected,
+   previousTitle:String(record.title||""),
+   surface:"CHARACTER_RECORD_TITLE"};
+ }
+ return Object.freeze({read,apply,applyToCharacter});
 }
-module.exports={TABLE,KEY,TITLES,empty,validate,titleForRank,nextTitle,createRankTitles};
+module.exports={TABLE,KEY,TITLES,empty,validate,titleForRank,nextTitle,
+ createRankTitles,characterIDOf};

@@ -85,3 +85,57 @@ function fixture({env=flags()}={}){
  return {titles,get writes(){return writes},state:()=>records.get(TABLE+":"+KEY),
   set:state=>records.set(TABLE+":"+KEY,structuredClone(state))};
 }
+
+// A real player title must reach the STOCK character record, which is what the
+// client's character sheet shows. Everything else stays untouched.
+function characterFixture(record = {title: ""}) {
+ const rows = new Map([["140000005", { ...record, characterID: 140000005 }]]);
+ const api = {
+  getCharacterRecord: id => rows.get(String(id)) || null,
+  updateCharacterRecord: (id, updater) => {
+   const current = rows.get(String(id));
+   if (!current) return { success: false, errorMsg: "CHARACTER_NOT_FOUND" };
+   const next = updater(structuredClone(current));
+   rows.set(String(id), next);
+   return { success: true, data: next };
+  },
+ };
+ const gameStore = { coopAtomicNativeRows: { transact: (tables, fn) =>
+  fn({ get: () => null, put: () => {} }) } };
+ const titles = createRankTitles({ gameStore, env: flags(), clock: () => 1000, characters: api });
+ return { titles, rows, api };
+}
+
+test("a player promotion writes the canonical title into the character record", () => {
+ const f = characterFixture();
+ const out = f.titles.applyToCharacter({ pilotID: "coop-player-140000005",
+  rank: "pilot", title: "Fleet Pilot" });
+ assert.equal(out.status, "APPLIED");
+ assert.equal(out.surface, "CHARACTER_RECORD_TITLE");
+ assert.equal(f.rows.get("140000005").title, "Fleet Pilot");
+ assert.equal(f.rows.get("140000005").characterID, 140000005);
+ assert.equal(f.titles.applyToCharacter({ pilotID: "coop-player-140000005",
+  rank: "pilot" }).status, "UNCHANGED");
+});
+
+test("a character title is refused for a non-player key, an unknown rank, a mismatched or invented title and a missing record", () => {
+ const f = characterFixture();
+ assert.deepEqual(f.titles.applyToCharacter({ pilotID: "coop-pilot-001", rank: "pilot" }),
+  { status: "REFUSED", reason: "NOT_A_PLAYER_PILOT_KEY" });
+ assert.deepEqual(f.titles.applyToCharacter({ pilotID: "coop-player-140000005", rank: "titan" }),
+  { status: "REFUSED", reason: "UNKNOWN_RANK" });
+ assert.equal(f.titles.applyToCharacter({ pilotID: "coop-player-140000005",
+  rank: "pilot", title: "Warlord of Jita" }).reason, "TITLE_NOT_CANONICAL_FOR_RANK");
+ assert.equal(f.titles.applyToCharacter({ pilotID: "coop-player-140000005",
+  characterID: 999, rank: "pilot" }).reason, "CHARACTER_KEY_MISMATCH");
+ assert.equal(f.titles.applyToCharacter({ pilotID: "coop-player-140000009",
+  rank: "pilot" }).reason, "CHARACTER_RECORD_MISSING");
+ assert.equal(f.rows.get("140000005").title, "");
+});
+
+test("a refused native write is reported, never assumed", () => {
+ const f = characterFixture();
+ f.api.updateCharacterRecord = () => ({ success: false, errorMsg: "WRITE_ERROR" });
+ const out = f.titles.applyToCharacter({ pilotID: "coop-player-140000005", rank: "recruit" });
+ assert.deepEqual(out, { status: "FAILED", reason: "WRITE_ERROR" });
+});

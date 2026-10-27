@@ -91,6 +91,25 @@ function note({ proof, victim, emit, ledger: injected } = {}) {
         .createRankTitles({gameStore: require("../gameStore")});
       rankTitle = titles.apply({pilotID: attackerPilotID,
         record: {rank: killer.rank, merit: killer.merit}});
+      // A player's title must be visible where the client shows it: the stock
+      // character record. A refusal is reported, never invented.
+      if (/^coop-player-[0-9]{3,}$/.test(attackerPilotID)) {
+        const onCharacter = titles.applyToCharacter({pilotID: attackerPilotID,
+          rank: rankTitle.rank || killer.rank, title: rankTitle.title});
+        rankTitle = Object.assign({}, rankTitle, {character: onCharacter});
+        if (record && ["APPLIED", "REFUSED", "FAILED"].includes(onCharacter.status)) {
+          record("living-native-war-rank-title", null,
+            {spaceState: {systemID: Number(p.systemID) || 0}}, {
+              status: onCharacter.status,
+              surface: onCharacter.surface || "CHARACTER_RECORD_TITLE",
+              characterID: onCharacter.characterID || 0,
+              pilotID: attackerPilotID, rank: onCharacter.rank || "",
+              title: onCharacter.title || "",
+              reason: onCharacter.reason || "",
+              unlocks: [], evidence: "STOCK_CHARACTER_RECORD_TITLE_ONLY",
+            });
+        }
+      }
       if (rankTitle.status === "CHANGED" && record) {
         record("living-native-war-rank-title", null,
           {spaceState: {systemID: Number(p.systemID) || 0}}, {
