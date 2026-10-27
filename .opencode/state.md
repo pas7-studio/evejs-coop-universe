@@ -530,3 +530,61 @@ promotion -> treasury).
 COMMITTED/ABORTED bank journal; hulls left behind in Jita (980000016644/16642)
 stay registered to their campaigns. `EVEJS_LOG_LEVEL=2` was used only for the
 diagnosis and has been removed from `compose.coop-probe.yaml`.
+
+## 2026-10-27 - war kill loop: real fire -> kill -> wreck -> loot -> casualty -> merit -> promotion (2567db15, 16cda1ed, 00db71a9, 34471320)
+
+**Proven live (container evejs-server-1, read-only admin bridge + coop-events).**
+- Loadout: `spawn_native_npc parity_serpentis_blaster_cruiser role patrol durable`
+  -> `"loadout":{"status":"RESOLVED","reason":"AUTHORED_MULTI_CHARGE_ROW",
+  "loadoutID":"coop_war_patrol_ammo60_parity_serpentis_blaster_cruiser_loadout",
+  "chargeTypeID":20057,"chargeDepth":60}` and `inspect_npc 980000017150` ->
+  `"moduleCount":5`, cargo 5 x typeID 20057 `"quantity":60` (300 real charges).
+- Multi-cycle bank: `living-native-npc-ammo-debit` cargoID 980200006198
+  `"before":41,"after":36,"unitsDebited":5` on the same hull (not one volley).
+- Measured kill: `war_combat_diagnose` victim HP 225 -> 131.27522104432944 ->
+  26.666062461711466 shield, then destroyed.
+- Wreck + loot: `living-native-wreck-evidence PHYSICAL_NATIVE_WRECK_VERIFIED`
+  wreckID 980300000006 `"storedItemCount":7,"storedQuantity":279,
+  "lootStatus":"ITEMS_STORED"`.
+- Casualty: `living-native-war-casualty "status":"RECORDED"` wreckID 980300000006
+  pilotID coop-pilot-056 (victim), campaign war:500011-500020:campaign:30001363.
+- Strict killer: `living-native-destruction-attacker
+  NATIVE_DESTRUCTION_ATTACKER_PROVIDED` attackerEntityID 980000017150
+  attackerPilotID coop-pilot-050 (upstream options.attackerEntity only).
+- Merit + promotion: `living-native-war-merit {"status":"PROMOTED",
+  "pilotID":"coop-pilot-050","kind":"warship-kill","merit":25,"from":"recruit",
+  "to":"pilot","command":2,"wreckID":980300000006,
+  "evidence":"UPSTREAM_ATTACKER_ENTITY_PLUS_PHYSICAL_NATIVE_WRECK"}`, persisted in
+  `coop-faction-war<0x1f>merit-v1` and read by the live command-size rule.
+
+**Three structural defects fixed to get there.**
+1. Every real loadout row carried one charge, so a hull fired one volley and was
+   dry forever: `coopWarPatrolLoadoutRow` authors a real static row plus a real
+   ammo depth (2567db15).
+2. A dry hull held its side slot forever: `coopWarBattleLineRelief` releases war
+   custody on the mobiliser's own `WAR_NO_NATIVE_LOADED_WEAPON` verdict, and the
+   mobiliser's ASSIGN event ID now identifies the real attempt so a released hull
+   can be mobilized again (16cda1ed).
+3. A destroyed hull stayed registered, so the first kill consumed the slot: the
+   registry's `confirmDestroyed` witness is wired to real native wrecks and seeded
+   from the durable casualty ledger (34471320).
+
+**BLOCKED_TREASURY_UNFUNDED (exact finding, no fabrication).** The last leg
+("treasury credit") has no legal ISK source in this world:
+`coopWarTreasury` has **NO_TREASURY_ROW** (no HELD escrow), a RESERVE is refused
+for a campaign that already exists, and both war corporations have **no
+corporationRuntime wallet row at all** (`1000135`/`1000138` MISSING, so
+`NATIVE_CORPORATION_WALLET_UNVERIFIED`), while the victim hull typeID 10016 has no
+`shipInsurancePrices` row. Any credit would therefore mint ISK, which is
+forbidden. A real settlement needs a funded war chest first.
+
+**NEXT ACTION (exact).** Fund a war chest from real income (NPC economy credits or
+a player corporation wallet) and enable `EVEJS_COOP_WAR_TREASURY=1`, then reserve
+**before** the campaign is created (`coopWarTreasury.execute RESERVE` refuses an
+existing campaign) and pay the bounty from that HELD escrow on
+`living-native-war-merit` PROMOTED. Do not mint ISK. After that, backlog:
+sovereignty projection -> shipcaster logistics -> player rank decal (title only).
+
+**Known noise.** Two dead wrecks (980300000005/6) with stored loot in 30001363,
+the released dry hulls 980000016638/16642/16644 and 980000016639/16987 remain as
+real idle NPCs, and the ORE campaigns stay PREPARING by construction.

@@ -120,3 +120,35 @@ overlay: OVERLAY_OK
 live: before -> "npc.weapons.initial-cycle ... errorMsg=NO_AMMO" then NATIVE_AMMO_BANK_SHIP_QUARANTINED, victim HP {"shield":225,...} ; after -> journal 980000016639.json phase COMMITTED, war_combat_diagnose victim 980000016987 hp {"shield":200.13459482520693,"armor":200,"structure":215} = 24.87 measured HP loss from a real turret hit
 metrics: tests_total=1200 pass=1090 fail=98 new_tests=18 modules_added=0 modules_changed=6 live_events=3
 next: a kill is still out of reach because one bank cycle spends every fitted charge (quantity 1 per module), so each hull fires exactly one volley; authoring a war-patrol loadout with quantityPerModule > 1 is the next real lever for the wreck + loot legs
+
+## 2026-10-27T02:59Z - step 1: authored multi-charge war-patrol loadout - 2567db15
+done: integration/coopWarPatrolLoadoutRow.cjs authors a real static npcLoadouts row plus a real ammo depth (modules/charge typeIDs copied unchanged, item registry + weapon family + native charge compatibility required, refusals for every missing fact); coopWarPatrolLoadout reports chargeDepth, prefers the authored row and refuses NO_MULTI_CHARGE_ROW when depth is required; admin bridge requires depth for role patrol and refuses AUTHORED_ROW_FLAG_OFF; one opt-in npcData resolver hook in overlay-spec.
+tests: node --test tests/coop-war-patrol-loadout-row.test.mjs tests/coop-war-patrol-loadout.test.mjs -> 20/0 ; coop-war-* + coop-faction-war-* -> 273 pass / 11 fail (same 11 pre-existing)
+overlay: OVERLAY_OK
+live: spawn_native_npc parity_serpentis_blaster_cruiser role patrol durable -> {"loadout":{"status":"RESOLVED","reason":"AUTHORED_MULTI_CHARGE_ROW","loadoutID":"coop_war_patrol_ammo60_parity_serpentis_blaster_cruiser_loadout","chargeTypeID":20057,"chargeDepth":60}} ; inspect_npc 980000017150 -> "moduleCount":5, cargo 5 x typeID 20057 "quantity":60
+metrics: tests_total=20 modules_added=1 modules_changed=3 live_events=2
+next: a deep stack alone cannot kill while a dry hull holds the side slot
+
+## 2026-10-27T03:00Z - step 2: dry hull releases its slot, deep stack fires many cycles - 16cda1ed
+done: integration/coopWarBattleLineRelief.cjs releases war custody (registry RELEASE + native proof) for a hull the mobiliser's own readiness calls WAR_NO_NATIVE_LOADED_WEAPON, never for any other refusal; mobiliser ASSIGN event ID now identifies the real assignment attempt so a released hull can be mobilized again.
+tests: node --test tests/coop-war-battle-line-relief.test.mjs tests/coop-war-mobilization.test.mjs -> 19/0
+overlay: OVERLAY_OK
+live: living-native-war-battle-line-relief {"status":"RELEASED","reason":"NO_COMPATIBLE_CHARGE_LEFT"} -> fleet re-claimed 980000017150 (deep ammo) ; living-native-war-attack-orders NATIVE_ATTACK_ORDER_ACCEPTED 980000017150 -> 980000017316 and back ; living-native-npc-ammo-debit cargoID 980200006198 "before":41,"after":36,"unitsDebited":5 (more than one bank cycle on the same hull)
+metrics: tests_total=19 modules_added=1 modules_changed=2 live_events=3
+next: sustained fire must actually kill
+
+## 2026-10-27T03:01Z - step 3: the full kill loop, six legs proven live - 00db71a9
+done: kill 1 (wreck 980300000005) proved sustained fire -> HP to zero -> real wreck + stored loot -> casualty ledger -> strict native attacker; kill 2 (wreck 980300000006) added durable merit (coopWarMeritLedger) + promotion, fed into the live command cap.
+tests: node --test tests/coop-war-merit-ledger.test.mjs -> 6/0 ; coop-war-* + coop-faction-war-* + coop-admin-bridge-* -> 298 pass / 11 fail (same 11 pre-existing)
+overlay: OVERLAY_OK
+live: victim HP measured 225 -> 131.27522104432944 -> 26.666062461711466 shield then destroyed (war_combat_diagnose) ; living-native-wreck-evidence PHYSICAL_NATIVE_WRECK_VERIFIED wreckID 980300000006 "storedItemCount":7,"storedQuantity":279,"lootStatus":"ITEMS_STORED" ; living-native-war-casualty "status":"RECORDED" wreckID 980300000006 pilotID coop-pilot-056 ; living-native-destruction-attacker NATIVE_DESTRUCTION_ATTACKER_PROVIDED attackerEntityID 980000017150 attackerPilotID coop-pilot-050 ; living-native-war-merit {"status":"PROMOTED","pilotID":"coop-pilot-050","kind":"warship-kill","merit":25,"from":"recruit","to":"pilot","command":2,"wreckID":980300000006,"evidence":"UPSTREAM_ATTACKER_ENTITY_PLUS_PHYSICAL_NATIVE_WRECK"}
+metrics: tests_total=6 modules_added=2 modules_changed=4 live_events=5
+next: treasury credit is BLOCKED_TREASURY_UNFUNDED - see state.md
+
+## 2026-10-27T03:02Z - step 3b: a destroyed hull frees its slot - 34471320
+done: the registry's confirmDestroyed witness is wired to the native wreck this process really confirmed (and seeded from the durable casualty ledger after a restart), and the relief releases such a slot; a missing scene is still never a destruction witness.
+tests: node --test tests/coop-war-battle-line-relief.test.mjs -> 8/0
+overlay: OVERLAY_OK
+live: after deploy, fleet registry no longer holds the destroyed 980000017316 and a fresh armed frigate 980000017478 took the attacker slot, was killed and paid merit (see step 3)
+metrics: tests_total=8 modules_added=0 modules_changed=2 live_events=1
+next: BLOCKED_TREASURY_UNFUNDED (no real ISK source exists), then backlog: sovereignty projection
