@@ -1,5 +1,64 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 16:50Z — war gate crossing: five real blockers named and removed
+
+**Done (commits 83a9b3bc, 9f66beec, 466593aa, 18768947, 82f7ca0a, 0fdf15c9,
+76970e18, b24a32f2).** Gate staging no longer refuses silently. In order:
+1. `coopWarGateStaging.tick` returns per-campaign `skips[]` with the exact
+   precondition, published once per distinct set as
+   `living-native-war-gate-staging` status SKIPPED; the phase's own early returns
+   use `warSkip("gate-staging", …)` and `gateReason(env)` names missing flags.
+2. ASSAULT campaigns are staged (the crossing leg was never even considered) and
+   the operator's explicit `paper-supply:<campaignID>` waiver is accepted and
+   labelled `PAPER_UNFUNDED_EXPLICIT`.
+3. A warp the native runtime refuses as `WARP_DISTANCE_TOO_CLOSE` is closed by a
+   real native follow order (and every per-ship rejection is now named).
+4. The follow order is actually forwarded (`orderFollow` → `createGateTravel`).
+5. **The gate arrival is measured before the retry window** — the 180 s
+   `NATIVE_GATE_WARP` window used to skip the hull before the surface-gap check,
+   which hid the only moment it was physically at the gate.
+6. `coopWarTransferLedger` accepts the ASSAULT leg and a waived campaign that has
+   no treasury row at all; `coopFactionWarCore.paperSupply` is the single rule.
+
+**Live, read-only on the owner's running build (verbatim).**
+`living-native-war-gate-staging 16:19:30` → `AT_REAL_GATE` +
+`TRANSFER_REFUSED:WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED`; `15:35`
+`WARP_REFUSED:WARP_DISTANCE_TOO_CLOSE` at gate `50016294`; the hull
+`980000023574` really warped to that gate (real reciprocal pair
+50016294 ↔ 50016293, 30003837 → 30045344) and then drifted ~15 km per 30 s tick.
+`war_state`: `campaignStates {PREPARING:5, ASSAULT:1}`, `30045344` ASSAULT with
+source `30003837`.
+
+**NEEDS_OWNER_RESTART_WINDOW.** FW-037 (the ledger fix that unblocks the actual
+crossing) is committed, `--apply`/`--check` = OVERLAY_OK, but it is **not** in the
+owner's running server and that server must not be recreated while he plays. The
+crossing proof needs exactly one recreate of project `evejs`.
+
+**NEXT ACTION (exact).** In the owner's next restart window: recreate once, then
+watch `living-native-war-gate-staging` for
+`VERIFIED_NATIVE_GATE_TRANSFER` of `980000023574` into `30045344` (and the
+`living-native-war-transit-retired` archive after it). If it refuses again, the
+reason is now always in `observations[]` (`TRANSFER_REFUSED:<reason>`) or
+`skips[]` (`ATTACKER_REJECTED:<id>/<reason>`) — fix that exact string.
+Everything else continues on project `evejs-agents`
+(`scripts/Start-Agents-Stack.ps1 -Action Status|Seed|Up|Down`), x5 time.
+
+**Item 13, title half DONE (54ec5bd0).** `coopWarRankTitle.applyToCharacter`
+writes the canonical rank title into the stock character record through
+`characterState.updateCharacterRecord`; refuses a non `coop-player-` key, an
+unknown rank, a key/record mismatch, a missing record and any non-canonical
+title; `coopWarKillMerit` publishes `living-native-war-rank-title` with
+`surface:"CHARACTER_RECORD_TITLE"`. Tests 10/10, with merit/bounty 22/22.
+The payout half stays `BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION` (= item 16).
+
+**NEXT CODE ITEM (15).** Fleet reconstitution + faction reserve:
+`integration/coopWarFleetRoster.cjs` (TABLE `corporationRuntime`, KEY
+`coop-faction-war\x1ffleet-roster-v1`) already plans from proven-alive survivors
+and records a loss only with a real wreck. Missing: a durable per-faction hull
+reserve (spawnable + equipped count per doctrine role) and a front-chat line per
+loss/replacement via `coopWarClientView.frontReport` (line 122) with the same
+once-per-key throttle `warFrontChat` uses.
+
 ## 2026-10-27 20:30 local (16:30Z) — OWNER DIRECTIVE: the live `evejs` stack is untouchable
 
 Owner is playing on `evejs-server-1` / `evejs-market-1` right now. **Never**
