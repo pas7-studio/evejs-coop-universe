@@ -3332,6 +3332,15 @@ function advanceNativeRaids(){
   // it must not abandon its sale route to accept an opportunistic new raid.
   const delivering=lootCommerce?.activeIDs(systemID)||new Set();
   const outOfAmmo=nativeAmmoSupply?.activeIDs(systemID)||new Set();
+  // FW-020: a hull that holds a live claim on a wreck it really made belongs to
+  // the loot phases, not to the raid (one owner per record). Without this the
+  // raid re-tasks the killer forever and the wreck recovery can never start.
+  let wreckClaimOwners=new Set();
+  try{
+   const claims=require("./coopNpcWreckClaims").getWreckClaims().active(systemID)||[];
+   wreckClaimOwners=new Set(claims.map(c=>Number(c.attackerEntityID))
+    .filter(id=>Number.isSafeInteger(id)&&id>0));
+  }catch(_error){wreckClaimOwners=new Set();}
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   // FW-013B: a hull that was really linked AFTER boot was invisible here. The
   // materializer's assignment map is rebuilt only during boot, while the raid
@@ -3343,7 +3352,11 @@ function advanceNativeRaids(){
     scene.getEntityByID(Number(link.entityID)));
   const pirates=systemLinks.filter(link=>link.role==="pirate"&&
    !delivering.has(Number(link.entityID))&&
-   !outOfAmmo.has(Number(link.entityID))).map(link=>Number(link.entityID));
+   !outOfAmmo.has(Number(link.entityID))&&
+   // FW-020: a pirate that just made a real kill stops hunting and loots its
+   // own wreck. Otherwise the raid lease and the wreck recovery fight over the
+   // same hull forever (one owner per record) and the loot is never recovered.
+   !wreckClaimOwners.has(Number(link.entityID))).map(link=>Number(link.entityID));
   if(!pirates.length)continue;
   const fleets=mining.getMiningFleetsForSystem(systemID);
   const raidPolicy=require("./coopNativeRaidEligibility");

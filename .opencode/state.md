@@ -1291,3 +1291,35 @@ home, 5.7 AU away. ccd6046c: the scope covers home->hull + hull->prey + 100 km.
 (c) `activeModules` non-empty, then `living-native-weapon-event` from 980000018058 and a
 falling shield/armor on the same victim. If the lock stays empty, the next question is why
 the stock loop does not add it, not the leash.
+
+## 2026-10-27T11:54Z — ITEM 2: the first real raid kill in the seeded region (25e879fe, f5d8454a)
+
+**Proven live (container evejs-server-1, verbatim).**
+
+```
+{"at":"2026-10-27T11:52:33.981Z","event":"living-native-stock-fleet-wreck-evidence",
+ "status":"PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED","systemID":30000145,
+ "victimEntityID":980000016472,"victimRole":"miner","wreckID":980300000008,
+ "storedItemCount":3,"storedQuantity":93450,"lootStatus":"ITEMS_STORED"}
+```
+
+The chain that produced it, all real:
+`living-native-raid-leash APPLIED` (980000018058 leash 373 994 723 022 vs profile
+90 000 for a 373 994 623 021 m order) -> `living-native-warp-point-engaged`
+`ENGAGED alreadyScrambled true` for 980000000601 and 980000000602 on miner
+980000016472 -> `living-native-weapon-event` missile-launch 980000000601 ->
+980000016472 -> real wreck 980300000008 with 3 stored stacks (93 450 units).
+
+**Two defects fixed here.** (1) An attack order on prey beyond the 250 km approach
+boundary was released only after the 90 s no-lock window, which a 60 s attack lease
+re-arms forever, so the hull orbited at 2.5 AU holding an order it could not fly; the
+far case now releases and re-approaches on the re-check itself. (2) A concurrent
+commit had captured the `relocateRaidHomeAnchors(...)` call site without its
+definition, so the whole `native-raids` phase failed
+(`living-world-phase-failed ... relocateRaidHomeAnchors is not defined`); the orphan
+call is removed and the leash (c6965dbd) is the single movement mechanism.
+
+**NEXT ACTION (exact).** Item 3: recover wreck 980300000008 and sell its loot to the
+real seeded buyer at New Caldari 60000688 (typeID 482 @ 571 211 ISK), then fund the
+faction chest from that real fill, re-run `war_funding_diagnose` until the side reads
+FUNDED, and confirm `living-native-war-bounty` PAID from HELD escrow.
