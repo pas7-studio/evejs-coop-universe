@@ -1583,3 +1583,9 @@ Why: the front page described an older project state (no origin, no run paths, s
 Detail: What it is (private ~2-player living universe on the pinned EveJS), where it comes from (EveJS c3ea396b, X-Eve concept not vendored), how to run (play vs work stack, gates, deploy, acceptance), what the overlay adds, what is claimed vs still unverified, the our-own inventory and the layer rule.
 Where: README.md
 Evidence: README.md rewritten; links and referenced scripts verified to exist (Start-Agents-Stack.ps1, coop-loop-gate.sh, restart-acceptance.sh, coop-deploy.cjs, Verify-Local-Coop.ps1, two-stacks/loop-acceptance docs)
+### 2026-10-27T21:19Z · d0e3b0d · DOCS · docs(readme): the world is 2+ players, not exactly two
+
+Why: the front page said '~2-player', which reads as 'about two'; the owner wants 2 and up, and the overlay never assumes a fixed pair
+Detail: The overlay never assumes a fixed pair: 2+ is the design target and two clients are only the minimum acceptance bar for a shared world.
+Where: README.md
+Evidence: README.md only; headline, PvE bullet, acceptance row and a player-count note now say 2+ / two or more
