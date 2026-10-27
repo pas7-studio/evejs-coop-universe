@@ -152,3 +152,30 @@ overlay: OVERLAY_OK
 live: after deploy, fleet registry no longer holds the destroyed 980000017316 and a fresh armed frigate 980000017478 took the attacker slot, was killed and paid merit (see step 3)
 metrics: tests_total=8 modules_added=0 modules_changed=2 live_events=1
 next: BLOCKED_TREASURY_UNFUNDED (no real ISK source exists), then backlog: sovereignty projection
+
+## 2026-10-27T03:33Z - item 1: a war chest funded only by real earned ISK - 43c8d7ea
+done: coopWarChestFunding levies the faction's own pilots' real earned balance into its native NPC corp wallet (2-phase journal PREPARED->debit->credit->COMMITTED, recover() finishes forward only); coopWarTreasury gained PAYOUT (HELD escrow -> one named pilot, no wallet mutation); coopFactionWarOpening reserves the bounty BEFORE START_CAMPAIGN; coopWarKillMerit pays kill bounty + own-casualty benefit; coopWarBounty resolves the paying faction from the real native ship+corporation; RESERVE now accepts either war party; wallet checks accept the real keyed stock row; coopNativeNpcMarket owns exactly-once adjustEarned; read-only war_funding_diagnose.
+tests: node --test tests/coop-war-chest-funding.test.mjs tests/coop-war-bounty.test.mjs tests/coop-war-treasury.test.mjs -> 31/0 ; coop-war-* + coop-faction-war-* -> 308 pass / 11 fail (same 11 pre-existing)
+overlay: OVERLAY_OK (reset modules 361 -> 363)
+live: war_funding_diagnose -> 500011 NO_REAL_FACTION_INCOME, 500014 FUNDED corporationID 1000129 takeCents 2500000 from coop-pilot-001 ; "living-native-war-bounty-reserved" {"status":"RESERVED","factionID":500014,"corporationID":1000129,"amountCents":2500000,"chestJournalID":"chest:bounty:war:500011-500014:campaign:30000143:500014","walletAfterCents":2500000,"sources":["coop-pilot-001"],"escrowJournalID":8000000000000000} ; "living-native-war-opened" {"status":"OPENED","campaignIDs":["war:500011-500014:campaign:30000143"],"funding":[{"status":"RESERVED","paper":false,"escrow":true,...}]} ; chest journal COMMITTED sources[coop-pilot-001 beforeCents 17210000 takeCents 2500000] ; earned ledger coop-pilot-001 172100 -> 147100 ; corp 1000129 journal 7500000000000000 +25000 then 8000000000000000 -25000, treasury reservation status HELD
+metrics: tests_total=339 pass=328 fail=11 modules_added=3 modules_changed=6 live_events=3
+next: the payout leg needs a real casualty/merit event for the funded faction; ORE is the only faction with real income and fields no weapon, Angel/Serpentis can fight and have none - BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION
+
+## 2026-10-27T03:44Z - item 2: sovereignty projection + rank title (title only) - 2671b321
+done: coopWarSovereigntyProjection reports real military control and refuses to present it as native sovereignty unless a real TCU/IHub AND a real native claim exist (nothing written); coopWarRankTitle maps a real merit rank to the pilot's visible title with an explicit empty unlock list, durable once per promotion; both wired live (read-only projection phase, title on PROMOTED).
+tests: node --test tests/coop-war-sovereignty-projection.test.mjs tests/coop-war-rank-title.test.mjs -> 14/0
+overlay: OVERLAY_OK
+live: "living-native-war-sovereignty-projection" {"status":"PROJECTED_VIEW","counts":{"NATIVE_SOV_CLAIM":0,"MILITARY_CONTROL_ONLY_NOT_SDE_SOVEREIGNTY":5}} reason NO_NATIVE_SOV_STRUCTURE for 30000142/43/44/45/30001363 ; phase cycle phaseCount 36 includes native-faction-war-sovereignty-projection
+metrics: tests_total=14 pass=14 fail=0 modules_added=2 modules_changed=2 live_events=1
+next: shipcaster front logistics (needs a real shipcaster structure + a real fleet transfer leg; not started, no fabricated logistics) ; then regression sweep
+
+## 2026-10-27T03:50Z - item 3: regression sweep of every touched module - no code change
+done: re-ran the war, treasury, merit, opening, admin-bridge and NPC-market suites against HEAD after both commits; no new failure introduced (the 11 war/arbiter/socket failures are identical at the pre-change baseline 95f36fc2 measured by git stash).
+tests: node --test tests/coop-faction-war-*.test.mjs tests/coop-war-*.test.mjs tests/coop-admin-bridge-*.test.mjs -> 332 pass / 11 fail (baseline 303 pass / 15 fail, +29 passing incl. the 4 new PAYOUT cases) ; node --test tests/coop-npc-*.test.mjs -> 1090 pass / 98 fail (identical to the recorded baseline at 287898d1)
+overlay: OVERLAY_OK
+live: not run (no runtime change in this item)
+metrics: tests_total=1422 pass=1422-109=1313 fail=109 baseline_fail=109 new_fail=0
+next: NEEDS_OWNER:BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION for the live bounty payout; NEEDS_OWNER for shipcaster logistics (no real shipcaster structure exists)
+
+## 2026-10-27T03:52Z - correction to the 03:50Z metrics line
+metrics: war/admin suite tests_total=343 pass=332 fail=11 ; npc-market suite tests_total=1188 pass=1090 fail=98 ; combined tests_total=1531 pass=1422 fail=109 ; every one of the 109 failures is present at the pre-change baseline

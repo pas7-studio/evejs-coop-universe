@@ -588,3 +588,65 @@ sovereignty projection -> shipcaster logistics -> player rank decal (title only)
 **Known noise.** Two dead wrecks (980300000005/6) with stored loot in 30001363,
 the released dry hulls 980000016638/16642/16644 and 980000016639/16987 remain as
 real idle NPCs, and the ORE campaigns stay PREPARING by construction.
+
+## 2026-10-27 loop - treasury made real (funded + escrowed live), sovereignty + title projected, payout blocked exactly
+
+**Item 1 code PASS + live funding/reserve PASS (43c8d7ea).**
+`coopWarChestFunding` moves real earned ISK (the only real ISK an NPC owns, every
+cent paid by a real seeded-market fill) from the faction's own pilots into its
+native NPC corporation wallet, then `coopWarTreasury` RESERVE debits that wallet
+into HELD escrow. The reservation is taken in `coopFactionWarOpening` BEFORE
+`START_CAMPAIGN`, so the treasury's "no reservation for an existing campaign"
+rule is never bypassed. PAYOUT releases HELD escrow to one named pilot with an
+injected authorizer and no wallet mutation (the value left at RESERVE).
+`coopWarKillMerit` pays the kill bounty and the faction's own casualty benefit;
+`coopWarBounty` resolves the paying faction from the pilot's real native ship and
+corporation. RESERVE now accepts either war party (a defender funds its own
+defensive bounty) and the wallet checks accept the real keyed stock row shape
+(the old `corp.corporationID` check was the actual cause of
+`NATIVE_CORPORATION_WALLET_UNVERIFIED`: the stock row has no such field).
+
+Live, verbatim (container evejs-server-1):
+- `living-native-war-bounty-reserved` `{"status":"RESERVED","factionID":500014,
+  "corporationID":1000129,"amountCents":2500000,
+  "chestJournalID":"chest:bounty:war:500011-500014:campaign:30000143:500014",
+  "walletAfterCents":2500000,"sources":["coop-pilot-001"],
+  "escrowJournalID":8000000000000000}`
+- `living-native-war-opened` `OPENED` `campaignIDs:["war:500011-500014:campaign:30000143"]`
+  with `funding:[{status:RESERVED,paper:false,escrow:true,...}]`
+- chest journal COMMITTED: coop-pilot-001 172 100.00 -> take 25 000.00;
+  earned ledger 172 100 -> **147 100**; corp 1000129 journal `7500000000000000`
+  +25 000 then `8000000000000000` -25 000; treasury row exists with the
+  reservation `bounty:war:500011-500014:campaign:30000143:500014` **HELD**.
+
+**Exact blocker for the live PAYOUT (NEEDS_OWNER:BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION).**
+The only faction with real earned income is ORE 500014 (147 100 ISK left), and ORE
+fields 11 profiles, all miners/haulers with no weapon, so it can never produce or
+receive a kill in a campaign it funds. Angel 500011 and Serpentis 500020 can fight
+(the proven kill loop) and have **zero** earned ISK: `war_funding_diagnose`
+reports `NO_REAL_FACTION_INCOME` for both, so their bounty is refused instead of
+minted. The payout path itself is unit-proven (6 tests) and wired; it fires on a
+real casualty/merit event for the funded faction. To unblock honestly the owner
+needs one of: (a) real earned income for an armed faction (a real native sale by
+an Angel/Serpentis pilot), or (b) an armed ORE hull profile with a real loadout.
+
+**Item 2 partial (2671b321).** `coopWarSovereigntyProjection` reports real
+military control and refuses to call it native sovereignty unless a real TCU/IHub
+AND a real native claim exist. Live: `NATIVE_SOV_CLAIM:0`,
+`MILITARY_CONTROL_ONLY_NOT_SDE_SOVEREIGNTY:5`, reason
+`NO_NATIVE_SOV_STRUCTURE` for every held system (the two faction Astrahus are not
+sov structures). `coopWarRankTitle` maps a real merit rank to the pilot's visible
+title with an explicit empty unlock list, durable once per promotion.
+**Shipcaster front logistics: NEEDS_OWNER, not started** - no real shipcaster
+structure exists in this world, so any "front logistics" would be invented.
+
+**Item 3 regression (no code change).** war/treasury/merit/opening/admin suites
+332 pass / 11 fail (baseline 303/15), `coop-npc-*` 1090 pass / 98 fail (identical
+to the recorded baseline). No new failure.
+
+**NEXT ACTION (exact).** Give an armed faction real income: run one real native
+sale for an Angel (500011) or Serpentis (500020) pilot through
+`coopNativeNpcMarket` (real seeded bid, real cargo), then re-run
+`war_funding_diagnose` until its side reports `FUNDED`, let the next opening
+reserve the bounty, and confirm `living-native-war-bounty` `PAID` on the next real
+casualty of that faction. Do not fund it any other way.
