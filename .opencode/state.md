@@ -1,5 +1,28 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 20:30 local (16:30Z) — OWNER DIRECTIVE: the live `evejs` stack is untouchable
+
+Owner is playing on `evejs-server-1` / `evejs-market-1` right now. **Never**
+`docker compose up/restart/down/--force-recreate` against project `evejs`, never
+touch those containers. All further live proofs happen in a separate stack
+(own project name, own ports — 26000-26002/443/5222/40110 are taken — own
+volumes). `docker build -t evejs-local .` is allowed (it touches no container).
+If something truly needs the owner's stack restarted, record
+`NEEDS_OWNER_RESTART_WINDOW` instead of restarting.
+
+Consequence for the war work: the last deploy of FW-036 (transfer ledger accepts
+the ASSAULT leg + the explicit paper waiver) was already live before the
+directive arrived, so the crossing leg can still be observed **read-only** on
+that build. Everything after that is verified in the agent stack only, and every
+metrics block from now on states that the owner's stack was not restarted.
+
+**NEXT ACTION (exact).** (1) Read-only: watch `living-native-war-gate-staging` on
+the owner's running FW-036 build for `VERIFIED_NATIVE_GATE_TRANSFER` of
+980000023574 into 30045344; a `TRANSFER_REFUSED:<reason>` is the next exact
+precondition to fix. (2) Stand up the agent stack
+(`docker compose -p evejs-agents` + its own port/volume overrides) so no further
+item needs the owner's stack.
+
 ## 2026-10-27 16:25Z - second startup slot added (additive), New Caldari has a fleet again
 
 Owner asked to finish. Slot 30000145-1 fails deterministically on EVERY boot with
