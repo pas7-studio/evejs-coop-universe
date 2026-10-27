@@ -24,6 +24,31 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
+
+// Stations are static: read them once per process instead of parsing the whole
+// station table for a single name.
+let stationIndex = null;
+function stationRecord(stationID) {
+  const id = Number(stationID) || 0;
+  if (!(id > 0)) return null;
+  if (!stationIndex) {
+    stationIndex = new Map();
+    try {
+      const read = require("../gameStore").read("stations");
+      const data = read && read.data !== undefined ? read.data : read;
+      const walk = (value, depth) => {
+        if (!value || depth > 6 || stationIndex.size > 20000) return;
+        if (Array.isArray(value)) { for (const child of value) walk(child, depth + 1); return; }
+        if (typeof value !== "object") return;
+        const sid = Number(value.stationID);
+        if (sid > 0) { stationIndex.set(sid, value); return; }
+        for (const child of Object.values(value)) walk(child, depth + 1);
+      };
+      walk(data, 0);
+    } catch (_error) { stationIndex = new Map(); }
+  }
+  return stationIndex.get(id) || null;
+}
 const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist", "spawn_war_fleet", "release_identity", "assign_identity", "war_fleet_state", "fleet_reconstitute"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
@@ -718,6 +743,19 @@ function militiaState(request) {
         .createWarMeritLedger({ gameStore: require("../gameStore") });
       merit = ledger.read().records["coop-player-" + characterID] || null;
     } catch (_error) { merit = null; }
+    // "Where do I enlist?" must be answerable without a human: resolve the real
+    // militia agent and its real station instead of leaving the player guessing.
+    let enlistHint = null;
+    try {
+      const agentAuthority = require("../services/agent/agentAuthority");
+      const militiaCorp = Number(faction && faction.militiaCorporationID) || 0;
+      const agents = militiaCorp && typeof agentAuthority.listAgentsByCorporationID === "function"
+        ? agentAuthority.listAgentsByCorporationID(militiaCorp) : [];
+      const first = Array.isArray(agents) ? agents.find((a) => Number(a && a.stationID) > 0) : null;
+      const station = first ? stationRecord(Number(first.stationID)) : null;
+      enlistHint = require("./coopMilitiaEnlistHint" + siblingSuffix)
+        .buildEnlistHint({ record, faction, agents, station });
+    } catch (_error) { enlistHint = null; }
     return {
       ok: true, characterID,
       character: {
@@ -729,7 +767,7 @@ function militiaState(request) {
       },
       faction: faction ? { factionID: faction.factionID, name: String(faction.name || ""),
         militiaCorporationID: Number(faction.militiaCorporationID) || 0 } : null,
-      situation, enlistment, merit,
+      situation, enlistment, merit, enlistHint,
       warCounts: warState ? {
         wars: Object.keys(warState.wars || {}).length,
         campaigns: Object.keys(warState.campaigns || {}).length,
