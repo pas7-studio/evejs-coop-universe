@@ -937,3 +937,9 @@ Evidence: docs/TWO_CLIENT_CHECKLIST.md; preconditions taken from this session's 
 Why: Keep the metrics ledger in step with the checklist commit
 Where: .opencode/metrics.md, docs/WORKLOG.md
 Evidence: metrics.md block for 21349a8a
+### 2026-10-27T00:15Z · 06f95eb · DOCS · docs(loop): exact root cause for the NPC fitting blocker
+
+Why: The muster blocker's root cause had to be recorded before any patch is written
+Detail: buildNpcDefinition takes the loadout from the profile row, and every pirate subcapital profile uses retail_empty_npc_entity_loadout (modules 0, charges 0) because retail NPC stats live on type dogma. Only capitals, CONCORD and Triglavian profiles carry a real validating weapon+charge, so the muster gate can never pass for a pirate frigate/cruiser/battleship. Two honest fixes recorded (L1 loadout-o
+Where: .opencode/metrics.md, .opencode/state.md
+Evidence: probe output: retail_empty_npc_entity_loadout modules 0; capital_angel_dreadnought modules 1 charges 1 valid
