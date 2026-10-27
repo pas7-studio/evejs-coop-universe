@@ -342,3 +342,21 @@ test("a refused native warp is published verbatim instead of going silent",()=>{
  assert.equal(result.actions[0].errorMsg,"WARP_COMMAND_FAILED");
  assert.equal(result.actions[0].distanceMeters,300000);
 });
+
+test("an attack order on prey beyond the approach boundary re-approaches on the next re-check",()=>{
+ const f=fixture();
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ assert.equal(f.tick().actions[0].action,"attack");
+ // The prey is warped 2.5 AU away while the native controller still holds OUR
+ // attack order and its own lock: waiting for the 90 s no-lock window would
+ // leave a turret holding an order it can never reach.
+ f.miner.position.x=380000000000;
+ f.controller.currentTargetID=201;
+ f.controller.manualOrder={type:"attack",targetID:201};
+ f.advance(60000);
+ const result=f.tick();
+ assert.deepEqual(f.releases,[[501,"FOR_APPROACH"]]);
+ const action=result.actions.find(x=>x.action==="warp-to-hauler");
+ assert.equal(action.released,true);
+ assert.deepEqual(f.nativeOrders.at(-1),["warp",501,201]);
+});
