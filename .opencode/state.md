@@ -2099,3 +2099,18 @@ session recreates the stack every ~1 minute, which interrupts probes.
   Seed once on a fresh volume (`market-tools rebuild v1 --preset jita_new_caldari`),
   otherwise evejs-agents-market-1 exits 1 with "No market database exists".
   Host ports 28000-28002/28443/25222/41110; volumes evejs-agents-data/-images.
+
+## NEXT ACTION (2026-10-27T18:10Z)
+
+Perf rounds 1-3 are built and verified in source (`OVERLAY_OK`, image rebuilt,
+patches 0009/0010, suites 11/11 + 5/5). They are NOT on the play stack yet.
+The single blocking action is the owner's restart window:
+
+    docker compose -f compose.yaml -f compose.coop-probe.yaml \
+      up -d --force-recreate --no-deps server   (in C:\Games\EveCoop\upstream-evejs\Code)
+
+After the recreate: profile the play stack the same way (SIGUSR1 + live-profile.cjs
+25 s + Analyze-CpuProfile + chain.cjs) and record the idle share and the top rows
+in .opencode/metrics.md. Compare against the pre-fix rows: idle 0%, cloneValue
+62.7%, ensureRootShape 24.0%, chains evaluatePair 5962 ms / cargoRows 1406 ms /
+miningFleetDurable.check 871 ms.

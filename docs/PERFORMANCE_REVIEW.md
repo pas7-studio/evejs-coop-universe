@@ -71,6 +71,35 @@ The ring buffer is bounded (200 samples per phase), so instrumentation cannot
 become the leak it is meant to find. `timePhase` re-throws the original error
 unchanged: it can never alter control flow.
 
+## Round 3 — CONCORD rules: a cache hit that still copied everything
+
+After rounds 1–2 the top *stock* cost was
+`buildConfiguredConcordStartupRules` → `cloneValue` (1.4%): the function caches
+its generated rules by signature, but the cache-hit path returned
+`cachedRules.map((rule) => cloneValue(rule))` with
+`cloneValue = JSON.parse(JSON.stringify(...))`, on every scene tick that asks for
+the startup rules.
+
+Fix (L1 patch `0010`): `structuredClone(cachedRules)` — the same deep copy for
+plain JSON data without the stringify round-trip. No rule, signature or cache
+semantics change.
+
+## Measured result of rounds 1–2 (work stack, 25 s, 21 430 samples)
+
+| row | before | after |
+| --- | --- | --- |
+| idle | 0% (play stack) | 85.9% (young work world) |
+| `cloneValue` (NPC store) | 62.7% | 4.2% |
+| `ensureRootShape` | 24.0% | 1.6% (spawn path only) |
+| `evaluatePair` chain | 5962 ms | gone from the top |
+| `cargoRows` chain | 1406 ms | gone |
+| `miningFleetDurable.check` chain | 871 ms | gone |
+
+Honest caveat: the work world is young, so its idle share is **not** comparable
+to the play stack's. What is comparable is that the three named chains
+disappeared. The play-stack comparison is the next measurement, and it needs the
+owner's restart window.
+
 ## What is left, in the order the profile justifies
 
 1. **`buildConfiguredConcordStartupRules`** (2.6%) runs per scene tick. Stock
