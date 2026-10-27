@@ -103,6 +103,13 @@ test('an unknown demand is re-measured soon instead of freezing the decision', (
   assert.equal(second.demand, 5000, 'a short unknown TTL must re-measure');
 });
 
+test('the work stack time scale shortens the policy interval, never the policy', () => {
+  assert.equal(gov.scaledTrickleMs(900000, {scale: 5}), 180000);
+  assert.equal(gov.scaledTrickleMs(900000, {scale: 1}), 900000);
+  assert.equal(gov.scaledTrickleMs(900000, {scale: 0}), 900000, 'a zero scale means stock pacing');
+  assert.equal(gov.scaledTrickleMs(900000, {scale: 50}), 90000, 'the factor is capped at 10');
+});
+
 test('an unreadable stock never stops mining', () => {
   const engine = gov.createGovernor({
     items: {listOwnedItems: () => { throw new Error('boom'); }},

@@ -1489,3 +1489,20 @@ Evidence: tests/coop-war-rank-title 10/10 + merit/kill-merit/bounty 22/22; no li
 Why: The owner split the machine into a PLAY stack (his live game) and an agent WORK stack; every further proof must run on evejs-agents and the play stack must not be restarted.
 Where: .opencode/state.md
 Evidence: docs/TWO_STACKS_PLAY_AND_WORK.md; evejs-agents-server-1 env TIME_SCALE=5 GOVERNOR=1 FLEET_COUNT=2 MINERAL_LIFT=1; fresh world 448 event lines
+### 2026-10-27T16:38Z · a1d5b03 · L2 · FW-039 (item 15): durable faction hull reserve and real attrition on the front
+
+Why: a faction can only replace what it really holds, and attrition must be visible where the player reads it
+Detail: The roster now carries a per-faction, per-role reserve (spawnable + equipped) in the same durable row: a proven loss really removes one equipped hull, an adopted replacement consumes one spawnable hull and becomes equipped, and a caller may only DECLARE what it proved (declareReserve with a source, unknown roles and non-integers refused). reserveOf reports the real totals. Every real loss and ever
+Where: integration/coopAdminBridge.cjs, integration/coopWarClientView.cjs, integration/coopWarFleetRoster.cjs, tests/coop-war-fleet-roster.test.mjs
+Evidence: tests/coop-war-fleet-roster 11/11 + client-view + admin-bridge + composition 37/37; OVERLAY_OK; no live deploy (owner stack not restarted)
+### 2026-10-27T16:40Z · ae9cea9 · L2 · FW-040 (item 16, code half): a pilot's earned ISK funds the pilot's OWN corporation
+
+Why: a foreign pilot's earned ISK must not fund another faction's corporation; that misrouting kept every armed faction at NO_REAL_FACTION_INCOME
+Detail: Every armed faction reported NO_REAL_FACTION_INCOME because the treasury sweep moved ANY pilot's real sale into one corporation (default 1000129), so an Angel or Serpentis pilot's earned ISK funded an ORE factory and its own faction stayed at balance 0. coopNpcCorpTreasury.run now accepts a resolveCorporation authority and sweeps ONLY pilots that really belong to the target corporation; a pilot wh
+Where: integration/coopNpcCorpTreasury.cjs, integration/coopNpcRefineryTick.cjs, tests/coop-npc-corp-treasury.test.mjs
+Evidence: tests/coop-npc-corp-treasury 8/8 + refinery + war-funding + war-treasury 62/62; OVERLAY_OK; no live deploy (owner stack not restarted)
+### 2026-10-27T16:41Z · 2d82e58 · L2 · docs: metrics for item 15 reserve/attrition and item 16 income routing
+
+Why: The governor's trickle pause did not follow EVEJS_COOP_TIME_SCALE, so on the x5 work stack a 15-minute policy interval became 75 accelerated minutes and the proof crawled.
+Where: .opencode/metrics.md
+Evidence: scaledTrickleMs(900000,{scale:5}) = 180000; governor 15/15

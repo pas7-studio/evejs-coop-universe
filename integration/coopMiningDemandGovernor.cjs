@@ -70,6 +70,15 @@ function demandUnits(stock, books) {
   return total;
 }
 
+// The work stack runs the same world five times faster (EVEJS_COOP_TIME_SCALE=5).
+// A policy interval has to follow that factor, or a "15 minute" trickle pause would
+// become 75 accelerated minutes and the proof would crawl. Pure and tested.
+function scaledTrickleMs(baseMs, {scale = 1} = {}) {
+  const base = Math.max(1000, num(baseMs) || 0);
+  const factor = Math.min(10, Math.max(1, num(scale) || 1));
+  return Math.round(base / factor);
+}
+
 // Pure decision, so the policy can be tested without a server.
 function decide({stock = 0, demand = 0, lastTrickleAt = 0, now = 0,
   factor = 1.5, floorUnits = 20000, trickleMs = 15 * 60 * 1000} = {}) {
@@ -218,7 +227,9 @@ function serverGovernor() {
     items, getStation: (id) => worldData.getStationByID(id), corpID,
     factor: Math.max(0, Number(process.env.EVEJS_COOP_MINING_DEMAND_FACTOR || 1.5)),
     floorUnits: Math.max(0, Number(process.env.EVEJS_COOP_MINING_DEMAND_FLOOR || 20000)),
-    trickleMs: Math.max(60000, Number(process.env.EVEJS_COOP_MINING_DEMAND_TRICKLE_MS || 900000)),
+    trickleMs: Math.max(60000, scaledTrickleMs(
+      Number(process.env.EVEJS_COOP_MINING_DEMAND_TRICKLE_MS || 900000),
+      {scale: Number(process.env.EVEJS_COOP_TIME_SCALE || 1)})),
     cacheMs: refreshMs,
     probe: require("./coopRuntimeProbe"),
     market: {books: () => Object.fromEntries(books)},
@@ -227,4 +238,5 @@ function serverGovernor() {
   return singleton;
 }
 
-module.exports = {HANGAR, stockRows, demandUnits, decide, createGovernor, serverGovernor};
+module.exports = {HANGAR, stockRows, demandUnits, scaledTrickleMs, decide, createGovernor,
+  serverGovernor};
