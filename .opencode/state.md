@@ -1,5 +1,50 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 15:00Z - ITEM 3 (owner correction): an enlisted player is ONE ship in a fleet
+
+**Code PASS (4001d5bd).** `coopWarBattleDirector` no longer has a separate
+player-only fallback branch. Per war ship it builds ONE ranked candidate list where
+a hostile native hull and an enlisted enemy player are the same kind of candidate,
+ordered by the same distance rule the NPCs already use on each other; a native hull
+wins an exact distance tie, so a player is never preferred. The enlistment proof is
+re-read immediately before the native order, exactly one native command is issued
+per hull per tick, and the ranking is published once per distinct set as
+`living-native-war-target-selection` (per ship: candidates, distance, chosen,
+reason). Tests 8/8 (2 new: "the player is one candidate among several, never the
+only or first target", "on an exact distance tie a native hull is chosen over a
+player"); 41/41 with the militia/mobilisation/assault suites; OVERLAY_OK; built and
+recreated.
+
+**Live, verbatim.** `militia_enlist 140000102/3012018` ->
+`{"enlistment":{"characterID":140000102,"factionID":500001,"status":"ACTIVE"},
+"agentSays":"[Militia] Enlistment recorded for Caldari State."}`. Read-only verdict
+probe on the real war ships of `campaign:30045344`:
+`char=140000102 ship=980000023571 faction=500001 system=30045344 -> ALLY` (his own
+faction never fires on him) and `ship=980000023574 faction=500004 system=30003837 ->
+NO_ACTIVE_ASSAULT` (the enemy may only engage him once it is physically inside the
+contested system - a real geometry gate, not a rule change).
+
+**BLOCKED_CLIENT_CHECK (the in-space half, exact).** The multi-tick target-selection
+proof needs the player's hull in a live scene. There is no server-side player-in-space
+facility (`coopSessionPresence.admission` requires a live socket,
+`initialStateSent`, a native scene membership and an unambiguous ship owner), and
+`140000005` is undocked (`stationID null`, `solarSystemID 30000145`), so even his
+enlistment needs a client dock. Required human action: log the client in as
+140000005, dock at a Caldari militia desk (3012018 @ 60003754 Perimeter or 3010879
+@ 60000358), enlist, undock in 30045344 while the campaign is in ASSAULT.
+
+**World prerequisite (open).** `EVEJS_COOP_FACTION_WAR_GATE_APPROACH: '1'` was added
+to `compose.coop-probe.yaml` and the server recreated, but the Gallente attacker
+980000023574 is still in 30003837 and no `living-native-war-gate*` event exists, so
+gate staging has not yet produced a crossing. That is the next exact step for the
+assault leg (a front whose attacker never arrives can never be fought).
+
+**NEXT ACTION (exact).** Diagnose gate staging for `campaign:30045344`: read
+`advanceNativeWarGateStaging` + `coopWarGateStaging.tick` and publish the exact
+refusal (treasury row, gate lookup, order lease, or `maxOrders`), then make the real
+Gallente hull cross 30003837 -> 30045344. After that, the client half of item 3
+(BLOCKED_CLIENT_CHECK above).
+
 ## 2026-10-27 14:42Z - ITEMS 1+2 PASS live: per-campaign mobilisation and the Caldari front in ASSAULT
 
 **Item 1 (38300de5).** `coopWarMobilizer.tick` now plans every live campaign before

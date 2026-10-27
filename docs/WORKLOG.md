@@ -1407,3 +1407,9 @@ Why: per-campaign mobilisation: every live campaign is planned, reported and ser
 Detail: Every live campaign is planned before any write: the mobiliser reports one block per campaign with each side's own assigned count, commander cap, real mobilizable hulls and the exact first rejection. The per-tick write budget is spent on the most starved campaign first, so a second border can no longer be starved by the first one. A refused native ASSIGN is no longer a silent boolean: the registry
 Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs, tests/coop-war-mobilization.test.mjs
 Evidence: node --test tests/coop-war-mobilization.test.mjs -> 16/16; OVERLAY_OK; live living-native-war-mobilization campaign:30045344 both sides + living-native-war-assault ASSAULT_BEGUN; militia_state 140000005 fronts [30045344]
+### 2026-10-27T14:48Z · 4001d5b · L2 · FW-029: an enlisted player is one ship in a fleet, never a priority target
+
+Why: an enlisted player is one ship in a fleet: one ranked candidate list per war ship (native hull and enlisted player are the same kind of candidate, same distance rule, native hull wins ties), ranked list published as living-native-war-target-selection
+Detail: The battle director used to try native hulls first and fall back to a separate player-only branch. It now builds ONE ranked candidate list per war ship where a hostile native hull and an enlisted enemy player are the same kind of candidate, ordered by the same distance rule the NPCs already apply to each other (a native hull wins an exact tie, so a player is never preferred). The only player-speci
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarBattleDirector.cjs, tests/coop-war-battle-director.test.mjs
+Evidence: node --test tests/coop-war-battle-director.test.mjs -> 8/8; 41/41 with militia+mobilization+assault; OVERLAY_OK; live verdict probe on real war ships of campaign:30045344
