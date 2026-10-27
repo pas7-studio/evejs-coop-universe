@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "mining_fleet_diagnose"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -798,6 +798,30 @@ function executeRequest(request) {
       return { ok: true, combat: runtimeWorld.diagnoseCombat() };
     } catch (error) {
       return { ok: false, error: "combat diagnose failed: " + String(error && error.message || error) };
+    }
+  }
+  // Read-only: why a stock mining fleet is not at its belt, or why a loaded fleet
+  // never leaves for a station. Never warps, orders, mines or writes a journal.
+  if (action === "mining_fleet_diagnose") {
+    const systemIDs = (Array.isArray(request.systemIDs) ? request.systemIDs : [request.systemID])
+      .map((value) => Number(value) || 0).filter((value) => value > 0);
+    if (!systemIDs.length) return { ok: false, error: "systemID or systemIDs is required" };
+    try {
+      const runtime = require("./runtime");
+      const controllers = require("./npc/npcRegistry");
+      const operations = require("../services/mining/miningNpcOperations");
+      const diagnose = require("./coopMiningFleetDiagnose" + siblingSuffix).createMiningFleetDiagnose({
+        getFleets: (systemID) => operations.getMiningFleetsForSystem(systemID) || [],
+        getScene: (systemID) => (runtime.scenes instanceof Map ? runtime.scenes.get(Number(systemID)) : null),
+        getController: (entityID) => controllers.getControllerByEntityID(entityID),
+        waypoints: (scene) => require("./coopNpcTopology" + siblingSuffix).waypoints(scene),
+        getNativeEntity: (entityID) => require("./npc/nativeNpcStore").getNativeEntity(entityID),
+        orderDiagnose: (args) => require("./coopVirtualWorldRuntime" + siblingSuffix).diagnoseNpcOrder(args),
+        journalRoot: process.env.EVEJS_COOP_NPC_WAREHOUSE_DIR || "/var/lib/evejs/coop-native-warehouse",
+      });
+      return { ok: true, systemIDs, fleets: diagnose.run({ systemIDs }) };
+    } catch (error) {
+      return { ok: false, error: "mining fleet diagnose failed: " + String(error && error.message || error) };
     }
   }
   if (action === "war_diagnose") {

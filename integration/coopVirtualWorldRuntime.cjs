@@ -1116,6 +1116,15 @@ function npcOrderBridge(){
  }
  return nativeOrderBridge;
 }
+// Read-only: why a native order would be refused for this hull, with the exact
+// first blocker and the current lease owner. Never issues or retains a lease.
+function diagnoseNpcOrder({entityID,systemID,owner}={}){
+ const bridge=npcOrderBridge();
+ if(!bridge)return {status:"DISABLED",reason:"COOP_NPC_ORDER_ARBITRATION_OFF"};
+ try{return bridge.diagnose({entityID,systemID,owner:String(owner||"RAID")})}
+ catch(error){return {status:"BLOCKED",reason:"DIAGNOSE_FAILED",
+  details:String(error&&error.message||error).slice(0,120)}}
+}
 function npcNativeOrder(owner,entityID,action,execute,systemID){
  const guard=npcOrderBridge();
  if(!guard)return owner==="WAR"?{success:false,errorMsg:"COOP_NPC_ORDER_WAR_ARBITER_REQUIRED"}:execute();
@@ -4386,4 +4395,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,warFrontChat};

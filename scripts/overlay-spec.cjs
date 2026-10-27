@@ -102,6 +102,9 @@ names.splice(names.indexOf("coopMiningTrace")+1,0,"coopMiningTargetGuard");
 names.splice(names.indexOf("coopMiningTargetGuard")+1,0,"coopFleetComposition");
 // A miner must not fill beyond one hauler load (default OFF).
 names.splice(names.indexOf("coopFleetComposition")+1,0,"coopMiningFillCap");
+// Read-only: why a mining fleet is not at its belt, or why a loaded fleet never
+// leaves for a station (no warp, no order, no journal write).
+names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopMiningFleetDiagnose");
 // The cargo projection carries no volume; annotate it from SDE (default OFF).
 names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
 // Guarded telemetry used by the restart-resilience modules.
