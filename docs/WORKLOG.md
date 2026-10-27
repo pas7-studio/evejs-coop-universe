@@ -1552,3 +1552,8 @@ Why: The empty-haul retry re-entered mining every 2s, which re-issued the hauler
 Detail: The FW tab only rendered systems present in the territory table, so the Caldari/Gallente assault in 30045344 was invisible while it was really running. occupationStates now fills the gap from live campaigns (defender holds, attacker contests) and leaves a recorded territory authoritative; the hook reports militia corporations (1000180/1000181) because that is what the client colours by, and drops 
 Where: integration/coopWarClientView.cjs, scripts/overlay-spec.cjs
 Evidence: work stack: hauler 980000000026 at 99528 m, 418 haul attempts in 13 min, miners holding 32480 units; guard now waits in the same haul and re-issues only after 24 waits; 5 structural tests
+### 2026-10-27T18:47Z · d67d44e · L2 · docs(state): perf closed, map works, FW tab is a stub in this build
+
+Why: The hauler landed 750 m from the asteroid while the miner orbits kilometres away, so the 2500 m transfer range was never reached and no ore ever loaded (ranges 55-238 km).
+Where: .opencode/state.md
+Evidence: work stack: living-haul-no-hauler out-of-range ranges oscillating, miners holding 60k units; guard now warps the hauler to the miner position every other retry; 6 structural tests

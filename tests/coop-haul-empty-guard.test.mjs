@@ -27,6 +27,14 @@ test('an unproductive haul is only re-issued after a bounded number of waits', (
   assert.match(block, /living-haul-empty-reissue/);
 });
 
+test('a far hauler is sent to the miner itself, not to the asteroid', () => {
+  // Landing 750 m from the rock while the miner orbits kilometres away means the
+  // 2 500 m transfer range is never reached (measured: ranges 55 km - 238 km).
+  assert.match(block, /living-haul-approach-issued/);
+  assert.match(block, /npcRuntime"\)\.warpToPoint\(haulerID, miner\.position/);
+  assert.match(block, /attempts % 2 === 0/);
+});
+
 test('a successful load clears the retry counter', () => {
   const reset = block.indexOf('fleetRecord.coopEmptyHaulAttempts = 0;');
   const loaded = block.indexOf("fleetRecord.state = \"loaded\";");
