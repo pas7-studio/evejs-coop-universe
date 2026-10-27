@@ -1557,3 +1557,23 @@ Evidence: work stack: hauler 980000000026 at 99528 m, 418 haul attempts in 13 mi
 Why: The hauler landed 750 m from the asteroid while the miner orbits kilometres away, so the 2500 m transfer range was never reached and no ore ever loaded (ranges 55-238 km).
 Where: .opencode/state.md
 Evidence: work stack: living-haul-no-hauler out-of-range ranges oscillating, miners holding 60k units; guard now warps the hauler to the miner position every other retry; 6 structural tests
+### 2026-10-27T19:31Z · f4fe0fa · L1 · fix(patches): regenerate 0009 after 0001, de-CRLF 0010, refresh MANIFEST sha256
+
+Why: 0009 was generated against pre-0001 context so git apply always failed after 0001 and the NPC store perf fix never reached the container; 0010 had CRLF line endings and could not apply on any tree
+Where: patches/upstream/0009-native-npc-store-root-clone.patch, patches/upstream/0010-concord-rules-cache-clone.patch, patches/upstream/MANIFEST.json
+Evidence: git apply --directory=Code --check 0009/0010 rc=0; node --test tests/coop-native-npc-store-patch.test.mjs pass=2
+### 2026-10-27T19:33Z · 6803ee4 · OPS · fix(deploy): apply L1 before the overlay, detect overlay-covered patches by content, fail if the overlay eats one
+
+Why: overlay-first order made 0004 unappliable and reverse-check reported an installed patch as drifted; L1 must precede L2 and presence is now proven by content
+Where: scripts/apply-all.cjs
+Evidence: apply-all: applied=0 alreadyPresent=10 total=10, OVERLAY_OK, exit 0
+### 2026-10-27T19:40Z · 0f08c34 · L2 · feat(fw): return every static warzone system with faction IDs (EVEJS_COOP_FW_ALL_SYSTEMS) instead of militia corporations
+
+Why: FW tab was grey: payload carried militia corporation IDs for only the systems we simulate, so the client had no occupation entry for the rest of the warzone; the untested combination was faction IDs with all static warzone systems
+Where: scripts/overlay-spec.cjs
+Evidence: OVERLAY_OK; payload owners must be 500001/500004 with 814 util.KeyVal entries; env-gated, default OFF, rollback is the env flag
+### 2026-10-27T20:00Z · 1ae27c1 · OPS · docs(state): handoff with the war-opening API, the ordered next steps and the guard rails
+
+Why: Work-stack bring-up from a clean volume after seven real defects; one stale market journal from a mid-RPC restart was moved aside so the trader stops refusing every sale.
+Where: .opencode/state.md
+Evidence: agents volumes reset 19:36Z, market reseeded jita_new_caldari (23 stations, 445096 rows), hauler-loaded 1680/2940/1260 units, station deliveries live

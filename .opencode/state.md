@@ -1,5 +1,40 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 20:00Z - fresh agents world + every defect found today is fixed
+
+Owner split the machine (docs/TWO_STACKS_PLAY_AND_WORK.md): play stack `evejs` is his game,
+not to be restarted; work stack `evejs-agents` is where proofs run. All work since then is
+on the work stack only.
+
+Defects found and fixed today, each with tests (all pushed):
+  1. liftedTypes declared inside the lift gate, read outside -> every arrival died with
+     'liftedTypes is not defined' and NOTHING sold (3 deliveries, 0 sales).
+  2. An empty haul flipped the fleet to 'loaded' -> empty fleets flew to stations
+     (living-native-haul-delivered NO_CARGO, lastHauledVolumeM3 0).
+  3. That retry re-entered mining every 2 s, restarting the hauler warp forever (99 km gap).
+  4. Then the warp target was the asteroid, not the miner -> 2 500 m transfer range never
+     reached (ranges 22-130 km). Now the hauler ORBITS the miner at 500 m, issued at most
+     once per 2 minutes (a warp takes ~24 s; re-issuing restarted it).
+  5. Governor decided on a partial bid book -> throttled a world with 25k/90k bids; a
+     partial book is now 'unknown' (>=90% stock coverage required).
+  6. Governor ignored EVEJS_COOP_TIME_SCALE -> a 15 min trickle became 75 accelerated min.
+  7. patches/upstream/MANIFEST.json carried a BOM -> JSON.parse failed, the whole deploy was
+     blocked for everyone. BOM stripped.
+
+Work-stack config (agent-only, compose/compose.agents.yaml): startup systems
+30000142,30000145 (Perimeter has zero bids), demand floor 200000 (a fresh economy is not
+overstock), fleet count 2, x5 pacing.
+
+Agents volumes were reset at 19:36Z (sandbox only) and the market reseeded with
+`jita_new_caldari` (23 stations, 445 096 seed rows). One stale market journal from my own
+mid-RPC restart (coop-pilot-012, order gone + cargo gone) was moved out of tx/ so the trader
+stops blocking every sale with UNRESOLVED_MARKET_JOURNAL; kept as
+/var/lib/evejs/coop-market-tx-stale-from-restart.json.
+
+Live on the fresh world so far: mining cycles COMMITTED, living-hauler-loaded with real
+quantities (1680, 2940, 1260), station deliveries, station trips. Remaining: the first
+successful sale -> treasury sweep -> paid refinery -> mineral lift -> mineral sale.
+
 ## 2026-10-27 17:05Z — items 15 and 16 (code halves) done; exact next steps
 
 **Item 15 DONE (code) — a1d5b03b.** `coopWarFleetRoster` now keeps a durable
