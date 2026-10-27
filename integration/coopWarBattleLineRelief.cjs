@@ -21,13 +21,15 @@ function createWarBattleLineRelief({
   sceneForSystem,
   getNativeEntity,
   inspectReadiness,
+  isDestroyed = () => false,
   clearOrder,
   clock = () => Date.now(),
   cooldownMs = 180000,
   maxReleases = 2,
 } = {}) {
   if (!registry || typeof registry.execute !== "function" || typeof registry.snapshot !== "function" ||
-    [sceneForSystem, getNativeEntity, inspectReadiness, clearOrder].some((fn) => typeof fn !== "function") ||
+    [sceneForSystem, getNativeEntity, inspectReadiness, isDestroyed, clearOrder]
+      .some((fn) => typeof fn !== "function") ||
     !Number.isSafeInteger(cooldownMs) || cooldownMs < 30000 ||
     !Number.isSafeInteger(maxReleases) || maxReleases < 1 || maxReleases > 8) {
     throw Error("WAR_BATTLE_LINE_RELIEF_AUTHORITIES_REQUIRED");
@@ -38,6 +40,15 @@ function createWarBattleLineRelief({
   function inspect({ entityID, systemID } = {}) {
     const id = Number(entityID), system = Number(systemID);
     if (!pos(id) || !pos(system)) return { status: "UNVERIFIED", reason: "INVALID_HULL" };
+    // A hull this process (or the durable casualty ledger) already confirmed as a
+    // real native wreck is gone: its slot must be released, not held by a corpse.
+    let destroyed = false;
+    try {
+      destroyed = isDestroyed(id) === true;
+    } catch (_error) {
+      destroyed = false;
+    }
+    if (destroyed) return { status: "DESTROYED", reason: "NATIVE_WRECK_CONFIRMED" };
     let scene = null, native = null, readiness = null;
     try {
       scene = sceneForSystem(system);
@@ -97,7 +108,7 @@ function createWarBattleLineRelief({
         nextAt.delete(key);
         continue;
       }
-      if (verdict.status !== "DRY") {
+      if (verdict.status !== "DRY" && verdict.status !== "DESTROYED") {
         blocked.push({ entityID: id, status: verdict.status, reason: verdict.reason });
         nextAt.set(key, at + cooldownMs);
         continue;

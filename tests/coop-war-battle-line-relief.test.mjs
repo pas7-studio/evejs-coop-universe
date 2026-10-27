@@ -98,3 +98,22 @@ test("every authority is required and the system list is bounded",()=>{
  assert.equal(api.tick({systemIDs:Array.from({length:21},()=>SYSTEM)}).status,"INVALID_SYSTEMS");
  assert.equal(api.tick({systemIDs:[]}).status,"NO_SYSTEMS");
 });
+
+test("a confirmed native wreck releases its slot instead of holding it",()=>{
+ const {api,calls}=fixture();
+ const destroyed=createWarBattleLineRelief({
+  registry:{snapshot:()=>({ships:{[String(SHIP)]:{entityID:SHIP,systemID:SYSTEM,
+   pilotID:"coop-pilot-051",fleetID:"fleet-1",warID:"war:500011-500020",
+   campaignID:"war:500011-500020:campaign:30001363",factionID:500020}}}),
+   execute:command=>{calls.push(command);return {status:"APPLIED",receipt:{type:"RELEASE"}};}},
+  sceneForSystem:id=>({systemID:id,getEntityByID:()=>null}),
+  getNativeEntity:()=>null,
+  inspectReadiness:()=>({ready:false,reason:"PHYSICAL_WAR_HULL_NOT_VERIFIED"}),
+  isDestroyed:id=>id===SHIP,
+  clearOrder:()=>{},
+ });
+ const result=destroyed.tick({systemIDs:[SYSTEM]});
+ assert.equal(result.status,"RELEASED");
+ assert.equal(result.released[0].reason,"NATIVE_WRECK_CONFIRMED");
+ assert.equal(calls.filter(x=>x&&x.type==="RELEASE").length,1);
+});

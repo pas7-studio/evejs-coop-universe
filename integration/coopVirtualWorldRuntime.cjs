@@ -5,6 +5,10 @@ const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
 let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null;
+// Native wreck IDs this process confirmed (and, after a restart, the durable
+// casualty ledger): the only proof that a registered warship is really gone.
+const destroyedNativeShips=new Set();
+let casualtySeedDone=false;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 // Real merit per pilot (coop-pilot-XXX -> record). Nothing promotes a pilot yet,
 // so it is empty and every commander is a recruit; the career phase fills it.
@@ -77,7 +81,10 @@ function nativeWarFleetRegistry(){
    getNativeEntity:id=>entityStore.getNativeEntity(id),
    assignments:()=>[...(bridge?.snapshot()||[]),
     ...Object.values(identityRegistry?.snapshot()?.links||{})],
-   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id)
+   getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
+   // A hull whose physical native wreck this process already confirmed may leave
+   // fleet custody. Nothing else counts as destroyed: a missing scene never does.
+   confirmDestroyed:d=>destroyedNativeShips.has(Number(d?.entityID))
   });
   warFleetRegistry=require("./coopWarFleetRegistry").createWarFleetRegistry({
    gameStore:require("../gameStore"),...proofs,
@@ -408,6 +415,21 @@ function advanceNativeWarBattleLineRelief(){
    const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
     dogma=require("./combat/weaponDogma"),capability=require("./npc/npcCapabilityResolver"),
     npc=require("./npc/npcRuntime");
+   // Restart safety: a hull whose wreck is already in the durable casualty ledger
+   // stays out of the battle line even though this process never saw the wreck.
+   if(!casualtySeedDone){
+    casualtySeedDone=true;
+    try{
+     const row=require("./coopNativeRowPath").readRow(
+      require("../gameStore"),"corporationRuntime","coop-faction-war\u001fcasualties-v1");
+     for(const entry of Object.values(row?.byWreck||{})){
+      const id=Number(entry?.entityID);
+      if(Number.isSafeInteger(id)&&id>0)destroyedNativeShips.add(id);
+     }
+    }catch(error){
+     console.warn("[CoopWarRelief] casualty seed",String(error&&error.message||error));
+    }
+   }
    // The dry verdict is the mobiliser's own rule, never a second opinion.
    const readiness=require("./coopWarMusterReadiness").createWarMusterReadiness({
     store:npcStore,resolveFamily:dogma.resolveWeaponFamily,
@@ -419,6 +441,9 @@ function advanceNativeWarBattleLineRelief(){
     sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
     getNativeEntity:id=>npcStore.getNativeEntity(id),
     inspectReadiness:context=>readiness.inspect(context),
+    // A hull this process confirmed as a real native wreck is not merely idle:
+    // it is gone, and its slot must not stay occupied by a corpse.
+    isDestroyed:id=>destroyedNativeShips.has(Number(id)),
     // Both calls are the same native manual-order API the battle director uses:
     // stop clears the live target, resumeBehavior clears the manual order, which
     // is exactly what the registry's native release proof requires.
@@ -3668,6 +3693,10 @@ function confirmedWreck(session,ship,npcID,wreckID){
  }catch(e){console.warn("[CoopVirtualWorld] loss",e.message);}
 }
 function confirmedNativeNpcWreck(systemID,npcID,wreckID,destroyedShip=null){
+ // FW-009C: the authoritative native wreck callback is the only witness that a
+ // registered warship is really gone, so a destroyed hull can leave the battle
+ // line instead of blocking its campaign slot forever.
+ if(Number.isSafeInteger(Number(npcID))&&Number(npcID)>0)destroyedNativeShips.add(Number(npcID));
  // Native service calls this only AFTER original source rows are written
  // and a physical wreck is spawned; do not wait for the next A-Life tick.
  if(process.env.EVEJS_COOP_PVE_NATIVE_BOSSES==="1"&&
