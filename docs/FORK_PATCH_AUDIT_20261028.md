@@ -96,14 +96,32 @@ Current state of the giant modules:
 
 | File | Lines | Split |
 |---|---|---|
-| `space/coopVirtualWorldRuntime.js` | 5 330 → **4 419** | 55 state-free helpers (911 lines) → `space/coopVirtualWorldPure.js` (engine commit `893c78f`) |
-| `space/coopAdminBridge.js` | 1 518 | not started — next |
+| `space/coopVirtualWorldRuntime.js` | 5 330 | **blocked** — see below |
+| `space/coopAdminBridge.js` | 1 518 | not started |
 | `space/coopNativeStationArrival.js` | 1 451 | not started |
 | `space/coopCourierRuntime.js` | 975 | not started |
 
-Verified after the split: same 21 exports, and the 26 test files that reference
-the runtime report 188 pass / 20 fail both before and after the change (those 20
-failures are pre-existing in the working tree, from unrelated in-progress work).
+### Attempted split of `coopVirtualWorldRuntime.js` (reverted)
+
+The tool found a clean, state-free slice: 55 declarations, 911 lines (distance
+and belt summaries, NPC module summary, raid leash, PVE wave helpers, sale
+notes, war presence math) → `space/coopVirtualWorldPure.js`, parent 4 419 lines.
+Behaviour was verified: the engine still exported the **same 21 names**, and the
+26 test files referencing the runtime reported **188 pass / 20 fail both before
+and after** the change.
+
+It was reverted anyway, because **10 tests assert on the *text* of
+`integration/coopVirtualWorldRuntime.cjs`** (`read("integration/…")` +
+`assert.match`). Once the archived copy is refreshed, those assertions look for
+code that legitimately moved. The split is therefore blocked on a test
+migration, not on the tool:
+
+1. read `runtime + pure` together in the text-assertion helpers;
+2. re-run the 26 files and require the same 20 pre-existing failures only;
+3. then re-apply `--apply` and refresh the archived copies.
+
+Do not "fix" this by freezing the archived copy at the old text: an archive that
+disagrees with the engine is worse than a big file.
 
 ## Why the 78 legacy transforms were not deleted
 
