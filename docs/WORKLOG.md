@@ -1535,3 +1535,14 @@ Evidence: chains: evaluatePair 5962ms/23% wall, cargoRows 1406ms, miningFleetDur
 Why: The governor decided on a partially loaded bid book, so on the work stack it held a fleet on a world with 25k/90k bids per type; a partial book is now treated as unknown.
 Where: docs/WORKLOG.md, patches/upstream/MANIFEST.json, scripts/patch-evejs-coop.cjs, tests/coop-haul-empty-guard.test.mjs
 Evidence: work stack HOLD sys30000145 while livres had bids; coverage>=0.9 rule; governor 17/17
+### 2026-10-27T17:58Z · a82365d · L1 · perf(L1): the CONCORD rules cache hit copied every rule through JSON
+
+Why: Top stock cost after the NPC store fix; a JSON round-trip per scene tick for rules that were already cached
+Detail: buildConfiguredConcordStartupRules already caches by signature but cloned each rule with JSON.parse(JSON.stringify) on every hit; structuredClone is the same copy without the round-trip. Patch 0010. Round-2 proof recorded: on the rebuilt work stack the three named hot chains are gone and idle is 85.9%.
+Where: .opencode/metrics.md, patches/upstream/0010-concord-rules-cache-clone.patch, patches/upstream/MANIFEST.json
+Evidence: profile after round 2: 1.4% cloneValue(npcDefaultConcordRules) via buildConfiguredConcordStartupRules; work stack idle 85.9%, cloneValue 4.2%
+### 2026-10-27T17:59Z · f34e984 · OPS · docs(perf): rounds 1-3 measured, and the exact play-stack comparison step
+
+Why: On the fresh work-stack world the governor throttled mining at a 58k buffer against a 25k station bid, which is a normal economy, not overstock; the agents stack gets a higher floor while the play stack keeps 20k.
+Where: .opencode/state.md, docs/PERFORMANCE_REVIEW.md
+Evidence: compose/compose.agents.yaml EVEJS_COOP_MINING_DEMAND_FLOOR=200000; governor HOLD held=58453 want=25000 allow=37500 before the change

@@ -36,6 +36,17 @@ services:
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
+      # Phase timing on the work stack, so optimisation claims are measured.
+      EVEJS_COOP_PERF_METRICS: "1"
+      # The agent world seeds only Jita (30000142) and New Caldari (30000145).
+      # Perimeter (30000144) has ZERO seeded bids, so a fleet based there mines ore
+      # nobody can buy and the whole loop stalls at the sale. Every agent fleet is
+      # therefore based where its ore is really bought. Play stack untouched.
+      EVEJS_MINING_NPC_STARTUP_SYSTEM_IDS: "30000142,30000145"
+      # The governor stays ON here, but a small test world must not be throttled by a
+      # modest backlog: 58k units against one station's 25k bid is not "overstock" on
+      # a fresh economy, it is a normal buffer. The play stack keeps the 20 000 floor.
+      EVEJS_COOP_MINING_DEMAND_FLOOR: "200000"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.
