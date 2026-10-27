@@ -69,6 +69,8 @@ const M = Object.freeze({
   cruiseLauncher1: 13320,     // Cruise Missile Launcher I  (high)
   gatling125: 484,            // 125mm Gatling AutoCannon I (high)
   autoCannon200: 486,         // 200mm AutoCannon I         (high)
+  autoCannon220: 490,         // 220mm Vulcan AutoCannon I  (high, medium charge)
+  autoCannon425: 491,         // 425mm AutoCannon I         (high, medium charge)
 });
 
 // One doctrine = one real hull class + one real fitting. `chargePattern` picks a
@@ -174,14 +176,14 @@ const DOCTRINES = Object.freeze({
     brawler: {
       role: "brawler", hullClass: "cruiser",
       profileID: "parity_angel_autocannon_cruiser",
-      weapons: [{ typeID: M.autoCannon200, quantity: 4 }],
+      weapons: [{ typeID: M.autoCannon220, quantity: 4 }],
       utility: [{ typeID: M.stasisWeb2, quantity: 1 }],
       chargePattern: "^EMP M$", ammoDepth: 60,
     },
     heavy: {
       role: "heavy", hullClass: "battleship",
       profileID: "parity_angel_autocannon_battleship",
-      weapons: [{ typeID: M.autoCannon200, quantity: 4 }],
+      weapons: [{ typeID: M.autoCannon425, quantity: 4 }],
       utility: [{ typeID: M.warpDisruptor2, quantity: 1 }],
       chargePattern: "^EMP M$", ammoDepth: 60,
     },
