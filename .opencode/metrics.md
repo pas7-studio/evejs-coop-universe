@@ -40,3 +40,27 @@ overlay: OVERLAY_OK
 live: admin result war_diagnose -> {"status":"DRY_RUN","mobilized":[],"rejected":[{"entityID":980000000113,"pilotID":"coop-pilot-013","side":"ATTACKER","reason":"NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON"},...{"side":"DEFENDER","reason":"WRONG_FACTION"}],"activeCampaignCount":2}
 metrics: tests_total=39 modules_added=0 modules_changed=3 live_events=1
 next: the defender faction ORE (500014) has no armed profile, so this front can never muster; a fightable front needs an armed faction to own a border system
+
+## 2026-10-27T00:10Z - queue item 3: commander-sized battle groups - 78fb32ce
+done: coopFactionWarMerit.commandCapFor + sideCommandCap (recruit 1, squad-lead 5, admiral 25); mobiliser takes commandCap and caps each campaign side at min(maxPerSide, cap); runtime wires it to real merit records (none yet, so a recruit's 1).
+tests: node --test tests/coop-war-mobilization.test.mjs -> 10/0 ; merit+assault -> 6/0
+overlay: OVERLAY_OK
+live: docker build + recreate OK; admin war_diagnose after deploy -> {"status":"DRY_RUN","mobilized":[],"activeCampaignCount":2} (same world blocker, cap not the cause)
+metrics: tests_total=55 modules_added=0 modules_changed=3 live_events=0
+next: the real muster blocker is the native fitting, not the cap
+
+## 2026-10-27T00:12Z - blocker 2: NPC native fitting - eeacae5f
+done: read-only admin action inspect_npc (native record + fitted modules + cargo).
+tests: node --test tests/coop-admin-bridge-structure.test.mjs -> 6/0
+overlay: OVERLAY_OK
+live: admin result inspect_npc 980000000113 -> {"ok":true,"entityID":980000000113,"native":{"systemID":30000142,"corporationID":1000138,"ownerID":1000138,"transient":false},"modules":[],"moduleCount":0,"cargo":[],"cargoCount":0}
+metrics: tests_total=61 modules_added=0 modules_changed=1 live_events=1
+next: no NPC in this world carries a native fitted weapon or charge, so WAR_NO_NATIVE_LOADED_WEAPON can never pass; next diagnostic is spawn-time hardware fitting (npcHardwareCatalog family + loadout), not a war-layer change
+
+## 2026-10-27T00:20Z - queue item 4: front chat reports - 3ff71b13
+done: warFrontChat() in the runtime sends coopWarClientView.frontReport to live sessions in the affected systems on war opened / assault begun / objective captured, once per event key, never repeated.
+tests: node --test tests/coop-war-front-report.test.mjs -> 3/0 ; client-view+admin 11/0
+overlay: OVERLAY_OK
+live: deployed (docker build + recreate). No live transition occurred while a client was connected, so no chat line was observed - not claimed.
+metrics: tests_total=64 modules_added=0 modules_changed=1 live_events=0
+next: regression sweep of every touched module

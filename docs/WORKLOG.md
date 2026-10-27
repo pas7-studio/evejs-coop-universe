@@ -903,3 +903,15 @@ Evidence: coop-war-mobilization 10/10 (recruit caps a side at 1, admiral up to t
 Why: The mining loop had no buyer; a read-only audit now names exactly which native pieces are missing instead of guessing, and two wrong assumptions it exposed are pinned as tests.
 Where: .opencode/state.md
 Evidence: tests tests/coop-factory-audit.test.mjs 6 pass; live status=FACTORY_NOT_READY blueprints=0 jobs=0 fundedCorporations=0 with all stations online
+### 2026-10-27T00:06Z · eeacae5 · L2 · feat(admin): read-only inspect_npc to see what a native hull really carries
+
+Why: Muster readiness failed for every NPC; needed a read-only way to see the real fitting
+Detail: The mobilization diagnosis ended at WAR_NO_NATIVE_LOADED_WEAPON for every candidate, so the next question is what the hull actually has fitted. inspect_npc returns the native record plus the fitted modules and cargo of one entity and never writes anything. Live answer for the durable Angel Cartel patrol 980000000113 (in Jita): {"ok":true,"entityID":980000000113,"native":{"systemID":30000142, "corp
+Where: integration/coopAdminBridge.cjs, tests/coop-admin-bridge-structure.test.mjs
+Evidence: inspect_npc 980000000113 -> moduleCount 0, cargoCount 0; tests 6/6
+### 2026-10-27T00:08Z · 3ff71b1 · L2 · feat(war): front chat reports on real transitions only
+
+Why: The front report projector was dead code; players never heard about a real war transition
+Detail: coopWarClientView.frontReport existed but nothing called it. The runtime now reports the three transitions that really happen - war opened, assault begun, objective captured - to live sessions in the affected systems through chat.sendSystemMessage. Each report is keyed by the event (campaign, or campaign:system:revision) and is sent at most once per process, so a repeating tick can never spam a pl
+Where: integration/coopVirtualWorldRuntime.cjs, tests/coop-war-front-report.test.mjs
+Evidence: coop-war-front-report 3/3; --check OVERLAY_OK
