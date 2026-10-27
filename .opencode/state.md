@@ -2253,3 +2253,29 @@ wreck + stored loot on the same victim. No map work, no FW tab work.
    and stargate.lock.GetRestrictedSystems — neither is the warzone tab.
 Next: (a) rebalance the campaign seed so both factions hold systems, (b) add the
 advantage handler. No client patching, no map work.
+
+## TASK A+B (owner said "давай"): exact entry points, nothing mutated yet
+
+A. Rebalance "Gallente 2 / Caldari 0".
+   The number is `occupationStates()` in integration/coopWarClientView.cjs counting
+   `state.territories[systemID].militaryControllerFactionID`. The state is NOT a JSON
+   file (no /var/lib/evejs/coop-war-state.json) — it lives in SQLite behind
+   `integration/coopFactionWarStore.cjs` (createFactionWarStore -> execute/snapshot,
+   TABLE+KEY from that module) and `warState()` reads it with
+   `gameStore.coopAtomicNativeRows.transact([TABLE], tx => tx.get(TABLE, KEY))`.
+   Therefore the seed must go through the store's own `execute` mutation with its
+   receipts/proofs, NEVER a hand-written row: hand-writing is fabrication and the
+   store validates state on read (`core.validateState`).
+   First read the current territories + wars to see which systems are unowned, then
+   open real campaigns (attacker/defender, source/target) so both factions hold and
+   contest systems.
+
+B. "War zone" black screen + "loading advantage data" forever.
+   No advantage implementation exists server-side (`grep -rn Advantage
+   /app/server/src/services/` = 0). fwWarzoneSolarsystemService exposes only
+   GetAllWarzonesOccupationStates(+Uncached), GetAllWarzones, GetHQSystemIDs,
+   GetLocalOccupationState. The client asks for advantage/summary and never gets an
+   answer. Next: capture the exact RPC name from the client's request log while the
+   panel spins (docker logs evejs-server-1 | grep fwWarzone), then add a handler that
+   returns real occupation counts/contested counts from the same war state. Env-gate it
+   like EVEJS_COOP_WAR_CLIENT_VIEW and keep it default OFF until verified.
