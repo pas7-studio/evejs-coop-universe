@@ -137,3 +137,51 @@ Rules:
   every item (done / next / exact file+line) so a compaction loses nothing, let the
   session compact, then continue from the handoff. Only stop when a queue item is
   genuinely blocked or the queue is empty.
+
+## MASTER BACKLOG (owner-approved 2026-10-27, append-only — never drop an item)
+
+Status legend: DONE = live-proven, WIP = in progress, NEXT = approved next,
+BLOCKED = needs a real missing datum, CLIENT = needs the owner's eyes.
+
+1. DONE  Structure factory + real Astrahus in Perimeter/New Caldari.
+2. DONE  Structures bound as campaign objectives (structureID in the client snapshot).
+3. DONE  First real front, mobilisation, BEGIN_ASSAULT with real muster.
+4. DONE  Real fire, measured HP loss, real kills, wrecks with stored loot.
+5. DONE  Loot recovered and sold to a real seeded buyer (TRADE_SETTLED, no ISK minted).
+6. DONE  Warp disruption (two stock bugs) so prey can be held.
+7. DONE  Orbit at the fitted weapon's own range; leash scoped to home+hull.
+8. DONE  Merit + promotion from a real kill; command size 1/5/25.
+9. DONE  Treasury chest funded from pilots' real earned ISK; escrow reservation HELD.
+10. DONE Caldari enlistment proven (faction from the character record, enemy from real data).
+11. DONE Doctrine fleets: tackle/brawler/ewar/logistics, real hulls+modules+charges.
+12. DONE Client projection: map campaign layer + FW front tab payloads served.
+13. NEXT Player personal loop: kill -> merit -> VISIBLE rank/title -> payout from the chest.
+14. NEXT Structures as capture objectives: destroy the structure -> system flips owner.
+15. NEXT Fleet reconstitution + faction reserve, losses/replacements reported in chat.
+16. NEXT Real income for BOTH fighting factions from real loot sales.
+17. CLIENT Map/front-tab visual check prepared for the owner; never claim he saw it.
+18. CLIENT Second player (Sasha): server preconditions + checklist, no client claims.
+19. BLOCKED Shipcaster: no beacon type for 500011/500014/500020 — needs a design decision.
+20. BLOCKED Native sovereignty: needs a real TCU/IHub; military control only for now.
+21. BLOCKED Incursions: stub in this build — do not build on it.
+22. PENDING No player-priority targeting: the enlisted player is one of many targets.
+23. PENDING Per-campaign mobilisation for every live campaign (FW-028 landed; verify).
+24. PENDING Campaign closure on evidence (structure destroyed or force destroyed) -> front moves.
+25. PENDING Regression sweep of every touched module after each item.
+
+Rule: when the queue is updated, edit this list in place (append status changes),
+never delete an item. The agent reads this file before every new session.
+26. NEXT N1 Territory capture on real wrecks -> system flips controller (night-plan N1).
+27. NEXT N2 Formation warp proven live with 2+ hulls (night-plan N2).
+28. NEXT N3 Restart resilience of a live war, before/after diff (night-plan N3).
+29. NEXT N4 Enlisted player targeted by the enemy fleet (night-plan N4).
+30. NEXT N5 Real war economy: no free hulls, chest debit or refusal (night-plan N5).
+31. NEXT N6 Roster truth: write it or delete the dead NOT_IN_ROSTER path (N6).
+32. NEXT N7 Ammo endurance and dry-hull relief (night-plan N7).
+33. NEXT N8 Wreck/loot hygiene, never delete unclaimed evidence (night-plan N8).
+34. NEXT N9 Militia rank visible in the client from the merit ledger (N9).
+35. NEXT N10 Eight-hour soak with an hourly table (night-plan N10).
+36. NEXT N11 Extract FW hooks out of the stock service, AUDIT_OK (N11).
+37. NEXT N12 Operator guide with executed commands and real output (N12).
+38. NEXT N13 Morning handover: one play-stack deploy + MORNING file (N13).
+Detail and acceptance criteria: .opencode/night-plan-20261028.md
