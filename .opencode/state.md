@@ -480,3 +480,53 @@ older ORE campaigns stay PREPARING forever by construction (ORE cannot arm).
 -> capture of 30001363; (b) client check of the new campaign on the map/FW tab =
 BLOCKED_CLIENT_CHECK without the EVE client; (c) do not re-spawn patrols for the
 same campaign (side cap is 1 at recruit rank).
+
+## 2026-10-27 — assault battle leg: real fire + measured HP loss PROVEN (287898d1)
+
+**Proven live (container evejs-server-1, read-only probes).**
+- `living-native-war-attack-orders` `NATIVE_ATTACK_ORDER_ACCEPTED` for
+  980000016639 -> 980000016987 and back, after the director finally saw its own
+  war state.
+- `war_combat_diagnose` pair: `sameSystem:true, distanceMeters:4908,
+  inRange:true, verdict:AUTHORIZED, warID:war:500011-500020`.
+- `living-native-weapon-event` `VERIFIED_NATIVE_WEAPON_EVENT` repeatedly from both
+  hulls (module 980100051793 hybrid turret, 13773 projectile turret).
+- Ammo bank journal `980000016639.json` phase **COMMITTED** (a real charge debit).
+- Victim HP went from `{"shield":225,"armor":200,"structure":215}` to
+  `{"shield":200.13459482520693,"armor":200,"structure":215}` — 24.87 HP of
+  measured damage from a real Serpentis turret hit.
+
+**Five stacked defects fixed (each proven by a probe before the next):**
+1. `gameStore.read(TABLE,"/"+KEY)` cannot see a row written through
+   `coopAtomicNativeRows` (the cache nests it at 0x1f). The battle director's
+   `snapshots()` was always null -> `WAR_STATE_UNAVAILABLE` -> no order ever.
+   `integration/coopNativeRowPath.cjs` is now the one conversion point (195d4ec9).
+2. An assault attacker mobilized during PREPARING stayed in the source system and
+   held the rank-capped side slot forever (b5a8cd01).
+3. `coopNpcFireDebitProof` demanded `flagID` on native charge cargo rows, which
+   the native cargo writer never stamps -> `NO_AMMO` on every cycle.
+4. The ammo bank journal root did not exist -> `BANK_ATOMIC_JOURNAL_UNSAFE`.
+5. The bank transaction declared npcEntities/npcModules (transient rows) and no
+   contract covered them; two features now share the npcCargo set, so the caller
+   names its contract; a PREPARED journal whose SQLite fence proves no commit is
+   recovered as ABORTED by the new `native-ammo-bank-recovery` phase.
+
+**Exact remaining blocker for a KILL (wreck + loot).** One bank cycle spends every
+fitted charge (each charge row is quantity 1), so a hull fires exactly ONE volley
+and is dry: the cruiser hit for 24.87 HP against a 640 HP frigate. The real lever
+is ammo depth: author a war-patrol loadout with `chargeEntry.quantityPerModule`
+> 1 (the native spawn honours it, `nativeNpcService.js:563`), spawn the patrol
+with that `loadoutID`, then the same fire path kills the victim and
+`coopNpcWreckCustody` / `coopNativeLootQuarantine` / `coopWarCasualtyLedger`
+follow on the real wreck.
+
+**NEXT ACTION (exact).** Add a coop-authored war-patrol loadout row with
+`quantityPerModule` (e.g. 40) reachable through `coopWarPatrolLoadout`, spawn the
+Sobaseki attacker with it, verify repeated `living-native-weapon-event` +
+falling HP + a real wreck, then continue queue item 2 (casualty ledger -> merit ->
+promotion -> treasury).
+
+**Known noise.** The cruiser 980000016639 and frigate 980000016987 each have a
+COMMITTED/ABORTED bank journal; hulls left behind in Jita (980000016644/16642)
+stay registered to their campaigns. `EVEJS_LOG_LEVEL=2` was used only for the
+diagnosis and has been removed from `compose.coop-probe.yaml`.

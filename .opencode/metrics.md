@@ -96,3 +96,27 @@ overlay: OVERLAY_OK (coop-deploy reset=53 patches=series=7)
 live: docker exec evejs-server-1 -> inspect_npc 980000016644 -> "modules":[3 x typeID 13773 flagID 27/28/29],"moduleCount":3,"cargo":[3 x typeID 20767 one per module],"transient":false ; inspect_npc 980000016639 -> "moduleCount":5 typeID 13884 + 5 charges 20057 ; war_diagnose -> both armed hulls still rejected while transient ("NOT_READY:WAR_NO_NATIVE_LOADED_WEAPON") ; after durable spawns: "living-native-war-opened","status":"OPENED","warIDs":["war:500011-500020"],"campaignIDs":["war:500011-500020:campaign:30001363"] ; "living-native-war-mobilization" 980000016644 ATTACKER (30000142/500011) + 980000016639 DEFENDER (30001363/500020) ; "living-native-war-assault","status":"ASSAULT_BEGUN","campaignID":"war:500011-500020:campaign:30001363","attackerShips":[980000016644],"defenderShips":[980000016639],"evidence":"REAL_NATIVE_MUSTER_ON_BOTH_SIDES"
 metrics: tests_total=270 pass=259 fail=11 (all pre-existing) new_tests=17 modules_added=1 modules_changed=2 live_events=4
 next: the assault campaign war:500011-500020:campaign:30001363 is live; next real steps are the battle/objective leg (attack orders, structure objective binding, capture) and the client-visible check of the new campaign on the map (BLOCKED_CLIENT_CHECK without the EVE client)
+
+## 2026-10-27T01:20Z - assault battle leg: the director can see its own war state - 195d4ec9
+done: integration/coopNativeRowPath.cjs is the single read-only conversion from an atomic-rows key to its JSON cache path; coopWarCombatAuthority.snapshots, coopWarFleetRegistry.claim, coopWarTransferLedger.terminalCandidates and the runtime gate-staging readRow use it. New read-only admin action war_combat_diagnose (runtime diagnoseCombat) reports scene/native/controller/hp/pair verdict.
+tests: node --test tests/coop-native-row-path.test.mjs tests/coop-war-combat-diagnose.test.mjs -> 12/0 ; coop-war-* + coop-faction-war-* + coop-admin-bridge-* -> 274 pass / 11 fail (same 11 at pre-change HEAD)
+overlay: OVERLAY_OK
+live: war_combat_diagnose -> pair 980000016639/980000016644 {"sameSystem":false,"distanceMeters":3134785105830,"verdict":"BLOCKED","reason":"NATIVE_STORE_IDENTITY_MISMATCH"} (was WAR_SNAPSHOT_UNAVAILABLE); gameStore.read("corporationRuntime","/coop-faction-war<0x1f>state-v1") -> ENTRY_NOT_FOUND while tx.get() -> version 1, 2 wars
+metrics: tests_total=285 pass=274 fail=11 modules_added=1 modules_changed=5 live_events=1
+next: the assault attacker was physically in the campaign source system, so no co-located pair existed
+
+## 2026-10-27T01:24Z - assault battle leg: only a co-located hull fills a battle slot - b5a8cd01
+done: coopWarMobilizer counts a campaign side (and the commander's commanded pilots) only among hulls physically in that side system, so an assault attacker left in the source system no longer holds the rank-capped slot.
+tests: node --test tests/coop-war-mobilization.test.mjs -> 11/0 (new case: a stranded source-system hull never occupies an assault battle slot)
+overlay: OVERLAY_OK
+live: one real durable armed Angel patrol spawned in the target system (parity_angel_autocannon_frigate, 3x13773 + 3x20767, faction 500011/corp 1000138, entityID 980000016987, link coop-pilot-061) -> war_combat_diagnose {"sameSystem":true,"distanceMeters":4908,"inRange":true,"verdict":"AUTHORIZED","warID":"war:500011-500020"} ; living-native-war-attack-orders NATIVE_ATTACK_ORDER_ACCEPTED for both hulls
+metrics: tests_total=11 pass=11 fail=0 modules_added=0 modules_changed=1 live_events=2
+next: orders were accepted but no HP was lost - the ammo path refused every turret cycle
+
+## 2026-10-27T02:05Z - assault battle leg: a real warship fires a real shot - 287898d1
+done: five stacked ammo-path defects fixed (flagID demanded on native charge cargo rows; missing journal root; npcEntities/npcModules in the bank transaction vs transient rows; two features sharing one npcCargo contract; PREPARED journals never recovered) plus a bounded native-ammo-bank-recovery phase and named refusal reasons.
+tests: node --test tests/coop-npc-*.test.mjs -> 1090 pass / 98 fail, baseline with the same tree stashed 1071 pass / 116 fail, no test that passed at baseline fails now (Compare-Object empty on the => side)
+overlay: OVERLAY_OK
+live: before -> "npc.weapons.initial-cycle ... errorMsg=NO_AMMO" then NATIVE_AMMO_BANK_SHIP_QUARANTINED, victim HP {"shield":225,...} ; after -> journal 980000016639.json phase COMMITTED, war_combat_diagnose victim 980000016987 hp {"shield":200.13459482520693,"armor":200,"structure":215} = 24.87 measured HP loss from a real turret hit
+metrics: tests_total=1200 pass=1090 fail=98 new_tests=18 modules_added=0 modules_changed=6 live_events=3
+next: a kill is still out of reach because one bank cycle spends every fitted charge (quantity 1 per module), so each hull fires exactly one volley; authoring a war-patrol loadout with quantityPerModule > 1 is the next real lever for the wreck + loot legs
