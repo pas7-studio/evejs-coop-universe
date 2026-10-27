@@ -2217,3 +2217,22 @@ MANIFEST sha256 refreshed for 0009 and 0010 (apply-upstream-patches.cjs checks i
 
 Deploy is one command and now fails loudly if anything is missing:
 `node scripts/apply-all.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code`
+
+## NEXT: the war must be visible IN SPACE, not on the map (owner decision 2026-10-27)
+
+Owner confirmed: FW tab stays grey in every payload variant and the map opens fast now,
+so "на карті війну не побачимо". Do not spend more time on the map or the tab.
+
+The only visible war path left is the one he asked for from the start: fly to a warzone
+system and see his faction`s fleet actually fight the other faction. What already exists:
+  * `coopNpcHostility` allows NPC-vs-NPC only for named, physically linked opposing
+    factions with a current native attack order or fresh retaliation (do not weaken it);
+  * `warFrontChat` already emits real `war-opened` / `assault-begun` /
+    `objective-captured` lines to sessions inside the affected system, once per event,
+    text built from real state;
+  * mining fleets are alive again because patch 0004 is really applied now
+    (`ALIFE08 ... ALREADY_ACTIVE miners=2 haulers=1`), and a pirate raid is running.
+Next concrete step: stage BOTH factions` fleets in ONE warzone system (Caldari vs
+Gallente) so the owner can fly there and watch the fight, and make sure the front chat
+line reaches him there. Evidence required: real weapon success, measured HP loss, real
+wreck + stored loot on the same victim. No map work, no FW tab work.

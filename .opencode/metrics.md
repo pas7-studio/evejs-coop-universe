@@ -603,3 +603,20 @@ Note: the CPU baseline moved because patch 0004 is now really applied, so the
 mining fleets exist again (`ALIFE08 ... ALREADY_ACTIVE miners=2 haulers=1`) and the
 server does real mining/combat work. 17-35% of one core for that load is the new
 normal; the idle waste (86.7% in cloneValue/ensureRootShape) is gone.
+
+## 2026-10-27 late: FW tab closed as STUB_IN_THIS_BUILD
+
+Three payload variants tested against the real client, owner-confirmed:
+
+| payload | FW tab | map |
+|---|---|---|
+| dict | client exception `dict has no attribute occupierID` | - |
+| util.KeyVal + militia corps 1000180/1000181, 5 systems | grey | ok |
+| util.KeyVal + factions 500001/500004, 813 systems | grey | ok, no crash |
+
+Owner verdict: "сіра, карта швидше відкрилась, на карті війну не побачимо".
+So the map is not the place to show the war in this client build. Payload is back to
+the small set (EVEJS_COOP_FW_ALL_SYSTEMS=0) so the map stays fast.
+
+CPU after the recreate: 18.48% / 54.81% / 16.40% (spikes are the pirate raid and the
+mining tick), rootShapeVerified.add=1 in the container. Perf fix holds.
