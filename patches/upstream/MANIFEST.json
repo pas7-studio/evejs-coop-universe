@@ -49,12 +49,12 @@
     },
     {
       "file": "0006-native-npc-live-capacitor-wins.patch",
-      "sha256": "9a5cbc78c1e90982f85112a05e27011eb5b6789a2dff904717cccb26fb7b6932",
+      "sha256": "01d6cc7ec26b8a5fdb012dd6b30cd055eea2cf59f608e61477efac6648252a9a",
       "files": [
         "server/src/space/runtime.js"
       ],
       "status": "not-sent",
-      "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, candidate for an atomic upstream PR"
+      "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, and warpToEntity/warpToPoint resolved the command ship only from a session so an NPC hull warped while really scrambled, candidate for an atomic upstream PR"
     },
     {
       "file": "0007-npc-loadout-override.patch",

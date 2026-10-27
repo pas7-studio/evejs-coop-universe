@@ -43,6 +43,34 @@ function git(checkout, args, options = {}) {
     ...options,
   }).trim();
 }
+
+// The series is written against the EveJS `Code` directory, but `Code` is a
+// SUBDIRECTORY of the upstream git checkout (whose root also holds Doc/, Issue/
+// ...). `git -C <Code> apply` resolves the patched path against the repository
+// root and then silently SKIPS it as "outside the current directory": measured
+// 2026-10-27, runtime.js lost its L1 hunks on every deploy while the tool
+// printed a healthy series and `--check` exited 0. Applying from the repository
+// root with `--directory=<Code>` reaches the real file.
+function gitApply(checkout, flags, patchPath) {
+  const prefix = patchDirectory(checkout);
+  if (!prefix) return git(checkout, ["apply", ...flags, patchPath]);
+  const root = execFileSync("git", ["-C", checkout, "rev-parse", "--show-toplevel"], {
+    encoding: "utf8",
+  }).trim();
+  return git(root, ["apply", "--directory=" + prefix, ...flags, patchPath]);
+}
+function patchDirectory(checkout) {
+  try {
+    const root = execFileSync("git", ["-C", checkout, "rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+    }).trim();
+    const relative = path.relative(root, path.resolve(checkout)).replace(/\\/g, "/");
+    if (!relative || relative.startsWith("..")) return "";
+    return relative;
+  } catch (_error) {
+    return "";
+  }
+}
 function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
@@ -131,7 +159,7 @@ function main() {
     if (state === "CONFLICT") {
       die("Checkout matches neither the pinned base nor our patched state: " + entry.file);
     }
-    git(checkout, ["apply", ...(args.reverse ? ["--reverse"] : []), entry.path]);
+    gitApply(checkout, args.reverse ? ["--reverse"] : [], entry.path);
     applied.push(entry);
     console.log("[PATCHES] " + (args.reverse ? "REVERSED " : "APPLIED  ") + entry.file);
     if (args.commit && !args.reverse) {
@@ -157,7 +185,7 @@ function main() {
 function stateOf(checkout, entry, reverse) {
   const can = (flags) => {
     try {
-      git(checkout, ["apply", "--check", ...flags, entry.path]);
+      gitApply(checkout, ["--check", ...flags], entry.path);
       return true;
     } catch (_error) {
       return false;

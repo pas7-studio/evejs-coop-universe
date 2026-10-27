@@ -1,5 +1,5 @@
 From: pas7std co-op <coop@pas7std.invalid>
-Subject: [PATCH 0006/0006] runtime: do not reset a ship's capacitor to a stale snapshot
+Subject: [PATCH 0006/0006] runtime: live capacitor wins, and an NPC hull is checked before it warps
 
 refreshShipConditionFields copies the ship item's stored condition into the live
 entity on every presentation refresh, including capacitor charge. For a native
@@ -13,17 +13,42 @@ The live entity is now authoritative when it already has a charge ratio, and the
 stored snapshot seeds a fresh entity and is kept in step otherwise. Damage and
 activation write the live entity first, so downward changes still apply.
 
+Second omission in the same file: warpToEntity/warpToPoint resolved the command
+ship with getShipEntityForSession, which only understands a session object. The
+native NPC loops command a hull by ENTITY ID, so isShipWarpDisabledByRuntime and
+hostileModuleRuntime.isEntityWarpScrambled both saw no ship, and an NPC hull
+warped even while a real warp disruptor held it: measured 2026-10-27, the stock
+mining-fleet retreat warped every hull 2.5 AU out of a live engagement. The
+command ship is now resolved from a session OR from an entity ID.
+
 Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
 Local overlay: integration/* is NOT part of this patch series.
 ---
+diff --git a/server/src/space/runtime.js b/Code/server/src/space/runtime.js
+index e582373..cd77e08 100644
 --- a/server/src/space/runtime.js
 +++ b/server/src/space/runtime.js
-@@ -5623,24 +5623,37 @@ function refreshShipConditionFields(entity) {
-     return entity;
-   }
+@@ -945,6 +945,19 @@ function isShipWarpDisabledByRuntime(entity, nowMs = Date.now()) {
+     isMobileAnalysisBeaconWarpDisabled(entity, nowMs)
+   );
+ }
++// The native NPC loops command a hull by ENTITY ID (runtime.warpToPoint(entityID,
++// ...) and runtime.warpToEntity(entityID, ...)), while a player commands it by
++// session. getShipEntityForSession only understands a session, so every
++// pre-flight check in those two methods silently saw no ship for an NPC: a
++// scrambled or immobilised NPC hull still warped, which is exactly the warp a
++// real warp disruptor is supposed to forbid.
++function resolveCommandShipEntity(runtime, sessionOrEntityID) {
++  if (sessionOrEntityID && typeof sessionOrEntityID === "object") {
++    return runtime.getShipEntityForSession(sessionOrEntityID);
++  }
++  const entityID = toInt(sessionOrEntityID, 0);
++  return entityID > 0 ? runtime.getEntityByID(entityID) : null;
++}
  
-   const shipItem = findShipItemById(entity.itemID) || null;
-   const conditionState = shipItem
+ function roundNumber(value, decimals = 1) {
+   const factor = 10 ** decimals;
+@@ -5628,14 +5641,27 @@ function refreshShipConditionFields(entity) {
      ? getShipConditionState(shipItem)
      : normalizeShipConditionState(entity.conditionState);
    entity.conditionState = conditionState;
@@ -59,8 +84,21 @@ Local overlay: integration/* is NOT part of this patch series.
    return entity;
  }
  
- function refreshShipPresentationFields(entity) {
-   if (!entity || entity.kind !== "ship") {
-     return entity;
+@@ -32559,7 +32585,7 @@ class SolarSystemScene {
    }
  
+   warpToEntity(session, targetEntityID, options = {}) {
+-    const entity = this.getShipEntityForSession(session);
++    const entity = resolveCommandShipEntity(this, session);
+     if (isShipWarpDisabledByRuntime(entity, this.getCurrentSimTimeMs())) {
+       return {
+         success: false,
+@@ -32583,7 +32609,7 @@ class SolarSystemScene {
+   }
+ 
+   warpToPoint(session, point, options = {}) {
+-    const entity = this.getShipEntityForSession(session);
++    const entity = resolveCommandShipEntity(this, session);
+     if (isShipWarpDisabledByRuntime(entity, this.getCurrentSimTimeMs())) {
+       return {
+         success: false,
