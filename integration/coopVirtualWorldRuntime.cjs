@@ -1178,8 +1178,10 @@ function advanceNativeWarCombat(){
      registry:nativeWarFleetRegistry(),
      sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
      getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
-     warpToEntity:(id,targetID,options)=>
-      require("./npc/npcRuntime").warpToEntity(id,targetID,options)
+     warpToPoint:(id,point,options)=>
+      require("./npc/npcRuntime").warpToPoint(id,point,options),
+     orbit:(id,targetID,distance)=>
+      require("./npc/npcRuntime").orbit(id,targetID,distance)
     });
   }
   const engagement=warEngagement.tick({

@@ -1,5 +1,5 @@
-// FW-030 guard: a mustered assault whose fleets sit outside the native 250 km
-// engagement range must produce exactly one real native warp to the nearest
+// FW-030 guard: a mustered assault whose fleets sit outside real gun range must
+// produce exactly one real native warp to a standoff point beside the nearest
 // opposing war ship - never a spawn, a teleport, a scripted hit or a duplicate
 // order while the previous warp is still cooling down.
 import test from "node:test";
@@ -19,7 +19,12 @@ function world({ ships, positions, controllers = {} }) {
     scene,
     readWarState: () => ({
       version: 1,
-      wars: { "war:a-b": { warID: "war:a-b", state: "ACTIVE", attackerFactionID: 500001, defenderFactionID: 500004 } },
+      wars: {
+        "war:a-b": {
+          warID: "war:a-b", state: "ACTIVE",
+          attackerFactionID: 500001, defenderFactionID: 500004,
+        },
+      },
       campaigns: {
         c1: { campaignID: "c1", warID: "war:a-b", state: "ASSAULT", targetSystemID: 30045344 },
       },
@@ -30,61 +35,54 @@ function world({ ships, positions, controllers = {} }) {
   };
 }
 
-test("warps an idle war ship at the nearest enemy when the fleets are AU apart", () => {
-  const warpCalls = [];
-  const ships = {
-    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1", pilotID: "coop-pilot-001" },
-    2: { entityID: 2, systemID: 30045344, factionID: 500004, campaignID: "c1", pilotID: "coop-pilot-002" },
-    3: { entityID: 3, systemID: 30045344, factionID: 500004, campaignID: "c1", pilotID: "coop-pilot-003" },
-  };
-  const positions = {
-    1: { x: 0, y: 0, z: 0 },
-    2: { x: 900000, y: 0, z: 0 },
-    3: { x: 1200000, y: 0, z: 0 },
-  };
-  const authority = world({ ships, positions });
+const PAIR = {
+  ships: {
+    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1" },
+    2: { entityID: 2, systemID: 30045344, factionID: 500004, campaignID: "c1" },
+  },
+};
+
+test("warps the attacker to a standoff point beside the nearest enemy", () => {
+  const calls = [];
+  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
   const warp = createWarEngagementWarp({
-    ...authority,
-    warpToEntity: (id, targetID) => { warpCalls.push({ id, targetID }); return { success: true }; },
+    ...world({ ...PAIR, positions }),
+    warpToPoint: (id, point) => { calls.push({ id, point }); return { success: true }; },
     env: ON,
     clock: () => 1000,
   });
   const out = warp.tick({ systemIDs: [30045344] });
   assert.equal(out.status, "WARP_ORDERED");
-  assert.deepEqual(warpCalls, [{ id: 1, targetID: 2 }]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id, 1);
+  // Lands 1 km short of the enemy, inside real autocannon range.
+  assert.deepEqual(calls[0].point, { x: 899000, y: 0, z: 0 });
   assert.equal(out.orders[0].status, "NATIVE_WARP_STARTED");
+  assert.equal(out.orders[0].targetID, 2);
   assert.equal(out.orders[0].distanceMeters, 900000);
 });
 
-test("never warps inside the native firing envelope and never spawns", () => {
-  const warpCalls = [];
-  const ships = {
-    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1" },
-    2: { entityID: 2, systemID: 30045344, factionID: 500004, campaignID: "c1" },
-  };
-  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 120000, y: 0, z: 0 } };
+test("never warps a hull that is already inside gun range", () => {
+  const calls = [];
+  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 2000, y: 0, z: 0 } };
   const warp = createWarEngagementWarp({
-    ...world({ ships, positions }),
-    warpToEntity: () => { warpCalls.push(1); return { success: true }; },
+    ...world({ ...PAIR, positions }),
+    warpToPoint: () => { calls.push(1); return { success: true }; },
     env: ON,
     clock: () => 1000,
   });
   const out = warp.tick({ systemIDs: [30045344] });
   assert.equal(out.orders.length, 0);
-  assert.equal(warpCalls.length, 0);
+  assert.equal(calls.length, 0);
 });
 
 test("cooldown prevents a second warp while the first is still running", () => {
-  const warpCalls = [];
-  const ships = {
-    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1" },
-    2: { entityID: 2, systemID: 30045344, factionID: 500004, campaignID: "c1" },
-  };
+  const calls = [];
   const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
   let now = 1000;
   const warp = createWarEngagementWarp({
-    ...world({ ships, positions }),
-    warpToEntity: () => { warpCalls.push(now); return { success: true }; },
+    ...world({ ...PAIR, positions }),
+    warpToPoint: () => { calls.push(now); return { success: true }; },
     env: ON,
     clock: () => now,
     cooldownMs: 60000,
@@ -92,51 +90,70 @@ test("cooldown prevents a second warp while the first is still running", () => {
   warp.tick({ systemIDs: [30045344] });
   now = 30000;
   warp.tick({ systemIDs: [30045344] });
-  assert.equal(warpCalls.length, 1);
+  assert.equal(calls.length, 1);
   now = 62000;
   warp.tick({ systemIDs: [30045344] });
-  assert.equal(warpCalls.length, 2);
+  assert.equal(calls.length, 2);
 });
 
 test("a ship already fighting, warping or owned by a manual order is left alone", () => {
-  const warpCalls = [];
-  const ships = {
-    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1" },
-    2: { entityID: 2, systemID: 30045344, factionID: 500004, campaignID: "c1" },
-  };
+  const calls = [];
   const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
   const warp = createWarEngagementWarp({
     ...world({
-      ships, positions,
+      ...PAIR, positions,
       controllers: { 1: { entityID: 1, systemID: 30045344, currentTargetID: 2 } },
     }),
-    warpToEntity: () => { warpCalls.push(1); return { success: true }; },
+    warpToPoint: () => { calls.push(1); return { success: true }; },
     env: ON,
     clock: () => 1000,
   });
   const out = warp.tick({ systemIDs: [30045344] });
-  assert.equal(warpCalls.length, 0);
+  assert.equal(calls.length, 0);
   assert.equal(out.orders.length, 0);
 });
 
 test("flag OFF is inert and a refused native warp is reported as refused", () => {
-  const ships = {
-    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1" },
-    2: { entityID: 2, systemID: 30045344, factionID: 500004, campaignID: "c1" },
-  };
   const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
-  const authority = world({ ships, positions });
+  const authority = world({ ...PAIR, positions });
   const off = createWarEngagementWarp({
-    ...authority, warpToEntity: () => ({ success: true }), env: {}, clock: () => 1000,
+    ...authority, warpToPoint: () => ({ success: true }), env: {}, clock: () => 1000,
   });
   assert.equal(off.tick({ systemIDs: [30045344] }).status, "DISABLED");
   const refused = createWarEngagementWarp({
     ...authority,
-    warpToEntity: () => ({ success: false, errorMsg: "NOT_ENOUGH_CAPACITOR" }),
+    warpToPoint: () => ({ success: false, errorMsg: "NOT_ENOUGH_CAPACITOR" }),
     env: ON, clock: () => 1000,
   });
   const out = refused.tick({ systemIDs: [30045344] });
   assert.equal(out.orders[0].status, "NOT_ENOUGH_CAPACITOR");
+});
+
+test("the defender never warps and a missing attacker faction is reported", () => {
+  const calls = [];
+  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
+  const base = world({ ...PAIR, positions });
+  const defenderOnly = createWarEngagementWarp({
+    ...base,
+    registry: { snapshot: () => ({ ships: { 2: PAIR.ships[2] } }) },
+    warpToPoint: () => { calls.push(1); return { success: true }; },
+    env: ON, clock: () => 1000,
+  });
+  assert.equal(defenderOnly.tick({ systemIDs: [30045344] }).orders.length, 0);
+  assert.equal(calls.length, 0);
+  const noAttacker = createWarEngagementWarp({
+    ...base,
+    readWarState: () => ({
+      version: 1,
+      wars: { "war:a-b": { warID: "war:a-b", state: "ACTIVE" } },
+      campaigns: base.readWarState().campaigns,
+    }),
+    warpToPoint: () => ({ success: true }),
+    env: ON, clock: () => 1000,
+  });
+  const out = noAttacker.tick({ systemIDs: [30045344] });
+  assert.equal(out.orders.length, 0);
+  assert.equal(out.skips[0].reason, "NO_ATTACKER_FACTION");
 });
 
 test("enabled() only accepts the explicit flag and authorities are required", () => {

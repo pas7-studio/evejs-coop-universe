@@ -2508,3 +2508,31 @@ freezes the front again.
 NOTE: `scripts/overlay-spec.cjs` also needed `require("../../gameStore")` (the in-flight
 hauler work used `../gameStore` from services/mining, which cannot resolve and blocked
 the whole overlay with HOOK_REQUIRE_MISSING_FILE).
+
+## Live war state after FW-030 (2026-10-27T21:25Z)
+
+PROVEN live on the play stack (all through sanctioned paths, no invented ISK/kills):
+- campaign war:500001-500004:campaign:30045344 is in ASSAULT, both sides SIDE_MUSTERED;
+- `[CoopFactionWar] assault begun ... attacker=1 defender=1` and the front chat line
+  "[Front] Assault begun in system #30045344: 1 attacking ships against 1 defenders.";
+- real native gate transfer moved a Gallente hull 30003837 -> 30045344;
+- FW-030 warps the assaulting side from 9.87e12 m (66 AU) to ~12 km: WARP_ORDERED,
+  NATIVE_WARP_STARTED;
+- the war director then issues a real native attack order:
+  NATIVE_ATTACK_ORDER_ACCEPTED Caldari 980000033113 -> Gallente 980000023574.
+
+STILL NOT PROVEN - and this is the single next blocker: no damage is exchanged.
+Measured on the live ships: both sides keep hp {shield 150/175, armor 175/145,
+structure 160/125} unchanged; the ordered hull shows `manualOrder {type:attack}` but
+`currentTargetID: 0`, `mode: STOP`. The doctrine guns are short-range autocannons
+(typeID 564/562 on the Condor/Atron), so 11-90 km is outside real gun range, and:
+- a native warp refuses a short hop (`WARP_DISTANCE_TOO_CLOSE` at 43 km / 90 km);
+- `orbit(id, enemy, 1000)` is accepted (`NATIVE_ORBIT_ORDERED`) but the patrol's own
+  movement wins and the range grows again (12 km -> 27 -> 43 -> 89 km -> back to 66 AU).
+
+NEXT SINGLE STEP: make the attack order and the approach one decision - issue the
+native attack only once the hull is inside real gun range, and stop the patrol's own
+movement from overriding the approach (the order bridge refuses any new WAR order while
+`movementBusy` is true and the hull has no arbiter lease, which is exactly the state an
+orbiting patrol is in). Do not raise the battle director's 250 km rule: that is the real
+firing envelope of these guns' falloff, not a bug.

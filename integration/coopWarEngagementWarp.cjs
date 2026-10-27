@@ -1,13 +1,15 @@
 "use strict";
 // FW-030: an assault whose two sides materialized at different system anchors is
-// mustered but un-fightable. The native battle director only orders a shot inside
-// its real engagement range (250 km), so a fleet sitting AUs away can never open
-// fire even though both sides own the field.
+// mustered but un-fightable. The native war director only issues a shot inside its
+// own engagement range, and the real doctrine guns on these hulls are short-range
+// autocannons: a fleet sitting tens of AU - or even eleven kilometres - away can
+// never open fire even though both sides own the field.
 //
-// A real fleet warps to the enemy it was mustered against. This module issues
-// exactly that: one native warpToEntity to the nearest opposing war ship of the
-// same campaign. It never spawns, teleports, deals damage or invents a kill, and
-// every attempt is reported with its own native status.
+// A real fleet closes on the enemy it was mustered against. This module issues
+// exactly that: one native warpToPoint to a standoff point beside the nearest
+// opposing war ship of the same campaign, so the attacker really arrives inside
+// gun range. It never spawns, teleports, deals damage or invents a kill, and every
+// attempt is reported with its own native status.
 const enabled = env => env.EVEJS_COOP_WAR_ENGAGE_WARP === "1";
 const pos = x => Number.isSafeInteger(x) && x > 0;
 const finite = p => p && ["x", "y", "z"].every(k => typeof p[k] === "number" && Number.isFinite(p[k]));
@@ -19,17 +21,23 @@ function createWarEngagementWarp({
   registry,
   sceneForSystem,
   getController,
-  warpToEntity,
+  warpToPoint,
+  orbit = null,
   clock = () => Date.now(),
   env = process.env,
-  maxRangeMeters = 250000,
+  engageMeters = 3000,
+  standoffMeters = 1000,
+  warpMeters = 150000,
   cooldownMs = 60000,
 } = {}) {
   if (
-    [readWarState, sceneForSystem, getController, warpToEntity].some(x => typeof x !== "function") ||
+    [readWarState, sceneForSystem, getController, warpToPoint].some(x => typeof x !== "function") ||
     !registry || typeof registry.snapshot !== "function" ||
     typeof clock !== "function" ||
-    !Number.isSafeInteger(maxRangeMeters) || maxRangeMeters < 10000 ||
+    (orbit !== null && typeof orbit !== "function") ||
+    !Number.isSafeInteger(engageMeters) || engageMeters < 500 ||
+    !Number.isSafeInteger(standoffMeters) || standoffMeters < 100 || standoffMeters >= engageMeters ||
+    !Number.isSafeInteger(warpMeters) || warpMeters <= engageMeters ||
     !Number.isSafeInteger(cooldownMs) || cooldownMs < 10000
   ) throw Error("WAR_ENGAGEMENT_WARP_AUTHORITIES_REQUIRED");
   const nextAt = new Map();
@@ -59,8 +67,7 @@ function createWarEngagementWarp({
     for (const campaign of campaigns) {
       const systemID = Number(campaign.targetSystemID);
       // Only the assaulting side closes the distance; the defender holds the
-      // field it already controls. This also keeps one warp per engagement
-      // instead of two fleets warping past each other.
+      // field it already controls.
       const attackerFactionID = Number(state.wars[campaign.warID]?.attackerFactionID);
       if (!pos(attackerFactionID)) {
         skips.push({ campaignID: campaign.campaignID, reason: "NO_ATTACKER_FACTION" });
@@ -77,6 +84,7 @@ function createWarEngagementWarp({
         const id = Number(ship.entityID);
         if (!pos(id)) continue;
         if (Number(ship.factionID) !== attackerFactionID) continue;
+        if ((nextAt.get(id) || 0) > now) continue;
         const me = scene.getEntityByID(id);
         if (!me || me.kind !== "ship" || me.nativeNpc !== true || me.session?.characterID) continue;
         if (!finite(me.position) || warping(me)) continue;
@@ -85,16 +93,16 @@ function createWarEngagementWarp({
         if (!controller || controller.entityID !== id || Number(controller.systemID) !== systemID) continue;
         // Another director, a player order or an active engagement already owns it.
         if (Number(controller.currentTargetID) > 0 || controller.manualOrder) continue;
-        if ((nextAt.get(id) || 0) > now) continue;
         const enemies = inSystem
           .filter(o => Number(o.entityID) !== id &&
             Number(o.factionID) !== Number(ship.factionID) &&
             String(o.campaignID) === String(ship.campaignID))
-          .map(row => ({ row, entity: scene.getEntityByID(Number(row.entityID)) }))
+          .map(row => ({ entityID: Number(row.entityID), entity: scene.getEntityByID(Number(row.entityID)) }))
           .filter(x => x.entity && x.entity.nativeNpc === true && finite(x.entity.position) &&
             !warping(x.entity))
           .map(x => ({
-            entityID: Number(x.row.entityID),
+            entityID: x.entityID,
+            position: x.entity.position,
             distance: Math.hypot(
               x.entity.position.x - me.position.x,
               x.entity.position.y - me.position.y,
@@ -107,12 +115,39 @@ function createWarEngagementWarp({
           continue;
         }
         const nearest = enemies[0];
-        // Already inside the native firing envelope: the battle director owns it.
-        if (nearest.distance <= maxRangeMeters) continue;
+        // Already close enough for the real guns: the war director owns the shot.
+        if (nearest.distance <= engageMeters) continue;
         nextAt.set(id, now + cooldownMs);
+        // A native warp refuses a short hop, so the last leg is flown sublight:
+        // the hull orbits the enemy at gun range instead of warping beside it.
+        if (nearest.distance <= warpMeters && typeof orbit === "function") {
+          let ack = null, threw = "";
+          try { ack = orbit(id, nearest.entityID, standoffMeters); }
+          catch (error) { threw = String(error?.message || error).slice(0, 120); }
+          orders.push({
+            entityID: id,
+            targetID: nearest.entityID,
+            campaignID: campaign.campaignID,
+            factionID: Number(ship.factionID),
+            systemID,
+            distanceMeters: Math.round(nearest.distance),
+            status: ack?.success === true ? "NATIVE_ORBIT_ORDERED"
+              : String(threw || ack?.errorMsg || "REFUSED").slice(0, 120),
+          });
+          continue;
+        }
+        const dx = nearest.position.x - me.position.x;
+        const dy = nearest.position.y - me.position.y;
+        const dz = nearest.position.z - me.position.z;
+        const length = Math.hypot(dx, dy, dz) || 1;
+        const point = {
+          x: nearest.position.x - (dx / length) * standoffMeters,
+          y: nearest.position.y - (dy / length) * standoffMeters,
+          z: nearest.position.z - (dz / length) * standoffMeters,
+        };
         let ack = null, threw = "";
         try {
-          ack = warpToEntity(id, nearest.entityID, {
+          ack = warpToPoint(id, point, {
             forceImmediateStart: true,
             broadcastWarpStartToVisibleSessions: true,
           });
