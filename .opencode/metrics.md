@@ -477,3 +477,11 @@ overlay: unchanged OVERLAY_OK
 live: the owner's evejs-server-1/evejs-market-1 were NOT touched after the directive
 metrics: tests_total=0 pass=0 fail=0 modules_added=0 modules_changed=0 live_events=0
 next: use the evejs-agents stack for any live proof; item 13 next.
+
+## 2026-10-27T16:45Z - ITEM 13 title half: the player's rank title reaches the character sheet - 54ec5bd0
+done: coopWarRankTitle.applyToCharacter writes the canonical rank title into the stock character record via characterState.updateCharacterRecord and refuses a non coop-player- key, an unknown rank, a key/record mismatch, a missing record and any non-canonical title; coopWarKillMerit calls it on a real promotion and publishes living-native-war-rank-title surface CHARACTER_RECORD_TITLE.
+tests: node --test tests/coop-war-rank-title.test.mjs -> 10 pass / 0 fail; with merit-ledger + kill-merit + bounty -> 22 pass / 0 fail
+overlay: OVERLAY_OK (moduleCurrent 380)
+live: OWNER STACK NOT RESTARTED (directive). Code-only change; no live probe of the character-sheet title yet.
+metrics: tests_total=22 pass=22 fail=0 modules_added=0 modules_changed=2 live_events=0
+next: item 13 payout half is BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION (needs item 16 real income); item 15 next in code.
