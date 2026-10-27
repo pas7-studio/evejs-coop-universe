@@ -90,10 +90,30 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
    if(activeTarget&&scene.getEntityByID(activeTarget)){
     // Never steal a naturally acquired native target. Only the target
     // of OUR unfinished warp lease may be promoted to a weapon attack.
-    if(!ownedApproach)continue;
+    if(!ownedApproach){
+     // Our own attack order on a prey that sits beyond the same 250 km boundary
+     // the approach uses cannot fire (a turret or missile never reaches 2.5 AU).
+     // Release it and re-issue the approach as a real warp in the same tick:
+     // releasing alone would send the hull home and end the engagement.
+     if(holdsAttack(controller)&&old&&issuedAt>0&&
+        Number(old.targetID)===activeTarget&&now>=issuedAt+attackNoLockMs){
+      const prey=scene.getEntityByID(activeTarget);
+      const gap=prey&&valid(prey.position)?range(ship.position,prey.position):Infinity;
+      if(gap>250000){
+       pendingRelease=releaseOrder(id,"FOR_APPROACH");
+       if(!pendingRelease.released){
+        actions.push({pirateID:id,targetID:activeTarget,
+         targetRole:String(old.targetRole||""),action:"attack-unreachable",
+         distanceMeters:gap,...pendingRelease});
+        continue;
+       }
+      }
+     }
+     if(!pendingRelease)continue;
+    }
     if(playerShipIDs.has(activeTarget))continue;
-    if(manual?.type==="attack"&&manualTarget===activeTarget)continue;
-    if(manual&&manual.type!=="resumeBehavior"&&
+    if(!pendingRelease&&manual?.type==="attack"&&manualTarget===activeTarget)continue;
+    if(!pendingRelease&&manual&&manual.type!=="resumeBehavior"&&
       (!ownedApproach||manual.type!=="warp"))continue;
     // Keep native unsolicited combat/retaliation from being hijacked.
     const aggroAt=Number(controller?.lastAggressedAtMs);
@@ -168,8 +188,11 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     action="attack";
    }
    // Warping to the convoy is only the approach, not the raid itself:
-   // reevaluate soon after landing and issue a genuine weapon attack.
-   const retryMs=result?.success===true?(action==="attack"?cooldownMs:15000):60000;
+   // reevaluate soon after landing and issue a genuine weapon attack. An attack
+   // lease is re-checked every minute too: the prey can warp 2.5 AU away, and an
+   // order that can no longer fire must be released, not held for eight minutes.
+   const retryMs=result?.success===true?
+    (action==="attack"?Math.min(cooldownMs,60000):15000):60000;
    leases.set(key,{nextAt:now+retryMs,targetID:target.id,targetRole:target.role,
     phase:action,issuedAtMs:now});
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,

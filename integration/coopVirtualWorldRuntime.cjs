@@ -3237,11 +3237,12 @@ function advanceNativeRaids(){
   // explicit status so a hull that cannot execute an order never looks idle.
   const releasedActions=result.actions.filter(action=>
    action.action==="approach-unflyable"||action.action==="attack-no-lock"||
-   action.released===true);
+   action.action==="attack-unreachable"||action.released===true);
   for(const action of releasedActions){
    const status=action.reason==="FOR_APPROACH"?"RAID_ORDER_RELEASED_FOR_APPROACH":
     action.reason==="APPROACH_NOT_WARPING"?"RAID_APPROACH_UNFLYABLE":
     action.reason==="ATTACK_NO_NATIVE_LOCK"?"RAID_ATTACK_NO_LOCK":
+    action.reason==="ATTACK_TARGET_UNREACHABLE"?"RAID_ATTACK_UNREACHABLE":
     "RAID_ORDER_RELEASE_REFUSED";
    require("./coopRuntimeProbe").observe("living-native-raid-order-released",null,
     {spaceState:{systemID}},{status,action:action.action,

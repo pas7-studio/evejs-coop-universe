@@ -14,6 +14,7 @@ function fixture(){
  const controller={currentTargetID:0,manualOrder:null,lastAggressedAtMs:0};
  const nativeOrders=[];
  const releases=[];
+ let failRelease=false;
  const scene={systemID:30000144,sessions:new Map(),getEntityByID:id=>ships.get(id)||null};
  const tick=()=>raids.tick({systemID:30000144,scene,pirates:[501],
   fleetShips,
@@ -32,11 +33,12 @@ function fixture(){
   },
   release:(id,reason)=>{
    releases.push([id,reason]);
+   if(failRelease){return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE"};}
    controller.manualOrder={type:"resumeBehavior"};
    return {success:true};
   }});
  return {tick,ships,fleetShips,scene,pirate,miner,controller,nativeOrders,
-  releases,advance:ms=>{now+=ms;}};
+  releases,advance:ms=>{now+=ms;},failRelease:value=>{failRelease=value===true;}};
 }
 test("real pirate approaches loaded miner and issues a native attack after landing",()=>{
  const f=fixture();
@@ -193,4 +195,43 @@ test("a rival manual attack order is never released by the raid",()=>{
  assert.equal(f.tick().actions.length,0);
  assert.equal(f.releases.length,0);
  assert.equal(f.nativeOrders.length,0);
+});
+
+test("our own attack order on prey 2.5 AU away becomes a real warp approach",()=>{
+ const f=fixture();
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ assert.equal(f.tick().actions[0].action,"attack");
+ // The native controller keeps the lock, but the convoy is warped 2.5 AU away.
+ f.miner.position.x=380000000000;
+ f.advance(480000);
+ const result=f.tick();
+ assert.deepEqual(f.releases,[[501,"FOR_APPROACH"]]);
+ const action=result.actions.find(x=>x.action==="warp-to-hauler");
+ assert.equal(action.released,true);
+ assert.deepEqual(f.nativeOrders.at(-1),["warp",501,201]);
+});
+
+test("an unreachable attack is reported, not re-tasked, when the release is refused",()=>{
+ const f=fixture();
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ assert.equal(f.tick().actions[0].action,"attack");
+ const issued=f.nativeOrders.length;
+ f.miner.position.x=380000000000;
+ f.failRelease(true);
+ f.advance(480000);
+ const result=f.tick();
+ assert.deepEqual(result.actions.map(x=>x.action),["attack-unreachable"]);
+ assert.equal(result.actions[0].released,false);
+ assert.equal(result.actions[0].errorMsg,"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE");
+ assert.equal(f.nativeOrders.length,issued);
+});
+
+test("an ongoing in-range attack is never released",()=>{
+ const f=fixture();
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ assert.equal(f.tick().actions[0].action,"attack");
+ f.advance(480000);
+ const result=f.tick();
+ assert.equal(result.actions.length,0);
+ assert.equal(f.releases.length,0);
 });
