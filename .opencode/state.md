@@ -1,5 +1,29 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 13:35Z - the loop's real ceiling, measured with a new read-only audit
+
+scripts/coop-economy-balance.cjs (+5 tests) answers the only question that decides whether
+the loop can be self-sustaining: what the corporation holds versus what the world still pays.
+Live measurement inside the container:
+
+  status=PARTIAL_DEMAND stock=3965422 sellable=35046 stranded=3930376 potential_isk=373147.08
+  station=60000358 type=17464 stock=623883 demand=0   NO_BUYER_ON_THIS_STATION
+  station=60000358 type=17470 stock=525488 demand=0   NO_BUYER_ON_THIS_STATION
+  station=60000358 type=34    stock=407192 demand=0   NO_BUYER_ON_THIS_STATION
+  station=60000682 type=34    stock=321677 demand=5000 price=2.96 DEMAND_LIMITED
+
+So ~4.0M units of ore/minerals are stored and only ~35k units can still become ISK. The
+seeded bid book is a FINITE pool that earlier sales have already consumed; Perimeter's station
+has zero bids for every type, which is why its fleet can never earn there.
+
+Also confirmed: the lift account is clean (0 journals, 9 receipts, 0 blocked events).
+
+Unproven still: one mineral sale (types 34/35 in living-npc-station-sold). The 5000+5000 units
+are aboard hauler 980000016300 and the deployed sale path now sells them; the New Caldari fleet
+must haul to a station that still pays (60000682 is the only one left in that system). Its
+mining stopped at 13:21 after TICK_aggressed (another session is running militia/raid admin
+commands on the same container), so the proof waits on world time, not on code.
+
 ## 2026-10-27 13:05Z - FIRST LIVE MINERAL LIFT (and two regressions it exposed)
 
 PROVEN LIVE at 12:47:45-12:47:47 (run ca59f6c0):
