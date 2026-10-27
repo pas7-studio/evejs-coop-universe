@@ -1,141 +1,167 @@
 # EveJS Co-op Universe
 
-**Status: substantial pinned EveJS integration code exists, but two-client gameplay and friend-PC access remain unverified.**
+**A private, ~2-player "living universe" on top of [EveJS](https://github.com/gameboys84/EveJS):
+one authoritative server, autonomous NPC pilots that really mine, haul, trade, fight
+and die, and persistent consequences a couple of players can join in on.**
 
-A community-oriented **two-player cooperative world** concept built *around* [EveJS](https://github.com/gameboys84/EveJS), with an optional future integration of [X-Eve Living Universe](https://github.com/kaiwren986/evejs-living-universe). Our goal is one authoritative game world for two friends, populated by persistent NPC pilots, corporations and an evolving economy.
+> Independent, unofficial project. Not affiliated with CCP Games, EveJS or the
+> X-Eve maintainers. No game client, client binary, proprietary asset, certificate,
+> database or credential is distributed here, and none may be redistributed.
+> An open-source server license does **not** license CCP's client — client
+> modification, remote play and redistribution each need their own legal review.
 
-> Independent, unofficial project. Not affiliated with CCP Games, EveJS or X-Eve maintainers. **Do not distribute game clients, modified client binaries, proprietary assets, certificates, private configuration or databases.** The EVE client terms and upstream licensing need review/permission before client modification, remote multiplayer deployment or redistribution. An open-source server license does **not** authorize use of CCP's client.
+## Where this comes from
 
-## How to verify the actual game (not just Docker)
+- **Base server:** [gameboys84/EveJS](https://github.com/gameboys84/EveJS), pinned at
+  `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` (EVE 24.01 build **3396210**),
+  running from a local `evejs-local` Docker image. Upstream stays localhost-only.
+- **Idea source:** [X-Eve Living Universe](https://github.com/kaiwren986/evejs-living-universe)
+  (patch v0.2.2 against EveJS v0.12.3.1). Its "virtual NPCs outside the scene,
+  physical NPCs inside it" model is the concept this repo grew from — **it is not
+  vendored**, and `EveJS main` is not the archive that patch expects.
+- **Everything else in this repo is ours:** ~384 co-op overlay modules, 10 atomic
+  upstream patches, 6 Rust bridges, ~645 test files and 224 scripts, all built for
+  this pinned tree and this small player group.
 
-**Cloud session with no access to this PC? Read [`state/NOW.md`](state/NOW.md)
-first** (plus [docs/AGENT_START_HERE.md](docs/AGENT_START_HERE.md)): it is the
-generated, redacted snapshot of the last local test run, overlay state, gate
-status and next action. Refresh it locally with
-`.\scripts\Publish-SessionState.ps1`.
+## What is proven, and what is not
 
-**Start with [Gameplay acceptance and agent instructions](docs/GAMEPLAY_TESTING.md).**
-The companion [gameplay report template](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md)
-separates genuine NPC and client observations from unit tests and TCP sockets.
+| Area | State |
+| --- | --- |
+| Overlay installs on the pin (`OVERLAY_OK`), 10 L1 patches apply/reverse cleanly | **Verified locally** |
+| Local overlay + isolated upstream contract suite | **Green at the recorded revisions** (`state/NOW.md` snapshot: 542 pass / 0 fail); re-run for the current tree |
+| Headless boot, native spawn, mining cycle, native haul, station delivery | **Observed live on the agent work stack** |
+| First sale → treasury sweep → paid refinery → mineral/ore sale chain | **In progress** — mining, haul and station delivery are live; the sale/treasury/refinery half is not yet green |
+| Named NPC persistence across a restart | Durable records exist; live restart QA still open |
+| NPC-owned player-market orders, gate/system transfer of a named NPC | Implemented, **flag-gated OFF**, unverified live |
+| Faction warfare campaign, structures as objectives | Real records, campaign still stuck in `PREPARING` (fleet presence) |
+| **Visible client gameplay, two independent accounts, shared grid** | **NOT VERIFIED** — needs a compatible, lawfully obtained EVE client and a human |
 
-The first 2026-10-25 backend run at `cc5ce83` passed **72 local / 27 upstream
-contracts**. A later live run at `a087167` verified **headless event logging**
-and healthy server/market but still found **0 named NPCs and no proved
-physical activity**. The `World` gate mistakenly selected **Jita 30000142**,
-which legitimately has zero asteroid belts. Mineable scenes are now
-checked explicitly in **Perimeter 30000144**, which has real belts.
-This still does **not** prove NPC or two-player gameplay. For a running deployed overlay:
+A green backend, a TCP socket check or a unit test is never gameplay evidence.
+The only accepted sequence is [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md)
+with its [report template](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md).
+
+## How to run
+
+### Two stacks: play and work (read [docs/TWO_STACKS_PLAY_AND_WORK.md](docs/TWO_STACKS_PLAY_AND_WORK.md) first)
+
+| | PLAY (owner + one friend) | WORK (agents, proofs) |
+| --- | --- | --- |
+| Compose project | `evejs` | `evejs-agents` |
+| Ports (loopback) | `443/5222/26000-26002/40110` | `28443/25222/28000-28002/41110` |
+| Volumes | `evejs-data`, `evejs-images` | `evejs-agents-*` |
+| Access | SSH tunnel for the friend | local only |
+| Pacing | real | x5 (`EVEJS_COOP_TIME_SCALE=5`) |
+
+**Never deploy, rebuild, recreate, restart, `down` or merge into `evejs` unless the
+owner explicitly asks for a restart window.** Prove everything on `evejs-agents`.
 
 ```powershell
-.\scripts\Local-Two-Client-Test.ps1 -Action DiagnoseWorld -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
-.\scripts\Local-Two-Client-Test.ps1 -Action World -WorldSystemID 30000144 -CodePath 'C:\Games\EveCoop\upstream-evejs\Code'
+cd R:\GitRepository\pas7std\evejs-coop-universe
+
+.\scripts\Start-Agents-Stack.ps1 -Action Status   # read-only health
+.\scripts\Start-Agents-Stack.ps1 -Action Seed     # ONCE per fresh volume (market rebuild)
+.\scripts\Start-Agents-Stack.ps1 -Action Up       # start the work world
+.\scripts\Start-Agents-Stack.ps1 -Action Down
 ```
 
-`DiagnoseWorld` is read-only and checks the running container's flags,
-installed overlay files, log path and startup diagnostics. `World` is
-a **server-native scene/activity check**; no client is needed for the
-initial `living-headless-boot-requested` event. After that, actual
-rendering, targeting and two-player gameplay require a compatible,
-independently authorized EVE client and human confirmation.
+### Build, gate, deploy, accept (all local, no CI)
 
-**Do not rerun npm audit for gameplay validation**. Seven previously
-reported dependency advisories are a separate security-remediation
-track; the game remains loopback-only. No GitHub Actions/remote CI.
+```sh
+# repo-side + structural + disposable GameStore gates -> LOOP_GATE_PASS
+scripts/coop-loop-gate.sh --code-path 'C:\Games\EveCoop\upstream-evejs\Code'
 
-Named NPC restart safety is documented in
-[NATIVE_NPC_DURABILITY.md](docs/NATIVE_NPC_DURABILITY.md).
-The new durable-hull implementation is still **unverified in a live
-restart**; do not substitute saved identity files for real native
-ship continuity.
+# overlay check (must print OVERLAY_OK) / install into the pinned checkout
+node scripts/coop-deploy.cjs --checkout 'C:\Games\EveCoop\upstream-evejs\Code' --check
+node scripts/coop-deploy.cjs --checkout 'C:\Games\EveCoop\upstream-evejs\Code' --build
 
-## What this repository contains
+# mining -> haul -> station -> sale, plus a restart proof -> LOOP_PASS
+scripts/restart-acceptance.sh --wait-load-min 20 --after-restart 240
+```
 
-**Executable, optional server-side integration overlay and Windows runbooks.** This repo contains NPC/world modules, reversible source hooks, deployment scripts, and read-only live two-pilot evidence tools. It does **not** include a proprietary EVE client, a standalone complete game server, or a verified VPN gateway. Do not mistake a committed integration for proven end-to-end gameplay.
+Local regression suite (equivalent of the removed CI):
 
-- [Setup on Windows 11](docs/SETUP_WINDOWS.md) – verified upstream commands, prerequisites, smoke tests, blockers.
-- [Development doctrine](docs/DEVELOPMENT_DOCTRINE.md) – **binding**: how the overlay may touch the pinned server, upgrade runbook for a new upstream SHA, anti-footgun list.
-- [Architecture and private co-op design](docs/ARCHITECTURE.md) – host/client topology, VPN, networking discovery, security, failure cases.
-- [Delivery roadmap and agent tasks](docs/ROADMAP.md) – prioritized, independently testable engineering work.
-- [Upstreams, compatibility and contribution policy](docs/UPSTREAM.md).
+```powershell
+.\scripts\Verify-Local-Coop.ps1
+```
 
-## Concept
+First installation only: [docs/FIRST_RUN.md](docs/FIRST_RUN.md). For an existing
+world use the read-only `-Action DiagnoseWorld` / `-Action World` probes described in
+[docs/PLAY_COOP_NOW.md](docs/PLAY_COOP_NOW.md) instead of redeploying.
 
-- **One host:** authoritative game logic, world persistence, economy and NPC simulation.
-- **Two human clients:** independent accounts in the *same* world, no second authoritative game server.
-- **VPN transport:** WireGuard/Tailscale for private connectivity, **not** public port forwarding. Actual remote-client compatibility has *not* been implemented or established.
-- **Living universe:** virtual NPCs outside observed scenes, physical NPCs where players can interact; real persistent consequences.
-- **Community-first:** upstream-friendly patches, issue reports and tests. Avoid undocumented binary modifications and vendoring third-party assets.
+## What the co-op overlay adds
 
-## Compatibility snapshot (2026-10-24)
+All server-side, opt-in via env flags ([docs/coop-flags.json](docs/coop-flags.json)),
+default OFF unless the runbook says otherwise.
 
-| Item | Known state |
+- **Living NPC fleet:** named, durable, physically present miners, haulers, traders,
+  patrols and pirates with persistent identity, memory, chatter and real weapon cycles.
+- **Closed economy loop:** native mining → partial/full haul → station delivery →
+  sale → corporation treasury → paid refinery → mineral sale, every step atomic and
+  restart-safe, with an exact refusal reason for every blocked step.
+- **NPC combat with receipts:** native hostility between physically linked rival
+  factions, wrecks, stored loot, kills credited only on real weapon + HP evidence.
+- **PvE for a small group (~2 players):** native raids and sites, duo mission
+  instances, boss loot custody, escort contracts with real warp, attendance,
+  rescue and settlement fences.
+- **Market depth:** NPC buyers/sellers, player↔player fills, escrow, refunds, taxes,
+  cancellation, partial fills and crash recovery through native GameStore + Rust.
+- **War and territory:** faction warfare fronts, campaigns, muster/fleet reserves,
+  engagement warp, structure objectives, sovereignty projection, merit and bounties.
+- **Player-side systems:** industry and manufacturing, structures, wormholes/Pochven,
+  salvage, clones, skills, standings/LP, PI, fittings, exploration/scanning, EWAR,
+  crime/CONCORD consequences.
+- **Operator and agent surfaces:** in-process admin bridge, read-only MCP servers for
+  the running compose project and the local EVE client, `coop-events.jsonl` telemetry
+  with an explicit `status`/`reason` on every runtime decision.
+
+## What is ours (inventory)
+
+| Path | Contents |
 | --- | --- |
-| [gameboys84/EveJS](https://github.com/gameboys84/EveJS) | EVE 24.01 build **3396210** target; upstream README specifies **localhost-only** and Docker setup |
-| [X-Eve Living Universe](https://github.com/kaiwren986/evejs-living-universe) | Patch v0.2.2 targets **one exact EveJS v0.12.3.1 archive**, SHA-256 below |
-| Windows 11 / Docker Desktop | Recommended **localhost baseline**, subject to compatible legal client availability |
-| Two PCs through VPN | **NOT SUPPORTED / NOT VERIFIED** in current upstream |
-| NPC economy and AI | Documented by patch author; **not verified by this project** |
+| `integration/*.cjs` | L2 co-op modules, one owner per record, env-gated |
+| `patches/upstream/0001..0010` | L1 atomic stock fixes, pinned by `sha256`, reversible via `scripts/apply-upstream-patches.cjs` |
+| `rust/*.rs` | native GameStore/wallet settlement helpers |
+| `scripts/` | deploy, check, audit, acceptance, state publishing (224 files) |
+| `tests/` | overlay + contract suites (645 files, `node --test`) |
+| `mcp/` | server + client MCP tools used for read-only live evidence |
+| `docs/` | doctrine, runbooks, per-feature contracts and the `WORKLOG` |
+| `state/` | generated, redacted `NOW.md` + digests + ledger for cloud sessions |
+| `qa/` | acceptance matrices, defect handoffs, operator evidence templates |
 
-Expected v0.12.3.1 archive hash per X-Eve authors:
+**Layer rule** (binding, [docs/UPSTREAM_PATCH_SERIES.md](docs/UPSTREAM_PATCH_SERIES.md)):
+a stock bug becomes an `L1` patch, a co-op rule becomes an `L2` overlay module plus one
+hook line, a new stateful mechanism becomes an `L3` runtime. Never a second patching
+mechanism, never a hand-edited world to make an acceptance pass, and every commit gets
+a `scripts/log-change.cjs` entry in [docs/WORKLOG.md](docs/WORKLOG.md).
 
-```text
-1DEB61A51F808D9F2B330214DA64EC297D9EE5F96EE4B8265692A65F35EEFC1E
-```
+Consequences of that rule: the pinned EveJS tree keeps its stock behaviour unless an
+`L2` flag is switched on, every `L1` patch can be reversed and is pinned by `sha256`,
+and no feature here exists only as an undocumented string edit inside a checkout.
 
-**Important:** `gameboys84/EveJS` main is *not* automatically the v0.12.3.1 archive accepted by the X-Eve installer. Never force a patch into a mismatched tree.
+## Documentation map
 
-## Play together in a living universe (experimental)
+- [docs/AGENT_START_HERE.md](docs/AGENT_START_HERE.md) + [state/NOW.md](state/NOW.md) — current state, last run, next action
+- [docs/DEVELOPMENT_DOCTRINE.md](docs/DEVELOPMENT_DOCTRINE.md) — binding overlay rules
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — topology, boundaries, failure cases
+- [docs/COOP_LOOP_ACCEPTANCE.md](docs/COOP_LOOP_ACCEPTANCE.md) — the mining→sale gates
+- [docs/ROADMAP.md](docs/ROADMAP.md) — prioritised work with task IDs
+- [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md) — how to prove actual gameplay
+- [docs/RELEASE_GATES.md](docs/RELEASE_GATES.md) — what must be true before "playable"
+- [docs/UPSTREAM.md](docs/UPSTREAM.md) — upstreams, compatibility, contribution policy
 
-The default [game-night setup](docs/PLAY_COOP_NOW.md) runs one native
-EveJS server with **autonomous named miners, haulers, traders, patrols and
-pirates**. Explore and fight ships that already belong to the world:
-**no player-triggered PvE arena, no automatic waves**. NPCs have
-persistent identities, physical movement, real native combat and wrecks,
-and a recorded recovery delay after their ship is destroyed.
+## Rules of this repository
 
-For an **existing deployed universe**, follow the single [gameplay acceptance sequence](docs/GAMEPLAY_TESTING.md) above. Do not redeploy as the first test. After World PASS, confirm one authorized client manually, then two clients.
-
-The first-time upstream database preparation is documented separately.
-The live simulation now **reuses EveJS's actual NPC mining fleets**,
-mineable asteroid depletion, native ore cargo, mining haulers and
-aggression-response AI. Named pirates may attack existing ore-bearing
-NPC ships, creating unscripted fights that players can join. Hauler ore
-moves through the native NPC cargo store and becomes real EveJS wreck
-loot on destruction. The game-night overlay now also records player
-attacks and verified pirate-defense kills in **EveJS's actual standings
-system**, changing the size of mining-fleet security responses.
-**Independent NPC-owned player-market orders remain unverified.** The optional seed-market transaction adapter is disabled by default and has only isolated tests; see [Native NPC Market](docs/NATIVE_NPC_MARKET.md).
-
-[Two-PC authenticated loopback tunnel](docs/FRIEND_PC_PRIVATE_TUNNEL.md)
-is experimental. Neither real two-client game rendering nor friend-PC
-TLS/login has been live-verified.
-
-## First milestone
-
-1. Run the base game services **locally only** according to [SETUP_WINDOWS](docs/SETUP_WINDOWS.md).
-2. Record reproducible smoke tests and failures, including the client/build provenance and actual feature support.
-3. Obtain a **lawfully usable** compatible baseline and relevant permissions; assess X-Eve patch compatibility.
-4. Audit listeners, advertised endpoints, TLS, session management, and input trust boundaries.
-5. Only with necessary permissions and security review, prototype a **VPN-only, default-off** co-op gateway with two-user tests.
-
-## Explicit non-goals
-
-Public Internet hosting, bypassing upstream authentication, bypassing CCP licensing/DRM, redistributing CCP content, promising full parity with EVE Online, or replacing EVE with a proprietary fork without tracking licenses.
+- **No CI, no remote automation.** Every gate is a local script with recorded evidence.
+- **No fabricated PASS.** Missing telemetry is `BLOCKED_TELEMETRY`, a missing client is
+  `BLOCKED_CLIENT_UNAVAILABLE`; never substitute a unit test or a health check.
+- **No npm audit / dependency-upgrade runs** as gameplay validation; the seven known
+  advisories are a separate security track and all services stay loopback-only.
+- **No public hosting**, no auth/DRM bypass, no CCP asset redistribution, no VPN gateway
+  promised as working.
 
 ## Licensing and contributions
 
-No third-party source has been copied into this repository. Keep each upstream's license and attribution when/if importing lawfully; EveJS states AGPL-3.0-only, while X-Eve licenses original contributions separately. Before importing a patch, review provenance and compatibility. Contributions should be small, reproducible, tested, and submitted upstream when appropriate.
-
-See [UPSTREAM](docs/UPSTREAM.md) for references and caveats.
-
-## Deployment entrypoint (Windows 11)
-
-Use [FIRST_RUN.md](docs/FIRST_RUN.md) **only for a fresh installation**. For the existing, already-deployed world use [GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md) and preserve the upstream working tree, local test adapters and persistent volumes. Never repeat one-time initialization to diagnose missing NPC events.
-
-## One-PC server + two-client test for agents
-
-See [TWO_CLIENTS_ONE_PC.md](docs/TWO_CLIENTS_ONE_PC.md) for copy-paste Windows commands to prepare one Docker server, start two client launchers, inspect health, collect logs and stop safely. Actual two-client gameplay is **not yet validated**.
-
-## Agent backend gate (no proprietary client required)
-
-Run the optional [backend verifier](docs/VERIFY_BACKEND_ONE_COMMAND.md) on a new installation or when backend changes require regression checking. The 2026-10-25 backend evidence is already recorded for its tested revision. Do not rerun it as a substitute for gameplay: a backend PASS is not an NPC or two-player PASS.
+No third-party source is copied into this repository. EveJS upstream is AGPL-3.0-only;
+X-Eve licenses its own contributions separately. Keep attribution when importing
+anything, review provenance first, and send small, tested, reproducible changes
+upstream when they are genuine upstream fixes.
