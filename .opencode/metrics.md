@@ -553,3 +553,19 @@ chains: evaluatePair 5962 ms, cargoRows 1406 ms, miningFleetDurable.check 871 ms
 metrics: profile-named callers only, no guesswork; see docs/PERFORMANCE_REVIEW.md
 next: recreate the play stack to load the build (needs the owner's window), then
 re-profile and compare idle share and the three chains.
+
+## 2026-10-27T18:05Z perf — round 2 proven on the work stack, round 3 patched
+
+done: work stack rebuilt with the round-2 build and profiled (25 s, 21 430 samples).
+live verbatim:
+  85.9% idle, 4.2% cloneValue(nativeNpcStore), 2.4% program, 1.6% ensureRootShape,
+  1.4% cloneValue(npcDefaultConcordRules), 0.4% GC
+  chains: NO evaluatePair, NO cargoRows, NO miningFleetDurable.check in the top
+  (before: evaluatePair 5962 ms, cargoRows 1406 ms, check 871 ms)
+Caveat stated honestly: the work world is young (few NPCs), so the idle share is
+not comparable to the play stack; what IS comparable is that the three named
+chains disappeared from the profile.
+also done: L1 patch 0010 - the CONCORD rules cache hit copied every rule through
+JSON; now structuredClone. Top stock cost after round 2.
+tests: cache/metrics suites 11/11, militia hint 5/5; OVERLAY_OK; image rebuilt
+next: recreate the play stack (owner's window) and re-profile there.

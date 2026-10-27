@@ -1,4 +1,4 @@
-{
+﻿{
     "pin":  "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
     "policy":  "applied only by scripts/apply-upstream-patches.cjs, before the L2 overlay",
     "patches":  [
@@ -84,6 +84,15 @@
                                   ],
                         "status":  "not-sent",
                         "note":  "readCollection/ensureRootShape re-read and double-cloned the entire NPC root on every call; a live profile measured 86.7% of one core there. Root shape is now verified once per table per process and collections are read by subpath. Candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0010-concord-rules-cache-clone.patch",
+                        "sha256":  "f06257c893258d19b7cc087aa7372c36e619cf30877895ac8da7165bb43f9cc7",
+                        "files":  [
+                                      "server/src/space/npc/npcDefaultConcordRules.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "the cache-hit path deep-copied every generated CONCORD startup rule through JSON.parse(JSON.stringify()); structuredClone is the same copy without the round-trip. Candidate for an atomic upstream PR"
                     }
                 ]
 }
