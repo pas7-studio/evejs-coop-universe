@@ -47,6 +47,9 @@ services:
       # modest backlog: 58k units against one station's 25k bid is not "overstock" on
       # a fresh economy, it is a normal buffer. The play stack keeps the 20 000 floor.
       EVEJS_COOP_MINING_DEMAND_FLOOR: "200000"
+      # Temporary, agent-only: name the treasury decision when the corporation is not
+      # funded, so "moved 0" can never masquerade as a healthy sweep.
+      EVEJS_COOP_TREASURY_TRACE: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

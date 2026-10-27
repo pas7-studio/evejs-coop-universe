@@ -1589,3 +1589,13 @@ Why: the front page said '~2-player', which reads as 'about two'; the owner want
 Detail: The overlay never assumes a fixed pair: 2+ is the design target and two clients are only the minimum acceptance bar for a shared world.
 Where: README.md
 Evidence: README.md only; headline, PvE bullet, acceptance row and a player-count note now say 2+ / two or more
+### 2026-10-27T21:24Z · a7b69e8 · L3 · feat(war): FW-030 closes the assault's last leg with a standoff warp then a gun-range orbit; record the exact no-damage blocker
+
+Why: FW-030: a mustered faction-war assault could never fire because the two fleets sat tens of AU (then 11-90 km) apart while the battle director only orders a shot inside its real envelope; the attacker now warps to a standoff point beside the enemy and orbits into gun range, reporting every native status
+Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarEngagementWarp.cjs, tests/coop-war-engagement-warp.test.mjs
+Evidence: tests/coop-war-engagement-warp.test.mjs pass=7 fail=0; apply-all OVERLAY_OK; live events living-native-war-engagement-warp WARP_ORDERED/NATIVE_WARP_STARTED/NATIVE_ORBIT_ORDERED and living-native-war-attack-orders NATIVE_ATTACK_ORDER_ACCEPTED in 30045344
+### 2026-10-27T21:30Z · 36d7e1d · DOCS · feat(war): a war hull with an accepted attack order but no target closes on the ship it was ordered to kill
+
+Why: Recorded exactly where the fresh work-stack loop stops: ore sells for real ISK, but the corporation is never funded, so the refinery cannot pay and no minerals exist to lift.
+Where: .opencode/state.md, integration/coopWarEngagementWarp.cjs
+Evidence: agents world: 80+ cycles, 14 hauls, 9 deliveries, 1 sale 26 018 500 ISK in ledger.json; 0 treasury sweeps; refinery blocked NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED

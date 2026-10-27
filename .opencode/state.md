@@ -1,5 +1,32 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 21:50Z - where the loop really stands (fresh work-stack world)
+
+Fresh `evejs-agents` world (volumes reset, market reseeded jita_new_caldari, 445 096 rows) with
+every fix in the image. Measured on THAT world:
+  80+ living-mining-cycle-settled COMMITTED
+  14 living-hauler-loaded with real quantities (the orbit-the-miner fix works)
+  9 living-npc-station-delivered and station trips
+  1 living-npc-station-sold: 5000 units type 17464 @ 5203.7 = 26 018 500 ISK credited to the
+    pilot ledger (ledger.json coop-pilot-002 balance 26 018 500)
+
+Blocking the last leg: the corporation is never funded. `living-corp-treasury-swept` never
+appears, so the refinery answers NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED for every stack at
+60000682 / 60003724 and no minerals are produced. Without minerals there is no lift and no
+mineral sale, which is the only unproven stage.
+
+What is already fixed for that path (all pushed, tested):
+  - refinery hook now passes the in-process gameStore and marketRoot; `../../gameStore`
+    resolves from services/mining (verified ROOT_OK, ../gameStore is MODULE_NOT_FOUND);
+  - EVEJS_COOP_TREASURY_TRACE=1 on the agents stack emits living-corp-treasury-skipped with
+    the treasury's own status/reason, so the next refinery attempt names the refusal instead
+    of hiding it.
+
+So the next single observable is `living-corp-treasury-skipped` (status/reason) on the first
+arrival that carries ore after a restart. Nothing else can be inferred before it appears.
+
+Owner's stack `evejs` was never restarted; every experiment here ran on `evejs-agents`.
+
 ## 2026-10-27 20:00Z - fresh agents world + every defect found today is fixed
 
 Owner split the machine (docs/TWO_STACKS_PLAY_AND_WORK.md): play stack `evejs` is his game,
