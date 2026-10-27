@@ -49,16 +49,43 @@ there. Exact evidence and the single decision needed: `.opencode/state.md`,
 So when the human tester opens the map, expect the Angel/Serpentis campaign in
 30001363 to be visible and real; do not expect a 500011-500014 assault.
 
+## Refresh 2026-10-27 06:00Z — the front now sits in a seeded region
+
+The owner-approved default was applied: an armed pair's front was brought into
+region 10000002 instead of leaving the only real fight in the market-less region
+10000016.
+
+- **Maurasi 30000140** is now real military control of Serpentis 500020
+  (`warState.territories["30000140"].militaryControllerFactionID = 500020`)
+  after the armed cruiser `980000018084` (coop-pilot-063) was spawned there.
+  It is the only seeded-region system that is both belt-bearing (25 real SDE
+  belts) and gated to Jita by a real reciprocal pair (`50000802 <-> 50001248`),
+  and it is not ORE-owned, so a border between two **armed** factions exists
+  inside region 10000002.
+- Seeded buyers really exist there: 431 station/type buy rows for the loot and
+  ore types, all at Jita 30000142 and New Caldari 30000145 stations.
+- The campaign is refused for exactly one reason, measured:
+  `living-native-war-opening-blocked` ->
+  `SUPPLY_UNFUNDED:500011:NO_REAL_FACTION_INCOME|500020:NO_REAL_FACTION_INCOME`.
+- Raids are live again (three silent blockers fixed, `9ff67b86`): a real armed
+  pirate gets real native attack orders with `orderDiagnosis PERMITTED`, and
+  `npc_pair_diagnose` reports `engagementAllowed true` with 300 fitted charges.
+- **Not** solved: no kill yet in Jita/New Caldari, because the stock mining fleet
+  there sits at AU-scale positions and keeps warping, so the raid cannot convert
+  into damage. Nothing was minted or faked. Exact data and the two honest options:
+  `.opencode/state.md`, "FW-013 result".
+
 ## Human steps (two characters, one machine)
 
 1. Confirm the server: `docker compose -f compose.yaml -f compose.coop-probe.yaml ps`
    shows `evejs-server-1` healthy and the market container healthy.
 2. Start the client **once** per account directory and log in character A.
 3. Character A: dock/undock in Jita (30000142), then open the **map** and the
-   **Faction Warfare** tab. Expected: the campaign layer shows the coop campaign
-   for the Angel/ORE front, and the FW tab lists 30000142 / 30000144 / 30000145
-   with the real owner/occupier. If the tab is empty, capture the client log tail
-   instead of guessing.
+   **Faction Warfare** tab. Expected: the campaign layer shows the coop campaigns
+   (Angel/ORE fronts plus the Angel/Serpentis front on the Maurasi border), and
+   the FW tab lists 30000140 / 30000142 / 30000144 / 30000145 with the real
+   owner/occupier. If the tab is empty, capture the client log tail instead of
+   guessing.
 4. Character B: log in on the second client, fly to Jita, and form a fleet with A.
 5. Both: undock together and jump Jita -> Perimeter (30000144). Expected: both
    ships arrive in the same scene, and the Astrahus `Perimeter Anchor Keep` is
@@ -72,7 +99,8 @@ So when the human tester opens the map, expect the Angel/Serpentis campaign in
 
 - that a player sees the campaign, the FW tab, the structures or any chat report;
 - that two characters share a scene, fleet or warp;
-- that an assault began (it cannot, see above).
+- that an assault began on the Maurasi border (it cannot until an armed faction
+  really earns its bounty - see above).
 
 ## Stop rules
 
