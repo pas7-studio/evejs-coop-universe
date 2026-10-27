@@ -5068,6 +5068,26 @@ function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:f
 // registry knows which roster pilot flies it, so this links the pair and refuses
 // unless the native entity really exists in that system and the pilot is a real,
 // still-unlinked roster identity.
+// FW-027: a pilot identity can be released from a hull that no longer needs it
+// (a retired or reassigned ship), so a new real hull can be crewed. The release
+// is the identity registry's own operation and never touches the ship itself.
+function releaseSpawnedIdentity({pilotID,entityID=0,reason=""}={}){
+ if(!identityRegistry)return {status:"IDENTITY_REGISTRY_UNAVAILABLE"};
+ const pilotId=String(pilotID||"").trim();
+ if(!pilotId)return {status:"PILOT_REQUIRED"};
+ let released=null;
+ try{
+  released=identityRegistry.release(pilotId,
+   Number(entityID)>0?{expectedEntityID:Number(entityID)}:{});
+ }catch(error){
+  return {status:"RELEASE_FAILED",reason:String(error?.message||error)};
+ }
+ if(released?.status!=="RELEASED")return released||{status:"NOT_RELEASED"};
+ try{
+  require("./coopNativeActivity"+(typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
+ }catch{}
+ return {...released,reason:String(reason||"IDENTITY_REASSIGNED")};
+}
 function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
  if(!identityRegistry)return {status:"IDENTITY_REGISTRY_UNAVAILABLE"};
  const pilotId=String(pilotID||"").trim();
@@ -5102,4 +5122,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};

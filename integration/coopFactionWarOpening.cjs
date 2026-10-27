@@ -218,6 +218,9 @@ function planWars({
     return refuse("NO_FRONT", { territories, observedCount, registeredCount, summary });
   const limit = Math.max(1, Math.min(8, Math.trunc(num(maxOpenings) || 1)));
   const openings = [], skipped = [];
+  // FW-027: orientation of each war planned in THIS tick, so two borders of the
+  // same faction pair never disagree with the single war record.
+  const plannedWarOrientation = new Map();
   for (const front of fronts) {
     for (const edge of front.edges) {
       if (openings.length >= limit) break;
@@ -241,11 +244,36 @@ function planWars({
       const warID = war ? war.warID
         : "war:" + Math.min(attackerFactionID, defenderFactionID) + "-" +
           Math.max(attackerFactionID, defenderFactionID);
+      // FW-027: there is exactly ONE war per faction pair, so every campaign of
+      // that pair must use the SAME orientation the war record carries. A second
+      // border of the same pair in one tick is flipped to the war's orientation
+      // instead of being denied by the core as CAMPAIGN_PREREQUISITES_NOT_MET.
+      const known = war
+        ? { attackerFactionID: num(war.attackerFactionID), defenderFactionID: num(war.defenderFactionID) }
+        : plannedWarOrientation.get(warID) || null;
+      let plannedEdge = edge;
+      let plannedTarget = targetSystemID;
+      if (known && known.attackerFactionID === defenderFactionID &&
+        known.defenderFactionID === attackerFactionID) {
+        plannedEdge = {
+          ...edge,
+          fromSystemID: targetSystemID, toSystemID: sourceSystemID,
+          fromOwner: defenderFactionID, toOwner: attackerFactionID,
+        };
+        plannedTarget = sourceSystemID;
+        if (liveCampaignFor(state, plannedTarget)) {
+          skipped.push({ edge, reason: "TARGET_ALREADY_CONTESTED" });
+          continue;
+        }
+      }
+      if (!known) {
+        plannedWarOrientation.set(warID, { attackerFactionID, defenderFactionID });
+      }
       const plan = planOpeningCampaign({
-        fronts: [{ frontID: front.frontID, edgeCount: 1, edges: [edge] }],
+        fronts: [{ frontID: front.frontID, edgeCount: 1, edges: [plannedEdge] }],
         nowMs,
         warID,
-        campaignID: warID + ":campaign:" + targetSystemID,
+        campaignID: warID + ":campaign:" + plannedTarget,
       });
       if (plan.status !== "PLANNED") { skipped.push({ edge, reason: plan.reason }); continue; }
       const held = Object.keys(territories)
@@ -286,6 +314,15 @@ function applyOpenings({ state, plan, nowMs, reserveBounty, persistState } = {})
     for (const opening of plan.openings) {
       const { war, campaign } = opening.plan;
       const proofs = opening.proofs;
+      // FW-027: two borders of the same pair can name the SAME target system
+      // (e.g. a hub that touches both sides). The core refuses a second live
+      // campaign on one target, and one bad edge must not discard the borders
+      // that did open, so it is skipped here instead of aborting the batch.
+      if (Object.values(current.campaigns || {}).some((existing) =>
+        Number(existing && existing.targetSystemID) === Number(campaign.targetSystemID) &&
+        ["PREPARING", "ASSAULT"].includes(String(existing && existing.state)))) {
+        continue;
+      }
       if (!current.wars[war.warID]) {
         step({
           type: "DECLARE_WAR", eventID: "open:" + war.warID + ":declare", warID: war.warID,

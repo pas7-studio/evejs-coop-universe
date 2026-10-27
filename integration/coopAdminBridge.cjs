@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist", "spawn_war_fleet", "war_fleet_state", "fleet_reconstitute"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist", "spawn_war_fleet", "release_identity", "assign_identity", "war_fleet_state", "fleet_reconstitute"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -1073,6 +1073,52 @@ function fleetReconstitute(request) {
   return { ok: plan.status !== "BLOCKED", recorded, plan, committed };
 }
 
+// FW-027: crew a real hull with a real roster identity, or release one. A fleet
+// hull spawned by spawn_war_fleet is unlinked by design (the world's pilot roster
+// is finite), and the war mobiliser only musters linked patrols, so this pair of
+// actions is how a fleet commander really takes the ship. Neither action creates
+// a ship or an identity: release only detaches an existing link, assign only uses
+// a pilot the identity registry still considers free.
+function releaseIdentity(request) {
+  const pilotID = String(request.pilotID || "").trim();
+  const entityID = Number(request.entityID) || 0;
+  if (!pilotID) return { ok: false, error: "pilotID is required" };
+  try {
+    const runtimeWorld = require("./coopVirtualWorldRuntime" + siblingSuffix);
+    const released = runtimeWorld.releaseSpawnedIdentity({
+      pilotID, entityID, reason: String(request.reason || "IDENTITY_REASSIGNED"),
+    });
+    emitEvent("living-identity-released", String(released && released.status || "UNKNOWN"), {
+      pilotID, entityID, reason: String(request.reason || ""),
+      releasedEntityID: Number(released && released.entityID) || 0,
+    });
+    return { ok: released && released.status === "RELEASED", pilotID, released };
+  } catch (error) {
+    return { ok: false, error: "identity release failed: " + String(error && error.message || error) };
+  }
+}
+
+function assignIdentity(request) {
+  const pilotID = String(request.pilotID || "").trim();
+  const entityID = Number(request.entityID) || 0;
+  const systemID = Number(request.systemID) || 0;
+  if (!pilotID || !(entityID > 0) || !(systemID > 0)) {
+    return { ok: false, error: "pilotID, entityID and systemID are required" };
+  }
+  try {
+    const runtimeWorld = require("./coopVirtualWorldRuntime" + siblingSuffix);
+    const link = runtimeWorld.linkSpawnedIdentity({
+      pilotID, systemID, entityID, role: String(request.role || "patrol"),
+    });
+    emitEvent("living-identity-assigned", String(link && link.status || "UNKNOWN"), {
+      pilotID, entityID, systemID, role: String(request.role || "patrol"),
+    });
+    return { ok: link && link.status === "LINKED", pilotID, entityID, systemID, link };
+  } catch (error) {
+    return { ok: false, error: "identity assign failed: " + String(error && error.message || error) };
+  }
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
@@ -1084,6 +1130,8 @@ function executeRequest(request) {
   if (action === "spawn_war_fleet") return spawnWarFleet(request);
   if (action === "war_fleet_state") return warFleetState(request);
   if (action === "fleet_reconstitute") return fleetReconstitute(request);
+  if (action === "release_identity") return releaseIdentity(request);
+  if (action === "assign_identity") return assignIdentity(request);
   // Read-only war diagnostics: never reserves, orders or writes anything.
   if (action === "inspect_npc") {
     // Read-only: what a native hull really carries right now.

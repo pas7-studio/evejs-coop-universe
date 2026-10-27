@@ -255,6 +255,59 @@ test('one tick opens the war, and the next tick reports it instead of duplicatin
  assert.equal(Object.keys(state.campaigns).length,1);
 });
 
+test('two borders of one faction pair share the war orientation instead of being denied',()=>{ // Four systems, two real reciprocal borders between the SAME two factions.
+ const gates={
+  1:[{itemID:11,destinationID:33,destinationSolarSystemID:3,solarSystemID:1}],
+  2:[{itemID:22,destinationID:44,destinationSolarSystemID:4,solarSystemID:2}],
+  3:[{itemID:33,destinationID:11,destinationSolarSystemID:1,solarSystemID:3}],
+  4:[{itemID:44,destinationID:22,destinationSolarSystemID:2,solarSystemID:4}],
+ };
+ const gateByID={11:gates[1][0],22:gates[2][0],33:gates[3][0],44:gates[4][0]};
+ const pilots=[
+  {systemID:1,factionID:'500001'},{systemID:1,factionID:'500001'},
+  {systemID:2,factionID:'500001'},{systemID:2,factionID:'500001'},
+  {systemID:3,factionID:'500004'},{systemID:3,factionID:'500004'},
+  {systemID:4,factionID:'500004'},{systemID:4,factionID:'500004'},
+ ];
+ const plan=opening.planWars({
+  state:core.empty(),
+  presence:{status:'PRESENCE',pilots,skipped:0},
+  getStargatesForSystem:(id)=>gates[id]||[],
+  getGate:(id)=>gateByID[id]||null,
+  nowMs:1000,
+  maxOpenings:4,
+ });
+ assert.equal(plan.status,'READY');
+ const wars=new Set(plan.openings.map(o=>o.plan.war.warID));
+ assert.equal(wars.size,1);
+ const orientations=new Set(plan.openings.map(o=>o.plan.war.attackerFactionID));
+ assert.equal(orientations.size,1,'one war, one orientation');
+ const applied=opening.applyOpenings({state:core.empty(),plan,nowMs:1000});
+ assert.equal(applied.status,'OPENED');
+ assert.equal(Object.keys(applied.state.campaigns).length,plan.openings.length);
+ for(const campaign of Object.values(applied.state.campaigns)){
+  const war=applied.state.wars[campaign.warID];
+  const src=applied.state.territories[String(campaign.sourceSystemID)];
+  const dst=applied.state.territories[String(campaign.targetSystemID)];
+  assert.equal(src.militaryControllerFactionID,war.attackerFactionID);
+  assert.equal(dst.militaryControllerFactionID,war.defenderFactionID);
+ }
+});
+
+test('a second border naming the same target is skipped, not fatal to the batch',()=>{
+ const plan=opening.planWars({state:core.empty(),presence:presence(),
+  getStargatesForSystem,getGate,nowMs:1000});
+ assert.equal(plan.status,'READY');
+ const first=plan.openings[0];
+ const duplicate={...first,plan:{...first.plan,
+  campaign:{...first.plan.campaign,campaignID:first.plan.campaign.campaignID+':dup'}}};
+ const applied=opening.applyOpenings({state:core.empty(),
+  plan:{...plan,openings:[first,duplicate]},nowMs:1000});
+ assert.equal(applied.status,'OPENED');
+ assert.equal(Object.keys(applied.state.campaigns).length,1);
+ assert.equal(applied.campaignIDs.length,1);
+});
+
 test('a real war fleet is presence too, so a fleet-only front can open',()=>{
  let state=core.empty(),writes=0;
  const warOpening=opening.createWarOpening({
