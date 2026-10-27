@@ -2398,3 +2398,18 @@ NEXT ACTION: mobilize real Caldari and Gallente war fleets into 30045344 and 300
 (registry: nativeWarFleetRegistry, EVEJS_COOP_FACTION_WAR_FLEETS/_MOBILIZE), verify with
 diagnoseWarState that presence.systems is non-empty, then re-check the campaign leaves
 PREPARING. Funding stays honest: NO_REAL_FACTION_INCOME means no invented ISK.
+
+## ROOT CAUSE CONFIRMED: the war fleet registry is EMPTY
+
+`require("/app/server/src/space/coopVirtualWorldRuntime.js").nativeWarFleetRegistry()`
+returns `{}`. So there are no war fleets anywhere, therefore presence in 30045344 /
+30003837 is 0, therefore the campaign cannot leave PREPARING and no reverse front can
+be planned. EVEJS_COOP_FACTION_WAR_FLEETS=1 and _MOBILIZE=1 are set but mobilization
+never produced a fleet, so the registry stays empty.
+
+NEXT ACTION (single): find why mobilization spawns nothing with those flags on — the
+mobilize phase logs nothing and the registry is empty, so check the mobilize entry point
+in coopVirtualWorldRuntime (grep EVEJS_COOP_FACTION_WAR_MOBILIZE) and what precondition
+it needs (funding gate is REFUSED/NO_REAL_FACTION_INCOME, which may be exactly what stops
+it). Decide honestly: either real faction income exists and mobilization is broken, or
+the funding gate is the real blocker and no fleet may legally spawn without it.
