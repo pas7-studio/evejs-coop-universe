@@ -75,6 +75,33 @@ region 10000002 instead of leaving the only real fight in the market-less region
   into damage. Nothing was minted or faked. Exact data and the two honest options:
   `.opencode/state.md`, "FW-013 result".
 
+## Refresh 2026-10-27 09:05Z - the raid really approaches now; the kill needs warp disruption
+
+Two measured corrections and one new fact the tester should know.
+
+- The stale-order hypothesis was **wrong**: `npc_pair_diagnose` now reports the
+  order-bridge verdict and it answers `PERMITTED` / `leaseOwner RAID` for
+  `980000018058`. The hull was pinned by its own native subwarp pursuit, not by a
+  bridge gate (`7e07e000`).
+- The raid now releases its own unexecutable order and re-approaches with a real
+  warp (`RAID_ORDER_RELEASED_FOR_APPROACH`, `RAID_APPROACH_UNFLYABLE`,
+  `RAID_ATTACK_NO_LOCK`, `64d166c5`). Live: the pirates went from "order held at
+  2.5 AU, never fired" to real attack orders at **10 162 m** and **8 882 m**.
+- The remaining blocker for a kill in New Caldari is the stock fleet retreat:
+  the first aggression teleports the whole fleet 2.5 AU, the native loop then
+  clears the attacker's order (`currentTargetID 0`), and shield regeneration
+  wins (measured 146.45 -> 225.00 shield over 5 minutes, 0 wrecks). A kill needs
+  real warp disruption on the raider, not a relaxed gate.
+- Seeded buyers **do** exist for the loot that a kill would drop: `GetOrders`
+  region 10000002 (`source: seed`) -> 482 at 571 211 ISK (60000688 New Caldari),
+  20767 at 62 839 ISK (60000682), 13773 at 3 083 304 ISK (60000682). The older
+  `NO_SEEDED_COUNTERPARTY` note is stale for these types.
+
+What this means for the client test: the Angel/ORE and Angel/Serpentis fronts are
+real and visible, real NPC combat is happening in New Caldari (missile launches
+and measured shield damage), but no wreck exists there yet, so do not expect a
+loot sale or a funded war chest on this run.
+
 ## Human steps (two characters, one machine)
 
 1. Confirm the server: `docker compose -f compose.yaml -f compose.coop-probe.yaml ps`
