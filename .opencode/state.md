@@ -2152,3 +2152,31 @@ here (boundary), so the tab is not finishable server-side.
 NEXT (needs the owner's go): show the front through the surfaces that work -
 the map campaign layer (insurgencySolarsystem.GetAllVisibleCampaigns) and the
 front chat lines already emitted ([Front] assault begun in system ...).
+
+## HANDOFF 2026-10-27T19:30Z (context nearly exhausted)
+
+DEPLOY PATH: `node scripts/apply-all.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code`.
+It runs the overlay, then `git apply --directory=Code` for every
+patches/upstream/*.patch not already present, then asserts OVERLAY_OK. The
+`--directory=Code` is required: patches are written against the Code/ root and
+without it 0001 fails with "No such file or directory".
+Never run `patch-evejs-coop.cjs --apply` alone: it restores stock files and kills
+every direct L1 edit (it ate patch 0009 twice, dropping CPU from 15% back to 97%).
+
+CLIENT VIEW (map + FW tab), state of the experiments:
+  * dict payload -> client AttributeError 'dict' has no attribute 'occupierID'.
+  * util.KeyVal payload + few systems -> map renders, tab shows the front only.
+  * util.KeyVal + ALL 814 static warzone systems -> tab populates but the map
+    crashes in mapViewFiltered.GetLineColor (partial colours), so it is reverted.
+  * current payload = 5 systems (campaign + territory, warzone factions only).
+  * OPEN QUESTION: colours. Tried militia corporations (1000180/1000181) -> grey.
+    The untested combination is FACTIONS (500001/500004) with the correct
+    util.KeyVal type; the hooks are in scripts/overlay-spec.cjs (three entries for
+    fwWarzoneSolarsystemService) and the `militiaOf` mapping is where to switch.
+
+PERF: closed. 97.8% -> ~10-18% of one core with short spikes >100% during heavy
+phases; idle ~49% in the profile. Guard test tests/coop-native-npc-store-patch.test.mjs
+fails if the memo line disappears from patch 0009 again.
+
+FW TAB: STUB_IN_THIS_BUILD (client lists warzone systems and colours them itself).
+Do not promise it; use the map campaign layer + front chat lines instead.

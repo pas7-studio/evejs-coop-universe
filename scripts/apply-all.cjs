@@ -42,13 +42,14 @@ function main() {
   let skipped = 0;
   for (const name of patches) {
     const file = path.join(patchDir, name);
-    const already = run("git", ["-C", checkoutRoot, "apply", "--reverse", "--check", file]);
+    // Patches are written against the Code/ root, so git apply needs the prefix.
+    const already = run("git", ["-C", checkoutRoot, "apply", "--directory=Code", "--reverse", "--check", file]);
     if (already.code === 0) {
       skipped += 1;
       console.log("[apply-all] present ", name);
       continue;
     }
-    const result = run("git", ["-C", checkoutRoot, "apply", file]);
+    const result = run("git", ["-C", checkoutRoot, "apply", "--directory=Code", file]);
     if (result.code !== 0) {
       console.log("[apply-all] FAILED  ", name, result.out.trim().split("\n").slice(0, 3).join(" | "));
       process.exit(2);
