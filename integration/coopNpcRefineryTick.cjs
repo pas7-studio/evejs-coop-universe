@@ -69,7 +69,7 @@ function candidates({items, ownerID, stationID, limit = 8}) {
 
 // Pay a real station fee from the corporation's own wallet and leave a durable
 // receipt the refinery can verify by name. Never creates ISK: the debit is the source.
-function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, fsApi = fs}) {
+function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, fsApi = require("node:fs")}) {
   const amount = Math.round(Number(amountISK) * 100) / 100;
   if (!(amount > 0)) return {status: "FEE_INVALID"};
   const pointer = "/corporations/" + ownerID + "/wallet";
@@ -145,6 +145,31 @@ function run(options = {}) {
       outcome = refinery.refine({oreItemID: Number(row.itemID), ownerID, stationID});
     } catch (error) {
       outcome = {status: "REFINERY_THROW", reason: String(error && error.message).slice(0, 80)};
+    }
+    // A positive station fee is a real bill. Pay it from the corporation's own wallet,
+    // hand the refinery the durable receipt, and retry once. No ISK is created here.
+    if (String(outcome && outcome.status) === "NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED") {
+      let paid;
+      try {
+        const gameStore = options.gameStore || require("../gameStore");
+        const root = options.root || env[DIR_FLAG];
+        paid = payFee({gameStore, root, ownerID, stationID, oreItemID: Number(row.itemID),
+          amountISK: outcome.iskCost, now: options.now, fsApi: options.fsApi});
+      } catch (error) {
+        paid = {status: "FEE_PAYMENT_UNAVAILABLE", reason: String(error && error.message).slice(0, 80)};
+      }
+      if (paid.status === "PAID") {
+        try {
+          outcome = refinery.refine({oreItemID: Number(row.itemID), ownerID, stationID,
+            feePaid: {receiptID: paid.receipt.receiptID, amountISK: paid.receipt.amountISK,
+              corporationID: ownerID, stationID}});
+        } catch (error) {
+          outcome = {status: "REFINERY_THROW", reason: String(error && error.message).slice(0, 80)};
+        }
+      } else {
+        outcome = {...outcome, feePayment: paid.status,
+          walletISK: paid.balanceISK !== undefined ? paid.balanceISK : null};
+      }
     }
     const status = String(outcome && outcome.status || "UNKNOWN");
     statuses.push(status);

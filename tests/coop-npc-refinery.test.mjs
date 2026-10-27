@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
-const {createRefinery}=require('../integration/coopNpcRefinery.cjs');
+const {createRefinery,journalFile}=require('../integration/coopNpcRefinery.cjs');
 const {HOOK,patch,TARGET}=require('../scripts/coop-native-refinery-item-patch.cjs');
 function sample(mutate={}){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'coop-refinery-'));
@@ -69,9 +69,27 @@ each('strict corporation and station ownership cannot be bypassed',f=>{
  assert.equal(f.engine.refine({...args,stationID:900}).status,'NPC_FACILITY_UNAVAILABLE');
  assert.equal(f.writes(),0);
 });
-each('NPC refinery does not bypass corporate reprocessing tax/wallet',f=>{
- f.state.fee=2.3;assert.equal(f.engine.refine(args).status,'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED');
+each('NPC refinery never bypasses a positive corporate reprocessing fee',f=>{
+ f.state.fee=2.3;
+ // Unpaid: refuse and report the exact native cost instead of waiving it.
+ assert.equal(f.engine.refine(args).status,'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED');
  assert.equal(f.writes(),0);
+ const witness=(over={})=>({receiptID:700,amountISK:2.3,corporationID:1001,stationID:2001,...over});
+ // A payment for another amount, station or corporation is not this bill.
+ assert.equal(f.engine.refine({...args,feePaid:witness({amountISK:1})}).status,
+  'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED');
+ assert.equal(f.engine.refine({...args,feePaid:witness({stationID:900})}).status,
+  'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED');
+ assert.equal(f.engine.refine({...args,feePaid:witness({corporationID:5})}).status,
+  'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED');
+ // A claimed receipt that never reached the disk proves nothing.
+ assert.equal(f.engine.refine({...args,feePaid:witness()}).status,'REFINERY_FEE_RECEIPT_NOT_DURABLE');
+ assert.equal(f.writes(),0);
+ // A durable paid receipt for exactly this corporation, station and amount is accepted.
+ fs.mkdirSync(path.join(f.dir,'refinery-fees'),{recursive:true});
+ fs.writeFileSync(path.join(f.dir,'refinery-fees','700.json'),'{"status":"PAID","amountISK":2.3}');
+ assert.equal(f.engine.refine({...args,feePaid:witness()}).status,'COMMITTED');
+ assert.equal(f.writes(),1);
 });
 each('missing native SDE recipe never mints mineral',f=>{
  f.state.invalid=true;assert.equal(f.engine.refine(args).status,'NATIVE_REPROCESSING_RECIPE_UNAVAILABLE');
@@ -115,7 +133,8 @@ each('journal survives process restart and source shape cannot double-credit',f=
  assert.equal(f.writes(),1);
 });
 each('receipt store refuses broken journal and does not write inventory',f=>{
- fs.writeFileSync(path.join(f.dir,'coop-refine:v1:700:100.json'),'INVALID_JSON');
+ // The journal file name is platform-escaped; ask the module instead of guessing it.
+ fs.writeFileSync(journalFile(f.dir,'coop-refine:v1:700:100'),'INVALID_JSON');
  assert.equal(f.engine.refine(args).status,'NEEDS_OPERATOR_REPAIR');
  assert.equal(f.writes(),0);
 });
@@ -166,11 +185,11 @@ test('live adapter uses actual NPC corporation and station service, never impers
 
 each('refinery journal lock prevents simultaneous writers from different executor instances',f=>{
  const id='coop-refine:v1:700:100';
- fs.writeFileSync(path.join(f.dir,id+'.json.lock'),'other-instance');
+ fs.writeFileSync(journalFile(f.dir,id)+'.lock','other-instance');
  assert.equal(f.engine.refine(args).status,'REFINERY_LOCKED_NEEDS_REVIEW');
  assert.equal(f.engine.reconcile(700,100,{authorize:true}).status,'REFINERY_LOCKED_NEEDS_REVIEW');
  assert.equal(f.writes(),0);
- assert.equal(fs.existsSync(path.join(f.dir,id+'.json.lock')),true);
+ assert.equal(fs.existsSync(journalFile(f.dir,id)+'.lock'),true);
 });
 
 

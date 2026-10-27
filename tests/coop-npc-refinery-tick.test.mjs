@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fsApi from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {createRequire} from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -115,4 +118,42 @@ test('the fleet tick is throttled per system and station', () => {
 
 test('no known station means no refine, never a guess', () => {
   assert.equal(tick.tick({env: {EVEJS_COOP_NPC_REFINERY: '1'}, systemID: 30000144}).status, 'NO_STATION');
+});
+
+// A positive station fee is a real bill: the caller must pay it from the corporation's
+// own wallet and hand the refinery a durable receipt, then refine for real.
+test('the corporation pays the real station fee before the ore is refined', () => {
+  const root = fsApi.mkdtempSync(path.join(os.tmpdir(), 'coop-refinery-fee-'));
+  try {
+    const wallet = {divisions: {1000: {balance: 5000}}};
+    const store = {
+      read: () => ({success: true, data: structuredClone(wallet)}),
+      write: (_table, _pointer, next) => { wallet.divisions = next.divisions; return {success: true}; },
+      flushTableSync: () => ({success: true}),
+    };
+    const calls = [];
+    const fake = {refine(args) {
+      calls.push(args);
+      if (!args.feePaid) return {status: 'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED', iskCost: 1234.5};
+      return {status: 'COMMITTED', operationID: 'coop-refine:v1:' + ORE + ':54999',
+        outputs: [{typeID: 34, quantity: 1000}]};
+    }};
+    const log = events();
+    const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, stationID: 60000358,
+      systemID: 30000144, items: items([warehouseOre()]), refinery: fake, root,
+      gameStore: store, observe: log.see, probe: {}});
+    assert.equal(r.status, 'REFINED');
+    assert.equal(r.refined, 1);
+    assert.equal(wallet.divisions[1000].balance, 3765.5);
+    assert.equal(calls.length, 2);
+    assert.deepEqual(calls[1].feePaid,
+      {receiptID: ORE, amountISK: 1234.5, corporationID: 1000129, stationID: 60000358});
+    const receipt = JSON.parse(fsApi.readFileSync(
+      path.join(root, 'refinery-fees', ORE + '.json'), 'utf8'));
+    assert.equal(receipt.status, 'PAID');
+    assert.equal(receipt.amountISK, 1234.5);
+    assert.equal(receipt.corporationID, 1000129);
+    assert.equal(receipt.afterISK, 3765.5);
+    assert.equal(log.seen[0].event, 'living-npc-refined');
+  } finally { fsApi.rmSync(root, {recursive: true, force: true}); }
 });
