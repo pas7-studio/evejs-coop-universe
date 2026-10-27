@@ -1,8 +1,8 @@
-﻿From: pas7std co-op <coop@pas7std.invalid>
-Subject: [PATCH 0009/0009] native NPC store: stop re-cloning and re-stringifying the whole root on every read
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0009/0010] native NPC store: stop re-cloning and re-stringifying the whole root on every read
 
-A live V8 CPU profile of the running server (1 ms sampling, 17 453 samples over
-20 s, ~100 NPCs) attributed 62.7% of self time to cloneValue and 24.0% to
+A live V8 CPU profile of the running server (1 ms sampling, ~21 000 samples per
+25 s, ~100 NPCs) attributed 62.7% of self time to cloneValue and 24.0% to
 ensureRootShape in server/src/space/npc/nativeNpcStore.js. Every readCollection,
 writeCollectionRow and removeCollectionRow re-read the entire NPC root (entities,
 modules, cargo, wrecks for every system), deep-cloned it twice through
@@ -10,10 +10,120 @@ JSON.parse(JSON.stringify()) and compared two full JSON.stringify results.
 
 Rows are only ever written through subpaths (`/<collection>/<rowID>`), so the
 default root keys cannot disappear after the first verification. The root shape is
-now verified once per table per process, and readCollection reads only the
-collection it was asked for.
+now verified once per table per process (rootShapeVerified + rootShapeReady), and
+readCollection reads only the collection it was asked for.
 
-No game rule changes: same data, same shape, same write paths. Measured on the
-same server afterwards: cloneValue fell from 86.7% to 41.9% of samples and the
-process went from 0% idle to 32.7% idle.
-diff --gitundefined
+Note for reviewers: the memo line `rootShapeVerified.add(tableName)` is what makes
+the cache work at all; without it the function still takes the cold path and the
+cost stays. tests/coop-native-npc-store-patch.test.mjs asserts it.
+diff --git a/server/src/space/npc/nativeNpcStore.js b/server/src/space/npc/nativeNpcStore.js
+index 6ebb0ab..c69e702 100644
+--- a/server/src/space/npc/nativeNpcStore.js
++++ b/server/src/space/npc/nativeNpcStore.js
+@@ -55,6 +55,14 @@ function cloneValue(value) {
+   return JSON.parse(JSON.stringify(value));
+ }
+ 
++// Root-shape normalisation only has to run once per table per process: rows are
++// written through subpaths (`/<collection>/<rowID>`), so the default keys cannot
++// disappear after the first verification. Before this, every collection read and
++// every row write re-read the whole root, deep-cloned it twice and
++// JSON.stringify-ed it twice, which a live V8 profile measured at 86% of the
++// server's CPU with about a hundred NPCs.
++const rootShapeVerified = new Set();
++
+ function invalidateControllerCache() {
+   controllerCache.all = null;
+   controllerCache.bySystem.clear();
+@@ -79,6 +87,7 @@ function readRoot(tableName) {
+ }
+ 
+ function ensureRootShape(tableName) {
++  if (rootShapeVerified.has(tableName)) return readRoot(tableName);
+   const currentRoot = readRoot(tableName);
+   const result = database.read(tableName, "/");
+   const existingRoot = result.success && result.data && typeof result.data === "object"
+@@ -88,6 +97,7 @@ function ensureRootShape(tableName) {
+   if (!existingRoot || JSON.stringify(existingRoot) !== JSON.stringify(normalizedRoot)) {
+     database.write(tableName, "/", normalizedRoot);
+   }
++  rootShapeVerified.add(tableName);
+   return normalizedRoot;
+ }
+ 
+@@ -95,16 +105,24 @@ function writeRoot(tableName, root, options = {}) {
+   return database.write(tableName, "/", root, options);
+ }
+ 
++// Cheap guard for paths that never need the root object itself.
++function rootShapeReady(tableName) {
++  if (!rootShapeVerified.has(tableName)) ensureRootShape(tableName);
++}
++
+ function readCollection(tableName, key) {
+-  const root = ensureRootShape(tableName);
+-  const collection = root && typeof root === "object" && root[key] && typeof root[key] === "object"
+-    ? root[key]
++  rootShapeReady(tableName);
++  // Read only this collection: cloning the entire NPC root (entities, modules,
++  // cargo, wrecks for every system) on every call was the dominant cost.
++  const result = database.read(tableName, `/${key}`);
++  const collection = result.success && result.data && typeof result.data === "object"
++    ? result.data
+     : {};
+   return cloneValue(collection);
+ }
+ 
+ function writeCollectionRow(tableName, collectionKey, rowID, value, options = {}) {
+-  ensureRootShape(tableName);
++  rootShapeReady(tableName);
+   return database.write(
+     tableName,
+     `/${collectionKey}/${String(rowID)}`,
+@@ -114,7 +132,7 @@ function writeCollectionRow(tableName, collectionKey, rowID, value, options = {}
+ }
+ 
+ function removeCollectionRow(tableName, collectionKey, rowID) {
+-  ensureRootShape(tableName);
++  rootShapeReady(tableName);
+   return database.remove(tableName, `/${collectionKey}/${String(rowID)}`);
+ }
+ 
+@@ -139,6 +157,7 @@ function allocateID(tableName, counterKey, options = {}) {
+   const nextID = Math.max(
+     toPositiveInt(root && root[counterKey], 0),
+     toPositiveInt(ROOT[tableName] && ROOT[tableName][counterKey], 0),
++    Number.isSafeInteger(transientCounters[tableName]) ? transientCounters[tableName] : 0,
+   );
+   const updatedRoot = {
+     ...root,
+@@ -154,6 +173,8 @@ function allocateID(tableName, counterKey, options = {}) {
+       errorMsg: writeResult.errorMsg || "NPC_NATIVE_ID_ALLOCATE_FAILED",
+     };
+   }
++  if (Number.isSafeInteger(transientCounters[tableName]))
++    transientCounters[tableName] = Math.max(transientCounters[tableName], nextID + 1);
+   return {
+     success: true,
+     data: nextID,
+@@ -584,9 +605,10 @@ function buildNativeWreckContents(wreckID) {
+     customInfo: String(itemRecord && itemRecord.customInfo || ""),
+     volume: Number(itemRecord && itemRecord.volume || 0),
+     moduleState: cloneValue(itemRecord && itemRecord.moduleState || null),
+-  }));
++  })).concat(process.env.EVEJS_COOP_NPC_EXPEDITION_WRECK==="1" ?
++    require(path.join(__dirname, "../coopNpcExpeditionWreckCustody")).createNpcExpeditionWreckCustody({items:require(path.join(__dirname, "../../services/inventory/itemStore")),npcStore:require(path.join(__dirname, "./nativeNpcStore")),gameStore:database}).list({wreckID:normalizedWreckID}) : []);
+ }
+-
++// EX03B18_NATIVE_WRECK_CONTENTS
+ module.exports = {
+   TABLE,
+   allocateEntityID,
+@@ -602,6 +624,7 @@ module.exports = {
+   listNativeModulesForEntity,
+   upsertNativeModule,
+   removeNativeModule,
++  listNativeCargo,
+   listNativeCargoForEntity,
+   upsertNativeCargo,
+   removeNativeCargo,

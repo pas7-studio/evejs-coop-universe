@@ -78,7 +78,7 @@
     },
     {
       "file": "0009-native-npc-store-root-clone.patch",
-      "sha256": "80ffef3c425b2367b436bd77154d00b9ed6161491f803d43e6b92b05a073b772",
+      "sha256": "b16c8e04713068955a46853d601477f5088fc1771f4e94d2b6e3b48d66b165ae",
       "files": [
         "server/src/space/npc/nativeNpcStore.js"
       ],
