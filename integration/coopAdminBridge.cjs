@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "war_state", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose", "militia_state", "militia_enlist"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -690,6 +690,106 @@ function spawnNativeNpc(request) {
   };
 }
 
+// FW-024: read-only militia view for one real character. It resolves the
+// character's own faction from the character record, the militia corporation
+// from the faction record, the enemy from the declared war (or the game's own
+// warzone pairing) and the live enlistment/merit rows. Nothing is written.
+function militiaState(request) {
+  const characterID = Number(request.characterID) || 0;
+  if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
+  try {
+    const characters = require("../services/character/characterState");
+    const factions = require("../services/faction/factionState");
+    const record = characters.getCharacterRecord(characterID);
+    if (!record) return { ok: false, error: "character not found" };
+    const factionID = Number(record.factionID) || 0;
+    const faction = factionID ? factions.getFactionRecord(factionID) : null;
+    const warStore = require("./coopFactionWarStore" + siblingSuffix);
+    const { readRow } = require("./coopNativeRowPath" + siblingSuffix);
+    let warState = null;
+    try { warState = readRow(require("../gameStore"), warStore.TABLE, warStore.KEY); } catch (_error) { warState = null; }
+    const data = require("./coopMilitiaWarData" + siblingSuffix);
+    const situation = data.militiaSituation({ characterID, character: record, faction, warState });
+    const enlistment = warState && warState.enlistments
+      ? warState.enlistments[String(characterID)] || null : null;
+    let merit = null;
+    try {
+      const ledger = require("./coopWarMeritLedger" + siblingSuffix)
+        .createWarMeritLedger({ gameStore: require("../gameStore") });
+      merit = ledger.read().records["coop-player-" + characterID] || null;
+    } catch (_error) { merit = null; }
+    return {
+      ok: true, characterID,
+      character: {
+        name: String(record.characterName || ""), raceID: Number(record.raceID) || 0,
+        bloodlineID: Number(record.bloodlineID) || 0,
+        corporationID: Number(record.corporationID) || 0,
+        factionID, stationID: Number(record.stationID) || 0,
+        solarSystemID: Number(record.solarSystemID) || 0,
+      },
+      faction: faction ? { factionID: faction.factionID, name: String(faction.name || ""),
+        militiaCorporationID: Number(faction.militiaCorporationID) || 0 } : null,
+      situation, enlistment, merit,
+      warCounts: warState ? {
+        wars: Object.keys(warState.wars || {}).length,
+        campaigns: Object.keys(warState.campaigns || {}).length,
+        enlistments: Object.keys(warState.enlistments || {}).length,
+      } : null,
+    };
+  } catch (error) {
+    return { ok: false, error: "militia state failed: " + String(error && error.message || error) };
+  }
+}
+
+// FW-024: prove the stock militia-agent enlistment end to end without a client.
+// The character must be REALLY docked at the agent's own station (character
+// record), and the write goes through the same coopFactionWarAgent.doAction the
+// client calls. The session used is an explicit server-side in-process session,
+// NOT a client login, and the result says so.
+function militiaEnlist(request) {
+  const characterID = Number(request.characterID) || 0;
+  const agentID = Number(request.agentID) || 0;
+  if (!(characterID > 0) || !(agentID > 0))
+    return { ok: false, error: "characterID and agentID are required" };
+  try {
+    const characters = require("../services/character/characterState");
+    const agents = require("../services/agent/agentAuthority");
+    const registry = require("../services/chat/sessionRegistry");
+    const record = characters.getCharacterRecord(characterID);
+    const agent = agents.getAgentByID(agentID);
+    if (!record || !agent) return { ok: false, error: "unknown character or agent" };
+    if (Number(record.stationID) !== Number(agent.stationID))
+      return { ok: false, error: "character is not docked at that agent's station",
+        characterStationID: Number(record.stationID) || 0, agentStationID: Number(agent.stationID) || 0 };
+    if (registry.findSessionByCharacterID(characterID))
+      return { ok: false, error: "a live session already exists for this character" };
+    const session = { characterID, stationid: Number(agent.stationID),
+      socket: { destroyed: false }, coopProofSession: true };
+    registry.register(session);
+    try {
+      const reply = require("./coopFactionWarAgent" + siblingSuffix)
+        .doAction({ session, agentID, actionID: 3 });
+      const warStore = require("./coopFactionWarStore" + siblingSuffix);
+      const { readRow } = require("./coopNativeRowPath" + siblingSuffix);
+      let enlistment = null;
+      try {
+        const state = readRow(require("../gameStore"), warStore.TABLE, warStore.KEY);
+        enlistment = state && state.enlistments ? state.enlistments[String(characterID)] || null : null;
+      } catch (_error) { enlistment = null; }
+      return {
+        ok: true, characterID, agentID,
+        agentSays: reply && reply.data && reply.data.agentSays ? reply.data.agentSays[0] : null,
+        enlistment,
+        sessionProof: "SERVER_SIDE_IN_PROCESS_SESSION_NOT_A_CLIENT_LOGIN",
+      };
+    } finally {
+      registry.unregister(session);
+    }
+  } catch (error) {
+    return { ok: false, error: "militia enlist failed: " + String(error && error.message || error) };
+  }
+}
+
 function executeRequest(request) {
   if (!request || typeof request !== "object") return { ok: false, error: "empty request" };
   const action = String(request.action || "");
@@ -974,6 +1074,8 @@ function executeRequest(request) {
       return { ok: false, error: "funding diagnose failed: " + String(error && error.message || error) };
     }
   }
+  if (action === "militia_state") return militiaState(request);
+  if (action === "militia_enlist") return militiaEnlist(request);
   const characterID = Number(request.characterID) || 0;
   if (!(characterID > 0)) return { ok: false, error: "characterID is required" };
   if (action === "chat_command") return executeChatCommand(request);

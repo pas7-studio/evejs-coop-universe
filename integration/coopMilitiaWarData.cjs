@@ -57,7 +57,11 @@ function declaredOpponents(factionID, warState) {
 // What this character would fight for, and who the enemy is.
 function militiaSituation({ characterID, character, faction, warState } = {}) {
   const id = pos(characterID);
-  if (!id || !character || Number(character.characterID) !== id) return { status: "NO_CHARACTER" };
+  if (!id || !character) return { status: "NO_CHARACTER" };
+  // The record is read BY characterID; some stock rows omit the field entirely,
+  // so only an explicit, different id is a mismatch.
+  if (character.characterID !== undefined && character.characterID !== null &&
+    Number(character.characterID) !== id) return { status: "NO_CHARACTER" };
   const factionID = pos(character.factionID) || pos(faction?.factionID);
   if (!factionID) return { status: "NO_CHARACTER_FACTION" };
   if (!faction || Number(faction.factionID) !== factionID) return { status: "FACTION_NOT_FOUND", factionID };
