@@ -2279,3 +2279,17 @@ B. "War zone" black screen + "loading advantage data" forever.
    panel spins (docker logs evejs-server-1 | grep fwWarzone), then add a handler that
    returns real occupation counts/contested counts from the same war state. Env-gate it
    like EVEJS_COOP_WAR_CLIENT_VIEW and keep it default OFF until verified.
+
+## REAL WAR STATE (read-only probe, 2026-10-27) — the numbers are consistent
+
+/tmp/warstate.cjs in the container prints the live record:
+  wars:      war:500001-500004 attacker=500004 (Gallente) defender=500001 (Caldari)
+  territories: 30003837 -> 500004 SECURE ; 30045344 (Nennamaila) -> 500001 CONTESTED
+  campaigns:  war:500001-500004 30003837 -> 30045344 (Gallente pushes into Caldari)
+  byOwner:   500001=1, 500004=1
+So "Gallente 2 / Caldari 0" is the client counting the OCCUPIER: Gallente holds its
+own system plus the one it contests, Caldari holds a system that is being invaded so it
+counts as occupied. Nothing is corrupted — the war is simply one-sided: only Gallente
+attacks. The rebalance is therefore a second campaign in the opposite direction
+(Caldari 500001 attacking from 30045344 into 30003837), created through the war store
+execute API, not by editing rows.
