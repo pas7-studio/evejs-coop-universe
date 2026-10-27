@@ -49,6 +49,15 @@ node --test tests/coop-mission-wave-pacing.test.mjs      # 11/11
 node scripts/check-coop-mission-wave-hook.cjs            # HOOK_OK anchor=1
 ```
 
-Live proof needs the agents stack (`evejs-agents`) with both flags set; it must show
-`living-mission-wave` with `status: WAVE_OK` and, with a cap, `reason: WAVE_CAPPED` and
-`skipped: [wave_04..]`.
+Live proof runs on the agents stack only:
+
+```powershell
+docker cp scripts/verify-coop-mission-wave-pacing-live.cjs evejs-agents-server-1:/tmp/v.cjs
+docker exec evejs-agents-server-1 node /tmp/v.cjs        # LIVE_OK ...
+```
+
+It exercises the *installed* `space/coopMissionWavePacing.js` with capturing
+dependencies, so it proves the artifact and its require chain without writing world
+state or spawning a ship. An organic mission proof still needs a client on the agents
+stack: it must show `living-mission-wave` with `status: WAVE_OK` and, with a cap,
+`reason: WAVE_CAPPED` and `skipped: [wave_04..]`.

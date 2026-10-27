@@ -110,11 +110,33 @@ function run(argv) {
       cwd: checkout,
       encoding: "utf8",
     });
-    execFileSync(
-      "docker",
-      ["compose", "-p", "evejs", "-f", "compose.yaml", "-f", "compose.coop-probe.yaml", "up", "-d"],
-      {cwd: checkout, encoding: "utf8"},
-    );
+    // The play stack is the owner's live game. On 2026-10-28 this exact call
+    // recreated it during a session because the compose project is hard-coded to
+    // `evejs`; a build must never do that on its own.
+    const playRunning = (() => {
+      try {
+        return execFileSync("docker", [
+          "ps", "--filter", "label=com.docker.compose.project=evejs", "--format", "{{.Names}}",
+        ], {encoding: "utf8"}).trim().length > 0;
+      } catch (_error) {
+        return false;
+      }
+    })();
+    if (playRunning && !args.includes("--allow-play-restart")) {
+      report.playRestart = "SKIPPED_PLAY_STACK_RUNNING";
+      console.log(
+        "[DEPLOY] image built, play stack (project evejs) NOT restarted." +
+        " Prove on the work stack: scripts/Start-Agents-Stack.ps1 -Action Up." +
+        " Recreating the play stack needs the owner's restart window: --allow-play-restart.",
+      );
+    } else {
+      execFileSync(
+        "docker",
+        ["compose", "-p", "evejs", "-f", "compose.yaml", "-f", "compose.coop-probe.yaml", "up", "-d"],
+        {cwd: checkout, encoding: "utf8"},
+      );
+      report.playRestart = "DONE";
+    }
   }
 
   console.log(

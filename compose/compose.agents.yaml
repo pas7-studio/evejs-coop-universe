@@ -50,6 +50,11 @@ services:
       # Temporary, agent-only: name the treasury decision when the corporation is not
       # funded, so "moved 0" can never masquerade as a healthy sweep.
       EVEJS_COOP_TREASURY_TRACE: "1"
+      # Agent-mission waves 2..N carry an empty triggerMessages list, so the client is
+      # never told a wave exists (measured on Gone Berserk: 7 waves, 24 hulls, 250 LP).
+      # Announce the real wave, and cap the chain to 3 waves for live proof here only.
+      EVEJS_COOP_MISSION_WAVE_NOTIFY: "1"
+      EVEJS_COOP_MISSION_WAVE_CAP: "3"
       # Measured 2026-10-27: with no client logged in, a scene that has no native
       # controller deadline is put to sleep by stock cold-scene sleep, so
       # `scene.tick()` never runs. The tick profiler then shows our overlay phases

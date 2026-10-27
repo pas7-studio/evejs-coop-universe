@@ -72,6 +72,8 @@ names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
 names.splice(names.indexOf("coopWarDemobilizer")+1,0,"coopWarCasualtyLedger");
 // FW-009B: durable war merit paid only from a strictly proven native kill.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarMeritLedger","coopWarKillMerit");
+// FW-032: a confirmed native wreck must leave the war roster (required by coopVirtualWorldRuntime).
+names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarLossReconcile");
 // FW-005B/C: a war chest funded only from real earned income, plus the bounty
 // that releases HELD escrow to the pilot who really earned it.
 names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarChestFunding","coopWarBounty");
