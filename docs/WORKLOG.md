@@ -1609,3 +1609,8 @@ Evidence: tests pass 62 fail 0 (native-read-cache, war-engagement-warp, war-enga
 Why: A scene with no session and no native controller deadline is put to sleep by stock cold-scene sleep, so scene.tick never ran and no mining fix could ever fire on a headless world.
 Where: compose/compose.agents.yaml
 Evidence: agents tick profiler: only overlay phases (npc-reconcile:*, observed-native-mining), no mining/npc section; with EVEJS_DISABLE_NPC_COLD_SCENE_SLEEP=1 the same world emitted 16 living-mining-cycle-settled in 8 minutes
+### 2026-10-27T22:21Z · 91ec5d9 · L3 · coop: the corporation wallet is read through its native owner
+
+Why: The corporation wallet was read through a raw store pointer in a table that had never been bootstrapped, so the treasury answered CORP_WALLET_UNAVAILABLE while the pilots held real earned ISK and the refinery could never pay its fee.
+Where: integration/coopCorpWallet.cjs, integration/coopNpcCorpTreasury.cjs, integration/coopNpcRefineryTick.cjs, tests/coop-corp-wallet.test.mjs
+Evidence: agents world: CORP_WALLET_UNAVAILABLE with 26 018 500 ISK in ledger.json and one unrelated corporationRuntime row; after routing through corporationRuntimeState: living-corp-treasury-swept movedISK 38 791 223.64 and 4 living-npc-refined COMMITTED; 7 wallet tests + 27 treasury/refinery tests pass
