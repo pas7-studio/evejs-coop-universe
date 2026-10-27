@@ -773,6 +773,30 @@ function executeRequest(request) {
         ? Math.hypot(shipA.position.x - shipB.position.x, shipA.position.y - shipB.position.y, shipA.position.z - shipB.position.z)
         : null;
       const ctrl = controllers.getControllerByEntityID(attackerID);
+      // Read-only: the native target-lock state of both hulls. A warp point and a
+      // turret both need a real lock, so "TARGET_NOT_LOCKED" and "no fire" are
+      // answered here instead of guessed: a completed lock, a pending lock with
+      // its completion time, and the live module effects.
+      const locks = (systemID, ship) => {
+        if (!ship) return null;
+        const scene = sceneFor(systemID);
+        if (!scene || typeof scene.getTargetsForEntity !== "function") return null;
+        try {
+          const locked = scene.getTargetsForEntity(ship) || [];
+          const pending = typeof scene.getSortedPendingTargetLocks === "function"
+            ? (scene.getSortedPendingTargetLocks(ship) || []).map((entry) => ({
+              targetID: Number(entry && entry.targetID) || 0,
+              completeAtMs: Number(entry && entry.completeAtMs) || 0,
+            }))
+            : [];
+          const active = ship.activeModuleEffects instanceof Map
+            ? Array.from(ship.activeModuleEffects.keys()).map((id) => Number(id) || 0)
+            : [];
+          return { locked: locked.map((id) => Number(id) || 0), pending, activeModules: active };
+        } catch (error) {
+          return { error: String(error && error.message || error).slice(0, 80) };
+        }
+      };
       // Read-only health layers: a kill is measured damage, never a claim.
       let damage = null;
       try { damage = require("./combat/damage"); } catch (_error) { damage = null; }
@@ -821,8 +845,8 @@ function executeRequest(request) {
       return {
         ok: true,
         attackerID, targetID,
-        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null, health: health(shipA), gunRange: attackerGun },
-        target: { systemID: Number(b?.systemID) || 0, inScene: Boolean(shipB), mode: String(shipB?.mode || ""), position: shipB?.position || null, health: health(shipB) },
+        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null, health: health(shipA), gunRange: attackerGun, locks: locks(a?.systemID, shipA) },
+        target: { systemID: Number(b?.systemID) || 0, inScene: Boolean(shipB), mode: String(shipB?.mode || ""), position: shipB?.position || null, health: health(shipB), locks: locks(b?.systemID, shipB) },
         distanceMeters: distance,
         orderDiagnosis,
         controller: {
