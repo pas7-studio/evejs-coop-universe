@@ -316,3 +316,61 @@ test("a fill from BEFORE the departure belongs to another manifest",t=>{
  assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
  assert.equal(r.reason,"ALIFE12_SOURCE_CARGO_CHANGED");
 });
+
+// A prepared manifest with no departure ack is the only state that can neither be
+// resumed nor expired: no ship is proven to have left, and expire() demands an ack.
+// Measured live: fleet 960004609 sat in "loaded" for five hours on such a manifest
+// and mined nothing. The deadline turns it into a durable ABANDONED record, the
+// manifest and cargo stay untouched, and the fleet may plan a fresh trip.
+test("an ack-less prepared manifest is refused WITH its deadline evidence",t=>{
+ const f=fixture(t);
+ const blocked=f.recover();
+ assert.equal(blocked.reason,"ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED");
+ assert.equal(blocked.overdue,undefined,"a young route carries no deadline evidence");
+ f.setClock(100000+15*60*1000+1);
+ const overdue=f.recover();
+ assert.equal(overdue.reason,"ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED");
+ assert.deepEqual(overdue.overdue,{manifestID:f.m.key,startedAt:100000});
+});
+test("an ack-less route is closed as ABANDONED after the short grace, never expired",t=>{
+ const f=fixture(t);
+ const early=f.journal().abandon({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:101000});
+ assert.equal(early.reason,"ALIFE12_ABANDON_BEFORE_DEADLINE");
+ // No ship is proven to have departed, so 2 minutes of grace is enough: the only
+ // window in which a real departure could still be moving is the warp ingress.
+ const young=f.journal().abandon({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:100000+119000});
+ assert.equal(young.reason,"ALIFE12_ABANDON_BEFORE_DEADLINE");
+ f.setClock(100000+15*60*1000+1);
+ const closed=f.journal().abandon({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,
+  now:100000+15*60*1000+1});
+ assert.equal(closed.status,"ROUTE_ABANDONED");
+ const raw=JSON.parse(fs.readFileSync(path.join(f.root,"trip-departure-acks",
+  f.m.key+".abandoned.json"),"utf8"));
+ assert.equal(raw.status,"ROUTE_ABANDONED");
+ assert.equal(raw.manifestKey,f.m.key);
+ assert.equal(raw.reason,"PREPARED_WITHOUT_DEPARTURE_ACK");
+ assert.equal(raw.graceMs,120000);
+ assert.equal(fs.existsSync(path.join(f.root,"trip-departure-acks",f.m.key+".json")),false,
+  "an abandoned route must not fabricate a departure ack");
+ assert.equal(f.cargo.get(CARGO).quantity,13,"cargo is never touched");
+ assert.equal(f.recover().status,"NO_PENDING_TRIP");
+ assert.equal(f.journal().abandon({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,
+  now:100000+15*60*1000+1}).status,"ALREADY_ABANDONED");
+});
+test("a route with a real departure ack is never abandoned, only expired",t=>{
+ const f=fixture(t);assert.equal(f.confirm().status,"DURABLE_DEPARTURE_CONFIRMED");
+ f.setClock(100000+15*60*1000+1);
+ const refused=f.journal().abandon({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,
+  now:100000+15*60*1000+1});
+ assert.equal(refused.reason,"ALIFE12_ABANDON_WITH_DEPARTURE_ACK");
+ assert.equal(f.recover().status,"RECOVERED_NATIVE_TRIP");
+});
+test("an abandoned route is closed for good even if its cargo still matches",t=>{
+ const f=fixture(t);
+ const at=100000+15*60*1000+1;
+ f.setClock(at);
+ assert.equal(f.journal().abandon({manifestKey:f.m.key,systemID:SYSTEM,fleetID:FLEET,now:at}).status,
+  "ROUTE_ABANDONED");
+ assert.equal(f.recover().status,"NO_PENDING_TRIP");
+ assert.equal(f.cargo.get(CARGO).quantity,13);
+});

@@ -10,6 +10,10 @@ const marker=id=>"coop-warehouse:v1:cargo:"+id;
 // Same 15 minute budget the arrival gate enforces; a route older than this cannot
 // be resumed anyway, so its cargo mismatch is a stale route, not a live conflict.
 const ROUTE_DEADLINE_MS=15*60*1000;
+// A manifest with NO departure ack is not in flight: no ship is proven to have left,
+// so it must not wait out the full route deadline. 2 minutes is ~80x the native warp
+// ingress, which is the only window in which a real departure could still be moving.
+const ABANDON_GRACE_MS=2*60*1000;
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const fail=(reason,extra={})=>({status:"NEEDS_OPERATOR_REPAIR",reason,...extra});
 function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()=>Date.now()}={}){
@@ -98,6 +102,44 @@ function createJournal({root,manifest,store,items,getNativeEntity,io=fs,clock=()
   // it still carries. Nothing is delivered, nothing is credited, nothing is faked.
   const expiryFile=key=>path.join(dir,key+".expired.json");
   function expiryOf(key){try{return readJSON(expiryFile(key))}catch(_error){return null}}
+  // A PREPARED manifest whose departure ack was never written is NOT a trip: the
+  // ack is the only departure witness, so nothing proves a ship ever left. Such a
+  // route can never be expired either (expire() demands an ack), which is how a
+  // fleet sat in "loaded" for five hours in a healthy-looking state and never mined
+  // again. Past the same deadline it is closed as ABANDONED - its own fsynced
+  // record, with the manifest and any ack untouched - so the fleet plans a fresh
+  // trip from what its hulls really carry. No cargo, no delivery and no ISK is
+  // implied, and a route with a real departure ack is never abandoned.
+  const abandonedFile=key=>path.join(dir,key+".abandoned.json");
+  function abandonedOf(key){try{return readJSON(abandonedFile(key))}catch(_error){return null}}
+  function abandon({manifestKey,systemID,fleetID,now,reason,graceMs}={}){
+   try{
+    const key=String(manifestKey||""),m=sourceRecord(key);
+    if(!exact(systemID)||!exact(fleetID)||m.systemID!==systemID||m.fleetID!==fleetID)
+     return fail("ALIFE12_ABANDON_IDENTITY_CONFLICT");
+    const ack=readJSON(path.join(dir,key+".json"));
+    if(ack)return fail("ALIFE12_ABANDON_WITH_DEPARTURE_ACK");
+    const elapsed=Number(now||clock())-Number(m.startedAt);
+    const grace=Number.isFinite(Number(graceMs))?Number(graceMs):ABANDON_GRACE_MS;
+    if(!Number.isFinite(elapsed)||elapsed<=grace)
+     return fail("ALIFE12_ABANDON_BEFORE_DEADLINE");
+    const record={version:1,status:"ROUTE_ABANDONED",manifestKey:key,systemID,fleetID,
+     stationID:pos(m.stationID),corporationID:pos(m.corporationID),startedAt:m.startedAt,
+     manifestHash:hash(m),reason:String(reason||"PREPARED_WITHOUT_DEPARTURE_ACK"),graceMs:grace,
+     abandonedAt:Number(now)||Number(clock())};
+    if(!exact(record.abandonedAt))return fail("ALIFE12_ABANDON_TIME_UNVERIFIED");
+    const prior=abandonedOf(key);
+    if(prior)return equal(prior,record)?{status:"ALREADY_ABANDONED",manifestKey:key}:
+     fail("ALIFE12_ABANDON_ALREADY_RECORDED_DIFFERENTLY");
+    io.mkdirSync(dir,{recursive:true});
+    const file=abandonedFile(key),fd=io.openSync(file,"wx",0o600);
+    try{io.writeFileSync(fd,JSON.stringify(record));io.fsyncSync(fd)}
+    finally{io.closeSync(fd)}
+    if(!equal(record,abandonedOf(key)))return fail("ALIFE12_ABANDON_READBACK_MISMATCH");
+    return {status:"ROUTE_ABANDONED",manifestKey:key};
+   }catch(error){return fail("ALIFE12_ABANDON_WRITE_OUTCOME_UNKNOWN",{
+    details:String(error?.message||error).slice(0,120)})}
+  }
   function expire({manifestKey,systemID,fleetID,now}={}){
    try{
     const key=String(manifestKey||""),m=sourceRecord(key);
@@ -202,7 +244,7 @@ function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
        !equal(m.haulerIDs,sorted))return fail("ALIFE12_MANIFEST_FLEET_CONFLICT");
     // A closed route is closed for good: never re-account a manifest the operator or
     // the deadline already expired, or a stale sale would block the fleet forever.
-    if(expiryOf(key))continue;
+    if(expiryOf(key)||abandonedOf(key))continue;
     let active=0,accounted=0,undeclared=null;
     const declared=new Set(m.cargo.map(x=>x.cargoID));
     for(const [id,rows] of ships)
@@ -242,7 +284,7 @@ function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
     // A completed manifest is historical, not a new route to replay.
     if(active===0)continue;
     const ack=readJSON(path.join(dir,key+".json"));
-    if(!ack)return fail("ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED");
+    if(!ack)return fail("ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED",{...overdueOf(key,m),abandonable:{manifestID:key,startedAt:m.startedAt,elapsedMs:Number(clock())-Number(m.startedAt),graceMs:ABANDON_GRACE_MS}});
     if(ack.version!==1||ack.status!=="WARP_ACK_CONFIRMED"||
        ack.manifestKey!==key||ack.manifestHash!==hash(m)||
        ack.systemID!==systemID||ack.fleetID!==fleetID||
@@ -263,6 +305,6 @@ function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
   }catch(error){return fail("ALIFE12_JOURNAL_READ_OR_PROVENANCE_UNAVAILABLE",{
    details:String(error?.message||error).slice(0,120)})}
  }
- return Object.freeze({confirm,recover,expire});
+ return Object.freeze({confirm,recover,expire,abandon});
 }
 module.exports={createJournal};

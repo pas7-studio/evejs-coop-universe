@@ -22,6 +22,14 @@ const pause = status => ({status,terminal:false});
 const DEADLINE_MS = 15*60*1000;
 const ARRIVAL_DWELL_MS = 2000;
 const MAX_SURFACE_GAP_METERS = 2500;
+// A hull that is flying a real delivery route must not be dragged home by a fleet
+// retreat: the trip, not the retreat, owns its movement. Measured live: after a
+// pirate raid the whole fleet was warped back to its off-grid origin 1.9e11 m from
+// the station with an active, acknowledged trip, so the arrival gate could never
+// pass and the fleet sat in "loaded" until the deadline.
+const REWARP_ABOVE_METERS = 50_000;
+const REWARP_RETRY_MS = 60_000;
+const rewarpAt = new Map();
 function createStationArrival({getStations, getStation, getCorporation, isNpcCorporation,
  getNativeEntity, getScene, store, items, flush, warpToPoint, root, probe={observe:()=>{}},clock=()=>Date.now(),warehouse=null,verifyTransferredTitle=null,manifest=null,escortGate=null,destinationOracle=null,warpFence=null,beforeDeposit=null,ingressSnapshot=null,tripJournal=null,deliveryEvidence=null}={}){
  if(typeof getStations!=="function"||typeof getStation!=="function"||
@@ -56,7 +64,34 @@ function createStationArrival({getStations, getStation, getCorporation, isNpcCor
     Math.max(0,Number(ship.radius)||0)-point.radius)<=MAX_SURFACE_GAP_METERS;
  };
  const arrivals=new Map(),activeNativeEscortWarps=new Map();
-  // A sold row leaves the hull through a REAL market fill, but it never becomes a
+ // The same native warp the departure used, re-issued to a hull the trip still
+ // owns. Never a teleport: the ship really flies, and the arrival gate below still
+ // demands a physical arrival plus dwell before anything is deposited.
+ function rewarpStalledHauler(point,ship,haulerID,index){
+  if(process.env.EVEJS_COOP_NATIVE_STATION_REWARP!=="1")return null;
+  if(!ship||!vector(ship.position)||ship.mode==="WARP"||ship.pendingWarp||
+   ship.warpState||ship.sessionlessWarpIngress)return null;
+  const gap=Math.max(0,distance(ship.position,point.position)-
+   Math.max(0,Number(ship.radius)||0)-point.radius);
+  if(!(gap>REWARP_ABOVE_METERS))return null;
+  const now=clock(),key=String(haulerID);
+  if(now-(rewarpAt.get(key)||0)<REWARP_RETRY_MS)return null;
+  rewarpAt.set(key,now);
+  const target={...point.position,x:point.position.x+750+Math.max(0,Number(index)||0)*100};
+  let ack=null;
+  try{ack=warpToPoint(haulerID,target,{forceImmediateStart:true,
+   broadcastWarpStartToVisibleSessions:true,visibilitySuppressMs:250,
+   ingressDurationMs:2500});}
+  catch(error){ack={success:false,errorMsg:String(error?.message||error).slice(0,120)};}
+  const accepted=ack===true||(ack&&ack.success===true);
+  try{probe.observe("living-npc-station-trip-rewarp",null,
+   {spaceState:{systemID:Number(point.systemID)||0}},
+   {haulerID,gapMeters:Math.round(gap),accepted,
+    errorMsg:accepted?"":String((ack&&(ack.errorMsg||ack.error))||"UNKNOWN").slice(0,120)});}
+  catch(_error){/* telemetry must never break the route */}
+  return accepted?"TRIP_REWARP_ISSUED":null;
+ }
+ // A sold row leaves the hull through a REAL market fill, but it never becomes a
 // station item, so the warehouse receipt the route journal reads could never prove
 // it: after a restart the trip looked like its cargo had changed and the fleet sat
 // in "loaded" forever. The fill is recorded as its own durable receipt, under the
@@ -445,7 +480,11 @@ const saleBaseline=new Map();
   const outcome=routeJournal.recover({systemID,fleetID,haulerIDs:haulers.slice()});
   if(outcome?.status==="NO_PENDING_TRIP")return {status:"NO_PENDING_TRIP",terminal:false};
   if(outcome?.status!=="RECOVERED_NATIVE_TRIP")
-   return pause("ALIFE12_"+String(outcome?.reason||outcome?.status||"RECOVERY_UNVERIFIED"));
+   // The deadline evidence travels with the refusal: without it the caller cannot
+   // tell a route that is simply young from one that is dead and must be closed.
+   return {...pause("ALIFE12_"+String(outcome?.reason||outcome?.status||"RECOVERY_UNVERIFIED")),
+    ...(outcome?.overdue?{overdue:outcome.overdue}:{}),
+    ...(outcome?.abandonable?{abandonable:outcome.abandonable}:{})};
   const trip=outcome.trip;  const station=isValidStation(scene,getStation(trip.stationID),systemID);
   // A trip whose station, fleet or start time cannot be proven is operator repair.
   // A trip that merely ran past its deadline is an expired route: report it so the
@@ -514,12 +553,37 @@ const saleBaseline=new Map();
    const staleOverdue=previous.status!=="NO_PENDING_TRIP"&&
     previous.status!=="ROUTE_EXPIRED"&&previous.overdue&&
     pos(previous.overdue.manifestID?1:0)&&Number.isFinite(Number(previous.overdue.startedAt));
-   if(staleOverdue){
-    const closed=routeJournal.expire({manifestKey:String(previous.overdue.manifestID),
+   // A PREPARED route with no departure ack is not in flight, so it is closed as
+   // soon as the departure attempt is provably over instead of waiting out the
+   // whole route deadline. Measured: after every restart the fleet lost 15 minutes
+   // to such a manifest while its haulers were already at the station.
+   const stalePrepared=!staleOverdue&&previous.abandonable&&
+    pos(previous.abandonable.manifestID?1:0)&&
+    String(previous.status||"").includes("PREPARED_BUT_WARP_UNCONFIRMED");
+   if(stalePrepared){
+    const abandoned=routeJournal.abandon({manifestKey:String(previous.abandonable.manifestID),
      systemID,fleetID,now});
-    if(!["ROUTE_EXPIRED","ALREADY_EXPIRED"].includes(closed?.status))
+    if(!["ROUTE_ABANDONED","ALREADY_ABANDONED"].includes(abandoned?.status))
+     return pause("ALIFE12_"+String(abandoned?.reason||abandoned?.status||"ABANDON_UNVERIFIED"));
+    noteRouteStatus(fleet,"ROUTE_ABANDONED_STALE_PREPARED");
+   }else if(staleOverdue){
+    const key=String(previous.overdue.manifestID);
+    const done=["ROUTE_ABANDONED","ALREADY_ABANDONED","ROUTE_EXPIRED","ALREADY_EXPIRED"];
+    // A PREPARED manifest with no departure ack can never be expired, so it is
+    // closed as ABANDONED first (the journal refuses that when a real ack exists,
+    // and then the ordinary expiry below still applies). Measured: 30000144 sat in
+    // "loaded" on 30000144-960004609-1793061051055 for five hours, ack absent,
+    // while every tick reported ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED and the
+    // fleet mined nothing at all.
+    let closed=typeof routeJournal.abandon==="function"
+     ? routeJournal.abandon({manifestKey:key,systemID,fleetID,now})
+     : null;
+    if(!done.includes(closed?.status))
+     closed=routeJournal.expire({manifestKey:key,systemID,fleetID,now});
+    if(!done.includes(closed?.status))
      return pause("ALIFE12_"+String(closed?.reason||closed?.status||"EXPIRY_UNVERIFIED"));
-    noteRouteStatus(fleet,"ROUTE_EXPIRED_STALE_CARGO");
+    noteRouteStatus(fleet,closed.status==="ROUTE_ABANDONED"||closed.status==="ALREADY_ABANDONED"
+     ?"ROUTE_ABANDONED_STALE_PREPARED":"ROUTE_EXPIRED_STALE_CARGO");
    }else if(previous.status==="ROUTE_EXPIRED"||
     previous.status==="ROUTE_SUPERSEDED"){
     // The route outlived its deadline. Record that durably, then plan a new trip:
@@ -708,7 +772,18 @@ const saleBaseline=new Map();
    result.expectedCargoIDs=manifestProof.cargoIDs;
   }
   fleet.coopStationArrival=result; // In-memory intent is never proof of inventory.
+  // A hauler that is ALREADY physically at this station needs no warp, and the
+  // native warp refuses one that close (measured WARP_DISTANCE_TOO_CLOSE every
+  // time a new trip was planned while the haulers sat at the station after the
+  // previous trip expired, which deadlocked the fleet in "loaded" for good).
+  // Nothing departs, so nothing is acknowledged as a departure either.
+  let warpedHaulers=0;
   for(const [index,id] of ships.entries()){
+   const alreadyThere=stableAt(findShip(scene,id,systemID),destination);
+   if(alreadyThere){
+    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
+    continue;
+   }
    const target={...destination.position,x:destination.position.x+750+index*100};
    const sceneBeat=Math.max(250,Math.min(5000,Number(scene._tickIntervalMs)||1000));
    const realIngress=strictMotion()?
@@ -730,8 +805,11 @@ const saleBaseline=new Map();
      probe.observe("living-npc-station-warp-rejected",null,{spaceState:{systemID}},rejection);
     return pause("WARP_COMMAND_FAILED");}
    arrivals.set(id,{fleetID,stationID:destination.stationID,arrivedAt:0});
+   warpedHaulers+=1;
   }
-  if(routeJournal&&manifestProof){
+  // Only a real departure can be acknowledged: a trip that started with every hull
+  // already at the station has no departure to witness.
+  if(routeJournal&&manifestProof&&warpedHaulers>0){
    const ack=routeJournal.confirm({manifestKey:manifestProof.key,systemID,fleetID,
     stationID:destination.stationID,corporationID:destination.corporationID,
     haulerIDs:ships.slice(),cargoIDs:manifestProof.cargoIDs.slice(),startedAt:now});
@@ -876,7 +954,14 @@ const saleBaseline=new Map();
     return pause("HAULER_LOST_OR_NOT_DURABLE");
    }
    const arrival=trip.haulers[id];
-   if(!stableAt(ship,point)){arrival.arrivedAt=0;
+   if(!stableAt(ship,point)){
+    // A retreat or a scene swap can drag a hull that is flying a real delivery
+    // route back to the fleet's off-grid origin, AU-scale from the station, while
+    // its acknowledged trip is still live. The trip still owns that hull, so it
+    // re-flies it with the same native warp; the arrival gate is unchanged.
+    if(rewarpStalledHauler(point,ship,id,Object.keys(trip.haulers).indexOf(String(id)))==="TRIP_REWARP_ISSUED")
+     return pause("TRIP_REWARP_ISSUED");
+    arrival.arrivedAt=0;
     arrivals.set(id,{fleetID:trip.fleetID,stationID:trip.stationID,arrivedAt:0});
     return pause("AWAITING_PHYSICAL_ARRIVAL");}
    if(!arrival.arrivedAt){arrival.arrivedAt=now;
