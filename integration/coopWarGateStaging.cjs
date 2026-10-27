@@ -20,7 +20,7 @@ const gate=env=>gateReason(env)===null;
 function createWarGateStaging({readWar,readFleet,readTreasury,
  sceneForSystem,getGate,warpToEntity,getController,bridge,transfer=null,
  isTactical=()=>false,isAmmoRetreat=()=>false,
- clock=()=>Date.now(),env=process.env,maxOrders=1}={}){
+ clock=()=>Date.now(),env=process.env,maxOrders=1,orderFollow=null}={}){
  if([readWar,readFleet,readTreasury,sceneForSystem,getGate,
   warpToEntity,getController,isTactical,isAmmoRetreat,clock]
   .some(x=>typeof x!=="function")||typeof bridge?.issue!=="function"||
@@ -28,6 +28,7 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
   !Number.isSafeInteger(maxOrders)||maxOrders<1||maxOrders>3)
   throw Error("WAR_NATIVE_GATE_AUTHORITIES_REQUIRED");
  const travel=createGateTravel({getGate,clock,maxShipsPerTick:maxOrders,
+  orderFollow,
   warp:(id,gateID,options)=>{
    let controller;
    try{controller=getController(id)}catch{

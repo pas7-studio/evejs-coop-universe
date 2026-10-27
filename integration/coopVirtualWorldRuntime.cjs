@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
 const raidDiagnose=new Map();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
 // casualty ledger): the only proof that a registered warship is really gone.
 const destroyedNativeShips=new Set();
@@ -1094,8 +1094,12 @@ function advanceNativeWarGateStaging(){
      const answer=require("./npc/npcService").issueManualOrder(entityID,{
       type:"follow",targetID,followRangeMeters:Number(options?.rangeMeters)||1000,
       allowWeapons:false});
+     if(answer?.success!==true)followOrderReason=String(answer?.errorMsg||"MANUAL_FOLLOW_ORDER_REFUSED");
      return answer?.success===true;
-    }catch{return false}
+    }catch(error){
+     followOrderReason="MANUAL_FOLLOW_ORDER_THROW:"+String(error?.message||error).slice(0,80);
+     return false;
+    }
    },
    isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true,
    isAmmoRetreat:(systemID,id)=>nativeAmmoSupply?.activeIDs(systemID)?.has(id)===true
@@ -1115,16 +1119,16 @@ function advanceNativeWarGateStaging(){
   gateStagingSkipKey=key;
   require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
    null,null,{status:result.status,orders:result.orders,
-    observations:result.observations,skips,
+    observations:result.observations,skips,followOrderReason,
     evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
  }else if(result.observations.length){
   require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
    null,null,{status:result.status,orders:[],observations:result.observations,
-    skips,evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
+    skips,followOrderReason,evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
  }else if(skips.length&&key!==gateStagingSkipKey){
   gateStagingSkipKey=key;
   require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
-   null,null,{status:"SKIPPED",reason:skips[0].reason,skips,
+   null,null,{status:"SKIPPED",reason:skips[0].reason,skips,followOrderReason,
     evidence:"EXPLICIT_PRECONDITION_NOT_MET"});
  }
 }

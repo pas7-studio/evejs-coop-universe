@@ -163,6 +163,27 @@ test("a missing source scene, attacker or reciprocal gate is reported verbatim",
  assert.deepEqual(empty.tick({systemIDs:[101]}).skips,
   [{campaignID:"c1",reason:"SOURCE_SCENE_MISSING:101"}]);
 });
+test("the durable follow order is forwarded to the gate travel authority",()=>{
+ const f=fixture(),asked=[];
+ const director=createWarGateStaging({
+  env:flags(),clock:()=>100000,readWar:()=>f.war,readFleet:()=>f.fleet,
+  readTreasury:()=>f.treasury,sceneForSystem:()=>f.scene,
+  getGate:id=>f.gates[id],
+  getController:id=>id===501?{
+   entityID:501,systemID:101,currentTargetID:0,lastAggressorID:0,
+   manualOrder:null}:null,
+  bridge:{issue:r=>r.execute()},
+  warpToEntity:()=>({success:false,errorMsg:"WARP_DISTANCE_TOO_CLOSE"}),
+  orderFollow:(entityID,targetID,options)=>{
+   asked.push({entityID,targetID,options});return true;
+  }
+ });
+ const out=director.tick({systemIDs:[101]});
+ assert.deepEqual(asked,[{entityID:501,targetID:801,options:{rangeMeters:1000}}]);
+ assert.equal(out.orders[0].action,"NATIVE_SUBWARP_TO_REAL_GATE");
+ assert.equal(out.orders[0].order,"MANUAL_FOLLOW_ORDER");
+ assert.equal(out.orders[0].phase,"STAGING_SUBWARP_APPROACH_ONLY_NOT_TRANSFER");
+});
 test("gateReason names every missing env flag",()=>{
  const env=flags();env.EVEJS_COOP_WAR_TREASURY="0";
  delete env.EVEJS_COOP_ALIFE;
