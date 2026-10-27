@@ -7,6 +7,20 @@ published by `scripts/Publish-SessionState.ps1`. Never infer the current state
 from an older document; `node scripts/coop-state.cjs --verify` reports
 `STATE_STALE` when the bundle predates real changes.
 
+## Two servers: the owner's PLAY stack and the agents' WORK stack
+
+Read [`docs/TWO_STACKS_PLAY_AND_WORK.md`](docs/TWO_STACKS_PLAY_AND_WORK.md)
+before any `docker compose` command. Compose project **`evejs`** (ports
+`443/5222/26000-26002/40110`, volumes `evejs-data`/`evejs-images`) is the
+owner's live game, shared with his friend over an SSH tunnel. **Deploy,
+rebuild, recreate, restart, `down` or merge into it only when the owner
+explicitly asks for a restart window.** Agents prove everything on compose
+project **`evejs-agents`** (ports `28443/25222/28000-28002/41110`, volumes
+`evejs-agents-*`, x5 time acceleration) via
+`scripts/Start-Agents-Stack.ps1 -Action Status|Seed|Up|Down`. If a proof truly
+needs the play stack, append `NEEDS_OWNER_RESTART_WINDOW` to
+`.opencode/state.md`; never restart it yourself.
+
 For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For the mining →
 hauler → station → sale loop use [`docs/COOP_LOOP_ACCEPTANCE.md`](docs/COOP_LOOP_ACCEPTANCE.md):
 its gates, the exact events each stage must emit, and the acceptance command. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`,
