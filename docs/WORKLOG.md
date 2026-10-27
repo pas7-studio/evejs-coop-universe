@@ -921,3 +921,8 @@ Why: A shell rewrite converted two modules to CRLF and broke an LF-anchored guar
 Detail: A PowerShell Set-Content rewrite turned coopVirtualWorldRuntime.cjs and coopWarMobilizer.cjs into CRLF, which broke the LF-anchored source guard in tests/coop-alife-order-authority.test.mjs (the only new failure the regression sweep found: 460 vs 459 at baseline). Content is byte-identical apart from the line endings (git diff --ignore-cr-at-eol is empty). Regression: 5712 tests / 5162 pass / 460 
 Where: .opencode/metrics.md, docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs
 Evidence: full suite 5712/5163/459 (baseline 5680/5131/459): zero regressions, 32 new passing tests
+### 2026-10-27T00:12Z · 5e7824e · DOCS · docs(loop): regression numbers, items 3/4/10 and the fitting-layer blocker
+
+Why: Record the regression sweep numbers and the narrowed assault blocker
+Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
+Evidence: metrics.md blocks for 78fb32ce/eeacae5f/3ff71b13/f3997b30; state.md next action
