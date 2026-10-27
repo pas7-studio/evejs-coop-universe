@@ -1361,3 +1361,15 @@ Why: item 1 closed live and item 2's exact blocker (cross-faction treasury sweep
 Detail: Verbatim evidence: NATIVE_WRECK_CARGO_SETTLED (1200 units of 17471 out of wreck 980300000010, remainder 75660 kept as a real wreck item), PHYSICALLY_AT_NATIVE_ STATION 60014935, TRADE_SETTLED balance 10332 from seeded order 4257762183096583231 (marketRPC FillOrder, sourceOfFunds SEED_MARKET_FILLED_ORDER). Item 2 blocker measured: the corporation treasury sweep moved that Angel pilot's 10332 ISK in
 Where: .opencode/metrics.md, .opencode/state.md
 Evidence: TRADE_SETTLED balance 10332 from EVEJS_SEED; corp-treasury/1000129.json SWEPT 10332 from coop-pilot-060
+### 2026-10-27T13:31Z · e8c9842 · DOCS · docs: two-client checklist refreshed - the loot leg is real, the client half is not
+
+Why: the two-client checklist predated the loot leg and had to carry the measured war-chest blocker
+Detail: Server-side facts added with their verbatim events (wreck restore, honest claim close, capacity-bounded pickup, seeded sale 10 332 ISK) plus BLOCKED_CLIENT_CHECK for the visual half and the measured reason the war chest cannot be funded yet.
+Where: docs/TWO_CLIENT_CHECKLIST.md
+Evidence: wreck restore + honest close + 1200-unit pickup + TRADE_SETTLED 10332 documented; BLOCKED_CLIENT_CHECK recorded
+### 2026-10-27T13:39Z · f4fc7ae · L2 · FW-027: durable war-fleet roster and honest reconstitution
+
+Why: Mining kept producing ore nobody could buy: measured 4.0M units stored against ~35k units of remaining seeded demand, so the closed loop still grew a stranded stock forever.
+Detail: A fleet record that survives a restart: real ships, real doctrine rows, real losses with wreck evidence, and a reconstitution plan that only ever uses hulls that already exist. Survivors are proved alive through the native entity store; replacements are adopted only from hulls the identity registry reports as free in the staging system and that no live fleet already owns. When nothing real is avai
+Where: integration/coopWarDoctrine.cjs, integration/coopWarFleetRoster.cjs, scripts/overlay-spec.cjs, tests/coop-war-fleet-roster.test.mjs
+Evidence: coop-economy-balance status=PARTIAL_DEMAND stock=3965422 sellable=35046; governor holds the native tick only in state mining, trickle 900000ms, factor 1.5 floor 20000; tests 13/13

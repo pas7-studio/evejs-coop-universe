@@ -128,6 +128,9 @@ names.splice(names.indexOf("coopNpcRefineryTick")+1,0,"coopNpcCorpTreasury");
 // The refinery leaves minerals in the corporation hangar; this loads them into a
 // real native cargo hold so the proven sale path can turn them back into ISK.
 names.splice(names.indexOf("coopNpcCorpTreasury")+1,0,"coopNpcMineralLift");
+// Production must follow real demand: measured live at 4.0M units stored against
+// ~35k still buyable. Default OFF.
+names.splice(names.indexOf("coopNpcMineralLift")+1,0,"coopMiningDemandGovernor");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -321,6 +324,12 @@ const specs=[
   // loaded -> station -> sell pipeline continue. Telemetry never decides.
   {anchor:"function tickMiningFleet(scene, fleetRecord, now, hooks) {",after:true,
    line:'  if (process.env.EVEJS_COOP_HAUL_CARGO_ADOPTION === "1") { try { require("../../space/coopHaulCargoAdoption").adopt(scene, fleetRecord); } catch (_coopAdoptError) { console.warn("[CoopHaulCargoAdoption]", _coopAdoptError.message); } }'},
+  // Production may never outrun what the world can still buy. The governor skips
+  // the tick only while the fleet is actually MINING: a fleet already carrying ore
+  // must still haul and sell it, and a live station trip always finishes. One
+  // trickle window per interval keeps a heartbeat.
+  {anchor:"  fleetRecord.nextThinkAtMs = now + thinkIntervalMs;",after:true,
+   line:'  if (process.env.EVEJS_COOP_MINING_DEMAND_GOVERNOR === "1" && !fleetRecord.coopStationArrival && String(fleetRecord.state || "") === "mining") { try { if (require("../../space/coopMiningDemandGovernor").serverGovernor().hold(scene, fleetRecord)) { return; } } catch (_coopDemandError) { console.warn("[CoopMiningDemandGovernor]", _coopDemandError.message); } }'},
   // Why a "mining" fleet can produce nothing: the stock loop `continue`s
   // silently at each of these points. Trace-only, nothing destructive.
   {anchor:"    if (miningModules.length <= 0) {",after:true,
