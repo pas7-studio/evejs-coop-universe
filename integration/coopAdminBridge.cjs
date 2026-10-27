@@ -759,6 +759,30 @@ function executeRequest(request) {
         ? Math.hypot(shipA.position.x - shipB.position.x, shipA.position.y - shipB.position.y, shipA.position.z - shipB.position.z)
         : null;
       const ctrl = controllers.getControllerByEntityID(attackerID);
+      // Read-only health layers: a kill is measured damage, never a claim.
+      let damage = null;
+      try { damage = require("./combat/damage"); } catch (_error) { damage = null; }
+      const health = (ship) => {
+        if (!ship || !damage) return null;
+        try {
+          const max = damage.getEntityMaxHealthLayers(ship);
+          const cur = damage.getEntityCurrentHealthLayers(ship, max);
+          if (!max || !cur) return null;
+          return {
+            max: { shield: Number(max.shield) || 0, armor: Number(max.armor) || 0, structure: Number(max.structure) || 0 },
+            current: { shield: Number(cur.shield) || 0, armor: Number(cur.armor) || 0, structure: Number(cur.structure) || 0 },
+          };
+        } catch (_error) { return null; }
+      };
+      // Read-only: the exact first blocker the order bridge reports for this
+      // hull, so a refused or unexecutable order is measured, not inferred.
+      let orderDiagnosis = null;
+      try {
+        orderDiagnosis = require("./coopVirtualWorldRuntime" + siblingSuffix)
+          .diagnoseNpcOrder({ entityID: attackerID, systemID: Number(a?.systemID) || 0, owner: "RAID" });
+      } catch (error) {
+        orderDiagnosis = { status: "THREW", reason: String(error && error.message || error).slice(0, 80) };
+      }
       let engagement = null;
       try {
         engagement = require("./coopNpcHostility" + siblingSuffix).allowsNativeEngagement(shipA, shipB) === true;
@@ -774,9 +798,10 @@ function executeRequest(request) {
       return {
         ok: true,
         attackerID, targetID,
-        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null },
-        target: { systemID: Number(b?.systemID) || 0, inScene: Boolean(shipB), mode: String(shipB?.mode || ""), position: shipB?.position || null },
+        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null, health: health(shipA) },
+        target: { systemID: Number(b?.systemID) || 0, inScene: Boolean(shipB), mode: String(shipB?.mode || ""), position: shipB?.position || null, health: health(shipB) },
         distanceMeters: distance,
+        orderDiagnosis,
         controller: {
           entityID: Number(ctrl?.entityID) || 0,
           systemID: Number(ctrl?.systemID) || 0,

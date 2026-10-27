@@ -3062,7 +3062,10 @@ function advanceNativeRaids(){
    warp:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"warp-to-prey",
     ()=>npc.warpToEntity(pirateID,targetID,options)),
    attack:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"attack",
-    ()=>npc.issueAttackOrder(pirateID,targetID,options))
+    ()=>npc.issueAttackOrder(pirateID,targetID,options)),
+   // One owner per record: only the raid director releases the order it issued.
+   release:(pirateID,reason)=>npcNativeOrder("RAID",pirateID,"release-order",
+    ()=>npc.resumeBehavior(pirateID))
   });
  }
  if(process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&!huntPolicy) {
@@ -3230,7 +3233,26 @@ function advanceNativeRaids(){
        reason:planned.reason,verifiedRaid:active.has(id)||leased.has(id)});
    }
   }
-  if(result.actions.length){
+  // A release is a runtime decision, not a raid: it is published with its own
+  // explicit status so a hull that cannot execute an order never looks idle.
+  const releasedActions=result.actions.filter(action=>
+   action.action==="approach-unflyable"||action.action==="attack-no-lock"||
+   action.released===true);
+  for(const action of releasedActions){
+   const status=action.reason==="FOR_APPROACH"?"RAID_ORDER_RELEASED_FOR_APPROACH":
+    action.reason==="APPROACH_NOT_WARPING"?"RAID_APPROACH_UNFLYABLE":
+    action.reason==="ATTACK_NO_NATIVE_LOCK"?"RAID_ATTACK_NO_LOCK":
+    "RAID_ORDER_RELEASE_REFUSED";
+   require("./coopRuntimeProbe").observe("living-native-raid-order-released",null,
+    {spaceState:{systemID}},{status,action:action.action,
+     pirateID:action.pirateID,targetID:action.targetID,
+     distanceMeters:action.distanceMeters,released:action.released===true,
+     reason:String(action.reason||""),errorMsg:String(action.errorMsg||"")});
+  }
+  // Only a real native order is a raid. A release must never be reported as one.
+  const orders=result.actions.filter(action=>
+   action.action==="warp-to-hauler"||action.action==="attack");
+  if(orders.length){
    // Only a successful native ATTACK order against another named NPC
    // is faction tension evidence. Warp approaches aren't battles.
    if(factionDirector&&identityRegistry){
@@ -3239,7 +3261,7 @@ function advanceNativeRaids(){
       scene.getEntityByID(Number(link.entityID)));
     const byEntity=new Map(actualLinks.map(link=>[Number(link.entityID),link]));
     const factions=new Map(world.snapshot().pilots.map(p=>[p.id,p.faction]));
-    for(const action of result.actions){
+    for(const action of orders){
      if(action.action!=="attack")continue;
      const attacker=byEntity.get(Number(action.pirateID));
      const defender=byEntity.get(Number(action.targetID));
@@ -3254,10 +3276,10 @@ function advanceNativeRaids(){
      });
     }
    }
-   console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:result.actions}));
-   require("./coopWorldSignals").notifyRaid(scene,result.actions);
+   console.info("[CoopLivingWorld] Native pirate raid",JSON.stringify({systemID,actions:orders}));
+   require("./coopWorldSignals").notifyRaid(scene,orders);
    require("./coopRuntimeProbe").observe("living-pirate-raid",null,
-    {spaceState:{systemID}},{actions:result.actions});
+    {spaceState:{systemID}},{actions:orders});
   }
  }
 }
