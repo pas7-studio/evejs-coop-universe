@@ -3127,6 +3127,67 @@ function nativeWarpPoint(){
  if(!warpPointDirector)warpPointDirector=require("./coopNpcWarpPoint").shared();
  return warpPointDirector;
 }
+// FW-018d: while the raid holds a lease it is the one owner of that hull's
+// movement, and the stock leash is what aborts it. Measured live: a blaster
+// cruiser with 300 real charges got an attack order 4.4 km from its prey, the
+// prey's own retreat moved the fleet 2.5 AU, and the stock loop then found the
+// hull beyond its 90 km leash, cleared the combat state and flew it home on every
+// think (mode GOTO, returningHome true, manualType "", currentTargetID 0) - so the
+// DPS never happened even though the gun range was finally right. The leash is a
+// stock behaviour parameter, not an evidence gate: it is widened to cover exactly
+// the approach the raid itself ordered, and it is restored to the profile's own
+// value the moment the raid releases the hull. No damage, no distance of ours and
+// no gate is invented or relaxed.
+const raidLeashNotes=new Map();
+function raidLeashWrite(pirateID,leashRangeMeters){
+ const controllers=require("./npc/npcRegistry");
+ const npcService=require("./npc/npcService");
+ const ctrl=controllers.getControllerByEntityID(pirateID);
+ if(!ctrl)return {status:"NPC_NOT_FOUND",entityID:pirateID};
+ const existing=(ctrl.behaviorOverrides&&typeof ctrl.behaviorOverrides==="object")
+  ?{...ctrl.behaviorOverrides}:{};
+ const profileLeash=Math.max(0,Number(ctrl.behaviorProfile?.leashRangeMeters)||0);
+ const next={...existing};
+ if(leashRangeMeters===null)delete next.leashRangeMeters;
+ else next.leashRangeMeters=Math.max(0,Math.round(leashRangeMeters));
+ npcService.setBehaviorOverrides(pirateID,next);
+ const applied=Number(next.leashRangeMeters)||0;
+ return {status:"APPLIED",entityID:pirateID,leashRangeMeters:applied,
+  profileLeashRangeMeters:profileLeash};
+}
+function raidLeashScope(pirateID,distanceMeters){
+ const distance=Number(distanceMeters)||0;
+ if(!(distance>0))return {status:"NO_DISTANCE",entityID:pirateID};
+ let outcome;
+ try{outcome=raidLeashWrite(pirateID,distance+100000);}
+ catch(error){return {status:"REFUSED",entityID:pirateID,
+  reason:String(error&&error.message||error).slice(0,80)};}
+ // Published once per changed value: the leash the hull really flies with.
+ const key=pirateID+":"+outcome.leashRangeMeters;
+ if(outcome.status==="APPLIED"&&raidLeashNotes.get(pirateID)!==key){
+  raidLeashNotes.set(pirateID,key);
+  try{
+   require("./coopRuntimeProbe").observe("living-native-raid-leash",null,null,
+    {...outcome,orderDistanceMeters:distance,
+     reason:"RAID_LEASE_OWNS_MOVEMENT"});
+  }catch(_error){/* a lost probe never blocks the order */}
+ }
+ return outcome;
+}
+function raidLeashRestore(pirateID){
+ try{
+  const outcome=raidLeashWrite(pirateID,null);
+  if(raidLeashNotes.get(pirateID)!==pirateID+":restored"){
+   raidLeashNotes.set(pirateID,pirateID+":restored");
+   try{
+    require("./coopRuntimeProbe").observe("living-native-raid-leash",null,null,
+     {...outcome,reason:"LEASE_RELEASED_PROFILE_LEASH"});
+   }catch(_error){/* ignore */}
+  }
+  return outcome;
+ }catch(error){return {status:"REFUSED",entityID:pirateID,
+  reason:String(error&&error.message||error).slice(0,80)};}
+}
 function advanceNativeRaids(){
  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
@@ -3135,8 +3196,11 @@ function advanceNativeRaids(){
  const controllers=require("./npc/npcRegistry");
  if(!raidDirector){
   raidDirector=require("./coopNativeRaids").createRaids({
-   warp:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"warp-to-prey",
-    ()=>npc.warpToEntity(pirateID,targetID,options)),
+   warp:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"warp-to-prey",()=>{
+    const {distanceMeters,...native}=options||{};
+    raidLeashScope(pirateID,distanceMeters);
+    return npc.warpToEntity(pirateID,targetID,native);
+   }),
    attack:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"attack",()=>{
     // FW-018: the attack is flown at the hull's own gun range. `orbitDistanceMeters`
     // is the native behaviour override the stock mining code itself uses to park a
@@ -3145,6 +3209,9 @@ function advanceNativeRaids(){
     // attack intent and the native NPC hostility invariant would then treat the
     // prey as friendly (measured live: target cleared, mode STOP, no fire).
     const engagementRange=Number(options?.engagementRangeMeters)||0;
+    // The approach the raid just ordered decides how far the hull may fly from
+    // its own home; the leash is restored on release (see raidLeashScope).
+    raidLeashScope(pirateID,Number(options?.distanceMeters)||0);
     if(engagementRange>0){
      try{
       // setBehaviorOverrides REPLACES the whole override object, so the hull's
@@ -3173,7 +3240,7 @@ function advanceNativeRaids(){
    },
    // One owner per record: only the raid director releases the order it issued.
    release:(pirateID,reason)=>npcNativeOrder("RAID",pirateID,"release-order",
-    ()=>npc.resumeBehavior(pirateID)),
+    ()=>{raidLeashRestore(pirateID);return npc.resumeBehavior(pirateID);}),
    // FW-017: a real warp point is fitted and engaged on the prey, and a really
    // scrambled prey keeps its attack order instead of losing the lock. Both are
    // OFF unless the flag is on, and neither ever guesses a module or a target.
@@ -3293,6 +3360,7 @@ function advanceNativeRaids(){
    assessments.set(Number(pirateID),seen);
    return decision.decision==="RAID";
   };
+  relocateRaidHomeAnchors({systemID,scene,pirates});
   const result=raidDirector.tick({
    systemID,scene,pirates,fleetShips,canAttack,
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),

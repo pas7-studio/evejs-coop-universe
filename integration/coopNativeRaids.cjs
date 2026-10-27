@@ -110,9 +110,12 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
      // Release it and re-issue the approach as a real warp in the same tick:
      // releasing alone would send the hull home and end the engagement.
      if(holdsAttack(controller)&&old&&issuedAt>0&&
-        Number(old.targetID)===activeTarget&&now>=issuedAt+attackNoLockMs){
+        Number(old.targetID)===activeTarget){
       const prey=scene.getEntityByID(activeTarget);
       const gap=prey&&valid(prey.position)?range(ship.position,prey.position):Infinity;
+      // Beyond the same 250 km boundary the approach uses a turret can never
+      // reach: release and re-approach on this re-check. Closer prey keeps its
+      // lock window instead (a real warp point needs time to acquire a lock).
       if(gap>250000){
        pendingRelease=releaseOrder(id,"FOR_APPROACH");
        if(!pendingRelease.released){
@@ -202,7 +205,7 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     // command that moves the ship, so the approach never really flies.
     if(!released&&holdsAttack(controller)&&(old?.phase==="attack"||manualTarget===target.id))
      released=releaseOrder(id,"FOR_APPROACH");
-    result=warp(id,target.id,{forceImmediateStart:true});
+    result=warp(id,target.id,{forceImmediateStart:true,distanceMeters:distance});
     action="warp-to-hauler";
    }else{
     // The hull fights with the range its own fitted weapon really has. A raider
@@ -219,7 +222,7 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
      try{gun=gunRange(ship)||null;}catch(_error){gun=null;}
     }
     const optimal=Number(gun&&gun.meters)||0;
-    result=attack(id,target.id,{allowWeapons:true,keepLock:true,
+    result=attack(id,target.id,{allowWeapons:true,keepLock:true,distanceMeters:distance,
      ...(optimal>0?{engagementRangeMeters:optimal}:{})});
     action="attack";
    }
