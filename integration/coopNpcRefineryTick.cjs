@@ -67,6 +67,20 @@ function candidates({items, ownerID, stationID, limit = 8}) {
   return out;
 }
 
+// Move the fleet's own earnings into the corporation that pays the station bill.
+// Best effort: a missing ledger or a disabled flag must never block refining.
+function fundTreasury({options, env, ownerID}) {
+  try {
+    const treasury = options.treasury || require("./coopNpcCorpTreasury.cjs");
+    return treasury.run({env, root: options.marketRoot, corporationID: ownerID,
+      gameStore: options.gameStore, fsApi: options.fsApi, now: options.now,
+      observe: options.observe, probe: options.probe});
+  } catch (error) {
+    return {status: "TREASURY_UNAVAILABLE", moved: 0,
+      reason: String(error && error.message).slice(0, 80)};
+  }
+}
+
 // Pay a real station fee from the corporation's own wallet and leave a durable
 // receipt the refinery can verify by name. Never creates ISK: the debit is the source.
 function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, fsApi = require("node:fs")}) {
@@ -139,6 +153,14 @@ function run(options = {}) {
   if (!rows.length) return {status: "NO_WAREHOUSE_ORE", refined: 0};
   let refined = 0;
   const statuses = [];
+  // The station bills its fee to the corporation, so the corporation has to hold the ISK
+  // its pilots actually earned. Sweep pilot earnings into the corp wallet first; the
+  // pilot-ledger debit is the only source of the credit, so nothing is minted.
+  const funded = fundTreasury({options, env, ownerID});
+  if (funded && funded.status === "SWEPT" && Number(funded.moved) > 0)
+    note(options, "living-corp-treasury-swept", {systemID: options.systemID, ownerID,
+      movedISK: Number(funded.moved),
+      corporationISK: funded.balanceISK !== undefined ? funded.balanceISK : null});
   for (const row of rows) {
     let outcome;
     try {
@@ -217,3 +239,4 @@ function resetForTests() {
 
 module.exports = {FLAG, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
   candidates, payFee, run, tick, resetForTests};
+

@@ -157,3 +157,41 @@ test('the corporation pays the real station fee before the ore is refined', () =
     assert.equal(log.seen[0].event, 'living-npc-refined');
   } finally { fsApi.rmSync(root, {recursive: true, force: true}); }
 });
+
+// Ore cannot be refined for free, and the fee is the corporation's bill: the fleet's own
+// earnings must first move into the corp wallet, then the same wallet pays the station.
+test('pilot earnings fund the corporation that pays the station fee', () => {
+  tick.resetForTests(); // events are de-duplicated per process by station and item
+  const root = fsApi.mkdtempSync(path.join(os.tmpdir(), 'coop-refinery-treasury-'));
+  try {
+    fsApi.writeFileSync(path.join(root, 'ledger.json'),
+      JSON.stringify({pilots: {'coop-pilot-001': {balance: 33714.25}}}));
+    const wallet = {divisions: {1000: {balance: 0}}};
+    const store = {
+      read: () => ({success: true, data: structuredClone(wallet)}),
+      write: (_table, _pointer, next) => { wallet.divisions = next.divisions; return {success: true}; },
+      flushTableSync: () => ({success: true}),
+    };
+    const calls = [];
+    const fake = {refine(args) {
+      calls.push(args);
+      if (!args.feePaid) return {status: 'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED', iskCost: 4998.33};
+      return {status: 'COMMITTED', operationID: 'op', outputs: [{typeID: 34, quantity: 10}]};
+    }};
+    const log = events();
+    const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1', EVEJS_COOP_CORP_TREASURY: '1'},
+      stationID: 60000358, systemID: 30000144, items: items([warehouseOre()]), refinery: fake,
+      root: path.join(root, 'refinery'), marketRoot: root, gameStore: store,
+      observe: log.see, probe: {}});
+    assert.equal(r.status, 'REFINED');
+    assert.equal(calls.length, 2);
+    // 0 ISK corp wallet + 33 714.25 earned - 4 998.33 fee
+    assert.equal(wallet.divisions[1000].balance, 28715.92);
+    const ledger = JSON.parse(fsApi.readFileSync(path.join(root, 'ledger.json'), 'utf8'));
+    assert.equal(ledger.pilots['coop-pilot-001'].balance, 0);
+    const named = log.seen.map((e) => e.event);
+    assert.ok(named.includes('living-corp-treasury-swept'), named.join(','));
+    assert.ok(named.includes('living-npc-refined'), named.join(','));
+    assert.equal(log.seen.find((e) => e.event === 'living-corp-treasury-swept').fields.movedISK, 33714.25);
+  } finally { fsApi.rmSync(root, {recursive: true, force: true}); }
+});
