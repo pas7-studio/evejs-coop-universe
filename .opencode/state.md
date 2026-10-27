@@ -1,5 +1,20 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 11:26Z - BPO bootstrap must run INSIDE the server process
+
+grantItemToOwnerLocation(1000129, 60000358, 4, 950 /* Merlin Blueprint */, 1, {singleton}) plus
+industryRuntimeState.getBlueprintState(itemID) do create the real native blueprint and state,
+but a node process started with docker exec only writes into its own GameStore buffer:
+flushTableSync('items') and flushTableSync('industryBlueprintState') both answer
+flushed:false and scripts/coop-factory-audit.cjs still reports blueprints=0. The grant was
+lost, so nothing was actually changed on disk.
+
+Next attempt MUST go through the in-process admin bridge (/var/lib/evejs/coop-admin-requests.jsonl,
+see integration/coopAdminBridge.cjs) or a real hook, never a docker exec side process.
+
+Everything else stands: 16 refines, 521 754.08 ISK swept, 23 mineral stacks worth 0 ISK because
+region 10000002 has zero orders for typeID 34/35.
+
 ## 2026-10-27 11:24Z - why minerals cannot be sold yet (measured, not assumed)
 
 scripts/coop-mineral-audit.cjs (5 tests) reads the real stock and asks the real market book:

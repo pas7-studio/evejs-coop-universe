@@ -1210,3 +1210,8 @@ Why: raid_diagnose required its own services; the live action answered SCENE_MIS
 Detail: runtime/controllers/mining are locals of advanceNativeRaids, so the module-level diagnose answered SCENE_MISSING 'runtime is not defined' in the live container. It now requires the same three services itself and reports a missing scene as a reason. Live: raid_diagnose 30000145 -> status OK, linkedShips 21, roleCounts pirate 4, fleetShips 23, leases [], per-hull gunRangeMeters 1050/5000/15625 RESOL
 Where: integration/coopVirtualWorldRuntime.cjs
 Evidence: live raid_diagnose 30000145 -> OK, pirates 4, fleetShips 23, gunRangeMeters 1050/5000/15625
+### 2026-10-27T11:24Z · 8e9eb0d · DOCS · coop: measure the mineral leg before building it - there is no buyer at all
+
+Why: Two hard facts found by measurement: out-of-process GameStore writes are discarded (flushed:false) and the mineral book is empty region-wide; both change the plan.
+Where: .opencode/state.md, docs/WORKLOG.md, scripts/coop-mineral-audit.cjs, tests/coop-mineral-audit.test.mjs
+Evidence: flushTableSync flushed:false for items/industryBlueprintState; factory audit blueprints=0 after grant; GetOrders 10000002 type 34/35 = 0
