@@ -535,3 +535,21 @@ next: the remaining cloneValue is OUR callers re-reading a collection per entity
 (`coopWarCombatAuthority.evaluatePair`, `coopWarFleetRoster.presence`,
 `coopHaulCargoAdoption.cargoRows`, `coopNpcAmmoWitness.sample`); hoist one read per
 pass instead of one read per entity.
+
+## 2026-10-27T17:50Z perf — round 2: our own callers re-read a collection per entity
+
+done: `coopNativeReadCache` (one bulk read per 200 ms window, identity facts only)
+wired into the three measured hot call sites: `coopWarCombatAuthority.evaluatePair`,
+`coopHaulCargoAdoption.cargoRows`, `coopNativeMiningFleetDurable.check`.
+`coopPerfMetrics` + one hook in `safeNpcPhase` (EVEJS_COOP_PERF_METRICS=1) emits
+`coop-perf-sample` every 60 s with the top eight phases.
+tests: new suites 11/11 pass; related suites 51/52 (the one failure,
+ALIFE13 "auditStartupCargo before materialization", is pre-existing: audit is at
+line 566, materialize at 473)
+overlay: OVERLAY_OK, image evejs-local rebuilt
+live verbatim (profile of the running server, 25 s, 21 471 samples):
+47.6% idle, 37.8% cloneValue, 2.6% buildConfiguredConcordStartupRules;
+chains: evaluatePair 5962 ms, cargoRows 1406 ms, miningFleetDurable.check 871 ms
+metrics: profile-named callers only, no guesswork; see docs/PERFORMANCE_REVIEW.md
+next: recreate the play stack to load the build (needs the owner's window), then
+re-profile and compare idle share and the three chains.

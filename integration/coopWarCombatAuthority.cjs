@@ -26,7 +26,7 @@ function ammoEnabled(env=process.env){
   env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1";
 }
 function createWarCombatAuthority({gameStore,getController,getNativeEntity,
- getFactionForCorporation,env=process.env}={}){
+ getFactionForCorporation,entityCache=null,env=process.env}={}){
  if(typeof gameStore?.read!=="function"||
   [getController,getNativeEntity,getFactionForCorporation].some(x=>typeof x!=="function"))
   throw Error("WAR_COMBAT_NATIVE_AUTHORITIES_REQUIRED");
@@ -45,7 +45,10 @@ function createWarCombatAuthority({gameStore,getController,getNativeEntity,
   const a=attacker?.itemID,b=target?.itemID;
   if(!pos(a)||!pos(b)||a===b)return {status:"BLOCKED",reason:"INVALID_WAR_PAIR"};
   try{
-   const ar=getNativeEntity(a),br=getNativeEntity(b);
+   // One bulk read per cache window instead of two full collection clones per
+   // pair: identity facts (corporationID, systemID) are stable inside a tick.
+   const lookup=typeof entityCache==="function"?entityCache:getNativeEntity;
+   const ar=lookup(a),br=lookup(b);
    if(!ar||!br||ar.entityID!==a||br.entityID!==b||
     !pos(ar.corporationID)||!pos(br.corporationID)||
     ar.corporationID!==attacker.corporationID||
@@ -69,6 +72,7 @@ function native(){
   gameStore:require("../gameStore"),
   getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
   getNativeEntity:id=>require("./npc/nativeNpcStore").getNativeEntity(id),
+  entityCache:id=>require("./coopNativeReadCache").nativeCache().entityByID(id),
   getFactionForCorporation:id=>
    require("../services/faction/factionState").getFactionIDForCorporation(id)
  });

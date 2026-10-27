@@ -30,7 +30,7 @@ function warMeritRecords(){
  try{return warMeritLedger.records();}catch{return {}}
 }
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
-let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false;
+let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false,perfTimer=null;
 const wreckCustodyNotes=new Map();
 const lootStationNotes=new Map();
 // Wall-clock instant this process started running the living world. A wreck
@@ -58,12 +58,19 @@ if(ids.length)return ids.sort((left,right)=>left-right);
 return [140000100,140000101,140000102,140000103,140000104,140000105,140000106];
 }
 function safeNpcPhase(phase,run){
+ // Opt-in phase timing (EVEJS_COOP_PERF_METRICS=1): a measured phase is the only
+ // honest basis for the next optimisation.
+ const timed=require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).enabled();
+ const started=timed?process.hrtime.bigint():0n;
  try{return run();}
  catch(error){
   console.warn("[CoopLivingWorld] "+phase,error.message);
   try{require("./coopRuntimeProbe").observe("living-world-phase-failed",null,null,
    {phase,reason:String(error.message).slice(0,160)});}catch(_ignored){}
   return null;
+ }finally{
+  if(timed)require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).metrics()
+   .observe(phase,Number(process.hrtime.bigint()-started)/1e6);
  }
 }
 // Opt-in shared native order arbitration; original native behavior stays OFF.
@@ -1875,6 +1882,16 @@ function start(){
    groups:row.groups,unknownNames:row.unknownNames,
    source:row.source,nativeSettlementVerified:false});
  }});
+ // Opt-in perf report: which phases really cost time, every minute.
+ if(require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).enabled()){
+  perfTimer=setInterval(()=>{
+   try{
+    const top=require("./coopPerfMetrics"+(__filename.endsWith(".js")?"":".cjs")).metrics().top(8);
+    require("./coopRuntimeProbe").observe("coop-perf-sample",null,null,{top});
+   }catch(_ignored){}
+  },60000);
+  perfTimer.unref?.();
+ }
  timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{
   backgroundTicks++;
   // Read-only courier pass (COOP-024). It never mutates a contract: it only

@@ -341,7 +341,10 @@ function verifyActors({scene,store,systemID,slot,minerIDs,haulerIDs}){
     found.haulers.some(x=>!haulerIDs.includes(x)))
   throw Error("ALIFE08_UNEXPECTED_OR_MISSING_MARKED_SHIPS");
  const check=(id,role)=>{
-  const entity=store.getNativeEntity(id),controller=store.getNativeController(id);
+  // One cached bulk read per window instead of a full entity-collection clone
+  // per ship: this loop runs for every marked miner and hauler each pass.
+  const cache=require("./coopNativeReadCache"+(__filename.endsWith(".js")?"":".cjs")).nativeCache();
+  const entity=cache.entityByID(id)||store.getNativeEntity(id),controller=store.getNativeController(id);
   const marker=roleMarker(systemID,slot,role);
   if(!entity||!controller||entity.transient===true||controller.transient===true ||
      entity.nativeNpc!==true||pos(entity.entityID)!==id||

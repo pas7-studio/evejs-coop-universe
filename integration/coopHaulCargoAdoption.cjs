@@ -31,7 +31,11 @@ function dependenciesOf(options={}){
 // store cannot enumerate.
 function cargoRows({store,cargoTable,database}={}){
  if(typeof store?.listNativeCargo==="function"){
-  const all=store.listNativeCargo();
+  // The native store re-reads and deep-clones the whole cargo table on every
+  // call, and a plan runs per hauler per pass. One cached read per cache window
+  // replaces that; the TTL is the staleness bound for custody decisions.
+  const all=require("./coopNativeReadCache"+(__filename.endsWith(".js")?"":".cjs"))
+   .nativeCache().allCargoRows();
   if(Array.isArray(all))return all;
  }
  let read=cargoTable;
