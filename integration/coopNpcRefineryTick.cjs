@@ -67,6 +67,46 @@ function candidates({items, ownerID, stationID, limit = 8}) {
   return out;
 }
 
+// Pay a real station fee from the corporation's own wallet and leave a durable
+// receipt the refinery can verify by name. Never creates ISK: the debit is the source.
+function payFee({gameStore, root, ownerID, stationID, oreItemID, amountISK, now, fsApi = fs}) {
+  const amount = Math.round(Number(amountISK) * 100) / 100;
+  if (!(amount > 0)) return {status: "FEE_INVALID"};
+  const pointer = "/corporations/" + ownerID + "/wallet";
+  const current = gameStore.read("corporationRuntime", pointer);
+  const divisions = current && current.success === true && current.data && current.data.divisions;
+  if (!divisions || typeof divisions !== "object") return {status: "CORP_WALLET_UNAVAILABLE"};
+  const before = Number(divisions[1000] && divisions[1000].balance);
+  if (!Number.isFinite(before) || before < 0) return {status: "CORP_WALLET_INVALID"};
+  if (before < amount) return {status: "CORP_WALLET_INSUFFICIENT", iskCost: amount, balanceISK: before};
+  const next = {divisions: {...divisions,
+    [1000]: {...(divisions[1000] || {}), balance: Math.round((before - amount) * 100) / 100}}};
+  const written = gameStore.write("corporationRuntime", pointer, next);
+  if (!written || written.success !== true) return {status: "CORP_DEBIT_FAILED"};
+  if (typeof gameStore.flushTableSync === "function") {
+    const flushed = gameStore.flushTableSync("corporationRuntime", {log: false});
+    if (!flushed || flushed.success !== true) return {status: "CORP_DEBIT_FLUSH_UNCERTAIN"};
+  }
+  const receiptID = pos(oreItemID);
+  const receipt = {version: 1, status: "PAID", receiptID, amountISK: amount,
+    corporationID: pos(ownerID), stationID: pos(stationID), oreItemID: receiptID,
+    beforeISK: before, afterISK: Math.round((before - amount) * 100) / 100,
+    at: Number(now) || Date.now()};
+  try {
+    const dir = require("node:path").join(root, "refinery-fees");
+    fsApi.mkdirSync(dir, {recursive: true});
+    const file = require("node:path").join(dir, receiptID + ".json");
+    const tmp = file + ".tmp-" + process.pid;
+    const fd = fsApi.openSync(tmp, "w", 0o600);
+    try { fsApi.writeFileSync(fd, JSON.stringify(receipt)); fsApi.fsyncSync(fd); }
+    finally { fsApi.closeSync(fd); }
+    fsApi.renameSync(tmp, file);
+  } catch (error) {
+    return {status: "FEE_RECEIPT_UNWRITTEN", amountISK: amount};
+  }
+  return {status: "PAID", receipt};
+}
+
 /**
  * Refine the corporation's warehouse ore at one station. Returns a summary; never throws.
  */
@@ -151,4 +191,4 @@ function resetForTests() {
 }
 
 module.exports = {FLAG, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
-  candidates, run, tick, resetForTests};
+  candidates, payFee, run, tick, resetForTests};
