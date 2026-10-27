@@ -112,6 +112,32 @@ test("disabled or incomplete safety flags do not consult game world",()=>{
  assert.equal(f.tick().status,"DISABLED");
 });
 
+test("a stranded source-system hull never occupies an assault battle slot",()=>{
+ const f=fixture();
+ // Real live shape: the attacker side was mobilized during PREPARING from the
+ // campaign source system and never physically transferred. The assault then
+ // happens in the target system, where a real armed attacker patrol is present.
+ f.war.campaigns.battle1.state="ASSAULT";
+ f.registered.ships["501"]={entityID:501,systemID:101,pilotID:"coop-pilot-001",
+  factionID:11,campaignID:"battle1",warID:"war1"};
+ // A second real attacker patrol that is physically in the target system.
+ f.links.push({pilotID:"coop-pilot-006",entityID:506,systemID:202,role:"patrol"});
+ const corporationID=31;
+ f.entities.set(506,{itemID:506,kind:"ship",nativeNpc:true,corporationID,
+  ownerID:corporationID,position:{x:0,y:0,z:0}});
+ f.native.set(506,{entityID:506,systemID:202,corporationID,ownerID:corporationID});
+ f.controllers.set(506,{entityID:506,systemID:202,manualOrder:null,currentTargetID:0});
+ const result=f.tick();
+ // maxPerSide is 1 in this fixture: the co-located hull fills the assault slot.
+ assert.deepEqual(result.mobilized.map(x=>x.entityID),[503,506]);
+ const attacker=result.mobilized.find(x=>x.role==="ATTACKER");
+ assert.equal(attacker.entityID,506);
+ assert.equal(attacker.systemID,202);
+ // The stranded hull is untouched: no release, no rewrite, no teleport.
+ assert.equal(f.registered.ships["501"].systemID,101);
+ assert.equal(f.calls.every(c=>c.entityID!==501),true);
+});
+
 test("a dry run reports what would mobilize and never writes",()=>{
  const f=fixture();
  const dry=f.mobilizer.tick({systemIDs:[101,202],dryRun:true});

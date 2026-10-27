@@ -99,17 +99,20 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
     for(const side of sides){
      if(mobilized.length>=maxPerTick)break;
      if(!reachable.has(side.systemID))continue;
-     let existingSide=Object.values(assigned.ships).filter(s=>
-      s?.campaignID===c.campaignID&&s.factionID===side.factionID).length;
-     existingSide+=mobilized.filter(s=>s.campaignID===c.campaignID&&
-      s.factionID===side.factionID).length;
+     // Only a hull physically in THIS side's system can fight there. An assault
+     // campaign's attacker side is the target system, so a warship left behind in
+     // the campaign source system must not occupy a battle slot: it is neither
+     // co-located with the defender nor able to fire at it.
+     const inSideSystem=s=>s?.campaignID===c.campaignID&&
+      s.factionID===side.factionID&&s.systemID===side.systemID;
+     let existingSide=Object.values(assigned.ships).filter(inSideSystem).length;
+     existingSide+=mobilized.filter(inSideSystem).length;
      // A side may only field as many ships as its commander's rank allows
      // (recruit 1 ... admiral 25), and never more than the global hard cap.
      let sideLimit=maxPerSide;
      if(typeof commandCap==="function"){
       const commanded=[...Object.values(assigned.ships),...mobilized]
-       .filter(s=>s?.campaignID===c.campaignID&&s.factionID===side.factionID)
-       .map(s=>s.pilotID);
+       .filter(inSideSystem).map(s=>s.pilotID);
       let cap=0;
       try{
        cap=Number(commandCap({campaignID:c.campaignID,factionID:side.factionID,
