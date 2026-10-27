@@ -1,5 +1,37 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 17:05Z — items 15 and 16 (code halves) done; exact next steps
+
+**Item 15 DONE (code) — a1d5b03b.** `coopWarFleetRoster` now keeps a durable
+per-faction, per-role hull reserve (`spawnable` + `equipped`) in the same roster
+row: a proven loss removes one equipped hull, an adopted replacement consumes one
+spawnable hull and becomes equipped, `declareReserve` only accepts what a caller
+proved (`source` required, unknown roles / non-integers refused), `reserveOf`
+reports the real totals. Every real loss and replacement carries a `frontChat`
+record; `fleet_reconstitute` sends it through `coopWarClientView.frontReport`
+(new kinds `fleet-loss`, `fleet-replacement`) via the existing once-per-eventKey
+`warFrontChat`. Tests 37/37 with client-view + admin-bridge + composition.
+
+**Item 16 code half DONE — ae9cea92.** `coopNpcCorpTreasury.run` accepts a
+`resolveCorporation` authority and sweeps ONLY pilots that really belong to the
+target corporation (`NO_EARNINGS_FOR_THIS_CORPORATION` when none do, an
+unprovable owner is never swept); without the authority the historical sweep is
+unchanged, so nothing can regress. `coopNpcRefineryTick.fundTreasury` forwards
+`options.pilotCorporation`. Tests 62/62 with refinery + war-funding + treasury.
+
+**NEXT ACTION (exact), item 16 live half.** The routing fix is inert until a
+caller supplies the authority. At the refinery tick's call site pass
+`pilotCorporation: (pilotID) => <corporationID of that pilot's real native
+entity>` (identity registry + `nativeNpcStore.getNativeEntity`, the same
+authority `coopWarFleetRoster.presence` already uses), then run
+`war_funding_diagnose` until an ARMED faction (500011 Angel or 500020 Serpentis)
+reads `FUNDED` instead of `NO_REAL_FACTION_INCOME`, and confirm
+`living-native-war-bounty` `PAID` on its next real casualty. Do not fund it any
+other way and do not mint ISK.
+
+**Also open.** `NEEDS_OWNER_RESTART_WINDOW` for the FW-037 gate-crossing proof
+(see the section below). Item 13 payout stays blocked behind item 16.
+
 ## 2026-10-27 16:40Z - stack split: all further proofs run on evejs-agents
 
 Owner changed the rules (docs/TWO_STACKS_PLAY_AND_WORK.md, AGENTS.md): compose project
