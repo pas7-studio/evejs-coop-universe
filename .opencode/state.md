@@ -2449,3 +2449,24 @@ livingWorldPhases). Called from a fresh `docker exec node`, diagnoseMobilization
 running phase, not by a cold require. So the dry-run MUST be invoked inside the server
 process: either (a) a tiny env-gated hook that calls diagnoseMobilization on a timer and
 logs it, or (b) an admin-bridge action. (a) is 5 additive lines and cannot break startup.
+
+## READY-TO-APPLY: the mobilization diagnostic hook (paste, then apply-all + build)
+
+In integration/coopVirtualWorldRuntime.cjs, right after the module.exports assignment,
+append (additive, cannot affect startup):
+
+  if (process.env.EVEJS_COOP_WAR_DIAG === "1") {
+    try {
+      const timer = setInterval(() => {
+        try {
+          const out = module.exports.diagnoseMobilization();
+          console.log("[CoopWarDiag] mobilization " + JSON.stringify(out).slice(0, 1200));
+        } catch (error) { console.log("[CoopWarDiag] error " + error.message); }
+      }, 60000);
+      if (typeof timer.unref === "function") timer.unref();
+    } catch (_error) { /* diagnostics never break the world */ }
+  }
+
+Then: EVEJS_COOP_WAR_DIAG=1 in compose.coop-probe.yaml, apply-all, build, recreate, and read
+`docker logs evejs-server-1 | grep CoopWarDiag`. That prints the real per-side rejection
+(funding gate / getOrderLeases / readiness) for war:500001-500004.
