@@ -417,6 +417,12 @@ const specs=[
    // simply not registered for install).  // A durable NPC whose controller is dropped vanishes from every fleet that
   {"anchor":"    if (activeEffect) {\n      logNpcCombatDebug(\"npc.weapons.module-already-active\"","line":"    if (!require(\"../coopNpcWeaponAmmoGate\").check({entity,moduleItem,bankModuleIDs}).allowed) { if (activeEffect) scene.deactivateGenericModule(pseudoSession, activeEffect.moduleID || moduleItem.itemID, { reason: \"npc-ammo-empty\", deferUntilCycle: false }); continue; }","after":false},
   {anchor:"  if (sourceClass === \"npc\" && targetClass === \"npc\") {",line:"    if ((process.env.EVEJS_COOP_RIVAL_NPC_COMBAT === \"1\" || process.env.EVEJS_COOP_FACTION_WAR_COMBAT === \"1\") && require(\"../coopNpcHostility\").allowsNativeEngagement(entity, target)) return false;",after:true},
+  // FW-024: a player joins the war only through an ACTIVE militia enlistment.
+  // His own faction never fires on him, an uninvolved player is not a war target,
+  // and ONLY an enlisted enemy of this registered war ship (ACTIVE war, campaign
+  // in ASSAULT in this system) may be engaged. A hull that is not a registered
+  // war ship keeps stock behaviour exactly.
+  {anchor:"  if (sourceClass === \"npc\") {\n    return targetClass === \"npc\";",line:"  if (sourceClass === \"npc\" && targetClass === \"player\" && process.env.EVEJS_COOP_FACTION_WAR_COMBAT === \"1\") { try { const coopMilitia = require(\"../coopMilitiaWarPlayer\").npcPlayerVerdict(entity, target); if (coopMilitia.status === \"ENEMY_MILITIA\") return false; if (coopMilitia.status !== \"NOT_WAR_SHIP\") return true; } catch (_coopError) { console.warn(\"[CoopMilitiaWarPlayer]\", _coopError.message); } }",after:false},
   {anchor:"      if (launchResult && launchResult.success) {",line:"        try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"missile-launch\", chargeTypeID:entityMissileSource.chargeTypeID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); }",after:true},
   {anchor:"    logNpcCombatDebug(\"npc.weapons.module-activate\", () => ({",line:"    if (activationOutcome && activationOutcome.success) { try { require(\"../coopNpcWeaponEvidence\").noteVerified(scene, entity, target, {kind:\"module-activation\", moduleID:moduleItem.itemID}); } catch (_coopError) { console.warn(\"[CoopWeaponEvidence]\", _coopError.message); } }"}
  ]}

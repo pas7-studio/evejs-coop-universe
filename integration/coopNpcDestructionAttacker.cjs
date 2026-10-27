@@ -47,6 +47,47 @@ function note(scene,victim,options,wreck){
   const file=process.env.EVEJS_COOP_IDENTITY_FILE||"/var/lib/evejs/coop-npc-links.json";
   const saved=JSON.parse(fs.readFileSync(file,"utf8"));
   const links=Object.values(saved?.links||{});
+  const ext=__filename.endsWith(".cjs")?".cjs":"";
+  // FW-024: a PLAYER hull as the upstream attacker is a real war participant
+  // only through an ACTIVE militia enlistment against a registered war ship.
+  // This branch is the only place a player can earn war merit; it never runs
+  // for an NPC attacker and never invents an attribution.
+  const playerCharacterID=positive(options?.attackerEntity?.session?.characterID);
+  if(playerCharacterID){
+   let playerProof;
+   try{
+    playerProof=require("./coopMilitiaWarPlayer"+ext).native()
+     .playerKillProof({scene,victim,options,wreck});
+   }catch(error){
+    playerProof={status:"UNAVAILABLE",reason:String(error?.message||"PLAYER_KILL_PROOF_FAILED")};
+   }
+   try{
+    require("./coopRuntimeProbe").observe("living-player-war-kill",playerCharacterID,
+     {spaceState:{systemID:positive(scene?.systemID)||0}},playerProof);
+   }catch{}
+   if(playerProof.status!=="PLAYER_NATIVE_WAR_KILL_PROVIDED")return playerProof;
+   const pilotID="coop-player-"+playerCharacterID;
+   try{
+    const ledger=require("./coopWarMeritLedger"+ext)
+     .createWarMeritLedger({gameStore:require("../gameStore")});
+    const award=ledger.award({pilotID,kind:"warship-kill",
+     evidenceKey:"wreck:"+playerProof.wreckID,
+     evidence:{wreckID:playerProof.wreckID,victimEntityID:playerProof.victimEntityID,
+      attackerEntityID:playerProof.attackerEntityID,characterID:playerCharacterID,
+      campaignID:playerProof.campaignID}});
+    require("./coopRuntimeProbe").observe("living-player-war-merit",playerCharacterID,
+     {spaceState:{systemID:playerProof.systemID}},{status:award.status,pilotID,
+      kind:"warship-kill",merit:Number(award.merit)||0,
+      meritDelta:Number(award.meritDelta)||0,from:String(award.from||""),
+      to:String(award.to||""),rank:String(award.rank||""),
+      command:Number(award.command)||0,wreckID:playerProof.wreckID,
+      campaignID:playerProof.campaignID,
+      evidence:"UPSTREAM_ATTACKER_ENTITY_PLUS_ACTIVE_ENLISTMENT_PLUS_PHYSICAL_WRECK"});
+   }catch(error){
+    console.warn("[CoopWarMerit]",String(error?.message||"PLAYER_MERIT_UNAVAILABLE"));
+   }
+   return playerProof;
+  }
   let proof=verify({scene,victim,options,wreck,links});
   if(proof.status==="VICTIM_NOT_NAMED"&&
    process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"){

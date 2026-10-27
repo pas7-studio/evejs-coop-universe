@@ -66,3 +66,42 @@ test('attack proof is re-read after target selection before native issue',()=>{
  const r=f.director.tick({systemIDs:[202]});
  assert.equal(r.orders.length,0);assert.equal(f.issued,0);
 });
+test('an enlisted enemy player becomes a real native attack target',()=>{
+ env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS='1';
+ const f=fixture();
+ // No NPC opponent in range, so the militia branch decides.
+ f.ships.get(502).position.x=500000;
+ const playerShip={itemID:900,kind:'ship',corporationID:99,position:{x:1000,y:0,z:0},
+  session:{characterID:140000005}};
+ f.ships.set(900,playerShip);
+ f.scene.sessions.set('s1',{characterID:140000005,_space:{shipID:900}});
+ let asked=null;
+ const director=createWarBattleDirector({env,maxOrders:1,cooldownMs:120000,
+  clock:()=>2000000,
+  authority:{snapshots:()=>f.state,
+   evaluatePair:(a,b)=>a.itemID!==b.itemID?{status:'AUTHORIZED',warID:'w1',campaignID:'c1'}:{status:'BLOCKED'}},
+  getController:id=>({entityID:id,systemID:202,manualOrder:null,currentTargetID:0}),
+  bridge:{issue:x=>({success:true,data:{targetID:x.execute().data?.targetID}})},
+  sceneForSystem:id=>id===202?f.scene:null,
+  issueNativeAttack:(id,targetID,options)=>{asked={id,targetID,options};return {success:true,data:{targetID}}},
+  isAmmoDepleted:()=>false,isTactical:()=>false,
+  playerOpponents:({shipRow})=>shipRow.factionID===11?
+   [{characterID:140000005,entityID:900,entity:playerShip}]:[]});
+ const r=director.tick({systemIDs:[202]});
+ assert.equal(r.orders.length,1);
+ assert.equal(r.orders[0].targetKind,'MILITIA_PLAYER');
+ assert.equal(r.orders[0].characterID,140000005);
+ assert.equal(r.orders[0].evidence,'ACTIVE_ENLISTMENT_IN_THE_OPPOSING_FACTION');
+ assert.deepEqual(asked,{id:501,targetID:900,options:{allowWeapons:true,keepLock:true,allowPodKill:false}});
+});
+test('no militia list means the branch does nothing (stock behaviour)',()=>{
+ const f=fixture();f.ships.get(502).position.x=500000;
+ const director=createWarBattleDirector({env,maxOrders:1,cooldownMs:120000,
+  clock:()=>2000000,authority:{snapshots:()=>f.state,
+   evaluatePair:()=>({status:'BLOCKED'})},
+  getController:id=>({entityID:id,systemID:202,manualOrder:null,currentTargetID:0}),
+  bridge:{issue:()=>({success:true})},sceneForSystem:id=>id===202?f.scene:null,
+  issueNativeAttack:()=>({success:true}),isAmmoDepleted:()=>false,
+  isTactical:()=>false,playerOpponents:()=>[]});
+ assert.equal(director.tick({systemIDs:[202]}).orders.length,0);
+});

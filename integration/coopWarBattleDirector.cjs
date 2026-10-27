@@ -10,13 +10,27 @@ const {combatEnabled,ammoEnabled}=require("./coopWarCombatAuthority"+
  (__filename.endsWith(".js")?"":".cjs"));
 function createWarBattleDirector({authority,bridge,sceneForSystem,
  issueNativeAttack,getController,isAmmoDepleted=()=>false,isTactical=()=>false,
- clock=()=>Date.now(),env=process.env,maxOrders=2,cooldownMs=120000}={}){
+ clock=()=>Date.now(),env=process.env,maxOrders=2,cooldownMs=120000,
+ playerOpponents=null}={}){
  if(!authority?.snapshots||!authority?.evaluatePair||!bridge?.issue||
   [sceneForSystem,issueNativeAttack,getController,isAmmoDepleted,isTactical,clock].some(x=>typeof x!=="function")||
   !Number.isSafeInteger(maxOrders)||maxOrders<1||maxOrders>3||
   !Number.isSafeInteger(cooldownMs)||cooldownMs<30000)
   throw Error("FW_NATIVE_BATTLE_AUTHORITIES_REQUIRED");
  const nextAt=new Map();
+ // FW-024: an enlisted player is a legal target for the OPPOSING war ship and
+ // for nobody else. The verdict comes from coopMilitiaWarPlayer, which requires
+ // an ACTIVE enlistment plus an ACTIVE war whose campaign is in ASSAULT in this
+ // system; without one this list is empty and stock behaviour is unchanged.
+ function militiaTargets({systemID,shipRow,scene}){
+  try{
+   if(typeof playerOpponents==="function")
+    return playerOpponents({systemID,shipRow,scene})||[];
+   return require("./coopMilitiaWarPlayer"+
+    (__filename.endsWith(".js")?"":".cjs")).native()
+    .enemyPlayersForShip({scene,shipRow})||[];
+  }catch{return []}
+ }
  function tick({systemIDs=[]}={}){
   if(!combatEnabled(env)||!ammoEnabled(env))
    return {status:"DISABLED_OR_UNSAFE_AMMO",orders:[]};
@@ -107,9 +121,49 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
       nextAt.set(key,Number.POSITIVE_INFINITY);
      // No target-hopping after a potentially ambiguous native command.
      break;
+     }
+     // FW-024: no NPC opponent was engaged, so this war ship may now engage an
+     // enlisted enemy player in the same campaign. The order is a real native
+     // attack order; the player's own faction is never in this list.
+     if(orders.length<maxOrders){
+      const candidates=militiaTargets({systemID,shipRow,scene})
+       .filter(x=>pos(x.entityID)&&x.entityID!==id&&x.entity&&vec(x.entity.position)&&
+        !warp(x.entity)&&dist(attacker.position,x.entity.position)<=250000)
+       .sort((a,b)=>dist(attacker.position,a.entity.position)-
+        dist(attacker.position,b.entity.position)||a.entityID-b.entityID);
+      for(const candidate of candidates){
+       if(orders.length>=maxOrders)break;
+       let answer;
+       try{
+        answer=bridge.issue({entityID:id,systemID,owner:"WAR",action:"attack",
+         holdMs:120000,execute:()=>{
+          if(!combatEnabled(env)||!ammoEnabled(env)||
+            isAmmoDepleted(systemID,id)||isTactical(id)||warp(attacker)||
+            warp(candidate.entity)||
+            Number(getController(id)?.currentTargetID)>0)
+           return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
+          const fresh=militiaTargets({systemID,shipRow,scene})
+           .find(x=>x.entityID===candidate.entityID);
+          if(!fresh)return {success:false,errorMsg:"WAR_MILITIA_PROOF_CHANGED"};
+          return issueNativeAttack(id,candidate.entityID,{allowWeapons:true,
+           keepLock:true,allowPodKill:false});
+         }});
+       }catch{answer={success:false,errorMsg:"WAR_ORDER_OUTCOME_UNCERTAIN"}}
+       if(answer?.success===true){
+        orders.push({status:"NATIVE_ATTACK_ORDER_ACCEPTED",systemID,attackerID:id,
+         targetID:candidate.entityID,targetKind:"MILITIA_PLAYER",
+         characterID:candidate.characterID,warID:shipRow.warID,
+         campaignID:shipRow.campaignID,
+         evidence:"ACTIVE_ENLISTMENT_IN_THE_OPPOSING_FACTION"});
+        nextAt.set(key,at+cooldownMs);
+       }else if(answer?.errorMsg==="WAR_ORDER_OUTCOME_UNCERTAIN"||
+        answer?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
+        nextAt.set(key,Number.POSITIVE_INFINITY);
+       break;
+      }
+     }
     }
    }
-  }
   if(nextAt.size>1024)for(const [key,time] of nextAt)if(time<=at)nextAt.delete(key);
   return {status:"OBSERVED",orders};
  }

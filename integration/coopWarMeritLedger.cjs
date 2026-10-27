@@ -18,7 +18,7 @@ const core=require("./coopFactionWarMerit"+
 const KEY="coop-faction-war\u001fmerit-v1",MAX_RECORDS=512,MAX_HISTORY=64;
 const KILL_KIND="warship-kill";
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const pilot=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
+const pilot=x=>typeof x==="string"&&/^(coop-pilot|coop-player)-[0-9]{3,}$/.test(x);
 const key=x=>typeof x==="string"&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
 const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 const RANKS=new Set(core.RANKS.map(r=>r.rank));

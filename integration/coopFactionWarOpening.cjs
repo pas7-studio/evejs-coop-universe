@@ -110,6 +110,25 @@ function paperFunding({ heldSystemIDs = [], balanceISK = 0, rates = {} } = {}) {
   return Object.assign({ heldSystemIDs: heldSystemIDs.length }, funding);
 }
 
+// Owner decision 2026-10-27: the bounty escrow is an economic layer, not a
+// precondition for a real battle. EVEJS_COOP_WAR_REQUIRE_FUNDING=0 allows an
+// opening with an explicitly labelled PAPER_UNFUNDED_EXPLICIT supply: no ISK is
+// reserved, no bounty can ever be paid, and every opening event carries the
+// label. Default is 1 (strict).
+function fundingRequired(env = process.env) {
+  return String(env.EVEJS_COOP_WAR_REQUIRE_FUNDING ?? "1") !== "0";
+}
+
+function supplyFor({ funding, env = process.env } = {}) {
+  const base = funding && typeof funding === "object" ? funding : { status: "REFUSED_UNFUNDED" };
+  if (!fundingRequired(env) && base.status !== "FUNDED")
+    return Object.assign({}, base, {
+      status: "PAPER_UNFUNDED_EXPLICIT", paper: true,
+      reason: "WAR_FUNDING_NOT_REQUIRED_BY_OPERATOR",
+    });
+  return base;
+}
+
 // Per-system faction counts, including the systems that are contested. A tie is
 // the real reason a front cannot exist, so it has to be visible instead of
 // looking like a broken feature.
@@ -174,8 +193,10 @@ function buildProofs({ plan, presence, territories, getStargatesForSystem, getGa
     // A real reciprocal stargate connects the two systems.
     adjacency: ({ sourceSystemID: from, targetSystemID: to }) =>
       gateBetween(from, to, getStargatesForSystem, getGate) !== null,
-    // Paper treasury can pay for the opening operation.
-    supply: () => funding.status === "FUNDED" && funding.paper === true,
+    // Paper treasury can pay for the opening operation. An explicitly
+    // operator-approved unfunded paper supply is labelled as such.
+    supply: () => funding.paper === true &&
+      (funding.status === "FUNDED" || funding.status === "PAPER_UNFUNDED_EXPLICIT"),
   };
 }
 
@@ -230,14 +251,16 @@ function planWars({
       const held = Object.keys(territories)
         .filter((key) => territories[key] === String(plan.war.attackerFactionID));
       const funding = paperFunding({ heldSystemIDs: held, balanceISK });
-      if (funding.status !== "FUNDED") {
-        skipped.push({ edge, reason: "SUPPLY_UNFUNDED:" + funding.status });
+      const supply = supplyFor({ funding });
+      const requireFunding = fundingRequired();
+      if (requireFunding && supply.status !== "FUNDED") {
+        skipped.push({ edge, reason: "SUPPLY_UNFUNDED:" + supply.status });
         continue;
       }
       const proofs = buildProofs({
-        plan, presence, territories, getStargatesForSystem, getGate, minShips, funding,
+        plan, presence, territories, getStargatesForSystem, getGate, minShips, funding: supply,
       });
-      openings.push({ plan, proofs, funding, edge, existingWar: Boolean(war), frontID: front.frontID });
+      openings.push({ plan, proofs, funding: supply, edge, existingWar: Boolean(war), frontID: front.frontID });
     }
   }
   if (!openings.length)
@@ -378,6 +401,7 @@ function createWarOpening({
 
 module.exports = {
   gateBetween, collectPresence, territoriesForFronts, paperFunding, presenceSummary,
+  fundingRequired, supplyFor,
   activeWarFor, liveCampaignFor, buildProofs, planWars, applyOpenings, applyOpening,
   createWarOpening,
 };

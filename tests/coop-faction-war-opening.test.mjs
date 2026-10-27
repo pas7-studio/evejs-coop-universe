@@ -117,6 +117,20 @@ test('the opening plan is built from real presence, real gates and real ground',
  assert.equal(planned.proofs.adjacency({sourceSystemID:1,targetSystemID:3}),false);
 });
 
+test('an operator-approved unfunded opening is labelled and pays no bounty',()=>{
+ const env={EVEJS_COOP_WAR_REQUIRE_FUNDING:'0'};
+ const refused={status:'REFUSED_UNFUNDED',paper:true,heldSystemIDs:0};
+ const supplied=opening.supplyFor({funding:refused,env});
+ assert.equal(supplied.status,'PAPER_UNFUNDED_EXPLICIT');
+ assert.equal(supplied.paper,true);
+ assert.equal(supplied.reason,'WAR_FUNDING_NOT_REQUIRED_BY_OPERATOR');
+ // a funded opening keeps its real status
+ assert.equal(opening.supplyFor({funding:{status:'FUNDED',paper:true},env}).status,'FUNDED');
+ // the default stays strict: no operator opt-out means no supply
+ assert.equal(opening.supplyFor({funding:refused,env:{}}).status,'REFUSED_UNFUNDED');
+ assert.equal(opening.fundingRequired({}),true);
+ assert.equal(opening.fundingRequired({EVEJS_COOP_WAR_REQUIRE_FUNDING:'0'}),false);
+});
 test('no presence, one faction, or no gate means no war instead of an invented one',()=>{
  const empty=opening.planWars({state:core.empty(),presence:presence([]),
   getStargatesForSystem,getGate,nowMs:1});

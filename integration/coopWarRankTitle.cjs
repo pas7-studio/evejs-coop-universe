@@ -10,7 +10,7 @@ const {TABLE}=require("./coopFactionWarStore"+
 const core=require("./coopFactionWarMerit"+
  (__filename.endsWith(".js")?"":".cjs"));
 const KEY="coop-faction-war\u001ftitles-v1",MAX_RECORDS=512;
-const pilot=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
+const pilot=x=>typeof x==="string"&&/^(coop-pilot|coop-player)-[0-9]{3,}$/.test(x);
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const own=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 const RANKS=new Set(core.RANKS.map(r=>r.rank));
