@@ -23,6 +23,21 @@ test('a short approach is a real follow order, not an orbit label', () => {
   assert.ok(generator.includes('FOLLOWING_MINER'));
 });
 
+test('the follow order is re-issued every attempt while only the warp stays rare', () => {
+  // Measured 2026-10-27: the miners were parked between attempts and something
+  // re-accelerated them onto a straight full-throttle line, so a follow issued once per
+  // two minutes lost the race every time (gaps 27.9 km and 78.9 km on two fleets).
+  assert.ok(generator.includes('const rareRetry = attempts === 1 || attempts % 24 === 0;'),
+    'the warp keeps its rare gate');
+  assert.ok(generator.includes('if (rareRetry && !haulerWarping && gap !== null && gap > 150000'),
+    'only the warp is gated by the rare retry');
+  assert.ok(generator.includes('status: "ALREADY_WARPING"'),
+    'a hauler mid-warp must not be re-commanded');
+  const followAt = generator.indexOf('npcRuntime.follow(haulerID, minerID, 500)');
+  const gateAt = generator.indexOf('const rareRetry =');
+  assert.ok(followAt > gateAt && gateAt > 0, 'the follow sits outside the rare gate body');
+});
+
 test('a refused native order is reported, never assumed to have worked', () => {
   for (const marker of ['WARPED_TO_MINER', 'WARP_REFUSED', 'FOLLOW_REFUSED', 'nativeReason'])
     assert.ok(generator.includes(marker), 'missing outcome marker ' + marker);
