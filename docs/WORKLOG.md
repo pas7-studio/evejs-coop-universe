@@ -1657,3 +1657,9 @@ Evidence: README.md headline and PvE bullet only
 Why: the client faction-warfare advantage panel hung for our war pair: both native surfaces (fwVictoryPointMgr victory point states and the fw-advantage gateway score list) read state sources nothing in this build fills. Added a read-only authority that derives per-system score and per-faction contribution from the real war state, war fleet registry and casualty ledger, plus two default-OFF hooks
 Where: .opencode/state.md, integration/coopWarAdvantage.cjs, scripts/overlay-spec.cjs, tests/coop-war-advantage.test.mjs
 Evidence: tests pass 6 fail 0 (coop-war-advantage); apply-all OVERLAY_OK; live probe: GetAllVictoryPointStates {30045344: {3200,75000}}, GetLocalVictoryPointState [30045344,{3200,75000}], scores [{500001:3200},{500004:1100}]
+### 2026-10-27T22:43Z · 40ce807 · DOCS · docs: the engine is our fork now, patches are proposals only
+
+Why: Own the engine: pas7-studio/EveJS coop/pas7std at fork point c3ea396 imported 480 files (457 under Code/server/src, 72k lines) plus FORK.md; D1 revised from overlay-not-fork, patches demoted to proposals
+Detail: pas7-studio/EveJS (branch coop/pas7std, fork point c3ea396) becomes the source of truth for server code; this repo keeps tests, orchestration, evidence and doctrine. Revises D1 (overlay, not fork) after its own revisit trigger fired: 457 files / 73k lines already lived uncommitted in the pinned checkout, so the overlay model was only nominally true. Marks the 10 upstream patches as in-fork proposa
+Where: AGENTS.md, README.md, docs/DEVELOPMENT_DOCTRINE.md, docs/UPSTREAM_PATCH_SERIES.md, patches/upstream/MANIFEST.json
+Evidence: gh api repos/pas7-studio/EveJS default_branch=coop/pas7std; git -C checkout log: 154af54 import + docs commit; coop repo commit 40ce807c
