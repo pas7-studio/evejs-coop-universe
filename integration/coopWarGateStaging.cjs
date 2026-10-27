@@ -5,12 +5,18 @@
 const {createGateTravel}=require("./coopNpcGateTravel"+
  (__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
-const gate=env=>env.EVEJS_COOP_FACTION_WAR==="1"&&
- env.EVEJS_COOP_FACTION_WAR_FLEETS==="1"&&
- env.EVEJS_COOP_WAR_TREASURY==="1"&&
- env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH==="1"&&
- env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"&&
- (env.EVEJS_COOP_ALIFE==="1"||env.EVEJS_COOP_NPC_ORDER_ARBITER==="1");
+const REQUIRED_FLAGS=["EVEJS_COOP_FACTION_WAR","EVEJS_COOP_FACTION_WAR_FLEETS",
+ "EVEJS_COOP_WAR_TREASURY","EVEJS_COOP_FACTION_WAR_GATE_APPROACH",
+ "EVEJS_COOP_NATIVE_ATOMIC_ROWS"];
+// A phase that refuses without a reason cannot be diagnosed from outside, so the
+// exact missing flag is part of the contract, not a comment.
+function gateReason(env){
+ const missing=REQUIRED_FLAGS.filter(k=>env?.[k]!=="1");
+ if(env?.EVEJS_COOP_ALIFE!=="1"&&env?.EVEJS_COOP_NPC_ORDER_ARBITER!=="1")
+  missing.push("EVEJS_COOP_ALIFE|EVEJS_COOP_NPC_ORDER_ARBITER");
+ return missing.length?`WAR_GATE_FLAGS_INCOMPLETE:${missing.join(",")}`:null;
+}
+const gate=env=>gateReason(env)===null;
 function createWarGateStaging({readWar,readFleet,readTreasury,
  sceneForSystem,getGate,warpToEntity,getController,bridge,transfer=null,
  isTactical=()=>false,isAmmoRetreat=()=>false,
@@ -40,39 +46,89 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
    execute:()=>transfer(args)
   }):null});
  function tick({systemIDs=[]}={}){
-  if(!gate(env))return {status:"DISABLED",orders:[],observations:[]};
+  if(!gate(env))return {status:"DISABLED",reason:gateReason(env),orders:[],
+   observations:[],skips:[]};
   if(!Array.isArray(systemIDs)||systemIDs.length>20||
-   systemIDs.some(x=>!pos(x)))return {status:"INVALID_SYSTEMS",orders:[],observations:[]};
+   systemIDs.some(x=>!pos(x)))return {status:"INVALID_SYSTEMS",orders:[],
+   observations:[],skips:[]};
   let war,fleet,treasury;
   try{war=readWar();fleet=readFleet();treasury=readTreasury()}
-  catch{return {status:"NATIVE_STATE_UNAVAILABLE",orders:[],observations:[]}}
+  catch{return {status:"NATIVE_STATE_UNAVAILABLE",orders:[],
+   observations:[],skips:[]}}
   if(war?.version!==1||fleet?.version!==1||treasury?.version!==1||
    !war.campaigns||!war.wars||!fleet.ships||!treasury.reservations)
-   return {status:"WAR_NATIVE_STATE_INVALID",orders:[],observations:[]};
-  const accepted=new Set(systemIDs),orders=[],observations=[];
+   return {status:"WAR_NATIVE_STATE_INVALID",orders:[],observations:[],
+    skips:[]};
+  const accepted=new Set(systemIDs),orders=[],observations=[],skips=[];
   // Funding alone is not supply. A campaign must ALREADY have passed the
   // independent native supply/route verification in FW-001 START_CAMPAIGN.
-  for(const campaign of Object.values(war.campaigns)
-   .filter(c=>c?.state==="PREPARING"&&pos(c.sourceSystemID)&&
-    pos(c.targetSystemID)&&accepted.has(c.sourceSystemID))
-   .sort((a,b)=>a.campaignID.localeCompare(b.campaignID)).slice(0,12)){
-   if(orders.length>=maxOrders)break;
-   const w=war.wars[campaign.warID],reserve=treasury.reservations[campaign.supplyReservationID];
-   if(w?.state!=="ACTIVE"||!pos(w.attackerFactionID)||
-    reserve?.status!=="HELD"||reserve.warID!==campaign.warID||
-    reserve.campaignID!==campaign.campaignID||
-    reserve.factionID!==w.attackerFactionID||!pos(reserve.cents))
+  const live=Object.values(war.campaigns).filter(c=>
+   c?.state==="PREPARING"&&pos(c.sourceSystemID)&&pos(c.targetSystemID))
+   .sort((a,b)=>String(a.campaignID).localeCompare(String(b.campaignID)))
+   .slice(0,12);
+  if(!live.length)skips.push({campaignID:null,reason:"NO_PREPARING_CAMPAIGN"});
+  for(const campaign of live){
+   if(!accepted.has(campaign.sourceSystemID)){
+    skips.push({campaignID:campaign.campaignID,
+     reason:"SOURCE_SYSTEM_NOT_VISITED:"+campaign.sourceSystemID});
     continue;
+   }
+   if(orders.length>=maxOrders){
+    skips.push({campaignID:campaign.campaignID,reason:"ORDER_BUDGET_SPENT"});
+    continue;
+   }
+   const w=war.wars[campaign.warID],reserve=treasury.reservations[campaign.supplyReservationID];
+   if(w?.state!=="ACTIVE"||!pos(w.attackerFactionID)){
+    skips.push({campaignID:campaign.campaignID,
+     reason:`WAR_NOT_ACTIVE:${String(w?.state)}`});
+    continue;
+   }
+   if(reserve?.status!=="HELD"||reserve.warID!==campaign.warID||
+    reserve.campaignID!==campaign.campaignID||
+    reserve.factionID!==w.attackerFactionID||!pos(reserve.cents)){
+    // Name the FIRST precondition that actually failed instead of a blanket
+    // "no supply": the operator has to know which one to repair.
+    const why=!reserve?`SUPPLY_RESERVATION_MISSING:${String(campaign.supplyReservationID)}`:
+     reserve.status!=="HELD"?`SUPPLY_NOT_HELD:${String(reserve.status)}`:
+     reserve.warID!==campaign.warID?`SUPPLY_WAR_MISMATCH:${String(reserve.warID)}`:
+     reserve.campaignID!==campaign.campaignID?
+      `SUPPLY_CAMPAIGN_MISMATCH:${String(reserve.campaignID)}`:
+     reserve.factionID!==w.attackerFactionID?
+      `SUPPLY_FACTION_MISMATCH:${String(reserve.factionID)}`:
+      "SUPPLY_AMOUNT_INVALID";
+    skips.push({campaignID:campaign.campaignID,reason:why});
+    continue;
+   }
    let scene;
-   try{scene=sceneForSystem(campaign.sourceSystemID)}catch{continue}
-   if(scene?.systemID!==campaign.sourceSystemID)continue;
-   const assignments=Object.values(fleet.ships).filter(s=>
+   try{scene=sceneForSystem(campaign.sourceSystemID)}catch{
+    skips.push({campaignID:campaign.campaignID,
+     reason:"SOURCE_SCENE_UNAVAILABLE:"+campaign.sourceSystemID});
+    continue;
+   }
+   if(!scene){
+    skips.push({campaignID:campaign.campaignID,
+     reason:"SOURCE_SCENE_MISSING:"+campaign.sourceSystemID});
+    continue;
+   }
+   if(scene?.systemID!==campaign.sourceSystemID){
+    skips.push({campaignID:campaign.campaignID,
+     reason:"SOURCE_SCENE_NOT_READY:"+campaign.sourceSystemID});
+    continue;
+   }
+   const registered=Object.values(fleet.ships).filter(s=>
     s?.campaignID===campaign.campaignID&&s.warID===campaign.warID&&
-    s.factionID===w.attackerFactionID&&
+    s.factionID===w.attackerFactionID);
+   const assignments=registered.filter(s=>
     s.systemID===campaign.sourceSystemID&&pos(s.entityID)&&
     typeof s.pilotID==="string"&&/^coop-pilot-[0-9]{3,}$/.test(s.pilotID))
     .slice(0,8).map(s=>({...s,role:"patrol"}));
-   if(!assignments.length)continue;
+   if(!assignments.length){
+    skips.push({campaignID:campaign.campaignID,
+     reason:registered.length?
+      "NO_ATTACKER_SHIP_IN_SOURCE:"+campaign.sourceSystemID:
+      "NO_ATTACKER_SHIP_REGISTERED"});
+    continue;
+   }
    const blocked=new Set();
    for(const a of assignments)try{
     if(isTactical(a.entityID)||isAmmoRetreat(a.systemID,a.entityID))
@@ -83,6 +139,13 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
     route:[campaign.sourceSystemID,campaign.targetSystemID],
     getController,blockedIDs:blocked
    });
+   if(output.status!=="OK"&&!output.orders.length&&!output.observations.length)
+    skips.push({campaignID:campaign.campaignID,
+     reason:String(output.status||"GATE_TRAVEL_REFUSED")});
+   if(output.status==="OK"&&!output.orders.length&&!output.observations.length)
+    skips.push({campaignID:campaign.campaignID,
+     reason:blocked.size?"ATTACKER_BLOCKED:"+[...blocked].sort((a,b)=>a-b).join(","):
+      "NO_STAGEABLE_ATTACKER_SHIP"});
    // A gate-warp result does not change native ship location, fleet
    // registry, cargo, SDE faction, war objective or player's wallet.
    for(const o of output.orders){
@@ -97,8 +160,9 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
     observations.push({...o,campaignID:campaign.campaignID,
      phase:"AWAITING_NATIVE_WAR_FLEET_TRANSFER"});
   }
-  return {status:"OBSERVED",orders,observations:observations.slice(0,16)};
+  return {status:"OBSERVED",orders,observations:observations.slice(0,16),
+   skips:skips.slice(0,16)};
  }
  return Object.freeze({tick,activeIDs:travel.activeIDs});
 }
-module.exports={createWarGateStaging,gate};
+module.exports={createWarGateStaging,gate,gateReason,REQUIRED_FLAGS};

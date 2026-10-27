@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
 const raidDiagnose=new Map();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
 // casualty ledger): the only proof that a registered warship is really gone.
 const destroyedNativeShips=new Set();
@@ -1043,12 +1043,15 @@ function ensureNativeWarGateHandoff(runtime){
   throw Error("WAR_GATE_HANDOFF_REQUIRES_REPAIR:"+audit.status);
 }
 function advanceNativeWarGateStaging(){
- if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1"||
-    !visitedSystems.size)return;
- const {createWarGateStaging,gate}=require("./coopWarGateStaging");
- if(!gate(process.env))return;
+ if(process.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH!=="1")
+  return warSkip("gate-staging","GATE_APPROACH_FLAG_OFF");
+ if(!visitedSystems.size)return warSkip("gate-staging","NO_VISITED_SYSTEMS");
+ const {createWarGateStaging,gateReason}=require("./coopWarGateStaging");
+ const flags=gateReason(process.env);
+ if(flags)return warSkip("gate-staging",flags);
  const guard=npcOrderBridge();
- if(!guard||!nativeWarFleetRegistry())return;
+ if(!guard)return warSkip("gate-staging","NO_ORDER_BRIDGE");
+ if(!nativeWarFleetRegistry())return warSkip("gate-staging","NO_WAR_FLEET_REGISTRY");
  if(process.env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"){
   ensureNativeWarGateHandoff(require("./runtime"));
   const finished=warGateHandoff?.retireCompleted({max:2});
@@ -1093,11 +1096,27 @@ function advanceNativeWarGateStaging(){
   if(moved.action==="VERIFIED_NATIVE_GATE_TRANSFER")
    visitedSystems.add(Number(moved.targetSystemID));
  }
- if(result.orders.length||result.observations.length)
+ // An order is real evidence and is always published. A refusal is published
+ // once per distinct set so a front whose attacker never arrives names the
+ // exact precondition instead of looking like a silent no-op.
+ const skips=Array.isArray(result.skips)?result.skips:[];
+ const key=JSON.stringify(skips);
+ if(result.orders.length){
+  gateStagingSkipKey=key;
   require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
    null,null,{status:result.status,orders:result.orders,
-    observations:result.observations,
+    observations:result.observations,skips,
     evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
+ }else if(result.observations.length){
+  require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
+   null,null,{status:result.status,orders:[],observations:result.observations,
+    skips,evidence:"PHYSICAL_GATE_APPROACH_ONLY_NO_SYSTEM_TRANSFER"});
+ }else if(skips.length&&key!==gateStagingSkipKey){
+  gateStagingSkipKey=key;
+  require("./coopRuntimeProbe").observe("living-native-war-gate-staging",
+   null,null,{status:"SKIPPED",reason:skips[0].reason,skips,
+    evidence:"EXPLICIT_PRECONDITION_NOT_MET"});
+ }
 }
 function advanceNativeWarCombat(){
  const api=require("./coopWarCombatAuthority");

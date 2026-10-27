@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createWarGateStaging,gate}=require("../integration/coopWarGateStaging.cjs");
+const {createWarGateStaging,gate,gateReason}=require("../integration/coopWarGateStaging.cjs");
 const flags=()=>({
  EVEJS_COOP_FACTION_WAR:"1",EVEJS_COOP_FACTION_WAR_FLEETS:"1",
  EVEJS_COOP_WAR_TREASURY:"1",EVEJS_COOP_FACTION_WAR_GATE_APPROACH:"1",
@@ -101,4 +101,53 @@ test("tactical retreat and disabled flag suppress approach",()=>{
  f.block(false);f.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH="0";
  assert.equal(gate(f.env),false);assert.equal(f.tick().status,"DISABLED");
  assert.equal(f.issued,0);
+});
+test("every refusal names the exact precondition that failed",()=>{
+ const f=fixture();
+ // an unfunded campaign reports the missing reservation, never silence
+ delete f.treasury.reservations.s1;
+ assert.deepEqual(f.tick().skips,[{campaignID:"c1",
+  reason:"SUPPLY_RESERVATION_MISSING:s1"}]);
+ f.treasury.reservations.s1={reservationID:"s1",warID:"w1",campaignID:"c1",
+  factionID:11,cents:10000,status:"REFUNDED"};
+ assert.deepEqual(f.tick().skips,[{campaignID:"c1",reason:"SUPPLY_NOT_HELD:REFUNDED"}]);
+ f.treasury.reservations.s1.status="HELD";
+ f.treasury.reservations.s1.campaignID="other";
+ assert.equal(f.tick().skips[0].reason,"SUPPLY_CAMPAIGN_MISMATCH:other");
+ f.treasury.reservations.s1.campaignID="c1";
+ f.war.wars.w1.state="ENDED";
+ assert.equal(f.tick().skips[0].reason,"WAR_NOT_ACTIVE:ENDED");
+});
+test("a missing source scene, attacker or reciprocal gate is reported verbatim",()=>{
+ const f=fixture();
+ f.gates[802].destinationID=1000;
+ assert.deepEqual(f.tick().skips,[{campaignID:"c1",
+  reason:"NO_RECIPROCAL_NATIVE_GATE"}]);
+ f.gates[802].destinationID=801;
+ f.fleet.ships[501].systemID=202;
+ assert.deepEqual(f.tick().skips,[{campaignID:"c1",
+  reason:"NO_ATTACKER_SHIP_IN_SOURCE:101"}]);
+ f.fleet.ships[501].systemID=101;
+ const empty=createWarGateStaging({
+  env:flags(),clock:()=>100000,readWar:()=>f.war,readFleet:()=>f.fleet,
+  readTreasury:()=>f.treasury,sceneForSystem:()=>null,getGate:id=>f.gates[id],
+  getController:()=>null,warpToEntity:()=>{throw Error("must not warp")},
+  bridge:{issue:r=>r.execute()}
+ });
+ assert.deepEqual(empty.tick({systemIDs:[101]}).skips,
+  [{campaignID:"c1",reason:"SOURCE_SCENE_MISSING:101"}]);
+});
+test("gateReason names every missing env flag",()=>{
+ const env=flags();env.EVEJS_COOP_WAR_TREASURY="0";
+ delete env.EVEJS_COOP_ALIFE;
+ assert.equal(gateReason(env),"WAR_GATE_FLAGS_INCOMPLETE:EVEJS_COOP_WAR_TREASURY,"+
+  "EVEJS_COOP_ALIFE|EVEJS_COOP_NPC_ORDER_ARBITER");
+ assert.equal(gateReason(flags()),null);
+ const f=fixture();
+ f.env.EVEJS_COOP_FACTION_WAR_GATE_APPROACH="0";
+ const off=f.director.tick({systemIDs:[101]});
+ assert.equal(off.status,"DISABLED");
+ assert.equal(off.reason,
+  "WAR_GATE_FLAGS_INCOMPLETE:EVEJS_COOP_FACTION_WAR_GATE_APPROACH");
+ assert.deepEqual(off.skips,[]);
 });
