@@ -1087,3 +1087,48 @@ Why: a superseded manifest lost its identity in the arrival wrapper, so start() 
 Detail: Root cause found with the new read-only trip_diagnose (live, 30000144/960004609): the journal answered ROUTE_SUPERSEDED with reason ALIFE12_UNDECLARED_HAUL_CARGO (every declared row already proven, the hull carrying ore the manifest never declared). The arrival wrapper replaced that status with the prefixed reason string, and start() then compared the PREFIXED string against "ROUTE_SUPERSEDED", so
 Where: integration/coopAdminBridge.cjs, integration/coopNativeStationArrival.cjs, tests/coop-alife12-station-trip-recovery.test.mjs
 Evidence: live trip_diagnose 30000144/960004609 hasActiveTrip true with a fresh manifest 30000144-960004609-1793087656994 ; node --test tests/coop-alife12-station-trip-recovery.test.mjs -> 7 pass/2 fail vs baseline 6/2 ; journal 34/0 ; OVERLAY_OK
+### 2026-10-27T08:11Z · 0b4dfd0 · L2 · coop: item 1 closed - a real fleet mines at its belt again
+
+Why: an aggressed mining fleet never resumes because the stock auto-resume delay defaults to 0; the diagnose now publishes the aggro state, and item 1 is closed live
+Detail: The delivery leg now completes end to end (living-native-haul-delivered DELIVERED twice for fleet 960004609) and the 30000144 fleet returns to "mining" and stays there: 13 of 13 miners carry 2 live module effects each, all 13 within 200 km of a real belt, and cycles settle with the ore really rising (living-mining-cycle-settled nextCargo 1874 -> 3748 on miner 980000016470). This commit carries the
+Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md, integration/coopMiningFleetDiagnose.cjs
+Evidence: mining_fleet_diagnose 30000144 state=mining act=13 belt=13 ; living-mining-cycle-settled shipID 980000016470 nextCargo 3748 beforeRock 228126 afterRock 226252 ; living-native-haul-delivered DELIVERED x2 ; EVEJS_MINING_NPC_FLEET_AUTO_RESUME_DELAY_MS=120000 live in the container env ; node --test tests/coop-mining-fleet-diagnose.test.mjs -> 6/0
+### 2026-10-27T08:15Z · b3037ba · DOCS · docs: item 2's exact blocker, and a two-client checklist refresh
+
+Why: record item 2's measured raid-geometry blocker and refresh the two-client checklist with the new server-side facts
+Detail: Item 1 is closed live (a real fleet mines at its belt again, module effects and settled cycles proven). Item 2 (a real pirate kills a real miner) is blocked by raid geometry, measured rather than inferred: - npc_pair_diagnose 980000018058 -> 980000016311: distanceMeters 373994639646 (2.5 AU), attacker mode GOTO, target mode ORBIT, engagementAllowed true, the attack order still held - the "warp to 
+Where: .opencode/metrics.md, .opencode/state.md, docs/TWO_CLIENT_CHECKLIST.md
+Evidence: npc_pair_diagnose distanceMeters 373994639646 attacker mode GOTO ; mining_fleet_diagnose 30000145 state aggressed resumeInMs 92113 responseWing 0 atBelt 0 ; war_funding_diagnose 500011/500020 REFUSED NO_REAL_FACTION_INCOME ; item 1 closed live with act=13 belt=13 and living-mining-cycle-settled nextCargo 3748
+### 2026-10-27T08:15Z · e126b72 · DOCS · docs(state): the item 2 blocker is probably the pirate's own stale attack order, not a distance constant
+
+Why: record the refined item 2 hypothesis so the next session does not change a distance constant
+Where: .opencode/state.md
+Evidence: npc_pair_diagnose 980000018058 controller manualType attack currentTargetID 0 mode GOTO ; order bridge diagnose COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE observed for a hull with an active native command
+### 2026-10-27T08:32Z · 7e07e00 · L2 · coop: a raid releases its own stale order instead of pinning the fleet aggressed
+
+Why: The raid issued an approach warp while the hull still held its own attack order; the native controller's subwarp pursuit won, so the approach never flew and the target fleet stayed aggressed forever with an empty response wing
+Detail: The raid director issued a warp-to-prey, the native controller kept its own subwarp pursuit (mode GOTO) and the warp never became the command that moved the ship: measured live, 980000018058 sat 2.5 AU from its prey with mode GOTO and the same distance 30 s later, while the target fleet stayed in 'aggressed' with responseWing 0 and belt-return never ran. One owner per record now holds in the raid 
+Where: integration/coopAdminBridge.cjs, integration/coopNativeRaids.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-native-raids-gameplay.test.mjs
+Evidence: node --test tests/coop-native-raids-gameplay.test.mjs -> 14/0 ; OVERLAY_OK ; live living-native-raid-order-released RAID_APPROACH_UNFLYABLE pirateID 980000018058 released true distanceMeters 373994655618 ; RAID_APPROACH_UNFLYABLE pirateID 980000018994 released false errorMsg COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE
+### 2026-10-27T09:04Z · 64d166c · L2 · coop: an unreachable attack becomes a real warp approach instead of a dead order
+
+Why: An attack lease lasted eight minutes even when the prey had warped 2.5 AU away, so the order could never fire and the pirate drifted home; an unreachable locked prey is now released and re-approached with a real warp in the same tick
+Detail: Measured live: 980000000601 and 980000000602 held a native attack order on a miner that the fleet had just warped 2.5 AU away, so the order could never fire (currentTargetID kept flipping to 0 and the shield regenerated 146 -> 225 while the two pirates drifted away at subwarp). An attack lease is now re-checked every minute instead of every eight, and when our own locked prey is beyond the same 25
+Where: integration/coopNativeRaids.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-native-raids-gameplay.test.mjs
+Evidence: node --test tests/coop-native-raids-gameplay.test.mjs -> 17/0 ; raid+admin+materializer+belt-return -> 45/0 ; OVERLAY_OK ; live RAID_ORDER_RELEASED_FOR_APPROACH 980000000602 distanceMeters 373994659694 then living-pirate-raid attack at 10162 m (601) and 8882 m (18058)
+### 2026-10-27T09:04Z · abd71a9 · DOCS · docs(state): the raid releases its own order; the exact kill blocker is the fleet retreat
+
+Why: Record the measured result of the raid order release and the exact remaining blocker for a real kill
+Where: .opencode/metrics.md, .opencode/state.md
+Evidence: state.md FW-016 + metrics blocks for 7e07e000 and 64d166c5
+### 2026-10-27T09:05Z · 2156248 · DOCS · docs: two-client checklist refresh - the raid approaches, the kill needs warp disruption
+
+Why: The two-client checklist carried a wrong stale-order hypothesis and a stale no-buyer note
+Where: docs/TWO_CLIENT_CHECKLIST.md
+Evidence: docs/TWO_CLIENT_CHECKLIST.md refresh 2026-10-27 09:05Z with the measured order verdict, approach distances and real seeded bids
+### 2026-10-27T09:17Z · 61fa13a · L3 · coop: the refinery finally has a caller - and it reports the real station fee
+
+Why: The native refinery was implemented but never called, so ore could never become minerals and the only buyer stayed the finite seed-market book; a caller now refines tagged warehouse ore and reports the real station fee.
+Detail: integration/coopNpcRefinery.cjs was complete (native SDE quote, one atomic item debit+credit, durable journal) but NOTHING in the server ever called it, so ore could never become minerals. That is why the only buyer stayed the finite seed-market book. integration/coopNpcRefineryTick.cjs is the caller: it lists only the corporation's own tagged warehouse ore in a station hangar, asks the refinery t
+Where: docs/coop-flags.json, docs/coop-hook-inventory.json, integration/coopNpcRefineryTick.cjs, scripts/overlay-spec.cjs, tests/coop-npc-refinery-tick.test.mjs
+Evidence: live: hangar 52 warehouse ore stacks at 60000358, native quotes 4998.33..23760.72 ISK fee; tests coop-npc-refinery-tick 8 pass; deploy OVERLAY_OK reset=53
