@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "raid_diagnose", "mining_fleet_diagnose", "arrival_diagnose", "trip_diagnose"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -737,6 +737,20 @@ function executeRequest(request) {
       };
     } catch (error) {
       return { ok: false, error: "inspect failed: " + String(error && error.message || error) };
+    }
+  }
+  // Read-only: the raid director's own view of a system - every linked pirate,
+  // why it is excluded (loot delivery / ammo supply), its native controller
+  // state, its own gun range and the distance to its nearest real prey. Never
+  // issues, releases or retains an order.
+  if (action === "raid_diagnose") {
+    const systemID = Number(request.systemID) || 0;
+    if (!(systemID > 0)) return { ok: false, error: "systemID is required" };
+    try {
+      return Object.assign({ ok: true },
+        require("./coopVirtualWorldRuntime" + siblingSuffix).diagnoseNativeRaids({ systemID }));
+    } catch (error) {
+      return { ok: false, error: "raid diagnose failed: " + String(error && error.message || error) };
     }
   }
   // Read-only: why two native hulls do or do not engage. Never orders, never

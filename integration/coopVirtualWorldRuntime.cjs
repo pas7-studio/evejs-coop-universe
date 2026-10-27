@@ -1125,6 +1125,70 @@ function diagnoseNpcOrder({entityID,systemID,owner}={}){
  catch(error){return {status:"BLOCKED",reason:"DIAGNOSE_FAILED",
   details:String(error&&error.message||error).slice(0,120)}}
 }
+// Read-only: the raid director's own view of one system. "A real pirate with real
+// prey and still no order" must be a measurement, not a guess, and the periodic
+// diagnose is only published when the system produced no action at all - so a
+// hull that is silently excluded (or parked at its own home) was invisible.
+// It never issues, releases or retains an order and never moves a ship.
+function diagnoseNativeRaids({systemID}={}){
+ const id=Number(systemID)||0;
+ if(!(id>0))return {status:"SYSTEM_ID_REQUIRED"};
+ let scene=null;
+ try{scene=runtime.ensureScene(id,{refreshStargates:false});}
+ catch(error){return {status:"SCENE_MISSING",systemID:id,
+  reason:String(error&&error.message||error).slice(0,80)};}
+ if(!scene?.getEntityByID)return {status:"SCENE_MISSING",systemID:id};
+ const links=Object.values(identityRegistry?.snapshot().links||{})
+  .filter(link=>Number(link.systemID)===id&&scene.getEntityByID(Number(link.entityID)));
+ const roleCounts={};
+ for(const link of links)roleCounts[String(link.role||"")]=
+  (roleCounts[String(link.role||"")]||0)+1;
+ const delivering=lootCommerce?.activeIDs(id)||new Set();
+ const outOfAmmo=nativeAmmoSupply?.activeIDs(id)||new Set();
+ const pirates=links.filter(link=>link.role==="pirate")
+  .map(link=>Number(link.entityID));
+ let fleetShips=[];
+ try{fleetShips=require("./coopNativeRaidEligibility")
+  .liveFleetShips(mining.getMiningFleetsForSystem(id),scene)||[]}catch(_error){fleetShips=[]}
+ const gap=(a,b)=>(a&&b&&["x","y","z"].every(k=>
+  Number.isFinite(Number(a[k]))&&Number.isFinite(Number(b[k]))))?
+  Math.hypot(a.x-Number(b.x),a.y-Number(b.y),a.z-Number(b.z)):null;
+ let gunRangeModule=nativeGunRange;
+ const pirateDetail=pirates.map(pirateID=>{
+  const ship=scene.getEntityByID(pirateID);
+  const ctrl=controllers.getControllerByEntityID(pirateID);
+  let gun=null;
+  try{
+   if(!gunRangeModule)gunRangeModule=require("./coopNpcGunRange");
+   gun=gunRangeModule.shared().rangeOf(ship);
+  }catch(error){gun={status:"THREW",reason:String(error&&error.message||error).slice(0,80)}}
+  const nearest=fleetShips.map(target=>{
+   const targetShip=scene.getEntityByID(Number(target.id));
+   return {id:Number(target.id),role:String(target.role||""),
+    distanceMeters:gap(ship?.position,targetShip?.position)};
+  }).filter(x=>x.distanceMeters!==null)
+   .sort((a,b)=>a.distanceMeters-b.distanceMeters).slice(0,3);
+  return {entityID:pirateID,mode:String(ship?.mode||""),
+   excludedBy:delivering.has(pirateID)?"LOOT_DELIVERY":
+    (outOfAmmo.has(pirateID)?"AMMO_SUPPLY":""),
+   currentTargetID:Number(ctrl?.currentTargetID)||0,
+   manualType:String(ctrl?.manualOrder?.type||""),
+   manualTargetID:Number(ctrl?.manualOrder?.targetID)||0,
+   returningHome:ctrl?.returningHome===true,
+   leashRangeMeters:Number(ctrl?.behaviorProfile?.leashRangeMeters)||0,
+   orbitOverrideMeters:Number(ctrl?.behaviorOverrides?.orbitDistanceMeters)||0,
+   homeDistanceMeters:gap(ship?.position,ctrl?.homePosition),
+   gunRangeMeters:Number(gun&&gun.meters)||0,
+   gunRangeStatus:String(gun&&gun.status||""),
+   nearest};
+ });
+ return {status:"OK",systemID:id,linkedShips:links.length,roleCounts,
+  pirates:pirates.length,fleetShips:fleetShips.length,
+  excluded:{lootDelivery:Array.from(delivering),ammoSupply:Array.from(outOfAmmo)},
+  leases:(raidDirector?.snapshot?.()||[]).filter(lease=>
+   Number(String(lease.id||"").split(":")[0])===id),
+  pirateDetail,evidence:"READ_ONLY_RAID_DIRECTOR_VIEW"};
+}
 function npcNativeOrder(owner,entityID,action,execute,systemID){
  const guard=npcOrderBridge();
  if(!guard)return owner==="WAR"?{success:false,errorMsg:"COOP_NPC_ORDER_WAR_ARBITER_REQUIRED"}:execute();
@@ -3079,8 +3143,16 @@ function advanceNativeRaids(){
     const engagementRange=Number(options?.engagementRangeMeters)||0;
     if(engagementRange>0){
      try{
+      // setBehaviorOverrides REPLACES the whole override object, so the hull's
+      // existing overrides are carried over: only the engagement distance is ours.
+      let existing={};
+      try{
+       const controller=require("./npc/npcRegistry").getControllerByEntityID(pirateID);
+       if(controller&&controller.behaviorOverrides&&typeof controller.behaviorOverrides==="object")
+        existing=controller.behaviorOverrides;
+      }catch(_error){existing={};}
       require("./npc/npcService").setBehaviorOverrides(pirateID,
-       {orbitDistanceMeters:engagementRange});
+       {...existing,orbitDistanceMeters:engagementRange});
      }catch(error){
       require("./coopRuntimeProbe").observe("living-native-raid-engagement-range",
        null,null,{status:"REFUSED",pirateID,
@@ -4487,4 +4559,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,diagnoseNativeRaids,warFrontChat};
