@@ -955,3 +955,21 @@ Why: metrics + state entries for the L1 loadout seam and the live assault muster
 Detail: Records the verbatim live chain (inspect_npc armed durable hulls, war 500011-500020 opened, mobilizer reserved both sides, ASSAULT_BEGUN with REAL_NATIVE_MUSTER_ON_BOTH_SIDES) and the two real facts that unblocked it: the muster gate rejects transient charges, and campaignReadiness no longer stops at the first (un-winnable) preparing campaign.
 Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
 Evidence: verbatim live lines: inspect_npc 980000016644 moduleCount=3 + 3x20767, 980000016639 moduleCount=5 + 5x20057, living-native-war-opened war:500011-500020, mobilization both sides, living-native-war-assault ASSAULT_BEGUN
+### 2026-10-27T02:05Z · 287898d · L3 · fix(ammo): a real warship can finally fire a real shot
+
+Why: the native NPC ammo path could never complete a cycle, so a real warship fired no damaging shot
+Detail: Live chain found in the assault battle in Sobaseki 30001363, one defect at a time, each proven by a read-only probe before the next was touched: 1. coopNpcFireDebitProof demanded flagID on the native charge cargo row. The native cargo writer never stamps flagID on cargo, so every strict-ammo turret cycle was refused as NATIVE_FIRE_STALE_OR_FORGED_CHARGE while the hull really carried 5 Shadow Antim
+Where: integration/coopGameStoreAtomic.cjs, integration/coopNativeCargoTransientIsolation.cjs, integration/coopNpcAmmoBankAtomic.cjs, integration/coopNpcAmmoDebitJournal.cjs, integration/coopNpcFireDebitProof.cjs, integration/coopNpcWeaponAmmoGate.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-npc-ammo-bank-recovery.test.mjs, tests/coop-npc-ammo-bank-root.test.mjs, tests/coop-npc-ammo-bank-transient-contract.test.mjs, tests/coop-npc-fire-debit-proof.test.mjs, tests/coop-war-combat-diagnose.test.mjs
+Evidence: live: victim HP 225 -> 200.13 after a committed charge debit; tests coop-npc-ammo-bank-* + fire-debit-proof green
+### 2026-10-27T00:56Z · b5a8cd0 · L3 · fix(war): only a co-located hull fills an assault battle slot
+
+Why: an assault attacker hull left in the campaign source system kept the side cap full and could never fight
+Detail: coopWarMobilizer counted every ship of a campaign side, wherever it was. A hull mobilized during PREPARING sits in the campaign source system, so after ASSAULT_BEGUN it kept the side at its rank cap forever while being unable to reach or fire at the defender in the target system. The count (and the commander's commanded-pilot list) is now scoped to the side's own system, which is the target system
+Where: integration/coopWarMobilizer.cjs, tests/coop-war-mobilization.test.mjs
+Evidence: live: war_combat_diagnose pair 980000016639/980000016987 sameSystem true dist 4908 verdict AUTHORIZED
+### 2026-10-27T00:52Z · 195d4ec · L3 · fix(war): battle leg can read its own war state (atomic-rows cache path)
+
+Why: war/fleet rows written through coopAtomicNativeRows were invisible to gameStore.read, so the battle director never issued an order
+Detail: The battle director and the gate-staging phase read the war/fleet rows with gameStore.read(TABLE, "/"+KEY). A row written through coopAtomicNativeRows is nested in the JSON cache at the unit-separator (0x1f) character, so that read answers ENTRY_NOT_FOUND and every consumer silently saw no record: snapshots() returned null, the director returned WAR_STATE_UNAVAILABLE and never issued an attack ord
+Where: integration/coopAdminBridge.cjs, integration/coopNativeRowPath.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarCombatAuthority.cjs, integration/coopWarFleetRegistry.cjs, integration/coopWarTransferLedger.cjs, scripts/overlay-spec.cjs, tests/coop-native-row-path.test.mjs, tests/coop-war-combat-diagnose.test.mjs
+Evidence: live: pair verdict moved from WAR_SNAPSHOT_UNAVAILABLE to NATIVE_STORE_IDENTITY_MISMATCH after the fix
