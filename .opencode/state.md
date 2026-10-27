@@ -1973,3 +1973,8 @@ session recreates the stack every ~1 minute, which interrupts probes.
   (currently 48819) -> user `evefriend`, key-only, PermitOpen 127.0.0.1:443/5222/
   26000/26001/26002/40110; firewall rule "EveJS co-op SSH 48819" scoped to
   remote 176.37.43.83. EveJS ports stay 127.0.0.1.
+- Agent stack commands (never the owner's project):
+  `.\scripts\Start-Agents-Stack.ps1 -Action Status|Seed|Up|Down`.
+  Seed once on a fresh volume (`market-tools rebuild v1 --preset jita_new_caldari`),
+  otherwise evejs-agents-market-1 exits 1 with "No market database exists".
+  Host ports 28000-28002/28443/25222/41110; volumes evejs-agents-data/-images.

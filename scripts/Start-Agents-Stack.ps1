@@ -17,7 +17,7 @@
 #>
 [CmdletBinding()]
 param(
-  [ValidateSet('Status','Up','Down')]
+  [ValidateSet('Status','Seed','Up','Down')]
   [string]$Action='Status',
   [string]$CodePath='C:\Games\EveCoop\upstream-evejs\Code',
   [string]$Image='evejs-local',
@@ -47,6 +47,15 @@ switch($Action){
     "project: $project"
     $rows=Get-AgentContainers
     if(-not $rows){'no agent containers (stack is down)'} else {$rows}
+    break
+  }
+  'Seed' {
+    # A brand-new agent volume has no market database, and the market container
+    # exits 1 with "No market database exists". This is the documented one-time
+    # seed (docs/FIRST_RUN.md). It never runs on the owner's project.
+    & docker compose @composeArgs --profile tools run --rm --no-deps market-tools rebuild v1 --preset jita_new_caldari
+    if($LASTEXITCODE -ne 0){throw 'market seed failed for the agent stack'}
+    'AGENT_MARKET_SEEDED'
     break
   }
   'Up' {
