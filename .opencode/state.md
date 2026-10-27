@@ -397,3 +397,86 @@ Nothing was changed this step: no patch, no flag, no gate relaxation.
 --checkout <Code> --apply`. Live proof required: `inspect_npc <patrol>` shows
 `moduleCount>0` with a weapon+charge, then `war_diagnose` shows
 `DRY_RUN_MOBILIZABLE` on both sides, then `living-native-war-assault` fires.
+
+## 2026-10-27 — L1 loadout seam implemented (in progress, live proof pending)
+
+**Done so far.** `patches/upstream/0007-npc-loadout-override.patch` (sha256
+`4b9b8215ccf32e88c90ddef38a479f5796d6fbe693bfa7bf0e6d60bda1e2fc82`, MANIFEST
+entry, 3 files: npcData/npcSelection/npcService — nativeNpcService is NOT touched
+because 0002 owns it). `buildNpcDefinition(profileID, {loadoutID})` ->
+`resolveNpcSpawnPlan` -> `resolveBatchSelection` -> `spawnBatchInSystem`; retail
+path unchanged when the option is absent, a missing row fails as
+NPC_DEFINITION_INCOMPLETE. Apply + reverse both verified.
+`integration/coopWarPatrolLoadout.cjs` resolves the profile's own
+`<profileID>_loadout` row (real turret + native-compatible charge) and never
+overrides an already armed row; `coopAdminBridge.spawnNativeNpc` now refuses an
+unarmed `role:"patrol"` spawn (`WAR_PATROL_LOADOUT_UNAVAILABLE:<reason>`), accepts
+`loadoutID`/`warPatrol`, and reports the loadout it used.
+Tests: `coop-war-patrol-loadout` 7/7, `coop-npc-loadout-override-patch` 5/5.
+Deploy: `coop-deploy.cjs` -> `reset=53 patches=series=7 overlay=OVERLAY_OK`.
+
+**Proven live data (read-only probes).** `parity_angel_autocannon_frigate` ->
+`parity_angel_autocannon_frigate_loadout` = Domination 125mm Autocannon (13773,
+g55) + Domination EMP S (20767, g83), `validateNpcHardwareDefinition` ok, family
+angelcartel, `isNpcChargeCompatibleWithModule` true. Every `parity_*` pirate
+profile has such a row; `angel_raider`/`blood_raider_prophecy` do not (refused).
+
+**Assault blocker, corrected analysis.** War `war:500011-500014` has defender ORE
+(500014) and EVERY ORE profile is a miner/hauler (11 profiles, no weapon), so the
+defender side can never muster; registered territories (Jita=500011,
+30000144/30000145=500014) are authoritative over live presence, so spawning
+Serpentis into a registered ORE system does NOT change the owner (the previous
+NEXT list assumed it would). Real fix = a front between two ARMED factions: add
+Sobaseki 30001363 (real reciprocal gate 50013876<->50013875, 5 belts) to
+`EVEJS_COOP_VIRTUAL_ROUTE` and put one armed Serpentis patrol there; Jita is
+already 500011-owned, so a new war 500011-500020 opens on that border and both
+sides can muster.
+
+**NEXT (exact).** build + recreate -> `spawn_native_npc` (profileQuery
+parity_angel_autocannon_frigate, role patrol, warPatrol true, system 30000142) and
+the Serpentis twin in 30001363 -> `inspect_npc` both (moduleCount>0 + charge) ->
+`war_diagnose` DRY_RUN_MOBILIZABLE both sides -> `living-native-war-assault`.
+
+## 2026-10-27 — L1 loadout seam + REAL ASSAULT MUSTER (PASS, a7f4c379)
+
+**Proven live (verbatim, container evejs-server-1).**
+- `inspect_npc 980000016644` -> `"moduleCount":3` (3x typeID 13773 projectile
+  turret, flagID 27/28/29, online) + `"cargoCount":3` (3x typeID 20767 EMP S, one
+  per module), `"transient":false`.
+- `inspect_npc 980000016639` -> `"moduleCount":5` (5x 13884 hybrid turret) +
+  5 charges 20057, `"transient":false`.
+- `living-native-war-opened` `OPENED` `warIDs:["war:500011-500020"]`
+  `campaignIDs:["war:500011-500020:campaign:30001363"]`, territories now
+  `30000142:500011, 30000144:500014, 30000145:500014, 30001363:500020,
+  30100032:500020`, `fronts:2`, FUNDED paper treasury.
+- `living-native-war-mobilization` `NATIVE_PATROL_MOBILIZED` 980000016644
+  ATTACKER (30000142/500011) and 980000016639 DEFENDER (30001363/500020).
+- `living-native-war-assault` `ASSAULT_BEGUN`
+  `campaignID:"war:500011-500020:campaign:30001363"`
+  `attackerShips:[980000016644] defenderShips:[980000016639]`
+  `evidence:"REAL_NATIVE_MUSTER_ON_BOTH_SIDES"`.
+
+**Two facts that made this possible (both real, no gate touched).**
+1. The muster gate rejects **transient** charges (`c.transient===true`), so a war
+   patrol must be spawned `durable:true`; `coopAdminBridge` now does that on
+   request and reports `durable`.
+2. `campaignReadiness` returned on the FIRST preparing campaign, so the
+   un-winnable ORE border (`war:500011-500014:campaign:30000144`, defender ORE
+   flies no weapon at all) hid every later border. It now scans all PREPARING
+   campaigns and returns the first READY one; the per-campaign gate is unchanged.
+
+**World setup used (owner default: real NPCs/factions only).** Route gained
+`30001363` Sobaseki (real reciprocal gate 50013876<->50013875, 5 SDE belts), one
+armed Serpentis patrol there (faction 500020) and armed Angel patrols in Jita
+(500011) via `spawn_native_npc` + `linkSpawnedIdentity`. No synthetic state, no
+fabricated kill, no ammo invented.
+
+**Known noise, deliberately left.** The two transient pirate frigates from the
+first attempt (980000016644/16645 were transient then; 980000016644 came back as
+a durable restore) plus unarmed transient hulls still linked to some pilots; the
+older ORE campaigns stay PREPARING forever by construction (ORE cannot arm).
+
+**NEXT.** (a) battle/objective leg: attack orders -> structure objective binding
+-> capture of 30001363; (b) client check of the new campaign on the map/FW tab =
+BLOCKED_CLIENT_CHECK without the EVE client; (c) do not re-spawn patrols for the
+same campaign (side cap is 1 at recruit rank).
