@@ -1647,3 +1647,8 @@ Why: the first version announced every wave including the one stock already anno
 Detail: Audit of the pinned data: 1593 multi-wave templates, 1592 with at least one silent wave; only 4 mission-family dungeons are multi-wave. Gone Berserk 7 waves/24 hulls for 6 875 ISK per hull, The Blockade 5 waves/67 hulls for 2 463, both paying 120k+45k+250LP. The module now skips a wave the stock triggerMessages already announce, marks the last allowed wave (cap aware), and ships a read-only contai
 Where: docs/COOP_MISSION_WAVE_PACING.md, integration/coopMissionWavePacing.cjs, scripts/audit-agent-mission-waves.cjs, scripts/verify-coop-mission-wave-pacing-live.cjs, tests/coop-mission-wave-pacing.test.mjs
 Evidence: tests 13/13; LIVE_OK on evejs-agents image sha256:7b1ccd72 (finalWave + STOCK_ANNOUNCED asserted in-container); audit: 1593 multi-wave templates, 1592 with silent waves, Gone Berserk 6875 ISK/hull, The Blockade 2463 ISK/hull for the same 120k+45k ISK and 250 LP
+### 2026-10-27T22:40Z · edd24d6 · DOCS · docs(readme): 2++ players, not 2+
+
+Why: the owner reads the player ceiling as 2 and up, and wants the badge written 2++
+Where: README.md
+Evidence: README.md headline and PvE bullet only
