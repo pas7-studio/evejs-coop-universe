@@ -855,3 +855,14 @@ dwell set, ack true), so the exact next step is to explain that verdict
 (`verifyArrival`: point / stableAt / dwelled) and only then confirm a real
 mining cycle at the belt. Items 2-4 (pirate kill, seeded sale funding the war
 chest, verbatim loop proof) are untouched.
+**Correction, same run (07:14Z live):** `living-mining-belt-warp WARP_ISSUED`
+13 times for fleet 960004641 (30000145) at `distanceMeters 244253380576`
+(`thresholdMeters 100000`), fired right after `living-mining-blocker TICK_mining`
+proved the fleet had returned to `mining`. The same miners were then measured at
+`belt 20681 / 24174 / 45493 / 46104 / 49489 / 103499` m instead of 2.4e11 m, i.e.
+they really flew back and are closing the last kilometres at subwarp. The fleet
+had moved on to `loaded` again (a new haul), which is why `act 0` at that sample:
+mining modules are deactivated for a haul by design. Next exact step is therefore
+narrow: sample the fleet while it is in `mining` and require
+`activeModuleEffects > 0` plus a settled cycle for at least one miner, and explain
+`WAREHOUSE_ARRIVAL_NOT_VERIFIED` for the haulers the deposit gate rejects.
