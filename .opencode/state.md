@@ -1,5 +1,21 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 11:07Z - LIVE PROOF: the refinery is paid and refines
+
+After moving the hook before the early returns in shouldTriggerHauling and deploying:
+
+- living-corp-treasury-swept x1: 521 754.08 ISK moved from the pilot ledger into corp 1000129
+  (corp wallet already held 455 600 ISK).
+- living-npc-refined x16, all COMMITTED, real ore consumed (7 703 / 36 666 / 23 111 ...),
+  2 minerals per stack, station 60000358 and 60000688.
+- 16 journal files and 16 durable fee receipts in /var/lib/evejs/coop-native-refinery,
+  fees 1 135.72 - 22 760.08 ISK paid from the corp wallet.
+- The 16 living-npc-refinery-blocked rows are the SAME stacks retried after refining: what
+  is left is smaller than one native portion, so NATIVE_REPROCESSING_RECIPE_UNAVAILABLE is
+  correct but noisy - report leftovers as a leftover, not as a missing recipe.
+
+Closed loop now real: sale -> ISK -> corp wallet -> station fee -> minerals in the hangar.
+
 ## 2026-10-27 ~11:05Z - HEAD 27b0b3d4 (pushed): the refinery can be paid
 
 - coop-npc-refinery.test.mjs was 14 pass / 9 fail for one reason: the journal key is

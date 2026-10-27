@@ -1186,3 +1186,9 @@ Why: Refinery fee settlement is now real end to end and the live blocker (NO_STA
 Detail: The refinery hook only passed fleetRecord.stationID, and the mining fleet docks no hull, so every live tick returned NO_STATION and no ore was ever refined (the refinery directory did not even exist after hours of mining). When the caller has no station, the tick now reads the newest warehouse trip manifest for that system and fleet; with no manifest it reports NO_STATION instead of guessing. The 
 Where: integration/coopNpcRefineryTick.cjs, scripts/overlay-spec.cjs, tests/coop-npc-refinery-tick.test.mjs
 Evidence: coop-npc-refinery 23/23, tick 12/12, treasury 15/15; deployed; awaiting live living-npc-refined
+### 2026-10-27T11:04Z · 6381723 · L3 · coop: run the refinery hook where it is actually reached
+
+Why: The refinery hook ran after two early returns so the whole fee/refine path was dead live; moved it and proved the closed loop on the running server.
+Detail: The hook sat after two early returns inside shouldTriggerHauling (no hauler linked, hauler still in transit), so live it never ran: no refinery events and no /var/lib/evejs/coop-native-refinery directory existed after hours of mining, while the same module called by hand from inside the container previews real fees (1 135.72 - 22 760.08 ISK) on the real warehouse stacks. It now runs on every haul 
+Where: scripts/overlay-spec.cjs
+Evidence: live events: living-corp-treasury-swept 1 (521754.08 ISK moved), living-npc-refined 16 COMMITTED with 16 journals and 16 fee receipts, fees 1135.72-22760.08 ISK
