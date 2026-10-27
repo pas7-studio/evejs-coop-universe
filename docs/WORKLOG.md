@@ -1180,3 +1180,9 @@ Why: The refinery's fee could never be paid and 9 of its custody tests were red;
 Detail: The nine failing custody tests were not custody failures at all: the journal key is 'coop-refine:v1:<itemID>:<quantity>' and ':' cannot appear in a Windows file name, so acquire() could never create the lock and every refine returned REFINERY_LOCKED_NEEDS_REVIEW on Windows only. The path segment is now escaped on win32 (journalFile), the logical ID, receipts and comparisons are unchanged, and the 
 Where: integration/coopNpcRefineryTick.cjs, tests/coop-npc-refinery-tick.test.mjs, tests/coop-npc-refinery.test.mjs
 Evidence: coop-npc-refinery 23/23 (was 14/9), coop-npc-refinery-tick 9/9 incl. real 5000->3765.5 ISK debit with durable receipt, corp-treasury + factory-audit green: 43/43
+### 2026-10-27T11:00Z · 27b0b3d · DOCS · coop: refine where the fleet really docked, proven by its trip manifest
+
+Why: Refinery fee settlement is now real end to end and the live blocker (NO_STATION) is understood; the next agent needs the exact numbers and the NODE_OPTIONS trap.
+Detail: The refinery hook only passed fleetRecord.stationID, and the mining fleet docks no hull, so every live tick returned NO_STATION and no ore was ever refined (the refinery directory did not even exist after hours of mining). When the caller has no station, the tick now reads the newest warehouse trip manifest for that system and fleet; with no manifest it reports NO_STATION instead of guessing. The 
+Where: integration/coopNpcRefineryTick.cjs, scripts/overlay-spec.cjs, tests/coop-npc-refinery-tick.test.mjs
+Evidence: coop-npc-refinery 23/23, tick 12/12, treasury 15/15; deployed; awaiting live living-npc-refined

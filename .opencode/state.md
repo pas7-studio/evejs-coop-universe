@@ -1,5 +1,28 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 ~11:05Z - HEAD 27b0b3d4 (pushed): the refinery can be paid
+
+- coop-npc-refinery.test.mjs was 14 pass / 9 fail for one reason: the journal key is
+  coop-refine:v1:<item>:<qty> and ':' is illegal in a Windows file name, so acquire() never
+  locked and every refine answered REFINERY_LOCKED_NEEDS_REVIEW on Windows only.
+  journalFile() now escapes the path segment; logical IDs, receipts and comparisons are
+  unchanged. 23/23 green.
+- With that green a positive station fee is accepted only with a durable paid witness
+  (<root>/refinery-fees/<itemID>.json) naming that corporation, station and ISK amount.
+  The tick pays it (payFee) and retries: proven 5000 -> 3765.5 ISK.
+- coopNpcCorpTreasury had tests and no caller; the refinery tick now sweeps pilot earnings
+  into the corporation first (EVEJS_COOP_CORP_TREASURY=1), event living-corp-treasury-swept.
+  Proven 33714.25 -> fee 4998.33 -> 28715.92 ISK left.
+- Live blocker: zero refinery events ever and no /var/lib/evejs/coop-native-refinery dir.
+  The hook passed only fleetRecord.stationID; the mining fleet docks no hull, so every live
+  tick was NO_STATION. The tick now proves the station from the newest warehouse trip
+  manifest for that system+fleet and reports living-npc-refinery-skipped instead of silence.
+- New live flags: EVEJS_COOP_NPC_MARKET_DIR, EVEJS_COOP_CORP_TREASURY=1,
+  EVEJS_COOP_FACTORY_CORP_ID=1000129.
+- Operator note: this shell inherits VS Code's NODE_OPTIONS js-debug bootloader; clear it
+  (and VSCODE_INSPECTOR_OPTIONS) or gates report a fake BLOCKED_RUNTIME_SEED.
+- Pilot ledger then: 521754.08 ISK un-swept; corp wallet 0 until a sweep runs.
+
 Updated: 2026-10-26 ~23:10Z · HEAD `4e32bbca` (pushed)
 
 ## Proven live (twice, different runs)
