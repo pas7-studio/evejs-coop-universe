@@ -244,6 +244,13 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,
     targetRole:target.role,action,distanceMeters:distance,
     ...(gun?{gunRange:gun}:{}),...(released||{}),...(warpPoint?{warpPoint}:{})});
+   // A refused native warp used to be silent: the lease was recorded as an
+   // approach and 20 s later the hull was released as "not warping", which hid
+   // the real reason (a warp the runtime declined). Publish the refusal verbatim.
+   else actions.push({pirateID:id,targetID:target.id,targetRole:target.role,
+    action:action+"-refused",distanceMeters:distance,
+    errorMsg:String(result?.errorMsg||result?.status||""),
+    ...(gun?{gunRange:gun}:{}),...(released||{})});
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
  }

@@ -333,3 +333,12 @@ test("a hull with no real gun range keeps the plain attack order",()=>{
  assert.deepEqual(orders,[[501,201,undefined]]);
  assert.equal(result.actions[0].gunRange.reason,"NO_FITTED_WEAPON_RANGE");
 });
+test("a refused native warp is published verbatim instead of going silent",()=>{
+ const f=fixture({
+  warp:()=>({success:false,errorMsg:"WARP_COMMAND_FAILED"})
+ });
+ const result=f.tick();
+ assert.deepEqual(result.actions.map(x=>x.action),["warp-to-hauler-refused"]);
+ assert.equal(result.actions[0].errorMsg,"WARP_COMMAND_FAILED");
+ assert.equal(result.actions[0].distanceMeters,300000);
+});
