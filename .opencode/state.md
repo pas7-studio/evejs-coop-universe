@@ -2293,3 +2293,29 @@ counts as occupied. Nothing is corrupted — the war is simply one-sided: only G
 attacks. The rebalance is therefore a second campaign in the opposite direction
 (Caldari 500001 attacking from 30045344 into 30003837), created through the war store
 execute API, not by editing rows.
+
+## HANDOFF (context exhausted) — how to open the Caldari counter-offensive
+
+The war machinery is already in the deployed overlay, no new code needed:
+  /app/server/src/space/coopFactionWarOpening.js exports
+    gateBetween, collectPresence, territoriesForFronts, paperFunding, presenceSummary,
+    fundingRequired, supplyFor, activeWarFor, liveCampaignFor, buildProofs,
+    planWars, applyOpenings, applyOpening, createWarOpening
+  /app/server/src/space/coopFactionWarCampaigns.js exports planCampaign, resolveCampaign,
+    rolesForFront, ownerOf (ROLES, STATES, DEFAULT_TTL_MS)
+  /app/server/src/space/coopFactionWarStore.js -> createFactionWarStore({gameStore,proofs})
+    with execute/snapshot; every mutation must go through it (receipts + validateState).
+Current live record (probe /tmp/warstate.cjs): war 500001-500004 attacker=500004,
+territories 30003837=500004 SECURE, 30045344=500001 CONTESTED, one campaign
+30003837 -> 30045344.
+
+NEXT STEP, in order:
+ 1. read-only: call planWars/liveCampaignFor for the reverse front (Caldari 30045344 ->
+    Gallente 30003837) and print what it would open, WITHOUT applying.
+ 2. if the planner refuses, find the real blocker (gateBetween / fundingRequired /
+    supplyFor) and report it — do not force an opening.
+ 3. only then applyOpening/applyOpenings through the store, then re-run the probe and
+    confirm byOwner has both factions owning AND contesting a system.
+ 4. after that, the advantage handler for the black "war zone" tab: capture the exact
+    RPC from docker logs while the panel spins, add the handler env-gated default OFF.
+Never hand-write territory rows, never weaken coopNpcHostility, no client patching.
