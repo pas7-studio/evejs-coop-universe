@@ -1010,3 +1010,56 @@ before changing any distance constant: read
 coopNpcOrderBridge.diagnose({entityID:980000018058}) and, if it is
 NATIVE_COMMAND_ACTIVE, make the raid release its own previous order before issuing
 the approach (one owner per record), publishing RAID_ORDER_RELEASED_FOR_APPROACH.
+
+## 2026-10-27 (FW-016) - item 2 step 1+2 PASS (code + live): the raid releases its own order; the approach now really flies (7e07e000, 64d166c5)
+
+**The hypothesis in the previous NEXT was wrong, and that is now measured.** The
+order bridge answers `PERMITTED` / `leaseOwner RAID` for 980000018058 (published
+in `living-native-raid-diagnose.pirateDetail[].orderDiagnosis`), so the stale
+order was never a bridge gate. What actually pinned the hull was the native
+controller's own subwarp pursuit (mode GOTO) plus our own unexecutable order.
+
+**Two rules added (both through the bridge, no distance constant touched).**
+1. `RAID_ORDER_RELEASED_FOR_APPROACH` - the hull's own previous attack order is
+   released before a new approach, and an unreachable locked prey (> the same
+   250 km boundary) is released and re-approached with a real warp in the same
+   tick. `RAID_APPROACH_UNFLYABLE` when an approach never became a real warp
+   (20 s), `RAID_ATTACK_NO_LOCK` when an attack never acquired a native lock
+   (90 s). A rival order is never released: 980000018994 correctly answers
+   `released:false, errorMsg COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE` (CIVILIAN
+   lease). `npc_pair_diagnose` now also reports the bridge verdict and both
+   hulls' health layers.
+
+**Live proof the approach now flies.** `RAID_ORDER_RELEASED_FOR_APPROACH`
+980000000602 at 373 994 659 694 m, then 30 s later real attack orders at
+**10 162 m** (980000000601) and **8 882 m** (980000018058) - previously the same
+pair held an order at 2.5 AU for 20 minutes and never fired.
+
+**EXACT remaining blocker for the kill (`NEEDS_OWNER:BLOCKED_RETREAT_INVALIDATES_EVERY_ORDER`).**
+The stock aggression path (`miningNpcOperations.handleAggression` ->
+`retreatFleetToOrigin`) teleports the whole fleet 2.5 AU on the FIRST aggression.
+The native loop then clears the attacker's `manualOrder` because the prey is no
+longer a valid combat target, so `currentTargetID` returns to 0 within seconds and
+the hull resumes its own GOTO. Measured on 980000016472: shield 146.45 -> 161.80
+-> 193.13 -> 199.88 -> 209.32 -> 217.34 -> 225.00 over 5 minutes (real missile
+hits from 980000000601, then FULL regeneration), 0 wrecks, last
+`living-native-weapon-event` 08:48:40Z. The pair distance flips between 35 928 m
+and 373 994 655 083 m every ~30 s, which is the retreat/belt-return cycle, not a
+stale order.
+
+**NEXT ACTION (exact, one decision).** A kill in a seeded system needs the prey to
+stop completing an instant sessionless retreat while it is being shot. Two honest
+options, both real mechanics, neither a gate relaxation:
+(a) fit a real warp disruption module on the war-patrol loadout
+    (`coopWarPatrolLoadoutRow`) and activate it on the prey - stock
+    `beginNpcWarpToPoint` already refuses a warp when
+    `hostileModuleRuntime.isEntityWarpScrambled(entity)` is true, so the fight
+    resolves at close range and the wreck loot (2x typeID 482 = 571 211 ISK bid
+    at New Caldari 60000688, plus 16 380 ore 17463) becomes a real sale;
+(b) an L2 rule that a fleet retreat is refused while a hostile holds a live
+    native attack order on a fleet hull inside engagement range.
+Do NOT weaken `coopWarMusterReadiness`, do not seed a region, do not mint ISK.
+Verified buyers (read-only `GetOrders`, region 10000002, `source: seed`):
+20767 62 839 ISK at 60000682 (New Caldari), 482 571 211 ISK at 60000688,
+13773 3 083 304 ISK at 60000682, 17464 15.48 ISK at 60000688 - the
+`NO_SEEDED_COUNTERPARTY` note is stale for these types.
