@@ -2428,3 +2428,14 @@ NEXT SINGLE STEP: run the mobilizer in DRY RUN (DRY_RUN_REPORT_LIMIT=64, never w
 print the per-side reject reasons for war:500001-500004. That names the exact refusal —
 most likely the funding gate (NO_REAL_FACTION_INCOME) or an empty getOrderLeases — and it
 is the last unknown between the current frozen war and a visible two-sided fight.
+
+## CORRECTION (must not stand uncorrected): the registry is NOT empty
+
+Earlier note "nativeWarFleetRegistry() -> {}" was a PROBE ARTEFACT, not a fact:
+JSON.stringify of an object whose members are functions prints {}. The factory
+(coopVirtualWorldRuntime.js:86) returns null only when FACTION_WAR / FACTION_WAR_FLEETS /
+NATIVE_ATOMIC_ROWS are not 1; those are 1, so it builds a real registry through
+coopWarFleetRegistry.createWarFleetRegistry with native proofs. So do not chase an empty
+registry. The mobilizer therefore has its registry and the refusal is elsewhere
+(funding gate / getOrderLeases / readiness). The only way to name it is the mobilizer
+dry-run: tick({systemIDs, dryRun:true}) -> {status:"DRY_RUN", mobilized, rejected, blocked}.
