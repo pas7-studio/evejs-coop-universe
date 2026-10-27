@@ -1727,3 +1727,8 @@ Why: Perf: shared coopJsonFileCache removes per-tick readFileSync+JSON.parse in 
 Detail: coop-perf-audit.cjs ranks co-op modules by known lag shapes (deep clones at call time, readFileSync inside functions, per-tick sorts, quadratic scans) and fails on a budget regression; it found the two real ones: salvage witness manifests and the identity registry were re-read+re-parsed every tick, 1950 ms -> 390 ms for 80k reads. integration/coopJsonFileCache.js is a one-line shim so the byte-ide
 Where: integration/coopJsonFileCache.cjs, integration/coopJsonFileCache.js, integration/coopVirtualWorldRuntime.cjs, scripts/coop-perf-audit.cjs, tests/coop-json-file-cache.test.mjs
 Evidence: 80k reads 1950ms -> 390ms; exports 21 unchanged; PERF_OK AUDIT_OK; tests/coop-json-file-cache.test.mjs 4 pass
+### 2026-10-27T23:59Z · 675af29 · L2 · coop: mirror the manual follow order in the archived generator
+
+Why: A one-shot scene follow is re-tasked by the stock NPC behaviour loop, so the hauler sat in mode FOLLOW with speed 1 and a frozen gap one transfer range short of its miner; the approach must use the manual follow order the loop honours.
+Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
+Evidence: agents telemetry with the new fields: haulerMode FOLLOW haulerSpeed 1 haulerTargetID 980000000030 gap frozen at 3221 m (fleet 641 at 5692 m) across ~50 attempts; inspect_npc shows the lifted minerals 34/35 already in the hauler hold; 12 haul tests pass
