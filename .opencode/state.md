@@ -1340,3 +1340,64 @@ leash (ccd6046c): `npc_pair_diagnose 980000018058 -> 980000016299` showed
 980300000008/9, then `living-npc-station-sold` with real ISK from a seeded bid at New Caldari
 60000688 (482 @ 571 211 ISK was the measured bid). Then the war chest reserve, the opening with
 SUPPLY_UNFUNDED resolved, and the escrow PAYOUT to the named pilot.
+
+## 2026-10-27T12:14Z — deep-ammo hull really fires; the loot leg's exact blocker (10d3c4ba)
+
+**Proven live.** `living-native-weapon-event kind module-activation
+attackerEntityID 980000018058 attackerPilotID coop-pilot-070 victimEntityID
+980000016311 moduleID 980100056949` at 12:11:03Z — the 5-blaster hull with 300
+real charges, whose own gun range resolves at 1050 m, activated a real module on
+a real miner for the first time (the engagement-range order from FW-018 working).
+
+**Fixed.** A pirate holding a live wreck claim is excluded from the raid (one owner
+per record): the killer was being re-tasked forever, so the recovery never started.
+A recovery that orders nothing now publishes
+`living-npc-postraid-wreck-recovery-blocked` with the exact state it reads.
+
+**Exact blocker it exposed (measured, verbatim):**
+
+```
+{"event":"living-npc-postraid-wreck-recovery-blocked","status":"NO_ORDER",
+ "wreckID":980300000009,"hunterID":980000000602,"blocked":false,"hunterMode":"GOTO",
+ "hunterPresent":true,"wreckPresent":false,"manualType":"","currentTargetID":0,
+ "lastAggressorID":0,"distanceMeters":null,"pickupDistance":2500,"claims":2}
+```
+
+The durable wreck rows survive a restart but the physical native wreck entity does
+not, so `scene.getEntityByID(wreckID)` is null and the recovery director refuses.
+**A kill must be looted inside the same boot.**
+
+**NEXT ACTION (exact).** Watch 30000145 for the next real
+`living-native-stock-fleet-wreck-evidence` in the current boot and, without any
+recreate in between, require `living-npc-postraid-wreck-recovery` (orbit/warp to the
+wreck) then `advanceNativeWreckCustody` to move the loot into the pirate's hold, then
+`living-npc-loot-station` to New Caldari and a real seeded fill (typeID 482 @
+571 211 ISK at 60000688). Only after that fill: fund the chest, re-run
+`war_funding_diagnose`, confirm `living-native-war-bounty` PAID.
+## 2026-10-27T12:15Z - the loot leg is REAL: wreck cargo sold into a seeded bid (no code change)
+
+**Proven (verbatim).** `living-npc-loot-station`: coop-pilot-080 / 980000000602
+`NATIVE_WARP_TO_STATION` stationID **60014935** cargoID 980200026308, then
+`PHYSICALLY_AT_NATIVE_STATION`. `living-native-loot-market-settled` at 12:07:25Z:
+`status TRADE_SETTLED, side sell, typeID 17471, quantity 3150, price 8.61,
+balance 27121.5, marketOrderID 4257762183096583231, marketOrderSource EVEJS_SEED,
+lootSource {sourceWreckItemID 980400000026, sourceWreckID 980300000009},
+nativeCargoVerified true, marketRPCAcknowledged true, marketRPC FillOrder,
+sourceOfFunds SEED_MARKET_FILLED_ORDER, marketCurrency
+NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET`. `war_funding_diagnose` now lists
+coop-pilot-080 with a real balance of **27 121.5 ISK**.
+
+**Exact remaining blockers for the war chest (measured).**
+1. `living-native-war-opening-blocked` (last, 12:06:50Z) reason
+   `SUPPLY_UNFUNDED:500011:NO_REAL_FACTION_INCOME|500014:WAR_TREASURY_JOURNAL_COLLISION`
+   with `fronts: 0`; `war_diagnose` reports `activeCampaignCount 0`.
+2. The funded pilot is **Serpentis (500020)**, not 500011/500014, so the war that
+   can be funded is a front involving 500020 (Maurasi 30000140 is the Serpentis
+   presence from FW-013).
+3. 500014 carries a stale escrow journal (WAR_TREASURY_JOURNAL_COLLISION) from the
+   earlier funded reservation.
+
+**NEXT ACTION (exact).** Restore/verify the real front that involves 500020 (Jita
+30000142 Angel vs Maurasi 30000140 Serpentis) and clear the stale 500014 escrow
+journal through the treasury's own recovery, then let the opening reserve 25 000
+ISK from coop-pilot-080's real 27 121.5 and pay the bounty on a real casualty.
