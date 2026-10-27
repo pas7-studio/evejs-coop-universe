@@ -43,7 +43,7 @@ names.splice(names.indexOf("coopFactionWarStore")+1,0,"coopFactionWarNativeProof
 // FW-003B: native combat proof on existing 30s world tick, no new timer.
 names.splice(names.indexOf("coopWarFleetNativeProofs")+1,0,"coopWarCombatPolicy","coopWarCombatAuthority","coopWarBattleDirector");
 // FW-003C: existing physical patrol mobilization on shared A-Life tick.
-names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarMobilizer");
+names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarPatrolLoadout","coopWarMobilizer");
 // FW-005A: source-bound native corporation military wallet escrow, OFF by default.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarTreasury","coopWarTreasuryNative");
 // FW-007A: physical war-gate approach only, no native fleet transfer.

@@ -512,6 +512,38 @@ function deployStructure(request) {
   };
 }
 
+// FW-003C: the real loadout row a coop war patrol must be spawned with.
+// Stock pirate subcapital profiles point at the retail empty loadout, so a
+// native spawn would fit no modules and the muster gate could never pass. The
+// row is the profile's own authored `*_loadout` row (real turret + compatible
+// charge), named through the L1 loadout override; when none validates the
+// caller must not get an unarmed hull labelled "patrol".
+function resolveWarPatrolLoadout(profileQuery, loadoutID) {
+  let data = null;
+  let loadout = null;
+  try {
+    data = require("./npc/npcData");
+    const registry = require("../services/inventory/itemTypeRegistry");
+    const dogma = require("./combat/weaponDogma");
+    const capability = require("./npc/npcCapabilityResolver");
+    loadout = require("./coopWarPatrolLoadout" + siblingSuffix).createWarPatrolLoadout({
+      getProfile: (profileID) => data.getNpcProfile(profileID),
+      getLoadout: (id) => data.getNpcLoadout(id),
+      resolveItemByTypeID: registry.resolveItemByTypeID,
+      resolveWeaponFamily: (item) => dogma.resolveWeaponFamily(item),
+      isCompatibleCharge: (module, chargeTypeID) =>
+        capability.isNpcChargeCompatibleWithModule(module, chargeTypeID),
+    });
+  } catch (error) {
+    return { status: "REFUSED", reason: "LOADOUT_AUTHORITIES_UNAVAILABLE:" + String(error && error.message || error), override: false };
+  }
+  const resolution = data.resolveNpcProfile(String(profileQuery || ""), "");
+  if (!resolution.success || !resolution.data) {
+    return { status: "REFUSED", reason: "PROFILE_NOT_RESOLVED", override: false };
+  }
+  return loadout.resolve({ profileID: resolution.data.profileID, loadoutID: String(loadoutID || "") });
+}
+
 // Spawns real native NPC hulls in a system from a real SDE profile, so the world
 // can be set up honestly (e.g. a second faction's patrol in a tied system). It
 // uses the same native spawnBatchInSystem + scene anchor the materializer uses,
@@ -544,15 +576,37 @@ function spawnNativeNpc(request) {
   }
   const anchor = topology.anchorOptions(scene);
   if (!anchor) return { ok: false, error: "NO_NATIVE_SYSTEM_ANCHOR" };
+  // A war patrol is armed at spawn time or it is not spawned: see
+  // resolveWarPatrolLoadout above. `allowUnarmed: true` is the explicit opt-out
+  // for a hull that is intentionally not a fighting patrol.
+  const warPatrol = request.warPatrol === true || String(request.role || "") === "patrol";
+  let loadout = null;
+  let loadoutID = String(request.loadoutID || "").trim();
+  if (warPatrol || loadoutID) {
+    loadout = resolveWarPatrolLoadout(profileQuery, loadoutID);
+    if (loadout.status === "RESOLVED") loadoutID = loadout.loadoutID;
+    else if (loadout.status === "ALREADY_ARMED") loadoutID = "";
+    else if (warPatrol && request.allowUnarmed !== true) {
+      return {
+        ok: false,
+        error: "WAR_PATROL_LOADOUT_UNAVAILABLE:" + String(loadout.reason || "UNKNOWN"),
+        loadout,
+      };
+    }
+  }
   let result = null;
   try {
     result = npc.spawnBatchInSystem(systemID, {
       ...anchor,
       amount,
       entityType: "npc",
-      transient: true,
+      // A war patrol is a persistent world presence: a transient hull (and its
+      // transient modules/charges) can never pass the native muster gate, which
+      // requires durable fitted hardware. `durable: true` is explicit.
+      transient: request.durable === true ? false : true,
       broadcast: true,
       profileQuery,
+      ...(loadoutID ? { loadoutID } : {}),
     });
   } catch (error) {
     return { ok: false, error: "spawn threw: " + String(error && error.message || error) };
@@ -598,6 +652,15 @@ function spawnNativeNpc(request) {
     spawned: ships.length,
     ships,
     link,
+    durable: request.durable === true,
+    loadout: loadout ? {
+      status: loadout.status,
+      reason: String(loadout.reason || ""),
+      loadoutID: String(loadout.loadoutID || ""),
+      moduleTypeID: Number(loadout.moduleTypeID) || 0,
+      chargeTypeID: Number(loadout.chargeTypeID) || 0,
+      moduleFamily: String(loadout.moduleFamily || ""),
+    } : null,
     selectionID: String((result.data && (result.data.selectionID || result.data.selectionName)) || ""),
   };
 }

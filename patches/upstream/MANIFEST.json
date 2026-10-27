@@ -55,6 +55,17 @@
       ],
       "status": "not-sent",
       "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0007-npc-loadout-override.patch",
+      "sha256": "4b9b8215ccf32e88c90ddef38a479f5796d6fbe693bfa7bf0e6d60bda1e2fc82",
+      "files": [
+        "server/src/space/npc/npcData.js",
+        "server/src/space/npc/npcSelection.js",
+        "server/src/space/npc/npcService.js"
+      ],
+      "status": "not-sent",
+      "note": "buildNpcDefinition/spawnBatchInSystem could not fit an authored loadout row for a profile whose own row is the retail empty loadout; optional options.loadoutID, retail behaviour unchanged when absent, candidate for an atomic upstream PR"
     }
   ]
 }

@@ -24,6 +24,10 @@ function campaignReadiness({ state, ships, minPerSide = 1 } = {}) {
     .sort((a, b) => String(a.campaignID).localeCompare(String(b.campaignID)));
   if (!campaigns.length) return refuse("NO_PREPARING_CAMPAIGN");
   const required = Math.max(1, Math.trunc(num(minPerSide) || 1));
+  // Every preparing campaign is checked: one un-winnable border must never hide
+  // another border whose two sides really are mustered. A campaign is still only
+  // READY with real ships on both of ITS sides.
+  const waiting = [];
   for (const campaign of campaigns) {
     const war = state.wars[campaign.warID];
     if (!war || war.state !== "ACTIVE") continue;
@@ -47,13 +51,14 @@ function campaignReadiness({ state, ships, minPerSide = 1 } = {}) {
         evidence: "REAL_NATIVE_PATROLS_RESERVED_ON_BOTH_SIDES",
       }, base);
     }
-    return Object.assign({
+    waiting.push(Object.assign({
       status: "WAITING",
       attackerShips: attacker.length,
       defenderShips: defender.length,
-    }, base);
+    }, base));
   }
-  return refuse("NO_ACTIVE_WAR_FOR_CAMPAIGN");
+  if (!waiting.length) return refuse("NO_ACTIVE_WAR_FOR_CAMPAIGN");
+  return Object.assign({}, waiting[0], { waiting });
 }
 
 // Applies BEGIN_ASSAULT through the authoritative core with the muster as proof.

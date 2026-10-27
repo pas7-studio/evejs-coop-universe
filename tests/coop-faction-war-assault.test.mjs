@@ -87,3 +87,39 @@ test('nothing is mustered when there is no preparing campaign',()=>{
  assert.equal(campaignReadiness({ships:{}}).reason,'NO_WAR_STATE');
  assert.equal(beginAssault({state:core.empty(),readiness:{status:'WAITING'}}).reason,'MUSTER_NOT_READY');
 });
+
+test('a waiting border never hides a border whose sides are mustered',()=>{
+ // Two campaigns under different wars: the lexicographically first one can never
+ // muster (its defender has no ship), the second one has a real ship on each side.
+ const state=core.empty();
+ state.wars['war:a']={warID:'war:a',attackerFactionID:500001,
+  defenderFactionID:500003,state:'ACTIVE',declaredAt:1};
+ state.wars['war:b']={warID:'war:b',attackerFactionID:500001,
+  defenderFactionID:500002,state:'ACTIVE',declaredAt:1};
+ const territory=(systemID,owner)=>({systemID,originalOwnerFactionID:owner,
+  militaryControllerFactionID:owner,state:'SECURE',revision:1,changedAt:1});
+ state.territories['1']=territory(1,500001);
+ state.territories['2']=territory(2,500002);
+ state.territories['3']=territory(3,500003);
+ const campaign=(campaignID,warID,target)=>({campaignID,warID,
+  attackerFactionID:500001,sourceSystemID:1,targetSystemID:target,
+  supplyReservationID:'paper-supply:'+campaignID,state:'PREPARING',
+  startedAt:1,objectiveEvidence:[],revision:1});
+ state.campaigns['war:a:campaign:3']=campaign('war:a:campaign:3','war:a',3);
+ state.campaigns['war:b:campaign:2']=campaign('war:b:campaign:2','war:b',2);
+ const ships={
+  '101':{entityID:101,campaignID:'war:b:campaign:2',factionID:500001,systemID:1},
+  '201':{entityID:201,campaignID:'war:b:campaign:2',factionID:500002,systemID:2},
+ };
+ const ready=campaignReadiness({state,ships});
+ assert.equal(ready.status,'READY');
+ assert.equal(ready.campaignID,'war:b:campaign:2');
+ assert.deepEqual(ready.attackerShips,[101]);
+ assert.deepEqual(ready.defenderShips,[201]);
+ assert.equal(beginAssault({state,readiness:ready,nowMs:2000}).status,'ASSAULT_BEGUN');
+ // With no ship at all every border is reported, and the blocked one first.
+ const none=campaignReadiness({state,ships:{}});
+ assert.equal(none.status,'WAITING');
+ assert.equal(none.waiting.length,2);
+ assert.equal(none.campaignID,'war:a:campaign:3');
+});
