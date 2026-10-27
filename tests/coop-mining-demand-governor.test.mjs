@@ -66,9 +66,10 @@ function governor({rows = [row({quantity: 4_000_000})], books = {}, now = 1_000_
 
 test('an unread market book is unknown, so mining is not stopped by it', () => {
   const observed = [];
-  const engine = governor({books: {}, observe: (event, _a, extra) => observed.push(extra.status)});
+  const engine = governor({books: {}, observe: (event, _s, ship, extra) =>
+    observed.push({status: extra && extra.status, systemID: ship && ship.spaceState && ship.spaceState.systemID})});
   assert.equal(engine.hold({systemID: 30000145}, {fleetID: 960004641}), false);
-  assert.deepEqual(observed, ['DEMAND_UNKNOWN']);
+  assert.deepEqual(observed, [{status: 'DEMAND_UNKNOWN', systemID: 30000145}]);
 });
 
 test('a measured overstock really skips the native mining tick', () => {
@@ -76,7 +77,7 @@ test('a measured overstock really skips the native mining tick', () => {
   const stock = [row({quantity: 4_000_000})];
   const books = {'34:10000002': [bid({vol_remaining: 5000})]};
   const engine = governor({rows: stock, books,
-    observe: (event, _a, extra) => observed.push(extra.status)});
+    observe: (event, _s, _ship, extra) => observed.push(extra && extra.status)});
   // First call is the trickle window, then the tick is skipped.
   assert.equal(engine.hold({systemID: 30000145}, {fleetID: 960004641}), false);
   assert.equal(engine.hold({systemID: 30000145}, {fleetID: 960004641}), true);

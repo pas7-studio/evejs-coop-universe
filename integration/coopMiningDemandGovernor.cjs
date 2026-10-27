@@ -96,7 +96,11 @@ function createGovernor({items, market, getStation, corpID,
     if (now - (notes.get(reason) || 0) < 5 * 60 * 1000) return;
     notes.set(reason, now);
     try {
-      probe?.observe("living-mining-demand-governor", null, {...(detail || {}), status: reason});
+      // The probe signature is (event, session, ship, extra): the system has to
+      // travel as a ship-like record or the event ends up with systemID:null.
+      probe?.observe("living-mining-demand-governor", null,
+        {spaceState: {systemID: pos(detail && detail.systemID)}},
+        {...(detail || {}), status: reason});
     } catch (_error) { /* telemetry never decides */ }
   }
 

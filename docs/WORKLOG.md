@@ -1373,3 +1373,8 @@ Why: Mining kept producing ore nobody could buy: measured 4.0M units stored agai
 Detail: A fleet record that survives a restart: real ships, real doctrine rows, real losses with wreck evidence, and a reconstitution plan that only ever uses hulls that already exist. Survivors are proved alive through the native entity store; replacements are adopted only from hulls the identity registry reports as free in the staging system and that no live fleet already owns. When nothing real is avai
 Where: integration/coopWarDoctrine.cjs, integration/coopWarFleetRoster.cjs, scripts/overlay-spec.cjs, tests/coop-war-fleet-roster.test.mjs
 Evidence: coop-economy-balance status=PARTIAL_DEMAND stock=3965422 sellable=35046; governor holds the native tick only in state mining, trickle 900000ms, factor 1.5 floor 20000; tests 13/13
+### 2026-10-27T13:47Z · 833690f · L2 · coop: mining demand governor - production stops outrunning the real bid book
+
+Why: The governor's own telemetry used the wrong probe signature, so every live event carried systemID null and no status, making the throttle invisible.
+Where: docs/WORKLOG.md, integration/coopMiningDemandGovernor.cjs, scripts/overlay-spec.cjs, tests/coop-mining-demand-governor-wiring.test.mjs, tests/coop-mining-demand-governor.test.mjs
+Evidence: live living-mining-demand-governor entries with status empty and held undefined; governor 8/8 after passing a ship-like system record
