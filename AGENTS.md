@@ -55,6 +55,12 @@ Deploy = commit in the fork, then `cd C:\Games\EveCoop\upstream-evejs\Code;
 docker build -t evejs-local .` and restart the agent stack. Never add a second
 patching mechanism.
 
+**Extraction gate:** `node scripts/coop-engine-audit.cjs` must print
+`AUDIT_OK`. It measures how much co-op code still sits inside stock files, bans
+runtime monkey-patching and source rewriting, freezes the legacy transform
+library at 78 scripts, and fails on `integration/` drift. Numbers and the
+extraction pattern: [docs/FORK_PATCH_AUDIT_20261028.md](docs/FORK_PATCH_AUDIT_20261028.md).
+
 **Log every change, do not remember it.** After committing, run
 `node scripts/log-change.cjs --layer <L1|L2|L3|DOCS|TEST|OPS> --why "..."
 --evidence "..."`. It writes the commit hash, UTC time, files and reason into
