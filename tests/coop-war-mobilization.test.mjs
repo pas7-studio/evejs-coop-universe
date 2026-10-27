@@ -220,3 +220,108 @@ test("a hull released from a campaign can be mobilized into it again",()=>{
  const defender=f.calls.filter(c=>c.entityID===503).pop();
  assert.equal(defender.eventID,"wm:battle1:503:1","the event ID identifies the real attempt");
 });
+
+// FW-028: one live campaign must never hide or starve another. The world really
+// runs several wars at once (two pirate wars plus an empire front), and only the
+// first PREPARING campaign used to be reported.
+function twoCampaignFixture(){
+ const f=fixture();
+ // battle1 keeps its real, un-winnable shape: its defender side system has only
+ // wrong-faction hulls. battle2 is a second border with real patrols on both
+ // sides, in its own systems (301 source / 302 target).
+ f.war.wars.war2={state:"ACTIVE",attackerFactionID:11,defenderFactionID:22};
+ f.war.campaigns.battle2={campaignID:"battle2",warID:"war2",state:"PREPARING",
+  sourceSystemID:301,targetSystemID:302,startedAt:60};
+ const add=(pilotID,entityID,systemID,corp)=>{
+  f.links.push({pilotID,entityID,systemID,role:"patrol"});
+  f.entities.set(entityID,{itemID:entityID,kind:"ship",nativeNpc:true,
+   corporationID:corp,ownerID:corp,position:{x:0,y:0,z:0}});
+  f.native.set(entityID,{entityID,systemID,corporationID:corp,ownerID:corp});
+  f.controllers.set(entityID,{entityID,systemID,manualOrder:null,currentTargetID:0});
+  f.scenes.set(systemID,{systemID,sessions:new Map(),
+   getEntityByID:id=>f.entities.get(id)});
+ };
+ add("coop-pilot-101",601,301,31);   // battle2 attacker (its source system)
+ add("coop-pilot-102",602,302,32);   // battle2 defender (its target system)
+ // battle1's defender hull is now a real patrol of the wrong faction, which is
+ // exactly the live ORE border shape: the side can never muster.
+ f.entities.get(503).corporationID=31;
+ f.native.get(503).corporationID=31;
+ return f;
+}
+test("every live campaign is planned and reported, not only the first one",()=>{
+ const f=twoCampaignFixture();
+ const dry=f.mobilizer.tick({systemIDs:[101,202,301,302],dryRun:true});
+ assert.equal(dry.status,"DRY_RUN");
+ assert.equal(dry.activeCampaignCount,2);
+ assert.equal(Array.isArray(dry.campaigns),true);
+ assert.equal(dry.campaigns.length,2);
+ assert.deepEqual(dry.campaigns.map(c=>c.campaignID).sort(),["battle1","battle2"]);
+ const second=dry.campaigns.find(c=>c.campaignID==="battle2");
+ assert.equal(second.sides.length,2);
+ const defender=second.sides.find(s=>s.role==="DEFENDER");
+ const attacker=second.sides.find(s=>s.role==="ATTACKER");
+ assert.equal(defender.systemID,302);
+ assert.equal(attacker.systemID,301);
+ assert.deepEqual(defender.mobilizable,[602]);
+ assert.deepEqual(attacker.mobilizable,[601]);
+ assert.equal(defender.status,"SIDE_MUSTERED");
+ // The un-winnable first campaign explains itself per side instead of hiding
+ // the second one behind a global rejection cap.
+ const first=dry.campaigns.find(c=>c.campaignID==="battle1");
+ const firstDefender=first.sides.find(s=>s.role==="DEFENDER");
+ assert.equal(firstDefender.mobilizable.length,0);
+ assert.equal(firstDefender.rejected.some(r=>r.reason==="WRONG_FACTION"),true);
+ assert.equal(firstDefender.status,"NO_ELIGIBLE_PATROL");
+ assert.equal(f.calls.length,0,"a diagnosis never writes");
+});
+test("a second campaign musters on the next tick instead of starving",()=>{
+ const f=twoCampaignFixture();
+ const onePerTick=createWarMobilizer({
+  registry:{snapshot:()=>structuredClone(f.registered),execute:c=>{
+   f.calls.push(c);f.registered.ships[String(c.entityID)]={...c};
+   return {status:"APPLIED"}}},
+  readWarState:()=>f.war,readLinks:()=>f.links,
+  sceneForSystem:id=>f.scenes.get(id),getNativeEntity:id=>f.native.get(id),
+  getController:id=>f.controllers.get(id),
+  getFactionForCorporation:corp=>corp===31?11:corp===32?22:null,
+  inspectReadiness:()=>({ready:true}),getOrderLeases:()=>[],
+  isTactical:()=>false,clock:()=>100000,env:f.env,
+  maxPerTick:1,maxPerSide:1});
+ const first=onePerTick.tick({systemIDs:[101,202,301,302]});
+ assert.equal(first.mobilized.length,1);
+ assert.equal(first.mobilized[0].campaignID,"battle1","the older campaign goes first");
+ const second=onePerTick.tick({systemIDs:[101,202,301,302]});
+ assert.equal(second.mobilized.length,1);
+ assert.equal(second.mobilized[0].campaignID,"battle2",
+  "the campaign with the bigger deficit is served before the older one repeats");
+ const report=second.campaigns.find(c=>c.campaignID==="battle1");
+ assert.equal(report.sides.some(s=>s.assigned<s.limit),true);
+});
+test("per-campaign sides name the real blocker and the real limit",()=>{ const f=twoCampaignFixture();
+ // battle2's attacker hull is a real patrol but of the wrong faction.
+ f.entities.get(601).corporationID=32;
+ f.native.get(601).corporationID=32;
+ const dry=f.mobilizer.tick({systemIDs:[101,202,301,302],dryRun:true});
+ const second=dry.campaigns.find(c=>c.campaignID==="battle2");
+ const attacker=second.sides.find(s=>s.role==="ATTACKER");
+ assert.equal(attacker.mobilizable.length,0);
+ assert.equal(attacker.rejected.some(r=>r.reason==="WRONG_FACTION"),true);
+ assert.equal(attacker.limit,1);
+ assert.equal(attacker.assigned,0);
+ const defender=second.sides.find(s=>s.role==="DEFENDER");
+ assert.equal(defender.status,"SIDE_MUSTERED");
+});
+test("a native registry refusal publishes its own reason instead of silence",()=>{
+ const f=fixture();
+ f.deny(true);
+ const result=f.tick();
+ assert.equal(result.mobilized.length,0);
+ assert.equal(Array.isArray(result.blocked),true);
+ assert.equal(result.blocked.length>=1,true);
+ assert.equal(result.blocked[0].reason,"NATIVE_SHIP_OR_CAMPAIGN_UNVERIFIED");
+ assert.equal(result.blocked[0].campaignID,"battle1");
+ // The per-campaign side keeps the refusal as its explanation.
+ const defender=result.campaigns[0].sides.find(s=>s.role==="DEFENDER");
+ assert.equal(defender.rejected.some(r=>r.reason==="REGISTRY_NATIVE_SHIP_OR_CAMPAIGN_UNVERIFIED"),true);
+});

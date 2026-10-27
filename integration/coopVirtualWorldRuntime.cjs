@@ -662,12 +662,22 @@ function advanceNativeWarMobilization(){
     .sideCommandCap({pilotIDs:assignedPilotIDs,records:warMeritRecords()})
   });
  }
- const result=warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ const result=warMobilizer.tick({systemIDs:[...visitedSystems].sort((a,b)=>a-b).slice(0,20)});
  if(result.mobilized.length)require("./coopRuntimeProbe").observe(
   "living-native-war-mobilization",null,null,
   {status:result.status,ships:result.mobilized,
    evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
- else warSkip("mobilization","NO_MOBILIZED_SHIP:"+String(result.status||"UNKNOWN"));
+ else if(Array.isArray(result.blocked)&&result.blocked.length){
+  // The native fleet registry refused the real hull. Its own reason is the only
+  // honest explanation of an empty side, so publish it once per distinct set.
+  const signature=JSON.stringify(result.blocked.map(x=>x.entityID+":"+x.reason));
+  if(warSkipReasons["mobilization-blocked"]!==signature){
+   warSkipReasons["mobilization-blocked"]=signature;
+   require("./coopRuntimeProbe").observe("living-native-war-mobilization-blocked",
+    null,null,{status:"BLOCKED",ships:result.blocked.slice(0,8),
+     evidence:"NATIVE_FLEET_REGISTRY_REFUSED_ASSIGN"});
+  }
+ } else warSkip("mobilization","NO_MOBILIZED_SHIP:"+String(result.status||"UNKNOWN"));
 }
 // FW-003D: a registered battle-line hull that has no compatible charge left can
 // never fire again, and the mobiliser counts every registered hull of a side, so
@@ -748,17 +758,29 @@ function diagnoseWarState(){
   warID:String(war?.warID||""),
   attackerFactionID:Number(war?.attackerFactionID)||0,
   defenderFactionID:Number(war?.defenderFactionID)||0,
-  status:String(war?.status||""),
+  // The war record carries `state` (the value every phase gates on). Reporting
+  // only a `status` field that the record does not have made every war look
+  // stateless to an operator.
+  state:String(war?.state||""),
+  status:String(war?.state||war?.status||""),
+  startedAt:Number(war?.startedAt)||0,
  }));
  const campaigns=Object.values(state.campaigns||{}).map(campaign=>({
   campaignID:String(campaign?.campaignID||""),
   warID:String(campaign?.warID||""),
+  sourceSystemID:Number(campaign?.sourceSystemID)||0,
   targetSystemID:Number(campaign?.targetSystemID)||0,
-  status:String(campaign?.status||""),
+  state:String(campaign?.state||""),
+  status:String(campaign?.state||campaign?.status||""),
+  startedAt:Number(campaign?.startedAt)||0,
   structureID:Number(campaign?.structureID)||0,
  }));
+ const campaignStates={};
+ for(const campaign of campaigns)
+  campaignStates[campaign.state||"UNKNOWN"]=
+   (campaignStates[campaign.state||"UNKNOWN"]||0)+1;
  return {status:"OK",version:Number(state.version)||0,
-  territories,wars,campaigns,
+  territories,wars,campaigns,campaignStates,
   counts:{territories:Object.keys(territories).length,wars:wars.length,
    campaigns:campaigns.length},
   presence:presenceSummary()};
@@ -810,7 +832,14 @@ function diagnoseMobilization(){
  if(!warMobilizer)return {status:"MOBILIZER_NOT_INITIALIZED"};
  if(!visitedSystems.size)return {status:"NO_VISITED_SYSTEMS"};
  try{
-  return warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12),dryRun:true});
+  // Every tracked system is offered to the planner, sorted so the set never
+  // depends on the order the world happened to visit systems in. The mobiliser
+  // itself reports one block per LIVE campaign (campaigns[]), so a second war
+  // can no longer be hidden behind the first one.
+  const systemIDs=[...visitedSystems].sort((a,b)=>a-b).slice(0,20);
+  const result=warMobilizer.tick({systemIDs,dryRun:true});
+  return Object.assign({},result,{systemIDs,
+   campaignCount:Array.isArray(result.campaigns)?result.campaigns.length:0});
  }catch(error){
   return {status:"DIAGNOSE_FAILED",reason:String(error&&error.message||error)};
  }
