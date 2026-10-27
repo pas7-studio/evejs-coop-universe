@@ -1,8 +1,8 @@
 # EveJS Co-op Universe
 
-**A private, ~2-player "living universe" on top of [EveJS](https://github.com/gameboys84/EveJS):
+**A private, 2+-player "living universe" on top of [EveJS](https://github.com/gameboys84/EveJS):
 one authoritative server, autonomous NPC pilots that really mine, haul, trade, fight
-and die, and persistent consequences a couple of players can join in on.**
+and die, and persistent consequences two or more players can join in on.**
 
 > Independent, unofficial project. Not affiliated with CCP Games, EveJS or the
 > X-Eve maintainers. No game client, client binary, proprietary asset, certificate,
@@ -21,7 +21,7 @@ and die, and persistent consequences a couple of players can join in on.**
   vendored**, and `EveJS main` is not the archive that patch expects.
 - **Everything else in this repo is ours:** ~384 co-op overlay modules, 10 atomic
   upstream patches, 6 Rust bridges, ~645 test files and 224 scripts, all built for
-  this pinned tree and this small player group.
+  this pinned tree and this group of players.
 
 ## What is proven, and what is not
 
@@ -34,11 +34,15 @@ and die, and persistent consequences a couple of players can join in on.**
 | Named NPC persistence across a restart | Durable records exist; live restart QA still open |
 | NPC-owned player-market orders, gate/system transfer of a named NPC | Implemented, **flag-gated OFF**, unverified live |
 | Faction warfare campaign, structures as objectives | Real records, campaign still stuck in `PREPARING` (fleet presence) |
-| **Visible client gameplay, two independent accounts, shared grid** | **NOT VERIFIED** — needs a compatible, lawfully obtained EVE client and a human |
+| **Visible client gameplay, at least two independent accounts, shared grid** | **NOT VERIFIED** — needs a compatible, lawfully obtained EVE client and a human |
 
 A green backend, a TCP socket check or a unit test is never gameplay evidence.
 The only accepted sequence is [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md)
 with its [report template](docs/GAMEPLAY_TEST_REPORT_TEMPLATE.md).
+
+**Player count:** the design targets a small group of **2 or more** players. Nothing in
+the overlay hard-codes two — "two clients" is only the *minimum* acceptance bar, because
+that is the smallest number that can prove a shared world.
 
 ## How to run
 
@@ -100,7 +104,7 @@ default OFF unless the runbook says otherwise.
   restart-safe, with an exact refusal reason for every blocked step.
 - **NPC combat with receipts:** native hostility between physically linked rival
   factions, wrecks, stored loot, kills credited only on real weapon + HP evidence.
-- **PvE for a small group (~2 players):** native raids and sites, duo mission
+- **PvE for 2+ players:** native raids and sites, duo mission
   instances, boss loot custody, escort contracts with real warp, attendance,
   rescue and settlement fences.
 - **Market depth:** NPC buyers/sellers, player↔player fills, escrow, refunds, taxes,
