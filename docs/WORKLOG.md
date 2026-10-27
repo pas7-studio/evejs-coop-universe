@@ -1413,3 +1413,45 @@ Why: an enlisted player is one ship in a fleet: one ranked candidate list per wa
 Detail: The battle director used to try native hulls first and fall back to a separate player-only branch. It now builds ONE ranked candidate list per war ship where a hostile native hull and an enlisted enemy player are the same kind of candidate, ordered by the same distance rule the NPCs already apply to each other (a native hull wins an exact tie, so a player is never preferred). The only player-speci
 Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarBattleDirector.cjs, tests/coop-war-battle-director.test.mjs
 Evidence: node --test tests/coop-war-battle-director.test.mjs -> 8/8; 41/41 with militia+mobilization+assault; OVERLAY_OK; live verdict probe on real war ships of campaign:30045344
+### 2026-10-27T15:06Z · 83a9b3b · L3 · FW-030: gate staging publishes the exact precondition that refused it
+
+Why: a war phase that refuses silently cannot be diagnosed; every gate-staging precondition now names itself
+Detail: Every silent continue in coopWarGateStaging.tick is now a named refusal (WAR_NOT_ACTIVE, SUPPLY_RESERVATION_MISSING/NOT_HELD/_MISMATCH, SOURCE_SCENE_*, NO_ATTACKER_SHIP_*, NO_RECIPROCAL_NATIVE_GATE, ATTACKER_BLOCKED), and the runtime publishes them once per distinct set as living-native-war-gate-staging status SKIPPED with the first reason. The phase's own early returns now use warSkip (GATE_APPRO
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarGateStaging.cjs, tests/coop-war-gate-staging.test.mjs
+Evidence: tests/coop-war-gate-staging.test.mjs 10/10; live living-native-war-gate-staging SKIPPED reason SUPPLY_RESERVATION_MISSING:paper-supply:war:500001-500011:campaign:30002780
+### 2026-10-27T15:12Z · 9f66bee · L3 · FW-031: an assault attacker really stages at the gate, paper supply is labelled
+
+Why: an ASSAULT attacker must fly the gate into the contested system, and the explicit funding waiver must not be mistaken for a missing escrow
+Detail: Two silent preconditions made the Gallente attacker unable to arrive: 1. staging only looked at PREPARING campaigns, but the crossing leg is exactly the ASSAULT state - the attacker was never even considered; 2. EVEJS_COOP_WAR_REQUIRE_FUNDING=0 makes the opening record the campaign's own 'paper-supply:<campaignID>' id and reserve nothing, so the strict HELD-escrow test could never pass and every c
+Where: integration/coopWarGateStaging.cjs, tests/coop-war-gate-staging.test.mjs
+Evidence: tests 12/12; live living-native-war-gate-staging OBSERVED order NATIVE_WARP_TO_REAL_GATE entityID 980000023574 sourceGateID 50016294 targetSystemID 30045344 campaignState ASSAULT supply PAPER_UNFUNDED_EXPLICIT
+### 2026-10-27T15:39Z · 466593a · L3 · FW-032: a gate the native warp refuses as too close is closed by a real subwarp follow
+
+Why: a gate approach deadlocks when the native warp refuses an already-close target; the last kilometres must be a real subwarp follow
+Detail: Measured live on the Gallente attacker: the staging warp was accepted, the hull flew to gate 50016294, and then every retry answered WARP_DISTANCE_TOO_CLOSE because the native warp refuses a target it is already near. The hull would sit there for ever, so a gate approach could never become a crossing. On exactly that refusal a real native subwarp follow order is issued to the SAME gate entity (100
+Where: integration/coopNpcGateTravel.cjs, integration/coopWarGateStaging.cjs, tests/coop-npc-gate-travel.test.mjs
+Evidence: tests/coop-npc-gate-travel + staging + mining-gate + courier-hop 35/35; live WARP_REFUSED WARP_DISTANCE_TOO_CLOSE on 980000023574 at gate 50016294
+### 2026-10-27T15:55Z · 1876894 · L3 · FW-033: the gate approach is a durable native follow order, not a one-shot subwarp
+
+Why: a one-shot follow loses to the NPC behaviour loop, so a gate approach must be a durable native manual follow order
+Detail: Measured live: the subwarp follow was accepted and the hull still flew AWAY from the gate (mode GOTO, 66 km -> 97 km -> 127 km -> 157 km in four samples), because the NPC behaviour loop immediately replaced the one-shot follow with its own movement. So the last kilometres could never be closed. The approach now issues the durable native manual movement order the behaviour loop itself honours (type
+Where: integration/coopNpcGateTravel.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-npc-gate-travel.test.mjs
+Evidence: tests/coop-npc-gate-travel + staging + mining-gate + courier-hop 36/36; live GOTO distance grew 66758->96973->127176->157377 while the subwarp order was accepted
+### 2026-10-27T16:02Z · 82f7ca0 · L3 · FW-034: the follow order is actually forwarded, and its refusal is published
+
+Why: a dependency that is not forwarded is a silent fallback; the follow order and its refusal must both be visible
+Detail: The durable order was built but never passed into the gate travel authority, so the hull still flew a one-shot subwarp follow (live order SUBWARP_FOLLOW, hull still moving away). createWarGateStaging now forwards orderFollow into createGateTravel, and a refused manual order publishes followOrderReason (MANUAL_FOLLOW_ORDER_REFUSED:<reason> / _THROW) on the staging event instead of silently falling 
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarGateStaging.cjs, tests/coop-war-gate-staging.test.mjs
+Evidence: tests/coop-war-gate-staging 13/13 + coop-npc-gate-travel 12/12; live order SUBWARP_FOLLOW proved the fallback path
+### 2026-10-27T16:16Z · 0fdf15c · L3 · FW-035: the gate arrival is measured before the retry window
+
+Why: a retry window that precedes the arrival check hides the only moment a warped hull is physically at the gate
+Detail: Measured live: the warp to the real gate was accepted, the hull really landed on it, and then nothing happened for 180 s - the pending NATIVE_GATE_WARP window skipped the ship BEFORE the surface-gap check, so the only moment the hull was physically at the gate was never evaluated. Meanwhile the behaviour loop flew it 15 km away per tick. The measured surface gap now decides first; the pending wind
+Where: integration/coopNpcGateTravel.cjs, tests/coop-war-gate-staging.test.mjs
+Evidence: tests 37/37; live: warp accepted, hull at gate, 180s window skipped it, hull drifted 15km/tick
+### 2026-10-27T16:24Z · 76970e1 · L3 · FW-036: the transfer ledger accepts the assault leg and the explicit paper waiver
+
+Why: the crossing leg is the ASSAULT attacker and the funding waiver is an explicit operator decision, not a missing escrow
+Detail: Measured live, the first real crossing attempt: AT_REAL_GATE then TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED. Two causes, both the same silent rules that had blocked staging: - the ledger only accepted a PREPARING campaign, but the hull that must cross is exactly the ASSAULT attacker still outside the contested system; - it demanded a HELD escrow even for a campaign the operator exp
+Where: integration/coopFactionWarCore.cjs, integration/coopWarGateStaging.cjs, integration/coopWarTransferLedger.cjs, tests/coop-war-transfer-ledger.test.mjs
+Evidence: tests 57/57; live AT_REAL_GATE then TRANSFER_REFUSED WAR_HANDOFF_CAMPAIGN_OR_FUNDS_UNVERIFIED

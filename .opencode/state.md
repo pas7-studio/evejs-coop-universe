@@ -1,5 +1,26 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 16:25Z - second startup slot added (additive), New Caldari has a fleet again
+
+Owner asked to finish. Slot 30000145-1 fails deterministically on EVERY boot with
+ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH (operator repair, not code). Instead of touching the
+broken record, EVEJS_MINING_NPC_STARTUP_FLEET_COUNT went 1 -> 2, which creates a second
+startup slot per configured system. Nothing was deleted or rewritten.
+
+Live after the change (docker logs):
+  ALIFE08 slot 30000145-2 -> ALREADY_ACTIVE miners=2 haulers=1
+  ALIFE08 slot 30100032-2 -> ALREADY_ACTIVE miners=2 haulers=1
+  ALIFE08 slot 30000145-1 -> NEEDS_OPERATOR_REPAIR (unchanged, still blocked)
+
+Where the mineral sale can happen (economy balance, live):
+  60000682 type 34 stock=321677 demand=5000 price=2.96   -> 14 800 ISK
+  60003334 type 34 stock= 86915 demand=5000 price=3.10   -> 15 500 ISK
+Both are New Caldari stations the new fleet can reach, so the first arrival that lands on
+either one closes the last leg: lift -> sale -> treasury sweep.
+
+The demand governor stays ON with the approved defaults, so the small new fleet mines in
+the 15-minute trickle windows; the proof therefore takes tens of minutes, not seconds.
+
 ## 2026-10-27 15:10Z - owner backlog registered (8 items), exact first step for each
 
 Owner approved this order. Nothing below is claimed done; this is the plan a fresh
@@ -1917,3 +1938,15 @@ staging system.
 queued request can execute again after a restart (16 fleet records exist, several are
 duplicates of the same doctrine in the same system; all are real hulls). Another
 session recreates the stack every ~1 minute, which interrupts probes.
+
+## OWNER DIRECTIVE 2026-10-27 (binding)
+
+- The running stack `evejs` (evejs-server-1, evejs-market-1) is the OWNER'S PLAY
+  SERVER. Do NOT restart, recreate, `--force-recreate`, down, or rebuild-and-redeploy
+  it while the owner is playing. He said: "this one you will not restart until I say".
+- Agents that need to deploy/test must run their OWN separate compose project
+  (own project name, own host ports, own volumes) and leave `evejs` untouched.
+- Friend access path in use: ProtonVPN forwarded port -> sshd on that port
+  (currently 48819) -> user `evefriend`, key-only, PermitOpen 127.0.0.1:443/5222/
+  26000/26001/26002/40110; firewall rule "EveJS co-op SSH 48819" scoped to
+  remote 176.37.43.83. EveJS ports stay 127.0.0.1.
