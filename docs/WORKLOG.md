@@ -1530,3 +1530,8 @@ Why: Profile-named hot loops in our own modules paid a full native collection cl
 Detail: The profile named three of our own loops paying a full collection clone per entity: war pair evaluation (23% of wall), cargo adoption (5.5%), mining fleet check (3.4%). coopNativeReadCache keeps identity facts for 200 ms with an explicit invalidate; coopPerfMetrics times every safeNpcPhase and reports the top eight phases each minute when enabled. Review with all measured numbers in docs/PERFORMAN
 Where: .opencode/metrics.md, docs/PERFORMANCE_REVIEW.md, integration/coopHaulCargoAdoption.cjs, integration/coopNativeMiningFleetDurable.cjs, integration/coopNativeReadCache.cjs, integration/coopPerfMetrics.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarCombatAuthority.cjs, scripts/overlay-spec.cjs, tests/coop-native-read-cache.test.mjs, tests/coop-perf-metrics.test.mjs
 Evidence: chains: evaluatePair 5962ms/23% wall, cargoRows 1406ms, miningFleetDurable.check 871ms; new suites 11/11; OVERLAY_OK; image rebuilt
+### 2026-10-27T17:50Z · 1909efa · L2 · coop: an empty haul is no longer a loaded fleet, and the L1 manifest parses without a BOM
+
+Why: The governor decided on a partially loaded bid book, so on the work stack it held a fleet on a world with 25k/90k bids per type; a partial book is now treated as unknown.
+Where: docs/WORKLOG.md, patches/upstream/MANIFEST.json, scripts/patch-evejs-coop.cjs, tests/coop-haul-empty-guard.test.mjs
+Evidence: work stack HOLD sys30000145 while livres had bids; coverage>=0.9 rule; governor 17/17

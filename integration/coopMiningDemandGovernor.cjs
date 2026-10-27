@@ -129,15 +129,26 @@ function createGovernor({items, market, getStation, corpID,
     }
     // Books are supplied by the caller (a promise-based market needs prefetching).
     // No book yet means demand is UNKNOWN, not zero - an unread book must never
-    // stop the world's mining. An unknown measurement is cached only briefly, or
-    // the governor would stay blind for a whole refresh interval.
+    // stop the world's mining. The same holds for a PARTIAL book: deciding on the
+    // types that happen to be loaded understates demand and throttles a healthy
+    // economy (measured: HOLD on the work stack while 25k/90k bids existed).
     const books = typeof market?.books === "function" ? market.books() : {};
+    const known = new Set(Object.keys(books || {})
+      .filter((key) => books[key] !== undefined));
     const keys = new Set(stock.map((row) => String(row.typeID) + ":" + String(row.regionID)));
-    const have = [...keys].some((key) => books && books[key] !== undefined);
+    const totalUnits = stock.reduce((sum, row) => sum + pos(row.quantity), 0);
+    const knownUnits = stock
+      .filter((row) => known.has(String(row.typeID) + ":" + String(row.regionID)))
+      .reduce((sum, row) => sum + pos(row.quantity), 0);
+    const coverage = totalUnits > 0 ? knownUnits / totalUnits : 1;
+    const have = totalUnits === 0
+      ? known.size > 0
+      : coverage >= 0.9;
     cache = {at: have ? now : now - Math.max(0, cacheMs - 15000), stock,
-      stockUnits: stock.reduce((sum, row) => sum + pos(row.quantity), 0),
+      stockUnits: totalUnits,
       demand: have ? demandUnits(stock, books) : null,
-      booksKnown: [...keys].filter((key) => books && books[key] !== undefined).length,
+      coverage: Math.round(coverage * 100) / 100,
+      booksKnown: [...keys].filter((key) => known.has(key)).length,
       booksWanted: keys.size};
     return cache;
   }

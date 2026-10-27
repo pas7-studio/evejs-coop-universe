@@ -110,6 +110,37 @@ test('the work stack time scale shortens the policy interval, never the policy',
   assert.equal(gov.scaledTrickleMs(900000, {scale: 50}), 90000, 'the factor is capped at 10');
 });
 
+test('a partial book never throttles a healthy economy', () => {
+  // Measured on the work stack: only some types had loaded, so demand looked tiny
+  // (or zero) and the governor held a fleet in a world with abundant bids.
+  const stock = [row({typeID: 34, quantity: 30000}), row({typeID: 17470, quantity: 30000})];
+  const engine = gov.createGovernor({
+    items: {listOwnedItems: () => stock},
+    getStation: () => ({regionID: 10000002}),
+    market: {books: () => ({'34:10000002': [bid({vol_remaining: 5000})]})},
+    corpID: CORP, clock: () => 1_000_000, cacheMs: 1, probe: {observe: () => {}},
+  });
+  const measured = engine.measure(1_000_000);
+  assert.equal(measured.demand, null, 'half a book is not a measurement');
+  assert.equal(measured.coverage, 0.5);
+  assert.equal(engine.hold({systemID: 30000142}, {fleetID: 1}), false);
+});
+
+test('a full book does throttle an overstocked economy', () => {
+  const stock = [row({typeID: 34, quantity: 4_000_000})];
+  const engine = gov.createGovernor({
+    items: {listOwnedItems: () => stock},
+    getStation: () => ({regionID: 10000002}),
+    market: {books: () => ({'34:10000002': [bid({vol_remaining: 5000})]})},
+    corpID: CORP, clock: () => 1_000_000, cacheMs: 1, probe: {observe: () => {}},
+  });
+  const measured = engine.measure(1_000_000);
+  assert.equal(measured.demand, 5000);
+  assert.equal(measured.coverage, 1);
+  assert.equal(engine.hold({systemID: 30000142}, {fleetID: 1}), false, 'first call is the trickle');
+  assert.equal(engine.hold({systemID: 30000142}, {fleetID: 1}), true);
+});
+
 test('an unreadable stock never stops mining', () => {
   const engine = gov.createGovernor({
     items: {listOwnedItems: () => { throw new Error('boom'); }},
