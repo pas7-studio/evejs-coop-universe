@@ -2536,3 +2536,21 @@ movement from overriding the approach (the order bridge refuses any new WAR orde
 `movementBusy` is true and the hull has no arbiter lease, which is exactly the state an
 orbiting patrol is in). Do not raise the battle director's 250 km rule: that is the real
 firing envelope of these guns' falloff, not a bug.
+
+## FW-030 v3: a hull holding an accepted attack order also closes on its target
+
+Deployed: `coopWarEngagementWarp` no longer only moves the assaulting side. A war hull
+whose controller carries `manualOrder {type:"attack"}` with `currentTargetID: 0` is a
+hull that is outside real gun range with an order it cannot use, so it now closes on the
+ship it was ordered to kill (orbit inside 150 km, standoff warp beyond). Measured live
+after deploy: NATIVE_ORBIT_ORDERED at 82-90 km for the two Federation Navy hulls.
+
+Still not proven: HP on 980000033113 / 980000023574 / 980000033114 is unchanged
+(shield 175/150, armor 145/175, structure 125/160) and the Caldari hull still shows
+`mode STOP` with `currentTargetID 0` under an accepted attack order. So the open
+question is now narrow and native-side, not war-side: why a native `attack` order that
+the order bridge accepted leaves the controller with no target, and why an accepted
+`orbit` does not hold the hull at that range. Check `coopNpcHostility`
+`allowsNativeEngagement` (both flags are 1, so it should authorise) and the native
+`npcBehaviorLoop` target acquisition for these two hulls before touching the war code
+again. Nothing in the war store, the campaign or the front chat is blocking.

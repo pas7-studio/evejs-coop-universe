@@ -83,7 +83,6 @@ function createWarEngagementWarp({
       for (const ship of inSystem) {
         const id = Number(ship.entityID);
         if (!pos(id)) continue;
-        if (Number(ship.factionID) !== attackerFactionID) continue;
         if ((nextAt.get(id) || 0) > now) continue;
         const me = scene.getEntityByID(id);
         if (!me || me.kind !== "ship" || me.nativeNpc !== true || me.session?.characterID) continue;
@@ -91,8 +90,16 @@ function createWarEngagementWarp({
         let controller = null;
         try { controller = getController(id); } catch (_error) { controller = null; }
         if (!controller || controller.entityID !== id || Number(controller.systemID) !== systemID) continue;
-        // Another director, a player order or an active engagement already owns it.
-        if (Number(controller.currentTargetID) > 0 || controller.manualOrder) continue;
+        // Another director or an active engagement already owns it.
+        if (Number(controller.currentTargetID) > 0) continue;
+        const manual = controller.manualOrder;
+        const orderedTargetID = manual && manual.type === "attack"
+          ? Number(manual.targetID) || 0 : 0;
+        // A hull holding an accepted attack order but no target is outside real gun
+        // range: it closes on the ship it was ordered to kill. Any other hull is
+        // closed on only by the assaulting side.
+        if (manual && !orderedTargetID) continue;
+        if (!orderedTargetID && Number(ship.factionID) !== attackerFactionID) continue;
         const enemies = inSystem
           .filter(o => Number(o.entityID) !== id &&
             Number(o.factionID) !== Number(ship.factionID) &&
@@ -114,7 +121,8 @@ function createWarEngagementWarp({
           skips.push({ campaignID: campaign.campaignID, entityID: id, reason: "NO_ENEMY_IN_SYSTEM" });
           continue;
         }
-        const nearest = enemies[0];
+        const nearest = (orderedTargetID
+          ? enemies.find(x => x.entityID === orderedTargetID) || null : null) || enemies[0];
         // Already close enough for the real guns: the war director owns the shot.
         if (nearest.distance <= engageMeters) continue;
         nextAt.set(id, now + cooldownMs);
