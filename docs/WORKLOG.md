@@ -932,3 +932,8 @@ Why: The owner needs a step order that produces real two-client evidence
 Detail: Lists what this session actually proved (OVERLAY_OK 353 modules, healthy server, two real faction Astrahus structures, war:500011-500014 opened from real presence, front chat wired), the one server-side limitation that blocks an assault in this build (no NPC carries a native fitted weapon), and the exact human step order with the evidence to capture per step. No client success is claimed.
 Where: docs/TWO_CLIENT_CHECKLIST.md, docs/WORKLOG.md
 Evidence: docs/TWO_CLIENT_CHECKLIST.md; preconditions taken from this session's probes
+### 2026-10-27T00:13Z · ff20834 · DOCS · docs(loop): metrics block for the two-client checklist
+
+Why: Keep the metrics ledger in step with the checklist commit
+Where: .opencode/metrics.md, docs/WORKLOG.md
+Evidence: metrics.md block for 21349a8a
