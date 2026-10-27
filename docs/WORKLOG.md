@@ -1009,3 +1009,27 @@ Why: war control must be visible without fabricating native sovereignty; a real 
 Detail: - coopWarSovereigntyProjection reports the faction that really controls a system and refuses to present it as native sovereignty unless a real territorial-claim unit / infrastructure hub AND a real native claim exist in that system. Nothing is written, so no claim is fabricated. - The live world reports NATIVE_SOV_CLAIM 0 / MILITARY_CONTROL_ONLY 5 with reason NO_NATIVE_SOV_STRUCTURE for every held
 Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarKillMerit.cjs, integration/coopWarRankTitle.cjs, integration/coopWarSovereigntyProjection.cjs, scripts/overlay-spec.cjs, tests/coop-war-rank-title.test.mjs, tests/coop-war-sovereignty-projection.test.mjs
 Evidence: node --test tests/coop-war-sovereignty-projection.test.mjs tests/coop-war-rank-title.test.mjs -> 14/0; --check OVERLAY_OK; live: living-native-war-sovereignty-projection PROJECTED_VIEW counts {NATIVE_SOV_CLAIM:0,MILITARY_CONTROL_ONLY_NOT_SDE_SOVEREIGNTY:5} reason NO_NATIVE_SOV_STRUCTURE per system
+### 2026-10-27T03:50Z · add5483 · L2 · FW-005C: the hull that earned the wreck may sell its loot
+
+Why: FW-005C: the hull that really earned a native wreck (patrol, not only pirate) may liquidate the recovered loot at a real seeded bid, opt-in via EVEJS_COOP_NPC_LOOT_SELL_ROLES (default pirate)
+Detail: The loot chain (native wreck claim -> source-first cargo transfer -> station delivery -> seeded-market fill) was only ever offered to the pirate role, so the patrol hulls that really fight a war could never liquidate the wrecks they earned and their earned-ISK ledger stayed at zero (NO_REAL_FACTION_INCOME). coopNpcLootSellRoles answers one question: may this named native NPC role sell looted cargo
+Where: docs/coop-flags.json, integration/coopNpcLootSellRoles.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-npc-loot-sell-roles.test.mjs
+Evidence: node --test tests/coop-npc-loot-sell-roles.test.mjs -> 6/6 pass; overlay --check OVERLAY_OK (364 modules); live profile: NPC_LOOT_COMMERCE/WRECK_TRANSFER/WRECK_RECOVERY=1, LOOT_SELL_ROLES=pirate,patrol, loot typeIDs added to EVEJS_COOP_NPC_MARKET_SELL_TYPES
+### 2026-10-27T03:56Z · ff071de · L2 · P0: a durable hull that really relocated leaves a stale link, not a broken world
+
+Why: a durable native hull that really relocated left a stale identity link which halted restore with NEEDS_OPERATOR_REPAIR and prevented createBridge(), making every bridge-driven phase inert; stale links are now reconciled only via the opt-in EVEJS_COOP_DURABLE_RELOCATE_RESTORE=1 and the registry's precondition-checked relocate()
+Detail: live: living-native-durable-recovery NEEDS_OPERATOR_REPAIR for coop-pilot-046 (entity 980000016645), because the durable record and controller both say system 30000142 while the identity link still says 30001363. That single stale link threw DURABLE_NPC_RECOVERY_REQUIRES_REPAIR before createBridge(), so the materializer bridge never existed in this boot and every bridge-driven phase (raids, loot s
+Where: docs/coop-flags.json, integration/coopNativeRestore.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-native-durable-restart.test.mjs
+Evidence: node --test tests/coop-native-durable-restart.test.mjs -> 17/17; overlay --check OVERLAY_OK; live living-native-durable-recovery status OK alreadyPhysical 67 relocated 0 errors []
+### 2026-10-27T04:04Z · 674df5a · DOCS · docs(state): item 1 code PASS, live loot income blocked by world geography
+
+Why: record item 1 code PASS and the measured reasons the armed factions still cannot sell loot, plus the shipcaster ownership evidence
+Detail: Measured, not inferred: the only system with real armed native combat (30001363) is in region 10000016, which has zero seeded buy orders for every tested type, so recovered loot has no buyer there; the demand systems have no real armed combat; and ORE 500014, the only faction with real earned ISK, has no armed native profile so its campaigns never muster. Records the single decision needed and the
+Where: .opencode/metrics.md, .opencode/state.md
+Evidence: metrics/state blocks; probes: region 10000016 seeded buy rows 0, war_funding_diagnose 500011/500020 NO_REAL_FACTION_INCOME, war_diagnose mobilised 0
+### 2026-10-27T04:04Z · 84070c1 · DOCS · docs(checklist): two-client preconditions refreshed - fitting gap closed, one assault live
+
+Why: refresh the two-client checklist with the current verified server preconditions and the two remaining server-side impossibilities
+Detail: The old checklist told the tester to expect no assault because no NPC had a native module. That is no longer true: the authored war-patrol loadout row with a 60-deep charge bank gives real fitted weapons, and a real kill, wreck, loot, casualty, merit and promotion are already proven. The refresh records the live war state (2 ACTIVE wars, 4 campaigns, one in ASSAULT), the restored durable recovery,
+Where: docs/TWO_CLIENT_CHECKLIST.md
+Evidence: live: war state 2 ACTIVE wars/4 campaigns, campaign 30001363 ASSAULT; inspect_npc moduleCount 5 + 60 charges; living-native-durable-recovery OK
