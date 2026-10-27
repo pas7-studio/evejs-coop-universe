@@ -2114,3 +2114,21 @@ After the recreate: profile the play stack the same way (SIGUSR1 + live-profile.
 in .opencode/metrics.md. Compare against the pre-fix rows: idle 0%, cloneValue
 62.7%, ensureRootShape 24.0%, chains evaluatePair 5962 ms / cargoRows 1406 ms /
 miningFleetDurable.check 871 ms.
+
+## PROCESS BUG FOUND 2026-10-27T18:35Z — `--apply` silently drops direct L1 edits
+
+`node scripts/patch-evejs-coop.cjs --apply` restores the pinned stock files before
+installing the overlay, so an L1 fix that was made by editing the checkout
+directly DISAPPEARS on the next `--apply`. That is exactly what happened to patch
+0009 (nativeNpcStore root clone): it was live, then the next `--apply` reverted it
+and the play stack went back to 13% `ensureRootShape`.
+
+Rule from now on: an L1 fix must exist as `patches/upstream/NNN-*.patch` AND be
+applied through `apply-upstream-patches.cjs`. Direct edits are temporary only.
+
+`apply-upstream-patches.cjs` currently refuses this checkout:
+"Checkout matches neither the pinned base nor our patched state" (0004 fails on
+miningNpcOperations.js). That is NEEDS_PATCH_SERIES_REPAIR: the series tool and the
+working tree must be reconciled before the next L1 patch is trusted. Until then
+patch 0009 is re-applied idempotently by a local script and its sha256 in
+MANIFEST.json matches the regenerated patch file.
