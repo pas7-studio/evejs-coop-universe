@@ -1711,3 +1711,8 @@ Evidence: fork commits a52cf22, 0260078; live: warzone 2 = 118 systems, byOwner 
 Why: The hauler follow order was issued only every 24 failed haul attempts while the miners kept being re-accelerated, so the gap never closed inside the ten-minute haul budget.
 Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
 Evidence: agents world: one successful load/deliver/refine/lift, then two fleets stalled in hauling with hauler-to-miner gaps 27930 m and 78969 m; follow now issued every attempt, warp stays behind attempts===1||attempts%24, hauler mid-warp reports ALREADY_WARPING; fork ad1816a; 6 wiring tests pass
+### 2026-10-27T23:31Z · ba98f95 · L2 · coop: mirror ALREADY_FOLLOWING in the archived generator
+
+Why: A follow order re-issued every five seconds restarted the approach it waited for, so the hauler oscillated around 3.4-4.9 km while the transfer range is 2500 m.
+Where: scripts/patch-evejs-coop.cjs
+Evidence: agents world: living-haul-approach-issued FOLLOWING_MINER gap 4429/4681/4954 and 3364/3641/3936 within 10 s; block now records ALREADY_FOLLOWING and issues nothing when mode FOLLOW already targets that miner; fork commit follows, 6 wiring tests pass
