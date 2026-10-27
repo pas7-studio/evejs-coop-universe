@@ -64,14 +64,33 @@ function run(options = {}) {
   const root = options.root || env[DIR_FLAG];
   if (typeof root !== "string" || !path.isAbsolute(root)) return {status: "MARKET_DIRECTORY_REQUIRED", moved: 0};
   const corporationID = pos(options.corporationID) || pos(env[CORPORATION_FLAG]) || DEFAULT_CORP;
+  // FW-040: a pilot's earned ISK belongs to the pilot's OWN corporation. When the
+  // caller can prove a pilot's corporation, only the pilots that really belong to
+  // this corporation are swept - otherwise an Angel pilot's real sale would fund
+  // an ORE factory, which is exactly why an armed faction never showed income.
+  const resolveCorporation = typeof options.resolveCorporation === "function"
+    ? options.resolveCorporation : null;
   const ledgerFile = path.join(root, "ledger.json");
   let ledger;
   try { ledger = JSON.parse(fsApi.readFileSync(ledgerFile, "utf8")); }
   catch (error) {
     return {status: error && error.code === "ENOENT" ? "NO_LEDGER" : "LEDGER_UNREADABLE", moved: 0};
   }
-  const earnings = pilotEarnings(ledger);
-  if (!earnings.length) return {status: "NO_PILOT_EARNINGS", moved: 0};
+  const allEarnings = pilotEarnings(ledger);
+  let skippedForeign = 0;
+  const earnings = resolveCorporation
+    ? allEarnings.filter((entry) => {
+      let owner = 0;
+      try { owner = Number(resolveCorporation(entry.pilotID)) || 0; }
+      catch (_error) { owner = 0; }
+      // An unknown owner is never swept: unproven ISK must not move.
+      if (owner !== Number(corporationID)) { skippedForeign += 1; return false; }
+      return true;
+    })
+    : allEarnings;
+  if (!earnings.length)
+    return {status: skippedForeign ? "NO_EARNINGS_FOR_THIS_CORPORATION" : "NO_PILOT_EARNINGS",
+      moved: 0, skippedForeign};
   const total = Math.round(earnings.reduce((sum, entry) => sum + cents(entry.isk), 0)) / 100;
   if (!(total > 0)) return {status: "NO_PILOT_EARNINGS", moved: 0};
 
@@ -125,7 +144,8 @@ function run(options = {}) {
       corporationID, amountISK: total, beforeISK: before, afterISK: receipt.afterISK,
       pilots: earnings.length});
   } catch (_error) { /* telemetry only */ }
-  return {status: "SWEPT", moved: total, corporationID, afterISK: receipt.afterISK, pilots: earnings.length};
+  return {status: "SWEPT", moved: total, corporationID, afterISK: receipt.afterISK,
+    pilots: earnings.length, skippedForeign};
 }
 
 module.exports = {FLAG, DIR_FLAG, CORPORATION_FLAG, DEFAULT_CORP, DIVISION, pilotEarnings, run};

@@ -104,6 +104,11 @@ function fundTreasury({options, env, ownerID}) {
   try {
     const treasury = options.treasury || loadTreasury();
     return treasury.run({env, root: options.marketRoot, corporationID: ownerID,
+      // FW-040: only a pilot who really belongs to this corporation funds it. The
+      // resolver is optional, so a caller without the authority keeps the old
+      // behaviour instead of guessing an owner.
+      resolveCorporation: typeof options.pilotCorporation === "function"
+        ? options.pilotCorporation : null,
       gameStore: options.gameStore, fsApi: options.fsApi, now: options.now,
       observe: options.observe, probe: options.probe});
   } catch (error) {

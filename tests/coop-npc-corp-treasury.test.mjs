@@ -36,7 +36,7 @@ function fixture(t, {balances = {}, corpBalance = 0, writeFails = false} = {}) {
   const events = [];
   const env = {EVEJS_COOP_CORP_TREASURY: '1'};
   return {
-    dir, env,
+    dir, env, gameStore,
     run: () => treasury.run({env, root: dir, gameStore, now: 1234,
       observe: (_p, event, _s, fields) => events.push({event, fields}), probe: {}}),
     balances: () => JSON.parse(fs.readFileSync(path.join(dir, 'ledger.json'), 'utf8')).pilots,
@@ -90,4 +90,39 @@ test('no ledger, an unreadable root or zero balances are statuses, never throws'
     'MARKET_DIRECTORY_REQUIRED');
   assert.equal(treasury.run({env: {EVEJS_COOP_CORP_TREASURY: '1'}, root: '/definitely/not/here'}).status,
     'NO_LEDGER');
+});
+
+// FW-040: a pilot's earned ISK belongs to the pilot's OWN corporation. Sweeping
+// a foreign pilot into this corporation is what kept every armed faction at
+// NO_REAL_FACTION_INCOME.
+test('with a proven owner only this corporation own pilots are swept', (t) => {
+ const f = fixture(t, {balances: {'coop-pilot-001': 5000, 'coop-pilot-002': 7000}});
+ const own = {'coop-pilot-001': 1000135, 'coop-pilot-002': 1000129};
+ const out = treasury.run({env: f.env, root: f.dir, corporationID: 1000129,
+  gameStore: f.gameStore, now: 1234, resolveCorporation: (pilotID) => own[pilotID] || 0});
+ assert.equal(out.status, 'SWEPT');
+ assert.equal(out.corporationID, 1000129);
+ assert.equal(out.pilots, 1);
+ assert.equal(out.skippedForeign, 1);
+ assert.equal(f.balances()['coop-pilot-002'].balance, 0);
+ assert.equal(f.balances()['coop-pilot-001'].balance, 5000);
+ assert.equal(f.wallet(), 7000);
+});
+
+test('an unknown owner is never swept and the status says why', (t) => {
+ const f = fixture(t, {balances: {'coop-pilot-001': 5000}});
+ const out = treasury.run({env: f.env, root: f.dir, corporationID: 1000129,
+  gameStore: f.gameStore, now: 1234, resolveCorporation: () => 0});
+ assert.equal(out.status, 'NO_EARNINGS_FOR_THIS_CORPORATION');
+ assert.equal(out.moved, 0);
+ assert.equal(f.balances()['coop-pilot-001'].balance, 5000);
+});
+
+test('without a resolver the historical sweep is unchanged', (t) => {
+ const f = fixture(t, {balances: {'coop-pilot-001': 5000}});
+ const out = treasury.run({env: f.env, root: f.dir, corporationID: 1000129,
+  gameStore: f.gameStore, now: 1234});
+ assert.equal(out.status, 'SWEPT');
+ assert.equal(out.skippedForeign, 0);
+ assert.equal(f.wallet(), 5000);
 });
