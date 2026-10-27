@@ -705,3 +705,153 @@ shipcaster beacon structure types (75928 Imperial, 75929 State, 75930 Federation
 75931 Republic) but they belong to the four empires; no shipcaster beacon type
 exists for 500011/500014/500020, so a "faction shipcaster" would misrepresent
 structure ownership. Nothing was deployed.
+
+## 2026-10-27 (FW-013) - the armed pair's front is in the seeded region; three silent raid blockers fixed (9ff67b86)
+
+**Owner default applied: an armed pair's front now sits in seeded region 10000002.**
+SDE-verified, not guessed: Maurasi 30000140 has 25 real belts, sits in region
+10000002 (the only region with real seeded buy rows for the loot types: 431
+station/type rows, all in Jita 30000142 and New Caldari 30000145), and has a real
+reciprocal gate to Jita (50000802 <-> 50001248). It was added to
+`EVEJS_COOP_VIRTUAL_ROUTE` so the headless boot tracks it
+(`living-headless-boot-system 30000140 realAsteroidBelts 25
+authoritativeSdeBelts 25`).
+
+Real armed hulls spawned with `spawn_native_npc` (durable, authored multi-charge
+row `coop_war_patrol_ammo60_*`):
+- 980000018058 Serpentis cruiser, role **pirate**, New Caldari 30000145
+  (coop-pilot-070) - the income bootstrap;
+- 980000018084 Serpentis cruiser, role patrol, Maurasi 30000140 (coop-pilot-063)
+  - makes the system Serpentis by real presence;
+- 980000018085 Angel frigate, role patrol, Jita 30000142 (coop-pilot-078).
+
+**Measured:** `living-native-war-opening-blocked` now reports
+`SUPPLY_UNFUNDED:500011:NO_REAL_FACTION_INCOME|500020:NO_REAL_FACTION_INCOME`.
+That is the whole remaining gap: the front exists and BOTH sides are armed; only
+the real escrow reservation is missing, and it must come from a real seeded sale.
+
+**Three silent blockers removed (all measured, none guessed):**
+1. `EVEJS_COOP_MATERIALIZE_LIMIT: '26'` made `createBridge()` throw (contract
+   1..10) inside `observeSession` before `bridge` was assigned. Every
+   bridge-driven phase (raids, loot delivery, market assignments) had stopped
+   existing while the world looked healthy. `coopMaterializeLimit` clamps and
+   reports it; `living-native-bridge` publishes the created bridge.
+2. The raid director read the materializer assignment map, rebuilt only during
+   boot, so a hull linked afterwards was invisible. It now reads the identity
+   registry (the same authority the raid legality gate uses).
+3. The civilian route director held a CIVILIAN lease on pirate hulls and orbited
+   them, so every raid order was refused
+   `COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE`. One owner per record: a pirate's
+   movement belongs to the raid director.
+`coopNpcOrderBridge.diagnose()` + `living-native-raid-diagnose` make any
+future refusal an exact, published reason instead of a silent boolean.
+
+**Live proof of the fix:** `living-native-raid-diagnose 30000145 pirates 3
+fleetShips 23 oreBearing 5 authorized 21-22` -> `living-pirate-raid`
+`[{"pirateID":980000018058,"targetID":980000016318,"targetRole":"hauler",
+"action":"attack"}]` (30000144 attacks 980000016310) with
+`orderDiagnosis PERMITTED, leaseOwner RAID`.
+
+**NEXT ACTION (exact).** Wait for the real raid kill in 30000145 (a real stock
+mining-fleet hauler, 300 fitted charges): wreck -> `coopNpcWreckCustody` ->
+loot cargo -> `coopNpcLootCommerce` warp to a New Caldari station ->
+`coopNativeNpcMarket` fill against a real seeded bid (25606/25611/180/211 at
+New Caldari/Jita) -> Serpentis `earned` ISK -> `warBountyReserve` can then
+reserve for `war:500011-500020:campaign:30000140` (attacker Angel from Jita,
+defender Serpentis in Maurasi) -> mobilize -> BEGIN_ASSAULT -> real kill ->
+`living-native-war-bounty` PAID from HELD escrow. Never mint ISK; if the kill or
+the fill does not happen, record the measured blocker.
+
+## 2026-10-27 (FW-013 result) - seeded-region front PROVEN; the income leg is the single remaining blocker
+
+**Proven (live, verbatim):**
+- Maurasi 30000140 is registered military control **500020** (Serpentis) after the
+  real armed cruiser 980000018084 (coop-pilot-063) was spawned there, so a real
+  border with Jita 30000142 (500011 Angel) exists **inside seeded region
+  10000002**. SDE: 25 real belts, reciprocal gate 50000802 <-> 50001248.
+- `living-native-war-opening-blocked` reason (last, 05:27:18Z):
+  `SUPPLY_UNFUNDED:500011:NO_REAL_FACTION_INCOME|500020:NO_REAL_FACTION_INCOME`.
+  The front, both armed sides, the declaration presence and the adjacency proofs
+  all pass; only the real escrow reservation is missing.
+- Raid authority is now fully live and measured: `living-pirate-raid 30000145`
+  real attack orders (owner RAID, `orderDiagnosis PERMITTED`),
+  `npc_pair_diagnose` 980000018994 -> 980000016318 `engagementAllowed true`,
+  `manualType attack`, `allowWeapons true` at 15122 m, 5 hybrid turrets with
+  5 x 60 real charges.
+- Real NPC-vs-NPC fire does happen in this world: 30000144
+  `living-native-weapon-event` missile-launch 980000000153 -> 980000000444 and
+  `living-native-combat-damage` correlated damage 0.013 HP.
+
+**NEEDS_OWNER:BLOCKED_ARMED_FACTION_INCOME (exact missing data).** No armed
+faction can earn the 25 000 ISK the bounty needs, because earning requires a real
+seeded sale and a sale requires a kill inside Jita/New Caldari:
+1. the stock mining fleet in region 10000002 sits at AU-scale positions
+   (`toBeltMeters` 4.4e11 m) and keeps warping on its station route
+   (`ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED`). Measured over 20 min: the raiding
+   cruiser went 15 122 m -> 37 253 m from its target, both in GOTO,
+   `currentTargetID 0`, zero module activations;
+2. a hull in an active warp is rejected by the native combat resolver, so the
+   chase cannot convert into damage (the new filter at least stops the pirate
+   from being dragged across the system);
+3. the only real exchange in 30000144 is a Guristas patrol retaliating against an
+   *unarmed* pirate for ~0.01 HP per sample, and Perimeter has no seeded buy rows
+   (the seeded rows are only at Jita 30000142 and New Caldari 30000145 stations).
+Nothing was minted, no fill or kill was invented.
+
+**NEXT ACTION (exact).** Two honest ways to close it, both world-configuration:
+(a) repair the mining fleet's real position/route state so a belt miner is
+stationary at a reachable point (then the raid kill, wreck, loot and seeded sale
+follow on the already-proven path), or
+(b) let an armed faction earn from a real seeded fill it can already reach (for
+example a real ore haul by a pirate hull that owns cargo). Do not seed region
+10000016 and do not place unbacked orders.
+Shipcaster logistics stays NEEDS_OWNER (no shipcaster beacon type exists for
+500011/500014/500020 - only 75928/75929/75930/75931 for the four empires).
+
+## 2026-10-27 (FW-014) - item 1: mining-fleet movement root causes found; item still OPEN
+
+**Read-only probe (new, 75f9f54f).** `mining_fleet_diagnose` (admin bridge,
+`systemIDs`) reports, per ship: mode, pendingWarp, the sessionless warp clock and
+its own destination distance, distance to the nearest real SDE belt and to the
+trip station, the arrival surface gap, the dwell clock, the controller manual
+order, the arbiter lease owner; per fleet: state, origin anchor, trip and the
+trip-journal record (latest manifest, departure ack, expiry, overdue).
+Live: `fleet 960004609 state=loaded originAnchor distanceMeters 448793612100`,
+`journal latestManifestKey 30000144-960004609-1793061051055 ageMs 20187185
+overdue true departureAck false expired false`, miner `nearestBelt 448793621638`.
+
+**Three real defects, all measured, all fixed:**
+1. **Ack-less prepared trip could never be closed** (88a3ee63). The journal
+   returned `ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED` without the deadline
+   evidence, and `expire()` demands a departure ack, so the fleet sat in
+   `loaded` for 5.4 h and mined nothing. `abandon()` now writes a durable
+   `ROUTE_ABANDONED` record after a 2 min grace (a route WITH an ack is still
+   only expired; manifest, cargo and ack untouched). Also: a stalled hull is
+   re-flown to its own trip's station with the same native warp, a hauler that
+   is already at the station is not warped (`WARP_DISTANCE_TOO_CLOSE` deadlocked
+   every new trip), and the native "too close" refusal now becomes a real
+   subwarp approach instead of `WARP_COMMAND_FAILED`.
+2. **The deposit loop threw out of the whole mining tick** (a5f3fd53).
+   `WARN [SpaceRuntime] Mining tick failed for system=30000145: baselineKey is
+   not defined`, every tick, for hours: `baselineKey` was block-scoped inside
+   the sale block and used again after it, so nothing was ever deposited. Hoisted.
+3. **A stranded miner was only ever told to follow its rock** (b93bae0d).
+   `TARGET_OUT_OF_RANGE distanceMeters 448793611732 engagementMeters 11500`.
+   `coopMiningBeltReturn` issues the same native warp the fleet uses for its own
+   warp-in (landing point one rock radius + one orbit radius from the centre),
+   and `coopMiningTripRetreatGuard` stops a retreat from dragging a hauler that
+   is flying an acknowledged trip (`living-mining-retreat-skip`,
+   `living-npc-station-trip-rewarp gapMeters 190173736005 accepted true`).
+
+**Tests:** 49/0 (diagnose 6, belt return 7, retreat guard 4, journal 32) ;
+recovery suite 8 pass / 2 fail, both identical at the pre-change baseline
+(verified with `git stash`). Overlay `OVERLAY_OK` reset=53 patches=series=7.
+
+**Item 1 is NOT closed.** The fleet has not re-entered `mining` yet, so
+`living-mining-belt-warp` has fired 0 times. The delivery leg now reaches its
+own arrival gate instead of throwing, and answers `WAREHOUSE_ARRIVAL_NOT_VERIFIED`
+for the last haulers of the 30000144 trip (the sampled haulers are gap 0 m,
+dwell set, ack true), so the exact next step is to explain that verdict
+(`verifyArrival`: point / stableAt / dwelled) and only then confirm a real
+mining cycle at the belt. Items 2-4 (pirate kill, seeded sale funding the war
+chest, verbatim loop proof) are untouched.

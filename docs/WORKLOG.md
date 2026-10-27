@@ -1033,3 +1033,45 @@ Why: refresh the two-client checklist with the current verified server precondit
 Detail: The old checklist told the tester to expect no assault because no NPC had a native module. That is no longer true: the authored war-patrol loadout row with a 60-deep charge bank gives real fitted weapons, and a real kill, wreck, loot, casualty, merit and promotion are already proven. The refresh records the live war state (2 ACTIVE wars, 4 campaigns, one in ASSAULT), the restored durable recovery,
 Where: docs/TWO_CLIENT_CHECKLIST.md
 Evidence: live: war state 2 ACTIVE wars/4 campaigns, campaign 30001363 ASSAULT; inspect_npc moduleCount 5 + 60 charges; living-native-durable-recovery OK
+### 2026-10-27T04:52Z · 9ff67b8 · L2 · fix(npc): a real pirate can raid again - three silent blockers removed
+
+Why: A configured materialize limit above the bridge contract threw before the bridge was assigned (raids/loot/market inert), the raid director read only the boot-time assignment map, and the civilian route director held a CIVILIAN lease on pirate hulls so every raid order was refused
+Detail: 1. EVEJS_COOP_MATERIALIZE_LIMIT=26 made createBridge() throw (contract: 1..10), which aborted observeSession() before 'bridge' was assigned: raids, loot delivery and market assignments all stopped existing while the world looked healthy. The value is now resolved through coopMaterializeLimit (clamped, reported) and the created bridge publishes living-native-bridge once. 2. The raid director read t
+Where: integration/coopMaterializeLimit.cjs, integration/coopNpcOrderBridge.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-materialize-limit.test.mjs, tests/coop-npc-order-bridge-diagnose.test.mjs
+Evidence: node --test tests/coop-materialize-limit.test.mjs tests/coop-npc-order-bridge-diagnose.test.mjs -> 11/0 ; live: living-native-bridge READY effectiveLimit 10, living-pirate-raid 30000145 attack on stock hauler 980000016318 (owner RAID, orderDiagnosis PERMITTED)
+### 2026-10-27T05:49Z · 8fefe8c · L2 · fix(raid): chase real prey, not a hull that is warping away
+
+Why: Raid target selection preferred a hauler regardless of distance and chased hulls in an active warp, which the native combat resolver rejects, so a real armed pirate never fired; added a read-only npc_pair_diagnose to measure positions, distance, controller order and the hostility verdict
+Detail: The raid director sorted candidates by role first, so a loaded hauler at a stuck-fleet position 4.4e11 m away outranked a loaded miner 300 km away, and a target in an active warp was chased even though the native combat resolver rejects warping targets (isValidCombatTarget). Both produced the same silent outcome: a real pirate with real ammo never fires. - distance decides; a hauler is preferred o
+Where: integration/coopAdminBridge.cjs, integration/coopNativeRaids.cjs, tests/coop-native-raids-gameplay.test.mjs
+Evidence: node --test tests/coop-native-raids-gameplay.test.mjs -> 9/0 ; live npc_pair_diagnose 980000018994->980000016318 engagementAllowed true manualType attack at 15122 m ; living-pirate-raid 30000145 target miner 980000016052
+### 2026-10-27T05:54Z · bcf4c5d · DOCS · docs(checklist): the front moved into seeded region 10000002, the income gap stays
+
+Why: the two-client checklist must carry the current real state: the armed-pair front is now in seeded region 10000002 and the remaining gap is armed-faction income
+Detail: Maurasi 30000140 is now Serpentis military control, so the only border between two ARMED factions inside region 10000002 is real (25 SDE belts, reciprocal gate 50000802<->50001248), and the seeded buyers really exist there (431 station/type buy rows at Jita and New Caldari). The campaign is refused for one measured reason only: SUPPLY_UNFUNDED for 500011 and 500020. Raids are live again and issue 
+Where: docs/TWO_CLIENT_CHECKLIST.md
+Evidence: warState.territories 30000140=500020 ; living-native-war-opening-blocked SUPPLY_UNFUNDED:500011|500020 ; 431 seeded buy rows at Jita/New Caldari
+### 2026-10-27T07:17Z · a5f3fd5 · L2 · coop: the deposit loop no longer throws out of the whole mining tick
+
+Why: the deposit loop threw 'baselineKey is not defined' out of every native mining tick, so no ore was ever deposited and the fleet never left 'loaded'
+Detail: Measured live (container evejs-server-1, 07:04Z): every native mining tick for 30000145 died with 'baselineKey is not defined'. The pre-sale snapshot key was declared inside the sale block and used again after it, so the ReferenceError escaped tickMiningFleet and nothing was ever deposited: the fleet stayed in 'loaded', never mined again and a raider had no prey at the belt. The key is now hoisted
+Where: integration/coopNativeStationArrival.cjs
+Evidence: container evejs-server-1 logs 07:04Z: WARN [SpaceRuntime] Mining tick failed for system=30000145: baselineKey is not defined (repeated every tick); after the fix the tick publishes WAREHOUSE_ARRIVAL_NOT_VERIFIED instead
+### 2026-10-27T06:46Z · 88a3ee6 · L2 · coop: a loaded mining fleet can close a trip that never departed
+
+Why: an ack-less prepared station trip could neither be resumed nor expired, so a loaded mining fleet sat in 'loaded' for five hours and never mined
+Detail: Measured live: fleet 960004609 sat in 'loaded' for five hours on manifest 30000144-960004609-1793061051055 with no departure ack while every tick reported ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED. Such a manifest can neither be resumed (no ack proves a departure) nor expired (expire() demands an ack), so the fleet never mined again and a raider had no prey at the belt. The journal now carries the dea
+Where: integration/coopNativeStationArrival.cjs, integration/coopNativeStationTripJournal.cjs, tests/coop-alife12-station-trip-journal.test.mjs
+Evidence: living-npc-station-route ROUTE_ABANDONED_STALE_PREPARED then a fresh manifest with departureAck true; living-npc-station-trip-rewarp gapMeters 190173736005 accepted true; living-mining-retreat-skip ACTIVE_STATION_TRIP_OWNS_THIS_HULL
+### 2026-10-27T07:17Z · b93bae0 · L2 · coop: a stranded miner really warps back to its rock
+
+Why: a miner out of range was only told to follow its rock at subwarp, so after a retreat the fleet could never return to the belt (4.48e11 m vs 11 500 m) and a raider had no prey
+Detail: A miner out of range is only ever told to FOLLOW its rock, i.e. to cross the distance at subwarp speed. After a retreat the whole fleet sits at its off-grid warp origin 2-4 AU from the belt, so that order can never arrive: measured TARGET_OUT_OF_RANGE 448 793 611 732 m against an 11 500 m engagement range, unchanged for hours, while the fleet still reported mining. coopMiningBeltReturn issues the 
+Where: docs/coop-flags.json, integration/coopMiningBeltReturn.cjs, integration/coopMiningFleetDiagnose.cjs, integration/coopMiningTripRetreatGuard.cjs, scripts/overlay-spec.cjs, tests/coop-mining-belt-return.test.mjs, tests/coop-mining-trip-retreat-guard.test.mjs
+Evidence: living-mining-belt-warp WARP_ISSUED (live, after the fleet returns to mining) + tests/coop-mining-belt-return.test.mjs 7/0 + tests/coop-mining-trip-retreat-guard.test.mjs 4/0
+### 2026-10-27T06:09Z · 75f9f54 · L2 · coop: a read-only probe that says why a mining fleet is not at its belt
+
+Why: a mining fleet that is not at its belt had no published reason: the stock loop silently continues on every blocker
+Detail: The stock mining loop fails silently in two places: a miner out of range is only told to follow its rock at subwarp, and a loaded fleet whose trip journal refuses to close sits in 'loaded' forever while reporting a healthy state. mining_fleet_diagnose reports the measured state instead: per-ship mode/pendingWarp/sessionless ingress clock and its own destination distance, distance to the nearest re
+Where: integration/coopAdminBridge.cjs, integration/coopMiningFleetDiagnose.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-mining-fleet-diagnose.test.mjs
+Evidence: admin bridge mining_fleet_diagnose -> journal latestManifestKey 30000144-960004609-1793061051055 overdue true departureAck false; originAnchor distanceMeters 448793612100
