@@ -347,9 +347,12 @@ const specs=[
     // trigger compares the fill against the MINER's own capacity, which is how
     // 18 777 m3 waited for a hauler whose real hold is 5 500 m3.
     line:'  require("../../space/coopMiningFillCap").apply(scene, fleetRecord, cargoState);'},
-   // The refinery is real but had no caller: refine the corporation's warehouse ore at
-   // the station this fleet last visited. The module throttles and never invents a quote.
-   {anchor:"  const cargoState = getFleetCargoState(scene, fleetRecord);",after:true,
+   // The refinery is real but had no caller, and the first placement sat after two early
+   // returns (no hauler linked, hauler still in transit), so it never ran live: the
+   // refinery directory did not even exist. It now runs on every haul check; the module
+   // throttles itself, proves the station from the fleet's newest trip manifest and reports
+   // living-npc-refinery-skipped instead of guessing.
+   {anchor:"function shouldTriggerHauling(scene, fleetRecord, noAsteroidsRemain = false, now = Date.now()) {",after:true,
     line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0,fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0});}catch(_coopRefineError){}'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
