@@ -748,7 +748,51 @@ function diagnoseWarState(){
  return {status:"OK",version:Number(state.version)||0,
   territories,wars,campaigns,
   counts:{territories:Object.keys(territories).length,wars:wars.length,
-   campaigns:campaigns.length}};
+   campaigns:campaigns.length},
+  presence:presenceSummary()};
+}
+// The same presence the opening phase derives territories from: per system, how
+// many linked pilots resolve to a real faction, and why a link was skipped. A
+// funded faction with no territory here can never get a front.
+function presenceSummary(){
+ try{
+  const opening=require("./coopFactionWarOpening");
+  const factions=require("./factions");
+  const nativeStore=require("./npc/nativeNpcStore");
+  const links=Object.values(identityRegistry?.snapshot().links||{});
+  const systems=new Map();
+  const skipped=[];
+  for(const link of links){
+   const systemID=Number(link?.systemID)||0;
+   const entityID=Number(link?.entityID)||0;
+   if(!(systemID>0)||!(entityID>0))continue;
+   const native=nativeStore.getNativeEntity(entityID);
+   const faction=Number(factions.getFactionIDForCorporation(native?.corporationID))||0;
+   const row=systems.get(systemID)||{systemID,linked:0,resolved:0,factions:{},skipped:0};
+   row.linked+=1;
+   if(!native){row.skipped+=1;skipped.push({entityID,reason:"NO_NATIVE_ENTITY"});}
+   else if(Number(native.systemID)!==systemID){
+    row.skipped+=1;
+    skipped.push({entityID,reason:"LINK_NATIVE_SYSTEM_MISMATCH",
+     linkSystemID:systemID,nativeSystemID:Number(native.systemID)||0});
+   }else if(!(faction>0)){
+    row.skipped+=1;
+    skipped.push({entityID,reason:"NO_FACTION_FOR_CORPORATION",
+     corporationID:Number(native.corporationID)||0});
+   }else{
+    row.resolved+=1;
+    const key=String(faction);
+    row.factions[key]=(row.factions[key]||0)+1;
+   }
+   systems.set(systemID,row);
+  }
+  return {systems:Array.from(systems.values()).sort((a,b)=>a.systemID-b.systemID),
+   skipped:skipped.slice(0,8),minShips:1,
+   note:"TERRITORIES_NEED_AT_LEAST_ONE_RESOLVED_PILOT_PER_SYSTEM"};
+ }catch(error){
+  return {status:"PRESENCE_UNAVAILABLE",
+   reason:String(error&&error.message||error).slice(0,120)};
+ }
 }
 function diagnoseMobilization(){
  if(!warMobilizer)return {status:"MOBILIZER_NOT_INITIALIZED"};
