@@ -18,8 +18,10 @@ test('the hauler is warped only beyond the native warp minimum', () => {
 });
 
 test('a short approach is a real follow order, not an orbit label', () => {
-  assert.ok(generator.includes('npcRuntime.follow(haulerID, minerID, 500)'),
-    'a sub-warp approach must follow the moving miner');
+  // A one-shot scene follow loses to the NPC behaviour loop: measured mode FOLLOW with
+  // speedFraction 1 and a frozen 3 221 m gap across dozens of attempts.
+  assert.ok(generator.includes('npcService.issueManualOrder(haulerID, {type: "follow"'),
+    'a sub-warp approach must be a manual follow order the NPC loop honours');
   assert.ok(generator.includes('FOLLOWING_MINER'));
 });
 
