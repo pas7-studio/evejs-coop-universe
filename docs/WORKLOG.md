@@ -1518,3 +1518,15 @@ Why: Owner reports lag and bursty combat; measure before changing anything
 Detail: The play server sits at ~98% of one core with ~100 NPCs across 8 systems, so combat resolves in bursts. compose.agents.yaml enables a V8 CPU profile (1 ms) in the work stack only; scripts/Analyze-CpuProfile.cjs ranks self time per function so the fix targets a measured hot spot.
 Where: compose/compose.agents.yaml, scripts/Analyze-CpuProfile.cjs
 Evidence: docker stats: evejs-server-1 98.3% of one core twice in a row, client 92%, evejs-agents-server-1 12%, machine 21% of 32 cores; fleet_state 30000144 pilots=30, 30000145 pilots=20, 30000142 pilots=15
+### 2026-10-27T17:25Z · 4ea6254 · L1 · perf(L1): the native NPC store cloned the whole root on every collection read
+
+Why: Server pinned one core and combat resolved in bursts; a live profile showed 86.7% in the NPC store root clone
+Detail: Live V8 profile: 62.7% cloneValue + 24.0% ensureRootShape in nativeNpcStore. Rows are written through subpaths, so the root shape only has to be verified once per table per process, and readCollection can read its own collection instead of the whole root. Patch 0009, OVERLAY_OK, no game-rule change.
+Where: .opencode/metrics.md, patches/upstream/0009-native-npc-store-root-clone.patch, patches/upstream/MANIFEST.json
+Evidence: profile before: cloneValue 62.7% + ensureRootShape 24.0%, idle 0%; after: cloneValue 41.9%, ensureRootShape 0%, idle 32.7%; OVERLAY_OK; patch 0009 sha256 83c5828c
+### 2026-10-27T17:49Z · bfe2e39 · L3 · perf: one bulk native read per window, and phase metrics to prove it
+
+Why: Profile-named hot loops in our own modules paid a full native collection clone per entity; and there was no way to see phase cost at all
+Detail: The profile named three of our own loops paying a full collection clone per entity: war pair evaluation (23% of wall), cargo adoption (5.5%), mining fleet check (3.4%). coopNativeReadCache keeps identity facts for 200 ms with an explicit invalidate; coopPerfMetrics times every safeNpcPhase and reports the top eight phases each minute when enabled. Review with all measured numbers in docs/PERFORMAN
+Where: .opencode/metrics.md, docs/PERFORMANCE_REVIEW.md, integration/coopHaulCargoAdoption.cjs, integration/coopNativeMiningFleetDurable.cjs, integration/coopNativeReadCache.cjs, integration/coopPerfMetrics.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarCombatAuthority.cjs, scripts/overlay-spec.cjs, tests/coop-native-read-cache.test.mjs, tests/coop-perf-metrics.test.mjs
+Evidence: chains: evaluatePair 5962ms/23% wall, cargoRows 1406ms, miningFleetDurable.check 871ms; new suites 11/11; OVERLAY_OK; image rebuilt

@@ -175,6 +175,17 @@ function transform(source,spec,remove){
   const completeFn='function completeHaulCycle(scene, fleetRecord, now) {';
   const loadedBlock=[
     '  if (process.env.EVEJS_COOP_NATIVE_HAUL_CARGO === "1") {',
+    '    // A haul that moved NOTHING is not a loaded fleet. The old code flipped to',
+    '    // "loaded" regardless, so a hauler still out of range sent the fleet to the',
+    '    // station with an empty hold (measured on the work stack: lastHauledVolumeM3',
+    '    // 0, living-native-haul-delivered NO_CARGO, over and over). Stay in mining',
+    '    // and retry, so the real cargo transfer decides when the trip starts.',
+    '    if (!(hauledVolumeM3 > 0)) {',
+    '      fleetRecord.state = "mining";',
+    '      fleetRecord.nextThinkAtMs = now + 2000;',
+    '      require("../../space/coopRuntimeProbe").observe("living-haul-empty-retry", null, { spaceState: { systemID: fleetRecord.systemID } }, { fleetID: toInt(fleetRecord.fleetID, 0) });',
+    '      return;',
+    '    }',
     '    fleetRecord.state = "loaded";',
     '    fleetRecord.loadedUntilMs = now + Math.max(30000, Math.min(240000, Number(process.env.EVEJS_COOP_HAULER_HOLD_MS || 120000)));',
     '    fleetRecord.lastHauledVolumeM3 = hauledVolumeM3;',
