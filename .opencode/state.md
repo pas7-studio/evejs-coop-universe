@@ -998,3 +998,15 @@ belt return flies the miners home, and the next raid at the belt is the one that
 convert into damage. Then: wreck -> stored loot -> New Caldari 30000145 seeded sale
 -> Serpentis 500020 real income -> warBountyReserve -> war 500011-500020 opens
 with SUPPLY_UNFUNDED resolved -> escrow PAYOUT to the named pilot.
+
+**Correction/refinement to the item 2 next step (same run, 08:18Z).** The pirate
+980000018058 holds controller.manualType:"attack" with currentTargetID:0 while
+flying GOTO, and the order bridge's own diagnose answers
+COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE for a hull with an active native command. So
+the most likely mechanism is self-blocking: the raid's earlier ttack order is
+still active, the native controller refuses the later warp-to-hauler, and the hull
+subwarps toward a target 2.5 AU away while the fleet stays "aggressed". Check that
+before changing any distance constant: read
+coopNpcOrderBridge.diagnose({entityID:980000018058}) and, if it is
+NATIVE_COMMAND_ACTIVE, make the raid release its own previous order before issuing
+the approach (one owner per record), publishing RAID_ORDER_RELEASED_FOR_APPROACH.
