@@ -1215,3 +1215,21 @@ Evidence: live raid_diagnose 30000145 -> OK, pirates 4, fleetShips 23, gunRangeM
 Why: Two hard facts found by measurement: out-of-process GameStore writes are discarded (flushed:false) and the mineral book is empty region-wide; both change the plan.
 Where: .opencode/state.md, docs/WORKLOG.md, scripts/coop-mineral-audit.cjs, tests/coop-mineral-audit.test.mjs
 Evidence: flushTableSync flushed:false for items/industryBlueprintState; factory audit blueprints=0 after grant; GetOrders 10000002 type 34/35 = 0
+### 2026-10-27T11:27Z · c6965db · L2 · FW-018d: the raid's lease owns the hull's movement, so the stock leash cannot abort it
+
+Why: FW-018d: the raid widens the hull's own stock leash to the approach it ordered and restores the profile value on release (a retreating fleet moved the prey 2.5 AU and the leash cleared every order)
+Detail: Measured live: the blaster cruiser 980000018058 (5 real turrets, 300 real charges, its own gun range RESOLVED at 1050 m) got an attack order 4.4 km from its prey, then the prey's own retreat moved the fleet 2.5 AU and the stock loop found the hull beyond its 90 km leash: it cleared the combat state and flew home on every think (mode GOTO, returningHome true, manualType empty, currentTargetID 0), s
+Where: integration/coopNativeRaids.cjs, integration/coopVirtualWorldRuntime.cjs
+Evidence: tests 35/35; live: 980000018058 returningHome true, leash 90000 m, manualType empty with the prey 2.5 AU away
+### 2026-10-27T11:34Z · 57dc8cf · L2 · FW-018e: npc_pair_diagnose reports the native target-lock state of both hulls
+
+Why: npc_pair_diagnose reports completed/pending native target locks and live module effects per hull
+Detail: A warp point refuses TARGET_NOT_LOCKED and a turret fires nothing, both for the same reason: no completed native lock. The pair diagnose now reports, per hull, the completed locks, the pending locks with their completion time and the live module effects, so 'the lock never completed' is measured instead of inferred.
+Where: integration/coopAdminBridge.cjs
+Evidence: tests/coop-admin-bridge-raid-diagnose.test.mjs 4/4; OVERLAY_OK; deployed
+### 2026-10-27T11:38Z · f5d8454 · L2 · FW-018f: remove the orphan home-anchor call site (the leash owns the hull's movement instead)
+
+Why: Refinery minerals had no way back to ISK: a hangar stack cannot be sold by the ship trader, and the audit read a field that does not exist, hiding 23 real seeded bids per type.
+Detail: c6965dbd already widens the hull's own stock leash while the raid holds its lease, so the separate home-anchor relocation is not a second mechanism: it was dropped, and this removes the call site a concurrent commit had captured without its definition (live: living-world-phase-failed phase native-raids reason relocateRaidHomeAnchors is not defined).
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: coop-npc-mineral-lift 9/9, coop-mineral-audit 6/6; live GetOrders 10000002 buys=23 per type, station 60000682 Tritanium 5000@2.96 Pyerite 5000@16.35

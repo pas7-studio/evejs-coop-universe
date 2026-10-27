@@ -1,5 +1,25 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 12:0xZ - the mineral buyer was there all along (measurement bug fixed)
+
+The market daemon answers GetOrders as a BOOK of two sides: {buys, sells}. The audit and
+the earlier probe read `orders`, which never exists, so 'region 10000002 has zero mineral
+demand' was wrong. Live now: 23 seeded BIDS per type. Station 60000682 (New Caldari) has
+Tritanium 5000 @2.96 and Pyerite 5000 @16.35 right on the station the refinery already
+uses; 60000358 (Perimeter) has NO local bid, so its stock cannot be sold there.
+
+Bid depth is the real ceiling: 5000 per type per station, so the honest revenue is about
+14 800 + 81 750 ISK, but only 14 800 ISK of that is one order's depth at 2.96 for 5000
+units. Everything above the bid volume stays unsold, by design, never 'assumed'.
+
+New leg (OFF by default, EVEJS_COOP_NPC_MINERAL_LIFT=1): integration/coopNpcMineralLift.cjs
+takes the exact quantity out of the corporation hangar, writes a journal, puts it into the
+hauler real native cargo carry row, verifies it, then receipts it. A journal whose cargo is
+verified is replayed; a journal whose stock moved but whose cargo is missing halts the leg
+with NEEDS_OPERATOR_REPAIR. sellOnArrival calls it before the proven sale path, so those
+minerals are liquidated against the local seeded bids and the pilot ledger credits ISK,
+which the corp treasury sweep then pulls back to the corporation.
+
 ## 2026-10-27 11:26Z - BPO bootstrap must run INSIDE the server process
 
 grantItemToOwnerLocation(1000129, 60000358, 4, 950 /* Merlin Blueprint */, 1, {singleton}) plus

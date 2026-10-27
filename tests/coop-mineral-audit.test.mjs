@@ -39,6 +39,12 @@ test('the best seeded buy order wins on price and ignores other sources or stati
   assert.equal(best.price, 7.2);
 });
 
+test('a market book is read from its real buy side, never the empty generic field', () => {
+  assert.deepEqual(audit.bookBuys({buys: [order()], sells: [order()]}).length, 1);
+  assert.deepEqual(audit.bookBuys({orders: [order()]}), []);
+  assert.deepEqual(audit.bookBuys(null), []);
+});
+
 test('an audit prices the real stock and says exactly where no buyer exists', async () => {
   const report = await audit.audit({
     ownerID: 1000129,

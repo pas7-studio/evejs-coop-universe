@@ -54,6 +54,13 @@ function bestSeededBuy(orders, { stationID, typeID } = {}) {
     num(right.price) - num(left.price) || num(right.vol_remaining) - num(left.vol_remaining))[0];
 }
 
+// The daemon answers a book of two sides (buys / sells); a mineral can only be
+// sold into a real bid, so only the buy side is demand. Reading the wrong field
+// once hid 23 real bids per type and made the whole region look empty.
+function bookBuys(book) {
+  return Array.isArray(book && book.buys) ? book.buys : [];
+}
+
 function groupByStationAndType(rows) {
   const out = new Map();
   for (const row of rows) {
@@ -85,8 +92,12 @@ async function audit({ rows, ownerID, orders, regionForStation } = {}) {
     stations.push({...group,
       bestPrice: best ? num(best.price) : null,
       bestOrderID: best ? String(best.order_id || "") : null,
-      isk: best ? Math.round(num(best.price) * group.quantity * 100) / 100 : 0,
-      status: best ? "BUYER_FOUND" : (reason || "NO_SEEDED_COUNTERPARTY")});
+      // A bid only pays for its own remaining volume; the rest of the stack is
+      // not sellable at that price and must never be counted as ISK.
+      sellable: best ? Math.min(group.quantity, num(best.vol_remaining)) : 0,
+      isk: best ? Math.round(num(best.price) * Math.min(group.quantity, num(best.vol_remaining)) * 100) / 100 : 0,
+      status: best ? (num(best.vol_remaining) >= group.quantity ? "BUYER_FOUND" : "BUYER_DEPTH_LIMITED")
+        : (reason || "NO_SEEDED_COUNTERPARTY")});
   }
   const isk = Math.round(stations.reduce((sum, row) => sum + row.isk, 0) * 100) / 100;
   const unsold = stations.filter((row) => row.status !== "BUYER_FOUND").length;
@@ -100,7 +111,8 @@ function format(report) {
     " potential_isk=" + report.isk.toFixed(2)];
   for (const row of report.stations) {
     lines.push("  station=" + row.stationID + " type=" + row.typeID +
-      " qty=" + row.quantity + " price=" + (row.bestPrice === null ? "-" : row.bestPrice) +
+      " qty=" + row.quantity + " sellable=" + (row.sellable || 0) +
+      " price=" + (row.bestPrice === null ? "-" : row.bestPrice) +
       " isk=" + row.isk.toFixed(2) + " " + row.status);
   }
   if (report.status === "NO_MINERAL_STOCK")
@@ -108,7 +120,8 @@ function format(report) {
   return lines.join("\n");
 }
 
-module.exports = {REFINE_TAG, HANGAR, mineralRows, bestSeededBuy, groupByStationAndType, audit, format};
+module.exports = {REFINE_TAG, HANGAR, mineralRows, bookBuys, bestSeededBuy,
+  groupByStationAndType, audit, format};
 
 if (require.main === module) {
   const arg = process.argv.indexOf("--owner");
@@ -123,7 +136,7 @@ if (require.main === module) {
     rows, ownerID,
     regionForStation: (stationID) => pos(worldData.getStationByID(stationID)?.regionID),
     orders: async ({regionID, typeID}) =>
-      (await market.call("GetOrders", {region_id: regionID, type_id: typeID}))?.orders || [],
+      bookBuys(await market.call("GetOrders", {region_id: regionID, type_id: typeID})),
   }).then((report) => { console.log(format(report)); })
     .catch((error) => {
       console.log("status=AUDIT_FAILED reason=" + String(error && error.message).slice(0, 120));

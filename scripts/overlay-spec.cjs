@@ -122,6 +122,9 @@ names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
 names.splice(names.indexOf("coopCargoVolume")+1,0,"coopNpcRefineryTick");
 // The corporation must be paid for its ore, or it can never afford its own refining fee.
 names.splice(names.indexOf("coopNpcRefineryTick")+1,0,"coopNpcCorpTreasury");
+// The refinery leaves minerals in the corporation hangar; this loads them into a
+// real native cargo hold so the proven sale path can turn them back into ISK.
+names.splice(names.indexOf("coopNpcCorpTreasury")+1,0,"coopNpcMineralLift");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
