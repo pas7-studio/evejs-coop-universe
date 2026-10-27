@@ -1,6 +1,6 @@
 {
   "pin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
-  "policy": "applied only by scripts/apply-upstream-patches.cjs, before the L2 overlay",
+  "policy": "PROPOSALS ONLY (since 2026-10-28). The engine is our own fork pas7-studio/EveJS branch coop/pas7std; these patches are kept as atomic diffs we could offer upstream, they are not replayed to ship our code. See docs/UPSTREAM_PATCH_SERIES.md.",
   "patches": [
     {
       "file": "0001-native-npc-store-export-list-cargo.patch",
@@ -8,7 +8,7 @@
       "files": [
         "server/src/space/npc/nativeNpcStore.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "trivial export, candidate for an atomic upstream PR"
     },
     {
@@ -17,7 +17,7 @@
       "files": [
         "server/src/space/npc/nativeNpcService.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "native NPC capacitor recharge rate + durable identity on state save, candidate for an atomic upstream PR"
     },
     {
@@ -26,7 +26,7 @@
       "files": [
         "server/src/space/npc/npcBehaviorLoop.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "sessionless capacitor advance for native NPCs (shared-stamp interval fix), candidate for an atomic upstream PR"
     },
     {
@@ -35,7 +35,7 @@
       "files": [
         "server/src/services/mining/miningNpcOperations.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "a durable fleet actor is pruned while its stored controller row still exists, candidate for an atomic upstream PR"
     },
     {
@@ -44,7 +44,7 @@
       "files": [
         "server/src/space/npc/npcCombatDormancy.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "a durable co-op NPC is dematerialised by the combat-dormancy sweep on every no-session scene, candidate for an atomic upstream PR"
     },
     {
@@ -53,7 +53,7 @@
       "files": [
         "server/src/space/runtime.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, and warpToEntity/warpToPoint resolved the command ship only from a session so an NPC hull warped while really scrambled, candidate for an atomic upstream PR"
     },
     {
@@ -64,7 +64,7 @@
         "server/src/space/npc/npcSelection.js",
         "server/src/space/npc/npcService.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "buildNpcDefinition/spawnBatchInSystem could not fit an authored loadout row for a profile whose own row is the retail empty loadout; optional options.loadoutID, retail behaviour unchanged when absent, candidate for an atomic upstream PR"
     },
     {
@@ -73,7 +73,7 @@
       "files": [
         "server/src/space/modules/hostileModuleRuntime.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "getEntityWarpScrambleStatus returned the passive hull baseline (-2) instead of the live scrambler/disruptor sum, so a real warp point could never stop a real warp, candidate for an atomic upstream PR"
     },
     {
@@ -82,7 +82,7 @@
       "files": [
         "server/src/space/npc/nativeNpcStore.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "readCollection/ensureRootShape re-read and double-cloned the entire NPC root on every call; a live profile measured 86.7% of one core there. Root shape is now verified once per table per process and collections are read by subpath. Candidate for an atomic upstream PR"
     },
     {
@@ -91,7 +91,7 @@
       "files": [
         "server/src/space/npc/npcDefaultConcordRules.js"
       ],
-      "status": "not-sent",
+      "status": "in-fork",
       "note": "the cache-hit path deep-copied every generated CONCORD startup rule through JSON.parse(JSON.stringify()); structuredClone is the same copy without the round-trip. Candidate for an atomic upstream PR"
     }
   ]

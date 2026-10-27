@@ -1,7 +1,15 @@
-# Upstream patch series — ownership and layering
+# Upstream patch series — proposals, not the shipping mechanism
 
-This repository owns the **exact** set of changes applied to the pinned EveJS
-checkout. Nothing lives only as an edit inside `C:\Games\EveCoop\upstream-evejs`.
+**Changed 2026-10-28 (D1 revision).** The engine is now our own fork,
+[`pas7-studio/EveJS`](https://github.com/pas7-studio/EveJS) branch
+`coop/pas7std` (fork point `c3ea396`, see that repo's `FORK.md`). The pinned
+checkout is no longer upstream — it *is* our code, committed.
+
+A behaviour change is therefore a **commit in the fork** plus tests here.
+`patches/upstream/*.patch` are kept only as **proposals**: atomic, reviewable
+diffs anyone could send upstream if it revives. They are no longer replayed to
+ship our code, and `scripts/patch-evejs-coop.cjs` is legacy tooling kept for
+archaeology and rollback.
 
 ## Three layers, one rule each
 

@@ -12,16 +12,20 @@ and die, and persistent consequences two or more players can join in on.**
 
 ## Where this comes from
 
-- **Base server:** [gameboys84/EveJS](https://github.com/gameboys84/EveJS), pinned at
-  `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` (EVE 24.01 build **3396210**),
-  running from a local `evejs-local` Docker image. Upstream stays localhost-only.
+- **Base engine — our fork:** [pas7-studio/EveJS](https://github.com/pas7-studio/EveJS),
+  branch `coop/pas7std`, forked from [gameboys84/EveJS](https://github.com/gameboys84/EveJS)
+  at `c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` (EVE 24.01 build **3396210**).
+  We continue that engine ourselves — it is no longer a pristine upstream plus a
+  replay overlay — and build it as the local `evejs-local` Docker image. See that
+  repo's `FORK.md`; everything stays localhost-only.
 - **Idea source:** [X-Eve Living Universe](https://github.com/kaiwren986/evejs-living-universe)
   (patch v0.2.2 against EveJS v0.12.3.1). Its "virtual NPCs outside the scene,
   physical NPCs inside it" model is the concept this repo grew from — **it is not
   vendored**, and `EveJS main` is not the archive that patch expects.
-- **Everything else in this repo is ours:** ~384 co-op overlay modules, 10 atomic
-  upstream patches, 6 Rust bridges, ~645 test files and 224 scripts, all built for
-  this pinned tree and this group of players.
+- **Everything else in this repo is ours:** tests, orchestration, compose
+  overrides, evidence and doctrine — plus 10 atomic patches kept only as
+  proposals for the original author, 6 Rust bridges, ~645 test files and 224
+  scripts.
 
 ## What is proven, and what is not
 

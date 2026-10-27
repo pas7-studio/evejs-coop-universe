@@ -29,24 +29,31 @@ its gates, the exact events each stage must emit, and the acceptance command. Fo
 
 ## Where a change goes (read before editing)
 
-We own every change in **this** repository; the EveJS checkout is never the
-source of truth. Three layers, one rule each — full rules in
-[docs/UPSTREAM_PATCH_SERIES.md](docs/UPSTREAM_PATCH_SERIES.md):
+**The server code is ours.** Since 2026-10-28 the engine is the fork
+[`pas7-studio/EveJS`](https://github.com/pas7-studio/EveJS), branch
+`coop/pas7std`, checked out at `C:\Games\EveCoop\upstream-evejs` and built as
+`evejs-local`. Modify it there and **commit** — an uncommitted edit is the one
+thing that is still forbidden ([docs/UPSTREAM_PATCH_SERIES.md](docs/UPSTREAM_PATCH_SERIES.md),
+[DEVELOPMENT_DOCTRINE.md](docs/DEVELOPMENT_DOCTRINE.md) §2/D1).
 
-- **L1 stock bug or omission → `patches/upstream/NNN-*.patch`.** Real diff,
-  pinned, reversible. Apply with
-  `node scripts/apply-upstream-patches.cjs --checkout <Code> [--apply|--reverse]`;
-  it refuses a `sha256` or pin mismatch. One atomic patch per fix, plus an entry
-  in `patches/upstream/MANIFEST.json`.
-- **L2 co-op rule → `integration/*.cjs` plus one hook line in
-  `scripts/patch-evejs-coop.cjs`.** Env-gated, default OFF.
-- **L3 stateful mechanism → a new runtime phase/module**, never a string patch.
+This repository keeps the things the engine cannot own: tests, orchestration
+scripts, compose overrides, evidence, doctrine. `patches/upstream/*.patch` is a
+**proposal archive** for the (inactive) original author — not a way to ship.
 
-Order is always **L1 → L2**, then `--check` must print `OVERLAY_OK` before
-building. Keep our complete native set on the private branch with
-`--apply --branch coop/pas7std --commit`. Upstream receives only atomic
-proposals, and a merged proposal advances the pin instead of drifting. Never add
-a second patching mechanism.
+The overlay installer (`scripts/patch-evejs-coop.cjs`) is legacy: do not use it
+to add behaviour, and expect `DRIFTED` when pointed at the fork.
+
+- **stock bug or omission → a focused commit in the fork**, with a reproducing
+  test in this repo. If it is worth offering upstream, also keep it as
+  `patches/upstream/NNN-*.patch` (proposal only, recorded in `MANIFEST.json`).
+- **co-op rule → a module in the fork** (`Code/server/src/space/coop*.js`) plus
+  a one-statement, env-gated hook, default OFF. The `integration/*.cjs` copies
+  in this repo are the archived originals, not the deployed file.
+- **stateful mechanism → a new runtime phase/module**, never a string patch.
+
+Deploy = commit in the fork, then `cd C:\Games\EveCoop\upstream-evejs\Code;
+docker build -t evejs-local .` and restart the agent stack. Never add a second
+patching mechanism.
 
 **Log every change, do not remember it.** After committing, run
 `node scripts/log-change.cjs --layer <L1|L2|L3|DOCS|TEST|OPS> --why "..."

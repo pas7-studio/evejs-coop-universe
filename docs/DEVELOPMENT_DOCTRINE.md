@@ -1,6 +1,7 @@
 # Development doctrine — overlay engineering and upgrade safety
 
-**Status: binding for all coding agents and human contributors (2026-10-25).**
+**Status: binding for all coding agents and human contributors (2026-10-25;
+D1 revised 2026-10-28 — the engine is now our own fork).**
 Task: `COOP-023`. This document is the single source of truth for *how* the
 co-op overlay is allowed to change the pinned EveJS server. It does not replace
 gameplay acceptance ([GAMEPLAY_TESTING.md](GAMEPLAY_TESTING.md)) or provenance
@@ -14,41 +15,51 @@ same commit — do not work around it silently.
 
 | Layer | Location | Owner | Rule |
 | --- | --- | --- | --- |
-| L0 upstream EveJS | `C:\Games\EveCoop\upstream-evejs` (Docker `evejs-local`) | upstream | Never forked, never committed here, never hand-edited |
-| L1 native hooks | 22 insertions in 9 upstream files | this repo | ≤1 statement per insertion, env-gated, default OFF |
+| L0 engine | [`pas7-studio/EveJS`](https://github.com/pas7-studio/EveJS) branch `coop/pas7std`; working copy `C:\Games\EveCoop\upstream-evejs` (Docker `evejs-local`) | **us** | Our own code. Changes are commits there, never uncommitted edits |
+| L1 native fixes | the same fork (was 22 insertions in 9 stock files) | us | Still minimal and reviewable, but a normal commit, not a replay patch |
 | L2 integration modules | `integration/*.cjs` → `server/src/space/*.js` | this repo | repo copy is the only truth |
 | L3 tooling | `scripts/` (installer, deploy, verify) | this repo | read-only unless a named action mutates |
 | L4 evidence + docs | `docs/`, `docs/evidence/`, `test-results/` | this repo | no claim without evidence |
 
-The server foundation is **L0**. Everything this project writes lives in L1–L4.
-A repo that contains no upstream source is the intended state, not an omission.
+The server foundation is **ours (L0 = the fork)**. L1–L4 in this repository hold
+tests, orchestration, evidence and doctrine; the server code lives in the fork.
 
-## 2. Decision: overlay, not fork (D1)
+## 2. Decision: own the fork (D1, revised 2026-10-28)
 
-We keep upstream byte-identical and apply a transactional overlay
-(`scripts/patch-evejs-coop.cjs`) because:
+**Superseded:** the original rule was "overlay, not fork" — keep upstream
+byte-identical and replay a transactional overlay. That decision was made when
+the change surface was 59 new modules and 22 statements; its own revisit trigger
+(*"one release needs more than 5 files re-anchored"*) fired long before this
+revision, and upstream stopped being maintained.
 
-- a fork pays the same re-anchoring cost on every upstream release, but also
-  loses `git pull`, upstream issue reporting and PR contribution;
-- 59 modules are *new files*, only 22 statements touch upstream — the blast
-  radius of a release is small and enumerable;
-- the installer refuses unknown revisions and rolls back on failure, so a
-  mismatch is loud instead of corrupting the world.
+Measured on 2026-10-28, before the fork was created: in
+`C:\Games\EveCoop\upstream-evejs` there were **457 changed files under
+`Code/server/src` with ~73 000 added lines**, and **none of it was committed** —
+`main` still pointed at the pin `c3ea396`. The "upstream stays byte-identical"
+claim was already false in practice, and the code existed only as an
+uncommitted working tree with no history to bisect, review or restore.
 
-**Revisit this decision** if any of these become true:
+Current rule:
 
-1. upstream adds real extension points (event bus, NPC behaviour registry,
-   plugin loader) — then L1 shrinks to zero and we adopt them;
-2. one release needs more than 5 files re-anchored — then evaluate a tracked
-   fork branch with a rebase runbook;
-3. more than ~40 anchors exist — anchor churn becomes the dominant cost.
-
-Until then: no fork, no vendored upstream source, no in-place upstream commits.
+- The engine is [`pas7-studio/EveJS`](https://github.com/pas7-studio/EveJS),
+  branch `coop/pas7std`, default branch of that repo. We continue it publicly
+  and say so in its `FORK.md`: diverged from `gameboys84/EveJS` at `c3ea396`.
+- A behavioural change is a **commit in the fork** with a test in this repo.
+  Never an uncommitted edit in a checkout, never a string patch.
+- Hooks stay one-statement and env-gated, default OFF (R2/R3 below still bind):
+  the fork does not make a co-op rule unconditional.
+- `patches/upstream/*.patch` is now a **proposal archive**, not the shipping
+  mechanism. If upstream ever revives, a proposal is still a clean atomic diff;
+  nothing breaks if it is never merged.
+- `scripts/patch-evejs-coop.cjs` is **legacy**: kept to reconstruct or audit
+  history, never required to deploy, never used to add new behaviour. Its
+  `DRIFTED` verdict against a fork checkout is expected and is not a defect.
 
 ## 3. Rules for touching upstream (L1)
 
-- **R1** Never edit the deployed tree by hand. `--check` exists to catch exactly
-  that; a hand fix is a future silent overwrite.
+- **R1** Never edit the deployed tree by hand and leave it there. Since D1 the
+  checkout is ours: a change is fine, an **uncommitted** change is not. Commit
+  it on `coop/pas7std` (push to `pas7-studio/EveJS`) before it is deployed.
 - **R2** An insertion is one statement: `require("...").hook(...)` or a guarded
   `if (env) ...`. No multi-line logic, no local variables, no control-flow
   rewriting. Logic belongs in L2 where it can be tested.
@@ -200,7 +211,9 @@ Rungs 4–6 are evidence, not opinions. Documentation alone never advances a run
 
 ## 9. Decision log
 
-- **D1** Overlay instead of fork — see §2, with explicit revisit triggers.
+- **D1** We own the engine: `pas7-studio/EveJS`, branch `coop/pas7std` — see §2.
+  Replaces the 2026-10-25 "overlay instead of fork" decision, whose revisit
+  trigger fired; patches are proposals only.
 - **D2** One transactional installer, concern-specific transform helpers in
   `scripts/coop-*-patch.cjs`. Rationale: atomic rollback across all files.
 - **D3** `.cjs` modules are deployed as `.js` into `server/src/space`. Accepted
