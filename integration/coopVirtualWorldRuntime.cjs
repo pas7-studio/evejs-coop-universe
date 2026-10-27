@@ -30,6 +30,11 @@ function warMeritRecords(){
  try{return warMeritLedger.records();}catch{return {}}
 }
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
+let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false;
+// Wall-clock instant this process started running the living world. A wreck
+// claim is never closed or re-spawned inside the boot grace window, because a
+// scene that has just been created may not have loaded its entities yet.
+const worldBootAtMs=Date.now();
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
 let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null,npcWormholeApproaches=new Set();
 // The courier roster is data, not a constant: every seeded "Haul ..." character
@@ -1877,6 +1882,7 @@ function start(){
   runPhase("native-faction-war-battle",advanceNativeWarCombat);
   runPhase("native-faction-war-objectives",advanceNativeWarObjectives);
   runPhase("native-ammo-observe",observeNativeAmmoConsumption);
+  runPhase("native-wreck-claim-reconcile",advanceNativeWreckClaimReconcile);
   runPhase("native-wreck-recovery",advanceNativeWreckRecovery);
   runPhase("native-salvage-rivals",advanceNativeSalvageRivals);
   // Source-backed market decisions share this tick and never start a second
@@ -1925,7 +1931,44 @@ function start(){
   combatTimer=setInterval(()=>safeNpcPhase("native-combat-evidence",observeNativeCombat),every);
   combatTimer.unref?.();
  }
+ // A wreck can only be looted inside the boot that made it: the physical native
+ // entity never survives a restart. This claim-driven loop therefore runs only
+ // while a live claim really has its physical wreck in the scene, and gives the
+ // recovery + custody legs a fast cadence instead of the 30s economy tick.
+ // With no such claim it does nothing at all (no orders, no store writes).
+ if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"&&!wreckRecoveryTimer){
+  const configured=Number(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY_MS||5000);
+  const every=Number.isFinite(configured)?
+   Math.max(2000,Math.min(15000,configured)):5000;
+  wreckRecoveryTimer=setInterval(()=>{
+   if(wreckRecoveryFastBusy)return;
+   wreckRecoveryFastBusy=true;
+   try{
+    if(!hasPhysicalWreckClaim())return;
+    safeNpcPhase("native-wreck-recovery-fast",advanceNativeWreckRecovery);
+    safeNpcPhase("native-wreck-custody-fast",advanceNativeWreckCustody);
+   }finally{wreckRecoveryFastBusy=false;}
+  },every);
+  wreckRecoveryTimer.unref?.();
+ }
  scheduleHeadlessWorldBoot(route);
+}
+// True only when a live durable claim really has its physical native wreck in a
+// visited scene. This is the sole trigger of the fast loot loop.
+function hasPhysicalWreckClaim(){
+ try{
+  const runtime=require("./runtime"),
+   journal=require("./coopNpcWreckClaims").getWreckClaims();
+  for(const systemID of visitedSystems){
+   const scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;
+   if(!scene||typeof scene.getEntityByID!=="function")continue;
+   for(const claim of journal.active(systemID)){
+    const wreckID=Number(claim.wreckID)||0;
+    if(wreckID>0&&scene.getEntityByID(wreckID)?.nativeNpcWreck===true)return true;
+   }
+  }
+ }catch(_error){/* an unreadable journal simply means no claim-driven work */}
+ return false;
 }
 // Rapid bounded bootstrap attempts, then bounded low-frequency rechecks.
 // A temporarily absent EveJS static-data store must not permanently disable
@@ -2358,10 +2401,54 @@ function advanceNativeWreckRecovery(){
   }
  }
 }
+// A restart drops the physical native wreck entity while the durable native
+// wreck row and its stored loot survive. This phase has exactly two honest
+// outcomes per live claim: re-spawn the SAME native wreck entity from its own
+// durable row through the stock spawnNativeWreck path, or close the claim with
+// the measured reason. It never builds a wreck, moves an item or grants ISK.
+function advanceNativeWreckClaimReconcile(){
+ if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
+  process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
+  !alifeOrderArbitrationEnabled(process.env)||!visitedSystems.size)return;
+ const runtime=require("./runtime"),store=require("./npc/nativeNpcStore"),
+  wreckService=require("./npc/nativeNpcWreckService"),
+  journal=require("./coopNpcWreckClaims").getWreckClaims();
+ if(!wreckClaimReconcile)
+  wreckClaimReconcile=require("./coopNpcWreckClaimReconcile");
+ const configured=Number(process.env.EVEJS_COOP_NPC_WRECK_CLAIM_GRACE_MS||120000);
+ const graceMs=Number.isFinite(configured)?
+  Math.max(30000,Math.min(900000,configured)):120000;
+ const nowMs=Date.now(),bootAgeMs=nowMs-worldBootAtMs;
+ for(const systemID of visitedSystems){
+  const claims=journal.active(systemID);
+  if(!claims.length)continue;
+  let scene=null;
+  try{scene=runtime.scenes instanceof Map?runtime.scenes.get(systemID):null;}
+  catch(_error){scene=null;}
+  // A scene that does not exist yet can prove nothing about a wreck: wait.
+  if(!scene||typeof scene.getEntityByID!=="function")continue;
+  const result=safeNpcPhase("native-wreck-claim-reconcile",()=>
+   wreckClaimReconcile.reconcile({systemID,scene,claims,store,nowMs,bootAgeMs,
+    graceMs,
+    restore:({systemID:sys,wreckID})=>wreckService.spawnNativeWreck(sys,wreckID),
+    close:args=>journal.close(args)}));
+  if(!result||result.status!=="OK")continue;
+  for(const row of result.results||[]){
+   if(row.status==="RESTORED")
+    require("./coopRuntimeProbe").observe("living-npc-wreck-claim-restored",null,
+     {spaceState:{systemID}},row);
+   else if(row.status==="CLOSED"&&row.closeStatus==="CLAIM_CLOSED")
+    require("./coopRuntimeProbe").observe("living-npc-wreck-claim-closed",null,
+     {spaceState:{systemID}},{...row,
+      status:row.loot===null?"LOOT_LOST_UNMEASURABLE":
+       (Number(row.loot?.stacks)===0?"NOTHING_TO_RECOVER":"LOOT_LOST"),
+      iskGranted:false,cargoMoved:false});
+  }
+ }
+}
 // Native source-first wreck debit -> native cargo credit. This phase is
 // separate from mere wreck inspection and disabled by default.
-function advanceNativeWreckCustody(){
- if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
+function advanceNativeWreckCustody(){ if(process.env.EVEJS_COOP_NPC_WRECK_TRANSFER!=="1"||
   process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
   !alifeOrderArbitrationEnabled(process.env)||
