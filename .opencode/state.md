@@ -2193,3 +2193,27 @@ the tree. Repair plan for a fresh session:
   2. apply 0001..0010 strictly in order with `git apply --directory=Code`,
   3. regenerate any patch whose context moved, update MANIFEST sha256,
   4. assert tests/coop-native-npc-store-patch.test.mjs and the guard in CI-less run.
+
+## PATCH SERIES REPAIRED (2026-10-27, f4fe0fac + 6803ee4f)
+
+The series is no longer drifted. What was actually wrong, in order:
+
+1. `0009` was generated against the PRE-0001 file. `git apply` applies `0001` first
+   (same file, `nativeNpcStore.js`), so 0009's context never matched and it always
+   failed -> the perf fix never reached the container.
+   Fix: regenerated 0009 from a diff between "base + 0001" and "base + 0001 + memo",
+   so it applies cleanly on top of 0001. Guard: tests/coop-native-npc-store-patch.test.mjs
+   (pass=2).
+2. `0010` had CRLF line endings; `git apply` could not match the LF working tree on
+   ANY tree. Fix: converted to LF.
+3. `0004` never applied because `apply-all` ran the overlay FIRST and the overlay
+   inserts hooks into `miningNpcOperations.js`, moving the patch context. Doctrine is
+   L1 -> L2, so `apply-all` now applies the L1 series first, then the overlay, then
+   re-verifies every patch. A patch the overlay covers can no longer be reverse-applied
+   verbatim, so presence is proven by content (every added line must exist).
+   Result: `applied=0 alreadyPresent=10 total=10`, `OVERLAY_OK`, exit 0.
+
+MANIFEST sha256 refreshed for 0009 and 0010 (apply-upstream-patches.cjs checks it).
+
+Deploy is one command and now fails loudly if anything is missing:
+`node scripts/apply-all.cjs --code-path C:\Games\EveCoop\upstream-evejs\Code`
