@@ -2802,10 +2802,11 @@ async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKE
    for(const link of links.filter(x=>Number(x.systemID)===Number(systemID))){
     if(completed>=2)break;
     const role=roles.get(link.pilotID)||link.role;
-    const recoveredPirate=role==="pirate"&&
-     process.env.EVEJS_COOP_NPC_LOOT_COMMERCE==="1"&&
-     process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"&&
-     lootCommerce!==null;
+    // FW-005C: the hull that really earned the wreck must be able to sell what
+    // it recovered. The allowed roles are opt-in (default: pirate only), so a
+    // war `patrol` hull is never given market authority by accident.
+    const recoveredPirate=require("./coopNpcLootSellRoles").maySellLoot({
+     role,env:process.env,hasCommerce:lootCommerce!==null});
     const rearmingPirate=role==="pirate"&&rearmEnabled&&
      nativeRearm!==null&&rearmTypes.length>0;
     if(!["trader","hauler"].includes(role)&&!recoveredPirate&&

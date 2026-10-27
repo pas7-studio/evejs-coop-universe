@@ -70,6 +70,8 @@ names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarChestFunding","c
 names.splice(names.indexOf("coopWarBounty")+1,0,"coopWarSovereigntyProjection");
 // FW-012A: the faction rank title a pilot really earned (title only).
 names.splice(names.indexOf("coopWarSovereigntyProjection")+1,0,"coopWarRankTitle");
+// FW-005C: which native NPC role may liquidate recovered loot at a real bid.
+names.splice(names.indexOf("coopNpcLootCommerce")+1,0,"coopNpcLootSellRoles");
 // FW-003D: a battle-line hull with no compatible charge left releases its slot.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarBattleLineRelief");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.
