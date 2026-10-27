@@ -4836,8 +4836,11 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  // proven sale path then liquidates it against the seeded bids of THIS station.
  if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&
   !arrivalSales.has(Number(stationID)+":"+Number(haulerID))){
+  // Declared outside the try: the skip telemetry below reads it. As a block-scoped
+  // const it raised "loaded is not defined" on every arrival, aborting the sale.
+  let loaded=null;
   try{
-   const loaded=ensureMineralLift()?.lift({systemID,stationID,haulerID,
+   loaded=ensureMineralLift()?.lift({systemID,stationID,haulerID,
     cap:Math.max(1,Number(process.env.EVEJS_COOP_NPC_MINERAL_LIFT_MAX_QTY||100000))});
    if(loaded?.status==="LIFTED")
     for(const row of loaded.lifted){

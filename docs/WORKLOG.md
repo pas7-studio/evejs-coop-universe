@@ -1268,3 +1268,31 @@ Why: read-only war_state diagnose (territories/wars/campaigns) for the war leg
 Detail: territories, wars and campaigns (with target system and bound structure) exactly as coopFactionWarStore returns them, so 'fronts 0' and 'activeCampaignCount 0' are measurements instead of guesses. Read-only: it never plans, reserves or writes.
 Where: integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs
 Evidence: loads and reports WAR_STATE_UNAVAILABLE outside the server; deployed with the next build
+### 2026-10-27T12:18Z · d1a3022 · L3 · docs: demand lives only in Jita and New Caldari; the Perimeter station has no buyer at all
+
+Why: FW-020b: a wreck claim only owns the pirate while its physical wreck is still in the scene, so a restart-dropped claim cannot stall the raid for an hour
+Where: .opencode/state.md, docs/WORKLOG.md, integration/coopVirtualWorldRuntime.cjs
+Evidence: live living-npc-postraid-wreck-recovery-blocked wreckID 980300000008/9 wreckPresent false claims 3 while 980300000010 was really killed and stored in the same boot
+### 2026-10-27T12:26Z · 77693df · L2 · FW-022b: war_state also reports the presence the territories come from
+
+Why: war_state reports per-system presence and skip reasons, the input territories come from
+Detail: Per system: linked pilots, how many resolve to a real faction, the faction counts and the exact reason a link was skipped (no native entity, link/native system mismatch, no faction for the corporation). A funded faction with no territory here can never get a front, so this is the measurement that explains 'no front'.
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: module loads; deployed with the next build
+### 2026-10-27T12:27Z · d580a5f · L2 · FW-022b fix: the faction lookup is the stock factionState service, not ./factions
+
+Why: the presence diagnose required ./factions which does not exist in the deployed space dir; now uses services/faction/factionState
+Detail: The overlay apply refused the module (HOOK_REQUIRE_UNRESOLVED) and the previous build shipped without it; the require now points at the same service the rest of the runtime uses.
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: apply INSTALLED, --check OVERLAY_OK, image 3fc0677 built and recreated
+### 2026-10-27T12:34Z · c8a69b6 · L3 · FW-023: a wreck claim either restores its own native wreck or closes honestly
+
+Why: a wreck claim outlived its physical native wreck after every restart, so loot could never be recovered in a later boot
+Detail: A restart drops the physical native wreck entity while the durable native wreck row and its stored loot survive, so every live claim pointed at a wreck that could never be looted and the recovery leg refused with wreckPresent:false. - coopNpcWreckClaimReconcile: per claim, either RESTORE the same native wreck entity from its own durable row through the stock spawnNativeWreck path, or CLOSE the cla
+Where: integration/coopNpcWreckClaimReconcile.cjs, integration/coopNpcWreckClaims.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-npc-wreck-claim-reconcile.test.mjs
+Evidence: tests 22/22, OVERLAY_OK patched 59 moduleCurrent 374, coopNpcWreckClaimReconcile + durable claim close + claim-driven 5s recovery loop
+### 2026-10-27T12:35Z · fadc90e · L2 · docs: the war leg's exact blocker - the attacker faction is the unfunded side
+
+Why: A block-scoped const made every station arrival raise 'loaded is not defined', so the mineral lift never ran and the whole sale aborted; hoisted it and pinned the wiring with structural tests.
+Where: .opencode/metrics.md, .opencode/state.md
+Evidence: live reason=SALE_ERROR loaded is not defined at 60000358 and 60003334; coop-mineral-lift-wiring 4/4; coop-npc-mineral-lift 9/9
