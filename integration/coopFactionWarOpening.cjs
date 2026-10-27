@@ -306,7 +306,10 @@ function applyOpenings({ state, plan, nowMs, reserveBounty, persistState } = {})
       let stepProofs = proofs, realReservation = null;
       // FW-005B: a campaign is only funded by real escrow, and the reservation is
       // taken BEFORE the campaign exists (the treasury refuses an existing one).
-      if (typeof reserveBounty === "function") {
+      // FW-024: when the operator explicitly waives funding
+      // (EVEJS_COOP_WAR_REQUIRE_FUNDING=0) no escrow is reserved, nothing can be
+      // paid from it, and the opening records PAPER_UNFUNDED_EXPLICIT.
+      if (typeof reserveBounty === "function" && fundingRequired()) {
         const reserved = reserveBounty({
           war: current.wars[war.warID], campaign, warID: war.warID,
           campaignID: campaign.campaignID, state: current,
