@@ -2470,3 +2470,41 @@ append (additive, cannot affect startup):
 Then: EVEJS_COOP_WAR_DIAG=1 in compose.coop-probe.yaml, apply-all, build, recreate, and read
 `docker logs evejs-server-1 | grep CoopWarDiag`. That prints the real per-side rejection
 (funding gate / getOrderLeases / readiness) for war:500001-500004.
+
+## BREAKTHROUGH: the war is FIGHTING (2026-10-27T20:56Z, deployed on the play stack)
+
+The exact refusal was named by the existing admin action `war_diagnose` (no rebuild
+needed for diagnosis): DEFENDER side rejected entity 980000023574 with WRONG_FACTION
+(it is a Federation Navy hull in the Caldari contested system) and the ATTACKER side
+rejected 980000023571 with ORDER_LEASE_ACTIVE. Both war-doctrine hulls existed but sat
+in each other's systems, so no side could ever muster.
+
+Fix proven live, all through sanctioned paths:
+1. `release_identity` on two out-of-the-way traders (coop-pilot-034, coop-pilot-069).
+2. `spawn_war_fleet` faction 500001 in 30045344 and faction 500004 in 30003837 with
+   those pilots as commanders -> real Caldari Navy Condor 980000033113 and real
+   Federation Navy Atron 980000033114, doctrine loadouts, durable, linked as patrols.
+3. Next mobilization tick: campaign left PREPARING, `[CoopFactionWar] assault begun
+   war:500001-500004:campaign:30045344 attacker=1 defender=1`, both sides SIDE_MUSTERED.
+4. The gate-staging phase then really transferred the Gallente hull 30003837 -> 30045344.
+
+Remaining blocker was co-location: the battle director only fires inside 250 km and the
+fleets sat 9.87e12 m (66 AU) apart. New FW-030 `integration/coopWarEngagementWarp.cjs`
+(env `EVEJS_COOP_WAR_ENGAGE_WARP=1`, default OFF, 6 unit tests) warps the assaulting side
+to the nearest opposing war ship of the same campaign - one real `npcRuntime.warpToEntity`,
+never a teleport, spawn or damage.
+
+Deployed (apply-all OVERLAY_OK, image evejs-local rebuilt, server recreated) and observed:
+- `living-native-war-engagement-warp` status WARP_ORDERED, both Gallente hulls
+  NATIVE_WARP_STARTED at 9.87e12 m.
+- `living-native-war-attack-orders` NATIVE_ATTACK_ORDER_ACCEPTED: Caldari 980000033113
+  attacking Gallente 980000023574 in 30045344.
+
+NEXT: confirm real damage/wreck (HP drop on the same entities, not just the ACK), then
+make the garrison durable instead of operator-seeded: a war-zone system must be
+garrisoned by its controller's navy every time it is observed, otherwise a lost fleet
+freezes the front again.
+
+NOTE: `scripts/overlay-spec.cjs` also needed `require("../../gameStore")` (the in-flight
+hauler work used `../gameStore` from services/mining, which cannot resolve and blocked
+the whole overlay with HOOK_REQUIRE_MISSING_FILE).

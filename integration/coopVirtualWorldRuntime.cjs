@@ -1,4 +1,4 @@
-"use strict";
+﻿"use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
 let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null,warpPointDirector=null,nativeGunRange=null;
 const observedNpcIDs=new Set();
@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
 const raidDiagnose=new Map();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
+let warFleetRegistry=null,warBattleDirector=null,warEngagement=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
 // casualty ledger): the only proof that a registered warship is really gone.
 const destroyedNativeShips=new Set();
@@ -1167,6 +1167,32 @@ function advanceNativeWarCombat(){
   });
  }
  const result=warBattleDirector.tick({systemIDs:[...visitedSystems].sort((a,b)=>a-b).slice(0,12)});
+ // FW-030: a warp started here is what puts the two sides inside the native
+ // 250 km firing envelope at all; the next tick's director can then fire.
+ try{
+  if(!warEngagement){
+   const native=require("./runtime");
+   warEngagement=require("./coopWarEngagementWarp")
+    .createWarEngagementWarp({
+     readWarState:()=>warStateStore().read(),
+     registry:nativeWarFleetRegistry(),
+     sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+     getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
+     warpToEntity:(id,targetID,options)=>
+      require("./npc/npcRuntime").warpToEntity(id,targetID,options)
+    });
+  }
+  const engagement=warEngagement.tick({
+   systemIDs:[...visitedSystems].sort((a,b)=>a-b).slice(0,12)});
+  if(engagement.orders.length)require("./coopRuntimeProbe").observe(
+   "living-native-war-engagement-warp",null,null,{
+    status:engagement.status,orders:engagement.orders,
+    skips:engagement.skips.slice(0,4),
+    evidence:"REAL_NATIVE_WARP_TO_ENEMY_NO_DAMAGE"
+   });
+ }catch(error){
+  warSkip("combat-warp","THREW:"+String(error?.message||error).slice(0,120));
+ }
  if(result.orders.length)require("./coopRuntimeProbe").observe(
   "living-native-war-attack-orders",null,null,{
    status:result.status,orders:result.orders,

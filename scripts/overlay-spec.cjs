@@ -82,6 +82,9 @@ names.splice(names.indexOf("coopWarSovereigntyProjection")+1,0,"coopWarRankTitle
 names.splice(names.indexOf("coopNpcLootCommerce")+1,0,"coopNpcLootSellRoles");
 // FW-003D: a battle-line hull with no compatible charge left releases its slot.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarBattleLineRelief");
+// FW-030: an assault mustered AU apart warps the attacker to the enemy it was
+// mustered against, so the native 250 km firing envelope is reachable at all.
+names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarEngagementWarp");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarObjectiveAdjudicator","coopWarNativeStructureControl","coopWarNativeStructureCombatProof");
 // The world runtime requires this director from a live phase; leaving it out of
@@ -368,7 +371,7 @@ const specs=[
    // throttles itself, proves the station from the fleet's newest trip manifest and reports
    // living-npc-refinery-skipped instead of guessing.
    {anchor:"function shouldTriggerHauling(scene, fleetRecord, noAsteroidsRemain = false, now = Date.now()) {",after:true,
-    line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0,fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0});}catch(_coopRefineError){}'},
+    line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0,fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0,gameStore:require("../../gameStore"),marketRoot:process.env.EVEJS_COOP_NPC_MARKET_ROOT||process.env.EVEJS_COOP_NPC_MARKET_DIR||""});}catch(_coopRefineError){}'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
    // FW-017: the stock retreat ignores its own warp result and discards nothing
