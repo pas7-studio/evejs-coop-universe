@@ -1546,3 +1546,9 @@ Evidence: profile after round 2: 1.4% cloneValue(npcDefaultConcordRules) via bui
 Why: On the fresh work-stack world the governor throttled mining at a 58k buffer against a 25k station bid, which is a normal economy, not overstock; the agents stack gets a higher floor while the play stack keeps 20k.
 Where: .opencode/state.md, docs/PERFORMANCE_REVIEW.md
 Evidence: compose/compose.agents.yaml EVEJS_COOP_MINING_DEMAND_FLOOR=200000; governor HOLD held=58453 want=25000 allow=37500 before the change
+### 2026-10-27T18:34Z · 355d3b9 · L2 · fix(client-view): a live campaign is a front even before its territory record exists
+
+Why: The empty-haul retry re-entered mining every 2s, which re-issued the hauler warp and reset its progress, so it never closed 99 km to the miner (living-haul-no-hauler out-of-range forever).
+Detail: The FW tab only rendered systems present in the territory table, so the Caldari/Gallente assault in 30045344 was invisible while it was really running. occupationStates now fills the gap from live campaigns (defender holds, attacker contests) and leaves a recorded territory authoritative; the hook reports militia corporations (1000180/1000181) because that is what the client colours by, and drops 
+Where: integration/coopWarClientView.cjs, scripts/overlay-spec.cjs
+Evidence: work stack: hauler 980000000026 at 99528 m, 418 haul attempts in 13 min, miners holding 32480 units; guard now waits in the same haul and re-issues only after 24 waits; 5 structural tests
