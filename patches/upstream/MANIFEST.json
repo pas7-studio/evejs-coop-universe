@@ -1,80 +1,89 @@
-{
-  "pin": "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
-  "policy": "applied only by scripts/apply-upstream-patches.cjs, before the L2 overlay",
-  "patches": [
-    {
-      "file": "0001-native-npc-store-export-list-cargo.patch",
-      "sha256": "3b3c510919c07fac8bfcc1a46751807e0756a712297cae8be0b516cf0908ff44",
-      "files": [
-        "server/src/space/npc/nativeNpcStore.js"
-      ],
-      "status": "not-sent",
-      "note": "trivial export, candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0002-native-npc-capacitor-recharge.patch",
-      "sha256": "e749acbeb655ec98e58dada68e7ea16173ce77e22d9e00f49f484ce7cfab94ba",
-      "files": [
-        "server/src/space/npc/nativeNpcService.js"
-      ],
-      "status": "not-sent",
-      "note": "native NPC capacitor recharge rate + durable identity on state save, candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0003-native-npc-sessionless-capacitor.patch",
-      "sha256": "948596bad2dd98d0fc21f5cf7939c0a3a0ae677f7456d1a9b3fffb460b0cb990",
-      "files": [
-        "server/src/space/npc/npcBehaviorLoop.js"
-      ],
-      "status": "not-sent",
-      "note": "sessionless capacitor advance for native NPCs (shared-stamp interval fix), candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0004-native-mining-fleet-retained-actor.patch",
-      "sha256": "d9efc88018688939b8260fb96d5e36b90f33fd6e541ac6a35085d08d2d4a510c",
-      "files": [
-        "server/src/services/mining/miningNpcOperations.js"
-      ],
-      "status": "not-sent",
-      "note": "a durable fleet actor is pruned while its stored controller row still exists, candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0005-native-npc-durable-not-dormant.patch",
-      "sha256": "8269126357cb137fccb277c0cb8892d0e0b29da526cc8a3d8440dbc14fcb5eae",
-      "files": [
-        "server/src/space/npc/npcCombatDormancy.js"
-      ],
-      "status": "not-sent",
-      "note": "a durable co-op NPC is dematerialised by the combat-dormancy sweep on every no-session scene, candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0006-native-npc-live-capacitor-wins.patch",
-      "sha256": "01d6cc7ec26b8a5fdb012dd6b30cd055eea2cf59f608e61477efac6648252a9a",
-      "files": [
-        "server/src/space/runtime.js"
-      ],
-      "status": "not-sent",
-      "note": "presentation refresh overwrote live capacitor charge with a stale stored snapshot, and warpToEntity/warpToPoint resolved the command ship only from a session so an NPC hull warped while really scrambled, candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0007-npc-loadout-override.patch",
-      "sha256": "4b9b8215ccf32e88c90ddef38a479f5796d6fbe693bfa7bf0e6d60bda1e2fc82",
-      "files": [
-        "server/src/space/npc/npcData.js",
-        "server/src/space/npc/npcSelection.js",
-        "server/src/space/npc/npcService.js"
-      ],
-      "status": "not-sent",
-      "note": "buildNpcDefinition/spawnBatchInSystem could not fit an authored loadout row for a profile whose own row is the retail empty loadout; optional options.loadoutID, retail behaviour unchanged when absent, candidate for an atomic upstream PR"
-    },
-    {
-      "file": "0008-warp-scramble-live-effects.patch",
-      "sha256": "afc80def3d0c87bcad0578cb3eda335c989fd26909d13b6b129b8b3f87525433",
-      "files": [
-        "server/src/space/modules/hostileModuleRuntime.js"
-      ],
-      "status": "not-sent",
-      "note": "getEntityWarpScrambleStatus returned the passive hull baseline (-2) instead of the live scrambler/disruptor sum, so a real warp point could never stop a real warp, candidate for an atomic upstream PR"
-    }
-  ]
+﻿{
+    "pin":  "c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f",
+    "policy":  "applied only by scripts/apply-upstream-patches.cjs, before the L2 overlay",
+    "patches":  [
+                    {
+                        "file":  "0001-native-npc-store-export-list-cargo.patch",
+                        "sha256":  "3b3c510919c07fac8bfcc1a46751807e0756a712297cae8be0b516cf0908ff44",
+                        "files":  [
+                                      "server/src/space/npc/nativeNpcStore.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "trivial export, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0002-native-npc-capacitor-recharge.patch",
+                        "sha256":  "e749acbeb655ec98e58dada68e7ea16173ce77e22d9e00f49f484ce7cfab94ba",
+                        "files":  [
+                                      "server/src/space/npc/nativeNpcService.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "native NPC capacitor recharge rate + durable identity on state save, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0003-native-npc-sessionless-capacitor.patch",
+                        "sha256":  "948596bad2dd98d0fc21f5cf7939c0a3a0ae677f7456d1a9b3fffb460b0cb990",
+                        "files":  [
+                                      "server/src/space/npc/npcBehaviorLoop.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "sessionless capacitor advance for native NPCs (shared-stamp interval fix), candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0004-native-mining-fleet-retained-actor.patch",
+                        "sha256":  "d9efc88018688939b8260fb96d5e36b90f33fd6e541ac6a35085d08d2d4a510c",
+                        "files":  [
+                                      "server/src/services/mining/miningNpcOperations.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "a durable fleet actor is pruned while its stored controller row still exists, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0005-native-npc-durable-not-dormant.patch",
+                        "sha256":  "8269126357cb137fccb277c0cb8892d0e0b29da526cc8a3d8440dbc14fcb5eae",
+                        "files":  [
+                                      "server/src/space/npc/npcCombatDormancy.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "a durable co-op NPC is dematerialised by the combat-dormancy sweep on every no-session scene, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0006-native-npc-live-capacitor-wins.patch",
+                        "sha256":  "01d6cc7ec26b8a5fdb012dd6b30cd055eea2cf59f608e61477efac6648252a9a",
+                        "files":  [
+                                      "server/src/space/runtime.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "presentation refresh overwrote live capacitor charge with a stale stored snapshot, and warpToEntity/warpToPoint resolved the command ship only from a session so an NPC hull warped while really scrambled, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0007-npc-loadout-override.patch",
+                        "sha256":  "4b9b8215ccf32e88c90ddef38a479f5796d6fbe693bfa7bf0e6d60bda1e2fc82",
+                        "files":  [
+                                      "server/src/space/npc/npcData.js",
+                                      "server/src/space/npc/npcSelection.js",
+                                      "server/src/space/npc/npcService.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "buildNpcDefinition/spawnBatchInSystem could not fit an authored loadout row for a profile whose own row is the retail empty loadout; optional options.loadoutID, retail behaviour unchanged when absent, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0008-warp-scramble-live-effects.patch",
+                        "sha256":  "afc80def3d0c87bcad0578cb3eda335c989fd26909d13b6b129b8b3f87525433",
+                        "files":  [
+                                      "server/src/space/modules/hostileModuleRuntime.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "getEntityWarpScrambleStatus returned the passive hull baseline (-2) instead of the live scrambler/disruptor sum, so a real warp point could never stop a real warp, candidate for an atomic upstream PR"
+                    },
+                    {
+                        "file":  "0009-native-npc-store-root-clone.patch",
+                        "sha256":  "83c5828c1c12b5e412624304eb66b5c5866ebd6ba46c1cbb8f8569d35db2d935",
+                        "files":  [
+                                      "server/src/space/npc/nativeNpcStore.js"
+                                  ],
+                        "status":  "not-sent",
+                        "note":  "readCollection/ensureRootShape re-read and double-cloned the entire NPC root on every call; a live profile measured 86.7% of one core there. Root shape is now verified once per table per process and collections are read by subpath. Candidate for an atomic upstream PR"
+                    }
+                ]
 }

@@ -515,3 +515,23 @@ live verbatim (coop-admin-results.jsonl):
 {"id":"restore-antimatter","ok":true,"typeID":222,"itemID":9988400108322}
 metrics: 6/6 grants ok, 0 refusals, client notified live (notified:true)
 next: owner docks at 60015262 and fits; auto-fit via fit_slots once stationID is set.
+
+## 2026-10-27T17:30Z perf — the server was cloning the whole NPC root on every read
+
+done: L1 patch 0009. `nativeNpcStore.readCollection` re-read the entire NPC root
+(entities/modules/cargo/wrecks of every system), deep-cloned it twice and
+JSON.stringify-ed it twice on EVERY call; `ensureRootShape` did the same again.
+Root shape is now verified once per table per process and readCollection reads
+only `/<collection>`.
+tests: `node --check` on the patched file; `patch-evejs-coop.cjs --check` =
+OVERLAY_OK (moduleStale 0, moduleMissing 0)
+overlay: unchanged modules, one L1 patch
+live verbatim (V8 profile of the running server, 1 ms, 17 453 samples/20 s):
+BEFORE  62.7% cloneValue + 24.0% ensureRootShape  (0% idle)
+AFTER   41.9% cloneValue + 0% ensureRootShape    (32.7% idle)
+docker stats evejs-server-1: 96.9% -> 81-95% (still settling right after recreate)
+metrics: 86.7% -> 41.9% of one core in that path; idle 0% -> 32.7%
+next: the remaining cloneValue is OUR callers re-reading a collection per entity
+(`coopWarCombatAuthority.evaluatePair`, `coopWarFleetRoster.presence`,
+`coopHaulCargoAdoption.cargoRows`, `coopNpcAmmoWitness.sample`); hoist one read per
+pass instead of one read per entity.
