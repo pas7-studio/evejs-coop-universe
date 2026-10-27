@@ -429,3 +429,19 @@ overlay: OVERLAY_OK ; docker build + recreate OK
 live: release_identity coop-pilot-001 (980000020998) -> RELEASED, assign_identity -> LINKED 980000022066/30045344 ; release_identity coop-pilot-063 (980000018084) -> RELEASED, assign -> LINKED 980000022071/30003837 ; war_state -> wars include war:500001-500004 (500004 attacker, 500001 defender), campaign war:500001-500004:campaign:30045344 PREPARING, territories 30003837=500004 30045344=500001 ; militia_state 140000005 -> declaredWars [war:500001-500004 campaign 30045344 PREPARING, war:500001-500011 campaign 30002780 PREPARING], fronts []
 metrics: tests_total=18 pass=18 fail=0 modules_added=0 modules_changed=3 live_events=6
 next: BEGIN_ASSAULT needs the mobiliser to assign one linked armed patrol per side for campaign 30045344; the per-campaign diagnose currently reports only the first PREPARING campaign, so the exact next step is a per-campaign mobilization diagnose and then militia_state fronts.
+
+## 2026-10-27T14:42Z - ITEM 1 (per-campaign mobilisation) - 38300de5
+done: the mobiliser plans EVERY live campaign before any write and returns campaigns[] with each side's assigned count, commander cap, mobilizable hulls and exact first rejection; the per-tick budget goes to the most starved campaign; a refused native ASSIGN returns its registry reason (blocked[]) and is published once per set as living-native-war-mobilization-blocked; war_state projects the record's real state/sourceSystemID (it emitted only a non-existent 'status' before).
+tests: node --test tests/coop-war-mobilization.test.mjs -> 16 pass / 0 fail; war+assault+opening+militia+director+merit suites -> 65 pass / 0 fail
+overlay: OVERLAY_OK (moduleCurrent 380) ; docker build evejs-local + compose recreate server OK
+live: war_diagnose now lists 6 campaigns with per-side status; then living-native-war-mobilization {"entityID":980000023571,"pilotID":"coop-pilot-023","systemID":30045344,"factionID":500001,"campaignID":"war:500001-500004:campaign:30045344","role":"DEFENDER"} and {"entityID":980000023574,"pilotID":"coop-pilot-038","systemID":30003837,"factionID":500004,"role":"ATTACKER"} while 5 other campaigns stayed PREPARING
+metrics: tests_total=81 pass=81 fail=0 modules_added=0 modules_changed=2 live_events=2
+next: item 2 (BEGIN_ASSAULT + militia fronts)
+
+## 2026-10-27T14:42Z - ITEM 2 (BEGIN_ASSAULT for 30045344) - no code change, live proof
+done: the assault phase already scans every PREPARING campaign, so the real muster of campaign:30045344 was enough: no gate relaxed, no ship invented. Two real armed navy patrols were spawned through the admin bridge with the authored doctrine rows (Caldari Navy Condor 564+222x60 in 30045344, Federation Navy Atron 562+222x60 in 30003837) and crewed by released roster identities (coop-pilot-023 / coop-pilot-038) via release_identity+assign_identity in ONE drain (a reconcile re-links a released pilot otherwise).
+tests: not run (no code change)
+overlay: unchanged OVERLAY_OK
+live: living-native-war-assault {"status":"ASSAULT_BEGUN","campaignID":"war:500001-500004:campaign:30045344","attackerShips":[980000023574],"defenderShips":[980000023571],"evidence":"REAL_NATIVE_MUSTER_ON_BOTH_SIDES"} ; war_state campaignStates {"PREPARING":5,"ASSAULT":1} ; militia_state 140000005 -> fronts [{"warID":"war:500001-500004","campaignID":"war:500001-500004:campaign:30045344","systemID":30045344}]
+metrics: tests_total=0 pass=0 fail=0 modules_added=0 modules_changed=0 live_events=2
+next: item 3 (militia melee rule live: a real Gallente patrol attacks enlisted 140000005, Caldari NPCs never fire on him)

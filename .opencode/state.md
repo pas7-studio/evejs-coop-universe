@@ -1,5 +1,41 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 14:42Z - ITEMS 1+2 PASS live: per-campaign mobilisation and the Caldari front in ASSAULT
+
+**Item 1 (38300de5).** `coopWarMobilizer.tick` now plans every live campaign before
+any write: `campaigns[]` carries, per campaign side, the assigned count, the
+commander cap, the real mobilizable hulls and the exact first rejection. The
+per-tick write budget is spent on the most starved campaign, and a refused native
+ASSIGN returns the registry's own reason (`blocked[]`, published once per distinct
+set as `living-native-war-mobilization-blocked`). `war_state` now projects the
+record's real `state`/`sourceSystemID` (it emitted a `status` field the record does
+not have, so PREPARING vs ASSAULT was invisible). 16/16 + 65/65, OVERLAY_OK 380.
+
+Live: `war_diagnose` lists all 6 campaigns; then
+`living-native-war-mobilization` DEFENDER 980000023571 (coop-pilot-023, 30045344,
+500001) + ATTACKER 980000023574 (coop-pilot-038, 30003837, 500004) for
+`war:500001-500004:campaign:30045344`, while the five pirate/ORE campaigns stayed
+PREPARING.
+
+**Item 2 (live, no code).** `living-native-war-assault` `ASSAULT_BEGUN`
+`campaign:30045344` attacker `[980000023574]` defender `[980000023571]`,
+`REAL_NATIVE_MUSTER_ON_BOTH_SIDES`; `war_state.campaignStates {PREPARING:5,
+ASSAULT:1}`; `militia_state 140000005` -> `fronts:[{war:500001-500004,
+campaign:30045344, systemID 30045344}]`.
+
+World setup used (owner default: real NPCs only): two real armed navy patrols via
+`spawn_native_npc` with the authored doctrine rows (Caldari Navy Condor 564+222x60
+in 30045344, Federation Navy Atron 562+222x60 in 30003837), crewed by released
+roster identities `coop-pilot-023`/`coop-pilot-038`. **Operator note:** release and
+assign must go in ONE admin drain - a reconcile re-links a released pilot to its
+durable old hull within ~20 s, which is why the first attempt answered
+`PILOT_ALREADY_LINKED`.
+
+**NEXT ACTION (exact).** Item 3: enlist 140000005 (Caldari) with `militia_enlist`,
+then prove the melee rule live - a real Gallente (500004) patrol gets a
+`MILITIA_PLAYER` attack order on that character's hull while Caldari (500001) NPCs
+never fire on him. Read `coopMilitiaWarPlayer` first.
+
 ## 2026-10-27 14:30Z - production governor LIVE, and two world-caused blocks
 
 Owner decision: throttle extraction to real demand (not reseeding, not industry).

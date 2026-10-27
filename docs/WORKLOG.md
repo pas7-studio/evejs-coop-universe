@@ -1401,3 +1401,9 @@ Evidence: tests 18/18; OVERLAY_OK; live war:500001-500004 opened
 Why: Verified the demand governor live and recorded two world-caused blocks: the hull carrying the lifted minerals was destroyed, and slot 30000145-1 awaits a native repair.
 Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
 Evidence: governor HOLD held=4159021 want=45000, cycles 100+/5min -> ~34; hauler 980000016300 gone with 9 mineral rows; ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH at 14:21:14
+### 2026-10-27T14:40Z · 38300de · L2 · FW-028: per-campaign mobilisation and a per-campaign war diagnose
+
+Why: per-campaign mobilisation: every live campaign is planned, reported and served; a refused native ASSIGN publishes its reason; war_state projects the record's real state
+Detail: Every live campaign is planned before any write: the mobiliser reports one block per campaign with each side's own assigned count, commander cap, real mobilizable hulls and the exact first rejection. The per-tick write budget is spent on the most starved campaign first, so a second border can no longer be starved by the first one. A refused native ASSIGN is no longer a silent boolean: the registry
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs, tests/coop-war-mobilization.test.mjs
+Evidence: node --test tests/coop-war-mobilization.test.mjs -> 16/16; OVERLAY_OK; live living-native-war-mobilization campaign:30045344 both sides + living-native-war-assault ASSAULT_BEGUN; militia_state 140000005 fronts [30045344]
