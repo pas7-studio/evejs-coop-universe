@@ -1596,3 +1596,21 @@ the same way `coopWarPatrolLoadoutRow.resolveRow` is exposed, then:
 **Known noise.** `coop-admin-requests.jsonl` is not always truncated after a
 drain, so a request can execute twice; the second enlistment is a DUPLICATE and
 changes nothing.
+
+## 2026-10-27T13:24Z - FW-024d: the front opens (08576bb2)
+
+Live after deploy (container evejs-server-1):
+`living-native-war-opened OPENED` `warIDs:["war:500011-500014","war:500011-500020"]`
+`campaignIDs:["war:500011-500014:campaign:30000143",
+"war:500011-500014:campaign:30000144","war:500011-500014:campaign:30000145",
+"war:500011-500020:campaign:30000142"]`, territories 5 (Maurasi 500020, Jita
+500011, Niyabainen/Perimeter/New Caldari 500014), then
+`living-native-war-mobilization NATIVE_PATROL_MOBILIZED` in the same boot.
+`war_state` -> wars 2, campaigns 4, enlistments 1 (the proven Caldari enlistment).
+
+The opt-out now also skips the real escrow reservation, so no ISK is reserved and
+no bounty can be paid (`PAPER_UNFUNDED_EXPLICIT`). Default remains strict (1).
+
+`militia_state 140000005` still reports `fronts: []` because no campaign involves
+Caldari State 500001 - the Caldari/Gallente front is blocked by the navy loadout
+gap recorded below, not by funding.

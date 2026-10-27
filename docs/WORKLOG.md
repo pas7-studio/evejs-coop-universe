@@ -1343,3 +1343,9 @@ Why: FW-024: militia allowlist enabled from measured SDE militia corporations
 Detail: Measured against the live SDE, not assumed: Angel Cartel 500011 carries militiaCorporationID 1000436 and 193 agents docked at real stations (agent 3010015 Edilkam Silera, station 60012235, G-0Q86 30001041). Serpentis 500020 and ORE 500014 have militiaCorporationID null, so the agent gate can never accept them; adding them to the allowlist would change nothing. EVEJS_COOP_MILITIA_FACTION_IDS='50001
 Where: docs/MILITIA_ENLISTMENT.md, tests/coop-faction-war-agent.test.mjs
 Evidence: tests 7/7; SDE probe 500011 militiaCorp 1000436
+### 2026-10-27T13:21Z · 08576bb · L2 · FW-024d: the unfunded-supply opt-out also covers the real escrow reservation
+
+Why: FW-024d: unfunded-supply opt-out covers the escrow reservation so a front can open without minting ISK
+Detail: reserveBounty is only called when EVEJS_COOP_WAR_REQUIRE_FUNDING is not 0, so an operator-approved opening reserves nothing and cannot pay a bounty. Live after deploy: living-native-war-opened OPENED with 4 campaigns (war:500011-500014 in 30000143/144/145 and war:500011-500020 in 30000142) and the first living-native-war-mobilization in the same boot.
+Where: integration/coopFactionWarOpening.cjs
+Evidence: tests 15/15; live living-native-war-opened OPENED 4 campaigns
