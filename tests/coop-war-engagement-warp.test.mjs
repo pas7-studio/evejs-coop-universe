@@ -1,7 +1,9 @@
 // FW-030 guard: a mustered assault whose fleets sit outside real gun range must
 // produce exactly one real native warp to a standoff point beside the nearest
 // opposing war ship - never a spawn, a teleport, a scripted hit or a duplicate
-// order while the previous warp is still cooling down.
+// order while the previous warp is still cooling down. Inside the last leg the
+// native attack order's own movement flies the hull in, so no manual orbit order
+// is issued (that would block the war director with manualBusy).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createWarEngagementWarp, enabled } from "../integration/coopWarEngagementWarp.cjs";
@@ -55,16 +57,16 @@ test("warps the attacker to a standoff point beside the nearest enemy", () => {
   assert.equal(out.status, "WARP_ORDERED");
   assert.equal(calls.length, 1);
   assert.equal(calls[0].id, 1);
-  // Lands 1 km short of the enemy, inside real autocannon range.
-  assert.deepEqual(calls[0].point, { x: 899000, y: 0, z: 0 });
+  // Lands 50 km short of the enemy; the attack order flies the last leg in.
+  assert.deepEqual(calls[0].point, { x: 850000, y: 0, z: 0 });
   assert.equal(out.orders[0].status, "NATIVE_WARP_STARTED");
   assert.equal(out.orders[0].targetID, 2);
   assert.equal(out.orders[0].distanceMeters, 900000);
 });
 
-test("never warps a hull that is already inside gun range", () => {
+test("never warps inside the last leg a native warp refuses anyway", () => {
   const calls = [];
-  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 2000, y: 0, z: 0 } };
+  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 120000, y: 0, z: 0 } };
   const warp = createWarEngagementWarp({
     ...world({ ...PAIR, positions }),
     warpToPoint: () => { calls.push(1); return { success: true }; },
@@ -96,7 +98,7 @@ test("cooldown prevents a second warp while the first is still running", () => {
   assert.equal(calls.length, 2);
 });
 
-test("a ship already fighting, warping or owned by a manual order is left alone", () => {
+test("a ship that already has a live target is left to the native loop", () => {
   const calls = [];
   const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
   const warp = createWarEngagementWarp({
@@ -111,6 +113,75 @@ test("a ship already fighting, warping or owned by a manual order is left alone"
   const out = warp.tick({ systemIDs: [30045344] });
   assert.equal(calls.length, 0);
   assert.equal(out.orders.length, 0);
+});
+
+test("a hull with an accepted attack order but no target also closes", () => {
+  const calls = [];
+  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
+  const warp = createWarEngagementWarp({
+    ...world({
+      ...PAIR, positions,
+      controllers: {
+        1: { entityID: 1, systemID: 30045344, currentTargetID: 0, manualOrder: { type: "attack", targetID: 2 } },
+      },
+    }),
+    warpToPoint: (id) => { calls.push(id); return { success: true }; },
+    env: ON,
+    clock: () => 1000,
+  });
+  const out = warp.tick({ systemIDs: [30045344] });
+  assert.deepEqual(calls, [1]);
+  assert.equal(out.orders[0].entityID, 1);
+});
+
+test("a side of several hulls warps together in formation with one native batch", () => {
+  const batch = [];
+  const ships = {
+    1: { entityID: 1, systemID: 30045344, factionID: 500001, campaignID: "c1" },
+    2: { entityID: 2, systemID: 30045344, factionID: 500001, campaignID: "c1" },
+    3: { entityID: 3, systemID: 30045344, factionID: 500001, campaignID: "c1" },
+    9: { entityID: 9, systemID: 30045344, factionID: 500004, campaignID: "c1" },
+  };
+  const positions = {
+    1: { x: 0, y: 0, z: 0 },
+    2: { x: 2000, y: 0, z: 0 },
+    3: { x: 0, y: 2000, z: 0 },
+    9: { x: 900000, y: 0, z: 0 },
+  };
+  const warp = createWarEngagementWarp({
+    ...world({ ships, positions }),
+    warpToPoint: () => { throw new Error("a fleet must not warp one hull at a time"); },
+    warpBatchToPoints: (requests) => { batch.push(requests); return { success: true }; },
+    env: ON,
+    clock: () => 1000,
+  });
+  const out = warp.tick({ systemIDs: [30045344] });
+  assert.equal(out.status, "WARP_ORDERED");
+  assert.equal(batch.length, 1);
+  assert.equal(batch[0].length, 3);
+  const points = batch[0].map(r => r.point);
+  // Three distinct formation points, all near the standoff anchor, none equal.
+  const keys = new Set(points.map(p => `${Math.round(p.x)}:${Math.round(p.y)}:${Math.round(p.z)}`));
+  assert.equal(keys.size, 3);
+  for (const p of points) assert.ok(Math.hypot(p.x - 850000, p.y, p.z) < 3000);
+  assert.deepEqual(out.orders.map(o => o.status),
+    ["NATIVE_FORMATION_WARP_STARTED", "NATIVE_FORMATION_WARP_STARTED", "NATIVE_FORMATION_WARP_STARTED"]);
+  assert.equal(out.orders[0].formation, 3);
+});
+
+test("a lone hull still warps on its own", () => {
+  const calls = [];
+  const positions = { 1: { x: 0, y: 0, z: 0 }, 2: { x: 900000, y: 0, z: 0 } };
+  const warp = createWarEngagementWarp({
+    ...world({ ...PAIR, positions }),
+    warpToPoint: (id) => { calls.push(id); return { success: true }; },
+    warpBatchToPoints: () => { throw new Error("no batch for one hull"); },
+    env: ON,
+    clock: () => 1000,
+  });
+  const out = warp.tick({ systemIDs: [30045344] });
+  assert.deepEqual(calls, [1]);
+  assert.equal(out.orders[0].status, "NATIVE_WARP_STARTED");
 });
 
 test("flag OFF is inert and a refused native warp is reported as refused", () => {

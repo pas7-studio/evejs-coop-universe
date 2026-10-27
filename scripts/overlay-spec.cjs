@@ -85,6 +85,10 @@ names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarBattleLineRelief");
 // FW-030: an assault mustered AU apart warps the attacker to the enemy it was
 // mustered against, so the native 250 km firing envelope is reachable at all.
 names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarEngagementWarp");
+// FW-031: a war hull far from its belt anchor was leashed home on every think, so
+// its accepted attack order never became a target; clear the leash and orbit in
+// real gun range through the existing native behaviour overrides.
+names.splice(names.indexOf("coopWarEngagementWarp")+1,0,"coopWarEngagementPosture");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarObjectiveAdjudicator","coopWarNativeStructureControl","coopWarNativeStructureCombatProof");
 // The world runtime requires this director from a live phase; leaving it out of
@@ -128,6 +132,9 @@ names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
 names.splice(names.indexOf("coopCargoVolume")+1,0,"coopNpcRefineryTick");
 // The corporation must be paid for its ore, or it can never afford its own refining fee.
 names.splice(names.indexOf("coopNpcRefineryTick")+1,0,"coopNpcCorpTreasury");
+// Both the sweep and the fee read the corp wallet through this single adapter, which
+// prefers the native corporation runtime (the actual owner of that wallet).
+names.splice(names.indexOf("coopNpcCorpTreasury")+1,0,"coopCorpWallet");
 // The refinery leaves minerals in the corporation hangar; this loads them into a
 // real native cargo hold so the proven sale path can turn them back into ISK.
 names.splice(names.indexOf("coopNpcCorpTreasury")+1,0,"coopNpcMineralLift");

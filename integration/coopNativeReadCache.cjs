@@ -43,7 +43,11 @@ function createCache({ listNativeEntities, listNativeCargo, ttlMs = DEFAULT_TTL_
       const rows = typeof listNativeEntities === "function" ? listNativeEntities() : [];
       entityIndex = new Map();
       for (const row of rows || []) {
-        const id = Number(row && row.itemID);
+        // `listNativeEntities()` publishes the id as `entityID`; only the
+        // per-entity read uses `itemID`. Indexing on `itemID` alone made every
+        // lookup a miss, so `evaluatePair` answered NATIVE_STORE_IDENTITY_MISMATCH
+        // for every war pair and no hostile engagement was ever authorised.
+        const id = Number(row && (row.itemID ?? row.entityID));
         if (id > 0) entityIndex.set(id, row);
       }
       entityAt = now();

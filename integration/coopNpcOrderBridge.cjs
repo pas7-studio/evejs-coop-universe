@@ -83,11 +83,19 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController,
    return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE"};
   const lease=arbiter.snapshot().leases.find(x=>x.systemID===link.systemID&&
    x.entityID===link.entityID&&x.pilotID===link.pilotID);
+  // A registered war hull is exclusively reserved for WAR. Its own patrol
+  // movement (GOTO/ORBIT/FOLLOW with no manual order) is not another owner's
+  // command: refusing it left the defender unable to receive an attack order
+  // because the lease is only created by a successful issue. A manual combat
+  // order from an unknown owner is still never hijacked.
+  const warOwnsItsPatrol=owner==="WAR"&&warClaim==="ASSIGNED"&&!state.manualBusy;
   // A persisted/stock manual command without a live matching arbiter owner
   // cannot be silently claimed by a new route, gate or raiding planner.
-  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&(!lease||lease.owner!==owner))
+  if((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&
+   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)
    return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE"};
-  if(state.combat&&(owner==="RAID"||owner==="WAR")&&(!lease||lease.owner!==owner))
+  if(state.combat&&(owner==="RAID"||owner==="WAR")&&
+   (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)
    return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE"};
   return {success:true};
  }
@@ -115,14 +123,16 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController,
   if(warShipClaim)try{warClaim=warShipClaim(link)}catch{warClaim="UNKNOWN"}
   const lease=arbiter.snapshot().leases.find(x=>x.systemID===link.systemID&&
    x.entityID===link.entityID&&x.pilotID===link.pilotID);
+  const warOwnsItsPatrol=owner==="WAR"&&warClaim==="ASSIGNED"&&!state.manualBusy;
   const reason=state.warp?"COOP_NPC_ORDER_NATIVE_WARP_ACTIVE":
    (state.combat&&PEACEFUL.has(owner))?"COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE":
    ((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&
-    (!lease||lease.owner!==owner))?"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE":
+    (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)?"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE":
    (owner==="WAR"&&(!warShipClaim||warClaim!=="ASSIGNED"))?"COOP_NPC_ORDER_WAR_SHIP_UNVERIFIED":
    (warShipClaim&&owner!=="WAR"&&owner!=="TACTICS"&&
     (warClaim==="ASSIGNED"||warClaim==="UNKNOWN"))?"COOP_NPC_ORDER_WAR_SHIP_RESERVED":
-   (state.combat&&(owner==="RAID"||owner==="WAR")&&(!lease||lease.owner!==owner))?
+   (state.combat&&(owner==="RAID"||owner==="WAR")&&
+    (!lease||lease.owner!==owner)&&!warOwnsItsPatrol)?
     "COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE":
    arbiter.blocked({...link,owner})?"COOP_NPC_ORDER_ARBITER_BLOCKED":"";
   return reason?{status:"BLOCKED",reason,warClaim,state,leaseOwner:String(lease?.owner||"")}:

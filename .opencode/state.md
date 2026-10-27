@@ -2581,3 +2581,56 @@ the order bridge accepted leaves the controller with no target, and why an accep
 `allowsNativeEngagement` (both flags are 1, so it should authorise) and the native
 `npcBehaviorLoop` target acquisition for these two hulls before touching the war code
 again. Nothing in the war store, the campaign or the front chat is blocking.
+
+## WAR IS REAL: damage, mutual orders and three native kills (2026-10-27T22:20Z)
+
+Root causes found by measurement, not guesswork, and all three were needed:
+
+1. `coopNativeReadCache` indexed native rows by `row.itemID`, but
+   `nativeNpcStore.listNativeEntities()` publishes the id as `row.entityID`. Every
+   cache lookup missed, so `coopWarCombatAuthority.evaluatePair` answered
+   `NATIVE_STORE_IDENTITY_MISMATCH` for EVERY war pair. The hostility hook therefore
+   denied every engagement: an accepted attack order never became a target. Fixed by
+   indexing `itemID ?? entityID` (`tests/coop-native-read-cache.test.mjs`).
+
+2. The war hull is spawned at a belt anchor and warped to the enemy, so it stands
+   ~150 km from home with the profile's 90 km leash. `isBeyondLeash` then ran
+   `clearNpcCombatState` on every think, resetting `currentTargetID` to 0 and flying
+   the hull home. New FW-031 `integration/coopWarEngagementPosture.cjs`
+   (`EVEJS_COOP_WAR_ENGAGEMENT_POSTURE=1`, default OFF) applies the *native*
+   behaviour overrides `leashRangeMeters: 0`, `orbitDistanceMeters: 500`,
+   `movementMode: "orbit"` to every registered war hull in an assault system,
+   preserving all other overrides and never re-applying the same values.
+
+3. A war hull only flying its own patrol movement (GOTO/ORBIT) had `movementBusy`
+   true and no arbiter lease, so the bridge refused WAR with
+   `COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE` - and a lease is only created by a
+   successful issue, so the defender could never be ordered at all. The bridge now
+   lets WAR retask its own ASSIGNED hull when it carries no manual combat order.
+   An unleased manual attack from an unknown owner is still never hijacked
+   (`tests/coop-war-order-arbiter.test.mjs`, including a repair of that fixture,
+   which referenced an undefined `arbiter` and could never have passed).
+
+FW-030 also grew a real fleet warp: a side of 2+ hulls that must close now issues
+ONE native `warpBatchToPoints` with a line-abreast formation around the standoff
+anchor (per-slot lateral offset + staggered rank depth); a lone hull keeps
+`warpToPoint`. Formation offsets are unit-tested; no live scene has needed a
+multi-ship warp yet because the spawned hulls landed inside warp range.
+
+LIVE EVIDENCE (play stack, no fabricated damage):
+- `living-native-war-engagement-posture` POSTURE_APPLIED for 980000033113,
+  980000033114, 980000023574.
+- `npc_pair_diagnose` 980000033113 -> 980000023574: `warVerdict AUTHORIZED`,
+  `currentTargetID 980000023574` (was 0 before), leash override present.
+- Mutual real attack orders accepted in one tick: 980000033113 -> 980000036202,
+  980000036201 -> 980000036202, then 980000036202 -> 980000036201.
+- THREE real warship kills with native wrecks and stored loot:
+  980000023574 (wreck 980300000022), 980000033114 (wreck 980300000024),
+  980000036202 (wreck 980300000034), 980000036239 (wreck 980300000035).
+  Merit moved on both sides: Caldari commander promoted recruit -> pilot -> wingman
+  (command 1 -> 3), the losing pilots took `force-lost -10`.
+
+NEXT: the front is still operator-seeded (`spawn_war_fleet` needs a free identity).
+A durable garrison - a war system refilled by its controller's navy whenever it is
+observed - is the remaining gap before the war runs unattended. The formation warp
+needs one live case where a side of 2+ must close as a group to be seen in-client.

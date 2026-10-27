@@ -11,7 +11,7 @@ function fixture(claim=()=>'ASSIGNED'){
  const scene={systemID,getEntityByID:id=>id===entityID?ship:null};
  const controller={systemID,entityID,manualOrder:null};
  const arb=createOrderArbiter({clock:()=>now,leaseMs:30000});
- const bridge=createOrderBridge({arbiter,assignments:()=>[{systemID,entityID,pilotID}],
+ const bridge=createOrderBridge({arbiter:arb,assignments:()=>[{systemID,entityID,pilotID}],
   sceneForSystem:()=>scene,getController:()=>controller,warShipClaim:claim});
  const issue=(owner,action='attack')=>bridge.issue({systemID,entityID,owner,action,
   execute:()=>{executed++;return {success:true}}});
@@ -63,6 +63,28 @@ test('WAR may continue its accepted native attack order while others cannot',()=
  assert.equal(f.issue('WAR').success,true);
  assert.equal(f.issue('TACTICS','retreat-warp').success,true);
  assert.equal(f.executed,3);
+});
+test('WAR may retask its own registered hull that is only flying its patrol movement',()=>{
+ const f=fixture();
+ // The defender of an assault is spawned at a belt anchor and immediately flies
+ // its own GOTO leg. That is not another owner's command, so WAR must be able to
+ // give it an attack order instead of being refused forever (a lease only exists
+ // after a successful issue, so the old rule deadlocked every moving war hull).
+ f.ship.mode='GOTO';
+ assert.equal(f.issue('WAR').success,true);
+ assert.equal(f.executed,1);
+ f.ship.mode='ORBIT';
+ assert.equal(f.issue('RAID').errorMsg,'COOP_NPC_ORDER_WAR_SHIP_RESERVED');
+ assert.equal(f.issue('CIVILIAN').errorMsg,'COOP_NPC_ORDER_WAR_SHIP_RESERVED');
+ assert.equal(f.issue('WAR').success,true);
+ assert.equal(f.executed,2);
+});
+test('WAR still never hijacks an unleased manual combat order',()=>{
+ const f=fixture();
+ f.ship.mode='GOTO';
+ f.controller.manualOrder={type:'attack',targetID:777};f.controller.currentTargetID=777;
+ assert.equal(f.issue('WAR').errorMsg,'COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE');
+ assert.equal(f.executed,0);
 });
 test('WAR may not override native warp or unverified physical hull',()=>{
  const f=fixture();f.ship.mode='WARP';

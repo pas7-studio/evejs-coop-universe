@@ -6,7 +6,7 @@ const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
 const raidDiagnose=new Map();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warEngagement=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
+let warFleetRegistry=null,warBattleDirector=null,warEngagement=null,warPosture=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null,gateStagingSkipKey=null,followOrderReason=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
 // casualty ledger): the only proof that a registered warship is really gone.
 const destroyedNativeShips=new Set();
@@ -1166,6 +1166,29 @@ function advanceNativeWarCombat(){
    isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
   });
  }
+ // FW-031: a war hull spawned at a belt anchor sits 150 km from home with a 90 km
+ // native leash, so the behaviour loop cleared its combat state every think and an
+ // accepted attack order never became a target. Clear the leash and orbit inside
+ // the real gun range BEFORE the director issues the order.
+ try{
+  if(!warPosture)warPosture=require("./coopWarEngagementPosture")
+   .createWarEngagementPosture({
+    readWarState:()=>warStateStore().read(),
+    registry:nativeWarFleetRegistry(),
+    getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
+    setBehaviorOverrides:(id,overrides)=>
+     require("./npc/npcService").setBehaviorOverrides(id,overrides)
+   });
+  const posture=warPosture.tick();
+  if(posture.applied.length)require("./coopRuntimeProbe").observe(
+   "living-native-war-engagement-posture",null,null,{
+    status:posture.status,applied:posture.applied,
+    skips:posture.skips.slice(0,4),
+    evidence:"NATIVE_BEHAVIOUR_OVERRIDES_NO_LEASH_GUN_ORBIT"
+   });
+ }catch(error){
+  warSkip("combat-posture","THREW:"+String(error?.message||error).slice(0,120));
+ }
  const result=warBattleDirector.tick({systemIDs:[...visitedSystems].sort((a,b)=>a-b).slice(0,12)});
  // FW-030: a warp started here is what puts the two sides inside the native
  // 250 km firing envelope at all; the next tick's director can then fire.
@@ -1180,8 +1203,8 @@ function advanceNativeWarCombat(){
      getController:id=>require("./npc/npcRegistry").getControllerByEntityID(id),
      warpToPoint:(id,point,options)=>
       require("./npc/npcRuntime").warpToPoint(id,point,options),
-     orbit:(id,targetID,distance)=>
-      require("./npc/npcRuntime").orbit(id,targetID,distance)
+     warpBatchToPoints:(requests,options)=>
+      require("./npc/npcRuntime").warpBatchToPoints(requests,options)
     });
   }
   const engagement=warEngagement.tick({
