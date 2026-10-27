@@ -1701,3 +1701,8 @@ Why: Added a repeatable giga-file splitter (state-free slice extraction, node --
 Detail: coop-split-module.cjs extracts only declarations that touch no mutable module state, rewrites the parent to require them back and refuses to write unless both files pass node --check. Dry run on coopVirtualWorldRuntime.js yields 55 declarations / 911 lines; applied and behaviourally verified (same 21 exports, 26 test files 188/20 before and after), then reverted because 10 tests assert on the text
 Where: docs/FORK_PATCH_AUDIT_20261028.md
 Evidence: dry-run + apply on coopVirtualWorldRuntime.js: parent 5330->4419, exports 21 unchanged, 26 test files 188 pass/20 fail identical before and after; reverted; AUDIT_OK drift 0
+### 2026-10-27T23:18Z · e3a04c3 · L2 · docs(worklog): giga-file split tooling + blocked first split (DOCS bd491bb)
+
+Why: the faction-warfare window showed 0-0 because the warzone dict carried only the two systems our war state registers, while the client counts every system of the warzone; it now serves the whole warzone derived from the regions the war actually touches (Black Rise + Placid) with militia corporation ids
+Where: docs/WORKLOG.md
+Evidence: fork commits a52cf22, 0260078; live: warzone 2 = 118 systems, byOwner {1000180:47, 1000181:71}, contested [30045344]; GetLocalOccupationState 30045344 owner 1000180 occupier 1000181 contested true; map payload contains our campaign 587443003 covering 30003837+30045344
