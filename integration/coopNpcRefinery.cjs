@@ -4,6 +4,12 @@
 const fs=require("node:fs"),path=require("node:path");
 const positive=x=>Number.isSafeInteger(Number(x))&&Number(x)>0?Number(x):0;
 const keyFor=(itemID,quantity)=>`coop-refine:v1:${itemID}:${quantity}`;
+// The logical operation ID stays "coop-refine:v1:<itemID>:<quantity>", but ':' cannot
+// appear in a Windows file name, so the path segment is escaped there. Journal rows,
+// receipt identities and comparisons keep using the unescaped ID.
+const segment=(id)=>String(id).replace(/[^A-Za-z0-9._-]/g,c=>"%"+c.charCodeAt(0).toString(16).toUpperCase());
+const journalFile=(directory,id)=>path.join(directory,
+ (process.platform==="win32"?segment(id):String(id))+".json");
 const safe=(x)=>JSON.parse(JSON.stringify(x));
 const phases=Object.freeze({PREPARED:"PREPARED",COMMITTED:"COMMITTED"});
 function createRefinery({directory,items,reprocessing,getStation,getCorporation,isNpcCorporation,
@@ -14,7 +20,7 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
   [getStation,getCorporation,isNpcCorporation,facilityAvailable].some(fn=>typeof fn!=="function"))
   throw Error("NPC_REFINERY_DEPENDENCIES_REQUIRED");
  const busy=new Set();
- function filepath(id){return path.join(directory,id+".json");}
+ function filepath(id){return journalFile(directory,id);}
  function acquire(id){
   fsApi.mkdirSync(directory,{recursive:true});
   return fsApi.openSync(filepath(id)+".lock","wx",0o600);
@@ -49,7 +55,7 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
    throw Error("NPC_REFINERY_JOURNAL_INVALID");
   return row;
  }
- function validate({oreItemID,ownerID,stationID}={}){
+ function validate({oreItemID,ownerID,stationID,feePaid=null}={}){
   const id=positive(oreItemID),owner=positive(ownerID),stationIDNum=positive(stationID);
   if(!id||!owner||!stationIDNum)return {status:"INVALID_REQUEST"};
   const corp=getCorporation(owner),station=getStation(stationIDNum);
@@ -75,10 +81,26 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
      !Number.isSafeInteger(Number(quote.leftOvers))||Number(quote.leftOvers)<0||
      Number(quote.quantityToProcess)+Number(quote.leftOvers)!==Number(item.quantity))
     return {status:"NATIVE_REPROCESSING_RECIPE_UNAVAILABLE"};
-  // Tax must be paid from a real NPC corporate wallet. This v1 intentionally
-  // supports zero-fee quotes only, not silently waiving positive native cost.
-  if(!Number.isFinite(Number(quote.totalISKCost))||Number(quote.totalISKCost)!==0)
-    return {status:"NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED",iskCost:quote.totalISKCost};
+  // Tax must be paid from a real NPC corporate wallet. A positive native fee is
+  // accepted ONLY when the caller proves it already paid that exact amount: the
+  // witness must name this corporation, this station and this ISK cost, and its
+  // durable receipt must exist on disk. Nothing is ever waived.
+  const fee=Number(quote.totalISKCost);
+  if(!Number.isFinite(fee))return {status:"NATIVE_REPROCESSING_FEE_UNPROVEN"};
+  let feeWitness=null;
+  if(fee!==0){
+   const paid=feePaid&&typeof feePaid==="object"?feePaid:null;
+   const sameReceipt=Boolean(paid&&positive(paid.receiptID)&&
+    Number(paid.amountISK)===fee&&Number(paid.corporationID)===owner&&
+    Number(paid.stationID)===stationIDNum);
+   if(!sameReceipt)
+    return {status:"NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED",iskCost:fee};
+   let durable=false;
+   try{durable=fsApi.existsSync(path.join(directory,"refinery-fees",paid.receiptID+".json"))}
+   catch(_error){durable=false}
+   if(!durable)return {status:"REFINERY_FEE_RECEIPT_NOT_DURABLE",iskCost:fee};
+   feeWitness={receiptID:positive(paid.receiptID),amountISK:fee};
+  }
   const outputs=[];
   const seen=new Set();
   for(const entry of quote.recoverables||[]){
@@ -98,7 +120,8 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
     oreTypeID:Number(item.typeID),originalQuantity:Number(item.quantity),
     consumeQuantity:Number(quote.quantityToProcess),leftOvers:Number(quote.leftOvers),
     portions:Number(quote.portions),nativeEfficiency:Number(quote.efficiency),
-    stationTax:Number(quote.stationTax),iskCost:0,outputs,sourceCustomInfo:item.customInfo};
+    stationTax:Number(quote.stationTax),iskCost:fee,feeReceipt:feeWitness,outputs,
+    sourceCustomInfo:item.customInfo};
  }
  function verifyCommitted(row){
   const found=items.listOwnedItems(row.ownerID,{locationID:row.stationID,flagID:items.ITEM_FLAGS.HANGAR})||[];
@@ -182,4 +205,4 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
  }
  return {preview:validate,refine,reconcile};
 }
-module.exports={createRefinery,keyFor};
+module.exports={createRefinery,keyFor,journalFile};
