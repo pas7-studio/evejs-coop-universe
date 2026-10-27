@@ -38,6 +38,8 @@ names.splice(names.indexOf("coopNpcTactics")+1,0,"coopPveRetaliationGuard");
 // Chat 29: source-level buy cancellation custody, default OFF.
 // FW-001: source-only authoritative war state; default OFF.
 names.splice(names.indexOf("coopFactionDirector")+1,0,"coopFactionWarCore","coopFactionWarStore");
+// Shared read-only conversion of an atomic-rows key to its JSON cache path.
+names.splice(names.indexOf("coopFactionWarCore")+1,0,"coopNativeRowPath");
 // FW-002: native militia agent, default OFF.
 names.splice(names.indexOf("coopFactionWarStore")+1,0,"coopFactionWarNativeProofs","coopFactionWarAgent");
 // FW-003B: native combat proof on existing 30s world tick, no new timer.

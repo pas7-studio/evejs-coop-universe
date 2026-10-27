@@ -392,6 +392,107 @@ function diagnoseMobilization(){
   return {status:"DIAGNOSE_FAILED",reason:String(error&&error.message||error)};
  }
 }
+// Read-only operator diagnostic for the battle leg. For every registered war
+// hull it reports the physical scene, the native controller and the exact
+// pairing verdict the director would get, so a silent "no attack order" tick is
+// explained instead of guessed at. It never issues an order, reserves a ship,
+// writes a row or spends ammo.
+function diagnoseCombat(){
+ const api=require("./coopWarCombatAuthority");
+ const flags={combat:api.combatEnabled(),ammo:api.ammoEnabled()};
+ if(!visitedSystems.size)return {status:"NO_VISITED_SYSTEMS",flags};
+ let war,fleet;
+ try{
+  war=warStateStore().read();
+  fleet=nativeWarFleetRegistry()?.snapshot();
+ }catch(error){
+  return {status:"NATIVE_STATE_UNAVAILABLE",flags,
+   reason:String(error&&error.message||error)};
+ }
+ if(war?.version!==1||fleet?.version!==1)
+  return {status:"WAR_OR_FLEET_STATE_INVALID",flags};
+ const runtime=require("./runtime"),controllers=require("./npc/npcRegistry"),
+  entityStore=require("./npc/nativeNpcStore");
+ let authority=null;
+ try{
+  authority=api.createWarCombatAuthority({
+   gameStore:require("../gameStore"),
+   getController:id=>controllers.getControllerByEntityID(id),
+   getNativeEntity:id=>entityStore.getNativeEntity(id),
+   getFactionForCorporation:id=>
+    require("../services/faction/factionState").getFactionIDForCorporation(id)
+  });
+ }catch(error){
+  return {status:"AUTHORITY_UNAVAILABLE",flags,
+   reason:String(error&&error.message||error)};
+ }
+ const vec=x=>x&&["x","y","z"].every(k=>typeof x[k]==="number"&&
+  Number.isFinite(x[k]));
+ const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
+ const ships=[],entities=new Map();
+ for(const row of Object.values(fleet.ships)
+  .sort((a,b)=>a.entityID-b.entityID).slice(0,32)){
+  const scene=runtime.scenes instanceof Map?
+   runtime.scenes.get(row.systemID):null;
+  const entity=scene?.getEntityByID?.(row.entityID)||null;
+  let ctrl=null,native=null;
+  try{ctrl=controllers.getControllerByEntityID(row.entityID)}catch{}
+  try{native=entityStore.getNativeEntity(row.entityID)}catch{}
+  const campaign=war.campaigns[row.campaignID]||null,
+   factionID=Number(row.factionID)||0;
+  const opponentSystem=Number(campaign?.targetSystemID)||0;
+  ships.push({entityID:row.entityID,pilotID:row.pilotID,
+   factionID,systemID:row.systemID,campaignID:row.campaignID,
+   warID:row.warID,
+   campaignState:String(campaign?.state||"UNKNOWN"),
+   warState:String(war.wars[row.warID]?.state||"UNKNOWN"),
+   // The battle can only happen in the campaign's target system.
+   inBattleSystem:opponentSystem===0||row.systemID===opponentSystem,
+   nativeSystemID:Number(native?.systemID)||0,
+   nativeTransient:native?.transient===true,
+   sceneSystemID:Number(scene?.systemID)||0,
+   inScene:Boolean(entity),kind:String(entity?.kind||""),
+   nativeNpc:entity?.nativeNpc===true,
+   playerSession:Number(entity?.session?.characterID)||0,
+   mode:String(entity?.mode||""),
+   position:vec(entity?.position)?entity.position:null,
+   controllerSystemID:Number(ctrl?.systemID)||0,
+   currentTargetID:Number(ctrl?.currentTargetID)||0,
+   manualOrder:ctrl?.manualOrder?
+    {type:String(ctrl.manualOrder.type||""),
+     targetID:Number(ctrl.manualOrder.targetID)||0}:null,
+   ammoRetreat:nativeAmmoSupply?.activeIDs(row.systemID)?.has(row.entityID)===true,
+   tacticalBusy:tacticsDirector?.activeIDs()?.has(row.entityID)===true});
+  if(entity)entities.set(row.entityID,entity);
+ }
+ const pairs=[];
+ for(const attacker of ships)for(const target of ships){
+  if(attacker.entityID>=target.entityID)continue;
+  if(attacker.campaignID!==target.campaignID||
+   attacker.factionID===target.factionID)continue;
+  const a=entities.get(attacker.entityID),b=entities.get(target.entityID);
+  const shared=a&&b&&a.position&&b.position?
+   Math.round(dist(a.position,b.position)):null;
+  let verdict;
+  try{
+   verdict=authority.evaluatePair(a,b,{requireAttackIntent:false});
+  }catch(error){verdict={status:"BLOCKED",
+   reason:String(error&&error.message||error)}}
+  pairs.push({attackerID:attacker.entityID,targetID:target.entityID,
+   sameSystem:attacker.systemID===target.systemID,
+   distanceMeters:shared,
+   inRange:shared!==null&&shared<=250000,
+   verdict:String(verdict?.status||"UNKNOWN"),
+   reason:String(verdict?.reason||""),
+   warID:String(verdict?.warID||"")});
+ }
+ return {status:"OBSERVED",flags,
+  visitedSystems:[...visitedSystems].slice(0,12).sort((a,b)=>a-b),
+  campaigns:Object.values(war.campaigns).slice(0,16).map(c=>({
+   campaignID:c.campaignID,warID:c.warID,state:c.state,
+   sourceSystemID:c.sourceSystemID,targetSystemID:c.targetSystemID})),
+  ships,pairs};
+}
 // FW-007B: recover/audit native military handoff BEFORE the materializer
 // may prune old pilot links or rebuild another physical hull.
 function ensureWarRecoverySocket(){
@@ -471,11 +572,13 @@ function advanceNativeWarGateStaging(){
    warStore=require("./coopFactionWarStore"),
    fleetStore=require("./coopWarFleetRegistry"),
    treasuryStore=require("./coopWarTreasury"),
-   warCore=require("./coopFactionWarCore");
+   warCore=require("./coopFactionWarCore"),
+   nativeRows=require("./coopNativeRowPath");
   function readRow(table,key,validate){
-   const read=gameStore.read(table,"/"+key);
-   if(read?.success!==true)return null;
-   validate(read.data);return read.data;
+   // War rows live in the atomic-rows keyspace, whose JSON cache path is nested
+   // at the \u001f separator; the raw key read reports ENTRY_NOT_FOUND.
+   const row=nativeRows.readRow(gameStore,table,key,validate);
+   return row||null;
   }
   warGateStaging=createWarGateStaging({
    readWar:()=>readRow(warStore.TABLE,warStore.KEY,warCore.validateState),
@@ -3828,4 +3931,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,warFrontChat};

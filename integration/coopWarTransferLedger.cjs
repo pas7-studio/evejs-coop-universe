@@ -6,6 +6,7 @@ const crypto=require("node:crypto");
 const fleet=require("./coopWarFleetRegistry"+(__filename.endsWith(".js")?"":".cjs"));
 const warStore=require("./coopFactionWarStore"+(__filename.endsWith(".js")?"":".cjs"));
 const treasury=require("./coopWarTreasury"+(__filename.endsWith(".js")?"":".cjs"));
+const {readRow}=require("./coopNativeRowPath"+(__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const owns=(o,k)=>Object.prototype.hasOwnProperty.call(o,k);
 const key=x=>typeof x==="string"&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
@@ -393,9 +394,9 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   let state;
   try{
    if(typeof gameStore.read==="function"){
-    const r=gameStore.read(fleet.TABLE,"/"+fleet.KEY);
-    if(r?.success!==true)throw Error("NATIVE_FLEET_CACHE_UNAVAILABLE");
-    state=fleet.validate(r.data);
+    const r=readRow(gameStore,fleet.TABLE,fleet.KEY);
+    if(!r)throw Error("NATIVE_FLEET_CACHE_UNAVAILABLE");
+    state=fleet.validate(r);
    }else state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
   }catch{return []}
   return Object.values(state.transfers||{}).filter(t=>

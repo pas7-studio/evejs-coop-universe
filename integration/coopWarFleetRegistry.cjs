@@ -2,6 +2,8 @@
 // FW-003: durable exclusive native ship assignment, NOT a ship factory.
 // One SQLite atomic row in the same authoritative GameStore as FW-001.
 const TABLE="corporationRuntime",KEY="coop-faction-war\u001ffleet-registry-v1",VERSION=1;
+const {readRow}=require("./coopNativeRowPath"+
+ (typeof __filename==="string"&&__filename.endsWith(".js")?"":".cjs"));
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 const valid=x=>typeof x==="string"&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(x);
 const pilot=x=>typeof x==="string"&&/^coop-pilot-[0-9]{3,}$/.test(x);
@@ -85,10 +87,8 @@ function createWarFleetRegistry({gameStore,verifyNativeShip,verifyCampaign,
    // BEGIN IMMEDIATE for each visible NPC. Native atomic writes refresh it.
    let state;
    if(typeof gameStore.read==="function"){
-    const row=gameStore.read(TABLE,"/"+KEY);
-    if(row?.success===true)state=validate(row.data);
-    else if(row?.errorMsg==="ENTRY_NOT_FOUND")state=empty();
-    else return "UNKNOWN";
+    const row=readRow(gameStore,TABLE,KEY);
+    state=row?validate(row):empty();
    }else state=snapshot(); // only injectable offline fixtures
    const v=state.ships[String(link?.entityID)];
    if(!v)return "UNASSIGNED";

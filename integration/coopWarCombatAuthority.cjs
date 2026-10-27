@@ -6,6 +6,7 @@ const moduleName=x=>require("./"+x+(__filename.endsWith(".js")?"":".cjs"));
 const war=moduleName("coopFactionWarStore"),fleet=moduleName("coopWarFleetRegistry");
 const warCore=moduleName("coopFactionWarCore"),fleetCore=moduleName("coopWarFleetRegistry");
 const {evaluate}=moduleName("coopWarCombatPolicy");
+const {readRow}=moduleName("coopNativeRowPath");
 const pos=x=>Number.isSafeInteger(x)&&x>0;
 function combatEnabled(env=process.env){
  return env.EVEJS_COOP_FACTION_WAR==="1"&&
@@ -31,12 +32,11 @@ function createWarCombatAuthority({gameStore,getController,getNativeEntity,
   throw Error("WAR_COMBAT_NATIVE_AUTHORITIES_REQUIRED");
  function snapshots(){
   try{
-   const a=gameStore.read(war.TABLE,"/"+war.KEY),
-    b=gameStore.read(fleet.TABLE,"/"+fleet.KEY);
-   if(a?.success!==true||b?.success!==true||!a.data||!b.data)
-    return null;
-   warCore.validateState(a.data);fleetCore.validate(b.data);
-   return {warState:a.data,fleetState:b.data};
+   const a=readRow(gameStore,war.TABLE,war.KEY),
+    b=readRow(gameStore,fleet.TABLE,fleet.KEY);
+   if(!a||!b)return null;
+   warCore.validateState(a);fleetCore.validate(b);
+   return {warState:a,fleetState:b};
   }catch{return null}
  }
  function evaluatePair(attacker,target,{requireAttackIntent=true,proof=null}={}){
