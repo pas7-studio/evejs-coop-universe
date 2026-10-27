@@ -589,3 +589,17 @@ next: remaining cloneValue 31.3% is collection cloning in our own callers
 (coopWarFleetRoster.presence, listNativeCargo paths); hoist one read per pass.
 Also: map sector colouring fix deployed (all warzone shells + our occupation),
 awaiting the owner's visual check.
+
+## 2026-10-27 patch-series repair + FW payload (measured)
+
+| what | before | after |
+|---|---|---|
+| L1 series | applied=0, drifted=0004/0009/0010 | applied=0 alreadyPresent=10 total=10, OVERLAY_OK, exit 0 |
+| NPC store fix in container | absent (patch never applied) | `rootShapeVerified.add` = 1 |
+| server CPU, one core | 92-96% steady | 17-35% with an active mining fleet + pirate raid |
+| FW payload | 5 systems, militia corps 1000180/1000181 (grey) | 813 systems, util.KeyVal, factions 500001/500004 |
+
+Note: the CPU baseline moved because patch 0004 is now really applied, so the
+mining fleets exist again (`ALIFE08 ... ALREADY_ACTIVE miners=2 haulers=1`) and the
+server does real mining/combat work. 17-35% of one core for that load is the new
+normal; the idle waste (86.7% in cloneValue/ensureRootShape) is gone.
