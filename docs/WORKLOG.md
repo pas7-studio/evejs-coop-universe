@@ -1619,3 +1619,9 @@ Evidence: agents world: CORP_WALLET_UNAVAILABLE with 26 018 500 ISK in ledger.js
 Why: The hauler was told to orbit a miner 37-150 km away: an orbit order never warps and the discarded result made every retry look successful while the range grew.
 Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
 Evidence: agents world: 363 living-haul-no-hauler out-of-range 37857/150280 m with empty living-haul-approach-issued; block now warps to the miner when the measured gap exceeds 10 km, falls back to orbit and publishes WARPED_TO_MINER/WARP_REFUSED/ORBIT_REFUSED; 4 wiring tests pass
+### 2026-10-27T22:26Z · e40fec8 · L2 · feat(missions): announce agent-mission waves that spawn silently, and cap how many may run
+
+Why: agent-mission waves 2..N spawn with an empty triggerMessages list, so a player who cleared wave 1 sees an empty pocket and a mission that appears never to count (measured on Gone Berserk: wave 2 spawned 4 min later, silently, 24 hulls for 120k+45k ISK and 250 LP)
+Detail: Measured on the play stack: Gone Berserk spawns 7 waves (24 hulls) but waves 2..7 carry an empty triggerMessages list, so nothing tells the client a new wave exists; wave 2 really spawned four minutes after wave 1 was cleared. New L2 module (both flags default OFF) refreshes the owner's mission on a real wave spawn, writes living-mission-wave telemetry, and with a cap settles waves above it withou
+Where: docs/COOP_MISSION_WAVE_PACING.md, integration/coopMissionWavePacing.cjs, scripts/check-coop-mission-wave-hook.cjs, scripts/overlay-spec.cjs, tests/coop-mission-wave-pacing.test.mjs
+Evidence: tests/coop-mission-wave-pacing.test.mjs 11/11; scripts/check-coop-mission-wave-hook.cjs HOOK_OK anchor=1; live deploy NOT run - scripts/coop-deploy.cjs --check is currently blocked by another session's untracked integration/coopWarLossReconcile.cjs required from an uncommitted coopVirtualWorldRuntime.cjs
