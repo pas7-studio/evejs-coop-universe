@@ -78,7 +78,7 @@
     },
     {
       "file": "0009-native-npc-store-root-clone.patch",
-      "sha256": "b16c8e04713068955a46853d601477f5088fc1771f4e94d2b6e3b48d66b165ae",
+      "sha256": "b3f707c0b539888d504fe863552d8525bcd2a744c96e8be23a3146b42a8edb71",
       "files": [
         "server/src/space/npc/nativeNpcStore.js"
       ],
@@ -87,7 +87,7 @@
     },
     {
       "file": "0010-concord-rules-cache-clone.patch",
-      "sha256": "f06257c893258d19b7cc087aa7372c36e619cf30877895ac8da7165bb43f9cc7",
+      "sha256": "85834c79e65ef5b323f82fc7c503e8317b6f54b07b6d75031e4e81cdaa9a0303",
       "files": [
         "server/src/space/npc/npcDefaultConcordRules.js"
       ],
