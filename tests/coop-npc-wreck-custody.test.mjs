@@ -31,6 +31,9 @@ function fixture(){
    .map(x=>({itemID:x.cargoID,typeID:x.typeID,quantity:x.quantity,
     ownerID:x.ownerID,locationID:id})),
   allocateCargoID:()=>({success:true,data:++allocated}),
+  allocateWreckItemID:()=>({success:true,data:++allocated}),
+  upsertNativeWreckItem:(row)=>{sources.set(row.wreckItemID,{...row});
+   return {success:true};},
   removeNativeWreckItem:id=>{if(failDebit)return {success:false};
    sources.delete(id);return {success:true};},
   upsertNativeCargo:row=>{if(failCredit)return {success:false};
@@ -93,9 +96,27 @@ test("physical collection range cannot be bypassed by prior proximity inspection
   assert.equal(f.cargo.size,0);
  }finally{f.cleanup();}
 });
-test("native capacity and existing cargo are conserved without overflow",()=>{
+test("a hold smaller than the stack moves only what fits and leaves a real remainder",()=>{
  const f=fixture();try{
   f.types[40].capacity=25;
+  const result=f.create().transfer(f.input());
+  assert.equal(result.status,"NATIVE_WRECK_CARGO_SETTLED");
+  assert.equal(result.partial,true);
+  assert.equal(result.quantity,2);
+  assert.equal(result.sourceBeforeQuantity,3);
+  assert.equal([...f.cargo.values()][0].quantity,2);
+  // The one unit that did not fit is a real native wreck item, not a lost row.
+  const left=[...f.sources.values()];
+  assert.equal(left.length,1);
+  assert.equal(left[0].wreckID,201);
+  assert.equal(left[0].typeID,42);
+  assert.equal(left[0].quantity,1);
+  assert.equal(left[0].wreckItemID,result.remainder.itemID);
+ }finally{f.cleanup();}
+});
+test("a hold that cannot fit one unit still refuses instead of inventing space",()=>{
+ const f=fixture();try{
+  f.types[40].capacity=5;
   assert.equal(f.create().transfer(f.input()).status,"NATIVE_CARGO_FULL");
   assert.equal(f.sources.size,1);assert.equal(f.cargo.size,0);
  }finally{f.cleanup();}

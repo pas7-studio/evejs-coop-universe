@@ -9,10 +9,21 @@ const vec=x=>!!x&&["x","y","z"].every(k=>Number.isFinite(x[k]));
 const distance=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 const copy=x=>JSON.parse(JSON.stringify(x));
 const STATES=new Set(["PREPARED","DEBIT_CONFIRMED","SETTLED"]);
+// On POSIX the directory entry of a renamed journal is only durable after a
+// directory fsync. Windows cannot open a directory for fsync at all, so there
+// the file-level fsync of the journal itself is the whole guarantee the
+// platform offers; this is the real capability of the filesystem, not a
+// weakened fence.
+function syncDirectory(dir){
+ if(process.platform==="win32")return;
+ const fd=fs.openSync(dir,"r");
+ try{fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+}
 function createWreckCustody({store,sceneForSystem,resolveType,root,
  clock=()=>Date.now(),maxTransactions=10000,maxDistance=2500}={}){
  if(!store||!["getNativeEntity","getNativeWreck","getNativeWreckItem",
  "listNativeCargoForEntity","allocateCargoID","removeNativeWreckItem",
+ "upsertNativeWreckItem","allocateWreckItemID",
  "upsertNativeCargo","buildNativeCargoItems"].every(k=>typeof store[k]==="function")||
  typeof sceneForSystem!=="function"||typeof resolveType!=="function"||
  typeof root!=="string"||!path.isAbsolute(root)||
@@ -46,7 +57,15 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    (value.newCargo.sourceWreckItemID!==undefined&&
     Number(value.newCargo.sourceWreckItemID)!==Number(value.itemID))||
    (value.newCargo.sourceWreckID!==undefined&&
-    Number(value.newCargo.sourceWreckID)!==Number(value.wreckID)))
+    Number(value.newCargo.sourceWreckID)!==Number(value.wreckID))||
+   // A hold smaller than the stack moves what really fits and leaves the rest
+   // as a real remainder wreck item; both quantities must agree exactly.
+   (value.partial===true&&(!validID(value.sourceBeforeQuantity)||
+    Number(value.sourceBeforeQuantity)<=Number(value.quantity)||
+    !validID(value.remainder&&value.remainder.itemID)||
+    Number(value.remainder.itemID)===Number(value.itemID)||
+    Number(value.remainder.quantity)!==
+     Number(value.sourceBeforeQuantity)-Number(value.quantity))))
    throw Error("INVALID_NATIVE_WRECK_CUSTODY_JOURNAL");
   return value;
  }
@@ -61,8 +80,7 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    fs.renameSync(temp,file);
    // Durable name switch is also part of the write-ahead fence on Linux:
    // fsync() of the file alone does not persist its directory entry.
-   const directory=fs.openSync(dir,"r");
-   try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
+   syncDirectory(dir);
   }catch(error){
    try{fs.unlinkSync(temp);}catch(_){}
    throw error;
@@ -113,6 +131,16 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    return {status:"REPAIR_NATIVE_SHIP_IDENTITY"};
   if(store.getNativeWreckItem(tx.itemID))
    return {status:"REPAIR_SOURCE_STILL_PRESENT"};
+  // A partial move left a real remainder stack in the same wreck; it must exist
+  // with exactly the quantity that was not moved.
+  if(tx.partial===true){
+   const rest=store.getNativeWreckItem(tx.remainder.itemID);
+   if(!rest||Number(rest.wreckID)!==tx.wreckID||
+    Number(rest.typeID)!==tx.typeID||
+    Number(rest.quantity)!==tx.remainder.quantity||
+    (rest.singleton===true)!==(tx.newCargo.singleton===true))
+    return {status:"REPAIR_SOURCE_QUANTITY_CONFLICT"};
+  }
   const already=cargoFor(tx);
   if(already.length>1||already.length===1&&!sameCargo(already[0],tx))
    return {status:"REPAIR_DESTINATION_CONFLICT"};
@@ -128,6 +156,8 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
   return {status:"NATIVE_WRECK_CARGO_SETTLED",itemID:tx.itemID,
    cargoID:tx.cargoID,entityID:tx.entityID,
    wreckID:tx.wreckID,typeID:tx.typeID,quantity:tx.quantity,
+   partial:tx.partial===true,sourceBeforeQuantity:Number(tx.sourceBeforeQuantity||
+    tx.quantity),remainder:tx.remainder?{...tx.remainder}:null,
    nativeSourceDebited:true,nativeCargoCredited:true,iskCredited:false};
  }
  function inspectExisting(itemID){
@@ -232,25 +262,49 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
      return {status:"NATIVE_CARGO_CAPACITY_UNVERIFIED"};
     occupied+=vol*Number(cargo.quantity);
    }
-   if(!Number.isFinite(occupied)||occupied+unitVolume*quantity>capacity+1e-8)
-    return {status:"NATIVE_CARGO_FULL"};
+   if(!Number.isFinite(occupied)||occupied>capacity+1e-8)
+    return {status:"NATIVE_CARGO_CAPACITY_UNVERIFIED"};
+   // A real hold only takes what physically fits. The remainder stays in the
+   // same wreck as a real native wreck item (never duplicated, never invented).
+   const freeM3=capacity-occupied;
+   const fits=unitVolume>0?Math.floor((freeM3+1e-8)/unitVolume):quantity;
+   const moved=Math.min(quantity,Math.max(0,fits));
+   if(moved<1)return {status:"NATIVE_CARGO_FULL"};
+   const partial=moved<quantity;
    const allocated=store.allocateCargoID({transient:false});
    if(allocated?.success!==true||!validID(allocated.data))
     return {status:"NATIVE_CARGO_ID_ALLOCATION_FAILED"};
+   let remainder=null;
+   if(partial){
+    const remainderID=store.allocateWreckItemID({transient:source.transient===true});
+    if(remainderID?.success!==true||!validID(remainderID.data))
+     return {status:"NATIVE_WRECK_ITEM_ID_ALLOCATION_FAILED"};
+    remainder={itemID:Number(remainderID.data),quantity:quantity-moved};
+   }
    const cargoID=Number(allocated.data),now=clock();
    const newCargo={cargoID,entityID:shipID,ownerID:Number(native.ownerID),
     moduleID:0,typeID:Number(source.typeID),
     groupID:Number(source.groupID),categoryID:Number(source.categoryID),
     itemName:String(source.itemName||type.name||""),
-    quantity,singleton:source.singleton===true,
+    quantity:moved,singleton:source.singleton===true,
     flagID:5,moduleState:copy(source.moduleState||null),transient:false,
     sourceWreckID:wreckID,sourceWreckItemID:itemID};
    const tx={version:1,phase:"PREPARED",itemID,wreckID,systemID,
     entityID:shipID,pilotID:claim.attackerPilotID,cargoID,
     ownerID:Number(native.ownerID),typeID:Number(source.typeID),
-    quantity,groupID:Number(source.groupID),categoryID:Number(source.categoryID),
-    newCargo,at:now};
+    quantity:moved,groupID:Number(source.groupID),
+    categoryID:Number(source.categoryID),
+    newCargo,at:now,partial,sourceBeforeQuantity:quantity,
+    ...(remainder?{remainder}:{})};
    persist(tx);
+   if(remainder){
+    const written=store.upsertNativeWreckItem({...source,
+     wreckItemID:remainder.itemID,quantity:remainder.quantity,
+     transient:source.transient===true},
+     {transient:source.transient===true});
+    if(written?.success!==true)
+     return {status:"DEBIT_OUTCOME_UNCERTAIN_REPAIR_REQUIRED"};
+   }
    const debited=store.removeNativeWreckItem(itemID);
    if(debited?.success!==true||store.getNativeWreckItem(itemID))
     return {status:"DEBIT_OUTCOME_UNCERTAIN_REPAIR_REQUIRED"};
@@ -294,8 +348,7 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    fs.writeFileSync(fd,JSON.stringify({version:1,pid:process.pid,
     at:clock(),purpose:"NATIVE_WRECK_ITEM_CUSTODY"}));
    fs.fsyncSync(fd);
-   const directory=fs.openSync(root,"r");
-   try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
+   syncDirectory(root);
   }catch(_){
    if(fd!==undefined){
     try{fs.closeSync(fd);}catch(_){}
@@ -310,8 +363,7 @@ function createWreckCustody({store,sceneForSystem,resolveType,root,
    try{fs.closeSync(fd);}catch(_){lockUnsafe=true;}
    try{
     fs.unlinkSync(writerLock);
-    const directory=fs.openSync(root,"r");
-    try{fs.fsyncSync(directory);}finally{fs.closeSync(directory);}
+    syncDirectory(root);
    }catch(_){lockUnsafe=true;}
   }
   if(lockUnsafe)return blocked;

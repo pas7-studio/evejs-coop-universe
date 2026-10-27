@@ -31,6 +31,7 @@ function warMeritRecords(){
 }
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false;
+const wreckCustodyNotes=new Map();
 // Wall-clock instant this process started running the living world. A wreck
 // claim is never closed or re-spawned inside the boot grace window, because a
 // scene that has just been created may not have loaded its entities yet.
@@ -1944,7 +1945,13 @@ function start(){
    if(wreckRecoveryFastBusy)return;
    wreckRecoveryFastBusy=true;
    try{
-    if(!hasPhysicalWreckClaim())return;
+    if(!hasPhysicalWreckClaim()){
+     // No claim has its wreck in the scene yet: heal the claims first (a boot
+     // drops every physical wreck), then recover in the same boot.
+     safeNpcPhase("native-wreck-claim-reconcile-fast",
+      advanceNativeWreckClaimReconcile);
+     return;
+    }
     safeNpcPhase("native-wreck-recovery-fast",advanceNativeWreckRecovery);
     safeNpcPhase("native-wreck-custody-fast",advanceNativeWreckCustody);
    }finally{wreckRecoveryFastBusy=false;}
@@ -2415,9 +2422,9 @@ function advanceNativeWreckClaimReconcile(){
   journal=require("./coopNpcWreckClaims").getWreckClaims();
  if(!wreckClaimReconcile)
   wreckClaimReconcile=require("./coopNpcWreckClaimReconcile");
- const configured=Number(process.env.EVEJS_COOP_NPC_WRECK_CLAIM_GRACE_MS||120000);
+ const configured=Number(process.env.EVEJS_COOP_NPC_WRECK_CLAIM_GRACE_MS||45000);
  const graceMs=Number.isFinite(configured)?
-  Math.max(30000,Math.min(900000,configured)):120000;
+  Math.max(15000,Math.min(900000,configured)):45000;
  const nowMs=Date.now(),bootAgeMs=nowMs-worldBootAtMs;
  for(const systemID of visitedSystems){
   const claims=journal.active(systemID);
@@ -2526,6 +2533,25 @@ function advanceNativeWreckCustody(){ if(process.env.EVEJS_COOP_NPC_WRECK_TRANSF
      require("./coopRuntimeProbe").observe("living-npc-wreck-custody-refused",null,
       {spaceState:{systemID}},{status:result.status,
        wreckID:claim.wreckID,itemID:item.wreckItemID});
+     }else if(result.status!=="ALREADY_SETTLED"){
+      // These statuses used to return silently, so "why is the loot still in the
+      // wreck" had no answer. Publish each claim+status once per 5 minutes.
+      const noteKey=systemID+":"+claim.wreckID+":"+result.status;
+      const at=Date.now();
+      if(at-(wreckCustodyNotes.get(noteKey)||0)>=300000){
+       wreckCustodyNotes.set(noteKey,at);
+       require("./coopRuntimeProbe").observe("living-npc-wreck-custody-skip",null,
+        {spaceState:{systemID}},{status:result.status,
+         wreckID:Number(claim.wreckID)||0,itemID:Number(item.wreckItemID)||0,
+         hunterID:Number(claim.attackerEntityID)||0,
+         pilotID:String(claim.attackerPilotID||""),
+         hunterMode:String(ship?.mode||""),
+         distanceMeters:Math.hypot(ship.position.x-wreck.position.x,
+          ship.position.y-wreck.position.y,
+          ship.position.z-wreck.position.z),
+         quantity:Number(item.quantity)||0,typeID:Number(item.typeID)||0,
+         cargoTransferred:false,iskGranted:false});
+         }
     }
    }
   }
