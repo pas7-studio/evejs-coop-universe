@@ -62,8 +62,12 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
   const accepted=new Set(systemIDs),orders=[],observations=[],skips=[];
   // Funding alone is not supply. A campaign must ALREADY have passed the
   // independent native supply/route verification in FW-001 START_CAMPAIGN.
+  // An ASSAULT campaign is exactly the leg where the attacker still has to fly
+  // the gate, so it is staged too - but only the hulls still in the source
+  // system (one already inside the target system needs no crossing).
   const live=Object.values(war.campaigns).filter(c=>
-   c?.state==="PREPARING"&&pos(c.sourceSystemID)&&pos(c.targetSystemID))
+   ["PREPARING","ASSAULT"].includes(String(c?.state))&&
+   pos(c.sourceSystemID)&&pos(c.targetSystemID))
    .sort((a,b)=>String(a.campaignID).localeCompare(String(b.campaignID)))
    .slice(0,12);
   if(!live.length)skips.push({campaignID:null,reason:"NO_PREPARING_CAMPAIGN"});
@@ -83,9 +87,17 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
      reason:`WAR_NOT_ACTIVE:${String(w?.state)}`});
     continue;
    }
-   if(reserve?.status!=="HELD"||reserve.warID!==campaign.warID||
+   // EVEJS_COOP_WAR_REQUIRE_FUNDING=0 is an explicit operator decision: the
+   // opening records the campaign's own `paper-supply:<campaignID>` id and
+   // reserves nothing, so no escrow can exist and no bounty can ever be paid.
+   // Such a campaign may still fly a real hull at a real gate; it is labelled
+   // PAPER_UNFUNDED_EXPLICIT and never treated as funded. Any OTHER id keeps the
+   // full strict escrow proof.
+   const paperSupply=campaign.supplyReservationID===
+    "paper-supply:"+campaign.campaignID;
+   if(!paperSupply&&(reserve?.status!=="HELD"||reserve.warID!==campaign.warID||
     reserve.campaignID!==campaign.campaignID||
-    reserve.factionID!==w.attackerFactionID||!pos(reserve.cents)){
+    reserve.factionID!==w.attackerFactionID||!pos(reserve.cents))){
     // Name the FIRST precondition that actually failed instead of a blanket
     // "no supply": the operator has to know which one to repair.
     const why=!reserve?`SUPPLY_RESERVATION_MISSING:${String(campaign.supplyReservationID)}`:
@@ -153,6 +165,8 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
     if(o.action==="NATIVE_WARP_TO_REAL_GATE"||
        o.action==="VERIFIED_NATIVE_GATE_TRANSFER")
      orders.push({...o,campaignID:campaign.campaignID,
+      campaignState:String(campaign.state),
+      supply:paperSupply?"PAPER_UNFUNDED_EXPLICIT":"REAL_HELD_ESCROW",
       phase:o.action==="VERIFIED_NATIVE_GATE_TRANSFER"?
        "NATIVE_TRANSFER_WITH_DURABLE_HANDOFF":"STAGING_ONLY_NOT_TRANSFER"});
    }

@@ -88,12 +88,38 @@ test("unfunded, refunded or mismatched native escrow cannot trigger gate warp",(
 test("ceased war, assault and wrong-faction or nonphysical fleet do not stage",()=>{
  const f=fixture();f.war.wars.w1.state="ENDED";
  assert.equal(f.tick().orders.length,0);
- f.war.wars.w1.state="ACTIVE";f.war.campaigns.c1.state="ASSAULT";
- assert.equal(f.tick().orders.length,0);
- f.war.campaigns.c1.state="PREPARING";f.fleet.ships[501].factionID=22;
+ f.war.wars.w1.state="ACTIVE";f.fleet.ships[501].factionID=22;
  assert.equal(f.tick().orders.length,0);
  f.fleet.ships[501].factionID=11;f.ship.nativeNpc=false;
  assert.equal(f.tick().orders.length,0);
+});
+test("an ASSAULT campaign still stages the attacker that is outside the target",()=>{
+ const f=fixture();f.war.campaigns.c1.state="ASSAULT";
+ const out=f.tick();
+ assert.equal(out.orders.length,1);
+ assert.equal(out.orders[0].campaignState,"ASSAULT");
+ assert.equal(out.orders[0].action,"NATIVE_WARP_TO_REAL_GATE");
+ // the same hull already inside the target system needs no crossing
+ const arrived=fixture();arrived.war.campaigns.c1.state="ASSAULT";
+ arrived.fleet.ships[501].systemID=202;
+ assert.deepEqual(arrived.tick().skips,
+  [{campaignID:"c1",reason:"NO_ATTACKER_SHIP_IN_SOURCE:101"}]);
+});
+test("an explicitly waived paper supply stages a real hull but stays labelled",()=>{
+ const f=fixture();
+ delete f.treasury.reservations.s1;
+ f.war.campaigns.c1.supplyReservationID="paper-supply:c1";
+ const out=f.tick();
+ assert.equal(out.orders.length,1);
+ assert.equal(out.orders[0].supply,"PAPER_UNFUNDED_EXPLICIT");
+ // a paper id for a DIFFERENT campaign is not this campaign's waiver
+ const other=fixture();delete other.treasury.reservations.s1;
+ other.war.campaigns.c1.supplyReservationID="paper-supply:c2";
+ assert.equal(other.tick().orders.length,0);
+ assert.equal(other.tick().skips[0].reason,"SUPPLY_RESERVATION_MISSING:paper-supply:c2");
+ // a real reservation keeps the strict escrow proof
+ const strict=fixture();
+ assert.equal(strict.tick().orders[0].supply,"REAL_HELD_ESCROW");
 });
 test("tactical retreat and disabled flag suppress approach",()=>{
  const f=fixture();f.block(true);
