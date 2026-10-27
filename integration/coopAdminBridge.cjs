@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -737,6 +737,59 @@ function executeRequest(request) {
       };
     } catch (error) {
       return { ok: false, error: "inspect failed: " + String(error && error.message || error) };
+    }
+  }
+  // Read-only: why two native hulls do or do not engage. Never orders, never
+  // moves, never writes - positions, distance, controller order and the exact
+  // native hostility verdict, so "no fire" is a measurement instead of a guess.
+  if (action === "npc_pair_diagnose") {
+    const attackerID = Number(request.attackerID) || 0;
+    const targetID = Number(request.targetID) || 0;
+    if (!(attackerID > 0) || !(targetID > 0))
+      return { ok: false, error: "attackerID and targetID are required" };
+    try {
+      const runtime = require("./runtime");
+      const store = require("./npc/nativeNpcStore");
+      const controllers = require("./npc/npcRegistry");
+      const sceneFor = (systemID) => (runtime.scenes instanceof Map ? runtime.scenes.get(Number(systemID)) : null);
+      const a = store.getNativeEntity(attackerID), b = store.getNativeEntity(targetID);
+      const shipA = a ? sceneFor(a.systemID)?.getEntityByID?.(attackerID) : null;
+      const shipB = b ? sceneFor(b.systemID)?.getEntityByID?.(targetID) : null;
+      const distance = ["x", "y", "z"].every((k) => Number.isFinite(shipA?.position?.[k]) && Number.isFinite(shipB?.position?.[k]))
+        ? Math.hypot(shipA.position.x - shipB.position.x, shipA.position.y - shipB.position.y, shipA.position.z - shipB.position.z)
+        : null;
+      const ctrl = controllers.getControllerByEntityID(attackerID);
+      let engagement = null;
+      try {
+        engagement = require("./coopNpcHostility" + siblingSuffix).allowsNativeEngagement(shipA, shipB) === true;
+      } catch (error) {
+        engagement = "THREW:" + String(error && error.message || error).slice(0, 80);
+      }
+      let warVerdict = null;
+      try {
+        warVerdict = require("./coopWarCombatAuthority" + siblingSuffix).nativeWarCombatVerdict(shipA, shipB);
+      } catch (error) {
+        warVerdict = { status: "THREW", reason: String(error && error.message || error).slice(0, 80) };
+      }
+      return {
+        ok: true,
+        attackerID, targetID,
+        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null },
+        target: { systemID: Number(b?.systemID) || 0, inScene: Boolean(shipB), mode: String(shipB?.mode || ""), position: shipB?.position || null },
+        distanceMeters: distance,
+        controller: {
+          entityID: Number(ctrl?.entityID) || 0,
+          systemID: Number(ctrl?.systemID) || 0,
+          currentTargetID: Number(ctrl?.currentTargetID) || 0,
+          manualType: String(ctrl?.manualOrder?.type || ""),
+          manualTargetID: Number(ctrl?.manualOrder?.targetID) || 0,
+          allowWeapons: ctrl?.manualOrder?.allowWeapons !== false,
+        },
+        engagementAllowed: engagement,
+        warVerdict,
+      };
+    } catch (error) {
+      return { ok: false, error: "pair diagnose failed: " + String(error && error.message || error) };
     }
   }
   if (action === "war_combat_diagnose") {

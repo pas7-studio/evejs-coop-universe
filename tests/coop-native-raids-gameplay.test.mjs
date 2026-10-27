@@ -88,3 +88,35 @@ test("no ore, no live miner and rejected native command never produce fake raid"
  assert.equal(f.tick().actions.length,0);
  assert.equal(f.nativeOrders.length,0);
 });
+
+test("a loaded hauler far beyond the native leash never outranks a near loaded miner",()=>{
+ const f=fixture();
+ // The hauler sits at a stuck-fleet position 4.4e11 m away; the miner is 300 km.
+ const hauler={itemID:202,kind:"ship",nativeNpc:true,mode:"STOP",
+  position:{x:448793573773,y:0,z:0}};
+ f.ships.set(202,hauler);
+ f.fleetShips.push({id:202,role:"hauler"});
+ const result=f.tick();
+ assert.equal(result.actions[0].targetID,201);
+ assert.equal(result.actions[0].targetRole,"miner");
+});
+
+test("a loaded hauler that is really on grid is still the preferred prize",()=>{
+ const f=fixture();
+ const hauler={itemID:202,kind:"ship",nativeNpc:true,mode:"STOP",
+  position:{x:290000,y:0,z:0}};
+ f.ships.set(202,hauler);
+ f.fleetShips.push({id:202,role:"hauler"});
+ const result=f.tick();
+ assert.equal(result.actions[0].targetID,202);
+ assert.equal(result.actions[0].targetRole,"hauler");
+});
+
+test("a convoy hull in an active warp is not chased - it cannot be caught",()=>{
+ const f=fixture();
+ f.ships.get(201).mode="WARP";
+ assert.equal(f.tick().actions.length,0);
+ assert.equal(f.nativeOrders.length,0);
+ f.ships.get(201).mode="STOP";
+ assert.equal(f.tick().actions.length,1);
+});

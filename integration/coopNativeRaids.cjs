@@ -3,6 +3,9 @@
 // EveJS handles locking, damage, pursuit, aggression response and wrecks.
 // No scripted kills, fake mining, arena bubbles or player-target selection.
 const pos=v=>Number.isSafeInteger(Number(v))&&Number(v)>0?Number(v):null;
+// A loaded hauler is preferred over a loaded miner only within this slack of the
+// nearest authorized hull, never across an entire solar system.
+const HAULER_PREFERENCE_METERS=50000;
 const valid=p=>!!p&&["x","y","z"].every(k=>Number.isFinite(p[k]));
 const range=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y,a.z-b.z);
 function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
@@ -16,7 +19,13 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
       const ore=(getCargo(t.id)||[]).filter(x=>Number(x?.moduleID||0)===0)
        .reduce((n,x)=>n+Math.max(0,Number(x.quantity)||0),0);
       return {...t,ship,ore};
-    }).filter(t=>t.ship&&t.ore>0&&valid(t.ship.position));
+    })
+    // A hull in an active warp is not a legal combat target and cannot be caught:
+    // chasing it just drags the pirate across the system and beyond its native
+    // leash, where the behavior loop clears its combat state. Wait for real prey.
+    .filter(t=>t.ship&&t.ore>0&&valid(t.ship.position)&&
+     !String(t.ship.mode||"").toUpperCase().includes("WARP")&&
+     !t.ship.pendingWarp&&!t.ship.warpState);
   const actions=[];
   for(const rawID of pirates){
    const id=pos(rawID),ship=id&&scene.getEntityByID(id);
@@ -52,10 +61,20 @@ function createRaids({warp,attack,clock=()=>Date.now(),cooldownMs=480000}){
    // The convoy may move, but the raid should not silently target-hop.
    const authorized=candidates.filter(x=>x.id!==id&&
     canAttack({systemID,pirateID:id,targetID:x.id}));
+   // A loaded hauler is the better prize ONLY when it is really here. Sorting by
+   // role first sent pirates after a hauler that was 4.4e11 m away (a stuck fleet
+   // position) while a loaded miner sat 39 km away - and every hull beyond the
+   // native leash is pulled home with its combat state cleared, so the raid could
+   // never fire. Distance decides; the role only breaks a near tie.
+   const nearestFirst=authorized.slice().sort((a,b)=>
+    range(ship.position,a.ship.position)-range(ship.position,b.ship.position)||
+    (b.role==="hauler"?1:0)-(a.role==="hauler"?1:0)||
+    Number(a.id)-Number(b.id));
+   const nearestDistance=nearestFirst.length?range(ship.position,nearestFirst[0].ship.position):Infinity;
+   const preferredHauler=nearestFirst.find(x=>x.role==="hauler"&&
+    range(ship.position,x.ship.position)<=nearestDistance+HAULER_PREFERENCE_METERS);
    const target=authorized.find(x=>old?.phase==="warp-to-hauler"&&
-    x.id===old.targetID)||
-    authorized.sort((a,b)=>(b.role==="hauler"?1:0)-(a.role==="hauler"?1:0)||
-      range(ship.position,a.ship.position)-range(ship.position,b.ship.position))[0];
+    x.id===old.targetID)||preferredHauler||nearestFirst[0];
    if(!target)continue;
    const distance=range(ship.position,target.ship.position);
    let result,action;
