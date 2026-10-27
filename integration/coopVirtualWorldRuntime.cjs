@@ -757,7 +757,7 @@ function diagnoseWarState(){
 function presenceSummary(){
  try{
   const opening=require("./coopFactionWarOpening");
-  const factions=require("./factions");
+  const factions=require("../services/faction/factionState");
   const nativeStore=require("./npc/nativeNpcStore");
   const links=Object.values(identityRegistry?.snapshot().links||{});
   const systems=new Map();
