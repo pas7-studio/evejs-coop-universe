@@ -29,6 +29,8 @@ names.splice(names.indexOf("coopPveNativeBossDirector")+1,0,"coopPveBossLootPick
 names.splice(names.indexOf("coopPveObjectiveDoctrine")+1,0,"coopPveNativeBossDirector");
 // Chat 19+21 P0-3B: exact native killable objective defend, regroup and retreat.
 names.splice(names.indexOf("coopPveWaveReinforcements")+1,0,"coopPveObjectiveDoctrine");
+// Agent mission waves spawn silently (empty triggerMessages) - announce them and pace them.
+names.splice(names.indexOf("coopMissionInstanceProvenance")+1,0,"coopMissionWavePacing");
 // Chat 19+21 P0-3A: native authored-wave warp and physical arrival handoff.
 names.splice(names.indexOf("coopPveNativeSiteDefense")+1,0,"coopPveWaveReinforcements");
 // Chat 19+21 P0-2: native dungeon defender authority, independent OFF gate.
@@ -89,6 +91,11 @@ names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarEngagementWarp")
 // its accepted attack order never became a target; clear the leash and orbit in
 // real gun range through the existing native behaviour overrides.
 names.splice(names.indexOf("coopWarEngagementWarp")+1,0,"coopWarEngagementPosture");
+// FW-032: a confirmed wreck releases custody, records the roster loss and frees
+// the pilot identity, so a dead hull can never look like a live garrison.
+names.splice(names.indexOf("coopWarEngagementPosture")+1,0,"coopWarLossReconcile");
+// FW-033: refill a side of an active assault through the sanctioned spawn path.
+names.splice(names.indexOf("coopWarLossReconcile")+1,0,"coopWarGarrison");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarObjectiveAdjudicator","coopWarNativeStructureControl","coopWarNativeStructureCombatProof");
 // The world runtime requires this director from a live phase; leaving it out of
@@ -303,7 +310,13 @@ const specs=[
  {file:"server/src/services/industry/industryParityHelpers.js",patches:[]},
  {file:"server/src/services/agent/missionRuntimeState.js",patches:[]},
  {file:"server/src/services/agent/agentMissionRuntime.js",patches:[]},
- {file:"server/src/services/dungeon/dungeonUniverseSiteService.js",patches:[]},
+ {file:"server/src/services/dungeon/dungeonUniverseSiteService.js",patches:[
+  // Agent-mission waves 2..N spawn with an empty triggerMessages list, so the client is never
+  // told a new wave exists. Announce the real wave (and optionally cap how many waves a
+  // mission may run) without touching the spawn itself.
+  {anchor:"  sendEncounterTriggerNotifications(scene, instance, encounterPlan, {",
+   line:"  try { require(\"../../space/coopMissionWavePacing\").onWaveSpawn({ scene, instance, plan: encounterPlan, spawned: spawnResult.data.spawned, nowMs, totalWaves }, { mergeSpawnState: dungeonRuntime.mergeSpawnState, hasSpawned: (key) => { const live = dungeonRuntime.getInstance(instance.instanceID) || instance; const state = live && live.spawnState && live.spawnState.encounterStatesByKey && live.spawnState.encounterStatesByKey[key]; return Math.max(0, Number(state && state.spawnedAtMs) || 0) > 0; }, trimCompletion: (instanceID, keys, at) => dungeonRuntime.mergeObjectiveState(instanceID, { counters: { total_waves: keys.length }, metadata: { completionEncounterKeys: keys, totalWaves: keys.length } }, { nowMs: at }), sessionFor: (characterID) => require(\"../chat/sessionRegistry\").getSessions().find((entry) => Number(entry && entry.characterID) === Number(characterID)), missionUpdates: (characterID) => require(\"../agent/agentMissionRuntime\").getMissionInfoItems(characterID, Number(instance && instance.metadata && instance.metadata.agentID) || 0, {}) }); } catch (error) { console.warn(\"[CoopMissionWave]\", error.message); }"}
+ ]},
  {file:"server/src/services/agent/agentMgrService.js",patches:[
   {anchor:'    const result = agentMissionRuntime.doAgentAction(\n      normalizePositiveInteger(session && session.characterID, 0),\n      agentID,\n      actionID,\n    );',line:"    const coopTicket = process.env.EVEJS_COOP_FLEET_MISSION_TURNIN === \"1\" ? require(\"../../space/coopFleetMissionTurnin\").prepare({session,agentID,actionID,fleetRuntime:require(\"../fleets/fleetRuntime\"),missionRuntime:agentMissionRuntime,sessions:require(\"../chat/sessionRegistry\").getSessions(),getDockedLocationID:require(\"../structure/structureLocation\").getDockedLocationID}) : null;"},
   {anchor:'    return buildDoActionResponsePayload(result);',line:"    if (coopTicket && coopTicket.ok) { try { const shared = require(\"../../space/coopFleetMissionTurnin\").finish({ticket:coopTicket,missionRuntime:agentMissionRuntime,leaderActionResult:result,fleetRuntime:require(\"../fleets/fleetRuntime\"),getDockedLocationID:require(\"../structure/structureLocation\").getDockedLocationID}); require(\"../../space/coopRuntimeProbe\").observe(\"coop-fleet-native-mission-turnin\",session,null,shared); } catch (error) { console.warn(\"[CoopFleetMission]\",error.message); } }"}
