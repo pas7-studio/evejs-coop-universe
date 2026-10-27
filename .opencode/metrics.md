@@ -179,3 +179,19 @@ next: NEEDS_OWNER:BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION for the live bounty p
 
 ## 2026-10-27T03:52Z - correction to the 03:50Z metrics line
 metrics: war/admin suite tests_total=343 pass=332 fail=11 ; npc-market suite tests_total=1188 pass=1090 fail=98 ; combined tests_total=1531 pass=1422 fail=109 ; every one of the 109 failures is present at the pre-change baseline
+
+## 2026-10-27T04:05Z - item 1: the hull that earned the wreck may sell its loot (code) - add54831
+done: integration/coopNpcLootSellRoles.cjs gates loot liquidation by role (EVEJS_COOP_NPC_LOOT_SELL_ROLES, default pirate) so a war `patrol` hull can sell what it really recovered; the runtime uses it instead of a hard-coded role==="pirate"; live profile turned on loot commerce/wreck transfer/wreck recovery and added the real loot typeIDs to the seeded-market sell allowlist.
+tests: node --test tests/coop-npc-loot-sell-roles.test.mjs -> 6/0 ; node scripts/coop-flags.cjs --check -> FLAGS_OK declared=381
+overlay: OVERLAY_OK (364 modules)
+live: no loot sale yet - measured blockers, verbatim: seeded buy rows in region 10000016 (the only system with real armed war combat, 30001363) = 0 for 1228/34/211/20767/14272/11351 (probe-region); region 10000002 = 132, region 10001004 = 18 ; Angel 500011 / Serpentis 500020 pilots carry no sellable cargo (probe-cargo: no rows) ; war_funding_diagnose -> 500011 NO_REAL_FACTION_INCOME, 500020 NO_REAL_FACTION_INCOME, 500014 FUNDED
+metrics: tests_total=6 pass=6 fail=0 modules_added=1 modules_changed=3 live_events=0
+next: an armed faction must really kill inside a seeded-market system (see state.md "why the loot cannot be sold")
+
+## 2026-10-27T04:06Z - P0 fix found while doing item 1: stale durable link halted the whole bridge - ff071de9
+done: restoreNamedShips separated a real record conflict from a STALE LINK (record+controller agree, only the link's systemID is old); the stale case is reconciled only under EVEJS_COOP_DURABLE_RELOCATE_RESTORE=1 and only through registry.relocate() after the same native ship is physical in the record's system.
+tests: node --test tests/coop-native-durable-restart.test.mjs -> 17/0 ; coop-flags --check -> FLAGS_OK declared=382
+overlay: OVERLAY_OK
+live: before: living-native-durable-recovery {"status":"NEEDS_OPERATOR_REPAIR","errors":[{"pilotID":"coop-pilot-046","entityID":980000016645,"reason":"NATIVE_RECORD_IDENTITY_CONFLICT"}]} and bridge was never created (every bridge-driven phase inert) ; after: {"status":"OK","recovered":0,"alreadyPhysical":67,"legacyTransient":3,"confirmedLosses":3,"relocated":0,"errors":[]}
+metrics: tests_total=17 pass=17 fail=0 modules_added=0 modules_changed=2 live_events=2
+next: item 2 (payout) blocked by the same income root cause - see state.md

@@ -650,3 +650,58 @@ sale for an Angel (500011) or Serpentis (500020) pilot through
 `war_funding_diagnose` until its side reports `FUNDED`, let the next opening
 reserve the bounty, and confirm `living-native-war-bounty` `PAID` on the next real
 casualty of that faction. Do not fund it any other way.
+
+## 2026-10-27 loop - item 1 code PASS, live income BLOCKED BY WORLD GEOGRAPHY (add54831, ff071de9)
+
+**Code (add54831).** `coopNpcLootSellRoles` decides which named native NPC role may
+liquidate provenance-verified loot; the runtime no longer hard-codes `pirate`.
+Default list is `pirate` (historical behaviour); the live profile sets
+`EVEJS_COOP_NPC_LOOT_SELL_ROLES=pirate,patrol` and enables
+`EVEJS_COOP_NPC_LOOT_COMMERCE/WRECK_TRANSFER/WRECK_RECOVERY=1`, plus the real
+loot typeIDs (211,180,185,216,219,241,243,244,182,2516,20767,4959,20617,11351,
+14272,25611,25606) in `EVEJS_COOP_NPC_MARKET_SELL_TYPES`. 6/6 unit tests,
+OVERLAY_OK 364 modules, rebuilt and recreated.
+
+**P0 found and fixed while doing it (ff071de9).** `living-native-durable-recovery`
+was `NEEDS_OPERATOR_REPAIR` for coop-pilot-046/980000016645 (durable record and
+controller in 30000142, link said 30001363), which threw
+`DURABLE_NPC_RECOVERY_REQUIRES_REPAIR` **before** `createBridge()`. The bridge
+therefore did not exist in this boot, so every bridge-driven phase (raids, loot
+station delivery, market assignments) was silently inert. Stale links are now
+reconciled only under `EVEJS_COOP_DURABLE_RELOCATE_RESTORE=1` via the registry's
+own `relocate()`. Live after deploy: `status OK, alreadyPhysical 67, errors []`.
+
+**Why the armed factions still cannot sell loot (measured, not inferred).**
+1. The only theatre with real armed native combat is 30001363 (campaign
+   `war:500011-500020:campaign:30001363` in ASSAULT). Its region 10000016 has
+   **zero** seeded buy rows for 1228/34/211/20767/14272/11351, i.e. no NPC market
+   at all, so recovered loot can never be sold there (region 10000002 = 132 rows,
+   10001004 = 18).
+2. The demand systems have no real armed combat: 30000145's mining fleet is
+   stuck (`living-npc-station-route ALIFE12_PREPARED_BUT_WARP_UNCONFIRMED`, ships
+   ~4.4e11 m from the belt) so pirates have no live prey; 30100032 has 0 SDE
+   belts (`SYSTEM_HAS_NO_SDE_BELTS`); Jita's Guristas/Angel patrols have no
+   native attack order.
+3. ORE 500014 (the only faction with real income, 147 100 ISK, bounty already
+   HELD for `campaign:30000143`) has **no armed profile at all** in the native
+   resolver (only empire/pirate `parity_*` combat profiles exist), so
+   `war_diagnose` mobilises 0 ships for every 500011-500014 campaign and its
+   escrow can never pay a kill or a death benefit.
+4. `war_funding_diagnose` (live): 500011 `NO_REAL_FACTION_INCOME`, 500020
+   `NO_REAL_FACTION_INCOME`, 500014 `FUNDED` (coop-pilot-001 147 100 ISK).
+
+**NEXT ACTION (exact, one decision).** Item 2's payout needs a real casualty of
+the funded faction inside `campaign:30000143`, which needs an armed ORE hull;
+the alternative is a real kill by an armed faction inside a seeded-market system.
+Both are world-configuration choices, not missing code:
+(a) add a real armed ORE (500014) native combat profile so 500011-500014 can
+muster, or
+(b) bring an armed pair's front into a seeded region (30000144/30000145/Jita),
+or (c) seed region 10000016 (forbidden here: no market rebuilds).
+Until one is chosen, do not mint ISK and do not fake a kill.
+
+**Shipcaster logistics: NEEDS_OWNER, with evidence.** The SDE really contains
+shipcaster beacon structure types (75928 Imperial, 75929 State, 75930 Federation,
+75931 Republic) but they belong to the four empires; no shipcaster beacon type
+exists for 500011/500014/500020, so a "faction shipcaster" would misrepresent
+structure ownership. Nothing was deployed.
