@@ -973,3 +973,27 @@ Why: war/fleet rows written through coopAtomicNativeRows were invisible to gameS
 Detail: The battle director and the gate-staging phase read the war/fleet rows with gameStore.read(TABLE, "/"+KEY). A row written through coopAtomicNativeRows is nested in the JSON cache at the unit-separator (0x1f) character, so that read answers ENTRY_NOT_FOUND and every consumer silently saw no record: snapshots() returned null, the director returned WAR_STATE_UNAVAILABLE and never issued an attack ord
 Where: integration/coopAdminBridge.cjs, integration/coopNativeRowPath.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarCombatAuthority.cjs, integration/coopWarFleetRegistry.cjs, integration/coopWarTransferLedger.cjs, scripts/overlay-spec.cjs, tests/coop-native-row-path.test.mjs, tests/coop-war-combat-diagnose.test.mjs
 Evidence: live: pair verdict moved from WAR_SNAPSHOT_UNAVAILABLE to NATIVE_STORE_IDENTITY_MISMATCH after the fix
+### 2026-10-27T02:19Z · 2567db1 · L2 · fix(war): a war patrol flies a real ammo depth, not one charge
+
+Why: authored multi-charge war-patrol loadout row (real static row + real ammo depth) so a hull can fire more than one volley
+Detail: Every real npcLoadouts row carries charges with quantityPerModule 1 and the native ammo bank debits exactly one unit per cycle, so a spawned warship fired one volley (24.87 measured HP) and was dry forever: no kill, wreck, loot or casualty was reachable. integration/coopWarPatrolLoadoutRow.cjs authors a loadout row that is a real static row plus a real ammo depth: every module and charge typeID is
+Where: integration/coopAdminBridge.cjs, integration/coopWarPatrolLoadout.cjs, integration/coopWarPatrolLoadoutRow.cjs, scripts/overlay-spec.cjs, tests/coop-war-patrol-loadout-row.test.mjs, tests/coop-war-patrol-loadout.test.mjs
+Evidence: live spawn loadout RESOLVED AUTHORED_MULTI_CHARGE_ROW chargeDepth 60, inspect_npc 5 modules x quantity 60
+### 2026-10-27T02:41Z · 16cda1e · L2 · feat(war): a dry hull releases its slot so an armed hull can fight
+
+Why: a hull with no compatible charge left releases its campaign slot (registry RELEASE + native proof); mobiliser ASSIGN event ID identifies the real attempt
+Detail: The fleet registry holds one side slot per registered hull and the mobiliser counts every registered hull of a side. A hull that has fired is dry forever (the native ammo bank debits one charge per cycle and stock rows carry one), so it blocked its side for the rest of the campaign and no armed hull could ever take that slot: a real kill was unreachable even with a deep-ammo loadout. integration/c
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarBattleLineRelief.cjs, integration/coopWarMobilizer.cjs, scripts/overlay-spec.cjs, tests/coop-war-battle-line-relief.test.mjs, tests/coop-war-mobilization.test.mjs
+Evidence: live living-native-war-battle-line-relief RELEASED NO_COMPATIBLE_CHARGE_LEFT then fleet re-claimed the deep-ammo hull and it debited 41->36 charges
+### 2026-10-27T02:41Z · 00db71a · L3 · feat(war): a real kill pays real merit and can promote the pilot
+
+Why: durable war merit ledger paid only from a strictly proven native kill, plus promotion fed into the live command-size rule
+Detail: The war merit model could compute merit, ranks and command size, but nothing was ever persisted or paid: the runtime's merit table was an empty in-memory object, so every side stayed at a recruit's single ship and a confirmed kill had no career consequence at all. integration/coopWarMeritLedger.cjs is now the single owner of a pilot's war record, in the existing corporationRuntime atomic keyspace.
+Where: integration/coopFactionWarMerit.cjs, integration/coopNpcDestructionAttacker.cjs, integration/coopWarKillMerit.cjs, integration/coopWarMeritLedger.cjs, tests/coop-war-merit-ledger.test.mjs
+Evidence: live living-native-war-merit PROMOTED coop-pilot-050 merit 25 recruit->pilot command 2 wreckID 980300000006
+### 2026-10-27T02:56Z · 3447132 · L2 · fix(war): a confirmed native wreck frees its campaign slot
+
+Why: a confirmed native wreck frees its campaign slot (confirmDestroyed wired to real wrecks, seeded from the durable casualty ledger)
+Detail: A destroyed warship stayed in the fleet registry forever, so the campaign side it belonged to could never field a replacement: the first real kill consumed the attacker slot permanently and the next fight was unreachable. The registry's native release proof already accepts a destroyed hull through its confirmDestroyed witness, but nothing wired it. The runtime now records the entityID of every nat
+Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarBattleLineRelief.cjs, tests/coop-war-battle-line-relief.test.mjs
+Evidence: live fleet registry dropped destroyed 980000017316 and a fresh armed frigate took the slot, was killed and paid merit
