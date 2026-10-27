@@ -3188,9 +3188,9 @@ function raidLeashWrite(pirateID,leashRangeMeters){
  if(leashRangeMeters===null)delete next.leashRangeMeters;
  else next.leashRangeMeters=Math.max(0,Math.round(leashRangeMeters));
  npcService.setBehaviorOverrides(pirateID,next);
- const applied=Number(next.leashRangeMeters)||0;
+ const applied=leashRangeMeters===null?null:(Number(next.leashRangeMeters)||0);
  return {status:"APPLIED",entityID:pirateID,leashRangeMeters:applied,
-  profileLeashRangeMeters:profileLeash};
+  restored:leashRangeMeters===null,profileLeashRangeMeters:profileLeash};
 }
 function raidLeashScope(pirateID,distanceMeters){
  const distance=Number(distanceMeters)||0;
@@ -4538,22 +4538,6 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  const sellTypes=nativeMarketAllowlist("EVEJS_COOP_NPC_MARKET_SELL_TYPES");
  if(!sellTypes.length)return {status:"NO_SELL_TYPES"};
 
- // Last leg of the loop: the refinery leaves its minerals in the corporation
- // hangar, and a hangar stack cannot be sold by a ship trader. One custody-safe
- // load puts the exact quantity into the hauler real native cargo hold and the
- // proven sale path then liquidates it against the seeded bids of THIS station.
- if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&
-  !arrivalSales.has(Number(stationID)+":"+Number(haulerID))){
-  try{
-   const loaded=ensureMineralLift()?.lift({systemID,stationID,haulerID,
-    cap:Math.max(1,Number(process.env.EVEJS_COOP_NPC_MINERAL_LIFT_MAX_QTY||100000))});
-   if(loaded?.status==="LIFTED")
-    for(const row of loaded.lifted){
-     const typeID=Number(row.typeID);
-     if(!sellTypes.includes(typeID))sellTypes.push(typeID);
-    }
-  }catch(_error){/* a failed lift must never block the ore sale */}
- }
  const key=Number(stationID)+":"+Number(haulerID);
  const running=arrivalSales.get(key);
  if(running){
@@ -4637,6 +4621,22 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  if(!link)link=adoptMerchant(scene||require("./runtime").ensureScene(Number(systemID),
   {refreshStargates:false}),haulerID,systemID);
  if(!link){noteSaleSkip(systemID,stationID,haulerID,"HAULER_NOT_NAMED");return {status:"NOT_SOLD",reason:"HAULER_NOT_NAMED"};}
+ // Last leg of the loop: the refinery leaves its minerals in the corporation
+ // hangar, and a hangar stack cannot be sold by a ship trader. One custody-safe
+ // load puts the exact quantity into the hauler real native cargo hold and the
+ // proven sale path then liquidates it against the seeded bids of THIS station.
+ if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&
+  !arrivalSales.has(Number(stationID)+":"+Number(haulerID))){
+  try{
+   const loaded=ensureMineralLift()?.lift({systemID,stationID,haulerID,
+    cap:Math.max(1,Number(process.env.EVEJS_COOP_NPC_MINERAL_LIFT_MAX_QTY||100000))});
+   if(loaded?.status==="LIFTED")
+    for(const row of loaded.lifted){
+     const typeID=Number(row.typeID);
+     if(!sellTypes.includes(typeID))sellTypes.push(typeID);
+    }
+  }catch(_error){/* a failed lift must never block the ore sale */}
+ }
  const trader=ensureMarketTrader();
  if(!trader){noteSaleSkip(systemID,stationID,haulerID,"MARKET_UNAVAILABLE");return {status:"NOT_SOLD",reason:"MARKET_UNAVAILABLE"};}
  const wanted=[...new Set(sellTypes.filter(typeID=>
