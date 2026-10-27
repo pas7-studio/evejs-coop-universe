@@ -2390,6 +2390,19 @@ function advanceNativeWreckRecovery(){
   if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
     runtime.ensureScene(sys,{refreshStargates:false})))blockedIDs.add(id);
   if(lootCommerce)for(const id of lootCommerce.activeIDs(systemID))blockedIDs.add(id);
+  // Deliver what the hull already carries before taking more: a hold that is
+  // full of verified wreck cargo cannot loot anyway (NATIVE_CARGO_FULL), and
+  // the recovery lease would otherwise starve the station delivery forever.
+  if(lootCommerce){
+   for(const claim of claims){
+    const pilotID=String(claim.attackerPilotID||""),
+     entityID=Number(claim.attackerEntityID)||0;
+    if(!(entityID>0)||!pilotID)continue;
+    try{
+     if(lootCommerce.stock({pilotID,entityID}).length)blockedIDs.add(entityID);
+    }catch(_error){/* an unreadable custody journal simply blocks nothing */}
+   }
+  }
   addNpcOrderBlocks(blockedIDs,systemID,"CIVILIAN");
   const result=wreckRecoveryDirector.tick({systemID,scene,claims,assignments,store,
    getController:id=>controllers.getControllerByEntityID(id),blockedIDs,
