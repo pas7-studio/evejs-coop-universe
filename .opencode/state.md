@@ -2794,3 +2794,32 @@ NEXT (in order): N2 formation live proof, N3 restart resilience diff, N4 player 
 target, N5 war economy debit, N6 roster truth, N7 ammo, N8 wreck hygiene,
 N9 militia rank, N10 soak table, N11 FW hook extraction (AUDIT_OK), N12 operator
 guide, N13 morning handover.
+
+## PROBLEMS OBSERVED by the night watchdog (2026-10-27T23:53Z, real numbers)
+
+Watchdog v2 (`scripts/night-watch.ps1`, harness-managed background job) logs one line
+every 15 min plus an explicit PROBLEM line for: stack not healthy, CPU > 70%, war
+event file unreadable, or no war event for 60 min.
+
+First real sample: play stack healthy, CPU 0% (idle), war events on the play stack =
+15 casualties / 22 garrison spawns / 82 attack-order events.
+
+P1 FREE-SHIP GRINDER (confirmed, needs N5). Fleet registry holds only 2 hulls
+(1 Caldari, 1 Gallente, both in 30045344) while 22 garrison spawns happened: a hull
+dies, FW-032 releases its slot and frees the pilot, FW-033 immediately buys another
+one for free. The front is an endless free meat grinder - no cost, no end condition.
+N5 (real economy: debit the faction chest, refuse when empty) is the fix.
+
+P2 ROSTER IS DEAD WEIGHT (confirmed). `coopWarFleetRoster` still reports 0 fleets;
+`spawn_war_fleet` never writes it. FW-032 honestly reports NOT_IN_ROSTER. Either wire
+it (N6 option a) or delete the dependency (option b). No functional impact while the
+registry is authoritative, but it is a lie in the payload.
+
+P3 GARRISON PACING not yet proven safe: 22 spawns/hour is at the 3-min-per-side
+cooldown ceiling. With N5 it becomes self-limiting; until then the only brake is the
+cooldown. Watch the soak table (N10) for growth.
+
+P4 agents stack cannot prove war behaviour at all (no `EVEJS_COOP_FACTION_WAR*`
+flags in compose/compose.agents.yaml). Every live war proof must happen on the play
+stack after the morning deploy, or the agents stack must be given the flags and a
+seeded war.
