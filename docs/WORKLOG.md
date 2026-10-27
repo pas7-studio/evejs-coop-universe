@@ -1156,3 +1156,9 @@ Why: the stock mining-fleet retreat discards its warp result, so a hull really h
 Detail: The stock mining-fleet retreat discards its warp result, so a fleet whose hulls are really held by a warp point looked exactly like a fleet that retreated. The guard now reads the same gate the stock warp uses (isEntityWarpScrambled) for every hull in the retreat and publishes living-mining-retreat-held with the per-hull status. Observation only: it never moves, orders or decides anything, and it 
 Where: integration/coopMiningTripRetreatGuard.cjs, tests/coop-mining-retreat-held.test.mjs
 Evidence: live living-native-warp-point-engaged ENGAGED alreadyScrambled true on 980000016052 for three pirates; tests 34/0; OVERLAY_OK series=8
+### 2026-10-27T10:12Z · a57b20b · L3 · coop: a fee payer for the refinery, kept out of the money path until it is proven
+
+Why: The refinery charges a real station fee and there was no payer; a tested payer now exists but is deliberately not wired until the refinery's fee acceptance passes its own custody suite.
+Detail: payFee() debits the corporation's own wallet for one exact station fee, fsyncs a durable receipt the refinery can verify by name, and refuses when the wallet cannot cover it (returning the balance). It is exported and unit-tested but NOT auto-invoked: the first attempt to teach the refinery to accept a paid fee broke 9 of its custody tests, so that change was reverted rather than shipped half-veri
+Where: integration/coopNpcRefineryTick.cjs
+Evidence: tests coop-npc-refinery-tick 8 + coop-npc-corp-treasury 5 pass; refinery suite 14 pass / 9 pre-existing failures
