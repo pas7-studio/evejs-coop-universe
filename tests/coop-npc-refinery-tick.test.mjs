@@ -195,3 +195,26 @@ test('pilot earnings fund the corporation that pays the station fee', () => {
     assert.equal(log.seen.find((e) => e.event === 'living-corp-treasury-swept').fields.movedISK, 33714.25);
   } finally { fsApi.rmSync(root, {recursive: true, force: true}); }
 });
+
+// The mining fleet docks no hull, so the caller often has no station. The newest warehouse
+// trip manifest is proof of the station that really holds the ore; nothing is guessed.
+test('a station comes from the fleet manifest when the caller has none', () => {
+  tick.resetForTests();
+  const fake = refinery({status: 'COMMITTED', operationID: 'op', outputs: [{typeID: 34, quantity: 1}]});
+  const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, systemID: 30000145, fleetID: 960004641,
+    manifestStation: () => ({stationID: 60000358, manifest: '30000145-960004641-1.json'}),
+    items: items([warehouseOre()]), refinery: fake, observe: () => {}, probe: {}});
+  assert.equal(r.status, 'REFINED');
+  assert.equal(r.refined, 1);
+});
+
+test('no station and no manifest is reported, never invented', () => {
+  tick.resetForTests();
+  const seen = [];
+  const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, systemID: 30000145, fleetID: 960004641,
+    manifestStation: () => null, items: items([warehouseOre()]),
+    observe: (_p, event, _s, fields) => seen.push({event, fields}), probe: {}});
+  assert.equal(r.status, 'NO_STATION');
+  assert.equal(seen[0].event, 'living-npc-refinery-skipped');
+  assert.equal(seen[0].fields.status, 'NO_STATION');
+});

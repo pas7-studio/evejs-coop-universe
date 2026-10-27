@@ -21,6 +21,7 @@ const FLAG = "EVEJS_COOP_NPC_REFINERY";
 const DIR_FLAG = "EVEJS_COOP_NPC_REFINERY_DIR";
 const CORP_FLAG = "EVEJS_COOP_FACTORY_CORP_ID";
 const DEFAULT_CORP_ID = 1000129;
+const WAREHOUSE_FLAG = "EVEJS_COOP_NPC_WAREHOUSE_DIR";
 const WAREHOUSE_TAG = /^coop-warehouse:v1:cargo:[0-9]+$/;
 const THROTTLE_MS = 60_000;
 
@@ -65,6 +66,25 @@ function candidates({items, ownerID, stationID, limit = 8}) {
     out.push(row);
   }
   return out;
+}
+
+// Read the station a fleet really docked at from its newest warehouse trip manifest.
+// Returns null (never a guess) when there is no readable manifest for this fleet.
+function manifestStation({env, options}) {
+  try {
+    if (typeof options.manifestStation === "function") return options.manifestStation();
+    const root = options.warehouseRoot || env[WAREHOUSE_FLAG];
+    if (typeof root !== "string" || !require("node:path").isAbsolute(root)) return null;
+    const dir = require("node:path").join(root, "trip-manifests");
+    const prefix = String(pos(options.systemID)) + "-" + String(pos(options.fleetID)) + "-";
+    const newest = require("node:fs").readdirSync(dir)
+      .filter((name) => name.endsWith(".json") && name.startsWith(prefix)).sort().pop();
+    if (!newest) return null;
+    const row = JSON.parse(require("node:fs").readFileSync(
+      require("node:path").join(dir, newest), "utf8"));
+    const stationID = pos(row && row.stationID);
+    return stationID ? {stationID, manifest: newest} : null;
+  } catch (_error) { return null; }
 }
 
 // Move the fleet's own earnings into the corporation that pays the station bill.
@@ -139,7 +159,11 @@ function run(options = {}) {
   const env = options.env || process.env;
   if (String(env[FLAG] || "") !== "1") return {status: "DISABLED", refined: 0};
   const ownerID = pos(env[CORP_FLAG]) || DEFAULT_CORP_ID;
-  const stationID = pos(options.stationID);
+  // The mining fleet docks no hull, so its record usually carries no station. The station
+  // that really holds this fleet's ore is proven by its newest warehouse trip manifest,
+  // never guessed from an arbitrary system.
+  const proved = pos(options.stationID) ? null : manifestStation({env, options});
+  const stationID = pos(options.stationID) || (proved ? proved.stationID : 0);
   // Say why nothing was refined instead of returning silently: a caller that passes no
   // station must be visible in the event stream, not inferred from an empty refinery dir.
   const skip = (status, extra = {}) => {
@@ -256,6 +280,6 @@ function resetForTests() {
   lastRun.clear();
 }
 
-module.exports = {FLAG, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
+module.exports = {FLAG, WAREHOUSE_FLAG, manifestStation, DIR_FLAG, CORP_FLAG, DEFAULT_CORP_ID, THROTTLE_MS, WAREHOUSE_TAG,
   candidates, payFee, run, tick, resetForTests};
 

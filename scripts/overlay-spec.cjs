@@ -350,7 +350,7 @@ const specs=[
    // The refinery is real but had no caller: refine the corporation's warehouse ore at
    // the station this fleet last visited. The module throttles and never invents a quote.
    {anchor:"  const cargoState = getFleetCargoState(scene, fleetRecord);",after:true,
-    line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0});}catch(_coopRefineError){}'},
+    line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0,fleetID:Number(fleetRecord&&fleetRecord.fleetID)||0});}catch(_coopRefineError){}'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
    // FW-017: the stock retreat ignores its own warp result and discards nothing
