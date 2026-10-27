@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null,warpPointDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
@@ -3051,6 +3051,14 @@ function advanceNativeAmmoSupply({mode="LEGACY",systemIDFilter=null,decision=nul
  }
 
 }
+// FW-017: one shared real warp-point authority for the whole process. It only
+// decides which verified point a hull may carry, fits it through the native
+// store and activates it through the same generic module call the stock hostile
+// loop makes. No gate, distance constant or damage number is touched here.
+function nativeWarpPoint(){
+ if(!warpPointDirector)warpPointDirector=require("./coopNpcWarpPoint").shared();
+ return warpPointDirector;
+}
 function advanceNativeRaids(){
  if(process.env.EVEJS_COOP_NPC_RAIDS!=="1"||!bridge||!visitedSystems.size)return;
  const runtime=require("./runtime"),npc=require("./npc/npcRuntime");
@@ -3065,7 +3073,26 @@ function advanceNativeRaids(){
     ()=>npc.issueAttackOrder(pirateID,targetID,options)),
    // One owner per record: only the raid director releases the order it issued.
    release:(pirateID,reason)=>npcNativeOrder("RAID",pirateID,"release-order",
-    ()=>npc.resumeBehavior(pirateID))
+    ()=>npc.resumeBehavior(pirateID)),
+   // FW-017: a real warp point is fitted and engaged on the prey, and a really
+   // scrambled prey keeps its attack order instead of losing the lock. Both are
+   // OFF unless the flag is on, and neither ever guesses a module or a target.
+   ensurePoint:process.env.EVEJS_COOP_NPC_WARP_POINT==="1"?
+    ({pirateID,targetID})=>{
+     const director=nativeWarpPoint();
+     const pirate=nativeStore.getNativeEntity(pirateID);
+     return director.note(director.engage({
+      scene:runtime.ensureScene(Number(pirate?.systemID)||0,{refreshStargates:false}),
+      pirateID,targetID,entityRecord:pirate}));
+    }:null,
+   preyScrambled:process.env.EVEJS_COOP_NPC_WARP_POINT==="1"?
+    targetID=>{
+     const prey=nativeStore.getNativeEntity(targetID);
+     if(!prey)return false;
+     const preyScene=runtime.ensureScene(Number(prey.systemID)||0,{refreshStargates:false});
+     const preyShip=preyScene?.getEntityByID?.(Number(targetID));
+     return preyShip?nativeWarpPoint().isScrambled(preyShip):false;
+    }:null
   });
  }
  if(process.env.EVEJS_COOP_NPC_CAPSULEER_AGENCY==="1"&&!huntPolicy) {
@@ -3171,6 +3198,24 @@ function advanceNativeRaids(){
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
    getController:id=>controllers.getControllerByEntityID(id)
   });
+  // FW-017: the real point is re-engaged at the native hostile-maintenance
+  // cadence, not only when the 60 s attack lease is re-issued. The stock retreat
+  // fires within seconds of the first aggression, so a one-shot attempt at order
+  // time is not enough. Only a real raid target of this fleet is ever pointed at,
+  // and the outcome is published by note() once per change (refusal included).
+  if(process.env.EVEJS_COOP_NPC_WARP_POINT==="1"){
+   const point=nativeWarpPoint();
+   for(const rawID of pirates){
+    const pirateID=Number(rawID);
+    const ctrl=controllers.getControllerByEntityID(pirateID);
+    const targetID=Number(ctrl?.currentTargetID)||0;
+    if(!(targetID>0))continue;
+    if(!fleetShips.some(t=>Number(t.id)===targetID))continue;
+    if(!scene.getEntityByID(pirateID)||!scene.getEntityByID(targetID))continue;
+    point.note(point.engage({scene,pirateID,targetID,
+     entityRecord:nativeStore.getNativeEntity(pirateID)}));
+   }
+  }
   // A pirate that really exists and still gets no order must be measurable: the
   // first blocker is published once per changed shape, never every tick.
   if(!result.actions.length){

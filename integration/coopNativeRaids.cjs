@@ -23,9 +23,11 @@ const warping=e=>{const mode=String(e?.mode||"").toUpperCase();
 const holdsAttack=c=>String(c?.manualOrder?.type||"").toLowerCase()==="attack";
 function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=480000,
  approachVerifyMs=APPROACH_VERIFY_MS,attackNoLockMs=ATTACK_NO_LOCK_MS,
- releaseCooldownMs=RELEASE_COOLDOWN_MS}){
+ releaseCooldownMs=RELEASE_COOLDOWN_MS,ensurePoint=null,preyScrambled=null}){
  if(typeof warp!=="function"||typeof attack!=="function"||cooldownMs<60000)throw Error("invalid native raid API");
  if(release!==null&&typeof release!=="function")throw Error("invalid native raid release API");
+ if(ensurePoint!==null&&typeof ensurePoint!=="function")throw Error("invalid native raid point API");
+ if(preyScrambled!==null&&typeof preyScrambled!=="function")throw Error("invalid native raid scramble API");
  const leases=new Map();
  // One owner per record: only the director that issued an order may release it.
  function releaseOrder(pirateID,reason){
@@ -53,6 +55,16 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
      !String(t.ship.mode||"").toUpperCase().includes("WARP")&&
      !t.ship.pendingWarp&&!t.ship.warpState);
   const actions=[];
+  // A prey that really reads back as warp-scrambled cannot leave the fight, so
+  // its attack order is never released for "no native lock": the lock is exactly
+  // what the next weapon cycle acquires. Releasing it is what let shield
+  // regeneration win (measured 146.45 -> 225.00 over 5 minutes, 0 wrecks).
+  const pinned=targetID=>{
+   if(typeof preyScrambled!=="function")return false;
+   const id=pos(targetID);
+   if(!id)return false;
+   try{return preyScrambled(id)===true;}catch(_error){return false;}
+  };
   for(const rawID of pirates){
    const id=pos(rawID),ship=id&&scene.getEntityByID(id);
    if(!ship||!valid(ship.position)||String(ship.mode||"").includes("WARP"))continue;
@@ -132,6 +144,13 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     // A near target keeps its attack order for a fair lock window; only then is
     // an order that never acquired a native lock released.
     if(!stillFar&&now<issuedAt+attackNoLockMs)continue;
+    if(!stillFar&&pinned(old.targetID)){
+     // Held by a real warp point: the prey cannot warp away, the next weapon
+     // cycle re-acquires the lock, so the order stays ours instead of being
+     // released and re-issued every 90 s.
+     leases.set(key,{...old,nextAt:now+15000});
+     continue;
+    }
     pendingRelease=releaseOrder(id,stillFar?"FOR_APPROACH":"ATTACK_NO_NATIVE_LOCK");
     if(!stillFar){
      leases.set(key,{nextAt:now+releaseCooldownMs,targetID:Number(old.targetID),
@@ -187,6 +206,16 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     result=attack(id,target.id,{allowWeapons:true,keepLock:true});
     action="attack";
    }
+   // A close attack is also where the real warp point is fitted and engaged: a
+   // raider that cannot stop its prey from warping 2.5 AU out of range can never
+   // convert fire into a wreck. The outcome is reported with the action, refusal
+   // included, so "the prey still escaped" is a measured reason.
+   let warpPoint=null;
+   if(action==="attack"&&result?.success===true&&typeof ensurePoint==="function"){
+    try{warpPoint=ensurePoint({pirateID:id,targetID:target.id,distanceMeters:distance})||null;}
+    catch(error){warpPoint={status:"REFUSED",reason:"ENSURE_POINT_THREW:"+
+     String(error&&error.message||error).slice(0,60)};}
+   }
    // Warping to the convoy is only the approach, not the raid itself:
    // reevaluate soon after landing and issue a genuine weapon attack. An attack
    // lease is re-checked every minute too: the prey can warp 2.5 AU away, and an
@@ -197,7 +226,7 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     phase:action,issuedAtMs:now});
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,
     targetRole:target.role,action,distanceMeters:distance,
-    ...(released||{})});
+    ...(released||{}),...(warpPoint?{warpPoint}:{})});
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
  }

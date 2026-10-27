@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createRaids}=require("../integration/coopNativeRaids.cjs");
-function fixture(){
+function fixture(extra){
  let now=1000000;
  const pirate={itemID:501,kind:"ship",nativeNpc:true,mode:"STOP",
   position:{x:0,y:0,z:0}};
@@ -36,7 +36,7 @@ function fixture(){
    if(failRelease){return {success:false,errorMsg:"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE"};}
    controller.manualOrder={type:"resumeBehavior"};
    return {success:true};
-  }});
+  },...(extra||{})});
  return {tick,ships,fleetShips,scene,pirate,miner,controller,nativeOrders,
   releases,advance:ms=>{now+=ms;},failRelease:value=>{failRelease=value===true;}};
 }
@@ -234,4 +234,59 @@ test("an ongoing in-range attack is never released",()=>{
  const result=f.tick();
  assert.equal(result.actions.length,0);
  assert.equal(f.releases.length,0);
+});
+
+// FW-017: a prey that really reads back as warp-scrambled cannot leave the
+// fight, so the attack order that would otherwise be released for "no native
+// lock" after 90 s stays ours: releasing it is what let shield regeneration win.
+test("an attack on a really scrambled prey keeps its order instead of being released",()=>{
+ const f=fixture({preyScrambled:id=>Number(id)===201});
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ assert.equal(f.tick().actions[0].action,"attack");
+ const issued=f.nativeOrders.length;
+ f.controller.currentTargetID=0;
+ f.advance(480000);
+ const result=f.tick();
+ assert.equal(result.actions.length,0);
+ assert.equal(f.releases.length,0,"a pinned prey is never released");
+ assert.equal(f.nativeOrders.length,issued);
+});
+
+test("the same unscrambled prey is still released after the lock window",()=>{
+ const f=fixture({preyScrambled:()=>false});
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ assert.equal(f.tick().actions[0].action,"attack");
+ f.controller.currentTargetID=0;
+ f.advance(480000);
+ f.tick();
+ assert.deepEqual(f.releases,[[501,"ATTACK_NO_NATIVE_LOCK"]]);
+});
+
+test("a close attack reports the real warp-point outcome with the action",()=>{
+ const seen=[];
+ const f=fixture({ensurePoint:({pirateID,targetID,distanceMeters})=>{
+  seen.push([pirateID,targetID,distanceMeters]);
+  return {status:"ENGAGED",typeID:3242,moduleID:980100099999,scrambled:true};
+ }});
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ const result=f.tick();
+ assert.equal(result.actions[0].action,"attack");
+ assert.deepEqual(seen,[[501,201,10000]]);
+ assert.equal(result.actions[0].warpPoint.status,"ENGAGED");
+ assert.equal(result.actions[0].warpPoint.typeID,3242);
+});
+
+test("a refused warp point is reported with the attack, never hidden",()=>{
+ const f=fixture({ensurePoint:()=>({status:"REFUSED",reason:"TARGET_NOT_LOCKED"})});
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ const result=f.tick();
+ assert.equal(result.actions[0].warpPoint.status,"REFUSED");
+ assert.equal(result.actions[0].warpPoint.reason,"TARGET_NOT_LOCKED");
+});
+
+test("a warp approach never engages a point on prey it has not reached",()=>{
+ let calls=0;
+ const f=fixture({ensurePoint:()=>{calls+=1;return {status:"ENGAGED"};}});
+ assert.equal(f.tick().actions[0].action,"warp-to-hauler");
+ assert.equal(calls,0);
 });

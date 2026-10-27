@@ -1,0 +1,56 @@
+From: pas7std co-op <coop@pas7std.invalid>
+Subject: [PATCH 0008/0008] hostile modules: a live warp point must scramble, not the passive baseline
+
+getEntityWarpScrambleStatus returned the ship's passive warpScrambleStatus
+attribute whenever the dogma derived one, and only fell back to the live hostile
+target state when it was missing. Retail hulls carry that attribute as a
+baseline of -2, so a hull that really had a fitted warp disruptor applied to it
+still read back as -2 and isEntityWarpScrambled() stayed false forever. Measured
+live on 2026-10-27: a Venture (type 32880) with an active Warp Disruptor II on
+it reported warpScrambleStatus -2, so SpaceRuntime.warpToPoint and
+beginNpcWarpToPoint both allowed the warp the point was supposed to forbid.
+
+The live incoming effect sum is now added to the passive baseline, and
+isEntityWarpScrambled treats any positive live scramble status as a scramble.
+Hulls without the attribute behave exactly as before.
+
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+Local overlay: integration/* is NOT part of this patch series.
+---
+--- a/server/src/space/modules/hostileModuleRuntime.js
++++ b/server/src/space/modules/hostileModuleRuntime.js
+@@ -1405,15 +1405,30 @@ function executeHostileModuleCycle({
+ }
+ 
+ function getEntityWarpScrambleStatus(entity) {
++  const targetState = ensureTargetHostileState(entity, false);
++  const liveStatus = targetState ? roundNumber(targetState.warpScrambleStatus, 6) : 0;
+   const passiveValue = getEntityPassiveAttributeValue(entity, ATTRIBUTE_WARP_SCRAMBLE_STATUS, NaN);
+-  if (Number.isFinite(passiveValue)) {
+-    return roundNumber(passiveValue, 6);
++  // The passive attribute is a baseline (retail hulls carry -2), not a verdict.
++  // A live scrambler/disruptor effect adds to it, so reporting the passive value
++  // alone made every hull that carries the attribute permanently unscramblable:
++  // measured -2 on a Venture while a fitted Warp Disruptor was really active on
++  // it, so a real warp point could never stop a real warp.
++  if (liveStatus > 0) {
++    return roundNumber(
++      (Number.isFinite(passiveValue) ? passiveValue : 0) + liveStatus,
++      6,
++    );
+   }
+-  const targetState = ensureTargetHostileState(entity, false);
+-  return targetState ? roundNumber(targetState.warpScrambleStatus, 6) : 0;
++  return Number.isFinite(passiveValue) ? roundNumber(passiveValue, 6) : liveStatus;
+ }
+ 
+ function isEntityWarpScrambled(entity) {
++  // Any live point or scrambler on the target IS a scramble, whatever the hull's
++  // passive baseline says: the negative baseline always won before this.
++  const targetState = ensureTargetHostileState(entity, false);
++  if (targetState && roundNumber(targetState.warpScrambleStatus, 6) > 0) {
++    return true;
++  }
+   return getEntityWarpScrambleStatus(entity) > 0;
+ }
+ 

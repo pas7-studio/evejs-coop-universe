@@ -66,6 +66,15 @@
       ],
       "status": "not-sent",
       "note": "buildNpcDefinition/spawnBatchInSystem could not fit an authored loadout row for a profile whose own row is the retail empty loadout; optional options.loadoutID, retail behaviour unchanged when absent, candidate for an atomic upstream PR"
+    },
+    {
+      "file": "0008-warp-scramble-live-effects.patch",
+      "sha256": "afc80def3d0c87bcad0578cb3eda335c989fd26909d13b6b129b8b3f87525433",
+      "files": [
+        "server/src/space/modules/hostileModuleRuntime.js"
+      ],
+      "status": "not-sent",
+      "note": "getEntityWarpScrambleStatus returned the passive hull baseline (-2) instead of the live scrambler/disruptor sum, so a real warp point could never stop a real warp, candidate for an atomic upstream PR"
     }
   ]
 }

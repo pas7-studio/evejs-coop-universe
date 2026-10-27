@@ -48,6 +48,9 @@ names.splice(names.indexOf("coopWarFleetNativeProofs")+1,0,"coopWarCombatPolicy"
 names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarPatrolLoadout","coopWarMobilizer");
 // FW-003C ammo depth: the authored multi-charge war-patrol loadout row.
 names.splice(names.indexOf("coopWarPatrolLoadout")+1,0,"coopWarPatrolLoadoutRow");
+// FW-017: the real warp point a raider fits and engages on its prey, so a fleet
+// retreat cannot invalidate every attack order at 2.5 AU.
+names.splice(names.indexOf("coopNativeRaids")+1,0,"coopNpcWarpPoint");
 // FW-005A: source-bound native corporation military wallet escrow, OFF by default.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarTreasury","coopWarTreasuryNative");
 // FW-007A: physical war-gate approach only, no native fleet transfer.
