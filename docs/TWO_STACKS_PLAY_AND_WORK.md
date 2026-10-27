@@ -87,6 +87,14 @@ would **reuse** `evejs-data` (corrupting the owner's world).
 3. Merging into the branch the play stack is built from is also the owner's
    decision, not the agent's.
 
+## Footgun: older scripts target the PLAY project by default
+
+`scripts/Local-Two-Client-Test.ps1` builds its compose arguments **without**
+`-p`, so Compose resolves the project from `name: evejs` in `compose.yaml` — the
+owner's stack. Running it today would recreate his server. Use
+`Start-Agents-Stack.ps1` for the work stack; if the test script is really
+needed, add `-p evejs-agents` and `-f compose/compose.agents.yaml` first.
+
 ## Why this exists
 
 On 2026-10-27 the play stack was recreated twice inside a playing session
