@@ -206,3 +206,17 @@ test("a recruit commander caps a side at one ship, an admiral at the hard cap",(
  assert.equal(many.mobilized.length>=2,true);             // a fleet, still bounded by maxPerSide
  assert.equal(many.mobilized.length<=4,true);
 });
+
+test("a hull released from a campaign can be mobilized into it again",()=>{
+ const f=fixture();
+ // First real assignment, then a proven RELEASE receipt: the hull is free again.
+ const one=f.tick();
+ assert.equal(one.mobilized.length,2);
+ assert.match(f.calls[0].eventID,/^wm:battle1:503:0$/);
+ f.registered.history.push({type:"ASSIGN",entityID:503,campaignID:"battle1"});
+ delete f.registered.ships["503"];
+ const again=f.tick();
+ assert.equal(again.mobilized.length>=1,true,"the released defender is claimable again");
+ const defender=f.calls.filter(c=>c.entityID===503).pop();
+ assert.equal(defender.eventID,"wm:battle1:503:1","the event ID identifies the real attempt");
+});

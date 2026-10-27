@@ -4,11 +4,25 @@ let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,n
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 const initializedNativeMiningScenes=new WeakSet();
-let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null;
+let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null;
 let backgroundTicks=0,headlessBootTimer=null,nativeOrderBridge=null,personalGoals=null,squadDirector=null,wreckRecoveryDirector=null,wreckCustody=null,lootCommerce=null,nativeRearm=null,nativeAmmoWitness=null,nativeAmmoSupply=null;
 // Real merit per pilot (coop-pilot-XXX -> record). Nothing promotes a pilot yet,
 // so it is empty and every commander is a recruit; the career phase fills it.
-const warMeritRecords={};
+// FW-009B: the durable merit ledger is the real source; it is read here so a
+// promotion earned by a confirmed kill immediately enlarges the command.
+let warMeritLedger=null;
+function warMeritRecords(){
+ if(!warMeritLedger){
+  try{
+   warMeritLedger=require("./coopWarMeritLedger").createWarMeritLedger({
+    gameStore:require("../gameStore")});
+  }catch(error){
+   console.warn("[CoopWarMerit]",String(error&&error.message||error));
+   return {};
+  }
+ }
+ try{return warMeritLedger.records();}catch{return {}}
+}
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let alifeStationAuthority=null,alifeEconomyAuthorityBusy=false,alifeBuyerRuntime=null,alifeManufacturingRuntime=null;
 let worldPhaseCoordinator=null,npcExpeditionDirector=null,npcProbeEvidence=null,npcProbeFlight=null,npcProbeSweep=null,npcProbeLifecycle=null,npcProbeSceneTransition=null,npcExpeditionOperations=null,npcWormholeTransit=null,npcWormholeApproaches=new Set();
@@ -370,7 +384,7 @@ function advanceNativeWarMobilization(){
    // Command size comes from real rank. No pilot has earned merit yet, so every
    // side starts at a recruit's single ship instead of the old blanket two.
    commandCap:({assignedPilotIDs})=>require("./coopFactionWarMerit")
-    .sideCommandCap({pilotIDs:assignedPilotIDs,records:warMeritRecords})
+    .sideCommandCap({pilotIDs:assignedPilotIDs,records:warMeritRecords()})
   });
  }
  const result=warMobilizer.tick({systemIDs:[...visitedSystems].slice(0,12)});
@@ -379,6 +393,49 @@ function advanceNativeWarMobilization(){
   {status:result.status,ships:result.mobilized,
    evidence:"EXISTING_NATIVE_PATROLS_RESERVED_NO_SPAWN_OR_FUNDS"});
  else warSkip("mobilization","NO_MOBILIZED_SHIP:"+String(result.status||"UNKNOWN"));
+}
+// FW-003D: a registered battle-line hull that has no compatible charge left can
+// never fire again, and the mobiliser counts every registered hull of a side, so
+// one dry hull would block that side for the rest of the campaign. Release only
+// war custody (native RELEASE proof), never the hull, its modules or its cargo.
+function advanceNativeWarBattleLineRelief(){
+ if(process.env.EVEJS_COOP_FACTION_WAR_RELIEF!=="1")return;
+ if(!visitedSystems.size)return warSkip("relief","NO_VISITED_SYSTEMS");
+ const registry=nativeWarFleetRegistry();
+ if(!registry)return warSkip("relief","NO_WAR_FLEET_REGISTRY");
+ try{
+  if(!warRelief){
+   const native=require("./runtime"),npcStore=require("./npc/nativeNpcStore"),
+    dogma=require("./combat/weaponDogma"),capability=require("./npc/npcCapabilityResolver"),
+    npc=require("./npc/npcRuntime");
+   // The dry verdict is the mobiliser's own rule, never a second opinion.
+   const readiness=require("./coopWarMusterReadiness").createWarMusterReadiness({
+    store:npcStore,resolveFamily:dogma.resolveWeaponFamily,
+    isOptional:dogma.isChargeOptionalTurretWeapon,
+    compatible:capability.isNpcChargeCompatibleWithModule
+   });
+   warRelief=require("./coopWarBattleLineRelief").createWarBattleLineRelief({
+    registry,
+    sceneForSystem:id=>native.scenes instanceof Map?native.scenes.get(id):null,
+    getNativeEntity:id=>npcStore.getNativeEntity(id),
+    inspectReadiness:context=>readiness.inspect(context),
+    // Both calls are the same native manual-order API the battle director uses:
+    // stop clears the live target, resumeBehavior clears the manual order, which
+    // is exactly what the registry's native release proof requires.
+    clearOrder:({entityID})=>{npc.issueOrder(entityID,{type:"stop"});
+     npc.resumeBehavior(entityID);}
+   });
+  }
+  const result=warRelief.tick({systemIDs:[...visitedSystems].slice(0,12)});
+  if(result.released.length)require("./coopRuntimeProbe").observe(
+   "living-native-war-battle-line-relief",null,null,
+   {status:result.status,ships:result.released,
+    evidence:"NO_COMPATIBLE_CHARGE_LEFT_SLOT_RELEASED_HULL_PRESERVED"});
+  else if(result.dry.length)warSkip("relief","RELEASE_BLOCKED:"+
+   String(result.blocked[0]&&result.blocked[0].reason||"UNKNOWN"));
+ }catch(error){
+  warSkip("relief","RELIEF_FAILED:"+String(error&&error.message||error));
+ }
 }
 // Read-only operator diagnostic: what would mobilization do right now, and why
 // not. Uses the same live authorities and the mobilizer's own dry run, so it can
@@ -1379,6 +1436,9 @@ function start(){
   runPhase("native-pve-objective-doctrine",advanceNativePveObjectiveDoctrine);
   runPhase("native-faction-war-demobilization",advanceNativeWarDemobilization);
   runPhase("native-faction-war-opening",advanceNativeWarOpening);
+  // A dry hull releases its campaign slot first, so the same tick can field one
+  // that can really fire.
+  runPhase("native-faction-war-battle-line-relief",advanceNativeWarBattleLineRelief);
   runPhase("native-faction-war-mobilization",advanceNativeWarMobilization);
   runPhase("native-faction-war-assault",advanceNativeWarAssault);
   runPhase("native-faction-war-gate-staging",advanceNativeWarGateStaging);

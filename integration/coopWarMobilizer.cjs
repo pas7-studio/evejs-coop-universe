@@ -67,6 +67,16 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
    const existing=new Set(Object.keys(assigned.ships).map(Number));
    const usedPilots=new Set(Object.values(assigned.ships).map(x=>x?.pilotID));
    const mobilized=[];
+   // A hull that was released from a campaign may legitimately be mobilized into
+   // it again (e.g. after it was relieved while dry and later re-armed). The
+   // registry refuses a reused event ID, so the ID must identify the real
+   // assignment attempt: the count of proven ASSIGN receipts already on record.
+   const assignmentCounts=new Map();
+   for(const receipt of Array.isArray(assigned.history)?assigned.history:[]){
+    if(receipt?.type!=="ASSIGN"||!pos(receipt.entityID)||!receipt.campaignID)continue;
+    const key=String(receipt.campaignID)+":"+Number(receipt.entityID);
+    assignmentCounts.set(key,(assignmentCounts.get(key)||0)+1);
+   }
    // Diagnostics only: the exact first failed check per candidate, so a silent
    // "nothing mobilized" tick can be explained instead of guessed at.
    const rejected=[];
@@ -184,7 +194,9 @@ function createWarMobilizer({registry,readWarState,readLinks,sceneForSystem,
        continue;
       }
       const command={
-       type:"ASSIGN",eventID:"wm:"+c.campaignID+":"+id,
+       type:"ASSIGN",
+       eventID:"wm:"+c.campaignID+":"+id+":"+
+        (assignmentCounts.get(String(c.campaignID)+":"+id)||0),
        entityID:id,systemID:side.systemID,pilotID:link.pilotID,
        corporationID:native.corporationID,factionID:side.factionID,
        fleetID:"fw-"+c.campaignID+"-"+side.factionID,

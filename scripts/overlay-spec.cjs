@@ -60,6 +60,10 @@ names.splice(names.indexOf("coopWarGateHandoff")+1,0,"coopWarRecoveryConsole","c
 names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
 // FW-009A: native confirmed faction-war casualties, never synthetic victory.
 names.splice(names.indexOf("coopWarDemobilizer")+1,0,"coopWarCasualtyLedger");
+// FW-009B: durable war merit paid only from a strictly proven native kill.
+names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarMeritLedger","coopWarKillMerit");
+// FW-003D: a battle-line hull with no compatible charge left releases its slot.
+names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarBattleLineRelief");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarObjectiveAdjudicator","coopWarNativeStructureControl","coopWarNativeStructureCombatProof");
 // The world runtime requires this director from a live phase; leaving it out of
