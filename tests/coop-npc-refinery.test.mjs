@@ -34,6 +34,8 @@ function sample(mutate={}){
     if(state.invalid)return null;
     assert.equal(context.characterID,0);assert.equal(context.dockedKind,'station');
     assert.equal(context.skillMap instanceof Map,true);
+    if(state.tiny)return {typeID:item.typeID,quantityToProcess:0,leftOvers:item.quantity,
+       portions:0,efficiency:0.5,stationTax:0.03,totalISKCost:0,recoverables:[]};
     return {typeID:item.typeID,quantityToProcess:90,leftOvers:10,
        portions:9,efficiency:0.5,stationTax:0.03,totalISKCost:state.fee,
        recoverables:[{typeID:34,client:45,unrecoverable:45,iskCost:0},
@@ -90,6 +92,13 @@ each('NPC refinery never bypasses a positive corporate reprocessing fee',f=>{
  fs.writeFileSync(path.join(f.dir,'refinery-fees','700.json'),'{"status":"PAID","amountISK":2.3}');
  assert.equal(f.engine.refine({...args,feePaid:witness()}).status,'COMMITTED');
  assert.equal(f.writes(),1);
+});
+// A stack smaller than one native portion is leftovers, not a missing recipe.
+each('a stack below one native portion is leftovers, not a missing recipe',f=>{
+ f.state.tiny=true;
+ const r=f.engine.refine(args);
+ assert.equal(r.status,'NATIVE_REFINERY_LEFTOVER_TOO_SMALL');
+ assert.equal(f.writes(),0);
 });
 each('missing native SDE recipe never mints mineral',f=>{
  f.state.invalid=true;assert.equal(f.engine.refine(args).status,'NATIVE_REPROCESSING_RECIPE_UNAVAILABLE');

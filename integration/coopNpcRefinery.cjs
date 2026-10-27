@@ -77,8 +77,12 @@ function createRefinery({directory,items,reprocessing,getStation,getCorporation,
     skillMap:new Map(),implants:[],standing:0};
   const quote=reprocessing.buildReprocessingQuoteForItem(item,context,
     {includeRecoverablesFromRandomizedOutputs:false});
-  if(!quote||quote.errorMsg||!positive(quote.quantityToProcess)||!positive(quote.portions)||
-     !Number.isSafeInteger(Number(quote.leftOvers))||Number(quote.leftOvers)<0||
+  if(!quote||quote.errorMsg)return {status:"NATIVE_REPROCESSING_RECIPE_UNAVAILABLE"};
+  // A stack smaller than one native portion is not a missing recipe: the refinery did all
+  // it could and only leftovers are left. Say that, so an operator does not chase a bug.
+  if(!positive(quote.quantityToProcess)||!positive(quote.portions))
+    return {status:"NATIVE_REFINERY_LEFTOVER_TOO_SMALL",quantity:Number(item.quantity)};
+  if(!Number.isSafeInteger(Number(quote.leftOvers))||Number(quote.leftOvers)<0||
      Number(quote.quantityToProcess)+Number(quote.leftOvers)!==Number(item.quantity))
     return {status:"NATIVE_REPROCESSING_RECIPE_UNAVAILABLE"};
   // Tax must be paid from a real NPC corporate wallet. A positive native fee is

@@ -250,6 +250,14 @@ function run(options = {}) {
       }
       continue;
     }
+    // Only leftovers remain: not a defect, and not something to report every tick.
+    if (status === "NATIVE_REFINERY_LEFTOVER_TOO_SMALL") {
+      if (once(options, "leftover:" + stationID + ":" + row.itemID, status))
+        note(options, "living-npc-refinery-skipped", {systemID: options.systemID,
+          ownerID, stationID, status, oreItemID: Number(row.itemID),
+          oreTypeID: Number(row.typeID), quantity: Number(row.quantity)});
+      continue;
+    }
     // A fee is a real economic fact, not an error to swallow: report the exact cost.
     const key = "blocked:" + stationID + ":" + row.itemID + ":" + status;
     if (once(options, key, status + ":" + String(outcome && outcome.iskCost))) {
