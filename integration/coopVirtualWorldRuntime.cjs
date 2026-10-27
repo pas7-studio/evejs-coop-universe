@@ -1133,9 +1133,13 @@ function diagnoseNpcOrder({entityID,systemID,owner}={}){
 function diagnoseNativeRaids({systemID}={}){
  const id=Number(systemID)||0;
  if(!(id>0))return {status:"SYSTEM_ID_REQUIRED"};
- let scene=null;
- try{scene=runtime.ensureScene(id,{refreshStargates:false});}
- catch(error){return {status:"SCENE_MISSING",systemID:id,
+ let spaceRuntime=null,controllers=null,mining=null,scene=null;
+ try{
+  spaceRuntime=require("./runtime");
+  controllers=require("./npc/npcRegistry");
+  mining=require("../services/mining/miningNpcOperations");
+  scene=spaceRuntime.ensureScene(id,{refreshStargates:false});
+ }catch(error){return {status:"SCENE_MISSING",systemID:id,
   reason:String(error&&error.message||error).slice(0,80)};}
  if(!scene?.getEntityByID)return {status:"SCENE_MISSING",systemID:id};
  const links=Object.values(identityRegistry?.snapshot().links||{})
