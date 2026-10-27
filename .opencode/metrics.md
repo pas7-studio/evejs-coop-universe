@@ -569,3 +569,23 @@ also done: L1 patch 0010 - the CONCORD rules cache hit copied every rule through
 JSON; now structuredClone. Top stock cost after round 2.
 tests: cache/metrics suites 11/11, militia hint 5/5; OVERLAY_OK; image rebuilt
 next: recreate the play stack (owner's window) and re-profile there.
+
+## 2026-10-27T18:55Z perf — the memo line was the whole fix, now measured on the play stack
+
+done: root cause of the "fixed but still slow" round: patch 0009 was deployed without
+`rootShapeVerified.add(tableName)`, so the Set never populated and every read took
+the cold path (full root clone + two JSON.stringify). Restored the line, regenerated
+the patch from the real diff (sha256 b16c8e04), added
+tests/coop-native-npc-store-patch.test.mjs as a guard.
+live verbatim (play stack, same world, same NPC population):
+  before: docker stats 97.3% of one core, profile idle 0.0%,
+          cloneValue 62.7% + ensureRootShape 24.0%
+  after : docker stats 14.4% then 18.2%, profile idle 48.7%,
+          cloneValue 31.3%, ensureRootShape no longer in the top rows
+  deployed check: grep -c rootShapeVerified.add /app/.../nativeNpcStore.js = 1
+tests: guard 2/2, cache/metrics 11/11, militia hint 5/5
+overlay: OVERLAY_OK
+next: remaining cloneValue 31.3% is collection cloning in our own callers
+(coopWarFleetRoster.presence, listNativeCargo paths); hoist one read per pass.
+Also: map sector colouring fix deployed (all warzone shells + our occupation),
+awaiting the owner's visual check.
