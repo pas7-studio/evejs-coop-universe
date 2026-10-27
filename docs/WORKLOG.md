@@ -1689,3 +1689,15 @@ Evidence: node scripts/coop-engine-audit.cjs -> AUDIT_OK exit=0; node --test all
 Why: the faction-warfare front tab stayed black for our pair: the occupation-state hook reported FACTION ids (500001/500004) while the client colours warzone systems by MILITIA CORPORATION (1000180/1000181), so it could not resolve a side; the earlier 813-system experiment only slowed the map
 Where: docs/WORKLOG.md
 Evidence: fork commit a52cf22; live probe: warzone 2 -> 30003837 owner 1000181/occupier 1000181, 30045344 owner 1000180/occupier 1000181 contested=true; GetLocalOccupationState same; coop-engine-audit AUDIT_OK
+### 2026-10-27T23:16Z · fe01698 · L3 · tools: repeatable giga-file split (state-free slice extraction) + documented policy
+
+Why: Split the 5330-line virtual-world runtime: 55 state-free helpers to coopVirtualWorldPure.js (engine 893c78f), plus a repeatable splitter tool with a node --check gate
+Detail: coop-split-module.cjs finds the declarations that touch no mutable module state, moves them into their own module, rewrites the parent to require them back and refuses to write unless both files pass node --check. Applied to coopVirtualWorldRuntime.js (engine 893c78f): 4 419 lines left, 911 moved, same 21 exports, same test results.
+Where: docs/FORK_PATCH_AUDIT_20261028.md, scripts/coop-split-module.cjs
+Evidence: engine require -> 21 exports unchanged; 26 runtime test files: 188 pass/20 fail before AND after; node scripts/coop-engine-audit.cjs AUDIT_OK
+### 2026-10-27T23:18Z · bd491bb · DOCS · tools: repeatable giga-file split, and why the first split is blocked
+
+Why: Added a repeatable giga-file splitter (state-free slice extraction, node --check gate) and documented the blocked first split: 55 decls/911 lines verified but reverted because text-assertion tests read the archived copy
+Detail: coop-split-module.cjs extracts only declarations that touch no mutable module state, rewrites the parent to require them back and refuses to write unless both files pass node --check. Dry run on coopVirtualWorldRuntime.js yields 55 declarations / 911 lines; applied and behaviourally verified (same 21 exports, 26 test files 188/20 before and after), then reverted because 10 tests assert on the text
+Where: docs/FORK_PATCH_AUDIT_20261028.md
+Evidence: dry-run + apply on coopVirtualWorldRuntime.js: parent 5330->4419, exports 21 unchanged, 26 test files 188 pass/20 fail identical before and after; reverted; AUDIT_OK drift 0
