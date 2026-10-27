@@ -2376,3 +2376,25 @@ NEXT ACTION (concrete): add the Gallente/Caldari border systems to the visited r
 (EVEJS_COOP_WAR_ROUTE / the 5-system route in compose.coop-probe.yaml) so the war tick
 sees both sides present, then re-run /tmp/warstate.cjs and expect byOwner with both
 factions owning AND contesting. Then the advantage handler for the black tab.
+
+## DEFINITIVE WAR DIAGNOSIS (2026-10-28, read-only diagnoseWarState/diagnoseWarFunding)
+
+  territories: 30003837 Gallente SECURE, 30045344 Caldari CONTESTED
+  war:         war:500001-500004 ACTIVE
+  campaign:    war:500001-500004:campaign:30045344 source=30003837 target=30045344
+               state=PREPARING (stuck, never advances)
+  presence:    {"systems":[],"minShips":1,
+                "note":"TERRITORIES_NEED_AT_LEAST_ONE_RESOLVED_PILOT_PER_SYSTEM"}
+  funding:     both sides REFUSED / NO_REAL_FACTION_INCOME (needCents=2500000, pilots=0)
+
+THE WAR IS FROZEN ON PRESENCE = 0, not on the map, the FW tab or the patch series.
+No faction-resolved NPC pilot exists in 30045344 or 30003837, so the campaign cannot
+leave PREPARING and no reverse front can be planned. The route already contains both
+systems (EVEJS_COOP_VIRTUAL_ROUTE: 30000142,30000144,30000145,30045344,30003837) and all
+war flags are ON, so the missing piece is the real war fleets of BOTH factions in those
+two systems, plus real faction income for funding.
+
+NEXT ACTION: mobilize real Caldari and Gallente war fleets into 30045344 and 30003837
+(registry: nativeWarFleetRegistry, EVEJS_COOP_FACTION_WAR_FLEETS/_MOBILIZE), verify with
+diagnoseWarState that presence.systems is non-empty, then re-check the campaign leaves
+PREPARING. Funding stays honest: NO_REAL_FACTION_INCOME means no invented ISK.
