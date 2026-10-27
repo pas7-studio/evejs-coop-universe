@@ -1673,3 +1673,8 @@ Evidence: agents world: 32 cycles, treasury-swept 38 791 223.64 ISK, 4 refined C
 Why: The stranded-hull cause is our own order bridge refusing to replace a stuck native movement order and failing miner identity, not a bogus target point; recorded so the next edit goes to the bridge.
 Where: .opencode/state.md, docs/WORKLOG.md
 Evidence: mining_fleet_diagnose: hauler BLOCKED COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE with movementBusy true and leaseOwner empty, miner BLOCKED COOP_NPC_ORDER_IDENTITY_UNVERIFIED, targetPoint 1.0e16 is a no-target sentinel
+### 2026-10-27T23:01Z · 30e699c · L2 · test: pin the runaway-miner park in the fork
+
+Why: While a mining fleet is hauling the state machine returns before the per-miner loop, so a hull left with a native full-throttle straight-line target (position + direction * 1.0e16) keeps flying away from its own belt and the hauler can never close on it.
+Where: tests/coop-park-runaway-miner.test.mjs
+Evidence: agents mining_fleet_diagnose: mode GOTO targetPoint 1.0e16, miner->rock 45765 m -> 49487 m in 29 s, hauler follow closed to 4 km then reopened 9536 -> 33406 m, zero living-hauler-loaded; fork commit ec33683 stops such a hull and parks miners in hauling/loaded; 3 wiring tests pass
