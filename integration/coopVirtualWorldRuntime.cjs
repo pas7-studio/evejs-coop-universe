@@ -5042,22 +5042,25 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
  // hangar, and a hangar stack cannot be sold by a ship trader. One custody-safe
  // load puts the exact quantity into the hauler real native cargo hold and the
  // proven sale path then liquidates it against the seeded bids of THIS station.
- if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&
-  !arrivalSales.has(Number(stationID)+":"+Number(haulerID))){
-  // Declared outside the try: the skip telemetry below reads it. As a block-scoped
-  // const it raised "loaded is not defined" on every arrival, aborting the sale.
-  let loaded=null;
-  // Types this arrival really loaded from the corporation hangar, plus any lift
-  // cargo a previous arrival left in the hold. They must be sold even though the
-  // caller's `types` list only names the ore the fleet mined.
+ // Any lift-tagged mineral cargo this hauler already carries must be sold even when
+ // this arrival loads nothing new. Declared at FUNCTION scope: inside the gate below it
+ // was invisible to the sale filter and every arrival died with `liftedTypes is not
+ // defined` (measured on the fresh work-stack world, 3 deliveries, 0 sales).
+ const liftedTypes=new Set();
+ if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"){
   const MINERAL_LIFT_CARGO_TAG=/^coop-mineral-lift:v1:/;
-  const liftedTypes=new Set();
   try{
    const held=require("./npc/nativeNpcStore").listNativeCargoForEntity(Number(haulerID))||[];
    for(const row of held)
     if(MINERAL_LIFT_CARGO_TAG.test(String(row.customInfo||""))&&Number(row.typeID)>0)
      liftedTypes.add(Number(row.typeID));
   }catch(_error){/* an unreadable hold never blocks the ore sale */}
+ }
+ if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&
+  !arrivalSales.has(Number(stationID)+":"+Number(haulerID))){
+  // Declared outside the try: the skip telemetry below reads it. As a block-scoped
+  // const it raised "loaded is not defined" on every arrival, aborting the sale.
+  let loaded=null;
   try{
    loaded=ensureMineralLift()?.lift({systemID,stationID,haulerID,
     cap:Math.max(1,Number(process.env.EVEJS_COOP_NPC_MINERAL_LIFT_MAX_QTY||100000))});

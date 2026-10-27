@@ -51,6 +51,15 @@ test('the caller ore list can never filter out the minerals this arrival loaded'
   assert.match(source, /liftedTypes\.add\(typeID\)/);
 });
 
+test('the lifted-type set is declared at function scope, before its gate', () => {
+  // A block-scoped declaration here cost three deliveries and zero sales on the work
+  // stack: every arrival raised `liftedTypes is not defined` before the sale ran.
+  const decl = source.indexOf('const liftedTypes=new Set();');
+  const gate = source.indexOf('if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&');
+  assert.ok(decl > 0 && gate > 0);
+  assert.ok(decl < gate, 'the declaration must sit outside the lift gate');
+});
+
 test('mineral cargo a previous arrival left in the hold is still sold', () => {
   const decl = source.indexOf('const liftedTypes=new Set();');
   const scan = source.indexOf('MINERAL_LIFT_CARGO_TAG.test', decl);

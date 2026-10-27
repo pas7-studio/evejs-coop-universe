@@ -1506,3 +1506,15 @@ Evidence: tests/coop-npc-corp-treasury 8/8 + refinery + war-funding + war-treasu
 Why: The governor's trickle pause did not follow EVEJS_COOP_TIME_SCALE, so on the x5 work stack a 15-minute policy interval became 75 accelerated minutes and the proof crawled.
 Where: .opencode/metrics.md
 Evidence: scaledTrickleMs(900000,{scale:5}) = 180000; governor 15/15
+### 2026-10-27T16:46Z · fdbf691 · OPS · ops(friend): move the friend's SSH entry to the port Proton actually forwards
+
+Why: Friend could not connect: Proton now forwards 55346, not 48819
+Detail: ProtonVPN port forwarding maps a public port to the same local port and the number changes per session; Set-Friend-SshPort.ps1 rewrites the managed sshd drop-in, restarts sshd and recreates one inbound rule per port scoped to the friend's address. Elevated, dry run by default.
+Where: scripts/Set-Friend-SshPort.ps1
+Evidence: netstat: 0.0.0.0:55346 LISTENING; Test-NetConnection 159.26.120.49 -Port 55346 = True; firewall EveJS co-op SSH 55346 from 176.37.43.83
+### 2026-10-27T16:57Z · a06e2d0 · OPS · perf: profile the sim loop on the work stack instead of guessing
+
+Why: Owner reports lag and bursty combat; measure before changing anything
+Detail: The play server sits at ~98% of one core with ~100 NPCs across 8 systems, so combat resolves in bursts. compose.agents.yaml enables a V8 CPU profile (1 ms) in the work stack only; scripts/Analyze-CpuProfile.cjs ranks self time per function so the fix targets a measured hot spot.
+Where: compose/compose.agents.yaml, scripts/Analyze-CpuProfile.cjs
+Evidence: docker stats: evejs-server-1 98.3% of one core twice in a row, client 92%, evejs-agents-server-1 12%, machine 21% of 32 cores; fleet_state 30000144 pilots=30, 30000145 pilots=20, 30000142 pilots=15
