@@ -2132,3 +2132,23 @@ miningNpcOperations.js). That is NEEDS_PATCH_SERIES_REPAIR: the series tool and 
 working tree must be reconciled before the next L1 patch is trusted. Until then
 patch 0009 is re-applied idempotently by a local script and its sha256 in
 MANIFEST.json matches the regenerated patch file.
+
+## 2026-10-27T19:05Z — where the client work stands
+
+PERF: DONE and stable on the play stack. 97.8% -> 20.8% of one core, profile idle
+~49%, rootShapeVerified.add verified inside the container. Deploy path is now
+`node scripts/apply-all.cjs --code-path <Code>` (overlay + L1 series together);
+plain `--apply` wiped patch 0009 twice.
+
+MAP: renders with the small occupation payload (owner-confirmed).
+FW TAB: STUB_IN_THIS_BUILD. The client calls GetAllWarzonesOccupationStates, we
+answer with real util.KeyVal entries (militia corps 1000180/1000181, contested
+flags), and it still shows "no data" because it lists warzone systems from its own
+static logic and colours them itself. Filling all 814 static warzone systems makes
+the tab populate but crashes the map in mapViewFiltered.GetLineColor (partial
+colour data: one line end coloured, the other None). Client code cannot be patched
+here (boundary), so the tab is not finishable server-side.
+
+NEXT (needs the owner's go): show the front through the surfaces that work -
+the map campaign layer (insurgencySolarsystem.GetAllVisibleCampaigns) and the
+front chat lines already emitted ([Front] assault begun in system ...).
