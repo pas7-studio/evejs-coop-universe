@@ -1275,3 +1275,19 @@ is a behaviour parameter, not an evidence gate.
 holds an attack order inside its own 1050 m gun range on a pinned prey, then require
 `living-native-weapon-event` from it plus falling shield/armor on the same victim, then the
 wreck -> loot -> casualty -> merit -> seeded sale -> war chest -> PAYOUT chain.
+
+## 2026-10-27T11:58Z - item 2 step 5: the leash is measured from HOME (ccd6046c)
+
+Live, verbatim: `npc_pair_diagnose 980000018058 -> 980000016472` gave
+`manualType "attack", allowWeapons true, behaviorOverrides {orbitDistanceMeters 1050,
+leashRangeMeters 149182}, returningHome true, homeDistanceMeters 862066008895` and
+`locks {locked: [], pending: [], activeModules: []}` on BOTH hulls, distance 40-49 km and
+slowly closing in GOTO. So the order and the gun range were right, the leash value was
+wrong: 149 km is measured from the hull, but the leash is measured from the hull's own
+home, 5.7 AU away. ccd6046c: the scope covers home->hull + hull->prey + 100 km.
+
+**NEXT ACTION (exact).** After this deploy sample `npc_pair_diagnose 980000018058 ->
+980000016472` every minute and require (a) `returningHome false`, (b) a completed lock,
+(c) `activeModules` non-empty, then `living-native-weapon-event` from 980000018058 and a
+falling shield/armor on the same victim. If the lock stays empty, the next question is why
+the stock loop does not add it, not the leash.
