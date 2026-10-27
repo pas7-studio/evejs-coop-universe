@@ -2439,3 +2439,13 @@ coopWarFleetRegistry.createWarFleetRegistry with native proofs. So do not chase 
 registry. The mobilizer therefore has its registry and the refusal is elsewhere
 (funding gate / getOrderLeases / readiness). The only way to name it is the mobilizer
 dry-run: tick({systemIDs, dryRun:true}) -> {status:"DRY_RUN", mobilized, rejected, blocked}.
+
+## FOUND: diagnoseMobilization already exists (it was in module.exports all along)
+
+coopVirtualWorldRuntime exports diagnoseMobilization (and diagnoseCombat, diagnoseWarState,
+diagnoseWarFunding, diagnoseNpcOrder, diagnoseNativeRaids, nativeWarFleetRegistry,
+livingWorldPhases). Called from a fresh `docker exec node`, diagnoseMobilization returns
+{"status":"MOBILIZER_NOT_INITIALIZED"} because warMobilizer is module state created by the
+running phase, not by a cold require. So the dry-run MUST be invoked inside the server
+process: either (a) a tiny env-gated hook that calls diagnoseMobilization on a timer and
+logs it, or (b) an admin-bridge action. (a) is 5 additive lines and cannot break startup.
