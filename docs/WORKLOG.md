@@ -1238,3 +1238,33 @@ Evidence: coop-npc-mineral-lift 9/9, coop-mineral-audit 6/6; live GetOrders 1000
 Why: Every station-trip sale died with HAULER_NOT_NAMED because all 100 residents were linked, one per trip ever run; the identity pool had no lifecycle.
 Where: .opencode/state.md, docs/WORKLOG.md, integration/coopNpcMineralLift.cjs, scripts/coop-mineral-audit.cjs, scripts/overlay-spec.cjs, tests/coop-mineral-audit.test.mjs, tests/coop-npc-mineral-lift.test.mjs
 Evidence: live: 100 pilots, 100 links, 100 live entities; 26 living-npc-sale-skipped HAULER_NOT_NAMED; registry release test 6/6
+### 2026-10-27T11:48Z · ccd6046 · L2 · FW-018g: the leash is measured from the hull's own home, not from the hull
+
+Why: the raid leash must cover home->hull + hull->prey; the hull was 5.7 AU from home with a 149 km leash
+Detail: Measured live: raidLeashScope applied 149 182 m while the cruiser was 862 066 008 895 m from its own home, so the effective profile still read 'beyond leash', the loop cleared the attack order it had just been given (returningHome true, currentTargetID 0) and the hull flew home instead of closing on its prey. The scope now covers home->hull + hull->prey + 100 km, and a release reports the override
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: live: leashRangeMeters 149182 applied while homeDistanceMeters 862066008895, returningHome true, currentTargetID 0; tests 36/36
+### 2026-10-27T11:28Z · 25e879f · TEST · FW-018e: an unreachable attack re-approaches on the next re-check, never waits for the lock window
+
+Why: FW-018e: an attack order on prey beyond the 250 km approach boundary re-approaches on the next re-check instead of waiting for the 90 s no-lock window, which a 60 s attack lease could never reach (measured live: 980000000601 orbited at 2.5 AU holding an attack order)
+Detail: Measured live: 980000000601 held an attack order on 980000016052 at 2.5 AU with currentTargetID set, so the 90 s no-lock window was refreshed by every 60 s attack lease and the release never fired; the hull orbited at 2.5 AU instead of warping. The far case now releases and re-approaches on the re-check itself; a near prey still keeps its lock window.
+Where: tests/coop-native-raids-gameplay.test.mjs
+Evidence: node --test tests/coop-native-raids-gameplay.test.mjs -> 26 pass / 0 fail; live living-pirate-raid 30000145 warp-to-hauler at 373994623021 m right after the release
+### 2026-10-27T12:04Z · c49e3b8 · L2 · FW-021: inspect_npc reports the provenance of recovered wreck cargo
+
+Why: inspect_npc exposes the wreck provenance fields the loot leg verifies
+Detail: The loot leg only moves cargo whose live native row still proves its wreck (sourceWreckID/sourceWreckItemID written by the custody transaction), so a recovered stack that lost those fields is silently invisible. inspect_npc now reports groupID, sourceWreckID and sourceWreckItemID per cargo row.
+Where: integration/coopAdminBridge.cjs
+Evidence: read-only field addition; live custody tx 980400000026 SETTLED for 980000000602 with 3150 x 17471
+### 2026-10-27T12:13Z · 10d3c4b · L3 · FW-020: a pirate that made a kill stops hunting and loots it, and a blocked recovery says why
+
+Why: FW-020: a pirate holding a live wreck claim is excluded from the raid so the wreck recovery owns the hull (one owner per record), and a recovery that orders nothing publishes its exact refusal instead of returning silently
+Detail: Measured live: wreck 980300000008 had a real claim by coop-pilot-060 (980000000601) while the raid re-tasked the same hull forever, so the wreck recovery never started (one owner per record). A pirate holding a live wreck claim is now excluded from the raid. The recovery phase also publishes living-npc-postraid-wreck-recovery-blocked with the exact state it reads (hunter mode, manual order, target
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: node --test tests/coop-native-raids-gameplay.test.mjs tests/coop-admin-bridge-raid-diagnose.test.mjs -> 30 pass / 0 fail; live living-npc-postraid-wreck-recovery-blocked wreckID 980300000009 hunterID 980000000602 wreckPresent false claims 2
+### 2026-10-27T12:17Z · 12d47fd · L2 · FW-022: war_state reports the war state the phases really read
+
+Why: read-only war_state diagnose (territories/wars/campaigns) for the war leg
+Detail: territories, wars and campaigns (with target system and bound structure) exactly as coopFactionWarStore returns them, so 'fronts 0' and 'activeCampaignCount 0' are measurements instead of guesses. Read-only: it never plans, reserves or writes.
+Where: integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs
+Evidence: loads and reports WAR_STATE_UNAVAILABLE outside the server; deployed with the next build

@@ -1,5 +1,28 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 12:18Z - the whole picture, measured: where demand really is
+
+Seeded BIDS only exist in two systems of region 10000002:
+  30000142 Jita: 18 stations, 90 000 units of each ore/mineral
+  30000145 New Caldari: 5 stations, 25 000 units, e.g. 60000682 Tritanium 5000@2.96,
+    Pyerite 5000@16.35, Veldspar 4.42, Scordite 3.63, Pyroxeres 7.74
+  30000144 Perimeter: ZERO bids of ANY type right now, including at 60000358.
+
+So every station trip of the Perimeter fleet (960004609 -> 60000358) ends in
+living-npc-station-sale-skipped NOT_SOLD NO_SEEDED_COUNTERPARTY: the station has no buyer
+at all. Earlier sales there (521 754.08 ISK earned) consumed the finite 5000-unit bids that
+did exist. Seeded depth does not come back on its own, so a loop that only sells into it can
+never be perpetual without a real consumer (native industry) or owner-approved reseeding.
+
+Identity exhaustion is FIXED and visible live: the same sale path that used to report
+HAULER_NOT_NAMED now reaches the market and reports NO_SEEDED_COUNTERPARTY, i.e. the
+merchant identity really is adopted (registry.release + reuse of a finished shift).
+
+The New Caldari fleet (960004641) mines again after the restart (cycles COMMITTED, durable
+slots RESTORED) but has not started a station trip yet, so the mineral lift at 60000682
+(the only station that both holds refinery minerals and pays for them) is still waiting for
+its first real arrival. living-npc-mineral-lift-skipped now reports every decision.
+
 ## 2026-10-27 12:0xZ - the mineral buyer was there all along (measurement bug fixed)
 
 The market daemon answers GetOrders as a BOOK of two sides: {buys, sells}. The audit and

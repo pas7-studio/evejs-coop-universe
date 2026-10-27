@@ -3395,13 +3395,18 @@ function advanceNativeRaids(){
   // FW-020: a hull that holds a live claim on a wreck it really made belongs to
   // the loot phases, not to the raid (one owner per record). Without this the
   // raid re-tasks the killer forever and the wreck recovery can never start.
+  // A claim whose physical wreck no longer exists (a restart drops the scene
+  // entity, the durable row stays) can never be recovered, so it must not keep
+  // the hull out of the raid for the rest of the claim's hour.
+  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   let wreckClaimOwners=new Set();
   try{
    const claims=require("./coopNpcWreckClaims").getWreckClaims().active(systemID)||[];
-   wreckClaimOwners=new Set(claims.map(c=>Number(c.attackerEntityID))
+   wreckClaimOwners=new Set(claims
+    .filter(c=>Boolean(scene.getEntityByID(Number(c.wreckID)||0)))
+    .map(c=>Number(c.attackerEntityID))
     .filter(id=>Number.isSafeInteger(id)&&id>0));
   }catch(_error){wreckClaimOwners=new Set();}
-  const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   // FW-013B: a hull that was really linked AFTER boot was invisible here. The
   // materializer's assignment map is rebuilt only during boot, while the raid
   // legality gate below already reads the identity registry - the same
