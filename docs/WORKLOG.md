@@ -1355,3 +1355,9 @@ Why: the loot delivery leg had no refusal telemetry and the whole kill -> loot -
 Detail: The delivery leg published only successful orders, so a hull carrying verified wreck cargo that stayed put was invisible. It now publishes living-npc-loot-station-blocked (blocked owner, mode, warp, controller order, cargo ids, station count, nearest station and distance) once per hull per 5 minutes. LIVE PROOF of the whole loot leg in the running world (verbatim): - living-npc-wreck-cargo-settled
 Where: integration/coopVirtualWorldRuntime.cjs
 Evidence: living-npc-wreck-cargo-settled 1200 units, PHYSICALLY_AT_NATIVE_STATION 60014935, TRADE_SETTLED balance 10332 from EVEJS_SEED order 4257762183096583231
+### 2026-10-27T13:30Z · ebf698f · DOCS · docs: item 1 closed live - kill, loot pickup and a real seeded sale in one world
+
+Why: item 1 closed live and item 2's exact blocker (cross-faction treasury sweep) measured
+Detail: Verbatim evidence: NATIVE_WRECK_CARGO_SETTLED (1200 units of 17471 out of wreck 980300000010, remainder 75660 kept as a real wreck item), PHYSICALLY_AT_NATIVE_ STATION 60014935, TRADE_SETTLED balance 10332 from seeded order 4257762183096583231 (marketRPC FillOrder, sourceOfFunds SEED_MARKET_FILLED_ORDER). Item 2 blocker measured: the corporation treasury sweep moved that Angel pilot's 10332 ISK in
+Where: .opencode/metrics.md, .opencode/state.md
+Evidence: TRADE_SETTLED balance 10332 from EVEJS_SEED; corp-treasury/1000129.json SWEPT 10332 from coop-pilot-060
