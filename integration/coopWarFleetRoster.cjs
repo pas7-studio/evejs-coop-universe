@@ -26,20 +26,48 @@ const MAX_FLEETS = 256;
 const MAX_SHIPS = 64;
 const MAX_LOSSES = 256;
 const ROLES = new Set(["tackle", "brawler", "sniper", "logistics", "ewar", "heavy"]);
+const FACTIONS = /^[0-9]{1,20}$/;
 const pos = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0;
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const valid = (value) => typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(value);
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
 function empty() {
-  return { version: VERSION, nextSerial: 1, fleets: {}, history: [] };
+  return { version: VERSION, nextSerial: 1, fleets: {}, reserve: {}, history: [] };
+}
+
+// FW-039: the durable per-faction hull RESERVE. A faction can only replace what
+// it really holds: `equipped` is decremented by a proven loss, `spawnable` is the
+// count of real free native hulls a caller proved (never invented), and a
+// replacement consumes one spawnable hull. Both counters are integers per role.
+function emptyReserve() {
+  const roles = {};
+  for (const role of ROLES) roles[role] = { spawnable: 0, equipped: 0 };
+  return roles;
+}
+function normalizeReserve(reserve) {
+  const out = emptyReserve();
+  if (!reserve || typeof reserve !== "object" || Array.isArray(reserve)) return out;
+  for (const [role, row] of Object.entries(reserve)) {
+    if (!ROLES.has(role)) continue;
+    const spawnable = Number(row && row.spawnable);
+    const equipped = Number(row && row.equipped);
+    out[role] = {
+      spawnable: Number.isSafeInteger(spawnable) && spawnable >= 0 ? spawnable : 0,
+      equipped: Number.isSafeInteger(equipped) && equipped >= 0 ? equipped : 0,
+    };
+  }
+  return out;
 }
 
 function validate(state) {
   if (!state || state.version !== VERSION || !state.fleets || typeof state.fleets !== "object" ||
     Array.isArray(state.fleets) || !Array.isArray(state.history) ||
     !pos(state.nextSerial) || Object.keys(state.fleets).length > MAX_FLEETS ||
-    state.history.length > 512) {
+    state.history.length > 512 ||
+    (state.reserve !== undefined &&
+      (typeof state.reserve !== "object" || Array.isArray(state.reserve) ||
+        Object.keys(state.reserve).some((key) => !FACTIONS.test(key))))) {
     throw Error("WAR_FLEET_ROSTER_INVALID");
   }
   for (const [fleetID, fleet] of Object.entries(state.fleets)) {
@@ -93,8 +121,59 @@ function createWarFleetRoster(injected) {
     return {
       status: "OK",
       fleets: Object.keys(state.fleets).length,
+      reserve: state.reserve || {},
       state: clone(state),
     };
+  }
+
+  // Read-only: what one faction really holds right now, per role.
+  function reserveOf({ factionID } = {}) {
+    if (!enabled()) return { status: "DISABLED" };
+    const faction = String(Number(factionID) || 0);
+    if (!FACTIONS.test(faction) || faction === "0") {
+      return { status: "BLOCKED", reason: "FACTION_REQUIRED" };
+    }
+    const state = read();
+    const roles = normalizeReserve((state.reserve || {})[faction]);
+    const totals = Object.values(roles).reduce((acc, row) => ({
+      spawnable: acc.spawnable + row.spawnable,
+      equipped: acc.equipped + row.equipped,
+    }), { spawnable: 0, equipped: 0 });
+    return { status: "OK", factionID: Number(faction), roles, totals };
+  }
+
+  // Durable write of what a caller PROVED: free real hulls in a staging system.
+  // It is a declaration with a reason, never a guess.
+  function declareReserve({ factionID, role, spawnable = 0, equipped = 0,
+    source = "", at = 0 } = {}) {
+    if (!enabled()) return { status: "DISABLED" };
+    const faction = String(Number(factionID) || 0);
+    if (!FACTIONS.test(faction) || faction === "0") {
+      return { status: "BLOCKED", reason: "FACTION_REQUIRED" };
+    }
+    if (!ROLES.has(String(role || ""))) {
+      return { status: "BLOCKED", reason: "UNKNOWN_ROLE" };
+    }
+    if (!Number.isSafeInteger(Number(spawnable)) || Number(spawnable) < 0 ||
+      !Number.isSafeInteger(Number(equipped)) || Number(equipped) < 0) {
+      return { status: "BLOCKED", reason: "COUNT_NOT_AN_INTEGER" };
+    }
+    const when = pos(at) ? Number(at) : clock();
+    return transact((tx) => {
+      const state = validate(tx.get(TABLE, KEY) || empty());
+      if (!state.reserve) state.reserve = {};
+      const roles = normalizeReserve(state.reserve[faction]);
+      roles[String(role)] = { spawnable: Number(spawnable), equipped: Number(equipped) };
+      state.reserve[faction] = roles;
+      state.history.push({ at: when, event: "FLEET_RESERVE_DECLARED", factionID: Number(faction),
+        role: String(role), spawnable: Number(spawnable), equipped: Number(equipped),
+        source: String(source || "").slice(0, 64) });
+      if (state.history.length > 512) state.history.splice(0, state.history.length - 512);
+      validate(state);
+      tx.put(TABLE, KEY, state);
+      return { status: "DECLARED", factionID: Number(faction), role: String(role),
+        spawnable: Number(spawnable), equipped: Number(equipped) };
+    });
   }
 
   function fleet(fleetID) {
@@ -220,6 +299,13 @@ function createWarFleetRoster(injected) {
       const survivors = record.ships.filter((entry) => entry.state === "ALIVE" || entry.state === "ADOPTED");
       record.state = survivors.length ? "DISENGAGED" : "DESTROYED";
       record.updatedAt = when;
+      // A proven loss really removes one equipped hull from its faction's reserve.
+      if (!state.reserve) state.reserve = {};
+      const faction = String(record.factionID);
+      const roles = normalizeReserve(state.reserve[faction]);
+      const role = ROLES.has(String(ship.role || "")) ? String(ship.role) : "brawler";
+      roles[role].equipped = Math.max(0, roles[role].equipped - 1);
+      state.reserve[faction] = roles;
       state.history.push({ at: when, event: "FLEET_LOSS", fleetID: id, entityID: entity, survivors: survivors.length });
       if (state.history.length > 512) state.history.splice(0, state.history.length - 512);
       validate(state);
@@ -231,6 +317,12 @@ function createWarFleetRoster(injected) {
         survivors: survivors.length,
         lost: record.losses.length,
         fleetState: record.state,
+        factionID: record.factionID,
+        role,
+        reserve: roles[role],
+        frontChat: { kind: "fleet-loss", eventKey: "loss:" + id + ":" + entity,
+          factionID: record.factionID, role, systemID: record.systemID,
+          remaining: survivors.length, lost: record.losses.length },
         meritEvent: { kind: "force-lost", count: 1, fleetID: id, pilotID: ship.pilotID },
       };
     });
@@ -371,6 +463,7 @@ function createWarFleetRoster(injected) {
     });
     if (created.status !== "CREATED") return created;
     const at = clock();
+    let reserveAfter = null, faction = String(plan.factionID);
     transact((tx) => {
       const state = validate(tx.get(TABLE, KEY) || empty());
       const parent = state.fleets[plan.fleetID];
@@ -380,6 +473,18 @@ function createWarFleetRoster(injected) {
       parent.reconstitutedAs = created.fleetID;
       const child = state.fleets[created.fleetID];
       if (child) child.planStatus = plan.status;
+      // Every adopted real hull consumes one spawnable reserve slot and becomes
+      // equipped; a faction can never replace more than it really holds.
+      if (!state.reserve) state.reserve = {};
+      const factionKey = String(plan.factionID);
+      const roles = normalizeReserve(state.reserve[factionKey]);
+      for (const ship of plan.adopted || []) {
+        const role = ROLES.has(String(ship && ship.role || "")) ? String(ship.role) : "brawler";
+        if (roles[role].spawnable > 0) roles[role].spawnable -= 1;
+        roles[role].equipped += 1;
+      }
+      state.reserve[factionKey] = roles;
+      reserveAfter = roles;
       state.history.push({
         at, event: "FLEET_RECONSTITUTED", fleetID: plan.fleetID, newFleetID: created.fleetID,
         status: plan.status, survivors: plan.survivors.length, adopted: plan.adopted.length,
@@ -400,6 +505,14 @@ function createWarFleetRoster(injected) {
       missing: plan.missing,
       unrecorded: plan.unrecorded,
       reason: plan.reason,
+      factionID: plan.factionID,
+      reserve: reserveAfter ? { factionID: Number(faction), roles: reserveAfter } : null,
+      frontChat: plan.adopted.length
+        ? { kind: "fleet-replacement", eventKey: "replacement:" + created.fleetID,
+          factionID: plan.factionID, systemID: plan.stagingSystemID,
+          adopted: plan.adopted.length, size: created.size,
+          status: plan.status }
+        : null,
     };
   }
 
@@ -451,7 +564,8 @@ function createWarFleetRoster(injected) {
     return ships;
   }
 
-  return Object.freeze({ snapshot, fleet, createFleet, recordLoss, planReconstitution, commitReconstitution, presence });
+  return Object.freeze({ snapshot, fleet, createFleet, recordLoss, planReconstitution,
+    commitReconstitution, presence, reserveOf, declareReserve });
 }
 
 let shared = null;

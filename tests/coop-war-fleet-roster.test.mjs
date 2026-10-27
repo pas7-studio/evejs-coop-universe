@@ -184,3 +184,30 @@ test("an adopted hull cannot be adopted twice, and a refused plan never commits"
  assert.equal(planB.adopted.length,0,`2002 is already owned by ${committed.fleetID}`);
  assert.equal(roster.commitReconstitution({plan:{status:"BLOCKED"}}).reason,"PLAN_NOT_RECONSTITUTABLE");
 });
+
+// FW-039: the faction RESERVE is durable and only real facts move it.
+test("a faction reserve is declared, spent by a real loss and consumed by a replacement", () => {
+ const {roster,store}=fixture();
+ const created=roster.createFleet({factionID:500001,systemID:30002780,
+  stagingSystemID:30002780,rank:"squad-lead",merit:150,commandCap:3,ships:SHIPS});
+ assert.equal(created.status,"CREATED");
+ assert.deepEqual(roster.declareReserve({factionID:500001,role:"tackle",
+  spawnable:2,equipped:1,source:"REAL_FREE_NATIVE_HULLS"}).status,"DECLARED");
+ const before=roster.reserveOf({factionID:500001});
+ assert.equal(before.roles.tackle.equipped,1);
+ assert.equal(before.roles.tackle.spawnable,2);
+ const loss=roster.recordLoss({fleetID:created.fleetID,
+  entityID:1001,wreckID:980300000999});
+ assert.equal(loss.status,"RECORDED");
+ assert.equal(loss.factionID,500001);
+ assert.equal(loss.reserve.equipped,0);
+ assert.equal(loss.frontChat.kind,"fleet-loss");
+ assert.equal(loss.frontChat.eventKey,"loss:"+created.fleetID+":"+1001);
+ assert.equal(roster.reserveOf({factionID:500001}).roles.tackle.spawnable,2);
+ assert.equal(roster.declareReserve({factionID:500001,role:"titan",
+  spawnable:1,equipped:0}).reason,"UNKNOWN_ROLE");
+ assert.equal(roster.declareReserve({factionID:0,role:"tackle",
+  spawnable:1,equipped:0}).reason,"FACTION_REQUIRED");
+ assert.equal(roster.reserveOf({factionID:999}).totals.spawnable,0);
+ assert.ok(store.rows.has(TABLE+"|"+KEY));
+});

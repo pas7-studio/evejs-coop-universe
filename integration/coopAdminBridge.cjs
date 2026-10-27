@@ -1058,6 +1058,19 @@ function fleetReconstitute(request) {
   if (request.commit === true && (plan.status === "RECONSTITUTED" || plan.status === "REDUCED")) {
     committed = roster.commitReconstitution({ plan, rank });
   }
+  // FW-039: a real loss and a real replacement are announced on the front once
+  // each (warFrontChat is once-per-eventKey), never once per tick.
+  try {
+    const runtime = require("./coopVirtualWorldRuntime" + siblingSuffix);
+    for (const row of recorded) {
+      if (row && row.status === "RECORDED" && row.frontChat)
+        runtime.warFrontChat(row.frontChat.kind, row.frontChat,
+          [row.frontChat.systemID]);
+    }
+    if (committed && committed.frontChat)
+      runtime.warFrontChat(committed.frontChat.kind, committed.frontChat,
+        [committed.frontChat.systemID]);
+  } catch (_error) { /* the front chat must never fail a reconstitution */ }
   emitEvent("living-war-fleet-reconstitution",
     plan.status === "BLOCKED" ? "BLOCKED" : String(committed ? committed.status : plan.status), {
       fleetID,

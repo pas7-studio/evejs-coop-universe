@@ -137,6 +137,18 @@ function frontReport(kind, details = {}) {
   if (kind === "campaign-lost") {
     return "[Front] Campaign in system " + name(details.systemID) + " lost.";
   }
+  // FW-039: fleet attrition is reported where the player reads it - one line per
+  // real loss and per real replacement, never per tick.
+  if (kind === "fleet-loss") {
+    return "[Front] " + name(details.factionID) + " lost a " + String(details.role || "hull") +
+      " in system " + name(details.systemID) + " (" + num(details.remaining) +
+      " left in the fleet, " + num(details.lost) + " lost so far).";
+  }
+  if (kind === "fleet-replacement") {
+    return "[Front] " + name(details.factionID) + " recommitted " + num(details.adopted) +
+      " hull(s) in system " + name(details.systemID) + " - fleet back to " +
+      num(details.size) + " (" + String(details.status || "RECONSTITUTED") + ").";
+  }
   return null;
 }
 
