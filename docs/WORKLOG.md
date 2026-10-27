@@ -1631,3 +1631,8 @@ Why: an agent deploy recreated the owner's live play stack during a session, and
 Detail: coop-deploy --build hard-codes -p evejs and recreated the live play stack during a session on 2026-10-28. It now builds the image and refuses the restart while project evejs has running containers unless --allow-play-restart is passed. Also registers the war-loss module the uncommitted runtime hook requires, enables the wave flags on the agents stack only, and adds the in-container LIVE_OK verifie
 Where: compose/compose.agents.yaml, docs/COOP_MISSION_WAVE_PACING.md, scripts/coop-deploy.cjs, scripts/overlay-spec.cjs, scripts/verify-coop-mission-wave-pacing-live.cjs
 Evidence: LIVE_OK on evejs-agents (capped=wave_04..07 kept=wave_01..03); agents stack recreated with EVEJS_COOP_MISSION_WAVE_NOTIFY=1 CAP=3; play stack missionRuntimeState intact (6 keys); tests 11/11; HOOK_OK anchor=1
+### 2026-10-27T22:29Z · 2609aae · L2 · coop: a close hauler must follow its miner, not orbit it from 90 km
+
+Why: The hauler approach fell back to an orbit order the engine accepted but which left the hull drifting away, and the empty-haul budget re-armed after two minutes, faster than any 24-90 km sub-warp approach can finish.
+Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs, tests/coop-haul-empty-guard.test.mjs
+Evidence: agents world telemetry: status ORBIT with nativeReason WARP_DISTANCE_TOO_CLOSE at gap 24063/57106/29568/90546, miner and hauler toRockMeters growing (45765 -> 49487 in 29 s); now warp only beyond 150 km, follow the miner otherwise, publish FOLLOWING_MINER/FOLLOW_REFUSED, and allow 120 waits; 11 haul tests pass
