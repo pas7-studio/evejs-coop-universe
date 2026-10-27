@@ -18,6 +18,10 @@ const RANKS = Object.freeze([
 
 // Merit is paid for evidence, never for time served.
 const MERIT = Object.freeze({
+  // A confirmed native warship kill is the one result that can promote a recruit
+  // in a single real battle: the attacker proof is the upstream destruction
+  // caller's own attackerEntity, the wreck is physical and the loot is stored.
+  "warship-kill": 25,
   "kill-confirmed": 3,
   "objective-captured": 12,
   "objective-defended": 9,

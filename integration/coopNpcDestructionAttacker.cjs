@@ -60,6 +60,18 @@ function note(scene,victim,options,wreck){
   if(proof.status!=="VICTIM_NOT_NAMED"&&proof.status!=="INVALID_NATIVE_DESTRUCTION")
    require("./coopRuntimeProbe").observe("living-native-destruction-attacker",null,
     {spaceState:{systemID:proof.systemID}},proof);
+  // FW-009B: only this strict proof may pay war merit, and only for the exact
+  // physical wreck it names. A missing or non-native attacker pays nothing.
+  if(proof.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"){
+   try{
+    const ext=__filename.endsWith(".cjs")?".cjs":"";
+    require("./coopWarKillMerit"+ext).note({proof,victim,
+     emit:(event,characterID,spaceState,detail)=>
+      require("./coopRuntimeProbe").observe(event,characterID,spaceState,detail)});
+   }catch(error){
+    console.warn("[CoopWarKillMerit]",String(error?.message||"UNAVAILABLE"));
+   }
+  }
   if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY==="1"&&
    proof.status==="NATIVE_DESTRUCTION_ATTACKER_PROVIDED"){
    try{
