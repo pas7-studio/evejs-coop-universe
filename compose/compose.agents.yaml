@@ -36,6 +36,10 @@ services:
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
+      # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
+      # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
+      # Remove this line for normal agent runs.
+      NODE_OPTIONS: "--cpu-prof --cpu-prof-dir=/var/lib/evejs/prof --cpu-prof-interval=1000"
 volumes:
   evejs-data:
     name: evejs-agents-data
