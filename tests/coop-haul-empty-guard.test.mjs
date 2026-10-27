@@ -23,16 +23,21 @@ test('a haul that moved no cargo never becomes a loaded fleet', () => {
 
 test('an unproductive haul is only re-issued after a bounded number of waits', () => {
   assert.match(block, /coopEmptyHaulAttempts/);
-  assert.match(block, /if \(attempts >= 24\) \{/);
+  // Measured 2026-10-27: at 5 s per think, 24 waits is two minutes - shorter than the
+  // sub-warp approach the hauler actually needs (24-90 km), so the fleet re-entered
+  // mining before the hull could ever arrive.
+  assert.match(block, /if \(attempts >= 120\) \{/);
   assert.match(block, /living-haul-empty-reissue/);
 });
 
-test('a far hauler is sent to the miner itself, not to the asteroid', () => {
+test('a far hauler is ordered to the miner itself, never left on an orbit label', () => {
   // Landing 750 m from the rock while the miner orbits kilometres away means the
-  // 2 500 m transfer range is never reached (measured: ranges 55 km - 238 km).
+  // 2 500 m transfer range is never reached (measured: ranges 24 km - 150 km). A warp
+  // to a target that close answers WARP_DISTANCE_TOO_CLOSE, so the fallback must be a
+  // real follow order and the outcome must be published.
   assert.match(block, /living-haul-approach-issued/);
-  assert.match(block, /npcRuntime"\)\.warpToPoint\(haulerID, miner\.position/);
-  assert.match(block, /attempts % 2 === 0/);
+  assert.match(block, /npcRuntime\.follow\(haulerID, minerID, 500\)/);
+  assert.match(block, /attempts === 1 \|\| attempts % 24 === 0/);
 });
 
 test('a successful load clears the retry counter', () => {
