@@ -1716,3 +1716,8 @@ Evidence: agents world: one successful load/deliver/refine/lift, then two fleets
 Why: A follow order re-issued every five seconds restarted the approach it waited for, so the hauler oscillated around 3.4-4.9 km while the transfer range is 2500 m.
 Where: scripts/patch-evejs-coop.cjs
 Evidence: agents world: living-haul-approach-issued FOLLOWING_MINER gap 4429/4681/4954 and 3364/3641/3936 within 10 s; block now records ALREADY_FOLLOWING and issues nothing when mode FOLLOW already targets that miner; fork commit follows, 6 wiring tests pass
+### 2026-10-27T23:39Z · d732f78 · L1 · test: pin the runaway-GOTO guard on a real native hull
+
+Why: A native NPC in mode GOTO flies along entity.direction only, so the 'position + direction * 1.0e16' sentinel carried mining hulls away from their own belt for ever and the hauler could never reach the 2500 m transfer range.
+Where: tests/coop-npc-runaway-goto.test.mjs
+Evidence: agents mining_fleet_diagnose: miner and hauler both mode GOTO with targetPoint 8.19e15 m while nearestBelt 28434/53965 m; gaps grew 3364 -> 7440 m after every follow; new space/coopNpcRunawayGoto.js stops native hulls beyond 1e13 m, one statement in the runtime GOTO case, player ships untouched; 5 tests pass
