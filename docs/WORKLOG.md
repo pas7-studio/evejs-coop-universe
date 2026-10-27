@@ -1652,3 +1652,8 @@ Evidence: tests 13/13; LIVE_OK on evejs-agents image sha256:7b1ccd72 (finalWave 
 Why: the owner reads the player ceiling as 2 and up, and wants the badge written 2++
 Where: README.md
 Evidence: README.md headline and PvE bullet only
+### 2026-10-27T22:40Z · 969b1c0 · L2 · feat(fw): the client advantage panel (victory points + fw-advantage gateway) is served from real wrecks and real hulls instead of an empty state source
+
+Why: the client faction-warfare advantage panel hung for our war pair: both native surfaces (fwVictoryPointMgr victory point states and the fw-advantage gateway score list) read state sources nothing in this build fills. Added a read-only authority that derives per-system score and per-faction contribution from the real war state, war fleet registry and casualty ledger, plus two default-OFF hooks
+Where: .opencode/state.md, integration/coopWarAdvantage.cjs, scripts/overlay-spec.cjs, tests/coop-war-advantage.test.mjs
+Evidence: tests pass 6 fail 0 (coop-war-advantage); apply-all OVERLAY_OK; live probe: GetAllVictoryPointStates {30045344: {3200,75000}}, GetLocalVictoryPointState [30045344,{3200,75000}], scores [{500001:3200},{500004:1100}]
