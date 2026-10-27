@@ -113,6 +113,8 @@ names.splice(names.indexOf("coopMiningFleetDiagnose")+1,0,"coopMiningBeltReturn"
 names.splice(names.indexOf("coopMiningBeltReturn")+1,0,"coopMiningTripRetreatGuard");
 // The cargo projection carries no volume; annotate it from SDE (default OFF).
 names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
+// The refinery existed but nothing called it: ore could never become minerals.
+names.splice(names.indexOf("coopCargoVolume")+1,0,"coopNpcRefineryTick");
 // Guarded telemetry used by the restart-resilience modules.
 names.splice(names.indexOf("coopHaulCargoAdoption")+1,0,"coopObserve");
 // Single reader for our own EVEJS_* gates (default OFF, only "1" enables).
@@ -338,6 +340,10 @@ const specs=[
     // trigger compares the fill against the MINER's own capacity, which is how
     // 18 777 m3 waited for a hauler whose real hold is 5 500 m3.
     line:'  require("../../space/coopMiningFillCap").apply(scene, fleetRecord, cargoState);'},
+   // The refinery is real but had no caller: refine the corporation's warehouse ore at
+   // the station this fleet last visited. The module throttles and never invents a quote.
+   {anchor:"  const cargoState = getFleetCargoState(scene, fleetRecord);",after:true,
+    line:'  try{require("../../space/coopNpcRefineryTick").tick({systemID:Number(scene&&scene.systemID)||0,stationID:Number(fleetRecord&&fleetRecord.stationID)||0});}catch(_coopRefineError){}'},
    {anchor:"const minerEntity = scene.getEntityByID(minerEntityID);",after:true,
     line:'    if (minerEntity) require("../../space/coopStuckWarpRecovery").release(minerEntity, scene);'},
    {anchor:"    if (!targetEntity) {\n      delete assignmentMap[toInt(minerEntity.itemID, 0)];",after:true,

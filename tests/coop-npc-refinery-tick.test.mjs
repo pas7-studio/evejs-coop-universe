@@ -1,0 +1,118 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
+
+const require = createRequire(import.meta.url);
+const tick = require('../integration/coopNpcRefineryTick.cjs');
+
+// The refinery (COOP-031) was fully implemented and never called, so ore could never
+// become minerals. This caller is the missing wiring - and it must report the real
+// station fee instead of waiving it.
+const HANGAR = 4;
+const ORE = 980200001111;
+
+function items(rows, {fail = false} = {}) {
+  return {
+    ITEM_FLAGS: {HANGAR},
+    listOwnedItems(ownerID, filter) {
+      if (fail) throw new Error('store down');
+      assert.equal(filter.locationID, 60000358);
+      return rows.filter((row) => Number(row.ownerID) === ownerID);
+    },
+  };
+}
+
+const warehouseOre = (overrides = {}) => ({
+  itemID: ORE, typeID: 17470, quantity: 54999, ownerID: 1000129, locationID: 60000358,
+  flagID: HANGAR, stacksize: 54999, singleton: 0, customInfo: 'coop-warehouse:v1:cargo:' + ORE,
+  ...overrides,
+});
+
+function refinery(result) {
+  return {calls: [], refine(args) { this.calls.push(args); return result; }};
+}
+
+const events = () => {
+  const seen = [];
+  return {see: (_probe, event, _subject, fields) => seen.push({event, fields}), seen};
+};
+
+test('the default is off and nothing is refined', () => {
+  const r = tick.run({env: {}, stationID: 60000358});
+  assert.equal(r.status, 'DISABLED');
+  assert.equal(r.refined, 0);
+});
+
+test('only tagged warehouse ore in the hangar is a candidate', () => {
+  const rows = [
+    warehouseOre(),
+    warehouseOre({itemID: 5, customInfo: 'something else'}),
+    warehouseOre({itemID: 6, locationID: 60000682}),
+    warehouseOre({itemID: 7, ownerID: 1000007}),
+  ];
+  const got = tick.candidates({items: items(rows), ownerID: 1000129, stationID: 60000358});
+  assert.equal(got.length, 1);
+  assert.equal(got[0].itemID, ORE);
+});
+
+test('a committed refine is reported as real minerals for real ore', () => {
+  const log = events();
+  const fake = refinery({status: 'COMMITTED', operationID: 'coop-refine:v1:' + ORE + ':54999',
+    outputs: [{typeID: 34, quantity: 1000}, {typeID: 35, quantity: 200}]});
+  const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, stationID: 60000358, systemID: 30000144,
+    items: items([warehouseOre()]), refinery: fake, observe: log.see, probe: {}});
+  assert.equal(r.status, 'REFINED');
+  assert.equal(r.refined, 1);
+  assert.deepEqual(fake.calls, [{oreItemID: ORE, ownerID: 1000129, stationID: 60000358}]);
+  assert.equal(log.seen.length, 1);
+  assert.equal(log.seen[0].event, 'living-npc-refined');
+  assert.equal(log.seen[0].fields.minerals, 2);
+  assert.equal(log.seen[0].fields.consumed, 54999);
+});
+
+test('a station fee is reported with its exact cost, never waived', () => {
+  const log = events();
+  const fake = refinery({status: 'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED', iskCost: 1234.5});
+  const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, stationID: 60000358,
+    items: items([warehouseOre()]), refinery: fake, observe: log.see, probe: {}});
+  assert.equal(r.status, 'BLOCKED');
+  assert.equal(r.refined, 0);
+  assert.equal(log.seen[0].event, 'living-npc-refinery-blocked');
+  assert.equal(log.seen[0].fields.iskCost, 1234.5);
+  assert.equal(log.seen[0].fields.status, 'NPC_CORPORATION_WALLET_SETTLEMENT_REQUIRED');
+});
+
+test('an unavailable refinery or unreadable stock is a status, never a throw', () => {
+  const unavailable = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1', EVEJS_COOP_NPC_REFINERY_DIR: ''},
+    stationID: 60000358, items: items([warehouseOre()]), observe: () => {}, probe: {}});
+  assert.equal(unavailable.status, 'REFINERY_UNAVAILABLE');
+  const unreadable = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, stationID: 60000358,
+    items: items([], {fail: true}), refinery: refinery({status: 'COMMITTED'}),
+    observe: () => {}, probe: {}});
+  assert.equal(unreadable.status, 'CANDIDATES_UNREADABLE');
+  const noOre = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, stationID: 60000358,
+    items: items([]), refinery: refinery({status: 'COMMITTED'}), observe: () => {}, probe: {}});
+  assert.equal(noOre.status, 'NO_WAREHOUSE_ORE');
+});
+
+test('a throwing refinery is contained per stack', () => {
+  const exploding = {refine() { throw new Error('journal write failed'); }};
+  const r = tick.run({env: {EVEJS_COOP_NPC_REFINERY: '1'}, stationID: 60000358,
+    items: items([warehouseOre()]), refinery: exploding, observe: () => {}, probe: {}});
+  assert.equal(r.status, 'BLOCKED');
+  assert.equal(r.statuses[0], 'REFINERY_THROW');
+});
+
+test('the fleet tick is throttled per system and station', () => {
+  const env = {EVEJS_COOP_NPC_REFINERY: '1'};
+  const opts = {env, stationID: 60000358, systemID: 30000144, items: items([]),
+    refinery: refinery({status: 'COMMITTED'}), observe: () => {}, probe: {}};
+  tick.resetForTests();
+  assert.notEqual(tick.tick({...opts, now: 1000}).status, 'THROTTLED');
+  assert.equal(tick.tick({...opts, now: 2000}).status, 'THROTTLED');
+  assert.notEqual(tick.tick({...opts, now: 1000 + tick.THROTTLE_MS + 1}).status, 'THROTTLED');
+});
+
+test('no known station means no refine, never a guess', () => {
+  assert.equal(tick.tick({env: {EVEJS_COOP_NPC_REFINERY: '1'}, systemID: 30000144}).status, 'NO_STATION');
+});
