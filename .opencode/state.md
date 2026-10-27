@@ -2413,3 +2413,18 @@ in coopVirtualWorldRuntime (grep EVEJS_COOP_FACTION_WAR_MOBILIZE) and what preco
 it needs (funding gate is REFUSED/NO_REAL_FACTION_INCOME, which may be exactly what stops
 it). Decide honestly: either real faction income exists and mobilization is broken, or
 the funding gate is the real blocker and no fleet may legally spawn without it.
+
+## MOBILIZER IS ENABLED — so the blocker is inside it, not the flags
+
+coopWarMobilizer.enabled() needs FACTION_WAR, FACTION_WAR_FLEETS, FACTION_WAR_MOBILIZE,
+NATIVE_ATOMIC_ROWS, NPC_STRICT_AMMO, NPC_AMMO_DURABLE_CYCLE, NPC_BANK_ATOMIC and
+(ALIFE or NPC_ORDER_ARBITER). Container env proves all of them are 1.
+It also needs createWarMobilizer({registry, readWarState, readLinks, sceneForSystem,
+getNativeEntity, getController, getFactionForCorporation, inspectReadiness,
+getOrderLeases, isTactical, clock}) or it throws
+WAR_MOBILIZATION_NATIVE_AUTHORITIES_REQUIRED. The registry is empty and nothing throws,
+so the mobilizer runs and rejects every side silently (SIDE_REJECT_LIMIT exists for that).
+NEXT SINGLE STEP: run the mobilizer in DRY RUN (DRY_RUN_REPORT_LIMIT=64, never writes) and
+print the per-side reject reasons for war:500001-500004. That names the exact refusal —
+most likely the funding gate (NO_REAL_FACTION_INCOME) or an empty getOrderLeases — and it
+is the last unknown between the current frozen war and a visible two-sided fight.
