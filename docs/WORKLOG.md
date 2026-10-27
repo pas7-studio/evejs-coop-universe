@@ -1577,3 +1577,9 @@ Evidence: OVERLAY_OK; payload owners must be 500001/500004 with 814 util.KeyVal 
 Why: Work-stack bring-up from a clean volume after seven real defects; one stale market journal from a mid-RPC restart was moved aside so the trader stops refusing every sale.
 Where: .opencode/state.md
 Evidence: agents volumes reset 19:36Z, market reseeded jita_new_caldari (23 stations, 445096 rows), hauler-loaded 1680/2940/1260 units, station deliveries live
+### 2026-10-27T21:18Z · 7de8cb3 · DOCS · docs(readme): rewrite the front page - origin, run paths, capability list, honest proof state
+
+Why: the front page described an older project state (no origin, no run paths, stale proof claims) so a newcomer or a cloud agent could not tell what is proven from what is only planned
+Detail: What it is (private ~2-player living universe on the pinned EveJS), where it comes from (EveJS c3ea396b, X-Eve concept not vendored), how to run (play vs work stack, gates, deploy, acceptance), what the overlay adds, what is claimed vs still unverified, the our-own inventory and the layer rule.
+Where: README.md
+Evidence: README.md rewritten; links and referenced scripts verified to exist (Start-Agents-Stack.ps1, coop-loop-gate.sh, restart-acceptance.sh, coop-deploy.cjs, Verify-Local-Coop.ps1, two-stacks/loop-acceptance docs)
