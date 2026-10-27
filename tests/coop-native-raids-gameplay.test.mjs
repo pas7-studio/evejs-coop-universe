@@ -370,10 +370,17 @@ test("a hull a live wreck claim owns is released by the raid that leased it",()=
  assert.equal(released[0].reason,"WRECK_CLAIM_OWNS_HULL");
  assert.deepEqual(f.releases,[[501,"WRECK_CLAIM_OWNS_HULL"]]);
  assert.deepEqual([...f.raids.activePirateIDs(()=>f.scene)],[]);
- // releasing twice is a no-op, and a hull this director never leased is untouched
+ // releasing twice inside the throttle window is a no-op
  assert.deepEqual(f.raids.releaseExcluded([501],"WRECK_CLAIM_OWNS_HULL"),[]);
- assert.deepEqual(f.raids.releaseExcluded([999],"WRECK_CLAIM_OWNS_HULL"),[]);
  assert.equal(f.releases.length,1);
+ // the stock loop re-acquires its target, so the same hull is released again
+ // after the throttle, and a hull this director never leased is still cleared
+ // through the same bridge call (the bridge decides who owns it)
+ f.advance(16000);
+ assert.equal(f.raids.releaseExcluded([501],"WRECK_CLAIM_OWNS_HULL").length,1);
+ assert.equal(f.raids.releaseExcluded([999],"WRECK_CLAIM_OWNS_HULL").length,1);
+ assert.deepEqual(f.releases,[[501,"WRECK_CLAIM_OWNS_HULL"],
+  [501,"WRECK_CLAIM_OWNS_HULL"],[999,"WRECK_CLAIM_OWNS_HULL"]]);
 });
 test("a refused release is reported instead of pretending the hull is free",()=>{
  const f=fixture();

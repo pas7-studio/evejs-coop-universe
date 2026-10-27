@@ -31,6 +31,9 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
  if(preyScrambled!==null&&typeof preyScrambled!=="function")throw Error("invalid native raid scramble API");
  if(gunRange!==null&&typeof gunRange!=="function")throw Error("invalid native raid gun range API");
  const leases=new Map();
+ // Per-hull throttle for a hull a live wreck claim owns: the stock behavior loop
+ // re-acquires its own target after every release.
+ const excludedReleasedAt=new Map();
  // One owner per record: only the director that issued an order may release it.
  function releaseOrder(pirateID,reason){
   if(!release)return {released:false,reason:"RELEASE_UNAVAILABLE"};
@@ -261,20 +264,23 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
  // its own native order are released here, by the director that issued them
  // (one owner per record). Nothing is released for a hull this director never
  // leased, and a rival owner is never overridden - the order bridge decides.
- function releaseExcluded(ids=[],reason="WRECK_CLAIM_OWNS_HULL"){
-  const released=[];
+ function releaseExcluded(ids=[],reason="WRECK_CLAIM_OWNS_HULL",options={}){
+  const released=[],force=options?.force===true;
   for(const raw of Array.isArray(ids)?ids:[]){
    const id=pos(raw);
    if(!id)continue;
-   for(const [key,lease] of leases){
-    if(Number(key.split(":")[1])!==id||lease.phase==="released")continue;
-    const now=clock(),outcome=releaseOrder(id,reason);
-    leases.set(key,{nextAt:now+releaseCooldownMs,
-     targetID:Number(lease.targetID)||0,targetRole:String(lease.targetRole||""),
-     phase:"released",issuedAtMs:now});
-    released.push({pirateID:id,reason,leaseTargetID:Number(lease.targetID)||0,
-     ...outcome});
-   }
+   const now=clock();
+   // The stock behavior loop re-acquires its own target after a release, so a
+   // hull whose wreck claim is live is released again, at most every 15 s.
+   if(!force&&now-(excludedReleasedAt.get(id)||0)<15000)continue;
+   excludedReleasedAt.set(id,now);
+   const leaseKey=[...leases.keys()].find(key=>Number(key.split(":")[1])===id);
+   const lease=leaseKey?leases.get(leaseKey):null;
+   const outcome=releaseOrder(id,reason);
+   const targetID=Number(lease?.targetID)||0;
+   if(leaseKey)leases.set(leaseKey,{nextAt:now+releaseCooldownMs,targetID,
+    targetRole:String(lease?.targetRole||""),phase:"released",issuedAtMs:now});
+   released.push({pirateID:id,reason,leaseTargetID:targetID,...outcome});
   }
   return released;
  }

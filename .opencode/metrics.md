@@ -351,3 +351,35 @@ overlay: OVERLAY_OK (apply INSTALLED, problems []) ; image 3fc0677 built and rec
 live: war_state -> {"status":"OK","counts":{"territories":2,"wars":1,"campaigns":0},"presence":{"systems":[{"systemID":30000140,"linked":1,"resolved":1,"factions":{"500020":1}},{"systemID":30000142,"linked":15,"resolved":15,"factions":{"500010":3,"500011":8,"500012":2,"500020":2}},{"systemID":30000144,"linked":31,"resolved":31,"factions":{"500012":3,"500014":24,"500019":3,"500020":1}},{"systemID":30000145,"linked":21,"resolved":21,"factions":{"500010":1,"500011":2,"500012":2,"500014":11,"500020":5}},...],"skipped":[]} ; opening still refuses SUPPLY_UNFUNDED:500011:NO_REAL_FACTION_INCOME|500014:WAR_TREASURY_JOURNAL_COLLISION
 metrics: tests_total=4 pass=4 fail=0 modules_added=0 modules_changed=3 live_events=1
 next: the Jita(500011)->Maurasi(500020) front needs the ATTACKER 500011 funded too; 500020 already holds 27121.5 ISK from the real loot fill. 601 (Angel, corp 1000138) has no cargo because its wreck 980300000008 is no longer in the scene (wreckPresent false), so the honest route is a NEW kill in this boot -> wreck -> recovery -> seeded sale by an Angel pilot -> 500011 funded -> war 500011-500020 opens with both sides funded -> escrow PAYOUT on a real casualty.
+
+## 2026-10-27T13:15Z - item 1 (boot-churn robustness): a claim restores its own wreck or closes honestly - c8a69b63
+done: a restart drops the physical native wreck entity while the durable native wreck row (and its stored loot) survives, so every claim pointed at a wreck that could never be looted. coopNpcWreckClaimReconcile either re-spawns the SAME native wreck entity from its own durable row through the stock spawnNativeWreck path, or closes the claim durably with the measured reason (WRECK_ROW_ABSENT / WRECK_DECAYED / WRECK_HAS_NO_STORED_ITEMS / WRECK_ROW_MISMATCH / RESTORE_REFUSED_<native>) plus the measured lost stacks; coopNpcWreckClaims.close() adds an idempotent closed section that survives a restart. The runtime gained the native-wreck-claim-reconcile phase (45s boot grace, scene must exist) and a claim-driven 5s fast loop (EVEJS_COOP_NPC_WRECK_RECOVERY_MS) that runs recovery+custody only while a live claim really has its physical wreck.
+tests: node --test tests/coop-npc-wreck-claim-reconcile.test.mjs tests/coop-npc-native-wreck-recovery.test.mjs -> 22 pass / 0 fail
+overlay: OVERLAY_OK (patched 59, moduleCurrent 374) ; docker build + compose recreate OK
+live: {"event":"living-npc-wreck-claim-restored","status":"RESTORED","wreckID":980300000008,"reason":"NATIVE_WRECK_ENTITY_RESTORED_FROM_DURABLE_ROW","loot":{"stacks":3,"quantity":93450,"typeIDs":[1228,17463,17471]},"pilotID":"coop-pilot-060","hunterID":980000000601,"nativeSource":"STOCK_SPAWN_NATIVE_WRECK"} and {"event":"living-npc-wreck-claim-closed","status":"NOTHING_TO_RECOVER","wreckID":980300000009,"reason":"WRECK_HAS_NO_STORED_ITEMS","closeStatus":"CLAIM_CLOSED","iskGranted":false,"cargoMoved":false}
+metrics: tests_total=22 pass=22 fail=0 modules_added=1 modules_changed=2 live_events=2
+next: the hull must really fly to the restored wreck and move its cargo (capacity + combat order were the next measured blockers).
+
+## 2026-10-27T13:35Z - item 1b: a hold smaller than the wreck stack moves what fits - 3f290ab4
+done: the Angel killer 980000000601 (Arch Angel Centurion, capacity 120 m3) held a live claim on a wreck whose stacks are 4 032 + 2 142 + 5 229 m3, so every custody attempt answered NATIVE_CARGO_FULL and the loot could never leave. A stack that does not fit now moves floor(free/volume) units and the remainder stays in the same wreck as a real native wreck item (allocated id recorded in the write-ahead journal and verified on settle); a hold that cannot fit one unit still answers NATIVE_CARGO_FULL. syncDirectory() skips the POSIX directory fsync on Windows, where the OS refuses to open a directory: the writer lock used to fail there and 19 custody tests could never run on this machine. The custody statuses that returned silently now publish living-npc-wreck-custody-skip (mode, distance, quantity, type) once per claim+status per 5 minutes.
+tests: node --test tests/coop-npc-wreck-custody.test.mjs tests/coop-npc-loot-commerce.test.mjs tests/coop-npc-wreck-claim-reconcile.test.mjs tests/coop-npc-native-wreck-recovery.test.mjs -> 54 pass / 0 fail
+overlay: OVERLAY_OK ; docker build + compose recreate OK
+live: inspect_npc 980000000601 -> moduleCount 1 (warp disruptor), cargoCount 0 ; wreck 980300000008 stacks measured type 1228 x26880 (4032 m3), 17463 x14280 (2142 m3), 17471 x52290 (5229 m3) vs hull capacity 120 m3 -> NATIVE_CARGO_FULL was the exact blocker
+metrics: tests_total=54 pass=54 fail=0 modules_added=0 modules_changed=2 live_events=0
+next: the killer must also stop holding its native attack order while its wreck is 2.5 AU away.
+
+## 2026-10-27T13:55Z - item 1c: the raid releases its own order when a claim owns the hull - 316539b4
+done: excluding the killer from new raid candidates was not enough: the director still held its lease and the native attack order, so the recovery director refused with NATIVE_COMBAT_ORDER_ACTIVE. releaseExcluded() releases exactly the leases this director issued (never a rival owner - the order bridge decides) and re-releases a hull the stock loop re-targets, at most every 15 s, publishing living-native-raid-release with the real outcome.
+tests: node --test tests/coop-native-raids-gameplay.test.mjs -> 28 pass / 0 fail
+overlay: deployed into the running container (the shared checkout was drifted by another session at that moment)
+live: {"event":"living-native-raid-release","systemID":30000145,"pirateID":980000000601,"reason":"WRECK_CLAIM_OWNS_HULL","leaseTargetID":980000016293,"released":true,"status":"RAID_ORDER_RELEASED_FOR_LOOT"}
+metrics: tests_total=28 pass=28 fail=0 modules_added=0 modules_changed=2 live_events=1
+next: recovery must issue the real warp to the restored wreck and custody must settle a partial stack.
+
+## 2026-10-27T14:05Z - OPS: the deploy itself was broken by a committed hook without an installed module - 3f9b6d8c
+done: HEAD carried npcBehaviorLoop -> ../coopMilitiaWarPlayer but coopMilitiaWarPlayer was not in the overlay install list, so every deploy refused with HOOK_REQUIRE_NOT_INSTALLED, the checkout could not be patched and the running server lost the co-op startup hook (no living world at all). One name in scripts/overlay-spec.cjs restores HOOK_REQUIRES_OK and coop-deploy reset=53 series=8 OVERLAY_OK.
+tests: node scripts/coop-hook-requires.cjs --checkout <Code> -> HOOK_REQUIRES_OK targets=1289 installed=375 stock=663
+overlay: OVERLAY_OK (reset=53 patches=series=8) ; docker build + compose recreate OK
+live: the living world is back (living-native-durable-slot 13:04:08Z) and the new claim phases ran in the same boot
+metrics: tests_total=0 pass=0 fail=0 modules_added=1 modules_changed=0 live_events=1
+next: catch the restore -> warp -> custody -> station -> seeded sale chain inside one boot.

@@ -2363,6 +2363,28 @@ function advanceNativeWreckRecovery(){
   if(!claims.length)continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
   const blockedIDs=new Set();
+  // A hull that owns a live claim must actually be able to fly to it. The stock
+  // behaviour loop re-acquires its old prey every tick, so the loot phase clears
+  // that unexecutable order itself and issues the wreck order in the SAME tick:
+  // a release that waits for the next tick is undone before it can be used.
+  if(typeof raidDirector?.releaseExcluded==="function"){
+   try{
+    const stale=claims.map(claim=>Number(claim.attackerEntityID)||0)
+     .filter(entityID=>{
+      if(!(entityID>0))return false;
+      const ctrl=controllers.getControllerByEntityID(entityID);
+      return String(ctrl?.manualOrder?.type||"").toLowerCase()==="attack"||
+       Number(ctrl?.currentTargetID)>0;
+     });
+    const released=stale.length?
+     raidDirector.releaseExcluded(stale,"WRECK_CLAIM_OWNS_HULL",{force:true}):[];
+    for(const row of released)
+     require("./coopRuntimeProbe").observe("living-native-raid-release",null,
+      {spaceState:{systemID}},{...row,status:row.released?
+       "RAID_ORDER_RELEASED_FOR_LOOT":"RAID_ORDER_RELEASE_REFUSED",
+       iskGranted:false});
+   }catch(_error){/* the refusal below still reports the exact state */}
+  }
   if(tacticsDirector)for(const id of tacticsDirector.activeIDs())blockedIDs.add(id);
   if(gateTravelDirector)for(const id of gateTravelDirector.activeIDs())blockedIDs.add(id);
   if(raidDirector)for(const id of raidDirector.activePirateIDs(sys=>
@@ -3570,7 +3592,16 @@ function advanceNativeRaids(){
   // releases exactly its own order for every hull a live claim now owns.
   if(wreckClaimOwners.size&&typeof raidDirector.releaseExcluded==="function"){
    try{
-    const released=raidDirector.releaseExcluded([...wreckClaimOwners],
+    // Only a hull that really still holds a native combat order is released
+    // again; an idle claim owner is left alone.
+    const stillFighting=[...wreckClaimOwners].filter(entityID=>{
+     try{
+      const ctrl=controllers.getControllerByEntityID(entityID);
+      return String(ctrl?.manualOrder?.type||"").toLowerCase()==="attack"||
+       Number(ctrl?.currentTargetID)>0;
+     }catch(_error){return false;}
+    });
+    const released=raidDirector.releaseExcluded(stillFighting,
      "WRECK_CLAIM_OWNS_HULL");
     for(const row of released)
      require("./coopRuntimeProbe").observe("living-native-raid-release",null,
