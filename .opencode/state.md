@@ -1690,3 +1690,64 @@ the levy can see it; then let the next sale (the hull is empty and loots again b
 1 200-unit trip) fund `warBountyReserve` for 500011, watch `living-native-war-opened` with `escrow:true`, and
 confirm `living-native-war-bounty` `PAID` on the next real casualty. Never mint ISK; the 10 332 already in
 1000129 is real money that simply belongs to the wrong faction's wallet.
+
+## 2026-10-27T14:30Z - FW-026/027: real doctrine fleets, a live Caldari/Gallente front, and the exact assault blocker
+
+**Proven live (container evejs-server-1, verbatim).**
+- Doctrine fleets spawn from real SDE profiles with authored rows:
+  `spawn_war_fleet 500001/30002780 merit 150` -> `size 5 counts {tackle:1,brawler:2,ewar:1,logistics:1}`,
+  fleet `coop-fleet-500001-0001`; `500004/30000140` -> `coop-fleet-500004-0016`.
+- Four different doctrines, four different hulls/module sets/charges:
+  `inspect_npc 980000020999` (Caldari Navy Moa, brawler) -> `moduleCount 6` = 4x typeID 568
+  (flags 27-30) + 527 (mid 19) + 2048 (low 11), cargo typeID 230 x60;
+  `980000021001` (Blackbird, EWAR) -> 2410x2 + 1969x2, charge 209 x40;
+  `980000021002` (Delta II, logi) -> 2404 + 3588x2, charge 210 x40;
+  `980000020998` (Condor, tackle) -> 564x2 + 3244 (warp disruptor), charge 222 x60.
+  All `transient:false`, corporation 1000035 (Caldari Navy).
+- A real front opened: `war:500001-500004` (attacker Gallente 500004, defender Caldari
+  500001), campaign `war:500001-500004:campaign:30045344` (Nennamaila) `PREPARING`,
+  territories `30003837=500004` (Aldranette) and `30045344=500001` (Nennamaila) -
+  a real reciprocal gate pair from the SDE scan (18 real Caldari/Gallente borders).
+- `militia_state 140000005` now lists `declaredWars: [war:500001-500004 campaign
+  30045344 PREPARING, war:500001-500011 campaign 30002780 PREPARING]`; `fronts: []`
+  because a front is only listed once its campaign is in `ASSAULT`.
+
+**Hull reality, measured, not dressed up.** Every navy/pirate combat profile in this
+build points at a category-11 NPC *entity* hull (278 Caldari/Gallente navy profiles,
+0 on a player hull; only CONCORD and ORE fly category-6 player hulls). Those hulls
+carry a real dogma record (65-86 attributes) but no slot attributes, so the native
+auto-fit uses its documented base flag list. The doctrine reports
+`hull.kind=ENTITY_HULL` and `slotMode=NATIVE_AUTOFIT_FALLBACK` instead of claiming
+slots the data does not have.
+
+**Three real opening defects found and fixed on the way (2cea1091).**
+1. two borders of one faction pair produced campaigns with opposite orientation ->
+   `CAMPAIGN_PREREQUISITES_NOT_MET` discarded the whole batch; campaigns now follow
+   the single war record's orientation;
+2. a second border naming an already-contested target aborted the batch; it is
+   skipped now;
+3. no pilot identity was free (100/100 linked), so a fleet hull could not be crewed:
+   `releaseSpawnedIdentity` + `release_identity`/`assign_identity` move an existing
+   identity between real hulls (proven: coop-pilot-001 and coop-pilot-063 reassigned).
+
+**EXACT next step (assault).** `BEGIN_ASSAULT` needs the mobiliser to assign one
+linked armed patrol per side of campaign `30045344`: coop-pilot-063 on
+980000022071 (Aldranette, attacker) and coop-pilot-001 on 980000022066
+(Nennamaila, defender) are already linked and armed. The current
+`war_diagnose` mobilisation section reports only the FIRST PREPARING campaign
+(the old pirate ones), so the next change is a per-campaign mobilisation diagnose
+(`war_diagnose {campaignID}`) plus, if a candidate is rejected, the real reason
+(ORDER_LEASE_ACTIVE / ALREADY_ASSIGNED / NOT_READY:...). Then `militia_state
+140000005` must list the campaign under `fronts`.
+
+**Reconstitution (unit-proven, live not yet).** 10 tests: survivors must be proved
+alive, replacements are adopted only from free native hulls in the staging system
+that no live fleet owns, a fleet with no real replacement is `REDUCED` with the
+missing roles listed, a loss needs a real native wreck and returns a `force-lost`
+merit event. Live proof needs one real loss (wreck) plus a real free hull in the
+staging system.
+
+**Known noise.** The admin requests file is not always truncated after a drain, so a
+queued request can execute again after a restart (16 fleet records exist, several are
+duplicates of the same doctrine in the same system; all are real hulls). Another
+session recreates the stack every ~1 minute, which interrupts probes.

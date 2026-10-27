@@ -398,4 +398,34 @@ tests: node --test tests/coop-npc-wreck-custody.test.mjs tests/coop-npc-loot-com
 overlay: OVERLAY_OK (reset=53 patches=series=8) ; docker build + compose recreate OK
 live: NATIVE_WRECK_CARGO_SETTLED 1200 units typeID 17471 wreckID 980300000010 remainder 75660 -> PHYSICALLY_AT_NATIVE_STATION 60014935 -> TRADE_SETTLED balance 10332 marketOrderSource EVEJS_SEED marketRPC FillOrder sourceOfFunds SEED_MARKET_FILLED_ORDER
 metrics: tests_total=82 pass=82 fail=0 modules_added=1 modules_changed=5 live_events=4
-next: the corp treasury sweep moved an Angel pilot 10332 ISK into corporation 1000129, so war_funding_diagnose reads NO_REAL_FACTION_INCOME; make the sweep respect the pilot own corporation, then fund 500011 and prove the escrow payout.
+next: the corp treasury sweep moved an Angel pilot 10332 ISK into corporation 1000129, so war_funding_diagnose reads NO_REAL_FACTION_INCOME; make the sweep respect the pilot own corporation, then fund 500011 and prove the escrow payout.## 2026-10-27T14:25Z - FW-026: real navy/pirate fleet doctrines + rank-driven composition - 03296c1f
+done: 6 empire doctrines (tackle/brawler/sniper/logi/ewar/heavy) + 3 pirate doctrines, each a real SDE profile with a fitting validated through the item registry, slot family and native charge compatibility; authored rows served by the single npcData loadout hook. Composition follows coopFactionWarMerit.command (1/2/3/5/8/14/25) and is role-complete.
+tests: node --test tests/coop-war-doctrine.test.mjs tests/coop-war-fleet-composition.test.mjs -> 17 pass / 0 fail
+overlay: OVERLAY_OK (moduleCurrent 378) ; docker build evejs-local + recreate OK
+live: probe-doctrine in container -> CATALOG 500001 OK 0 refused, CATALOG 500004 OK 0 refused, 500020 OK, 500011 PARTIAL (2 medium-projectile charge patterns wrong, fixed next commit); HOOK_ROW coop_war_doctrine_500001_brawler -> modules 568x4,527,2048 charges 230x60
+metrics: tests_total=17 pass=17 fail=0 modules_added=2 modules_changed=2 live_events=0
+next: fix Angel medium projectile charges, then spawn real fleets and inspect them live.
+
+## 2026-10-27T14:26Z - FW-027: durable war-fleet roster + honest reconstitution - f4fc7aed
+done: durable fleet record (real ships, doctrine rows, losses with wreck evidence); reconstitution plans only from proven-alive survivors plus free native hulls no live fleet owns; REDUCED_/NO_REAL_REPLACEMENT_AVAILABLE when nothing real exists; a loss returns a real force-lost merit event. Angel doctrine fixed to 220mm Vulcan AutoCannon I / 425mm AutoCannon I with EMP M.
+tests: node --test tests/coop-war-fleet-roster.test.mjs -> 10 pass / 0 fail
+overlay: OVERLAY_OK
+live: not run (no live probe this commit)
+metrics: tests_total=10 pass=10 fail=0 modules_added=1 modules_changed=1 live_events=0
+next: bridge actions to spawn a fleet and to record a real loss.
+
+## 2026-10-27T14:27Z - FW-027b: fleets spawn from doctrines and count as real presence - 0735afaa
+done: spawn_war_fleet composes+spawns a role-complete fleet and records it; war_fleet_state reports per-hull modules and real charge stacks; fleet_reconstitute records a loss only with a real native wreck; a real war fleet is presence too (fleetPresence authority merged into the war opening).
+tests: node --test coop-war-doctrine, coop-war-fleet-composition, coop-war-fleet-roster, coop-faction-war-opening -> 47 pass / 0 fail
+overlay: OVERLAY_OK ; docker build + recreate OK
+live: spawn_war_fleet 500001/30002780 merit150 -> size 5 counts {tackle:1,brawler:2,ewar:1,logistics:1} fleet coop-fleet-500001-0001 ; inspect_npc 980000020999 -> moduleCount 6 (4x568 flag27-30, 527 flag19, 2048 flag11) cargo 230 x60 ; 980000021001 -> 2410x2 + 1969x2, charge 209 x40 ; 980000021002 -> 2404 + 3588x2, charge 210 x40 ; 980000020998 -> 564x2 + 3244, charge 222 x60
+metrics: tests_total=47 pass=47 fail=0 modules_added=0 modules_changed=3 live_events=3
+next: open the Caldari/Gallente front; the opening refused with CAMPAIGN_PREREQUISITES_NOT_MET.
+
+## 2026-10-27T14:28Z - FW-027c: one war per pair, one campaign per target, identity reassignment - 2cea1091
+done: campaigns of one faction pair now follow the single war record's orientation; a second border naming an already-contested target is skipped instead of aborting the batch; releaseSpawnedIdentity + release_identity/assign_identity move a real pilot identity between real hulls (no ship or identity invented).
+tests: node --test tests/coop-faction-war-opening.test.mjs -> 18 pass / 0 fail
+overlay: OVERLAY_OK ; docker build + recreate OK
+live: release_identity coop-pilot-001 (980000020998) -> RELEASED, assign_identity -> LINKED 980000022066/30045344 ; release_identity coop-pilot-063 (980000018084) -> RELEASED, assign -> LINKED 980000022071/30003837 ; war_state -> wars include war:500001-500004 (500004 attacker, 500001 defender), campaign war:500001-500004:campaign:30045344 PREPARING, territories 30003837=500004 30045344=500001 ; militia_state 140000005 -> declaredWars [war:500001-500004 campaign 30045344 PREPARING, war:500001-500011 campaign 30002780 PREPARING], fronts []
+metrics: tests_total=18 pass=18 fail=0 modules_added=0 modules_changed=3 live_events=6
+next: BEGIN_ASSAULT needs the mobiliser to assign one linked armed patrol per side for campaign 30045344; the per-campaign diagnose currently reports only the first PREPARING campaign, so the exact next step is a per-campaign mobilization diagnose and then militia_state fronts.

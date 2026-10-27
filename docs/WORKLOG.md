@@ -1384,3 +1384,15 @@ Why: An unknown demand was cached for a whole refresh interval, so the governor 
 Detail: spawn_war_fleet composes a role-complete formation for the commander's real command cap, spawns every hull with its authored doctrine row through the same armed-patrol path, links only the commander identity, and records the fleet in the durable roster. war_fleet_state reports per-hull modules and real charge stacks. fleet_reconstitute records a loss ONLY with a real native wreck, then plans/commi
 Where: integration/coopAdminBridge.cjs, integration/coopFactionWarOpening.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarFleetRoster.cjs, tests/coop-faction-war-opening.test.mjs
 Evidence: live DEMAND_UNKNOWN 14:00:39 and 14:03:15 with booksKnown 0; governor 9/9 (new test: an unknown demand is re-measured within 16s)
+### 2026-10-27T13:34Z · 03296c1 · L2 · FW-026: real navy/pirate fleet doctrines and rank-driven composition
+
+Why: real navy/pirate fleet doctrines with validated fittings and rank-driven role-complete composition
+Detail: Six doctrines per empire faction (tackle, brawler, sniper, logistics, EWAR, heavy) and three per pirate faction, each a real SDE profile plus a fitting whose every module resolves in the item registry, declares a real slot family and carries a charge the native capability resolver accepts. The authored row is served through the single existing npcData loadout hook (coopWarPatrolLoadoutRow.resolveR
+Where: integration/coopWarDoctrine.cjs, integration/coopWarFleetComposition.cjs, integration/coopWarPatrolLoadoutRow.cjs, scripts/overlay-spec.cjs, tests/coop-war-doctrine.test.mjs, tests/coop-war-fleet-composition.test.mjs
+Evidence: tests 17/17; OVERLAY_OK; live doctrine catalog 500001 6/6 and 500004 6/6 resolved
+### 2026-10-27T14:16Z · 2cea109 · L2 · FW-027c: one war per pair, one campaign per target; identity reassignment
+
+Why: one war per faction pair and one campaign per target; identity reassignment between real hulls
+Detail: Three real opening defects found while trying to open the Caldari/Gallente front: 1. two borders of the SAME faction pair in one tick produced campaigns with opposite orientations, so the core refused START_CAMPAIGN with CAMPAIGN_PREREQUISITES_NOT_MET and the whole batch was discarded. Campaigns now follow the single war record's orientation (the edge is flipped). 2. a second border naming a targe
+Where: integration/coopAdminBridge.cjs, integration/coopFactionWarOpening.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-faction-war-opening.test.mjs
+Evidence: tests 18/18; OVERLAY_OK; live war:500001-500004 opened
