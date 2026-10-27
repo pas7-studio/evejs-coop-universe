@@ -1,5 +1,45 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 22:45Z - three real fixes landed, one measured blocker left
+
+PROVEN LIVE on `evejs-agents` (never on the owner's play stack):
+  - mining runs without any client: 32 living-mining-cycle-settled after the fix;
+  - the corporation really receives its pilots' ISK: living-corp-treasury-swept
+    movedISK 38 791 223.64 into corp 1000129 from coop-pilot-002 (ledger debit 0);
+  - the refinery pays its own station fee and commits: 4 living-npc-refined COMMITTED.
+
+Fixes landed (committed and pushed to origin/main):
+  1. OPS 669a4d13 + 6f096445 - EVEJS_DISABLE_NPC_COLD_SCENE_SLEEP=1 on the agents
+     stack. Evidence: the tick profiler showed ONLY overlay phases (npc-reconcile:*,
+     observed-native-mining) and no mining/npc section, i.e. scene.tick() never ran,
+     so no mining fix could ever fire in a world without a logged-in client.
+  2. L3 91ec5d93 + 22033e2f - integration/coopCorpWallet.cjs is now the single wallet
+     authority and prefers the native corporationRuntimeState (which bootstraps the
+     divisions) over a raw `/corporations/<id>/wallet` pointer. It verifies the write
+     by reading the balance back, so a no-op write is CORP_CREDIT_UNVERIFIED, never
+     'paid'. Before this the treasury answered CORP_WALLET_UNAVAILABLE while the pilot
+     ledger held 26 018 500 ISK.
+  3. L2 2609aae4 + 8c6a7ea0 - the haul approach: warp only beyond 150 km, otherwise a
+     real follow order, and publish WARPED_TO_MINER / WARP_REFUSED / FOLLOWING_MINER /
+     FOLLOW_REFUSED with the measured gap. Telemetry proved the old block: warp answered
+     WARP_DISTANCE_TOO_CLOSE at 24-90 km and the orbit fallback let the hull DRIFT AWAY
+     (57 km -> 90 km between two retries). Empty-haul budget 24 -> 120 waits (10 min).
+
+REMAINING BLOCKER (measured, not inferred) - the hauler cannot reach its miner:
+  admin bridge mining_fleet_diagnose (read-only) for 30000145 shows both fleets in
+  state hauling with miners in mode GOTO whose targetPoint is ~1.0e16 m from the
+  system origin (68 000 AU) while the ship itself is 2.5 AU out and only 54 km from
+  its nearest belt. The haulers therefore chase a nonsense point and the gap
+  oscillates (24-90 km). Mining and delivery worked in this world before the 21:30Z
+  restart, so the suspect is restored movement state: a ship comes back with
+  mode GOTO plus a stale target that every new orbit/follow order is refused against.
+  Next single step: in the fork (server code is ours since 2026-10-28), clear the
+  movement target on restore / refuse an absurd target (|target - position| > 1e9 m),
+  then prove living-hauler-loaded -> delivered -> refined -> mineral lift -> sale.
+
+Doctrine note: the overlay installer is legacy; new server behaviour goes into the
+fork C:\Games\EveCoop\upstream-evejs (branch coop/pas7std) as a commit, then build.
+
 ## 2026-10-27 21:50Z - where the loop really stands (fresh work-stack world)
 
 Fresh `evejs-agents` world (volumes reset, market reseeded jita_new_caldari, 445 096 rows) with

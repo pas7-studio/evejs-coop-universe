@@ -1663,3 +1663,8 @@ Why: Own the engine: pas7-studio/EveJS coop/pas7std at fork point c3ea396 import
 Detail: pas7-studio/EveJS (branch coop/pas7std, fork point c3ea396) becomes the source of truth for server code; this repo keeps tests, orchestration, evidence and doctrine. Revises D1 (overlay, not fork) after its own revisit trigger fired: 457 files / 73k lines already lived uncommitted in the pinned checkout, so the overlay model was only nominally true. Marks the 10 upstream patches as in-fork proposa
 Where: AGENTS.md, README.md, docs/DEVELOPMENT_DOCTRINE.md, docs/UPSTREAM_PATCH_SERIES.md, patches/upstream/MANIFEST.json
 Evidence: gh api repos/pas7-studio/EveJS default_branch=coop/pas7std; git -C checkout log: 154af54 import + docs commit; coop repo commit 40ce807c
+### 2026-10-27T22:43Z · e193364 · DOCS · docs(worklog): record the fork takeover (DOCS)
+
+Why: Recorded the three live-proven fixes and the one measured blocker with the exact admin-bridge evidence, so the next session fixes the real next cause instead of re-running the loop.
+Where: docs/WORKLOG.md
+Evidence: agents world: 32 cycles, treasury-swept 38 791 223.64 ISK, 4 refined COMMITTED; mining_fleet_diagnose targetPoint ~1.0e16 m vs 2.5 AU position, hauler gap 24-90 km oscillating
