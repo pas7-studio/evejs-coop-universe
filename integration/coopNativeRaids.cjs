@@ -23,11 +23,13 @@ const warping=e=>{const mode=String(e?.mode||"").toUpperCase();
 const holdsAttack=c=>String(c?.manualOrder?.type||"").toLowerCase()==="attack";
 function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=480000,
  approachVerifyMs=APPROACH_VERIFY_MS,attackNoLockMs=ATTACK_NO_LOCK_MS,
- releaseCooldownMs=RELEASE_COOLDOWN_MS,ensurePoint=null,preyScrambled=null}){
+ releaseCooldownMs=RELEASE_COOLDOWN_MS,ensurePoint=null,preyScrambled=null,
+ gunRange=null}){
  if(typeof warp!=="function"||typeof attack!=="function"||cooldownMs<60000)throw Error("invalid native raid API");
  if(release!==null&&typeof release!=="function")throw Error("invalid native raid release API");
  if(ensurePoint!==null&&typeof ensurePoint!=="function")throw Error("invalid native raid point API");
  if(preyScrambled!==null&&typeof preyScrambled!=="function")throw Error("invalid native raid scramble API");
+ if(gunRange!==null&&typeof gunRange!=="function")throw Error("invalid native raid gun range API");
  const leases=new Map();
  // One owner per record: only the director that issued an order may release it.
  function releaseOrder(pirateID,reason){
@@ -192,7 +194,7 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     x.id===old.targetID)||preferredHauler||nearestFirst[0];
    if(!target)continue;
    const distance=range(ship.position,target.ship.position);
-   let result,action,released=pendingRelease;
+   let result,action,released=pendingRelease,gun=null;
    if(distance>250000){
     // One owner per record: the hull's own previous attack order is released
     // BEFORE the approach. While it stands, the native behaviour loop keeps
@@ -203,7 +205,22 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
     result=warp(id,target.id,{forceImmediateStart:true});
     action="warp-to-hauler";
    }else{
-    result=attack(id,target.id,{allowWeapons:true,keepLock:true});
+    // The hull fights with the range its own fitted weapon really has. A raider
+    // parked at its behaviour profile's distance (measured: a blaster cruiser
+    // holding an attack order at 9 km and at 2.5 AU) can never hit with a gun
+    // whose own maxRange is a few kilometres, so the attack order carries the
+    // gun's own range as the hull's engagement distance: the stock loop then
+    // orbits at exactly that distance with weapons on. The number comes from the
+    // module/charge dogma the stock resolver reads, never from a constant here.
+    // A standalone manual `orbit` order is NOT used: it is not an attack intent,
+    // so the native NPC hostility invariant treats the prey as friendly and the
+    // loop clears the target (measured live: mode STOP, currentTargetID 0).
+    if(typeof gunRange==="function"){
+     try{gun=gunRange(ship)||null;}catch(_error){gun=null;}
+    }
+    const optimal=Number(gun&&gun.meters)||0;
+    result=attack(id,target.id,{allowWeapons:true,keepLock:true,
+     ...(optimal>0?{engagementRangeMeters:optimal}:{})});
     action="attack";
    }
    // A close attack is also where the real warp point is fitted and engaged: a
@@ -223,10 +240,10 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
    const retryMs=result?.success===true?
     (action==="attack"?Math.min(cooldownMs,60000):15000):60000;
    leases.set(key,{nextAt:now+retryMs,targetID:target.id,targetRole:target.role,
-    phase:action,issuedAtMs:now});
+    phase:action,issuedAtMs:now,engagementRangeMeters:Number(gun&&gun.meters)||0});
    if(result?.success===true)actions.push({pirateID:id,targetID:target.id,
     targetRole:target.role,action,distanceMeters:distance,
-    ...(released||{}),...(warpPoint?{warpPoint}:{})});
+    ...(gun?{gunRange:gun}:{}),...(released||{}),...(warpPoint?{warpPoint}:{})});
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
  }

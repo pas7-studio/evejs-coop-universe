@@ -1,4 +1,4 @@
-import test from "node:test";
+﻿import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
@@ -289,4 +289,47 @@ test("a warp approach never engages a point on prey it has not reached",()=>{
  const f=fixture({ensurePoint:()=>{calls+=1;return {status:"ENGAGED"};}});
  assert.equal(f.tick().actions[0].action,"warp-to-hauler");
  assert.equal(calls,0);
+});
+
+// FW-018: the attack is flown at the range the hull's own fitted weapon really
+// has. A raider parked at its behaviour profile's distance fires charges that
+// never reach, so the order carries the gun's own maxRange as the engagement
+// distance (the native `orbitDistanceMeters` override the stock loop orbits at).
+test("an attack carries the hull's own gun range as the engagement distance",()=>{
+ const orders=[];
+ const f=fixture({
+  gunRange:()=>({status:"RESOLVED",meters:1050,source:"maxRange",typeID:13884}),
+  attack:(id,targetID,options)=>{
+   orders.push([id,targetID,options.engagementRangeMeters,
+    options.allowWeapons===true,options.keepLock===true]);
+   f.controller.currentTargetID=targetID;
+   f.controller.manualOrder={type:"attack",targetID};
+   return {success:true};
+  }
+ });
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ const result=f.tick();
+ assert.deepEqual(result.actions.map(x=>x.action),["attack"]);
+ assert.deepEqual(orders,[[501,201,1050,true,true]]);
+ assert.equal(result.actions[0].gunRange.meters,1050);
+ assert.equal(result.actions[0].distanceMeters,10000);
+ assert.equal(f.releases.length,0);
+});
+
+test("a hull with no real gun range keeps the plain attack order",()=>{
+ const orders=[];
+ const f=fixture({
+  gunRange:()=>({status:"REFUSED",reason:"NO_FITTED_WEAPON_RANGE"}),
+  attack:(id,targetID,options)=>{
+   orders.push([id,targetID,options.engagementRangeMeters]);
+   f.controller.currentTargetID=targetID;
+   f.controller.manualOrder={type:"attack",targetID};
+   return {success:true};
+  }
+ });
+ f.tick();f.advance(15000);f.pirate.mode="STOP";f.pirate.position.x=290000;
+ const result=f.tick();
+ assert.deepEqual(result.actions.map(x=>x.action),["attack"]);
+ assert.deepEqual(orders,[[501,201,undefined]]);
+ assert.equal(result.actions[0].gunRange.reason,"NO_FITTED_WEAPON_RANGE");
 });

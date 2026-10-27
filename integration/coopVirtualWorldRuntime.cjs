@@ -1,6 +1,6 @@
 "use strict";
 // Optional background driver of virtual world; no NPC ships materialized.
-let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null,warpPointDirector=null;
+let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null,warpPointDirector=null,nativeGunRange=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
 // FW-013B: last published raid-diagnose shape per system (never every tick).
@@ -3069,8 +3069,32 @@ function advanceNativeRaids(){
   raidDirector=require("./coopNativeRaids").createRaids({
    warp:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"warp-to-prey",
     ()=>npc.warpToEntity(pirateID,targetID,options)),
-   attack:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"attack",
-    ()=>npc.issueAttackOrder(pirateID,targetID,options)),
+   attack:(pirateID,targetID,options)=>npcNativeOrder("RAID",pirateID,"attack",()=>{
+    // FW-018: the attack is flown at the hull's own gun range. `orbitDistanceMeters`
+    // is the native behaviour override the stock mining code itself uses to park a
+    // hull at its engagement distance, so the stock loop orbits at exactly this
+    // range with weapons on. A standalone manual `orbit` order would replace the
+    // attack intent and the native NPC hostility invariant would then treat the
+    // prey as friendly (measured live: target cleared, mode STOP, no fire).
+    const engagementRange=Number(options?.engagementRangeMeters)||0;
+    if(engagementRange>0){
+     try{
+      require("./npc/npcService").setBehaviorOverrides(pirateID,
+       {orbitDistanceMeters:engagementRange});
+     }catch(error){
+      require("./coopRuntimeProbe").observe("living-native-raid-engagement-range",
+       null,null,{status:"REFUSED",pirateID,
+        reason:String(error&&error.message||error).slice(0,80)});
+     }
+    }
+    return npc.issueAttackOrder(pirateID,targetID,options);
+   }),
+   // The range comes from the fitted module/charge dogma the stock resolver
+   // reads, never from a constant of ours.
+   gunRange:entity=>{
+    if(!nativeGunRange)nativeGunRange=require("./coopNpcGunRange");
+    return nativeGunRange.shared().rangeOf(entity);
+   },
    // One owner per record: only the raid director releases the order it issued.
    release:(pirateID,reason)=>npcNativeOrder("RAID",pirateID,"release-order",
     ()=>npc.resumeBehavior(pirateID)),

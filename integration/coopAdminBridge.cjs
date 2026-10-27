@@ -795,10 +795,19 @@ function executeRequest(request) {
       } catch (error) {
         warVerdict = { status: "THREW", reason: String(error && error.message || error).slice(0, 80) };
       }
+      // Read-only: the range the attacker's own fitted weapon really has in
+      // dogma. A raider parked outside its own gun range can never convert an
+      // attack order into damage, so the number the raid orbits at is measured.
+      let attackerGun = null;
+      try {
+        attackerGun = require("./coopNpcGunRange" + siblingSuffix).shared().rangeOf(shipA);
+      } catch (error) {
+        attackerGun = { status: "THREW", reason: String(error && error.message || error).slice(0, 80) };
+      }
       return {
         ok: true,
         attackerID, targetID,
-        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null, health: health(shipA) },
+        attacker: { systemID: Number(a?.systemID) || 0, inScene: Boolean(shipA), mode: String(shipA?.mode || ""), position: shipA?.position || null, health: health(shipA), gunRange: attackerGun },
         target: { systemID: Number(b?.systemID) || 0, inScene: Boolean(shipB), mode: String(shipB?.mode || ""), position: shipB?.position || null, health: health(shipB) },
         distanceMeters: distance,
         orderDiagnosis,
@@ -809,6 +818,18 @@ function executeRequest(request) {
           manualType: String(ctrl?.manualOrder?.type || ""),
           manualTargetID: Number(ctrl?.manualOrder?.targetID) || 0,
           allowWeapons: ctrl?.manualOrder?.allowWeapons !== false,
+          // A stock NPC that is beyond its own leash clears its combat state and
+          // flies home on every think, so an issued order can never become fire.
+          returningHome: ctrl?.returningHome === true,
+          leashRangeMeters: Number(ctrl?.behaviorProfile?.leashRangeMeters) || 0,
+          behaviorOverrides: ctrl?.behaviorOverrides || null,
+          homeDistanceMeters: (() => {
+            const home = ctrl?.homePosition;
+            if (!shipA || !home) return null;
+            return ["x", "y", "z"].every((k) => Number.isFinite(Number(home[k])) && Number.isFinite(shipA.position?.[k]))
+              ? Math.hypot(shipA.position.x - Number(home.x), shipA.position.y - Number(home.y), shipA.position.z - Number(home.z))
+              : null;
+          })(),
         },
         engagementAllowed: engagement,
         warVerdict,

@@ -51,6 +51,8 @@ names.splice(names.indexOf("coopWarPatrolLoadout")+1,0,"coopWarPatrolLoadoutRow"
 // FW-017: the real warp point a raider fits and engages on its prey, so a fleet
 // retreat cannot invalidate every attack order at 2.5 AU.
 names.splice(names.indexOf("coopNativeRaids")+1,0,"coopNpcWarpPoint");
+// FW-018: the raider's own gun range, read from the real module/charge dogma.
+names.splice(names.indexOf("coopNpcWarpPoint")+1,0,"coopNpcGunRange");
 // FW-005A: source-bound native corporation military wallet escrow, OFF by default.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarTreasury","coopWarTreasuryNative");
 // FW-007A: physical war-gate approach only, no native fleet transfer.
