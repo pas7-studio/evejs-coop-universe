@@ -105,6 +105,12 @@ names.splice(names.indexOf("coopFleetComposition")+1,0,"coopMiningFillCap");
 // Read-only: why a mining fleet is not at its belt, or why a loaded fleet never
 // leaves for a station (no warp, no order, no journal write).
 names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopMiningFleetDiagnose");
+// A miner stranded at the off-grid warp origin must really warp back to its rock
+// instead of following it at subwarp forever (default OFF).
+names.splice(names.indexOf("coopMiningFleetDiagnose")+1,0,"coopMiningBeltReturn");
+// A hauler flying an acknowledged station trip keeps it: a retreat must not drag
+// it back to the off-grid origin (default OFF).
+names.splice(names.indexOf("coopMiningBeltReturn")+1,0,"coopMiningTripRetreatGuard");
 // The cargo projection carries no volume; annotate it from SDE (default OFF).
 names.splice(names.indexOf("coopMiningFillCap")+1,0,"coopCargoVolume");
 // Guarded telemetry used by the restart-resilience modules.
@@ -306,6 +312,18 @@ const specs=[
    line:'      require("../../space/coopMiningTrace").note("NO_MINING_MODULE",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0)});'},
   {anchor:"    if (!primarySnapshot) {",after:true,
    line:'      require("../../space/coopMiningTrace").note("NO_MINING_SNAPSHOT",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),moduleTypeID:toInt(miningModules[0].moduleItem&&miningModules[0].moduleItem.typeID,0)});'},
+  {anchor:"  for (const entityID of entityIDs) {\n    if (!npcService.getControllerByEntityID(entityID)) {\n      continue;\n    }",
+   after:true,
+   // A hauler flying an acknowledged station trip is not the retreat's to move:
+   // pulling it home destroys a live route and strands the fleet in "loaded".
+   line:'    if (require("../../space/coopMiningTripRetreatGuard").skip(fleetRecord, entityID)) { continue; }'},
+  {anchor:"    if (distanceToTarget > engagementRangeMeters) {",
+   // A miner out of range is only ever told to FOLLOW its rock, i.e. to cross the
+   // distance at subwarp speed. After a retreat the fleet sits 2-4 AU from the belt,
+   // so that order can never arrive (measured 448 793 611 732 m against an 11 500 m
+   // engagement range for hours). The hook issues the same native warp the fleet
+   // already uses for its own warp-in; default OFF.
+   line:'      if (require("../../space/coopMiningBeltReturn").ensure(scene, fleetRecord, minerEntity, targetEntity, {orbitDistanceMeters, engagementRangeMeters, now, ingressDurationMs: Math.max(250, toFiniteNumber(config.miningNpcWarpIngressDurationMs, DEFAULT_MINING_WARP_INGRESS_DURATION_MS)), warp: (shipID, point, warpOptions) => npcService.runtime.warpToPoint(shipID, point, warpOptions)})) continue;'},
   {anchor:"    if (distanceToTarget > engagementRangeMeters) {",after:true,
    line:'      require("../../space/coopMiningTrace").note("TARGET_OUT_OF_RANGE",{fleetID:toInt(fleetRecord&&fleetRecord.fleetID,0),systemID:toInt(scene&&scene.systemID,0),minerID:toInt(minerEntity.itemID,0),distanceMeters:Math.round(distanceToTarget),engagementMeters:Math.round(engagementRangeMeters)});'},
   {anchor:"    if (!targetLockResult || targetLockResult.success !== true) {",after:true,

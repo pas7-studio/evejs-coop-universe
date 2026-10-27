@@ -92,6 +92,10 @@ function createMiningFleetDiagnose({
     const position = vec(entity?.position);
     const station = trip ? vec(trip.stationPosition) : null;
     const effects = entity?.activeModuleEffects instanceof Map ? entity.activeModuleEffects.size : -1;
+    const gap = position && station
+      ? Math.max(0, distance(position, station) - Math.max(0, Number(entity?.radius) || 0) -
+        Math.max(0, Number(trip.stationRadius) || 0))
+      : null;
     return {
       entityID,
       inScene: Boolean(entity),
@@ -105,6 +109,12 @@ function createMiningFleetDiagnose({
       distanceToOriginAnchorMeters: position && vec(trip?.originAnchorPosition)
         ? meters(distance(position, vec(trip.originAnchorPosition))) : null,
       distanceToStationMeters: position && station ? meters(distance(position, station)) : null,
+      // The station-arrival gate accepts a hull only inside 2 500 m of surface, so
+      // the gap it measures is reported here instead of being guessed.
+      surfaceGapToStationMeters: meters(gap),
+      stationRadiusMeters: trip ? Number(trip.stationRadius) || 0 : null,
+      shipRadiusMeters: Number(entity?.radius) || 0,
+      tripArrivedAtMs: trip && trip.arrivals ? Number(trip.arrivals[entityID]) || 0 : null,
       activeModuleEffects: effects,
       controller: controller ? {
         currentTargetID: pos(controller.currentTargetID),
@@ -185,6 +195,12 @@ function createMiningFleetDiagnose({
         needsOperatorRepair: raw.coopStationTripNeedsOperatorRepair === true ||
           fleet.coopStationTripNeedsOperatorRepair === true,
         stationPosition: vec(station?.position),
+        stationRadius: Math.max(0, Number(station?.radius) || 0),
+        // When each hauler's dwell clock started, so a stuck arrival is visible.
+        arrivals: raw.haulers && typeof raw.haulers === "object"
+          ? Object.fromEntries(Object.entries(raw.haulers)
+            .map(([id, record]) => [pos(id), Number(record && record.arrivedAt) || 0]))
+          : {},
       };
     }
     const anchor = fleet.originAnchor && typeof fleet.originAnchor === "object" ? fleet.originAnchor : null;
