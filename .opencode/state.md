@@ -2180,3 +2180,16 @@ fails if the memo line disappears from patch 0009 again.
 
 FW TAB: STUB_IN_THIS_BUILD (client lists warzone systems and colours them itself).
 Do not promise it; use the map campaign layer + front chat lines instead.
+
+## PATCH SERIES IS DRIFTED — must be repaired before the next L1 patch
+
+`apply-all` now reports: applied=0, alreadyPresent=7, drifted=0004, 0009, 0010.
+0009/0010 fail at their hunk because patch 0001 (same file, nativeNpcStore.js) is
+applied first and changes the context. Until the series is regenerated in order,
+the perf fix is applied by the idempotent local script
+(reapply-0009.cjs + fix-add-line.cjs) and patch 0009 in the repo no longer matches
+the tree. Repair plan for a fresh session:
+  1. git checkout the checkout to the pinned base,
+  2. apply 0001..0010 strictly in order with `git apply --directory=Code`,
+  3. regenerate any patch whose context moved, update MANIFEST sha256,
+  4. assert tests/coop-native-npc-store-patch.test.mjs and the guard in CI-less run.
