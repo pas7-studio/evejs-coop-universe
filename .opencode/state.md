@@ -1524,3 +1524,75 @@ by an ANGEL hull (601 coop-pilot-060, corp 1000138) so 500011 earns real ISK fro
 recovery -> seeded sale path that already paid 500020 27 121.5 ISK. Then
 `war_funding_diagnose` must show both 500011 and 500020 funded and the opening must reserve
 25 000 ISK before START_CAMPAIGN; a real casualty then pays the bounty from HELD escrow.
+
+## 2026-10-27T13:16Z - FW-024: militia enlistment PROVEN live; the melee is blocked by one missing data row (1abc629a)
+
+**Proven live (container evejs-server-1, verbatim).**
+- `militia_enlist` 140000102 / agent 3012018 ->
+  `"[Militia] Enlistment recorded for Caldari State. No items or ISK granted."`
+  with `{"characterID":140000102,"factionID":500001,"status":"ACTIVE","rank":0,
+  "enlistedAt":1793106715078,"cooldownUntil":0}`. Same code path the client
+  calls (`coopFactionWarAgent.doAction`), real docked character, real agent.
+- `militia_state` 140000102 -> `MILITIA_AVAILABLE`, faction 500001 Caldari State,
+  `militiaCorporationID 1000180`, `warzone 2`, `enemyFactionIDs [500004]`,
+  `fronts []` (no ASSAULT campaign yet).
+- `war_state` -> territories 2 (Jita 500011, Niyabainen 500014), wars 1
+  (`war:500011-500014`), campaigns 0.
+
+**Owner's faction, from his own record (not from a message):**
+`characters.140000005` Sasunok1488, raceID 1, bloodlineID 2, corporationID
+98000001, `factionID 500001` Caldari State; militiaCorporationID 1000180; the
+game's own pairing (`fwWarzoneSolarsystemService.js`, WARZONE_CALDARI_GALLENTE=2)
+makes Gallente 500004 the enemy. Nearest real desk: agent 3010879 "Okamainen
+Niuranto", station 60000358 Perimeter VI - Ytiri Storage, 1 jump from Jita.
+
+**What is implemented (all data-gated, all tested):**
+1. `EVEJS_COOP_MILITIA_FACTION_IDS='500001,500002,500003,500004,500010,500011'`
+   - exactly the factions whose SDE row has a real militiaCorporationID.
+   Serpentis 500020 and ORE 500014 are `null` and can never recruit.
+2. `coopMilitiaWarData`: opponent = declared war first, else the game warzone
+   pairing; drift test against the deployed service source.
+3. `coopMilitiaWarPlayer`: `ENEMY_MILITIA` only for an ACTIVE enlistment in the
+   opposing side of an ACTIVE war whose campaign is ASSAULT in that system;
+   `ALLY` for his own faction; `NOT_WAR_SHIP` for every hull outside the war
+   registry, so stock pirates keep their behaviour.
+4. `npcBehaviorLoop.isFriendlyCombatTarget` hook: an NPC war ship treats his own
+   faction and uninvolved players as friendly (never fires), and only an enlisted
+   enemy as engageable.
+5. `coopWarBattleDirector`: a war ship with no NPC opponent in range issues a real
+   native attack order at an enlisted enemy player (`targetKind MILITIA_PLAYER`).
+6. `coopNpcDestructionAttacker`: a player hull as the upstream `attackerEntity`
+   is proven (registered war ship of the opposing side + physical wreck + ACTIVE
+   enlistment) and pays merit to `coop-player-<characterID>` in the same durable
+   ledger as NPC kills (identity regex widened in the ledger and rank titles).
+7. `EVEJS_COOP_WAR_REQUIRE_FUNDING=0` in the live profile: an explicit, labelled
+   `PAPER_UNFUNDED_EXPLICIT` supply (no ISK reserved, no bounty payable). Default
+   stays 1.
+
+**NEEDS_OWNER:BLOCKED_NO_ARMED_NAVY_LOADOUT (exact, measured).** A Caldari vs
+Gallente front needs armed navy patrols, and the static tables cannot arm them:
+`0/146` Caldari (500001) and `0/132` Gallente (500004) profiles have any loadout
+row - every one resolves to `retail_empty_npc_entity_loadout` - and authoring a
+co-op row from an existing base fails with `NO_COMPATIBLE_CHARGE`
+(weaponTypeID 16128, CONCORD row) or `BASE_LOADOUT_ROW_MISSING` (trig rows are not
+in the `readStaticRows` table). `spawn_native_npc` therefore refuses with
+`WAR_PATROL_LOADOUT_UNAVAILABLE:LOADOUT_ROW_MISSING`. No hull was spawned and no
+gate was relaxed.
+
+**NEXT ACTION (exact).** Author ONE real navy loadout per hull class (a real
+turret from the SDE hardware catalog + a real charge that
+`isNpcChargeCompatibleWithModule` accepts, validated by
+`validateNpcHardwareDefinition`), expose it through the `npcLoadouts` resolver
+the same way `coopWarPatrolLoadoutRow.resolveRow` is exposed, then:
+1. `spawn_native_npc` a Caldari patrol in 30002780 (already in
+   `EVEJS_COOP_VIRTUAL_ROUTE`) and 2 Gallente patrols in Maurasi 30000140
+   (real reciprocal gate 30002780 <-> 30000140) with `warPatrol:true,durable:true`;
+2. wait for `living-native-war-opened` `war:500001-500004` with the
+   `PAPER_UNFUNDED_EXPLICIT` label, then `living-native-war-assault`;
+3. `militia_state 140000005` must list that campaign under `fronts`;
+4. client check: the owner docks at 60000358, enlists with 3010879, jumps to the
+   campaign system and the enemy patrol issues a `MILITIA_PLAYER` attack order.
+
+**Known noise.** `coop-admin-requests.jsonl` is not always truncated after a
+drain, so a request can execute twice; the second enlistment is a DUPLICATE and
+changes nothing.

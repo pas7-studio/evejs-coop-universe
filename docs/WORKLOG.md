@@ -1319,3 +1319,27 @@ Why: a committed hook required a module that was never installed, so every deplo
 Detail: HEAD carried a committed hook (npcBehaviorLoop -> ../coopMilitiaWarPlayer) whose module was never added to the install list, so every deploy refused with HOOK_REQUIRE_NOT_INSTALLED and the checkout could not be patched at all (the running server lost the co-op startup hook and the whole living world stopped). One name in scripts/overlay-spec.cjs restores HOOK_REQUIRES_OK targets=1289.
 Where: scripts/overlay-spec.cjs
 Evidence: HOOK_REQUIRES_OK targets=1289 installed=375, coop-deploy reset=53 series=8 OVERLAY_OK
+### 2026-10-27T13:13Z · 1abc629 · L2 · FW-024c: enlistment is provable without a client, and the character's own faction is resolved
+
+Why: FW-024: militia enlistment enabled for every faction with a real militia corporation, character faction resolved from its own record, and an in-process proof action
+Detail: coopAdminBridge gains two actions: - militia_state (read-only): resolves the character's faction from its own record, the militia corporation from the faction record, the enemy from the declared war or the game's warzone pairing, and reports the live enlistment and merit rows. - militia_enlist: writes through the SAME coopFactionWarAgent.doAction the client calls, requires the character to be real
+Where: integration/coopAdminBridge.cjs, integration/coopMilitiaWarData.cjs, scripts/overlay-spec.cjs
+Evidence: militia_enlist 140000102/3012018 -> ACTIVE enlistment 500001; militia_state -> MILITIA_AVAILABLE enemy 500004; tests 24/24 + 67/67; OVERLAY_OK
+### 2026-10-27T12:56Z · 8bea602 · L2 · FW-024a: the player's own faction and its real enemy come from the data
+
+Why: FW-024a: player's own faction and its real enemy derived from character/faction/warzone data
+Detail: His character is characters.140000005 Sasunok1488: raceID 1 (Caldari), factionID 500001 Caldari State, whose militiaCorporationID is 1000180 and whose game-defined wartime opponent is Gallente 500004 (fwWarzoneSolarsystemService WARZONE_CALDARI_GALLENTE = 2). The allowlist now carries every faction that really has a militia corporation (500001,500002,500003,500004,500010,500011); Serpentis 500020 
+Where: docs/MILITIA_ENLISTMENT.md, integration/coopMilitiaWarData.cjs, integration/coopMilitiaWarPlayer.cjs, tests/coop-militia-war-data.test.mjs, tests/coop-militia-war-player.test.mjs
+Evidence: coopMilitiaWarData + coopMilitiaWarPlayer tests 24/24
+### 2026-10-27T13:01Z · 8806541 · L2 · FW-024b: the melee - enemy NPCs engage the enlisted player, own faction never does, player kills earn merit
+
+Why: FW-024b: enemy war ships engage the enlisted player, own faction never does, player kills earn merit, explicit unfunded-supply opt-out
+Detail: Three hooks, each gated by real data: 1. npcBehaviorLoop.isFriendlyCombatTarget (overlay-spec): for a PLAYER target the verdict comes from coopMilitiaWarPlayer. His own faction and uninvolved players are friendly (never fired on); only an ACTIVE enlistment in the opposing side of an ACTIVE war whose campaign is in ASSAULT in this system is engageable; a hull outside the war registry keeps stock be
+Where: integration/coopFactionWarOpening.cjs, integration/coopNpcDestructionAttacker.cjs, integration/coopWarBattleDirector.cjs, integration/coopWarMeritLedger.cjs, integration/coopWarRankTitle.cjs, scripts/overlay-spec.cjs, tests/coop-faction-war-opening.test.mjs, tests/coop-war-battle-director.test.mjs
+Evidence: battle director + destruction attacker + merit tests 67/67; OVERLAY_OK
+### 2026-10-27T12:48Z · 67b9864 · L2 · FW-024: enable militia enlistment for the one faction the SDE really allows
+
+Why: FW-024: militia allowlist enabled from measured SDE militia corporations
+Detail: Measured against the live SDE, not assumed: Angel Cartel 500011 carries militiaCorporationID 1000436 and 193 agents docked at real stations (agent 3010015 Edilkam Silera, station 60012235, G-0Q86 30001041). Serpentis 500020 and ORE 500014 have militiaCorporationID null, so the agent gate can never accept them; adding them to the allowlist would change nothing. EVEJS_COOP_MILITIA_FACTION_IDS='50001
+Where: docs/MILITIA_ENLISTMENT.md, tests/coop-faction-war-agent.test.mjs
+Evidence: tests 7/7; SDE probe 500011 militiaCorp 1000436
