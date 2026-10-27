@@ -6,7 +6,7 @@
 const positive=x=>{const n=Number(x);return Number.isSafeInteger(n)&&n>0?n:null};
 const validShip=(ship,id)=>Boolean(ship&&ship.kind==="ship"&&
  ship.nativeNpc===true&&positive(ship.itemID)===id);
-function restoreNamedShips({registry,store,service,sceneForSystem,lostShips=[],maxLinks=100}={}){
+function restoreNamedShips({registry,store,service,sceneForSystem,lostShips=[],maxLinks=100,allowRelocation=false}={}){
  if(typeof registry?.snapshot!=="function"||typeof store?.getNativeEntity!=="function"||
   typeof store?.getNativeController!=="function"||
   typeof service?.materializeStoredNativeController!=="function"||
@@ -51,26 +51,53 @@ function restoreNamedShips({registry,store,service,sceneForSystem,lostShips=[],m
    continue;
   }
   if(positive(entity.entityID)!==id||positive(controller.entityID)!==id||
-   positive(entity.systemID)!==systemID||positive(controller.systemID)!==systemID||
-   entity.nativeNpc!==true){
+   entity.nativeNpc!==true||positive(entity.systemID)!==positive(controller.systemID)){
    stats.errors.push({pilotID,entityID:id,reason:"NATIVE_RECORD_IDENTITY_CONFLICT"});
    continue;
   }
+  // The durable record owns the ship's own location; the identity link is the
+  // derived index. A record whose entity and controller agree with each other
+  // but not with the link is a STALE LINK (the hull really relocated), not a
+  // second ship and not a licence to steal another pilot's record. It may only
+  // be reconciled when an operator opts in, and only through the registry's own
+  // precondition-checked relocate(), which persists the new system afterwards.
+  const recordSystemID=positive(entity.systemID);
+  let destination=systemID;
+  if(recordSystemID!==systemID){
+   if(allowRelocation!==true){
+    stats.errors.push({pilotID,entityID:id,reason:"NATIVE_RECORD_IDENTITY_CONFLICT"});
+    continue;
+   }
+   if(typeof registry?.relocate!=="function"){
+    stats.errors.push({pilotID,entityID:id,reason:"NATIVE_RECORD_RELOCATION_UNSUPPORTED"});
+    continue;
+   }
+   destination=recordSystemID;
+  }
   try{
-   const scene=sceneForSystem(systemID);
-   if(!scene||positive(scene.systemID)!==systemID||
+   const scene=sceneForSystem(destination);
+   if(!scene||positive(scene.systemID)!==destination||
     typeof scene.getEntityByID!=="function")
     throw Error("DESTINATION_NATIVE_SCENE_NOT_READY");
    const current=scene.getEntityByID(id);
    if(current){
     if(!validShip(current,id))throw Error("ENTITY_ID_OCCUPIED_BY_FOREIGN_SHIP");
     stats.alreadyPhysical++;
-    continue;
+   }else{
+    const result=service.materializeStoredNativeController(scene,id,{broadcast:false});
+    if(result?.success!==true||!validShip(scene.getEntityByID(id),id))
+     throw Error(String(result?.errorMsg||"NATIVE_RESTORE_NOT_PHYSICAL").slice(0,100));
+    stats.recovered++;
    }
-   const result=service.materializeStoredNativeController(scene,id,{broadcast:false});
-   if(result?.success!==true||!validShip(scene.getEntityByID(id),id))
-    throw Error(String(result?.errorMsg||"NATIVE_RESTORE_NOT_PHYSICAL").slice(0,100));
-   stats.recovered++;
+   if(destination!==systemID){
+    const moved=registry.relocate(pilotID,systemID,id,destination);
+    if(moved?.status!=="RELOCATED"){
+     stats.errors.push({pilotID,entityID:id,
+      reason:"NATIVE_RECORD_RELOCATION_REFUSED:"+String(moved?.status||"UNKNOWN")});
+     continue;
+    }
+    stats.relocated=(Number(stats.relocated)||0)+1;
+   }
   }catch(error){
    stats.errors.push({pilotID,entityID:id,
     reason:String(error?.message||error).slice(0,120)});

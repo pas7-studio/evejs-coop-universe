@@ -145,3 +145,41 @@ test("stale previous wreck cannot erase a newer persistent ship with same native
  assert.equal(r.errors[0].reason,"DURABLE_NATIVE_RECORD_MISSING");
  assert.equal(r.confirmedLosses,0);
 });
+
+test("a relocated hull is restored in its own durable system only with the operator flag",()=>{
+ const x=fixture();
+ const destination=30000142;
+ x.entity.systemID=destination;x.controller.systemID=destination;
+ const moved=[];x.deps.registry.relocate=(pilotID,from,id,to)=>{
+  moved.push([pilotID,from,id,to]);
+  assert.equal(from,x.link.systemID);assert.equal(to,destination);
+  return {status:"RELOCATED",pilotID,systemID:to,entityID:id};
+ };
+ const destScene={systemID:destination,getEntityByID:id=>x.ships.get(id)||null};
+ x.deps.sceneForSystem=system=>system===destination?destScene:null;
+ x.deps.service={materializeStoredNativeController:(sc,id)=>{assert.equal(sc,destScene);x.ships.set(id,{itemID:id,kind:"ship",nativeNpc:true});return {success:true};}};
+ // Without the flag the mismatch still fails closed and nothing is materialized.
+ const blocked=restoreNamedShips(x.deps);
+ assert.equal(blocked.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(blocked.errors[0].reason,"NATIVE_RECORD_IDENTITY_CONFLICT");
+ assert.equal(x.getCalls(),0);
+ assert.equal(moved.length,0);
+ const r=restoreNamedShips({...x.deps,allowRelocation:true});
+ assert.equal(r.status,"OK");
+ assert.equal(r.recovered,1);
+ assert.equal(r.relocated,1);
+ assert.deepEqual(moved,[[x.link.pilotID,x.link.systemID,x.link.entityID,destination]]);
+});
+
+test("a relocation the registry refuses is reported, never silently accepted",()=>{
+ const x=fixture();
+ x.entity.systemID=30000142;x.controller.systemID=30000142;
+ x.deps.registry.relocate=()=>({status:"STALE_SOURCE"});
+ const dest2={systemID:30000142,getEntityByID:id=>x.ships.get(id)||null};
+ x.deps.sceneForSystem=system=>system===30000142?dest2:null;
+ x.deps.service={materializeStoredNativeController:(sc,id)=>{x.ships.set(id,{itemID:id,kind:"ship",nativeNpc:true});return {success:true};}};
+ const r=restoreNamedShips({...x.deps,allowRelocation:true});
+ assert.equal(r.status,"NEEDS_OPERATOR_REPAIR");
+ assert.equal(r.errors[0].reason,"NATIVE_RECORD_RELOCATION_REFUSED:STALE_SOURCE");
+});
+

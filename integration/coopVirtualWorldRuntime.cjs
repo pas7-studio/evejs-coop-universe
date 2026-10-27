@@ -3604,13 +3604,18 @@ function observeSession(session,ship){
              runtime.ensureScene(id,{refreshStargates:false}),
             store:require("./npc/nativeNpcStore"),
             service:require("./npc/nativeNpcService"),
-            lostShips:Object.values(life?.snapshot()?.wrecks||{})
+            lostShips:Object.values(life?.snapshot()?.wrecks||{}),
+            // A hull whose durable record really relocated leaves a stale link
+            // behind. Only an explicit operator flag may reconcile it, and only
+            // after the same native ship is physical in the record's system.
+            allowRelocation:process.env.EVEJS_COOP_DURABLE_RELOCATE_RESTORE==="1"
           });
           require("./coopRuntimeProbe").observe("living-native-durable-recovery",null,null,
            {status:recovered.status,recovered:recovered.recovered,
             alreadyPhysical:recovered.alreadyPhysical,
             legacyTransient:recovered.legacyTransient,
             confirmedLosses:recovered.confirmedLosses,
+            relocated:Number(recovered.relocated)||0,
             errors:recovered.errors});
           if(recovered.status!=="OK")
            throw Error("DURABLE_NPC_RECOVERY_REQUIRES_REPAIR: "+JSON.stringify(recovered.errors).slice(0,210));
