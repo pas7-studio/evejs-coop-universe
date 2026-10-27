@@ -962,3 +962,39 @@ really kill a miner: repeated living-native-weapon-event, measured HP loss, a
 real wreck with stored loot, living-native-war-casualty, and merit. The 30000145
 fleet must leave "aggressed" first (auto-resume 120 s after the last aggression,
 and only when its response wing is gone) - esumeInMs/esponseWing say which.
+
+## 2026-10-27 - ITEM 2 blocked exactly: the raid holds an order it cannot fly
+
+Measured, verbatim, read-only:
+
+```
+{"ok":true,"attackerID":980000018058,"targetID":980000016311,
+ "distanceMeters":373994639646.8543,
+ "attacker":{"systemID":30000145,"inScene":true,"mode":"GOTO"},
+ "target":{"systemID":30000145,"inScene":true,"mode":"ORBIT"},
+ "controller":{"currentTargetID":0,"manualType":"attack","manualTargetID":980000016311,
+ "allowWeapons":true},"engagementAllowed":true}
+```
+
+2.5 AU apart, the attacker in GOTO (a "warp" that never became a warp), the order
+still held. The fleet side:
+
+```
+{"fleet":960004641,"state":"aggressed","resumeInMs":92113,"responseWing":0,
+ "lastAggressedAtMs":1793088751229,"miners":13,"atBelt":0}
+```
+
+esponseWing 0 and esumeAtMs set (the new stock auto-resume knob), but the
+aggression clock is re-armed every couple of minutes, so the fleet never returns to
+mining; coopMiningBeltReturn only runs in the mining branch, so its 13 miners
+stay 2.4e11 m off the belt and nothing can be shot.
+
+**NEXT ACTION (exact).** In integration/coopNativeRaids.cjs (the distance >
+250000 branch that issues warp-to-hauler): after the native warp call, verify the
+hull is really warping (mode WARP / sessionlessWarpIngress) and not in GOTO; when it
+is not, release the order (no attack lease) and publish
+RAID_APPROACH_UNFLYABLE:<distanceMeters>. The fleet then leaves "aggressed", the
+belt return flies the miners home, and the next raid at the belt is the one that can
+convert into damage. Then: wreck -> stored loot -> New Caldari 30000145 seeded sale
+-> Serpentis 500020 real income -> warBountyReserve -> war 500011-500020 opens
+with SUPPLY_UNFUNDED resolved -> escrow PAYOUT to the named pilot.

@@ -108,3 +108,43 @@ If the client cannot be started, report `BLOCKED_CLIENT_UNAVAILABLE` with the
 exact launcher error. If the map shows no campaign while the server state has
 one, capture the client log and the `coop-events.jsonl` window; that is a real
 projection bug to fix, not a reason to fake a screenshot.
+
+## Refresh 2026-10-27 08:15Z - a real mining fleet mines again; the raid geometry is the open item
+
+**Proven server-side since the last refresh (all read-only probes, verbatim in
+.opencode/state.md):**
+- fleet 960004609 in Perimeter 30000144 is state=mining with ct=13
+  (13 of 13 miners carry 2 live module effects) and all 13 within 200 km of a real
+  belt; living-mining-cycle-settled really raises the ore
+  (
+extCargo 1874 -> 3748, eforeRock 228126 -> afterRock 226252).
+- The delivery leg completes: living-native-haul-delivered DELIVERED twice, and
+  the deposit gate now explains any refusal by name (detail.term).
+- An aggressed stock fleet now resumes after 120 s
+  (EVEJS_MINING_NPC_FLEET_AUTO_RESUME_DELAY_MS, a real stock knob).
+- war_funding_diagnose: ORE 500014 FUNDED (coop-pilot-001 183 400 ISK); Angel
+  500011 and Serpentis 500020 both REFUSED:NO_REAL_FACTION_INCOME, so
+  living-native-war-opening-blocked still reports
+  SUPPLY_UNFUNDED:500011:...|500020:... and ronts:0.
+
+**Open server item (not a client problem):** the raid in New Caldari 30000145
+holds an attack order it cannot execute. 
+pc_pair_diagnose 980000018058 ->
+980000016311 reports distanceMeters 373994639646 (2.5 AU) with the attacker in
+mode:GOTO, and the fleet's aggression clock keeps being re-armed
+(lastAggressedAtMs 08:12:31, esumeInMs 92113, esponseWing 0), so the fleet
+never returns to mining and coopMiningBeltReturn never flies its 13 miners
+(0 of 13 at a belt) back. Fix direction: the raid director must refuse or release
+an approach the native controller cannot fly (a "warp" that lands in GOTO) and
+publish the reason; the fleet then resumes, the belt return runs, and the next
+raid at the belt is the one that can really fire.
+
+### Human steps (unchanged, still the only way to prove the client half)
+
+1. Launch the client once (client_launch), log the first character in, and stay
+   in Perimeter 30000144 so the working mining fleet is on grid.
+2. Second character in the same system; both must be able to see the same named
+   NPCs (living-native-* names) and the same fleet.
+3. Report what the map campaign layer and the FW front tab show; the server
+   projection is EVEJS_COOP_WAR_CLIENT_VIEW=1.
+4. Nothing in this document claims any of that is client-verified.
