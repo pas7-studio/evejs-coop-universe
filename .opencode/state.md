@@ -1614,3 +1614,55 @@ no bounty can be paid (`PAPER_UNFUNDED_EXPLICIT`). Default remains strict (1).
 `militia_state 140000005` still reports `fronts: []` because no campaign involves
 Caldari State 500001 - the Caldari/Gallente front is blocked by the navy loadout
 gap recorded below, not by funding.
+
+## 2026-10-27T13:32Z - ITEM 1 CLOSED (live): kill -> loot picked up -> real seeded sale, and item 2's exact blocker measured
+
+**Proven live, verbatim, container evejs-server-1 (the whole loot leg, no ISK minted).**
+
+```
+{"at":"2026-10-27T13:15:09.456Z","event":"living-npc-wreck-cargo-settled","status":"NATIVE_WRECK_CARGO_SETTLED",
+ "itemID":980400000027,"cargoID":980200031908,"entityID":980000000601,"wreckID":980300000010,
+ "typeID":17471,"quantity":1200,"partial":true,"sourceBeforeQuantity":76860,
+ "remainder":{"itemID":980400000030,"quantity":75660},
+ "nativeSourceDebited":true,"nativeCargoCredited":true,"iskCredited":false}
+{"at":"2026-10-27T13:23:46.378Z","event":"living-npc-loot-station","nativeMovementOrders":[
+ {"pilotID":"coop-pilot-060","entityID":980000000601,"stationID":60014935,"action":"NATIVE_WARP_TO_STATION",
+  "cargoIDs":[980200031908],"iskCredited":false}]}
+{"at":"2026-10-27T13:24:13.981Z","event":"living-npc-loot-station","physicallyReady":[
+ {"pilotID":"coop-pilot-060","entityID":980000000601,"stationID":60014935,"status":"PHYSICALLY_AT_NATIVE_STATION"}]}
+{"at":"2026-10-27T13:24:14.929Z","event":"living-native-loot-market-settled","status":"TRADE_SETTLED","side":"sell",
+ "pilotID":"coop-pilot-060","entityID":980000000601,"stationID":60014935,"typeID":17471,"quantity":1200,
+ "price":8.61,"balance":10332,"marketOrderID":"4257762183096583231","marketOrderSource":"EVEJS_SEED",
+ "marketRPC":"FillOrder","lootSource":{"sourceWreckItemID":980400000027,"sourceWreckID":980300000010},
+ "sourceOfFunds":"SEED_MARKET_FILLED_ORDER","marketCurrency":"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"}
+```
+
+**Four measured blockers were fixed to get there** (each proven by a live event before the next):
+1. `c8a69b63` the physical wreck never survives a restart, so a claim is now either restored from its own
+   durable row through stock `spawnNativeWreck` (`living-npc-wreck-claim-restored`, wreck 980300000008 with
+   3 stacks / 93 450 units) or closed with the measured reason (`living-npc-wreck-claim-closed`,
+   wreck 980300000009 `WRECK_HAS_NO_STORED_ITEMS` `CLAIM_CLOSED`). A claim-driven 5 s loop loots in the same boot.
+2. `3f290ab4` the killer's hold is 120 m3 while the wreck stacks are 4 032 / 2 142 / 5 229 m3, so custody
+   answered `NATIVE_CARGO_FULL` forever. A stack that does not fit now moves what fits and leaves a real
+   remainder wreck item (above: 1 200 moved, 75 660 remain as 980400000030). The Windows-only writer-lock
+   failure (directory fsync) is fixed too, so 19 custody tests finally run on this machine.
+3. `316539b4` / `507934af` the raid kept its own attack order on the hull (prey 980000016293, 2.5 AU away) and
+   the stock loop re-acquired it, so the recovery refused `NATIVE_COMBAT_ORDER_ACTIVE`. The loot phase now
+   releases and orders in the same tick (`living-native-raid-release` `RAID_ORDER_RELEASED_FOR_LOOT`).
+4. `217ec980` a full hold must deliver before taking more; the recovery lease was starving the delivery leg.
+
+**ITEM 2's exact blocker, measured (not inferred).** The Angel pilot really earned 10 332 ISK, and the
+corporation treasury sweep then moved it into **corporation 1000129 (ORE)**:
+`/var/lib/evejs/coop-native-market/corp-treasury/1000129.json` ->
+`{"status":"SWEPT","corporationID":1000129,"amountISK":10332,"beforeISK":346627.03,"afterISK":356959.03,
+"pilots":[{"pilotID":"coop-pilot-060","isk":10332}]}`, and `ledger.json` now shows `coop-pilot-060 balance 0`.
+`war_funding_diagnose` therefore reports `NO_REAL_FACTION_INCOME` for 500011/500014/500020 (it reads pilot
+balances only), and the war opening stays `NO_OPENABLE_FRONT` even though `fronts: 3` and both sides are armed.
+
+**NEXT ACTION (exact, one change).** Make the treasury sweep respect the pilot's own corporation
+(`coopNpcCorpTreasury.run({pilotFilter})` + the refinery tick's `fundTreasury` passing a filter built from the
+linked native entity's `corporationID`), so an Angel sale stays in the Angel pilot's ledger (or in 1000138) and
+the levy can see it; then let the next sale (the hull is empty and loots again by itself, ~10 332 ISK per
+1 200-unit trip) fund `warBountyReserve` for 500011, watch `living-native-war-opened` with `escrow:true`, and
+confirm `living-native-war-bounty` `PAID` on the next real casualty. Never mint ISK; the 10 332 already in
+1000129 is real money that simply belongs to the wrong faction's wallet.
