@@ -340,3 +340,60 @@ author a real loadout through the catalog or record it as a stock data gap in
 **Also still open:** queue items 6 (NPC careers), 7 (courier economy), 8
 (industry/salvage loop), 9 (two-client checklist); owner backlog items 1-3
 (sovereignty projection, shipcaster logistics, player ranks).
+
+## 2026-10-27 — NPC fitting root cause FOUND (exact), fix needs an override seam
+
+**Root cause (verified, no guessing).** `npcData.buildNpcDefinition(profileID)`
+takes the loadout straight from the profile row (`profileRow.loadoutID`), and
+every pirate *subcapital* profile points at
+`retail_empty_npc_entity_loadout` — a documented stock row with
+`modules: [], charges: []` ("Retail NPC Entity Native Dogma": retail NPC stats
+live on the type dogma record, not on fitted modules). Measured in the live
+container:
+
+```
+PROFILE angel_raider                     loadoutID retail_empty_npc_entity_loadout modules 0 charges 0
+PROFILE parity_angel_autocannon_frigate   loadoutID retail_empty_npc_entity_loadout modules 0 charges 0
+PROFILE blood_raider_prophecy             loadoutID retail_empty_npc_entity_loadout modules 0 charges 0
+PROFILE ore_mining_venture                loadoutID ore_mining_venture_dual_miner      modules 1 charges 0
+PROFILE concord_police_cruiser            loadoutID concord_medium_beam_laser_cruiser_mwd modules 2 charges 1
+```
+
+So `coopWarMusterReadiness` is correct and stock is correct; the two never meet
+for pirate subcaps.
+
+**Profiles that DO carry a real, validating weapon+charge (existing data only):**
+- `capital_angel_dreadnought` / `capital_serpentis_dreadnought` / ... (each pirate
+  faction's capital) — 1 module + 1 charge, `validateNpcHardwareDefinition` -> ok;
+- CONCORD (17 profiles, faction 500006);
+- Triglavian (28 profiles, faction 500026).
+
+Every pirate *frigate/cruiser/battleship* has zero modules. There is no
+subcapital pirate loadout anywhere in the static tables.
+
+**Two honest fixes (both keep coopWarMusterReadiness untouched):**
+
+1. **L1 seam (recommended, real patrols).** Add an explicit loadout override to
+   the spawn path (`buildNpcDefinition(profileID, {loadoutID})` or
+   `spawnBatchInSystem(..., {loadoutID})`) as a pinned
+   `patches/upstream/NNN-npc-loadout-override.patch` + MANIFEST entry, then author
+   ONE coop war-patrol loadout (a real turret + a real compatible charge) in the
+   coop layer and spawn war patrols with it. Small diff, reversible, keeps retail
+   behaviour when the option is absent.
+2. **Existing-data-only (no patch, semantically weak).** Use a pirate capital
+   (`capital_angel_dreadnought`) as the armed hull, which already has a real
+   loadout — but a dreadnought labelled `role:"patrol"` is a misleading label and
+   needs a 10-ship world flip to give a fightable border (Jita's neighbours are
+   all ORE-owned; ORE has 11 profiles, all miners, and no capital).
+
+Nothing was changed this step: no patch, no flag, no gate relaxation.
+
+**NEXT ACTION (exact):** implement option 1. Start at
+`server/src/space/npc/npcData.js:459 buildNpcDefinition(profileID)` and
+`nativeNpcService.js:430 buildNativeModuleRecords` (reads
+`definition.loadout.modules`); thread an optional `loadoutID` through
+`npcSelection.resolveNpcSpawnPlan` -> `spawnBatchInSystem`, add the patch +
+`patches/upstream/MANIFEST.json` entry, then `node scripts/apply-upstream-patches.cjs
+--checkout <Code> --apply`. Live proof required: `inspect_npc <patrol>` shows
+`moduleCount>0` with a weapon+charge, then `war_diagnose` shows
+`DRY_RUN_MOBILIZABLE` on both sides, then `living-native-war-assault` fires.

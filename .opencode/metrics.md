@@ -80,3 +80,11 @@ overlay: OVERLAY_OK (unchanged)
 live: not run (documentation only)
 metrics: tests_total=not run modules_added=0 modules_changed=0 live_events=0
 next: fix NPC authored loadout so BEGIN_ASSAULT can fire (state.md NEXT ACTION), then owner backlog item 1 (sovereignty projection)
+
+## 2026-10-27T01:05Z - NPC fitting root cause (diagnosis only, no code change) - next commit
+done: proved why no patrol can pass the muster gate: every pirate subcapital profile points at retail_empty_npc_entity_loadout (modules 0, charges 0); only capitals, CONCORD and Triglavian profiles carry a real validating weapon+charge. coopWarMusterReadiness untouched.
+tests: not run (read-only diagnosis)
+overlay: OVERLAY_OK (unchanged)
+live: probe in container -> PROFILE angel_raider loadoutID retail_empty_npc_entity_loadout modules 0 charges 0 ; PROFILE concord_police_cruiser modules 2 charges 1 ; DEF capital_angel_dreadnought modules=1 charges=1 valid {"ok":true,"family":"angelcartel"}
+metrics: tests_total=not run modules_added=0 modules_changed=0 live_events=0
+next: L1 seam - optional loadoutID override in buildNpcDefinition/spawnBatchInSystem as a pinned patch + MANIFEST, then one coop war-patrol loadout (real turret + compatible charge); live proof = inspect_npc moduleCount>0 then war_diagnose DRY_RUN_MOBILIZABLE on both sides then living-native-war-assault
