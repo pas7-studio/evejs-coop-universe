@@ -266,3 +266,19 @@ overlay: OVERLAY_OK
 live: RAID_ORDER_RELEASED_FOR_APPROACH 980000000602 distanceMeters 373994659694 then living-pirate-raid attack 10162 m (980000000601) and 8882 m (980000018058) - the pirates reach the prey instead of flying home ; npc_pair_diagnose 980000016472 health 146.45 -> 225.00 shield over 5 min (real missile hits, then full regeneration) ; 0 wrecks in 30000145
 metrics: tests_total=45 pass=45 fail=0 modules_added=0 modules_changed=2 live_events=4
 next: NEEDS_OWNER:BLOCKED_RETREAT_INVALIDATES_EVERY_ORDER - the stock retreat teleports the whole fleet 2.5 AU on the first aggression, the native loop then clears the attacker's manualOrder (currentTargetID 0 within seconds), and shield regeneration outpaces the delivered DPS; a kill needs real warp disruption on the raider or a retreat that a close-range live attack order can prevent (see state.md)
+
+## 2026-10-27T09:50Z - item 1: a real warp point on the raider, and a scramble that reads back (3c46dbb3)
+done: L1 0008 fixes the stock scramble verdict (the passive hull baseline -2 was returned instead of the live effect sum, so a fitted Warp Disruptor on a Venture still read as unscrambled); L2 coopNpcWarpPoint verifies a real group-52 module through the registry/dogma/native auto-fit, fits it as a real native module record and activates it with the same activateGenericModule call the stock hostile loop makes; the raid no longer releases an attack order on a prey that really reads back as scrambled, and every attack action carries the point outcome (refusal included, with hostileModules/lockCount/preyScrambleStatus).
+tests: node --test tests/coop-npc-warp-point.test.mjs -> 10/0 ; warp-point+raids+loadout-override+admin-bridge-war-patrol -> 41/0
+overlay: OVERLAY_OK (reset=53 patches=series=8)
+live: inspect_npc 980000000602 -> {"modules":[{"moduleID":980100060463,"categoryID":7,"typeID":3244,"flagID":19,"online":true}]} (a real Warp Disruptor II in a real mid slot); living-native-warp-point-refused 980000018058 -> 980000016472 at 9357 m reason TARGET_NOT_LOCKED hostileModules 2 preyScrambleStatus -2 (the native runtime's own verdict, published verbatim); the same pair really fires: living-native-weapon-event missile-launch 09:37:07Z
+metrics: tests_total=41 pass=41 fail=0 modules_added=1 modules_changed=2 live_events=9
+next: item 2 - wait for the first ENGAGED (prey really scrambled at 1-3 km), then sustained fire to a real wreck, stored loot, casualty ledger and merit.
+
+## 2026-10-27T10:12Z - item 1 CLOSED (real point engages, prey really scrambled) - 2fba2807
+done: L1 0008 (live scramble verdict) + L1 0006 extension (an NPC hull is now really checked before it warps) + OPS fix (the L1 series silently did not apply to Code/ before) + L2 coopNpcWarpPoint (real group-52 module, real native module record, real activateGenericModule) + raid keeps a pinned order + the retreat publishes its own scramble verdict.
+tests: node --test tests/coop-mining-retreat-held.test.mjs tests/coop-npc-warp-point.test.mjs tests/coop-native-raids-gameplay.test.mjs -> 34/0
+overlay: OVERLAY_OK (reset=53 patches=series=8)
+live: living-native-warp-point-engaged status ENGAGED alreadyScrambled true for 980000018058, 980000000601 and 980000000602 on the same miner 980000016052 at 10:01:16Z (the first time a real warp disruptor made a real hull read as scrambled); inspect_npc 980000000602 -> moduleID 980100060463 typeID 3244 flagID 19 online true; before the fix the same hull read preyScrambleStatus -2 while the point was active.
+metrics: tests_total=34 pass=34 fail=0 modules_added=1 modules_changed=3 live_events=6
+next: item 2 - keep the attacker FIRING on a held prey. Evidence at 10:06: 980000000601 sits 1393 m from 980000016052 with a full shield (6890/6890) and no launch since 09:53:20Z, while 980000018058 (5 blasters, 300 real charges) holds an attack order 2.5 AU away. The prey is held, the DPS is the missing piece.

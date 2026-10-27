@@ -1063,3 +1063,48 @@ Verified buyers (read-only `GetOrders`, region 10000002, `source: seed`):
 20767 62 839 ISK at 60000682 (New Caldari), 482 571 211 ISK at 60000688,
 13773 3 083 304 ISK at 60000682, 17464 15.48 ISK at 60000688 - the
 `NO_SEEDED_COUNTERPARTY` note is stale for these types.
+
+## 2026-10-27 (FW-017) - item 1 CLOSED: a real warp point really scrambles a real hull (3c46dbb3, 7efd3e82, 2fba2807)
+
+**The old blocker is gone.** `BLOCKED_RETREAT_INVALIDATES_EVERY_ORDER` had two stock
+causes, both measured, both now fixed as L1:
+
+1. `hostileModuleRuntime.getEntityWarpScrambleStatus` returned the hull's PASSIVE
+   `warpScrambleStatus` baseline (-2 on retail hulls) and never the live effect sum,
+   so `isEntityWarpScrambled` was permanently false for any hull that carries the
+   attribute: a fitted Warp Disruptor II on a Venture read back -2 (live
+   `preyScrambleStatus:-2` in every refused attempt).
+2. `runtime.warpToEntity/warpToPoint` resolved the command ship with
+   `getShipEntityForSession`, which only understands a SESSION. The native NPC loops
+   command by ENTITY ID, so `isShipWarpDisabledByRuntime` and
+   `isEntityWarpScrambled` both saw no ship and an NPC hull warped while really held.
+
+Both are patched (`0008-warp-scramble-live-effects`, `0006` extended). **Ops bug
+found and fixed on the way:** `git -C <Code> apply` resolved the patched path
+against the upstream repo root and silently SKIPPED it (exit 0), so a coop-deploy
+reset left managed files unpatched while the applier printed a healthy series;
+`apply-upstream-patches` now applies from the root with `--directory=Code`.
+
+**Live proof (10:01:16Z).** `living-native-warp-point-engaged status ENGAGED
+alreadyScrambled true` for 980000018058, 980000000601 and 980000000602 on the same
+miner 980000016052 - the first time a real warp disruptor made a real hull read as
+scrambled in this world. `inspect_npc 980000000602` -> `moduleID 980100060463,
+typeID 3244 (Warp Disruptor II), flagID 19, online true`, written through
+`nativeNpcStore` (real native module record, real mid slot from the native auto-fit).
+
+**NEXT ACTION (exact, item 2).** The prey is now holdable; the missing piece is
+SUSTAINED DAMAGE on a held prey. Measured at 10:06Z: 980000000601 sits **1 393 m**
+from 980000016052 with a FULL shield (6890/6890) and no launch since 09:53:20Z,
+while 980000018058 (5 blasters, 300 real charges, the only deep ammo bank) holds an
+attack order **2.5 AU** away at the belt. Two concrete things to check next, in
+this order:
+1. `coopNpcWeaponAmmoGate` / `nativeAmmoSupply` for 980000000601: it fires a
+   hull-effect missile (chargeTypeID 213) and launched exactly 3 times, then
+   stopped - if the gate is blocking it, the raid must prefer the hull with a real
+   ammo bank (980000018058) instead of the nearest hull.
+2. Why 980000018058 does not close from 9 225 m to blaster optimal: it keeps an
+   attack order but its mode is GOTO back to the belt after the prey moves; the
+   `attackNoLockMs` release + re-approach cycle is the thing to tighten (keep the
+   order while the prey is pinned, which is already implemented via
+   `preyScrambled`, and make sure the lease is not released while pinned).
+Do NOT script damage, do not touch distance constants, do not mint ISK.

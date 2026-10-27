@@ -1150,3 +1150,9 @@ Why: Sale proceeds landed only in the pilot ledger while the corporation that ow
 Detail: The NPC market credits a PILOT ledger, so after three live sales the fleet's pilots held 98 402 ISK while the owning corporation's wallet stayed at 0 - and the refinery's real station fee (measured 4 998 / 12 806 / 14 996 / 21 501 / 22 760 / 23 760 ISK per stack) could therefore never be paid. The ore is the corporation's, so the proceeds belong to the corporation. integration/coopNpcCorpTreasury.
 Where: integration/coopNpcCorpTreasury.cjs, scripts/overlay-spec.cjs, tests/coop-npc-corp-treasury.test.mjs
 Evidence: tests coop-npc-corp-treasury 5 pass; live pilots 98402 ISK vs corp wallet 0, refinery fees 4998..23760 ISK
+### 2026-10-27T10:07Z · 2fba280 · L2 · FW-017b: publish the retreat's own scramble verdict
+
+Why: the stock mining-fleet retreat discards its warp result, so a hull really held by a warp point was indistinguishable from a hull that retreated
+Detail: The stock mining-fleet retreat discards its warp result, so a fleet whose hulls are really held by a warp point looked exactly like a fleet that retreated. The guard now reads the same gate the stock warp uses (isEntityWarpScrambled) for every hull in the retreat and publishes living-mining-retreat-held with the per-hull status. Observation only: it never moves, orders or decides anything, and it 
+Where: integration/coopMiningTripRetreatGuard.cjs, tests/coop-mining-retreat-held.test.mjs
+Evidence: live living-native-warp-point-engaged ENGAGED alreadyScrambled true on 980000016052 for three pirates; tests 34/0; OVERLAY_OK series=8
