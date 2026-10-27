@@ -62,6 +62,9 @@ names.splice(names.indexOf("coopWarRecoverySocket")+1,0,"coopWarDemobilizer");
 names.splice(names.indexOf("coopWarDemobilizer")+1,0,"coopWarCasualtyLedger");
 // FW-009B: durable war merit paid only from a strictly proven native kill.
 names.splice(names.indexOf("coopWarCasualtyLedger")+1,0,"coopWarMeritLedger","coopWarKillMerit");
+// FW-005B/C: a war chest funded only from real earned income, plus the bounty
+// that releases HELD escrow to the pilot who really earned it.
+names.splice(names.indexOf("coopWarTreasuryNative")+1,0,"coopWarChestFunding","coopWarBounty");
 // FW-003D: a battle-line hull with no compatible charge left releases its slot.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarBattleLineRelief");
 // FW-009B: source-gated real structure objectives; no GM/admin damage hook.

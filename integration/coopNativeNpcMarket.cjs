@@ -47,6 +47,64 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
    !Number.isSafeInteger(a.tradeCount)||a.tradeCount<0)throw Error("NPC_MARKET_ACCOUNT_INVALID");
   return a;
  };
+ // FW-005B: the earned-ISK ledger is the only real ISK an NPC owns. A faction
+ // levy (negative) and a war bounty (positive) are transfers of that same
+ // value, never new ISK, so they must be exactly-once and must never be lost to
+ // the in-memory copy a trade would otherwise write back.
+ const adjustmentsFile=path.join(root,"adjustments.json");
+ function readAdjustments(){
+  try{
+   const state=JSON.parse(fs.readFileSync(adjustmentsFile,"utf8"));
+   if(state?.version!==1||!state.applied||typeof state.applied!=="object"||
+    Array.isArray(state.applied))throw Error("NPC_MARKET_ADJUSTMENTS_INVALID");
+   return state;
+  }catch(e){
+   if(e.code==="ENOENT")return {version:1,applied:{}};
+   throw e;
+  }
+ }
+ function reloadLedger(){
+  let next;
+  try{next=JSON.parse(fs.readFileSync(ledgerFile,"utf8"));}
+  catch(e){
+   if(e.code!=="ENOENT")throw e;
+   next={version:1,pilots:{}};
+  }
+  if(next?.version!==1||!next.pilots||typeof next.pilots!=="object")
+   throw Error("NPC_MARKET_LEDGER_INVALID");
+  ledger=next;
+ }
+ function adjustEarned({pilotID,cents:delta,eventID,reason=""}={}){
+  if(!pilotName(pilotID)||!Number.isSafeInteger(delta)||delta===0||
+   !Number.isSafeInteger(clock()))return {status:"INVALID_ADJUSTMENT"};
+  const id=typeof eventID==="string"&&/^[A-Za-z0-9][A-Za-z0-9._:-]{0,95}$/.test(eventID)?
+   eventID:"";
+  if(!id)return {status:"INVALID_ADJUSTMENT"};
+  if(!fs.existsSync(path.dirname(adjustmentsFile)))
+   fs.mkdirSync(path.dirname(adjustmentsFile),{recursive:true});
+  const applied=readAdjustments(),prior=applied.applied[id];
+  if(prior)return prior.pilotID===pilotID&&prior.cents===delta?
+   {status:"DUPLICATE",receipt:prior}:
+   {status:"ADJUSTMENT_CONFLICT",eventID:id};
+  // Re-read before every change: a market trade writes the whole ledger from
+  // memory, so a stale copy must never overwrite a real levy or bounty.
+  reloadLedger();
+  const before=account(pilotID).balance;
+  const afterCents=Math.round(before*100)+delta;
+  if(afterCents<0)return {status:"INSUFFICIENT_EARNED_ISK",pilotID,
+   balanceCents:Math.round(before*100)};
+  const after=afterCents/100;
+  const current=ledger.pilots[pilotID]||{balance:0,lastTradeAt:0,tradeCount:0};
+  ledger.pilots[pilotID]={...current,balance:after,
+   lastTradeAt:Number.isFinite(current.lastTradeAt)?current.lastTradeAt:0,
+   tradeCount:Number.isSafeInteger(current.tradeCount)?current.tradeCount:0};
+  atomic(ledgerFile,ledger);
+  const receipt={pilotID,cents:delta,before,after,at:clock(),
+   reason:String(reason||"").slice(0,80)};
+  applied.applied[id]=receipt;
+  atomic(adjustmentsFile,applied);
+  return {status:"APPLIED",receipt};
+ }
  function sameCargo(now,before,after){
   if(now===null)return after===0;
   return Number(now.quantity)===before||Number(now.quantity)===after;
@@ -361,6 +419,6 @@ function createNpcMarketTrader({call,store,registry,getStation,resolveType,scene
     reason:String(error?.message||error).slice(0,120)};
   }finally{active.delete(pre.pilotID);}
  }
- return {offer,execute,recover,snapshot:()=>copy(ledger)};
+ return {offer,execute,recover,adjustEarned,snapshot:()=>copy(ledger)};
 }
 module.exports={createNpcMarketTrader};

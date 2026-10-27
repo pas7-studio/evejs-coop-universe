@@ -247,7 +247,7 @@ function planWars({
 
 // Applies every planned opening through the authoritative core, reusing an
 // already declared war for the same faction pair.
-function applyOpenings({ state, plan, nowMs } = {}) {
+function applyOpenings({ state, plan, nowMs, reserveBounty, persistState } = {}) {
   if (!plan || plan.status !== "READY") return refuse("PLAN_NOT_READY");
   const at = num(nowMs) > 0 ? num(nowMs) : Date.now();
   let current = state;
@@ -279,15 +279,36 @@ function applyOpenings({ state, plan, nowMs } = {}) {
           systemID, ownerFactionID,
         }, proofs);
       }
+      let supplyReservationID = "paper-supply:" + campaign.campaignID;
+      let stepProofs = proofs, realReservation = null;
+      // FW-005B: a campaign is only funded by real escrow, and the reservation is
+      // taken BEFORE the campaign exists (the treasury refuses an existing one).
+      if (typeof reserveBounty === "function") {
+        const reserved = reserveBounty({
+          war: current.wars[war.warID], campaign, warID: war.warID,
+          campaignID: campaign.campaignID, state: current,
+          persist: () => { if (typeof persistState === "function") persistState(current); },
+        });
+        if (reserved.status !== "RESERVED")
+          throw Object.assign(Error("WAR_SUPPLY_UNFUNDED:" + reserved.reason), {
+            reason: "SUPPLY_UNFUNDED:" + String(reserved.reason || "UNKNOWN"),
+          });
+        supplyReservationID = reserved.reservationID;
+        realReservation = reserved;
+        fundings.push(Object.assign({ status: "FUNDED", paper: false, escrow: true },
+          reserved));
+        // The supply proof is now the real HELD escrow this faction funded.
+        stepProofs = Object.assign({}, proofs, { supply: () => true });
+      }
       step({
         type: "START_CAMPAIGN", eventID: "open:" + campaign.campaignID + ":start",
         campaignID: campaign.campaignID, warID: war.warID,
         sourceSystemID: campaign.sourceSystemID, targetSystemID: campaign.targetSystemID,
-        supplyReservationID: "paper-supply:" + campaign.campaignID,
-      }, proofs);
+        supplyReservationID,
+      }, stepProofs);
       if (!warIDs.includes(war.warID)) warIDs.push(war.warID);
       campaignIDs.push(campaign.campaignID);
-      fundings.push(opening.funding);
+      if (!realReservation) fundings.push(opening.funding);
     }
     return { status: "OPENED", state: current, warIDs, campaignIDs, applied, fundings };
   } catch (error) {
@@ -297,10 +318,10 @@ function applyOpenings({ state, plan, nowMs } = {}) {
 
 // Single-opening convenience used by the assault tests and by callers that only
 // care about the first front.
-function applyOpening({ state, plan, nowMs } = {}) {
+function applyOpening({ state, plan, nowMs, reserveBounty, persistState } = {}) {
   if (!plan || plan.status !== "READY" || !Array.isArray(plan.openings) || plan.openings.length !== 1)
     return refuse("PLAN_NOT_READY");
-  const result = applyOpenings({ state, plan, nowMs });
+  const result = applyOpenings({ state, plan, nowMs, reserveBounty, persistState });
   if (result.status !== "OPENED") return result;
   return Object.assign({}, result, {
     warID: result.warIDs[0],
@@ -312,6 +333,7 @@ function applyOpening({ state, plan, nowMs } = {}) {
 function createWarOpening({
   readLinks, getNativeEntity, getFactionForCorporation,
   getStargatesForSystem, getGate, readWarState, writeWarState,
+  reserveBounty = null,
   minShips = 1, balanceISK = 0, maxOpenings = 4,
   now = () => Date.now(), maxLinks = MAX_LINKS,
 } = {}) {
@@ -339,7 +361,8 @@ function createWarOpening({
       });
       if (plan.status !== "READY")
         return { status: "NO_OPENING", reason: plan.reason || "PLAN_REFUSED", plan };
-      const opened = applyOpenings({ state, plan, nowMs: num(now()) });
+      const opened = applyOpenings({ state, plan, nowMs: num(now()),
+        reserveBounty, persistState: writeWarState });
       if (opened.status !== "OPENED") return opened;
       writeWarState(opened.state);
       return {

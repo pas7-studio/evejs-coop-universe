@@ -28,15 +28,19 @@ function validate(s){
  for(const [id,r] of Object.entries(s.reservations)){
   if(!key(id)||r?.reservationID!==id||!pos(r.corporationID)||
    !pos(r.factionID)||!key(r.warID)||!key(r.campaignID)||
-   !pos(r.cents)||!["HELD","REFUNDED"].includes(r.status))
+   !pos(r.cents)||!["HELD","REFUNDED","PAID"].includes(r.status))
    throw Error("WAR_TREASURY_CORRUPT_RESERVATION");
+   // A PAID row is the proof that escrowed value left the chest for a named
+   // pilot; without the whole proof the row is not a settlement.
+   if(r.status==="PAID"&&(!pos(r.paidAt)||!pos(r.paidToPilotID)||!key(r.payoutProofID)))
+    throw Error("WAR_TREASURY_CORRUPT_PAYOUT");
  }
  return s;
 }
 function createWarTreasury({gameStore,verifyCorporation,authorizeRefund,
- clock=()=>Date.now(),env=process.env}={}){
+ authorizePayout=()=>false,clock=()=>Date.now(),env=process.env}={}){
  if(typeof gameStore?.coopAtomicNativeRows?.transact!=="function"||
-  [verifyCorporation,authorizeRefund,clock].some(x=>typeof x!=="function"))
+  [verifyCorporation,authorizeRefund,authorizePayout,clock].some(x=>typeof x!=="function"))
   throw Error("WAR_TREASURY_AUTHORITIES_REQUIRED");
  const enabled=()=>env.EVEJS_COOP_FACTION_WAR==="1"&&
   env.EVEJS_COOP_WAR_TREASURY==="1"&&env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1";
@@ -50,7 +54,7 @@ function createWarTreasury({gameStore,verifyCorporation,authorizeRefund,
   if(!enabled())return {status:"DISABLED"};
   if(busy)return {status:"BLOCKED",reason:"WAR_TREASURY_REENTRANT"};
   if(!command||!key(command.eventID)||
-   !["RESERVE","REFUND"].includes(command.type))
+   !["RESERVE","REFUND","PAYOUT"].includes(command.type))
    return {status:"BLOCKED",reason:"INVALID_TREASURY_COMMAND"};
   busy=true;
   try{
@@ -76,6 +80,13 @@ function createWarTreasury({gameStore,verifyCorporation,authorizeRefund,
     if(command.type==="REFUND"&&(!r||r.status!=="HELD"||
       r.corporationID!==command.corporationID||!key(command.proofID)))
      return {status:"BLOCKED",reason:"INVALID_TREASURY_REFUND"};
+    // PAYOUT releases a HELD escrow to one named pilot. The funds already left
+    // the native wallet at RESERVE time, so a payout can never create ISK: it
+    // only proves where the escrowed value went.
+    if(command.type==="PAYOUT"&&(!r||r.status!=="HELD"||
+      r.corporationID!==command.corporationID||!key(command.proofID)||
+      !pos(command.pilotID)))
+     return {status:"BLOCKED",reason:"INVALID_TREASURY_PAYOUT"};
     const at=clock();
     if(!pos(at))throw Error("WAR_TREASURY_CLOCK_UNSAFE");
     const warState=tx.get(TABLE,WAR_KEY);
@@ -83,14 +94,29 @@ function createWarTreasury({gameStore,verifyCorporation,authorizeRefund,
      return {status:"BLOCKED",reason:"WAR_NATIVE_STATE_UNAVAILABLE"};
     const purpose=command.type==="RESERVE"?command:r;
     const war=own(warState.wars,purpose.warID)?warState.wars[purpose.warID]:null;
-    if(!war||war.attackerFactionID!==purpose.factionID)
+    // Either real party to the war funds its own chest: the attacker pays for an
+    // operation and the defender pays its own defensive bounty. A faction that
+    // is not in this war can never touch its escrow.
+    if(!war||(war.attackerFactionID!==purpose.factionID&&
+      war.defenderFactionID!==purpose.factionID))
      return {status:"BLOCKED",reason:"WAR_TREASURY_FACTION_MISMATCH"};
     if(command.type==="RESERVE"){
      if(war.state!=="ACTIVE"||own(warState.campaigns,command.campaignID)||
       Object.values(state.reservations).some(v=>v.warID===command.warID&&
-       v.campaignID===command.campaignID&&v.status==="HELD")||
+       v.campaignID===command.campaignID&&v.factionID===command.factionID&&
+       v.status==="HELD")||
       Object.keys(state.reservations).length>=MAX_RESERVATIONS)
       return {status:"BLOCKED",reason:"WAR_TREASURY_PURPOSE_UNAVAILABLE"};
+    }else if(command.type==="PAYOUT"){
+     // The escrow belongs to one campaign of one war. A payout must name the
+     // campaign that really exists for this reservation.
+     const campaign=warState.campaigns[r.campaignID];
+     if(!campaign||campaign.warID!==r.warID)
+      return {status:"BLOCKED",reason:"WAR_TREASURY_PURPOSE_UNAVAILABLE"};
+     let valid=false;
+     try{valid=authorizePayout({...r,proofID:command.proofID,
+       pilotID:command.pilotID,war,campaign},tx)===true}catch{}
+     if(!valid)return {status:"BLOCKED",reason:"WAR_TREASURY_PAYOUT_NOT_AUTHORIZED"};
     }else{
      const campaign=warState.campaigns[r.campaignID];
      if(!(war.state==="ENDED"||campaign?.state==="CANCELLED"))
@@ -99,13 +125,29 @@ function createWarTreasury({gameStore,verifyCorporation,authorizeRefund,
      try{valid=authorizeRefund({...r,proofID:command.proofID,war,campaign},tx)===true}catch{}
      if(!valid)return {status:"BLOCKED",reason:"WAR_TREASURY_REFUND_NOT_AUTHORIZED"};
     }
+    // A payout never touches the native wallet: RESERVE already removed the
+    // value, so releasing it can only move an existing escrow to a named pilot.
+    if(command.type==="PAYOUT"){
+     const paid={...r,status:"PAID",paidAt:at,
+      paidToPilotID:command.pilotID,payoutProofID:command.proofID};
+     const receipt={type:"PAYOUT",reservationID:id,
+      corporationID:r.corporationID,factionID:r.factionID,warID:r.warID,
+      campaignID:r.campaignID,pilotID:command.pilotID,amountCents:r.cents,
+      escrowJournalID:r.sourceJournalID||0,payoutProofID:command.proofID,at};
+     state.reservations[id]=paid;
+     state.processed[command.eventID]={signature,receipt};
+     validate(state);
+     tx.put(TABLE,KEY,state);
+     return {status:"APPLIED",receipt};
+    }
     const corpKey=CORP_PREFIX+command.corporationID,corp=tx.get(TABLE,corpKey),
      division=corp?.wallet?.divisions?.["1000"],
      balance=cents(division?.balance);
     let corporationOK=false;
     try{corporationOK=verifyCorporation({corporationID:command.corporationID,
       factionID:purpose.factionID,warID:purpose.warID},corp,tx)===true}catch{}
-    if(!corporationOK||corp?.corporationID!==command.corporationID||
+    if(!corporationOK||!corp||
+     (corp.corporationID!==undefined&&corp.corporationID!==command.corporationID)||
      balance===null||!Array.isArray(division.journal)||
      !Array.isArray(division.transactions))
      return {status:"BLOCKED",reason:"NATIVE_CORPORATION_WALLET_UNVERIFIED"};

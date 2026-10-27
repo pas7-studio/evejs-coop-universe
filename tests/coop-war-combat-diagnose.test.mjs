@@ -25,7 +25,7 @@ test("the combat diagnostic is a whitelisted admin action",()=>{
 });
 
 test("the diagnostic is exported from the world runtime",()=>{
- assert.match(runtime,/linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,warFrontChat\}/);
+ assert.match(runtime,/linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,warFrontChat\}/);
 });
 
 test("the diagnostic never mutates native state",()=>{

@@ -14,6 +14,12 @@ const pilotOf = (value) => (typeof value === "string" && /^coop-pilot-[0-9]{3,}$
 const pos = (value) => Number.isSafeInteger(Number(value)) && Number(value) > 0;
 
 let ledger = null;
+// FW-005C: the war chest payer is installed by the live runtime. Without it a
+// kill still earns merit, but no ISK moves (there is nothing to pay from).
+let bountyPayer = null;
+function setBountyPayer(payer) {
+  bountyPayer = typeof payer === "function" ? payer : null;
+}
 function ledgerInstance() {
   if (!ledger) {
     ledger = require("./coopWarMeritLedger" + (__filename.endsWith(".js") ? "" : ".cjs"))
@@ -76,16 +82,43 @@ function note({ proof, victim, emit, ledger: injected } = {}) {
     }
   }
   const killer = awards[0];
+  // A real kill can release a real bounty, but only from a HELD escrow that the
+  // killer's own faction funded. A refusal is reported, never papered over.
+  let bounty = null;
+  if (bountyPayer && killer.status !== "BLOCKED") {
+    try {
+      bounty = bountyPayer({pilotID: attackerPilotID, kind: "warship-kill",
+        wreckID, proofID: "wreck:" + wreckID});
+    } catch (error) {
+      bounty = {status: "UNAVAILABLE",
+        reason: String((error && error.message) || error).slice(0, 120)};
+    }
+  }
+  // The same escrow also compensates the faction's own fallen pilot. Only the
+  // faction that really owns a HELD reservation for this campaign can pay it,
+  // and the payer proves that before any ISK moves.
+  let deathBenefit = null;
+  if (bountyPayer && awards[1] && awards[1].status !== "BLOCKED") {
+    try {
+      deathBenefit = bountyPayer({pilotID: victimPilotID, kind: "force-lost",
+        wreckID, proofID: "wreck:" + wreckID});
+    } catch (error) {
+      deathBenefit = {status: "UNAVAILABLE",
+        reason: String((error && error.message) || error).slice(0, 120)};
+    }
+  }
   return {
     status: killer.status,
     attackerPilotID,
     victimPilotID,
     wreckID,
     awards,
+    bounty,
+    deathBenefit,
     promoted: killer.promoted === true,
     rank: String(killer.rank || ""),
     merit: Number(killer.merit) || 0,
   };
 }
 
-module.exports = { note };
+module.exports = { note, setBountyPayer };

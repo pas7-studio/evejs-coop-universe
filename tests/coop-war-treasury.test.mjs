@@ -13,7 +13,7 @@ const reserve=(extra={})=>({type:"RESERVE",eventID:"fw:reserve:w1:c1",
 const refund=(extra={})=>({type:"REFUND",eventID:"fw:refund:w1:c1",
  reservationID:"supply-w1-c1",corporationID:31,
  proofID:"operator-reviewed-unspent",...extra});
-function fixture({funds=1000,refundable=true,corporationOK=true,
+function fixture({funds=1000,refundable=true,corporationOK=true,payable=true,
   env=flags()}={}){
  const records=new Map();
  const corp={corporationID:31,wallet:{divisions:{
@@ -36,12 +36,13 @@ function fixture({funds=1000,refundable=true,corporationOK=true,
  const treasury=createWarTreasury({gameStore,env,clock:()=>100000,
   verifyCorporation:({corporationID,factionID},row)=>
    corporationOK&&corporationID===31&&factionID===11&&
-   row?.corporationID===31,
-  authorizeRefund:()=>refundable});
+   (row?.corporationID===undefined||row?.corporationID===31),
+  authorizeRefund:()=>refundable,authorizePayout:()=>payable});
  const wallet=()=>records.get(TABLE+":"+CORP_PREFIX+31).wallet.divisions["1000"];
  const state=()=>records.get(TABLE+":"+KEY);
  return {treasury,records,war,wallet,state,env,corp,deny:()=>corporationOK=false,
-  prohibit:()=>refundable=false,throws:()=>throws=true,get writes(){return writes}};
+  prohibit:()=>refundable=false,denyPayout:()=>payable=false,
+  throws:()=>throws=true,get writes(){return writes}};
 }
 test("real native corporation ISK leaves spendable wallet exactly once",()=>{
  const f=fixture();
@@ -83,7 +84,9 @@ test("low available funds, minimum reserve and noncent balance deny reservations
 });
 test("wrong faction, ended war, owner proof and repeated reservation never debit",()=>{
  const f=fixture();
- assert.equal(f.treasury.execute(reserve({factionID:22})).reason,
+ // The defender is a real war party and may fund its own chest; a faction that
+ // is not in this war never can.
+ assert.equal(f.treasury.execute(reserve({factionID:33})).reason,
   "WAR_TREASURY_FACTION_MISMATCH");
  f.war.wars.w1.state="ENDED";
  f.records.set(TABLE+":coop-faction-war\u001fstate-v1",f.war);
@@ -124,4 +127,72 @@ test("native currency preserves cents and rejects imaginary fractional ISK",()=>
  assert.equal(cents(0),0);
  assert.equal(cents(5.999),null);
  assert.equal(cents(NaN),null);
+});
+
+// FW-005C: a HELD escrow is released to one named pilot. The wallet was already
+// debited at RESERVE time, so a payout moves no new ISK and can never mint.
+const payout=(extra={})=>({type:"PAYOUT",eventID:"fw:bounty:w1:c1",
+ reservationID:"supply-w1-c1",corporationID:31,proofID:"wreck:9001",pilotID:7,...extra});
+function withCampaign(f){
+ const stored=f.records.get(TABLE+":coop-faction-war\u001fstate-v1");
+ stored.campaigns={c1:{campaignID:"c1",warID:"w1",state:"ASSAULT"}};
+ f.records.set(TABLE+":coop-faction-war\u001fstate-v1",stored);
+}
+test("a real bounty leaves HELD escrow for one named pilot, once",()=>{
+ const f=fixture();
+ assert.equal(f.treasury.execute(reserve()).status,"APPLIED");
+ assert.equal(f.wallet().balance,875);
+ withCampaign(f);
+ const paid=f.treasury.execute(payout());
+ assert.equal(paid.status,"APPLIED",JSON.stringify(paid));
+ assert.equal(paid.receipt.amountCents,12500);
+ assert.equal(paid.receipt.pilotID,7);
+ assert.equal(paid.receipt.escrowJournalID,8000000000000000);
+ // No second debit and no refund of the same value.
+ assert.equal(f.wallet().balance,875);
+ assert.equal(f.wallet().journal.length,1);
+ assert.equal(f.state().reservations["supply-w1-c1"].status,"PAID");
+ assert.equal(f.state().reservations["supply-w1-c1"].paidToPilotID,7);
+ assert.equal(f.treasury.execute(payout()).status,"DUPLICATE");
+ assert.equal(f.treasury.execute(reserve({eventID:"fw:reserve:w1:c2",
+  reservationID:"supply-w1-c2"})).reason,"WAR_TREASURY_PURPOSE_UNAVAILABLE");
+});
+test("a payout without a real proof, campaign or authorization never releases value",()=>{
+ const f=fixture();
+ f.treasury.execute(reserve());
+ withCampaign(f);
+ assert.equal(f.treasury.execute(payout({proofID:""})).reason,
+  "INVALID_TREASURY_PAYOUT");
+ assert.equal(f.treasury.execute(payout({pilotID:0})).reason,
+  "INVALID_TREASURY_PAYOUT");
+ f.denyPayout();
+ assert.equal(f.treasury.execute(payout()).reason,
+  "WAR_TREASURY_PAYOUT_NOT_AUTHORIZED");
+ assert.equal(f.state().reservations["supply-w1-c1"].status,"HELD");
+ assert.equal(f.wallet().balance,875);
+});
+test("a payout for a campaign that does not exist is refused",()=>{
+ const f=fixture();
+ f.treasury.execute(reserve());
+ assert.equal(f.treasury.execute(payout()).reason,"WAR_TREASURY_PURPOSE_UNAVAILABLE");
+ assert.equal(f.state().reservations["supply-w1-c1"].status,"HELD");
+});
+test("a real stock wallet row (keyed, no corporationID field) is accepted",()=>{
+ const f=fixture();
+ const key=TABLE+":"+CORP_PREFIX+31;
+ const row=f.records.get(key);
+ delete row.corporationID;
+ f.records.set(key,row);
+ const result=f.treasury.execute(reserve());
+ assert.equal(result.status,"APPLIED",JSON.stringify(result));
+ assert.equal(f.wallet().balance,875);
+});
+test("a corrupted PAID row without its proof is never accepted",()=>{ const f=fixture();
+ f.treasury.execute(reserve());
+ withCampaign(f);
+ f.treasury.execute(payout());
+ const stored=f.state();
+ delete stored.reservations["supply-w1-c1"].payoutProofID;
+ f.records.set(TABLE+":"+KEY,stored);
+ assert.throws(()=>f.treasury.snapshot(),/WAR_TREASURY_CORRUPT_PAYOUT/);
 });

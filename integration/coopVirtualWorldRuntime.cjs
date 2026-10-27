@@ -241,9 +241,227 @@ function warFrontChat(kind,details={},systemIDs=[]){
  }catch(_error){/* probe is best effort */}
  return true;
 }
+// FW-005B/C: the war chest is real money only. A faction's bounty is funded from
+// the earned ISK its own pilots really hold, escrowed in its native corporation
+// wallet, reserved BEFORE the campaign exists, and paid out of that HELD escrow.
+let warChestInstance=null,warTreasuryInstance=null,warBountyInstance=null;
+function warChestStore(){
+ if(warChestInstance)return warChestInstance;
+ const gameStore=require("../gameStore"),factions=require("../services/faction/factionState"),
+  nativeRows=require("./coopNativeRowPath");
+ const trader=ensureMarketTrader();
+ if(!trader||typeof trader.adjustEarned!=="function")
+  throw Error("WAR_CHEST_EARNED_LEDGER_UNAVAILABLE");
+ warChestInstance=require("./coopWarChestFunding").createWarChestFunding({
+  gameStore,
+  journalFile:process.env.EVEJS_COOP_WAR_CHEST_JOURNAL||
+   "/var/lib/evejs/coop-war-chest-journal.json",
+  readWarState:()=>warStateStore().read(),
+  adjustEarned:args=>trader.adjustEarned(args),
+  verifyCorporation({corporationID,factionID},stored){
+   if(!Number.isSafeInteger(corporationID)||!Number.isSafeInteger(factionID)||!stored||
+    (stored.corporationID!==undefined&&stored.corporationID!==corporationID))return false;
+   try{
+    const corporation=require("../services/corporation/corporationState")
+      .getCorporationRecord(corporationID),
+     faction=factions.getFactionRecord(factionID);
+    return corporation?.corporationID===corporationID&&
+     corporation.isNPC===true&&faction?.factionID===factionID&&
+     factions.getFactionIDForCorporation(corporationID)===factionID;
+   }catch(_error){return false}
+  }
+ });
+ void nativeRows;
+ return warChestInstance;
+}
+function warTreasuryStore(){
+ if(warTreasuryInstance)return warTreasuryInstance;
+ const gameStore=require("../gameStore"),
+  factions=require("../services/faction/factionState"),
+  corporationState=require("../services/corporation/corporationState");
+ warTreasuryInstance=require("./coopWarTreasuryNative").createNativeWarTreasury({
+  gameStore,corporationState,factionState:factions,
+  authorizePayout({factionID,pilotID,campaign}){
+   // The payer must be a real member of the faction that owns this escrow, and
+   // the campaign must be a real campaign of that war. The event proof itself
+   // (a strictly proven native kill or casualty) is checked by the caller.
+   if(!Number.isSafeInteger(Number(pilotID))||!campaign)return false;
+   const faction=warPilotFaction(pilotID);
+   return Number.isSafeInteger(faction)&&faction===Number(factionID);
+  }
+ });
+ return warTreasuryInstance;
+}
+function warPilotFaction(pilotID){
+ if(!identityRegistry)return 0;
+ const npcStore=require("./npc/nativeNpcStore"),
+  factions=require("../services/faction/factionState");
+ for(const link of Object.values(identityRegistry.snapshot()?.links||{})){
+  if(link?.pilotID!==pilotID)continue;
+  try{
+   const native=npcStore.getNativeEntity(Number(link.entityID));
+   const faction=Number(factions.getFactionIDForCorporation(native?.corporationID));
+   if(Number.isSafeInteger(faction)&&faction>0)return faction;
+  }catch(_error){/* one bad link never decides a faction */}
+ }
+ return 0;
+}
+function warPresencePilots(){
+ if(!identityRegistry)return [];
+ const npcStore=require("./npc/nativeNpcStore"),
+  factions=require("../services/faction/factionState");
+ const out=[];
+ for(const link of Object.values(identityRegistry.snapshot()?.links||{})){
+  try{
+   const native=npcStore.getNativeEntity(Number(link.entityID));
+   const faction=Number(factions.getFactionIDForCorporation(native?.corporationID));
+   if(!Number.isSafeInteger(faction)||faction<=0)continue;
+   out.push({pilotID:link.pilotID,systemID:Number(link.systemID)||0,factionID:faction,
+    corporationID:Number(native?.corporationID)||0});
+  }catch(_error){/* skip */}
+ }
+ return out;
+}
+// The real NPC corporation a faction fields. A faction with earned income in
+// one of its corporations funds its chest from that corporation's wallet.
+function warFactionCorporation(factionID,pilots,ledger){
+ const balances=(ledger&&ledger.pilots)||{},counts=new Map();
+ for(const pilot of pilots||[]){
+  if(Number(pilot?.factionID)!==Number(factionID))continue;
+  const corp=Number(pilot.corporationID)||0;
+  if(!Number.isSafeInteger(corp)||corp<=0)continue;
+  const paid=Number(balances[pilot.pilotID]?.balance)>0?1:0;
+  const prior=counts.get(corp)||{corp,paid:0,ships:0};
+  counts.set(corp,{corp,paid:prior.paid+paid,ships:prior.ships+1});
+ }
+ const ranked=[...counts.values()].sort((a,b)=>b.paid-a.paid||b.ships-a.ships||a.corp-b.corp);
+ if(ranked.length)return ranked[0].corp;
+ try{
+  return Number(require("../services/faction/factionState")
+   .getFactionRecord(factionID)?.militiaCorporationID)||0;
+ }catch(_error){return 0}
+}
+function warEarnedLedger(){
+ try{
+  const trader=ensureMarketTrader();
+  return trader?trader.snapshot():{version:1,pilots:{}};
+ }catch(_error){return {version:1,pilots:{}}}
+}
+function warBountyStore(){
+ if(warBountyInstance)return warBountyInstance;
+ const gameStore=require("../gameStore"),
+  factions=require("../services/faction/factionState"),
+  npcStore=require("./npc/nativeNpcStore"),
+  casualtyStore=require("./coopWarCasualtyLedger"),
+  nativeRows=require("./coopNativeRowPath");
+ warBountyInstance=require("./coopWarBounty").createWarBounty({
+  gameStore,
+  treasury:warTreasuryStore(),
+  chest:warChestStore(),
+  readWarState:()=>warStateStore().read(),
+  readLinks:()=>Object.values(identityRegistry?.snapshot()?.links||{}),
+  getNativeEntity:id=>npcStore.getNativeEntity(id),
+  getFactionForCorporation:id=>factions.getFactionIDForCorporation(id),
+  readCasualties:()=>nativeRows.readRow(gameStore,casualtyStore.TABLE,
+   casualtyStore.KEY,casualtyStore.validate),
+  emit:(event,detail)=>{
+   try{require("./coopRuntimeProbe").observe(event,null,null,detail);}
+   catch(_error){/* probe is best effort */}
+  }
+ });
+ return warBountyInstance;
+}
+// One real reservation per campaign side, taken before START_CAMPAIGN.
+function warBountyReserve({war,campaign,campaignID,warID,persist}){
+ if(process.env.EVEJS_COOP_WAR_BOUNTY_ISK==="0")return {status:"REFUSED",reason:"WAR_BOUNTY_OFF"};
+ const bountyISK=Math.max(1,Math.round(Number(process.env.EVEJS_COOP_WAR_BOUNTY_ISK)||25000));
+ const needCents=bountyISK*100;
+ // The declaration must be durable before an escrow can name this war.
+ try{if(typeof persist==="function")persist();}
+ catch(error){return {status:"REFUSED",reason:"WAR_STATE_PERSIST_FAILED"};}
+ const pilots=warPresencePilots(),ledger=warEarnedLedger(),refusals=[];
+ const chest=warChestStore(),treasury=warTreasuryStore();
+ for(const factionID of [Number(war.attackerFactionID),Number(war.defenderFactionID)]){
+  if(!Number.isSafeInteger(factionID)||factionID<=0)continue;
+  const corporationID=warFactionCorporation(factionID,pilots,ledger);
+  if(!Number.isSafeInteger(corporationID)||corporationID<=0){
+   refusals.push({factionID,reason:"NO_MILITIA_CORPORATION"});
+   continue;
+  }
+  let funded=null;
+  try{
+   funded=chest.fund({factionID,corporationID,warID,campaignID,needCents,pilots,ledger,
+    eventID:"bounty:"+campaignID+":"+factionID});
+  }catch(error){
+   refusals.push({factionID,reason:"WAR_CHEST_THROW:"+String(error&&error.message||error)});
+   continue;
+  }
+  if(funded.status!=="APPLIED"&&funded.status!=="DUPLICATE"){
+   refusals.push({factionID,reason:String(funded.reason||funded.status)});
+   continue;
+  }
+  const reservationID="bounty:"+campaignID+":"+factionID;
+  let reserved;
+  try{
+   reserved=treasury.execute({type:"RESERVE",
+    eventID:"fw:reserve:"+campaignID+":"+factionID,reservationID,
+    corporationID,factionID,warID,campaignID,amountCents:needCents,
+    minRemainingCents:0});
+  }catch(error){
+   refusals.push({factionID,reason:"WAR_TREASURY_THROW:"+String(error&&error.message||error)});
+   continue;
+  }
+  if(reserved.status!=="APPLIED"&&reserved.status!=="DUPLICATE"){
+   refusals.push({factionID,reason:String(reserved.reason||reserved.status)});
+   continue;
+  }
+  try{
+   require("./coopRuntimeProbe").observe("living-native-war-bounty-reserved",null,null,{
+    status:"RESERVED",factionID,corporationID,campaignID,warID,
+    amountCents:needCents,reservationID,
+    chestJournalID:String(funded.entry?.journalID||""),
+    walletAfterCents:Number(funded.entry?.walletAfterCents)||0,
+    sources:(funded.entry?.sources||[]).map(s=>s.pilotID),
+    escrowJournalID:Number(reserved.receipt?.journalID)||0,
+    evidence:"REAL_EARNED_ISK_TO_NATIVE_CORP_WALLET_TO_HELD_ESCROW"});
+  }catch(_error){/* probe is best effort */}
+  return {status:"RESERVED",reservationID,factionID,corporationID,
+   amountCents:needCents,chestJournalID:String(funded.entry?.journalID||""),
+   escrowJournalID:Number(reserved.receipt?.journalID)||0};
+ }
+ return {status:"REFUSED",reason:refusals.length?
+  refusals.map(r=>r.factionID+":"+r.reason).join("|"):"NO_WAR_PARTY",refusals};
+}
+// Read-only: what the chest can really see, so a refusal names its own cause.
+function diagnoseWarFunding(){
+ const pilots=warPresencePilots(),ledger=warEarnedLedger();
+ const need=Math.max(1,Math.round(Number(process.env.EVEJS_COOP_WAR_BOUNTY_ISK)||25000))*100;
+ let state=null;
+ try{state=warStateStore().read()}catch(_error){state=null}
+ const plan=require("./coopWarChestFunding").planLevy;
+ const wars=Object.values(state?.wars||{}).filter(w=>w.state==="ACTIVE");
+ return {
+  flags:{factionWar:process.env.EVEJS_COOP_FACTION_WAR==="1",
+   treasury:process.env.EVEJS_COOP_WAR_TREASURY==="1",
+   atomicRows:process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1"},
+  needCents:need,
+  pilots:pilots.length,
+  earned:{pilots:Object.keys(ledger.pilots||{}).length,
+   balances:Object.entries(ledger.pilots||{}).map(([id,row])=>({pilotID:id,
+    balance:Number(row?.balance)||0}))},
+  wars:wars.map(w=>({warID:w.warID,attackerFactionID:w.attackerFactionID,
+   defenderFactionID:w.defenderFactionID,
+   sides:[Number(w.attackerFactionID),Number(w.defenderFactionID)].map(factionID=>({
+    factionID,corporationID:warFactionCorporation(factionID,pilots,ledger),
+    plan:plan({factionID,pilots,ledger,needCents:need})}))})),
+ };
+}
 function advanceNativeWarOpening(){
  const {enabled}=require("./coopWarMobilizer");
  if(!enabled(process.env))return warSkip("opening","WAR_FLAGS_OFF");
+ // A kill can only pay a bounty once the chest payer is installed.
+ try{require("./coopWarKillMerit").setBountyPayer(args=>warBountyStore().pay(args));}
+ catch(error){warSkip("bounty","WAR_BOUNTY_UNAVAILABLE:"+String(error&&error.message||error));}
  if(!visitedSystems.size)return warSkip("opening","NO_VISITED_SYSTEMS");
  if(!identityRegistry)return warSkip("opening","NO_IDENTITY_REGISTRY");
  try{ensureWarState()}catch(error){
@@ -263,6 +481,7 @@ function advanceNativeWarOpening(){
    getGate:id=>worldData.getStargateByID(id),
    readWarState,
    writeWarState:state=>store.write(state),
+   reserveBounty:warBountyReserve,
    minShips:Math.max(1,Number(process.env.EVEJS_COOP_WAR_TERRITORY_MIN_SHIPS)||1)
   });
  }
@@ -4063,4 +4282,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,diagnoseCombat,diagnoseWarFunding,warFrontChat};
