@@ -1162,3 +1162,21 @@ Why: The refinery charges a real station fee and there was no payer; a tested pa
 Detail: payFee() debits the corporation's own wallet for one exact station fee, fsyncs a durable receipt the refinery can verify by name, and refuses when the wallet cannot cover it (returning the balance). It is exported and unit-tested but NOT auto-invoked: the first attempt to teach the refinery to accept a paid fee broke 9 of its custody tests, so that change was reverted rather than shipped half-veri
 Where: integration/coopNpcRefineryTick.cjs
 Evidence: tests coop-npc-refinery-tick 8 + coop-npc-corp-treasury 5 pass; refinery suite 14 pass / 9 pre-existing failures
+### 2026-10-27T10:50Z · 1d6a383 · L2 · FW-018 (WIP): the raider flies to its own gun range, not to a distance of ours
+
+Why: FW-018 WIP: the raider fights at its own fitted weapon's dogma range (coopNpcGunRange + setBehaviorOverrides orbitDistanceMeters) instead of a constant
+Detail: A blaster cruiser with 300 real charges held a live attack order at 2.5 AU and then at 9 km and hit nothing, because its behaviour profile parks it far outside the dogma maxRange of its own fitted weapon. coopNpcGunRange reads the range from the same native snapshot the stock combat resolver uses (npcEquipment getNpcWeaponModules + buildNpcWeaponModuleSnapshot: maxRange for a turret, the missile's
+Where: integration/coopAdminBridge.cjs, integration/coopNativeRaids.cjs, integration/coopNpcGunRange.cjs, integration/coopVirtualWorldRuntime.cjs, scripts/overlay-spec.cjs, tests/coop-native-raids-gameplay.test.mjs, tests/coop-npc-gun-range.test.mjs
+Evidence: tests/coop-npc-gun-range.test.mjs 6/6, tests/coop-native-raids-gameplay.test.mjs 24/24; live gunRange RESOLVED 1050 m for 980000018058 (5x 13884 hybrid turret) - sustained fire NOT yet proven
+### 2026-10-27T10:50Z · 91f68dd · L2 · coop: a refinery journal file name Windows can actually create
+
+Why: coopNpcRefinery: the journal file name is escaped on win32 because NTFS rejects ':' in coop-refine:v1:<itemID>:<quantity>
+Detail: The logical operation ID is coop-refine:v1:<itemID>:<quantity> and the journal used it as a file name, which NTFS refuses (':'). Only the path segment is now escaped, and only on win32; the journal key itself is unchanged, so existing records and their identity checks are untouched.
+Where: integration/coopNpcRefinery.cjs
+Evidence: the journal key is unchanged; only the path segment is escaped, existing records and identity checks untouched
+### 2026-10-27T10:51Z · 01ef259 · L3 · coop: the refinery can finally be paid, and its 9 red tests were a Windows file name
+
+Why: The refinery's fee could never be paid and 9 of its custody tests were red; the red was a Windows-only file name bug, and with it fixed a durable paid-fee witness is now accepted and the tick pays it from the corporate wallet.
+Detail: The nine failing custody tests were not custody failures at all: the journal key is 'coop-refine:v1:<itemID>:<quantity>' and ':' cannot appear in a Windows file name, so acquire() could never create the lock and every refine returned REFINERY_LOCKED_NEEDS_REVIEW on Windows only. The path segment is now escaped on win32 (journalFile), the logical ID, receipts and comparisons are unchanged, and the 
+Where: integration/coopNpcRefineryTick.cjs, tests/coop-npc-refinery-tick.test.mjs, tests/coop-npc-refinery.test.mjs
+Evidence: coop-npc-refinery 23/23 (was 14/9), coop-npc-refinery-tick 9/9 incl. real 5000->3765.5 ISK debit with durable receipt, corp-treasury + factory-audit green: 43/43
