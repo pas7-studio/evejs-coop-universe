@@ -485,3 +485,11 @@ overlay: OVERLAY_OK (moduleCurrent 380)
 live: OWNER STACK NOT RESTARTED (directive). Code-only change; no live probe of the character-sheet title yet.
 metrics: tests_total=22 pass=22 fail=0 modules_added=0 modules_changed=2 live_events=0
 next: item 13 payout half is BLOCKED_TREASURY_NO_ARMED_FUNDED_FACTION (needs item 16 real income); item 15 next in code.
+
+## 2026-10-27T17:05Z - ITEM 15 fleet reserve + real attrition, ITEM 16 income routing (code halves) - a1d5b03b, ae9cea92
+done: (15) the roster carries a durable per-faction/per-role hull reserve (spawnable+equipped): a proven loss removes one equipped hull, an adopted replacement consumes one spawnable hull, only a proved declaration is accepted, and every loss/replacement carries a frontChat record sent once per event through coopWarClientView.frontReport (new kinds fleet-loss / fleet-replacement). (16) coopNpcCorpTreasury.run sweeps ONLY pilots that really belong to the target corporation when a resolveCorporation authority is supplied; an unprovable owner is never swept; without the authority behaviour is unchanged.
+tests: node --test coop-war-fleet-roster + client-view + admin-bridge* + fleet-composition -> 37 pass / 0 fail; coop-npc-corp-treasury + refinery* + war-funding* + war-treasury* -> 62 pass / 0 fail
+overlay: OVERLAY_OK (moduleCurrent 380)
+live: OWNER STACK NOT RESTARTED (directive). No live probe of either change; the agent stack (evejs-agents, x5 time) is up and is the only place live proofs may run.
+metrics: tests_total=99 pass=99 fail=0 modules_added=0 modules_changed=5 live_events=0
+next: pass pilotCorporation at the refinery tick's call site (identity registry: entity -> corporationID) so the routing fix is live, then re-run war_funding_diagnose until an ARMED faction reads FUNDED; and the FW-037 crossing proof in the owner's next restart window.
