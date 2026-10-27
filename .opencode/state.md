@@ -2354,3 +2354,25 @@ NEXT STEP, in order:
  4. after that, the advantage handler for the black "war zone" tab: capture the exact
     RPC from docker logs while the panel spins, add the handler env-gated default OFF.
 Never hand-write territory rows, never weaken coopNpcHostility, no client patching.
+
+## WHERE THE COUNTER-OFFENSIVE ACTUALLY STOPS (probed 2026-10-28)
+
+1. planWars({state}) with no gate wiring -> REFUSED / NO_GATE_AUTHORITY. It refuses to
+   invent a front without real stargate topology. Correct behaviour, not a bug.
+2. The sanctioned entry point is NOT a hand-built plan: coopVirtualWorldRuntime calls
+   createWarOpening({ readLinks, getNativeEntity, getFactionForCorporation,
+   getStargatesForSystem: worldData.getStargatesForSystem, getGate: worldData.getStargateByID,
+   readWarState, writeWarState, reserveBounty, fleetPresence, minShips }).tick({systemIDs})
+   with systemIDs = [...visitedSystems].slice(0,12), and skips with
+   NO_VISITED_SYSTEMS / NO_IDENTITY_REGISTRY / WAR_STATE_WRITE_FAILED.
+3. Every war flag is already ON in compose.coop-probe.yaml (EVEJS_COOP_FACTION_WAR,
+   _FLEETS, _MOBILIZE, _COMBAT, _MERIT, _TREASURY, _NATIVE_TRANSFER, _SOVEREIGNTY_PROJECTION,
+   WAR_REQUIRE_FUNDING=0). No war-skip lines in 2h of logs, so the phase is not erroring.
+So the war is enabled and one-sided because a reverse front needs CALDARI presence in a
+system that borders Gallente-held 30003837, and the visited route does not include
+Nennamaila (30045344) / that border. Nothing is corrupted and nothing is missing code.
+
+NEXT ACTION (concrete): add the Gallente/Caldari border systems to the visited route
+(EVEJS_COOP_WAR_ROUTE / the 5-system route in compose.coop-probe.yaml) so the war tick
+sees both sides present, then re-run /tmp/warstate.cjs and expect byOwner with both
+factions owning AND contesting. Then the advantage handler for the black tab.
