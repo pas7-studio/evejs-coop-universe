@@ -35,6 +35,10 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
    if(![row?.cargoID,row?.haulerID,row?.typeID,row?.quantity,row?.fromMinerID]
     .every(valid)||!haulers.includes(row.haulerID)||
     cargoIDs.has(row.cargoID))return false;
+   // The pre-warp OWNER of the row is recorded when it is known (new manifests).
+   // A manifest written before the field existed stays readable: its owner is
+   // then proven from the physical stack the receipt names, never assumed.
+   if(row.ownerID!==undefined&&!valid(row.ownerID))return false;
    cargoIDs.add(row.cargoID);
   }
   return true;
@@ -71,9 +75,13 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
       Number(row.moduleID||0)!==0||row.transient===true||seen.has(id(row.cargoID)))
       return {status:"MANIFEST_CARGO_INVALID_OR_AMBIGUOUS"};
      seen.add(id(row.cargoID));
+     // The row's own cargo owner travels with the manifest: the receipt written at
+     // the station names THIS corporation (the ore owner), while the manifest's
+     // corporationID is the station operator the fleet trades with.
      cargo.push({cargoID:id(row.cargoID),haulerID,
       typeID:id(row.typeID),quantity:id(row.quantity),
-      fromMinerID:id(row.coopHaulFromMinerID)});
+      fromMinerID:id(row.coopHaulFromMinerID),
+      ...(valid(row.ownerID)?{ownerID:id(row.ownerID)}:{})});
     }
    }
   }catch{return {status:"MANIFEST_SOURCE_UNAVAILABLE"}}
@@ -145,21 +153,28 @@ function createManifest({root,store,items,getNativeEntity,io=fs,clock=()=>Date.n
     // recorded quantity and type - never by inventing stock - and it may cover only
     // part of the row when the market filled less than the hull carried.
     const saleFill=String(receipt&&receipt.source)==="NPC_MARKET_FILL";
+    // Ownership: a warehouse receipt names the corporation that owned THIS row
+    // (the deposit goes into the owner's own hangar), while m.corporationID is the
+    // station operator. Comparing the two rejected every real deposit as
+    // MANIFEST_WAREHOUSE_RECEIPT_CONFLICT. The owner is now taken from the manifest
+    // row when it recorded one, and otherwise from the physical stack the receipt
+    // names - which the native itemStore check below must still prove exists.
+    const ownerCorporationID=valid(row.ownerID)?row.ownerID:id(receipt&&receipt.corporationID);
     if(receipt?.version!==1||receipt.phase!=="COMMITTED"||
      id(receipt.cargoID)!==row.cargoID||id(receipt.haulerID)!==row.haulerID||
      id(receipt.typeID)!==row.typeID||
      id(receipt.stationID)!==m.stationID||
-     (!saleFill&&id(receipt.corporationID)!==m.corporationID)||
+     (!saleFill&&(id(receipt.corporationID)!==ownerCorporationID))||
      id(receipt.systemID)!==m.systemID||id(receipt.fleetID)!==m.fleetID||
      (saleFill?!saleFillCoversRow(receipt,row,m):
       (id(receipt.quantity)!==row.quantity||!valid(receipt.itemID))))
      return {status:"MANIFEST_WAREHOUSE_RECEIPT_CONFLICT",cargoID:row.cargoID};
     if(saleFill)continue;
-    const stock=items.findWarehouseItem({ownerID:m.corporationID,
+    const stock=items.findWarehouseItem({ownerID:ownerCorporationID,
      stationID:m.stationID,cargoID:row.cargoID});
     if(!stock||id(stock.itemID)!==id(receipt.itemID)||
      id(stock.typeID)!==row.typeID||id(stock.quantity)!==row.quantity||
-     id(stock.ownerID)!==m.corporationID||id(stock.locationID)!==m.stationID||
+     id(stock.ownerID)!==ownerCorporationID||id(stock.locationID)!==m.stationID||
      String(stock.customInfo)!==marker(row.cargoID))
      return {status:"MANIFEST_NATIVE_ITEMSTORE_STOCK_CONFLICT",cargoID:row.cargoID};
    }

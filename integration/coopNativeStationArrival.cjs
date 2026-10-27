@@ -448,19 +448,46 @@ const saleBaseline=new Map();
  const routeJournal=recoverEnabled?(tripJournal||
   require("./coopNativeStationTripJournal").createJournal({
    root,manifest:manifestDirector,store,items,getNativeEntity,clock})):null;
+ // The arrival gate is three independent facts: a real station point in this
+ // scene, a durable hauler physically sitting on it, and a dwell. A bare
+ // `ARRIVAL_NOT_VERIFIED` hid which one failed, so the same closure now names
+ // the exact term. It stays READ-ONLY and the deposit gate stays a strict boolean.
+ const explainArrival=args=>{
+  const scene=getScene(args.systemID),point=scene&&isValidStation(scene,getStation(args.stationID),args.systemID);
+  const ship=scene&&findShip(scene,args.haulerID,args.systemID);
+  const active=arrivals.get(args.haulerID);
+  // ONE clock for the dwell. The trip loop measures it on the native tick clock it
+  // was handed (`now`), which can run ahead of the wall clock; comparing it against
+  // Date.now() made a physically arrived hauler report DWELL_PENDING forever
+  // (measured: arrivedAtMs 2 041 ms ahead of the event time, gap 0 m).
+  const at=pos(args.nowMs)||clock();
+  // The trip itself just proved stability + dwell before it asks for a deposit,
+  // so a vanished in-memory record must not block a physically arrived hauler:
+  // accept the trip's own arrivedAt only together with a live stability check.
+  const dwelled=Boolean((active&&active.fleetID===args.fleetID&&active.stationID===args.stationID&&
+      active.arrivedAt>0&&at-active.arrivedAt>=ARRIVAL_DWELL_MS)||
+    (pos(args.arrivedAtMs)&&at-Number(args.arrivedAtMs)>=ARRIVAL_DWELL_MS));
+  const warping=Boolean(ship&&(ship.mode==="WARP"||ship.pendingWarp||ship.warpState||
+    ship.isWarping===true));
+  const gapMeters=ship&&vector(ship.position)&&point?
+   Math.round(Math.max(0,distance(ship.position,point.position)-
+    Math.max(0,Number(ship.radius)||0)-point.radius)):null;
+  const term=!scene?"SCENE_UNAVAILABLE":
+   !point?"STATION_NOT_VALID_IN_SCENE":
+   !ship?"HAULER_NOT_DURABLE_IN_SCENE":
+   point.stationID!==args.stationID?"STATION_ID_MISMATCH":
+   warping?"HAULER_WARPING":
+   gapMeters===null?"HAULER_POSITION_UNKNOWN":
+   gapMeters>MAX_SURFACE_GAP_METERS?"SURFACE_GAP_TOO_LARGE":
+   !dwelled?"DWELL_PENDING":"VERIFIED";
+  return {ok:term==="VERIFIED",term,gapMeters,
+   maxSurfaceGapMeters:MAX_SURFACE_GAP_METERS,mode:String(ship?.mode||""),warping,
+   arrivedAtMs:pos(args.arrivedAtMs)||0,
+   activeArrivedAt:Number(active?.arrivedAt||0)||0,dwellMs:ARRIVAL_DWELL_MS,dwelled};
+ };
  const factory=warehouse||createWarehouse({root,store,items,flush,getStation,getCorporation,isNpcCorporation,verifyTransferredTitle,
-  verifyArrival:args=>{
-   const scene=getScene(args.systemID),point=scene&&isValidStation(scene,getStation(args.stationID),args.systemID);
-   const ship=scene&&findShip(scene,args.haulerID,args.systemID);
-   const active=arrivals.get(args.haulerID);
-   // The trip itself just proved stability + dwell before it asks for a deposit,
-   // so a vanished in-memory record must not block a physically arrived hauler:
-   // accept the trip's own arrivedAt only together with a live stability check.
-   const dwelled=(active&&active.fleetID===args.fleetID&&active.stationID===args.stationID&&
-      active.arrivedAt>0&&clock()-active.arrivedAt>=ARRIVAL_DWELL_MS)||
-    (pos(args.arrivedAtMs)&&clock()-Number(args.arrivedAtMs)>=ARRIVAL_DWELL_MS);
-   return Boolean(point&&point.stationID===args.stationID&&stableAt(ship,point)&&dwelled);
-  },
+  explainArrival,
+  verifyArrival:args=>explainArrival(args).ok,
   verifyDurableCargo:(cargo,args)=>cargo.transient!==true&&
       Number(cargo.entityID)===args.haulerID&&Number(cargo.coopHaulFleetID)===args.fleetID&&
       Number(cargo.coopHaulFromMinerID)>0});
@@ -1108,7 +1135,7 @@ const saleBaseline=new Map();
     }
     const result=factory.deposit({cargoID:Number(item.cargoID),haulerID:id,
       fleetID:trip.fleetID,systemID:trip.systemID,stationID:trip.stationID,
-      corporationID:ownerCorporationID,arrivedAtMs:arrival.arrivedAt});
+      corporationID:ownerCorporationID,arrivedAtMs:arrival.arrivedAt,nowMs:now});
     if(!["COMMITTED","ALREADY_COMMITTED"].includes(result.status)){
      // A blocked deposit is retried every native tick, so an unthrottled event
      // floods the log (230 lines a minute) and hides every other signal.
@@ -1117,7 +1144,8 @@ const saleBaseline=new Map();
      if(now-(warehouseBlockedAt.get(key)||0)>=120000){
       warehouseBlockedAt.set(key,now);
       probe.observe("living-npc-warehouse-blocked",null,{spaceState:{systemID:trip.systemID}},
-       {fleetID:trip.fleetID,cargoID:item.cargoID,reason:result.status});
+       {fleetID:trip.fleetID,cargoID:item.cargoID,reason:result.status,
+        ...(result.detail?{detail:result.detail}:{})});
      }
      return pause("WAREHOUSE_"+result.status);
     }
@@ -1219,7 +1247,7 @@ const saleBaseline=new Map();
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
  return {start,tick,recover,resumeNativeDelivery,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
-  oracle:destinationOracle};
+  explainArrival,oracle:destinationOracle};
 }
 let runtimeDirector;
 function getRuntimeDirector(){
@@ -1275,6 +1303,15 @@ function getOriginalWarehouseReceipt(cargoID){
    !Number.isSafeInteger(cargoID)||cargoID<=0||!runtimeDirector)return null;
  try{return runtimeDirector.warehouse?.getReceipt?.(cargoID)||null}
  catch{return null;}
+}
+// Read-only: the three terms of the arrival gate for one hauler of the LIVE
+// director (its own `arrivals` map, scene and station). Never warps, deposits
+// or creates a scene; a missing director is reported instead of being built.
+function diagnoseArrival(args){
+ if(!runtimeDirector||typeof runtimeDirector.explainArrival!=="function")
+  return {status:"NO_LIVE_DIRECTOR"};
+ try{return runtimeDirector.explainArrival(args||{})}
+ catch(error){return {status:"DIAGNOSE_FAILED",reason:String(error?.message||error).slice(0,95)}}
 }
 function observePreferredOre({systemID,reason="periodic"}={}){
  if(process.env.EVEJS_COOP_ECONOMY_DESTINATION!=="1")return null;
@@ -1365,4 +1402,4 @@ function checkReturn(scene,fleet,now,director=null){
   arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
  return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress,getOriginalWarehouseReceipt};
+module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress,getOriginalWarehouseReceipt,diagnoseArrival};

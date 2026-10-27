@@ -9,7 +9,7 @@ const marker = cargoID => `coop-warehouse:v1:cargo:${cargoID}`;
 const copy = value => JSON.parse(JSON.stringify(value));
 const statuses = Object.freeze({PREPARED:"PREPARED", DEBIT:"SOURCE_DEBIT_PROVEN", CREDIT:"TARGET_CREDIT_PROVEN", COMMITTED:"COMMITTED"});
 
-function createWarehouse({root, store, items, flush, getStation, getCorporation, isNpcCorporation, verifyArrival, verifyDurableCargo, verifyTransferredTitle=null, clock=()=>Date.now(), fsApi=fs}={}) {
+function createWarehouse({root, store, items, flush, getStation, getCorporation, isNpcCorporation, verifyArrival, verifyDurableCargo, verifyTransferredTitle=null, explainArrival=null, clock=()=>Date.now(), fsApi=fs}={}) {
  if(!root || !path.isAbsolute(root) || !store || !items || typeof flush!=="function" ||
     typeof getStation!=="function" || typeof getCorporation!=="function" ||
     typeof isNpcCorporation!=="function" || typeof verifyArrival!=="function" ||
@@ -182,12 +182,13 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
   const saved=load(id);
   return saved?copy(saved):null;
  }
- function deposit({cargoID,haulerID,fleetID,systemID,stationID,corporationID,arrivedAtMs}={}){
+ function deposit({cargoID,haulerID,fleetID,systemID,stationID,corporationID,arrivedAtMs,nowMs}={}){
   const id=pos(cargoID),args={cargoID:id,haulerID:pos(haulerID),fleetID:pos(fleetID),
    systemID:pos(systemID),stationID:pos(stationID),corporationID:pos(corporationID)};
   // The arrival proof is checked but never becomes part of the receipt identity:
-  // it is a time stamp, not a property of the cargo.
-  const arrivalAtMs=pos(arrivedAtMs);
+  // it is a time stamp, not a property of the cargo. `nowMs` is the native tick
+  // clock the trip measured its own dwell with; it is never persisted either.
+  const arrivalAtMs=pos(arrivedAtMs),tickMs=pos(nowMs);
   if(Object.values(args).some(v=>!v))return answer("INVALID_REQUEST");
   if(busy.has(id))return answer("IN_PROGRESS");
   busy.add(id);
@@ -206,7 +207,12 @@ function createWarehouse({root, store, items, flush, getStation, getCorporation,
     return answer("PENDING_RECONCILIATION",record,{phase:record.phase});
    }
    if(!validateOwner(args))return answer("OWNER_OR_STATION_MISSING");
-   if(verifyArrival({...args,arrivedAtMs:arrivalAtMs})!==true)return answer("ARRIVAL_NOT_VERIFIED");
+   // A refusal must say WHICH term of the arrival gate failed (station point,
+   // physical stability, dwell). The gate itself is unchanged: only `true` passes.
+   const arrivalProof=verifyArrival({...args,arrivedAtMs:arrivalAtMs,nowMs:tickMs});
+   if(arrivalProof!==true)return answer("ARRIVAL_NOT_VERIFIED",null,
+    typeof explainArrival==="function"?
+     {detail:explainArrival({...args,arrivedAtMs:arrivalAtMs,nowMs:tickMs})}:{});
    const cargo=lookupCargo(args.haulerID,id);
    if(!cargo||Number(cargo.entityID)!==args.haulerID||!pos(cargo.typeID)||!pos(cargo.quantity)||
       Number(cargo.moduleID||0)!==0||Number(cargo.coopHaulFleetID)!==args.fleetID||

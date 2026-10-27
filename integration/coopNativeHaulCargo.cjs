@@ -152,8 +152,10 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  // tell whether the hull was out of range, full, warping or unresolvable in SDE.
  for(const {item,volume,unit} of cargo){
   let selected=null,why="",skipped=[],partialUnits=0,bestFree=0,bestShip=null;
+  const owned=tripOwnedHaulers(fleet);
   for(const haulerID of fleet.haulerEntityIDs){
    if(!integer(haulerID)||haulerID===minerID){skipped.push({haulerID,why:"invalid-id"});continue;}
+   if(owned&&owned.has(Number(haulerID))){skipped.push({haulerID,why:"delivery-trip-owns-hull"});continue;}
    const ship=scene.getEntityByID(haulerID),native=store.getNativeEntity(haulerID);
    if(!ship||ship.itemID!==haulerID||ship.kind!=="ship")why="ship-missing";
    else if(ship.nativeNpc!==true||ship.transient!==false)why="not-durable-native";
@@ -267,6 +269,18 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
  }
  return totalMoved;
 }
+ // The delivery trip OWNS the hulls it declared: a manifest is an immutable
+ // pre-warp snapshot, so ore loaded into a hull that is already flying that route
+ // can never be part of it (measured live: every new load turned the pending trip
+ // into ALIFE12_UNDECLARED_HAUL_CARGO and the fleet never returned to mining).
+ // Returns the set of hauler IDs the active trip holds.
+ function tripOwnedHaulers(fleet){
+  const trip=fleet?.coopStationArrival;
+  if(!trip||typeof trip!=="object")return null;
+  const ids=Object.keys(trip.haulers&&typeof trip.haulers==="object"?trip.haulers:{})
+   .map(Number).filter(x=>Number.isSafeInteger(x)&&x>0);
+  return ids.length?new Set(ids):null;
+ }
 function transferCargo(scene,fleet,miner,options={}){
  try{
   if(!scene||!positive(miner?.itemID)||!positive(fleet?.fleetID))return 0;
@@ -276,8 +290,10 @@ function transferCargo(scene,fleet,miner,options={}){
     fleet.startupKey.length>0;
   if(durableRequired||flags.on("EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD"))
    return strictTransferCargo(scene,fleet,miner,options,store,probe);
+  const owned=tripOwnedHaulers(fleet);
   const hauler=(fleet.haulerEntityIDs||[]).map(id=>scene.getEntityByID(Number(id)))
-    .find(x=>x?.kind==="ship"&&positive(x.itemID)&&x.itemID!==miner.itemID);
+    .find(x=>x?.kind==="ship"&&positive(x.itemID)&&x.itemID!==miner.itemID&&
+     !(owned&&owned.has(Number(x.itemID))));
   if(!hauler)return 0;
   const items=(store.listNativeCargoForEntity(miner.itemID)||[]).filter(mineable);
   let moved=0,quantity=0,volume=0;

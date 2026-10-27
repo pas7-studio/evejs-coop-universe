@@ -125,6 +125,28 @@ test("a partially delivered two-stack manifest resumes the exact remaining origi
  assert.equal(recovered.activeCargo,1);
  assert.equal(f.cargo.get(CARGO2).quantity,19);
 });
+test("a warehouse receipt naming the ORE OWNER proves a row of a station-corporation manifest",t=>{
+ const f=fixture(t);f.confirm();f.deliver(CARGO);
+ // Live shape: the manifest names the station operator, the deposit receipt names
+ // the corporation that owned the cargo. Ownership is the physical stack's owner.
+ const owner=1000129;
+ const item=f.stock.get(CARGO);item.ownerID=owner;
+ const p=path.join(f.root,"receipts",CARGO+".json");
+ fs.writeFileSync(p,JSON.stringify({...JSON.parse(fs.readFileSync(p)),corporationID:owner}));
+ assert.equal(f.recover().status,"NO_PENDING_TRIP");
+});
+test("a receipt naming a corporation other than the recorded row owner proves nothing",t=>{
+ const f=fixture(t);f.confirm();f.deliver(CARGO);
+ const owner=1000129;
+ const file=path.join(f.root,"trip-manifests",f.m.key+".json");
+ const record=JSON.parse(fs.readFileSync(file));
+ record.cargo=record.cargo.map(row=>({...row,ownerID:1000777}));
+ fs.writeFileSync(file,JSON.stringify(record));
+ const item=f.stock.get(CARGO);item.ownerID=owner;
+ const p=path.join(f.root,"receipts",CARGO+".json");
+ fs.writeFileSync(p,JSON.stringify({...JSON.parse(fs.readFileSync(p)),corporationID:owner}));
+ assert.equal(f.recover().reason,"ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF");
+});
 test("cargo lost without committed warehouse proof is quarantined",t=>{
  const f=fixture(t);f.confirm();f.cargo.delete(CARGO);
  assert.equal(f.recover().reason,"ALIFE12_SOURCE_MISSING_WITHOUT_WAREHOUSE_PROOF");

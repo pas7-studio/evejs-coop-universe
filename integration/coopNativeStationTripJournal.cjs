@@ -206,12 +206,16 @@ function saleReceiptMatches(row,m){return saleReceiptCovers(row,m,0)}
      r.cargoID!==row.cargoID||r.haulerID!==row.haulerID||
      r.typeID!==row.typeID||r.quantity!==row.quantity||
      r.systemID!==m.systemID||r.fleetID!==m.fleetID||
-     r.stationID!==m.stationID||r.corporationID!==m.corporationID||
-     !pos(r.itemID))return false;
+     r.stationID!==m.stationID||!pos(r.corporationID)||!pos(r.itemID))return false;
+  // The receipt names the ore OWNER; the manifest names the station corporation.
+  // A manifest row that recorded its pre-warp owner must match it exactly, and the
+  // physical stack below is the final authority on who holds the ore.
+  if(pos(row.ownerID)&&pos(row.ownerID)!==pos(r.corporationID))return false;
+  const ownerID=pos(r.corporationID);
   const item=items.findWarehouseItem({
-   ownerID:m.corporationID,stationID:m.stationID,cargoID:row.cargoID});
+   ownerID,stationID:m.stationID,cargoID:row.cargoID});
   return Boolean(item&&item.itemID===r.itemID&&item.typeID===row.typeID&&
-   item.quantity===row.quantity&&item.ownerID===m.corporationID&&
+   item.quantity===row.quantity&&item.ownerID===ownerID&&
    item.locationID===m.stationID&&String(item.customInfo)===marker(row.cargoID));
  }
  function recover({systemID,fleetID,haulerIDs}={}){

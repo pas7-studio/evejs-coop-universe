@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "mining_fleet_diagnose"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "war_combat_diagnose", "war_funding_diagnose", "inspect_npc", "npc_pair_diagnose", "mining_fleet_diagnose", "arrival_diagnose"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -798,6 +798,31 @@ function executeRequest(request) {
       return { ok: true, combat: runtimeWorld.diagnoseCombat() };
     } catch (error) {
       return { ok: false, error: "combat diagnose failed: " + String(error && error.message || error) };
+    }
+  }
+  // Read-only: WHICH term of the arrival gate refuses a deposit for one hauler of
+  // a live trip (station point / physical stability / dwell). Never warps, orders,
+  // deposits or creates a scene.
+  if (action === "arrival_diagnose") {
+    const systemID = Number(request.systemID) || 0;
+    const fleetID = Number(request.fleetID) || 0;
+    const haulerID = Number(request.haulerID) || 0;
+    const cargoID = Number(request.cargoID) || 0;
+    if (!(systemID > 0) || !(haulerID > 0)) return { ok: false, error: "systemID and haulerID are required" };
+    try {
+      const operations = require("../services/mining/miningNpcOperations");
+      const fleets = operations.getMiningFleetsForSystem(systemID) || [];
+      const fleet = fleetID > 0 ? fleets.find((row) => Number(row?.fleetID) === fleetID) : fleets[0];
+      const trip = fleet?.coopStationArrival || null;
+      const stationID = Number(request.stationID) || Number(trip?.stationID) || 0;
+      const arrivedAtMs = Number(trip?.haulers?.[haulerID]?.arrivedAt) || 0;
+      const arrival = require("./coopNativeStationArrival" + siblingSuffix).diagnoseArrival({
+        systemID, stationID, fleetID: Number(fleet?.fleetID) || 0, haulerID, cargoID, arrivedAtMs });
+      return { ok: true, systemID, fleetID: Number(fleet?.fleetID) || 0, stationID, haulerID,
+        cargoID, fleetState: String(fleet?.state || ""), tripStationID: Number(trip?.stationID) || 0,
+        tripCorporationID: Number(trip?.corporationID) || 0, arrival };
+    } catch (error) {
+      return { ok: false, error: "arrival diagnose failed: " + String(error && error.message || error) };
     }
   }
   // Read-only: why a stock mining fleet is not at its belt, or why a loaded fleet
