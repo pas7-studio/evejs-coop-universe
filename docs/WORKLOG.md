@@ -1684,3 +1684,8 @@ Why: Extracted the native alliance authority guard into one reusable, env-gated 
 Detail: coop-engine-audit.cjs measures co-op code inside stock EveJS files, monkey patching, source rewriting, the frozen legacy transform library and integration/ drift; budgets fail the run on growth (AUDIT_OK / AUDIT_REGRESSION). FORK_PATCH_AUDIT_20261028.md records the numbers: 392 engine modules, 56 stock files with 430 lines, zero runtime patching, 78 frozen patch scripts. First extraction: native a
 Where: AGENTS.md, docs/FORK_PATCH_AUDIT_20261028.md, integration/coopStructureAllianceGuard.cjs, scripts/coop-engine-audit.cjs, tests/coop-structure-alliance-guard-module.test.mjs
 Evidence: node scripts/coop-engine-audit.cjs -> AUDIT_OK exit=0; node --test alliance x3 -> pass 15 / fail 0; before/after chars 16450 -> 1707
+### 2026-10-27T23:04Z · 754fdb8 · L2 · docs(worklog): engine audit + alliance guard extraction (L2 deb2a50)
+
+Why: the faction-warfare front tab stayed black for our pair: the occupation-state hook reported FACTION ids (500001/500004) while the client colours warzone systems by MILITIA CORPORATION (1000180/1000181), so it could not resolve a side; the earlier 813-system experiment only slowed the map
+Where: docs/WORKLOG.md
+Evidence: fork commit a52cf22; live probe: warzone 2 -> 30003837 owner 1000181/occupier 1000181, 30045344 owner 1000180/occupier 1000181 contested=true; GetLocalOccupationState same; coop-engine-audit AUDIT_OK
