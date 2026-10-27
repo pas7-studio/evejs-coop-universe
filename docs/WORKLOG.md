@@ -1204,3 +1204,9 @@ Why: a refused native warp is published with the action instead of leaving a sil
 Detail: The raid only recorded successful orders, so a warp the native runtime declined left a lease behind and surfaced 20 s later as APPROACH_NOT_WARPING - the real reason was nowhere. The refusal now travels with the action (warp-to-hauler-refused + errorMsg) and the lease logic is unchanged. Tests: tests/coop-native-raids-gameplay.test.mjs 25/25.
 Where: integration/coopNativeRaids.cjs, tests/coop-native-raids-gameplay.test.mjs
 Evidence: tests/coop-native-raids-gameplay.test.mjs 25/25 (new case: refused warp is reported verbatim); OVERLAY_OK; deployed
+### 2026-10-27T11:23Z · e20f680 · L2 · FW-018b fix: raid_diagnose resolves its own services instead of a function-local name
+
+Why: raid_diagnose required its own services; the live action answered SCENE_MISSING 'runtime is not defined'
+Detail: runtime/controllers/mining are locals of advanceNativeRaids, so the module-level diagnose answered SCENE_MISSING 'runtime is not defined' in the live container. It now requires the same three services itself and reports a missing scene as a reason. Live: raid_diagnose 30000145 -> status OK, linkedShips 21, roleCounts pirate 4, fleetShips 23, leases [], per-hull gunRangeMeters 1050/5000/15625 RESOL
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: live raid_diagnose 30000145 -> OK, pirates 4, fleetShips 23, gunRangeMeters 1050/5000/15625

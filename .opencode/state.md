@@ -1,5 +1,18 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 11:24Z - why minerals cannot be sold yet (measured, not assumed)
+
+scripts/coop-mineral-audit.cjs (5 tests) reads the real stock and asks the real market book:
+the corporation holds 23 refinery stacks - 407 192 Tritanium + 81 826 Pyerite at 60000358 and
+321 677 + 7 401 at 60000682 - and region 10000002 (The Forge) returns ZERO orders for typeID
+34 and 35. There is no buyer to fill, so a mineral sale leg would be dead on arrival; the
+blocker is demand, not custody.
+
+Closing the loop therefore needs one of:
+  a) native industry really consuming minerals (blueprint + funded corp + industry jobs), or
+  b) backed seed BUY orders for minerals via the market daemon (AdjustSeedStock), which
+     changes the economy book and needs the owner explicit approval.
+
 ## NEXT (unfinished, do not claim done)
 
 1. Minerals -> ISK. Refined minerals sit in corp 1000129 hangar with customInfo prefix
