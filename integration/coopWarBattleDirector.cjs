@@ -36,7 +36,7 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
    return {status:"DISABLED_OR_UNSAFE_AMMO",orders:[]};
   if(!Array.isArray(systemIDs)||systemIDs.length>20)
    return {status:"INVALID_SYSTEMS",orders:[]};
-  const at=clock(),orders=[];
+  const at=clock(),orders=[],selections=[];
   if(!pos(at))return {status:"INVALID_CLOCK",orders};
   let snapshots;
   try{snapshots=authority.snapshots()}catch{}
@@ -52,120 +52,135 @@ function createWarBattleDirector({authority,bridge,sceneForSystem,
    const fleet=grouped.filter(x=>x.systemID===systemID).slice(0,80);
    const players=new Set([...(scene.sessions?.values?.()||[])]
     .map(s=>Number(s?._space?.shipID)).filter(pos));
-   for(const shipRow of fleet){
-    if(orders.length>=maxOrders)break;
-    const id=shipRow.entityID,attacker=scene.getEntityByID(id),
-      key=String(id),controller=getController(id);
-    if(players.has(id)||!attacker||!vec(attacker.position)||warp(attacker)||
-      controller?.entityID!==id||controller.systemID!==systemID||
-      Number(controller.currentTargetID)>0||
-      (controller.manualOrder&&controller.manualOrder.type!=="resumeBehavior")||
-      nextAt.get(key)>at||isAmmoDepleted(systemID,id)||isTactical(id))
-      continue;
-    const opponents=fleet.filter(x=>x.entityID!==id&&
-     x.factionID!==shipRow.factionID&&x.campaignID===shipRow.campaignID&&
-     x.warID===shipRow.warID).map(row=>{
-       const entity=scene.getEntityByID(row.entityID);
-       return {row,entity};
-     }).filter(x=>!players.has(x.row.entityID)&&
-       x.entity?.nativeNpc===true&&vec(x.entity.position)&&!warp(x.entity)&&
-       dist(attacker.position,x.entity.position)<=250000)
-     .sort((a,b)=>dist(attacker.position,a.entity.position)-
-       dist(attacker.position,b.entity.position)||a.row.entityID-b.row.entityID);
-    for(const opponent of opponents){
-     // Use the native authority twice: preselect and again immediately
-     // before issuing the synchronous native command.
-     const authorized=authority.evaluatePair(attacker,opponent.entity,
-      {requireAttackIntent:false,proof:snapshots});
-     if(authorized.status!=="AUTHORIZED")continue;
-     const targetID=opponent.row.entityID;
-     const targetController=getController(targetID);
-     // A war fleet does not steal a ship already engaged by a player,
-     // raid, rescue or another active manual native order.
-     if(targetController?.entityID!==targetID||
-        targetController.systemID!==systemID||
-        (Number(targetController.currentTargetID)>0&&
-         Number(targetController.currentTargetID)!==id)||
-        (targetController.manualOrder&&
-         targetController.manualOrder.type!=="resumeBehavior"&&
-         !(targetController.manualOrder.type==="attack"&&
-           Number(targetController.manualOrder.targetID)===id)))continue;
-     let answer;
-     try{
-      answer=bridge.issue({entityID:id,systemID,owner:"WAR",action:"attack",
-       holdMs:120000,execute:()=>{
-        if(!combatEnabled(env)||!ammoEnabled(env)||
-          isAmmoDepleted(systemID,id)||isTactical(id)||
-          warp(attacker)||warp(opponent.entity)||
-          Number(getController(id)?.currentTargetID)>0||
-          (Number(getController(targetID)?.currentTargetID)>0&&
-           Number(getController(targetID)?.currentTargetID)!==id))
-          return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
-        const fresh=authority.evaluatePair(attacker,opponent.entity,
-         {requireAttackIntent:false});
-        if(fresh.status!=="AUTHORIZED")return {success:false,errorMsg:"WAR_NATIVE_PROOF_CHANGED"};
-        return issueNativeAttack(id,targetID,{allowWeapons:true,
-         keepLock:true,allowPodKill:false});
-       }});
-     }catch{answer={success:false,errorMsg:"WAR_ORDER_OUTCOME_UNCERTAIN"}}
-     // An accepted attack order does NOT prove fired ammo, hits or death.
-     if(answer?.success===true){
-      orders.push({status:"NATIVE_ATTACK_ORDER_ACCEPTED",systemID,attackerID:id,
-       targetID,warID:authorized.warID,campaignID:authorized.campaignID});
-      nextAt.set(key,at+cooldownMs);
-     }else if(answer?.errorMsg==="WAR_ORDER_OUTCOME_UNCERTAIN")
-      // If the bridge itself escaped with an ambiguous outcome, keep the
-      // local hull quarantined rather than retrying after a cooldown.
-      nextAt.set(key,Number.POSITIVE_INFINITY);
-     else if(answer?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
-      nextAt.set(key,Number.POSITIVE_INFINITY);
-     // No target-hopping after a potentially ambiguous native command.
-     break;
+    for(const shipRow of fleet){
+     if(orders.length>=maxOrders)break;
+     const id=shipRow.entityID,attacker=scene.getEntityByID(id),
+       key=String(id),controller=getController(id);
+     if(players.has(id)||!attacker||!vec(attacker.position)||warp(attacker)||
+       controller?.entityID!==id||controller.systemID!==systemID||
+       Number(controller.currentTargetID)>0||
+       (controller.manualOrder&&controller.manualOrder.type!=="resumeBehavior")||
+       nextAt.get(key)>at||isAmmoDepleted(systemID,id)||isTactical(id))
+       continue;
+     // ONE candidate list: a hostile native hull and an enlisted enemy player are
+     // the same kind of candidate. The only player-specific fact is the proof that
+     // makes him hostile at all (an ACTIVE enlistment in the opposing faction), and
+     // that proof is re-read immediately before the native order is issued.
+     const candidates=[];
+     for(const row of fleet){
+      if(row.entityID===id||row.factionID===shipRow.factionID||
+        row.campaignID!==shipRow.campaignID||row.warID!==shipRow.warID)continue;
+      if(players.has(row.entityID))continue;
+      const entity=scene.getEntityByID(row.entityID);
+      if(!entity||entity.nativeNpc!==true||!vec(entity.position)||warp(entity))continue;
+      const distance=dist(attacker.position,entity.position);
+      if(distance>250000)continue;
+      candidates.push({kind:"WAR_SHIP",entityID:row.entityID,entity,distance,row});
      }
-     // FW-024: no NPC opponent was engaged, so this war ship may now engage an
-     // enlisted enemy player in the same campaign. The order is a real native
-     // attack order; the player's own faction is never in this list.
-     if(orders.length<maxOrders){
-      const candidates=militiaTargets({systemID,shipRow,scene})
-       .filter(x=>pos(x.entityID)&&x.entityID!==id&&x.entity&&vec(x.entity.position)&&
-        !warp(x.entity)&&dist(attacker.position,x.entity.position)<=250000)
-       .sort((a,b)=>dist(attacker.position,a.entity.position)-
-        dist(attacker.position,b.entity.position)||a.entityID-b.entityID);
-      for(const candidate of candidates){
-       if(orders.length>=maxOrders)break;
-       let answer;
-       try{
-        answer=bridge.issue({entityID:id,systemID,owner:"WAR",action:"attack",
-         holdMs:120000,execute:()=>{
-          if(!combatEnabled(env)||!ammoEnabled(env)||
-            isAmmoDepleted(systemID,id)||isTactical(id)||warp(attacker)||
-            warp(candidate.entity)||
-            Number(getController(id)?.currentTargetID)>0)
-           return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
-          const fresh=militiaTargets({systemID,shipRow,scene})
-           .find(x=>x.entityID===candidate.entityID);
-          if(!fresh)return {success:false,errorMsg:"WAR_MILITIA_PROOF_CHANGED"};
-          return issueNativeAttack(id,candidate.entityID,{allowWeapons:true,
-           keepLock:true,allowPodKill:false});
-         }});
-       }catch{answer={success:false,errorMsg:"WAR_ORDER_OUTCOME_UNCERTAIN"}}
-       if(answer?.success===true){
-        orders.push({status:"NATIVE_ATTACK_ORDER_ACCEPTED",systemID,attackerID:id,
-         targetID:candidate.entityID,targetKind:"MILITIA_PLAYER",
-         characterID:candidate.characterID,warID:shipRow.warID,
-         campaignID:shipRow.campaignID,
-         evidence:"ACTIVE_ENLISTMENT_IN_THE_OPPOSING_FACTION"});
-        nextAt.set(key,at+cooldownMs);
-       }else if(answer?.errorMsg==="WAR_ORDER_OUTCOME_UNCERTAIN"||
-        answer?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED")
-        nextAt.set(key,Number.POSITIVE_INFINITY);
-       break;
+     for(const target of militiaTargets({systemID,shipRow,scene})){
+      if(!pos(target.entityID)||target.entityID===id||!target.entity||
+        !vec(target.entity.position)||warp(target.entity))continue;
+      const distance=dist(attacker.position,target.entity.position);
+      if(distance>250000)continue;
+      candidates.push({kind:"MILITIA_PLAYER",entityID:target.entityID,
+        entity:target.entity,characterID:Number(target.characterID)||0,distance});
+     }
+     // Same rule for every candidate: nearest first. On an exact distance tie a
+     // native hull wins over a player, so a player is never preferred.
+     candidates.sort((a,b)=>a.distance-b.distance||
+       (a.kind===b.kind?0:a.kind==="WAR_SHIP"?-1:1)||a.entityID-b.entityID);
+     const selection=candidates.length?{shipID:id,systemID,
+       factionID:shipRow.factionID,warID:shipRow.warID,campaignID:shipRow.campaignID,
+       candidates:candidates.slice(0,8).map(c=>({entityID:c.entityID,kind:c.kind,
+         distanceMeters:Math.round(c.distance),chosen:false,reason:""})),
+       ordered:0}:null;
+     if(selection)selections.push(selection);
+     for(const candidate of candidates){
+      if(orders.length>=maxOrders)break;
+      const slot=selection.candidates.find(x=>x.entityID===candidate.entityID);
+      if(candidate.kind==="WAR_SHIP"){
+       // Use the native authority twice: preselect and again immediately
+       // before issuing the synchronous native command.
+       const authorized=authority.evaluatePair(attacker,candidate.entity,
+        {requireAttackIntent:false,proof:snapshots});
+       if(authorized.status!=="AUTHORIZED"){
+        if(slot)slot.reason="AUTHORITY_"+String(authorized.status||"REFUSED");
+        continue;
+       }
+       const targetID=candidate.entityID,targetController=getController(targetID);
+       // A war fleet does not steal a ship already engaged by a player,
+       // raid, rescue or another active manual native order.
+       if(targetController?.entityID!==targetID||
+          targetController.systemID!==systemID||
+          (Number(targetController.currentTargetID)>0&&
+           Number(targetController.currentTargetID)!==id)||
+          (targetController.manualOrder&&
+           targetController.manualOrder.type!=="resumeBehavior"&&
+           !(targetController.manualOrder.type==="attack"&&
+             Number(targetController.manualOrder.targetID)===id))){
+        if(slot)slot.reason="TARGET_BUSY";
+        continue;
+       }
+      }else{
+       // A player candidate is legal only while the enlistment proof still holds.
+       const fresh=militiaTargets({systemID,shipRow,scene})
+        .find(x=>x.entityID===candidate.entityID);
+       if(!fresh){
+        if(slot)slot.reason="WAR_MILITIA_PROOF_CHANGED";
+        continue;
+       }
       }
+      const targetID=candidate.entityID;
+      let answer;
+      try{
+       answer=bridge.issue({entityID:id,systemID,owner:"WAR",action:"attack",
+        holdMs:120000,execute:()=>{
+         if(!combatEnabled(env)||!ammoEnabled(env)||
+           isAmmoDepleted(systemID,id)||isTactical(id)||
+           warp(attacker)||warp(candidate.entity)||
+           Number(getController(id)?.currentTargetID)>0||
+           (candidate.kind==="WAR_SHIP"&&
+            Number(getController(targetID)?.currentTargetID)>0&&
+            Number(getController(targetID)?.currentTargetID)!==id))
+           return {success:false,errorMsg:"WAR_NATIVE_UNSAFE_RECHECK"};
+         if(candidate.kind==="WAR_SHIP"){
+          const fresh=authority.evaluatePair(attacker,candidate.entity,
+           {requireAttackIntent:false});
+          if(fresh.status!=="AUTHORIZED")return {success:false,errorMsg:"WAR_NATIVE_PROOF_CHANGED"};
+         }else if(!militiaTargets({systemID,shipRow,scene})
+          .some(x=>x.entityID===targetID))
+          return {success:false,errorMsg:"WAR_MILITIA_PROOF_CHANGED"};
+         return issueNativeAttack(id,targetID,{allowWeapons:true,
+          keepLock:true,allowPodKill:false});
+        }});
+      }catch{answer={success:false,errorMsg:"WAR_ORDER_OUTCOME_UNCERTAIN"}}
+      // An accepted attack order does NOT prove fired ammo, hits or death.
+      if(answer?.success===true){
+       if(slot){slot.chosen=true;slot.reason="ORDER_ACCEPTED";}
+       if(selection)selection.ordered=1;
+       orders.push(candidate.kind==="MILITIA_PLAYER"?
+        {status:"NATIVE_ATTACK_ORDER_ACCEPTED",systemID,attackerID:id,
+         targetID,targetKind:"MILITIA_PLAYER",characterID:candidate.characterID,
+         warID:shipRow.warID,campaignID:shipRow.campaignID,
+         evidence:"ACTIVE_ENLISTMENT_IN_THE_OPPOSING_FACTION"}:
+        {status:"NATIVE_ATTACK_ORDER_ACCEPTED",systemID,attackerID:id,
+         targetID,warID:shipRow.warID,campaignID:shipRow.campaignID});
+       nextAt.set(key,at+cooldownMs);
+      }else if(answer?.errorMsg==="WAR_ORDER_OUTCOME_UNCERTAIN"||
+       answer?.errorMsg==="COOP_NPC_ORDER_REPAIR_REQUIRED"){
+       if(slot)slot.reason=String(answer.errorMsg);
+       // If the bridge itself escaped with an ambiguous outcome, keep the
+       // local hull quarantined rather than retrying after a cooldown.
+       nextAt.set(key,Number.POSITIVE_INFINITY);
+      }else if(slot)slot.reason=String(answer?.errorMsg||"ORDER_REFUSED");
+      // Exactly one native command per hull per tick: a real native order was
+      // issued, so no target-hopping after it (success or failure).
+      break;
      }
     }
    }
   if(nextAt.size>1024)for(const [key,time] of nextAt)if(time<=at)nextAt.delete(key);
-  return {status:"OBSERVED",orders};
+  return {status:"OBSERVED",orders,selections};
  }
  return Object.freeze({tick});
 }

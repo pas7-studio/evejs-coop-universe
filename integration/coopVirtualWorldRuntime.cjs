@@ -1126,12 +1126,26 @@ function advanceNativeWarCombat(){
    isTactical:id=>tacticsDirector?.activeIDs()?.has(id)===true
   });
  }
- const result=warBattleDirector.tick({systemIDs:[...visitedSystems].slice(0,12)});
+ const result=warBattleDirector.tick({systemIDs:[...visitedSystems].sort((a,b)=>a-b).slice(0,12)});
  if(result.orders.length)require("./coopRuntimeProbe").observe(
   "living-native-war-attack-orders",null,null,{
    status:result.status,orders:result.orders,
    evidence:"ACK_ONLY_NOT_DAMAGE_OR_KILL"
   });
+ // Owner requirement: an enlisted player is one ship in a fleet, so the ranking
+ // itself is published - who was considered, at what range, in which order and
+ // why the chosen target won. A player who is only one of several candidates is
+ // visible here instead of being inferred from the order list.
+ if(Array.isArray(result.selections)&&result.selections.length){
+  const signature=JSON.stringify(result.selections.map(s=>s.shipID+":"+
+   s.candidates.map(c=>c.entityID+(c.chosen?"*":"")).join(",")));
+  if(warSkipReasons["battle-selection"]!==signature){
+   warSkipReasons["battle-selection"]=signature;
+   require("./coopRuntimeProbe").observe("living-native-war-target-selection",
+    null,null,{status:"RANKED",ships:result.selections.slice(0,8),
+     evidence:"SAME_DISTANCE_RULE_FOR_NPC_AND_PLAYER"});
+  }
+ }
 }
 // FW-009B: original stocked native structures, real killmail combat
 // proof, fully enumerated physical ships. No independent scheduler and
