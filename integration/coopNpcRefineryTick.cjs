@@ -140,7 +140,15 @@ function run(options = {}) {
   if (String(env[FLAG] || "") !== "1") return {status: "DISABLED", refined: 0};
   const ownerID = pos(env[CORP_FLAG]) || DEFAULT_CORP_ID;
   const stationID = pos(options.stationID);
-  if (!stationID) return {status: "NO_STATION", refined: 0};
+  // Say why nothing was refined instead of returning silently: a caller that passes no
+  // station must be visible in the event stream, not inferred from an empty refinery dir.
+  const skip = (status, extra = {}) => {
+    if (once(options, "refinery-skip:" + status + ":" + stationID, status))
+      note(options, "living-npc-refinery-skipped", {systemID: options.systemID,
+        ownerID, stationID, status, ...extra});
+    return {status, refined: 0};
+  };
+  if (!stationID) return skip("NO_STATION");
   let refinery;
   try {
     const factory = options.refinery ||
@@ -158,10 +166,10 @@ function run(options = {}) {
   try {
     rows = candidates({items, ownerID, stationID, limit: 8});
   } catch (error) {
-    return {status: "CANDIDATES_UNREADABLE", reason: String(error && error.message).slice(0, 80), refined: 0};
+    return skip("CANDIDATES_UNREADABLE", {reason: String(error && error.message).slice(0, 80)});
   }
-  if (rows === null) return {status: "STOCK_UNREADABLE", refined: 0};
-  if (!rows.length) return {status: "NO_WAREHOUSE_ORE", refined: 0};
+  if (rows === null) return skip("STOCK_UNREADABLE");
+  if (!rows.length) return skip("NO_WAREHOUSE_ORE");
   let refined = 0;
   const statuses = [];
   // The station bills its fee to the corporation, so the corporation has to hold the ISK
