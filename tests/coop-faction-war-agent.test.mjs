@@ -64,6 +64,15 @@ test('negative faction standing and absent operator allowlist deny joining',()=>
  assert.equal(f.peek().history.length,0);
  f.env.EVEJS_COOP_MILITIA_FACTION_IDS='';assert.equal(f.action(null),null);
 }));
+test('faction without a real militia corporation can never enlist',()=>withFlags(()=>{
+ // Measured SDE shape: Serpentis 500020 and ORE 500014 have
+ // militiaCorporationID null, so no agent of theirs may offer militia service.
+ const f=fixture();f.faction.militiaCorporationID=null;
+ assert.equal(f.action(null),null);assert.equal(f.action(3),null);
+ assert.deepEqual(f.peek().enlistments,{});
+ f.faction.militiaCorporationID=0;assert.equal(f.action(3),null);
+ f.faction.militiaCorporationID=22;assert.match(f.action(3).data.agentSays[0],/Enlistment recorded/);
+}));
 test('default-off militia agent does not intercept native missions',()=>withFlags(()=>{
  const f=fixture();f.env.EVEJS_COOP_FACTION_MILITIA_AGENT='0';
  assert.equal(f.action(3),null);
