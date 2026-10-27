@@ -1192,3 +1192,15 @@ Why: The refinery hook ran after two early returns so the whole fee/refine path 
 Detail: The hook sat after two early returns inside shouldTriggerHauling (no hauler linked, hauler still in transit), so live it never ran: no refinery events and no /var/lib/evejs/coop-native-refinery directory existed after hours of mining, while the same module called by hand from inside the container previews real fees (1 135.72 - 22 760.08 ISK) on the real warehouse stacks. It now runs on every haul 
 Where: scripts/overlay-spec.cjs
 Evidence: live events: living-corp-treasury-swept 1 (521754.08 ISK moved), living-npc-refined 16 COMMITTED with 16 journals and 16 fee receipts, fees 1135.72-22760.08 ISK
+### 2026-10-27T11:08Z · d0f5d8d · L2 · FW-018b: the raid director's own view of a system, and an override that merges
+
+Why: FW-018b: read-only raid_diagnose (per-pirate exclusion, controller state, own gun range, nearest prey, leases) and a merged behaviour override
+Detail: A real pirate with real prey and still no order was invisible: the periodic diagnose is only published when a system produced NO action at all, so a hull that the raid silently skips (loot delivery, ammo supply) or that sits parked at its own home never appeared anywhere. raid_diagnose (read-only admin action -> coopVirtualWorldRuntime.diagnoseNativeRaids) reports every linked pirate, why it is ex
+Where: integration/coopAdminBridge.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-admin-bridge-raid-diagnose.test.mjs
+Evidence: tests/coop-admin-bridge-raid-diagnose.test.mjs 4/4; OVERLAY_OK; deployed
+### 2026-10-27T11:13Z · 1e431ed · L2 · FW-018c: a refused native warp is published, not turned into a silent lease
+
+Why: a refused native warp is published with the action instead of leaving a silent lease
+Detail: The raid only recorded successful orders, so a warp the native runtime declined left a lease behind and surfaced 20 s later as APPROACH_NOT_WARPING - the real reason was nowhere. The refusal now travels with the action (warp-to-hauler-refused + errorMsg) and the lease logic is unchanged. Tests: tests/coop-native-raids-gameplay.test.mjs 25/25.
+Where: integration/coopNativeRaids.cjs, tests/coop-native-raids-gameplay.test.mjs
+Evidence: tests/coop-native-raids-gameplay.test.mjs 25/25 (new case: refused warp is reported verbatim); OVERLAY_OK; deployed

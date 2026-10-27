@@ -1,5 +1,24 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## NEXT (unfinished, do not claim done)
+
+1. Minerals -> ISK. Refined minerals sit in corp 1000129 hangar with customInfo prefix
+   coop-refine:v1:<item>:<qty>:mineral:. The station sale path (coopNativeStationArrival +
+   trip manifest) is ore-only (isOreType), and coopNpcLootCommerce is pilot/ship-centric, so
+   neither can sell them. Needed: one custody-safe local leg - a manifest of the refinery
+   operation IDs and mineral rows, a sale against real seeded buy orders at the same station
+   (minerals already there, no haul), and a durable receipt per row. No unbacked orders.
+2. Manufacturer buyer. corp 1000129 now holds ISK (455600 + 521754.08 swept). Missing: an
+   inventory item with categoryID = BLUEPRINT_CATEGORY_ID owned by that corp at a station,
+   which makes industryBlueprintState.records[itemID] real; then scripts/coop-factory-audit.cjs
+   must print FACTORY_READY (it reads blueprints, jobs, fundedCorporations).
+3. Gate baselines: coop-loop-gate.sh fails hook-inventory (58 expected, 59 actual),
+   overlay-l1-baseline (patch series != manifest), flags (3 new env flags:
+   EVEJS_COOP_NPC_MARKET_DIR, EVEJS_COOP_CORP_TREASURY, EVEJS_COOP_FACTORY_CORP_ID).
+   Update the baseline files deliberately after confirming no duplicate hook exists
+   (only one coopNpcRefineryTick.tick call is present in the built checkout, line ~2896 of
+   miningNpcOperations.js). isolated-gamestore passes once NODE_OPTIONS is cleared.
+
 ## 2026-10-27 11:07Z - LIVE PROOF: the refinery is paid and refines
 
 After moving the hook before the early returns in shouldTriggerHauling and deploying:
