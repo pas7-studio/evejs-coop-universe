@@ -892,3 +892,14 @@ Evidence: war_diagnose DRY_RUN rejected: DEFENDER WRONG_FACTION (ORE has no arme
 Why: Record item 1/2/5 evidence and the proven assault blocker
 Where: .opencode/metrics.md, .opencode/state.md, docs/WORKLOG.md
 Evidence: metrics.md blocks for 3fc8e73c and 457b0ef0; state.md next-step plan
+### 2026-10-26T23:58Z · 78fb32c · L2 · feat(war): a commander's rank caps the ships a campaign side may field
+
+Why: Command size was a description only; one global maxPerSide capped every campaign side
+Detail: coopFactionWarMerit already described command size (recruit 1, squad-lead 5, admiral 25) but nothing enforced it: the mobiliser used one global maxPerSide. It now takes an optional commandCap({campaignID,factionID, systemID,assignedPilotIDs}) and limits each side to max(1, min(maxPerSide, cap)). coopFactionWarMerit gains commandCapFor(record) and sideCommandCap({pilotIDs, records}): a side is comm
+Where: docs/WORKLOG.md, integration/coopFactionWarMerit.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarMobilizer.cjs, tests/coop-war-mobilization.test.mjs
+Evidence: coop-war-mobilization 10/10 (recruit caps a side at 1, admiral up to the hard cap); merit+assault 6/6; --check OVERLAY_OK
+### 2026-10-26T23:59Z · 01173d8 · TEST · docs: native industry as the ore buyer - findings and bootstrap plan
+
+Why: The mining loop had no buyer; a read-only audit now names exactly which native pieces are missing instead of guessing, and two wrong assumptions it exposed are pinned as tests.
+Where: .opencode/state.md
+Evidence: tests tests/coop-factory-audit.test.mjs 6 pass; live status=FACTORY_NOT_READY blueprints=0 jobs=0 fundedCorporations=0 with all stations online

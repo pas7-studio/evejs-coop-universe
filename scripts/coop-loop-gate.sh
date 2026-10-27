@@ -56,6 +56,7 @@ run "deploy-reset-list"      node --test tests/coop-deploy-reset-list.test.mjs
 run "overlay-l1-baseline"    node --test tests/coop-overlay-l1-baseline.test.mjs
 run "fleet-composition"      node --test tests/coop-fleet-composition.test.mjs
 run "fleet-audit"           node --test tests/coop-fleet-audit.test.mjs
+run "factory-audit"         node --test tests/coop-factory-audit.test.mjs
 run "fleet-slot-recompose"   node --test tests/coop-fleet-slot-recompose.test.mjs
 run "mining-fill-cap"       node --test tests/coop-mining-fill-cap.test.mjs
 run "cargo-volume"         node --test tests/coop-cargo-volume.test.mjs
