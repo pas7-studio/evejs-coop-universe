@@ -1,5 +1,61 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 15:10Z - owner backlog registered (8 items), exact first step for each
+
+Owner approved this order. Nothing below is claimed done; this is the plan a fresh
+session continues from, with the real file/line anchors already located.
+
+1. **Owner's personal loop: kill -> merit -> VISIBLE rank/title -> chest payout.**
+   Title first. Already real: `coopWarMeritLedger` + `coopFactionWarMerit` (rank
+   from merit) and `coopWarRankTitle.apply()` (durable title ledger, wired to
+   `coopWarKillMerit` on `PROMOTED`, event `living-native-war-rank-title`). Missing
+   for *his* character: the title is only in the co-op ledger - it must be written
+   into the native character record's own `title` field (client-visible on the
+   character sheet) for `coop-player-<characterID>`, via the stock
+   `characterState` writer, refusing any non-player key and any unknown rank.
+   Then the payout: `coopWarKillMerit` already calls `bountyPayer` ->
+   `coopWarBounty`/`coopWarTreasury` PAYOUT from HELD escrow; it needs a funded
+   chest (item 5) or an armed faction with real income.
+3. **Structures as real objectives.** `campaign.structureID` is emitted by
+   `coopWarClientView.campaignSnapshots` (flag
+   `EVEJS_COOP_WAR_OBJECTIVE_STRUCTURE_TYPE_IDS=35832`) and the two real Astrahus
+   exist (1030000000000/1030000000001). Missing: `coopWarObjectiveAdjudicator` must
+   bind the campaign's structureID to a real native destruction of THAT structure
+   and flip `militaryControllerFactionID` on that proof only (no timer, no capture
+   by presence).
+4. **Fleet reconstitution + faction RESERVE.** `coopWarFleetRoster` already plans
+   from proven-alive survivors and records losses with a wreck; missing: a durable
+   per-faction hull reserve count (spawnable + equipped) and a front-chat line on
+   every loss/replacement through `coopWarClientView.frontReport` (same once-per-key
+   throttle as `warFrontChat`).
+5. **Real income for BOTH sides.** `war_funding_diagnose` live: every side is
+   `NO_REAL_FACTION_INCOME` (all five earned-ledger pilots sit at balance 0). The
+   only real ISK source is a seeded-market fill, so loot sales
+   (`coopNpcLootCommerce` -> `coopNativeNpcMarket`) must fund the *seller's own*
+   corporation (`coopNpcCorpTreasury` corporationID fix) - that is the same
+   misrouting bug already recorded for the Angel pilot.
+6. **Map/front-tab client check** (BLOCKED_CLIENT_CHECK until the owner confirms):
+   open the FW front tab and the insurgency/campaign map layer in 30045344; the
+   expected payloads are `coopWarClientView` campaignSnapshots (objective
+   `structure:<id>`) and `fwWarzoneSolarsystem.GetAllWarzonesOccupationStates`
+   (`ownerID`/`occupierID` field names still unverified).
+7. **Second player (Sasha):** server-side preconditions only - a second character
+   record docked at a militia desk, its own enlistment, its own active hull; never
+   claim a client success without the client.
+8. **Deferred:** shipcaster needs an owner decision (no beacon typeID exists for
+   500011/500014/500020; only empire 75928-75931) - propose "no faction shipcaster
+   in this build, empire beacons only"; native sovereignty needs a real TCU/IHub
+   typeID + a native claim row (live: `NATIVE_SOV_CLAIM:0`, reason
+   `NO_NATIVE_SOV_STRUCTURE`); incursions are a stub (2 files/0 handlers) - do not
+   build on them.
+
+**NEXT ACTION (exact).** Item 1, title half: add `applyToCharacter({pilotID,
+characterID,rank,title})` to `integration/coopWarRankTitle.cjs` writing the stock
+character record `title` (refuse non-`coop-player-` keys, unknown ranks and a
+missing record), call it from `coopWarKillMerit` when the pilot key is a player,
+emit `living-native-war-rank-title` with `surface:"CHARACTER_RECORD_TITLE"`, and
+unit-test the refusals + the exact written value.
+
 ## 2026-10-27 15:00Z - ITEM 3 (owner correction): an enlisted player is ONE ship in a fleet
 
 **Code PASS (4001d5bd).** `coopWarBattleDirector` no longer has a separate

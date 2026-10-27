@@ -453,3 +453,11 @@ overlay: OVERLAY_OK ; docker build evejs-local + compose recreate server OK
 live: militia_enlist 140000102/3012018 -> {"enlistment":{"factionID":500001,"status":"ACTIVE"},"agentSays":"[Militia] Enlistment recorded for Caldari State."} ; read-only verdict probe on the real war ships of campaign:30045344 -> char=140000102 ship=980000023571 faction=500001 system=30045344 {"status":"ALLY","factionID":500001} and ship=980000023574 faction=500004 system=30003837 {"status":"NO_ACTIVE_ASSAULT"}
 metrics: tests_total=49 pass=49 fail=0 modules_added=0 modules_changed=2 live_events=2
 next: BLOCKED_CLIENT_CHECK for the in-space multi-tick selection (no client session: coopSessionPresence.admission needs a live socket, and 140000005 is undocked with stationID null). World prerequisite: the Gallente attacker 980000023574 is still in 30003837 although EVEJS_COOP_FACTION_WAR_GATE_APPROACH=1 was added - no living-native-war-gate event yet.
+
+## 2026-10-27T15:10Z - BACKLOG REGISTERED (owner order 1,3,4,5,6,7,8) - docs only
+done: the eight-item owner backlog is written into .opencode/state.md with the exact anchor for each item (rank title -> native character record title, structure objective -> native destruction adjudicator, fleet reserve + front-chat attrition, real income for both sides via the corp-treasury misrouting fix, map/front-tab client check, second player preconditions, deferred shipcaster/sov/incursion decisions).
+tests: not run (no code change)
+overlay: unchanged OVERLAY_OK
+live: not run (no code change); last measured live facts kept: war_funding_diagnose every side NO_REAL_FACTION_INCOME, five earned pilots at balance 0
+metrics: tests_total=0 pass=0 fail=0 modules_added=0 modules_changed=0 live_events=0
+next: item 1 title half - coopWarRankTitle.applyToCharacter writes the stock character record title for coop-player-<id>, wired from coopWarKillMerit, with refusal tests
