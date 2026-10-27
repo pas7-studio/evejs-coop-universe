@@ -69,9 +69,20 @@ function candidates({items, ownerID, stationID, limit = 8}) {
 
 // Move the fleet's own earnings into the corporation that pays the station bill.
 // Best effort: a missing ledger or a disabled flag must never block refining.
+// The repo keeps .cjs modules while the overlay installs them as .js, and the installer
+// only rewrites extensionless requires, so both forms are offered explicitly.
+function loadTreasury() {
+  try {
+    return require("./coopNpcCorpTreasury.cjs");
+  } catch (error) {
+    if (error && error.code === "MODULE_NOT_FOUND") return require("./coopNpcCorpTreasury");
+    throw error;
+  }
+}
+
 function fundTreasury({options, env, ownerID}) {
   try {
-    const treasury = options.treasury || require("./coopNpcCorpTreasury.cjs");
+    const treasury = options.treasury || loadTreasury();
     return treasury.run({env, root: options.marketRoot, corporationID: ownerID,
       gameStore: options.gameStore, fsApi: options.fsApi, now: options.now,
       observe: options.observe, probe: options.probe});
