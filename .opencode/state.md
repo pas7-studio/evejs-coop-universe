@@ -1228,3 +1228,30 @@ same victim; if the hull still sits outside its own gun range, read the new
 `returningHome`/`leashRangeMeters`/`homeDistanceMeters` fields (a stock NPC beyond its
 leash clears combat state and flies home) instead of guessing. Then wreck -> stored loot ->
 casualty ledger -> merit -> seeded sale -> war chest -> PAYOUT.
+
+## 2026-10-27T11:48Z - item 2 step 4 (committed): why the DPS never happens, measured (d0f5d8de, e20f6801, 1e431ed0, c6965dbd)
+
+**New read-only tool.** `raid_diagnose` (admin bridge -> `diagnoseNativeRaids`) reports
+per linked pirate: exclusion reason (loot delivery / ammo supply), native controller state
+(mode, currentTargetID, manual order, returningHome, leash, home distance, orbit override),
+the range its own fitted weapon really has, and its nearest real prey - plus the director's
+leases. A refused native warp is now published instead of leaving a silent lease.
+
+**Measured (verbatim).** At 11:18Z `raid_diagnose 30000145`: `status OK, linkedShips 21,
+roleCounts pirate 4, fleetShips 23, leases []`; 980000018058 `mode STOP,
+homeDistanceMeters 0, gunRangeMeters 1050 RESOLVED`, nearest hauler 980000016318 at
+**4446 m**. Three minutes later `npc_pair_diagnose 980000018058 -> 980000016318`:
+`distanceMeters 373994637299.5` (2.5 AU), `returningHome true, leashRangeMeters 90000,
+manualType "", currentTargetID 0`. So the hull had the prey 4.4 km away, the prey's retreat
+moved it 2.5 AU, and the stock leash cleared the order and flew the hull home. Last
+`living-native-weapon-event` 10:20:06Z; the 300-charge cruiser has never fired in this boot.
+
+**Fix (c6965dbd).** While the raid holds a lease it owns the hull's movement: it widens the
+hull's own stock leash to the approach it ordered (distance + 100 km) and restores the
+profile value on release, publishing `living-native-raid-leash` once per change. The leash
+is a behaviour parameter, not an evidence gate.
+
+**NEXT ACTION (exact).** Sample `raid_diagnose`/`npc_pair_diagnose` until 980000018058
+holds an attack order inside its own 1050 m gun range on a pinned prey, then require
+`living-native-weapon-event` from it plus falling shield/armor on the same victim, then the
+wreck -> loot -> casualty -> merit -> seeded sale -> war chest -> PAYOUT chain.
