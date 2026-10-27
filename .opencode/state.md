@@ -1323,3 +1323,20 @@ call is removed and the leash (c6965dbd) is the single movement mechanism.
 real seeded buyer at New Caldari 60000688 (typeID 482 @ 571 211 ISK), then fund the
 faction chest from that real fill, re-run `war_funding_diagnose` until the side reads
 FUNDED, and confirm `living-native-war-bounty` PAID from HELD escrow.
+## 2026-10-27T12:02Z - ITEM 1 CLOSED (live): real fire, real kill, real wreck with stored loot
+
+**Proven (verbatim, container evejs-server-1).** The DPS gap is closed by the home-measured
+leash (ccd6046c): `npc_pair_diagnose 980000018058 -> 980000016299` showed
+`locks {locked:[980000016299]}, activeModules [... 980100056948]` and the victim's shield fell
+**3118.35 -> 1773.12 in 30 s** while the attacker orbited at 2030 m. Then two real wrecks:
+
+- 11:52:33Z `PHYSICAL_NATIVE_STOCK_FLEET_WRECK_VERIFIED` victim 980000016472 wreckID
+  **980300000008**, `storedItemCount 3, storedQuantity 93450, lootStatus ITEMS_STORED`,
+  attacker 980000000601 (coop-pilot-060);
+- 12:00:10Z wreckID **980300000009**, victim 980000019472, `storedQuantity 3150`,
+  attacker 980000000602 (coop-pilot-080).
+
+**NEXT ACTION (exact).** The loot leg: watch `living-native-loot-*` for the recovery of wreck
+980300000008/9, then `living-npc-station-sold` with real ISK from a seeded bid at New Caldari
+60000688 (482 @ 571 211 ISK was the measured bid). Then the war chest reserve, the opening with
+SUPPLY_UNFUNDED resolved, and the escrow PAYOUT to the named pilot.
