@@ -70,6 +70,22 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
   try{persist()}catch(error){delete state.links[pilot.id];throw error;}
   return {...e};
  }
+ // A finished shift frees the pilot. The physical ship stays alive as a spare;
+ // only the identity link is dropped, and only when it still points at the exact
+ // entity the caller means. Without this a long-lived world spends one resident
+ // per station trip and every later sale dies with no free identity.
+ function release(pilotID,options={}){
+  if(!validID(pilotID))return {status:"INVALID_PILOT"};
+  const record=state.links[pilotID];
+  if(!record)return {status:"NOT_LINKED"};
+  const expected=positive(options?.expectedEntityID);
+  if(expected&&Number(record.entityID)!==expected)return {status:"ENTITY_MISMATCH"};
+  delete state.links[pilotID];
+  try{persist();}
+  catch(error){state.links[pilotID]=record;throw error;}
+  return {status:"RELEASED",pilotID,entityID:Number(record.entityID),
+   systemID:Number(record.systemID)};
+ }
  // Only update durable identity AFTER the same native ship physically
  // exists in the destination and is absent from its former EveJS scene.
  function relocate(pilotID,fromSystemID,entityID,toSystemID){
@@ -98,6 +114,6 @@ function createRegistry({file,exists,clock=()=>Date.now()}){
   if(removed)try{persist()}catch(error){state.links=before;throw error;}
   return removed;
  }
- return {get,link,relocate,prune,snapshot:()=>structuredClone(state)};
+ return {get,link,release,relocate,prune,snapshot:()=>structuredClone(state)};
 }
 module.exports={createRegistry};

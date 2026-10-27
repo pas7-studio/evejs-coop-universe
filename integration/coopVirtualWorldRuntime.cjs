@@ -3195,8 +3195,26 @@ function raidLeashWrite(pirateID,leashRangeMeters){
 function raidLeashScope(pirateID,distanceMeters){
  const distance=Number(distanceMeters)||0;
  if(!(distance>0))return {status:"NO_DISTANCE",entityID:pirateID};
+ // The leash is measured from the hull's OWN home, not from the hull: a raider
+ // that already chased its prey 5.7 AU from home needs a leash that covers both
+ // legs, otherwise the effective profile still reads "beyond leash" and the loop
+ // clears the order it was just given (measured live: leash 149 182 m applied
+ // while homeDistanceMeters was 862 066 008 895).
+ let homeGap=0;
+ try{
+  const controllers=require("./npc/npcRegistry");
+  const spaceRuntime=require("./runtime");
+  const ctrl=controllers.getControllerByEntityID(pirateID);
+  const scene=ctrl?spaceRuntime.ensureScene(Number(ctrl.systemID)||0,{refreshStargates:false}):null;
+  const ship=scene?.getEntityByID?.(pirateID);
+  const home=ctrl?.homePosition,position=ship?.position;
+  if(home&&position&&["x","y","z"].every(k=>
+   Number.isFinite(Number(home[k]))&&Number.isFinite(Number(position[k]))))
+   homeGap=Math.hypot(position.x-Number(home.x),position.y-Number(home.y),
+    position.z-Number(home.z));
+ }catch(_error){homeGap=0;}
  let outcome;
- try{outcome=raidLeashWrite(pirateID,distance+100000);}
+ try{outcome=raidLeashWrite(pirateID,homeGap+distance+100000);}
  catch(error){return {status:"REFUSED",entityID:pirateID,
   reason:String(error&&error.message||error).slice(0,80)};}
  // Published once per changed value: the leash the hull really flies with.
@@ -4577,6 +4595,39 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
     try{require("./coopNpcPresentation").presentVirtualPilot(scene,Number(haulerID),pilot);}
     catch(_error){/* a failed name broadcast must not block the sale */}
     return linked;
+  }
+  // Every resident may already be linked, because each station trip used to
+  // consume one identity for good. A hauler that is absent from every active
+  // scene, carries nothing and only sits in the store has finished its shift;
+  // its pilot can name the ship that is physically here instead of the sale
+  // dying with HAULER_NOT_NAMED forever.
+  const nativeStore=require("./npc/nativeNpcStore");
+  const sceneIDs=new Set(Array.from(scene?.dynamicEntities?.keys?.()||[]).map(Number));
+  for(const entry of links){
+   if(!["hauler","trader"].includes(String(entry.role)))continue;
+   if(entry.durable===true)continue;
+   if(Number(entry.systemID)!==Number(systemID))continue;
+   if(sceneIDs.has(Number(entry.entityID)))continue;
+   if(!nativeStore.getNativeEntity(Number(entry.entityID)))continue;
+   if((nativeStore.listNativeCargoForEntity(Number(entry.entityID))||[]).length)continue;
+   const donor=pilots.find(p=>String(p?.id)===String(entry.pilotID));
+   if(!donor)continue;
+   let freed=null;
+   try{freed=registry.release(entry.pilotID,{expectedEntityID:Number(entry.entityID)});}
+   catch(_error){continue;}
+   if(freed?.status!=="RELEASED")continue;
+   let reused=null;
+   try{reused=registry.link(donor,Number(systemID),Number(haulerID));}
+   catch(_error){continue;}
+   if(!reused||Number(reused.entityID)!==Number(haulerID))continue;
+   try{require("./coopNpcPresentation").presentVirtualPilot(scene,Number(haulerID),donor);}
+   catch(_error){/* a failed name broadcast must not block the sale */}
+   try{
+    require("./coopRuntimeProbe").observe("living-npc-merchant-identity-reused",null,
+     {spaceState:{pilotID:String(donor.id),fromEntityID:Number(entry.entityID),
+      toEntityID:Number(haulerID),systemID:Number(systemID)}});
+   }catch(_error){}
+   return reused;
   }
   return null;
  }

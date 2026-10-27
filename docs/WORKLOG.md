@@ -1233,3 +1233,8 @@ Why: Refinery minerals had no way back to ISK: a hangar stack cannot be sold by 
 Detail: c6965dbd already widens the hull's own stock leash while the raid holds its lease, so the separate home-anchor relocation is not a second mechanism: it was dropped, and this removes the call site a concurrent commit had captured without its definition (live: living-world-phase-failed phase native-raids reason relocateRaidHomeAnchors is not defined).
 Where: integration/coopVirtualWorldRuntime.cjs
 Evidence: coop-npc-mineral-lift 9/9, coop-mineral-audit 6/6; live GetOrders 10000002 buys=23 per type, station 60000682 Tritanium 5000@2.96 Pyerite 5000@16.35
+### 2026-10-27T11:40Z · 7bbc817 · L2 · coop: the mineral leg exists - hangar stock loads into native cargo and sells into the real bids
+
+Why: Every station-trip sale died with HAULER_NOT_NAMED because all 100 residents were linked, one per trip ever run; the identity pool had no lifecycle.
+Where: .opencode/state.md, docs/WORKLOG.md, integration/coopNpcMineralLift.cjs, scripts/coop-mineral-audit.cjs, scripts/overlay-spec.cjs, tests/coop-mineral-audit.test.mjs, tests/coop-npc-mineral-lift.test.mjs
+Evidence: live: 100 pilots, 100 links, 100 live entities; 26 living-npc-sale-skipped HAULER_NOT_NAMED; registry release test 6/6

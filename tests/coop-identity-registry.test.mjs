@@ -78,3 +78,25 @@ test("durable named NPC identity flag persists explicitly and legacy links remai
   assert.equal(restarted.snapshot().links["coop-pilot-004"].entityID,90101);
  }finally{rmSync(dir,{recursive:true,force:true})}
 });
+
+test('a finished shift releases the pilot so a long-lived world never runs out of identities', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'coop-identity-'));
+  try {
+    const file = join(dir, 'links.json');
+    const registry = createRegistry({file, exists: () => true});
+    const pilot = {id: 'coop-pilot-001', name: 'Wanderer 001', role: 'hauler'};
+    registry.link(pilot, 30000142, 8001);
+    // A release that points somewhere else must never steal a live ship.
+    assert.equal(registry.release(pilot.id, {expectedEntityID: 8002}).status, 'ENTITY_MISMATCH');
+    assert.equal(registry.get(pilot.id).entityID, 8001);
+    const freed = registry.release(pilot.id, {expectedEntityID: 8001});
+    assert.equal(freed.status, 'RELEASED');
+    assert.equal(freed.entityID, 8001);
+    assert.equal(registry.get(pilot.id), null);
+    // The same resident can name the ship that is really doing the work now.
+    assert.equal(registry.link(pilot, 30000142, 8003).entityID, 8003);
+    assert.equal(createRegistry({file, exists: () => true}).get(pilot.id).entityID, 8003);
+    assert.equal(registry.release(pilot.id).status, 'RELEASED');
+    assert.equal(registry.release(pilot.id).status, 'NOT_LINKED');
+  } finally { rmSync(dir, {recursive: true, force: true}); }
+});
