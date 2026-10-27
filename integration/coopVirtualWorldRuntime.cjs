@@ -32,6 +32,7 @@ function warMeritRecords(){
 let intelAnnouncer=null,recognitionAnnouncer=null,alifeEconomyObserver=null,nativeMiningWitness=null,courierDispatch=null;
 let wreckClaimReconcile=null,wreckRecoveryTimer=null,wreckRecoveryFastBusy=false;
 const wreckCustodyNotes=new Map();
+const lootStationNotes=new Map();
 // Wall-clock instant this process started running the living world. A wreck
 // claim is never closed or re-spawned inside the boot grace window, because a
 // scene that has just been created may not have loaded its entities yet.
@@ -2631,6 +2632,47 @@ function advanceNativeLootStationDelivery(){
    nativeMovementOrders:result.orders,physicallyReady:result.ready,
    source:"AUTHENTICATED_NATIVE_WRECK_CARGO",iskCredited:false
   });
+ else{
+  // A hull that really carries custody-verified wreck cargo and still gets no
+  // station order is a measured refusal, never silence: publish why.
+  const nowMs=Date.now();
+  for(const row of assignments){
+   const entityID=Number(row?.entityID)||0,pilotID=String(row?.pilotID||"");
+   const systemID=Number(row?.systemID)||0;
+   if(!(entityID>0)||!pilotID||!(systemID>0))continue;
+   let stock=[];
+   try{stock=lootCommerce.stock({pilotID,entityID});}catch(_error){stock=[];}
+   if(!stock.length)continue;
+   const key="loot-station:"+entityID;
+   if(nowMs-(lootStationNotes.get(key)||0)<300000)continue;
+   lootStationNotes.set(key,nowMs);
+   let ship=null,ctrl=null,stations=0,nearest=null;
+   try{
+    const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+    ship=scene?.getEntityByID?.(entityID)||null;
+    ctrl=controllers.getControllerByEntityID(entityID);
+    const list=(scene?.staticEntities||[]).filter(p=>p?.kind==="station"&&
+     Number(p.itemID)>0&&p.position);
+    stations=list.length;
+    if(ship?.position&&list.length){
+     const gap=p=>Math.hypot(ship.position.x-p.position.x,
+      ship.position.y-p.position.y,ship.position.z-p.position.z);
+     const best=list.slice().sort((a,b)=>gap(a)-gap(b))[0];
+     nearest={stationID:Number(best.itemID)||0,distanceMeters:gap(best)};
+    }
+   }catch(_error){/* telemetry must never block the leg */}
+   try{
+    require("./coopRuntimeProbe").observe("living-npc-loot-station-blocked",null,
+     {spaceState:{systemID}},{status:"NO_ORDER",pilotID,entityID,systemID,
+      blocked:blockedIDs.has(entityID),mode:String(ship?.mode||""),
+      pendingWarp:Boolean(ship?.pendingWarp||ship?.warpState),
+      currentTargetID:Number(ctrl?.currentTargetID)||0,
+      manualType:String(ctrl?.manualOrder?.type||""),
+      cargoIDs:stock.map(c=>Number(c.cargoID)),stationCount:stations,nearest,
+      cargoMoved:false,iskGranted:false});
+   }catch(_error){/* ignore */}
+  }
+ }
 }
 function advanceNativePatrolRoutes(){
  if(!patrolDirector||!patrolNavigator||process.env.EVEJS_COOP_FACTION_PATROLS!=="1")return;
