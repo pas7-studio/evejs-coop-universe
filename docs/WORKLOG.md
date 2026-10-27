@@ -1378,3 +1378,9 @@ Evidence: coop-economy-balance status=PARTIAL_DEMAND stock=3965422 sellable=3504
 Why: The governor's own telemetry used the wrong probe signature, so every live event carried systemID null and no status, making the throttle invisible.
 Where: docs/WORKLOG.md, integration/coopMiningDemandGovernor.cjs, scripts/overlay-spec.cjs, tests/coop-mining-demand-governor-wiring.test.mjs, tests/coop-mining-demand-governor.test.mjs
 Evidence: live living-mining-demand-governor entries with status empty and held undefined; governor 8/8 after passing a ship-like system record
+### 2026-10-27T13:56Z · 0735afa · L2 · FW-027b: fleets spawn from doctrines and count as real presence
+
+Why: An unknown demand was cached for a whole refresh interval, so the governor stayed blind right after startup and only ever reported DEMAND_UNKNOWN.
+Detail: spawn_war_fleet composes a role-complete formation for the commander's real command cap, spawns every hull with its authored doctrine row through the same armed-patrol path, links only the commander identity, and records the fleet in the durable roster. war_fleet_state reports per-hull modules and real charge stacks. fleet_reconstitute records a loss ONLY with a real native wreck, then plans/commi
+Where: integration/coopAdminBridge.cjs, integration/coopFactionWarOpening.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWarFleetRoster.cjs, tests/coop-faction-war-opening.test.mjs
+Evidence: live DEMAND_UNKNOWN 14:00:39 and 14:03:15 with booksKnown 0; governor 9/9 (new test: an unknown demand is re-measured within 16s)

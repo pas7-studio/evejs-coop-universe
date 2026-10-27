@@ -120,11 +120,12 @@ function createGovernor({items, market, getStation, corpID,
     }
     // Books are supplied by the caller (a promise-based market needs prefetching).
     // No book yet means demand is UNKNOWN, not zero - an unread book must never
-    // stop the world's mining.
+    // stop the world's mining. An unknown measurement is cached only briefly, or
+    // the governor would stay blind for a whole refresh interval.
     const books = typeof market?.books === "function" ? market.books() : {};
     const keys = new Set(stock.map((row) => String(row.typeID) + ":" + String(row.regionID)));
     const have = [...keys].some((key) => books && books[key] !== undefined);
-    cache = {at: now, stock,
+    cache = {at: have ? now : now - Math.max(0, cacheMs - 15000), stock,
       stockUnits: stock.reduce((sum, row) => sum + pos(row.quantity), 0),
       demand: have ? demandUnits(stock, books) : null,
       booksKnown: [...keys].filter((key) => books && books[key] !== undefined).length,

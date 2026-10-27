@@ -84,6 +84,25 @@ test('a measured overstock really skips the native mining tick', () => {
   assert.deepEqual(observed, ['TRICKLE_ALLOWED', 'HOLD']);
 });
 
+test('an unknown demand is re-measured soon instead of freezing the decision', () => {
+  // The books arrive asynchronously; caching "unknown" for a whole refresh window
+  // left the governor blind right after startup (measured live).
+  let clock = 1_000_000;
+  const books = {};
+  const engine = gov.createGovernor({
+    items: {listOwnedItems: () => [row({quantity: 4_000_000})]},
+    getStation: () => ({regionID: 10000002}),
+    market: {books: () => books},
+    corpID: CORP, clock: () => clock, cacheMs: 300000, probe: {observe: () => {}},
+  });
+  const first = engine.measure(clock);
+  assert.equal(first.demand, null);
+  clock += 16000;
+  books['34:10000002'] = [bid({vol_remaining: 5000})];
+  const second = engine.measure(clock);
+  assert.equal(second.demand, 5000, 'a short unknown TTL must re-measure');
+});
+
 test('an unreadable stock never stops mining', () => {
   const engine = gov.createGovernor({
     items: {listOwnedItems: () => { throw new Error('boom'); }},
