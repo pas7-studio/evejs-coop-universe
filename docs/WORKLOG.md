@@ -1349,3 +1349,9 @@ Why: FW-024d: unfunded-supply opt-out covers the escrow reservation so a front c
 Detail: reserveBounty is only called when EVEJS_COOP_WAR_REQUIRE_FUNDING is not 0, so an operator-approved opening reserves nothing and cannot pay a bounty. Live after deploy: living-native-war-opened OPENED with 4 campaigns (war:500011-500014 in 30000143/144/145 and war:500011-500020 in 30000142) and the first living-native-war-mobilization in the same boot.
 Where: integration/coopFactionWarOpening.cjs
 Evidence: tests 15/15; live living-native-war-opened OPENED 4 campaigns
+### 2026-10-27T13:27Z · 85e19cd · L2 · FW-026: a loot hull with cargo and no station order says why
+
+Why: the loot delivery leg had no refusal telemetry and the whole kill -> loot -> sale chain had never completed in one world
+Detail: The delivery leg published only successful orders, so a hull carrying verified wreck cargo that stayed put was invisible. It now publishes living-npc-loot-station-blocked (blocked owner, mode, warp, controller order, cargo ids, station count, nearest station and distance) once per hull per 5 minutes. LIVE PROOF of the whole loot leg in the running world (verbatim): - living-npc-wreck-cargo-settled
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: living-npc-wreck-cargo-settled 1200 units, PHYSICALLY_AT_NATIVE_STATION 60014935, TRADE_SETTLED balance 10332 from EVEJS_SEED order 4257762183096583231

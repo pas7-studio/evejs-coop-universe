@@ -42,6 +42,10 @@ Flags that must be on for the closed loop (probe compose): `EVEJS_COOP_NATIVE_MI
 | haul | `living-hauler-loaded` | `cargoQuantity>0`, `haulerID>0` |
 | delivery | `living-npc-station-delivered` | `stationID>0`, `stacks>0` |
 | sale | `living-npc-station-sold` | `status=SOLD`, `quantity`, `isk` |
+| refinery | `living-npc-refined` | `status=COMMITTED`, paid fee in the journal, mineral stacks in the corporation hangar |
+| mineral lift | `living-npc-mineral-lifted` | one `coop-mineral-lift:v1` row per stack in the hauler's native cargo, hangar stack debited |
+| mineral sale | `living-npc-station-sold` | a `sold[]` entry whose `typeID` is a mineral (34/35), never ore |
+| treasury | `living-corp-treasury-swept` | `movedISK>0`, `ownerID` = the corporation that paid the refinery fee |
 
 Everything that refuses prints its own reason, and those reasons are the answer:
 `ACTIVATION_SKIPPED:<no-module|no-scene-api>`, `CAPACITOR_WAIT`,
