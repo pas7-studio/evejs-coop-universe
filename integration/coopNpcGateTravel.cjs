@@ -112,14 +112,19 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
    if(issued>=maxShipsPerTick)break;
    const key=system+":"+pilot.id;
    const old=pending.get(key);
-   if(old&&now<old.nextAt){
-    reject(pilot,pilot.id,"PENDING:"+String(old.phase)+"@"+old.nextAt);
-    continue;
-   }
    const gate=gates.reduce((best,g)=>!best||distance(pilot.ship.position,g.position)<
     distance(pilot.ship.position,best.position)?g:best,null);
    if(!gate)continue;
    const meters=surfaceGap(pilot.ship,gate);
+   // ARRIVAL IS MEASURED BEFORE ANY RETRY WINDOW. A warp lands the hull on the
+   // gate, and the native warp of the NEXT tick is refused as too close, so a
+   // pending window that skipped the arrival check would hide the only moment the
+   // hull really is at the gate (measured: the hull drifted 15 km per tick after
+   // a successful warp and was never evaluated).
+   if(meters>approachMeters&&old&&now<old.nextAt){
+    reject(pilot,pilot.id,"PENDING:"+String(old.phase)+"@"+old.nextAt);
+    continue;
+   }
    if(meters>approachMeters){
     const result=warp(pilot.id,gate.sourceGateID,{forceImmediateStart:true,
      broadcastWarpStartToVisibleSessions:true});

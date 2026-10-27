@@ -56,10 +56,14 @@ test("funded attacker patrol uses WAR order to warp to verified reciprocal gate"
  assert.equal(f.ship.position.x,0);
  assert.equal(f.treasury.reservations.s1.cents,10000);
 });
-test("no second warp during native pending approach window",()=>{
- const f=fixture();f.tick();
- assert.equal(f.tick().orders.length,0);
- assert.equal(f.issued,1);
+test("a hull that arrived after its own warp is evaluated before the retry window",()=>{
+ const f=fixture();
+ f.tick();                       // warp issued, 30 s dwell window open
+ f.ship.position.x=1000000;      // the real warp landed it on the gate
+ const out=f.tick();
+ assert.equal(out.orders.length,0);
+ assert.deepEqual(out.observations.map(o=>o.status),["AT_REAL_GATE"]);
+ assert.equal(f.fleet.ships[501].systemID,101);
 });
 test("gate arrival only observes physical presence, NEVER transfers hull",()=>{
  const f=fixture();f.ship.position.x=1000000;
