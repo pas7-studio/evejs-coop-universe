@@ -24,7 +24,7 @@ const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js
 const REQUESTS = process.env.EVEJS_COOP_ADMIN_REQUESTS || "/var/lib/evejs/coop-admin-requests.jsonl";
 const RESULTS = process.env.EVEJS_COOP_ADMIN_RESULTS || "/var/lib/evejs/coop-admin-results.jsonl";
 const EVENTS = process.env.EVEJS_COOP_EVENTS_FILE || "/var/lib/evejs/coop-events.jsonl";
-const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose"]);
+const ALLOWED_ACTIONS = new Set(["chat_command", "give_item", "remove_item", "board_ship", "fit_ship", "move_item", "fit_slots", "deploy_structure", "spawn_native_npc", "war_diagnose", "inspect_npc"]);
 const MAX_REQUESTS_PER_DRAIN = 8;
 
 function readJsonLines(file) {
@@ -611,6 +611,46 @@ function executeRequest(request) {
   if (action === "deploy_structure") return deployStructure(request);
   if (action === "spawn_native_npc") return spawnNativeNpc(request);
   // Read-only war diagnostics: never reserves, orders or writes anything.
+  if (action === "inspect_npc") {
+    // Read-only: what a native hull really carries right now.
+    const entityID = Number(request.entityID) || 0;
+    if (!(entityID > 0)) return { ok: false, error: "entityID is required" };
+    try {
+      const store = require("./npc/nativeNpcStore");
+      const native = store.getNativeEntity(entityID);
+      const modules = store.listNativeModulesForEntity(entityID) || [];
+      const cargo = store.listNativeCargoForEntity(entityID) || [];
+      return {
+        ok: true,
+        entityID,
+        native: native ? {
+          systemID: Number(native.systemID) || 0,
+          corporationID: Number(native.corporationID) || 0,
+          ownerID: Number(native.ownerID) || 0,
+          transient: native.transient === true,
+        } : null,
+        modules: modules.slice(0, 16).map((m) => ({
+          moduleID: Number(m.moduleID) || 0,
+          categoryID: Number(m.categoryID) || 0,
+          typeID: Number(m.typeID) || 0,
+          flagID: Number(m.flagID) || 0,
+          online: Boolean(m.moduleState && m.moduleState.online),
+        })),
+        moduleCount: modules.length,
+        cargo: cargo.slice(0, 16).map((c) => ({
+          cargoID: Number(c.cargoID) || 0,
+          categoryID: Number(c.categoryID) || 0,
+          typeID: Number(c.typeID) || 0,
+          quantity: Number(c.quantity) || 0,
+          moduleID: Number(c.moduleID) || 0,
+          transient: c.transient === true,
+        })),
+        cargoCount: cargo.length,
+      };
+    } catch (error) {
+      return { ok: false, error: "inspect failed: " + String(error && error.message || error) };
+    }
+  }
   if (action === "war_diagnose") {
     try {
       const runtimeWorld = require("./coopVirtualWorldRuntime" + siblingSuffix);

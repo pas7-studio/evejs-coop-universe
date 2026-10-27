@@ -46,3 +46,13 @@ test('spawn_native_npc validates its inputs before touching native code',()=>{
  assert.equal(offline.ok,false);
  assert.match(offline.error,/native spawn dependencies unavailable/);
 });
+
+test('inspect_npc is a read-only action that validates its input',()=>{
+ assert.equal(bridge.ALLOWED_ACTIONS.has('inspect_npc'),true);
+ const none=bridge.executeRequest({action:'inspect_npc'});
+ assert.equal(none.ok,false);
+ assert.equal(none.error,'entityID is required');
+ const offline=bridge.executeRequest({action:'inspect_npc',entityID:980000000113});
+ assert.equal(offline.ok,false);
+ assert.match(offline.error,/inspect failed/);      // no EveJS tree in the repo
+});
