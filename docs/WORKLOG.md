@@ -1307,3 +1307,15 @@ Why: the loot could never leave a wreck because the killer's hold was smaller th
 Detail: Measured blocker: the Angel killer 980000000601 (Arch Angel Centurion, capacity 120 m3) held a live claim on wreck 980300000008 whose three stored stacks are 4 032 + 2 142 + 5 229 m3, so every custody attempt answered NATIVE_CARGO_FULL and the loot could never leave the wreck. - coopNpcWreckCustody: a stack that does not fit is no longer refused outright. The hull takes floor(free/volume) units an
 Where: integration/coopNpcWreckCustody.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-npc-wreck-custody.test.mjs
 Evidence: tests 54/54, OVERLAY_OK, capacity-bounded partial custody + remainder wreck item + custody-skip telemetry
+### 2026-10-27T12:56Z · 316539b · L2 · FW-025: the raid releases its own order when a wreck claim owns the hull
+
+Why: a killer kept its native attack order while owning a wreck, so the recovery director could never order it to the wreck
+Detail: Measured: 980000000601 kept manualType attack on miner 980000016293 while its own wreck 980300000008 was 2.5 AU away, so the recovery director refused (NATIVE_COMBAT_ORDER_ACTIVE) and the loot never left the wreck even with the wreck restored in the same boot. Excluding the hull from new raid candidates was not enough: the director still held its lease and the native attack order that came with it
+Where: integration/coopNativeRaids.cjs, tests/coop-native-raids-gameplay.test.mjs
+Evidence: tests 28/28, living-native-raid-release; deployed into the running container while the shared checkout is drifted by another session
+### 2026-10-27T13:01Z · 3f9b6d8 · OPS · OPS: register coopMilitiaWarPlayer for install
+
+Why: a committed hook required a module that was never installed, so every deploy refused and the live server lost the co-op startup hook
+Detail: HEAD carried a committed hook (npcBehaviorLoop -> ../coopMilitiaWarPlayer) whose module was never added to the install list, so every deploy refused with HOOK_REQUIRE_NOT_INSTALLED and the checkout could not be patched at all (the running server lost the co-op startup hook and the whole living world stopped). One name in scripts/overlay-spec.cjs restores HOOK_REQUIRES_OK targets=1289.
+Where: scripts/overlay-spec.cjs
+Evidence: HOOK_REQUIRES_OK targets=1289 installed=375, coop-deploy reset=53 series=8 OVERLAY_OK

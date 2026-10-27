@@ -1,5 +1,28 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-27 13:05Z - FIRST LIVE MINERAL LIFT (and two regressions it exposed)
+
+PROVEN LIVE at 12:47:45-12:47:47 (run ca59f6c0):
+  living-npc-mineral-lifted - 9 receipts, 5000 Tritanium + 5000 Pyerite taken out of the
+    corporation hangar at 60003334 and written into hauler 980000016300's real native cargo
+    (coop-mineral-lift:v1 journal tag, hangar stacks debited to zero).
+  living-npc-station-sold SOLD - type 17471 qty 3975 @9.43 = 37 484 ISK credited to the pilot.
+  living-corp-treasury-swept - 37 484.25 ISK into corporation 1000129 the same second.
+
+Two real regressions the lift exposed, both fixed and tested:
+  1. The sale filtered the allowlist by the caller's `types` (ore only), so the just-lifted
+     minerals were never sold and stayed aboard as 9 stacks. Lifted types now bypass that
+     filter via `liftedTypes`. tests/coop-mineral-lift-wiring.test.mjs 5/5.
+  2. The lift writes its own custody rows (journal tag, no coopHaulFleetID), which made the
+     durable mining fleet throw ALIFE12_NATIVE_HAUL_CUSTODY_AMBIGUOUS on boot and quarantine
+     slot 30000145-1. Tagged lift rows are now excluded from that custody check.
+     tests/coop-native-mining-fleet-durable.test.mjs 29/29.
+
+Also worth knowing: the overlay --apply ABORTED once with HOOK_REQUIRE_UNRESOLVED
+(npcBehaviorLoop -> ../coopMilitiaWarPlayer) because another session was mid-write; a second
+run returned OVERLAY_OK. Always check that a deploy actually copied the module you changed
+(grep the tag in the checkout) instead of trusting build exit=0.
+
 ## 2026-10-27 12:46Z - the lift path now RUNS live (and one real bug died)
 
 Fixed live bug: the lift result was a block-scoped const used by the skip telemetry, so every

@@ -28,10 +28,8 @@ test('minerals are loaded only after a merchant identity really exists', () => {
 test('the lift runs once per arrival and only when its own flag is on', () => {
   const calls = source.split('ensureMineralLift()?.lift').length - 1;
   assert.equal(calls, 1);
-  const block = source.slice(source.indexOf('ensureMineralLift()?.lift') - 900,
-    source.indexOf('ensureMineralLift()?.lift'));
-  assert.match(block, /EVEJS_COOP_NPC_MINERAL_LIFT==="1"/);
-  assert.match(block, /arrivalSales\.has/);
+  assert.match(source,
+    /if\(process\.env\.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&\s*!arrivalSales\.has\(Number\(stationID\)/);
 });
 
 test('the sale keeps the lifted mineral types even when the allowlist lacks them', () => {
@@ -51,4 +49,13 @@ test('the caller ore list can never filter out the minerals this arrival loaded'
   const decl = source.indexOf('const liftedTypes=new Set();');
   assert.ok(decl > 0 && decl < wanted, 'the set must exist before the wanted filter');
   assert.match(source, /liftedTypes\.add\(typeID\)/);
+});
+
+test('mineral cargo a previous arrival left in the hold is still sold', () => {
+  const decl = source.indexOf('const liftedTypes=new Set();');
+  const scan = source.indexOf('MINERAL_LIFT_CARGO_TAG.test', decl);
+  const wanted = source.indexOf('const wanted=[...new Set(sellTypes.filter', decl);
+  assert.ok(scan > decl && scan < wanted, 'the hold must be scanned before the sale filter');
+  assert.ok(source.includes('listNativeCargoForEntity(Number(haulerID))'));
+  assert.ok(source.includes('const MINERAL_LIFT_CARGO_TAG=/^coop-mineral-lift:v1:/;'));
 });
