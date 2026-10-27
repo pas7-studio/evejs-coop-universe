@@ -2217,6 +2217,7 @@ function advanceNativeSalvageRivals(){
     });
  }
 }
+const wreckRecoveryNotes=new Map();
 function advanceNativeWreckRecovery(){
  if(process.env.EVEJS_COOP_NPC_WRECK_RECOVERY!=="1"||
   process.env.EVEJS_COOP_NATIVE_WEAPON_EVIDENCE!=="1"||
@@ -2252,6 +2253,36 @@ function advanceNativeWreckRecovery(){
    require("./coopRuntimeProbe").observe("living-npc-postraid-wreck-recovery",null,
     {spaceState:{systemID}},{orders:result.orders,inspections:result.inspections,
      transferStatus:"NOT_IMPLEMENTED_NO_NATIVE_ATOMIC_CUSTODY"});
+  else{
+   // A live claim with no order is a measured refusal, never a silent no-op:
+   // publish the exact state the recovery director reads for that hull.
+   const nowMs=Date.now();
+   for(const claim of claims.slice(0,2)){
+    const key="recovery:"+systemID+":"+claim.wreckID;
+    if(nowMs-(wreckRecoveryNotes.get(key)||0)<300000)continue;
+    wreckRecoveryNotes.set(key,nowMs);
+    const hunterID=Number(claim.attackerEntityID)||0;
+    const hunter=scene.getEntityByID(hunterID);
+    const physical=scene.getEntityByID(Number(claim.wreckID)||0);
+    const ctrl=controllers.getControllerByEntityID(hunterID);
+    const gap=(a,b)=>(a&&b&&["x","y","z"].every(k=>
+     Number.isFinite(Number(a[k]))&&Number.isFinite(Number(b[k]))))?
+     Math.hypot(a.x-Number(b.x),a.y-Number(b.y),a.z-Number(b.z)):null;
+    try{
+     require("./coopRuntimeProbe").observe("living-npc-postraid-wreck-recovery-blocked",
+      null,{spaceState:{systemID}},{status:"NO_ORDER",wreckID:Number(claim.wreckID)||0,
+       hunterID,blocked:blockedIDs.has(hunterID),
+       hunterMode:String(hunter?.mode||""),hunterPresent:Boolean(hunter),
+       wreckPresent:physical?.nativeNpcWreck===true,
+       manualType:String(ctrl?.manualOrder?.type||""),
+       currentTargetID:Number(ctrl?.currentTargetID)||0,
+       lastAggressorID:Number(ctrl?.lastAggressorID)||0,
+       distanceMeters:gap(hunter?.position,physical?.position),
+       pickupDistance:process.env.EVEJS_COOP_NPC_WRECK_TRANSFER==="1"?2500:0,
+       claims:claims.length});
+    }catch(_error){/* telemetry must never block recovery */}
+   }
+  }
  }
 }
 // Native source-first wreck debit -> native cargo credit. This phase is
