@@ -1721,3 +1721,9 @@ Evidence: agents world: living-haul-approach-issued FOLLOWING_MINER gap 4429/468
 Why: A native NPC in mode GOTO flies along entity.direction only, so the 'position + direction * 1.0e16' sentinel carried mining hulls away from their own belt for ever and the hauler could never reach the 2500 m transfer range.
 Where: tests/coop-npc-runaway-goto.test.mjs
 Evidence: agents mining_fleet_diagnose: miner and hauler both mode GOTO with targetPoint 8.19e15 m while nearestBelt 28434/53965 m; gaps grew 3364 -> 7440 m after every follow; new space/coopNpcRunawayGoto.js stops native hulls beyond 1e13 m, one statement in the runtime GOTO case, player ships untouched; 5 tests pass
+### 2026-10-27T23:40Z · 0f4444d · L3 · perf: static trap audit + shared JSON file cache (engine ca94bf5)
+
+Why: Perf: shared coopJsonFileCache removes per-tick readFileSync+JSON.parse in salvage witnesses and the identity registry (engine ca94bf5); added coop-perf-audit.cjs with budgets
+Detail: coop-perf-audit.cjs ranks co-op modules by known lag shapes (deep clones at call time, readFileSync inside functions, per-tick sorts, quadratic scans) and fails on a budget regression; it found the two real ones: salvage witness manifests and the identity registry were re-read+re-parsed every tick, 1950 ms -> 390 ms for 80k reads. integration/coopJsonFileCache.js is a one-line shim so the byte-ide
+Where: integration/coopJsonFileCache.cjs, integration/coopJsonFileCache.js, integration/coopVirtualWorldRuntime.cjs, scripts/coop-perf-audit.cjs, tests/coop-json-file-cache.test.mjs
+Evidence: 80k reads 1950ms -> 390ms; exports 21 unchanged; PERF_OK AUDIT_OK; tests/coop-json-file-cache.test.mjs 4 pass
