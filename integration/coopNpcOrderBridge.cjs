@@ -104,6 +104,30 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController,
   if(!link)return true;
   return !nativePermits(link,owner).success||arbiter.blocked({...link,owner});
  }
+ // Read-only: why an order would be refused, with the exact first blocker.
+ // Never issues, never retains a lease - the caller only observes.
+ function diagnose({entityID,systemID,owner="RAID"}={}){
+  const link=uniqueAssignment(entityID,systemID);
+  if(!link)return {status:"BLOCKED",reason:"COOP_NPC_ORDER_IDENTITY_UNVERIFIED"};
+  const state=nativeState(link);
+  if(!state)return {status:"BLOCKED",reason:"COOP_NPC_ORDER_NATIVE_PROOF_MISSING"};
+  let warClaim="UNASSIGNED";
+  if(warShipClaim)try{warClaim=warShipClaim(link)}catch{warClaim="UNKNOWN"}
+  const lease=arbiter.snapshot().leases.find(x=>x.systemID===link.systemID&&
+   x.entityID===link.entityID&&x.pilotID===link.pilotID);
+  const reason=state.warp?"COOP_NPC_ORDER_NATIVE_WARP_ACTIVE":
+   (state.combat&&PEACEFUL.has(owner))?"COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE":
+   ((state.manualBusy||state.movementBusy)&&owner!=="TACTICS"&&
+    (!lease||lease.owner!==owner))?"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE":
+   (owner==="WAR"&&(!warShipClaim||warClaim!=="ASSIGNED"))?"COOP_NPC_ORDER_WAR_SHIP_UNVERIFIED":
+   (warShipClaim&&owner!=="WAR"&&owner!=="TACTICS"&&
+    (warClaim==="ASSIGNED"||warClaim==="UNKNOWN"))?"COOP_NPC_ORDER_WAR_SHIP_RESERVED":
+   (state.combat&&(owner==="RAID"||owner==="WAR")&&(!lease||lease.owner!==owner))?
+    "COOP_NPC_ORDER_NATIVE_COMBAT_ACTIVE":
+   arbiter.blocked({...link,owner})?"COOP_NPC_ORDER_ARBITER_BLOCKED":"";
+  return reason?{status:"BLOCKED",reason,warClaim,state,leaseOwner:String(lease?.owner||"")}:
+   {status:"PERMITTED",warClaim,state,leaseOwner:String(lease?.owner||"")};
+ }
  function blocksForSystem(systemID,owner){
   const ids=new Set();
   let links=[];
@@ -119,6 +143,6 @@ function createOrderBridge({arbiter, assignments, sceneForSystem, getController,
   return ids;
  }
  function snapshot(){return arbiter.snapshot();}
- return {issue,blocked,blocksForSystem,snapshot};
+ return {issue,blocked,blocksForSystem,snapshot,diagnose};
 }
 module.exports={createOrderBridge};

@@ -3,6 +3,8 @@
 let world=null,timer=null,combatTimer=null,bridge=null,gateTravelDirector=null,nativeGateTransfer=null,nativeMarketTrader=null,nativeMarketTickRunning=false,nativeMarketBlocked=false,economy=null,lossBridge=null,factionDirector=null,patrolDirector=null,patrolNavigator=null,civilianOrders=null,life=null,identityRegistry=null,raidDirector=null,huntPolicy=null,tacticsDirector=null,pveSiteDefenseDirector=null,pveWaveReinforcementsDirector=null,pveObjectiveDoctrineDirector=null,pveNativeBossDirector=null,activityDirector=null,combatEvidenceDirector=null,stockCombatEvidenceDirector=null;
 const observedNpcIDs=new Set();
 const visitedSystems=new Set();
+// FW-013B: last published raid-diagnose shape per system (never every tick).
+const raidDiagnose=new Map();
 const initializedNativeMiningScenes=new WeakSet();
 let warFleetRegistry=null,warBattleDirector=null,warMobilizer=null,warGateStaging=null,warGateHandoff=null,warRecoverySocket=null,warDemobilizer=null,warCasualtyLedger=null,warObjectiveDirector=null,warOpening=null,warRelief=null;
 // Native wreck IDs this process confirmed (and, after a restart, the durable
@@ -2961,7 +2963,12 @@ function advanceNativeCivilianOrders(){
    if(role)routeOverrides[pilot.pilotID]=role;
   }
  }
- const orders=civilianOrders.tick(assignments,roles,{blockedIDs,routeOverrides});
+ // FW-013D: one owner per record. A pirate hull's movement belongs to the raid
+ // director (owner RAID). When the civilian route director orbited it, the
+ // CIVILIAN lease stayed live and every raid order was refused with
+ // COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE - real prey, zero raids.
+ const civilianAssignments=assignments.filter(a=>roles[a.pilotID]?.role!=="pirate");
+ const orders=civilianOrders.tick(civilianAssignments,roles,{blockedIDs,routeOverrides});
  if(goals)for(const order of orders){
   if(!routeOverrides[order.pilotID])continue;
   try{goals.observeNativeOrder({pilotID:order.pilotID,
@@ -3057,7 +3064,6 @@ function advanceNativeRaids(){
    onDecision:decision=>require("./coopRuntimeProbe").observe("living-npc-opportunity",null,null,decision)
   });
  }
- const roles=economy?.snapshot().pilots||{};
  // Validate persisted goal state before allowing any new native raid command.
  const goals=npcPersonalGoals();
  for(const systemID of visitedSystems){
@@ -3065,20 +3071,25 @@ function advanceNativeRaids(){
   // it must not abandon its sale route to accept an opportunistic new raid.
   const delivering=lootCommerce?.activeIDs(systemID)||new Set();
   const outOfAmmo=nativeAmmoSupply?.activeIDs(systemID)||new Set();
-  const pirates=bridge.snapshot().filter(p=>
-   p.systemID===systemID&&roles[p.pilotID]?.role==="pirate"&&
-   !delivering.has(Number(p.entityID))&&
-   !outOfAmmo.has(Number(p.entityID))).map(x=>x.entityID);
-  if(!pirates.length)continue;
   const scene=runtime.ensureScene(systemID,{refreshStargates:false});
+  // FW-013B: a hull that was really linked AFTER boot was invisible here. The
+  // materializer's assignment map is rebuilt only during boot, while the raid
+  // legality gate below already reads the identity registry - the same
+  // authority. A named pirate that is physically present in this scene is a
+  // raid candidate; a stored link with no native ship still is not.
+  const systemLinks=Object.values(identityRegistry?.snapshot().links||{})
+   .filter(link=>Number(link.systemID)===Number(systemID)&&
+    scene.getEntityByID(Number(link.entityID)));
+  const pirates=systemLinks.filter(link=>link.role==="pirate"&&
+   !delivering.has(Number(link.entityID))&&
+   !outOfAmmo.has(Number(link.entityID))).map(link=>Number(link.entityID));
+  if(!pirates.length)continue;
   const fleets=mining.getMiningFleetsForSystem(systemID);
   const raidPolicy=require("./coopNativeRaidEligibility");
   // Authoritative live EveJS mining fleet membership is the only source
   // of valid targets. Unnamed stock miners are not invisible to pirates.
   const fleetShips=raidPolicy.liveFleetShips(fleets,scene);
-  const activeLinks=Object.values(identityRegistry?.snapshot().links||{})
-   .filter(link=>Number(link.systemID)===Number(systemID)&&
-    scene.getEntityByID(Number(link.entityID)));
+  const activeLinks=systemLinks;
   const actualPilots=world.snapshot().pilots;
   const factionByPilot=new Map(actualPilots.map(p=>[p.id,p.faction]));
   const squadContacts=activeLinks.map(p=>({...p,
@@ -3148,6 +3159,47 @@ function advanceNativeRaids(){
    getCargo:id=>nativeStore.listNativeCargoForEntity(id),
    getController:id=>controllers.getControllerByEntityID(id)
   });
+  // A pirate that really exists and still gets no order must be measurable: the
+  // first blocker is published once per changed shape, never every tick.
+  if(!result.actions.length){
+   const oreBearing=fleetShips.filter(t=>
+    (nativeStore.listNativeCargoForEntity(t.id)||[]).some(c=>
+     Number(c?.moduleID||0)===0&&Number(c?.quantity)>0)).length;
+   const signature=[pirates.length,fleetShips.length,oreBearing,
+    Number(result.eligibleTargetCount)||0].join(":");
+   if(raidDiagnose.get(Number(systemID))!==signature){
+    raidDiagnose.set(Number(systemID),signature);
+    // Why a real pirate with real prey still got no order: the exact per-hull
+    // state the director reads, plus how many targets the legality gate allowed.
+    const pirateDetail=pirates.slice(0,4).map(rawID=>{
+     const id=Number(rawID),ship=scene.getEntityByID(id),ctrl=controllers.getControllerByEntityID(id);
+     const link=activeLinks.find(x=>Number(x.entityID)===id);
+     let warClaim="",orderBlocked=null,orderDiagnosis=null;
+     try{warClaim=String(nativeWarFleetRegistry()?.claim(link)||"")}catch(_error){warClaim="THREW"}
+     try{
+      const guard=npcOrderBridge();
+      orderBlocked=guard?guard.blocked({entityID:id,systemID:Number(systemID),owner:"RAID"}):"NO_GUARD";
+      orderDiagnosis=guard&&typeof guard.diagnose==="function"?
+       guard.diagnose({entityID:id,systemID:Number(systemID),owner:"RAID"})
+       :{status:"NO_DIAGNOSE"};
+     }catch(error){orderBlocked="THREW:"+String(error&&error.message||error).slice(0,60)}
+     return {entityID:id,mode:String(ship?.mode||""),
+      currentTargetID:Number(ctrl?.currentTargetID)||0,
+      manualType:String(ctrl?.manualOrder?.type||""),
+      warClaim,orderBlocked,orderDiagnosis,
+      authorized:fleetShips.filter(t=>{
+       try{return raidPolicy.isAuthorizedStockMiningRaid({systemID,
+        attacker:scene.getEntityByID(id),target:scene.getEntityByID(t.id),
+        links:activeLinks,pilots:actualPilots,fleetShips})}catch(_error){return false}
+      }).length};
+    });
+    require("./coopRuntimeProbe").observe("living-native-raid-diagnose",null,
+     {spaceState:{systemID}},{status:"NO_RAID_ORDER",pirates:pirates.length,
+      fleetShips:fleetShips.length,oreBearingTargets:oreBearing,
+      eligibleTargets:Number(result.eligibleTargetCount)||0,
+      pirateDetail,evidence:"NAMED_PIRATE_LINK_PLUS_LIVE_NATIVE_FLEET"});
+   }
+  }
   if(goals){
    const points=npcRealPoints(scene),active=new Set(result.actions.map(a=>Number(a.pirateID)));
    const leased=raidDirector.activePirateIDs(sys=>
@@ -3620,9 +3672,12 @@ function observeSession(session,ship){
           if(recovered.status!=="OK")
            throw Error("DURABLE_NPC_RECOVERY_REQUIRES_REPAIR: "+JSON.stringify(recovered.errors).slice(0,210));
         }
+        const materializeLimit=require("./coopMaterializeLimit" +
+         (__filename.endsWith(".js")?"":".cjs"))
+         .resolveMaterializeLimit(process.env.EVEJS_COOP_MATERIALIZE_LIMIT);
         bridge=createBridge({
           registry:identityRegistry,
-          limit:Number(process.env.EVEJS_COOP_MATERIALIZE_LIMIT||2),
+          limit:materializeLimit.limit,
           exemptRoles:nativeMining?["miner","hauler"]:[],
           exists:(system,id)=>{
            const ship=runtime.ensureScene(system,{refreshStargates:false})?.getEntityByID(id);
@@ -3654,6 +3709,13 @@ function observeSession(session,ship){
             });
           }
         });
+        // A bridge that never gets assigned is a silent world-wide outage of
+        // every bridge-driven phase. Publish the effective cap once.
+        require("./coopRuntimeProbe").observe("living-native-bridge",null,null,{
+         status:"READY",configuredLimit:String(materializeLimit.configured||""),
+         effectiveLimit:materializeLimit.limit,clamped:materializeLimit.clamped===true,
+         reason:materializeLimit.reason,
+         evidence:"BRIDGE_CREATED_WITH_BOUNDED_LIMIT"});
       }
       const present=require("./coopNpcPresentation").presentVirtualPilot;
       let industry={status:"DISABLED",fleets:[],assignments:[]};
