@@ -257,6 +257,27 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
   }
   return {status:"OK",eligibleTargetCount:candidates.length,actions};
  }
+ // A hull that a live wreck claim now owns must leave the raid: its lease and
+ // its own native order are released here, by the director that issued them
+ // (one owner per record). Nothing is released for a hull this director never
+ // leased, and a rival owner is never overridden - the order bridge decides.
+ function releaseExcluded(ids=[],reason="WRECK_CLAIM_OWNS_HULL"){
+  const released=[];
+  for(const raw of Array.isArray(ids)?ids:[]){
+   const id=pos(raw);
+   if(!id)continue;
+   for(const [key,lease] of leases){
+    if(Number(key.split(":")[1])!==id||lease.phase==="released")continue;
+    const now=clock(),outcome=releaseOrder(id,reason);
+    leases.set(key,{nextAt:now+releaseCooldownMs,
+     targetID:Number(lease.targetID)||0,targetRole:String(lease.targetRole||""),
+     phase:"released",issuedAtMs:now});
+    released.push({pirateID:id,reason,leaseTargetID:Number(lease.targetID)||0,
+     ...outcome});
+   }
+  }
+  return released;
+ }
  function activePirateIDs(sceneForSystem){
   const active=new Set();
   const now=clock();
@@ -268,6 +289,6 @@ function createRaids({warp,attack,release=null,clock=()=>Date.now(),cooldownMs=4
   }
   return active;
  }
- return {tick,activePirateIDs,snapshot:()=>Array.from(leases,([id,value])=>({id,...value}))};
+ return {tick,activePirateIDs,releaseExcluded,snapshot:()=>Array.from(leases,([id,value])=>({id,...value}))};
 }
 module.exports={createRaids};

@@ -37,7 +37,7 @@ function fixture(extra){
    controller.manualOrder={type:"resumeBehavior"};
    return {success:true};
   },...(extra||{})});
- return {tick,ships,fleetShips,scene,pirate,miner,controller,nativeOrders,
+ return {tick,raids,ships,fleetShips,scene,pirate,miner,controller,nativeOrders,
   releases,advance:ms=>{now+=ms;},failRelease:value=>{failRelease=value===true;}};
 }
 test("real pirate approaches loaded miner and issues a native attack after landing",()=>{
@@ -359,4 +359,28 @@ test("an attack order on prey beyond the approach boundary re-approaches on the 
  const action=result.actions.find(x=>x.action==="warp-to-hauler");
  assert.equal(action.released,true);
  assert.deepEqual(f.nativeOrders.at(-1),["warp",501,201]);
+});
+test("a hull a live wreck claim owns is released by the raid that leased it",()=>{
+ const f=fixture();
+ f.tick();
+ assert.deepEqual(f.nativeOrders,[["warp",501,201]]);
+ const released=f.raids.releaseExcluded([501],"WRECK_CLAIM_OWNS_HULL");
+ assert.equal(released.length,1);
+ assert.equal(released[0].released,true);
+ assert.equal(released[0].reason,"WRECK_CLAIM_OWNS_HULL");
+ assert.deepEqual(f.releases,[[501,"WRECK_CLAIM_OWNS_HULL"]]);
+ assert.deepEqual([...f.raids.activePirateIDs(()=>f.scene)],[]);
+ // releasing twice is a no-op, and a hull this director never leased is untouched
+ assert.deepEqual(f.raids.releaseExcluded([501],"WRECK_CLAIM_OWNS_HULL"),[]);
+ assert.deepEqual(f.raids.releaseExcluded([999],"WRECK_CLAIM_OWNS_HULL"),[]);
+ assert.equal(f.releases.length,1);
+});
+test("a refused release is reported instead of pretending the hull is free",()=>{
+ const f=fixture();
+ f.tick();
+ f.failRelease(true);
+ const released=f.raids.releaseExcluded([501],"WRECK_CLAIM_OWNS_HULL");
+ assert.equal(released.length,1);
+ assert.equal(released[0].released,false);
+ assert.equal(released[0].errorMsg,"COOP_NPC_ORDER_NATIVE_COMMAND_ACTIVE");
 });
