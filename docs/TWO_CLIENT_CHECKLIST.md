@@ -15,18 +15,39 @@ claims client success; the client half is unverified until a person does it.
 | Front chat reports are wired | `warFrontChat` in `coopVirtualWorldRuntime`, tests 3/3 |
 | War client projection is live | `EVEJS_COOP_WAR_CLIENT_VIEW=1`, `campaignSnapshots` emits the bound `structure:<id>` |
 
-## Known server-side limitation before an assault can begin
+## Refresh 2026-10-27 04:00Z — the fitting gap is closed, one assault is live
 
-`coopWarMusterReadiness` requires a native fitted weapon plus exactly one
-compatible charge. In this world **no NPC has any native module at all**
-(`inspect_npc 980000000113` -> `moduleCount 0, cargoCount 0`), because the pinned
-`nativeNpcService.buildNativeModuleRecords` only fits `definition.loadout.modules`
-and these profiles resolve to an empty loadout. So:
+The earlier limitation ("no NPC has any native module") no longer holds. The
+authored war-patrol loadout row plus `EVEJS_COOP_WAR_PATROL_AMMO_DEPTH=60` give a
+real fitted weapon **and** a real charge bank:
 
-- the war, its campaigns and the structures are real;
-- `BEGIN_ASSAULT` cannot fire until that fitting gap is fixed (see
-  `.opencode/state.md`, "NEXT ACTION");
-- do not expect an assault on the map in this build.
+- `spawn_native_npc` -> `loadout {"status":"RESOLVED","reason":"AUTHORED_MULTI_CHARGE_ROW",
+  "chargeTypeID":20767,"chargeDepth":60}` and `inspect_npc 980000017150` ->
+  `moduleCount 5`, cargo 5 x typeID 20057 x 60.
+- Real measured damage, wreck, stored loot, casualty, strict attacker, merit and
+  a promotion are all proven (`living-native-war-merit PROMOTED`).
+- War state right now: 2 ACTIVE wars, 4 campaigns — `war:500011-500020:campaign:30001363`
+  in **ASSAULT** (both sides armed, this is the theatre that really fights) and
+  three `war:500011-500014` campaigns in PREPARING (see below).
+- `living-native-durable-recovery` is `OK` again after the stale-link fix
+  (`ff071de9`); the materializer bridge exists, so raids, loot delivery and
+  market assignments are no longer inert.
+- War chest: ORE 500014 really funded its own chest from earned ISK and its
+  bounty is HELD in escrow for `campaign:30000143`.
+
+### Still true, and it is not a client problem
+
+`war:500011-500014` campaigns cannot muster: ORE 500014 has **no armed native
+profile** (the resolver only has empire/pirate `parity_*` combat profiles), so
+`war_diagnose` mobilises 0 ships and ORE's HELD escrow can never pay a kill or a
+death benefit. Angel 500011 and Serpentis 500020 can fight but have no real
+income, because the only system where they really fight (30001363) sits in region
+10000016, which has **zero** seeded buy orders — recovered loot has no buyer
+there. Exact evidence and the single decision needed: `.opencode/state.md`,
+"item 1 code PASS, live income BLOCKED BY WORLD GEOGRAPHY".
+
+So when the human tester opens the map, expect the Angel/Serpentis campaign in
+30001363 to be visible and real; do not expect a 500011-500014 assault.
 
 ## Human steps (two characters, one machine)
 
