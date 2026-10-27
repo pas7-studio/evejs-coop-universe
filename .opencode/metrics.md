@@ -493,3 +493,25 @@ overlay: OVERLAY_OK (moduleCurrent 380)
 live: OWNER STACK NOT RESTARTED (directive). No live probe of either change; the agent stack (evejs-agents, x5 time) is up and is the only place live proofs may run.
 metrics: tests_total=99 pass=99 fail=0 modules_added=0 modules_changed=5 live_events=0
 next: pass pilotCorporation at the refinery tick's call site (identity registry: entity -> corporationID) so the routing fix is live, then re-run war_funding_diagnose until an ARMED faction reads FUNDED; and the FW-037 crossing proof in the owner's next restart window.
+
+## 2026-10-27T17:11Z ops — owner ship loss compensated from the real killmail
+
+done: real loss proven from the native store, not from a story: items row
+9988400102059 = ENTRY_NOT_FOUND (hull gone), character 140000005 now in capsule
+9988400108212 (typeID 670). killmails table row `records<US>17`:
+victimCharacterID 140000005, victimShipTypeID 16240 (Catalyst), iskLost
+1216432.06, attackers faction 500011 shipTypeID 22833 and faction 500020
+shipTypeID 23451, fit = 4x 10692 125mm Compressed Coil Gun I, 1x 11105 Vortex
+Compact Magnetic Field Stabilizer, 1x 56134 Tranquil Firestorm Filament,
+1161x 221 Plutonium Charge S, 993x 222 Antimatter Charge S.
+tests: n/a (live admin action through the existing coopAdminBridge whitelist)
+overlay: unchanged
+live verbatim (coop-admin-results.jsonl):
+{"id":"restore-hull","ok":true,"stationID":60015262,"typeID":16240,"itemID":9988400108317,"name":"Catalyst","online":true,"notified":true}
+{"id":"restore-guns","ok":true,"typeID":10692,"itemID":9988400108318,"name":"125mm Compressed Coil Gun I"}
+{"id":"restore-mfs","ok":true,"typeID":11105,"itemID":9988400108319}
+{"id":"restore-filament","ok":true,"typeID":56134,"itemID":9988400108320}
+{"id":"restore-plutonium","ok":true,"typeID":221,"itemID":9988400108321}
+{"id":"restore-antimatter","ok":true,"typeID":222,"itemID":9988400108322}
+metrics: 6/6 grants ok, 0 refusals, client notified live (notified:true)
+next: owner docks at 60015262 and fits; auto-fit via fit_slots once stationID is set.
