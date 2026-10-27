@@ -114,6 +114,29 @@ function occupationStates(state) {
       militaryState: String((record && record.state) || "SECURE"),
     };
   }
+  // A live campaign is a front even before the system's territory record flips:
+  // the client only renders warzone systems, and a front that exists in the war
+  // state but not in the territory table was invisible. Defender holds, attacker
+  // contests, both sides of the border are marked.
+  for (const campaign of campaigns) {
+    const war = state.wars[campaign.warID] || {};
+    const attacker = num(war.attackerFactionID);
+    const defender = num(war.defenderFactionID);
+    if (!pos(attacker)) continue;
+    for (const systemID of [num(campaign.sourceSystemID), num(campaign.targetSystemID)]) {
+      if (!pos(systemID)) continue;
+      const existing = bySystem[systemID];
+      // A recorded territory stays authoritative; this only fills the gap for a
+      // warzone system the territory table has not seen yet.
+      if (existing) continue;
+      bySystem[systemID] = {
+        ownerID: pos(defender) ? defender : attacker,
+        occupierID: attacker,
+        contested: true,
+        militaryState: "CONTESTED",
+      };
+    }
+  }
   return bySystem;
 }
 
