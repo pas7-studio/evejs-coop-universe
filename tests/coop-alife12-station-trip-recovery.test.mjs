@@ -147,6 +147,22 @@ test("a physically absent real station after restart cannot authorize cargo cred
  assert.equal(r.status,"NO_NATIVE_NPC_STATION");
  assert.equal(f.deposits,0);
 });
+test("a superseded manifest (undeclared ore aboard) is expired and replanned, never answered forever",t=>{
+ // Live shape: the journal answered ROUTE_SUPERSEDED with reason
+ // ALIFE12_UNDECLARED_HAUL_CARGO, the arrival wrapper prefixed that reason, and
+ // start() then compared the PREFIXED string, so it returned the same pause on
+ // every tick and the fleet sat in "loaded" for 20 minutes with 3 cargo rows.
+ const f=fixture(t),fleet=f.newFleet();
+ const superseded={status:"ROUTE_SUPERSEDED",reason:"ALIFE12_UNDECLARED_HAUL_CARGO",
+  trip:{systemID:SYSTEM,fleetID:FLEET,stationID:STATION,corporationID:CORP,
+   startedAt:START,manifestID:SYSTEM+"-"+FLEET+"-"+START,
+   expectedCargoIDs:[CARGO],haulers:{[SHIP]:{arrivedAt:0}}}};
+ f.journal.recover=()=>superseded;
+ const r=f.director().start(f.scene,fleet,START+60*1000);
+ assert.equal(f.expiries,1,"the superseded route is closed durably");
+ assert.equal(r.status,"EN_ROUTE","a fresh manifest is planned from what the hull carries");
+ assert.equal(f.prepares,1);
+});
 test("an expired original route is recorded and replanned, never resumed",t=>{
  // The old behaviour paused forever: a restart mid-haul left the fleet in loaded
  // with ore aboard and no way out. The stale route is now a durable fact, so the

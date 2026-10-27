@@ -509,7 +509,14 @@ const saleBaseline=new Map();
   if(outcome?.status!=="RECOVERED_NATIVE_TRIP")
    // The deadline evidence travels with the refusal: without it the caller cannot
    // tell a route that is simply young from one that is dead and must be closed.
+   // The journal's OWN status travels too: the prefixed string above is a report,
+   // and start() must still be able to recognise ROUTE_SUPERSEDED / ROUTE_EXPIRED.
+   // Measured live: a superseded manifest (all rows accounted, the hull carrying
+   // undeclared ore) lost that identity here, so start() answered the same string
+   // on every tick and the fleet sat in "loaded" for 20 minutes.
    return {...pause("ALIFE12_"+String(outcome?.reason||outcome?.status||"RECOVERY_UNVERIFIED")),
+    journalStatus:String(outcome?.status||""),journalReason:String(outcome?.reason||""),
+    ...(outcome?.trip?{trip:outcome.trip}:{}),
     ...(outcome?.overdue?{overdue:outcome.overdue}:{}),
     ...(outcome?.abandonable?{abandonable:outcome.abandonable}:{})};
   const trip=outcome.trip;  const station=isValidStation(scene,getStation(trip.stationID),systemID);
@@ -612,11 +619,15 @@ const saleBaseline=new Map();
     noteRouteStatus(fleet,closed.status==="ROUTE_ABANDONED"||closed.status==="ALREADY_ABANDONED"
      ?"ROUTE_ABANDONED_STALE_PREPARED":"ROUTE_EXPIRED_STALE_CARGO");
    }else if(previous.status==="ROUTE_EXPIRED"||
-    previous.status==="ROUTE_SUPERSEDED"){
-    // The route outlived its deadline. Record that durably, then plan a new trip:
-    // the ore is still aboard and the ships are alive, and a closed route must not
-    // strand the fleet in "loaded" forever (measured: a restart mid-haul).
-    const expired=routeJournal.expire({manifestKey:previous.trip.manifestID,
+    previous.status==="ROUTE_SUPERSEDED"||
+    previous.journalStatus==="ROUTE_EXPIRED"||previous.journalStatus==="ROUTE_SUPERSEDED"){
+    // The route outlived its deadline, or the hull carries ore the manifest never
+    // declared while every declared row is already proven. Record that durably,
+    // then plan a new trip: the ore is still aboard and the ships are alive, and a
+    // closed route must not strand the fleet in "loaded" forever.
+    const key=String(previous.trip?.manifestID||previous.overdue?.manifestID||"");
+    if(!/^\d+-\d+-\d+$/.test(key))return pause("ALIFE12_SUPERSEDED_ROUTE_IDENTITY_UNVERIFIED");
+    const expired=routeJournal.expire({manifestKey:key,
      systemID,fleetID,now});
     if(!["ROUTE_EXPIRED","ALREADY_EXPIRED"].includes(expired?.status))
      return pause("ALIFE12_"+String(expired?.reason||expired?.status||"EXPIRY_UNVERIFIED"));
@@ -1246,9 +1257,29 @@ const saleBaseline=new Map();
     terminalAttendanceStatus}:{}),
    ...(manifestVerified?{nativeFullManifestProof:manifestVerified}:{})};
  }
+ // Read-only: what the trip machinery would answer for this fleet RIGHT NOW.
+ // recover() only reads the journal, the manifests and the live scene; it never
+ // warps, never writes and never creates a route. This is how a fleet that sits in
+ // "loaded" says which status is blocking it instead of being inferred.
+ function diagnoseTrip(scene,fleet,now=clock()){
+  const systemID=pos(scene?.systemID),fleetID=pos(fleet?.fleetID);
+  const out={systemID,fleetID,state:String(fleet?.state||""),
+   hasActiveTrip:Boolean(fleet?.coopStationArrival),
+   loadedUntilMs:Number(fleet?.loadedUntilMs||0)||0,
+   startupKey:String(fleet?.startupKey||""),
+   haulers:Array.isArray(fleet?.haulerEntityIDs)?fleet.haulerEntityIDs.length:0,
+   haulersDurable:Array.isArray(fleet?.haulerEntityIDs)&&
+    fleet.haulerEntityIDs.every(id=>findShip(scene,id,systemID)),
+   journalEnabled:Boolean(routeJournal),manifestEnabled:Boolean(manifestDirector)};
+  if(!routeJournal)return {...out,status:"RECOVERY_DISABLED"};
+  try{out.recover=recover(scene,fleet,now)}
+  catch(error){out.recover={status:"DIAGNOSE_FAILED",reason:String(error?.message||error).slice(0,95)}}
+  try{out.manifest=manifestDirector?.read?.(String(fleet?.coopStationArrival?.manifestID||""))||null}
+  catch(_error){out.manifest=null}
+  return out;
+ }
  return {start,tick,recover,resumeNativeDelivery,noteNativeMotion,restoreNativeIngress,verify:stableAt,warehouse:factory,manifest:manifestDirector,
-  explainArrival,oracle:destinationOracle};
-}
+  explainArrival,diagnoseTrip,oracle:destinationOracle};}
 let runtimeDirector;
 function getRuntimeDirector(){
  if(runtimeDirector)return runtimeDirector;
@@ -1312,6 +1343,21 @@ function diagnoseArrival(args){
   return {status:"NO_LIVE_DIRECTOR"};
  try{return runtimeDirector.explainArrival(args||{})}
  catch(error){return {status:"DIAGNOSE_FAILED",reason:String(error?.message||error).slice(0,95)}}
+}
+// Read-only: the live director's own answer for one fleet's trip state.
+function diagnoseTrip({systemID,fleetID}={}){
+ if(!runtimeDirector||typeof runtimeDirector.diagnoseTrip!=="function")
+  return {status:"NO_LIVE_DIRECTOR"};
+ try{
+  const runtime=require("./runtime");
+  const scene=runtime.scenes instanceof Map?runtime.scenes.get(Number(systemID)):null;
+  const operations=require("../services/mining/miningNpcOperations");
+  const fleet=(operations.getMiningFleetsForSystem(Number(systemID))||[])
+   .find(row=>Number(row?.fleetID)===Number(fleetID));
+  if(!scene)return {status:"SCENE_NOT_IN_MEMORY"};
+  if(!fleet)return {status:"FLEET_NOT_FOUND"};
+  return runtimeDirector.diagnoseTrip(scene,fleet);
+ }catch(error){return {status:"DIAGNOSE_FAILED",reason:String(error?.message||error).slice(0,95)}}
 }
 function observePreferredOre({systemID,reason="periodic"}={}){
  if(process.env.EVEJS_COOP_ECONOMY_DESTINATION!=="1")return null;
@@ -1402,4 +1448,4 @@ function checkReturn(scene,fleet,now,director=null){
   arrival?.status!=="ARRIVAL_DWELL_PENDING")noteRouteStatus(fleet,arrival?.status||"UNKNOWN");
  return arrival;
 }
-module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress,getOriginalWarehouseReceipt,diagnoseArrival};
+module.exports={createStationArrival,routeFromHaul,checkReturn,observePreferredOre,noteNativeMotion,restoreNativeIngress,getOriginalWarehouseReceipt,diagnoseArrival,diagnoseTrip};
