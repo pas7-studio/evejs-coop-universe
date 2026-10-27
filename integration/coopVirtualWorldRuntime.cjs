@@ -188,6 +188,38 @@ function ensureWarState(){
 // real presence + real reciprocal gates + real held ground, and writes it through
 // the authoritative core. One faction pair = one war; every open border under it
 // is its own campaign, so a war is multi-front by construction.
+// Front chat reports. Only real transitions call this, the text comes from
+// coopWarClientView.frontReport (built from real state), and each event is sent
+// once per process so a player is never spammed by a repeating tick.
+const warFrontChatSent=new Set();
+// Source .cjs modules become .js siblings in the deployed EveJS overlay.
+const siblingSuffix = typeof __filename === "string" && __filename.endsWith(".js") ? "" : ".cjs";
+function warFrontChat(kind,details={},systemIDs=[]){
+ const key=kind+":"+String(details.eventKey||"");
+ if(warFrontChatSent.has(key))return false;
+ let text=null;
+ try{text=require("./coopWarClientView"+siblingSuffix).frontReport(kind,details)}catch(_error){text=null}
+ if(!text)return false;
+ warFrontChatSent.add(key);
+ if(warFrontChatSent.size>256)warFrontChatSent.clear();
+ const systems=[...new Set((Array.isArray(systemIDs)?systemIDs:[]).map(Number).filter(n=>Number.isSafeInteger(n)&&n>0))];
+ let sent=0;
+ try{
+  const native=require("./runtime"),chat=require("../services/chat/chatHub");
+  for(const systemID of systems){
+   const scene=native.scenes instanceof Map?native.scenes.get(systemID):null;
+   for(const session of scene?.sessions?.values?.()||[]){
+    if(session?._space?.initialStateSent!==true||!session.characterID)continue;
+    try{chat.sendSystemMessage(session,text);sent++;}catch(_error){/* one bad socket never stops the report */}
+   }
+  }
+ }catch(_error){/* a missing chat hub must not break the war phase */}
+ try{
+  require("./coopRuntimeProbe").observe("living-war-front-report",null,null,{
+   kind,text,systems,sessions:sent,evidence:"REAL_TRANSITION_ONCE_PER_EVENT"});
+ }catch(_error){/* probe is best effort */}
+ return true;
+}
 function advanceNativeWarOpening(){
  const {enabled}=require("./coopWarMobilizer");
  if(!enabled(process.env))return warSkip("opening","WAR_FLAGS_OFF");
@@ -244,6 +276,17 @@ function advanceNativeWarOpening(){
   funding:result.fundings,
   evidence:"REAL_PRESENCE_REAL_RECIPROCAL_GATE_PAPER_TREASURY"
  });
+ // One front report per real opening, to the systems it really touches.
+ for(const campaignID of result.campaignIDs||[]){
+  const campaign=result.state&&result.state.campaigns&&result.state.campaigns[campaignID];
+  if(!campaign)continue;
+  warFrontChat("war-opened",{
+   eventKey:campaignID,
+   attackerFactionID:Number(result.state.wars?.[campaign.warID]?.attackerFactionID)||0,
+   defenderFactionID:Number(result.state.wars?.[campaign.warID]?.defenderFactionID)||0,
+   targetSystemID:campaign.targetSystemID,
+  },[campaign.sourceSystemID,campaign.targetSystemID]);
+ }
 }
 // FW-010B: PREPARING becomes ASSAULT only when the mobiliser has really put
 // native ships on both sides of that border. No muster, no assault.
@@ -271,6 +314,16 @@ function advanceNativeWarAssault(){
   attackerShips:begun.attackerShips,defenderShips:begun.defenderShips,
   evidence:"REAL_NATIVE_MUSTER_ON_BOTH_SIDES"
  });
+ const begunCampaign=begun.state&&begun.state.campaigns&&begun.state.campaigns[begun.campaignID];
+ warFrontChat("assault-begun",{
+  eventKey:begun.campaignID,
+  targetSystemID:Number(begunCampaign&&begunCampaign.targetSystemID)||0,
+  attackerShips:begun.attackerShips.length,
+  defenderShips:begun.defenderShips.length,
+ },[
+  Number(begunCampaign&&begunCampaign.sourceSystemID)||0,
+  Number(begunCampaign&&begunCampaign.targetSystemID)||0,
+ ]);
 }
 function advanceNativeWarMobilization(){
  const {enabled,createWarMobilizer}=require("./coopWarMobilizer");
@@ -540,6 +593,21 @@ function advanceNativeWarObjectives(){
     status:result.status,events:result.events,
     evidence:"PHYSICAL_STRUCTURE_COMBAT_KILLMAIL_AND_UNCONTESTED_NATIVE_OCCUPANCY"
    });
+ // A captured system is a real front event: report it once, to that system.
+ for(const event of result.events||[]){
+  if(!event||event.kind!=="MILITARY_CONTROL_CAPTURED")continue;
+  let capturerFactionID=0;
+  try{
+   const warState=warStateStore().read();
+   const campaign=warState&&warState.campaigns&&warState.campaigns[event.campaignID];
+   capturerFactionID=Number(warState?.wars?.[campaign?.warID]?.attackerFactionID)||0;
+  }catch(_error){capturerFactionID=0}
+  warFrontChat("objective-captured",{
+   eventKey:String(event.campaignID||"")+":"+String(event.systemID||"")+":"+String(event.revision||""),
+   systemID:event.systemID,
+   factionID:capturerFactionID,
+  },[event.systemID]);
+ }
 }
 // One existing A-Life 30-second scheduler, no faction-war timer.
 function npcOrderBridge(){
@@ -3760,4 +3828,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,diagnoseMobilization,warFrontChat};
