@@ -1466,3 +1466,20 @@ this boot -> `living-native-stock-fleet-wreck-evidence` -> `living-npc-wreck-car
 -> `living-npc-loot-station` -> `living-native-loot-market-settled` for an Angel
 pilot, then `war_funding_diagnose` must show 500011 funded and the opening must
 reserve 25 000 ISK before START_CAMPAIGN, then a real casualty pays the bounty.
+
+## 2026-10-27T12:40Z - why the raid is idle right now (measured, no code change)
+
+`mining_fleet_diagnose 30000145`: fleet 960004641 `state "loaded"`, 13 miners
+`mode STOP` with no ore left (transferred), haulers carrying it on the live trip
+`30000145-960004641-1793104338982` (`departureAck true`), one hauler 299 195 691 465 m
+out on its warp to the station. `raid_diagnose`: 4 linked pirates, 23 fleet hulls, `leases []`,
+every pirate `mode STOP, manualType ""` - no legal target because the whole convoy is on its
+delivery leg, which is exactly what the raid's warp filter is for. The last raid action was
+12:26:46Z (`warp-to-hauler` for 980000018058) and the last kill 12:00:10Z.
+
+**NEXT ACTION (exact).** Wait for the trip to deliver (`living-native-haul-delivered`) so the
+fleet returns to `mining`; the raid then kills again. For the war chest the kill must be made
+by an ANGEL hull (601 coop-pilot-060, corp 1000138) so 500011 earns real ISK from the same
+recovery -> seeded sale path that already paid 500020 27 121.5 ISK. Then
+`war_funding_diagnose` must show both 500011 and 500020 funded and the opening must reserve
+25 000 ISK before START_CAMPAIGN; a real casualty then pays the bounty from HELD escrow.
