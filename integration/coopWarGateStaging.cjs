@@ -156,23 +156,32 @@ function createWarGateStaging({readWar,readFleet,readTreasury,
      reason:String(output.status||"GATE_TRAVEL_REFUSED")});
    if(output.status==="OK"&&!output.orders.length&&!output.observations.length)
     skips.push({campaignID:campaign.campaignID,
-     reason:blocked.size?"ATTACKER_BLOCKED:"+[...blocked].sort((a,b)=>a-b).join(","):
+     reason:(Array.isArray(output.rejections)&&output.rejections.length)?
+      "ATTACKER_REJECTED:"+output.rejections.slice(0,3)
+       .map(r=>`${r.entityID}/${r.reason}`).join(","):
+      blocked.size?"ATTACKER_BLOCKED:"+[...blocked].sort((a,b)=>a-b).join(","):
       "NO_STAGEABLE_ATTACKER_SHIP"});
    // A gate-warp result does not change native ship location, fleet
    // registry, cargo, SDE faction, war objective or player's wallet.
    for(const o of output.orders){
     if(orders.length>=maxOrders)break;
     if(o.action==="NATIVE_WARP_TO_REAL_GATE"||
+       o.action==="NATIVE_SUBWARP_TO_REAL_GATE"||
        o.action==="VERIFIED_NATIVE_GATE_TRANSFER")
      orders.push({...o,campaignID:campaign.campaignID,
       campaignState:String(campaign.state),
       supply:paperSupply?"PAPER_UNFUNDED_EXPLICIT":"REAL_HELD_ESCROW",
       phase:o.action==="VERIFIED_NATIVE_GATE_TRANSFER"?
-       "NATIVE_TRANSFER_WITH_DURABLE_HANDOFF":"STAGING_ONLY_NOT_TRANSFER"});
+       "NATIVE_TRANSFER_WITH_DURABLE_HANDOFF":
+       o.action==="NATIVE_SUBWARP_TO_REAL_GATE"?
+       "STAGING_SUBWARP_APPROACH_ONLY_NOT_TRANSFER":
+       "STAGING_ONLY_NOT_TRANSFER"});
    }
    for(const o of output.observations.slice(0,8))
     observations.push({...o,campaignID:campaign.campaignID,
-     phase:"AWAITING_NATIVE_WAR_FLEET_TRANSFER"});
+     phase:o.status==="TRANSFER_REFUSED"?"NATIVE_TRANSFER_REFUSED":
+      o.status==="WARP_REFUSED"?"NATIVE_WARP_REFUSED":
+      "AWAITING_NATIVE_WAR_FLEET_TRANSFER"});
   }
   return {status:"OBSERVED",orders,observations:observations.slice(0,16),
    skips:skips.slice(0,16)};

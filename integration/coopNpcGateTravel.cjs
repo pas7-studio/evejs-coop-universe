@@ -33,7 +33,7 @@ function connectedGates({sourceSystemID,targetSystemID,sourceScene,getGate}={}){
  return result.sort((a,b)=>a.sourceGateID-b.sourceGateID);
 }
 function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
- approachMeters=2500,maxShipsPerTick=2,transfer=null}={}){
+ approachMeters=2500,maxShipsPerTick=2,transfer=null,followEntity=null}={}){
  if(typeof warp!=="function"||typeof getGate!=="function"||typeof clock!=="function"||
   !Number.isSafeInteger(dwellMs)||dwellMs<30000||
   !Number.isFinite(approachMeters)||approachMeters<500||approachMeters>2500||
@@ -52,21 +52,44 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
   if(!destination||destination===system)return {status:"NO_ROUTE",orders:[],observations:[]};
   const gates=connectedGates({sourceSystemID:system,targetSystemID:destination,sourceScene:scene,getGate});
   if(!gates.length)return {status:"NO_RECIPROCAL_NATIVE_GATE",orders:[],observations:[]};
-  const now=clock(),orders=[],observations=[],candidates=[];
+  const now=clock(),orders=[],observations=[],candidates=[],rejections=[];
+  // The native warp refuses a target that is already close (measured
+  // WARP_DISTANCE_TOO_CLOSE) and then the hull would sit at that distance for
+  // ever: the last kilometres are covered by a REAL subwarp follow order to the
+  // same gate entity, never by moving the ship.
+  const followShip=(ship,gateID)=>{try{
+   if(typeof followEntity==="function")return followEntity(ship,gateID,1000,{
+    queueHistorySafeContract:true,suppressFreshAcquireReplay:true})===true;
+   return scene?.followShipEntity?.(ship,gateID,1000,
+    {queueHistorySafeContract:true,suppressFreshAcquireReplay:true})===true;
+  }catch{return false}};
+  const reject=(a,id,reason)=>rejections.push({entityID:id,pilotID:a?.pilotID,reason});
   for(const a of assignments){
    const id=pos(a?.entityID);
-   if(!id||!named(a.pilotID)||Number(a.systemID)!==system||blockedIDs.has(id))continue;
+   if(!id)continue;
+   if(!named(a.pilotID)){reject(a,id,"PILOT_NOT_NAMED");continue}
+   if(Number(a.systemID)!==system){reject(a,id,"ASSIGNMENT_SYSTEM_MISMATCH");continue}
+   if(blockedIDs.has(id)){reject(a,id,"BLOCKED_BY_OWNER");continue}
    const role=String(roles[a.pilotID]?.role||a.role||"");
-   if(role!=="trader"&&role!=="patrol")continue;
+   if(role!=="trader"&&role!=="patrol"){reject(a,id,"ROLE_NOT_TRAVELING");continue}
    const ship=scene.getEntityByID(id);
-   if(!ship||ship.kind!=="ship"||ship.nativeNpc!==true||
-    !vector(ship.position)||ship.session?.characterID)continue;
+   if(!ship){reject(a,id,"SHIP_NOT_IN_SCENE");continue}
+   if(ship.kind!=="ship"){reject(a,id,"NOT_A_SHIP");continue}
+   if(ship.nativeNpc!==true){reject(a,id,"NOT_A_NATIVE_NPC");continue}
+   if(!vector(ship.position)){reject(a,id,"NO_REAL_POSITION");continue}
+   if(ship.session?.characterID){reject(a,id,"PLAYER_SESSION");continue}
    const c=getController(id);
-   if(!c||Number(c.entityID)!==id||Number(c.systemID)!==system||
-    Number(c.currentTargetID)>0||Number(c.lastAggressorID)>0&&
-      now-Number(c.lastAggressedAtMs)<120000||c.manualOrder?.type==="attack")continue;
-   if(String(ship.mode||"").toUpperCase().includes("WARP")||
-    ship.pendingWarp||ship.warpState)continue;
+   if(!c){reject(a,id,"NO_NATIVE_CONTROLLER");continue}
+   if(Number(c.entityID)!==id){reject(a,id,"CONTROLLER_ENTITY_MISMATCH");continue}
+   if(Number(c.systemID)!==system){reject(a,id,"CONTROLLER_SYSTEM_MISMATCH");continue}
+   if(Number(c.currentTargetID)>0){reject(a,id,"CONTROLLER_ENGAGED");continue}
+   if(Number(c.lastAggressorID)>0&&
+      now-Number(c.lastAggressedAtMs)<120000){reject(a,id,"RECENTLY_AGGRESSED");continue}
+   if(c.manualOrder?.type==="attack"){reject(a,id,"MANUAL_ATTACK_ORDER");continue}
+   if(String(ship.mode||"").toUpperCase().includes("WARP")){
+    reject(a,id,"SHIP_WARPING:"+String(ship.mode));continue}
+   if(ship.pendingWarp){reject(a,id,"PENDING_WARP");continue}
+   if(ship.warpState){reject(a,id,"WARP_STATE_SET:"+String(ship.warpState));continue}
    candidates.push({id,pilotID:a.pilotID,role,ship});
   }
   let issued=0;
@@ -74,7 +97,10 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
    if(issued>=maxShipsPerTick)break;
    const key=system+":"+pilot.id;
    const old=pending.get(key);
-   if(old&&now<old.nextAt)continue;
+   if(old&&now<old.nextAt){
+    reject(pilot,pilot.id,"PENDING:"+String(old.phase)+"@"+old.nextAt);
+    continue;
+   }
    const gate=gates.reduce((best,g)=>!best||distance(pilot.ship.position,g.position)<
     distance(pilot.ship.position,best.position)?g:best,null);
    if(!gate)continue;
@@ -90,6 +116,24 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
      issued++;orders.push({pilotID:pilot.pilotID,entityID:pilot.id,
       sourceGateID:gate.sourceGateID,targetSystemID:destination,
       action:"NATIVE_WARP_TO_REAL_GATE"});
+    }else{
+     const reason=String(result?.errorMsg||"NATIVE_WARP_NOT_ACCEPTED");
+     // A real subwarp follow replaces a warp the native runtime refuses because
+     // the hull is already at the gate: same gate entity, real movement, and the
+     // arrival is still only claimed by a measured surface gap.
+     if(reason.includes("WARP_DISTANCE_TOO_CLOSE")&&followShip(pilot.ship,gate.sourceGateID)){
+      pending.set(key,{pilotID:pilot.pilotID,sourceSystemID:system,
+       targetSystemID:destination,gateID:gate.sourceGateID,
+       nextAt:now+30000,phase:"SUBWARP_APPROACH"});
+      issued++;
+      orders.push({pilotID:pilot.pilotID,entityID:pilot.id,
+       sourceGateID:gate.sourceGateID,targetSystemID:destination,
+       action:"NATIVE_SUBWARP_TO_REAL_GATE"});
+      continue;
+     }
+     observations.push({pilotID:pilot.pilotID,entityID:pilot.id,
+      sourceGateID:gate.sourceGateID,destinationGateID:gate.destinationGateID,
+      destinationSystemID:destination,status:"WARP_REFUSED",reason});
     }
     continue;
    }
@@ -117,10 +161,16 @@ function createGateTravel({warp,getGate,clock=()=>Date.now(),dwellMs=180000,
     pending.set(key,{pilotID:pilot.pilotID,sourceSystemID:system,
      targetSystemID:destination,gateID:gate.sourceGateID,
      nextAt:now+60000,phase:"TRANSFER_NOT_VERIFIED"});
+    // A refused crossing must name itself: the exact adapter verdict is the only
+    // thing that can tell an operator which native precondition is missing.
+    observations.push({pilotID:pilot.pilotID,entityID:pilot.id,
+     sourceGateID:gate.sourceGateID,destinationGateID:gate.destinationGateID,
+     destinationSystemID:destination,status:"TRANSFER_REFUSED",
+     reason:String(result?.errorMsg||"TRANSFER_NOT_VERIFIED")});
    }
   }
   if(pending.size>500)for(const [key,p] of pending)if(p.nextAt<now-3600000)pending.delete(key);
-  return {status:"OK",gateCount:gates.length,orders,observations};
+  return {status:"OK",gateCount:gates.length,orders,observations,rejections};
  }
  function activeIDs(){
   const now=clock(),ids=new Set();
