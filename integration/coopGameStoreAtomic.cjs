@@ -90,7 +90,7 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
   throw Error("NATIVE_GAMESTORE_AUTHORITIES_REQUIRED");
  const sqliteWriter=sqliteStore.coopAtomicNativeRows.claimTransactor();
  let busy=false,poisoned=false;
- function transact(tables,mutation){
+ function transact(tables,mutation,options={}){
   if(poisoned)throw Error("NATIVE_GAMESTORE_POISONED");
   if(process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1")throw Error("NATIVE_GAMESTORE_ATOMIC_DISABLED");
   assertTables(tables);
@@ -101,7 +101,10 @@ function createGameStoreAdapter({sqliteStore,ensureSqliteReady,ensureCached,flus
   // A cargo-bearing transaction may mix with transient cache cargo only under a
   // declared contract: exact table set, its own flags, exact write set. A table
   // set that is not declared still fails closed with NATIVE_TRANSIENT_STATE_UNSAFE.
-  const cargoContract=require("./coopNativeCargoTransientIsolation").contractForTables(tables);
+  // The caller may name its contract when two features share one table set.
+  const contractName=typeof options?.contract==="string"?options.contract:null;
+  const cargoContract=require("./coopNativeCargoTransientIsolation")
+    .contractForTables(tables,process.env,contractName);
   const mixedMode=Boolean(cargoContract)&&
     process.env.EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION==="1"&&
     cargoContract.flags.every(flag=>process.env[flag]==="1");

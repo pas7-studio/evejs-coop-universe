@@ -210,8 +210,26 @@ function createAmmoDebitJournal({root,store,clock=()=>Date.now()}={}){
    return {ok:false,status:"NATIVE_AMMO_BANK_IDENTITY_INVALID"};
   // A prior atomic multi-barrel debit may have reached SQLite while its
   // ship journal remains PREPARED. Never switch back to module-wise fire
-  // to bypass that unresolved transaction.
-  const bankShip=require("./coopNpcAmmoBankAtomic").inspectShip({root,entityID});
+  // to bypass that unresolved transaction. A PREPARED journal whose SQLite
+  // replay fence proves the debit never committed is recovered as ABORTED
+  // first: one failed transaction must not quarantine a real warship forever.
+  let bankShip=require("./coopNpcAmmoBankAtomic").inspectShip({root,entityID});
+  if(!bankShip.ok&&(bankShip.status==="BANK_NEEDS_RECONCILIATION"||
+   bankShip.status==="BANK_LOCKED_RECONCILE")){
+   try{
+    const recovered=require("./coopNpcAmmoBankAtomic").recoverUncommitted({
+     root,entityID,
+     readFence:id=>require("./coopNativeRowPath").readRow(
+      require("../gameStore"),"npcCargo","coopAmmoCycles_"+String(id))});
+    if(recovered.status==="ABORTED")
+     bankShip=require("./coopNpcAmmoBankAtomic").inspectShip({root,entityID});
+    else console.warn("[CoopAmmoJournal] bank recovery",
+     String(recovered.status||"UNKNOWN"),String(recovered.reason||""));
+   }catch(error){
+    console.warn("[CoopAmmoJournal] bank recovery threw",
+     String(error&&error.message||error));
+   }
+  }
   if(!bankShip.ok)return {ok:false,status:"NATIVE_AMMO_BANK_SHIP_QUARANTINED",
    reason:bankShip.status};
   // Never downgrade a ship with atomic cargo history back to separate

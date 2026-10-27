@@ -39,7 +39,7 @@ test("the diagnostic reports the exact physical and controller facts",()=>{
  const body=diagnoseCombatBody();
  for(const field of ["inScene","nativeNpc","playerSession","controllerSystemID",
   "currentTargetID","manualOrder","ammoRetreat","tacticalBusy","inBattleSystem",
-  "distanceMeters","inRange","verdict","reason"])
+  "distanceMeters","inRange","verdict","reason","hp"])
   assert.ok(body.includes(field),field+" must be reported");
 });
 

@@ -33,7 +33,7 @@ function readReceipt(file,io=fs){
  }catch(e){if(e.code==="ENOENT")return null;throw e;}
  if(typeof raw!=="string"||raw.length>maxReceiptBytes)throw Error("BANK_RECEIPT_SIZE_INVALID");
  const v=JSON.parse(raw);
- if(v?.version!==1||!["PREPARED","COMMITTED"].includes(v.phase)||
+ if(v?.version!==1||!["PREPARED","COMMITTED","ABORTED"].includes(v.phase)||
    !pos(v.entityID)||!boundary(v.boundaryMs)||
    !Array.isArray(v.modules)||!v.modules.length||v.modules.length>16||
    v.modules.some(m=>!pos(m))||new Set(v.modules).size!==v.modules.length||
@@ -58,12 +58,29 @@ function inspectShip({root,entityID,io=fs}={}){
   if(!receipt)return {ok:true,status:"EMPTY"};
   if(receipt.entityID!==id)return {ok:false,status:"BANK_IDENTITY_MISMATCH"};
   if(receipt.phase==="PREPARED")return {ok:false,status:"BANK_NEEDS_RECONCILIATION"};
+  if(receipt.phase==="ABORTED")return {ok:true,status:"ABORTED",receipt};
   return {ok:true,status:"COMMITTED",receipt};
  }catch(_){return {ok:false,status:"BANK_JOURNAL_CORRUPT"};}
 }
 function syncDir(io,dir){
+ // Windows cannot open a directory for fsync; the deployed runtime is POSIX.
+ // Every other platform stays strict: a failed directory fsync is an error.
+ if(process.platform==="win32")return;
  const fd=io.openSync(dir,"r");
  try{io.fsyncSync(fd);}finally{io.closeSync(fd);}
+}
+// The journal root is a private directory, not game state: create it when the
+// deployment never made it (a container that never provisioned the volume would
+// otherwise fail every single turret cycle as BANK_ATOMIC_JOURNAL_UNSAFE).
+// A symlink or a non-directory still fails closed, because that is exactly how
+// a real path substitution would look.
+function ensureJournalRoot({root,io=fs}={}){
+ if(typeof root!=="string"||!path.isAbsolute(root))throw Error("BANK_ROOT_UNSAFE");
+ try{io.mkdirSync(root,{mode:0o700});}
+ catch(e){if(e.code!=="EEXIST")throw e;}
+ const stat=io.lstatSync(root);
+ if(!stat.isDirectory()||stat.isSymbolicLink())throw Error("BANK_ROOT_UNSAFE");
+ return root;
 }
 function writeAtomic(io,file,receipt){
  const dir=path.dirname(file),bytes=JSON.stringify(receipt);
@@ -91,7 +108,8 @@ function prepare(io,root,entityID,modules,whenMs,clock){
  // COOP-046: when outcome attestation is requested, never overwrite a
  // successful cargo debit whose native fire result is still unknown.
  if((process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"||
-     status.receipt?.outcomeRequired===true)&&status.receipt){
+     status.receipt?.outcomeRequired===true)&&status.receipt&&
+    status.receipt.phase==="COMMITTED"){
   const o=status.receipt.outcome;
   if(!o||o.version!==1||o.boundaryMs!==status.receipt.boundaryMs||
      !Number.isFinite(o.observedAtMs)||o.observedAtMs<=0||
@@ -100,8 +118,7 @@ function prepare(io,root,entityID,modules,whenMs,clock){
    throw Error("BANK_OUTCOME_NOT_ATTESTED");
  }
  const dir=path.join(root,"bank-ships");
- const rootStat=io.lstatSync(root);
- if(!rootStat.isDirectory()||rootStat.isSymbolicLink())throw Error("BANK_ROOT_UNSAFE");
+ ensureJournalRoot({root,io});
  try{io.mkdirSync(dir,{mode:0o700});}
  catch(e){if(e.code!=="EEXIST")throw e;}
  const dirStat=io.lstatSync(dir);
@@ -135,6 +152,74 @@ function settle(io,token){
  io.unlinkSync(token.lock);
  syncDir(io,path.dirname(token.file));
 }
+// A PREPARED journal whose SQLite replay fence never reached the boundary is a
+// debit that provably did NOT commit: the fence is written in the same
+// transaction as the cargo delta. Such a journal is recovered as ABORTED (no
+// refund, no invented shot) so one failed transaction cannot quarantine a real
+// warship forever. A fence at or past the boundary is the opposite proof: the
+// debit landed, so nothing is touched and the ship stays NEEDS_OPERATOR_REPAIR.
+function recoverUncommitted({root,entityID,atomicRows,readFence,io=fs,clock=()=>Date.now()}={}){
+ const id=pos(entityID);
+ if(typeof root!=="string"||!path.isAbsolute(root)||!id||
+    (typeof readFence!=="function"&&typeof atomicRows?.transact!=="function"))
+  return {status:"RECOVERY_UNAVAILABLE"};
+ const file=journalFile(root,id),lock=file+".lock";
+ let receipt;
+ try{
+  if(!io.existsSync(file))return {status:"NOTHING_TO_RECOVER"};
+  receipt=readReceipt(file,io);
+ }catch(_){return {status:"RECOVERY_JOURNAL_UNREADABLE"}}
+ if(!receipt)return {status:"NOTHING_TO_RECOVER"};
+ if(receipt.entityID!==id)return {status:"RECOVERY_IDENTITY_MISMATCH"};
+ if(receipt.phase!=="PREPARED")return {status:"NOTHING_TO_RECOVER"};
+ let fence=null;
+ try{
+  // A plain cache read is enough: the atomic writer reconciles the GameStore
+  // cache synchronously after COMMIT. The runtime therefore never needs a new
+  // SQLite transaction just to prove a debit did not land.
+  if(typeof readFence==="function")fence=readFence(id)||null;
+  else fence=atomicRows.transact(["npcCargo"],tx=>
+   tx.get("npcCargo","coopAmmoCycles_"+String(id)));
+ }catch(_){return {status:"RECOVERY_SQLITE_UNAVAILABLE"}}
+ const committed=receipt.modules.some(moduleID=>
+  Number(fence?.modules?.[String(moduleID)]||0)>=receipt.boundaryMs);
+ if(committed)return {status:"NEEDS_OPERATOR_REPAIR",
+  reason:"SQLITE_FENCE_PROVES_COMMITTED_DEBIT",boundaryMs:receipt.boundaryMs};
+ try{
+  if(io.existsSync(lock)){
+   const owner=JSON.parse(io.readFileSync(lock,"utf8"));
+   if(owner?.entityID!==id||owner?.nonce!==receipt.nonce)
+    return {status:"NEEDS_OPERATOR_REPAIR",reason:"BANK_LOCK_OWNER_MISMATCH"};
+  }
+  const current=readReceipt(file,io);
+  if(current?.phase!=="PREPARED"||current.nonce!==receipt.nonce)
+   return {status:"NEEDS_OPERATOR_REPAIR",reason:"BANK_JOURNAL_CHANGED"};
+  writeAtomic(io,file,{...current,phase:"ABORTED",
+   abortedAtMs:Number(clock()),abortReason:"NO_COMMITTED_SQLITE_FENCE"});
+  if(io.existsSync(lock))io.unlinkSync(lock);
+  syncDir(io,path.dirname(file));
+  return {status:"ABORTED",entityID:id,boundaryMs:receipt.boundaryMs};
+ }catch(_){return {status:"RECOVERY_PERSISTENCE_UNSAFE"}}
+}
+// Bounded discovery for the periodic recovery phase: only real journal files.
+function listJournals({root,io=fs}={}){
+ if(typeof root!=="string"||!path.isAbsolute(root))return {status:"INVALID_ROOT",entityIDs:[]};
+ const dir=path.join(root,"bank-ships");
+ let names;
+ try{names=io.readdirSync(dir);}
+ catch(e){if(e.code==="ENOENT")return {status:"EMPTY",entityIDs:[]};
+  return {status:"UNAVAILABLE",entityIDs:[]};}
+ const entityIDs=[];
+ for(const name of names.slice(0,4096)){
+  const match=/^([1-9]\d{0,15})\.json$/.exec(String(name));
+  if(!match)continue;
+  const id=Number(match[1]);
+  if(!Number.isSafeInteger(id)||id<=0)continue;
+  entityIDs.push(id);
+ }
+ entityIDs.sort((a,b)=>a-b);
+ return {status:"OBSERVED",entityIDs:entityIDs.slice(0,256)};
+}
 function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>Date.now(),faultProbe=null}={}){
  if(typeof root!=="string"||!path.isAbsolute(root)||
    typeof atomicRows?.transact!=="function"||
@@ -160,19 +245,49 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
    expected.push({moduleID,cargoID,typeID,flagID:Number(e.moduleItem.flagID),
     moduleTypeID:pos(e.moduleItem.typeID),qty,original:e.chargeItem});
   }
-  let token;
+  let shipRow=null;
+  try{
+   shipRow=typeof store.getNativeEntity==="function"?
+    store.getNativeEntity(entityID):null;
+  }catch{shipRow=null}
+  // The native ship record is read before the transaction on purpose: the
+  // npcEntities table carries transient rows for transient hulls, and the
+  // transient-cargo contract cannot cover that table, so declaring it made the
+  // GameStore owner refuse every bank transaction. Ownership is still proven
+  // inside the transaction by every module and cargo row's own entityID and
+  // ownerID, which must equal this verified owner.
+  if(!shipRow||Number(shipRow.entityID)!==entityID||
+   Number(shipRow.ownerID)!==ownerID||!pos(shipRow.systemID))
+   return fail("BANK_ATOMIC_INVALID_IDENTITY");
+  // Verify every fitted module against the native store BEFORE the transaction,
+  // because npcModules carries transient rows and cannot join the cargo contract.
+  let fittedModules;
+  try{fittedModules=store.listNativeModulesForEntity(entityID);}
+  catch{return fail("BANK_ATOMIC_MODULE_PROOF_UNAVAILABLE")}
+  if(!Array.isArray(fittedModules))return fail("BANK_ATOMIC_MODULE_PROOF_UNAVAILABLE");
+  for(const part of expected){
+   const fitted=fittedModules.filter(row=>Number(row?.moduleID)===part.moduleID);
+   if(fitted.length!==1)return fail("BANK_ATOMIC_MODULE_NOT_VERIFIED");
+   part.fitted=fitted[0];
+  }
+  let token,recovery=null;
   try{token=prepare(io,root,entityID,seenModules,whenMs,clock);}
-  catch(_){return fail("BANK_ATOMIC_JOURNAL_UNSAFE");}
+  catch(error){
+   // Recover a provably uncommitted PREPARED journal, then retry once. Without
+   // this a single failed transaction quarantines a real warship forever.
+   recovery=recoverUncommitted({root,entityID,atomicRows,io,clock});
+   if(recovery.status!=="ABORTED")
+    return fail("BANK_ATOMIC_JOURNAL_UNSAFE");
+   try{token=prepare(io,root,entityID,seenModules,whenMs,clock);}
+   catch(_){return fail("BANK_ATOMIC_JOURNAL_UNSAFE");}
+  }
   // Test-only crash probe. Runtime never passes this injectable callback.
   if(faultProbe)try{faultProbe("after-prepared",token);}catch(_){
    return fail("BANK_ATOMIC_FAULT_PROBE_STOP");
   }
   let updated;
   try{
-   updated=atomicRows.transact(["npcEntities","npcModules","npcCargo"],tx=>{
-    const ship=tx.get("npcEntities","entities\u001f"+String(entityID));
-    if(!ship||Number(ship.ownerID)!==ownerID||!pos(ship.systemID))
-     throw Error("BANK_NATIVE_SHIP_CHANGED");
+   updated=atomicRows.transact(["npcCargo"],tx=>{
     const cargo=tx.get("npcCargo","cargo");
     if(!cargo||typeof cargo!=="object"||Array.isArray(cargo))
      throw Error("BANK_NATIVE_CARGO_UNAVAILABLE");
@@ -193,7 +308,11 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
     // SQLite keeps prior debits. A new empty root must NEVER silently
     // bootstrap a new accepted outcome history for an already-spent ship.
     if(process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"){
-     const previousReceipt=token.previousReceipt;
+     // An ABORTED journal is a proven non-debit: it carries no SQLite history,
+     // so it must not look like a rotated/lost root.
+     const priorReceipt=token.previousReceipt;
+     const previousReceipt=priorReceipt&&priorReceipt.phase==="COMMITTED"?
+      priorReceipt:null;
      const exists=previousFence!==null;
      if(exists!==Boolean(previousReceipt))
       throw Error("BANK_NATIVE_JOURNAL_FENCE_DIVERGED");
@@ -210,7 +329,11 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
     const next={...cargo};
     const result=[];
     for(const part of expected){
-     const fitted=tx.get("npcModules","modules\u001f"+String(part.moduleID));
+     // The fitted module row was verified from the same native store before this
+     // transaction: the npcModules table carries transient rows for transient
+     // hulls and cannot be part of the cargo contract, and the event loop cannot
+     // interleave a module change between that synchronous read and this commit.
+     const fitted=part.fitted;
      const row=next[String(part.cargoID)];
      if(!fitted||Number(fitted.moduleID)!==part.moduleID||
        Number(fitted.entityID)!==entityID||
@@ -247,8 +370,15 @@ function createAtomicAmmoBank({root,atomicRows,store,compatible,io=fs,clock=()=>
      outcomeRequired:previousFence?.outcomeRequired===true||
       process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS==="1"});
     return result;
-   });
-  }catch(_){return fail("BANK_ATOMIC_TRANSACTION_UNCERTAIN");}
+   },{contract:"npc-ammo-bank"});
+  }catch(error){
+   // A swallowed error here is an undiagnosable deadlock: the ship stays
+   // quarantined forever with no reason on record. Keep the fail-closed
+   // result, but name the real cause in the server log.
+   console.warn("[CoopAmmoBank] transaction refused",
+    String(error&&error.message||error));
+   return fail("BANK_ATOMIC_TRANSACTION_UNCERTAIN");
+  }
   if(faultProbe)try{faultProbe("after-sqlite-commit",token);}catch(_){
    return fail("BANK_ATOMIC_FAULT_PROBE_STOP");
   }
@@ -342,4 +472,4 @@ function consumeBank(args){
    store,compatible}).consume(args);
  }catch(_){return {success:false,errorMsg:"BANK_ATOMIC_UNAVAILABLE",stopReason:"ammo"};}
 }
-module.exports={createAtomicAmmoBank,inspectShip,consumeBank,gate,verifyDirectDebit,guardDirectDebit};
+module.exports={createAtomicAmmoBank,inspectShip,ensureJournalRoot,recoverUncommitted,listJournals,consumeBank,gate,verifyDirectDebit,guardDirectDebit};

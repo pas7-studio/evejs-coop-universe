@@ -36,12 +36,19 @@ function createFireDebitProof({store,compatible,env=process.env}={}){
    const rows=cargo.filter(x=>Number(x.cargoID)===cargoID);
    if(rows.length!==1)return {allowed:false,status:"NATIVE_FIRE_CARGO_MISSING"};
    const row=rows[0];
+   // A native charge row is bound to its turret by `moduleID`; the native cargo
+   // writer does not stamp `flagID` on cargo at all. Demanding that optional
+   // field made every strict-ammo turret cycle fail as a forged charge, so a
+   // fully loaded real warship could activate a module and never apply damage.
+   // The flag is still enforced whenever the row really carries one.
+   const rowFlag=row.flagID;
    if(Number(row.entityID)!==entityID||
     Number(row.ownerID)!==Number(ship.ownerID)||
     Number(row.categoryID)!==8||
     Number(row.moduleID)!==moduleID||
     Number(row.typeID)!==Number(chargeItem.typeID)||
-    Number(row.flagID)!==Number(moduleItem.flagID)||
+    (rowFlag!==undefined&&rowFlag!==null&&
+     Number(rowFlag)!==Number(moduleItem.flagID))||
     compatible(fitted[0],Number(row.typeID))!==true||
     !Number.isSafeInteger(Number(row.quantity))||
     Number(row.quantity)<requested||

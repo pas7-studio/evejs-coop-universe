@@ -140,11 +140,13 @@ function check(args = {}) {
       capability: require("./npc/npcCapabilityResolver"),
       isWarHull: entityID => {
         const { TABLE, KEY } = require("./coopWarFleetRegistry");
-        const result = require("../gameStore").read(TABLE, "/" + KEY);
-        if (result?.success !== true || result.data?.version !== 1 ||
-            !result.data.ships || typeof result.data.ships !== "object")
+        // War rows live in the atomic-rows keyspace (nested JSON cache path).
+        const data = require("./coopNativeRowPath").readRow(
+          require("../gameStore"), TABLE, KEY);
+        if (data?.version !== 1 ||
+            !data.ships || typeof data.ships !== "object")
           return "UNKNOWN";
-        return Object.prototype.hasOwnProperty.call(result.data.ships,String(entityID))?
+        return Object.prototype.hasOwnProperty.call(data.ships,String(entityID))?
           "ASSIGNED":"UNASSIGNED";
       },
     }).check(args);

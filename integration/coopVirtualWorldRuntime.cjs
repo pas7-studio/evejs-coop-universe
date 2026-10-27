@@ -435,9 +435,17 @@ function diagnoseCombat(){
   const scene=runtime.scenes instanceof Map?
    runtime.scenes.get(row.systemID):null;
   const entity=scene?.getEntityByID?.(row.entityID)||null;
-  let ctrl=null,native=null;
+  let ctrl=null,native=null,hp=null;
   try{ctrl=controllers.getControllerByEntityID(row.entityID)}catch{}
   try{native=entityStore.getNativeEntity(row.entityID)}catch{}
+  try{
+   // The same authoritative native health layers the combat evidence sampler
+   // uses: a reported activation is not damage, a measured layer loss is.
+   const damage=require("./combat/damage");
+   const max=damage.getEntityMaxHealthLayers(entity);
+   if(entity&&Object.values(max).some(n=>n>0))
+    hp=damage.getEntityCurrentHealthLayers(entity,max);
+  }catch{hp=null}
   const campaign=war.campaigns[row.campaignID]||null,
    factionID=Number(row.factionID)||0;
   const opponentSystem=Number(campaign?.targetSystemID)||0;
@@ -456,6 +464,7 @@ function diagnoseCombat(){
    playerSession:Number(entity?.session?.characterID)||0,
    mode:String(entity?.mode||""),
    position:vec(entity?.position)?entity.position:null,
+   hp,
    controllerSystemID:Number(ctrl?.systemID)||0,
    currentTargetID:Number(ctrl?.currentTargetID)||0,
    manualOrder:ctrl?.manualOrder?
@@ -492,6 +501,39 @@ function diagnoseCombat(){
    campaignID:c.campaignID,warID:c.warID,state:c.state,
    sourceSystemID:c.sourceSystemID,targetSystemID:c.targetSystemID})),
   ships,pairs};
+}
+// A PREPARED ammo-bank journal can only be recovered OUTSIDE the native fire
+// cycle: a transaction is not re-entrant there, so the hot path can refuse but
+// must not repair. This bounded phase recovers journals that the SQLite replay
+// fence proves never committed, so one failed transaction cannot leave a real
+// warship permanently unable to fire. Nothing is refunded and nothing is
+// invented: a fence at the boundary keeps the ship in operator repair.
+function advanceNativeAmmoBankRecovery(){
+ const env=process.env;
+ if(env.EVEJS_COOP_NPC_STRICT_AMMO!=="1"||
+  env.EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE!=="1"||
+  env.EVEJS_COOP_NPC_BANK_ATOMIC!=="1"||
+  env.EVEJS_COOP_NATIVE_ATOMIC_ROWS!=="1")return;
+ const api=require("./coopNpcAmmoBankAtomic");
+ const root=env.EVEJS_COOP_NPC_AMMO_DEBIT_ROOT||"/var/lib/evejs/coop-npc-ammo-debits";
+ const listed=api.listJournals({root});
+ if(listed.status!=="OBSERVED"||!listed.entityIDs.length)return;
+ const atomicRows=require("../gameStore").coopAtomicNativeRows;
+ const rows=require("./coopNativeRowPath");
+ const gameStore=require("../gameStore");
+ const readFence=id=>rows.readRow(gameStore,"npcCargo","coopAmmoCycles_"+String(id));
+ const recovered=[],blocked=[];
+ for(const entityID of listed.entityIDs.slice(0,8)){
+  if(api.inspectShip({root,entityID}).status==="COMMITTED")continue;
+  const result=api.recoverUncommitted({root,entityID,atomicRows,readFence});
+  if(result.status==="ABORTED")recovered.push(result);
+  else if(result.status!=="NOTHING_TO_RECOVER")
+   blocked.push({entityID,status:String(result.status||""),
+    reason:String(result.reason||"")}); }
+ if(recovered.length||blocked.length)
+  require("./coopRuntimeProbe").observe("living-native-ammo-bank-recovered",
+   null,null,{status:recovered.length?"RECOVERED":"BLOCKED",recovered,blocked,
+    evidence:"NO_COMMITTED_SQLITE_FENCE_PROVES_UNDEBITED_CHARGE"});
 }
 // FW-007B: recover/audit native military handoff BEFORE the materializer
 // may prune old pilot links or rebuild another physical hull.
@@ -1326,6 +1368,7 @@ function start(){
     advanceNativeAmmoSupply({mode:"SURVIVAL"}));
   }
   else runPhase("native-ammo-supply",advanceNativeAmmoSupply);
+  runPhase("native-ammo-bank-recovery",advanceNativeAmmoBankRecovery);
   runPhase("native-raids",advanceNativeRaids);
   runPhase("native-tactics",advanceNativeTactics);
   if(process.env.EVEJS_COOP_ALIFE==="1"&&process.env.EVEJS_COOP_NPC_EXPEDITIONS==="1")

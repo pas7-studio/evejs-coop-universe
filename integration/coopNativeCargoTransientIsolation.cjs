@@ -40,18 +40,46 @@ const MINING_CYCLE=Object.freeze({
  journal:Object.freeze({table:"miningRuntimeState",status:"COMMITTED",
   requires:Object.freeze(["op","fingerprint","cargoID","nextCargo"])}),
 });
-const CONTRACTS=Object.freeze([HAUL_TRANSFER,MINING_CYCLE]);
-function contractForTables(tables){
+// COOP-046: the same single-table contract also covers one atomic NPC ammo-bank
+// cycle: exactly one cargo root rewrite plus exactly one per-ship replay fence
+// row. It never touches a still-transient cargo row (the transaction reads the
+// durable SQLite root). Without this the GameStore owner refused the whole bank
+// whenever any transient NPC hull existed, so a loaded warship could activate a
+// turret and never debit a charge or apply damage.
+const AMMO_BANK=Object.freeze({
+ name:"npc-ammo-bank",
+ tables:Object.freeze(["npcCargo"]),
+ flags:Object.freeze(["EVEJS_COOP_NPC_STRICT_AMMO",
+  "EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE","EVEJS_COOP_NPC_BANK_ATOMIC",
+  "EVEJS_COOP_NATIVE_ATOMIC_ROWS"]),
+ cargoRootWrites:Object.freeze({min:1,max:1}),
+ cargoOtherKeys:"ammo-fence",
+ journal:null,
+});
+// Two declared contracts share the single npcCargo table set. The caller names
+// its policy explicitly (the GameStore transaction carries an optional contract
+// name), so neither feature can silently borrow the other's write-set rules.
+const CONTRACTS=Object.freeze([HAUL_TRANSFER,MINING_CYCLE,AMMO_BANK]);
+function sameTableSet(contractTables,tables){
+ return contractTables.length===tables.length&&
+  [...contractTables].sort().every((table,index)=>table===tables[index]);
+}
+function contractForTables(tables,env=null,name=null){
  if(!Array.isArray(tables)||tables.length<1)return null;
  const wanted=[...new Set(tables)].sort();
  if(wanted.length!==tables.length)return null;
- return CONTRACTS.find(c=>c.tables.length===wanted.length&&
-  [...c.tables].sort().every((table,index)=>table===wanted[index]))||null;
+ const matches=CONTRACTS.filter(c=>sameTableSet(c.tables,wanted));
+ if(!matches.length)return null;
+ if(name)return matches.find(c=>c.name===name&&
+  (!env||c.flags.every(flag=>env[flag]==="1")))||null;
+ return matches[0];
 }
 function getCargo(root){
  if(!root||typeof root!=="object"||Array.isArray(root)||
     !root.cargo||typeof root.cargo!=="object"||Array.isArray(root.cargo))
-  error("NATIVE_CARGO_SHAPE_INVALID");
+  error("NATIVE_CARGO_SHAPE_INVALID["+
+   (root&&typeof root==="object"&&!Array.isArray(root)?
+    Object.keys(root).slice(0,8).join("|"):typeof root)+"]");
  return root.cargo;
 }
 /**
@@ -94,7 +122,7 @@ function guardMutation(tx,witness,contract){
  if(!witness)return tx;
  const policy=contract||HAUL_TRANSFER;
  const ids=witness.ids,deny=()=>error("TRANSIENT_CARGO_SQL_WRITE_FORBIDDEN");
- let cargoWrites=0,receiptWrites=0,journalWrites=0,cargoRoot=null,journalRow=null;
+ let cargoWrites=0,receiptWrites=0,fenceWrites=0,journalWrites=0,cargoRoot=null,journalRow=null;
  const guarded=Object.freeze({
   get:(table,key)=>tx.get(table,key),
   scan:table=>tx.scan(table),
@@ -105,8 +133,18 @@ function guardMutation(tx,witness,contract){
         !value||typeof value!=="object"||Array.isArray(value)||
         ids.some(id=>own(value,id)))deny();
      cargoWrites++;cargoRoot=value;
-    }else if(policy.cargoOtherKeys==="forbid"){
-     // A mining cycle owns exactly one cargo row update and no side rows; a haul
+    }else if(policy.cargoOtherKeys==="ammo-fence"){
+     // One atomic ammo-bank cycle owns exactly one per-ship replay fence and no
+     // other cargo side row. The fence must describe this ship and version.
+     const match=typeof key==="string"&&
+       /^coopAmmoCycles_([1-9]\d{0,15})$/.exec(key);
+     if(!match||fenceWrites!==0||ids.includes(match[1])||
+        Number(value?.entityID)!==Number(match[1])||value?.version!==1||
+        !value.modules||typeof value.modules!=="object"||
+        Array.isArray(value.modules))
+      error("UNEXPECTED_MIXED_CARGO_SQL_FENCE");
+     fenceWrites++;
+    }else if(policy.cargoOtherKeys==="forbid"){     // A mining cycle owns exactly one cargo row update and no side rows; a haul
      // receipt or allocator counter in the same transaction is not that cycle.
      error("UNEXPECTED_MIXED_CARGO_SQL_KEY");
     }else{
@@ -128,6 +166,12 @@ function guardMutation(tx,witness,contract){
   del(){deny();},
   assertTransferComplete(){return this.assertWriteSetComplete();},
   assertWriteSetComplete(){
+   if(policy.cargoOtherKeys==="ammo-fence"){
+    // Exactly one cargo root rewrite plus exactly one matching replay fence.
+    if(cargoWrites!==1||fenceWrites!==1)
+     error("INCOMPLETE_NATIVE_AMMO_BANK_WRITE_SET");
+    return;
+   }
    if(policy.cargoOtherKeys==="receipt"){
     // ALIFE-10 contract, unchanged: exactly one cargo root rewrite plus exactly one
     // matching immutable COMMITTED receipt.
@@ -177,4 +221,4 @@ function rehydrate({persisted,live,paths,witness}={}){
  return result;
 }
 module.exports={capture,guardMutation,rehydrate,contractForTables,
- CONTRACTS,HAUL_TRANSFER,MINING_CYCLE};
+ CONTRACTS,HAUL_TRANSFER,MINING_CYCLE,AMMO_BANK};
