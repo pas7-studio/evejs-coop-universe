@@ -111,3 +111,64 @@ test("an oversized row is refused instead of fitted",()=>{
  assert.equal(f.api.resolve({profileID:"parity_angel_autocannon_frigate"}).reason,
   "LOADOUT_TOO_LARGE");
 });
+
+// FW-003C ammo depth: one fitted charge is one volley (the native ammo bank
+// debits exactly one unit per cycle), so a real multi-charge row is preferred
+// and a single-charge row is refused when depth is required.
+const {authoredIDFor}=require("../integration/coopWarPatrolLoadoutRow.cjs");
+function deepFixture(){
+ const f=fixture();
+ // The authored row is the real row with a real ammo depth; the resolver sees it
+ // exactly as the deployed static-table hook would.
+ f.api=createWarPatrolLoadout({
+  getProfile:id=>f.profiles.get(String(id))||null,
+  getLoadout:id=>f.loadouts.get(String(id))||null,
+  resolveItemByTypeID:id=>ITEMS.get(Number(id))||null,
+  resolveWeaponFamily:item=>Number(item&&item.typeID)===TURRET?"projectileTurret":"",
+  isCompatibleCharge:(module,chargeTypeID)=>Number(chargeTypeID)===CHARGE,
+  getAuthoredRow:(baseID,depth)=>authoredIDFor(baseID,depth),
+  ammoDepth:60,
+ });
+ f.authorDepth=(baseID,depth)=>{
+  const id=authoredIDFor(baseID,depth);
+  f.loadouts.set(id,{loadoutID:id,name:baseID+" deep",
+   modules:[{typeID:TURRET,quantity:3}],
+   charges:[{typeID:CHARGE,quantityPerModule:depth,singleton:true}]});
+  return id;
+ };
+ return f;
+}
+test("a single-charge row is deepened to the real multi-charge row",()=>{
+ const f=deepFixture();
+ f.addProfile("parity_angel_autocannon_frigate",RETAIL_EMPTY_LOADOUT_ID);
+ f.add("parity_angel_autocannon_frigate_loadout",armed);
+ f.authorDepth("parity_angel_autocannon_frigate_loadout",60);
+ const x=f.api.resolve({profileID:"parity_angel_autocannon_frigate",requireAmmoDepth:true});
+ assert.equal(x.status,"RESOLVED");
+ assert.equal(x.reason,"AUTHORED_MULTI_CHARGE_ROW");
+ assert.equal(x.loadoutID,authoredIDFor("parity_angel_autocannon_frigate_loadout",60));
+ assert.equal(x.chargeDepth,60);
+ assert.equal(x.chargeTypeID,CHARGE,"the real charge type is unchanged");
+});
+test("without a real multi-charge row a one-volley patrol is refused",()=>{
+ const f=deepFixture();
+ f.addProfile("parity_angel_autocannon_frigate",RETAIL_EMPTY_LOADOUT_ID);
+ f.add("parity_angel_autocannon_frigate_loadout",armed);
+ const x=f.api.resolve({profileID:"parity_angel_autocannon_frigate",requireAmmoDepth:true});
+ assert.equal(x.status,"REFUSED");
+ assert.equal(x.reason,"NO_MULTI_CHARGE_ROW");
+ assert.equal(x.chargeDepth,1);
+ const loose=f.api.resolve({profileID:"parity_angel_autocannon_frigate"});
+ assert.equal(loose.status,"RESOLVED","an explicit caller may still ask for the real row");
+ assert.equal(loose.chargeDepth,1);
+});
+test("an already armed row is deepened instead of left at one volley",()=>{
+ const f=deepFixture();
+ f.addProfile("concord_police_cruiser","concord_medium_beam_laser_cruiser_mwd");
+ f.add("concord_medium_beam_laser_cruiser_mwd",armed);
+ f.authorDepth("concord_medium_beam_laser_cruiser_mwd",60);
+ const x=f.api.resolve({profileID:"concord_police_cruiser",requireAmmoDepth:true});
+ assert.equal(x.status,"ALREADY_ARMED");
+ assert.equal(x.reason,"PROFILE_LOADOUT_ALREADY_ARMED_DEEPENED");
+ assert.equal(x.chargeDepth,60);
+});

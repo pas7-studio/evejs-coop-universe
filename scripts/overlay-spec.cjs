@@ -46,6 +46,8 @@ names.splice(names.indexOf("coopFactionWarStore")+1,0,"coopFactionWarNativeProof
 names.splice(names.indexOf("coopWarFleetNativeProofs")+1,0,"coopWarCombatPolicy","coopWarCombatAuthority","coopWarBattleDirector");
 // FW-003C: existing physical patrol mobilization on shared A-Life tick.
 names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarMusterReadiness","coopWarPatrolLoadout","coopWarMobilizer");
+// FW-003C ammo depth: the authored multi-charge war-patrol loadout row.
+names.splice(names.indexOf("coopWarPatrolLoadout")+1,0,"coopWarPatrolLoadoutRow");
 // FW-005A: source-bound native corporation military wallet escrow, OFF by default.
 names.splice(names.indexOf("coopWarMobilizer")+1,0,"coopWarTreasury","coopWarTreasuryNative");
 // FW-007A: physical war-gate approach only, no native fleet transfer.
@@ -171,6 +173,14 @@ const SOCIAL_PATCH_PATHS=new Set([
 names.splice(names.indexOf("coopVirtualWorldRuntime")+1,0,
  "coopLivingWorldPhaseCoordinator","coopLivingWorldPhaseRegistry");
 const specs=[
+ // FW-003C ammo depth: an authored `coop_war_patrol_ammo<depth>_<base>` loadout
+ // row is not in the static npcLoadouts table, so the one read-only static row
+ // resolver must be able to return it. Opt-in flag, default OFF, and a missing
+ // or invalid authored row still falls through to the static table.
+ {file:"server/src/space/npc/npcData.js",patches:[
+   {anchor:"function findRawByID(tableName, value) {",after:true,
+    line:'  if (tableName === "npcLoadouts" && process.env.EVEJS_COOP_WAR_PATROL_LOADOUT_ROW === "1") { try { const coopAuthoredRow = require("../coopWarPatrolLoadoutRow").resolveRow(value); if (coopAuthoredRow) return coopAuthoredRow; } catch (_error) { /* static table stays authoritative */ } }'}
+ ]},
  {file:"server/src/services/industry/industryManagerService.js",patches:[]},
  {file:"server/src/services/reprocessing/reprocessingRuntime.js",patches:[]},
  {file:"server/src/services/station/reprocessingService.js",patches:[]},

@@ -518,21 +518,28 @@ function deployStructure(request) {
 // row is the profile's own authored `*_loadout` row (real turret + compatible
 // charge), named through the L1 loadout override; when none validates the
 // caller must not get an unarmed hull labelled "patrol".
-function resolveWarPatrolLoadout(profileQuery, loadoutID) {
+function resolveWarPatrolLoadout(profileQuery, loadoutID, options) {
+  const requireAmmoDepth = Boolean(options && options.requireAmmoDepth === true);
   let data = null;
   let loadout = null;
+  let rows = null;
   try {
     data = require("./npc/npcData");
     const registry = require("../services/inventory/itemTypeRegistry");
     const dogma = require("./combat/weaponDogma");
     const capability = require("./npc/npcCapabilityResolver");
+    rows = require("./coopWarPatrolLoadoutRow" + siblingSuffix);
     loadout = require("./coopWarPatrolLoadout" + siblingSuffix).createWarPatrolLoadout({
       getProfile: (profileID) => data.getNpcProfile(profileID),
-      getLoadout: (id) => data.getNpcLoadout(id),
+      // The static table first, then the authored row (which only validates when
+      // every module and charge typeID really exists in that same static row).
+      getLoadout: (id) => data.getNpcLoadout(id) || rows.resolveRow(id),
       resolveItemByTypeID: registry.resolveItemByTypeID,
       resolveWeaponFamily: (item) => dogma.resolveWeaponFamily(item),
       isCompatibleCharge: (module, chargeTypeID) =>
         capability.isNpcChargeCompatibleWithModule(module, chargeTypeID),
+      getAuthoredRow: (baseLoadoutID, depth) => rows.authoredIDFor(baseLoadoutID, depth),
+      ammoDepth: Number(process.env.EVEJS_COOP_WAR_PATROL_AMMO_DEPTH) || 60,
     });
   } catch (error) {
     return { status: "REFUSED", reason: "LOADOUT_AUTHORITIES_UNAVAILABLE:" + String(error && error.message || error), override: false };
@@ -541,7 +548,11 @@ function resolveWarPatrolLoadout(profileQuery, loadoutID) {
   if (!resolution.success || !resolution.data) {
     return { status: "REFUSED", reason: "PROFILE_NOT_RESOLVED", override: false };
   }
-  return loadout.resolve({ profileID: resolution.data.profileID, loadoutID: String(loadoutID || "") });
+  return loadout.resolve({
+    profileID: resolution.data.profileID,
+    loadoutID: String(loadoutID || ""),
+    requireAmmoDepth,
+  });
 }
 
 // Spawns real native NPC hulls in a system from a real SDE profile, so the world
@@ -583,13 +594,26 @@ function spawnNativeNpc(request) {
   let loadout = null;
   let loadoutID = String(request.loadoutID || "").trim();
   if (warPatrol || loadoutID) {
-    loadout = resolveWarPatrolLoadout(profileQuery, loadoutID);
+    // A patrol that can fire exactly one volley is not a war patrol: the native
+    // ammo bank debits one charge per cycle, so a single-charge row is refused.
+    loadout = resolveWarPatrolLoadout(profileQuery, loadoutID, { requireAmmoDepth: warPatrol });
     if (loadout.status === "RESOLVED") loadoutID = loadout.loadoutID;
-    else if (loadout.status === "ALREADY_ARMED") loadoutID = "";
+    else if (loadout.status === "ALREADY_ARMED") loadoutID = loadout.override === true ? loadout.loadoutID : "";
     else if (warPatrol && request.allowUnarmed !== true) {
       return {
         ok: false,
         error: "WAR_PATROL_LOADOUT_UNAVAILABLE:" + String(loadout.reason || "UNKNOWN"),
+        loadout,
+      };
+    }
+    // The authored row is not in the static table; the native resolver only sees
+    // it behind this explicit flag. Without it the spawn would fail with a
+    // missing loadout instead of silently fitting the retail empty row.
+    if (loadoutID && loadoutID.startsWith("coop_war_patrol_ammo") &&
+      process.env.EVEJS_COOP_WAR_PATROL_LOADOUT_ROW !== "1") {
+      return {
+        ok: false,
+        error: "WAR_PATROL_LOADOUT_UNAVAILABLE:AUTHORED_ROW_FLAG_OFF",
         loadout,
       };
     }
@@ -660,6 +684,7 @@ function spawnNativeNpc(request) {
       moduleTypeID: Number(loadout.moduleTypeID) || 0,
       chargeTypeID: Number(loadout.chargeTypeID) || 0,
       moduleFamily: String(loadout.moduleFamily || ""),
+      chargeDepth: Number(loadout.chargeDepth) || 0,
     } : null,
     selectionID: String((result.data && (result.data.selectionID || result.data.selectionName)) || ""),
   };
