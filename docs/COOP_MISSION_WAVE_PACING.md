@@ -32,6 +32,31 @@ the last wave dies, and nothing tells the player that a new wave exists.
 The module never spawns, damages, kills or completes anything itself; every allowed wave is
 still a real native wave, and the objective still needs those hulls dead.
 
+## Audit of the other multi-wave mission dungeons
+
+`scripts/audit-agent-mission-waves.cjs` (read-only, run inside a container) walks
+`dungeonAuthority` and joins it with the live `missionRuntimeState` rewards:
+
+| template | mission | waves | hulls | silent waves | ISK per hull |
+| --- | --- | --- | --- | --- | --- |
+| `client-dungeon:875` | Gone Berserk | 7 | 24 | 5 | 6 875 |
+| `client-dungeon:1940` | The Blockade | 5 | **67** | 0 | **2 463** |
+| `client-dungeon:3030` | Alluring Emanations | 3 | 44 | 2 | no live record |
+| `client-dungeon:283` | Avenge A Fallen Comrade (Caldari lvl 1) | 3 | 20 | 3 | no live record |
+
+Both missions that have been offered live pay the same **120 000 + 45 000 ISK and
+250 LP**, so The Blockade is 2.8x the fleet for the same money. Output of the same
+run over all 1593 multi-wave templates: 1592 of them have at least one silent wave,
+so this is the normal shape of the data, not one broken mission.
+
+Conclusions:
+- **Silence is data, not code**: only wave 1 of most templates has `triggerMessages`,
+  and The Blockade proves the runtime does deliver them when the data has them.
+- **The cap is the real balance lever**, not the message: 24 and 67 hulls for one
+  level-1 payout. A default cap of 3 waves is what the work stack runs.
+- The audit must be repeated per upstream data refresh; the numbers above are from the
+  pinned build (`c3ea396b`) and are not a property of our overlay.
+
 ## What it does not fix (follow-ups)
 
 1. **Reward vs effort** is a data question: either cap level-1 missions (e.g. 3 waves) or

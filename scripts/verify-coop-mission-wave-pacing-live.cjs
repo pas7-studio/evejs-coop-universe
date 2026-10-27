@@ -58,6 +58,24 @@ for (const write of writes) {
 assert.deepEqual(trims[0].keys, ["wave_01", "wave_02", "wave_03"]);
 assert.equal(notifications.length, 1);
 assert.equal(notifications[0].type, "OnMissionsUpdated");
+assert.equal(result.finalWave, false, "wave 1 of a capped 3-wave chain is not the final wave");
+assert.equal(result.effectiveTotal, 3);
+assert.equal(result.stockAnnounced, false);
+
+// A wave the static plan already announces must not be announced twice.
+const stockSpoken = pacing.onWaveSpawn(
+  { instance, plan: { waveIndex: 1, label: "wave 1", triggerMessages: [{ messageType: 2, messageID: 123944 }] }, spawned: new Array(9).fill({}), nowMs: Date.now() },
+  { sessionFor: () => ({ characterID: 1, sendNotification: () => { throw new Error("must not notify"); } }), missionUpdates: () => [{ agentID: 1 }], hasSpawned: () => false },
+);
+assert.deepEqual(stockSpoken.notify, { status: "SKIPPED", reason: "STOCK_ANNOUNCED" });
+
+// The last allowed wave must say so, so the client can show a finish line.
+const lastWave = pacing.onWaveSpawn(
+  { instance, plan: { waveIndex: 3, label: "wave 3" }, spawned: [{}], nowMs: Date.now() },
+  { sessionFor: () => ({ characterID: 1, sendNotification: () => {} }), missionUpdates: () => [{ agentID: 1 }], hasSpawned: () => true },
+);
+assert.equal(lastWave.finalWave, true);
+assert.equal(lastWave.effectiveTotal, 3);
 
 // Both flags off must be a no-op even on a real mission instance.
 delete process.env.EVEJS_COOP_MISSION_WAVE_NOTIFY;

@@ -180,6 +180,38 @@ test("a wave that already spawned is never re-marked or written over", () => {
   assert.deepEqual(plan.kept, ["wave_01", "wave_02", "wave_03"]);
 });
 
+test("a wave the stock plan already announces is not announced twice", () => {
+  withFlags(ON, () => {
+    const h = harness();
+    const result = onWaveSpawn({
+      instance: missionInstance(),
+      plan: { waveIndex: 1, label: "Gone Berserk Wave 1", triggerMessages: [{ messageType: 2, messageID: 123944 }] },
+      spawned: new Array(9).fill({}),
+      nowMs: 1000,
+    }, h.deps);
+    assert.equal(result.stockAnnounced, true);
+    assert.deepEqual(result.notify, { status: "SKIPPED", reason: "STOCK_ANNOUNCED" });
+    assert.equal(h.notifications.length, 0, "stock already tells the player about this wave");
+  });
+});
+
+test("the last allowed wave says so, cap or no cap", () => {
+  withFlags(ON, () => {
+    const h = harness();
+    const uncapped = onWaveSpawn({ instance: missionInstance(), plan: { waveIndex: 7, label: "w7" }, spawned: [{}], nowMs: 1 }, h.deps);
+    assert.equal(uncapped.finalWave, true);
+    assert.equal(uncapped.effectiveTotal, 7);
+    assert.equal(uncapped.remainingWaves, 0);
+  });
+  withFlags({ EVEJS_COOP_MISSION_WAVE_NOTIFY: "1", EVEJS_COOP_MISSION_WAVE_CAP: "3" }, () => {
+    const h = harness();
+    const capped = onWaveSpawn({ instance: missionInstance(), plan: { waveIndex: 3, label: "w3" }, spawned: [{}], nowMs: 1 }, h.deps);
+    assert.equal(capped.finalWave, true, "with cap 3, wave 3 is the last wave the player will see");
+    assert.equal(capped.effectiveTotal, 3);
+    assert.equal(capped.remainingWaves, 0);
+  });
+});
+
 test("a malformed cap value cannot enable a silent gameplay change", () => {
   withFlags({ EVEJS_COOP_MISSION_WAVE_CAP: "0" }, () => assert.equal(capFor(), 0));
   withFlags({ EVEJS_COOP_MISSION_WAVE_CAP: "three" }, () => assert.equal(capFor(), 0));

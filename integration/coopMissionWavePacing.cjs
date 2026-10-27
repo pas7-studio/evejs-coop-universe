@@ -65,13 +65,20 @@ function totalWavesOf(instance, fallback) {
 function describeWave(instance, plan, totalWaves, spawnedCount) {
   const wave = Math.max(0, Number(plan && plan.waveIndex) || 0);
   const total = Math.max(wave, totalWavesOf(instance, totalWaves));
+  const cap = capFor();
+  const effectiveTotal = cap > 0 ? Math.min(cap, total) : total;
   return {
     wave,
     total,
+    effectiveTotal,
+    finalWave: wave >= effectiveTotal,
     key: waveKey(wave),
     label: String((plan && plan.label) || (instance && instance.templateID) || "") || null,
     spawned: Math.max(0, Number(spawnedCount) || 0),
-    remainingWaves: Math.max(0, total - wave),
+    remainingWaves: Math.max(0, effectiveTotal - wave),
+    // The stock data announces a wave only when the plan carries triggerMessages;
+    // waves 2..N of most mission templates carry none.
+    stockAnnounced: Array.isArray(plan && plan.triggerMessages) && plan.triggerMessages.length > 0,
   };
 }
 
@@ -163,7 +170,10 @@ function onWaveSpawn(input, deps = {}) {
   }
 
   if (enabled() && typeof deps.sessionFor === "function") {
-    result.notify = notifyOwner(instance, described, deps);
+    // A wave the stock data already announces must not be announced twice.
+    result.notify = described.stockAnnounced
+      ? { status: "SKIPPED", reason: "STOCK_ANNOUNCED" }
+      : notifyOwner(instance, described, deps);
   }
 
   if (enabled() || capFor() > 0) observe(instance, result, { notify: result.notify });
