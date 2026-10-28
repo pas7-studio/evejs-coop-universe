@@ -1,5 +1,48 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 23:00Z (UTC) - FIRST LIVE GATE CROSSING, and what it cost
+
+PROVEN: hauler 980000004164 crossed New Caldari 30000145 -> Jita 30000142 through gate
+pair 50002198/50001250. The native adapter's own verdict wrote SAME_NATIVE_SHIP_ARRIVED
+on the first attempt, and the DURABLE store moved to 30000142 with its 4 modules. No
+client, no synthetic jump.
+
+Four fixes were needed to make a crossing survive the real world (all pinned by tests):
+  1. the adapter takes the proven GATE PAIR, not the stargate row;
+  2. a hull a few km out is closed with a native FOLLOW order (a warp refuses a close
+     target, so the run re-warped for ever);
+  3. a durable ship whose scene was rebuilt is re-materialized from its own record;
+  4. the run waits for a calm hull (WAITING_CALM:...) and a target lock alone does not
+     veto the attempt - the durable controller record showed target 0.
+The crossing is advanced from the DRAIN tick as well as the mining hook (measured: the
+drain ticked at 21:55 while the loop hook had not run since 21:52).
+
+OPEN ISSUE, MY OWN COST: the return crossing of that hull blocks in Jita (the mining
+behaviour loop keeps it busy; attempts 3/5 at 22:48) and slot 30000145-1 is therefore
+NEEDS_OPERATOR_REPAIR / ALIFE08_RECOMPOSE_MARKER_SET_INCOMPLETE: its miners are in system
+and the assigned hauler is the one in Jita. Slot 30000145-2 is ALREADY_ACTIVE, so mining
+continues at half strength. This is NOT a code bug and NOT a lost ship: the hull is
+durable in 30000142.
+
+TO RESTORE THE SLOT (one of, in order of preference):
+  a. let the return crossing finish - the journal is durable at
+     /var/lib/evejs/coop-native-market/gate-crossing/980000004164.json and retries while
+     EVEJS_COOP_DISTRIBUTION=1;
+  b. spawn a durable hauler in 30000145 with operatorKind coop-mining-30000145-1-hauler
+     (spawnNativeNpcEntityInSystem needs a real anchorDescriptor; ANCHOR_REQUIRED was the
+     measured refusal, and guessing the option shape was not worth a wrong hull);
+  c. accept the Jita hull as the first distribution hull and let the fleet spawn a
+     replacement on the next owner restart window.
+Do NOT hand-edit the store to move the ship back: that is a fake jump.
+
+Distribution decision is live and honest: scripts/coop-distribution-plan.cjs picks the
+trip (Republic Fleet Depleted Uranium XL x1 -> 60003760 @560 000) and refuses a trip that
+does not pay. Jita bids Tritanium 4 x 4 000 000 and Pyerite 15 x 3 300 000 against the
+corporation's 874 916 / 118 434 held.
+
+Tests 52/52 across the seven loop suites. Gate: AUDIT_OK except the inherited runtime
+ratchet (5013 lines - other sessions' FW work; my net footprint there is negative).
+
 ## 2026-10-28 21:10Z (UTC) - one loop tick; the crossing cannot claim what it did not prove
 
 REFACTOR: the stock file now carries ONE hook line (space/coopLoopTick.js) that fans out to
