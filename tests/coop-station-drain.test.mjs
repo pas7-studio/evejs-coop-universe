@@ -144,3 +144,14 @@ test("the cool-down survives a restart", { skip: !present }, () => {
   assert.ok(source.includes("function saveCooldowns("));
   assert.ok(source.includes("if (id) { stationCooldown.set(id, now + COOLDOWN_MS); saveCooldowns(); }"));
 });
+
+test("an empty trip never cools a station that really buys", () => {
+  // Measured 2026-10-28: a trip with nothing to load cooled 60000682 for 30 minutes, and
+  // that same station had a real seeded bid of 54 289.76 for the product being built. An
+  // empty hold says nothing about demand, so it must not cost the corporation its customer.
+  assert.equal(drain.shouldCoolDown({ status: "NOT_SOLD", reason: "NO_REAL_NATIVE_CARGO" }), false);
+  assert.equal(drain.shouldCoolDown({ status: "NOT_SOLD", reason: "NOTHING_TO_CARRY" }), false);
+  assert.equal(drain.shouldCoolDown({ status: "NOT_SOLD", reason: "NO_BID_AT_STATION" }), true);
+  assert.equal(drain.shouldCoolDown({ status: "SOLD", reason: "" }), false);
+  assert.equal(drain.shouldCoolDown(null), false);
+});

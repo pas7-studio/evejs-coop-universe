@@ -426,9 +426,10 @@ test('an unfunded border is skipped by name instead of aborting the batch', () =
     state: core.empty(), plan, nowMs: 1000,
     reserveBounty: () => ({ status: 'REFUSED', reason: '500004:WAR_TREASURY_FUNDS_UNAVAILABLE' }),
   });
-  assert.equal(opened.status, 'OPENED');
-  assert.equal(opened.campaignIDs.length, 0, 'no campaign may open without a real escrow');
-  assert.equal(opened.warIDs.length, 0);
+  // Nothing opened is a refusal, never a success with empty lists.
+  assert.equal(opened.status, 'REFUSED');
+  assert.equal(opened.reason, 'NO_FUNDED_FRONT');
+  assert.equal(opened.skipped.length >= 1, true);
   assert.ok(opened.skipped.length >= 1);
   assert.match(opened.skipped[0].reason, /^SUPPLY_UNFUNDED:/);
   assert.equal(opened.skipped[0].warID, plan.openings[0].plan.war.warID);
