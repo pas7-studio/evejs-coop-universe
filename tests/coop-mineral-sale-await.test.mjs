@@ -29,7 +29,7 @@ test("the lifted mineral types join the sale list", { skip: !present }, () => {
 });
 
 test("an arrival with nothing sellable is still reported", { skip: !present }, () => {
-  assert.ok(source.includes('if(!wanted.length)last="NO_ALLOWED_ORE";'));
+  assert.ok(source.includes('if(!ordered.length)last="NO_ALLOWED_ORE";'));
 });
 
 test("a type the station does not bid for never ends the whole batch", { skip: !present }, () => {
@@ -39,9 +39,9 @@ test("a type the station does not bid for never ends the whole batch", { skip: !
   // really bids 53 700 for was never asked for.
   assert.ok(source.includes('"NO_SEEDED_COUNTERPARTY"].includes(last)'),
     "a missing bid for one type must skip that type, not the haul");
-  const sortAt = source.indexOf("wanted.sort((left,right)=>(liftedTypes.has(Number(right))?1:0)-");
+  const sortAt = source.indexOf("const ordered=[...carriedGood,...liftedRest,");
   const wantedAt = source.indexOf("const wanted=[...new Set(sellTypes.filter(typeID=>");
-  assert.ok(sortAt > wantedAt, "the stock the lift just produced is asked for first");
+  assert.ok(sortAt > wantedAt, "the product and the lifted stock are asked for first");
 });
 
 test("real cargo in the hold is sellable even when the manifest names only ore", { skip: !present }, () => {
