@@ -67,3 +67,15 @@ test("the sell policy is capped, so its ORDER is the priority", { skip: !present
   const line = compose.split("\n").find((x) => x.includes("EVEJS_COOP_NPC_MARKET_SELL_TYPES"));
   assert.ok(line && line.includes("'444,"), "the manufactured product must lead the list");
 });
+
+test("the world settles its own market journal instead of staying blocked", { skip: !present }, () => {
+  // Measured 2026-10-28: one crashed partial fill left a journal at RPC_CALLING and every
+  // later sale of that pilot was refused with UNRESOLVED_MARKET_JOURNAL until an operator
+  // ran the reconcile tool. The proof is read-only, so the world does it itself.
+  assert.ok(source.includes("function reconcileMarketJournalsAtBoot("));
+  assert.ok(source.includes('reconcileMarketJournalsAtBoot(true);'),
+    "a journal refusal retries the reconcile instead of blocking for ever");
+  assert.ok(source.includes('const result=await require("./coopNativeNpcMarketReconcile").reconcileJournals('));
+  assert.ok(source.includes('inspectOrder:orderID=>marketClient.call("GetOrder",{order_id:String(orderID)})'),
+    "settlement reads the market's own row and never re-sends a fill");
+});

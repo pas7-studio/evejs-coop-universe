@@ -107,8 +107,52 @@ function warStateStore(){
   write(state){
    core.validateState(state);
    rows.transact([TABLE],tx=>{tx.put(TABLE,KEY,state);});
+   mirrorWarState(state);
   }
  };
+}
+// FW-041: the war record must survive a container recreate.
+//
+// Measured repeatedly on the work stack: the fleet registry, the casualty ledger,
+// the merit ledger and the treasury row all survived, while the war state row came
+// back EMPTY - so the campaign disappeared, the escrow kept holding real ISK and
+// no bounty could ever pay. A validated mirror on the data volume is a copy of the
+// authoritative record, never an invention: it is written after every successful
+// write and restored only when the atomic row is missing or unreadable, and it must
+// pass the core's own validateState before it is used.
+const WAR_MIRROR_FILE=()=>process.env.EVEJS_COOP_WAR_STATE_MIRROR_FILE||
+ "/var/lib/evejs/coop-faction-war-mirror.json";
+function warMirrorEnabled(){
+ return String(process.env.EVEJS_COOP_WAR_STATE_MIRROR??"1")!=="0";
+}
+function mirrorWarState(state){
+ if(!warMirrorEnabled())return;
+ try{
+  const fs=require("node:fs"),file=WAR_MIRROR_FILE(),tmp=file+".tmp";
+  fs.writeFileSync(tmp,JSON.stringify(state));
+  fs.renameSync(tmp,file);
+ }catch(_error){/* a mirror is best effort, never a reason to fail a war write */}
+}
+function readWarMirror(){
+ if(!warMirrorEnabled())return null;
+ try{
+  const fs=require("node:fs");
+  const parsed=JSON.parse(fs.readFileSync(WAR_MIRROR_FILE(),"utf8"));
+  const core=require("./coopFactionWarCore");
+  core.validateState(parsed);
+  return parsed;
+ }catch(_error){return null}
+}
+// Pure: which record to use on boot. A mirror may only replace an ABSENT or EMPTY
+// record - it can never overwrite a live war with an older copy.
+function chooseWarRestore({current,mirror}={}){
+ const liveSides=(state)=>Object.keys((state&&state.wars)||{}).length+
+  Object.keys((state&&state.campaigns)||{}).length+
+  Object.keys((state&&state.territories)||{}).length;
+ if(!mirror)return {use:current||null,reason:"NO_MIRROR"};
+ if(liveSides(mirror)===0)return {use:current||null,reason:"MIRROR_EMPTY_TOO"};
+ if(current&&liveSides(current)>0)return {use:current,reason:"LIVE_RECORD_WINS"};
+ return {use:mirror,reason:"RESTORED_FROM_MIRROR"};
 }
 // The war domain needs a valid state record to exist at all. Without it every
 // phase answers NO_WAR_STATE, which looks like a broken feature instead of an
@@ -118,6 +162,19 @@ function ensureWarState(){
  const store=warStateStore(),core=require("./coopFactionWarCore");
  const current=store.read();
  if(current)return current;
+ // FW-041: restore the validated mirror instead of publishing an empty war.
+ const restored=chooseWarRestore({current,mirror:readWarMirror()});
+ if(restored.use&&restored.reason==="RESTORED_FROM_MIRROR"){
+  store.write(restored.use);
+  try{
+   require("./coopRuntimeProbe").observe("living-native-war-state",null,null,
+    {status:"RESTORED",version:core.VERSION,
+     wars:Object.keys(restored.use.wars||{}).length,
+     campaigns:Object.keys(restored.use.campaigns||{}).length,
+     evidence:"VALIDATED_MIRROR_ON_DATA_VOLUME_NOT_AN_INVENTED_WAR"});
+  }catch(_error){/* probe is best effort */}
+  return restored.use;
+ }
  const state=core.empty();
  store.write(state);
  console.log("[CoopFactionWar] empty war state created (version "+core.VERSION+")");
@@ -2955,8 +3012,43 @@ function ensureMineralLift(){
  return mineralLiftEngine;
 }
 
-function ensureMarketTrader(){
- if(nativeMarketTrader||nativeMarketBlocked)return nativeMarketTrader;
+// Close the world's own RPC_CALLING journals from proof the market itself provides. Runs
+// once per process, is read-only on the market side, and never repeats a fill: it settles
+// only what the market's own order row proves, and closes a journal without effect only on
+// three independent proofs. Every outcome is observable.
+let journalReconcileStarted=false,journalReconcileLastAtMs=0;
+function reconcileMarketJournalsAtBoot(force=false){
+ // A journal that appears while the world is running is retried at most every five
+ // minutes: the market call is cheap, but a hot loop against it is not.
+ if(journalReconcileStarted&&(!force||Date.now()-journalReconcileLastAtMs<300000))return;
+ journalReconcileStarted=true;journalReconcileLastAtMs=Date.now();
+ void (async()=>{
+  try{
+   const store=require("./npc/nativeNpcStore");
+   const runtime=require("./runtime");
+   const inventory=require("../services/inventory/itemTypeRegistry");
+   const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+   const result=await require("./coopNativeNpcMarketReconcile").reconcileJournals({
+    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
+    inspectOrder:orderID=>marketClient.call("GetOrder",{order_id:String(orderID)}),
+    store,
+    sceneForSystem:systemID=>{
+     try{return runtime.ensureScene(systemID,{refreshStargates:false})}catch(_error){return null}
+    },
+    resolveType:typeID=>inventory.resolveItemByTypeID(typeID),
+   });
+   require("./coopRuntimeProbe").observe("living-npc-market-journal-reconciled",null,null,{
+    settled:result.settled.length,pending:result.pending.length,
+    settledNoEffect:result.settled.filter(x=>x.noEffect===true).length,
+    pendingReasons:result.pending.slice(0,3).map(x=>String(x.reason||"")).join(",")});
+  }catch(error){
+   // An unreachable market is not a proof of anything: the journal stays for the next boot.
+   require("./coopRuntimeProbe").observe("living-npc-market-journal-unreached",null,null,
+    {reason:String((error&&error.message)||error).slice(0,90)});
+  }
+ })();
+}
+function ensureMarketTrader(){ if(nativeMarketTrader||nativeMarketBlocked)return nativeMarketTrader;
  if(!identityRegistry||!world)return null;
  const runtime=require("./runtime"),store=require("./npc/nativeNpcStore");
  const worldData=require("./worldData"),inventory=require("../services/inventory/itemTypeRegistry");
@@ -2987,15 +3079,21 @@ function ensureMarketTrader(){
     return decision.price||0;
    }:null
  });
- // A pending RPC of unknown outcome can never be retried automatically.
+ // A pending RPC of unknown outcome can never be retried automatically - but it can be
+ // SETTLED from the market's own order row, and until that runs every later sale of the
+ // pilot is refused with UNRESOLVED_MARKET_JOURNAL (measured 2026-10-28: one crashed
+ // partial fill stopped the corporation from selling anything at all). The proof is
+ // read-only, so the world closes its own journal at boot instead of waiting for an
+ // operator; the per-trade journal guard still refuses every trade until it is closed.
  const recovered=market.recover();
  if(recovered.status==="NEEDS_OPERATOR_REPAIR"){
-  nativeMarketBlocked=true;
   require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,null,recovered);
-  return null;
- }
- if(recovered.recovered)
+ } else if(recovered.recovered)
   require("./coopRuntimeProbe").observe("living-native-market-recovered",null,null,recovered);
+ // Always once per boot, whether or not recover() complained: a journal at RPC_CALLING is
+ // exactly what recover() leaves alone, and that is the one an operator had to close by
+ // hand. The reconcile is read-only and reports what it did either way.
+ reconcileMarketJournalsAtBoot();
  nativeMarketTrader=market;
  return market;
 }
@@ -3157,8 +3255,14 @@ async function advanceNativeMarket(){ if(process.env.EVEJS_COOP_NATIVE_NPC_MARKE
         marketCurrency:"NPC_LEDGER_ONLY_NOT_EVEJS_PLAYER_WALLET"});
       continue;
      }
-     if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR",
-      "UNRESOLVED_MARKET_JOURNAL"].includes(result.status)){
+     if(result.status==="UNRESOLVED_MARKET_JOURNAL"){
+      // The world refuses the trade (correct: the journal is not settled) but it also
+      // tries to settle it from the market own row instead of staying blocked until a
+      // restart: measured 2026-10-28 one crashed partial fill stopped every sale.
+      reconcileMarketJournalsAtBoot(true);
+      continue;
+     }
+     if(["RPC_OUTCOME_UNKNOWN","RPC_ACK_NOT_VERIFIABLE","NEEDS_MARKET_REPAIR"].includes(result.status)){
       nativeMarketBlocked=true;
       require("./coopRuntimeProbe").observe("living-native-market-repair-required",null,
        {spaceState:{systemID}},{pilotID:link.pilotID,status:result.status});
@@ -4733,4 +4837,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,identityLinks,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,identityLinks,chooseWarRestore,readWarMirror,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
