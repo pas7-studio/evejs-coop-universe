@@ -4012,3 +4012,25 @@ shared GameStore): either keep the two views in sync for `coop-faction-war` (wri
 path with the same document on every atomic write), or make the boot reconciliation prefer the
 atomic row over the namespace blob. Then the mirror/FW-041 keeps a second copy and a recreate can
 no longer erase a war that already exists.
+
+## Finish recipe for the payout rung (copy/paste, ~10 min in a quiet window)
+1. Confirm the stack is not being recreated: `docker inspect -f '{{.Created}}' evejs-agents-server-1`
+   must stay unchanged for the whole run.
+2. Make one navy faction own a system next to another navy faction's system. Proven working
+   seed (armed, durable, real doctrine):
+   `spawn_native_npc systemID=30003837 profileQuery="Federation Navy Atron"
+    loadoutID=serpentis_small_blaster_frigate warPatrol=true durable=true pilotID=<free>`
+   x3, and x3 `"Angel Raider"` + `angel_small_autocannon_frigate` in 30045344.
+   Free pilots: read `/var/lib/evejs/coop-npc-links.json` vs `coop-virtual-world.json`.
+   If a spawn answers PILOT_ALREADY_LINKED use `assign_identity` with the returned entityID.
+3. Both militia wallets must hold >= 25 000 ISK (bounty need). Measured 18:3xZ:
+   1000120 = 50 000, 1000138 = 25 000, 1000129 (ORE) = 433 790 567.61.
+   Top up with a real transfer: `war_mercenary_settle` eventID`merc:<n>`
+   payerCorporationID 1000129, payeeCorporationID <1000120|1000138>, amountCents 2500000.
+   Idempotency is wallet-anchored, so a replay is refused with both legs DUPLICATE.
+4. Wait for `living-native-war-opened` + `living-native-war-bounty-reserved RESERVED`, then for
+   `living-native-war-attack-orders OBSERVED` and a `living-native-war-casualty RECORDED` in that
+   campaign. Attribution needs `living-native-destruction-attacker
+   NATIVE_DESTRUCTION_ATTACKER_PROVIDED` (proven at 17:40:29 with merit PROMOTED).
+5. Payout shows as the treasury reservation flipping HELD -> PAID with `paidToPilotID`, plus
+   `living-native-war-merit` for the killer. Nothing else is required; no code left to write.
