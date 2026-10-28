@@ -69,9 +69,12 @@ Owner decision 2026-10-28: delete it. Done in `a6d6b44a`; the CI-triggered EX-03
 became `scripts/Run-NpcProbe-PinnedChecks.ps1` (`bbea62c3`) so the procedure survived,
 and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 `coop-feature-readiness` 7/1->8/0, `coop-crossstream-overlay-roundtrip` 1/1->2/0).
-Full probe `suite-final2.json` (2026-10-28): 6187 pass / 20 fail / 99 skip. Since then
-coop-flag-registry (1) and the four spec-gap suites (4) went green, so the next probe
-should read **6192 / 15 / 99** against the 5837 / 332 / 92 baseline.
+Full probe `suite-final3.json` (2026-10-28): **6197 pass / 15 fail / 99 skip** against the
+5837 / 332 / 92 baseline (that run predates the war client-view refactor `d2d7fd24`,
+which touched no failing suite). Seven files are still red, 15 cases:
+escort-flight-stage-c 6, wreck-client-refresh 3, hook-inventory 2 (now 6 long hooks,
+not 9), alife-native-buyer-wiring 1, alife13 1, integration-shims 1,
+virtual-world-split 1.
 
 **`node scripts/coop-engine-audit.cjs` prints AUDIT_REGRESSION at 20:55Z** - not from
 these commits: `integration drift 4 > 0` for coopAdminBridge, coopAdminBridgeActions,
