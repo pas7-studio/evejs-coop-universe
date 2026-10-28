@@ -8697,3 +8697,27 @@ faction=500011 corporation=1000138 cents=2500000 journal=8000000000000009`.
 Open review notes (not changed, need an owner decision): (a) the treasury has no pruning of terminal
 reservation rows, so after 500 campaign-sides `RESERVE` refuses forever - a capacity ceiling rather
 than a bug; (b) `coopWarBounty` exports TREASURY_KEY/CASUALTY_KEY that nothing imports (dead).
+
+## 2026-10-29T03:45Z - patrols actually fly now, and pirates are no longer cap-locked
+
+Three findings from the live event stream, each fixed and verified after a rebuild:
+
+1. **`virtual-faction-patrol` never deployed.** It answered `FAILED` with no reason at all
+   (fork `67bd5f8` now reports `failures` + `reason`), and the reason turned out to be
+   `POOL_EMPTY`: the `concord_police` pool resolves to `concord_police_cruiser`, whose profile
+   `entityType` is **"concord"**, while the runtime asked the spawner for `"npc"` - and the
+   spawner defaults a missing type back to `"npc"`, so dropping the argument changed nothing.
+   The patrol now derives the type from the pool's own fallback profile (fork `3249ba8`).
+   Verified live: `virtual-faction-patrol status=AT_CAP active=[980000046081,980000046082]`
+   plus `virtual-faction-patrol-route status=OK waypointCount=8` in 30045344.
+2. **Pirates could not online their warp scrambler.** `NOT_ENOUGH_CAPACITOR` (393 events) came
+   from the player rule "95% capacitor to online a module" applied to hulls that have no
+   capacitor manager; a pirate that had just fired could never reach it. A sessionless native
+   NPC now passes that single check (fork `72c3640`, flag `EVEJS_COOP_NPC_CAPACITOR`), and the
+   next refusal reason is the ordinary `TARGET_NOT_LOCKED` ordering.
+3. A profile with no `entityType` now counts as an NPC instead of being rejected (fork
+   `7a60c0d`); `coopNpcCapacitor` is registered in the overlay names so it ships at all.
+
+Also this pass: the gateway coverage is measured (217 client request types, 159 named, 101
+answered with a default empty message) and the online-status rowset carries a real
+`blue.DBRowDescriptor`, so contact login/logout no longer throws in the client.

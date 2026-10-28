@@ -2225,3 +2225,18 @@ Why: virtual-faction-patrol reported FAILED with no reason, which hides whether 
 Detail: Live events showed virtual-faction-patrol FAILED every two minutes with empty spawned/active and no reason, while the same tick's materializer said SPAWN_LIMIT_REACHED - so a full system looked like a broken spawn. reconcile() now carries per-faction failures and a top-level reason when nothing deployed. Fork: 67bd5f8.
 Where: integration/coopFactionPatrolRuntime.cjs, tests/coop-faction-patrol.test.mjs
 Evidence: fork 67bd5f8; live: 24 FAILED patrol events in the last 4000 events, all with empty spawned/active and no reason, next to living-native-materialization-attempt SPAWN_LIMIT_REACHED occupied=3 limit=3; tests coop-faction-patrol 4/0
+### 2026-10-28T22:50Z · f7543a1 · L2 · alife19b: the live gate crossing, its four real-world fixes, and the agents distribution flag
+
+Why: The last economic link needed a real crossing of a co-op hull; the naive version failed four different ways in the live world
+Where: integration/coopLoopTick.cjs, integration/coopMarketJournalBoot.cjs, integration/coopNpcGateCrossing.cjs, integration/coopStationDrain.cjs, tests/coop-mineral-sale-await.test.mjs, tests/coop-npc-gate-crossing.test.mjs
+Evidence: first crossing ARRIVED (SAME_NATIVE_SHIP_ARRIVED, entity 980000004164, 30000145->30000142, store moved); 10/10 tests coop-npc-gate-crossing; 52/52 across the loop suites
+### 2026-10-28T22:50Z · 426d940 · DOCS · state(fw): restart verification - four defects found by measuring the restore path
+
+Why: Record what really restores after a restart and the four defects the verification exposed
+Where: .opencode/state.md
+Evidence: war-state RESTORED each boot, mirror 11037 B, durable recovery OK, treasury row reverted to nextJournalID 3, expired escrow refunded 2500000 cents at 22:48:21Z
+### 2026-10-28T22:53Z · 6322d00 · L2 · fix(patrol): derive entityType from the pool profile instead of dropping it
+
+Why: faction patrols could never deploy (POOL_EMPTY) because the concord pool profiles are typed 'concord' while the spawner asked for 'npc', and pirates were blocked by the player-only 95% capacitor rule for module online
+Where: integration/coopVirtualWorldRuntime.cjs
+Evidence: fork 3249ba8 + 72c3640; live after rebuild: virtual-faction-patrol status AT_CAP active=[980000046081,980000046082] + virtual-faction-patrol-route OK waypoints=8 in 30045344; warp-point refusal reason moved from NOT_ENOUGH_CAPACITOR to the normal TARGET_NOT_LOCKED; tests coop-faction-patrol 4, coop-npc-online-capacitor 4, coop-npc-entity-type 3
