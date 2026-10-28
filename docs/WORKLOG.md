@@ -2201,3 +2201,9 @@ Why: one Proton port could not carry five client services; the endpoint now carr
 Detail: ProtonVPN forwards a single port, so it now carries one SSH session that the friend uses to forward 443/5222/26000/26001/26002 to his own loopback - all five client services arrive, instead of only the game port and a hand-built tunnel for the rest. The host side is the evejs-ssh-relay container (0.0.0.0:61730 -> hardened sshd 127.0.0.1:55346). Start-Play-Stack.ps1 becomes the single entry point: 
 Where: AGENTS.md, docs/PUBLIC_ENDPOINT_PROTONVPN.md, scripts/Start-Play-Stack.ps1
 Evidence: docs/PUBLIC_ENDPOINT_PROTONVPN.md + scripts/Start-Play-Stack.ps1 (130 lines) + AGENTS.md; relay evejs-ssh-relay 0.0.0.0:61730 -> sshd 127.0.0.1:55346
+### 2026-10-28T21:58Z · afef0dc · L2 · fix(fw): reopening a front after expiry gets its own campaign id
+
+Why: a front whose campaign expired could never reopen: the deterministic campaign id collided with the processed eventID, so the core answered DUPLICATE while the runtime published 'war opened' every tick
+Detail: The deterministic campaign id made the second attempt collide with the processed eventID of the expired campaign: the core answered DUPLICATE, nothing changed, and the runtime published 'war opened' every tick (measured: six lines in ten minutes for war:500001-500004:campaign:30003837 while the durable record stayed EXPIRED). nextCampaignID adds :r2/:r3 when a terminal campaign holds the base id, 
+Where: integration/coopFactionWarOpening.cjs, tests/coop-faction-war-opening.test.mjs
+Evidence: fork 501afd7; live: 6 'war opened' lines in 10 min for war:500001-500004:campaign:30003837 with the durable record EXPIRED; test coop-faction-war-opening 22/0 (fails 21/1 on the old planner); campaigns/stall-reaper green
