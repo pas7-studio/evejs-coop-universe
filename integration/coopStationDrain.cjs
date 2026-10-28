@@ -47,20 +47,35 @@ function onCooldown(stationID, now = Date.now()) {
   const until = stationCooldown.get(pos(stationID));
   return Boolean(until && now < until);
 }
-function chooseStation(rows, { corpID = 0, isMineral = () => false, now = Date.now() } = {}) {
+function chooseStation(rows, { corpID = 0, isMineral = () => false, isOre = () => false,
+  now = Date.now() } = {}) {
   const totals = new Map();
+  const products = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
     if (Number(row?.ownerID) !== Number(corpID)) continue;
     const station = pos(row?.stationID || row?.locationID);
     const quantity = Math.max(0, num(row?.quantity));
     if (!station || quantity <= 0) continue;
-    if (!isMineral(Number(row?.typeID))) continue;
+    const typeID = Number(row?.typeID);
+    if (!isMineral(typeID) && !isOre(typeID)) {
+      // A manufactured good: nobody else in this world produces it, so it is the
+      // cargo the economy most needs to move. It outranks refinery minerals.
+      products.set(station, (products.get(station) || 0) + quantity);
+      continue;
+    }
+    if (!isMineral(typeID)) continue;
     totals.set(station, (totals.get(station) || 0) + quantity);
   }
+  const pickFrom = (map) => [...map.entries()]
+    .filter(([stationID]) => !onCooldown(stationID, now))
+    .sort((a, b) => b[1] - a[1])[0] || null;
+  const product = pickFrom(products);
+  if (product) return { stationID: product[0], units: product[1], kind: "product",
+    ranked: [...products.entries()] };
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
   const usable = ranked.filter(([stationID]) => !onCooldown(stationID, now));
   const pick = usable[0] || ranked[0];
-  return pick ? { stationID: pick[0], units: pick[1], ranked } : null;
+  return pick ? { stationID: pick[0], units: pick[1], kind: "mineral", ranked } : null;
 }
 
 function note(reason, fleetRecord, payload = {}) {
@@ -78,6 +93,14 @@ function stockRows(corpID) {
   return rows;
 }
 
+function isOreType(typeID) {
+  try {
+    const type = require("../services/inventory/itemTypeRegistry").resolveItemByTypeID(Number(typeID));
+    return Number(type && type.categoryID) === 25; // Ore
+  } catch (_error) {
+    return false;
+  }
+}
 function isMineralType(typeID) {
   try {
     const type = require("../services/inventory/itemTypeRegistry").resolveItemByTypeID(Number(typeID));
@@ -263,7 +286,7 @@ function start(scene, fleetRecord, now) {
     return skip("STOCK_UNREADABLE", fleetRecord,
       { reason: String((error && error.message) || error).slice(0, 80) });
   }
-  const chosen = chooseStation(rows, { corpID, isMineral: isMineralType });
+  const chosen = chooseStation(rows, { corpID, isMineral: isMineralType, isOre: isOreType, now });
   if (!chosen) return skip("NO_MINERAL_STOCK", fleetRecord, { rows: rows.length });
   const point = stationPoint(scene, chosen.stationID);
   if (!point) return skip("STATION_NOT_PHYSICAL", fleetRecord, { stationID: chosen.stationID });

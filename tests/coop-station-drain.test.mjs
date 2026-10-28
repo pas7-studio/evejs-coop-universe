@@ -17,6 +17,7 @@ const drain = present ? require(modulePath) : {};
 const CORP = 1000129;
 const MINERALS = new Set([34, 35, 36, 37]);
 const isMineral = (typeID) => MINERALS.has(Number(typeID));
+const isOre = (typeID) => Number(typeID) === 1228;
 
 test("the drain is OFF unless the flag says otherwise", { skip: !present }, () => {
   const before = process.env.EVEJS_COOP_STATION_DRAIN;
@@ -38,7 +39,7 @@ test("it flies to the station that really holds the most refined minerals", { sk
     // Another owner's stock can never be lifted by this corporation.
     { ownerID: 42, stationID: 60003724, typeID: 34, quantity: 99999 },
   ];
-  const chosen = drain.chooseStation(rows, { corpID: CORP, isMineral });
+  const chosen = drain.chooseStation(rows, { corpID: CORP, isMineral, isOre });
   assert.equal(chosen.stationID, 60014935);
   assert.equal(chosen.units, 9000);
   assert.equal(chosen.ranked.length, 2, "only stations with real mineral stock are ranked");
@@ -46,7 +47,7 @@ test("it flies to the station that really holds the most refined minerals", { sk
 
 test("no refined stock anywhere means no trip", { skip: !present }, () => {
   const rows = [{ ownerID: CORP, stationID: 60000682, typeID: 1228, quantity: 50000 }];
-  assert.equal(drain.chooseStation(rows, { corpID: CORP, isMineral }), null);
+  assert.equal(drain.chooseStation(rows, { corpID: CORP, isMineral, isOre }), null);
 });
 
 test("a fleet is only drained while it is in the mining state", { skip: !present }, () => {
@@ -84,4 +85,17 @@ test("the sale is the proven arrival path, never a new market call", { skip: !pr
   assert.ok(source.includes('require("./coopVirtualWorldRuntime").sellOnArrival'));
   assert.ok(!/FillOrder|PlaceOrder/.test(source), "the drain never places or fills an order itself");
   assert.ok(source.includes("living-station-drain"), "every step is observable");
+});
+
+test("a manufactured good outranks refinery minerals", { skip: !present }, () => {
+  // The economy's own product is what nobody else makes, so it must move first:
+  // measured 2026-10-28 a station held 5 Mining Survey Chipset I while another held
+  // 300k of minerals, and the drain must not keep choosing the minerals.
+  const rows = [
+    { ownerID: CORP, stationID: 60000682, typeID: 34, quantity: 300000 },
+    { ownerID: CORP, stationID: 60014935, typeID: 444, quantity: 5 },
+  ];
+  const chosen = drain.chooseStation(rows, { corpID: CORP, isMineral, isOre });
+  assert.equal(chosen.stationID, 60014935);
+  assert.equal(chosen.kind, "product");
 });

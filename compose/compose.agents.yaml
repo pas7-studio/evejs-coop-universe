@@ -53,6 +53,15 @@ services:
       # refined minerals, lifts them into its real hold and sells them, then returns.
       # Agent stack only until the owner has seen it work.
       EVEJS_COOP_STATION_DRAIN: "1"
+      # Manufacturing: the corporation buys/produces real goods from native blueprint
+      # recipes (materials really leave the hangar, the product really appears), and a
+      # manufactured item is the cargo the drain sells first.
+      EVEJS_COOP_NPC_MANUFACTURE: "1"
+      # 1800 s of native job time is 3.6 s here, so a proof does not wait half an hour.
+      EVEJS_COOP_INDUSTRY_TIME_SCALE: "0.002"
+      # The lift carries any corp-owned stack the station really bids for, not only the
+      # refinery's minerals, so a manufactured module reaches the market the same way.
+      EVEJS_COOP_LIFT_ANY_TYPE: "1"
       # Temporary, agent-only: name the treasury decision when the corporation is not
       # funded, so "moved 0" can never masquerade as a healthy sweep.
       EVEJS_COOP_TREASURY_TRACE: "1"
@@ -81,6 +90,12 @@ services:
       # DEFENDER_STILL_PRESENT. Work stack ONLY: the owner's live world keeps the
       # old free-refill behaviour until he accepts the cost.
       EVEJS_COOP_WAR_GARRISON_FUNDED: "1"
+      # FW-005C (2026-10-28): the pilot-earned levy is starved by the refinery
+      # treasury sweep, which already moved those ISK into the corporation
+      # wallet. Opt-in: when the levy plans zero, back the bounty escrow with
+      # that same native wallet (coopWarTreasury verifies and debits it, so no
+      # ISK is created). Work stack only until the owner accepts it.
+      EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.
