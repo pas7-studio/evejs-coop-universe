@@ -3262,3 +3262,30 @@ so its three assertions were passing on nothing - and one label that changed fro
 UNCLASSIFIED to INVALID. The single remaining red is the COOP-049 `materialNeeds` gap
 above. The snapshot also contains the other session's uncommitted `overlay-spec.cjs` work;
 reverting that shows up as a parity regression, which is the intended signal.
+
+## FW capture: two real blockers found and fixed (2026-10-28T13:3xZ, evejs fork 45ad47f + 4068eff)
+Capture (FW-035) could not land on the work stack, and it was NOT the wreck evidence:
+`campaign:30045344` already held two verified defender wrecks (victimFactionID 500001,
+attribution NATIVE_VICTIM_WRECK_ONLY_NO_KILLER). Two genuine defects were in the way.
+1. N5 - the garrison bought a free replacement navy on cooldown forever (GARRISON_APPLIED
+   every ~2.5 min), so the defending side never held zero live hulls. Fixed in the fork
+   (4068eff, EVEJS_COOP_WAR_GARRISON_FUNDED=1, agents stack only): a refill now requires a
+   COMMITTED FW-005B campaign-chest entry for that faction+campaign, i.e. ISK a real seeded
+   market fill paid to an NPC pilot. Verified LIVE after deploy: `living-native-war-skip`
+   phase "garrison" reason "GARRISON_CHEST_EMPTY" at 13:20:28 and 13:23:39 - no hull bought.
+2. FW-035 counted registry rows, not hulls (45ad47f). A custody row is not a ship: three
+   500001 rows whose hulls were in no scene answered DEFENDER_STILL_PRESENT forever. Capture
+   now takes the same isHullLive scene probe FW-033 uses and reports liveDefenders +
+   ghostDefenders separately; without the authority the old behaviour is unchanged.
+Tests: tests/coop-war-garrison.test.mjs (12 pass), tests/coop-war-capture-by-force.test.mjs
+(8 pass), `node scripts/coop-engine-audit.cjs` AUDIT_OK, integration/*.cjs in sync.
+STILL UNPROVEN LIVE: CAPTURE_TERRITORY + a militaryControllerFactionID flip. The work stack
+`evejs-agents` is being recreated by another session roughly every 10-20 min (13:13:25 was not
+mine). After each recreate the durable navy hulls come back as registry rows but
+`war_combat_diagnose` shows inScene=false / npc=false, so no attack order is ever issued
+(latest living-native-war-attack-orders is 12:31:27) and no defender wreck can be produced in
+the window. Re-seeding by hand (spawn_native_npc + assign_identity, then spawn_war_fleet) gets
+a real ASSAULT campaign and in-scene hulls (1702 npc=true) but the peers do not materialize.
+Next: one quiet window on evejs-agents, or the owner's approval, to run the last step:
+1 live defender + 3 armed attackers in the target system -> defender wreck -> zero live
+defenders -> CAPTURE_TERRITORY. Do not weaken the sustain window to force it.

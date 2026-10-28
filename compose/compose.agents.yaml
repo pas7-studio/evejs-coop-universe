@@ -74,6 +74,13 @@ services:
       # already linked to the mining fleet, so a war could never be staffed. The
       # virtual world tops the roster up on boot without wiping pilot history.
       EVEJS_COOP_VIRTUAL_POPULATION: "64"
+      # FW N5 (2026-10-28): a garrison replacement hull must be paid for by the
+      # campaign chest (FW-005B, real earned ISK only). Without it a garrison
+      # refilled on cooldown forever, so the defending side never held zero live
+      # hulls and the force capture (FW-035) could only answer
+      # DEFENDER_STILL_PRESENT. Work stack ONLY: the owner's live world keeps the
+      # old free-refill behaviour until he accepts the cost.
+      EVEJS_COOP_WAR_GARRISON_FUNDED: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

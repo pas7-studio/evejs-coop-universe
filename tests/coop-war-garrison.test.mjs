@@ -3,7 +3,7 @@
 // Never an invented hull, never an unearned kill, never a silent failure.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createWarGarrison, enabled } from "../integration/coopWarGarrison.cjs";
+import { createWarGarrison, enabled, fundedGate } from "../integration/coopWarGarrison.cjs";
 
 const ON = {
   EVEJS_COOP_FACTION_WAR: "1",
@@ -162,4 +162,81 @@ test("flag OFF is inert and authorities are required", () => {
   assert.equal(enabled(ON), true);
   assert.equal(enabled({}), false);
   assert.throws(() => createWarGarrison({}), /WAR_GARRISON_AUTHORITIES_REQUIRED/);
+});
+
+// N5 guard: a replacement navy costs money the faction really earned.
+// Measured on the work stack 2026-10-28: both garrisons refilled on cooldown
+// forever (GARRISON_APPLIED every ~2.5 min), so the defending side of
+// campaign:30045344 never held zero live hulls and the force capture (FW-035)
+// could only answer DEFENDER_STILL_PRESENT even with two real defender wrecks.
+const FUNDED_ON = { ...ON, EVEJS_COOP_WAR_GARRISON_FUNDED: "1" };
+
+test("an unfunded chest refuses a replacement hull and names the reason", () => {
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => STATE,
+    registry: { snapshot: () => ({ ships: {} }) },
+    listFreePilots: () => ["coop-pilot-001", "coop-pilot-002"],
+    spawnFleet: (input) => { calls.push(input); return { ok: true, ships: [] }; },
+    chestCommitment: () => ({ status: "UNFUNDED", reason: "GARRISON_CHEST_EMPTY" }),
+    env: FUNDED_ON,
+    clock: () => 1000,
+  });
+  const out = garrison.tick();
+  assert.equal(calls.length, 0, "no hull may be bought without a funded chest");
+  assert.equal(out.status, "NO_CHANGE");
+  assert.equal(out.skips[0].reason, "GARRISON_CHEST_EMPTY");
+  assert.equal(out.skips[0].chestStatus, "UNFUNDED");
+  assert.equal(out.skips[0].factionID, 500004);
+});
+
+test("a funded campaign chest still spawns through the sanctioned path", () => {
+  const calls = [];
+  const seen = [];
+  const garrison = createWarGarrison({
+    readWarState: () => STATE,
+    registry: { snapshot: () => ({ ships: {} }) },
+    listFreePilots: () => ["coop-pilot-001"],
+    spawnFleet: (input) => { calls.push(input); return { ok: true, ships: [{ entityID: 901 }] }; },
+    chestCommitment: (query) => { seen.push(query); return { status: "FUNDED", totalCents: 250000 }; },
+    env: FUNDED_ON,
+    clock: () => 1000,
+  });
+  const out = garrison.tick();
+  assert.equal(calls.length, 1);
+  assert.equal(seen[0].warID, "war:a-b");
+  assert.equal(seen[0].campaignID, "c1");
+  assert.equal(out.applied[0].status, "NATIVE_GARRISON_SPAWNED");
+});
+
+test("an absent chest authority is a refusal, never a free hull", () => {
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => STATE,
+    registry: { snapshot: () => ({ ships: {} }) },
+    listFreePilots: () => ["coop-pilot-001"],
+    spawnFleet: (input) => { calls.push(input); return { ok: true, ships: [] }; },
+    env: FUNDED_ON,
+    clock: () => 1000,
+  });
+  const out = garrison.tick();
+  assert.equal(calls.length, 0);
+  assert.equal(out.skips[0].reason, "GARRISON_CHEST_UNAVAILABLE");
+});
+
+test("the funding gate is opt-in: flag OFF keeps the old behaviour", () => {
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => STATE,
+    registry: { snapshot: () => ({ ships: {} }) },
+    listFreePilots: () => ["coop-pilot-001"],
+    spawnFleet: (input) => { calls.push(input); return { ok: true, ships: [] }; },
+    chestCommitment: () => ({ status: "UNFUNDED", reason: "GARRISON_CHEST_EMPTY" }),
+    env: ON,
+    clock: () => 1000,
+  });
+  garrison.tick();
+  assert.equal(calls.length, 1, "flag OFF must not change existing behaviour");
+  assert.equal(fundedGate(ON), false);
+  assert.equal(fundedGate(FUNDED_ON), true);
 });

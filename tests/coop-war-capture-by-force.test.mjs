@@ -121,3 +121,56 @@ test("flag OFF is inert and authorities are required", () => {
   assert.equal(off.tick().status, "DISABLED");
   assert.throws(() => createWarCaptureByForce({}), /WAR_CAPTURE_BY_FORCE_AUTHORITIES_REQUIRED/);
 });
+
+// FW-032 x FW-035 guard: a registry row is custody, not a ship.
+// Measured on the work stack 2026-10-28: campaign:30045344 held two real
+// defender wrecks and answered DEFENDER_STILL_PRESENT for three registry rows
+// whose hulls were in no scene at all, so a physically empty system could never
+// be captured. With a liveness authority the same rows are recognised as ghosts.
+const GHOSTS = () => ({
+  wrecks: DEFENDER_WRECK,
+  ships: {
+    501: { entityID: 501, systemID: 30045344, factionID: 500001, pilotID: "coop-pilot-001", corporationID: 1000035, fleetID: "f", warID: "war:a-b", campaignID: "c1" },
+    502: { entityID: 502, systemID: 30045344, factionID: 500001, pilotID: "coop-pilot-002", corporationID: 1000035, fleetID: "f", warID: "war:a-b", campaignID: "c1" },
+  },
+});
+
+test("a ghost custody row does not block the capture when liveness is known", () => {
+  let now = 100000;
+  const s = store(GHOSTS());
+  const view = createWarCaptureByForce({
+    gameStore: s, env: ON, clock: () => now,
+    isHullLive: () => false,
+  });
+  const first = view.tick();
+  assert.equal(first.captured.length, 0);
+  assert.equal(first.skips[0].reason, "CAPTURE_SUSTAIN_STARTED");
+  now += 61000;
+  const second = view.tick();
+  assert.equal(second.captured[0].kind, "OBJECTIVE_RECORDED");
+  now += 1000;
+  const third = view.tick();
+  assert.equal(third.status, "CAPTURE_APPLIED", JSON.stringify(third.skips));
+  assert.equal(third.captured[0].kind, "CAPTURED");
+});
+
+test("a hull that is really in the scene still blocks, and names the ghosts", () => {
+  const s = store(GHOSTS());
+  const view = createWarCaptureByForce({
+    gameStore: s, env: ON, clock: () => 100000,
+    isHullLive: (systemID, entityID) => entityID === 502,
+  });
+  const out = view.tick();
+  assert.equal(out.captured.length, 0);
+  assert.equal(out.skips[0].reason, "DEFENDER_STILL_PRESENT");
+  assert.equal(out.skips[0].liveDefenders, 1);
+  assert.equal(out.skips[0].ghostDefenders, 1);
+});
+
+test("without a liveness authority the old row-counting behaviour is unchanged", () => {
+  const s = store(GHOSTS());
+  const view = createWarCaptureByForce({ gameStore: s, env: ON, clock: () => 100000 });
+  const out = view.tick();
+  assert.equal(out.skips[0].reason, "DEFENDER_STILL_PRESENT");
+  assert.equal(out.skips[0].liveDefenders, 2);
+});
