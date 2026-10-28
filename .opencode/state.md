@@ -1,5 +1,31 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 21:10Z (UTC) - one loop tick; the crossing cannot claim what it did not prove
+
+REFACTOR: the stock file now carries ONE hook line (space/coopLoopTick.js) that fans out to
+refinery + manufacture + distribution. Verified live after deploy: refinery 21:06:09 and
+manufacture 21:04:39 both ran through it, and stockChars dropped back under the frozen
+budget. A throwing phase is reported as living-coop-loop-phase-failed and skipped.
+
+CROSSING (space/coopNpcGateCrossing.js): durable journal per entity, phases
+APPROACH -> AT_GATE -> CROSSING -> ARRIVED/BLOCKED. ARRIVED requires the native adapter
+proof: success + verifiedSourceAbsent + verifiedDestinationPresent + same entityID + exact
+destination system. Anything less is named (SOURCE_STILL_PRESENT, DESTINATION_ABSENT,
+ENTITY_CHANGED, WRONG_DESTINATION_SYSTEM, TRANSFER_REFUSED), retried at most 5 times, then
+BLOCKED. No adapter -> stays AT_GATE with TRANSFER_UNAVAILABLE. It never plans or moves a
+hull by itself.
+
+STILL NEEDED FOR THE LIVE RUN (owner/config, not code):
+  - EVEJS_COOP_NATIVE_GATE_TRANSFER=1 (ensureNativeGateTransfer requires it; only
+    EVEJS_COOP_NATIVE_GATE_APPROACH=1 is set today),
+  - a transfer adapter handed to coopLoopTick (the runtime keeps its instance private;
+    one getter line in coopVirtualWorldRuntime.js would expose it, but that file is over
+    its ratchet and owned by the FW work right now),
+  - a hull to fly: the fleet hauler is busy with ore, so a spare or an owner-approved
+    window is needed before a real crossing with cargo.
+
+Tests: 6/6 tests/coop-npc-gate-crossing.test.mjs; 46/46 across the seven loop suites.
+
 ## 2026-10-29 21:20Z - distribution: the decision exists, the movement stays opt-in
 
 GATE FACTS (measured, not assumed): connectedGates finds ONE reciprocal gate between
