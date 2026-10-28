@@ -129,7 +129,27 @@ and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 Full probe `suite-final3.json` (2026-10-28): **6197 pass / 15 fail / 99 skip** against the
 5837 / 332 / 92 baseline (that run predates the war client-view refactor `d2d7fd24`,
 which touched no failing suite). Seven files are still red, 15 cases:
-wreck-client-refresh 3, alife-native-buyer-wiring 1, alife13 1 - 5 cases now.
+ONE case is left: coop-alife-native-buyer-wiring (COOP-049, by owner decision) - plus
+coop-installer-module-coverage whenever another session leaves a module untracked for a
+while, which is churn, not a defect of ours.
+
+Owner approved three calls on 2026-10-28 and all three are done:
+  retire the wreck transformer -> deleted scripts/coop-npc-expedition-wreck-patch.cjs (4 of
+    its 7 anchors are not in the deployed engine; it could only throw
+    EX03B18_PINNED_WRECK_SOURCE_DRIFT), its wiring, its parse entry, and the 8 cases that
+    only exercised it. Legacy 78 -> 77, budget tightened to match. The observer broadcast
+    it aimed at is asserted directly in coop-wreck-client-refresh (1/0).
+  fix the ALIFE-13 order -> measured, not changed: auditStartupCargo runs before the
+    durable restore, and the test compared offsets against a call inside a function that is
+    merely DEFINED earlier. The test now asserts the real order plus a single
+    materialization site. coop-alife13-startup-cargo-audit 23/0.
+  leave COOP-049 open -> recorded here, not touched.
+
+coop-virtual-world-split was also made drift-proof (5936df34): an exact export list forced
+every new export to edit one test and drifted twice in an hour, so the twenty-one pre-split
+names are still required and no export may be undefined.
+
+Since suite-final3 (6197/15) that is 14 of the 15 remaining cases closed.
 
 The 119 missing `.js` shims are DONE (`64dc366a`): `coop-integration-shims --write`
 completed the existing convention (122 shims were already there). That was not a
