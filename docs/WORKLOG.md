@@ -2189,3 +2189,9 @@ Why: a genuine gRPC request crashed the server process (compat trailers) and bin
 Detail: A request listener on the HTTP/2 server, and JSON parsing of binary bodies, are both silent until they are fatal: the first kills the process with ERR_HTTP2_TRAILERS_ALREADY_SENT, the second answers the client with an HTML 500 it reports as ServerException(500, 'invalid character on request'). Fork: ba187e3.
 Where: tests/coop-gateway-transport.test.mjs
 Evidence: fork ba187e3; reproduced with TLS+HTTP/2 Ping: before = uncaughtException ERR_HTTP2_TRAILERS_ALREADY_SENT + container exit 1; after = 3 calls status 200 grpc-status 0 in trailers, container healthy; tests/coop-gateway-transport 4/0
+### 2026-10-28T21:53Z · 70149c7 · DOCS · docs: how to launch the client, and what a wrong launch costs
+
+Why: agents kept launching exefile.exe directly, which silently disables every gRPC surface because only Play.bat exports the proxy and CA
+Detail: Play.bat is not a wrapper: it exports http_proxy/https_proxy and the local CA, which is what routes the client's HTTPS calls to *-public-gateway.evetech.net into the local HTTP/2 gateway. Launched straight from exefile.exe the client reaches the gateway zero times (measured: no CONNECT, no HTTP/2 in ten minutes) and every gateway surface reports ServerException(500, "invalid character on request")
+Where: AGENTS.md, docs/CLIENT_LAUNCH.md
+Evidence: docs/CLIENT_LAUNCH.md + AGENTS.md pointer; direct launch = 0 CONNECT/0 H2/0 proxy requests in 10 min; via Play.bat = H2 tls established ALPN=h2 + POST /eve_public.gateway.Requests/Send; gateway then served licence 200, plex balance 2222, corruption/suppression 200, corp+daily goals 200
