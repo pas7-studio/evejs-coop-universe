@@ -235,6 +235,12 @@ function register(rows) {
     "  gRPC gateway answers every campaign request with `statusCode 200` and an empty payload,",
     "  and the local proto root does not define the campaign messages. Nothing throws; the page",
     "  lists no campaigns. Turning that on is a feature (proto schema + campaign attributes).");
+  lines.push("- `fwAdvantageGateway.GetSolarSystemScores` is NOT a stub: the co-op hook fills it",
+    "  from the war casualty ledger and fleet registry (`EVEJS_COOP_WAR_ADVANTAGE=1`), and the",
+    "  values are clamped into the 0..100000 domain `factionwarfare/advantageState.py` accepts.");
+  lines.push("- `insurgencyGatewayService` builds real payload shapes for corruption/suppression",
+    "  system info, but the progress it reports is zero because this world produces no",
+    "  corruption or suppression state: the shapes are correct, the numbers are honest zeros.");
   lines.push("- `insurgencySolarsystem.GetLocalCampaignClientSnapshot` used to answer",
     "  `(solarSystemID, null)` for every system; it now answers the snapshot of a system a live",
     "  campaign really covers (fork `841345f`).");
