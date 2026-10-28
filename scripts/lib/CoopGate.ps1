@@ -38,12 +38,21 @@ function Invoke-CoopGateById {
     [Parameter(Mandatory)][string]$Id,
     [string]$ReportDir = "",
     # Gates that declare pinned verifiers expose -UpstreamCodeRoot; the others ignore it.
-    [string]$UpstreamCodeRoot = ""
+    [string]$UpstreamCodeRoot = "",
+    # Wrapper switches that add test groups (e.g. -IncludeExistingEconomyTests).
+    [hashtable]$Switches = @{}
   )
   $spec = Get-CoopGateSpec -Id $Id
   $tests = @($spec.tests)
   foreach ($optional in @($spec.optionalTests)) {
-    if ($optional -and (Test-Path (Join-Path $script:CoopGateRepo ([string]$optional.exists)))) {
+    if (-not $optional) { continue }
+    if ($optional.switch) {
+      # A wrapper switch turns a whole group on or off (e.g. the existing
+      # economy tests are only run when an operator asks for them).
+      if ($Switches[[string]$optional.switch]) { $tests += @($optional.tests) }
+      continue
+    }
+    if (Test-Path (Join-Path $script:CoopGateRepo ([string]$optional.exists))) {
       $tests += [string]$optional.test
     }
   }
@@ -58,17 +67,27 @@ function Invoke-CoopGateById {
     Banner = @($spec.banner)
     Syntax = @($spec.syntax)
     SyntaxFail = [string]$spec.syntaxFail
+    FailureContext = [bool]$spec.failureContext
   }
-  if ($spec.manifest) {
-    $gate.Manifest = @{
-      Path = [string]$spec.manifest.path
-      Missing = [string]$spec.manifest.missing
-      Schema = [string]$spec.manifest.schema
-      Count = $spec.manifest.count
-      Op = [string]$spec.manifest.op
-      Invalid = [string]$spec.manifest.invalid
+  # One gate may refuse several acceptance manifests (the A-Life economy gate
+  # guards ten); each row keeps its own schema, count and messages. `manifest`
+  # is the single-manifest shorthand the other gates use.
+  $manifests = @()
+  foreach ($manifest in @($spec.manifests) + @($spec.manifest)) {
+    if (-not $manifest) { continue }
+    $manifests += @{
+      Path = [string]$manifest.path
+      Missing = [string]$manifest.missing
+      Schema = [string]$manifest.schema
+      Count = $manifest.count
+      Op = [string]$manifest.op
+      Status = [string]$manifest.status
+      Invalid = [string]$manifest.invalid
+      NotRun = [string]$manifest.notRun
+      ExcludeFromCount = [bool]$manifest.excludeFromCount
     }
   }
+  $gate.Manifests = $manifests
   if ($spec.pinned) {
     $verifiers = @()
     foreach ($verifier in @($spec.pinned.scripts)) {
@@ -89,7 +108,7 @@ function Invoke-CoopNodeGate {
   [CmdletBinding()]
   param(
     # One hashtable keeps a wrapper readable as data: Name, ReportSlug, Tests,
-    # LogName, Tail, TestMissing, Manifest, Syntax, Pinned, NodeFail, Banner.
+    # LogName, Tail, TestMissing, Manifests, Syntax, Pinned, NodeFail, Banner.
     [Parameter(Mandatory)][hashtable]$Gate,
     [string]$ReportDir = ""
   )
@@ -127,8 +146,8 @@ function Invoke-CoopNodeGate {
 
   # 3. A physical/manual scenario manifest may only ever be NOT_RUN here.
   $scenarioCount = 0
-  $manifest = $Gate.Manifest
-  if ($manifest) {
+  foreach ($manifest in @($Gate.Manifests) + @($Gate.Manifest)) {
+    if (-not $manifest) { continue }
     $manifestPath = Join-Path $repo ([string]$manifest.Path)
     if (-not (Test-Path $manifestPath)) {
       throw (if ($manifest.Missing) { [string]$manifest.Missing } else { "$name scenario manifest missing: $($manifest.Path)" })
@@ -144,11 +163,14 @@ function Invoke-CoopNodeGate {
         default { throw "GATE_SPEC_INVALID: $name unknown manifest count op '$op'" }
       }
     }
-    if (-not $invalid) {
-      $invalid = @($scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0
-    }
+    if (-not $invalid -and $manifest.Status) { $invalid = $loaded.status -ne [string]$manifest.Status }
     if ($invalid) { throw ([string]$manifest.Invalid) }
-    $scenarioCount = $scenarios.Count
+    if (@($scenarios | Where-Object { $_.status -ne "NOT_RUN" }).Count -gt 0) {
+      throw (if ($manifest.NotRun) { [string]$manifest.NotRun } else { [string]$manifest.Invalid })
+    }
+    # One manifest can be a guard only: its scenarios are not counted in the
+    # operator-facing total the historic banner reported.
+    if (-not $manifest.ExcludeFromCount) { $scenarioCount += $scenarios.Count }
   }
 
   # 4. The suite itself, into a log the operator can open.
@@ -159,6 +181,20 @@ function Invoke-CoopNodeGate {
     $exitCode = $LASTEXITCODE
   } finally { Pop-Location }
   $tail = if ($Gate.Tail) { [int]$Gate.Tail } else { 45 }
+  if ($exitCode -ne 0 -and $Gate.FailureContext) {
+    # A 50-file suite is unreadable as a tail: print the failing cases first.
+    Write-Host "=== $name TEST FAILURE CONTEXT ==="
+    $failures = @(Select-String -Path $log -Pattern '^not ok [0-9]+' -Context 2,25)
+    if ($failures.Count -eq 0) {
+      Get-Content -Path $log | Select-Object -Last 120 | ForEach-Object { Write-Host $_ }
+    } else {
+      foreach ($failure in $failures) {
+        $failure.Context.PreContext | ForEach-Object { Write-Host $_ }
+        Write-Host $failure.Line
+        $failure.Context.PostContext | ForEach-Object { Write-Host $_ }
+      }
+    }
+  }
   Get-Content -Path $log | Select-Object -Last $tail | ForEach-Object { Write-Host $_ }
   if ($exitCode -ne 0) {
     $nodeFail = if ($Gate.NodeFail) { [string]$Gate.NodeFail } else { "$name Node tests FAILED: {log}" }
@@ -187,6 +223,8 @@ function Invoke-CoopNodeGate {
   }
 
   foreach ($line in @($Gate.Banner)) {
-    if ($line) { Write-Host ([string]$line).Replace("{scenarios}", "$scenarioCount") }
+    if ($line) {
+      Write-Host ([string]$line).Replace("{scenarios}", "$scenarioCount").Replace("{log}", $log).Replace("{repo}", $repo)
+    }
   }
 }

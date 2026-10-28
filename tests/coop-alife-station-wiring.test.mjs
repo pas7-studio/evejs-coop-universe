@@ -11,7 +11,9 @@ const reader=read("integration/coopAlifeStationAuthorityRuntime.cjs");
 const brain=read("integration/coopAlifeEconomy.cjs");
 const sensor=read("integration/coopAlifeEconomySensor.cjs");
 const overlay=read("scripts/patch-evejs-coop.cjs");
-const ps=read("scripts/Run-Alife-Economy-Tests.ps1");
+// The manual runner is data now (scripts/lib/gates.json); this asserts the gate
+// really runs the station wirings, wherever the list is stored.
+const ps=JSON.parse(read("scripts/lib/gates.json")).gates.alifeEconomy.tests.join("\n");
 const manifest=JSON.parse(read("tests/scenarios/alife-native-economy-e2e.json"));
 test("read authority is opt-in within existing A-Life 30-second loop, not a seventh scheduler",()=>{
  assert.match(runtime,/EVEJS_COOP_ALIFE_ECONOMY_AUTHORITY==="1"/);

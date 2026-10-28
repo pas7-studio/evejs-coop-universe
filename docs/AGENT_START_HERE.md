@@ -36,7 +36,9 @@ client. The repository is the only shared memory. Read in this order:
   one runner (`scripts/lib/CoopGate.ps1`) and one data table
   (`scripts/lib/gates.json`). Add or change a gate in the table, never in a
   wrapper; `node --test tests/coop-gate-specs.test.mjs` proves the table still
-  points at real tests, pins and all-NOT_RUN manifests.
+  points at real tests, pins and all-NOT_RUN manifests. `Run-Alife-Economy-Tests.ps1`
+  is the largest row (38 test files behind the `-IncludeExistingEconomyTests`
+  switch, ten acceptance manifests that must stay `NOT_RUN`).
 
 ## Trusting the state bundle
 

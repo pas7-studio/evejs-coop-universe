@@ -578,6 +578,165 @@
         "LW-03 Node source gates PASS. Original SQLite/Rust/two-client gameplay remain NOT_RUN.",
         "Protected evejs-data, Docker, native wallets and cargo were not touched."
       ]
+    },
+    "alifeEconomy": {
+      "name": "NATIVE ECONOMY",
+      "reportSlug": "evejs-alife-economy-gates",
+      "logName": "alife-economy-node-tests.txt",
+      "tail": 40,
+      "failureContext": true,
+      "testMissing": "Missing required test: {test}",
+      "tests": [
+        "tests/coop-alife-native-buyer-dispatch.test.mjs",
+        "tests/coop-alife-native-buyer-runtime.test.mjs",
+        "tests/coop-npc-buyer-native-bindings.test.mjs",
+        "tests/coop-npc-buyer-two-session-sqlite-e2e.test.mjs",
+        "tests/coop-npc-rust-order-authority.test.mjs",
+        "tests/coop-npc-seller-tax-authority.test.mjs",
+        "tests/coop-npc-buyer-recovery-audit.test.mjs",
+        "tests/coop-npc-buyer-controlled-recovery.test.mjs",
+        "tests/coop-npc-buyer-admin-control.test.mjs",
+        "tests/coop-npc-market-completion-notify.test.mjs",
+        "tests/coop-alife-native-buyer-wiring.test.mjs",
+        "tests/coop-alife-native-overlay-compat.test.mjs",
+        "tests/coop-npc-corp-buyer.test.mjs",
+        "tests/coop-npc-buyer-coordinator.test.mjs",
+        "tests/coop-npc-corp-buyer-real-sqlite.test.mjs",
+        "tests/coop-rust-npc-corp-buy-patch.test.mjs",
+        "tests/coop-npc-partial-fill-atomic.test.mjs",
+        "tests/coop-npc-partial-real-sqlite.test.mjs",
+        "tests/coop-rust-npc-partial-patch.test.mjs",
+        "tests/coop-npc-market-policy.test.mjs",
+        "tests/coop-npc-demand-authority.test.mjs",
+        "tests/coop-alife-native-act.test.mjs",
+        "tests/coop-alife-native-economy.test.mjs",
+        "tests/coop-alife-economy-sensor.test.mjs",
+        "tests/coop-alife-economy-wiring.test.mjs",
+        "tests/coop-alife-station-authority.test.mjs",
+        "tests/coop-alife-station-runtime.test.mjs",
+        "tests/coop-alife-station-owner-isolation.test.mjs",
+        "tests/coop-alife-station-wiring.test.mjs",
+        "tests/coop-npc-manufacturing.test.mjs",
+        "tests/coop-npc-native-economy-director.test.mjs",
+        "tests/coop-alife-order-authority.test.mjs",
+        "tests/coop-alife-native-intent-reconciliation.test.mjs",
+        "tests/coop-alife-integration-acceptance.test.mjs",
+        "tests/coop-alife-native-resupply-act.test.mjs",
+        "tests/coop-alife-native-resupply-wiring.test.mjs",
+        "tests/coop-npc-ammo-supply.test.mjs",
+        "tests/coop-alife-native-resupply-acceptance.test.mjs"
+      ],
+      "optionalTests": [
+        {
+          "switch": "IncludeExistingEconomyTests",
+          "tests": [
+            "tests/coop-npc-native-economy-director.test.mjs",
+            "tests/coop-npc-native-bindings.test.mjs",
+            "tests/coop-npc-economy-scheduler.test.mjs"
+          ]
+        }
+      ],
+      "manifests": [
+        {
+          "path": "tests/scenarios/alife-native-economy-e2e.json",
+          "missing": "Missing 22-scenario ALIFE acceptance manifest",
+          "schema": "coop-alife-economy-acceptance/v1",
+          "count": 20,
+          "op": "ge",
+          "invalid": "Invalid ALIFE native economy test manifest",
+          "notRun": "Do not mark local E2E scenarios PASS before actually running them"
+        },
+        {
+          "path": "tests/scenarios/coop-044-industry-replenishment-integrity.json",
+          "missing": "Missing native industry replenishment integrity scenarios",
+          "schema": "coop-044-native-industry-replenishment-integrity/v1",
+          "count": 10,
+          "op": "ge",
+          "invalid": "Native industry integrity acceptance manifest invalid",
+          "notRun": "Do not mark native industry acceptance scenarios PASS before real gameplay validation"
+        },
+        {
+          "path": "tests/scenarios/coop-045-native-demand-lifecycle.json",
+          "missing": "Missing native demand lifecycle scenarios",
+          "schema": "coop-045-native-demand-lifecycle/v1",
+          "count": 8,
+          "op": "ge",
+          "invalid": "Invalid native demand lifecycle acceptance manifest",
+          "notRun": "Do not mark demand lifecycle gameplay scenarios PASS without actual native evidence"
+        },
+        {
+          "path": "tests/scenarios/coop-046-market-policy-acceptance.json",
+          "missing": "Missing native market policy acceptance scenarios",
+          "schema": "coop-046-native-market-policy/v1",
+          "count": 6,
+          "op": "ge",
+          "invalid": "Invalid native market policy acceptance manifest",
+          "notRun": "Do not mark market policy E2E PASS without native settlement evidence"
+        },
+        {
+          "path": "tests/scenarios/coop-047-native-partial-market-e2e.json",
+          "missing": "Missing native partial-fill acceptance scenarios",
+          "schema": "coop-047-native-partial-market/v1",
+          "count": 7,
+          "op": "ge",
+          "invalid": "Invalid native partial-fill acceptance manifest",
+          "notRun": "Do not mark native Rust/GameStore E2E PASS without physical evidence"
+        },
+        {
+          "path": "tests/scenarios/coop-048-native-npc-player-buyer.json",
+          "missing": "Missing native NPC buyer acceptance scenarios",
+          "schema": "coop-048-native-npc-player-buy/v1",
+          "count": 8,
+          "op": "ge",
+          "invalid": "Invalid native NPC corporate buyer acceptance manifest",
+          "notRun": "Do not claim NPC buyer gameplay success without native Rust/GameStore evidence"
+        },
+        {
+          "path": "tests/scenarios/alife-native-authority-integration.json",
+          "missing": "Missing 8-scenario A-Life integration acceptance manifest",
+          "schema": "evejs-coop/alife-integration-acceptance/v1",
+          "count": 8,
+          "op": "eq",
+          "invalid": "Invalid A-Life integration acceptance manifest",
+          "notRun": "Never mark live A-Life gameplay accepted from an isolated test run"
+        },
+        {
+          "path": "tests/scenarios/alife-native-resupply-act-e2e.json",
+          "missing": "Missing native A-Life RESUPPLY ACT acceptance manifest",
+          "schema": "evejs-coop/alife-native-resupply-act-acceptance/v1",
+          "count": 7,
+          "op": "eq",
+          "invalid": "Invalid native RESUPPLY ACT scenarios",
+          "notRun": "Never claim live native resupply ACT from source-only tests"
+        },
+        {
+          "path": "tests/scenarios/coop-049-alife-native-buyer-e2e.json",
+          "missing": "Missing A-Life native buyer acceptance scenarios",
+          "schema": "coop-049-alife-native-buyer-v1",
+          "count": 11,
+          "op": "ge",
+          "invalid": "Invalid A-Life native buyer acceptance manifest",
+          "notRun": "Do not claim native A-Life buyer E2E without physical receipts"
+        },
+        {
+          "path": "tests/scenarios/coop-060-native-player-seller-live-e2e.json",
+          "missing": "Missing COOP-060 native two-client acceptance matrix",
+          "schema": "coop-060-native-player-seller-live-e2e/v1",
+          "count": 12,
+          "op": "eq",
+          "status": "NOT_RUN",
+          "invalid": "COOP-060 real gameplay E2E matrix invalid",
+          "notRun": "Never represent automated backend SQLite/Rust protocol simulation as live two-client gameplay",
+          "excludeFromCount": true
+        }
+      ],
+      "nodeFail": "A-Life economy tests failed (exit {code}): {log}",
+      "banner": [
+        "PASS: local unit and contract checks. E2E scenarios remaining NOT_RUN: {scenarios}",
+        "Evidence checklists: {repo}/tests/scenarios/alife-native-economy-e2e.json ; {repo}/tests/scenarios/alife-native-authority-integration.json ; {repo}/tests/scenarios/alife-native-resupply-act-e2e.json",
+        "Test report: {log}",
+        "No game server, market database, Docker volume, or evejs-data was modified."
+      ]
     }
   }
 }
