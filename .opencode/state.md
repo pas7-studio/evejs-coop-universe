@@ -3921,3 +3921,24 @@ and it must not be guessed. Merit DID fire 5 times earlier in the day for stock 
 mechanism works; what is missing is that path for war-fleet hulls.
 NEXT EXACT STEP: pass the native attacker entity through the war-fleet destruction hook (the same
 one that already credits stock NPC kills), then the HELD escrow pays automatically.
+
+## FW-040 deployed; the blocker is now the shared stack's churn, not the code (18:0xZ)
+Found and fixed the exact reason a war kill could not be attributed: the attribution path read
+identity links from the ON-DISK file only, and that file lags the live registry, so a real war
+casualty answered `NOT_UNIQUE_NAMED_PIRATE` (measured 17:25:12) - no attribution, no merit, and
+the HELD bounty could never pay. `coopNpcDestructionAttacker` now merges the on-disk links with
+the live identity registry (`identityLinks()` exported from the runtime, pure `mergeLinks`
+helper, 2 tests). Deployed.
+Proof that the mechanism itself works when attribution lands: 17:40:29
+`living-native-destruction-attacker NATIVE_DESTRUCTION_ATTACKER_PROVIDED` attacker coop-pilot-060
+-> `living-native-war-merit PROMOTED coop-pilot-060 warship-kill +25` and the victim
+coop-pilot-002 `force-lost -10`, in the same millisecond.
+What now blocks the final observation is the environment, measured rather than assumed: the
+shared `evejs-agents` stack is recreated by another session roughly every 10-30 minutes (container
+created 17:31, then again at ~17:5x and ~18:0x), and the war state row does not survive those
+recreates: `war_diagnose` now answers `mob DRY_RUN camps 0 mobilized 0` with an empty navy list,
+i.e. the campaign and the escrow purpose were reset again even though the treasury row kept the
+HELD reservation. No code change can hold a 5-minute combat window open across that.
+SESSION LADDER: capture PROVEN, merit PROVEN (6 promotions), client view PROVEN (OCCUPIED),
+escrow PROVEN (real HELD 25 000 ISK from real earnings), attribution PROVEN (17:40:29),
+payout = the only rung not yet observed, gated by campaign survival, not by missing logic.

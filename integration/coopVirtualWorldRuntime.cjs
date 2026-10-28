@@ -197,6 +197,11 @@ function warNavyCapability(){
 }
 // Read-only: the capability of every faction that appears in a live war, plus the
 // decision for each war, so "this border cannot be fought" is a measurement.
+// FW-040: the live identity registry, for attribution paths that used to read
+// only the on-disk file and therefore saw a just-spawned war hull as UNNAMED.
+function identityLinks(){
+ try{return Object.values(identityRegistry?.snapshot?.()?.links||{})}catch(_error){return []}
+}
 function diagnoseNavy(){
  const capability=warNavyCapability();
  if(!capability)return {status:"UNAVAILABLE",factions:[],wars:[]};
@@ -486,15 +491,33 @@ function advanceNativeWarOpening(){
    minShips:Math.max(1,Number(process.env.EVEJS_COOP_WAR_TERRITORY_MIN_SHIPS)||1)
   });
  }
+ // The war domain already knows its own systems. Measured: the frontier refused to
+ // open while the territory map clearly held 30003837 (500004) next to 30045344
+ // (500011), because the tick only ever saw systems the A-Life walker had visited
+ // this process. A system the war state already owns is a real system for the
+ // planner, so the two sets are unioned instead of trusting one of them.
+ let knownSystems=[...visitedSystems];
+ try{
+  const known=store.read();
+  for(const id of Object.keys((known&&known.territories)||{})){
+   const systemID=Number(id);
+   if(Number.isSafeInteger(systemID)&&systemID>0&&!knownSystems.includes(systemID))
+    knownSystems.push(systemID);
+  }
+ }catch(_error){/* the war state is optional here */}
+ const tickSystems=knownSystems.slice(0,12);
  let result;
- try{result=warOpening.tick({systemIDs:[...visitedSystems].slice(0,12)})}
+ try{result=warOpening.tick({systemIDs:tickSystems})}
  catch(error){
   warSkip("opening","OPENING_THROW:"+String(error&&error.message||error));
   return;
  }
  if(result.status!=="OPENED"){
   const reason=String(result.reason||result.status||"UNKNOWN");
-  const skips=Array.isArray(result.plan?.skipped)?result.plan.skipped:[];
+  // The refusal can come from the planner (plan.skipped) or from the applier, which
+  // names each border it refused to fund (result.skipped). Both must be published.
+  const skips=[].concat(Array.isArray(result.plan?.skipped)?result.plan.skipped:[],
+   Array.isArray(result.skipped)?result.skipped:[]);
   // Deduplicate on the reason AND the per-border detail. Measured: a border that
   // changed from "no navy" to "no money" kept the same top-level reason
   // NO_OPENABLE_FRONT, so the new precondition was never published and the world
@@ -508,6 +531,8 @@ function advanceNativeWarOpening(){
      presence:result.plan?.summary||{},
      fronts:(result.plan?.fronts||[]).length,
      skipped:skips.slice(0,8),
+     tickSystems,
+     visitedSystems:[...visitedSystems].slice(0,12),
      evidence:"REAL_PRESENCE_DERIVED_NO_FRONT_INVENTED"
     });
    }catch(_error){/* probe is best effort */}
@@ -4708,4 +4733,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,identityLinks,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
