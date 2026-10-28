@@ -108,6 +108,16 @@ function warStateStore(){
    core.validateState(state);
    rows.transact([TABLE],tx=>{tx.put(TABLE,KEY,state);});
    mirrorWarState(state);
+   // FW-042: keep the SECOND view in sync. Measured in the SQLite file: the legacy
+   // namespace blob ("coop-faction-war", 9018 B) held treasury-v1 and merit-v1 but an
+   // EMPTY state-v1, and the blob is what survives a container recreate, so the war
+   // (wars + campaigns + territories) was erased while real ISK stayed in escrow.
+   // Writing the same validated document into the legacy path means whichever view
+   // the boot reconciliation prefers, it now contains the real war.
+   if(String(process.env.EVEJS_COOP_WAR_STATE_LEGACY_MIRROR??"1")!=="0"){
+    try{gameStore.write(TABLE,"/coop-faction-war/state-v1",state);}
+    catch(_error){/* the atomic row stays authoritative; this is a second copy */}
+   }
   }
  };
 }
@@ -308,6 +318,17 @@ function warBountyStore(){
  return warBountyInstance;
 }
 // One real reservation per campaign side, taken before START_CAMPAIGN.
+//
+// FW-046: this used to RETURN on the first side it could fund, so a war had a
+// bounty only for the attacker. Measured on the work stack at 19:15Z: the real
+// kill that decided the battle was made by a DEFENDER (coop-pilot-027, faction
+// 500011) while the only HELD escrow belonged to 500004, so `coopWarBounty`
+// correctly refused with NO_HELD_ESCROW_FOR_FACTION and no ISK could move - a
+// funded war where half the fighters can never be paid is not a bounty, and the
+// comment above already promised one reservation per side.
+// Each side now funds its OWN bounty out of its OWN wallet; a side that cannot
+// pay is refused per side (its own reason is kept) and never blocks the other.
+// Env-gated because it takes a second real escrow: EVEJS_COOP_WAR_BOUNTY_BOTH_SIDES=1.
 function warBountyReserve({war,campaign,campaignID,warID,persist}){
  if(process.env.EVEJS_COOP_WAR_BOUNTY_ISK==="0")return {status:"REFUSED",reason:"WAR_BOUNTY_OFF"};
  const bountyISK=Math.max(1,Math.round(Number(process.env.EVEJS_COOP_WAR_BOUNTY_ISK)||25000));
@@ -317,20 +338,22 @@ function warBountyReserve({war,campaign,campaignID,warID,persist}){
  catch(error){return {status:"REFUSED",reason:"WAR_STATE_PERSIST_FAILED"};}
  const pilots=warPresencePilots(),ledger=warEarnedLedger(),refusals=[];
  const chest=warChestStore(),treasury=warTreasuryStore();
- for(const factionID of [Number(war.attackerFactionID),Number(war.defenderFactionID)]){
-  if(!Number.isSafeInteger(factionID)||factionID<=0)continue;
+ const reserveSide=(factionID)=>{
+  if(!Number.isSafeInteger(factionID)||factionID<=0)
+   return {status:"REFUSED",reason:"NO_FACTION",factionID:0};
   const corporationID=warFactionCorporation(factionID,pilots,ledger);
   if(!Number.isSafeInteger(corporationID)||corporationID<=0){
    refusals.push({factionID,reason:"NO_MILITIA_CORPORATION"});
-   continue;
+   return {status:"REFUSED",reason:"NO_MILITIA_CORPORATION",factionID};
   }
   let funded=null;
   try{
    funded=chest.fund({factionID,corporationID,warID,campaignID,needCents,pilots,ledger,
     eventID:"bounty:"+campaignID+":"+factionID});
   }catch(error){
-   refusals.push({factionID,reason:"WAR_CHEST_THROW:"+String(error&&error.message||error)});
-   continue;
+   const reason="WAR_CHEST_THROW:"+String(error&&error.message||error);
+   refusals.push({factionID,reason});
+   return {status:"REFUSED",reason,factionID};
   }
   if(funded.status!=="APPLIED"&&funded.status!=="DUPLICATE"){
    const reason=String(funded.reason||funded.status);
@@ -346,7 +369,10 @@ function warBountyReserve({war,campaign,campaignID,warID,persist}){
    // not there, so no ISK is invented, only spent from where it already is.
    const walletBacked=process.env.EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK==="1"&&
     ["NO_REAL_FACTION_INCOME","INSUFFICIENT_REAL_INCOME"].includes(reason);
-   if(!walletBacked){refusals.push({factionID,reason});continue}
+   if(!walletBacked){
+    refusals.push({factionID,reason});
+    return {status:"REFUSED",reason,factionID};
+   }
    refusals.push({factionID,reason:"BOUNTY_BACKED_BY_NATIVE_CORP_WALLET",chestRefusal:reason});
   }
   const reservationID="bounty:"+campaignID+":"+factionID;
@@ -357,12 +383,14 @@ function warBountyReserve({war,campaign,campaignID,warID,persist}){
     corporationID,factionID,warID,campaignID,amountCents:needCents,
     minRemainingCents:0});
   }catch(error){
-   refusals.push({factionID,reason:"WAR_TREASURY_THROW:"+String(error&&error.message||error)});
-   continue;
+   const reason="WAR_TREASURY_THROW:"+String(error&&error.message||error);
+   refusals.push({factionID,reason});
+   return {status:"REFUSED",reason,factionID};
   }
   if(reserved.status!=="APPLIED"&&reserved.status!=="DUPLICATE"){
-   refusals.push({factionID,reason:String(reserved.reason||reserved.status)});
-   continue;
+   const reason=String(reserved.reason||reserved.status);
+   refusals.push({factionID,reason});
+   return {status:"REFUSED",reason,factionID};
   }
   try{
    require("./coopRuntimeProbe").observe("living-native-war-bounty-reserved",null,null,{
@@ -377,9 +405,22 @@ function warBountyReserve({war,campaign,campaignID,warID,persist}){
   return {status:"RESERVED",reservationID,factionID,corporationID,
    amountCents:needCents,chestJournalID:String(funded.entry?.journalID||""),
    escrowJournalID:Number(reserved.receipt?.journalID)||0};
- }
- return {status:"REFUSED",reason:refusals.length?
-  refusals.map(r=>r.factionID+":"+r.reason).join("|"):"NO_WAR_PARTY",refusals};
+ };
+ const sides=[Number(war.attackerFactionID),Number(war.defenderFactionID)];
+ const both=String(process.env.EVEJS_COOP_WAR_BOUNTY_BOTH_SIDES||"0")==="1";
+ const planned=require("./coopWarBountyEscrowSides")
+  .planSideReservations({sides,both,attackerFactionID:war.attackerFactionID,reserveSide});
+ if(!planned.funded.length)
+  return {status:"REFUSED",reason:refusals.length?
+   refusals.map(r=>r.factionID+":"+r.reason).join("|"):"NO_WAR_PARTY",refusals};
+ // The campaign is oriented attacker -> defender, so the attacker's escrow is the
+ // one that names this campaign's supply. A defender-only escrow still opens the
+ // war (unchanged fallback), it simply is not the supply proof.
+ const primary=planned.primary;
+ return {...primary,status:"RESERVED",refusals,
+  otherSideReservationID:(planned.funded.find(r=>r!==primary)||{}).reservationID||"",
+  sides:planned.funded.map(r=>({factionID:r.factionID,
+   reservationID:r.reservationID,corporationID:r.corporationID}))};
 }
 // Read-only: what the chest can really see, so a refusal names its own cause.
 function diagnoseWarFunding(){
@@ -476,11 +517,136 @@ function diagnoseMercenary(wars,pilots,ledger,needCents){
 // reported; a native sov claim is reported only where a real sov structure and
 // a real native claim exist. Nothing is written, so no claim is fabricated.
 let warSovProjection=null;
+// FW-043: a wiped war record left the territory map EMPTY, and every later phase
+// derives its fronts from that very map - so after a container recreate the world
+// could never re-derive ownership, project sovereignty, or open a front again. The
+// deadlock was self-inflicted: projection iterated `state.territories` to find
+// structures, and an empty map simply produced nothing.
+//
+// Territories are therefore re-derived from REAL PRESENCE (the same resolved
+// pilots the front planner uses): a system belongs to the one faction that really
+// holds strictly more resolved ships there than any other. Ties register nothing,
+// no ISK, hull or system is invented, and the record goes through the same
+// validated store the rest of the domain uses.
+// FW-044: military control needs a military presence.
+//
+// Measured right after FW-043: ownership derived from raw presence let ORE - a faction
+// with mining hulls and NO combat doctrine at all - own four systems, so every border
+// resolved to a party that cannot fight and FW-036 correctly refused every front. A
+// mining fleet is not a garrison. A system can only be owned when at least one ARMED
+// pilot (role patrol/pirate) of the winning faction is really there, and the owner is
+// still the faction with the most resolved pilots among those that can defend.
+// A tie owns nothing, and a system with no armed presence stays unowned.
+const ARMED_ROLES=new Set(["patrol","pirate"]);
+function deriveTerritoryOwners(pilots){
+ const counts=new Map();
+ for(const pilot of Array.isArray(pilots)?pilots:[]){
+  const systemID=Number(pilot&&pilot.systemID),factionID=Number(pilot&&pilot.factionID);
+  if(!Number.isSafeInteger(systemID)||systemID<=0||
+   !Number.isSafeInteger(factionID)||factionID<=0)continue;
+  const key=String(systemID);
+  if(!counts.has(key))counts.set(key,new Map());
+  const per=counts.get(key);
+  const row=per.get(factionID)||{ships:0,armed:0};
+  row.ships+=1;
+  if(ARMED_ROLES.has(String(pilot&&pilot.role||"")))row.armed+=1;
+  per.set(factionID,row);
+ }
+ const owners=[];
+ for(const [key,per] of counts){
+  const eligible=[...per.entries()].filter(([,row])=>row.armed>0);
+  if(!eligible.length)continue;
+  eligible.sort((a,b)=>b[1].ships-a[1].ships||a[0]-b[0]);
+  const [factionID,row]=eligible[0];
+  if(eligible.length>1&&eligible[1][1].ships>=row.ships)continue; // a tie owns nothing
+  owners.push({systemID:Number(key),factionID,ships:row.ships,armed:row.armed});
+ }
+ owners.sort((a,b)=>a.systemID-b.systemID);
+ return owners;
+}
+// FW-045: a map derived under the old rule must be repairable without wiping the world.
+//
+// FW-044 corrected WHICH faction may own ground, but it could only act on an empty map,
+// and the live map was already mining-weighted, so the world kept refusing every front.
+// A territory that has never been fought over (revision 1, no campaign has ever used it)
+// whose owner fields NO armed presence there any more is re-derived from presence; a
+// system with no armed faction at all loses its owner, because nobody garrisons it.
+// Anything that was really captured or is being fought over is never touched.
+function planTerritoryBootstrap({territories,pilots}={}){
+ const current=territories||{};
+ const owners=deriveTerritoryOwners(pilots);
+ const desired=new Map(owners.map(o=>[String(o.systemID),o]));
+ const armedBySystem=new Map();
+ for(const pilot of Array.isArray(pilots)?pilots:[]){
+  const systemID=Number(pilot&&pilot.systemID),factionID=Number(pilot&&pilot.factionID);
+  if(!Number.isSafeInteger(systemID)||systemID<=0)continue;
+  if(!ARMED_ROLES.has(String(pilot&&pilot.role||"")))continue;
+  const key=String(systemID);
+  if(!armedBySystem.has(key))armedBySystem.set(key,new Set());
+  armedBySystem.get(key).add(Number(factionID));
+ }
+ const add=[],correct=[],release=[],keep=[];
+ for(const [key,owner] of desired){
+  const existing=current[key];
+  if(!existing){add.push(owner);continue;}
+  if(Number(existing.revision)>1){keep.push({systemID:Number(key),reason:"ALREADY_FOUGHT_OVER"});continue;}
+  const armed=armedBySystem.get(key)||new Set();
+  if(armed.has(Number(existing.militaryControllerFactionID))){
+   keep.push({systemID:Number(key),reason:"OWNER_STILL_ARMED"});
+   continue;
+  }
+  if(Number(existing.militaryControllerFactionID)!==owner.factionID)correct.push(owner);
+  else keep.push({systemID:Number(key),reason:"UNCHANGED"});
+ }
+ for(const [key,existing] of Object.entries(current)){
+  if(desired.has(key))continue;
+  if(Number(existing.revision)>1)keep.push({systemID:Number(key),reason:"ALREADY_FOUGHT_OVER"});
+  else release.push({systemID:Number(key),factionID:Number(existing.militaryControllerFactionID)});
+ }
+ return {add,correct,release,keep};
+}
+function bootstrapTerritoriesFromPresence(state){
+ if(!state||!state.territories)return {status:"NO_STATE",added:0};
+ let pilots=[];
+ try{pilots=warPresencePilots()||[]}catch(_error){pilots=[]}
+ if(!pilots.length)return {status:"NO_PRESENCE",added:0};
+ const plan=planTerritoryBootstrap({territories:state.territories,pilots});
+ if(!plan.add.length&&!plan.correct.length&&!plan.release.length)
+  return {status:"NO_CHANGE",added:0,kept:plan.keep.length};
+ const at=Date.now(),next={...state,territories:{...(state.territories||{})}};
+ const apply=(owner)=>{
+  next.territories[String(owner.systemID)]={systemID:owner.systemID,
+   originalOwnerFactionID:owner.factionID,militaryControllerFactionID:owner.factionID,
+   state:"SECURE",revision:1,changedAt:at};
+ };
+ for(const owner of plan.add)apply(owner);
+ for(const owner of plan.correct)apply(owner);
+ for(const gone of plan.release)delete next.territories[String(gone.systemID)];
+ warStateStore().write(next);
+ return {status:plan.add.length?"REGISTERED_FROM_PRESENCE":"CORRECTED_FROM_PRESENCE",
+  added:plan.add.length,corrected:plan.correct.length,released:plan.release.length,
+  kept:plan.keep.length,
+  systems:[...plan.add,...plan.correct].map(o=>({systemID:o.systemID,
+   factionID:o.factionID,ships:o.ships,armed:o.armed})),
+  releasedSystems:plan.release};
+}
 function advanceNativeWarSovereigntyProjection(){
  if(process.env.EVEJS_COOP_WAR_SOVEREIGNTY_PROJECTION!=="1")return;
  let state=null;
  try{state=warStateStore().read()}catch(_error){state=null}
  if(!state||!state.territories)return;
+ // FW-043: an empty map is a bootstrap, not an answer.
+ try{
+  const boot=bootstrapTerritoriesFromPresence(state);
+  if(boot.status==="REGISTERED_FROM_PRESENCE"||boot.status==="CORRECTED_FROM_PRESENCE"){
+   require("./coopRuntimeProbe").observe("living-native-war-territory-bootstrap",null,null,
+    {status:boot.status,added:boot.added,corrected:boot.corrected,
+     released:boot.released,kept:boot.kept,systems:boot.systems,
+     evidence:"REAL_PRESENCE_STRICT_MAJORITY_ARMED_OWNER_NO_INVENTED_OWNER"});
+   state=warStateStore().read();
+   if(!state||!state.territories)return;
+  }
+ }catch(_error){/* a bootstrap failure must never break the phase */}
  let structures=[];
  try{
   const worldData=require("./worldData");
@@ -3012,41 +3178,22 @@ function ensureMineralLift(){
  return mineralLiftEngine;
 }
 
-// Close the world's own RPC_CALLING journals from proof the market itself provides. Runs
-// once per process, is read-only on the market side, and never repeats a fill: it settles
-// only what the market's own order row proves, and closes a journal without effect only on
-// three independent proofs. Every outcome is observable.
-let journalReconcileStarted=false,journalReconcileLastAtMs=0;
+// Close the world's own RPC_CALLING journals from market proof (space/coopMarketJournalBoot.js
+// owns the logic; every authority is injected so this file keeps no state for it).
+let journalBootReconciler=null;
 function reconcileMarketJournalsAtBoot(force=false){
- // A journal that appears while the world is running is retried at most every five
- // minutes: the market call is cheap, but a hot loop against it is not.
- if(journalReconcileStarted&&(!force||Date.now()-journalReconcileLastAtMs<300000))return;
- journalReconcileStarted=true;journalReconcileLastAtMs=Date.now();
- void (async()=>{
-  try{
-   const store=require("./npc/nativeNpcStore");
-   const runtime=require("./runtime");
-   const inventory=require("../services/inventory/itemTypeRegistry");
-   const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
-   const result=await require("./coopNativeNpcMarketReconcile").reconcileJournals({
-    root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
-    inspectOrder:orderID=>marketClient.call("GetOrder",{order_id:String(orderID)}),
-    store,
-    sceneForSystem:systemID=>{
-     try{return runtime.ensureScene(systemID,{refreshStargates:false})}catch(_error){return null}
-    },
-    resolveType:typeID=>inventory.resolveItemByTypeID(typeID),
-   });
-   require("./coopRuntimeProbe").observe("living-npc-market-journal-reconciled",null,null,{
-    settled:result.settled.length,pending:result.pending.length,
-    settledNoEffect:result.settled.filter(x=>x.noEffect===true).length,
-    pendingReasons:result.pending.slice(0,3).map(x=>String(x.reason||"")).join(",")});
-  }catch(error){
-   // An unreachable market is not a proof of anything: the journal stays for the next boot.
-   require("./coopRuntimeProbe").observe("living-npc-market-journal-unreached",null,null,
-    {reason:String((error&&error.message)||error).slice(0,90)});
-  }
- })();
+ if(!journalBootReconciler){
+  const marketClient=require("../services/market/marketDaemonClient").marketDaemonClient;
+  const runtime=require("./runtime"),inventory=require("../services/inventory/itemTypeRegistry");
+  journalBootReconciler=require("./coopMarketJournalBoot").createJournalBootReconciler({
+   root:process.env.EVEJS_COOP_NPC_MARKET_ROOT||"/var/lib/evejs/coop-native-market",
+   inspectOrder:orderID=>marketClient.call("GetOrder",{order_id:String(orderID)}),
+   store:require("./npc/nativeNpcStore"),
+   sceneForSystem:systemID=>{try{return runtime.ensureScene(systemID,{refreshStargates:false})}catch(_error){return null}},
+   resolveType:typeID=>inventory.resolveItemByTypeID(typeID),
+   observe:require("./coopRuntimeProbe").observe});
+ }
+ return journalBootReconciler(force);
 }
 function ensureMarketTrader(){ if(nativeMarketTrader||nativeMarketBlocked)return nativeMarketTrader;
  if(!identityRegistry||!world)return null;
@@ -4837,4 +4984,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,identityLinks,chooseWarRestore,readWarMirror,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,identityLinks,deriveTerritoryOwners,planTerritoryBootstrap,bootstrapTerritoriesFromPresence,chooseWarRestore,readWarMirror,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};

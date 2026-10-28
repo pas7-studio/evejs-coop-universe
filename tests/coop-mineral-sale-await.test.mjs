@@ -75,7 +75,8 @@ test("the world settles its own market journal instead of staying blocked", { sk
   assert.ok(source.includes("function reconcileMarketJournalsAtBoot("));
   assert.ok(source.includes('reconcileMarketJournalsAtBoot(true);'),
     "a journal refusal retries the reconcile instead of blocking for ever");
-  assert.ok(source.includes('const result=await require("./coopNativeNpcMarketReconcile").reconcileJournals('));
+  const boot = fs.readFileSync(path.join(path.dirname(fork), "coopMarketJournalBoot.js"), "utf8");
+  assert.ok(boot.includes('require("./coopNativeNpcMarketReconcile").reconcileJournals({'));
   assert.ok(source.includes('inspectOrder:orderID=>marketClient.call("GetOrder",{order_id:String(orderID)})'),
     "settlement reads the market's own row and never re-sends a fill");
 });
