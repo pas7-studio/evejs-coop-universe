@@ -2864,3 +2864,37 @@ P4 agents stack cannot prove war behaviour at all (no `EVEJS_COOP_FACTION_WAR*`
 flags in compose/compose.agents.yaml). Every live war proof must happen on the play
 stack after the morning deploy, or the agents stack must be given the flags and a
 seeded war.
+
+## WHY THE WAR FROZE (diagnosed 2026-10-28T10:04Z, real probes)
+
+Symptom: no faction-war event since 04:47 (counters stuck 15 casualty / 22 garrison /
+82 orders) while the world keeps running (phase cycle 1170 at 10:02:53 includes every
+`native-faction-war-*` phase, and pirate warp-point tackles still fire at 10:02:42).
+
+Two independent deadlocks, both measured:
+
+D1 GHOST HULLS IN THE FLEET REGISTRY. The registry holds exactly two hulls -
+980000038148 (Caldari, coop-pilot-038) and 980000039139 (Gallente, coop-pilot-089),
+both "in" 30045344. Probe: `nativeNpcStore.getNativeEntity` returns a row for both,
+but `scene.getEntityByID` returns nothing for both (`inScene false`). They are dead or
+despawned ships that were never released. Consequences:
+  - FW-033 counts registry rows as "present" -> missing = 0 -> the garrison never
+    refills a side that physically has no ship;
+  - the battle director finds no live candidate -> no attack order;
+  - the campaign stays ASSAULT rev 2 with 0 objectives, territory still Caldari.
+
+D2 ZERO FREE PILOT IDENTITIES. Roster 100, linked 100, free 0. The last garrison
+attempts are literally `phase:"garrison", reason:"NO_FREE_PILOT_IDENTITY"`
+(23:26, 23:30, 23:34) interleaved with `GARRISON_COOLDOWN`. So even a correct
+"missing" count could not field a replacement commander.
+
+WHY IT IS NOT JUST "absence = death": the registry's own release verifier refuses a
+missing hull unless a physical wreck was confirmed (`confirmDestroyed`), which is the
+correct invariant. So the fix must NOT weaken custody. Proposed:
+  F1 FW-033 counts LIVE scene hulls (inScene), not registry rows, when deciding
+     whether a side is missing. Ghost rows then block nothing.
+  F2 the free-pilot pool may reclaim an identity whose bound hull is in no scene
+     (release_identity on that link first), so a ghost cannot hold the last pilot.
+  F3 (separate) a read-only `war_registry_audit` action that reports ghost rows so the
+     operator sees them instead of guessing.
+Not implemented yet; no change was made to the running server.
