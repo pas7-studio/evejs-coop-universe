@@ -6,7 +6,26 @@ const {createAmmoGate}=require("../integration/coopNpcWeaponAmmoGate.cjs");
 const {specs,transform,classifyFile}=require("../scripts/patch-evejs-coop.cjs");
 const spec=specs.find(x=>x.file==="server/src/space/npc/npcBehaviorLoop.js");
 const fixture=[
- 'function exampleSyncNpcWeapons(entity,modules,scene,activeEffect){',
+ // npcBehaviorLoop.js carries six hook sites the spec patches; the fixture has to
+ // model each anchor or transform() correctly refuses the synthetic file.
+ 'function clearNpcTargetLocks(scene, entity) { return null; }',
+ 'function canAttack(entity, target, sourceClass, targetClass) {',
+ '  if (sourceClass === "npc" && targetClass === "npc") {',
+ '    return false;',
+ '  }',
+ '  if (sourceClass === "npc") {',
+ '    return targetClass === "npc";',
+ '  }',
+ '  return false;',
+ '}',
+ 'function launchMissile(entity, target, entityMissileSource) {',
+ '  const launchResult = {success:true};',
+ '      if (launchResult && launchResult.success) {',
+ '        return launchResult;',
+ '      }',
+ '  return null;',
+ '}',
+ 'function exampleSyncNpcWeapons(entity,modules,scene,activeEffect,options={}){',
  ' const pseudoSession={characterID:0};',
  ' const bankModuleIDs=modules.map(m=>m.itemID);',
  ' for(const moduleItem of modules){',
@@ -14,8 +33,16 @@ const fixture=[
  '      logNpcCombatDebug("npc.weapons.module-already-active", () => ({}));',
  '      continue;',
  '    }',
- '    scene.activateGenericModule(pseudoSession,moduleItem);',
+ '    const activationOutcome = scene.activateGenericModule(pseudoSession,moduleItem);',
+ '    logNpcCombatDebug("npc.weapons.module-activate", () => ({',
+ '      moduleID: moduleItem.itemID,',
+ '    }));',
  ' }',
+ // npcBehaviorLoop.js carries a second hook site the spec patches: the mining
+ // target-lock guard inside the clearTargets branch.
+ '  if (options.clearTargets !== false) {',
+ '    clearNpcTargetLocks(scene, entity);',
+ '  }',
  '}'
 ].join("\n");
 function runtime({hasAmmo=true,strict=true,active=false}={}){

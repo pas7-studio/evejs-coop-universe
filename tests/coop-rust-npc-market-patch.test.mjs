@@ -55,6 +55,8 @@ test("Rust reservation identity is unique in all three dimensions",()=>{
 
 test("native Rust order inspection exposes remaining volume for COOP-035 finalize",()=>{
  const source=fs.readFileSync(require.resolve("../rust/coop_npc_market_pending.rs"),"utf8");
- assert.match(source,/o\\.vol_remaining/);
+ // The double backslash made this regex require a literal "o\.vol_remaining" in the
+ // Rust file, so it could never match the real "o.vol_remaining" projection.
+ assert.match(source,/\bo\.vol_remaining\b/);
  assert.match(source,/"vol_remaining":remaining/);
 });

@@ -23,13 +23,22 @@ const source=[
  "  ledger.damageTaken = toFiniteNumber(ledger.damageTaken, 0) + damageAmount;",
  "  ledger.lastUpdatedAtMs = whenMs;",
  " return ledger;",
+ "}",
+ // killmailTracker.js carries a second hook site: the FW structure-killmail call
+ // immediately before the ledger is dropped, which the installer also patches.
+ "function recordKillmailFromDestruction(targetEntity, destroyResult, options = {}) {",
+ "  const ledgerKey = String(targetEntity && targetEntity.id);",
+ "  const record = ledgersByVictim.get(ledgerKey);",
+ "  ledgersByVictim.delete(ledgerKey);",
+ "  return record;",
  "}"
 ].join("\n");
 test("installer contains exactly one native damage spec and overlay copy name",()=>{
  assert.ok(spec);
  assert.equal(installer.specs.filter(x=>x.file===target).length,1);
  const installerText=fs.readFileSync(path.join(root,"scripts/patch-evejs-coop.cjs"),"utf8");
- assert.match(installerText,/coopPlayerCombatWitness/);
+ // Module names live in the single spec; the installer keeps the patch-script wiring.
+ assert.ok(installer.names.includes("coopPlayerCombatWitness"));
  assert.match(installerText,/coop-player-damage-native-patch\.cjs/);
  assert.ok(fs.existsSync(path.join(root,"integration/coopPlayerCombatWitness.cjs")));
 });

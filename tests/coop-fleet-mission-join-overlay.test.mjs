@@ -8,7 +8,8 @@ const {patch,FILE,HOOK,ANCHOR}=require("../scripts/coop-fleet-mission-join-patch
 const installer=require("../scripts/patch-evejs-coop.cjs");
 test("new L2 module is present, native L1 spec registered, and no stock agent flow replaced",()=>{
  const src=readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
- assert.ok(src.includes('"coopFleetMissionJoin"'));
+ // Module names live in the single spec; the installer re-exports the resolved list.
+ assert.ok(installer.names.includes("coopFleetMissionJoin"));
  assert.ok(installer.specs.some(s=>s.file===FILE));
  assert.match(src,/coop-fleet-mission-native-patch\.cjs/);
  assert.match(src,/coop-fleet-mission-join-patch\.cjs/);
