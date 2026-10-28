@@ -97,9 +97,9 @@ Current state of the giant modules:
 | File | Lines | Split |
 |---|---|---|
 | `space/coopVirtualWorldRuntime.js` | 4 379 | **done** — pure helpers in `coopVirtualWorldRuntime.pure.js` (970 lines) |
-| `space/coopAdminBridge.js` | 1 518 | not started |
+| `space/coopAdminBridge.js` | 451 | **done** — the whitelisted actions in `coopAdminBridgeActions.js` (1 067 lines) |
 | `space/coopNativeStationArrival.js` | 1 451 | not started |
-| `space/coopCourierRuntime.js` | 975 | not started |
+| `space/coopCourierRuntime.js` | 975 | **not a split** — 956 of its 975 lines are already one closure factory; moving them would be a rename, not a separation |
 
 ### The runtime split, and the test migration that unblocked it
 
@@ -144,7 +144,15 @@ Two rules learned here, both cheap to forget:
    the parent without the file it requires.
 2. `--out` must stay in the **same directory** as the parent. The splitter moves
    bodies that contain relative `require()` calls; a subdirectory would silently
-   change what they resolve to.
+   change what they resolve to. The tool now refuses a different directory.
+
+And one the splitter had to be fixed for: the `require()` back into the parent is
+inserted **where the first extracted declaration was**, not at the top of the
+file. Moving a `const` config value (`REQUESTS`, `RESULTS`) to the top broke
+`coopAdminBridge.js` at load with `Cannot access 'REQUESTS' before
+initialization`, because `module.exports` at the bottom read it before the
+destructuring ran. `node --check` cannot catch that; the split of the admin bridge
+was reverted and re-applied after the fix.
 
 Do not "fix" a broken text assertion by freezing the archived copy at the old
 text: an archive that disagrees with the engine is worse than a big file.

@@ -150,9 +150,13 @@ for (let i = 0; i < lines.length; i++) {
   if (removeLines.has(i)) {
     // collapse the blank line that preceded an extracted block
     if (kept.length && kept[kept.length - 1].trim() === '') kept.pop();
+    // The require goes where the FIRST extracted declaration was, not at the top
+    // of the file: a moved `const` (a config value, for instance) must still be
+    // initialised before the parent's own statements read it, or the parent
+    // throws "Cannot access X before initialization" at load.
+    if (insertAt === -1) insertAt = kept.length;
     continue;
   }
-  if (i === headerEnd && insertAt === -1) insertAt = kept.length;
   kept.push(lines[i]);
 }
 if (insertAt === -1) insertAt = kept.length;

@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import path from "node:path";
-const ROOT=path.join(import.meta.dirname,"..");
-const source=fs.readFileSync(path.join(ROOT,"integration","coopAdminBridge.cjs"),"utf8");
+import {readModuleText} from "./_support/coopSourceText.mjs";
+// The bridge is split: the actions live in its `coopAdminBridgeActions.js`
+// sibling, which readModuleText inlines for the wiring assertions below.
+const source=readModuleText("integration/coopAdminBridge.cjs");
 
 // Wiring guards for the live world-setup path. They prove the admin spawn cannot
 // silently produce an unarmed "patrol" and that a war patrol can be durable
