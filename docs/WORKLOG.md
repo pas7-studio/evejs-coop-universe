@@ -1811,3 +1811,9 @@ Why: Overlay wiring tests asserted the layout of the module registry (/"coopA","
 Detail: A wiring test used to assert `/"coopA","coopB"/` against scripts/overlay-spec.cjs. Read literally that means "registered in the same splice call, adjacent, in that order" - the layout of a list, not the fact under test. Inserting one module between them (an ordinary change) failed six tests that had nothing wrong with them. tests/_support/coopSourceText.mjs now exports overlayModules() and overlay
 Where: tests/_support/coopSourceText.mjs, tests/coop-alife-economy-wiring.test.mjs, tests/coop-alife-station-wiring.test.mjs, tests/coop-convoy-native-outcomes-overlay.test.mjs, tests/coop-native-hacking-admission.test.mjs, tests/coop-native-haul-manifest-overlay.test.mjs, tests/coop-npc-expedition-native-bridge.test.mjs, tests/coop-npc-probe-wiring.test.mjs
 Evidence: 7 files: coop-npc-probe-wiring 22/0, 5 more fully green, 1 real failure left; new helper overlayModules/overlayRegistrations
+### 2026-10-28T12:05Z · 37e8094 · TEST · test: the allocator test must not depend on a transform that no longer exists
+
+Why: An allocator test ran a legacy transform that now applies zero edits; it tests the algorithm directly plus the three guards in the deployed file, and the checkout resolves through one helper instead of per-test env handling
+Detail: The native ID allocator fix is committed in the fork, so server/src/space/npc/ nativeNpcStore.js already contains it: the legacy patch that used to produce it applies zero edits, and the three tests that ran the patched fixture failed for a reason unrelated to the allocator. They now test the algorithm directly (no transform) and one case ties it back to the deployed file: the transient seed, the 
+Where: tests/_support/engineCheckout.mjs, tests/coop-native-durable-id-allocator.test.mjs
+Evidence: coop-native-durable-id-allocator 4/0 (was 0/3); engineCheckout.mjs used by the test
