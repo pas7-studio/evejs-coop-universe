@@ -2898,3 +2898,34 @@ correct invariant. So the fix must NOT weaken custody. Proposed:
   F3 (separate) a read-only `war_registry_audit` action that reports ghost rows so the
      operator sees them instead of guessing.
 Not implemented yet; no change was made to the running server.
+
+## FREEZE ROOT CAUSE FOUND AND FIXED (2026-10-28T10:25Z, deployed)
+
+The freeze was NOT the war logic. `scripts/coop-split-module.cjs` moved
+`nativeWarFleetRegistry()` into `server/src/space/coopVirtualWorldRuntime.pure.js`
+but did not move its module state, so the function threw
+`ReferenceError: warFleetRegistry is not defined` on every call. The garrison phase
+caught it per phase (`[CoopLivingWorld] native-faction-war-garrison warFleetRegistry
+is not defined`), so the war silently stopped refilling and the front emptied.
+
+Fixes deployed (fork `ef48a4f`, `48f63d9`):
+- `.pure.js` now declares `warFleetRegistry`, `bridge`, `identityRegistry` and exports
+  `bindWarRuntime({bridge,identityRegistry})`; the main runtime binds the live objects
+  right after `createBridge(...)`.
+- FW-033 counts LIVE scene hulls, not custody rows (`isHullLive`), so a ghost hull can
+  no longer look like a manned side.
+- the free-pilot pool reclaims an identity whose ship is in no live scene
+  (`GHOST_HULL_NO_SCENE`) instead of starving the garrison with
+  `NO_FREE_PILOT_IDENTITY`.
+
+Evidence after deploy: garrison events 22 -> 25; 10:17:10 Gallente refill, 10:17:36
+Caldari refill (980000042212, commander coop-pilot-003), 10:20:32 Gallente refill.
+The ReferenceError is gone from the log.
+
+STILL BROKEN (next): the battle director issues no attack order (82 unchanged) and
+`war_combat_diagnose` returns `status OBSERVED` with an EMPTY ships list, even though
+the garrison just spawned three hulls. Suspicion: the same split-runtime state loss in
+the combat path (a helper that reads the registry/scene from the pure module), or the
+registry rows and the live scene disagree. Next probe: call
+`nativeWarFleetRegistry().snapshot()` inside the running process and compare with
+`scene.getEntityByID` for each row, then follow `advanceNativeWarCombat` step by step.
