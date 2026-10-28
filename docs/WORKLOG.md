@@ -1934,3 +1934,14 @@ Why: seven more modules fsynced a directory unguarded, so opportunity board/volu
 Detail: Same seven modules, byte-identical to the fork. Evidence on this Windows box: coop-native-opportunity-board 6/10 -> 15/1, coop-escort-native-predeparture 5/6 -> 11/0, escort suite 359/52 -> 365/46. Unrelated files were checked before and after and did not move (coop-installer-module-coverage 2/1, coop-npc-job-board 19/1, coop-salvage-postpickup-settlement 3/6). coop-engine-audit AUDIT_OK, coop-tes
 Where: integration/coopEscortVolunteers.cjs, integration/coopNativeContractMutationFence.cjs, integration/coopNativeJobAgentSelection.cjs, integration/coopNativeJobNotifications.cjs, integration/coopSalvageNativeConsent.cjs, integration/coopSalvageProvenance.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWorldOpportunityBoard.cjs
 Evidence: native-opportunity-board 6/10->15/1, escort-native-predeparture 5/6->11/0, escort suite 359/52->365/46; parity PARITY_OK; audit AUDIT_OK
+### 2026-10-28T13:52Z · 228ed18 · L1 · ops(fw): back a bounty escrow with the native corporation wallet when the pilot levy is swept; record merit and client view
+
+Why: The bounty could never be reserved because the refinery sweep empties pilot balances before the FW-005B levy reads them
+Where: .opencode/state.md
+Evidence: war_funding_diagnose NO_REAL_FACTION_INCOME on all sides; refinery swept 250000 ISK; fallback deployed on evejs-agents
+### 2026-10-28T13:56Z · 6bd4805 · L1 · coop: mirror the errno-only durability guard (fork f6ef7fc) and fix four escort fixtures
+
+Why: four escort journals skipped the whole durability re-read on win32, so a lost fsync ACK was unobservable on the dev box and a directory-only refusal would have counted as durable
+Detail: The four escort journals no longer skip the fsync re-read on win32; they attempt it and swallow only the platform errno values. Escort route witness 18/2 -> 20/0, terminal attendance 14/2 -> 16/0, ingress snapshot 13/1 -> 14/0, departure witness 15/3 -> 17/1. Fixture defects found while proving that (each is the module's own contract, not a relaxed assertion): - station-predeparture-gate: the paid
+Where: integration/coopEscortDepartureWitness.cjs, integration/coopEscortNativeIngressSnapshot.cjs, integration/coopEscortRouteWitness.cjs, integration/coopEscortTerminalAttendance.cjs, integration/coopStuckWarpRecovery.js, tests/coop-escort-departure-witness.test.mjs, tests/coop-escort-native-bootstrap-failure.test.mjs, tests/coop-escort-station-predeparture-gate.test.mjs, tests/coop-escort-verified-volunteers.test.mjs
+Evidence: route witness 18/2->20/0, terminal attendance 14/2->16/0, ingress snapshot 13/1->14/0, departure witness 15/3->17/0; escort suite 365/46->391/19; AUDIT_OK, PARITY_OK
