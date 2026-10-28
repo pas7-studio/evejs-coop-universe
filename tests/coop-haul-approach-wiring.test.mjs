@@ -23,8 +23,8 @@ test('a short approach orbits the fleet asteroid and changes the hull profile', 
   // target 0, frozen 3 221 m gap, hauler 750 m from the rock, miner 3-6 km away).
   assert.ok(generator.includes('movementMode: "orbit", orbitDistanceMeters: 1_000, followRangeMeters: 1_000, idleAnchorOrbit: false, issueStopOrder: false'),
     'the hauler profile itself must change, not only its order');
-  assert.ok(generator.includes('issueManualOrder(haulerID, {type: "orbit", targetID: rockID'),
-    'the matching orbit order is what the behaviour loop honours');
+  assert.ok(generator.includes('issueManualOrder(haulerID, {type: "orbit", targetID: minerID'),
+    'the order must station-keep on the MINER: the miners orbit the rock kilometres away');
   assert.ok(generator.includes('APPROACH_ISSUED'));
 });
 
