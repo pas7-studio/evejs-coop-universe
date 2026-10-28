@@ -2171,3 +2171,9 @@ Why: client-facing placeholders were invisible; the register makes every stub, i
 Detail: The client is the specification, so the register is built from its own call list: docs/client-contracts/calls.json holds all 542 RemoteSvc/ProxySvc service.method pairs the pinned client issues (370 modules, taken from its bytecode), and scripts/coop-client-contracts.cjs classifies each one against the fork: MISSING (handler absent -> baseService answers null), STUB (constant null/empty), NULLABLE
 Where: docs/AGENT_START_HERE.md, docs/CLIENT_CONTRACT_STATUS.md, docs/client-contracts/baseline.json, docs/client-contracts/calls.json, scripts/coop-client-contracts.cjs, tests/coop-client-contracts.test.mjs
 Evidence: scripts/coop-client-contracts.cjs: 542 client calls, 0 missing, 44 stubs, 103 nullable, 395 ok; docs/CLIENT_CONTRACT_STATUS.md generated; tests/coop-client-contracts.test.mjs 2/0; rowset columns verified (stationID, fromID, solarSystemID/value1/value2, locationID, warID, contactID, agentID, allianceID, itemID)
+### 2026-10-28T21:28Z · f8b983c · DOCS · docs(fw): the register also separates the gRPC stubs from the working surfaces
+
+Why: the register must not call a working surface a stub: gRPC surfaces are now classified explicitly
+Detail: The campaigns gateway answers every request with 200 plus an empty payload (its messages are not even in the local proto root), while fwAdvantage is filled from real state and the insurgency gateway reports correct shapes with honest zero progress. A register that calls all three 'stubs' would be wrong.
+Where: docs/CLIENT_CONTRACT_STATUS.md, scripts/coop-client-contracts.cjs
+Evidence: docs/CLIENT_CONTRACT_STATUS.md regenerated: 542 calls, 0 missing, 44 stubs, 103 nullable, 395 ok; tests/coop-client-contracts 2/0
