@@ -20,7 +20,10 @@ function fixture(t,{titleWitness=null}={}){
   singleton:0,typeID:34,quantity:25,stacksize:25,
   customInfo:'coop-warehouse:v1:cargo:'+CID},cargo=[];
  const warehouse=createWarehouse({
-  root,store:{listNativeCargoForEntity:()=>cargo,removeNativeCargo:()=>({success:true})},
+  // The custodian also enumerates the whole native cargo table, so a fixture
+  // that only answers per-entity reads cannot be a native store at all.
+  root,store:{listNativeCargoForEntity:()=>cargo,listNativeCargo:()=>cargo,
+   removeNativeCargo:()=>({success:true})},
   items:{findWarehouseItem:()=>item,grantUniqueNpcDepotItem:()=>({success:false})},
   flush:()=>({success:true}),getStation:()=>({stationID:STATION,solarSystemID:SYSTEM}),
   getCorporation:()=>({corporationID:CORP}),
