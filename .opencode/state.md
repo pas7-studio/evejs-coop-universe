@@ -3139,3 +3139,22 @@ NEXT (unmeasured): casualties (wreck + casualty ledger), objective/capture on a 
 payout, and the same chain on a fresh agents world without hand seeding. The owner's play stack
 was not touched; the elevated event numbers there (war:500001-500004 campaign:30045343 with
 accepted attack orders at 12:05) come from the earlier morning deploy, read-only.
+
+## FW-009A PROVEN + capture-by-force is the next wall (2026-10-28T12:27Z, evejs-agents)
+12:24:46 `living-native-war-casualty` RECORDED: war:500001-500004 / campaign:30045344, victim
+980000000283 (Caldari 500001, coop-pilot-013, corp 1000035), wreckID 980300000002, real native
+wreck 12:24:46.677 `living-native-wreck-evidence` PHYSICAL_NATIVE_WRECK_VERIFIED, 4 stored items.
+The receipt is honest about what it does not know: attribution NATIVE_VICTIM_WRECK_ONLY_NO_KILLER,
+captureAuthorized false, killCreditAssigned false. So casualties are real; killer identity is not.
+12:26:25 `living-native-war-skip` phase "capture-by-force" reason **NO_DEFENDER_WRECK** - the kill
+we got was an ATTACKER hull, and FW-035 needs a wreck of the DEFENDING faction in the campaign
+system, plus the defender holding ZERO registered hulls there twice, >=60 s apart.
+Both garrisons keep buying replacement hulls (GARRISON_APPLIED at 12:24:08 and 12:26:52), so a
+defender side never stays empty long enough: this is N5 (chest-funded garrison) promoted from
+"nice to have" to the actual capture blocker. FW-005B `coopWarChestFunding` already exists and
+moves only real earned ISK (pilot earned balance -> faction corp wallet -> HELD escrow), so N5
+must be wired to it rather than to a new money source.
+NEXT (exact): (1) get a defender-side wreck in 30045344 (attackers already outnumber 6:1 there);
+(2) gate the garrison refill on a funded chest and refuse when empty, so the defender can really
+stay at zero across the two 60 s samples; (3) observe CAPTURE_TERRITORY + militaryControllerFactionID
+flip in war_state; (4) only then payout/merit for the owner's character.
