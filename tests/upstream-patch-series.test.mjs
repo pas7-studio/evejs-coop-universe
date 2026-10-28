@@ -30,7 +30,10 @@ test("each patch hash matches the manifest, so an edit cannot pass unnoticed", (
     const digest = crypto.createHash("sha256").update(buffer).digest("hex");
     assert.equal(digest, entry.sha256, entry.file + " hash mismatch");
     assert.equal(entry.status, entry.status, "status field is required");
-    assert.ok(["not-sent", "sent", "merged"].includes(entry.status), entry.file + " status");
+    // "in-fork" is the documented state since 2026-10-28: the change already
+    // ships in pas7-studio/EveJS and the file is only a proposal diff.
+    assert.ok(["not-sent", "sent", "merged", "in-fork"].includes(entry.status),
+      entry.file + " status");
   }
 });
 

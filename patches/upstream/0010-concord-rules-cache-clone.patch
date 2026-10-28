@@ -1,4 +1,4 @@
-﻿From: pas7std co-op <coop@pas7std.invalid>
+From: pas7std co-op <coop@pas7std.invalid>
 Subject: [PATCH 0010/0010] CONCORD startup rules: the cache hit copied every rule through JSON
 
 buildConfiguredConcordStartupRules already caches by signature, but the hit path
@@ -10,6 +10,8 @@ stock cost once the NPC store clone is fixed).
 
 structuredClone is the same deep copy for plain JSON data without the stringify
 round-trip. No rule, signature or cache semantics change.
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+
 diff --git a/server/src/space/npc/npcDefaultConcordRules.js b/server/src/space/npc/npcDefaultConcordRules.js
 index daf23f0..c4b2db0 100644
 --- a/server/src/space/npc/npcDefaultConcordRules.js

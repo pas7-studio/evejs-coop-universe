@@ -49,7 +49,7 @@
     },
     {
       "file": "0006-native-npc-live-capacitor-wins.patch",
-      "sha256": "01d6cc7ec26b8a5fdb012dd6b30cd055eea2cf59f608e61477efac6648252a9a",
+      "sha256": "704a0b7da6ad89f1bdd466445dbf423d66ccc3a36dfb4bfa17b2ff3d55f69d3a",
       "files": [
         "server/src/space/runtime.js"
       ],
@@ -78,7 +78,7 @@
     },
     {
       "file": "0009-native-npc-store-root-clone.patch",
-      "sha256": "b3f707c0b539888d504fe863552d8525bcd2a744c96e8be23a3146b42a8edb71",
+      "sha256": "725f44259a6a1789cf62caa40633c41c9fd98a530c4075401210defeb015152f",
       "files": [
         "server/src/space/npc/nativeNpcStore.js"
       ],
@@ -87,7 +87,7 @@
     },
     {
       "file": "0010-concord-rules-cache-clone.patch",
-      "sha256": "85834c79e65ef5b323f82fc7c503e8317b6f54b07b6d75031e4e81cdaa9a0303",
+      "sha256": "c09313c315417c39a111e38f04aa6b72a9c682af6c47a336351f589cbf5d8ba4",
       "files": [
         "server/src/space/npc/npcDefaultConcordRules.js"
       ],

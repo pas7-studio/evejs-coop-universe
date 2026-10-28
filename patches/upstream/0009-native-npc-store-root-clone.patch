@@ -16,6 +16,8 @@ readCollection reads only the collection it was asked for.
 Note for reviewers: the memo line `rootShapeVerified.add(tableName)` is what makes
 the cache work at all; without it the function still takes the cold path and the
 cost stays. tests/coop-native-npc-store-patch.test.mjs asserts it.
+Upstream base: c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f
+
 diff --git a/server/src/space/npc/nativeNpcStore.js b/server/src/space/npc/nativeNpcStore.js
 index 0000000..1111111 100644
 --- a/server/src/space/npc/nativeNpcStore.js

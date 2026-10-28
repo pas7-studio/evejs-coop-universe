@@ -17,7 +17,9 @@ test("the loadout override patch is pinned in the series with its real hash",()=
  const digest=crypto.createHash("sha256")
   .update(fs.readFileSync(path.join(SERIES,FILE))).digest("hex");
  assert.equal(entry.sha256,digest);
- assert.equal(entry.status,"not-sent");
+ // Since 2026-10-28 the change ships in pas7-studio/EveJS and the file is kept
+ // as a proposal diff; the manifest records that state as "in-fork".
+ assert.equal(entry.status,"in-fork");
  assert.equal(MANIFEST.pin,"c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f");
  assert.ok(patch.includes("Upstream base: "+MANIFEST.pin));
 });
