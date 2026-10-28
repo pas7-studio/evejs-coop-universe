@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const {createJobBoard}=require("../integration/coopNpcJobBoard.cjs");
 const NOW=10000, SYSTEM=30000144, HAULER=901, STATION=6001001;
@@ -164,9 +165,11 @@ test("only a bounded source listing can supply job results",()=>{
 });
 test("new read-only hook and chat registration are present in the reversible installer",async()=>{
  const fs=await import("node:fs");
- const installer=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
+ // The module list and the chat hook live in the one registry, not in the
+ // legacy patch script (which now only consumes it).
+ const installer=fs.readFileSync(new URL("../scripts/overlay-spec.cjs",import.meta.url),"utf8");
  const board=fs.readFileSync(new URL("../integration/coopWorldOpportunityBoard.cjs",import.meta.url),"utf8");
- assert.match(installer,/coopNpcJobBoard/);
+ assert.equal(overlayRegistrations("coopNpcJobBoard"),1);
  assert.match(installer,/if \(command === "jobs"\)/);
  assert.match(installer,/names\.splice\(names\.indexOf\("coopWorldOpportunityBoard"\)/);
  assert.match(board,/function listNativeEvents\(/);

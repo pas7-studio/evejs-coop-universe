@@ -4,7 +4,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {createRequire} from "node:module";
+import {swapEnv} from "./_support/env.mjs";
 const require=createRequire(import.meta.url);
+// Consent and the game authority refuse to construct with these off, which
+// reads as DISABLED from every later assertion instead of a feature question.
+const restoreSalvageEnv=swapEnv({EVEJS_COOP_SALVAGE_CONSENT:"1",
+ EVEJS_COOP_SALVAGE_GAME:"1"});
+process.on("exit",restoreSalvageEnv);
 const {createSalvageOffers}=require("../integration/coopSalvageNativeOffers.cjs");
 const {createSalvageConsent}=require("../integration/coopSalvageNativeConsent.cjs");
 const {createSalvageGameAuthority}=require("../integration/coopSalvageGameAuthority.cjs");

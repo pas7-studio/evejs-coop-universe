@@ -109,7 +109,12 @@ test("voluntary interest is durable and never claims a fleet join",()=>withFixtu
  const r=f.board.interest(701,"raid-30000144-202-901");
  assert.equal(r.status,"INTEREST_RECORDED");
  assert.match(r.note,/Interest only/);
- assert.equal(f.board.interest(701,"raid-30000144-202-901").status,"ALREADY_INTERESTED_OR_WRITE_UNCERTAIN");
+ // A repeat opt-in is now answered from the durable record it can also
+ // re-fsync, not from an ambiguous "already interested or write uncertain".
+ const again=f.board.interest(701,"raid-30000144-202-901");
+ assert.equal(again.status,"INTEREST_ALREADY_DURABLY_RECORDED");
+ assert.equal(again.characterID,701);
+ assert.equal(again.eventID,"raid-30000144-202-901");
 }));
 test("chat slash interface filters local/global and exposes consent controls",()=>withFixture({},f=>{
  f.board.nativeRaid({scene:f.scene,action:f.action});

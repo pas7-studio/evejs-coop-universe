@@ -1,17 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFileSync} from "node:fs";
-import {createRequire} from "node:module";
-const require=createRequire(import.meta.url);
-const compiled={exports:{}};
-const source=readFileSync(new URL("../integration/coopNativeStationArrival.cjs",import.meta.url),"utf8");
-new Function("require","module","exports",source)(id=>{
- if(id==="./coopNativeWarehouse")return {createWarehouse:()=>{throw Error("Unexpected native warehouse constructor")}};
- if(id==="./coopEconomyDestination")return require("../integration/coopEconomyDestination.cjs");
- if(id==="./coopAlifeNativeDeliveryEvidence")return require("../integration/coopAlifeNativeDeliveryEvidence.cjs");
- return require(id);
-},compiled,compiled.exports);
-const {createStationArrival}=compiled.exports;
+import {loadIntegration} from "./_support/integrationSandbox.mjs";
+const {createStationArrival}=loadIntegration("coopNativeStationArrival",{
+ "./coopNativeWarehouse":{createWarehouse:()=>{throw Error("Unexpected native warehouse constructor")}}});
 function env({manifestStatus="MANIFEST_DURABLY_PREPARED",verifyStatus="FULL_NATIVE_CARGO_DELIVERY_VERIFIED",
  enabled=true,failDeposit=false,wrongProofKey=false}={}){
  const original=process.env.EVEJS_COOP_NATIVE_HAUL_MANIFEST;
@@ -26,7 +17,8 @@ function env({manifestStatus="MANIFEST_DURABLY_PREPARED",verifyStatus="FULL_NATI
  const scene={systemID:30000144,staticEntities:[point],getEntityByID:id=>id===901?ship:null};
  const fleet={fleetID:77,systemID:30000144,haulerEntityIDs:[901]};
  const cargo=new Map([[501,{cargoID:501,entityID:901,coopHaulFleetID:77,
-  coopHaulFromMinerID:333,typeID:34,quantity:12,moduleID:0,transient:false}]]);
+  coopHaulFromMinerID:333,typeID:34,quantity:12,moduleID:0,transient:false,
+  ownerID:1000035}]]);
  const manifest={
   prepare:()=>{prepared++;return {status:manifestStatus,key:"30000144-77-100000",cargoIDs:[501]}},
   verify:()=>{verified++;return {status:verifyStatus,cargoIDs:[501],stacks:1,quantity:12,

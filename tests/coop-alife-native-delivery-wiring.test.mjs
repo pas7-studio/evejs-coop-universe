@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const manifest=JSON.parse(read("tests/scenarios/alife-native-delivery-e2e.json"));
@@ -28,12 +29,12 @@ test("event bridge is on original native arrival path and never writes cargo or 
  assert.match(station,/verifyFullNativeDelivery\(trip,manifestVerified\)/);
  assert.match(station,/alife-native-delivery-settled/);
  assert.ok(station.indexOf('manifestDirector.verify(')<station.indexOf('probe.observe("alife-native-delivery-settled"'));
- assert.match(patch,/"coopAlifeNativeDeliveryEvidence"/);
+ assert.equal(overlayRegistrations("coopAlifeNativeDeliveryEvidence"),1);
  assert.doesNotMatch(helper,/grantItem|removeNativeCargo|\.transact\(|setInterval|setTimeout|creditISK/);
 });
 test("empty cargo after committed last warehouse receipt is never an optimistic finish",()=>{
  const station=read("integration/coopNativeStationArrival.cjs");
- assert.match(station,/!stackCount&&!trip.completedStackCount&&!manifestDirector/);
+ assert.match(station,/!stackCount&&!trip.completedStackCount&&!trip.soldStacks&&!manifestDirector/);
  assert.match(station,/manifestVerified\?\.status!=="FULL_NATIVE_CARGO_DELIVERY_VERIFIED"/);
  assert.match(station,/NATIVE_FULL_MANIFEST_WITNESSED/);
 });

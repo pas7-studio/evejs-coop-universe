@@ -4,16 +4,10 @@ import fs from 'node:fs';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
 const path=require('node:path');
-const source=fs.readFileSync(new URL('../integration/coopNativeStationArrival.cjs',import.meta.url),'utf8');
-const compiled={exports:{}};
-new Function('require','module','exports',source)(id=>{
- if(id==='./coopNativeWarehouse')return {createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}};
- if(id==='./coopEconomyDestination')return require('../integration/coopEconomyDestination.cjs');
- if(id==='./coopStuckWarpRecovery')return require('../integration/coopStuckWarpRecovery.cjs');
- if(id==='./coopObserve')return require('../integration/coopObserve.cjs');
- return require(id);
-},compiled,compiled.exports);
-const {createStationArrival}=compiled.exports;
+import {loadIntegration} from './_support/integrationSandbox.mjs';
+const arrival=loadIntegration('coopNativeStationArrival',{
+ './coopNativeWarehouse':{createWarehouse:()=>{throw Error('Unexpected real warehouse construction')}}});
+const {createStationArrival}=arrival;
 function fixture(options={}){
  let time=1_000_000;
  const station={stationID:60010001,corporationID:1000035,solarSystemID:30000144};
@@ -85,7 +79,7 @@ test('an overdue route expires durably and replans instead of stranding the flee
 test('fleet does not restart delivery while route in progress',()=>{const f=fixture();f.dir.start(f.scene,f.fleet,f.now());assert.equal(f.dir.start(f.scene,f.fleet,f.now()+5000).status,'ROUTE_ALREADY_ACTIVE');assert.equal(f.warps.length,1)});
 test('no cargo skips unneeded station warp without creating goods',()=>{const f=fixture();f.cargo.clear();assert.equal(f.dir.start(f.scene,f.fleet,f.now()).status,'NO_ORE_TO_DELIVER');assert.equal(f.warps.length,0)});
 test('a fleet with no physical trip returns home instead of stalling forever',()=>{
- const {checkReturn}=compiled.exports;
+ const {checkReturn}=arrival;
  const previous=process.env.EVEJS_COOP_NPC_STATION_DELIVERY;
  process.env.EVEJS_COOP_NPC_STATION_DELIVERY='1';
  try{

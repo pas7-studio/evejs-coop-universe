@@ -1,21 +1,17 @@
 import test from "node:test";
 import {withEnv} from "./_support/env.mjs";
+import {loadIntegration} from "./_support/integrationSandbox.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const code=fs.readFileSync(new URL("../integration/coopNativeStationArrival.cjs",import.meta.url),"utf8");
-const injected={exports:{}};
-new Function("require","module","exports",code)(id=>{
- if(id==="./coopNativeWarehouse")return{createWarehouse:()=>{throw Error("UNEXPECTED_REAL_WAREHOUSE")}};
- if(id==="./coopAlifeNativeDeliveryEvidence")return{
+const {createStationArrival,checkReturn}=loadIntegration("coopNativeStationArrival",{
+ "./coopNativeWarehouse":{createWarehouse:()=>{throw Error("UNEXPECTED_REAL_WAREHOUSE")}},
+ "./coopAlifeNativeDeliveryEvidence":{
   verifyFullNativeDelivery:(trip,m)=>({
    status:"NATIVE_FULL_MANIFEST_WITNESSED",manifestID:trip.manifestID,
    cargoIDs:m.cargoIDs,haulerIDs:m.haulerIDs,stacks:m.stacks,quantity:m.quantity,
-   nativeMutation:false,iskCredited:false})};
- return require(id);
-},injected,injected.exports);
-const {createStationArrival,checkReturn}=injected.exports;
+   nativeMutation:false,iskCredited:false})}});
 const SYSTEM=30000142,FLEET=SYSTEM*32+1,SHIP=980000000002,STATION=60010001,CORP=1000035,CARGO=980200000111,MINER=980000000001,START=100000;
 function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
  const flags=["EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY",
@@ -27,7 +23,8 @@ function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
   position:{x:0,y:0,z:0},radius:100,mode:"STOP",pendingWarp:null};
  const scene={systemID:SYSTEM,staticEntities:[point],getEntityByID:id=>id===SHIP?ship:null};
  const cargo=new Map([[CARGO,{cargoID:CARGO,entityID:SHIP,coopHaulFleetID:FLEET,
-  coopHaulFromMinerID:MINER,typeID:34,quantity:13,moduleID:0,transient:false}]]);
+  coopHaulFromMinerID:MINER,typeID:34,quantity:13,moduleID:0,transient:false,
+  ownerID:CORP}]]);
  const manifestKey=SYSTEM+"-"+FLEET+"-"+START;
  let now=START,acks=0,warps=0,prepares=0,deposits=0,verifies=0,expiries=0;
  let writtenAck=false;
