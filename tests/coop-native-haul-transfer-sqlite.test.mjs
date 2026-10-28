@@ -1,4 +1,5 @@
 import test from "node:test";
+import {withEnv} from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,8 +15,7 @@ const keys=["EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC","EVEJS_COOP_NATIVE_ATOMIC_R
  "EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE","EVEJS_COOP_NATIVE_HAUL_CARGO",
  "EVEJS_COOP_NPC_STATION_DELIVERY"];
 function setup(t){
- const prev=Object.fromEntries(keys.map(k=>[k,process.env[k]]));
- keys.forEach(k=>process.env[k]="1");
+ withEnv(t,keys.map(k=>[k,"1"]));
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-alife10-haul-"));
  const filename=path.join(dir,"disposable-gamestore.sqlite");
  let db=new DatabaseSync(filename);
@@ -26,8 +26,7 @@ function setup(t){
  const get=key=>{const row=db.prepare('SELECT json FROM "npcCargo" WHERE key=?').get(key);
   return row?JSON.parse(row.json):null;};
  put("cargo",{[String(cargoID)]:ore});
- t.after(()=>{if(db)db.close();fs.rmSync(dir,{recursive:true,force:true});
-  for(const [k,v] of Object.entries(prev)){if(v===undefined)delete process.env[k];else process.env[k]=v;}});
+ t.after(()=>{if(db)db.close();fs.rmSync(dir,{recursive:true,force:true});});
  const miner={kind:"ship",itemID:minerID,ownerID:1000035,nativeNpc:true,
   transient:false,position:{x:0,y:0,z:0},
   nativeCargoItems:[{itemID:cargoID,typeID:34,volume:0.1,quantity:13}]};

@@ -1,13 +1,14 @@
 import test from 'node:test';
+import {swapEnv} from "./_support/env.mjs";
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 const require=createRequire(import.meta.url);
 const {transferCargo}=require('../integration/coopNativeHaulCargo.cjs');
 const flags=['EVEJS_COOP_NATIVE_HAUL_CARGO','EVEJS_COOP_NPC_STATION_DELIVERY',
  'EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC','EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD'];
-const initial=Object.fromEntries(flags.map(k=>[k,process.env[k]]));
 function flag(value='1') {for(const k of flags)process.env[k]=value;}
-test.after(()=>{for(const k of flags){if(initial[k]===undefined)delete process.env[k];else process.env[k]=initial[k];}});
+const restoreEnv=swapEnv(flags.map(k=>[k,undefined]));
+test.after(restoreEnv);
 const typeIDs={miningShip:5001,hauler:5002,ore:34};
 function fixture(opts={}){
  flag();

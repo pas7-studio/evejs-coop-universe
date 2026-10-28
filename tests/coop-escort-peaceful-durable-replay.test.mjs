@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import {createRequire} from "node:module";
+import {swapEnv} from "./_support/env.mjs";
 const require=createRequire(import.meta.url);
 const source=fs.readFileSync(new URL("../integration/coopEscortRuntime.cjs",import.meta.url),"utf8");
 const {createPeacefulEscortSettlement}=require("../integration/coopEscortPeacefulSettlement.cjs");
@@ -10,8 +11,7 @@ const FLAGS=["EVEJS_COOP_ESCORT_CONTRACTS","EVEJS_COOP_ESCORT_ROUTE_GATE",
  "EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_ESCORT_WALLET",
  "EVEJS_COOP_ESCORT_PEACEFUL_PAYOUT","EVEJS_COOP_ESCORT_DEPARTURE_WITNESS",
  "EVEJS_COOP_ESCORT_ROUTE_WITNESS","EVEJS_COOP_ESCORT_PEACEFUL_REPLAY"];
-const prev=Object.fromEntries(FLAGS.map(k=>[k,process.env[k]]));
-for(const k of FLAGS)process.env[k]="1";
+const restoreEnv=swapEnv(FLAGS.map(k=>[k,"1"]));
 const key="30000144-77-123",contractID="escort-30000144-77-123";
 const booking=()=>({manifestKey:key,contractID,systemID:30000144,
  fleetID:77,haulerID:901,stationID:6001001,corporationID:1000001,
@@ -192,5 +192,4 @@ test("peaceful payout scans a bounded cursor page then advances without re-credi
   "PEACEFUL_REPLAY_SCAN_OPTIONS_INVALID");
  assert.equal(f.scans(),2);
 });
-process.on("exit",()=>{for(const [k,v] of Object.entries(prev))
- if(v===undefined)delete process.env[k];else process.env[k]=v});
+process.on("exit",restoreEnv);

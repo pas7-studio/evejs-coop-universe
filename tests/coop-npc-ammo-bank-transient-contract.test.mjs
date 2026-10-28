@@ -1,4 +1,5 @@
-import test from "node:test";
+import test from "node:test";
+import {withEnv} from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -26,8 +27,7 @@ const copy = v => JSON.parse(JSON.stringify(v));
 function fixture(t) {
   const flags = ["EVEJS_COOP_NATIVE_ATOMIC_ROWS", "EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION",
     "EVEJS_COOP_NPC_STRICT_AMMO", "EVEJS_COOP_NPC_AMMO_DURABLE_CYCLE", "EVEJS_COOP_NPC_BANK_ATOMIC"];
-  const prev = Object.fromEntries(flags.map(k => [k, process.env[k]]));
-  flags.forEach(k => { process.env[k] = "1"; });
+  withEnv(t, flags.map(k => [k, "1"]));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "evejs-ammo-bank-contract-"));
   const db = new DatabaseSync(path.join(dir, "gamestore.sqlite"));
   db.exec('PRAGMA journal_mode=WAL;' +
@@ -55,9 +55,6 @@ function fixture(t) {
   t.after(() => {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
-    for (const [key, v] of Object.entries(prev)) {
-      if (v === undefined) delete process.env[key]; else process.env[key] = v;
-    }
   });
   const bank = (whenMs, mutate) => bridge.transact(["npcCargo"], tx => {
     const root = tx.get("npcCargo", "cargo");

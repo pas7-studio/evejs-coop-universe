@@ -1,4 +1,5 @@
 import test from "node:test";
+import { swapEnv } from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
@@ -16,13 +17,9 @@ const flags = [
   "EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC",
   "EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD",
 ];
-const initial = Object.fromEntries(flags.map((key) => [key, process.env[key]]));
-test.after(() => {
-  for (const key of flags) {
-    if (initial[key] === undefined) delete process.env[key];
-    else process.env[key] = initial[key];
-  }
-});
+// The fixture below turns these on; snapshot them now and put them back after
+// the file's tests, including the ones that were unset.
+test.after(swapEnv(flags.map((key) => [key, process.env[key]])));
 
 const ORE = 34;
 

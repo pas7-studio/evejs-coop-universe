@@ -1,4 +1,5 @@
 import test from "node:test";
+import {withEnv} from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -14,8 +15,7 @@ const ghost=id=>({cargoID:id,entityID:980000000401,ownerID:1000035,typeID:34,cat
 const copy=v=>JSON.parse(JSON.stringify(v));
 function fixture(t){
  const flags=["EVEJS_COOP_NATIVE_ATOMIC_ROWS","EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC","EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION"];
- const prev=Object.fromEntries(flags.map(k=>[k,process.env[k]]));
- flags.forEach(k=>process.env[k]="1");
+ withEnv(t,flags.map(k=>[k,"1"]));
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-alife11-mixed-"));
  const db=new DatabaseSync(path.join(dir,"gamestore.sqlite"));
  db.exec('PRAGMA journal_mode=WAL; CREATE TABLE "npcCargo" (key TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE "npcEntities" (key TEXT PRIMARY KEY,json TEXT NOT NULL)');
@@ -39,10 +39,7 @@ function fixture(t){
   cache,dirty,flushTimers,inFlightFlushes,transientPaths,dirtyRowKeys,fullDirty,
   rebuildFlushBaselineFromDisk:()=>{},invalidateNativeItems:()=>true,
   fatal:()=>fatal++});
- t.after(()=>{db.close();fs.rmSync(dir,{recursive:true,force:true});
-  for(const [key,v] of Object.entries(prev)){
-   if(v===undefined)delete process.env[key];else process.env[key]=v;
-  }});
+ t.after(()=>{db.close();fs.rmSync(dir,{recursive:true,force:true});});
  const change=(callback)=>bridge.transact(["npcCargo"],tx=>{
   const root=tx.get("npcCargo","cargo");
   assert.equal(root[String(transientID)],undefined);

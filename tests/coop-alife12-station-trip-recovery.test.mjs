@@ -1,4 +1,5 @@
 import test from "node:test";
+import {withEnv} from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {createRequire} from "node:module";
@@ -19,11 +20,7 @@ const SYSTEM=30000142,FLEET=SYSTEM*32+1,SHIP=980000000002,STATION=60010001,CORP=
 function fixture(t,{ackFail=false,missingAck=false,recoveryBlocked=false}={}){
  const flags=["EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_NATIVE_STATION_TRIP_RECOVERY",
  "EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE","EVEJS_COOP_NPC_STATION_DELIVERY"];
- const prev=Object.fromEntries(flags.map(x=>[x,process.env[x]]));
- for(const k of flags)process.env[k]="1";
- t.after(()=>{for(const [k,v] of Object.entries(prev)){
-  if(v===undefined)delete process.env[k];else process.env[k]=v;
- }});
+ withEnv(t,flags.map(k=>[k,"1"]));
  const station={stationID:STATION,corporationID:CORP,solarSystemID:SYSTEM};
  const point={kind:"station",itemID:STATION,position:{x:10000,y:0,z:0},radius:500};
  const ship={kind:"ship",itemID:SHIP,ownerID:CORP,nativeNpc:true,transient:false,

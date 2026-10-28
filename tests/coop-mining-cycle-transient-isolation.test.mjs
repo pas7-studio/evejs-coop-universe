@@ -1,4 +1,5 @@
 import test from "node:test";
+import {withEnv} from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -35,8 +36,7 @@ const rock = {entityID: rockID, yieldTypeID: oreTypeID, remainingQuantity: 1000,
 function fixture(t){
   const flags = ["EVEJS_COOP_NATIVE_ATOMIC_ROWS", "EVEJS_COOP_NATIVE_CARGO_TRANSIENT_ISOLATION",
     "EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC", "EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC"];
-  const previous = Object.fromEntries(flags.map((key) => [key, process.env[key]]));
-  flags.forEach((key) => { process.env[key] = "1"; });
+  withEnv(t, flags.map((key) => [key, "1"]));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "evejs-alife07-mixed-"));
   const db = new DatabaseSync(path.join(dir, "gamestore.sqlite"));
   db.exec('PRAGMA journal_mode=WAL; CREATE TABLE "npcCargo" (key TEXT PRIMARY KEY,json TEXT NOT NULL); CREATE TABLE "miningRuntimeState" (key TEXT PRIMARY KEY,json TEXT NOT NULL)');
@@ -68,9 +68,6 @@ function fixture(t){
   t.after(() => {
     db.close();
     fs.rmSync(dir, {recursive: true, force: true});
-    for (const [key, value] of Object.entries(previous)){
-      if (value === undefined) delete process.env[key]; else process.env[key] = value;
-    }
   });
   // The exact write set the ALIFE-07 settler produces for one mining cycle.
   const cycle = (mutate) => bridge.transact(["miningRuntimeState", "npcCargo"], (tx) => {

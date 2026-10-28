@@ -1,4 +1,5 @@
 import test from "node:test";
+import {withEnv} from "./_support/env.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {createRequire} from "node:module";
@@ -8,11 +9,7 @@ function fixture(t,mode="COMMITTED"){
  const flags=["EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE","EVEJS_COOP_NATIVE_HAUL_TRANSFER_ATOMIC",
   "EVEJS_COOP_NATIVE_HAUL_CARGO","EVEJS_COOP_NPC_STATION_DELIVERY",
   "EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC","EVEJS_COOP_NATIVE_HAUL_TRANSFER_GUARD"];
- const prev=Object.fromEntries(flags.map(k=>[k,process.env[k]]));
- for(const k of flags)process.env[k]="1";
- t.after(()=>{for(const [k,v] of Object.entries(prev)){
-  if(v===undefined)delete process.env[k];else process.env[k]=v;
- }});
+ withEnv(t,flags.map(k=>[k,"1"]));
  const container={exports:{}};
  // The module loads three co-op helpers at load time (cargo promotion, telemetry
  // and flag reading). Audit every *other* dependency strictly, but give those
