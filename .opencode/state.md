@@ -1,5 +1,34 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 15:20Z - the loop sells again; the last hop is the chipsets in a hold
+
+THREE refusals in a chain (fork 07f37c4), each measured:
+
+1. DEPARTURE. The station-trip journal compared a manifest's hull list BEFORE skipping
+   closed routes, so 40 manifests of earlier trips (old hull IDs) refused every trip with
+   ALIFE12_MANIFEST_FLEET_CONFLICT. A durable repair gives a fleet new hulls, so the fleet
+   sat "loaded" for hours. Closed routes are skipped first; an overdue live route whose
+   hulls no longer exist is expired by its own durable record.
+   PROOF: ROUTE_EXPIRED_STALE_CARGO -> fleet 960004641 back to "mining".
+
+2. DRAIN GATE. The mineral demand governor throttled everything, so 5 chipsets in a
+   hangar that really bids 53 700 were never lifted: 61 000 units of Tritanium were
+   within the 200 000 floor and ALLOW silenced the only selling path. The gate now lives
+   in the mineral branch (shouldStart); a product is decided by the station that bids.
+
+3. SALE BATCH. The arrival sale ended the whole batch on the first allowlisted type the
+   station did not bid for (NO_SEEDED_COUNTERPARTY), so the lifted chipsets were never
+   asked for. That status now skips a type, and lifted stock is asked for first.
+   PROOF 15:12:48 st60003724 SOLD 1193 x 17470 @ 1946.98 = 2 322 747 ISK - the first
+   sale after the fleet was unblocked. Type 444 added to the operator sell policy.
+
+WHERE THE 10 CHIPSETS ARE: 5 in hull 980000003532 (a fleet hauler, with real ore) and 5
+in orphan hull 980000003529. The next station arrival of 980000003532 asks the market for
+444; 23 real seeded bids exist (53 700 at 60014935, 54 374 at 60000361).
+
+NEXT: confirm the 444 sale on that arrival, then wire the automatic manufacture trigger
+(niche by measured margin) - the drain product path is otherwise closed.
+
 ## 2026-10-28 - test-parity round: Windows durability + stale fixtures
 
 Suite: 5837 pass / 332 fail / 92 skip (baseline) -> 6128 / 77 / 97 (full probe,
@@ -23,6 +52,20 @@ Closed since that probe (each with a fork mirror where the code changed):
   coop-player-industry-fence 3/9->12/0, cycle 0/1->1/0, native-boundary 9/2->11/0
   coop-skill-rate-cutover 8/13->21/0, coop-rescue-native-contract-wallet 2/6->8/0,
   coop-war-recovery-console 6/1->7/0, coop-native-live-capacitor 0/1->3/0
+
+Closed after the probe: npc-buyer-admin-control 12/2->12/0+2skip,
+npc-buyer-controlled-recovery 10/5->15/0, coop-flag-registry 3/1->4/0 (the
+registry had drifted by 40 flags), coop-corporate-real-sqlite 0/6->6/0,
+player-mining-native-adapter 6/1->7/0, upstream-patch-series 2/2->4/0.
+
+Everything still red is one of these four, in this order of value:
+  A. overlay/installer suites - they need scripts/overlay-spec.cjs, which another
+     session is editing right now (hook-inventory reports 9 long hooks vs a
+     baseline of 4, the anchors moved). Do not touch the anchors mid-flight.
+  B. the three owner decisions below.
+  C. integration/coopNativeMiningFleetDurable.cjs and coopVirtualWorldRuntime.cjs
+     assertions, also another session's files.
+  D. coop-integration-shims.test.mjs, untracked until B2 is decided.
 
 Still open and NOT ours to fix silently:
   - coop-escort-flight-stage-c 8/6: needs the missing ./coopAlifeNativeDeliveryEvidence
