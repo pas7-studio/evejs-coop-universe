@@ -8282,3 +8282,26 @@ Operational note: the work stack is being recreated by another session every few
 (`%TEMP%\opencode\keeper.cjs`) re-seeds both sides of the 30045344 <-> 30003837 border and tops both
 militia wallets up through a REAL settlement whenever they are missing; it never restarts a
 container and logs every answer to `%TEMP%\opencode\keeper.log`.
+
+## 2026-10-28T20:50Z - the map window: faction IDs, not militia corporations (DONE, live)
+
+`GetAllWarzonesOccupationStates` answered with 204 systems whose `occupierID`/`ownerID` were
+militia CORPORATIONS (1000180/1000181). The client indexes faction tables with those values
+(`fwwarzone/client/dashboard/warzoneMap.py`: `FACTION_ID_TO_COLOR[occupierID]`;
+`eve/.../maps/starModeHandler.py`: `nameByFaction[occupierID]` against `_OCCUPIER_FW_FACTIONS`),
+so every colouring pass raised KeyError, never finished and re-ran: measured 36
+`GetAllVictoryPointStates` a second, map window never opening. The same tiles also read
+`adjacencyState` without a default and the field was absent from the payload entirely.
+
+Fixed in the fork (`8fa69e2`) + the projection module: occupancy values are factions,
+`adjacencyState` (FL/SL/BL) is computed from the real gate graph and neighbour occupiers,
+`attackerID` names the other side or the owner a system was taken from, and the three service
+handlers now delegate to `warzonesResponse`/`localOccupationResponse` (fork == overlay-spec).
+
+Live after `docker build -t evejs-local .` + compose up: payload 204 -> 3 systems,
+`30045343 {owner 500001, occupier 500004, attacker 500001, contested true, SL}`,
+`30045344`/`30003837` FL. Tests: 9 in `tests/coop-war-client-view.test.mjs`.
+Remaining reds are other sessions': `coop-flag-registry` (EVEJS_COOP_NPC_MANUFACTURE_MIN_INPUT_RATIO,
+EVEJS_COOP_NPC_REFINERY_BATCH), `coop-overlay-dependencies`
+(coopVirtualWorldRuntime -> coopWarBountyEscrowSides not in overlay-spec names),
+`AUDIT_REGRESSION` (coopVirtualWorldRuntime.js 4995 lines > 4800, split in progress elsewhere).
