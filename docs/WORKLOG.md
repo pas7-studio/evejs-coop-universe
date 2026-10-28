@@ -1817,3 +1817,14 @@ Why: An allocator test ran a legacy transform that now applies zero edits; it te
 Detail: The native ID allocator fix is committed in the fork, so server/src/space/npc/ nativeNpcStore.js already contains it: the legacy patch that used to produce it applies zero edits, and the three tests that ran the patched fixture failed for a reason unrelated to the allocator. They now test the algorithm directly (no transform) and one case ties it back to the deployed file: the transient seed, the 
 Where: tests/_support/engineCheckout.mjs, tests/coop-native-durable-id-allocator.test.mjs
 Evidence: coop-native-durable-id-allocator 4/0 (was 0/3); engineCheckout.mjs used by the test
+### 2026-10-28T12:06Z · 79e5371 · L1 · docs(worklog): allocator test + engine checkout helper (TEST)
+
+Why: a front is one gate pair, not one direction; a different war holding the target froze the border so the Caldari/Gallente war could never open
+Where: docs/WORKLOG.md
+Evidence: node --test tests/coop-faction-war-opening.test.mjs -> 20 pass; live: war:500001-500004 opened, campaign 30045343 ASSAULT, native attack order accepted 980000043284->980000042223
+### 2026-10-28T12:12Z · ebd2e2a · OPS · ops(gates): nineteen Run-* source gates share one runner and one table
+
+Why: nineteen gate scripts duplicated the same six-step runner; one table plus one validated implementation replaces them
+Detail: Every gate script repeated the same six steps with its own wording: resolve the repo, create a report dir, resolve node, check the declared test files exist, refuse a scenario manifest that is not all-NOT_RUN, run `node --test` into a log and throw. A fix to one step never reached the other eighteen, and a renamed test file or a moved manifest schema was only found by an operator running the gate.
+Where: scripts/Run-Alife-Native-Delivery-Tests.ps1, scripts/Run-Alife-Native-Mining-Cargo-Tests.ps1, scripts/Run-Alife-Native-Mining-Cycle-Tests.ps1, scripts/Run-Alife-Native-Mining-Tests.ps1, scripts/Run-Alife07-Native-Mining-Atomic-Tests.ps1, scripts/Run-Alife08-Native-Mining-Durable-Tests.ps1, scripts/Run-Alife09-Native-Mining-Station-Gate.ps1, scripts/Run-Alife10-Native-Haul-Atomic-Tests.ps1, scripts/Run-Alife11-Native-Cargo-Isolation-Tests.ps1, scripts/Run-Alife12-Native-Station-Restart-Tests.ps1, scripts/Run-LW04B-Manufacturing-Gates.ps1, scripts/Run-LW04C-Industry-Recovery-Gates.ps1, scripts/Run-LW04C2-Original-Industry-Gates.ps1, scripts/Run-LW04C3-Rust-Sell-Gates.ps1, scripts/Run-LW04C3B-Sale-Finance-Gates.ps1, scripts/Run-LW04C4-Sold-Gates.ps1, scripts/Run-LW04E-Warehouse-Transfer-Gates.ps1, scripts/Run-LW04F-Source-Gates.ps1, scripts/Run-LivingWorld-Phase-Gates.ps1, scripts/lib/CoopG
+Evidence: all 19 gates run before/after: identical exit codes (8 pass/11 red) and banners; tests/coop-gate-specs.test.mjs 5/5
