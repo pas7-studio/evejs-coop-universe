@@ -21,8 +21,12 @@ test("strict opt-in cannot override vanilla default and does not add a second va
 test("source preflight hashes clean upstream blob, parses without executing, restores exact bytes",()=>{
  const preflight=read("scripts/verify-alife-mining-cargo-source.cjs");
  assert.match(preflight,/80e8aa4e43afc4665a2a885d03c2fd81e7171eee/);
- assert.match(preflight,/patchMiningCargo\(patched,true\)!==original/);
- assert.match(preflight,/new Function\("require","module","exports",patched\)/);
+ // The reversibility proof now lives in scripts/lib/pinned-source.cjs (one
+ // implementation for five verifiers), so the requirement is that this gate
+ // declares the real apply/revert pair, not that it inlines the comparison.
+ assert.match(preflight,/assertReversible\(/);
+ assert.match(preflight,/apply:\(t\)=>patchMiningCargo\(t\),revert:\(t\)=>patchMiningCargo\(t,true\)/);
+ assert.match(preflight,/new Function\("require","module","exports",text\)/);
  assert.doesNotMatch(preflight,/writeFileSync|fs\.writeFile|execSync|spawnSync|docker/);
 });
 test("all native allocator, write, restart, downstream and client scenarios remain NOT_RUN",()=>{

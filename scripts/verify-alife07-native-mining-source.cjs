@@ -1,35 +1,31 @@
 "use strict";
 // Read-only: applies ALIFE-06 then ALIFE-07 to original pinned upstream in memory.
-const fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
+const path=require("node:path");
+const {readPinned,assertReversible,runVerifier}=require("./lib/pinned-source.cjs");
 const {PINNED}=require("./verify-alife-native-mining-cycle-source.cjs");
 const {patch:stage6}=require("./coop-native-mining-cycle-conservation-patch.cjs");
 const {patch:stage7}=require("./coop-native-mining-atomic-source-patch.cjs");
+const DIR=path.join("server","src","services","mining");
 function verify(root){
  const results=[];
  for(const [name,pin] of Object.entries(PINNED)){
-  const file=path.join(root,"server","src","services","mining",name);
-  const original=fs.readFileSync(file,"utf8");
-  const lf=original.replace(/\r\n/g,"\n");
-  const hash=crypto.createHash("sha1")
-    .update("blob "+Buffer.byteLength(lf)+"\0").update(lf).digest("hex");
-  if(hash!==pin)throw Error("ALIFE07_SOURCE_PIN_MISMATCH:"+name);
+  const {canonical,sha}=readPinned(root,path.join(DIR,name));
+  if(sha!==pin)throw Error("ALIFE07_SOURCE_PIN_MISMATCH:"+name);
   const target="server/src/services/mining/"+name;
-  for(const format of ["LF","CRLF"]){
-   const before=format==="LF"?lf:lf.replace(/\n/g,"\r\n");
-   const six=stage6(before,target),seven=stage7(six,target);
-   new Function("require","module","exports",seven);
-   if(seven===six || stage7(seven,target)!==seven ||
-      stage6(stage7(seven,target,true),target,true)!==before)
-     throw Error("ALIFE07_SOURCE_REVERSIBILITY_FAILED:"+name+":"+format);
-   results.push({file:name,eol:format,status:"PASS"});
-  }
+  const modes=assertReversible({
+   variants:[{mode:"LF",text:canonical},
+    {mode:"CRLF",text:canonical.replace(/\n/g,"\r\n")}],
+   stages:[
+    {name:"conservation",apply:(t)=>stage6(t,target),revert:(t)=>stage6(t,target,true)},
+    {name:"atomic",apply:(t)=>stage7(t,target),revert:(t)=>stage7(t,target,true)}
+   ],
+   checkSyntax:(text)=>{new Function("require","module","exports",text);},
+   failure:(mode)=>"ALIFE07_SOURCE_REVERSIBILITY_FAILED:"+name+":"+mode
+  });
+  for(const mode of modes)results.push({file:name,eol:mode,status:"PASS"});
  }
  return {status:"PINNED_ALIFE07_SOURCE_VERIFIED",modifiedDisk:false,results};
 }
-if(require.main===module){
- const root=process.argv[2];
- if(!root){console.error("Pass original clean pinned EveJS Code root");process.exitCode=2;}
- else try{console.log(JSON.stringify(verify(path.resolve(root)),null,2));}
- catch(e){console.error(String(e.message||e));process.exitCode=1;}
-}
+if(require.main===module)runVerifier({verify,
+ usage:"Pass original clean pinned EveJS Code root"});
 module.exports={verify};
