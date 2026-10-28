@@ -6,7 +6,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createAtomicMiningSettler}=require("../integration/coopNativeMiningAtomic.cjs");
 const SEP="\u001f",SYSTEM=30000144,ROCK=41,SHIP=2001,OWNER=17,ORE=34;
 function fixture(t){
@@ -32,14 +32,14 @@ function fixture(t){
    if(previous[name]===undefined)delete process.env[name];else process.env[name]=previous[name];
   }
  });
- const writer=createSqliteAdapter(()=>db).claimTransactor();
+ const rows=gameStoreTransact(()=>db);
  const read=(table,key)=>{
   const row=db.prepare('SELECT json FROM "'+table+'" WHERE key=?').get(key);
   return row?JSON.parse(row.json):null;
  };
  let nextCargo=900001;
  const gameStore={
-  coopAtomicNativeRows:{transact(tables,mutation){return writer.transact(tables,mutation).result;}},
+  coopAtomicNativeRows:rows,
   read(table,p){
    const match=/^\/systems\/(\d+)\/entities\/(\d+)$/.exec(p);
    if(!match||table!=="miningRuntimeState")return{success:false};

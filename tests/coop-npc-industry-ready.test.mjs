@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";import os from "node:os";import path from "node:path";
 import {DatabaseSync} from "node:sqlite";import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createNpcIndustryScopedProof}=require("../integration/coopNpcIndustryGameStoreScope.cjs");
 const {createNpcIndustryReadyProof}=require("../integration/coopNpcIndustryReady.cjs");
 const SEP="\u001f",OP="npc-manufacture:9e3123226b71e9fe",NOW=1761390000000,FINISH=NOW+120000;
@@ -27,8 +27,7 @@ function fixture(overrides={}){
  put("industryBlueprintState","records"+SEP+"91",{itemID:91,typeID:1111,original:true,jobID:null});
  put("industryJobs","_meta",{nextJobID:970000000000000,version:1});
  put("identityState","version",1);put("identityState","nextItemID",1990000200);
- const writer=createSqliteAdapter(()=>db).claimTransactor(),gameStore={
-  transact:(t,fn)=>writer.transact(t,fn).result,isPoisoned:()=>false
+ const gameStore={...gameStoreTransact(()=>db),isPoisoned:()=>false
  };
  let now=NOW;
  const owners=(overrides.verifyNativeOwner||(()=>true)),outputs=(overrides.verifyNativeOutput||(()=>true));
@@ -111,7 +110,7 @@ test("duplicate operation identity cannot select one job arbitrarily",()=>withFi
 test("external native output or owner authority can veto readiness",()=>withFixture(f=>{
  f.install();f.setNow(FINISH);
  const row=f.snapshot(),other=createNpcIndustryReadyProof({
-  gameStore:{transact:(t,fn)=>{const writer=createSqliteAdapter(()=>f.db).claimTransactor();return writer.transact(t,fn).result;}},
+  gameStore:gameStoreTransact(()=>f.db),
   verifyNativeOwner:()=>false,verifyNativeOutput:()=>true,clock:()=>FINISH});
  assert.match(other.markReadyOnce(OP).error,/AUTHORITY_REJECTED/);assert.deepEqual(f.snapshot(),row);
 }));

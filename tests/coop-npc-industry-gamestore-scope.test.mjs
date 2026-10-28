@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";import os from "node:os";import path from "node:path";
 import {DatabaseSync} from "node:sqlite";import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createScopedSqlFacade,createNpcIndustryScopedProof}=require("../integration/coopNpcIndustryGameStoreScope.cjs");
 const {createNativeIndustryBindings}=require("../integration/coopNpcIndustryNativeBindings.cjs");
 const OP="npc-manufacture:9e3123226b71e9fe",NOW=1761390000000,SEP="\u001f";
@@ -28,8 +28,7 @@ function fixture(opts={}){
  put("industryBlueprintState","records"+SEP+"91",{itemID:91,typeID:1111,original:true,jobID:null});
  put("industryJobs","_meta",{nextJobID:970000000000000,version:1});
  put("identityState","version",1);put("identityState","nextItemID",1990000200);
- const writer=createSqliteAdapter(()=>db).claimTransactor();
- const gameStore={transact:(t,fn)=>writer.transact(t,fn).result,isPoisoned:()=>false};
+ const gameStore={...gameStoreTransact(()=>db),isPoisoned:()=>false};
  const proof=createNpcIndustryScopedProof({gameStore,verifyNativeQuote:()=>true,verifyNativeOwner:()=>true,
   verifyNativeOutput:()=>true,verifyNativeIdFloor:()=>true,
   buildNativeOutputItem:x=>({...x,stacksize:x.quantity,singleton:0,categoryID:8}),clock:()=>NOW,...opts});

@@ -6,8 +6,8 @@ import path from "node:path";
 import {spawnSync} from "node:child_process";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
 const {createCorporateSellFillSettlement}=
  require("../integration/coopPlayerMiningCorporateFillSettlement.cjs");
 const {createMiningCorporatePnl}=
@@ -35,7 +35,7 @@ function fixture(t,{lostCommitAck=false}={}){
  const file=path.join(dir,"gamestore.sqlite"),witnessFile=path.join(dir,"rust-test-double.json");
  const oldFlag=process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS;
  process.env.EVEJS_COOP_NATIVE_ATOMIC_ROWS="1";
- let db,writer,claim,dropAck=lostCommitAck;
+ let db,rows,claim,dropAck=lostCommitAck;
  const get=(table,key)=>{
   const row=db.prepare('SELECT json FROM "'+table+'" WHERE key=?').get(String(key));
   return row?JSON.parse(row.json):null;
@@ -48,7 +48,7 @@ function fixture(t,{lostCommitAck=false}={}){
   db.exec("PRAGMA journal_mode=WAL");
   for(const table of TABLES)
    db.exec('CREATE TABLE IF NOT EXISTS "'+table+'"(key TEXT PRIMARY KEY,json TEXT NOT NULL)');
-  writer=createSqliteAdapter(()=>db).claimTransactor();
+  rows=gameStoreTransact(()=>db);
  }
  function close(){db.close();db=null;}
  t.after(()=>{
@@ -120,7 +120,7 @@ function fixture(t,{lostCommitAck=false}={}){
   coopAtomicNativeRows:{
    mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,
    transact(tables,fn){
-    const result=writer.transact(tables,fn).result;
+    const result=rows.transact(tables,fn);
     if(dropAck){dropAck=false;throw Error("TEST_LOST_AFTER_DURABLE_COMMIT");}
     return result;
    }
@@ -159,12 +159,12 @@ function fixture(t,{lostCommitAck=false}={}){
   // then exits immediately without closing the connection or sending an ACK.
   const source=[
    'const {DatabaseSync}=require("node:sqlite");',
-   'const {createSqliteAdapter}=require(process.env.CORP_TEST_ATOMIC);',
+   'const {gameStoreTransact}=require(process.env.CORP_TEST_STORE);',
    'const {createCorporateSellFillSettlement}=require(process.env.CORP_TEST_SETTLEMENT);',
    'const db=new DatabaseSync(process.env.CORP_TEST_SQLITE);',
-   'const writer=createSqliteAdapter(()=>db).claimTransactor();',
    'const claim=JSON.parse(process.env.CORP_TEST_CLAIM);',
-   'const gameStore={coopAtomicNativeRows:{mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,transact:(tables,fn)=>writer.transact(tables,fn).result}};',
+   'const rows=gameStoreTransact(()=>db);',
+   'const gameStore={coopAtomicNativeRows:{mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,transact:(tables,fn)=>rows.transact(tables,fn)}};',
    'const service=createCorporateSellFillSettlement({gameStore,enabled:()=>true,clock:()=>1793030000000,readNativeClaim:()=>claim,quoteNativeFees:()=>({verifiedNative:true,transactionTaxCents:30,brokerFeeCents:15})});',
    'const result=service.settle({orderID:claim.orderID,cycle:claim.cycle});',
    'if(result.phase!=="GAMESTORE_COMMITTED")process.exit(13);',
@@ -172,7 +172,7 @@ function fixture(t,{lostCommitAck=false}={}){
   ].join("\n");
   const result=spawnSync(process.execPath,["-e",source],{
    env:{...process.env,CORP_TEST_SQLITE:file,
-    CORP_TEST_ATOMIC:require.resolve("../integration/coopGameStoreAtomic.cjs"),
+    CORP_TEST_STORE:require.resolve("./_support/sqliteStore.cjs"),
     CORP_TEST_SETTLEMENT:require.resolve(
      "../integration/coopPlayerMiningCorporateFillSettlement.cjs"),
     CORP_TEST_CLAIM:JSON.stringify(claim)},
