@@ -158,6 +158,8 @@ and no feature here exists only as an undocumented string edit inside a checkout
 - [docs/UPSTREAM.md](docs/UPSTREAM.md) — upstreams, compatibility, contribution policy
 - [docs/PUBLIC_ENDPOINT_PROTONVPN.md](docs/PUBLIC_ENDPOINT_PROTONVPN.md) — remote player:
   ProtonVPN port carries SSH, host/friend bring-up, symptom→fix table
+- [docs/COOP_PLAYBOOK.md](docs/COOP_PLAYBOOK.md) — end-to-end methodology: server,
+  host client, remote client, market seed, verification order, failure map
 - [docs/MARKET_SEED_ECONOMY_DESIGN.md](docs/MARKET_SEED_ECONOMY_DESIGN.md) — market seed audit,
   invariants, faction sectors, executed reseed
 
