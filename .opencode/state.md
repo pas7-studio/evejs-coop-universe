@@ -3951,3 +3951,18 @@ HELD reservation. No code change can hold a 5-minute combat window open across t
 SESSION LADDER: capture PROVEN, merit PROVEN (6 promotions), client view PROVEN (OCCUPIED),
 escrow PROVEN (real HELD 25 000 ISK from real earnings), attribution PROVEN (17:40:29),
 payout = the only rung not yet observed, gated by campaign survival, not by missing logic.
+
+## FW-041 mirror deployed; measured caveat (18:0xZ)
+The mirror exists and is written on every successful war-state write, but at 17:55:19 and
+17:57:09 the world CREATED an empty state again (another session's recreate), so the mirror now
+holds the EMPTY document (100 bytes) and `chooseWarRestore` correctly refuses it
+(`MIRROR_EMPTY_TOO`). That is the right behaviour but it means the mirror only protects a war
+that already exists at the moment of the write: the war must be opened first, then mirrored, then
+survive long enough to be fought.
+Current live state: `living-native-war-opening-blocked NO_OPENABLE_FRONT` every 30 s, wars none,
+mirror empty. Presence and the identity world still exist on the volume, so a front can still be
+derived the moment a navy-capable pair owns two adjacent systems.
+CONCLUSION for the payout rung: every other rung is proven (capture, merit, client view, escrow,
+attribution). Payout needs ~5 uninterrupted minutes of a funded war against an armed enemy, and
+this shared stack is recreated every 10-30 min by another session while the war row does not
+survive it. Options: a quiet window, or the atomic-row durability fix at the store level.
