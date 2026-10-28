@@ -2949,3 +2949,37 @@ requires `campaign.state` in [PREPARING, ASSAULT] and the defender's hull in the
 system - so a hull spawned for the DEFENDER side in the target system is legal, while an
 ATTACKER hull must be in `campaign.targetSystemID` during ASSAULT. A mismatch there is the
 most likely silent refusal.
+
+## INCIDENT 2026-10-28T11:25Z - I reset the war state by restoring an old runtime
+
+What I did: to kill a cascade of `X is not defined` errors from the split runtime
+(`eec175f`), I restored the pre-split single-file
+`server/src/space/coopVirtualWorldRuntime.js` (fork commit `6ca4557`).
+
+What broke: the pre-split file is an OLDER code base than the tree it replaced. On
+boot its opening phase logged `[CoopFactionWar] empty war state created (version 1)`
+and then opened `war:500004-500014` (Gallente vs ORE). The previous state
+(`war:500001-500004`, territories 30003837/30045344, the ASSAULT campaign) is GONE.
+Identity links also dropped from 100 to 43 (57 pilots now free).
+
+Current measured state after reverting `6ca4557` (fork is back to the split runtime):
+  roster 100, linked 43, free 57
+  campaign war:500004-500014:campaign:30045344 PREPARING rev 1
+  territory 30003837 -> 500014 SECURE, 30045344 -> 500004 CONTESTED
+  split runtime still throws `warpPointDirector is not defined` (native-raids phase)
+
+RECOVERY PLAN (do NOT repeat the restore):
+1. Never again swap a whole runtime file from an older commit into a newer tree.
+2. Fix the split properly: revert `eec175f` in history with conflict resolution, or
+   re-run `scripts/coop-split-module.cjs` with module-state extraction, so every
+   implicit global is declared. Known missing names so far: warFleetRegistry, bridge,
+   identityRegistry, economy, nativeGateTransfer, recognitionAnnouncer,
+   nativeAmmoWitness, warpPointDirector.
+3. Re-open the Caldari/Gallente war through the sanctioned path. The opening phase
+   picks a pair by adjacency and chose 500004-500014; add a confirm-gated
+   `war_open` admin action that calls the same store with the same proofs instead of
+   guessing, then re-register 30003837 (Gallente) and 30045344 (Caldari).
+4. Only then continue with the combat/registry work.
+
+Lesson recorded: a war state row is live data, not code. Any change that can create
+an "empty war state" must be proven on the agents stack first, never on the play stack.
