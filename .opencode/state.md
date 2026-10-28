@@ -3228,3 +3228,26 @@ profile row naming the caller). A micro-benchmark of `require()` on this shared 
 three targets are already ranked there (buildConfiguredConcordStartupRules memo,
 structureState.cloneValue, coopGameStoreAtomic reconcileObject); a real profile needs the
 agents stack, which another session is currently running (do not restart it).
+
+## Stale wiring assertions + one real gap found (2026-10-28, TEST)
+Three recorded-red test files were red for reasons that were not behaviour: a bare `\n`
+anchor against `integration/coopVirtualWorldRuntime.cjs`, which is committed with CRLF
+(byte-identical to the engine copy), and two checks that greped the LEGACY installer
+`scripts/patch-evejs-coop.cjs` for module names that now live in `scripts/overlay-spec.cjs`.
+`coop-alife-order-authority`, `coop-convoy-native-outcomes-overlay` and (partly)
+`coop-alife-native-buyer-wiring` are green again; the module checks now ask
+`overlayRegistrations()` for exactly ONE registration, which is stricter than a substring.
+Anchors must be `\r?\n` - `docs/DEVELOPMENT_DOCTRINE.md` already says EOL-agnostic.
+
+**Real gap, left standing on purpose:** `integration/coopAlifeStationAuthority.cjs` returns
+`products: rows.map(({requirements,...x})=>x)` and NO `materialNeeds`, while
+`coopAlifeNativeBuyerDispatch.cjs` requires `Array.isArray(economy.materialNeeds)` and
+`coopAlifeNativeBuyerRuntime.cjs#needs()` requires `observed.materialNeeds` plus a
+cross-pilot JSON match. Nothing in the repo or the fork ever writes `materialNeeds`
+(`grep -rn materialNeeds` finds only those two readers and the tests that fabricate it),
+so the opt-in COOP-049 buyer leg cannot fire even with its flag on - contradicting
+`docs/COOP_049_ALIFE_NATIVE_BUYER.md` §2 ("derived concrete materialNeeds"). The red case
+"station authority is genuinely read-only, never virtual inventory" is that alarm: do not
+delete the assertion, decide whether the authority should derive `materialNeeds` from
+`requirements` again or the buyer should read `products`. Feature is OFF by default, so
+this is not a live regression.
