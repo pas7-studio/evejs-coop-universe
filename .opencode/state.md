@@ -8721,3 +8721,43 @@ Three findings from the live event stream, each fixed and verified after a rebui
 Also this pass: the gateway coverage is measured (217 client request types, 159 named, 101
 answered with a default empty message) and the online-status rowset carries a real
 `blue.DBRowDescriptor`, so contact login/logout no longer throws in the client.
+
+## FW-054..FW-057 (23:0xZ): the payout was unreachable by design, and four gates are green again
+
+FW-055 is the review find that explains the whole day: a bounty payout names a CO-OP PILOT, and every
+co-op pilot id is a string ("coop-pilot-027"), but `coopWarTreasury` demanded `pos(command.pilotID)`
+- a positive INTEGER - and its row validator demanded `pos(r.paidToPilotID)` too. So
+`coopWarBounty.pay() -> PAYOUT` was refused with INVALID_TREASURY_PAYOUT before a single cent could
+move, and a row that somehow stored the real id would be rejected as WAR_TREASURY_CORRUPT_PAYOUT on
+the next read. Attribution, escrow and merit all worked; the last step could not be taken by design.
+Both a coop-pilot/coop-player id and a positive integer are accepted now.
+
+FW-054: the reservation ledger had no pruning and RESERVE refuses at 500 rows, so a long-lived world
+would eventually refuse every war with WAR_TREASURY_PURPOSE_UNAVAILABLE. Settled rows are dropped
+oldest-first only when room is needed, HELD is never touched, and the count is reported.
+
+FW-056: `processed` had a hard 2000-event cap that stopped every money command
+(WAR_TREASURY_EVENT_CAP). The oldest receipts are compacted into eventID -> sha256(signature): a
+replay is still DUPLICATE (deliberately without a receipt), a different command under that id is still
+a conflict, the archive is bounded.
+
+FW-057: `coopMilitiaWarPlayer` names a player kill `coop-player-<characterID>`, but every ledger
+behind it (kill merit, bounty, chest credit, market earned ledger) used the NPC-only regex, so a
+player could be recognised as a killer and then refused the identity it was handed. One shared
+predicate now accepts both; NPC-only features keep the strict form.
+
+Housekeeping that also closed real gates: six integration copies and six engine files had been
+rewritten with CRLF by an editing session on a repo that stores LF - restored (content identical).
+`overlay-spec.cjs` was missing four modules an earlier change committed (coopLoopTick,
+coopNpcDistribution, coopNpcGateCrossing, coopNpcManufactureTick) plus the new coopWarPilotID, and
+coopLoopTick needed its generated shim; the overlay gate is green again.
+
+Manual suite at 23:2xZ: 6453 tests, 1 failure - `A-Life station authority is genuinely read-only`
+in another session's `coopAlifeNativeBuyerRuntime` (its source pattern changed while its test still
+asserts the old text). Nothing in the war/bounty/treasury path is red.
+
+LIVE after the deploy (23:16Z): `war:500001-500011:campaign:30003837` reached OCCUPIED and the
+territory map now reads 30003837 = 500011 (a real capture by force), 30003836 = 500011,
+30045343 = 500020, 30045344 = 500011; the expired campaign got a successor `...:30045343:r2` in
+PREPARING with fresh escrow. The bounty payout itself still waits for an attributed kill in a funded
+campaign - the watcher is armed and will report it with the exact numbers.
