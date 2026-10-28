@@ -3590,3 +3590,23 @@ corporations currently have no income path (mining/refining corps do). Payout ne
 militia income doctrine or an owner decision to fund militia corporations from the real economy.
 `node scripts/coop-engine-audit.cjs` reports drift in `coopMissionInstanceProvenance.cjs` - that
 file belongs to another session's in-progress work and was left untouched.
+
+## war_diagnose now answers "can this border be fought at all" (14:4xZ, live)
+Live output from the running work stack right after the deploy:
+  navy status OK
+    500004 CAN_FIELD armed:1 coop_war_doctrine_500004_tackle
+    500010 NO_NAVY   armed:0
+    500011 CAN_FIELD armed:1 coop_war_doctrine_500011_tackle
+    500014 NO_NAVY   armed:0            <- ORE: mining loadouts only
+  war war:500010-500014 -> NO_NAVY_CAPABILITY:ATTACKER
+  war war:500004-500011 -> BOTH_SIDES_CAN_FIELD_NAVY
+So the two wars are now distinguishable without reading the opening skip list: one is a
+paper war nobody can fight, the other is a real border. Read-only; the capability comes from
+the same doctrine composition the sanctioned spawn path uses.
+NOTE for the next agent: `node scripts/coop-engine-audit.cjs` currently reports drift in
+`coopGameStoreAtomic.cjs` and `coopNativeStationTripJournal.cjs` (earlier it was
+`coopMissionInstanceProvenance.cjs`). Those are another session's in-progress files; this branch
+did not touch them and they were deliberately left alone.
+STILL OPEN (owner decision): militia corporations have no income (measured: 1000035/1000120/
+1000138 = 0 ISK, only ORE 1000129 holds 136.5 M), so no escrow and no bounty payout exists.
+FW-036/037 removed the deadlock and the silent failure, but they cannot create money.
