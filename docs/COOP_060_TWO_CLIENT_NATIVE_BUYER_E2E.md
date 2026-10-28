@@ -28,11 +28,14 @@ The twelve scenarios under `tests/scenarios/coop-060-native-player-seller-live-e
 
 Never run mutating tests on your existing `evejs-data` volume. Keep all native trading and operator recovery feature flags disabled in permanent-world configuration.
 
-## CI and merge gates
+## Local gates
 
-`.github/workflows/coop-native-economy-gate.yml` has been restored with two isolated jobs:
+`.github/workflows/coop-native-economy-gate.yml` was removed on 2026-10-28 together with
+the whole workflow directory (the owner prohibits remote CI). The two jobs it ran are
+now performed manually, in this order:
 
 1. Node 22 `node:sqlite` preflight; direct COOP-060 backend E2E; complete `Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests` and 12-scenario `NOT_RUN` honesty gate.
 2. Exact `gameboys84/EveJS@c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f` checkout, sequential reversible Rust market overlays, `cargo test --locked --all-targets`, and removal verification. This does **not** claim real networked Rust/gameplay E2E.
 
-Merge this test PR only once the two actual GitHub jobs PASS on its exact SHA; then repeat the workflow on merged main and collect manual-world evidence before enabling native trades. Unrelated faction-warfare and living-world draft PR stacks remain separate integration domains and should not be blindly mass-merged.
+Enable native trades only after both manual runs pass on the exact revision being
+shipped, and after manual-world evidence exists. No GitHub job runs any of this. Unrelated faction-warfare and living-world draft PR stacks remain separate integration domains and should not be blindly mass-merged.

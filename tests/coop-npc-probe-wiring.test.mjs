@@ -172,12 +172,12 @@ test("EX-03B6 native probe position changes are source-first broadcast transitio
  assert.match(manifest,/"coopNativeNpcProbeSceneTransition"/);
  assert.doesNotMatch(sweep,/live\.position=\{\.\.\.position\}/);
 });
-test("EX-03B6 CI includes real SQLite SIGKILL and native scene acceptance fixtures",()=>{
- const ci=read(".github/workflows/ex03-native-npc-probes.yml");
+test("EX-03B6 local gate includes real SQLite SIGKILL and native scene acceptance fixtures",()=>{
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  const script=read("scripts/verify-npc-probe-sqlite-crash.mjs");
- assert.match(ci,/npm ci --no-audit --no-fund/);
- assert.match(ci,/node scripts\/verify-npc-probe-sqlite-crash\.mjs/);
- assert.match(ci,/coop-native-npc-probe-scene-transition\.test\.mjs/);
+ assert.match(gate,/npm ci --no-audit --no-fund/);
+ assert.match(gate,/'scripts\/verify-npc-probe-sqlite-crash\.mjs'/);
+ assert.match(gate,/coop-native-npc-probe-scene-transition\.test\.mjs/);
  assert.match(script,/process\.kill\(process\.pid,"SIGKILL"\)/);
  assert.match(script,/EVEJS_GAMESTORE_DATA_DIR:data/);
  assert.match(script,/EVEJS_PINNED_SERVER/);
@@ -185,10 +185,10 @@ test("EX-03B6 CI includes real SQLite SIGKILL and native scene acceptance fixtur
 });
 
 test("EX-03B7 production probe state machines use attested native SQLite across kill windows",()=>{
- const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  const source=read("scripts/verify-npc-probe-feature-sqlite-crash.mjs");
  const original=read("scripts/verify-npc-probe-sqlite-crash.mjs");
- assert.match(workflow,/node scripts\/verify-npc-probe-feature-sqlite-crash\.mjs/);
+ assert.match(gate,/'scripts\/verify-npc-probe-feature-sqlite-crash\.mjs'/);
  assert.match(source,/createNativeNpcProbeFlight/);
  assert.match(source,/createNativeNpcProbeSweep/);
  assert.match(source,/createNativeNpcProbeLifecycle/);
@@ -216,7 +216,7 @@ test("EX-03 strict source provenance is checked by both scanner and launch repla
 test("EX-03B9 native scanner priority cannot be starved by virtual miners",()=>{
  const director=read("integration/coopNpcExpeditionDirector.cjs");
  const world=read("integration/coopVirtualWorldRuntime.cjs");
- const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  assert.match(director,/roles\[a\.pilotID\]==="patrol"/);
  assert.match(director,/isNativeProbeScout\(id,scene\.systemID\)/);
  assert.match(director,/SCANNER_PREFLIGHT_BUDGET=128/);
@@ -227,11 +227,12 @@ test("EX-03B9 native scanner priority cannot be starved by virtual miners",()=>{
  assert.match(world,/isNativeProbeScout:\(id,systemID\)=>/);
  assert.match(world,/store\.listNativeModulesForEntity\(id\)/);
  assert.match(world,/m\.groupID===481&&m\.categoryID===7/);
- assert.match(workflow,/feat\/ch22-23-npc-expedition-competition-20261026/);
- const push=workflow.split("  push:\n")[1]?.split("  workflow_dispatch:")[0];
- assert.ok(push,"EX03_PUSH_EVENT_REQUIRED");
- assert.match(push,/integration\/coopNpcExpedition\*\.cjs/);
- assert.match(push,/tests\/coop-npc-\*/);
+ // The workflow used to trigger on this feature branch and on those paths. The
+ // local gate states the same scope as data: the pinned upstream commit and the
+ // fixture that proves scanner priority, instead of as an event filter.
+ assert.match(gate,/PinnedSha = 'c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f'/);
+ assert.match(gate,/tests\/coop-npc-expedition-director\.test\.mjs/);
+ assert.match(gate,/tests\/coop-npc-probe-wiring\.test\.mjs/);
 });
 
 test("EX-03B11 native scanner handoff orders the scout before escorted patrols",()=>{
@@ -254,7 +255,7 @@ test("EX-03B12/B13 source checks protect the native scout-to-arbiter bridge",()=
  const director=read("integration/coopNpcExpeditionDirector.cjs");
  const live=read("tests/coop-npc-expedition-native-bridge.test.mjs");
  const tests=read("tests/coop-npc-expedition-director.test.mjs");
- const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  assert.match(director,/let ship,c,n;/);
  assert.match(director,/catch\{return null\}/);
  assert.match(director,/uncertainOrders\.add\(moveKey\)/);
@@ -265,7 +266,7 @@ test("EX-03B12/B13 source checks protect the native scout-to-arbiter bridge",()=
  assert.match(live,/createOrderBridge/);
  assert.match(live,/actual native order bridge\/arbiter accepts scout-first warp/);
  assert.match(tests,/ambiguous arbiter issue result is permanently fenced/);
- assert.match(workflow,/tests\/coop-npc-expedition-native-bridge\.test\.mjs/);
+ assert.match(gate,/tests\/coop-npc-expedition-native-bridge\.test\.mjs/);
 });
 
 test("EX-03B15/B16 original native hack, ItemStore title and wormhole source wiring",()=>{
@@ -277,7 +278,7 @@ test("EX-03B15/B16 original native hack, ItemStore title and wormhole source wir
  const fitting=read("integration/coopNpcScoutLoadout.cjs");
  const patch=read("scripts/patch-evejs-coop.cjs");
  const overlay=read("scripts/overlay-spec.cjs");
- const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  assert.match(runtime,/npcExpeditionDirector\.operations\(\)/);
  assert.match(runtime,/createNpcExpeditionOperations/);
  assert.match(runtime,/EVEJS_COOP_NPC_EXPEDITION_HACK==="1"/);
@@ -306,15 +307,15 @@ test("EX-03B15/B16 original native hack, ItemStore title and wormhole source wir
  for(const file of ["coop-npc-expedition-hacking.test.mjs",
   "coop-npc-expedition-loot.test.mjs",
   "coop-npc-expedition-operations.test.mjs",
-  "coop-npc-wormhole-transit.test.mjs"])assert.ok(workflow.includes(file));
- assert.match(workflow,/EVEJS_PINNED_HACKING_SOURCE/);
- assert.match(workflow,/EVEJS_COOP_NPC_EXPEDITION_HACK: '0'/);
- assert.match(workflow,/EVEJS_COOP_NPC_EXPEDITION_WORMHOLES: '0'/);
+  "coop-npc-wormhole-transit.test.mjs"])assert.ok(gate.includes(file));
+ assert.match(gate,/EVEJS_PINNED_HACKING_SOURCE/);
+ assert.match(gate,/EVEJS_COOP_NPC_EXPEDITION_HACK='0'/);
+ assert.match(gate,/EVEJS_COOP_NPC_EXPEDITION_WORMHOLES='0'/);
 });
 
 test("EX-03B17 native SQLite SIGKILL and two-client live acceptance remain explicit hard gates",()=>{
  const runtime=read("integration/coopVirtualWorldRuntime.cjs");
- const workflow=read(".github/workflows/ex03-native-npc-probes.yml");
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  const crash=read("scripts/verify-npc-expedition-loot-sqlite-crash.mjs");
  const e2e=JSON.parse(read("tests/scenarios/ex03-native-two-client-exploration-e2e.json"));
  assert.match(runtime,/expedition-wormhole-approach/);
@@ -326,15 +327,15 @@ test("EX-03B17 native SQLite SIGKILL and two-client live acceptance remain expli
  assert.match(crash,/items\.updateInventoryItem/);
  assert.match(crash,/items\.transferItemToOwnerLocation/);
  assert.match(crash,/items\.moveItemToLocation/);
- assert.match(workflow,/node scripts\/verify-npc-expedition-loot-sqlite-crash\.mjs/);
- assert.match(workflow,/EVEJS_PINNED_HACKING_SOURCE/);
+ assert.match(gate,/'scripts\/verify-npc-expedition-loot-sqlite-crash\.mjs'/);
+ assert.match(gate,/EVEJS_PINNED_HACKING_SOURCE/);
  assert.equal(e2e.releaseStatus,"NOT_VERIFIED");
  assert.ok(e2e.steps.length>=16);
  assert.ok(e2e.steps.every(x=>x.status==="NOT_RUN"),
   "source-only tests cannot make a fake two-client E2E pass");
 });
 
-test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and CI",()=>{
+test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and the local gate",()=>{
  const deploy=read("scripts/Deploy-Coop-RuntimeProbe.ps1");
  assert.match(deploy,/EnableNpcExpeditionHacking/);
  assert.match(deploy,/EnableNpcExpeditionLoot/);
@@ -349,7 +350,7 @@ test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and 
  const overlay=read("scripts/overlay-spec.cjs");
  const live=read("integration/coopVirtualWorldRuntime.cjs");
  const loot=read("integration/coopNpcExpeditionLoot.cjs");
- const ci=read(".github/workflows/ex03-native-npc-probes.yml");
+ const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  const crash=read("scripts/verify-npc-expedition-wreck-sqlite-crash.mjs");
  const pinned=read("tests/coop-npc-expedition-wreck-native-source.test.mjs");
  assert.match(source,/createNpcExpeditionWreckCustody/);
@@ -366,12 +367,12 @@ test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and 
  assert.match(overlay,/"coopNpcExpeditionWreckCustody"/);
  assert.match(live,/EVEJS_COOP_NPC_EXPEDITION_WRECK==="1"/);
  assert.match(loot,/IN_NATIVE_WRECK/);
- assert.match(ci,/EVEJS_PINNED_NPC_WRECK_SOURCE/);
- assert.match(ci,/EVEJS_PINNED_NPC_STORE_SOURCE/);
- assert.match(ci,/EVEJS_COOP_NPC_EXPEDITION_WRECK: '0'/);
- assert.match(ci,/tests\/coop-npc-expedition-wreck-custody\.test\.mjs/);
- assert.match(ci,/tests\/coop-npc-expedition-wreck-native-source\.test\.mjs/);
- assert.match(ci,/node scripts\/verify-npc-expedition-wreck-sqlite-crash\.mjs/);
+ assert.match(gate,/EVEJS_PINNED_NPC_WRECK_SOURCE/);
+ assert.match(gate,/EVEJS_PINNED_NPC_STORE_SOURCE/);
+ assert.match(gate,/EVEJS_COOP_NPC_EXPEDITION_WRECK='0'/);
+ assert.match(gate,/tests\/coop-npc-expedition-wreck-custody\.test\.mjs/);
+ assert.match(gate,/tests\/coop-npc-expedition-wreck-native-source\.test\.mjs/);
+ assert.match(gate,/'scripts\/verify-npc-expedition-wreck-sqlite-crash\.mjs'/);
  assert.match(crash,/process\.kill\(process\.pid,"SIGKILL"\)/);
  assert.match(crash,/gameStore\._sqliteTables\.has\("items"\)/);
  assert.match(crash,/gameStore\._sqliteTables\.has\("npcWrecks"\)/);

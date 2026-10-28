@@ -22,6 +22,6 @@ No tests run against the protected user's `evejs-data` volume. Live two-client m
 
 ## Local and GitHub CI
 
-`pwsh -File scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests` covers the Node A-Life/SQLite suite. `.github/workflows/coop-native-economy-gate.yml` checks out the **pinned EveJS** into a disposable directory, sequentially patches COOP-034/035/047/048 Rust, compiles and runs `cargo test --locked --all-targets`, and checks reversible overlay removal. Four new Rust tests are picked up by this cargo test.
+`pwsh -File scripts/Run-Alife-Economy-Tests.ps1 -IncludeExistingEconomyTests` covers the Node A-Life/SQLite suite. The same Rust check is now manual (the workflow directory was removed on 2026-10-28 because the owner prohibits remote CI): check out the **pinned EveJS** into a disposable directory, sequentially patch COOP-034/035/047/048 Rust, compile and run `cargo test --locked --all-targets`, and verify reversible overlay removal. Four new Rust tests are picked up by this cargo test.
 
 Acceptance for history: each successful NPC-to-player `fillID` must produce exactly one Rust `coop_npc_corp_buy_history` row and one unit change to daily `price_history.order_count`; a lost ACK or duplicate RPC must leave these totals unchanged.

@@ -545,8 +545,9 @@ supply or unattended multi-system campaigns. Future automatic
 demobilization/redeployment should reuse the fleet-release/native
 recruitment proofs, not erase war ownership or teleport.
 
-**CI and QA:** updated `.github/workflows/fw-war-recovery-source.yml`
-to run both military fleet registry and native gate staging tests
+**CI and QA:** the `fw-war-recovery-source.yml` workflow that ran both military fleet
+registry and native gate staging tests was deleted on 2026-10-28 (the owner prohibits
+remote CI); run the same suites locally instead
 alongside recovery. In particular test (a) two sequential legitimate
 transits of the same entity, (b) globally distinct serial IDs, (c)
 one native hull across all scenes, (d) unchanged native cargo and
@@ -924,7 +925,7 @@ Tested source suites:
 `tests/coop-war-player-militia-presence.test.mjs`,
 `tests/coop-war-militia-intel.test.mjs`,
 `tests/coop-war-militia-agent-frontline.test.mjs`,
-and previous FW-009B tests; Node 22 CI workflow is updated.
+and previous FW-009B tests; they run locally on Node 22 (no remote CI).
 
 Negative scenarios: duplicate login, stale shipID, disconnect,
 ship warp, not-yet-hydrated scene, absent original player ship,
