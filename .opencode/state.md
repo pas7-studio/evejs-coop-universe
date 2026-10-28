@@ -8495,3 +8495,42 @@ Verified clean this pass (no change): every rowset column the client `Index()`es
 (stationID, fromID, solarSystemID/value1/value2, locationID, warID, contactID, agentID,
 allianceID through `__header__`, itemID); no client call site dereferences a NULLABLE answer
 without a guard, including delayed `self.attr = RemoteSvc(...)` uses.
+
+## 2026-10-29T02:20Z - the error hunt found a process-killing bug in the gRPC gateway
+
+Owner asked to look at errors and warnings, not only stubs. The client reports its own Python
+tracebacks through `alert.SendClientStackTraceAlert`, and the server logs all 23 of them - that
+is the only client-side error channel we have (the gamelog stays empty).
+
+What the alerts said (client, 21:26 login burst): `ServerException(status_code=500,
+status_message="invalid character on request")` on user licences, insurgency corruption and
+suppression, corp goals (`GetMineWithRewards`, `GetAllWithRewards`) and campaigns
+(`CampaignRequestError`), plus `FlatbufferContentProvider ... Internal Server Error(L500)` and
+client-side `IOError: [Errno 9] Bad file descriptor` tasklet noise.
+
+Reproduced the server side with a plain TLS+HTTP/2 unary Ping against 127.0.0.1:443 (the
+listener the launcher proxy CONNECTs to):
+
+    ERR_HTTP2_TRAILERS_ALREADY_SENT  at ServerHttp2Stream.onStreamTrailersReady
+    -> uncaughtException -> the whole server process exits (container `Exited (1)`)
+
+Cause: an HTTP/1 compat `"request"` listener on the HTTP/2 secure server. Node engages an
+`Http2ServerResponse` for EVERY stream as soon as that listener exists, and the compat response
+sends its own trailers after the gateway already sent `grpc-status`. Fixed in fork `ba187e3`:
+listener removed, stream handler extracted and wrapped so a throw cannot end the process.
+
+Verified after the fix: three TLS+HTTP/2 calls returned `status 200`, `grpc-status 0` in
+trailers, and the container stayed healthy.
+
+Second fix in the same commit: `express.json()` parsed every body regardless of content type, so
+binary gRPC frames got an HTML 500 the client reports as "invalid character on request". JSON is
+now gated on `application/json`, and a gateway path that lands on the plain-HTTP port logs the
+real diagnosis instead of echoing silently. Third: `essMgr`/`DynamicResourceCacheMgr` called a
+handler that legitimately answers null an "Unhandled method fallback" (that is the
+`GetDataForClientSolarSystem` warning, five times per login).
+
+Still open on the client side: the running client sends NO `CONNECT` and NO HTTP/2 traffic to
+the local listener, so its gRPC calls never reach us - the launcher (`Play.bat`) is what exports
+`http_proxy`/`https_proxy` for the client, and this session was launched without it. With the
+crash gone, relaunching through the launcher makes the gRPC surfaces (advantages, licences,
+corp goals, campaigns, insurgency) reachable.
