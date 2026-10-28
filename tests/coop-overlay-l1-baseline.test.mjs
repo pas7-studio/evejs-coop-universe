@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
-import {readFileSync} from 'node:fs';
+import {readFileSync, readdirSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {dirname, join} from 'node:path';
 
@@ -26,14 +26,22 @@ test('every L1 patch target is recognised as an overlay baseline', ()=>{
   }
 });
 
+// The manifest is the declaration, so copying its file list into this test only
+// creates a second place to forget. The invariants that actually matter are: the
+// declared series is exactly what sits on disk, it is numbered without gaps, and
+// every entry still carries the hash the repo pins it by.
 test('the patch series is what the manifest declares', ()=>{
-  const files = (manifest.patches || []).map((entry) => entry.file).sort();
-  assert.deepEqual(files, [
-    '0001-native-npc-store-export-list-cargo.patch',
-    '0002-native-npc-capacitor-recharge.patch',
-    '0003-native-npc-sessionless-capacitor.patch',
-    '0004-native-mining-fleet-retained-actor.patch',
-    '0005-native-npc-durable-not-dormant.patch',
-    '0006-native-npc-live-capacitor-wins.patch',
-  ]);
+  const declared = (manifest.patches || []).map((entry) => entry.file).sort();
+  const onDisk = readdirSync(join(root, 'patches/upstream'))
+    .filter((name) => name.endsWith('.patch')).sort();
+  assert.deepEqual(declared, onDisk, 'manifest and patches/upstream disagree');
+
+  declared.forEach((name, index) => {
+    assert.equal(name.slice(0, 4), String(index + 1).padStart(4, '0'),
+      `${name} is out of sequence`);
+  });
+  for (const entry of manifest.patches || []) {
+    assert.match(entry.sha256 || '', /^[0-9a-f]{64}$/, `${entry.file} has no pinned sha256`);
+    assert.ok((entry.files || []).length > 0, `${entry.file} declares no targets`);
+  }
 });

@@ -68,9 +68,14 @@ test("inspector detects missing copy registration, native source spec, and tests
   ]};
   const unregistered = {...registry, names: registry.names.filter(n => n !== f.overlayModules[0]),
     specs: registry.specs.filter(spec => spec.file !== f.installerSpecs[0])};
+  // The inspector joins the virtual root with path.join, so the paths it probes
+  // carry the host separator. Catalog entries are always written with "/", and a
+  // raw endsWith() against them silently answers "exists" on Windows.
+  const posix = value => value.split(/[\\/]/).join("/");
   const report = inspectCatalog(local, {
     root: "/virtual", registry: unregistered, codePath: "/pinned", nativeRevision: catalog.upstreamPin,
-    exists: file => !file.endsWith(f.tests[0]) && !file.endsWith(f.nativeEntrypoints[0])
+    exists: file => !posix(file).endsWith(posix(f.tests[0]))
+      && !posix(file).endsWith(posix(f.nativeEntrypoints[0]))
   });
   assert.equal(report.counts.integrationGaps, 1);
   assert.equal(report.features[0].status, "INTEGRATION_GAP");
