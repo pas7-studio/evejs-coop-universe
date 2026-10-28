@@ -1,5 +1,37 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 13:50Z - manufactured goods EXIST; selling them waits on a fleet restore
+
+PROVEN on `evejs-agents` (no client):
+  blueprint 1076 (Mining Survey Chipset I Blueprint) seeded at station 60014935
+  -> 5-run job consumed 5 555 Tritanium (72 399 -> 66 844)
+  -> 5 x typeID 444 produced in the corporation hangar
+  -> receipt coop-native-industry/receipts/coop-job:1000129:60014935:1076:1793194860012.json
+     with recipe, materials, installedAt/completedAt.
+  The station bids 53 700.08 for that item, so the product has a real buyer.
+
+HOW (fork 6c66f05): the native job pipeline is session-bound (quoteIndustryJob derives owner,
+facility, blueprint access and slots from a client session) and this world has no client, so
+production runs through space/coopNpcManufacture.js with the SAME native static-data recipe and
+the SAME inventory primitives (takeItemTypeFromOwnerLocation / grantItemToOwnerLocation) that the
+job pipeline uses - the pattern the co-op refinery already proved. It refuses unless the
+corporation really owns the blueprint item and the materials in that hangar; the journal is
+INSTALLED -> COMPLETED so a crash can never double-produce; time is compressed only by
+EVEJS_COOP_INDUSTRY_TIME_SCALE (0.002 on the agent stack).
+
+Selling a product reuses the proven arrival sale: the lift now carries ANY corp-owned hangar
+stack the station really bids for (EVEJS_COOP_LIFT_ANY_TYPE=1), and the drain prefers a station
+holding a manufactured good over one holding refinery minerals (station rotation + 30 min
+cooldown when a visit sells nothing).
+
+BLOCKER for the last step (not in our modules): after the 13:49 restart the two 30000145 mining
+fleets did NOT come back -
+  [ALIFE08] slot 30000145-1 -> NEEDS_OPERATOR_REPAIR ALIFE08_REPAIR_SPAWN_COUNT_MISMATCH
+  [ALIFE08] slot 30000145-2 -> NEEDS_OPERATOR_REPAIR ALIFE08_REPAIR_MARKER_MISMATCH
+so there is no hauler to carry the chipsets to the station. That repair path is
+space/coopNativeMiningFleetDurable.js (another session's module); it must be fixed or the slot
+records repaired before the produced goods can be sold. Do NOT wipe volumes to force restore.
+
 ## 2026-10-28 13:10Z - surplus drains: minerals finally sell, stock is falling
 
 Measured on `evejs-agents` (headless):
