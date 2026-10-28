@@ -8655,3 +8655,45 @@ alerts are `IOError: [Errno 9] Bad file descriptor` - a client tasklet writing i
 stdout (the launcher's window), not a server answer.
 
 Pending restart: the patrol reason (already in the container) and nothing else.
+
+## FW-050..FW-053B (22:3x-22:5xZ): restart verification found four real defects, all fixed and tested
+
+The owner asked to verify that everything really restores after a server restart. Measured first,
+then fixed:
+
+WORKS (evidence): 142 runtime runs today; each boot emits `living-native-war-state RESTORED`; the
+FW-041 mirror is now 11 037 B and equals the atomic `state-v1` row (both non-empty); territory
+revisions survive (30003836 r2, 30003837 r2, 30045343 r3 - captures are never reset);
+`living-native-durable-recovery OK`, `alreadyPhysical 9-11`, `errors 0` on the last six boots; the
+same campaignIDs/startedAt live across every recreate and continue through mobilization -> assault
+-> attack orders -> casualties -> merit.
+
+FW-050 (money, found by the verification): `corporationRuntime` stores "coop-faction-war" as a row
+GROUP, so FW-042's legacy write of `/coop-faction-war/state-v1` marked the whole group dirty and the
+next flush rebuilt every member from the in-memory cache - including `treasury-v1`. Measured: the
+treasury row came back with 3 reservations and `nextJournalID` 3 while events had used escrow
+journals ...004-...006, and two ASSAULT campaigns lost HELD escrow while the wallets kept the debits
+(1000120: -25 000 ISK with no reservation behind it). The legacy copy was never read back
+(`warStateStore.read` reads the flat atomic row; boot prefers the live record, else the file mirror),
+so it is now OFF unless `EVEJS_COOP_WAR_STATE_LEGACY_MIRROR=1` exactly.
+
+FW-051 (review): `collectPresence` DROPPED a hull whose link had drifted, while `warPresencePilots`
+counted it where the hull really is (FW-049). Two presence projections for one world: a border could
+be owned by a faction the opening planner could not see. The native record now decides the system.
+
+FW-052 (review): a blocked border reported only TARGET_ALREADY_CONTESTED - the 19:14 campaign held
+that same string for an hour, so a legitimate "already fighting here" looked identical to a stuck
+world. The skip now names blockingCampaignID, blockingWarID, sameFactionPair, sourceCampaignID.
+
+FW-053/053B (money, review): an EXPIRED campaign never released its escrow - the treasury refunded
+only ENDED wars and CANCELLED campaigns, and the live runtime never supplied `authorizeRefund` at all
+(default `() => false`). Measured: `war:500011-500020:campaign:30045343` was EXPIRED with 2 500 000
+cents still HELD. EXPIRED is now terminal-refundable, the runtime has a real refund authority, the
+tick refunds what it just expired, and a reconcile pass recovers escrow left behind by an expiry that
+happened before the process started. PROVEN LIVE 22:48:21Z:
+`living-native-war-bounty-refunded APPLIED campaign=war:500011-500020:campaign:30045343
+faction=500011 corporation=1000138 cents=2500000 journal=8000000000000009`.
+
+Open review notes (not changed, need an owner decision): (a) the treasury has no pruning of terminal
+reservation rows, so after 500 campaign-sides `RESERVE` refuses forever - a capacity ceiling rather
+than a bug; (b) `coopWarBounty` exports TREASURY_KEY/CASUALTY_KEY that nothing imports (dead).
