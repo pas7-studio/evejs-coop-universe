@@ -37,7 +37,10 @@ test("repeated central install never appends COOP-034 after COOP-035",()=>{
 test("mixed old and new NPC buy guards fail closed rather than suppressing buying",()=>{
  const original=patch(guard(SRC));
  const mixed=original.replace(ANCHOR,LINE+"\n"+ANCHOR);
- assert.throws(()=>guard(mixed),/MIXED_COOP034_COOP035/);
+ // The mixed-state case is folded into one drift refusal that also covers a
+ // truncated corporate branch; the invariant is that a source carrying BOTH
+ // guards is refused, never silently re-patched.
+ assert.throws(()=>guard(mixed),/NPC_BUY_GUARD_CORPORATE_PATCH_DRIFT/);
 });
 test("guard rejects all not-PURCHASED results without stock seller fallback",()=>{
  const modified=patch(guard(SRC));
