@@ -38,7 +38,7 @@ services:
       # world already tracked had a live campaign; these two systems are the real
       # stargate neighbours of the captured 30045344, so the world can derive a
       # fresh front from real travel instead of a hand-made record.
-      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30045343,30045342"
+      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30003836,30045343,30045342"
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
@@ -63,6 +63,11 @@ services:
       # recipes (materials really leave the hangar, the product really appears), and a
       # manufactured item is the cargo the drain sells first.
       EVEJS_COOP_NPC_MANUFACTURE: "1"
+      # Distribution: the loop can decide what to ship to a system that really bids (Jita
+      # 30000142 is one reciprocal gate from New Caldari 30000145) and advance an
+      # operator-journaled gate crossing with the native transfer's own verdict. It never
+      # plans or starts a crossing by itself, and ARRIVED needs full native proof.
+      EVEJS_COOP_DISTRIBUTION: "1"
       # 1800 s of native job time is 3.6 s here, so a proof does not wait half an hour.
       EVEJS_COOP_INDUSTRY_TIME_SCALE: "0.002"
       # The lift carries any corp-owned stack the station really bids for, not only the
