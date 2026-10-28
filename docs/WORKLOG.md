@@ -1895,3 +1895,9 @@ Why: headless sandbox whitelist predated the module split; coordinator async lab
 Detail: coop-headless-startup-evidence stubbed require() with a whitelist that predates the module split, so it died on './coopVirtualWorldRuntime.pure' - i.e. it was red because of a refactor, not because startup evidence changed. The stub now loads the two real leaf modules (the pure sibling and coopJsonFileCache) and keeps failing loudly on anything else, so the boot path under test is still isolated. 
 Where: tests/coop-headless-startup-evidence.test.mjs, tests/coop-living-world-phase-coordinator.test.mjs
 Evidence: coop-headless-startup-evidence 3/3, coop-living-world-phase-coordinator 22/22; full parity PARITY_OK; coop-engine-audit AUDIT_OK
+### 2026-10-28T13:21Z · 34b871e · TEST · test(stage-j): follow the salvage phases to their new dispatcher; re-record parity
+
+Why: stage-j salvage wiring anchored on safeNpcPhase which the phase coordinator replaced, leaving a vacuous empty slice; snapshot recorded at 222/13 was stale
+Detail: The Living World tick now dispatches through the phase coordinator, so safeNpcPhase("native-salvage-*") no longer exists in the runtime. Both cases were red for that alone, and the second one was worse than red: its slice() of the telemetry block came back empty, so its three matches were vacuous. The slice is now anchored on the phase labels and asserts the block was actually found. Re-recorded d
+Where: docs/evidence/test-parity.json, tests/coop-stage-j-auto-market-wiring.test.mjs
+Evidence: coop-stage-j-auto-market-wiring 5/5; parity re-recorded 234 pass / 1 fail, compare mode PARITY_OK
