@@ -2142,3 +2142,14 @@ Why: the FW dashboard could not open: facWarMgr answered five client getters wit
 Detail: The faction-warfare dashboard cannot build a single panel without GetFactionMilitiaCorporation (KeyError(None) via cfg.eveowners) and GetCorpFactionalWarStatus (AttributeError on None.startDate). Both, plus the corp and alliance war-faction getters and the faction corporation list, now come from the native faction record and the character's persisted war faction. Two more client-domain rules are p
 Where: integration/coopFactionWarMgrView.cjs, integration/coopNpcGateCrossing.js, integration/coopNpcManufactureTick.js, integration/coopNpcRefineryTick.js, integration/coopWarAdvantage.cjs, integration/coopWarClientView.cjs, scripts/overlay-spec.cjs, tests/coop-facwar-mgr-answers.test.mjs, tests/coop-war-advantage.test.mjs, tests/coop-war-client-view.test.mjs
 Evidence: fork 331cffa; live: militia 500001->1000180, corpStatus null (not enlisted), factionCorps [], warzones 3 systems with faction ids + FL/SL + attackerID; tests 10/7/6 green; image rebuilt, server healthy. Client rendering not yet observed
+### 2026-10-28T21:07Z · 921c55e · L2 · alife19: one loop tick and the verified gate crossing, with tests
+
+Why: Each loop phase cost a stock hook line, and the last economic link (moving stock to a buying system) had no journaled, verifiable crossing at all
+Where: integration/coopFactionWarMgrView.cjs, integration/coopLoopTick.cjs, integration/coopNpcGateCrossing.cjs, tests/coop-facwar-mgr-answers.test.mjs, tests/coop-npc-gate-crossing.test.mjs
+Evidence: one stock hook line drives refinery+manufacture (live events 21:04:39/21:06:09); 6/6 tests tests/coop-npc-gate-crossing.test.mjs; audit green except the inherited ratchet
+### 2026-10-28T21:12Z · 8666d97 · L2 · test(fw): pin the payload contracts the client dereferences
+
+Why: statistics tab asked six facWarMgr getters the server never answered, and a buildDict import was missing in the first cut
+Detail: The client's own bytecode is the specification. These cases name the field each module reads without a default and fail if the server renames or drops it: the map rowsets the client Indexes (stationID, fromID, solarSystemID/value1/value2), the war rowset column (warID), the warzone occupation KeyVal, and every facWarMgr getter the dashboard and the statistics tab call. Fork: 9a2a113.
+Where: tests/coop-client-contract-payloads.test.mjs
+Evidence: fork 9a2a113; live: topAndAll groups 1/2/32, militia keyed 500001/500004, factionInfo systemsCount 1/2 from real territories; tests coop-facwar-mgr-answers 10, coop-client-contract-payloads 7, coop-war-client-view 10; image rebuilt, server healthy
