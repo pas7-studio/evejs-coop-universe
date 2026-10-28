@@ -8,6 +8,10 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createWarRecoverySocket}=require("../integration/coopWarRecoverySocket.cjs");
 const secret="ABCD".repeat(16);
+// The recovery socket is a Unix-domain socket service and the module refuses to
+// start on a Windows host by design (it names the Linux container instead), so
+// these cases cannot run here.
+const unixOnly={skip:process.platform==="win32"&&"Unix-domain socket; use the Linux container"};
 async function fixture(){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"fw-war-socket-"));
  const runDir=path.join(root,"private");
@@ -48,7 +52,7 @@ async function fixture(){
  return {root,server,send,seen,secretFile,socketPath,env,
   cleanup:()=>{server.close();fs.rmSync(root,{recursive:true,force:true})}};
 }
-test("Unix socket denies wrong key and does not pass client-supplied identity",async()=>{
+test("Unix socket denies wrong key and does not pass client-supplied identity",unixOnly,async()=>{
  const f=await fixture();
  try{
   assert.deepEqual(await f.send({credential:"bad",operation:"review",
@@ -60,7 +64,7 @@ test("Unix socket denies wrong key and does not pass client-supplied identity",a
   assert.equal(f.seen[0].req.operator.principalID,"local-war-operator");
  }finally{f.cleanup()}
 });
-test("Unix socket approves only explicit apply, not arbitrary mutations",async()=>{
+test("Unix socket approves only explicit apply, not arbitrary mutations",unixOnly,async()=>{
  const f=await fixture();
  try{
   const x=await f.send({credential:secret,operation:"drop-database",
@@ -74,7 +78,7 @@ test("Unix socket approves only explicit apply, not arbitrary mutations",async()
   assert.equal(f.seen[0].req.action,"FINISH");
  }finally{f.cleanup()}
 });
-test("missing group-safe key mode prevents recovery socket startup",()=>{
+test("missing group-safe key mode prevents recovery socket startup",unixOnly,()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"fw-war-key-"));
  try{
   const secretFile=path.join(root,"key"),socketPath=path.join(root,"war.sock");
