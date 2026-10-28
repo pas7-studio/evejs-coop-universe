@@ -27,6 +27,9 @@ Still open and NOT ours to fix silently:
     emits materialNeeds while the buyer dispatch requires it (money-moving, flags OFF).
   - coop-alife13-startup-cargo-audit 22/1: ordering assertion lives in
     integration/coopNativeMiningFleetDurable.cjs, another session's file.
+  - PARITY_REGRESSION now names coop-virtual-world-split: the faction-war work added a
+    diagnoseNavy export to coopVirtualWorldRuntime while that suite's frozen public
+    surface list still lacks it (f36ee344, not ours; do not edit either side).
 
 ## 2026-10-28 14:15Z - the fleet is repaired; the produced goods still need a named, near ship
 
