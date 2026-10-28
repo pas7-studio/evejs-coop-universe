@@ -4034,3 +4034,20 @@ no longer erase a war that already exists.
    NATIVE_DESTRUCTION_ATTACKER_PROVIDED` (proven at 17:40:29 with merit PROMOTED).
 5. Payout shows as the treasury reservation flipping HELD -> PAID with `paidToPilotID`, plus
    `living-native-war-merit` for the killer. Nothing else is required; no code left to write.
+
+## FW-043 works: the map rebuilds itself (18:39Z), and it exposes the real frontier shape
+`living-native-war-territory-bootstrap REGISTERED_FROM_PRESENCE added:6` - territories are back
+without any hand-written record: 30000142/30000144/30000145/30003837 = 500014, 30045342 = 500010,
+30045344 = 500011. The empty-map deadlock is gone; after any recreate the world can own ground,
+project sovereignty and derive fronts again.
+Measured consequence, and it is the next real decision: MINING presence decides ownership, so ORE
+(500014, no navy at all) now owns four systems, and the only navy-owned system is 30045344
+(500011) whose neighbours are ORE/500010 - both NO_NAVY. So FW-036 correctly refuses every front,
+and the frontier is starved of navy-vs-navy borders even though the map is healthy.
+Two honest options (owner decision):
+  a) weight ownership by ARMED presence only (a mining fleet cannot claim military control of a
+     system), which is closer to the FW doctrine and would let 500004/500011 own their borders;
+  b) keep presence as is and always seed a navy into the neighbour at bootstrap time (the recipe
+     below already does that).
+Note that bootstrap only runs while the map is EMPTY, so a rebuild is the only moment presence can
+set an owner; afterwards ownership changes only through capture - which is the intended design.
