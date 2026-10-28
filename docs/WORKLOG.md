@@ -1732,3 +1732,15 @@ Evidence: 80k reads 1950ms -> 390ms; exports 21 unchanged; PERF_OK AUDIT_OK; tes
 Why: A one-shot scene follow is re-tasked by the stock NPC behaviour loop, so the hauler sat in mode FOLLOW with speed 1 and a frozen gap one transfer range short of its miner; the approach must use the manual follow order the loop honours.
 Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
 Evidence: agents telemetry with the new fields: haulerMode FOLLOW haulerSpeed 1 haulerTargetID 980000000030 gap frozen at 3221 m (fleet 641 at 5692 m) across ~50 attempts; inspect_npc shows the lifted minerals 34/35 already in the hauler hold; 12 haul tests pass
+### 2026-10-28T00:09Z · e6626a1 · L3 · refactor: admin bridge split (engine 7069863), and the splitter fix it exposed
+
+Why: Split the 5 349-line virtual world runtime: 56 state-free declarations (970 lines) moved to coopVirtualWorldRuntime.pure.js, same 21 exports (engine eec175f)
+Detail: The bridge's whitelisted actions moved to coopAdminBridgeActions.js: 1 518 -> 451 lines in the parent, same five exports. The action text is now asserted through readModuleText (the wiring test for the war patrol read the file directly and lost the code that moved). coop-split-module.cjs now inserts the require() where the first extracted declaration was, and refuses an --out outside the parent's 
+Where: docs/FORK_PATCH_AUDIT_20261028.md, integration/coopAdminBridge.cjs, integration/coopAdminBridgeActions.cjs, integration/coopAdminBridgeActions.js, integration/coopVirtualWorldRuntime.pure.cjs, scripts/coop-split-module.cjs, scripts/overlay-spec.cjs, tests/coop-admin-bridge-war-patrol.test.mjs
+Evidence: 26 runtime test files 187 pass/21 fail, all 21 pre-existing; AUDIT_OK PERF_OK
+### 2026-10-28T00:05Z · eaf1298 · L1 · refactor: virtual world runtime split, and the test migration that allows it
+
+Why: Virtual world runtime split (engine eec175f): pure helpers moved out, test source-text helper added so wiring assertions follow moved code
+Detail: The engine runtime went from 5 349 to 4 379 lines (engine eec175f): 56 state-free declarations (970 lines) moved to coopVirtualWorldRuntime.pure.js and the parent destructures them back, so the 21 exported names are unchanged. The first attempt at this was reverted because 10 wiring tests assert on the *text* of integration/coopVirtualWorldRuntime.cjs. Fixed properly instead of freezing the archiv
+Where: docs/FORK_PATCH_AUDIT_20261028.md, integration/coopVirtualWorldRuntime.cjs, integration/coopVirtualWorldRuntime.pure.cjs, integration/coopVirtualWorldRuntime.pure.js, scripts/coop-engine-audit.cjs, scripts/coop-split-module.cjs, scripts/overlay-spec.cjs, tests/_support/coopSourceText.mjs, tests/coop-alife-native-manufacturing-runtime.test.mjs, tests/coop-alife-native-mining-wiring.test.mjs, tests/coop-npc-probe-wiring.test.mjs, tests/coop-source-text-helper.test.mjs, tests/coop-war-combat-diagnose.test.mjs, tests/lw04b-main-forward-port-regression.test.mjs, tests/lw04b-single-tick-manufacturing-wiring.test.mjs
+Evidence: 187 pass/21 fail in the 26 runtime files, all 21 pre-existing; AUDIT_OK PERF_OK
