@@ -214,6 +214,16 @@ names.splice(names.indexOf("coopPlayerIndustryFence")+1,0,"coopPlayerIndustryRun
 // Living Agent is already present in the initial native module list.
 // Duplicate deployment records would overwrite/verify the same file twice.
 names.push("coopNpeSafety");
+// Modules delivered by the station-drain / war-mercenary / factory streams. They are
+// required by coopVirtualWorldRuntime, so a copy that is missing here is not a cosmetic
+// gap: the deployed hook throws MODULE_NOT_FOUND the first time the branch is reached.
+// The guard keeps a later merge from adding one of them twice (duplicate deployment
+// records would install and verify the same file twice).
+for(const name of ["coopJsonFileCache","coopNativeNpcMarketReconcile","coopNpcManufacture",
+ "coopStationDrain","coopStructureAllianceGuard","coopWarCaptureByForce",
+ "coopWarMercenaryContract","coopWarMercenarySettlement","coopWarNavyCapability",
+ "coopWarObservedSystems"])
+ if(!names.includes(name))names.push(name);
 // Chats 25/32/39: original native source hooks; all feature flags stay OFF.
 const ORE_PATCH_PATHS=new Set([
  "server/src/services/inventory/itemStore.js",
