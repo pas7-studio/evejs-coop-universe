@@ -18,9 +18,7 @@ test("current-main industry scope retained its deployed native .js import and 4-
  assert.match(src,/const DELIVER_TABLES=/);
 });
 test("current-main installer contains no duplicate Living Agent or manufacturing admission",()=>{
- const src=file("scripts/patch-evejs-coop.cjs");
- const code=src.slice(src.indexOf("const names="),src.indexOf("const specs=["));
- const names=new Function(code+"return names;")();
+ const {names}=require("../scripts/overlay-spec.cjs");
  assert.equal(names.length,new Set(names).size);
  for(const name of ["coopLivingAgentRuntime","coopAlifeNativeManufacturingRuntime",
   "coopNpeSafety","coopNpcIndustryNativeBindings","coopAlifeNativeBuyerRuntime"]){

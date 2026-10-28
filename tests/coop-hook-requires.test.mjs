@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 const hookRequires = require('../scripts/coop-hook-requires.cjs');
 const {audit} = hookRequires;
 const spec = require('../scripts/overlay-spec.cjs');
-const integrations = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..', 'integration');
+const integrations = path.join(import.meta.dirname, '..', 'integration');
 
 // A hook is one call into a module. If that module is not installed the require
 // throws inside stock code and aborts the whole native tick - measured as

@@ -6,7 +6,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 
 const require = createRequire(import.meta.url);
-const root = path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1')), '..');
+const root = path.join(import.meta.dirname, '..');
 const integrations = path.join(root, 'integration');
 const {names} = require('../scripts/overlay-spec.cjs');
 

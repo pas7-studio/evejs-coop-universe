@@ -5,7 +5,7 @@ import path from "node:path";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {names,PIN}=require("../scripts/patch-evejs-coop.cjs");
-const pending=fs.readFileSync(path.join(import.meta.dirname||path.dirname(new URL(import.meta.url).pathname),
+const pending=fs.readFileSync(path.join(import.meta.dirname||import.meta.dirname,
  "../rust/coop_npc_market_pending.rs"),"utf8");
 test("both original industry and gated native salvage operations are explicit Rust namespaces",()=>{
  assert.match(pending,/strip_prefix\("npc-manufacture:"\)/);

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"..");
+const root=path.resolve(import.meta.dirname,"..");
 const read=file=>fs.readFileSync(path.join(root,file),"utf8");
 const turnin=read("integration/coopFleetMissionTurnin.cjs");
 const custody=read("integration/coopPveDuoNativeRewardCustody.cjs");

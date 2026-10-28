@@ -59,16 +59,17 @@ test("industry graph never starts independent NPC economy scheduler",()=>{
  }
 });
 test("new LW-04 admission is installed exactly once into central overlay",()=>{
+ // The module registry lives in scripts/overlay-spec.cjs; the installer reads it.
+ // Assert the real export: slicing `const names=` out of the installer text broke
+ // the moment the registry was extracted, for a reason that is not a regression.
+ const {names}=require("../scripts/overlay-spec.cjs");
+ assert.equal(names.filter(x=>x==="coopAlifeNativeManufacturingRuntime").length,1);
  const text=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
- const calls=[...text.matchAll(/"coopAlifeNativeManufacturingRuntime"/g)];
- assert.equal(calls.length,1);
  assert.match(text,/path\.join\(code,"server\/src\/space",name\+"\.js"\)/);
 });
 
 test("pinned overlay has no duplicate module names after concurrent merges",()=>{
- const text=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
- const declaration=text.slice(text.indexOf("const names="),text.indexOf("const specs=["));
- const names=new Function(declaration+"return names;")();
+ const {names}=require("../scripts/overlay-spec.cjs");
  assert.equal(names.length,new Set(names).size);
  assert.equal(names.filter(x=>x==="coopCourierRuntime").length,1);
  assert.equal(names.filter(x=>x==="coopAlifeNativeManufacturingRuntime").length,1);

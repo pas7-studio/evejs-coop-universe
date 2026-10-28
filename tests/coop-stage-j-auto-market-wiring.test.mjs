@@ -5,7 +5,7 @@ import path from "node:path";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {names,PIN}=require("../scripts/patch-evejs-coop.cjs");
-const root=path.resolve(path.dirname(new URL(import.meta.url).pathname),"..");
+const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 test("single pinned reversible overlay carries all Stage J salvage market dependencies",()=>{
  assert.equal(PIN,"c3ea396b6761a0ed3e71ad5b8dd7507f9ae6d69f");

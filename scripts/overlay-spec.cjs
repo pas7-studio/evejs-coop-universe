@@ -93,9 +93,6 @@ names.splice(names.indexOf("coopWarBattleDirector")+1,0,"coopWarEngagementWarp")
 // its accepted attack order never became a target; clear the leash and orbit in
 // real gun range through the existing native behaviour overrides.
 names.splice(names.indexOf("coopWarEngagementWarp")+1,0,"coopWarEngagementPosture");
-// FW-032: a confirmed wreck releases custody, records the roster loss and frees
-// the pilot identity, so a dead hull can never look like a live garrison.
-names.splice(names.indexOf("coopWarEngagementPosture")+1,0,"coopWarLossReconcile");
 // FW-033: refill a side of an active assault through the sanctioned spawn path.
 names.splice(names.indexOf("coopWarLossReconcile")+1,0,"coopWarGarrison");
 // FW-034: per-system advantage/victory-point state from real wrecks and hulls.

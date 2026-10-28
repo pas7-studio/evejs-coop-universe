@@ -23,9 +23,7 @@ test("absence of confirmed live director cannot become a producer transaction",a
  assert.doesNotMatch(src,/\.transact\s*\(|\.credit\s*\(|\.grantItem\s*\(/);
 });
 test("original installer contains one manufacturing admission and no duplicate Living Agent",()=>{
- const patch=text("scripts/patch-evejs-coop.cjs");
- const declaration=patch.slice(patch.indexOf("const names="),patch.indexOf("const specs=["));
- const names=new Function(declaration+"return names;")();
+ const {names}=require("../scripts/overlay-spec.cjs");
  assert.equal(names.length,new Set(names).size);
  assert.equal(names.filter(n=>n==="coopAlifeNativeManufacturingRuntime").length,1);
  assert.equal(names.filter(n=>n==="coopLivingAgentRuntime").length,1);
