@@ -8392,3 +8392,31 @@ Tests: `coop-war-client-view` 10, `coop-war-advantage` 7, `coop-facwar-mgr-answe
 Fork `331cffa`, repo `01cdd07a`. Rebuilt `evejs-local` + recreate, server healthy.
 Still to observe IN THE CLIENT: the four surfaces (map, FW tab, warzone map, advantages).
 The server logs every `CALL_REQ`, so the next step is a trace of one open of each tab.
+
+## 2026-10-28T21:15Z - client-contract audit: 542 calls scanned, the breaks are shapes
+
+Built the whole client->server call graph from the pinned client (370 `.pyj` modules contain
+`RemoteSvc`/`ProxySvc`; 542 distinct `service.method` pairs, 838 call sites). Cross-checked
+against the fork (203 services): **every method name resolves** - the remaining bugs are
+answer SHAPES, not missing names, which is why a name-only audit reports nothing.
+
+Per-service smoke of the getters the most-used services expose (called with a minimal
+session, non-mutating names only): corpmgr, lookupSvc, billMgr, allianceRegistry, agentMgr
+answer structurally (nulls only for missing args), `warsInfoMgr.GetPublicWarInfo` answers
+null only for an unknown warID (legitimate). Rowset columns the client indexes are all
+present: `stationID`, `fromID`, `solarSystemID/value1/value2/value3`, `warID`, `againstID`.
+
+Found and fixed in the same pass: the statistics tab. `statisticsController.py` needs six
+`facWarMgr` getters that did not exist and dereferences them (`topStats[0][groupCharacter][k]`,
+`GetStats_Character().items()`, militia header through `appConst.raceByFaction`). Now
+answered with the client's own shapes: groups 1/2/32 (`inventorycommon/const.py`), the six
+stat keys, and a militia table keyed by real warzone faction ids. Kills/VPs stay zero while
+no killer is attributed; `systemsCount` is counted from real territory controllers.
+First cut shipped without `buildDict` imported - the per-service smoke caught it before the
+client could.
+
+New durable gate: `tests/coop-client-contract-payloads.test.mjs` (7 cases) pins each field
+the client reads without a default, citing the client module that would throw.
+
+Fork `9a2a113`, repo `8e0025d2`..`8666d97`. Image rebuilt, server healthy.
+Still unobserved: the four FW surfaces IN the client (needs one login + four clicks).
