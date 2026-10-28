@@ -4051,3 +4051,19 @@ Two honest options (owner decision):
      below already does that).
 Note that bootstrap only runs while the map is EMPTY, so a rebuild is the only moment presence can
 set an owner; afterwards ownership changes only through capture - which is the intended design.
+
+## FW-044 deployed, unit-tested, waiting for the next empty-map bootstrap (19:0xZ)
+`deriveTerritoryOwners` is pure and tested (4 tests): a system is owned only if at least one
+ARMED pilot (role patrol/pirate) of the winning faction is really there; the owner is the faction
+with the most resolved pilots among those that can defend; a tie owns nothing; an unarmed system
+stays unowned. A mining fleet can no longer claim military control.
+Caveat measured right after the deploy: the map bootstrapped at 18:39 (before this fix) and it is
+NOT empty, so the new rule cannot re-derive anything - ownership only changes at an empty-map
+bootstrap or through a real capture. Current map is still the mining-weighted one
+(30000142/30000144/30000145/30003837 = 500014, 30045342 = 500010, 30045344 = 500011), and the
+opening refuses every border for that reason, so the world will not stage a navy-vs-navy war until
+the next recreate wipes the map and FW-044 derives it correctly.
+That is the honest state: five real defects fixed today (N5 funded garrison, custody-vs-hull in
+capture and mobilisation, FW-036 navy capability, FW-037 per-border refusals, FW-039 orphaned
+escrow, FW-040 attribution links, FW-041/042 durability of the war record, FW-043 territory
+bootstrap, FW-044 armed ownership), and the payout rung still needs one uninterrupted window.
