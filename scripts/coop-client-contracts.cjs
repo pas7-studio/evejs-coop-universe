@@ -295,8 +295,25 @@ function register(rows) {
     "  `(solarSystemID, null)` for every system; it now answers the snapshot of a system a live",
     "  campaign really covers (fork `841345f`).");
   lines.push("- Re-run the extraction against the client to refresh `calls.json` after a client",
-    "  update: decompile the 370 `.pyj` modules that mention `RemoteSvc`/`ProxySvc` and collect",
-    "  `RemoteSvc\\('svc'\\)\\.Method` with the owning module.");
+    "  update. `tq/code.ccp` is a ZIP of `*.pyj` entries and each entry is already a complete",
+    "  Python 2.7 `.pyc` (magic included), zlib-compressed:");
+  lines.push("");
+  lines.push("  ```python");
+  lines.push("  import zipfile, zlib");
+  lines.push("  from uncompyle6.main import decompile_file");
+  lines.push("  z = zipfile.ZipFile(r'W:/EVE Online - 3396210/tq/code.ccp')");
+  lines.push("  for name in z.namelist():");
+  lines.push("      data = zlib.decompress(z.read(name))        # a valid .pyc, no header surgery");
+  lines.push("      if b'RemoteSvc' not in data and b'ProxySvc' not in data:");
+  lines.push("          continue                                # 370 of 12527 modules call the server");
+  lines.push("      open('m.pyc', 'wb').write(data)");
+  lines.push("      with open('m.py', 'w') as out:");
+  lines.push("          decompile_file('m.pyc', out)");
+  lines.push("  ```");
+  lines.push("");
+  lines.push("  Install the decompiler with `pip install --target <dir> uncompyle6` (it runs on Python");
+  lines.push("  3.12 and reads 2.7 bytecode). Keep only the `.py` text: the `.pyc` files are reproducible");
+  lines.push("  from `code.ccp` in seconds and were deleted after use.");
   lines.push("");
   return lines.join("\n");
 }

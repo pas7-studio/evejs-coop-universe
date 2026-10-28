@@ -300,5 +300,22 @@ cannot decode, and the gateway logs the type. These carry no data yet:
   `(solarSystemID, null)` for every system; it now answers the snapshot of a system a live
   campaign really covers (fork `841345f`).
 - Re-run the extraction against the client to refresh `calls.json` after a client
-  update: decompile the 370 `.pyj` modules that mention `RemoteSvc`/`ProxySvc` and collect
-  `RemoteSvc\('svc'\)\.Method` with the owning module.
+  update. `tq/code.ccp` is a ZIP of `*.pyj` entries and each entry is already a complete
+  Python 2.7 `.pyc` (magic included), zlib-compressed:
+
+  ```python
+  import zipfile, zlib
+  from uncompyle6.main import decompile_file
+  z = zipfile.ZipFile(r'W:/EVE Online - 3396210/tq/code.ccp')
+  for name in z.namelist():
+      data = zlib.decompress(z.read(name))        # a valid .pyc, no header surgery
+      if b'RemoteSvc' not in data and b'ProxySvc' not in data:
+          continue                                # 370 of 12527 modules call the server
+      open('m.pyc', 'wb').write(data)
+      with open('m.py', 'w') as out:
+          decompile_file('m.pyc', out)
+  ```
+
+  Install the decompiler with `pip install --target <dir> uncompyle6` (it runs on Python
+  3.12 and reads 2.7 bytecode). Keep only the `.py` text: the `.pyc` files are reproducible
+  from `code.ccp` in seconds and were deleted after use.
