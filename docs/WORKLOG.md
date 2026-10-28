@@ -2183,3 +2183,9 @@ Why: the all-systems warzone mode left systems without a victory point state, wh
 Detail: With EVEJS_COOP_FW_ALL_SYSTEMS=1 the occupation payload lists every static warzone system, but the victory point state covered only territories and campaign targets, and warzoneStats.py reads victoryPointsState.contestedFraction without a guard - an AttributeError on the first untouched system. The state now covers the same systems with an honest zero score. Measured live with the flag on: 814 sta
 Where: integration/coopWarAdvantage.cjs, tests/coop-war-advantage.test.mjs
 Evidence: fork 3033ce5; live flag-on probe: 814 states, 30045344=1200, others 0/75000; coop-war-advantage 8/0; module deployed without restart
+### 2026-10-28T21:45Z · 0ee1516 · L1 · test(gateway): pin the two transport rules that cost a server process
+
+Why: a genuine gRPC request crashed the server process (compat trailers) and binary bodies were answered with an HTML 500 that the client cannot decode
+Detail: A request listener on the HTTP/2 server, and JSON parsing of binary bodies, are both silent until they are fatal: the first kills the process with ERR_HTTP2_TRAILERS_ALREADY_SENT, the second answers the client with an HTML 500 it reports as ServerException(500, 'invalid character on request'). Fork: ba187e3.
+Where: tests/coop-gateway-transport.test.mjs
+Evidence: fork ba187e3; reproduced with TLS+HTTP/2 Ping: before = uncaughtException ERR_HTTP2_TRAILERS_ALREADY_SENT + container exit 1; after = 3 calls status 200 grpc-status 0 in trailers, container healthy; tests/coop-gateway-transport 4/0
