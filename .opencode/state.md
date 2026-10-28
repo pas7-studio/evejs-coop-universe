@@ -1,5 +1,46 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 01:35Z - the loop runs live; the sale needs one operator decision
+
+PROVEN LIVE on `evejs-agents` in this session (no client, headless world):
+  ore mined -> hauler loaded -> station delivered -> ore refined (COMMITTED, fee paid
+  from the corp wallet) -> minerals lifted into the hauler -> repeat, every ~5 minutes.
+  Measured counts since 01:20Z: 2-3 living-hauler-loaded, 3 living-npc-station-delivered,
+  8 living-npc-refined, 1-2 living-npc-mineral-lifted. Both fleets cycle.
+
+Chain of real causes fixed (fork branch coop/pas7std, all committed):
+  1. 11b9d29 movement: a native NPC in GOTO flies along entity.direction only, so the
+     `position + direction * 1.0e16` sentinel carried hulls off their own belt for ever.
+     New space/coopNpcRunawayGoto.js stops such a hull; one statement in the GOTO case.
+  2. 08ca1e9..3205d9f mining: the hauler is spawned with behaviour profile
+     movementMode "stop", so every one-shot follow was consumed and the hull re-stopped.
+     It now orbits the fleet's asteroid (the only orbit target the loop honours - orbiting
+     the miner is refused), and miners are sent to the same rock; radii 250/600 m keep the
+     whole orbit inside the 2 500 m transfer range.
+  3. 27cc4ed mining: the park helper stopped any hull with speedFraction > 0, i.e. the very
+     orbit it had issued one line earlier (measured: 56 'parked' miners, all in STOP).
+  4. c43af40 space/coopNativeHaulCargo.js: the store returns `transient` as 0/1, so
+     `row.transient === false` refused every durable cargo row (`cargo-invalid`, usedM3 0).
+     Custody is now "not another party's cargo": the row's owner may be the miner OR the
+     hauler, and a refusal always names the failing predicate.
+  5. ba31852 space/coopNativeHaulManifest.js: the hold carries the fleet's own lift-tagged
+     minerals back to market, and those rows made the whole ore manifest invalid
+     (MANIFEST_CARGO_INVALID_OR_AMBIGUOUS). The manifest describes the ORE; lift cargo has
+     its own journal and is skipped.
+
+REMAINING BLOCKER (not a code bug - a required operator decision):
+  every station arrival answers living-npc-station-sale-skipped NOT_SOLD MARKET_UNAVAILABLE
+  because the native market is halted: living-native-market-repair-required
+  {status NEEDS_OPERATOR_REPAIR, pending [{file coop-pilot-012.json,
+   reason RPC_OUTCOME_UNKNOWN}]} (last at 01:22:49Z).
+  The repository doctrine is explicit: an ambiguous market RPC halts trading and a possibly
+  completed fill is never repeated. So the ore of those arrivals is deposited
+  (depositOnly), not sold, and no ISK reaches the pilot ledger or the treasury.
+  Next single step: reconcile that one journal against the market, then let the sale run.
+  Nothing else in the loop is blocked - mining, haul, delivery, refine, lift all repeat.
+
+Extraction gate: `node scripts/coop-engine-audit.cjs` prints AUDIT_OK.
+
 ## 2026-10-27 23:00Z - the last blocker is our own order bridge, and it deadlocks
 
 `mining_fleet_diagnose` (read-only admin bridge) now answers the question exactly:

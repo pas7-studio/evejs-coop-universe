@@ -1760,3 +1760,8 @@ Evidence: 6174 cases 5543 pass/541 fail (109 pin/overlay, rest native/SQLite); p
 Why: Orbiting the fleet asteroid keeps the hauler kilometres from its own miner, which orbits that rock far outside the transfer range; the hauler must station-keep on the miner.
 Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
 Evidence: agents telemetry: mode ORBIT with target 5020484740198 while the gap grew 8503 -> 8878 m (fleet 641) and 3954 -> 4430 m (fleet 642); order retargeted to the miner at 1200 m; 6 wiring tests pass
+### 2026-10-28T00:16Z · c0ba59c · L1 · docs: log the miner station-keep
+
+Why: A native NPC in GOTO flies along entity.direction only, so the position+direction*1e16 sentinel carried mining hulls away from their own belt for ever and no follow order could compete.
+Where: docs/WORKLOG.md
+Evidence: agents mining_fleet_diagnose: miner and hauler both mode GOTO targetPoint 8.19e15 m while nearestBelt 28-54 km; fork 11b9d29 adds space/coopNpcRunawayGoto.js (1e13 m limit, native hulls only) with one statement in the runtime GOTO case; 5 tests pass
