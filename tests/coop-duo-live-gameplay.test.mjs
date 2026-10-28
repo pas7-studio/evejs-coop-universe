@@ -17,10 +17,18 @@ function harness(){
   sessions:new Map([[501,a]]),getEntityByID:id=>id===1001?shipA:id===1002?shipB:null};
  const events=[],greetings=[],fleetNotices=[],module={exports:{}};
  const requireMock=id=>{
-  if(id==="./runtime")return {getSceneForSession:()=>scene};
+  // Real deployment hands each session the scene of ITS system; one shared
+  // scene would make a pilot in another system look like a replaced hull.
+  if(id==="./runtime")return {getSceneForSession:s=>({
+   systemID:s?._space?.systemID,sessions:scene.sessions,
+   getEntityByID:scene.getEntityByID})};
   if(id==="./coopRuntimeProbe")return {observe:(name,_session,_ship,details)=>
    events.push({name,...details})};
   if(id==="./coopDuoPresence")return {observe:()=>({status:"SERVER_OBSERVATION"})};
+  // Run the real presence admission, but without the live registry: this
+  // harness owns the scene, so the scene-only checks are what must hold.
+  if(id==="./coopSessionPresence")return {...require(
+   "../integration/coopSessionPresence.cjs"),nativeAuthority:()=>null};
   if(id==="../services/fleets/fleetRuntime")return {status:"STOCK_NATIVE"};
   if(id==="./coopNativeFleetParty")return {membership:()=>fleetActive?
    {ok:true,fleetID:7004}:{ok:false,reason:"INVITE_NOT_ACCEPTED"}};

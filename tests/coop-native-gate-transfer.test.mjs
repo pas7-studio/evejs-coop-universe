@@ -89,7 +89,7 @@ test("same native EveJS entity ID crosses systems with unmodified HP, modules an
   const oldCargo=x.store.listNativeCargoForEntity(100);
   const oldModules=x.store.listNativeModulesForEntity(100);
   const result=x.call(native.transfer);
-  assert.equal(result.success,true);
+  assert.equal(result.success,true,JSON.stringify(result).slice(0,400));
   assert.equal(result.entityID,100);assert.equal(result.systemID,B);
   assert.equal(result.verifiedSourceAbsent,true);
   assert.equal(result.verifiedDestinationPresent,true);

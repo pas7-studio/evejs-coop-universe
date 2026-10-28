@@ -8,7 +8,10 @@ const station=60003760,agentID=501;
 function scenario(){
  const leader={characterID:101,stationid:station,socket:{destroyed:false}};
  const peer={characterID:102,stationid:station,socket:{destroyed:false}};
- const fleet={fleetID:77,creatorCharID:101,members:new Map([[101,{job:1}],[102,{job:0}]])};
+ // Native membership is proven from the member records themselves, not from
+ // the map keys, so each record must name its own character.
+ const fleet={fleetID:77,creatorCharID:101,
+  members:new Map([[101,{job:1,charID:101}],[102,{job:0,charID:102}]])};
  const fleetRuntime={
   getFleetForCharacter:id=>fleet.members.has(id)?fleet:null,
   getMemberRecord:(f,id)=>f.members.get(id)||null
