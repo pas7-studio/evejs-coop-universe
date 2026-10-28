@@ -8337,3 +8337,32 @@ Remaining reds are other sessions': `coop-flag-registry` (EVEJS_COOP_NPC_MANUFAC
 EVEJS_COOP_NPC_REFINERY_BATCH), `coop-overlay-dependencies`
 (coopVirtualWorldRuntime -> coopWarBountyEscrowSides not in overlay-spec names),
 `AUDIT_REGRESSION` (coopVirtualWorldRuntime.js 4995 lines > 4800, split in progress elsewhere).
+
+## 2026-10-28T21:02Z - FW tab: the five facWarMgr getters the server never answered
+
+Decompiled the client (`code.ccp` is a zip of `.pyj` bytecode; `pip install uncompyle6` +
+prepend the py2.7 pyc magic, then `decompile_file`) and read what each FW surface asks for:
+
+- `fwwarzone/client/dashboard/fwWarzoneDashboard.py` calls
+  `cfg.eveowners.Get(GetFactionMilitiaCorporation(faction)).name` and reads
+  `factionalWarStatus.startDate`. The pinned `facWarMgrService` implements only the four
+  rank getters, and `baseService` answers every other method with `null`, so the dashboard
+  threw while constructing itself. Fixed in fork `331cffa`: militia corporation from the
+  native faction record, corp status from the character's persisted war faction,
+  corp/alliance war faction + faction corporation list answered (null/empty, not invented).
+- `warzoneMap.py` does `FACTION_ID_TO_COLOR[occupierID]` and
+  `ADJACENCY_STATE_TO_ICON_PATH[adjacencyState]`; the advantage gauge additionally does
+  `FACTION_ID_TO_COLOR[attackerID]`, so attackerID may never be 0. Live payload now:
+  `30045343 {owner 500001, occupier 500004, attacker 500001, contested true, SL}`,
+  `30045344`/`30003837` FL, 3 systems total.
+- `factionwarfare/advantageState.py` refuses points outside 0..100000 (and
+  contribution+floor > 100000), and the tab shows nothing when that raises; the projection
+  clamps now.
+- `warzoneStats.py` reads `victoryPointsState.contestedFraction`, so a warzone system with
+  no victory-point entry is an AttributeError: `victoryPointStates()` must cover every
+  system the occupation payload lists (it does, both come from territories + campaigns).
+
+Tests: `coop-war-client-view` 10, `coop-war-advantage` 7, `coop-facwar-mgr-answers` 6.
+Fork `331cffa`, repo `01cdd07a`. Rebuilt `evejs-local` + recreate, server healthy.
+Still to observe IN THE CLIENT: the four surfaces (map, FW tab, warzone map, advantages).
+The server logs every `CALL_REQ`, so the next step is a trace of one open of each tab.

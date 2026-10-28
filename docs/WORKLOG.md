@@ -2131,3 +2131,14 @@ Evidence: 15 COMMITTED refines at 60000682 after deploy; 3/3 tests in tests/coop
 Why: the map window never opened: the warzone payload sent militia corporation IDs where the client indexes faction tables, and the tiles had no adjacencyState at all
 Where: .opencode/state.md
 Evidence: fork 8fa69e2; live payload 204 systems/1000180 -> 3 systems with faction IDs + FL/SL/BL; 36 GetAllVictoryPointStates/s storm source identified (client warzoneMap FACTION_ID_TO_COLOR[occupierID] KeyError); coop-war-client-view 9/0; image evejs-local rebuilt + recreate, server healthy
+### 2026-10-28T20:51Z · b361d4f · L2 · alife18: distribution decision, planner tool and the arbitrage rules
+
+Why: The corporation holds 874k Tritanium and 173k Scordite III-Grade that no local station buys while Jita, one real gate away, bids 4 and 17 ISK for them in millions
+Where: integration/coopNpcDistribution.cjs, scripts/coop-distribution-plan.cjs, tests/coop-npc-distribution.test.mjs
+Evidence: plan() returns TRIP Republic Fleet Depleted Uranium XL x1 -> 60003760 @560000 with Scordite/Tritanium runner-ups; 6/6 tests tests/coop-npc-distribution.test.mjs; fork alife18 commit
+### 2026-10-28T20:59Z · 01cdd07 · L2 · fix(fw): the client asks facWarMgr five questions the server never answered
+
+Why: the FW dashboard could not open: facWarMgr answered five client getters with null, and two client payload domains (attackerID colour lookup, advantage 0..100000) were violated
+Detail: The faction-warfare dashboard cannot build a single panel without GetFactionMilitiaCorporation (KeyError(None) via cfg.eveowners) and GetCorpFactionalWarStatus (AttributeError on None.startDate). Both, plus the corp and alliance war-faction getters and the faction corporation list, now come from the native faction record and the character's persisted war faction. Two more client-domain rules are p
+Where: integration/coopFactionWarMgrView.cjs, integration/coopNpcGateCrossing.js, integration/coopNpcManufactureTick.js, integration/coopNpcRefineryTick.js, integration/coopWarAdvantage.cjs, integration/coopWarClientView.cjs, scripts/overlay-spec.cjs, tests/coop-facwar-mgr-answers.test.mjs, tests/coop-war-advantage.test.mjs, tests/coop-war-client-view.test.mjs
+Evidence: fork 331cffa; live: militia 500001->1000180, corpStatus null (not enlisted), factionCorps [], warzones 3 systems with faction ids + FL/SL + attackerID; tests 10/7/6 green; image rebuilt, server healthy. Client rendering not yet observed
