@@ -1755,3 +1755,8 @@ Why: Scoped parity gate replaces the pin-bound whole-suite baseline for change a
 Detail: Measured today: 6 174 cases, 5 543 pass, 541 fail, 90 skip; 109 of the failures name the pin, the overlay, the installer or a source hash, and the rest are the native/SQLite cases that need deployed modules. docs/evidence/test-baseline.json (pinned checkout, 538 pass / 0 fail) therefore cannot gate anything. coop-test-parity.cjs compares the *names* of failing cases for the files a change touches,
 Where: docs/FORK_PATCH_AUDIT_20261028.md, docs/evidence/test-parity.json, scripts/coop-test-parity.cjs
 Evidence: 6174 cases 5543 pass/541 fail (109 pin/overlay, rest native/SQLite); parity snapshot 30 files 204 pass/21 fail PARITY_OK; AUDIT_OK PERF_OK
+### 2026-10-28T00:16Z · c9abc77 · L2 · coop: mirror the miner station-keep in the archived generator
+
+Why: Orbiting the fleet asteroid keeps the hauler kilometres from its own miner, which orbits that rock far outside the transfer range; the hauler must station-keep on the miner.
+Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
+Evidence: agents telemetry: mode ORBIT with target 5020484740198 while the gap grew 8503 -> 8878 m (fleet 641) and 3954 -> 4430 m (fleet 642); order retargeted to the miner at 1200 m; 6 wiring tests pass
