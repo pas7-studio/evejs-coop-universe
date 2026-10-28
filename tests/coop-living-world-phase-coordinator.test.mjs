@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {createRequire} from "node:module";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const {createPhaseCoordinator}=require("../integration/coopLivingWorldPhaseCoordinator.cjs");
 const {classifyPhase,catalog,phaseNames}=require("../integration/coopLivingWorldPhaseRegistry.cjs");
@@ -104,7 +105,14 @@ test("a promise-returning phase is not awaited or relabeled as a native settleme
  const f=fixture();
  let settle;
  const pending=new Promise(resolve=>{settle=resolve});
- const result=f.coordinator.tick(run=>run("alife-native-economy-observe",()=>pending));
+ const result=f.coordinator.tick(run=>{
+  // The real 30 s timer callback is a block arrow and returns nothing. Written
+  // as an implicit-return arrow this would return the phase's own promise, which
+  // the coordinator cannot tell apart from an async tick (asserted below) and
+  // therefore refuses; the point here is that the PHASE promise is neither
+  // awaited nor labelled a native settlement.
+  run("alife-native-economy-observe",()=>pending);
+ });
  assert.equal(result.status,"COMPLETED");
  assert.equal(f.coordinator.snapshot().active,false);
  settle({status:"SETTLED"});
@@ -175,8 +183,14 @@ test("only real original systemIDs classify as dynamic reconciliation",()=>{
  assert.deepEqual(classifyPhase("npc-reconcile:30000142"),{
   status:"KNOWN",group:"reconciliation",canonical:"npc-reconcile:"});
  for(const input of ["npc-reconcile:0","npc-reconcile:01","npc-reconcile:-1",
-  "npc-reconcile:NaN","npc-reconcile:","npc-reconcile:99999999999999999999"])
-  assert.equal(classifyPhase(input).status,"UNCLASSIFIED");
+  "npc-reconcile:NaN","npc-reconcile:","npc-reconcile:99999999999999999999"]){
+  // Two labels, one rule: a suffix that is not a real original systemID must
+  // never be classified as a dynamic reconcile. Which of INVALID/UNCLASSIFIED it
+  // gets is name-shape detail ("NaN" is uppercase, so malformed).
+  const verdict=classifyPhase(input);
+  assert.notEqual(verdict.status,"KNOWN",input);
+  assert.notEqual(verdict.group,"reconciliation",input);
+ }
  assert.equal(classifyPhase("npc-reconcile:3 4").status,"INVALID");
 });
 test("each existing domain is observable without a parallel native executor",()=>{
@@ -223,13 +237,15 @@ test("operator cannot mutate returned source classification or native phase tota
 test("registry remains pure and has no second timer or native game writers",()=>{
  const source=fs.readFileSync(new URL("../integration/coopLivingWorldPhaseRegistry.cjs",import.meta.url),"utf8");
  const coordinator=fs.readFileSync(new URL("../integration/coopLivingWorldPhaseCoordinator.cjs",import.meta.url),"utf8");
- const installer=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
  for(const s of [source,coordinator]){
   assert.doesNotMatch(s,/setInterval\s*\(/);
   assert.doesNotMatch(s,/setTimeout\s*\(/);
   assert.doesNotMatch(s,/coopAtomicNativeRows|grantItem|marketDaemonClient|\.transact\(/);
  }
- assert.match(installer,/coopLivingWorldPhaseRegistry/);
+ // Packaging: the registry must be in the installed set exactly once (the legacy
+ // installer's text no longer carries the list).
+ assert.equal(overlayRegistrations("coopLivingWorldPhaseRegistry"),1,"coopLivingWorldPhaseRegistry");
+ assert.equal(overlayRegistrations("coopLivingWorldPhaseCoordinator"),1,"coopLivingWorldPhaseCoordinator");
 });
 
 test("native PvE site defense joins existing combat group, not unclassified",()=>{

@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import {createRequire} from 'node:module';
+const require = createRequire(import.meta.url);
 const src=path.resolve(import.meta.dirname,'../integration/coopVirtualWorldRuntime.cjs');
 function initSandbox(env={EVEJS_COOP_VIRTUAL_WORLD:'1',EVEJS_COOP_HEADLESS_WORLD_BOOT:'1'}){
  const evidence=[];const warnings=[];
@@ -11,6 +13,8 @@ function initSandbox(env={EVEJS_COOP_VIRTUAL_WORLD:'1',EVEJS_COOP_HEADLESS_WORLD
   console:{warn:(...args)=>warnings.push(args.join(' ')),info:()=>{}},
   setInterval(){throw Error('unexpected live timer on failed initialization')},
   require(id){
+   if(id==='./coopVirtualWorldRuntime.pure')return require('../integration/coopVirtualWorldRuntime.pure.cjs');
+   if(id==='./coopJsonFileCache')return require('../integration/coopJsonFileCache.cjs');
    if(id==='./coopRuntimeProbe')return {observe:(event,session,ship,extra)=>{evidence.push({event,extra});return true;}};
    if(id==='./coopVirtualWorld')return {createWorld(){throw Object.assign(Error('corrupt native state'),{code:'E_CORRUPT'})}};
    if(id==='./coopNpcLife')return {createLife(){throw Error('should never reach NPC life')}};
