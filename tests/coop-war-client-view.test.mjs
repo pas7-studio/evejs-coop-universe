@@ -184,3 +184,24 @@ test('every system names an attacker the client can look up',()=>{
   assert.notEqual(entry.attackerID, entry.occupierID, 'a side cannot attack itself');
  }
 });
+
+// insurgencySolarsystemService answers (solarSystemID, None) unconditionally, so a player
+// standing inside a system that really is a front saw no campaign there.
+test('the local campaign snapshot only answers for a system the campaign really covers',()=>{
+ const snapshots=[{campaignID:11,originSolarsystemID:30045344,coveredSolarsystemIDs:[30003837,30045344]}];
+ assert.equal(view.localCampaignSnapshot(snapshots,30045344).campaignID,11,'the target system');
+ assert.equal(view.localCampaignSnapshot(snapshots,30003837).campaignID,11,'the source side of the border');
+ assert.equal(view.localCampaignSnapshot(snapshots,30000142),null,'elsewhere stays null');
+ assert.equal(view.localCampaignSnapshot([],30045344),null);
+ assert.equal(view.localCampaignSnapshot(snapshots,0),null,'no session system, no claim');
+});
+
+test('the local campaign answer never invents a campaign for the current system',()=>{
+ // The whole answer is built in the module so the service hook stays one statement.
+ const build = (snapshot) => ({campaignID: snapshot.campaignID});
+ assert.equal(view.localCampaignResponse({session:{solarsystemid2:30045344},
+  buildCampaignSnapshot: build}), null,
+  'no campaign record in this store means no snapshot, and stock null stands');
+ assert.equal(view.localCampaignResponse({session:{solarsystemid2:30045344}}), null,
+  'without the native snapshot builder there is nothing to answer with');
+});
