@@ -135,10 +135,14 @@ Two tools now make that class impossible:
 
 - `scripts/coop-split-check.cjs` reads both modules and reports `UNDECLARED` (a
   name the sibling uses and never declares - the ReferenceError class),
-  `COUPLING` (a name only the parent declares) and `TWO_STATES` (the same name
-  declared in both modules). `coop-engine-audit.cjs` runs it: the first two are
-  hard failures, and `TWO_STATES` is a ratchet with a ceiling that may only be
-  lowered.
+  `COUPLING` (a name only the parent declares), `UNBOUND_STATE` (the name exists
+  in both modules, the parent assigns its own copy, and no `bind*()` call hands
+  the live object over - a stale copy by construction) and `TWO_STATES` (the same
+  name declared in both modules). A `DEAD_STATE` note covers the harmless variant
+  where the parent declares the name and never assigns it, so only the sibling's
+  copy is live (that is `warFleetRegistry` today). `coop-engine-audit.cjs` runs
+  it: `UNDECLARED`, `COUPLING` and `UNBOUND_STATE` are hard failures, and
+  `TWO_STATES` is a ratchet with a ceiling that may only be lowered.
 - `scripts/coop-split-module.cjs` now reads every declarator of every
   declaration, and after `--apply` it runs the checker and **restores both files**
   if the split is not safe. `node --check` cannot replace that: it cannot see a

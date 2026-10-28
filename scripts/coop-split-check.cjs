@@ -27,7 +27,7 @@
 const fs = require("fs");
 const path = require("path");
 const {
-  stripComments, bindingNames: bindingNamesPublic, declaredNames, moduleLevelNames, assignedNames, usedNames,
+  stripComments, bindingNames: bindingNamesPublic, declaredNames, moduleLevelNames, moduleLevelStatements, assignedNames, usedNames,
 } = require("./lib/js-declarations.cjs");
 
 const args = process.argv.slice(2);
@@ -61,12 +61,34 @@ function checkPair(parentRel, siblingRel) {
     .sort();
   const coupling = [...new Set([...assigned, ...used].filter((n) => !declared.has(n) && parentTop.has(n)))].sort();
   const twoStates = [...siblingTop].filter((n) => parentTop.has(n)).sort();
+  // Two copies of one state are only equal while something hands the live object
+  // over. A name declared in both modules but never passed to a binder is a stale
+  // copy by construction - this is how the war reverted to an empty state.
+  const bound = new Set();
+  for (const m of parentText.matchAll(/\bbind[A-Za-z0-9_$]*\s*\(\s*\{([^}]*)\}/g)) {
+    for (const name of bindingNamesPublic(m[1])) bound.add(name);
+  }
+  // "the parent assigns it" must mean a real assignment outside the declaration
+  // itself: `let warFleetRegistry=null` is an initialiser, not a live copy.
+  const declarationLines = moduleLevelStatements(parentText);
+  const parentLines = parentText.split("\n");
+  const writtenOutsideDeclaration = (name) => {
+    const re = new RegExp(`(?<![.\\w$])${name}\\s*(?:(?:\\+|-|\\*|/|%)?=|\\+\\+|--)`);
+    return parentLines.some((line, i) =>
+      !declarationLines.some((d) => i >= d.startLine && i <= d.endLine) && re.test(line));
+  };
+  const unbound = twoStates.filter((n) => !bound.has(n) && writtenOutsideDeclaration(n));
+  // Declared in the parent, never assigned there: the copy is inert and only the
+  // sibling's is live. Harmless, but it reads like shared state, so it is listed.
+  const dead = twoStates.filter((n) => !bound.has(n) && !writtenOutsideDeclaration(n));
 
   const problems = [];
   for (const n of undeclared) problems.push(`UNDECLARED ${n}: used but declared nowhere -> ReferenceError (strict mode)`);
   for (const n of twoStates) problems.push(`TWO_STATES ${n}: declared in both ${path.basename(parentRel)} and ${path.basename(siblingRel)}`);
+  for (const n of unbound) problems.push(`UNBOUND_STATE ${n}: two copies, the parent assigns its own and no binder hands it over`);
   for (const n of coupling) problems.push(`COUPLING ${n}: owned by ${path.basename(parentRel)}, used by the sibling`);
-  return { parentRel, siblingRel, declared: declared.size, assigned: assigned.size, problems };
+  const notes = dead.map((n) => `DEAD_STATE ${n}: declared in the parent, never assigned there - only the sibling's copy is live`);
+  return { parentRel, siblingRel, declared: declared.size, assigned: assigned.size, problems, notes };
 }
 
 const explicitParent = opt("--parent");
@@ -115,12 +137,16 @@ for (const [parentRel, siblingRel] of pairs) {
     continue;
   }
   const result = checkPair(parentRel, siblingRel);
+  for (const problem of result.problems || []) console.log(`  ${problem}`);
   if (result.problems.length) {
     failed = true;
     console.log(`SPLIT_UNSAFE ${siblingRel} <- ${parentRel}`);
-    for (const problem of result.problems) console.log(`  ${problem}`);
-  } else {
+    for (const note of result.notes || []) console.log(`  ${note}`);
+  } else if (!(result.notes || []).length) {
     console.log(`SPLIT_OK ${siblingRel} <- ${parentRel} (${result.declared} declared names)`);
+  } else {
+    console.log(`SPLIT_OK ${siblingRel} <- ${parentRel} (${result.declared} declared names, ${result.notes.length} note(s))`);
+    for (const note of result.notes || []) console.log(`  ${note}`);
   }
 }
 if (failed) {

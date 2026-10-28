@@ -213,12 +213,12 @@
       "failing": []
     },
     "coop-split-tooling": {
-      "pass": 6,
+      "pass": 9,
       "fail": 0,
       "skipped": 0,
       "failing": []
     }
   },
-  "recordedAt": "2026-10-28T11:41:52.741Z",
-  "projectRev": "003ab181288d8878d6c3356f9f2e4bfdcbb280e1"
+  "recordedAt": "2026-10-28T11:46:34.153Z",
+  "projectRev": "b42e53fc10bdb00b87c17c12818c52aee8394eed"
 }

@@ -121,3 +121,54 @@ test("a used name is not invented by regex backtracking", () => {
   assert.ok(!member.has("start"));
   assert.ok(assignedNames(stripComments("x = 1;\n")).has("x"));
 });
+
+test("two copies of one state must be handed over by a binder call", () => {
+  const { code } = fixture({
+    "unbound.js": [
+      '"use strict";',
+      "let director=null;",
+      "const {read}=require(\"./unbound.pure\");",
+      "function start(){ director=require(\"./d\"); }",
+      "module.exports={read,start};",
+      "",
+    ].join("\n"),
+    "unbound.pure.js": '// Extracted from space/unbound.js by scripts/coop-split-module.cjs.\n"use strict";\nlet director=null;\nfunction read(){ return director; }\nmodule.exports={read,director};\n',
+  });
+  const result = run(CHECKER, ["--code-path", code, "--parent", "space/unbound.js", "--sibling", "space/unbound.pure.js"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /UNBOUND_STATE director/);
+});
+
+test("a parent copy that is never assigned is dead state, not a stale live one", () => {
+  const { code } = fixture({
+    "dead.js": [
+      '"use strict";',
+      "let director=null;",
+      "const {read}=require(\"./dead.pure\");",
+      "module.exports={read};",
+      "",
+    ].join("\n"),
+    "dead.pure.js": '// Extracted from space/dead.js by scripts/coop-split-module.cjs.\n"use strict";\nlet director=null;\nfunction read(){ if(!director)director=require("./d"); return director; }\nmodule.exports={read,director};\n',
+  });
+  const result = run(CHECKER, ["--code-path", code, "--parent", "space/dead.js", "--sibling", "space/dead.pure.js"]);
+  assert.match(result.out, /DEAD_STATE director/);
+  assert.doesNotMatch(result.out, /UNBOUND_STATE/);
+});
+
+test("a binder call makes the two copies explicit and the pair readable", () => {
+  const { code } = fixture({
+    "bound.js": [
+      '"use strict";',
+      "let director=null;",
+      "const {read}=require(\"./bound.pure\");",
+      "function start(){ director=require(\"./d\"); }",
+      "function sync(){ require(\"./bound.pure\").bindState({director}); }",
+      "module.exports={read,start,sync};",
+      "",
+    ].join("\n"),
+    "bound.pure.js": '// Extracted from space/bound.js by scripts/coop-split-module.cjs.\n"use strict";\nlet director=null;\nfunction bindState(state){ if(state.director!==undefined)director=state.director||null; return true; }\nfunction read(){ return director; }\nmodule.exports={bindState,read,director};\n',
+  });
+  const result = run(CHECKER, ["--code-path", code, "--parent", "space/bound.js", "--sibling", "space/bound.pure.js"]);
+  assert.match(result.out, /TWO_STATES director/);
+  assert.doesNotMatch(result.out, /UNBOUND_STATE|DEAD_STATE/);
+});

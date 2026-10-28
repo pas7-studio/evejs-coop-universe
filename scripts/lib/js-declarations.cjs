@@ -174,19 +174,14 @@ function declaratorText(text, from) {
   return out;
 }
 
-// Module-level declarations of a file: the names whose value lives in that
-// module's own scope.
-function moduleLevelNames(source) {
+// Module-level declaration statements of a file: `{ startLine, endLine, kind,
+// names }` per statement (0-based, endLine inclusive).
+function moduleLevelStatements(source) {
   const text = stripComments(source).replace(/\r/g, "");
   const lines = text.split("\n");
-  const names = new Set();
+  const statements = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (!/^[A-Za-z_$]/.test(line)) continue;
-    const fn = /^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/.exec(line);
-    if (fn) names.add(fn[1]);
-    const cls = /^class\s+([A-Za-z_$][\w$]*)/.exec(line);
-    if (cls) names.add(cls[1]);
     if (!/^(?:const|let|var)\s/.test(line)) continue;
     // Collect the whole statement (it may span lines and hold several statements).
     let statement = line;
@@ -200,14 +195,34 @@ function moduleLevelNames(source) {
       const tail = statement.trimEnd();
       return depth <= 0 && (tail.endsWith(";") || !/[,=([]$/.test(tail));
     };
+    const start = i;
     while (!terminated() && i + 1 < lines.length && !/^[A-Za-z_$]/.test(lines[i + 1])) {
       statement += `\n${lines[++i]}`;
     }
+    const kind = /^(const|let|var)/.exec(line)[1];
+    const names = new Set();
     for (const chunk of statement.split(";")) {
       const decl = /^\s*(?:const|let|var)\s+([\s\S]*)$/.exec(chunk);
       if (!decl) continue;
       for (const name of bindingNames(decl[1])) names.add(name);
     }
+    statements.push({ startLine: start, endLine: i, kind, names });
+  }
+  return statements;
+}
+
+// Module-level declarations of a file: the names whose value lives in that
+// module's own scope.
+function moduleLevelNames(source) {
+  const names = new Set();
+  for (const statement of moduleLevelStatements(source)) for (const name of statement.names) names.add(name);
+  const text = stripComments(source).replace(/\r/g, "");
+  for (const line of text.split("\n")) {
+    if (!/^[A-Za-z_$]/.test(line)) continue;
+    const fn = /^(?:async\s+)?function\s*\*?\s*([A-Za-z_$][\w$]*)/.exec(line);
+    if (fn) names.add(fn[1]);
+    const cls = /^class\s+([A-Za-z_$][\w$]*)/.exec(line);
+    if (cls) names.add(cls[1]);
   }
   return names;
 }
@@ -244,4 +259,4 @@ function usedNames(strippedText) {
   return names;
 }
 
-module.exports = { GLOBALS, stripComments, bindingNames, declaredNames, moduleLevelNames, assignedNames, usedNames };
+module.exports = { GLOBALS, stripComments, bindingNames, declaredNames, moduleLevelNames, moduleLevelStatements, assignedNames, usedNames };
