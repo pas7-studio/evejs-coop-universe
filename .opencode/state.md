@@ -8788,3 +8788,25 @@ OPERATIONAL HAZARD, measured today: commit `3249ba8` (another session) replaced
 22:48:21Z was no longer in the tree. It is re-applied in `c4ddfba`. After ANY commit by the parallel
 session that touches a file this work also touches, re-check the exports:
 `grep -c "refundExpiredCampaigns\|reconcileBountyCredits" coopVirtualWorldRuntime.js`.
+
+## 2026-10-29T03:50Z - clean client layer, unbounded event file closed
+
+Client-server layer right now (measured over the last 40 minutes with both players online):
+**one** client alert (`IOError: [Errno 9] Bad file descriptor` - the client writing into a closed
+stdout), **zero** gateway defaults (every `eve_public.*` call had a handler), zero `Unhandled
+method` lines, handler sweep clean on charMgr/corpmgr/agentMgr/contractMgr/fleetMgr/industry.
+
+Found while reading the world instead: `/var/lib/evejs/coop-events.jsonl` had grown to **368 MB /
+402 291 lines** and the data volume to **4.2 GB**, because nothing ever trimmed the only durable
+trace of the world. The probe now rotates it to `<file>.1` past `EVEJS_COOP_EVENTS_MAX_MB` (default
+128, `0` disables), checking at most once a minute (fork `7988e05`, deployed without restart,
+tests `coop-events-rotation` 4/0).
+
+Open question, no fix yet - do not repeat the mistake of guessing: the 30000144 mining fleet
+reports `state=mining` with 13 miners / 10 haulers while no `living-mining-cycle-settled` fired
+between 23:24:31 and 23:44, and the per-fleet snapshot shows `act0` (no active module) with the
+same four asteroids cycling. The `living-mining-blocker` events are NOT evidence of a failure:
+`coopMiningTrace` emits `"TICK_" + fleet.state` on a two-minute throttle, so a quiet trace can look
+like a healthy fleet. `NO_MINEABLE_TARGET` never fired, so the fleet believes it has targets. Next
+step: instrument the activation path (`MODULE_ACTIVATE_FAILED` already exists) or check whether the
+four rocks are simply depleted, before changing anything.
