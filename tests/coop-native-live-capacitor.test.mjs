@@ -15,12 +15,22 @@ const patchPath = join(root, 'patches/upstream/0006-native-npc-live-capacitor-wi
 const patch = readFileSync(patchPath, 'utf8');
 const manifest = JSON.parse(readFileSync(join(root, 'patches/upstream/MANIFEST.json'), 'utf8'));
 
-// Rebuild the patched function from the hunk: context lines plus added lines.
-// The hunk starts inside the function, so the signature is supplied by the test.
+// Rebuild the patched function from its hunk: context lines plus added lines.
+// The hunk opens inside the function, so the signature AND the unchanged
+// early-return guard are supplied here; they are context, not proof.
+const REFRESH_GUARD = [
+  ' const shipItem = findShipItemById(entity.itemID);',
+  ' const conditionState = shipItem',
+  '  ? getShipConditionState(shipItem)',
+  '  : normalizeShipConditionState(entity.conditionState);',
+].join('\n');
 function patchedBody(){
   const lines = patch.split('\n');
-  const start = lines.findIndex((line) => line.startsWith('@@'));
-  assert.ok(start >= 0, 'patch has no hunk');
+  // The patch carries two hunks for the same file; only the capacitor one
+  // rebuilds refreshShipConditionFields.
+  const start = lines.findIndex((line) =>
+    line.startsWith('@@') && line.includes('refreshShipConditionFields'));
+  assert.ok(start >= 0, 'patch has no refreshShipConditionFields hunk');
   const body = [];
   let capturing = false;
   for (let index = start + 1; index < lines.length; index += 1) {
@@ -29,10 +39,9 @@ function patchedBody(){
     if (!line.startsWith('+') && !line.startsWith('-') && !line.startsWith(' ')) break;
     if (line.startsWith('-')) continue;
     const content = line.slice(1);
-    // The hunk opens with the tail of the early-return guard; the body starts at
-    // the first statement after it.
+    // Skip the tail of the unchanged guard; REFRESH_GUARD re-supplies it.
     if (!capturing) {
-      if (content.trim().startsWith('const shipItem')) capturing = true;
+      if (content.trim().startsWith('entity.conditionState = conditionState')) capturing = true;
       else continue;
     }
     if (content === '}') {
@@ -46,7 +55,8 @@ function patchedBody(){
 }
 
 function buildRefresh(){
-  const source = 'function refreshShipConditionFields(entity) {\n' + patchedBody();
+  const source = 'function refreshShipConditionFields(entity) {\n' +
+    REFRESH_GUARD + '\n' + patchedBody();
   const harness = new Function('findShipItemById', 'getShipConditionState', 'normalizeShipConditionState', `
     const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
     const toFiniteNumber = (value, fallback) => (Number.isFinite(Number(value)) ? Number(value) : fallback);
@@ -56,7 +66,8 @@ function buildRefresh(){
   return harness;
 }
 
-const REFRESH_SOURCE = 'function refreshShipConditionFields(entity) {\n' + patchedBody();
+const REFRESH_SOURCE = 'function refreshShipConditionFields(entity) {\n' +
+  REFRESH_GUARD + '\n' + patchedBody();
 
 test('0006 is recorded in the manifest with a matching hash', ()=>{
   const entry = (manifest.patches || []).find((p) => p.file === '0006-native-npc-live-capacitor-wins.patch');
