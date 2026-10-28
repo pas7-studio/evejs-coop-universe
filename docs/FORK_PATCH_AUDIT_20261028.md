@@ -154,6 +154,15 @@ destructuring and catch bindings collected). `tests/coop-split-tooling.test.mjs`
 pins the behaviour, including the `actionID -> actionI` regex-backtracking bug
 that made every long identifier look like a free variable.
 
+**Reproduced against the real broken commit.** Extracting `eec175f` into a temp
+tree and running the checker prints 23 `COUPLING` names - `bridge`, `economy`,
+`identityRegistry`, `raidDirector`, `warpPointDirector`, `warFleetRegistry` and
+their relatives - i.e. exactly the state that made those phases throw
+`ReferenceError` in the live world. The same check on the repaired tree reports
+0 hard findings and 23 `TWO_STATES`, which is the honest description of the
+current design: the split still keeps two copies of that state in step through
+`syncWarRuntime()`/`bindWarRuntime()`.
+
 What actually blocked the first attempt was not the code but 10 wiring tests
 asserting on the *text* of `integration/coopVirtualWorldRuntime.cjs`: after the
 archive was refreshed, they looked for code that had legitimately moved. The fix
