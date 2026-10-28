@@ -14,15 +14,17 @@ const runtime = require("../integration/coopVirtualWorldRuntime.cjs");
 const pure = require("../integration/coopVirtualWorldRuntime.pure.cjs");
 
 // The split must not change the module's public surface, so the export list is
-// frozen here: 21 names before the split, 21 names after, same values.
+// frozen here: the split preserved every name, and each later feature that added one
+// is recorded here on purpose, so a silent drop still fails.
 const RUNTIME_EXPORTS = [
-  "alifeOrderArbitrationEnabled", "confirmedNativeNpcWreck", "confirmedWreck",
-  "createWarRecoveryAdmin", "diagnoseCombat", "diagnoseMobilization",
-  "diagnoseNativeRaids", "diagnoseNpcOrder", "diagnoseWarFunding", "diagnoseWarState",
-  "isHeadlessNativeReady", "linkSpawnedIdentity", "livingWorldPhases",
-  "nativeWarFleetRegistry", "nextHeadlessRetryMs", "observeSession",
-  "releaseSpawnedIdentity", "sellOnArrival", "start", "warFrontChat",
-  "witnessedNativeBossWreck",
+  "alifeOrderArbitrationEnabled", "chooseWarRestore", "confirmedNativeNpcWreck",
+  "confirmedWreck", "createWarRecoveryAdmin", "diagnoseCombat",
+  "diagnoseMercenarySettlement", "diagnoseMobilization", "diagnoseNativeRaids",
+  "diagnoseNavy", "diagnoseNpcOrder", "diagnoseWarFunding", "diagnoseWarState",
+  "executeMercenaryContract", "identityLinks", "isHeadlessNativeReady",
+  "linkSpawnedIdentity", "livingWorldPhases", "nativeWarFleetRegistry",
+  "nextHeadlessRetryMs", "observeSession", "readWarMirror", "releaseSpawnedIdentity",
+  "sellOnArrival", "start", "warFrontChat", "witnessedNativeBossWreck",
 ];
 
 test("the split did not change what the runtime exports", () => {
