@@ -247,3 +247,35 @@ test("a bid short by a different quantity proves nothing", { skip: !present }, (
   assert.equal(proof.ok, false);
   assert.equal(proof.reason, "MARKET_ORDER_NOT_FILLED");
 });
+
+test("the market's own count settles a sale it absorbed only partly", { skip: !present }, async () => {
+  // Measured 2026-10-28 at 60014935: the journal declared 5 chipsets, the seeded bid went
+  // 5000 -> 4997 (it took 3 at 53 700.08), and the hull still carried all 5 because a slot
+  // repair had restored a stale cargo snapshot. Crediting the declared 5 would invent two
+  // sales that never happened; crediting none would hide a real one.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "coop-market-"));
+  fs.mkdirSync(path.join(root, "tx"));
+  const journal = { ...JOURNAL, typeID: 444, quantity: 5, price: 53700.08,
+    stationID: 60014935, marketOrderID: "4257762183096566204",
+    beforeQuantity: 5, afterQuantity: 0, beforeBalance: 0, afterBalance: 268500.4 };
+  fs.writeFileSync(path.join(root, "tx", "coop-pilot-012.json"), JSON.stringify(journal));
+  fs.writeFileSync(path.join(root, "ledger.json"), JSON.stringify({ version: 1, pilots: {} }));
+  const order = { is_corp: false, order_id: "4257762183096566204", owner_id: 0, source: "seed",
+    state: "open",
+    row: { bid: true, order_id: "4257762183096566204", price: 53700.08,
+      station_id: 60014935, type_id: 444, vol_entered: 5000, vol_remaining: 4997,
+      issued_at: new Date(journal.at + 30).toISOString() } };
+  let stored = null;
+  const result = await reconcileJournals({ root, inspectOrder: () => order,
+    store: { listNativeCargoForEntity: () => [{ cargoID: journal.cargoID,
+      entityID: journal.entityID, typeID: 444, quantity: 5 }],
+      upsertNativeCargo: (row) => { stored = row; return { success: true }; } } });
+  assert.deepEqual(result.pending, []);
+  const receipt = JSON.parse(fs.readFileSync(path.join(root, "reconciled", "coop-pilot-012.json"), "utf8"));
+  assert.equal(receipt.quantity, 3, "the market took 3");
+  assert.equal(receipt.declaredQuantity, 5, "the journal declared 5");
+  assert.equal(receipt.isk, 161100.24);
+  assert.equal(stored.quantity, 2, "the hull keeps the 2 the market did not buy");
+  const ledger = JSON.parse(fs.readFileSync(path.join(root, "ledger.json"), "utf8"));
+  assert.equal(ledger.pilots["coop-pilot-012"].balance, 161100.24);
+});
