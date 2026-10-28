@@ -1871,3 +1871,9 @@ Evidence: 12-case fake-docker argv/payload/banner/throw comparison identical bef
 Why: Every sale in the world's history was ore and not one mineral: ensureMineralLift().lift() is async, its Promise was read as a result, so the lifted mineral types never joined the sale list and the trader answered NO_REAL_NATIVE_CARGO while the refinery surplus could never be sold.
 Where: .opencode/state.md
 Evidence: agents events: all four sales before the fix were ore (17464, 1228, 1230); after the awaited lift a drain COMPLETE settled sold [{typeID 34 Tritanium, ...}] isk 250000; corporate stock fell 739 492 -> 596 517 units (Tritanium 261 419 -> 101 419); treasury swept 250 000 (125 725 858.69 -> 125 975 858.69); fork 04e2c8a; 3 tests pass
+### 2026-10-28T13:11Z · 7f20e0d · OPS · ops(parity): run the recorded suites concurrently instead of one after another
+
+Why: coop-test-parity spawned 31 test files serially and idled; switched to bounded concurrent spawn with --jobs
+Detail: The parity runner spawned one Node test process per file and waited for each, so re-checking the 31 recorded files took 15.3 s of mostly idle wall clock. Node already runs test *files* in parallel for `node --test`, and every file here has its own process, so the isolation the runner relies on is unchanged; only the waiting is. - child_process.spawn + await instead of blocking spawnSync, bounded t
+Where: scripts/coop-test-parity.cjs
+Evidence: 15315ms serial vs 6783ms default / 7427ms at --jobs 4; per-file snapshot JSON byte-identical (222 pass / 13 fail, 0 diffs); exit 1 path verified
