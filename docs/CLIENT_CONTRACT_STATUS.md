@@ -178,6 +178,12 @@ Total client calls: 542 · MISSING 0 · STUB 44 · NULLABLE 103 · OK 395
   gRPC gateway answers every campaign request with `statusCode 200` and an empty payload,
   and the local proto root does not define the campaign messages. Nothing throws; the page
   lists no campaigns. Turning that on is a feature (proto schema + campaign attributes).
+- The gRPC/gateway surfaces are only reachable when the client is started by the
+  launcher (`Play.bat`): it exports `http_proxy`/`https_proxy` plus the local CA, so the
+  client's HTTPS calls to `public-gateway.evetech.net` are CONNECTed to the local HTTP/2
+  listener. A client started straight from `exefile.exe` never touches it (measured: zero
+  CONNECT, zero H2, zero proxy requests) and every gateway surface reports
+  `ServerException(500, invalid character on request)`.
 - `fwAdvantageGateway.GetSolarSystemScores` is NOT a stub: the co-op hook fills it
   from the war casualty ledger and fleet registry (`EVEJS_COOP_WAR_ADVANTAGE=1`), and the
   values are clamped into the 0..100000 domain `factionwarfare/advantageState.py` accepts.
