@@ -93,6 +93,33 @@ test("a refused native spawn is reported with its own reason", () => {
   assert.equal(out.applied[0].status, "DOCTRINE_REFUSED");
 });
 
+test("a registry row whose hull is not in the scene does not count as present", () => {
+  const calls = [];
+  const garrison = createWarGarrison({
+    readWarState: () => STATE,
+    registry: {
+      snapshot: () => ({
+        ships: {
+          1: { entityID: 1, systemID: 30045344, factionID: 500001 },
+          2: { entityID: 2, systemID: 30045344, factionID: 500001 },
+          3: { entityID: 3, systemID: 30045344, factionID: 500004 },
+          4: { entityID: 4, systemID: 30045344, factionID: 500004 },
+        },
+      }),
+    },
+    // Only the Gallente pair is really on the field; the Caldari rows are ghosts.
+    isHullLive: (systemID, entityID) => entityID >= 3,
+    listFreePilots: () => ["coop-pilot-001"],
+    spawnFleet: (input) => { calls.push(input); return { ok: true, ships: [{ entityID: 901 }] }; },
+    env: ON,
+    clock: () => 1000,
+  });
+  const out = garrison.tick();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].factionID, 500001);
+  assert.equal(out.applied[0].missing, 2);
+});
+
 test("cooldown stops a spawn loop when the native spawn cannot keep up", () => {
   const calls = [];
   let now = 1000;
