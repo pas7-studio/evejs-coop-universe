@@ -20,7 +20,8 @@ function store(){
   writeSync:(fd,buf,offset=0,len=buf.length)=>{
    const row=handles.get(fd);if(!row)throw Error("BAD_FD");
    if(failWrites&&row.mode==="a")throw Error("DISK_ERROR");
-   const payload=typeof buf==="string"?buf:buf.data;
+   // The journal writes real Buffers now, not plain strings or {data} stubs.
+   const payload=Buffer.isBuffer(buf)?buf.toString("utf8"):typeof buf==="string"?buf:buf.data;
    files.set(row.file,(row.mode==="a"?files.get(row.file):"")+payload.slice(offset,offset+len));
    return len;
   },

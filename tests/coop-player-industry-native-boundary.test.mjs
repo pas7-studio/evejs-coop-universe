@@ -71,7 +71,14 @@ for(const eol of ["\n","\r\n"])test("native industry source roundtrips "+JSON.st
  const source=fixture(eol),applied=patch(source,fileName);
  assert.equal(patch(applied,fileName),applied);
  assert.equal(patch(applied,fileName,true),source);
- for(const [,hook] of pairs)assert.equal(applied.split(hook).length-1,1);
+ // Anchor counts must use the same EOL-delimited form the patch uses: the
+ // single-job line is a substring of the batch-job line, so a bare split()
+ // counts the 6-space occurrence twice.
+ for(const [plainLine,guardedLine] of pairs){
+  const hits=needle=>applied.split(eol+needle+eol).length-1;
+  assert.equal(hits(plainLine)+hits(guardedLine),1,
+   'each native anchor carries exactly one guard');
+ }
  assert.doesNotThrow(()=>new vm.Script(applied));
 });
 test("central installer includes source guards, journal and native RPC spec exactly once",()=>{

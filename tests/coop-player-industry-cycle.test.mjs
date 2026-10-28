@@ -12,7 +12,8 @@ function memory(){
   openSync:(p,mode)=>{if(mode==="wx"&&files.has(p))throw Error("EEXIST");
    if(mode==="wx"||mode==="a"&&!files.has(p))files.set(p,"");
    const n=++fd;handles.set(n,{p,mode});return n},
-  writeSync:(n,buf,off=0,len=buf.length)=>{const h=handles.get(n),s=typeof buf==="string"?buf:buf.data;
+  writeSync:(n,buf,off=0,len=buf.length)=>{const h=handles.get(n),
+   s=Buffer.isBuffer(buf)?buf.toString("utf8"):typeof buf==="string"?buf:buf.data;
    files.set(h.p,(h.mode==="a"?files.get(h.p):"")+s.slice(off,off+len));return len},
   fsyncSync:()=>{},closeSync:n=>handles.delete(n),unlinkSync:p=>files.delete(p)};
 }
