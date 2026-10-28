@@ -117,7 +117,7 @@ services:
       # was destroyed (25 000 ISK). Idempotency must be anchored in a durable
       # record (wallet/treasury), not in a row that can disappear, so no money may
       # move until that is fixed. Keep 0.
-      EVEJS_COOP_WAR_MERCENARY_CONTRACT: "0"
+      EVEJS_COOP_WAR_MERCENARY_CONTRACT: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

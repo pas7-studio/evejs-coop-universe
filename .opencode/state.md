@@ -3727,3 +3727,23 @@ the row can vanish AFTER the payment. The correct fix is to anchor the event in 
 record that holds the money (a reservation in `coopWarTreasury`, whose journal is a wallet
 transaction) so a replay is refused by the wallet itself, not by a separate row.
 No further transfers are possible while the flag is 0; mining/refining economy untouched.
+
+## FW-038C: wallet-anchored payment + a REAL HELD bounty escrow (15:28Z, proven live)
+Idempotency fix that worked, measured on the same running stack:
+  merc:fw038c:1 PAID (debitLeg APPLIED, creditLeg APPLIED)
+  replay of the SAME event -> status PAID but debitLeg DUPLICATE, creditLeg DUPLICATE and
+  every balance byte-identical before and after (1000129=280 097 039.67, 1000120=100 000).
+  The marker lives in the wallet journal itself (`FW-MERC <eventID> DEBIT|CREDIT`), written in
+  the same write as the balance, so a vanished side row can no longer cause a second payment.
+Money now sits where the war needs it, all of it moved from real ORE income by journaled
+two-leg transfers (nothing minted):
+  1000120 (Federation Navy) 100 000 ISK    1000138 (Angel Cartel) 25 000 ISK
+And the chain completed by itself 15:28:40:
+  living-native-war-bounty-reserved RESERVED
+  factionID 500011, corporationID 1000138, campaign war:500004-500011:campaign:30045344,
+  amountCents 2 500 000 (25 000 ISK), reservation HELD, escrow journal 8000000000000000.
+So for the first time in this world a war party holds a REAL bounty escrow, taken from a real
+corporation wallet. The remaining step is only the native trigger: an attributed kill in that
+campaign (or a recorded casualty, which `coopWarBounty` accepts) releases the escrow to the
+pilot's earned balance - `living-native-war-merit` already proved the attribution path works
+(5 promotions). Nothing about that is staged or faked.
