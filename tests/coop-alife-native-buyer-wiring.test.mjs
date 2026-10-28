@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const runtime=read("integration/coopVirtualWorldRuntime.cjs");
@@ -49,7 +50,10 @@ test("all new native economy source modules are copied by the pinned overlay",()
   "coopNpcBuyerNativeBindings","coopNpcBuyerCoordinator",
   "coopNpcCorporateBuyerAtomic","coopNpcMarketPolicy",
   "coopNpcDemandAuthority","coopNpcNativeEconomyDirector"]){
-  assert.ok(patcher.includes('"'+filename+'"'),filename);
+  // The installed set is scripts/overlay-spec.cjs, not the legacy installer's
+  // text: asking the list also rejects a duplicate registration, which a
+  // substring search cannot.
+  assert.equal(overlayRegistrations(filename),1,filename);
   assert.ok(fs.existsSync(path.join(root,"integration",filename+".cjs")),filename);
  }
 });
