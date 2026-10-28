@@ -14,7 +14,7 @@ const IDENTITY={operationID:OP,orderID:ORDER,ownerID:OWNER,stationID:STATION,
  typeID:215,itemID:ITEM,quantity:100};
 const ROW="corporations\u001f"+OWNER, RECEIPT="order\u001f"+ORDER;
 function fixture(){
- const dir=fs.mkdtempSync(path.join(os.tmpdir,"coop035-native-sqlite-")),filepath=path.join(dir,"gamestore.sqlite");
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop035-native-sqlite-")),filepath=path.join(dir,"gamestore.sqlite");
  let db=new DatabaseSync(filepath);
  for(const table of TABLES)db.exec('CREATE TABLE "'+table+'"(key TEXT PRIMARY KEY,json TEXT NOT NULL)');
  const put=(t,key,value)=>db.prepare('INSERT INTO "'+t+'"(key,json) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json')

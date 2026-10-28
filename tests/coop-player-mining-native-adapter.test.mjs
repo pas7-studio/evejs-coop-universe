@@ -39,8 +39,12 @@ function fixture(bound=true){
  return {a,run,assign,fleet,records,ships,entities,controllers,cargo};
 }
 test('strict native adapter verifies stock startup fleet and original durable pilot hulls',()=>{
- const x=fixture();assert.deepEqual(x.a.verified({systemID:SYSTEM,fleetID:FLEET}),{
-  systemID:SYSTEM,fleetID:FLEET,ownerID:NPC,minerIDs:[1001,1002],haulerIDs:[1003]});
+ const x=fixture();
+ // The verified identity also carries the fleet state: a caller asserts which
+ // native shift it proved, not just which hulls answer to it.
+ assert.deepEqual(x.a.verified({systemID:SYSTEM,fleetID:FLEET}),{
+  systemID:SYSTEM,fleetID:FLEET,ownerID:NPC,state:"mining",
+  minerIDs:[1001,1002],haulerIDs:[1003]});
  x.entities.get(1003).ownerID=9999;
  assert.equal(x.a.verified({systemID:SYSTEM,fleetID:FLEET}),null);
 });
