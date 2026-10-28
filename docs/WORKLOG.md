@@ -1928,3 +1928,9 @@ Evidence: escort suite 290/122 -> 359/52 on Windows; engine 109e131 byte-identic
 Why: Native industry jobs are session-bound and this world has no client, so the co-op economy could not manufacture anything; materials had no consumer and the whole upper economy could never start.
 Where: compose/compose.agents.yaml, integration/coopStationDrain.cjs, scripts/manufacture-npc-item.cjs, scripts/sell-station-goods.cjs, tests/coop-station-drain.test.mjs
 Evidence: agents world: blueprint 1076 seeded at 60014935, 5-run job consumed 5555 Tritanium (72399 -> 66844) and produced 5 x typeID 444 in the corp hangar with a receipt (coop-job:1000129:60014935:1076:1793194860012); station bid 53700.08; fork 6c66f05; 8 drain tests pass; AUDIT_OK
+### 2026-10-28T13:50Z · a6fabf6 · L1 · coop: mirror the second Windows fsync guard batch from the fork (7adf5d5)
+
+Why: seven more modules fsynced a directory unguarded, so opportunity board/volunteers/job/salvage journals reported write-uncertain on Windows for a platform reason
+Detail: Same seven modules, byte-identical to the fork. Evidence on this Windows box: coop-native-opportunity-board 6/10 -> 15/1, coop-escort-native-predeparture 5/6 -> 11/0, escort suite 359/52 -> 365/46. Unrelated files were checked before and after and did not move (coop-installer-module-coverage 2/1, coop-npc-job-board 19/1, coop-salvage-postpickup-settlement 3/6). coop-engine-audit AUDIT_OK, coop-tes
+Where: integration/coopEscortVolunteers.cjs, integration/coopNativeContractMutationFence.cjs, integration/coopNativeJobAgentSelection.cjs, integration/coopNativeJobNotifications.cjs, integration/coopSalvageNativeConsent.cjs, integration/coopSalvageProvenance.cjs, integration/coopVirtualWorldRuntime.cjs, integration/coopWorldOpportunityBoard.cjs
+Evidence: native-opportunity-board 6/10->15/1, escort-native-predeparture 5/6->11/0, escort suite 359/52->365/46; parity PARITY_OK; audit AUDIT_OK
