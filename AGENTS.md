@@ -21,14 +21,13 @@ project **`evejs-agents`** (ports `28443/25222/28000-28002/41110`, volumes
 needs the play stack, append `NEEDS_OWNER_RESTART_WINDOW` to
 `.opencode/state.md`; never restart it yourself.
 
-**Play stack with a remote player.** The owner's friend reaches the game through
-one ProtonVPN port (`159.26.120.49:61730` → container `26000`). Provision and
-recreate that stack only with
-`scripts/Start-Play-Stack.ps1 -Action Up` (it always includes
-`compose.play-public.yaml`) and run `-Action Status` after any change; a bare
-`docker compose up -d` silently drops the binding. Proton forwards only that one
-port, so the client-side chat/market/image ports `443/5222/26001/26002` need a
-separate path, and the client port lives in `prefs.ini`, not `start.ini`.
+**Play stack with a remote player.** One ProtonVPN port
+(`159.26.120.49:61730`) carries **SSH**, not the game: the friend opens one SSH
+session and forwards `443/5222/26000/26001/26002` to his own `127.0.0.1`. Host
+side is the `evejs-ssh-relay` container (`0.0.0.0:61730` -> hardened sshd
+`127.0.0.1:55346`). Bring the stack up with
+`scripts/Start-Play-Stack.ps1 -Action Up` and check `-Action Status` after any
+change. The client port lives in `prefs.ini`, not `start.ini`.
 Details: [`docs/PUBLIC_ENDPOINT_PROTONVPN.md`](docs/PUBLIC_ENDPOINT_PROTONVPN.md).
 
 **Launching the client:** always through the launcher, `Play.bat` (or
