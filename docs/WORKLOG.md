@@ -1889,3 +1889,9 @@ Why: two wiring assertions were red at HEAD for location/EOL reasons: bare LF an
 Detail: Both files were red at HEAD for reasons unrelated to behaviour. coop-alife-order-authority anchored the npcOrderBridge guard with a bare `\n`, but integration/coopVirtualWorldRuntime.cjs is committed with CRLF (it is byte-identical to the engine copy), so the anchor only matched when a block happened to be written with LF. The anchor is now EOL-agnostic, which is what docs/DEVELOPMENT_DOCTRINE.md 
 Where: tests/coop-alife-order-authority.test.mjs, tests/coop-convoy-native-outcomes-overlay.test.mjs
 Evidence: coop-alife-order-authority 5/5, coop-convoy-native-outcomes-overlay 5/5; coop-test-parity PARITY_OK with both reported FIXED
+### 2026-10-28T13:20Z · 5bfeacc · TEST · test: run the headless sandbox on real split siblings, and stop pinning a label
+
+Why: headless sandbox whitelist predated the module split; coordinator async label/installer-grep assertions were red for non-behaviour reasons
+Detail: coop-headless-startup-evidence stubbed require() with a whitelist that predates the module split, so it died on './coopVirtualWorldRuntime.pure' - i.e. it was red because of a refactor, not because startup evidence changed. The stub now loads the two real leaf modules (the pure sibling and coopJsonFileCache) and keeps failing loudly on anything else, so the boot path under test is still isolated. 
+Where: tests/coop-headless-startup-evidence.test.mjs, tests/coop-living-world-phase-coordinator.test.mjs
+Evidence: coop-headless-startup-evidence 3/3, coop-living-world-phase-coordinator 22/22; full parity PARITY_OK; coop-engine-audit AUDIT_OK
