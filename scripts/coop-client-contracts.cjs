@@ -16,8 +16,14 @@
 // Nothing here inspects the client at runtime: re-read the client to refresh calls.json.
 //
 //   node scripts/coop-client-contracts.cjs            # print the summary
-//   node scripts/coop-client-contracts.cjs --write    # rewrite the register
+//   node scripts/coop-client-contracts.cjs --write    # rewrite the register (needs the client once)
 //   node scripts/coop-client-contracts.cjs --check    # fail on a new MISSING/STUB
+//   node scripts/coop-client-contracts.cjs --verify   # offline: is the committed register still true?
+//
+// --verify needs NO client archive and no Python: `build()` reads the committed
+// `docs/client-contracts/calls.json` and the server tree, so any agent (including a
+// web session with no access to `tq/code.ccp`) can prove that what the repository
+// records about the client still matches the code in front of it.
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -333,6 +339,44 @@ function main() {
       `stub=${counts.STUB} nullable=${counts.NULLABLE} ok=${counts.OK}`);
     return;
   }
+  if (mode === "--verify") {
+    // The register is the only client contract a session without the client can see,
+    // so a stale register is worse than no register: it states a contract the code no
+    // longer honours. Everything below is derived from committed data, so a web agent
+    // with no access to tq/code.ccp can prove the record is still true.
+    const CR = String.fromCharCode(13);
+    const LF = String.fromCharCode(10);
+    const normalise = (text) => String(text).split(CR + LF).join(LF);
+    const expectedRegister = register(rows);
+    const expectedBaseline = JSON.stringify({
+      note: "known client-facing stubs; a new entry means a client call got a new placeholder",
+      missing: rows.filter((r) => r.status === "MISSING").map((r) => r.key),
+      stubs: rows.filter((r) => r.status === "STUB").map((r) => r.key),
+    }, null, 2) + LF;
+    const problems = [];
+    if (!fs.existsSync(REGISTER))
+      problems.push("docs/CLIENT_CONTRACT_STATUS.md is missing: run --write");
+    else if (normalise(fs.readFileSync(REGISTER, "utf8")) !== normalise(expectedRegister))
+      problems.push("docs/CLIENT_CONTRACT_STATUS.md is stale: run --write");
+    if (!fs.existsSync(BASELINE))
+      problems.push("docs/client-contracts/baseline.json is missing: run --write");
+    else if (normalise(fs.readFileSync(BASELINE, "utf8")) !== normalise(expectedBaseline))
+      problems.push("docs/client-contracts/baseline.json is stale: run --write");
+    // A call the client really makes must never answer "handler missing" silently.
+    const missing = rows.filter((row) => row.status === "MISSING").map((row) => row.key);
+    if (missing.length)
+      problems.push("MISSING client calls: " + missing.slice(0, 8).join(", "));
+    if (problems.length) {
+      console.error("CONTRACTS_OFFLINE_STALE" + LF + problems.join(LF));
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`CONTRACTS_OFFLINE_OK calls=${rows.length} missing=${counts.MISSING} ` +
+      `stub=${counts.STUB} nullable=${counts.NULLABLE} ok=${counts.OK} ` +
+      `client_archive_required=no`);
+    return;
+  }
+
   if (mode === "--check") {
     const baseline = fs.existsSync(BASELINE)
       ? JSON.parse(fs.readFileSync(BASELINE, "utf8"))

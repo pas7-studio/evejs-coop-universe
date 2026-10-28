@@ -11,6 +11,25 @@ a default-encoded empty message and a warning that names the type, so the client
 "no data" answer instead of a 404 it cannot decode. What that means in game is that the surface
 opens and shows nothing (or zeros) — it does not throw.
 
+## If you have no client: read this instead of decompiling
+
+A web or cloud session cannot run the decompiler - there is no `tq/code.ccp`, usually no Python
+and often no Windows machine. Nothing is lost: every client fact the repository relies on is
+committed as data, and it can be re-proved without the client.
+
+| what you want to know | read | prove it is still true |
+| --- | --- | --- |
+| every call the pinned client issues (542) | `docs/client-contracts/calls.json` | `node scripts/coop-client-contracts.cjs --verify` |
+| which of them answer a constant or may answer `null` | `docs/CLIENT_CONTRACT_STATUS.md` | same `--verify` (a stale register fails) |
+| every `eve_public.*Request` the client can send | `docs/client-contracts/gateway-types.json` | `node scripts/coop-client-contracts.cjs --verify` |
+| which response fields the client really reads | `docs/client-contracts/field-reads.json` | same |
+| what the client does when the gateway answers nothing | `docs/CLIENT_GAPS.md` (this file) | - |
+
+`--verify` touches only committed data and the server tree: it rebuilds the register and the
+baseline and fails with `CONTRACTS_OFFLINE_STALE` when either no longer matches the code, or when a
+recorded call has no handler at all. `--write` is the only mode that needs the client, and it is run
+by the machine that has it; never commit the decompiled text, only the derived JSON above.
+
 This file is the work queue for those surfaces. Refresh the numbers with
 `node scripts/coop-client-contracts.cjs --write` (see `docs/CLIENT_CONTRACT_STATUS.md`).
 
