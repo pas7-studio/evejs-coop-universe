@@ -16,7 +16,7 @@ function tactics(){
    eventID:"convoy-30000144-77-1234",fleetID:77,systemID:30000144,
    entityID:901,pilots:[{characterID:701,shipID:1901},{characterID:702,shipID:1902}]}),
   readRoute:()=>({status:"NATIVE_CONVOY_EN_ROUTE",systemID:30000144,
-   fleetID:77,entityID:901}),
+   fleetID:77,playerFleetID:77,entityID:901}),
   getScene:()=>scene,
   authorizeCommander:()=>({status:"AUTHORIZED_NATIVE_CONVOY_COMMANDER",characterID:701,fleetID:77}),
   issueNativeCommand:({shipID})=>{called++;return {status:"NATIVE_COMMAND_ACCEPTED",entityID:shipID}},

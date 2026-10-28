@@ -17,6 +17,7 @@ function fixture(){
   settlePeacefulFlight:()=>({status:"ALREADY_NATIVE_PAID"}),
   refundProvenLoss:()=>({status:"REFUNDED"}),
   readFlight:()=>({status:"READY"}),
+  readContract:()=>({status:"NOT_FOUND"}),
   inspectRefundRecovery:()=>({status:"READY"}),
   refundWreckedFlight:k=>{calls.push(k);return {status:"NATIVE_REFUND_ATTEMPT",manifestKey:k}},
   nativeFunds:{capabilities:()=>({nativeDurable:true,atomicDualCredit:true})}

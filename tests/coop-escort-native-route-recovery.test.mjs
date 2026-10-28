@@ -34,7 +34,8 @@ function fixture(){
   fleetID:77,haulerID:901,stationID:60001,
   corporationID:10001,cargoIDs:[5501]};
  const cargo=[{cargoID:5501,entityID:901,coopHaulFleetID:77,
-  coopHaulFromMinerID:503,moduleID:0,quantity:7,typeID:34,transient:false}];
+  coopHaulFromMinerID:503,moduleID:0,quantity:7,typeID:34,transient:false,
+  ownerID:10001}];
  const state={station,physicalStation,ingress,npc,scene,booking,entry,cargo,
   fleet:{fleetID:77,systemID:30000144,haulerEntityIDs:[901],
    coopEscortPredepartureEventID:"original-native-agent-contract"},
