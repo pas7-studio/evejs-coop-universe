@@ -41,14 +41,17 @@ coop-virtual-world-split 2/1 (PARITY_REGRESSION from another session), and the
 untracked coop-integration-shims 1/1.
 
 **New blocker found, needs the owner: `.github/workflows` is back in the tree.**
-12 workflow files are tracked on `main` (added 2026-10-26/27 by `3e0ef3bc`,
-`0598ac73`, `b792c328` - EX-03B17/EX-03B19/lw04* CI commits), which contradicts the
-AGENTS.md prohibition of 2026-10-24 and fails `coop-crossstream-overlay-roundtrip`
-("Owner prohibited remote GitHub CI for this game") and makes
-`coop-state.cjs --verify` report STATE_STALE with those files in its list. Either the
-prohibition was rescinded (then AGENTS.md and that assertion are stale and must be
-updated) or those commits violated it (then `git rm -r .github/workflows`), but that
-is not a call an agent may make alone.
+Owner decision 2026-10-28: delete it. Done in `a6d6b44a`; the CI-triggered EX-03 gate
+became `scripts/Run-NpcProbe-PinnedChecks.ps1` (`bbea62c3`) so the procedure survived,
+and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
+`coop-feature-readiness` 7/1->8/0, `coop-crossstream-overlay-roundtrip` 1/1->2/0).
+Steady total is now 6161 / 48 / 99.
+
+**`node scripts/coop-engine-audit.cjs` prints AUDIT_REGRESSION at 20:55Z** - not from
+these commits: `integration drift 4 > 0` for coopAdminBridge, coopAdminBridgeActions,
+coopStationDrain and coopVirtualWorldRuntime, i.e. another session's fork work is
+in flight (`coopStationDrain.js` and `coopVirtualWorldRuntime.js` are uncommitted in
+`C:\Games\EveCoop\upstream-evejs` right now). Their `AUDIT_OK` returns when they mirror.
 
 Closed since that probe (each with a fork mirror where the code changed):
   coop-native-haul-transfer-sqlite 2/5->7/0 (fixture handed the mover the raw SQLite
