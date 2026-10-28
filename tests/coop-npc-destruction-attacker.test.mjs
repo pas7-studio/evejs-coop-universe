@@ -40,8 +40,21 @@ test("player or fake attacker cannot get NPC kill credit",()=>{
  scene.sessions.clear();attacker.nativeNpc=false;
  assert.equal(verify(base).status,"UPSTREAM_ATTACKER_NOT_NATIVE");
 });
-test("stale/foreign named pilot link never proves native final attacker",()=>{
- const {base,links}=fixture();
+test("a stale link position never decides attribution, but the hull must be real",()=>{
+ // FW-048: the same physical hull can keep a link whose recorded system has already
+ // moved (the virtual pilot walks its route while the native hull stays). The wreck
+ // and the scene prove locality, so attribution must survive that drift - it was the
+ // reason real kills answered ATTACKER_NOT_NAMED all evening.
+ const {base,links,scene}=fixture();
  links[0].systemID=30000144;
- assert.equal(verify(base).status,"ATTACKER_NOT_NAMED");
+ const r=verify(base);
+ assert.equal(r.status,"NATIVE_DESTRUCTION_ATTACKER_PROVIDED");
+ assert.equal(r.attackerPilotID,"coop-pilot-001");
+ assert.equal(r.staleLinkPosition,true,"the stale position is reported, never hidden");
+ // a hull the scene does not hold can never prove the attacker
+ const ghost={itemID:77,kind:"ship",nativeNpc:true};
+ const ghosted=verify({...base,options:{attackerEntity:ghost},
+  links:[links[0],links[1],{pilotID:"coop-pilot-003",entityID:77,systemID}]});
+ assert.notEqual(ghosted.status,"NATIVE_DESTRUCTION_ATTACKER_PROVIDED",
+  "a link alone is not a physical attacker");
 });
