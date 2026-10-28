@@ -33,6 +33,12 @@ services:
       #   manufacturing duration x0.2 (the module's own floor, = 5x faster).
       # Nothing here fakes a state change; it only shortens real durations.
       EVEJS_COOP_TIME_SCALE: "5"
+      # FW payout (2026-10-28): a bounty escrow can only be reserved before a
+      # campaign starts, so proving PAYOUT needs one NEW front. Every border the
+      # world already tracked had a live campaign; these two systems are the real
+      # stargate neighbours of the captured 30045344, so the world can derive a
+      # fresh front from real travel instead of a hand-made record.
+      EVEJS_COOP_VIRTUAL_ROUTE: "30000142,30000144,30000145,30045344,30003837,30045343,30045342"
       EVEJS_COOP_VIRTUAL_TRAVEL_MS: "24000"
       EVEJS_COOP_CLONE_RECOVERY_MS: "360000"
       EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: "0.2"
@@ -96,6 +102,12 @@ services:
       # that same native wallet (coopWarTreasury verifies and debits it, so no
       # ISK is created). Work stack only until the owner accepts it.
       EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK: "1"
+      # FW-005B (2026-10-28): this stack ran with REQUIRE_FUNDING=0, i.e. a
+      # campaign could open with a paper supply and no escrow, so no bounty could
+      # ever be paid. Require real money: a campaign now opens only if both war
+      # parties really reserve a HELD escrow (wallet-backed above), which is the
+      # only way PAYOUT can be observed. Work stack only.
+      EVEJS_COOP_WAR_REQUIRE_FUNDING: "1"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

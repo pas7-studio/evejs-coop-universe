@@ -3495,3 +3495,27 @@ Escort suite now 397 pass / 13 fail, and all 13 are `coop-escort-flight-stage-c`
 which is obsolete coverage (see earlier measurement): it predates mandatory
 discovery + paid consent and is covered green elsewhere. Owner decision pending:
 retire it or reduce it to the gate + station-arrival slice.
+
+## PAYOUT: root cause found (REQUIRE_FUNDING was off), still not observable (14:0xZ)
+Cause, measured rather than guessed: the work stack ran with
+`EVEJS_COOP_WAR_REQUIRE_FUNDING=0`. `coopFactionWarOpening.applyOpenings` then skips the
+escrow step entirely (`fundingRequired()` false), records `PAPER_UNFUNDED_EXPLICIT` and opens
+the campaign anyway. With no HELD reservation there is nothing a bounty could ever pay from, so
+`warBountyReserve` was never exercised and `treasury-v1.reservations` stayed at 0.
+Actions taken on the work stack only:
+ * `EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK=1` - the pilot-earned levy is empty because the
+   refinery sweep already moved those ISK into the corporation wallet, so when `planLevy`
+   answers NO_REAL_FACTION_INCOME the escrow may be backed by that same native wallet;
+   `coopWarTreasury` RESERVE verifies corporation/faction, writes a real journal entry and
+   debits division 1000, so value is spent, never minted.
+ * `EVEJS_COOP_WAR_REQUIRE_FUNDING=1` - a campaign may now only open with a real HELD escrow,
+   which is the only configuration in which PAYOUT can exist at all.
+ * route extended with the two real stargate neighbours of the captured system
+   (30045343, 30045342) so the world can derive a NEW front from real travel.
+Result of that: the world did open `war:500011-500014` and projected 30045342 -> 500014, so the
+frontier logic works, but the next tick answers `NO_OPENABLE_FRONT` for all 3 candidate borders
+because each target already carries a live campaign (30000144, 30000145, 30045344) - the
+orientation flip only rescues a border whose blocker belongs to a DIFFERENT faction pair.
+So PAYOUT is not blocked by code any more: it needs ONE campaign to finish (freeing a target)
+and then a NEW campaign to open under REQUIRE_FUNDING=1, where the reservation itself will be
+recorded as `living-native-war-bounty-reserved`. Nothing about that is faked in this repo.
