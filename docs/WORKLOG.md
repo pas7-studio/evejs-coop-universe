@@ -2257,3 +2257,15 @@ Why: agents needed the client's code to verify contracts, but committing decompi
 Detail: The client's Python cannot be committed - it is CCP code, and this repository explicitly does not vendor client files or CCP assets - but agents still need to read the client's own contract. scripts/coop-client-code.py decompiles one module (--module), searches the modules that contain a string (--grep) or lists the archive (--list) straight out of tq/code.ccp, and caches the text in %TEMP%/openco
 Where: .gitignore, AGENTS.md, scripts/coop-client-code.py, tests/coop-client-code-tool.test.mjs
 Evidence: scripts/coop-client-code.py (--module/--grep/--list, cache in %TEMP%/opencode/client-code, gitignored); verified --module facWarSvc and --grep FACTION_ID_TO_COLOR; AGENTS.md section; tests/coop-client-code-tool 3/0
+### 2026-10-28T23:29Z · 7aa118e · L1 · test(fw): FW-060 - garrison gates had no direct coverage
+
+Why: Close the three gaps the code review named: unbounded chest journal, missing payout-credit retry, and no direct garrison/chest coverage
+Detail: 5 tests on the properties that matter and were only proven by live runs: every flag must read exactly 1, no assault means no hull, a disabled world never reaches the spawner, a full garrison costs nothing, and a starved side asks for at most one hull and reports the native status it got.
+Where: tests/coop-war-garrison-gates.test.mjs
+Evidence: FW-058/059/060 deployed; 5+5 new tests; suite 6464 with one foreign failure
+### 2026-10-28T23:31Z · 76b0476 · DOCS · docs(client): give a session without the game what the client enforces
+
+Why: cloud sessions cannot decompile the client, so the contracts it enforces and the derived call/field data must be readable straight from the repository
+Detail: A cloud agent cannot decompile code.ccp, so the contract knowledge moves into the repository as derived data instead of client code: - docs/CLIENT_CONTRACTS.md - 15 verified contracts with the client module that enforces each, what the server answers and the fork commit that fixed it (warzone colouring, adjacency, advantage domain and attacker, victory-point coverage, militia corporation, corp war
+Where: docs/AGENT_START_HERE.md, docs/CLIENT_CONTRACTS.md, docs/client-contracts/field-reads.json, scripts/coop-client-fields.py, tests/coop-client-contracts-digest.test.mjs
+Evidence: docs/CLIENT_CONTRACTS.md (15 verified contracts with client modules), docs/client-contracts/field-reads.json (513 calls, 26 resolved, coverage stated), scripts/coop-client-fields.py --digest/--check; tests/coop-client-contracts-digest 3/0 and coop-client-code-tool 3/0
