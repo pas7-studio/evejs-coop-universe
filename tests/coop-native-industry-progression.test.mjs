@@ -54,7 +54,11 @@ test("only LivingCoop deployment activates bounded skill pace, Omega and native 
  const config=deploy.slice(start,deploy.indexOf("if ($LivingCoop)",start+1)>0?
   deploy.indexOf("if ($LivingCoop)",start+1):undefined);
  assert.match(config,/EVEJS_SKILL_TRAINING_SPEED: '\$CoopSkillTrainingSpeed'/);
- assert.match(deploy,/\[ValidateSet\(6,12,24,48\)\]\[int\]\$CoopSkillTrainingSpeed = 48/);
+ // docs/COOP_LOCAL_PROGRESSION_V2.md: 48 is the historical V2 target, the
+ // deployed source defaults to the owner's established 100 and accepts
+ // 6/12/24/48/100. Bounded stays bounded; the default is not 48.
+ assert.match(deploy,
+  /\[ValidateSet\(6,12,24,48,100\)\]\[int\]\$CoopSkillTrainingSpeed = 100/);
  assert.match(deploy,/ConfirmActiveTrainingRebased/);
  assert.match(config,/EVEJS_OMEGA_LICENSE: 'true'/);
  assert.match(config,/EVEJS_COOP_MANUFACTURING_TIME_MULTIPLIER: '0.35'/);
