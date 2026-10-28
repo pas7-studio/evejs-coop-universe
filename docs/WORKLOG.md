@@ -1771,3 +1771,8 @@ Why: Split safety: the splitter read only the first name of a declarator list, s
 Detail: Two modules declaring the same state name only stay equal while something passes the live object across. That is the failure mode behind the frozen war: the fleet registry existed twice, the garrison wrote one and the phase read the other. `UNBOUND_STATE` now names it (the parent assigns its own copy and no bind*() call hands it over) and the engine audit treats it as a hard failure. The harmless 
 Where: docs/FORK_PATCH_AUDIT_20261028.md, docs/evidence/test-parity.json, scripts/coop-split-check.cjs, scripts/lib/js-declarations.cjs, tests/coop-split-tooling.test.mjs
 Evidence: tests/coop-split-tooling.test.mjs 9/9; parity 31 files 213 pass/21 fail PARITY_OK; AUDIT_OK split safety 0 undeclared, 23 two-state; PERF_OK
+### 2026-10-28T11:47Z · 162f69b · DOCS · docs: the split-safety gate reproduces the real incident (23 COUPLING names at eec175f), and the repaired tree is 0 hard + 23 two-state
+
+Why: Record the split incident as evidence: the checker run against eec175f prints the 23 state names that threw ReferenceError live; the repaired tree is 0 hard findings, 23 two-state
+Where: docs/FORK_PATCH_AUDIT_20261028.md
+Evidence: historical extract of eec175f + current engine both checked with coop-split-check.cjs; AUDIT_OK
