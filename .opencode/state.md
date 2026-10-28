@@ -3661,3 +3661,24 @@ payer, refuses a payer that cannot cover the need, refuses to pay a navy that al
 refuses a zero need. It moves no ISK and creates none - the transfer is still a separate,
 journaled two-leg operation on real corporation wallets (`coopCorpWallet.applyDelta` writes and
 reads the balance back), which is the next wiring job.
+
+## FW-038B: money MOVED, then a real defect stopped it (2026-10-28T15:0xZ) - FEATURE DISABLED
+What worked, measured on the work stack with a dry run first:
+  DRY_RUN merc:fw038b:1 -> payer 1000129 179 219 344.69 ISK, payee 1000120 0 -> 25 000,
+  PAID merc:fw038b:1 -> payer 179 194 344.69, payee 25 000 (exactly one debit, one credit).
+What failed, and it is why the flag is now `EVEJS_COOP_WAR_MERCENARY_CONTRACT: "0"`:
+  a replay of the SAME event 28 s later answered PAID again instead of DUPLICATE. The
+  journal row (`coop-faction-war\u001fmercenary-v1` in corporationRuntime) could be read
+  back right after the write - the new durability guard passed - and was then GONE on the
+  next request. Result: ORE 1000129 went 179 219 344.69 -> 179 169 344.69 (two debits) while
+  the payee received 25 000 once, i.e. 25 000 ISK was DESTROYED. A further replay paid a
+  third time (payee 50 000 -> 75 000, payer -25 000, this leg conserved).
+  Root cause is the same durability class already seen with the war state: a row written
+  through the atomic native store is not reliably readable/writable across container
+  recreates in this world. A money mover therefore CANNOT anchor idempotency in that table.
+The code is kept, tested (8 tests) and honest about it: it refuses to debit unless the
+PREPARED row reads back (`WAR_MERCENARY_JOURNAL_NOT_DURABLE`), but that is not enough when
+the row can vanish AFTER the payment. The correct fix is to anchor the event in the same
+record that holds the money (a reservation in `coopWarTreasury`, whose journal is a wallet
+transaction) so a replay is refused by the wallet itself, not by a separate row.
+No further transfers are possible while the flag is 0; mining/refining economy untouched.

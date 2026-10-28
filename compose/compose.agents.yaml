@@ -108,6 +108,16 @@ services:
       # parties really reserve a HELD escrow (wallet-backed above), which is the
       # only way PAYOUT can be observed. Work stack only.
       EVEJS_COOP_WAR_REQUIRE_FUNDING: "1"
+      # FW-038B (2026-10-28): allow a funded faction to hire a navy with a real,
+      # journaled two-leg wallet transfer (division 1000). The world measured this
+      # asymmetry: ORE holds 136.5 M ISK and cannot field a hull, while every
+      # navy-capable faction holds 0 ISK. Work stack only.
+      # DISABLED 2026-10-28 after a measured failure: the settlement journal row
+      # vanished between transactions, so a replayed event paid again and one leg
+      # was destroyed (25 000 ISK). Idempotency must be anchored in a durable
+      # record (wallet/treasury), not in a row that can disappear, so no money may
+      # move until that is fixed. Keep 0.
+      EVEJS_COOP_WAR_MERCENARY_CONTRACT: "0"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.
