@@ -32,7 +32,8 @@ function withFiles(callback){
 function fixture(){
  const alice={characterID:101,socket:{destroyed:false}};
  const bob={characterID:102,socket:{destroyed:false}};
- const fleet={fleetID:45,members:new Map([[101,{}],[102,{}]])};
+ // Native fleet membership is proven from the member records, not the map keys.
+ const fleet={fleetID:45,members:new Map([[101,{charID:101}],[102,{charID:102}]])};
  const fleetRuntime={getFleetForCharacter:id=>fleet.members.has(id)?fleet:null,
   getMemberRecord:(f,id)=>f.members.get(id)||null};
  const missions=new Map([
@@ -151,7 +152,11 @@ test("P0 invalid state transition on a durable journal is never treated as fresh
 test("P0 when peer journal is unavailable, leader receipt cannot falsely claim both native missions cleared",()=>flags(()=>withFiles(({leader,dir})=>{
  const f=fixture(),ticket=prepare({...f.opts,leaderFencePath:leader});
  f.completeLeader();
- assert.equal(f.finishTicket(ticket,dir).status,"SETTLEMENT_JOURNAL_WRITE_FAILED");
+ // A directory is not a readable journal (EISDIR), so the honest answer is
+ // that the journal is unavailable; a write failure has its own case in
+ // coop-fleet-p0-cooperative-actions. Either way the peer award is refused
+ // and only the leader receipt advances.
+ assert.equal(f.finishTicket(ticket,dir).status,"JOURNAL_UNAVAILABLE");
  assert.deepEqual(f.paid,[101]);
  assert.equal(readLeaderFence(leader,leaderFenceKey(ticket)).previous.state,
   "LEADER_NATIVE_CLEARED");
