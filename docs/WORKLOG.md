@@ -2100,3 +2100,24 @@ Why: an untracked scratch module from another session turned the install-coverag
 Detail: Both coverage suites listed integration/*.cjs with readdir, so a module another session had written but not yet added to git made the repo-wide "every bundled module is installed" gate red for everyone - twice today. trackedModuleNames() asks git what is in the repository instead: an uncommitted module cannot be deployed, and a committed one missing from the install list is exactly the failure thi
 Where: tests/_support/trackedModules.mjs, tests/coop-installer-module-coverage.test.mjs, tests/coop-post42-native-overlay-assembly.test.mjs
 Evidence: installer-module-coverage 3/0, post42 3/0, 403 tracked vs names
+### 2026-10-28T19:53Z · d54d057 · L2 · coop: the manufacturer caller, its tests, and the empty-trip cool-down rule
+
+Why: The manufacturer had no caller in the server, so nothing was ever built without an operator script, and an empty drain trip cooled the corporation's best customer
+Where: integration/coopFactionWarOpening.cjs, integration/coopNpcManufacture.js, integration/coopNpcManufactureTick.cjs, integration/coopStationDrain.cjs, integration/coopWarTreasury.cjs, tests/coop-faction-war-opening.test.mjs, tests/coop-integration-shims.test.mjs, tests/coop-npc-manufacture-tick.test.mjs, tests/coop-station-drain.test.mjs, tests/coop-war-state-mirror.test.mjs, tests/coop-war-territory-owners.test.mjs
+Evidence: living-npc-manufacture-installed st60000682 5 runs bid 54289.76 and living-npc-manufactured observed live; 11/11 tests coop-npc-manufacture-tick, 12/12 coop-station-drain; fork c453c9a/b1826ad
+### 2026-10-28T20:01Z · 31f5278 · L1 · fix(fw): a stalled PREPARING campaign no longer locks the whole frontier
+
+Why: one stalled PREPARING campaign held a contested border and starved every front, leaving the client war map empty
+Detail: Live evidence from the owner's server: every opening tick logged `[CoopFactionWar] opening skipped: NO_OPENABLE_FRONT`, and the published refusal detail showed both candidate borders refused with TARGET_ALREADY_CONTESTED against 30045344 - held by one PREPARING campaign that never received its assault deployment proof. The map had no front to draw, and fwVictoryPointMgr.GetAllVictoryPointStates wa
+Where: docs/coop-flags.json, integration/coopFactionWarOpening.cjs, scripts/coop-flags.cjs, tests/coop-faction-war-stall-reaper.test.mjs
+Evidence: fork 0d6cb67; new expireStalledCampaigns + 6 tests; faction-war suites green; FLAGS_OK 439
+### 2026-10-28T20:05Z · 24a1d0f · DOCS · state(fw): FW-046..048 - three real defects behind the unpaid bounty, and the keeper used to survive recreates
+
+Why: Record the three defects that actually blocked the bounty payout and the operational keeper
+Where: .opencode/state.md
+Evidence: war opened 19:14:08 with HELD escrow; defender kill refused NO_HELD_ESCROW; 19:59:42 NOT_UNIQUE_NAMED_PIRATE on a named victim
+### 2026-10-28T20:23Z · 33ca7ee · L1 · alife17: pin the trivial-recipe guard
+
+Why: a stale full-state war write erased the campaign the opening had just created, and the reopen cooldown died with the process
+Where: integration/coopFactionWarCore.cjs, integration/coopFactionWarOpening.cjs, integration/coopNpcManufactureTick.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-faction-war-record-merge.test.mjs, tests/coop-faction-war-stall-reaper.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
+Evidence: mergeWarRecords in coopFactionWarCore (5 tests), durable cooldown in opening (8 tests); deployed to evejs-server-1; live: 38 war-opened then none for 3.5 min, refusal detail now real reasons
