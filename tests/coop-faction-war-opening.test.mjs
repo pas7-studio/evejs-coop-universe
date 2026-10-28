@@ -413,3 +413,23 @@ test('the same faction pair never reopens its own border from the far side',()=>
  assert.equal(again.reason,'NO_OPENABLE_FRONT');
  assert.equal(again.skipped[0].reason,'TARGET_ALREADY_CONTESTED');
 });
+
+// FW-037 guard: one border nobody can pay for must not abort the whole batch.
+// Measured on the work stack 2026-10-28: the frontier answered
+// SUPPLY_UNFUNDED and threw the whole plan away, so a single broke faction pair
+// stopped every other border from opening in the same tick.
+test('an unfunded border is skipped by name instead of aborting the batch', () => {
+  const plan = opening.planWars({ state: core.empty(), presence: presence(),
+    getStargatesForSystem, getGate, nowMs: 1000 });
+  assert.equal(plan.status, 'READY');
+  const opened = opening.applyOpenings({
+    state: core.empty(), plan, nowMs: 1000,
+    reserveBounty: () => ({ status: 'REFUSED', reason: '500004:WAR_TREASURY_FUNDS_UNAVAILABLE' }),
+  });
+  assert.equal(opened.status, 'OPENED');
+  assert.equal(opened.campaignIDs.length, 0, 'no campaign may open without a real escrow');
+  assert.equal(opened.warIDs.length, 0);
+  assert.ok(opened.skipped.length >= 1);
+  assert.match(opened.skipped[0].reason, /^SUPPLY_UNFUNDED:/);
+  assert.equal(opened.skipped[0].warID, plan.openings[0].plan.war.warID);
+});

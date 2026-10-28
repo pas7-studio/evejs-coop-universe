@@ -3558,3 +3558,35 @@ the test directory instead of the integration directory).
   with a require that resolves a bare sibling to `integration/<name>.cjs`; used by
   `coop-native-station-arrival` and `coop-native-haul-manifest-station`. Remaining
   hand-rolled `new Function("require",...)` sandboxes should move to it.
+
+## Doctrines + dynamic decisions (FW-036, FW-037) live on the work stack (14:3xZ)
+Live capability table measured inside the running container through the REAL doctrine
+composition (`warFleetAuthorities().composition` + real npcLoadouts + real weapon dogma):
+  500001 CAN_FIELD (coop_war_doctrine_500001_tackle)   500004 CAN_FIELD
+  500011 CAN_FIELD                                     500020 CAN_FIELD
+  500010 NO_NAVY   500012 NO_NAVY   500014 NO_NAVY (ORE)   500019 NO_NAVY
+and the decision itself: `decide(500004, 500014)` -> {open:false,
+reason:"NO_NAVY_CAPABILITY:DEFENDER"}; `decide(500004, 500011)` -> {open:true,
+reason:"BOTH_SIDES_CAN_FIELD_NAVY"}.
+FW-036 (new module `coopWarNavyCapability`): a war party must be able to field a real navy.
+A hull counts only when its real loadout carries a module that resolves to a real WEAPON
+family AND a charge with quantityPerModule >= 1 - a strip miner has both and is still not a
+navy, which is exactly how ORE looked armed. Both sides must be able to fight, because
+capture-by-force needs a defending wreck and a navy-less defender can never produce one (the
+measured deadlock: an ORE party's campaign held the target and every other front answered
+NO_OPENABLE_FRONT). Unknown capability is never a yes; without the authority the planner is
+unchanged.
+FW-037: an unfunded border is now skipped BY NAME (`SUPPLY_UNFUNDED:<warID>:<reason>`) and the
+batch continues, instead of throwing the whole plan away - one broke pair no longer blocks
+every other border in the same tick.
+ECONOMIC FINDING that still blocks a bounty payout, now measured not guessed - real corporation
+wallets (division 1000, the only source coopWarTreasury may debit):
+  1000035 (Caldari) 0   1000120 (Gallente) 0   1000138 (Angel) 0
+  1000129 (ORE) 136 554 292.96 ISK   others 0
+So every faction that can field a navy is broke, and the only funded corporation (ORE) cannot
+field one. Opening a campaign with REQUIRE_FUNDING=1 therefore answers
+`SUPPLY_UNFUNDED:...:WAR_TREASURY_FUNDS_UNAVAILABLE`, and that is the correct answer: militia
+corporations currently have no income path (mining/refining corps do). Payout needs either a
+militia income doctrine or an owner decision to fund militia corporations from the real economy.
+`node scripts/coop-engine-audit.cjs` reports drift in `coopMissionInstanceProvenance.cjs` - that
+file belongs to another session's in-progress work and was left untouched.

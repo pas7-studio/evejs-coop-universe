@@ -205,6 +205,7 @@ function buildProofs({ plan, presence, territories, getStargatesForSystem, getGa
 function planWars({
   state, presence, getStargatesForSystem, getGate,
   nowMs, minShips = 1, balanceISK = 0, maxOpenings = 4,
+  navyCapability = null,
 } = {}) {
   if (!state || typeof state !== "object") return refuse("NO_WAR_STATE");
   const { territories, observedCount, registeredCount } =
@@ -235,6 +236,21 @@ function planWars({
       if (!pos(sourceSystemID) || !pos(targetSystemID)) {
         skipped.push({ edge, reason: "INVALID_EDGE" });
         continue;
+      }
+      // FW-036 (dynamic decision): a campaign needs two sides that can really
+      // shoot, because capture-by-force needs a defending wreck and a defender
+      // with no navy can never produce one. Opening such a border squats the
+      // target forever and starves every other front (measured: an ORE party
+      // blocked the whole frontier). An unknown capability is never a yes.
+      if (typeof navyCapability === "function") {
+        let navy = null;
+        try {
+          navy = navyCapability({ attackerFactionID, defenderFactionID });
+        } catch (_error) { navy = null; }
+        if (!navy || navy.open !== true) {
+          skipped.push({ edge, reason: String((navy && navy.reason) || "NO_NAVY_CAPABILITY:UNKNOWN") });
+          continue;
+        }
       }
       // A front is one gate pair, not one direction. The derived edge keeps the
       // orientation of whichever system the territory map listed first, so when
@@ -333,7 +349,7 @@ function applyOpenings({ state, plan, nowMs, reserveBounty, persistState } = {})
   if (!plan || plan.status !== "READY") return refuse("PLAN_NOT_READY");
   const at = num(nowMs) > 0 ? num(nowMs) : Date.now();
   let current = state;
-  const applied = [], warIDs = [], campaignIDs = [], fundings = [];
+  const applied = [], warIDs = [], campaignIDs = [], fundings = [], skipped = [];
   const step = (command, proofs) => {
     const result = core.transition(current, command, { now: at, proofs });
     if (result.status !== "APPLIED" && result.status !== "DUPLICATE")
@@ -383,10 +399,21 @@ function applyOpenings({ state, plan, nowMs, reserveBounty, persistState } = {})
           campaignID: campaign.campaignID, state: current,
           persist: () => { if (typeof persistState === "function") persistState(current); },
         });
-        if (reserved.status !== "RESERVED")
-          throw Object.assign(Error("WAR_SUPPLY_UNFUNDED:" + reserved.reason), {
-            reason: "SUPPLY_UNFUNDED:" + String(reserved.reason || "UNKNOWN"),
+        if (reserved.status !== "RESERVED") {
+          // FW-037: one border nobody can pay for must not abort the whole batch.
+          // Measured on the work stack: the frontier refused every opening with
+          // SUPPLY_UNFUNDED and threw the plan away, so a single broke faction
+          // pair could stop every other border from opening in the same tick.
+          // The refusal is recorded per border instead, exactly like the
+          // mobiliser already reports a starved campaign without hiding others.
+          skipped.push({
+            edge: { sourceSystemID: campaign.sourceSystemID, targetSystemID: campaign.targetSystemID },
+            campaignID: campaign.campaignID,
+            warID: war.warID,
+            reason: "SUPPLY_UNFUNDED:" + String(reserved.reason || "UNKNOWN").slice(0, 160),
           });
+          continue;
+        }
         supplyReservationID = reserved.reservationID;
         realReservation = reserved;
         fundings.push(Object.assign({ status: "FUNDED", paper: false, escrow: true },
@@ -404,7 +431,7 @@ function applyOpenings({ state, plan, nowMs, reserveBounty, persistState } = {})
       campaignIDs.push(campaign.campaignID);
       if (!realReservation) fundings.push(opening.funding);
     }
-    return { status: "OPENED", state: current, warIDs, campaignIDs, applied, fundings };
+    return { status: "OPENED", state: current, warIDs, campaignIDs, applied, fundings, skipped };
   } catch (error) {
     return refuse(error.reason || String((error && error.message) || error), { state: current, applied });
   }
@@ -434,6 +461,9 @@ function createWarOpening({
   // their corporation really resolves to a faction. Without the authority the
   // behaviour is unchanged.
   fleetPresence = null,
+  // FW-036: which factions can really field a navy. Without this authority the
+  // planner behaves exactly as before (no capability gate).
+  navyCapability = null,
   minShips = 1, balanceISK = 0, maxOpenings = 4,
   now = () => Date.now(), maxLinks = MAX_LINKS,
 } = {}) {
@@ -488,6 +518,7 @@ function createWarOpening({
       const plan = planWars({
         state, presence, getStargatesForSystem, getGate,
         nowMs: num(now()), minShips, balanceISK, maxOpenings,
+        navyCapability: typeof navyCapability === "function" ? navyCapability : null,
       });
       if (plan.status !== "READY")
         return { status: "NO_OPENING", reason: plan.reason || "PLAN_REFUSED", plan };
@@ -499,7 +530,9 @@ function createWarOpening({
         status: "OPENED", warIDs: opened.warIDs, campaignIDs: opened.campaignIDs,
         applied: opened.applied, fundings: opened.fundings,
         presence: { pilots: presence.pilots.length, skipped: presence.skipped, fleetShips },
-        territories: plan.territories, fronts: plan.fronts.length, skipped: plan.skipped,
+        territories: plan.territories, fronts: plan.fronts.length,
+        // A border refused for funding is named here instead of vanishing.
+        skipped: plan.skipped.concat(Array.isArray(opened.skipped) ? opened.skipped : []),
       };
     } finally { busy = false; }
   }
