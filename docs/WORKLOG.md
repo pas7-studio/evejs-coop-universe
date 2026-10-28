@@ -1838,3 +1838,19 @@ Evidence: ADMIN war_state empty; presence only ORE/pirates; after population 64 
 Why: A sale only happens on a station arrival, so a fleet whose mining the demand governor holds can never sell the surplus it already owns: measured 705 484 units held against a 200 000 floor, nine hours without a single arrival.
 Where: integration/coopStationDrain.cjs, tests/coop-station-drain.test.mjs
 Evidence: agents world 12:13:13-12:14:20 living-station-drain STARTED/ARRIVED/4x SALE_CALLED/COMPLETE for both fleets at station 60014935, 210 429 units of mineral stock; treasury swept 22 942 300 ISK (97 001 891.19 -> 119 944 191.19); fork 4afec3e/03cafb7/9c5f9d4/706d8e5; 7 tests pass
+### 2026-10-28T12:23Z · f2922fb · DOCS · state(fw): the accelerated stack reaches ASSAULT, registers both fleets, issues mutual attack orders and takes real damage
+
+Why: Record that faction-war combat works end to end on the work stack and that the ASSIGN blocker does not reproduce on the current build
+Where: .opencode/state.md
+Evidence: agents stack war_state/campaigns/war_fleet_state/attack-orders/combat-damage measured 12:20-12:23Z
+### 2026-10-28T12:27Z · e09794d · DOCS · state(fw): a real warship casualty and wreck are recorded on the work stack; capture now waits on a funded garrison
+
+Why: Record the first real faction-war casualty receipt and the exact reason capture-by-force still skips
+Where: .opencode/state.md
+Evidence: living-native-war-casualty RECORDED 12:24:46 wreck 980300000002; capture-by-force SKIPPED NO_DEFENDER_WRECK 12:26:25; GARRISON_APPLIED 12:24:08 and 12:26:52
+### 2026-10-28T12:36Z · 063d32a · OPS · ops(verify): one read-only pinned-source checker behind five verifiers
+
+Why: five verify-*.cjs repeated the git-blob hash, the reversible patch chain and the CLI; extracted to scripts/lib/pinned-source.cjs
+Detail: The five scripts/verify-*.cjs preflights each re-implemented a Git blob hash of the CRLF-canonical text, a forward/reverse chain of in-memory patches that must be idempotent and byte-reversible, and the `node script.cjs <root>` CLI. verify-alife08 had to export its private hash so verify-alife09 could reuse it, which is why the shared part now lives in scripts/lib/pinned-source.cjs: - gitBlobSha o
+Where: scripts/lib/pinned-source.cjs, scripts/verify-alife-mining-cargo-source.cjs, scripts/verify-alife-native-mining-cycle-source.cjs, scripts/verify-alife07-native-mining-source.cjs, scripts/verify-alife08-durable-mining-source.cjs, scripts/verify-alife09-mining-overlay.cjs, tests/coop-native-mining-cargo-wiring.test.mjs, tests/coop-pinned-source.test.mjs
+Evidence: five CLIs byte-identical mismatch output+exit 1; coop-pinned-source.test.mjs 8/8 (git hash-object oracle); 19 gates re-run identical
