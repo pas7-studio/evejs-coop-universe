@@ -1,5 +1,37 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-29 21:20Z - distribution: the decision exists, the movement stays opt-in
+
+GATE FACTS (measured, not assumed): connectedGates finds ONE reciprocal gate between
+New Caldari 30000145 and Jita 30000142, so a distribution run is a single hop. The
+native transfer primitive is proven in this world: living-native-gate-transfer
+coop-pilot-004, entity 980000000141, 30045344 -> 30003837, SAME_NATIVE_SHIP_ARRIVED
+(2026-10-27T23:42:15Z). EVEJS_COOP_NATIVE_GATE_APPROACH=1 and
+EVEJS_COOP_VIRTUAL_ROUTE=30000142,30000144,30000145,... are already on.
+
+WHY JITA: it prices like a market - Tritanium 4 ISK x 4 000 000, Pyerite 15 x 3 300 000,
+Scordite 16 x 4 150 000, Scordite III-Grade 17 x 3 900 000 - and the stock is already
+on the shelf (874 916 Trit, 118 434 Pyerite, 173 613 Scordite III-Grade).
+
+space/coopNpcDistribution.js is the pure DECISION: which stack, how much, from where to
+where, and what the trip pays. Refusals: NO_BUYER_AT_DESTINATION,
+DESTINATION_DOES_NOT_PAY_MORE (arbitrage only), DOES_NOT_FIT_HOLD,
+BUYER_VOLUME_EXHAUSTED, TRIP_NOT_WORTH_IT. Load is bounded by the real hold, the buyer's
+remaining volume and the stack. It moves nothing on purpose: cross-system transfer is
+opt-in and needs live QA (docs/NATIVE_NPC_GATE_TRAVEL.md).
+
+scripts/coop-distribution-plan.cjs prints the live plan from the deployed image:
+  TRIP Republic Fleet Depleted Uranium XL x1 60000682 -> 60003760, 560 000 ISK vs 0
+  locally; runner-ups Scordite 338 922, Tritanium 320 989, Pyerite 283 763.
+
+NEXT (owner decision needed, one flag away): wire the movement - load the chosen stack
+into a hauler, warpToEntity to gate 50016293, nativeGateTransfer.transfer(), verify
+SAME_NATIVE_SHIP_ARRIVED, then warp to 60003760 and sell on arrival. Keep it OFF by
+default and prove one manual crossing with cargo before enabling the loop.
+
+Tests 6/6 tests/coop-npc-distribution.test.mjs; 33/33 across the five loop suites.
+Gate: AUDIT_OK on every rule except the inherited coopVirtualWorldRuntime ratchet.
+
 ## 2026-10-29 20:55Z - the refinery was serving the wrong station; books now close
 
 MEASURED DEFECT: 454 124 units of tagged warehouse ore sat at 60000682 while the
