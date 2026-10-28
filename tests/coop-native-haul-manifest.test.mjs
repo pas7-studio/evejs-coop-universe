@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
+import path from "node:path";
 const require=createRequire(import.meta.url);
 const {createManifest}=require("../integration/coopNativeHaulManifest.cjs");
 const ROOT="/tmp/native-manifest-acceptance";
@@ -39,7 +40,9 @@ function fixture(){
   stock.set(cargoID,{itemID,typeID:row.typeID,quantity:row.quantity,
    ownerID:args.corporationID,locationID:args.stationID,
    customInfo:"coop-warehouse:v1:cargo:"+cargoID});
-  files.set(ROOT+"/receipts/"+cargoID+".json",JSON.stringify({
+  // The module joins paths with path.join, so the fixture must build the same
+  // key on Windows as on POSIX.
+  files.set(path.join(ROOT,"receipts",cargoID+".json"),JSON.stringify({
    version:1,phase:"COMMITTED",cargoID,
    haulerID:row.entityID,systemID:args.systemID,fleetID:args.fleetID,
    stationID:args.stationID,corporationID:args.corporationID,
@@ -89,7 +92,7 @@ test("native stock tampering, wrong owner, marker or quantity blocks full proof"
 });
 test("a mismatched warehouse receipt cannot satisfy exact physical cargo manifest",()=>{
  const f=fixture();f.director().prepare(f.args);f.deliver(501);f.deliver(502);
- const p=ROOT+"/receipts/501.json",r=JSON.parse(f.files.get(p));
+ const p=path.join(ROOT,"receipts","501.json"),r=JSON.parse(f.files.get(p));
  f.files.set(p,JSON.stringify({...r,haulerID:999}));
  assert.equal(f.verify().status,"MANIFEST_WAREHOUSE_RECEIPT_CONFLICT");
 });
@@ -119,7 +122,7 @@ test("write/fsync uncertainty never permits warp-ready native delivery manifest"
 });
 test("a torn or corrupt immutable manifest cannot be read as valid proof",()=>{
  const f=fixture(),a=f.director(),p=a.prepare(f.args);
- f.files.set(ROOT+"/trip-manifests/"+p.key+".json",'{"v":1');
+ f.files.set(path.join(ROOT,"trip-manifests",p.key+".json"),'{"v":1');
  assert.equal(f.verify().status,"MANIFEST_CORRUPT");
 });
 test("native station, corporation, fleet, hauler identities cannot be swapped after preparation",()=>{

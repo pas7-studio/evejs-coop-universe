@@ -53,13 +53,20 @@ test('source-only RPC discovery never claims it is registered or functional', ()
   } finally { f.cleanup(); }
 });
 
-test('read-only audit ignores symlink escape and does not mutate fixture', () => {
+test('read-only audit ignores symlink escape and does not mutate fixture', (t) => {
   const f = fixture();
   try {
     const outside = path.join(f.directory, 'outsideService.js');
     fs.writeFileSync(outside, 'SECRET');
     const link = path.join(f.code, 'server/src/services/other/leakService.js');
-    fs.symlinkSync(outside, link);
+    try {
+      fs.symlinkSync(outside, link);
+    } catch (error) {
+      // Windows refuses symlinks without Developer Mode or an elevated shell.
+      if (['EPERM', 'EACCES'].includes(error?.code))
+        return t.skip('Symlink requires Windows Developer Mode/admin');
+      throw error;
+    }
     assert.equal(audit.readSource(f.code, 'server/src/services/other/leakService.js'), null);
     assert.equal(audit.collectServiceFiles(f.code).length, 2);
     const before = fs.readFileSync(path.join(f.code, 'server/src/services/contracts/contractService.js'), 'utf8');
