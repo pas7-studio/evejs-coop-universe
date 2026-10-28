@@ -1828,3 +1828,13 @@ Why: nineteen gate scripts duplicated the same six-step runner; one table plus o
 Detail: Every gate script repeated the same six steps with its own wording: resolve the repo, create a report dir, resolve node, check the declared test files exist, refuse a scenario manifest that is not all-NOT_RUN, run `node --test` into a log and throw. A fix to one step never reached the other eighteen, and a renamed test file or a moved manifest schema was only found by an operator running the gate.
 Where: scripts/Run-Alife-Native-Delivery-Tests.ps1, scripts/Run-Alife-Native-Mining-Cargo-Tests.ps1, scripts/Run-Alife-Native-Mining-Cycle-Tests.ps1, scripts/Run-Alife-Native-Mining-Tests.ps1, scripts/Run-Alife07-Native-Mining-Atomic-Tests.ps1, scripts/Run-Alife08-Native-Mining-Durable-Tests.ps1, scripts/Run-Alife09-Native-Mining-Station-Gate.ps1, scripts/Run-Alife10-Native-Haul-Atomic-Tests.ps1, scripts/Run-Alife11-Native-Cargo-Isolation-Tests.ps1, scripts/Run-Alife12-Native-Station-Restart-Tests.ps1, scripts/Run-LW04B-Manufacturing-Gates.ps1, scripts/Run-LW04C-Industry-Recovery-Gates.ps1, scripts/Run-LW04C2-Original-Industry-Gates.ps1, scripts/Run-LW04C3-Rust-Sell-Gates.ps1, scripts/Run-LW04C3B-Sale-Finance-Gates.ps1, scripts/Run-LW04C4-Sold-Gates.ps1, scripts/Run-LW04E-Warehouse-Transfer-Gates.ps1, scripts/Run-LW04F-Source-Gates.ps1, scripts/Run-LivingWorld-Phase-Gates.ps1, scripts/lib/CoopG
 Evidence: all 19 gates run before/after: identical exit codes (8 pass/11 red) and banners; tests/coop-gate-specs.test.mjs 5/5
+### 2026-10-28T12:14Z · 047265c · OPS · ops(agents): grow the work-world roster to 64 so a faction-war border can be staffed; record the real seeding recipe
+
+Why: The accelerated work stack had 12 pilots with 10 already linked, so no faction-war border could be staffed and war_state stayed empty
+Where: .opencode/state.md, compose/compose.agents.yaml
+Evidence: ADMIN war_state empty; presence only ORE/pirates; after population 64 + 4 real navy patrols the opening phase opened war:500014-500019 with campaign:30000144 PREPARING
+### 2026-10-28T12:16Z · d6107bf · L2 · coop: add the station drain, its tests and the agent-stack flag
+
+Why: A sale only happens on a station arrival, so a fleet whose mining the demand governor holds can never sell the surplus it already owns: measured 705 484 units held against a 200 000 floor, nine hours without a single arrival.
+Where: integration/coopStationDrain.cjs, tests/coop-station-drain.test.mjs
+Evidence: agents world 12:13:13-12:14:20 living-station-drain STARTED/ARRIVED/4x SALE_CALLED/COMPLETE for both fleets at station 60014935, 210 429 units of mineral stock; treasury swept 22 942 300 ISK (97 001 891.19 -> 119 944 191.19); fork 4afec3e/03cafb7/9c5f9d4/706d8e5; 7 tests pass
