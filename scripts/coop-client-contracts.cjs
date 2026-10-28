@@ -169,12 +169,23 @@ function gatewayCoverage() {
   const named = new Set();
   for (const file of walk(dir)) {
     const source = fs.readFileSync(file, "utf8");
-    for (const match of source.matchAll(/"(eve_public\.[A-Za-z0-9_.]*?Request)"/g)) {
+    for (const match of source.matchAll(/\"(eve_public\.[A-Za-z0-9_.]*?Request)\"/g)) {
       named.add(normaliseType(match[1]));
     }
   }
-  const client = [...new Set(types.map(normaliseType))];
-  const defaulted = client.filter((type) => !named.has(type) && type !== "eve_public.Request");
+  // The local gateway also answers a few types inline, without a gateway service: those are
+  // handled too and must not be reported as gaps (measured: user.license and cosmetic.ship
+  // were counted as missing while the client saw status 200).
+  const inline = path.join(SERVER_SRC, "_secondary/express/publicGatewayLocal.js");
+  if (fs.existsSync(inline)) {
+    const source = fs.readFileSync(inline, "utf8");
+    for (const match of source.matchAll(/requestTypeName === "(eve_public\.[A-Za-z0-9_.]*?Request)"/g)) {
+      named.add(normaliseType(match[1]));
+    }
+  }
+  // eve_public.Request is the gateway envelope itself, not a request type the client sends.
+  const client = [...new Set(types.map(normaliseType))].filter((type) => type !== "eve_public.Request");
+  const defaulted = client.filter((type) => !named.has(type));
   return { client, named, defaulted };
 }
 
@@ -255,7 +266,8 @@ function register(rows) {
   const gateway = gatewayCoverage();
   if (gateway) {
     lines.push(`## gRPC gateway types (${gateway.client.length} client request types, ` +
-      `${gateway.named.size} named by a gateway service, ${gateway.defaulted.length} defaulted)`, "");
+      `${gateway.named.size} names known to the gateway, ` +
+      `${gateway.defaulted.length} of those client types defaulted)`, "");
     lines.push("A type no gateway service names is answered with a default-encoded 200");
     lines.push("(`fork f256261`): the client gets a valid empty message instead of a 404 it");
     lines.push("cannot decode, and the gateway logs the type. These carry no data yet:", "");

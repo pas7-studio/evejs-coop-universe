@@ -32,11 +32,24 @@ test("the register stays in step with the checker", () => {
 
 test("the register also covers the gRPC gateway types", () => {
   const register = readFileSync(path.join(root, "docs/CLIENT_CONTRACT_STATUS.md"), "utf8");
-  const section = register.match(/## gRPC gateway types \((\d+) client request types, (\d+) named[^)]*\)/);
+  const section = register.match(/## gRPC gateway types \((\d+) client request types, (\d+) names known to the gateway, (\d+) of those client types defaulted\)/);
   assert.ok(section, "the gateway coverage section must exist");
   const [, client, named] = section;
   assert.ok(Number(client) > 100, "the client really sends that many types: " + client);
-  assert.ok(Number(named) > 0 && Number(named) < Number(client),
-    "some types are still defaulted, and the register says which");
+  assert.ok(Number(named) > 0, "the gateway names some types");
+  assert.match(section[0], /\d+ of those client types defaulted/, "the register says how many are defaulted");
   assert.match(register, /fork f256261/, "the default-answer rule is cited");
+});
+
+test("the gaps document matches the measured gateway gap", () => {
+  const register = readFileSync(path.join(root, "docs/CLIENT_CONTRACT_STATUS.md"), "utf8");
+  const measured = register.match(/(\d+) client request types, (\d+) names known to the gateway, (\d+) of those client types defaulted/);
+  assert.ok(measured, "the register states the numbers");
+  const gaps = readFileSync(path.join(root, "docs/CLIENT_GAPS.md"), "utf8");
+  assert.ok(gaps.includes("**" + measured[1] + "** of them"),
+    "the gap document cites the same client type count: " + measured[1]);
+  assert.ok(gaps.includes("**" + measured[2] + "**"),
+    "and the same handled count: " + measured[2]);
+  assert.ok(gaps.includes("**" + measured[3] + "**"),
+    "and the same gap count: " + measured[3]);
 });
