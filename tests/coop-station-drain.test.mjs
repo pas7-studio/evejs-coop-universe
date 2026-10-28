@@ -113,3 +113,20 @@ test("a product sale is not throttled by the mineral governor", { skip: !present
   assert.equal(drain.shouldStart("mineral", { action: "ALLOW" }).start, false);
   assert.equal(drain.shouldStart("mineral", null).start, false);
 });
+
+test("a station that sold nothing is not flown to again while it cools down", { skip: !present }, () => {
+  // Measured 2026-10-28: the drain returned to the same hangar three times because a
+  // fallback ignored the cooldown it had just set, and each trip burned the fleet's only
+  // hauler. The biggest stock is not the best station when that station buys nothing.
+  const rows = [
+    { ownerID: CORP, stationID: 60000682, typeID: 34, quantity: 400000 },
+    { ownerID: CORP, stationID: 60014935, typeID: 34, quantity: 60000 },
+  ];
+  const now = Date.now();
+  drain.coolDown(60000682, now);
+  const chosen = drain.chooseStation(rows, { corpID: CORP, isMineral, isOre, now });
+  assert.equal(chosen.stationID, 60014935);
+  // With every mineral station cooling, the drain stays in the belt instead of flying.
+  drain.coolDown(60014935, now);
+  assert.equal(drain.chooseStation(rows, { corpID: CORP, isMineral, isOre, now }), null);
+});
