@@ -3112,3 +3112,30 @@ Next: make the mobilizer see real armed patrols on both sides of campaign:300001
 in 30000142, defenders in 30000144), or force the Caldari/Gallente border by outnumbering
 30045344 (500001) vs 30003837 (500004); then check whether the fleet registry ASSIGN lands.
 NOTE: MCP `evejs-server.events` reads the OWNER's play stack, not this one - do not mix them.
+
+## FW PROVEN ON THE ACCELERATED STACK: war -> ASSAULT -> mutual orders -> real damage (2026-10-28T12:23Z, evejs-agents only)
+Seeded by hand on the work stack (population 64, 8 real navy patrol hulls), then the world did
+the rest by itself. Measured, verbatim from that stack:
+  war_state: wars [war:500014-500019 ACTIVE, war:500001-500004 ACTIVE]
+             campaigns [*:campaign:30000144 PREPARING, *:campaign:30045344 **ASSAULT**]
+  presence 30045344 500001x6 / 500004x1 / 500014x3, 30003837 500004x3 / 500014x2 / 500019x2
+  war_fleet_state: 2 registered fleets (coop-fleet-500004-0001 Federation Navy Atron 980000000565,
+             coop-fleet-500001-0002) -> the earlier "ASSIGN never lands" blocker does NOT reproduce
+             with the current fork build (bindWarRuntime + isHullLive fixes)
+  living-native-war-garrison GARRISON_APPLIED (real hull bought through spawn_war_fleet)
+  12:21:23 living-native-war-attack-orders: MUTUAL NATIVE_ATTACK_ORDER_ACCEPTED
+             980000000423 <-> 980000000565, both in the contested 30045344
+  12:22:19-12:22:29 living-native-combat-damage systemID 30045344 correlatedNpcDamage 1
+             (a war hull really taking damage; ACK alone is still not a kill)
+  war_diagnose now answers DRY_RUN campaigns 2 mobilized 1. The earlier
+  INVALID_MOBILIZATION_STATE was a stale read immediately after a container recreate, not a
+  durable bug - re-measure before "fixing" it.
+Spawn recipe caveats (both real): every SDE navy profile points at `retail_empty_npc_entity_loadout`
+so an explicit real `loadoutID` is mandatory; and `linkSpawnedIdentity` refuses
+PILOT_ALREADY_LINKED because a free pilot is re-bound to its durable old hull within ~20 s, so pick
+a pilot that is free RIGHT NOW (roster 64, 32 free) or bind the existing unlinked hull with
+`assign_identity`.
+NEXT (unmeasured): casualties (wreck + casualty ledger), objective/capture on a bound structure,
+payout, and the same chain on a fresh agents world without hand seeding. The owner's play stack
+was not touched; the elevated event numbers there (war:500001-500004 campaign:30045343 with
+accepted attack orders at 12:05) come from the earlier morning deploy, read-only.
