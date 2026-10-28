@@ -1,5 +1,36 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 13:10Z - surplus drains: minerals finally sell, stock is falling
+
+Measured on `evejs-agents` (headless):
+
+  stock 739 492 -> 596 517 units;  Tritanium 261 419 -> 101 419
+  corp wallet 119 944 191.19 -> 125 975 858.69 (sweeps of 22 942 300 then 250 000)
+  sold on a drain: [{typeID 34 Tritanium, ...}] isk 250 000;  pilot ledger tradeCount 9
+
+WHY IT WAS STUCK AND WHAT CHANGED (all committed):
+  1. A sale only happens on a station arrival, so a fleet whose mining the governor holds can
+     never sell the surplus it already owns: 705 484 units against a 200 000 floor with zero
+     arrivals for 9 h. New space/coopStationDrain.js flies an idle hauler to the station that
+     really holds the most refined minerals, sells through the PROVEN arrival path and flies
+     back. OFF unless EVEJS_COOP_STATION_DRAIN=1 (agent stack only).
+  2. The governor reports DEMAND_UNKNOWN with that stock, so a HOLD-driven trigger never fired;
+     and an ALLOW tick pushed the drain 15 min ahead every time, so a due trip drifted for ever
+     (due 12:29, still not run at 12:49). The drain now decides on the governor's own
+     measurement (only ALLOW means "within demand") and its schedule is owned by the trip.
+  3. **Every sale in the world's history was ore. Not one mineral ever sold.** The lift is
+     async, its Promise was read as a result, so the lifted mineral types never joined the sale
+     list and the trader answered NO_REAL_NATIVE_CARGO (measured: 47 lift rows in one hold).
+     The lift now runs inside the arrival job and is awaited (fork 04e2c8a).
+
+Fork commits: 4afec3e, 03cafb7, 9c5f9d4, 706d8e5, 7d997e1, 04e2c8a. Repo: d6107bfb, 583d10e0,
+0fda9c7b, b9ae10ab + worklog. AUDIT_OK.
+
+NEXT: the drain runs every 15 min per fleet and lifts up to 100k units per visit, but each
+trade is capped at 5 000 units (EVEJS_COOP_NPC_MARKET_MAX_QTY), so the 596k backlog needs many
+visits. If the owner wants it gone faster, raise the per-trade cap or the drain cadence - both
+are env knobs, no code change.
+
 ## 2026-10-28 12:00Z - CLOSED LOOP PROVEN: ore sold, ISK reached the corporation
 
 PROVEN LIVE on `evejs-agents` (headless, no client), same world that had been stuck since 02:05Z:
