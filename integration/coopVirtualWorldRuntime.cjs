@@ -4404,7 +4404,10 @@ function observeSession(session,ship){
             const anchor=require("./coopNpcTopology").anchorOptions(nativeScene);
             if(!anchor)return {success:false,errorMsg:"NO_NATIVE_SYSTEM_ANCHOR"};
             return npc.spawnBatchInSystem(id,{
-              ...anchor,amount:1,entityType:"npc",transient:true,broadcast:true,
+              // No entityType filter: the pool is explicit and its profiles type themselves
+              // ("concord" for concord_police), so demanding "npc" rejected the whole pool and
+              // every patrol answered POOL_EMPTY while the same pool resolves fine without it.
+              ...anchor,amount:1,transient:true,broadcast:true,
               // Faction patrols are law enforcement, not pirates: CONCORD-owned
               // hulls read as friendly/neutral brackets in the client.
               ...require("./coopNpcSpawnPools").spawnPoolForRole("patrol",
