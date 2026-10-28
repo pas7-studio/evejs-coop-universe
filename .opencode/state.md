@@ -3014,3 +3014,46 @@ RECOVERY PLAN (do NOT repeat the restore):
 
 Lesson recorded: a war state row is live data, not code. Any change that can create
 an "empty war state" must be proven on the agents stack first, never on the play stack.
+
+## 2026-10-28T12:10Z - the war is running again, and it is Caldari vs Gallente
+
+Recovered from the incident WITHOUT hand-written rows. What was actually broken
+and is now fixed in the fork (all committed):
+
+1. `26d107a` split runtime: sixteen names (`warpPointDirector`, `economy`,
+   `nativeGateTransfer`, `recognitionAnnouncer`, `nativeAmmoWitness`,
+   `raidDirector`, `tacticsDirector`, pve directors, `lossBridge`,
+   `nativeOrderBridge`, `lootCommerce`, `nativeAmmoSupply`, `warGateHandoff`,
+   `warRecoverySocket`, `nativeGunRange`, `warTreasuryInstance`) were undeclared
+   in `coopVirtualWorldRuntime.pure.js`. Every phase that touched one threw
+   `ReferenceError`, so raids, economy, ammo, recognition and the war stopped.
+   `syncWarRuntime()` now hands the live objects over on every tick.
+2. `aa26156`/hoist: `syncWarRuntime` had to be module scope; the tick called it
+   before the sale path that declared it.
+3. FW-036 (`coopWarObservedSystems.js`): the war layer only observed systems a
+   client had flown into, so a spawned war fleet could never open a front.
+   `visitedSystems` now also takes systems where the durable roster proves live
+   hulls. Test: `tests/coop-war-observed-systems.test.mjs` (5 pass).
+4. FW-037 (`coopFactionWarOpening.js`): a front is one gate pair, not one
+   direction. A different war holding the target froze the pair forever, so
+   Caldari/Gallente could never open. The planner now mirrors across the same
+   real gate; the same faction pair still never reopens its own border.
+   Tests: `tests/coop-faction-war-opening.test.mjs` (20 pass).
+
+Measured live state now (play stack, evejs-server-1):
+  wars: war:500004-500014, war:500014-500019, **war:500001-500004**
+  campaign war:500001-500004:campaign:30045343 = ASSAULT (Nennamaila)
+  territories: 30045343 CONTESTED (Caldari 500001), 30045344 CONTESTED (500004)
+  roster: 3 real fleets of 25 (500001 in 30045343 and 30003837, 500004 in 30045344)
+  registry: 3 ships assigned to campaigns
+  native evidence: living-native-war-attack-orders NATIVE_ATTACK_ORDER_ACCEPTED
+  (980000043284 -> 980000042223), target-selection RANKED, and a
+  living-native-weapon-event VERIFIED (980000043284 -> 980000043880)
+
+Next step (in order):
+1. The 25-ship roster fleets are PRESENCE (territory/front) but not BATTLE:
+   only the 1-ship garrison formations get campaign ASSIGN rows, so fights are
+   1v1. Teach the mobilizer/garrison to adopt roster hulls into the campaign.
+2. Then prove the same on the accelerated `evejs-agents` stack (needs the
+   EVEJS_COOP_FACTION_WAR* flags there plus a seeded war).
+3. Then the client surfaces (warzone payload/FW window) against the new war.
