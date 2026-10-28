@@ -47,6 +47,12 @@ services:
       # modest backlog: 58k units against one station's 25k bid is not "overstock" on
       # a fresh economy, it is a normal buffer. The play stack keeps the 20 000 floor.
       EVEJS_COOP_MINING_DEMAND_FLOOR: "200000"
+      # Measured 2026-10-28: the governor held 705 484 units against this allowance,
+      # and a held fleet also stops the only thing that could sell them (a station
+      # arrival). The drain flies an idle hauler to the station that holds the most
+      # refined minerals, lifts them into its real hold and sells them, then returns.
+      # Agent stack only until the owner has seen it work.
+      EVEJS_COOP_STATION_DRAIN: "1"
       # Temporary, agent-only: name the treasury decision when the corporation is not
       # funded, so "moved 0" can never masquerade as a healthy sweep.
       EVEJS_COOP_TREASURY_TRACE: "1"
@@ -63,6 +69,11 @@ services:
       # ever cut. This is the stock native switch that keeps a scene ticking
       # without sessions, which is exactly what a headless work world is.
       EVEJS_DISABLE_NPC_COLD_SCENE_SLEEP: "1"
+      # FW seeding (2026-10-28): the war needs FREE roster identities to crew real
+      # navy patrols on both sides of a border. The default 12-pilot world has ten
+      # already linked to the mining fleet, so a war could never be staffed. The
+      # virtual world tops the roster up on boot without wiping pilot history.
+      EVEJS_COOP_VIRTUAL_POPULATION: "64"
       # Profiling runs only: a V8 CPU profile of the sim loop, 1 ms sampling.
       # Writes /var/lib/evejs/prof/*.cpuprofile inside the work stack volume.
       # Remove this line for normal agent runs.

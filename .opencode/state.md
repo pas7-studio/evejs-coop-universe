@@ -3084,3 +3084,31 @@ git-blob hash + reversible-patch-chain check; scripts/Run-Alife-Economy-Tests.ps
 (183L, and a test reads its text) could take a second table row once its extra
 manifests are expressed. Engine perf work stays blocked while space/coopStationDrain.js
 and the overlay-spec edits are uncommitted in another session.
+
+## FW on the accelerated work stack — first seeding done (2026-10-28T12:15Z, evejs-agents only)
+Start: `war_state` EMPTY, `war_fleet_state` 0 ships, presence only ORE/pirates, roster 12
+pilots of which 10 already linked to the mining fleet -> no border could ever be staffed.
+1. `compose/compose.agents.yaml`: EVEJS_COOP_VIRTUAL_POPULATION 12 -> 64 (the virtual world
+   tops the roster up on boot without wiping pilot history; measured pilots 64 after restart).
+2. Real patrol seeding WORKS: `spawn_native_npc` needs an explicit real `loadoutID`, because
+   every SDE navy profile carries `retail_empty_npc_entity_loadout` and the profile's own
+   `<profile>_loadout` row is missing (`WAR_PATROL_LOADOUT_UNAVAILABLE:LOADOUT_ROW_MISSING`).
+   Working pair: "Caldari Navy Condor" + `guristas_light_missile_frigate` (corp 1000035 ->
+   500001, missileLauncher, chargeDepth 80), "Federation Navy Atron" +
+   `serpentis_small_blaster_frigate` (corp 1000120 -> 500004). Spawned 4 real durable hulls
+   (980000000283/286 in 30045344, 980000000288 + one in 30003837).
+3. Caveat measured: a pilot released and re-linked is re-bound to its durable old hull within
+   ~20 s, so the 2nd spawn answered `PILOT_ALREADY_LINKED` (its hull exists, unlinked). Use a
+   fresh pilotID per hull, and never assume the link when the status is not LINKED.
+4. The opening phase then opened a REAL war by itself: `war:500014-500019` (ORE vs 500019)
+   with `campaign:30000144` PREPARING (source 30000142), territories 30000142 -> 500014
+   SECURE, 30000144 -> 500019 CONTESTED. Log: `opening skipped: NO_OPENABLE_FRONT` on the
+   later tick = the same faction pair has a live campaign, not a failure.
+5. Measured bug: `war_diagnose` answers `INVALID_MOBILIZATION_STATE` with campaignCount 0 while
+   `war_state` shows that campaign, and the tick says `mobilization skipped:
+   NO_MOBILIZED_SHIP:OBSERVED`. So the diagnose reads a different record path than the store
+   (the same read-path class of bug fixed on 2026-10-27 for the phases).
+Next: make the mobilizer see real armed patrols on both sides of campaign:30000144 (attackers
+in 30000142, defenders in 30000144), or force the Caldari/Gallente border by outnumbering
+30045344 (500001) vs 30003837 (500004); then check whether the fleet registry ASSIGN lands.
+NOTE: MCP `evejs-server.events` reads the OWNER's play stack, not this one - do not mix them.
