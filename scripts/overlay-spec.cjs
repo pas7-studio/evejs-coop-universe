@@ -233,7 +233,9 @@ const SOCIAL_PATCH_PATHS=new Set([
  "server/src/services/mail/mailState.js"
 ]);
 names.splice(names.indexOf("coopVirtualWorldRuntime")+1,0,
- "coopLivingWorldPhaseCoordinator","coopLivingWorldPhaseRegistry");
+ // The runtime is split by scripts/coop-split-module.cjs: the pure helpers are a
+ // real deployed module and the parent requires it by extensionless name.
+ "coopVirtualWorldRuntime.pure","coopLivingWorldPhaseCoordinator","coopLivingWorldPhaseRegistry");
 const specs=[
  // FW-003C ammo depth: an authored `coop_war_patrol_ammo<depth>_<base>` loadout
  // row is not in the static npcLoadouts table, so the one read-only static row

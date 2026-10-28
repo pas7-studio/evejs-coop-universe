@@ -1,16 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import {createRequire} from "node:module";
+import {readModuleText,functionText} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
-const text=rel=>fs.readFileSync(new URL("../"+rel,import.meta.url),"utf8");
+const text=(rel,options)=>readModuleText(rel,options);
 
 test("manufacturing uses the original 30-second A-Life observation, not a new clock",()=>{
- const world=text("integration/coopVirtualWorldRuntime.cjs");
- const functionStart=world.indexOf("async function observeAlifeEconomy(){");
- const functionEnd=world.indexOf("\nfunction lockedTargets(",functionStart);
- assert.ok(functionStart>0&&functionEnd>functionStart);
- const phase=world.slice(functionStart,functionEnd);
+ const world=text("integration/coopVirtualWorldRuntime.cjs",{depth:0});
+ const phase=functionText(world,"async function observeAlifeEconomy(){");
+ assert.ok(phase.length>200,"observeAlifeEconomy exists in the runtime");
  assert.equal((phase.match(/alifeManufacturingRuntime\.tick\(/g)||[]).length,1);
  assert.match(phase,/const decision=alifeEconomyObserver\.tick\(snap\)/);
  assert.match(phase,/if\(process\.env\.EVEJS_COOP_ALIFE_ECONOMY_ACT==="1"\)/);

@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-const read=(name)=>fs.readFileSync(new URL("../"+name,import.meta.url),"utf8");
+import {readModuleText} from "./_support/coopSourceText.mjs";
+// A split module is read with its pure helpers inlined, so wiring assertions
+// keep covering code that moved out of the runtime file.
+const read=(name)=>readModuleText(name);
 test("native EX-03B scan runs only in same opt-in A-Life expedition cycle",()=>{
  const runtime=read("integration/coopVirtualWorldRuntime.cjs");
  assert.match(runtime,/EVEJS_COOP_NPC_PROBE_SCAN!=="1"/);

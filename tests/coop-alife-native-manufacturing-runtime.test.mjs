@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 import fs from "node:fs";
+import {readModuleText,functionText} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const {createRuntimeAlifeManufacturing}=require("../integration/coopAlifeNativeManufacturingRuntime.cjs");
 const OWNER=1000010,STATION=60000101,SYSTEM=30000142,ENTITY=199;
@@ -151,10 +152,9 @@ test("source-only adapter has no clock, wallet, original market or inventory mut
 
 
 test("A-Life exact world tick isolates manufacturing exception before NPC resupply and buyer",async()=>{
- const src=fs.readFileSync(new URL("../integration/coopVirtualWorldRuntime.cjs",import.meta.url),"utf8");
- const i=src.indexOf("async function observeAlifeEconomy(){");
- const j=src.indexOf("\nfunction lockedTargets(",i);
- assert.ok(i>=0&&j>i);
+ const src=readModuleText("integration/coopVirtualWorldRuntime.cjs",{depth:0});
+ const phase=functionText(src,"async function observeAlifeEconomy(){");
+ assert.ok(phase.length>200,"observeAlifeEconomy is a top-level function of the runtime");
  const seen=[],events=[];
  const modules={
   "./runtime":{ensureScene:()=>({})},
@@ -179,7 +179,7 @@ test("A-Life exact world tick isolates manufacturing exception before NPC resupp
   advanceNativeAmmoSupply:()=>seen.push("resupply-done"),
   require:id=>{if(!Object.hasOwn(modules,id))throw Error("UNEXPECTED_IMPORT:"+id);return modules[id]}
  };
- const step=new Function("ctx","with(ctx){"+src.slice(i,j)+";return observeAlifeEconomy;}")(ctx);
+ const step=new Function("ctx","with(ctx){"+phase+";return observeAlifeEconomy;}")(ctx);
  await step();
  assert.deepEqual(seen,["manufacture","resupply","resupply-done","buyer"]);
  assert.equal(ctx.alifeEconomyAuthorityBusy,false);

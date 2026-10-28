@@ -1,18 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import path from "node:path";
 import {createRequire} from "node:module";
+import {readModuleText,functionText} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const root=path.resolve(import.meta.dirname,"..");
-const read=p=>fs.readFileSync(path.join(root,p),"utf8");
+const read=(p,options)=>readModuleText(p,options);
 test("existing physical stock EveJS runtime reads loaded scenes, never creates a scene for proofs",()=>{
- const src=read("integration/coopVirtualWorldRuntime.cjs");
+ const src=read("integration/coopVirtualWorldRuntime.cjs",{depth:0});
  assert.match(src,/runtime\.scenes instanceof Map\?runtime\.scenes\.get\(systemID\)/);
- const begin=src.indexOf("function observeNativeMiningProof()");
- const end=src.indexOf("function syncNativeDeliveries()",begin);
- assert.ok(begin>=0&&end>begin);
- const code=src.slice(begin,end);
+ const code=functionText(src,"function observeNativeMiningProof()");
+ assert.ok(code.length>100,"observeNativeMiningProof exists in the runtime");
  assert.doesNotMatch(code,/ensureScene|spawnBatchInSystem|warpTo|new (?:Scene|Timer)|setInterval/);
  assert.match(code,/mining\.getMiningFleetsForSystem\(systemID\)/);
  assert.match(code,/miningState\.getMineableState\(sc,id\)/);

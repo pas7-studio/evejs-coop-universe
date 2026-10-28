@@ -42,6 +42,13 @@ if (!fs.existsSync(absFile)) {
   process.exit(1);
 }
 const outRel = opt('--out', path.join(path.dirname(relFile), `${path.basename(relFile, '.js')}.pure.js`));
+// A moved body keeps its relative `require("./x")` calls, so the new module has
+// to live in the same directory as the parent or those calls silently resolve
+// elsewhere. Refuse instead of writing a file that breaks at runtime.
+if (path.resolve(path.dirname(outRel)) !== path.resolve(path.dirname(relFile))) {
+  console.error(`--out must stay in ${path.dirname(relFile)} (moved bodies keep relative require() calls)`);
+  process.exit(1);
+}
 const absOut = path.join(SERVER, outRel);
 
 const source = fs.readFileSync(absFile, 'utf8');

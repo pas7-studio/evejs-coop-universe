@@ -96,32 +96,59 @@ Current state of the giant modules:
 
 | File | Lines | Split |
 |---|---|---|
-| `space/coopVirtualWorldRuntime.js` | 5 330 | **blocked** — see below |
+| `space/coopVirtualWorldRuntime.js` | 4 379 | **done** — pure helpers in `coopVirtualWorldRuntime.pure.js` (970 lines) |
 | `space/coopAdminBridge.js` | 1 518 | not started |
 | `space/coopNativeStationArrival.js` | 1 451 | not started |
 | `space/coopCourierRuntime.js` | 975 | not started |
 
-### Attempted split of `coopVirtualWorldRuntime.js` (reverted)
+### The runtime split, and the test migration that unblocked it
 
-The tool found a clean, state-free slice: 55 declarations, 911 lines (distance
-and belt summaries, NPC module summary, raid leash, PVE wave helpers, sale
-notes, war presence math) → `space/coopVirtualWorldPure.js`, parent 4 419 lines.
-Behaviour was verified: the engine still exported the **same 21 names**, and the
-26 test files referencing the runtime reported **188 pass / 20 fail both before
-and after** the change.
+`space/coopVirtualWorldRuntime.js` went from 5 349 to 4 379 lines: 56
+declarations (970 lines) that touch no module state moved into
+`space/coopVirtualWorldRuntime.pure.js` - distance and belt summaries, NPC module
+summary, raid leash, PVE wave helpers, sale notes, war presence math, the
+headless retry policy, the salvage/wreck witnesses. The parent destructures them
+back, so the runtime still exports the **same 21 names**.
 
-It was reverted anyway, because **10 tests assert on the *text* of
-`integration/coopVirtualWorldRuntime.cjs`** (`read("integration/…")` +
-`assert.match`). Once the archived copy is refreshed, those assertions look for
-code that legitimately moved. The split is therefore blocked on a test
-migration, not on the tool:
+What actually blocked the first attempt was not the code but 10 wiring tests
+asserting on the *text* of `integration/coopVirtualWorldRuntime.cjs`: after the
+archive was refreshed, they looked for code that had legitimately moved. The fix
+is the reusable helper `tests/_support/coopSourceText.mjs`:
 
-1. read `runtime + pure` together in the text-assertion helpers;
-2. re-run the 26 files and require the same 20 pre-existing failures only;
-3. then re-apply `--apply` and refresh the archived copies.
+- `readModuleText(rel)` inlines **only** split siblings (`*.pure.js`, and the
+  archived `.cjs`/shim equivalents) in place of their `require()` call, so text
+  assertions and slices keep working after code moves and a later split cannot
+  silently hide an assertion. One caveat by design: a split sibling appears where
+  the parent requires it (near the top), not at each original position, so use
+  `functionText` rather than hand-written "next declaration" ranges. Nothing else
+  is inlined - a test that reads `scripts/overlay-spec.cjs` must still see that
+  file alone, or a `doesNotMatch` would trip over an imported copy of the same
+  string.
+- `functionText(text, signature)` returns one top-level function from its
+  signature to its closing brace, replacing hand-written
+  `indexOf(nextFunction)` slices that break as soon as the *next* function moves.
+- `{depth: 0}` means "this exact file", for tests that execute an extracted
+  function body in a sandbox.
 
-Do not "fix" this by freezing the archived copy at the old text: an archive that
-disagrees with the engine is worse than a big file.
+Verified after the split: the 26 test files referencing the runtime report
+**187 pass / 21 fail**, and the 21 are the pre-existing failures that also fail on
+the unchanged tree (overlay-spec and other sessions' work); one baseline failure
+(`the diagnostic is exported from the world runtime`) now asserts the real
+`require()`d export object instead of the text of an export list, and passes.
+The gates stay green: `AUDIT_OK`, `PERF_OK`.
+
+Two rules learned here, both cheap to forget:
+
+1. A split sibling is a **deployed module**: it must be registered next to its
+   parent in `scripts/overlay-spec.cjs` `names`, or the legacy installer copies
+   the parent without the file it requires.
+2. `--out` must stay in the **same directory** as the parent. The splitter moves
+   bodies that contain relative `require()` calls; a subdirectory would silently
+   change what they resolve to.
+
+Do not "fix" a broken text assertion by freezing the archived copy at the old
+text: an archive that disagrees with the engine is worse than a big file.
+
 
 ## Performance traps: look for them statically, then prove with a profile
 

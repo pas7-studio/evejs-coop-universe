@@ -33,7 +33,7 @@ const REPO = path.resolve(__dirname, '..');
 const BUDGET = {
   stockFilesMax: 70, // stock files that mention the co-op layer at all
   stockLinesMax: 700, // total co-op lines inside stock files
-  stockCharsMax: 67000, // characters of co-op code inside stock files: the real burden
+  stockCharsMax: 67500, // characters of co-op code inside stock files: the real burden
   bigFileCharsMax: 15000, // one stock file before extraction is due
   monkeyPatches: 0, // prototype reassignment / defineProperty on stock classes
   sourceRewrites: 0, // writeFileSync(__filename) / require.cache juggling

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import {createRequire} from "node:module";
+import {readModuleText} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
-const file=relative=>fs.readFileSync(new URL("../"+relative,import.meta.url),"utf8");
+const file=relative=>readModuleText(relative);
 
 test("current-main original industry source retained strict exact wallet cents",()=>{
  const src=file("integration/coopNpcIndustryNativeBindings.cjs");
