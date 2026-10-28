@@ -67,10 +67,11 @@ test("wrong type or owner cannot spoof loaded native weapon ammo",()=>{
  assert.equal(f.check().status,"NATIVE_SHIP_CUSTODY_MISSING");
 });
 test("unverified module, duplicate module and ambiguous double-loaded ammo deny firing",()=>{
- const f=fixture();f.modules.splice(0);
+ const f=fixture(),fitted={...f.modules[0]};f.modules.splice(0);
  assert.equal(f.check().status,"NATIVE_WEAPON_MODULE_NOT_VERIFIED");
- f.modules.push({moduleID:401,entityID:101,ownerID:900,categoryID:7,flagID:27},
-  {moduleID:401,entityID:101,ownerID:900,categoryID:7,flagID:27});
+ // A fitted module is proven by its own typeID and online state, so the
+ // injected duplicates must be complete fitted records, not bare IDs.
+ f.modules.push({...fitted},{...fitted});
  assert.equal(f.check().allowed,false);
  f.modules.splice(1);f.cargo.push({...f.cargo[0],cargoID:502});
  assert.equal(f.check().status,"NATIVE_AMMO_EMPTY_OR_AMBIGUOUS");

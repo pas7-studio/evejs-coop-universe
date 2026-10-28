@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const {createMiningHiring,readServerWagePolicy}=require("../integration/coopPlayerMiningHiring.cjs");
@@ -116,10 +117,12 @@ test("operator policy rejects unconfigured employer or invalid cycles and overfl
  assert.equal(x.preview().status,"NO_NATIVE_EMPLOYER_OFFER");
 });
 test("seller policy is explicitly configured server-side and never inferred from a market quote",()=>{
- const file="/world/coop-npc-mining/wage-policy.json";
+ // The module joins root + "coop-npc-mining" + "wage-policy.json" with
+ // path.join, so the fixture must name the same native path on every platform.
+ const root="/world",file=path.join(root,"coop-npc-mining","wage-policy.json");
  const data={version:1,employers:{[EMPLOYER]:{
   enabled:true,revision:1,minerCycleCents:10000,haulerCycleCents:5000,maxCycles:6}}};
- const source=readServerWagePolicy({root:"/world",
+ const source=readServerWagePolicy({root,
   io:{readFileSync:(p)=>{assert.equal(p,file);return JSON.stringify(data)}}});
  assert.equal(source(EMPLOYER).revision,1);
  assert.equal(source(BUYER),null);
