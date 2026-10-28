@@ -65,8 +65,19 @@ function checkPair(parentRel, siblingRel) {
   // over. A name declared in both modules but never passed to a binder is a stale
   // copy by construction - this is how the war reverted to an empty state.
   const bound = new Set();
-  for (const m of parentText.matchAll(/\bbind[A-Za-z0-9_$]*\s*\(\s*\{([^}]*)\}/g)) {
+  const binderCalls = [...parentText.matchAll(/\bbind[A-Za-z0-9_$]*\s*\(\s*\{([^}]*)\}/g)];
+  for (const m of binderCalls) {
     for (const name of bindingNamesPublic(m[1])) bound.add(name);
+  }
+  // A binder that nobody calls leaves every two-state name stale: the copies exist
+  // but nothing ever refreshes them. Look at the enclosing module-level function.
+  const binderNeverCalled = [];
+  for (const call of binderCalls) {
+    const before = parentText.slice(0, call.index);
+    const owner = [...before.matchAll(/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/gm)].pop();
+    if (!owner) continue; // module scope: it runs when the file loads
+    const uses = parentText.split(new RegExp(`\\b${owner[1]}\\b`)).length - 1;
+    if (uses <= 1) binderNeverCalled.push(owner[1]);
   }
   // "the parent assigns it" must mean a real assignment outside the declaration
   // itself: `let warFleetRegistry=null` is an initialiser, not a live copy.
@@ -86,6 +97,7 @@ function checkPair(parentRel, siblingRel) {
   for (const n of undeclared) problems.push(`UNDECLARED ${n}: used but declared nowhere -> ReferenceError (strict mode)`);
   for (const n of twoStates) problems.push(`TWO_STATES ${n}: declared in both ${path.basename(parentRel)} and ${path.basename(siblingRel)}`);
   for (const n of unbound) problems.push(`UNBOUND_STATE ${n}: two copies, the parent assigns its own and no binder hands it over`);
+  for (const n of binderNeverCalled) problems.push(`BINDER_NEVER_CALLED ${n}(): the binder is defined but nothing invokes it, so every two-state name stays stale`);
   for (const n of coupling) problems.push(`COUPLING ${n}: owned by ${path.basename(parentRel)}, used by the sibling`);
   const notes = dead.map((n) => `DEAD_STATE ${n}: declared in the parent, never assigned there - only the sibling's copy is live`);
   return { parentRel, siblingRel, declared: declared.size, assigned: assigned.size, problems, notes };

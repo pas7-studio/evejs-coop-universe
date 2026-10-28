@@ -172,3 +172,21 @@ test("a binder call makes the two copies explicit and the pair readable", () => 
   assert.match(result.out, /TWO_STATES director/);
   assert.doesNotMatch(result.out, /UNBOUND_STATE|DEAD_STATE/);
 });
+
+test("a binder nobody calls leaves every two-state name stale", () => {
+  const { code } = fixture({
+    "uncalled.js": [
+      '"use strict";',
+      "let director=null;",
+      "const {read}=require(\"./uncalled.pure\");",
+      "function start(){ director=require(\"./d\"); }",
+      "function neverRuns(){ require(\"./uncalled.pure\").bindState({director}); }",
+      "module.exports={read,start};",
+      "",
+    ].join("\n"),
+    "uncalled.pure.js": '// Extracted from space/uncalled.js by scripts/coop-split-module.cjs.\n"use strict";\nlet director=null;\nfunction bindState(state){ if(state.director!==undefined)director=state.director||null; return true; }\nfunction read(){ return director; }\nmodule.exports={bindState,read,director};\n',
+  });
+  const result = run(CHECKER, ["--code-path", code, "--parent", "space/uncalled.js", "--sibling", "space/uncalled.pure.js"]);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /BINDER_NEVER_CALLED neverRuns\(\)/);
+});
