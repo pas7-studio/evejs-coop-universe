@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
+import {withEnv} from "./_support/env.mjs";
 const require=createRequire(import.meta.url);
 const {observe}=require("../integration/coopNativeIndustry.cjs");
 const {transferCargo,unloadCargo}=require("../integration/coopNativeHaulCargo.cjs");
@@ -29,14 +30,23 @@ test("native mining ship and actual cargo are reused for a named durable pilot",
  assert.equal(state.fleets[0].oreQuantity,120);
  assert.equal(state.assignments.length,2);
 });
-test("miner native ore physically moves into hauler, can drop on kill and unload on return",()=>{
+test("miner native ore physically moves into hauler, can drop on kill and unload on return",(t)=>{
+ // Unloading only removes rows the transfer made durable, so the transfer has to
+ // run with station delivery on - that is what clears the transient marker.
+ withEnv(t,{EVEJS_COOP_NPC_STATION_DELIVERY:"1"});
  const store=fakeCargo(),events=[];
  const miner={itemID:101,kind:"ship",nativeCargoItems:[{itemID:701,quantity:120,volume:0.01}]};
- const hauler={itemID:201,kind:"ship",ownerID:2,transient:true,nativeCargoItems:[]};
- const scene={getEntityByID:id=>id===101?miner:id===201?hauler:null};
+ // A durable hauler, not a transient one: only a row that survives a restart may
+ // be unloaded, and a transient hull's haul cargo never does.
+ const hauler={itemID:201,kind:"ship",ownerID:2,transient:false,nativeCargoItems:[]};
+ const scene={systemID:30000142,
+  getEntityByID:id=>id===101?miner:id===201?hauler:null};
  const fleet={fleetID:9,systemID:30000142,haulerEntityIDs:[201]};
  const dependencies={store,probe:{observe:(event)=>events.push(event)},
-  depot:{prepare:()=>({status:"PREPARED"}),commit:()=>({status:"COMMITTED"})}};
+  depot:{prepare:()=>({status:"PREPARED"}),commit:()=>({status:"COMMITTED"})},
+  // A durable transfer is only acknowledged after the native table flush, so
+  // the fixture exposes the two calls coopDurableCargoWrite actually makes.
+  database:{setTransientPath:()=>({}),flushTableSync:()=>({success:true})}};
  assert.equal(transferCargo(scene,fleet,miner,dependencies),1.2);
  assert.equal(store.listNativeCargoForEntity(101).length,0);
  assert.equal(store.listNativeCargoForEntity(201)[0].quantity,120);
