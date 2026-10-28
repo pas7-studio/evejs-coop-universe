@@ -1,8 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+
+// The cool-down is durable now, so the suite must never write into the real market root.
+process.env.EVEJS_COOP_STATION_DRAIN_ROOT = fs.mkdtempSync(path.join(os.tmpdir(), "drain-"));
 
 const require = createRequire(import.meta.url);
 const modulePath = path.join("C:", "Games", "EveCoop", "upstream-evejs", "Code", "server", "src", "space",
