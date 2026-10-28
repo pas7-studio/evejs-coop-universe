@@ -69,7 +69,8 @@ Owner decision 2026-10-28: delete it. Done in `a6d6b44a`; the CI-triggered EX-03
 became `scripts/Run-NpcProbe-PinnedChecks.ps1` (`bbea62c3`) so the procedure survived,
 and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 `coop-feature-readiness` 7/1->8/0, `coop-crossstream-overlay-roundtrip` 1/1->2/0).
-Steady total is now 6161 / 48 / 99.
+Full probe `suite-final2.json` (2026-10-28 21:3xZ): 6187 pass / 20 fail / 99 skip,
+plus one more from the flag baseline = **6188 / 19 / 99** from the 5837 / 332 / 92 baseline.
 
 **`node scripts/coop-engine-audit.cjs` prints AUDIT_REGRESSION at 20:55Z** - not from
 these commits: `integration drift 4 > 0` for coopAdminBridge, coopAdminBridgeActions,
