@@ -3251,3 +3251,14 @@ so the opt-in COOP-049 buyer leg cannot fire even with its flag on - contradicti
 delete the assertion, decide whether the authority should derive `materialNeeds` from
 `requirements` again or the buyer should read `products`. Feature is OFF by default, so
 this is not a live regression.
+
+### Where the parity baseline stands (2026-10-28, after 34b871ec)
+`docs/evidence/test-parity.json` was re-recorded over its 31 files: **234 pass / 1 fail**
+(was 222/13 at `b42e53fc`). Eleven of the thirteen were stale assertions, not behaviour:
+a CRLF-vs-`\n` anchor, a sandbox `require()` whitelist that predated the module split, four
+greps of the LEGACY installer's module list (now `overlayRegistrations()`), `safeNpcPhase`
+labelled phases the coordinator dispatches as `runPhase` - one of those slices was EMPTY,
+so its three assertions were passing on nothing - and one label that changed from
+UNCLASSIFIED to INVALID. The single remaining red is the COOP-049 `materialNeeds` gap
+above. The snapshot also contains the other session's uncommitted `overlay-spec.cjs` work;
+reverting that shows up as a parity regression, which is the intended signal.
