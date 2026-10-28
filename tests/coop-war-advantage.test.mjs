@@ -133,3 +133,29 @@ test("a war with no active belligerents scores nothing", () => {
 test("authorities are required", () => {
   assert.throws(() => createWarAdvantage({}), /WAR_ADVANTAGE_AUTHORITIES_REQUIRED/);
 });
+
+test("the client can represent every score it is given", () => {
+ // factionwarfare/advantageState.py: contribution and floor are divided by 100000 and
+ // must stay within (0.0, 1.0) with the pair summing to at most 1.0, otherwise
+ // CreateAdvantageStateFromActivityState raises ValueError and the advantages tab
+ // shows nothing at all. A fleet's raw weighted points can exceed that domain.
+ // 300 losses is 300k weighted points, three times what the client can hold.
+ const byWreck = {};
+ for (let index = 0; index < 300; index += 1) {
+  const wreckID = 9000 + index;
+  byWreck[wreckID] = { wreckID, systemID: 30045344, entityID: 4000 + index,
+   pilotID: "coop-pilot-0" + (index % 100), victimFactionID: 500004,
+   corporationID: 1000181, warID: "war:a-b", campaignID: "c1",
+   observedAt: 1000 + index,
+   attribution: "NATIVE_VICTIM_WRECK_ONLY_NO_KILLER", kind: "WARSHIP_DESTROYED" };
+ }
+ const casualties = { version: 1, count: 300, byWreck };
+ const view = createWarAdvantage({gameStore: store({war: WAR, fleet: FLEET, casualties}), env: ON});
+ const scores = view.scoresFor(30045344);
+ assert.ok(scores.length > 0);
+ for (const score of scores) {
+  assert.ok(score.contribution >= 0 && score.contribution <= 100000,
+   "contribution inside the client domain: " + score.contribution);
+  assert.ok(score.floor >= 0 && score.contribution + score.floor <= 100000);
+ }
+});

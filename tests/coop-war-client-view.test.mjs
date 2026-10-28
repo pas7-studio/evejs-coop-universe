@@ -168,3 +168,19 @@ test('a captured system names the faction it was taken from as the attacker',()=
  assert.equal(ours[30045347].attackerID, 500001, 'the war does not invent a third faction');
  assert.equal(ours[30045347].contested, true);
 });
+
+test('every system names an attacker the client can look up',()=>{
+ // The warzone map and the advantage gauge both do FACTION_ID_TO_COLOR[attackerID];
+ // a 0 or an unknown id is a KeyError that takes the whole tab down.
+ const state = frontier();
+ state.territories['30045348'] = {systemID:30045348,originalOwnerFactionID:500004,
+  militaryControllerFactionID:500004,state:'SECURE',revision:1,changedAt:1};
+ const response = view.warzonesResponse(keyVal, dictOf, {2:[500001,500004]},
+  {state, getStargatesForSystem: (id) => gates[id] || []});
+ const ours = Object.fromEntries(response.entries.find(([id]) => id === 2)[1].entries);
+ for (const [systemID, entry] of Object.entries(ours)) {
+  assert.ok([500001,500004].includes(entry.attackerID),
+   'system ' + systemID + ' has no usable attacker: ' + entry.attackerID);
+  assert.notEqual(entry.attackerID, entry.occupierID, 'a side cannot attack itself');
+ }
+});
