@@ -4,8 +4,8 @@
  "wiredModules": 57,
  "specFiles": 21,
  "specEntries": 67,
- "longHooks": 4,
- "longestHook": 1131,
+ "longHooks": 3,
+ "longestHook": 822,
  "overlap": 10,
  "overlaps": [
   {
@@ -70,10 +70,6 @@
   }
  ],
  "long": [
-  {
-   "file": "server/src/services/dungeon/dungeonUniverseSiteService.js",
-   "chars": 1131
-  },
   {
    "file": "server/src/services/trade/tradeMgrService.js",
    "chars": 822
