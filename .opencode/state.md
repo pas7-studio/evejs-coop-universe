@@ -3610,3 +3610,18 @@ did not touch them and they were deliberately left alone.
 STILL OPEN (owner decision): militia corporations have no income (measured: 1000035/1000120/
 1000138 = 0 ISK, only ORE 1000129 holds 136.5 M), so no escrow and no bounty payout exists.
 FW-036/037 removed the deadlock and the silent failure, but they cannot create money.
+
+## FW-038: money and navies sat on opposite sides -> mercenary decision (live)
+Live `war_funding_diagnose` after the deploy:
+  needCents 2500000
+  mercenary {"status":"PROPOSED","proposals":[{"payerFactionID":500014,
+    "payerCorporationID":1000129,"payerBalanceCents":13655429296,
+    "mercenaryFactionID":500004,"amountCents":2500000,
+    "reason":"NAVY_WITHOUT_TREASURY_PAIRED_WITH_TREASURY_WITHOUT_NAVY"}]}
+i.e. the only funded faction (ORE) can hire the cheapest navy-capable faction for exactly the
+bounty need, computed from real division-1000 balances and the real doctrine composition.
+The decision is pure (`coopWarMercenaryContract.proposeContracts`, 4 tests): one contract per
+payer, refuses a payer that cannot cover the need, refuses to pay a navy that already has money,
+refuses a zero need. It moves no ISK and creates none - the transfer is still a separate,
+journaled two-leg operation on real corporation wallets (`coopCorpWallet.applyDelta` writes and
+reads the balance back), which is the next wiring job.
