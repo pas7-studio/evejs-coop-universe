@@ -8563,3 +8563,30 @@ Client error classes still seen (all client-side or known stubs): `CampaignReque
 campaigns API answers 200 with an empty list, so the page is legitimately empty),
 `FlatbufferContentProvider ... L500` (achievement/campaign definitions flatbuffer), and
 `IOError: [Errno 9] Bad file descriptor` (client tasklet writing to a closed log).
+
+## 2026-10-29T03:05Z - rebuild delivered: onlineStatus descriptor, gateway defaults, real reopen
+
+Rebuilt the image and brought the play stack up with `scripts/Start-Play-Stack.ps1 -Action Up`
+(public path now: Proton `61730` -> `evejs-ssh-relay` -> sshd `55346`; the server container keeps
+only loopback bindings plus `443 -> 26003`). Verified live afterwards:
+
+- `onlineStatus.Prime` now sends `header.type=objectex1 token=blue.DBRowDescriptor`
+  (fork `b7fa011`). Before, every contact login/logout raised
+  `TypeError: expected DBRow or DBRowDescriptor as first argument` in the friend's client.
+- Unmodelled gateway types answer a default-encoded 200 and say so:
+  `No handler for type=eve_public.stargate.lock.api.GetRestrictedSystemsRequest - answering a
+  default empty ...Response` (fork `f256261`). 404s for those two are gone.
+- The expired-front reopen is real: `war:500001-500004:campaign:30003837:r2` exists in
+  `PREPARING` while the old `...:campaign:30003837` stays `EXPIRED` as history, and there has
+  been exactly one `war opened` line since the restart instead of one per tick (fork `501afd7`).
+
+Remaining client-side errors after the rebuild (5 minutes, friend's client 140000107):
+`IOError: [Errno 9] Bad file descriptor` only - a client tasklet writing to a closed log, not a
+server answer. The career-portal `NoneType.progress`, the `Tag_img.size` texture error and the
+achievement flatbuffer `L500` did not reappear in this window; they belong to client-side
+features (career portal, textures, flatbuffer definitions) rather than to a gateway call, since
+no request of theirs reaches the gateway at all (checked: zero `achievement`/`definition` types,
+zero non-gRPC `H2` requests).
+
+The friend (140000107) is connected through the SSH relay and his gateway calls are served
+(18 `Requests.Send` in five minutes, all 200).
