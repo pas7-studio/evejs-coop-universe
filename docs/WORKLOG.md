@@ -2159,3 +2159,9 @@ Why: owner-verified in the client: the global map shows both factions' sectors i
 Detail: The mobiliser refuses a campaign whose side system is not tracked (SYSTEM_NOT_TRACKED), and the 500001/500011 border uses 30003836 as its source. Adding it to EVEJS_COOP_VIRTUAL_ROUTE makes the world track it so a real mustering can be evaluated there.
 Where: compose/compose.agents.yaml
 Evidence: owner report 2026-10-29: 'global map started showing sectors of both factions correctly in war, and the war tab - I finally see everything as it should'; warzone payload 3 systems with faction ids + FL/SL + attackerID; fork 331cffa/9a2a113
+### 2026-10-28T21:22Z · 4bce147 · L2 · fix(fw): the campaign of the system you stand in is no longer null
+
+Why: local campaign snapshot answered null on real fronts; owner-verified map and war tab recorded
+Detail: insurgencySolarsystemService answered (solarSystemID, None) for every system, so standing on a real front showed no campaign and the client's campaign path never fired. The answer is now the snapshot the visible-campaign list already serves, matched only against systems a live campaign really covers; the service hook stays one statement and the projection stays in the deployable module. Also regis
+Where: docs/coop-hook-inventory.json, integration/coopWarClientView.cjs, scripts/overlay-spec.cjs, tests/coop-war-client-view.test.mjs
+Evidence: fork 841345f; live: 30045343 -> (30045343, null) because its campaign is OCCUPIED (no live campaign in the world right now), 30000142 -> (30000142, null); coop-war-client-view 12/0; hook baseline 68 entries, long hooks 3; image rebuilt, server healthy
