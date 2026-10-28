@@ -3858,3 +3858,27 @@ changed from NO_NAVY to "no money" kept the same top-level NO_OPENABLE_FRONT and
 Next exact step for whoever continues: publish/log the opening phase's early-return reason
 (`warSkip("opening", ...)` already exists for all of them but only fires on a state change) and
 check `visitedSystems` membership for 30003837/30045344 at the moment the phase runs.
+
+## FUNDED CAMPAIGN + REAL KILL, payout still gated by attribution (17:25Z)
+Chain reached with a funded escrow and real combat in the SAME campaign:
+  17:18:43 living-native-war-bounty-reserved RESERVED factionID 500004, corp 1000120,
+          campaign war:500004-500011:campaign:30045344  (real HELD 25 000 ISK)
+  17:18:43 living-native-war-opened OPENED war:500004-500011 + that campaign
+  17:20:05 / 17:23:43 living-native-war-attack-orders OBSERVED
+  17:25:12 living-native-war-casualty RECORDED: victim 980000003812, wreck 980300000012,
+          pilot coop-pilot-005, corp 1000120, victimFactionID 500004, in that campaign.
+Fixes that made this possible this round (all in the fork, all with reasoning in the commits):
+  * the opening planner now unions visited systems with the systems the war already owns -
+    it had been blind to 30003837/30045344 because the A-Life walker had not visited them;
+  * OPENED now means something opened (a fully skipped batch is REFUSED/NO_FUNDED_FRONT);
+  * the refusal event carries the applier's per-border reasons, which is how the two real
+    blockers (WAR_TREASURY_JOURNAL_COLLISION, WAR_TREASURY_FUNDS_UNAVAILABLE) became visible;
+  * the escrow journal id is derived from the wallet, so a lost counter cannot collide.
+PAYOUT STILL DID NOT FIRE, and the reason is honest and specific: the casualty receipt carries
+`attribution:"NATIVE_VICTIM_WRECK_ONLY_NO_KILLER"`, no `living-native-war-merit` was emitted for
+it, so `coopWarKillMerit` never called the bounty payer. This is the documented FinalBlow gate:
+attribution may only come from the native destruction caller's explicit `options.attackerEntity`,
+and it must not be guessed. Merit DID fire 5 times earlier in the day for stock NPC kills, so the
+mechanism works; what is missing is that path for war-fleet hulls.
+NEXT EXACT STEP: pass the native attacker entity through the war-fleet destruction hook (the same
+one that already credits stock NPC kills), then the HELD escrow pays automatically.
