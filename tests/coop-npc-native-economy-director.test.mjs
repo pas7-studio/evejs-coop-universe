@@ -29,7 +29,10 @@ function fixture({target=100}={}) {
     assert.equal(Number.isSafeInteger(amountCents),true);
     wallet-=q.totalCost;
     debit={verifiedNative:true,jobID:970000000000000,ownerID:OWNER,amountCents};
-    job={jobID:970000000000000,ownerID:OWNER,coopOperationID:id,productTypeID:TYPE,blueprintID:BPO,status:1};
+    // The real install persists the canonical quote with the job; crash
+    // reconciliation re-attests that exact quote before trusting a delivery.
+    job={jobID:970000000000000,ownerID:OWNER,coopOperationID:id,productTypeID:TYPE,
+     blueprintID:BPO,status:1,coopQuoteSignature:JSON.stringify(q),totalCost:q.totalCost};
     return{status:"INSTALLED",jobID:job.jobID}},
   markReadyOnce:id=>{if(!elapsed)return{status:"BLOCKED",error:"NATIVE_JOB_NOT_YET_READY"};job.status=3;return{status:"READY"}},
   deliverOnce:id=>{if(job.status!==3)throw Error("NOT_READY");job.status=4;job.coopDelivery={itemID:1990000200,quantity:100};
