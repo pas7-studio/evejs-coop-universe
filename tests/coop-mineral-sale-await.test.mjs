@@ -43,3 +43,12 @@ test("a type the station does not bid for never ends the whole batch", { skip: !
   const wantedAt = source.indexOf("const wanted=[...new Set(sellTypes.filter(typeID=>");
   assert.ok(sortAt > wantedAt, "the stock the lift just produced is asked for first");
 });
+
+test("real cargo in the hold is sellable even when the manifest names only ore", { skip: !present }, () => {
+  // Measured 2026-10-28: 5 chipsets lifted on an earlier arrival rode along with a full
+  // ore haul; the trip's own `types` narrowed the batch to this trip's ore, so the market
+  // was never asked for them. The hull's real cargo is a fact, not a manifest entry.
+  assert.ok(source.includes('const carried=new Set();'));
+  assert.ok(source.includes("liftedTypes.has(Number(typeID))||carried.has(Number(typeID))||"));
+  assert.ok(source.includes("listNativeCargoForEntity(Number(haulerID))"));
+});
