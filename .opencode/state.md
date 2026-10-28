@@ -3057,3 +3057,30 @@ Next step (in order):
 2. Then prove the same on the accelerated `evejs-agents` stack (needs the
    EVEJS_COOP_FACTION_WAR* flags there plus a seeded war).
 3. Then the client surfaces (warzone payload/FW window) against the new war.
+
+## 2026-10-28 - OPS refactor: 19 gate scripts -> 1 runner + 1 validated table
+
+Commit `ebd2e2ac` (+ worklog `b03861d7`, docs `74017446`). No gameplay code touched.
+
+  scripts/lib/CoopGate.ps1  192L  the six steps once (tests exist -> manifest all-NOT_RUN
+                                 -> node --test -> tail -> throw -> pinned verifier)
+  scripts/lib/gates.json    583L  the 19 gate rows as data (tests, tail, log, manifest, pins)
+  Run-*.ps1 (19)            161L  five-line wrappers, same names, same banners (-671/+41)
+  tests/coop-gate-specs.test.mjs  proves every declared test/pin/manifest still exists,
+                                  no manifest claims unexecuted gameplay, no silent key typo,
+                                  every row has a wrapper. 5/5 pass.
+
+Evidence: all 19 gates run before and after the change with identical exit codes
+(8 pass / 11 already red - the red set is the other session's in-flight overlay work,
+not this change) and identical PASS/NOT_RUN banners. The only textual difference is
+the report-dir path echoed in LW04C4's failure message.
+
+Left alone on purpose: scripts/lib/CoopGate.ps1 is not dot-sourced by anything else;
+Run-Alife-Economy-Tests.ps1, Run-CommunityFittings.ps1, Run-NativeJob-Tests.ps1,
+Run-StageJ-Salvage-Tests.ps1, Run-LW04D-Source-Gates.ps1 do not share the template.
+
+Next candidates (NOT started): the six scripts/verify-*.cjs repeat the same pinned
+git-blob hash + reversible-patch-chain check; scripts/Run-Alife-Economy-Tests.ps1
+(183L, and a test reads its text) could take a second table row once its extra
+manifests are expressed. Engine perf work stays blocked while space/coopStationDrain.js
+and the overlay-spec edits are uncommitted in another session.
