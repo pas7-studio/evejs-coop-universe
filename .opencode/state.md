@@ -8534,3 +8534,32 @@ the local listener, so its gRPC calls never reach us - the launcher (`Play.bat`)
 `http_proxy`/`https_proxy` for the client, and this session was launched without it. With the
 crash gone, relaunching through the launcher makes the gRPC surfaces (advantages, licences,
 corp goals, campaigns, insurgency) reachable.
+
+## 2026-10-29T02:45Z - client-server pass after the correct launch
+
+With the client started through `Play.bat` (proxy + CA env), the gateway now really serves:
+`user.license.Get` 200 (`eve_clonestate_omega hasLicense=true`), `plex.vault.Balance` 200
+(2222 PLEX), `pirate.corruption` + `pirate.suppression` 200, `corporationgoal.GetMineWithRewards`
+200, `dailygoal.GetAllWithRewards` 200, `character.skill.plan.GetActive` 200,
+`cosmetic.ship.Get` 200, `space.api.cdn.GetUpdate` 200, `sovereignty.mercenaryden.GetAll` 200,
+`campaign.api.GetAll` 200. Two types still 404ed (`stargate.lock.api.GetRestrictedSystems`,
+`payment.schedule.api.GetActiveByType`) - fix committed in fork `f256261`.
+
+Found a real gameplay bug while reading the same log: **a front whose campaign expired could
+never reopen.** The campaign id is deterministic (`war + target`), so the next attempt produced
+the same id and the same processed eventID, the core answered `DUPLICATE`, nothing changed, and
+the runtime still published `war opened` on every tick - six lines in ten minutes for
+`war:500001-500004:campaign:30003837` while the durable record stayed EXPIRED. `nextCampaignID`
+now gives a terminal campaign's successor `:r2`/`:r3` (fork `501afd7`; the new test fails on the
+old planner). The module is already copied into the running container; it takes effect on the
+next server restart.
+
+Pending on the next restart (do NOT restart the owner's session for it):
+1. fork `f256261` - unmodelled `eve_public.*Request` gets a default-encoded 200 instead of 404;
+   needs an image rebuild (`publicGatewayLocal.js` is a stock file).
+2. fork `501afd7` - already in the container, needs the process restart.
+
+Client error classes still seen (all client-side or known stubs): `CampaignRequestError` (the
+campaigns API answers 200 with an empty list, so the page is legitimately empty),
+`FlatbufferContentProvider ... L500` (achievement/campaign definitions flatbuffer), and
+`IOError: [Errno 9] Bad file descriptor` (client tasklet writing to a closed log).
