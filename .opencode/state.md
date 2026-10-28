@@ -8810,3 +8810,27 @@ same four asteroids cycling. The `living-mining-blocker` events are NOT evidence
 like a healthy fleet. `NO_MINEABLE_TARGET` never fired, so the fleet believes it has targets. Next
 step: instrument the activation path (`MODULE_ACTIVATE_FAILED` already exists) or check whether the
 four rocks are simply depleted, before changing anything.
+
+## FW-063: the campaign has a validator, and it immediately found a real hole (23:5xZ)
+
+`scripts/coop-war-validate.cjs` + `scripts/war-campaign-checks.cjs` check the RELATIONS between the
+war records, because every defect today was invisible inside a single record: a funded war whose
+escrow had reverted, a campaign that expired with its money locked, a capture with no provenance.
+Ten checks, each PASS/WARN/SKIP/FAIL with its own evidence, `--json` for tooling, exit 1 on any FAIL.
+The invariants are pure functions, so they are unit-tested without a server (8 tests).
+
+First live run found `live-campaign-funded` FAIL for `war:500004-500011:campaign:30045344` and
+`:30003836` - both ASSAULT, zero escrow on either side (the FW-050 store defect had reverted the
+treasury row). That is FW-062: a live campaign with no HELD and no PAID row can never pay anybody, so
+`expireUnfundedCampaigns` now expires it and releases its claim, with the funding predicate supplied by
+the caller (one treasury snapshot; unreadable money is never treated as missing). After the deploy both
+zombie campaigns disappeared and the validator reports `WAR_CAMPAIGN_OK checks=10 pass=9 warn=1`.
+
+The remaining WARN is honest and explained: `war:500011-500020:campaign:30045343:r2` has escrow for
+the attacker only, because the defender's militia corporation 1000135 has a real wallet balance of 0 -
+the per-side refusal FW-046 is supposed to report, not a code fault. Measured with the validator, not
+guessed.
+
+Validated live (23:5xZ): territory provenance holds for all four changed systems (capture and
+contested-bump are both named by a campaign), one live campaign per target, 16 fleet-registry hulls all
+carry an entity and a system, no PAID row exists yet so the payout rung is still unproven by data.
