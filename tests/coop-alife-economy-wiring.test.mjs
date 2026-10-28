@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const runtime=read("integration/coopVirtualWorldRuntime.cjs");
@@ -26,7 +27,9 @@ test("both explicit A-Life flags guard the stage",()=>{
  assert.match(brain,/supportsNativeMutation:false/);
 });
 test("pinned overlay actually installs both new observer modules",()=>{
- assert.match(patcher,/"coopAlifeEconomy","coopAlifeEconomySensor"/);
+ // Registered exactly once each: their position in the list is layout, not wiring.
+ assert.equal(overlayRegistrations("coopAlifeEconomy"),1,"coopAlifeEconomy");
+ assert.equal(overlayRegistrations("coopAlifeEconomySensor"),1,"coopAlifeEconomySensor");
  assert.match(runtime,/require\("\.\/coopAlifeEconomy"\)/);
  assert.match(runtime,/require\("\.\/coopAlifeEconomySensor"\)/);
 });

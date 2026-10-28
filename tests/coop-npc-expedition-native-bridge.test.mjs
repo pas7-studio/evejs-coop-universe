@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import {createRequire} from "node:module";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const root=new URL("../integration/",import.meta.url);
 const read=name=>fs.readFileSync(new URL(name,root),"utf8");
@@ -38,7 +39,9 @@ test("EX-02 is registered as existing 30s A-Life phase; no new scheduler",()=>{
 });
 test("EX-02 overlay installer registers BOTH modules and requires native guards",()=>{
  const overlay=fs.readFileSync(new URL("../scripts/overlay-spec.cjs",import.meta.url),"utf8");
- assert.match(overlay,/"coopNpcExpeditionCompetition","coopNpcExpeditionDirector"/);
+ // Registered exactly once each: their position in the list is layout, not wiring.
+ assert.equal(overlayRegistrations("coopNpcExpeditionCompetition"),1,"coopNpcExpeditionCompetition");
+ assert.equal(overlayRegistrations("coopNpcExpeditionDirector"),1,"coopNpcExpeditionDirector");
  assert.match(read("coopNpcOrderArbiter.cjs"),/"WAR","EXPEDITION"/);
  assert.match(read("coopNpcOrderBridge.cjs"),/"GATE","EXPEDITION"/);
 });

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const root=path.resolve(import.meta.dirname,"..");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 const runtime=read("integration/coopVirtualWorldRuntime.cjs");
@@ -54,7 +55,9 @@ test("only one bounded native evidence refresh runs for maximum eight real stati
  assert.match(reader,/NATIVE_RUST_ORDERBOOK_TIMEOUT/);
 });
 test("pinned overlay contains both authority modules before the local test runner",()=>{
- assert.match(overlay,/"coopAlifeStationAuthority","coopAlifeStationAuthorityRuntime"/);
+ // Registered exactly once each: their position in the list is layout, not wiring.
+ assert.equal(overlayRegistrations("coopAlifeStationAuthority"),1,"coopAlifeStationAuthority");
+ assert.equal(overlayRegistrations("coopAlifeStationAuthorityRuntime"),1,"coopAlifeStationAuthorityRuntime");
  for(const f of ["coop-alife-station-authority.test.mjs",
  "coop-alife-station-runtime.test.mjs","coop-alife-station-owner-isolation.test.mjs",
  "coop-alife-station-wiring.test.mjs"])assert.ok(ps.includes(f));

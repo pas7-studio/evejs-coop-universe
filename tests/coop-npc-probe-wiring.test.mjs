@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readModuleText} from "./_support/coopSourceText.mjs";
+import {readModuleText,overlayRegistrations} from "./_support/coopSourceText.mjs";
 // A split module is read with its pure helpers inlined, so wiring assertions
 // keep covering code that moved out of the runtime file.
 const read=(name)=>readModuleText(name);
@@ -75,7 +75,11 @@ test("EX-03B2 is separately disabled unless explicit native probe launch flag",(
  assert.match(deploy,/\[switch\]\$EnableNpcProbeLaunch/);
  assert.match(deploy,/-not \$EnableNpcProbeScan/);
  assert.match(deploy,/EVEJS_COOP_NPC_PROBE_LAUNCH: '1'/);
- assert.match(overlay,/"coopNpcProbeScanEvidence","coopNativeNpcProbeFlight"/);
+ // Both modules must be installed by the overlay. Their position in the registry
+ // list is a layout detail: it changed as soon as another module was placed
+ // between them, and that is not a wiring regression.
+ for(const name of ["coopNpcProbeScanEvidence","coopNativeNpcProbeFlight"])
+  assert.equal(overlayRegistrations(name),1,name);
 });
 
 test("EX-03B3 original NPC cargo unitization is pinned-source opt-in only",()=>{
@@ -119,7 +123,8 @@ test("EX-03B4 original scout hardware is a conditional source-authored fitting",
  assert.match(deploy,/\[switch\]\$EnableNpcScoutLoadout/);
  assert.match(deploy,/EVEJS_COOP_NPC_SCOUT_LOADOUT: '1'/);
  const manifest=read("scripts/overlay-spec.cjs");
- assert.match(manifest,/"coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle","coopNativeNpcProbeSceneTransition","coopNpcScoutLoadout"/);
+ for(const name of ["coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle","coopNativeNpcProbeSceneTransition","coopNpcScoutLoadout"])
+  assert.equal(overlayRegistrations(name),1,name);
 });
 
 test("EX-03B5 source expiry and recovery use original gameStore single-table durability barrier",()=>{
@@ -139,7 +144,8 @@ test("EX-03B5 source expiry and recovery use original gameStore single-table dur
  assert.match(deploy,/\[switch\]\$EnableNpcProbeLifecycle/);
  assert.match(deploy,/EnableNpcProbeLifecycle -and -not \$EnableNpcProbeLaunch/);
  assert.match(deploy,/EVEJS_COOP_NPC_PROBE_LIFECYCLE: '1'/);
- assert.match(manifest,/"coopNativeNpcProbeSweep","coopNativeNpcProbeLifecycle"/);
+ assert.equal(overlayRegistrations("coopNativeNpcProbeSweep"),1);
+ assert.equal(overlayRegistrations("coopNativeNpcProbeLifecycle"),1);
 });
 test("EX-03B5 cannot produce player/client inventory or synthetic ISK during probe end",()=>{
  const lifecycle=read("integration/coopNativeNpcProbeLifecycle.cjs");

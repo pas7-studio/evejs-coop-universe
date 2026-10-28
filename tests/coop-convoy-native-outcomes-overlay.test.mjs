@@ -1,10 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 
 test("P1 new convoy outcome module is packaged without a new upstream native patch",()=>{
  const patch=readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
- assert.match(patch,/"coopConvoyOperations","coopConvoyOutcomeProof"/);
+ // Registered exactly once each: their position in the list is layout, not wiring.
+ assert.equal(overlayRegistrations("coopConvoyOperations"),1,"coopConvoyOperations");
+ assert.equal(overlayRegistrations("coopConvoyOutcomeProof"),1,"coopConvoyOutcomeProof");
  assert.match(patch,/"coopNpcChatter"/);
  assert.match(patch,/coop-native-station-arrival-patch\.cjs/);
  assert.doesNotMatch(patch,/coop-convoy-outcome-native-patch\.cjs/);

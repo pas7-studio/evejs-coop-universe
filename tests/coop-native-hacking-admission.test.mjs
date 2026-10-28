@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import {createRequire} from "node:module";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const require=createRequire(import.meta.url);
 const {createNativeHackingAdmission}=require("../integration/coopNativeHackingAdmission.cjs");
 const {patch,DOGMA,HACK}=require("../scripts/coop-native-hacking-admission-patch.cjs");
@@ -161,7 +162,9 @@ test("installer keeps security feature opt-in and copies server module",()=>{
  const installer=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
  const overlay=fs.readFileSync(new URL("../scripts/overlay-spec.cjs",import.meta.url),"utf8");
  assert.match(installer,/coop-native-hacking-admission-patch\.cjs/);
- assert.match(overlay,/"coopNativeScanProof","coopNativeHackingAdmission"/);
+ // Registered exactly once each: their position in the list is layout, not wiring.
+ assert.equal(overlayRegistrations("coopNativeScanProof"),1,"coopNativeScanProof");
+ assert.equal(overlayRegistrations("coopNativeHackingAdmission"),1,"coopNativeHackingAdmission");
  assert.match(overlay,/server\/src\/services\/dogma\/dogmaService\.js/);
  assert.match(overlay,/server\/src\/services\/exploration\/hackingMgrService\.js/);
 });

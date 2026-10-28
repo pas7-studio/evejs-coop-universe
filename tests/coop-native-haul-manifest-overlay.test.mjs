@@ -1,10 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
+import {overlayRegistrations} from "./_support/coopSourceText.mjs";
 const read=path=>readFileSync(new URL(path,import.meta.url),"utf8");
 test("full native cargo manifest is an ordinary L2 module, not a new pinned native patch",()=>{
  const src=read("../scripts/patch-evejs-coop.cjs");
- assert.match(src,/"coopNativeHaulCargo","coopNativeHaulManifest","coopNativeRaids"/);
+ // Registered exactly once each: their position in the list is layout, not wiring.
+ assert.equal(overlayRegistrations("coopNativeHaulCargo"),1,"coopNativeHaulCargo");
+ assert.equal(overlayRegistrations("coopNativeHaulManifest"),1,"coopNativeHaulManifest");
+ assert.equal(overlayRegistrations("coopNativeRaids"),1,"coopNativeRaids");
  assert.match(src,/coop-native-station-arrival-patch\.cjs/);
  assert.doesNotMatch(src,/coop-native-haul-manifest-patch\.cjs/);
 });

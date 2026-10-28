@@ -15,6 +15,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const SUFFIXES = ["", ".js", ".cjs", ".mjs", "/index.js"];
@@ -76,6 +77,25 @@ export function readModuleText(relPath, options = {}) {
   const text = expand(file, options.depth ?? 2, new Set([file]), order);
   if (options.withFiles) return { text, files: order.map((f) => path.relative(ROOT, f).replace(/\\/g, "/")) };
   return text;
+}
+
+/**
+ * The co-op modules the overlay installs, as the real list.
+ *
+ * Tests used to assert on the *text* of the registry, e.g.
+ * `/"coopA","coopB"/` - which silently means "registered in one splice call,
+ * adjacent, in that order". That is the layout of a list, not the fact anyone
+ * cares about, and it breaks every time a module is added between them. Ask the
+ * list instead.
+ */
+export function overlayModules() {
+  const spec = createRequire(import.meta.url)("../../scripts/overlay-spec.cjs");
+  return spec.names;
+}
+
+/** How many times the overlay registers `name` (1 = correct, 2 = merge accident). */
+export function overlayRegistrations(name) {
+  return overlayModules().filter((entry) => entry === name).length;
 }
 
 /** Files that `readModuleText` inlined, in read order (useful when debugging). */
