@@ -68,6 +68,12 @@ services:
       # operator-journaled gate crossing with the native transfer's own verdict. It never
       # plans or starts a crossing by itself, and ARRIVED needs full native proof.
       EVEJS_COOP_DISTRIBUTION: "1"
+      # The economic phases get their own beat: measured 2026-10-29, the stock hook ran at
+      # 23:30:26 and then not for eight minutes while a journaled crossing waited 6 km from
+      # its gate. A phase that only runs when another system happens to call it is not a
+      # phase. Default OFF everywhere except this probe stack.
+      EVEJS_COOP_LOOP_DRIVER: "1"
+      EVEJS_COOP_LOOP_INTERVAL_MS: "45000"
       # 1800 s of native job time is 3.6 s here, so a proof does not wait half an hour.
       EVEJS_COOP_INDUSTRY_TIME_SCALE: "0.002"
       # The lift carries any corp-owned stack the station really bids for, not only the
