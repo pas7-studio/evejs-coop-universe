@@ -32,6 +32,15 @@ function fixture(options={}){
   fundBeforeWarp:x=>{reserves++;return {status:"FUNDED_BEFORE_WARP",contractID:booking.contractID,manifestKey:x.manifestKey}},
   recordDelivery:x=>{deliveryCalls++;return {status:"DURABLE_NATIVE_DELIVERY_RECORDED",manifestKey:x.manifestKey}},
   finishAfterRaid:c=>{payments++;return {status:"SETTLED",contractID:c.contractID}},
+  // Required by makeBinding since d4aa1d54 exposed the gated peaceful payout;
+  // the case set below exercises the funding/delivery paths, not that one.
+  settlePeacefulFlight:manifestKey=>({status:"NATIVE_PEACEFUL_SETTLEMENT_VERIFIED",manifestKey}),
+  // Also required since d4aa1d54: refundNativeWreck reads the native contract
+  // first so a committed wallet refund can retry HISTORY only. FUNDED here, so
+  // the ordinary refund path is the one exercised.
+  readContract:()=>({status:"READY",phase:"FUNDED",contract:{
+   contractID:booking.contractID,corporationID:booking.corporationID,
+   amountISK:booking.amountISK}}),
   refundProvenLoss:()=>({status:"REFUNDED"}),
   refundWreckedFlight:()=>({status:"REFUNDED",contractID:booking.contractID,amountISK:20000}),
   readFlight:k=>({status:"READY",phase:options.notDelivered?"FUNDED":"DELIVERED",booking}),

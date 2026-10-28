@@ -35,7 +35,19 @@ const dist = (a, b) => (a && b ? Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) : I
 
 // Which station really holds the most refined minerals for this corporation.
 // Pure: takes the ownership rows and the mineral type test so it is testable.
-function chooseStation(rows, { corpID = 0, isMineral = () => false } = {}) {
+// A station that just answered "no seeded counterparty" is skipped for a while, so
+// the drain moves on to another hangar instead of re-visiting a market it emptied.
+const stationCooldown = new Map();
+const COOLDOWN_MS = 30 * 60 * 1000;
+function coolDown(stationID, now = Date.now()) {
+  const id = pos(stationID);
+  if (id) stationCooldown.set(id, now + COOLDOWN_MS);
+}
+function onCooldown(stationID, now = Date.now()) {
+  const until = stationCooldown.get(pos(stationID));
+  return Boolean(until && now < until);
+}
+function chooseStation(rows, { corpID = 0, isMineral = () => false, now = Date.now() } = {}) {
   const totals = new Map();
   for (const row of Array.isArray(rows) ? rows : []) {
     if (Number(row?.ownerID) !== Number(corpID)) continue;
@@ -46,7 +58,9 @@ function chooseStation(rows, { corpID = 0, isMineral = () => false } = {}) {
     totals.set(station, (totals.get(station) || 0) + quantity);
   }
   const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-  return ranked.length ? { stationID: ranked[0][0], units: ranked[0][1], ranked } : null;
+  const usable = ranked.filter(([stationID]) => !onCooldown(stationID, now));
+  const pick = usable[0] || ranked[0];
+  return pick ? { stationID: pick[0], units: pick[1], ranked } : null;
 }
 
 function note(reason, fleetRecord, payload = {}) {
@@ -178,6 +192,7 @@ function tick(scene, fleetRecord, now) {
       }
       return true;
     }
+    if (state.settlement && state.settlement.status === "NOT_SOLD") coolDown(state.stationID, now);
     fleetRecord[PHASE] = null;
     fleetRecord.coopDrainNextAtMs = now + intervalMs();
     let residual = null;
@@ -268,4 +283,4 @@ function start(scene, fleetRecord, now) {
   return true;
 }
 
-module.exports = { active, start, tick, chooseStation, intervalMs, ENABLED, PHASE };
+module.exports = { active, start, tick, chooseStation, intervalMs, ENABLED, PHASE, coolDown, onCooldown };

@@ -39,6 +39,17 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   env.EVEJS_COOP_FACTION_WAR_NATIVE_TRANSFER==="1"&&
   env.EVEJS_COOP_NATIVE_ATOMIC_ROWS==="1";
  const transact=fn=>gameStore.coopAtomicNativeRows.transact([fleet.TABLE],fn);
+ // FW-041: an ABSENT fleet row is a world that has never registered a warship.
+ // There is no hull and therefore no flight: that is CLEAN, not corrupt. Every
+ // reader used to call fleet.validate(tx.get(...)) directly, so a fresh world
+ // threw FW_FLEET_REGISTRY_INVALID on every gate-staging tick (the phase died
+ // before it could even stage a real hull). A row that DOES exist must still
+ // validate - real corruption is never reported as "no data".
+ function stateIn(tx){
+  const raw=tx.get(fleet.TABLE,fleet.KEY);
+  if(raw===undefined||raw===null)return null;
+  return fleet.validate(raw);
+ }
  function inspect(row,systemID,physical){
   try{
    const scene=sceneForSystem(systemID);
@@ -96,8 +107,8 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
     !key(transferID)))
    return {status:"BLOCKED",reason:"INVALID_WAR_HANDOFF_COMMAND"};
   return transact(tx=>{
-   const s=fleet.validate(tx.get(fleet.TABLE,fleet.KEY));
-   const row=s.ships[String(id)];
+   const s=stateIn(tx);
+   const row=s?s.ships[String(id)]:null;
    if(!row)return {status:"BLOCKED",reason:"WAR_HULL_NOT_REGISTERED"};
    if(!s.transfers)s.transfers={};
    if(Object.keys(s.transfers).length>128)
@@ -217,8 +228,9 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   })===true}catch{}
   if(!cleared)return {status:"BLOCKED",reason:"NATIVE_TRANSFER_JOURNAL_NOT_CLOSED"};
   return transact(tx=>{
-   const state=fleet.validate(tx.get(fleet.TABLE,fleet.KEY)),
-    row=state.ships[String(entityID)],
+   const state=stateIn(tx);
+   if(!state)return {status:"BLOCKED",reason:"RETIRE_STATE_CHANGED"};
+   const row=state.ships[String(entityID)],
     prior=state.transfers?.[String(entityID)];
    if(!row||!prior||prior.transferID!==transferID||
     !["COMPLETE","ABORTED"].includes(prior.phase))
@@ -259,8 +271,10 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
  function auditPersisted(){
   if(!enabled())return {status:"DISABLED",problems:[]};
   let state;
-  try{state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)))}
+  try{state=transact(stateIn)}
   catch{return {status:"NEEDS_OPERATOR_REPAIR",problems:[{reason:"SQL_FLEET_NOT_READABLE"}]}}
+  // No fleet row at all: nothing was ever registered, so nothing can be wrong.
+  if(!state)return {status:"CLEAN",problems:[]};
   const problems=[];
   for(const flight of Object.values(state.transfers||{})){
    const ship=state.ships[String(flight.entityID)];
@@ -294,8 +308,9 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   if(!enabled())return {status:"DISABLED"};
   if(!pos(entityID))return {status:"INVALID_ENTITY"};
   let state;
-  try{state=transact(tx=>structuredClone(fleet.validate(tx.get(fleet.TABLE,fleet.KEY))))}
+  try{state=transact(tx=>{const s=stateIn(tx);return s?structuredClone(s):null})}
   catch{return {status:"UNAVAILABLE",reason:"FLEET_SQL_READ_FAILED"}}
+  if(!state)return {status:"NO_ACTIVE_TRANSFER"};
   const row=state.ships[String(entityID)],
    flight=state.transfers?.[String(entityID)];
   if(!row||!flight)return {status:"NO_ACTIVE_TRANSFER"};
@@ -375,8 +390,9 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
   const auditID=crypto.createHash("sha256").update(
    [transferID,action,witnessHash,principalID,reason.trim()].join("|")).digest("hex");
   return transact(tx=>{
-   const state=fleet.validate(tx.get(fleet.TABLE,fleet.KEY)),
-    row=state.ships[String(entityID)],
+   const state=stateIn(tx);
+   if(!state)return {status:"BLOCKED",reason:"TRANSFER_NO_LONGER_PRESENT"};
+   const row=state.ships[String(entityID)],
     flight=state.transfers?.[String(entityID)];
    if(!row||!flight||flight.transferID!==transferID)
     return {status:"BLOCKED",reason:"TRANSFER_NO_LONGER_PRESENT"};
@@ -415,7 +431,9 @@ function createWarTransferLedger({gameStore,identityRegistry,sceneForSystem,
  }
  function pending(){
   if(!enabled())return {status:"DISABLED",pending:[]};
-  const state=transact(tx=>fleet.validate(tx.get(fleet.TABLE,fleet.KEY)));
+  const state=transact(stateIn);
+  // A world with no registered warship has no flight to repair.
+  if(!state)return {status:"CLEAN",pending:[]};
   const entries=Object.values(state.transfers||{});
   return {status:entries.some(x=>!["COMPLETE","ABORTED"].includes(x.phase))?
    "NEEDS_OPERATOR_REPAIR":"CLEAN",
