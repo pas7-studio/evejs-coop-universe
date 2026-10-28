@@ -18,7 +18,7 @@ test("single pinned reversible overlay carries all Stage J salvage market depend
 });
 test("A-Life executes salvage market inside the existing tick and has no new timers",()=>{
  const runtime=read("integration/coopVirtualWorldRuntime.cjs");
- assert.match(runtime,/safeNpcPhase\("native-salvage-rivals",advanceNativeSalvageRivals\)/);
+ assert.match(runtime,/runPhase\("native-salvage-rivals",advanceNativeSalvageRivals\)/);
  assert.match(runtime,/EVEJS_COOP_ALIFE_SALVAGE_MARKET/);
  assert.match(runtime,/coopAlifeSalvageMarketRuntime"\)\.advance/);
  for(const module of ["integration/coopAlifeSalvageMarket.cjs",
@@ -52,8 +52,12 @@ test("native salvage market uses original stock, Rust escrow and a separate conf
 });
 test("salvage A-Life telemetry never claims native settlement for blocked attempts",()=>{
  const runtime=read("integration/coopVirtualWorldRuntime.cjs");
- const telemetry=runtime.slice(runtime.indexOf('safeNpcPhase("native-salvage-market"'),
-  runtime.indexOf('safeNpcPhase("native-wreck-custody"'));
+ // Anchored on the phase labels, not on the dispatch helper's name: the Living
+ // World tick moved from safeNpcPhase() to the phase coordinator's runPhase(),
+ // and the slice silently became empty (so every match below was vacuous).
+ const telemetry=runtime.slice(runtime.indexOf('runPhase("native-salvage-market"'),
+  runtime.indexOf('runPhase("native-wreck-custody"'));
+ assert.ok(telemetry.length>200,"the salvage-market phase block must be found");
  assert.match(telemetry,/nativeEscrowVerified:result\.result\?\.nativeEscrowVerified===true/);
  assert.match(telemetry,/corporationWalletCredited:result\.result\?\.walletCredited===true/);
  assert.doesNotMatch(telemetry,/nativeRustAndGameStore:true/);
