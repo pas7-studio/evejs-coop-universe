@@ -6,7 +6,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createNpcCorporateSettlement,TABLES}=require("../integration/coopNpcCorporateSettlement.cjs");
 const OP="npc-manufacture:0123456789abcdef0123456789abcdef";
 const OWNER=1000010,STATION=60000001,ITEM=1990000200,ORDER=456,BUYER=90000001,FILL=900000000000001;
@@ -28,7 +28,7 @@ function fixture(){
  put("marketEscrow",ORDER,{orderId:String(ORDER),escrowType:"sell",isCorp:true,
    ownerId:OWNER,stationId:STATION,sourceItemID:ITEM,coopOperationID:OP,
    remainingQuantity:100,escrowLocationID:9200000000+ORDER});
- let writer=createSqliteAdapter(()=>db).claimTransactor();
+ let rows=gameStoreTransact(()=>db);
  let finalizeFailure=false,finalizeCalls=0;
  const order=()=>({source:"coop-npc",state:"settling",operation_id:OP,order_id:String(ORDER),
   source_item_id:String(ITEM),owner_id:OWNER,station_id:STATION,type_id:215,
@@ -42,13 +42,13 @@ function fixture(){
     fill_id:String(FILL),vol_remaining:0}},
   inspectClaim:async()=>({state:rustState,fill_id:String(FILL),buyer_id:String(BUYER)})
  };
- const settlement=()=>createNpcCorporateSettlement({gameStore:{transact:(tables,fn)=>writer.transact(tables,fn).result},
+ const settlement=()=>createNpcCorporateSettlement({gameStore:{transact:(tables,fn)=>rows.transact(tables,fn)},
   market,verifyBuyerSession:()=>true,verifyNpcCorporation:()=>true,clock:()=>1761390000000});
  const snapshot=()=>Object.fromEntries(TABLES.map(t=>[t,db.prepare('SELECT key,json FROM "'+t+'" ORDER BY key').all()]));
  return {get db(){return db},read,put,market,snapshot,settlement,
   get finalized(){return finalizeCalls},
   failFinalize(){finalizeFailure=true},
-  restart(){db.close();db=new DatabaseSync(filepath);writer=createSqliteAdapter(()=>db).claimTransactor()},
+  restart(){db.close();db=new DatabaseSync(filepath);rows=gameStoreTransact(()=>db)},
   close(){db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
 async function run(fn){

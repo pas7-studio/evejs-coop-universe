@@ -8,7 +8,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createNativeNpcBuyerBindings}=require("../integration/coopNpcBuyerNativeBindings.cjs");
 const {createNpcMarketCompletionNotifier}=
  require("../integration/coopNpcMarketCompletionNotify.cjs");
@@ -28,7 +28,7 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop060-e2e-"));
  const dbFile=path.join(dir,"gamestore.sqlite"),journal=path.join(dir,"buyer.json");
  const rustFile=path.join(dir,"market-rpc-replica.json");
- let db=new DatabaseSync(dbFile),writer,loss=dropAck,corruptWitness=corruptHistory;
+ let db=new DatabaseSync(dbFile),rows,loss=dropAck,corruptWitness=corruptHistory;
  let sessions=[],calls=[],grantIDs=new Set(),clock=AT,operatorAuthorizer=null;
  const get=(t,k)=>{
   const record=db.prepare('SELECT json FROM "'+t+'" WHERE key=?').get(String(k));
@@ -56,14 +56,14 @@ function fixture({offline=false,initialISK=1000,wrongEscrowOwner=false,
  put("marketEscrow",ORDER,{orderId:String(ORDER),escrowType:"sell",isCorp:false,
   ownerId:wrongEscrowOwner?OBSERVER:SELLER,stationId:STATION,typeId:TYPE,
   remainingQuantity:QUANTITY,escrowLocationID:9200000000+ORDER});
- const freshWriter=()=>{writer=createSqliteAdapter(()=>db).claimTransactor()};
+ const freshWriter=()=>{rows=gameStoreTransact(()=>db)};
  freshWriter();
  const gameStore={
   read:(table,raw)=>{
    const key=raw.split("/").filter(Boolean).join("\u001f");
    const data=get(table,key);return data==null?{success:false}:{success:true,data};
   },
-  coopAtomicNativeRows:{transact:(tables,fn)=>writer.transact(tables,fn).result}
+  coopAtomicNativeRows:{transact:(tables,fn)=>rows.transact(tables,fn)}
  };
  const itemStore={
   listOwnedItems:owner=>readAll("items").map(x=>x.value)

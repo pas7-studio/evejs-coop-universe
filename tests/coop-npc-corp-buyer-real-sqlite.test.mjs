@@ -6,7 +6,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createNpcCorporateBuyer,TABLES}=require("../integration/coopNpcCorporateBuyerAtomic.cjs");
 const BUYER=1000010,SELLER=90000001,STATION=60000001,TYPE=215,ORDER=456,ITEM=1990000200;
 const FILL=930000000000001,KEY="npc-corpbuy:0123456789abcdef0123456789abcdef";
@@ -35,7 +35,7 @@ function fixture(){
  put("marketEscrow",ORDER,{orderId:String(ORDER),escrowType:"sell",isCorp:false,
   ownerId:SELLER,stationId:STATION,typeId:TYPE,
   remainingQuantity:20,escrowLocationID:9200000000+ORDER});
- let writer=createSqliteAdapter(()=>db).claimTransactor();
+ let rows=gameStoreTransact(()=>db);
  let phase="claimed",rustState="settling",dropAck=false;
  const claim=()=>({history_recorded:phase==="finalized",history_day:phase==="finalized"?"2026-10-25":null,
   source:"player",state:rustState,fill_phase:phase,is_corp:false,bid:false,
@@ -51,7 +51,7 @@ function fixture(){
   inspectClaim:async()=>claim()
  };
  const settlement=()=>createNpcCorporateBuyer({
-  gameStore:{transact:(tables,fn)=>writer.transact(tables,fn).result},
+  gameStore:{transact:(tables,fn)=>rows.transact(tables,fn)},
   market,verifyBuyerCorporation:()=>true,verifyPlayerSeller:()=>true,
   quoteSellerTax:({sellerID,stationID,grossCents})=>({sellerID,stationID,grossCents,
    taxCents:Math.round(grossCents*0.08),policy:"EVEJS_NATIVE_MARKET_RULES"}),
@@ -63,7 +63,7 @@ function fixture(){
  return {buy,read,put,snapshot,get db(){return db},
   loseAck:()=>{dropAck=true},
   restart:()=>{db.close();db=new DatabaseSync(dbpath);
-   writer=createSqliteAdapter(()=>db).claimTransactor()},
+   rows=gameStoreTransact(()=>db)},
   close:()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
 async function run(callback){

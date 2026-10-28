@@ -6,7 +6,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createNpcPartialSettlement,TABLES}=require("../integration/coopNpcPartialFillAtomic.cjs");
 const OWNER=1000010,STATION=60000001,TYPE=215,ITEM=1990000200,ORDER=456,BUYER=90000001;
 const OP="npc-manufacture:0123456789abcdef0123456789abcdef";
@@ -31,7 +31,7 @@ function fixture(){
  put("marketEscrow",ORDER,{orderId:String(ORDER),escrowType:"sell",isCorp:true,
   ownerId:OWNER,stationId:STATION,typeId:TYPE,sourceItemID:ITEM,coopOperationID:OP,
   remainingQuantity:100,escrowLocationID:9200000000+ORDER});
- let writer=createSqliteAdapter(()=>db).claimTransactor();
+ let rows=gameStoreTransact(()=>db);
  let configured={claimKey:CLAIM1,fillID:910000000000001,quantity:20,remainingBefore:100};
  let stage="claimed";
  const claim=()=>({source:"coop-npc",state:stage==="claimed"?"settling":
@@ -51,7 +51,7 @@ function fixture(){
   inspectPartialClaim:async()=>claim()
  };
  const settle=()=>createNpcPartialSettlement({gameStore:{
-  transact:(tables,fn)=>writer.transact(tables,fn).result},
+  transact:(tables,fn)=>rows.transact(tables,fn)},
   market,verifyBuyerSession:()=>true,verifyNpcCorporation:()=>true,
   clock:()=>1761390000000});
  const buy=()=>settle().purchaseOnce({buyerID:BUYER,
@@ -64,7 +64,7 @@ function fixture(){
   next:(qty,remaining=80)=>{configured={claimKey:CLAIM2,fillID:910000000000002,
     remainingBefore:remaining,quantity:qty};stage="claimed";},
   loseAck:()=>{lost=true},
-  restart:()=>{db.close();db=new DatabaseSync(file);writer=createSqliteAdapter(()=>db).claimTransactor()},
+  restart:()=>{db.close();db=new DatabaseSync(file);rows=gameStoreTransact(()=>db)},
   close:()=>{db.close();fs.rmSync(dir,{recursive:true,force:true})}};
 }
 async function run(fn){

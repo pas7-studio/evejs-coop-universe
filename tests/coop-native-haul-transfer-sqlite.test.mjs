@@ -7,7 +7,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createAtomicHaulMover,receiptKey}=require("../integration/coopNativeHaulTransferAtomic.cjs");
 const systemID=30000142,slot=1,fleetID=systemID*32+slot;
 const minerID=980000000001,haulerID=980000000002,cargoID=980200000003;
@@ -46,11 +46,8 @@ function setup(t){
    quantity:row.quantity,stacksize:row.quantity}))
  };
  // The mover is handed gameStore.coopAtomicNativeRows in production, i.e. the
- // GameStore adapter, which answers with the mutation's own return value. The
- // raw SQLite writer answers with a {result,changed} envelope, so wrapping it
- // here is the same unwrap the GameStore adapter performs.
- const writer=createSqliteAdapter(()=>db).claimTransactor();
- const adapter={transact:(tables,fn)=>writer.transact(tables,fn).result};
+ // GameStore adapter, which answers with the mutation's own return value.
+ const adapter=gameStoreTransact(()=>db);
  const mover=createAtomicHaulMover({gameStore:{coopAtomicNativeRows:adapter},nativeStore:store,
   resolveType:typeID=>({typeID,volume:0.1}),clock:()=>654321});
  const move=()=>mover.transfer({scene,fleet,miner,hauler,cargoID});

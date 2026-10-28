@@ -6,7 +6,7 @@ import path from "node:path";
 import {DatabaseSync} from "node:sqlite";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {createSqliteAdapter}=require("../integration/coopGameStoreAtomic.cjs");
+import {gameStoreTransact} from "./_support/sqliteStore.mjs";
 const {createEscortNativeFunds,ESCROW_KEY}=require("../integration/coopEscortNativeFunds.cjs");
 const {createPeacefulEscortSettlement}=require("../integration/coopEscortPeacefulSettlement.cjs");
 
@@ -27,10 +27,10 @@ const stock={status:"FULL_NATIVE_CARGO_DELIVERY_VERIFIED",key,
 function fixture(){
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop-escort-peaceful-db-"));
  const filename=path.join(dir,"game.sqlite");
- let db=new DatabaseSync(filename),writer;
+ let db=new DatabaseSync(filename),rows;
  const init=()=>{
   db.exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;");
-  writer=createSqliteAdapter(()=>db).claimTransactor();
+  rows=gameStoreTransact(()=>db);
  };
  db.exec('CREATE TABLE "corporationRuntime"(key TEXT PRIMARY KEY,json TEXT NOT NULL)');
  db.exec('CREATE TABLE "characters"(key TEXT PRIMARY KEY,json TEXT NOT NULL)');
@@ -43,7 +43,7 @@ function fixture(){
  init();
  let proof=true;
  const atomicRows={mode:"SERVER_INTERNAL_FLAGGED",isPoisoned:()=>false,
-  transact:(tables,fn)=>writer.transact(tables,fn).result};
+  transact:(tables,fn)=>rows.transact(tables,fn)};
  const funds=()=>createEscortNativeFunds({atomicRows,
   isNpcCorporation:id=>id===10001,clock:()=>2000000});
  const service=(authority=funds())=>createPeacefulEscortSettlement({
