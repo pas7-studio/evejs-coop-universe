@@ -1,67 +1,85 @@
-# Public endpoint for the remote player (ProtonVPN + SSH, 2026-10-29)
+# Remote play runbook — ProtonVPN + SSH (owner + friend)
 
-**Status: implemented and locally verified; the friend's tunnel is the remaining
-check.**
+**Status 2026-10-29: host side implemented and verified; the friend has to run
+one SSH tunnel and point his client back at `127.0.0.1`.**
+This file exists so nobody has to rediscover the setup. Read §5 before touching
+anything when the friend reports a problem.
 
-The owner's friend plays over **one** ProtonVPN-forwarded TCP port,
-`159.26.120.49:61730`. That port carries **SSH**, not the game: the friend opens
-one SSH connection and forwards the five client ports to his own `127.0.0.1`.
-This is the same shape the pair used before — only the transport changed from a
-private VPN to the Proton forward.
-
-## Why SSH and not the game port
-
-The EVE client needs five loopback services:
-
-| port | service |
-| --- | --- |
-| 26000 | game server |
-| 443 | TLS proxy |
-| 5222 | chat (XMPP) |
-| 26001 | image server |
-| 26002 | microservices |
-
-The client asks for chat/market at `localhost:5222`, `localhost:26001`,
-`localhost:26002` (the server publishes `EVEJS_XMPP_CONNECT_HOST=localhost`), so
-every service must appear on the friend's own loopback. A single forwarded port
-cannot serve five services directly — but it can carry one SSH session that
-forwards all of them.
-
-## Host side
+## 1. Topology
 
 ```
-Proton edge                 host
-159.26.120.49:61730  -->  0.0.0.0:61730   (evejs-ssh-relay container, alpine/socat)
-                                  |
-                                  v
-                          127.0.0.1:55346 (sshd, hardened)
+friend PC                              host (owner)                       docker
+─────────────────────────────────────────────────────────────────────────────────
+client -> 127.0.0.1:26000  ─┐
+client -> 127.0.0.1:5222   ─┤
+client -> 127.0.0.1:443    ─┼─ ssh -p 61730 evefriend@159.26.120.49
+client -> 127.0.0.1:26001  ─┤        │
+client -> 127.0.0.1:26002  ─┘        │
+                                     │  Proton edge 159.26.120.49:61730
+                                     ▼
+                          0.0.0.0:61730  evejs-ssh-relay (alpine/socat)
+                                     │
+                          127.0.0.1:55346  sshd (hardened)
+                                     │  PermitOpen 443/5222/26000-26002/40110
+                                     ▼
+                          127.0.0.1:443/5222/26000-26002  evejs-server-1
+                          127.0.0.1:40110                 evejs-market-1
 ```
 
-- Proton logs confirm `Port pair 61730->61730` while the session is alive.
-- `evejs-ssh-relay` is a container (`--restart unless-stopped`) that bridges
-  `0.0.0.0:61730` to `host.docker.internal:55346`. It exists because adding
-  `Port 61730` to sshd needs an elevated edit; the relay does not.
-- sshd hardening lives in `C:\ProgramData\ssh\sshd_config.d\coop-friend.conf`:
-  key-only (`AuthenticationMethods publickey`), `AllowUsers evefriend`,
-  `PermitTTY no`, `ForceCommand echo Access denied`, and `PermitOpen` limited to
-  `127.0.0.1:443 127.0.0.1:5222 127.0.0.1:26000 127.0.0.1:26001 127.0.0.1:26002
-  127.0.0.1:40110`. Nothing else can be reached through the tunnel.
-- The play stack itself stays loopback-only: `127.0.0.1:443/5222/26000-26002`,
-  market `127.0.0.1:40110`.
+Key points:
 
-Bring the stack and the relay up with:
+- ProtonVPN forwards **exactly one** port. It carries SSH, never the game.
+- The EVE client always talks to `localhost`: chat, market proxy, images and
+  microservices are addressed as `127.0.0.1` (server config publishes
+  `EVEJS_XMPP_CONNECT_HOST=localhost`). That is why the tunnel is mandatory for
+  anything except flying around.
+- The play stack itself never leaves loopback.
+
+## 2. Host bring-up
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Start-Play-Stack.ps1 -Action Up
 ```
 
-`-Action Status` is read-only, prints the stack, the relay container and the SSH
-banner read from `127.0.0.1:61730`, and exits 2 when the friend could not connect.
+It runs `docker compose -p evejs -f compose.yaml -f compose.coop-probe.yaml up -d`,
+starts (or creates) `evejs-ssh-relay`, then proves the relay answers with an SSH
+banner. `-Action Status` is read-only and exits `2` when the friend could not
+connect. `-Action Stop` stops the stack and the relay, never the volumes.
 
-## Friend side
+The relay container is:
 
-1. One SSH session (his key is already in
-   `C:/ProgramData/ssh/evefriend_authorized_keys`):
+```powershell
+docker run -d --name evejs-ssh-relay --restart unless-stopped `
+  -p 0.0.0.0:61730:61730 alpine/socat `
+  tcp-listen:61730,fork,reuseaddr tcp-connect:host.docker.internal:55346
+```
+
+sshd hardening (already in place) —
+`C:\ProgramData\ssh\sshd_config.d\coop-friend.conf`:
+
+```
+Port 55346
+Port 48819
+PasswordAuthentication no
+AuthenticationMethods publickey
+PubkeyAuthentication yes
+AllowUsers evefriend
+AllowTcpForwarding yes
+Match User evefriend
+  AuthorizedKeysFile C:/ProgramData/ssh/evefriend_authorized_keys
+  PermitTTY no
+  PermitTunnel no
+  PermitOpen 127.0.0.1:443 127.0.0.1:5222 127.0.0.1:26000 127.0.0.1:26001 127.0.0.1:26002 127.0.0.1:40110
+  ForceCommand echo Access denied
+```
+
+Adding `Port 61730` there instead of relaying needs an elevated edit; the relay
+exists to avoid that. If someone later adds the port to sshd, delete the relay
+container so the two do not fight over 61730.
+
+## 3. Friend bring-up
+
+1. Tunnel (his existing key, nothing else changes):
 
    ```
    ssh -N -T -p 61730 evefriend@159.26.120.49 ^
@@ -70,33 +88,71 @@ banner read from `127.0.0.1:61730`, and exits 2 when the friend could not connec
      -L 26002:127.0.0.1:26002
    ```
 
-   `scripts/Start-Friend-Tunnel.ps1 -Action Start -SshUser evefriend -HostVpnIPv4 <host> -SshPort 61730`
-   does the same when the host address is passed explicitly.
-
-2. Client target is **`127.0.0.1` again**, not the public IP:
+2. `tq\start.ini`:
 
    ```ini
-   ; tq\start.ini
    server = 127.0.0.1
    port = 26000
    cryptoPack = Placebo
    ```
 
-3. The login port is persisted in
-   `%LOCALAPPDATA%\CCP\EVE\w_eve_online_-_3396210_tq_<server>\settings\prefs.ini`
-   (`port=26000`). `start.ini` supplies only `server`; a stale `prefs.ini` wins
-   over `start.ini` and is the usual cause of "connects to the wrong port".
+3. `%LOCALAPPDATA%\CCP\EVE\w_eve_online_-_3396210_tq_<server>\settings\prefs.ini`
+   must have `port=26000`. **This file wins over `start.ini`.**
 
-## Rules for agents
+## 4. Verification
 
-1. Never recreate `evejs` with a bare `docker compose up -d`; use
-   `scripts/Start-Play-Stack.ps1 -Action Up`, then `-Action Status`.
-2. If the friend reports a timeout, run `-Action Status` first: `ssh relay
-   container : MISSING` or a non-SSH banner means the relay/port is the problem,
-   not Proton.
-3. Proton exposes exactly one port. Do not publish the game, market
-   (`40110/40111`), admin bridge or agent ports publicly.
-4. Reading Proton state without changing it: NAT-PMP opcode 0 to `10.2.0.1:5351`
-   returns the external IP; `%LOCALAPPDATA%\Proton\Proton VPN\Logs\client-logs.txt`
-   shows `Port pair 61730->61730`. Mapping requests from this host time out —
-   only the app's single mapping exists.
+Host:
+
+```powershell
+powershell -File scripts/Start-Play-Stack.ps1 -Action Status     # stack + relay + SSH banner
+docker logs --tail 5 evejs-ssh-relay                              # socat bridging
+```
+
+Proton (read-only):
+
+- NAT-PMP opcode 0 to `10.2.0.1:5351` returns the external IPv4 (`159.26.120.49`).
+- `%LOCALAPPDATA%\Proton\Proton VPN\Logs\client-logs.txt` contains
+  `Port pair 61730->61730` while the mapping lives (renewed about every minute).
+
+Friend: `Test-NetConnection 159.26.120.49 -Port 61730` must succeed, then the
+`ssh` command must ask for **key** auth only and forward without errors.
+
+## 5. Symptom → cause → fix
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Client: "Could not connect … on port 26000" while `start.ini` says 61730 (or vice versa) | stale `prefs.ini` overrides `start.ini` | set `port=` in `prefs.ini` for the folder matching `<server>` |
+| Client: "Error connecting to chat server at localhost:5222" | no SSH tunnel; chat is always loopback | start the tunnel from §3 |
+| Market window empty, portraits missing | tunnel missing → no `443` / `26001` / `26002` | same tunnel |
+| Friend: `SynSent`, `Test-NetConnection` times out | nothing listening on the forwarded port (relay container gone, or the port was bound to the game earlier) | `-Action Status`; `-Action Up` recreates the relay |
+| `Test-NetConnection 159.26.120.49:61730` succeeds from the **host** but friend fails | Proton hairpin is unreliable: the host's own test proves nothing | only trust a test from outside the VPN |
+| SSH asks for a password | harden config requires key only; his key missing | compare `C:/ProgramData/ssh/evefriend_authorized_keys` |
+| SSH connects but `-L` fails | `PermitOpen` allows only the five game ports | forward exactly those ports |
+| Client window never appears (no error) | client started as `bin64\exefile.exe` without the launcher env | start via `Play.bat`; it exports `EO_REMOTEFILECACHEFOLDER`, proxy and CA |
+| Market/seed prices look old after a reseed | daemon still on the previous `market.sqlite` | stop `market`, replace the DB in the `evejs-data` volume, start it |
+
+## 6. Dead ends — do not repeat
+
+- **Publishing the game port on 61730.** One forwarded port then serves only the
+  game; chat, market and images break because the client insists on `localhost`
+  for them.
+- **Requesting extra NAT-PMP mappings.** Proton's gateway ignores mapping
+  requests from this host (they time out); only the app's single `61730->61730`
+  mapping exists.
+- **Testing the public endpoint from the host.** The Proton client answers the
+  TCP handshake itself (hairpin), so a local `Test-NetConnection` "success" means
+  nothing. Earlier this masked a completely unbind port.
+- **Assuming `docker compose up -d` keeps the public port.** It does not; that is
+  why the relay is a separate container with `--restart unless-stopped` and the
+  play stack is brought up by the script.
+
+## 7. Rules for agents
+
+1. Use `scripts/Start-Play-Stack.ps1 -Action Up|Status|Stop`; never recreate
+   `evejs` with a bare `docker compose up -d` while a remote player is expected.
+2. `-Action Status` first on any "friend cannot connect" report.
+3. Never publish the market (`40110/40111`), admin bridge or agent ports, and
+   never touch `evejs-agents` from this path.
+4. Keep the client port question separate from the server question: the host
+   server binds `26000`; the client may ask for a different number from
+   `prefs.ini`.
