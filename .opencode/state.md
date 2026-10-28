@@ -93,8 +93,31 @@ and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 Full probe `suite-final3.json` (2026-10-28): **6197 pass / 15 fail / 99 skip** against the
 5837 / 332 / 92 baseline (that run predates the war client-view refactor `d2d7fd24`,
 which touched no failing suite). Seven files are still red, 15 cases:
-escort-flight-stage-c 6, wreck-client-refresh 3, alife-native-buyer-wiring 1, alife13 1,
-integration-shims 1, virtual-world-split 1 - 13 cases after the hook extraction below.
+wreck-client-refresh 3, alife-native-buyer-wiring 1, alife13 1 - 5 cases now.
+
+The 119 missing `.js` shims are DONE (`64dc366a`): `coop-integration-shims --write`
+completed the existing convention (122 shims were already there). That was not a
+cosmetic gap - it closed `coop-escort-flight-stage-c` 8/6 -> **14/0**, whose six
+failures were all "Cannot find module './coopAlifeNativeDeliveryEvidence'", so the
+retire-or-reduce decision it was waiting on is moot, plus coop-integration-shims 2/0.
+`coop-virtual-world-split` is green too (`f856538f`): the frozen runtime surface now
+records the six exports the war/mercenary work added, and coop-test-parity is PARITY_OK.
+
+THREE findings the owner needs, each with hard evidence:
+
+1. coop-wreck-client-refresh cannot be fixed by its fixture: 4 of the 7 anchors
+   scripts/coop-npc-expedition-wreck-patch.cjs requires do not exist in the deployed
+   nativeNpcWreckService.js (checked against the fork file). The transformer describes
+   an engine that no longer exists. Retire it (and its spec entry) or retarget the test
+   at the fork's real code - both are deletions of that session's mechanism.
+
+2. coop-alife13-startup-cargo-audit case 14 is a real ordering regression in another
+   session's integration/coopNativeMiningFleetDurable.cjs: auditStartupCargo() is called
+   at line 626, materializeStoredNativeController() at 533, so the ALIFE-13 audit now
+   runs AFTER physical materialization - the opposite of what the test pins.
+
+3. coop-alife-native-buyer-wiring is still COOP-049 (station authority emits
+   `requirements`, buyer dispatch reads `materialNeeds`). Money-moving, flags OFF.
 
 `coop-hook-inventory` is GREEN (`ed43504a`, fork `37780e5`): five of the nine long hooks
 are now module calls. The war trio became occupationPairs()/warzonesResponse()/
