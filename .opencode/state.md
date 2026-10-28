@@ -77,6 +77,28 @@ coopStationDrain and coopVirtualWorldRuntime, i.e. another session's fork work i
 in flight (`coopStationDrain.js` and `coopVirtualWorldRuntime.js` are uncommitted in
 `C:\Games\EveCoop\upstream-evejs` right now). Their `AUDIT_OK` returns when they mirror.
 
+**The installer/overlay family is almost gone.** 29 more cases closed on 2026-10-28
+evening; the blocker was never `overlay-spec.cjs` being edited, it was that a dozen
+suites still described the pre-single-spec layout (module names moved into
+`scripts/overlay-spec.cjs`, which `patch-evejs-coop.cjs` re-exports as `names`), plus
+fixtures that modelled only the hook sites a native file had when they were written.
+Closed: overlay-drift-check 5/0, five-chat-market-reconcile 5/0, market-release-contract
+3/0, native-economy-overlay-resolution 6/0, pve-duo trio, native-trade-custody-overlay,
+native-mining-atomic-overlay, native-convoy-operations-overlay, crossstream-wiring,
+npc-weapon-source-hook, player-damage-overlay-integration, rust-npc-market-patch,
+fleet-mission-join-overlay, installer-module-coverage (fixture regex), post42 (same).
+
+FOUR suites are still red on ONE real gap, not a fixture: ten modules exist in
+`integration/` and are required by `coopVirtualWorldRuntime` but are absent from
+`scripts/overlay-spec.cjs`, so a deployed server would throw MODULE_NOT_FOUND:
+`coopJsonFileCache coopNativeNpcMarketReconcile coopNpcManufacture coopStationDrain
+coopStructureAllianceGuard coopWarCaptureByForce coopWarMercenaryContract
+coopWarMercenarySettlement coopWarNavyCapability coopWarObservedSystems`.
+installer-module-coverage 2/1, post42 2/1, overlay-dependencies 2/1, hook-requires 6/1.
+They are the other session's modules and `overlay-spec.cjs` is their file: not edited
+here. Fix is ten names in that array (plus `coop-hook-inventory`'s 9 long hooks and
+`coop-wreck-client-refresh`'s drifted wreck anchor, which are the same file's problem).
+
 Closed since that probe (each with a fork mirror where the code changed):
   coop-native-haul-transfer-sqlite 2/5->7/0 (fixture handed the mover the raw SQLite
     writer instead of the GameStore adapter shape it reads its receipt from)
