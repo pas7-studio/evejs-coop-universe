@@ -225,7 +225,9 @@ test("BUY PAID Rust release requires original durable receipt key and original f
     /P2P_BUY_PAY_DURABLE_COMMITTED_RECEIPT_REQUIRED/);
    assert.throws(()=>s.settle(args),/P2P_BUY_PAY_REPLAY_IDENTITY_CONFLICT/);
    assert.deepEqual(x.db,before);
-   assert.equal(x.commits,commits+1); // read-only access; failed replay rolls back
+   // Both calls are rejected inside their transaction, so neither one commits:
+   // the durable store is untouched and the counter must not move.
+   assert.equal(x.commits,commits);
   }
   x.db.playerMarketFills[genuine.key]=genuine;
   assert.equal(s.requireReceipt(ticket(),p).key,genuine.key);

@@ -595,7 +595,9 @@ test("original partial multi-stack receipt may not downgrade to legacy by omitti
    assert.throws(()=>settle.settle(payload),
     /P2P_ATOMIC_COMMITTED_RECEIPT_REPLAY_CONFLICT/);
    assert.deepEqual(x.db,saved);
-   assert.equal(x.commits,commits+1); // read-only requireReceipt uses the transactional facade
+   // A rejected read throws inside the transactional facade, so it commits
+   // nothing: the durable store stays byte-identical and the counter rests.
+   assert.equal(x.commits,commits);
   }
   x.db.playerMarketFills[key]=original;
   assert.equal(settle.requireReceipt(ticket(),partial).key,key);

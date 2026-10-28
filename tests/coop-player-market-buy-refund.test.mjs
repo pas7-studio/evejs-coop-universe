@@ -35,7 +35,9 @@ function fixture({filled=3}={}){
    journalIDs:[5000000000000000,5000000000000001,5000000000000002],
    createdAt:123456
   }},
-  identityState:{coopP2PMarketJournal:{next:5000000000000000}}
+  // The reserve receipt already burnt 5000000000000000..02, so the counter must
+  // sit past them: a refund journal ID at or below the reserve proof is refused.
+  identityState:{coopP2PMarketJournal:{next:5000000000000003}}
  };
  let state=structuredClone(data),commits=0;
  return {get db(){return state},get commits(){return commits},
@@ -66,7 +68,7 @@ test("cancel after 3-of-7 bought refunds exact 4-unit native escrow once",()=>{
  assert.equal(x.db.playerMarketFills[receiptKey].remainingReserveCents,0);
  assert.equal(x.db.playerMarketFills[receiptKey].spentCents,3702);
  assert.equal(x.db.playerMarketFills[receiptKey].refundedCents,4936);
- assert.equal(x.db.identityState.coopP2PMarketJournal.next,5000000000000001);
+ assert.equal(x.db.identityState.coopP2PMarketJournal.next,5000000000000004);
  const snap=structuredClone(x.db);
  const again=svc.refund(original(),"cancelled");
  assert.equal(again.replayed,true);
