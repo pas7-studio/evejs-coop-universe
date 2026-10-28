@@ -1,5 +1,33 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 - test-parity round: Windows durability + stale fixtures
+
+Suite: 5837 pass / 332 fail / 92 skip -> 5974 / 204 / 92 at the last full probe; every
+commit since then is measured per file below, so the next probe should land near
+6035 pass / ~163 fail.
+
+Closed since that probe (each with a fork mirror where the code changed):
+  coop-native-haul-transfer-sqlite 2/5->7/0 (fixture handed the mover the raw SQLite
+    writer instead of the GameStore adapter shape it reads its receipt from)
+  coop-native-loot-quarantine 7/3->10/0, coop-wormhole-jump-fence 10/4->14/0,
+  coop-pve-boss-loot-claim 8/8->16/0 (all three: Windows cannot fsync a directory)
+  coop-npc-atomic-weapon-bank 3/15->18/0 (bank now proves hull+modules before the tx;
+    ammo journal loaded its sibling by assumed .js extension)
+  coop-npc-atomic-sqlite-crash 0/2->2/0, coop-player-mining-warehouse-integration 0/5->5/0,
+  coop-native-industry 6/1->7/0, coop-park-runaway-miner 2/1->3/0,
+  coop-native-industry-progression 1/1->2/0
+
+Still open and NOT ours to fix silently:
+  - coop-escort-flight-stage-c 8/6: needs the missing ./coopAlifeNativeDeliveryEvidence
+    chain plus a manifest source-cargo contract; owner decision (retire vs reduce).
+  - scripts/coop-integration-shims.cjs --check still reports ~120 missing .js shims;
+    tests/coop-integration-shims.test.mjs stays untracked until the owner picks
+    "generate shims" vs "one resolver hook". Fixtures keep using loadIntegration().
+  - COOP-049 materialNeeds: coopAlifeStationAuthority strips `requirements` and never
+    emits materialNeeds while the buyer dispatch requires it (money-moving, flags OFF).
+  - coop-alife13-startup-cargo-audit 22/1: ordering assertion lives in
+    integration/coopNativeMiningFleetDurable.cjs, another session's file.
+
 ## 2026-10-28 14:15Z - the fleet is repaired; the produced goods still need a named, near ship
 
 FIXED (fork 9d96fb3): both 30000145 slots refused to restore for ever with
