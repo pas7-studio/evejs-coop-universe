@@ -69,8 +69,9 @@ Owner decision 2026-10-28: delete it. Done in `a6d6b44a`; the CI-triggered EX-03
 became `scripts/Run-NpcProbe-PinnedChecks.ps1` (`bbea62c3`) so the procedure survived,
 and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 `coop-feature-readiness` 7/1->8/0, `coop-crossstream-overlay-roundtrip` 1/1->2/0).
-Full probe `suite-final2.json` (2026-10-28 21:3xZ): 6187 pass / 20 fail / 99 skip,
-plus one more from the flag baseline = **6188 / 19 / 99** from the 5837 / 332 / 92 baseline.
+Full probe `suite-final2.json` (2026-10-28): 6187 pass / 20 fail / 99 skip. Since then
+coop-flag-registry (1) and the four spec-gap suites (4) went green, so the next probe
+should read **6192 / 15 / 99** against the 5837 / 332 / 92 baseline.
 
 **`node scripts/coop-engine-audit.cjs` prints AUDIT_REGRESSION at 20:55Z** - not from
 these commits: `integration drift 4 > 0` for coopAdminBridge, coopAdminBridgeActions,
@@ -89,16 +90,28 @@ native-mining-atomic-overlay, native-convoy-operations-overlay, crossstream-wiri
 npc-weapon-source-hook, player-damage-overlay-integration, rust-npc-market-patch,
 fleet-mission-join-overlay, installer-module-coverage (fixture regex), post42 (same).
 
-FOUR suites are still red on ONE real gap, not a fixture: ten modules exist in
+DONE (owner approved, commit `84096bc5`): ten modules existed in
 `integration/` and are required by `coopVirtualWorldRuntime` but are absent from
 `scripts/overlay-spec.cjs`, so a deployed server would throw MODULE_NOT_FOUND:
 `coopJsonFileCache coopNativeNpcMarketReconcile coopNpcManufacture coopStationDrain
 coopStructureAllianceGuard coopWarCaptureByForce coopWarMercenaryContract
 coopWarMercenarySettlement coopWarNavyCapability coopWarObservedSystems`.
 installer-module-coverage 2/1, post42 2/1, overlay-dependencies 2/1, hook-requires 6/1.
-They are the other session's modules and `overlay-spec.cjs` is their file: not edited
-here. Fix is ten names in that array (plus `coop-hook-inventory`'s 9 long hooks and
-`coop-wreck-client-refresh`'s drifted wreck anchor, which are the same file's problem).
+Added as one guarded loop (`names.push` block, 402 names / 402 unique); the four suites
+are green (3/0, 3/0, 3/0, 7/0).
+
+WHAT IS LEFT (15 cases, 7 files):
+  coop-escort-flight-stage-c 8/6        owner call: retire or reduce
+  coop-wreck-client-refresh 1/3         owner call: retarget at the fork or retire
+  coop-hook-inventory 2/2               9 hooks over 400 chars vs baseline 4. The three
+    fwWarzoneSolarsystemService hooks (1239/1248/1330 chars) are the same body three
+    times and are the obvious first extraction; the other six (dungeon 1131, trade 822,
+    agent 501, wreck 451, npcBehaviorLoop 407, fwAdvantage 495) belong to five other
+    features, so this is a multi-area refactor with fork mirrors, not a quick fix
+  coop-alife-native-buyer-wiring 1/1    COOP-049 materialNeeds contract
+  coop-alife13-startup-cargo-audit 1/1  assertion lives in another session's module
+  coop-integration-shims 1/1            untracked test: 119 shims or one resolver hook
+  coop-virtual-world-split 1/1          PARITY_REGRESSION from another session's export
 
 Closed since that probe (each with a fork mirror where the code changed):
   coop-native-haul-transfer-sqlite 2/5->7/0 (fixture handed the mover the raw SQLite
