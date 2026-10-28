@@ -32,6 +32,11 @@ client. The repository is the only shared memory. Read in this order:
   you touched (`--files a,b --record`, then run it without `--record`). The
   whole-suite baseline is still bound to the pinned checkout and is not a gate:
   `docs/FORK_PATCH_AUDIT_20261028.md` says why and what the 541 red cases are.
+- **The manual `scripts/Run-*.ps1` source gates** are five-line wrappers over
+  one runner (`scripts/lib/CoopGate.ps1`) and one data table
+  (`scripts/lib/gates.json`). Add or change a gate in the table, never in a
+  wrapper; `node --test tests/coop-gate-specs.test.mjs` proves the table still
+  points at real tests, pins and all-NOT_RUN manifests.
 
 ## Trusting the state bundle
 
