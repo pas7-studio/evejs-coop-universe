@@ -93,9 +93,18 @@ and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 Full probe `suite-final3.json` (2026-10-28): **6197 pass / 15 fail / 99 skip** against the
 5837 / 332 / 92 baseline (that run predates the war client-view refactor `d2d7fd24`,
 which touched no failing suite). Seven files are still red, 15 cases:
-escort-flight-stage-c 6, wreck-client-refresh 3, hook-inventory 2 (now 6 long hooks,
-not 9), alife-native-buyer-wiring 1, alife13 1, integration-shims 1,
-virtual-world-split 1.
+escort-flight-stage-c 6, wreck-client-refresh 3, alife-native-buyer-wiring 1, alife13 1,
+integration-shims 1, virtual-world-split 1 - 13 cases after the hook extraction below.
+
+`coop-hook-inventory` is GREEN (`ed43504a`, fork `37780e5`): five of the nine long hooks
+are now module calls. The war trio became occupationPairs()/warzonesResponse()/
+localOccupationResponse() in coopWarClientView; npcBehaviorLoop's friendly-fire policy
+became npcPlayerEngages() in coopMilitiaWarPlayer; the fwAdvantage envelope became
+scoresResponse() in coopWarAdvantage. Baseline refreshed deliberately: longHooks stays
+4, longest 822 -> 1131 (the dungeon hook, not ours to move), specFiles/entries grew from
+other sessions' features. The four remaining long hooks are one per feature (dungeon
+1131, trade 822, agent 501, wreck 451) and each needs callbacks from its own service,
+so each belongs to the session that tests that gameplay path.
 
 **`node scripts/coop-engine-audit.cjs` prints AUDIT_REGRESSION at 20:55Z** - not from
 these commits: `integration drift 4 > 0` for coopAdminBridge, coopAdminBridgeActions,
