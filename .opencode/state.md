@@ -2929,3 +2929,23 @@ the combat path (a helper that reads the registry/scene from the pure module), o
 registry rows and the live scene disagree. Next probe: call
 `nativeWarFleetRegistry().snapshot()` inside the running process and compare with
 `scene.getEntityByID` for each row, then follow `advanceNativeWarCombat` step by step.
+
+## COMBAT BLOCKER NARROWED (2026-10-28T10:35Z)
+
+New measured fact: `war fleet registry ships = 0` (probe reads the SQLite row directly),
+yet the garrison reported three successful spawns at 10:17:10 / 10:17:36 / 10:20:32
+(fleetIDs coop-fleet-500004-0029/0030, ships 980000042212). So `spawn_war_fleet`
+returns a composed fleet but its ASSIGN never lands in `coop-faction-war|fleet-registry-v1`.
+
+Consequences: the battle director has no registered ship -> no attack order (82 unchanged),
+`war_combat_diagnose` lists nothing, and the garrison keeps buying hulls every 3 min that
+the war cannot see. The capture phase is now unblocked (`DEFENDER_STILL_PRESENT` was the
+last refusal at 10:16:47, before the registry emptied).
+
+Next probe (exact): call `executeRequest({action:"spawn_war_fleet",...})` and read the
+returned `fleetStatus`/`fleetReason` plus the registry row immediately before and after.
+The registry `ASSIGN` needs `verifyNativeShip` AND `verifyCampaign`; the campaign check
+requires `campaign.state` in [PREPARING, ASSAULT] and the defender's hull in the target
+system - so a hull spawned for the DEFENDER side in the target system is legal, while an
+ATTACKER hull must be in `campaign.targetSystemID` during ASSAULT. A mismatch there is the
+most likely silent refusal.
