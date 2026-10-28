@@ -669,6 +669,11 @@ function observeEconomyOre(){
  }catch(error){console.warn("[CoopEconomyDestination] fleet state",error.message);}
 }
 
+// The order in the env list IS the priority: one arrival is bounded to 20 settlements,
+// so the goods that matter must be asked for first, and the cap is what keeps that bound.
+// Measured 2026-10-28: a manufactured product appended as the 44th type was silently
+// dropped by the slice, so the arrival sale never asked the market for the one good the
+// station really bids for - the chipsets rode along unsold through a full ore haul.
 function nativeMarketAllowlist(name){
  return [...new Set(String(process.env[name]||"").split(",").map(Number)
   .filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,20);

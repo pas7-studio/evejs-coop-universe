@@ -163,3 +163,87 @@ test("dry run proves without writing anything", { skip: !present }, async () => 
   assert.equal(fs.existsSync(path.join(root, "tx", "coop-pilot-012.json")), true);
   assert.equal(fs.readFileSync(path.join(root, "ledger.json"), "utf8"), before);
 });
+
+// Measured 2026-10-28: a sale of 5 manufactured chipsets wrote its journal, the fill it
+// described left NO order at the market, the hull still held all 5 units and the pilot's
+// balance stayed 0. The journal then blocked every later sale of that pilot with
+// UNRESOLVED_MARKET_JOURNAL, so the goods could never be offered again.
+const cargoIntact = (quantity) => ({
+  listNativeCargoForEntity: () => [
+    { cargoID: JOURNAL.cargoID, entityID: JOURNAL.entityID, typeID: JOURNAL.typeID, quantity },
+  ],
+});
+
+test("a journal whose order never existed is closed without effect", { skip: !present }, async () => {
+  const root = fixture();
+  const result = await reconcileJournals({
+    root,
+    inspectOrder: () => { throw Error("order " + JOURNAL.marketOrderID + " not found"); },
+    store: cargoIntact(JOURNAL.beforeQuantity),
+  });
+  assert.deepEqual(result.pending, []);
+  assert.equal(result.settled.length, 1);
+  assert.equal(result.settled[0].noEffect, true);
+  assert.equal(fs.existsSync(path.join(root, "tx", "coop-pilot-012.json")), false);
+  const receipt = JSON.parse(fs.readFileSync(path.join(root, "reconciled", "coop-pilot-012.json"), "utf8"));
+  assert.equal(receipt.status, "CLOSED_NO_EFFECT");
+  assert.equal(receipt.isk, 0);
+  assert.equal(receipt.replayed, false);
+  assert.equal(receipt.proof.cargoIntactQuantity, JOURNAL.beforeQuantity);
+  // Nothing was credited: the market never paid and the hull never lost a unit.
+  const ledger = JSON.parse(fs.readFileSync(path.join(root, "ledger.json"), "utf8"));
+  assert.deepEqual(ledger.pilots, {});
+});
+
+test("a missing order with the cargo already gone is never closed", { skip: !present }, async () => {
+  const root = fixture();
+  const result = await reconcileJournals({
+    root,
+    inspectOrder: () => { throw Error("order " + JOURNAL.marketOrderID + " not found"); },
+    store: cargoIntact(JOURNAL.afterQuantity),
+  });
+  assert.equal(result.settled.length, 0);
+  assert.equal(result.pending[0].reason, "NO_EFFECT_UNPROVEN");
+  assert.equal(fs.existsSync(path.join(root, "tx", "coop-pilot-012.json")), true);
+});
+
+test("a fresh journal is not closed while its call may still be in flight", { skip: !present }, async () => {
+  const root = fixture();
+  const result = await reconcileJournals({
+    root,
+    inspectOrder: () => { throw Error("order " + JOURNAL.marketOrderID + " not found"); },
+    store: cargoIntact(JOURNAL.beforeQuantity),
+    now: () => Number(JOURNAL.at) + 5_000,
+  });
+  assert.equal(result.settled.length, 0);
+  assert.equal(result.pending[0].reason, "RPC_STILL_IN_FLIGHT");
+});
+
+test("a seeded bid short by exactly our quantity proves a partial fill", { skip: !present }, () => {
+  // The 5 chipsets were sold into a 5 000-unit seed bid, so the order stays "open" and the
+  // row is short by 5. That is the market's own record of our sale.
+  const partial = {
+    ...ORDER, state: "open",
+    row: { ...ORDER.row, order_id: String(JOURNAL.marketOrderID), price: 54289.76,
+      station_id: JOURNAL.stationID, type_id: 444, bid: true,
+      vol_entered: 5000, vol_remaining: 4995,
+      issued_at: new Date(JOURNAL.at + 3).toISOString() },
+  };
+  const proof = proveFill({ ...JOURNAL, quantity: 5, beforeQuantity: 5, afterQuantity: 0,
+    typeID: 444, price: 54289.76 }, partial);
+  assert.equal(proof.ok, true);
+  assert.equal(proof.proof.partialFill, true);
+  assert.equal(proof.proof.volRemaining, 4995);
+  assert.equal(proof.ack.filled_quantity, 5);
+});
+
+test("a bid short by a different quantity proves nothing", { skip: !present }, () => {
+  const wrong = {
+    ...ORDER, state: "open",
+    row: { ...ORDER.row, vol_entered: 5000, vol_remaining: 4990,
+      issued_at: new Date(JOURNAL.at + 3).toISOString() },
+  };
+  const proof = proveFill({ ...JOURNAL, quantity: 5, beforeQuantity: 5, afterQuantity: 0 }, wrong);
+  assert.equal(proof.ok, false);
+  assert.equal(proof.reason, "MARKET_ORDER_NOT_FILLED");
+});

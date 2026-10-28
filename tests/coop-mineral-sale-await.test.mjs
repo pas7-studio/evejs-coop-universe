@@ -52,3 +52,18 @@ test("real cargo in the hold is sellable even when the manifest names only ore",
   assert.ok(source.includes("liftedTypes.has(Number(typeID))||carried.has(Number(typeID))||"));
   assert.ok(source.includes("listNativeCargoForEntity(Number(haulerID))"));
 });
+
+test("the sell policy is capped, so its ORDER is the priority", { skip: !present }, () => {
+  // Measured 2026-10-28: the manufactured chipsets were appended as the 44th type of the
+  // operator list, the allowlist keeps only the first 20, and the arrival sale therefore
+  // never asked the market for the one type the station really bid 54 289 for.
+  const pure = path.join(path.dirname(fork), "coopVirtualWorldRuntime.pure.js");
+  assert.ok(fs.existsSync(pure));
+  const source = fs.readFileSync(pure, "utf8");
+  assert.ok(source.includes(".filter(x=>Number.isSafeInteger(x)&&x>0))].slice(0,20)"),
+    "the cap is real: 20 types per batch");
+  const compose = fs.readFileSync(path.join("C:", "Games", "EveCoop", "upstream-evejs", "Code",
+    "compose.coop-probe.yaml"), "utf8");
+  const line = compose.split("\n").find((x) => x.includes("EVEJS_COOP_NPC_MARKET_SELL_TYPES"));
+  assert.ok(line && line.includes("'444,"), "the manufactured product must lead the list");
+});
