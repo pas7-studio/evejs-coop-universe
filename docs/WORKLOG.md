@@ -2269,3 +2269,15 @@ Why: cloud sessions cannot decompile the client, so the contracts it enforces an
 Detail: A cloud agent cannot decompile code.ccp, so the contract knowledge moves into the repository as derived data instead of client code: - docs/CLIENT_CONTRACTS.md - 15 verified contracts with the client module that enforces each, what the server answers and the fork commit that fixed it (warzone colouring, adjacency, advantage domain and attacker, victory-point coverage, militia corporation, corp war
 Where: docs/AGENT_START_HERE.md, docs/CLIENT_CONTRACTS.md, docs/client-contracts/field-reads.json, scripts/coop-client-fields.py, tests/coop-client-contracts-digest.test.mjs
 Evidence: docs/CLIENT_CONTRACTS.md (15 verified contracts with client modules), docs/client-contracts/field-reads.json (513 calls, 26 resolved, coverage stated), scripts/coop-client-fields.py --digest/--check; tests/coop-client-contracts-digest 3/0 and coop-client-code-tool 3/0
+### 2026-10-28T23:33Z · 515441c · DOCS · docs/contracts: let a session with no client prove the client contract
+
+Why: Give sessions without the game client a provable client contract instead of a decompiler they cannot run
+Detail: The register is the only client contract a web or cloud agent can see, and nothing proved it was still true: --write needs tq/code.ccp and Python, which those sessions do not have. --verify rebuilds the register and the baseline from committed data plus the server tree and fails with CONTRACTS_OFFLINE_STALE when either is stale or when a recorded call has no handler. CLIENT_GAPS.md now says which 
+Where: docs/CLIENT_GAPS.md, scripts/coop-client-contracts.cjs, tests/coop-client-contracts-offline.test.mjs
+Evidence: coop-client-contracts.cjs --verify -> CONTRACTS_OFFLINE_OK calls=542 missing=0 stub=44; 3 tests
+### 2026-10-28T23:47Z · beeaa20 · L2 · fix(probe): rotate the event file at 128 MB (EVEJS_COOP_EVENTS_MAX_MB=0 disables)
+
+Why: coop-events.jsonl grew without bound (368 MB, 402k lines, 4.2 GB data volume); the probe now rotates it at a configurable cap
+Detail: The only durable trace of the world had grown to 368 MB / 402 291 lines and was never trimmed, with the data volume at 4.2 GB. Rotation is bounded (one previous generation kept) and rate-limited to one size check a minute, so it cannot cost a tick. Fork: 7988e05. Tests: 4.
+Where: integration/coopRuntimeProbe.cjs, tests/coop-events-rotation.test.mjs
+Evidence: fork 7988e05; measured 368137461 bytes / 402291 lines before; module deployed without restart; tests/coop-events-rotation 4/0
