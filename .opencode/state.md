@@ -59,6 +59,12 @@ registry had drifted by 40 flags), coop-corporate-real-sqlite 0/6->6/0,
 player-mining-native-adapter 6/1->7/0, upstream-patch-series 2/2->4/0.
 
 Everything still red is one of these four, in this order of value:
+  L1 fix landed anyway: coopNpcCorporateBuyRuntime.loadSettlement fell back to the
+  specifier that had just failed instead of the .cjs sibling, so a source
+  checkout could not load it at all; coop-npc-corporate-buy-patch 12/6 -> 18/0
+  (fork 901a36b). Its mixed-guard case also asserted an error name that
+  eedfe1b4 folded into NPC_BUY_GUARD_CORPORATE_PATCH_DRIFT.
+
   A. overlay/installer suites - they need scripts/overlay-spec.cjs, which another
      session is editing right now (hook-inventory reports 9 long hooks vs a
      baseline of 4, the anchors moved). Do not touch the anchors mid-flight.
@@ -66,6 +72,12 @@ Everything still red is one of these four, in this order of value:
   C. integration/coopNativeMiningFleetDurable.cjs and coopVirtualWorldRuntime.cjs
      assertions, also another session's files.
   D. coop-integration-shims.test.mjs, untracked until B2 is decided.
+  E. coop-wreck-client-refresh and friends encode overlay-era fixes the fork now
+     carries: the case asserts a sendSlimItemChangesToAllSessions ->
+     broadcastSlimItemChanges rewrite that no longer exists in the transformer,
+     and its synthetic fixture has 4 of the 7 anchors the transformer now needs.
+     Retargeting it means deciding what still needs proving - owner call, not a
+     silent rewrite.
 
 Still open and NOT ours to fix silently:
   - coop-escort-flight-stage-c 8/6: needs the missing ./coopAlifeNativeDeliveryEvidence
