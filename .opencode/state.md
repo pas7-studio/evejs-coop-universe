@@ -3966,3 +3966,26 @@ CONCLUSION for the payout rung: every other rung is proven (capture, merit, clie
 attribution). Payout needs ~5 uninterrupted minutes of a funded war against an armed enemy, and
 this shared stack is recreated every 10-30 min by another session while the war row does not
 survive it. Options: a quiet window, or the atomic-row durability fix at the store level.
+
+## ROOT CAUSE of the vanishing war state (18:1xZ) - evidence, not a guess
+Direct read of `/var/lib/evejs/gameStore/gamestore.sqlite` (table `corporationRuntime`):
+  key "coop-faction-war"           9018 bytes  <- the LEGACY namespace blob, survives
+      inside: state-v1 (wars/campaigns/territories ALL empty, history 0),
+              treasury-v1 (1 reservation), merit-v1 (2 pilots), mercenary-v1
+  key "coop-faction-war|state-v1"  100 bytes   <- the atomic row, EMPTY
+  key "coop-faction-war|treasury-v1"           ABSENT as a row, but PRESENT in the blob
+So the two storage views disagree, and the blob is what outlives a recreate. Each pointer write
+and each legacy flush rewrites that blob from the legacy cache, which never contains the
+atomic-only war state row - so the blob keeps an EMPTY state-v1 while other sub-keys (treasury,
+merit) survive because they were also read through the legacy API. At the next boot the blob's
+view wins and the war (wars + campaigns + territories) is gone while real ISK stays in escrow.
+That is the store-level defect behind every "war state CREATED empty" event of the day, and it is
+NOT fixable inside the FW modules: a module cannot make one write atomically visible to the other
+view. The mirror (FW-041) is the correct mitigation, but it can only help once the state is
+non-empty when it is written; right now the mirror holds the empty document (100 bytes) and the
+world has no territories at all, so there is nothing yet to protect.
+NEXT (concrete, for a store-level change - needs the owner's agreement because it touches the
+shared GameStore): either keep the two views in sync for `coop-faction-war` (write the legacy
+path with the same document on every atomic write), or make the boot reconciliation prefer the
+atomic row over the namespace blob. Then the mirror/FW-041 keeps a second copy and a recreate can
+no longer erase a war that already exists.
