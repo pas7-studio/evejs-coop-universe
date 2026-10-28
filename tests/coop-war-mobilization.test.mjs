@@ -325,3 +325,25 @@ test("a native registry refusal publishes its own reason instead of silence",()=
  const defender=result.campaigns[0].sides.find(s=>s.role==="DEFENDER");
  assert.equal(defender.rejected.some(r=>r.reason==="REGISTRY_NATIVE_SHIP_OR_CAMPAIGN_UNVERIFIED"),true);
 });
+
+// FW-003C x FW-033 guard: an assigned row whose hull is not in the scene is not
+// a mustered side. Measured on the work stack 2026-10-28: both sides reported
+// SIDE_MUSTERED with assigned 1 while the only live hull in the system was
+// idle, so nothing was ever mobilized, no attack order was issued and the
+// campaign sat in ASSAULT forever.
+test("a ghost assignment does not count as a mustered side", () => {
+  const f = fixture();
+  // The defender side (faction 22 in the target system 202) holds only a
+  // custody row for a hull that is in no scene.
+  f.registered.ships["900"] = { entityID: 900, pilotID: "coop-pilot-009",
+    corporationID: 32, factionID: 22, systemID: 202, role: "tackle",
+    fleetID: "coop-fleet-ghost", warID: "war1", campaignID: "battle1", state: "ALIVE" };
+  // The real defender patrol hull 503 is physically gone from the scene.
+  f.scenes.set(202, { systemID: 202, sessions: new Map(),
+    getEntityByID: id => (Number(id) === 503 ? undefined : f.entities.get(id)) });
+  f.war.campaigns.battle1.state = "ASSAULT";
+  const out = f.tick();
+  const defender = out.campaigns[0].sides.find(s => s.role === "DEFENDER");
+  assert.equal(defender.assigned, 0, "the ghost row must not count as assigned");
+  assert.notEqual(defender.status, "SIDE_MUSTERED");
+});

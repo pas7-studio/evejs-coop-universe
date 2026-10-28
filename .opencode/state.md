@@ -3309,3 +3309,31 @@ one moved helper: each is a per-case expectation against the durable funding/war
 contract. Deciding whether the tests or the runtime is stale needs the escort owner's intent,
 so it is recorded here rather than "fixed" by relaxing assertions. None of these files are in
 `docs/evidence/test-parity.json`; adding them would only record red.
+
+## FW CAPTURE PROVEN END TO END (2026-10-28T13:37:57Z, evejs-agents only)
+The final gate of the FW ladder is now measured on the accelerated work stack, with no
+fabricated step anywhere in the chain:
+  13:36:04  living-native-war-casualty RECORDED - defending hull 980000001974
+            (Caldari Navy Condor, faction 500001, coop-pilot-005, corp 1000035) destroyed in
+            30045344; wreck 980300000010, 4 stored items / 315 units,
+            living-native-wreck-evidence PHYSICAL_NATIVE_WRECK_VERIFIED.
+  13:37:29  living-native-war-capture-by-force -> OBJECTIVE_RECORDED (warship:980300000010)
+  13:37:57  living-native-war-capture-by-force -> **CAPTURED**, receipt CAPTURE_TERRITORY
+            APPLIED, systemID 30045344, **militaryControllerFactionID 500011**,
+            territoryRevision 3, mode MILITARY_CONTROL_ONLY.
+  war_state afterwards: 30045344 = 500011 / **OCCUPIED** rev 3 (was 500001 / CONTESTED),
+            campaign:30045344 = OCCUPIED.
+Why it landed now and never before - three real defects were fixed in the fork:
+  4068eff N5   a garrison may only buy a replacement hull with a COMMITTED FW-005B campaign
+               chest entry (real earned ISK). Live proof of the refusal: garrison
+               GARRISON_CHEST_EMPTY at 13:20:28, 13:23:39, i.e. no free navy.
+  45ad47f FW-035  capture counts hulls really in the scene, not custody rows (it used to
+               answer DEFENDER_STILL_PRESENT for three hulls that were nowhere).
+  ded5cc7 FW-003C mobilisation counts only hulls really in the scene too; a ghost assignment
+               used to mark both sides SIDE_MUSTERED while the only live hull sat idle, so no
+               attack order was ever issued and the campaign stalled in ASSAULT.
+Tests: coop-war-garrison 12, coop-war-capture-by-force 8, coop-war-mobilization 17 - all pass;
+`node scripts/coop-engine-audit.cjs` AUDIT_OK; integration/*.cjs identical to the fork.
+Still open (unchanged, not blockers for the capture claim): killer identity is not attributed
+(NATIVE_VICTIM_WRECK_ONLY_NO_KILLER), and merit/payout for the owner's character is not yet
+observed. The owner's play stack `evejs` was never restarted or reconfigured.
