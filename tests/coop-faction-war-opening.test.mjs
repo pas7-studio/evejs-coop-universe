@@ -381,3 +381,35 @@ test('a contested system is reported, not silently dropped',()=>{
  assert.equal(plan.reason,'NO_FRONT');
  assert.equal(plan.summary.systems['1'].reason,'TIE_CONTESTED');
 });
+
+// FW-037: a front is one gate pair, not one direction. The derived edge keeps
+// the orientation of whichever system the territory map listed first, so a
+// different war squatting on that target froze the whole pair forever. Attack
+// across the same real gate from the other end instead.
+test('a different war on the target does not freeze the border - attack from the far side',()=>{
+ const state=core.empty();
+ state.wars['war:500002-500009']={warID:'war:500002-500009',state:'ACTIVE',
+  attackerFactionID:500009,defenderFactionID:500002,startedAtMs:1,frontID:'front:500002-500009'};
+ state.campaigns['war:500002-500009:campaign:2']={campaignID:'war:500002-500009:campaign:2',
+  warID:'war:500002-500009',state:'ASSAULT',sourceSystemID:9,targetSystemID:2,startedAt:1};
+ const plan=opening.planWars({state,presence:presence(),
+  getStargatesForSystem,getGate,nowMs:1000});
+ assert.equal(plan.status,'READY');
+ const planned=firstOpening(plan);
+ assert.equal(planned.plan.war.attackerFactionID,500002);
+ assert.equal(planned.plan.war.defenderFactionID,500001);
+ assert.equal(planned.plan.campaign.sourceSystemID,2);
+ assert.equal(planned.plan.campaign.targetSystemID,1);
+ assert.equal(planned.plan.war.warID,'war:500001-500002');
+});
+
+test('the same faction pair never reopens its own border from the far side',()=>{
+ const first=opening.planWars({state:core.empty(),presence:presence(),
+  getStargatesForSystem,getGate,nowMs:1000});
+ const opened=opening.applyOpening({state:core.empty(),plan:first,nowMs:1000});
+ const again=opening.planWars({state:opened.state,presence:presence(),
+  getStargatesForSystem,getGate,nowMs:2000});
+ assert.equal(again.status,'REFUSED');
+ assert.equal(again.reason,'NO_OPENABLE_FRONT');
+ assert.equal(again.skipped[0].reason,'TARGET_ALREADY_CONTESTED');
+});
