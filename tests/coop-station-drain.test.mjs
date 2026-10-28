@@ -130,3 +130,13 @@ test("a station that sold nothing is not flown to again while it cools down", { 
   drain.coolDown(60014935, now);
   assert.equal(drain.chooseStation(rows, { corpID: CORP, isMineral, isOre, now }), null);
 });
+
+test("the cool-down survives a restart", { skip: !present }, () => {
+  // The map was in memory and the work stack restarted between drain trips, so the same
+  // unprofitable station was visited three times. The cool-down is now durable.
+  const source = fs.readFileSync(modulePath, "utf8");
+  assert.ok(source.includes('"drain-cooldowns.json"'));
+  assert.ok(source.includes("function loadCooldowns("));
+  assert.ok(source.includes("function saveCooldowns("));
+  assert.ok(source.includes("if (id) { stationCooldown.set(id, now + COOLDOWN_MS); saveCooldowns(); }"));
+});
