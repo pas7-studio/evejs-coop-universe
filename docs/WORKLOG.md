@@ -1776,3 +1776,9 @@ Evidence: tests/coop-split-tooling.test.mjs 9/9; parity 31 files 213 pass/21 fai
 Why: Record the split incident as evidence: the checker run against eec175f prints the 23 state names that threw ReferenceError live; the repaired tree is 0 hard findings, 23 two-state
 Where: docs/FORK_PATCH_AUDIT_20261028.md
 Evidence: historical extract of eec175f + current engine both checked with coop-split-check.cjs; AUDIT_OK
+### 2026-10-28T11:50Z · ec6924b · L3 · feat(split-check): a binder nothing invokes leaves every two-state name stale
+
+Why: Split checker: BINDER_NEVER_CALLED - a binder function nobody invokes leaves every two-state name stale (same freeze as the missing names, one step later)
+Detail: The binder call is what keeps two copies of one state equal; if the function that holds it is never called, the copies exist and never refresh - the same freeze as the missing names, one step later. BINDER_NEVER_CALLED is now a hard finding, and a module-scope binder call still counts as running. Engine files were not touched: another session is mid-edit on coopVirtualWorldRuntime.js (mtime 15:50)
+Where: scripts/coop-split-check.cjs, tests/coop-split-tooling.test.mjs
+Evidence: tests/coop-split-tooling.test.mjs 10/10; checker on current engine 0 hard findings, 23 two-state; audit drift 1 left deliberately (another session mid-edit on the runtime)
