@@ -23,7 +23,8 @@ function fixture(options={}){
  const scene={systemID:station.solarSystemID,staticEntities:[point],getEntityByID:id=>id===ship.itemID?ship:null};
  const fleet={fleetID:77,systemID:station.solarSystemID,haulerEntityIDs:[ship.itemID]};
  const nativeEntity={entityID:ship.itemID,systemID:station.solarSystemID,transient:false};
- const cargo=new Map([[9980,{cargoID:9980,entityID:ship.itemID,coopHaulFleetID:77,coopHaulFromMinerID:9811,typeID:34,quantity:25,moduleID:0,transient:false}]]);
+ const cargo=new Map([[9980,{cargoID:9980,entityID:ship.itemID,coopHaulFleetID:77,coopHaulFromMinerID:9811,typeID:34,quantity:25,moduleID:0,transient:false,
+  ownerID:1000035}]]);
  const deposits=[],warps=[],flushed=[];let warehouseStatus='COMMITTED';
  const store={listNativeCargoForEntity:id=>id===ship.itemID?[...cargo.values()]:[],buildNativeCargoItems:id=>[...cargo.values()]};
  const warehouse={deposit:x=>{deposits.push(x);if(warehouseStatus==='COMMITTED')cargo.delete(x.cargoID);return {status:warehouseStatus};}};
@@ -51,7 +52,7 @@ test('actual physical station coordinates and dwell are required before native c
  assert.equal(f.dir.tick(f.scene,f.fleet,1004000).status,'ARRIVAL_DWELL_PENDING');
  f.setTime(1006000);const result=f.dir.tick(f.scene,f.fleet,1006000);
  assert.equal(result.status,'DELIVERED');assert.equal(f.deposits.length,1);
- assert.deepEqual(f.deposits[0],{cargoID:9980,haulerID:980001,fleetID:77,systemID:30000144,stationID:60010001,corporationID:1000035,arrivedAtMs:1003000});
+ assert.deepEqual(f.deposits[0],{cargoID:9980,haulerID:980001,fleetID:77,systemID:30000144,stationID:60010001,corporationID:1000035,arrivedAtMs:1003000,nowMs:1006000});
  assert.equal(f.cargo.size,0);assert.equal(f.fleet.coopStationArrival,undefined);
 });
 test('does not teleport ore from distant ship when timer fires',()=>{
@@ -71,7 +72,16 @@ test('failed native warehouse credit holds fleet for operator repair',()=>{
  const f=fixture();f.dir.start(f.scene,f.fleet,f.now());arrive(f);f.dir.tick(f.scene,f.fleet,1005000);f.setTime(1009000);f.setWarehouseStatus('TARGET_FLUSH_UNCERTAIN');
  assert.equal(f.dir.tick(f.scene,f.fleet,f.now()).status,'WAREHOUSE_TARGET_FLUSH_UNCERTAIN');assert.equal(f.fleet.coopStationArrival.stationID,f.station.stationID);assert.equal(f.cargo.size,1);
 });
-test('timeout blocks without treating deadline as arrival',()=>{const f=fixture();f.dir.start(f.scene,f.fleet,f.now());assert.equal(f.dir.tick(f.scene,f.fleet,f.now()+16*60*1000).status,'ARRIVAL_TIMED_OUT_REPAIR_REQUIRED');assert.equal(f.deposits.length,0)});
+test('an overdue route expires durably and replans instead of stranding the fleet',()=>{
+ // Measured live: pausing forever here left the fleet in "loaded" and stopped mining,
+ // so a deadline that passes now closes the route and the ore stays aboard for a new one.
+ const f=fixture();f.dir.start(f.scene,f.fleet,f.now());
+ const late=f.dir.tick(f.scene,f.fleet,f.now()+16*60*1000);
+ assert.equal(late.status,'ROUTE_EXPIRED_REPLANNED');
+ assert.equal(late.expired,true);assert.equal(late.terminal,false);
+ assert.equal(f.deposits.length,0);assert.equal(f.cargo.size,1);
+ assert.equal(f.fleet.coopStationArrival,undefined);
+});
 test('fleet does not restart delivery while route in progress',()=>{const f=fixture();f.dir.start(f.scene,f.fleet,f.now());assert.equal(f.dir.start(f.scene,f.fleet,f.now()+5000).status,'ROUTE_ALREADY_ACTIVE');assert.equal(f.warps.length,1)});
 test('no cargo skips unneeded station warp without creating goods',()=>{const f=fixture();f.cargo.clear();assert.equal(f.dir.start(f.scene,f.fleet,f.now()).status,'NO_ORE_TO_DELIVER');assert.equal(f.warps.length,0)});
 test('a fleet with no physical trip returns home instead of stalling forever',()=>{

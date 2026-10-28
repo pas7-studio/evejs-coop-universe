@@ -9,7 +9,10 @@ const {createEscortFlightGate}=require("../integration/coopEscortFlightGate.cjs"
 const {createEscortContractSettlement}=require("../integration/coopEscortContractSettlement.cjs");
 const {createStationArrival}=require("../integration/coopNativeStationArrival.cjs");
 const {createManifest}=require("../integration/coopNativeHaulManifest.cjs");
-const envKeys=["EVEJS_COOP_ESCORT_ROUTE_GATE","EVEJS_COOP_NATIVE_HAUL_MANIFEST","EVEJS_COOP_ESCORT_CONTRACTS"];
+const envKeys=["EVEJS_COOP_ESCORT_ROUTE_GATE","EVEJS_COOP_NATIVE_HAUL_MANIFEST",
+ "EVEJS_COOP_ESCORT_CONTRACTS","EVEJS_COOP_ESCORT_WARP_FENCE",
+ "EVEJS_COOP_OPPORTUNITY_BOARD","EVEJS_COOP_EVENT_VOLUNTEERS",
+ "EVEJS_COOP_ESCORT_PAID_ACCEPT"];
 const old=Object.fromEntries(envKeys.map(k=>[k,process.env[k]]));
 for(const k of envKeys)process.env[k]="1";
 function fixture(opts={}){
@@ -25,7 +28,7 @@ function fixture(opts={}){
  const fleet={systemID,fleetID,haulerEntityIDs:[haulerID]};
  const cargo=new Map([501,502].map((id,i)=>[id,{cargoID:id,entityID:haulerID,
   coopHaulFleetID:fleetID,coopHaulFromMinerID:800,typeID:34+i,
-  quantity:7+i,moduleID:0,transient:false}]));
+  quantity:7+i,moduleID:0,transient:false,ownerID:corporationID}]));
  const stock=new Map();
  const store={listNativeCargoForEntity:()=>[...cargo.values()],
   buildNativeCargoItems:()=>[...cargo.values()]};
@@ -71,13 +74,41 @@ function fixture(opts={}){
  const gateway=opts.missingGate?null:opts.failTerminal?{
   fundBeforeWarp:x=>flight.fundBeforeWarp(x),
   recordDelivered:()=>({status:"SIMULATED_TERMINAL_WRITE_FAILURE"})}:flight;
+ // A paid flight now requires a durable discovery event, a verified native duo
+ // and a durable two-pilot paid acceptance before any escrow or warp. Those
+ // sources have their own green suites (station-predeparture-gate,
+ // durable-warp-fence, native-funds); here they are stubbed so this file keeps
+ // testing milestone C itself: escrow, physical warp, delivery, settlement.
+ const eventID="convoy-"+systemID+"-"+fleetID+"-"+startAt;
+ const board=require("../integration/coopWorldOpportunityBoard.cjs");
+ const duo=require("../integration/coopEscortVolunteers.cjs");
+ const priced=require("../integration/coopEscortPricedOffers.cjs");
+ const stubs={prepare:board.noteNativeConvoyPreparing,
+  departed:board.noteNativePreparingDeparted,pair:duo.readVerifiedNativePair,
+  offer:priced.offerFromNative,accepted:priced.readNativeAccepted};
+ board.noteNativeConvoyPreparing=()=>({status:"NATIVE_PREPARING_EVENT_READY",id:eventID});
+ board.noteNativePreparingDeparted=()=>({status:"NATIVE_PREPARING_EVENT_CLOSED"});
+ duo.readVerifiedNativePair=()=>({status:"VERIFIED_NATIVE_DUO_VOLUNTEER",
+  eventID,systemID,entityID:haulerID,fleetID,pilots:[{characterID:701,shipID:1701},
+  {characterID:702,shipID:1702}]});
+ priced.offerFromNative=()=>({status:"NATIVE_QUOTE_READY"});
+ priced.readNativeAccepted=()=>({status:"DURABLE_TWO_PILOT_PAID_ACCEPTANCE",
+  eventID,fleetID,quote:{systemID,fleetID,stationID,corporationID,haulerID},
+  characters:[701,702],amountISK:20000});
+ const restore=()=>{board.noteNativeConvoyPreparing=stubs.prepare;
+  board.noteNativePreparingDeparted=stubs.departed;
+  duo.readVerifiedNativePair=stubs.pair;priced.offerFromNative=stubs.offer;
+  priced.readNativeAccepted=stubs.accepted;};
  const stationDirector=createStationArrival({getStations:()=>[station],
   getStation:id=>id===stationID?station:null,
   getCorporation:id=>id===corporationID?{corporationID:id}:null,
   isNpcCorporation:id=>id===corporationID,getNativeEntity:native,
   getScene:()=>scene,store,items,flush:()=>({success:true}),
   warpToPoint:()=>{warps++;return {success:true}},
-  warehouse,manifest,escortGate:gateway,root,clock:()=>now});
+  warehouse,manifest,escortGate:gateway,root,clock:()=>now,
+  warpFence:{inspectSource:()=>({status:"WARP_SOURCE_CLEAR"}),
+   prepare:()=>({status:"DURABLE_WARP_PREPARED"}),
+   confirm:()=>({status:"DURABLE_WARP_ACK_CONFIRMED"})}});
  const manifestKey=String(systemID)+"-"+fleetID+"-"+startAt;
  const contract=()=>({contractID,manifestKey,systemID,fleetID,haulerID,
   stationID,corporationID,amountISK:20000,characters:[701,702],
@@ -100,7 +131,8 @@ function fixture(opts={}){
  const arrive=()=>{ship.position={...point.position};tick(1003000);return tick(1006000)};
  return {root,fleet,ship,start,tick,arrive,manifestKey,contract,flight,newFlight,laterSettlement,
   reserves:()=>reserves,warps:()=>warps,payments:()=>payments,deposits:()=>deposits,
-  loseEscrow:()=>escrow=null,close:()=>fs.rmSync(root,{recursive:true,force:true})};
+  loseEscrow:()=>escrow=null,
+  close:()=>{restore();fs.rmSync(root,{recursive:true,force:true})}};
 }
 function run(fn,opts){const f=fixture(opts);try{fn(f)}finally{f.close()}}
 test("escrow is durable before first physical native warp",()=>run(f=>{
