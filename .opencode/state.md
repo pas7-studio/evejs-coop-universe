@@ -1,5 +1,41 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-29 20:55Z - the refinery was serving the wrong station; books now close
+
+MEASURED DEFECT: 454 124 units of tagged warehouse ore sat at 60000682 while the
+refinery only worked at the fleet's own dock (1 535 units there). The corporation refined
+almost none of its own ore, so Pyerite looked scarce while it was on the shelf as
+unrefined Scordite. coopNpcRefineryTick.run() now serves the fleet's station first and
+then the station its own newest warehouse trip manifest proves (both are proof, never a
+guess), with a batch of EVEJS_COOP_NPC_REFINERY_BATCH (default 24) instead of 8 rows a
+minute. After deploy: 15 COMMITTED operations at 60000682, ~9 995 ore units each.
+
+LEDGER (scripts/coop-economy-ledger.cjs, read-only, runs in the container):
+  treasury 722 134 486 ISK; refinery 71 ops / 247 005 ISK fees; 19 jobs / 85 runs;
+  160 sale fills = 165 357 081 ISK.
+  28338 Republic Fleet Depleted Uranium XL: produced 1 700 = sold 1 600 + held 100,
+  74 576 000 ISK; 444 Mining Survey Chipset I: produced 68 = sold 63 + held 5.
+  BALANCED - every produced unit is sold or physically held. Ore and minerals are
+  reported as FLOW (refined away / produced / held), never as a produce-sell balance.
+
+MARKET NOTE (not a code bug): the agents market was re-seeded at 20:17 by another
+session (manifest 585 455 rows, 40 regions, 5210 stations) and its local book at
+30000145 now holds only 83 LP/event bids (Loyalty Tokens, Datacores, Sleeper corpses) -
+nothing the corporation can make. The manufacturer therefore reports NO_REAL_BUYER,
+which is the correct economic answer, not a defect. Jita's book is dominated by
+static-data artifacts (Laelaps 446 800 000 for 1x Tritanium): isTrivialRecipe() refuses
+to build those, so the world idles instead of printing ISK.
+
+ALSO: an out-of-process blueprint seed is invisible to the running server, because
+itemStore keeps a process-local index. Seed, then restart the server - do not conclude
+the seed failed.
+
+NEXT (genuinely the last link): cross-system distribution. Both 30000145 and 30000142
+have real scenes; warp-to-gate + jump exists (coopNpcGateTravel.createGateTravel, proven
+by living-native-war-gate-staging). A distribution job is: load a hangar stack, gate hop,
+station trip, arrival sale at a station that really bids. Only worth wiring once the
+seeded book contains a sane price for an ordinary good; today it does not.
+
 ## 2026-10-29 20:10Z - the loop is closed: the world decides, builds, hauls and sells
 
 THE MISSING LINK WAS NOT ECONOMICS, IT WAS A CALLER. The server source contained
