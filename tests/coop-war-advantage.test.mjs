@@ -159,3 +159,21 @@ test("the client can represent every score it is given", () => {
   assert.ok(score.floor >= 0 && score.contribution + score.floor <= 100000);
  }
 });
+
+test("every system the warzone payload lists has a victory point state", () => {
+ // In EVEJS_COOP_FW_ALL_SYSTEMS=1 mode the occupation payload lists every static warzone
+ // system, and warzoneStats.py dereferences `victoryPointsState.contestedFraction` for each
+ // one: a missing entry is an AttributeError, not an empty progress bar.
+ const view = createWarAdvantage({
+  gameStore: store({war: WAR, fleet: FLEET, casualties: CASUALTIES}),
+  env: {...ON, EVEJS_COOP_FW_ALL_SYSTEMS: "1"},
+ });
+ const states = view.victoryPointStates();
+ assert.ok(Object.keys(states).length > 0);
+ for (const [systemID, state] of Object.entries(states)) {
+  assert.ok(Number.isSafeInteger(state.score) && state.score >= 0, systemID + " score");
+  assert.ok(state.threshold > 0, systemID + " threshold");
+ }
+ // the real system keeps its real score, the rest are honest zeros
+ assert.equal(states[30045344].score, 1000 + 200);
+});
