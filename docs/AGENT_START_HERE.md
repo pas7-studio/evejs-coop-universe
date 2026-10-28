@@ -26,6 +26,12 @@ client. The repository is the only shared memory. Read in this order:
   events → one authorized client → two clients. Claim only the rung you reached.
 - **Nothing is "done" from documentation or tests alone.** Real gameplay needs
   server evidence plus a human-visible client.
+- **Gating a change today:** `node scripts/coop-engine-audit.cjs` (`AUDIT_OK`) and
+  `node scripts/coop-perf-audit.cjs` (`PERF_OK`) measure our own burden, and
+  `node scripts/coop-test-parity.cjs` compares the failing case *names* of the files
+  you touched (`--files a,b --record`, then run it without `--record`). The
+  whole-suite baseline is still bound to the pinned checkout and is not a gate:
+  `docs/FORK_PATCH_AUDIT_20261028.md` says why and what the 541 red cases are.
 
 ## Trusting the state bundle
 

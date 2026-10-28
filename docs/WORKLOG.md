@@ -1749,3 +1749,9 @@ Evidence: 187 pass/21 fail in the 26 runtime files, all 21 pre-existing; AUDIT_O
 Why: The hauler behaviour profile is movementMode stop, so every follow order is consumed once and the hull is re-stopped; it parked 750 m from the rock while its miner orbited 3-6 km away, one transfer range short.
 Where: scripts/patch-evejs-coop.cjs, tests/coop-haul-approach-wiring.test.mjs
 Evidence: agents fleet-state with inDynamic/advancedAgoMs/maxVelocity: all hulls dynamic and advanced on the current tick (maxVelocity 78-335) yet mode STOP; hauler toRock 750 m vs miner toRock 3165-6357 m; profile now orbits the fleet asteroid at 1000 m with the matching manual order; 12 haul tests pass
+### 2026-10-28T00:15Z · c46c0a8 · OPS · test: scoped parity gate, because the whole-suite baseline is pin-bound
+
+Why: Scoped parity gate replaces the pin-bound whole-suite baseline for change acceptance; giga-file ratchet in the engine audit; both giga splits logged
+Detail: Measured today: 6 174 cases, 5 543 pass, 541 fail, 90 skip; 109 of the failures name the pin, the overlay, the installer or a source hash, and the rest are the native/SQLite cases that need deployed modules. docs/evidence/test-baseline.json (pinned checkout, 538 pass / 0 fail) therefore cannot gate anything. coop-test-parity.cjs compares the *names* of failing cases for the files a change touches,
+Where: docs/FORK_PATCH_AUDIT_20261028.md, docs/evidence/test-parity.json, scripts/coop-test-parity.cjs
+Evidence: 6174 cases 5543 pass/541 fail (109 pin/overlay, rest native/SQLite); parity snapshot 30 files 204 pass/21 fail PARITY_OK; AUDIT_OK PERF_OK
