@@ -1,0 +1,583 @@
+{
+  "//": "One row per source-only gate. Read by scripts/lib/CoopGate.ps1 through the thin Run-*.ps1 wrappers, and validated by tests/coop-gate-specs.test.mjs. Every schema/count here mirrors a tests/scenarios manifest that must still be all-NOT_RUN: a gate can never turn manual evidence into PASS.",
+  "schema": "evejs-coop/gate-specs/v1",
+  "gates": {
+    "alife07": {
+      "name": "ALIFE07",
+      "reportSlug": "evejs-alife07-atomic",
+      "logName": "alife07-atomic-node-tests.log",
+      "tail": 45,
+      "testMissing": "Missing test: {test}",
+      "tests": [
+        "tests/coop-native-mining-atomic.test.mjs",
+        "tests/coop-native-mining-atomic-overlay.test.mjs",
+        "tests/coop-native-mining-cycle-conservation.test.mjs",
+        "tests/coop-native-mining-cargo-integrity.test.mjs",
+        "tests/coop-gamestore-atomic.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/native-mining-atomic-e2e.json",
+        "missing": "Missing ALIFE-07 acceptance manifest",
+        "schema": "evejs-coop/alife07-atomic-mining-e2e/v1",
+        "count": 10,
+        "op": "eq",
+        "invalid": "ALIFE-07 physical E2E cases cannot pass without local evidence"
+      },
+      "nodeFail": "ALIFE07 Node test suite failed: {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife07-native-mining-source.cjs", "fail": "ALIFE07 original pinned mining source mismatch" }],
+        "missing": "Pinned upstream source NOT CHECKED: supply -UpstreamCodeRoot"
+      },
+      "banner": [
+        "PASS: Node isolated checks only; 10 physical ALIFE07 E2E scenarios NOT_RUN.",
+        "EVEJS_COOP_NATIVE_MINING_CYCLE_ATOMIC default OFF.",
+        "No game world, Docker or preserved evejs-data modifications."
+      ]
+    },
+    "alife08": {
+      "name": "ALIFE08",
+      "reportSlug": "evejs-alife08-durable",
+      "logName": "alife08-isolated-node.log",
+      "tail": 45,
+      "testMissing": "Required test missing: {test}",
+      "tests": [
+        "tests/coop-native-mining-fleet-durable.test.mjs",
+        "tests/coop-native-mining-fleet-durable-overlay.test.mjs",
+        "tests/coop-native-mining-cargo-integrity.test.mjs",
+        "tests/coop-native-mining-cycle-conservation.test.mjs",
+        "tests/coop-mining-startup-retry.test.mjs",
+        "tests/coop-native-convoy-renewal.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/native-mining-fleet-durable-e2e.json",
+        "missing": "Missing ALIFE-08 acceptance manifest",
+        "schema": "evejs-coop/alife08-durable-native-mining-e2e/v1",
+        "count": 12,
+        "op": "eq",
+        "invalid": "ALIFE08 physical E2E manifest lacks a truthful NOT_RUN gate"
+      },
+      "nodeFail": "ALIFE08 Node tests failed, inspect {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife08-durable-mining-source.cjs", "fail": "ALIFE08 pinned EveJS source preflight FAILED" }],
+        "missing": "Pinned source NOT verified: supply -UpstreamCodeRoot",
+        "missingKind": "Warning"
+      },
+      "banner": [
+        "PASS: isolated Node tests only; 12 physical mining E2E scenarios NOT_RUN.",
+        "Feature flag EVEJS_COOP_NATIVE_MINING_FLEET_DURABLE remains default OFF.",
+        "No changes to Docker or protected evejs-data."
+      ]
+    },
+    "alife09": {
+      "name": "ALIFE09",
+      "reportSlug": "evejs-alife09-station-gate",
+      "logName": "alife09-native-node.log",
+      "tail": 55,
+      "testMissing": "Missing ALIFE-09 required test file: {test}",
+      "tests": [
+        "tests/coop-alife09-station-fleet-restart-compat.test.mjs",
+        "tests/coop-native-mining-fleet-durable.test.mjs",
+        "tests/coop-native-mining-fleet-durable-overlay.test.mjs",
+        "tests/coop-native-station-arrival-patch.test.mjs",
+        "tests/coop-native-station-arrival.test.mjs",
+        "tests/coop-native-mining-atomic.test.mjs",
+        "tests/coop-native-mining-atomic-overlay.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/native-mining-station-restart-alife09-e2e.json",
+        "missing": "Missing ALIFE-09 station restart manifest",
+        "schema": "evejs-coop/alife09-native-station-restart/v1",
+        "count": 6,
+        "op": "eq",
+        "invalid": "ALIFE09 physical E2E manifest must remain honestly NOT_RUN without actual evidence"
+      },
+      "nodeFail": "ALIFE09 isolated tests failed. See {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife09-mining-overlay.cjs", "fail": "ALIFE09 pinned original mining installer preflight FAILED" }],
+        "missing": "ALIFE09 pinned upstream full roundtrip NOT VERIFIED (provide -UpstreamCodeRoot)",
+        "missingKind": "Warning"
+      },
+      "banner": [
+        "ALIFE09 isolated tests PASS; six physical two-client E2E scenarios NOT_RUN.",
+        "No Docker or protected evejs-data changes. New feature flags default OFF."
+      ]
+    },
+    "alife10": {
+      "name": "ALIFE10",
+      "reportSlug": "evejs-alife10-atomic-haul",
+      "logName": "alife10-native-haul-node.log",
+      "tail": 55,
+      "testMissing": "Missing required native test: {test}",
+      "tests": [
+        "tests/coop-native-haul-transfer-atomic.test.mjs",
+        "tests/coop-native-haul-transfer-sqlite.test.mjs",
+        "tests/coop-gamestore-atomic.test.mjs",
+        "tests/coop-gamestore-atomic-patch.test.mjs",
+        "tests/coop-native-haul-atomic-routing.test.mjs",
+        "tests/coop-native-hauler-persistence.test.mjs",
+        "tests/coop-native-mining-fleet-durable.test.mjs",
+        "tests/coop-native-mining-atomic.test.mjs",
+        "tests/coop-alife09-station-fleet-restart-compat.test.mjs",
+        "tests/coop-native-station-arrival.test.mjs",
+        "tests/coop-native-warehouse.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/native-haul-transfer-atomic-alife10-e2e.json",
+        "missing": "Missing ALIFE-10 haul transfer manifest",
+        "schema": "evejs-coop/alife10-atomic-native-haul-e2e/v1",
+        "count": 9,
+        "op": "eq",
+        "invalid": "ALIFE-10 physical E2E manifest must remain NOT_RUN without evidence"
+      },
+      "nodeFail": "ALIFE-10 test suite failed. Log: {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife09-mining-overlay.cjs", "fail": "Pinned original mining overlay preflight FAILED" }],
+        "missing": "Pinned source not inspected: pass -UpstreamCodeRoot to check pristine EveJS"
+      },
+      "banner": [
+        "PASS: isolated unit/SQLite regression suite. Physical gameplay E2E: 9 NOT_RUN.",
+        "No Docker commands and no protected evejs-data modifications."
+      ]
+    },
+    "alife11": {
+      "name": "ALIFE11",
+      "reportSlug": "evejs-alife11-cargo-isolation",
+      "logName": "alife11-native-cargo-node.log",
+      "tail": 50,
+      "testMissing": "ALIFE11_REQUIRED_TEST_NOT_FOUND: {test}",
+      "tests": [
+        "tests/coop-native-cargo-transient-isolation.test.mjs",
+        "tests/coop-native-haul-transfer-atomic.test.mjs",
+        "tests/coop-native-haul-transfer-sqlite.test.mjs",
+        "tests/coop-native-haul-atomic-routing.test.mjs",
+        "tests/coop-gamestore-atomic.test.mjs",
+        "tests/coop-gamestore-atomic-patch.test.mjs",
+        "tests/coop-native-mining-atomic.test.mjs",
+        "tests/coop-native-mining-fleet-durable.test.mjs",
+        "tests/coop-native-station-arrival.test.mjs",
+        "tests/coop-native-warehouse.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/alife11-transient-cargo-isolation-e2e.json",
+        "missing": "Missing ALIFE-11 cargo isolation manifest",
+        "schema": "evejs-coop/alife11-transient-native-cargo-isolation/v1",
+        "count": 9,
+        "op": "eq",
+        "invalid": "ALIFE11_PHYSICAL_SCENARIOS_MUST_REMAIN_NOT_RUN_WITHOUT_EVIDENCE"
+      },
+      "nodeFail": "ALIFE11_NODE_TEST_FAILED: {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife09-mining-overlay.cjs", "fail": "ALIFE11_PINNED_SOURCE_PREFLIGHT_FAILED" }],
+        "missing": "Original clean pinned source not inspected. Provide -UpstreamCodeRoot.",
+        "missingKind": "Warning"
+      },
+      "banner": [
+        "PASS: isolated native Node/SQLite regression gate. Nine physical E2E NOT_RUN.",
+        "No Docker commands; no changes to protected evejs-data."
+      ]
+    },
+    "alife12": {
+      "name": "ALIFE12",
+      "reportSlug": "evejs-alife12-station-restart",
+      "logName": "alife12-native-restart-node.log",
+      "tail": 55,
+      "testMissing": "ALIFE12_REQUIRED_TEST_MISSING: {test}",
+      "tests": [
+        "tests/coop-alife12-station-trip-journal.test.mjs",
+        "tests/coop-alife12-station-trip-recovery.test.mjs",
+        "tests/coop-alife13-startup-cargo-audit.test.mjs",
+        "tests/coop-native-mining-fleet-durable.test.mjs",
+        "tests/coop-native-haul-transfer-atomic.test.mjs",
+        "tests/coop-native-haul-transfer-sqlite.test.mjs",
+        "tests/coop-native-haul-atomic-routing.test.mjs",
+        "tests/coop-native-station-arrival.test.mjs",
+        "tests/coop-native-haul-manifest.test.mjs",
+        "tests/coop-native-haul-manifest-station.test.mjs",
+        "tests/coop-native-warehouse.test.mjs",
+        "tests/coop-gamestore-atomic.test.mjs"
+      ],
+      "optionalTests": [
+        { "exists": "tests/coop-native-cargo-transient-isolation.test.mjs", "test": "tests/coop-native-cargo-transient-isolation.test.mjs" }
+      ],
+      "manifest": {
+        "path": "tests/scenarios/alife12-original-station-route-restart-e2e.json",
+        "missing": "Missing ALIFE-12 station restart manifest",
+        "schema": "evejs-coop/alife12-original-physical-route-restart/v1",
+        "count": 12,
+        "op": "eq",
+        "invalid": "ALIFE12_REAL_GAMEPLAY_NOT_RUN_GATE_REQUIRED"
+      },
+      "nodeFail": "ALIFE12_NODE_TEST_FAILED: {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife09-mining-overlay.cjs", "fail": "ALIFE12_PINNED_NATIVE_UPSTREAM_CHANGED" }],
+        "missing": "Original pristine pinned source not inspected; supply -UpstreamCodeRoot",
+        "missingKind": "Warning"
+      },
+      "banner": [
+        "ALIFE-12 isolated Node/SQLite regression suite PASS; 12 physical/two-client E2E NOT_RUN.",
+        "Docker/containers and protected evejs-data were not touched."
+      ]
+    },
+    "alifeDelivery": {
+      "name": "Native delivery",
+      "reportSlug": "evejs-alife-delivery-gates",
+      "logName": "native-delivery-tests.log",
+      "tail": 40,
+      "testMissing": "Missing native safety test: {test}",
+      "tests": [
+        "tests/coop-alife-native-delivery-proof.test.mjs",
+        "tests/coop-alife-native-delivery-wiring.test.mjs",
+        "tests/coop-alife-news.test.mjs",
+        "tests/coop-native-haul-manifest-station.test.mjs",
+        "tests/coop-native-haul-manifest.test.mjs",
+        "tests/coop-native-haul-manifest-overlay.test.mjs",
+        "tests/coop-native-warehouse.test.mjs",
+        "tests/coop-native-warehouse-patch.test.mjs",
+        "tests/coop-native-hauler-persistence.test.mjs",
+        "tests/coop-native-station-ore-settlement.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/alife-native-delivery-e2e.json",
+        "missing": "Missing ALIFE native delivery E2E manifest",
+        "schema": "evejs-coop/alife-native-delivery-e2e/v1",
+        "count": 8,
+        "op": "eq",
+        "invalid": "Never accept native delivery E2E without executing the 8 manual scenarios"
+      },
+      "nodeFail": "Native delivery test suite failed (exit {code}): {log}",
+      "banner": [
+        "PASS: source-level native warehouse tests; physical E2E NOT_RUN: {scenarios}",
+        "Audit telemetry ONLY: node scripts/audit-alife-native-deliveries.cjs <copied-coop-events.jsonl>",
+        "No Docker container, data volume, wallet or inventory was changed by this script."
+      ]
+    },
+    "alifeMiningCargo": {
+      "name": "Native ore",
+      "reportSlug": "evejs-alife-native-mining-cargo",
+      "logName": "native-mining-cargo-tests.log",
+      "tail": 35,
+      "testMissing": "Missing native mining test: {test}",
+      "tests": [
+        "tests/coop-native-mining-cargo-integrity.test.mjs",
+        "tests/coop-native-mining-cargo-wiring.test.mjs",
+        "tests/coop-mining-startup-retry.test.mjs",
+        "tests/coop-native-mining-readiness.test.mjs",
+        "tests/coop-native-haul-manifest.test.mjs",
+        "tests/coop-native-haul-manifest-overlay.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/native-mining-cargo-integrity-e2e.json",
+        "missing": "Missing native cargo acceptance manifest",
+        "schema": "evejs-coop/native-mining-cargo-integrity-e2e/v1",
+        "count": 8,
+        "op": "eq",
+        "invalid": "Native storage fault tests and client acceptance cannot pass without live local evidence"
+      },
+      "nodeFail": "Native ore tests failed (exit {code}): {log}",
+      "pinned": {
+        "scripts": [{ "path": "scripts/verify-alife-mining-cargo-source.cjs", "fail": "Pinned mining source differs; do not enable strict flag" }],
+        "missing": "PINNED SOURCE NOT CHECKED: pass -UpstreamCodeRoot to verify original upstream bytes."
+      },
+      "banner": [
+        "PASS: Node source tests. Eight physical local E2E scenarios remain NOT_RUN.",
+        "Default OFF: EVEJS_COOP_NATIVE_MINING_CARGO_INTEGRITY",
+        "No live game, Docker or evejs-data modifications were made by this runner."
+      ]
+    },
+    "alifeMiningCycle": {
+      "name": "ALIFE06",
+      "reportSlug": "evejs-alife06-conservation",
+      "logName": "alife06-isolated-tests.log",
+      "tail": 35,
+      "testMissing": "Missing test {test}",
+      "tests": [
+        "tests/coop-native-mining-cycle-conservation.test.mjs",
+        "tests/coop-native-mining-cargo-integrity.test.mjs",
+        "tests/coop-native-mining-cargo-wiring.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/native-mining-cycle-conservation-e2e.json",
+        "missing": "Missing ALIFE-06 conservation manifest",
+        "schema": "evejs-coop/native-mining-cycle-conservation-e2e/v1",
+        "count": 8,
+        "op": "eq",
+        "invalid": "Eight physical E2E checks must remain NOT_RUN until tested in disposable EveJS"
+      },
+      "nodeFail": "ALIFE06 isolated tests failed: {log}",
+      "pinned": {
+        "scripts": [
+          { "path": "scripts/verify-alife-mining-cargo-source.cjs", "fail": "ALIFE05 original source mismatch" },
+          { "path": "scripts/verify-alife-native-mining-cycle-source.cjs", "fail": "ALIFE06 original source mismatch" }
+        ],
+        "missing": "Original pinned EveJS sources NOT CHECKED: supply -UpstreamCodeRoot"
+      },
+      "banner": [
+        "PASS: isolated Node checks only; 8 physical scenarios remain NOT_RUN.",
+        "OFF by default. Does not modify Docker, original Code or evejs-data."
+      ]
+    },
+    "alifeMining": {
+      "name": "Native mining",
+      "reportSlug": "evejs-alife-mining-gates",
+      "logName": "alife-native-mining-node-tests.log",
+      "tail": 40,
+      "testMissing": "Missing required test {test}",
+      "tests": [
+        "tests/coop-alife-native-mining-witness.test.mjs",
+        "tests/coop-alife-native-mining-gate.test.mjs",
+        "tests/coop-alife-native-mining-wiring.test.mjs",
+        "tests/coop-native-mining-readiness.test.mjs",
+        "tests/coop-mining-startup-world-report.test.mjs",
+        "tests/coop-native-hauler-persistence.test.mjs",
+        "tests/coop-native-haul-manifest.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/alife-native-mining-physical-e2e.json",
+        "missing": "Missing native mining acceptance manifest",
+        "schema": "evejs-coop/alife-native-mining-physical-proof/v1",
+        "count": 6,
+        "op": "eq",
+        "invalid": "Never count physical two-client mining E2E as PASS without execution"
+      },
+      "nodeFail": "Native mining tests failed (exit {code}): {log}",
+      "banner": [
+        "PASS: native mining code tests; six real physical E2E scenarios remain NOT_RUN",
+        "Copied log: node scripts/coop-world-report.cjs --system-id 30000144 --require-mining-yield < coop-events.jsonl",
+        "No Docker, game volume, ammo, ores, wallet or native movement changed."
+      ]
+    },
+    "lw04b": {
+      "name": "LW04B",
+      "reportSlug": "evejs-lw04b-gates",
+      "logName": "lw04b-source-tests.log",
+      "tail": 65,
+      "testMissing": "LW04B_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-alife-native-manufacturing-runtime.test.mjs",
+        "tests/coop-alife-native-act.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs",
+        "tests/coop-npc-native-economy-director.test.mjs",
+        "tests/coop-native-economy-overlay-resolution.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw04-native-manufacturing-e2e.json",
+        "missing": "Missing LW04B manufacturing manifest",
+        "schema": "evejs-coop/lw04-native-manufacturing-source-to-act/v1",
+        "count": 12,
+        "op": "ge",
+        "invalid": "LW04B_GAMEPLAY_NOT_RUN_GATE_MISSING"
+      },
+      "nodeFail": "LW04B_SOURCE_GATE_FAILED:{log}",
+      "banner": ["LW04B SOURCE TESTS PASS. Real live factory, original SQLite, Rust, two clients are NOT_RUN."]
+    },
+    "lw04c": {
+      "name": "LW04C",
+      "reportSlug": "evejs-lw04c-recovery",
+      "logName": "lw04c-node-tests.log",
+      "tail": 75,
+      "testMissing": "LW04C_REQUIRED_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-npc-industry-recovery-fence.test.mjs",
+        "tests/coop-npc-live-factory-readiness.test.mjs",
+        "tests/coop-alife-native-act.test.mjs",
+        "tests/coop-alife-native-manufacturing-runtime.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs",
+        "tests/coop-npc-native-economy-director.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw04c-industry-recovery-e2e.json",
+        "missing": "Missing LW04C industry recovery manifest",
+        "schema": "evejs-coop/lw04c-native-industry-recovery-gates/v1",
+        "count": 10,
+        "op": "ge",
+        "invalid": "LW04C_NATIVE_GAMEPLAY_RELEASE_GATE_INVALID"
+      },
+      "nodeFail": "LW04C_NODE_SOURCE_GATE_FAILED:{log}",
+      "banner": [
+        "LW04C Node source tests PASS; original Rust, SQLite and 2-client gameplay remain NOT_RUN.",
+        "No mutations to Docker, protected evejs-data, real item/ISK balances."
+      ]
+    },
+    "lw04c2": {
+      "name": "LW04C2",
+      "reportSlug": "evejs-lw04c2-source",
+      "logName": "lw04c2-original-stage-source-tests.log",
+      "tail": 70,
+      "testMissing": "LW04C2_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-npc-industry-original-stage-executor.test.mjs",
+        "tests/coop-npc-industry-original-game-store-kernel.test.mjs",
+        "tests/coop-npc-industry-recovery-fence.test.mjs",
+        "tests/coop-npc-live-factory-readiness.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw04c2-original-manufacturing-stage-e2e.json",
+        "missing": "Missing LW04C2 original manufacturing stage manifest",
+        "schema": "evejs-coop/lw04c2-original-manufacturing-stage/v1",
+        "count": 10,
+        "op": "ge",
+        "invalid": "LW04C2_REAL_GAMEPLAY_NOT_RUN_GATE_INVALID"
+      },
+      "nodeFail": "LW04C2_NODE_SOURCE_GATE_FAILED:{log}",
+      "banner": ["LW04C2 SOURCE TESTS PASS. Live SQLite, Rust and two-client original gameplay: NOT_RUN."]
+    },
+    "lw04c3": {
+      "name": "LW04C3",
+      "reportSlug": "evejs-lw04c3-source",
+      "logName": "lw04c3-source-gates.log",
+      "tail": 60,
+      "testMissing": "LW04C3_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-npc-industry-original-rust-sell.test.mjs",
+        "tests/coop-npc-pending-market-escrow.test.mjs",
+        "tests/coop-npc-industry-original-stage-executor.test.mjs",
+        "tests/coop-npc-industry-original-game-store-kernel.test.mjs",
+        "tests/coop-npc-industry-recovery-fence.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw04c3-rust-npc-sell-e2e.json",
+        "missing": "Missing LW04C3 Rust NPC sell manifest",
+        "schema": "evejs-coop/lw04c3-original-rust-npc-sell-e2e/v1",
+        "count": 12,
+        "op": "eq",
+        "invalid": "LW04C3_NATIVE_RUST_E2E_MANIFEST_NOT_RUN_REQUIRED"
+      },
+      "nodeFail": "LW04C3_SOURCE_GATE_FAILED:{log}",
+      "banner": ["LW04C3 source-only PASS; actual Rust daemon/SQLite/two-client NOT_RUN."]
+    },
+    "lw04c3b": {
+      "name": "LW04C3B",
+      "reportSlug": "evejs-lw04c3b-finance",
+      "logName": "lw04c3b-finance-source-gates.log",
+      "tail": 80,
+      "testMissing": "LW04C3B_REQUIRED_SOURCE_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-npc-industry-original-sale-audit.test.mjs",
+        "tests/coop-npc-industry-original-buyer-settlement.test.mjs",
+        "tests/coop-npc-industry-original-wallet-witness.test.mjs",
+        "tests/coop-npc-factory-original-sale-finance-chain.test.mjs",
+        "tests/coop-npc-corporate-settlement.test.mjs",
+        "tests/coop-npc-partial-fill-atomic.test.mjs",
+        "tests/coop-npc-industry-original-rust-sell.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw04c3b-factory-sale-finance-e2e.json",
+        "missing": "Missing LW04C3B factory sale finance manifest",
+        "schema": "evejs-coop/lw04c3b-original-npc-sale-finance-e2e/v1",
+        "count": 14,
+        "op": "eq",
+        "invalid": "LW04C3B_PHYSICAL_FINANCIAL_E2E_NOT_RUN_REQUIRED"
+      },
+      "nodeFail": "LW04C3B_SOURCE_GATE_FAILURE:{log}",
+      "banner": ["LW04C3B source tests PASS; original native SQLite/Rust + 2-client E2E NOT_RUN."]
+    },
+    "lw04c4": {
+      "name": "LW04C4",
+      "reportSlug": "evejs-lw04c4-sold",
+      "logName": "lw04c4-sold-source-tests.log",
+      "tail": 90,
+      "testMissing": "LW04C4_REQUIRED_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-npc-native-economy-director.test.mjs",
+        "tests/coop-npc-industry-original-sale-audit.test.mjs",
+        "tests/coop-npc-industry-original-wallet-witness.test.mjs",
+        "tests/coop-npc-factory-original-sale-finance-chain.test.mjs",
+        "tests/coop-npc-industry-original-buyer-settlement.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs"
+      ],
+      "syntax": ["integration/coopNpcNativeEconomyDirector.cjs"],
+      "syntaxFail": "LW04C4_DIRECTOR_SYNTAX_FAILED",
+      "manifest": {
+        "path": "tests/scenarios/lw04c4-original-npc-sold-e2e.json",
+        "missing": "Missing LW04C4 original NPC sold manifest",
+        "schema": "evejs-coop/lw04c4-original-npc-sold-finalization/v1",
+        "count": 13,
+        "op": "eq",
+        "invalid": "LW04C4_REAL_NATIVE_SQLITE_RUST_E2E_NOT_RUN_REQUIRED"
+      },
+      "nodeFail": "LW04C4_NODE_SOURCE_GATE_FAILED:{log}",
+      "banner": ["LW04C4 Node source tests PASS; real SQLite/Rust and 2-client E2E remain NOT_RUN."]
+    },
+    "lw04e": {
+      "name": "LW04E",
+      "reportSlug": "evejs-lw04e-warehouse",
+      "logName": "lw04e-source-node-gate.log",
+      "tail": 85,
+      "testMissing": "LW04E_SOURCE_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-lw04e-original-warehouse-title-transfer.test.mjs",
+        "tests/coop-native-station-ore-settlement.test.mjs",
+        "tests/coop-lw04d-original-native-chain-proof.test.mjs",
+        "tests/coop-npc-industry-original-game-store-kernel.test.mjs",
+        "tests/coop-npc-refinery.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw04e-original-warehouse-title-e2e.json",
+        "missing": "Missing LW04E warehouse title manifest",
+        "schema": "evejs-coop/lw04e-original-warehouse-title-finance-e2e/v1",
+        "count": 15,
+        "op": "eq",
+        "invalid": "LW04E_NATIVE_E2E_NOT_RUN_MANIFEST_REQUIRED"
+      },
+      "nodeFail": "LW04E_SOURCE_NODE_GATE_FAILED:{log}",
+      "banner": ["LW04E source-only PASS. Physical original GameStore/Rust/2-client NOT_RUN."]
+    },
+    "lw04f": {
+      "name": "LW04F",
+      "reportSlug": "evejs-lw04f-depot",
+      "logName": "lw04f-node-source.log",
+      "tail": 80,
+      "testMissing": "LW04F_SOURCE_MISSING:{test}",
+      "tests": [
+        "tests/coop-lw04f-original-native-depot-hook.test.mjs",
+        "tests/coop-native-station-ore-settlement.test.mjs",
+        "tests/coop-lw04e-original-warehouse-title-transfer.test.mjs",
+        "tests/coop-lw04d-original-native-chain-proof.test.mjs",
+        "tests/coop-native-industry-overlay-graph.test.mjs"
+      ],
+      "syntax": ["integration/coopNativeStationOreSettlement.cjs"],
+      "syntaxFail": "LW04F_SOURCE_SYNTAX_FAILED",
+      "manifest": {
+        "path": "tests/scenarios/lw04f-original-depot-e2e.json",
+        "missing": "Missing LW04F original depot manifest",
+        "schema": "evejs-coop/lw04f-original-itemstore-depot-e2e/v1",
+        "count": 12,
+        "op": "eq",
+        "invalid": "LW04F_REAL_NATIVE_DEPOSIT_AND_SQLITE_NOT_RUN_REQUIRED"
+      },
+      "nodeFail": "LW04F_NODE_SOURCE_GATE_FAILED",
+      "banner": ["LW04F source gate PASS; original native SQLite/Rust and two-client E2E NOT_RUN."]
+    },
+    "livingWorld": {
+      "name": "LW03",
+      "reportSlug": "evejs-lw03-phase-gate",
+      "logName": "lw03-node-source-gates.log",
+      "tail": 60,
+      "testMissing": "LW03_REQUIRED_TEST_MISSING:{test}",
+      "tests": [
+        "tests/coop-living-world-phase-coordinator.test.mjs",
+        "tests/coop-alife-economy-wiring.test.mjs",
+        "tests/coop-alife-native-buyer-wiring.test.mjs",
+        "tests/coop-alife-native-resupply-wiring.test.mjs",
+        "tests/coop-installer-module-coverage.test.mjs"
+      ],
+      "manifest": {
+        "path": "tests/scenarios/lw03-single-world-phase-e2e.json",
+        "missing": "Missing LW03 unified phase manifest",
+        "schema": "evejs-coop/lw03-unified-phase-gameplay/v1",
+        "count": 8,
+        "op": "ge",
+        "invalid": "LW03_NATIVE_GAMEPLAY_NOT_RUN_MANIFEST_REQUIRED"
+      },
+      "nodeFail": "LW03_SOURCE_TEST_FAILURE:{log}",
+      "banner": [
+        "LW-03 Node source gates PASS. Original SQLite/Rust/two-client gameplay remain NOT_RUN.",
+        "Protected evejs-data, Docker, native wallets and cargo were not touched."
+      ]
+    }
+  }
+}
