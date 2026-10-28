@@ -1765,3 +1765,9 @@ Evidence: agents telemetry: mode ORBIT with target 5020484740198 while the gap g
 Why: A native NPC in GOTO flies along entity.direction only, so the position+direction*1e16 sentinel carried mining hulls away from their own belt for ever and no follow order could compete.
 Where: docs/WORKLOG.md
 Evidence: agents mining_fleet_diagnose: miner and hauler both mode GOTO targetPoint 8.19e15 m while nearestBelt 28-54 km; fork 11b9d29 adds space/coopNpcRunawayGoto.js (1e13 m limit, native hulls only) with one statement in the runtime GOTO case; 5 tests pass
+### 2026-10-28T11:47Z · 0d4fa1c · L3 · feat(split-check): a two-state name that no binder hands over is a stale copy
+
+Why: Split safety: the splitter read only the first name of a declarator list, so code touching bridge/warpPointDirector moved into the sibling and threw ReferenceError in a live phase; now every declarator counts, and an applied split is verified (UNDECLARED/COUPLING/UNBOUND_STATE fail, TWO_STATES ratcheted at 23)
+Detail: Two modules declaring the same state name only stay equal while something passes the live object across. That is the failure mode behind the frozen war: the fleet registry existed twice, the garrison wrote one and the phase read the other. `UNBOUND_STATE` now names it (the parent assigns its own copy and no bind*() call hands it over) and the engine audit treats it as a hard failure. The harmless 
+Where: docs/FORK_PATCH_AUDIT_20261028.md, docs/evidence/test-parity.json, scripts/coop-split-check.cjs, scripts/lib/js-declarations.cjs, tests/coop-split-tooling.test.mjs
+Evidence: tests/coop-split-tooling.test.mjs 9/9; parity 31 files 213 pass/21 fail PARITY_OK; AUDIT_OK split safety 0 undeclared, 23 two-state; PERF_OK
