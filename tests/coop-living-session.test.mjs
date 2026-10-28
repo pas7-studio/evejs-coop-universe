@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
+import {withEnv} from "./_support/env.mjs";
 const require=createRequire(import.meta.url);
 const {build,createAnnouncer}=require("../integration/coopSystemIntel.cjs");
 const {createRaids}=require("../integration/coopNativeRaids.cjs");
@@ -38,7 +39,11 @@ test("two players get actionable native NPC mining, loaded cargo and pirate loca
  assert.equal(announcer.announce(pilot,scene,{fleets,pirateIDs:[901]}).status,"UNCHANGED");
  assert.equal(sent.length,2);
 });
-test("hauler delivery never removes unrelated native cargo; moved ore retains exact cargo ID",()=>{
+test("hauler delivery never removes unrelated native cargo; moved ore retains exact cargo ID",(t)=>{
+ // Unloading only removes rows the transfer made durable, so the transfer path
+ // itself must run with station delivery on; that is what marks the hauled row
+ // non-transient. Without it the mover writes a row the unloader must refuse.
+ withEnv(t,{EVEJS_COOP_NPC_STATION_DELIVERY:"1"});
  const cargo=new Map([
   [777,{cargoID:777,entityID:101,moduleID:0,typeID:34,quantity:100}],
   [888,{cargoID:888,entityID:201,moduleID:0,typeID:99,quantity:2}]
@@ -49,14 +54,20 @@ test("hauler delivery never removes unrelated native cargo; moved ore retains ex
   upsertNativeCargo:x=>{cargo.set(x.cargoID,x);return {success:true}},
   removeNativeCargo:id=>{cargo.delete(id);return {success:true}}
  };
- const miner={itemID:101,kind:"ship",nativeCargoItems:[{itemID:777,volume:0.01}]};
+ const miner={itemID:101,kind:"ship",ownerID:5001,
+  nativeCargoItems:[{itemID:777,volume:0.01}]};
  const hauler={itemID:201,kind:"ship",ownerID:5001,nativeCargoItems:[{itemID:888,volume:3}]};
- const physicalScene={getEntityByID:id=>id===101?miner:id===201?hauler:null};
+ const physicalScene={systemID:30000142,
+  getEntityByID:id=>id===101?miner:id===201?hauler:null};
  const fleet={fleetID:9,systemID:30000142,haulerEntityIDs:[201]};
  // Unloading requires a durable depot receipt now (fail closed): a real
  // prepare/commit pair is a mandatory precondition, not an option.
  const depot={prepare:()=>({status:"PREPARED"}),commit:()=>({status:"COMMITTED"})};
- const options={store,probe:{observe:()=>{}},depot};
+ // A source debit only counts after the native npcCargo flush succeeds, so the
+ // fixture must expose the database it is proving against.
+ const database={setTransientPath:()=>({}),
+  flushTableSync:()=>({success:true})};
+ const options={store,probe:{observe:()=>{}},depot,database};
  assert.equal(transferCargo(physicalScene,fleet,miner,options),1);
  assert.equal(store.listNativeCargoForEntity(201).length,2);
  assert.equal(cargo.get(777)[haulFlag],9);
