@@ -3289,3 +3289,23 @@ a real ASSAULT campaign and in-scene hulls (1702 npc=true) but the peers do not 
 Next: one quiet window on evejs-agents, or the owner's approval, to run the last step:
 1 live defender + 3 armed attackers in the target system -> defender wreck -> zero live
 defenders -> CAPTURE_TERRITORY. Do not weaken the sustain window to force it.
+
+## Test-side duplication: flags on/off (2026-10-28, TEST)
+`tests/_support/env.mjs` now owns "turn these flags on, then put them back" (`swapEnv`,
+`withEnv(t, ...)`), and nine files use it - previously four spellings of the same six
+lines, including one `process.on('exit')` variant for flags set at import time. Each file
+keeps its own flag list; only save/apply/restore is shared. 44 lines out, 25 in. Verified
+case-by-case (counts and failing names identical before/after). `tests/coop-env-support.test.mjs`
+(7 cases) pins the two rules that matter: an originally unset name is deleted, never set to
+the string "undefined", and an existing value comes back exactly.
+The other ~19 files with a hand-rolled snapshot are mostly the `coop-escort-*` family, which
+is already deeply red (below) - convert them when their cases are fixed, not before.
+
+### The escort suite is the largest red cluster and has no single cause
+34 `tests/coop-escort-*.test.mjs` files, ~120 failing cases (13 `CONTRACT_NOT_FOUND`,
+9 `FLIGHT_FUNDING_PREPARE_UNCERTAIN`, 8 each `ROUTE_CHECKPOINT_WRITE_UNCERTAIN` /
+`MANIFEST_DIRECTORY_DURABILITY_UNCERTAIN`, plus a long tail). This is not one import path or
+one moved helper: each is a per-case expectation against the durable funding/warp-fence
+contract. Deciding whether the tests or the runtime is stale needs the escort owner's intent,
+so it is recorded here rather than "fixed" by relaxing assertions. None of these files are in
+`docs/evidence/test-parity.json`; adding them would only record red.
