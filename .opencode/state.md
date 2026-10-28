@@ -8464,3 +8464,34 @@ Done instead in this pass (real, verified): `insurgencySolarsystem.GetLocalCampa
 now answers the snapshot of the system you stand in when a LIVE campaign really covers it
 (fork `841345f`); it still answers `(systemID, null)` when the covered campaign is EXPIRED or
 OCCUPIED, which is every front in the world right now.
+
+## 2026-10-29T02:05Z - contract register + one latent crash closed
+
+Owner asked for placeholders to be documented instead of silently tolerated.
+
+`docs/CLIENT_CONTRACT_STATUS.md` is now GENERATED (`scripts/coop-client-contracts.cjs --write`)
+from the client's own call list: `docs/client-contracts/calls.json` holds all 542
+`RemoteSvc`/`ProxySvc` `service.method` pairs the pinned client (V24.01, compiled 2026-06-16)
+issues, extracted from its bytecode with the calling module. Classification against the fork:
+**0 MISSING, 44 STUB, 103 NULLABLE, 395 OK**. Every STUB carries the reason it is tolerated
+(fire-and-forget proxy, QA-only, or the client guards the result) and anything unreviewed says
+so. `--check` is a gate: a client call that used to be answered must never start getting a
+placeholder answer; `tests/coop-client-contracts.test.mjs` runs it.
+
+Not stubs, and the register says so: `fwAdvantageGateway` is filled from the casualty ledger
+and fleet registry (clamped to the client's 0..100000 domain); `insurgencyGatewayService`
+builds correct shapes with honest zero progress; `eve_public.campaign.api.*` (Agency ->
+Campaigns) is a real stub - 200 + empty payload, campaign messages not even in the local proto
+root, so turning that page on is a feature (proto schema + attributes), not a fix.
+
+Also closed a latent crash found while auditing: with `EVEJS_COOP_FW_ALL_SYSTEMS=1` the
+warzone occupation payload lists every static warzone system while `victoryPointStates()`
+covered only territories and campaign targets, and `warzoneStats.py` reads
+`victoryPointsState.contestedFraction` unguarded -> AttributeError on the first untouched
+system. Fixed in fork `3033ce5`; measured with the flag on: 814 states, real systems keep their
+real score, the rest are 0/75000.
+
+Verified clean this pass (no change): every rowset column the client `Index()`es exists
+(stationID, fromID, solarSystemID/value1/value2, locationID, warID, contactID, agentID,
+allianceID through `__header__`, itemID); no client call site dereferences a NULLABLE answer
+without a guard, including delayed `self.attr = RemoteSvc(...)` uses.
