@@ -45,7 +45,12 @@ function setup(t){
    itemID:row.cargoID,typeID:row.typeID,locationID:row.entityID,ownerID:row.ownerID,
    quantity:row.quantity,stacksize:row.quantity}))
  };
- const adapter=createSqliteAdapter(()=>db).claimTransactor();
+ // The mover is handed gameStore.coopAtomicNativeRows in production, i.e. the
+ // GameStore adapter, which answers with the mutation's own return value. The
+ // raw SQLite writer answers with a {result,changed} envelope, so wrapping it
+ // here is the same unwrap the GameStore adapter performs.
+ const writer=createSqliteAdapter(()=>db).claimTransactor();
+ const adapter={transact:(tables,fn)=>writer.transact(tables,fn).result};
  const mover=createAtomicHaulMover({gameStore:{coopAtomicNativeRows:adapter},nativeStore:store,
   resolveType:typeID=>({typeID,volume:0.1}),clock:()=>654321});
  const move=()=>mover.transfer({scene,fleet,miner,hauler,cargoID});
@@ -57,7 +62,7 @@ function setup(t){
 test("real SQLite FULL WAL transaction persists original cargoID and matching receipt across reopen",t=>{
  const f=setup(t),before=f.read("cargo");
  assert.equal(Object.keys(before).length,1);
- const result=f.move();assert.equal(result.status,"COMMITTED");
+ const result=f.move();assert.equal(result.status,"COMMITTED",JSON.stringify(result).slice(0,300));
  assert.equal(f.db().prepare("PRAGMA synchronous").get().synchronous,2);
  f.close();f.reopen();
  const cargo=f.read("cargo"),receipt=f.read(receiptKey(cargoID));
