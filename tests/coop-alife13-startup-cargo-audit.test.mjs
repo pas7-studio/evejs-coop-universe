@@ -139,8 +139,17 @@ test("read failure or foreign hull owner never silently means clean native stock
 });
 test("runtime calls ALIFE-13 before physical materialization and never adds a timer",()=>{
  const source=fs.readFileSync(new URL("../integration/coopNativeMiningFleetDurable.cjs",import.meta.url),"utf8");
+ // The materialization call sits inside ensureControllers(), which is DEFINED above the
+ // boot code, so comparing raw string offsets against it only measured which function
+ // happens to be written first. The boot order that matters is: audit the original cargo,
+ // then restore the durable hulls.
+ assert.ok(source.indexOf("auditStartupCargo({systemID")>0,"the audit call is gone");
  assert.ok(source.indexOf("auditStartupCargo({systemID")<
-  source.indexOf("nativeService.materializeStoredNativeController(scene,id"));
+  source.indexOf("const restored=ensureControllers("),
+  "the ALIFE-13 audit must run before durable actors are materialized");
+ // Exactly one materialization site, so "where the ships come back" stays one place.
+ assert.equal(source.split("materializeStoredNativeController(scene,id").length-1,1,
+  "materialization must not gain a second call site");
  assert.match(source,/ALIFE13_STARTUP_ORIGINAL_CARGO_UNRECONCILED/);
  assert.match(source,/EVEJS_COOP_ALIFE_STARTUP_CARGO_AUDIT/);
  assert.doesNotMatch(source,/setInterval\s*\(/);
