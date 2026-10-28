@@ -1901,3 +1901,14 @@ Why: stage-j salvage wiring anchored on safeNpcPhase which the phase coordinator
 Detail: The Living World tick now dispatches through the phase coordinator, so safeNpcPhase("native-salvage-*") no longer exists in the runtime. Both cases were red for that alone, and the second one was worse than red: its slice() of the telemetry block came back empty, so its three matches were vacuous. The slice is now anchored on the phase labels and asserts the block was actually found. Re-recorded d
 Where: docs/evidence/test-parity.json, tests/coop-stage-j-auto-market-wiring.test.mjs
 Evidence: coop-stage-j-auto-market-wiring 5/5; parity re-recorded 234 pass / 1 fail, compare mode PARITY_OK
+### 2026-10-28T13:26Z · 9728e8c · L1 · feat(fw): a garrison must be funded and a custody row is not a defending garrison; record the capture blockers
+
+Why: Capture-by-force could never land: the garrison bought a free hull every cooldown and the capture counted custody rows instead of hulls
+Where: .opencode/state.md, compose/compose.agents.yaml, integration/coopWarCaptureByForce.cjs, integration/coopWarGarrison.cjs, tests/coop-war-capture-by-force.test.mjs, tests/coop-war-garrison.test.mjs
+Evidence: garrison GARRISON_CHEST_EMPTY live at 13:20:28 and 13:23:39; capture liveness fix; 20 unit tests pass; AUDIT_OK
+### 2026-10-28T13:29Z · 1ea30d6 · TEST · test: one implementation of "turn these flags on, then put them back"
+
+Why: nine files hand-rolled env save/apply/restore in four spellings; extracted to tests/_support/env.mjs to keep the delete-vs-set rule in one place
+Detail: Nine test files each carried their own four-to-six line version of the same bookkeeping, in four spellings: Object.fromEntries over a flag list, t.after vs test.after, an inline loop vs forEach, and in one file a process.on('exit') handler because the flags were set at import time. The fiddly part is not the loop: a restore has to DELETE a name that was unset, and `process.env.X = undefined` store
+Where: tests/_support/env.mjs, tests/coop-alife12-station-trip-recovery.test.mjs, tests/coop-env-support.test.mjs, tests/coop-escort-peaceful-durable-replay.test.mjs, tests/coop-haul-load-verification.test.mjs, tests/coop-mining-cycle-transient-isolation.test.mjs, tests/coop-native-cargo-transient-isolation.test.mjs, tests/coop-native-haul-atomic-routing.test.mjs, tests/coop-native-haul-transfer-physical.test.mjs, tests/coop-native-haul-transfer-sqlite.test.mjs, tests/coop-npc-ammo-bank-transient-contract.test.mjs
+Evidence: per-file pass/fail identical before/after, failing names identical for the two already-red files; coop-env-support 7/7
