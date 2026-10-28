@@ -99,3 +99,17 @@ test("a manufactured good outranks refinery minerals", { skip: !present }, () =>
   assert.equal(chosen.stationID, 60014935);
   assert.equal(chosen.kind, "product");
 });
+
+test("a product sale is not throttled by the mineral governor", { skip: !present }, () => {
+  // Measured 2026-10-28: 5 chipsets sat in a hangar that really bids 53 700 while the
+  // corporation held 61 000 units of Tritanium, legitimately within its 200 000 floor.
+  // The governor answered ALLOW and the drain never left, so the only path that could
+  // sell the goods that manufacturing had just produced was silenced by a rule about ore.
+  assert.equal(drain.shouldStart("product", { action: "ALLOW" }).start, true);
+  assert.equal(drain.shouldStart("product", null).start, true);
+  // Minerals keep the gate: overstock drains, demand does not.
+  assert.equal(drain.shouldStart("mineral", { action: "TRICKLE" }).start, true);
+  assert.equal(drain.shouldStart("mineral", { action: "HOLD" }).start, true);
+  assert.equal(drain.shouldStart("mineral", { action: "ALLOW" }).start, false);
+  assert.equal(drain.shouldStart("mineral", null).start, false);
+});

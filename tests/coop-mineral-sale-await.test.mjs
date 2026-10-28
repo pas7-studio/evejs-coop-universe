@@ -31,3 +31,15 @@ test("the lifted mineral types join the sale list", { skip: !present }, () => {
 test("an arrival with nothing sellable is still reported", { skip: !present }, () => {
   assert.ok(source.includes('if(!wanted.length)last="NO_ALLOWED_ORE";'));
 });
+
+test("a type the station does not bid for never ends the whole batch", { skip: !present }, () => {
+  // Measured 2026-10-28: the 5 manufactured chipsets were lifted into the hauler at
+  // 60014935, and the batch settled NOT_SOLD NO_SEEDED_COUNTERPARTY on an unrelated
+  // allowlisted ore type - an order the station never had a bid for. The only type it
+  // really bids 53 700 for was never asked for.
+  assert.ok(source.includes('"NO_SEEDED_COUNTERPARTY"].includes(last)'),
+    "a missing bid for one type must skip that type, not the haul");
+  const sortAt = source.indexOf("wanted.sort((left,right)=>(liftedTypes.has(Number(right))?1:0)-");
+  const wantedAt = source.indexOf("const wanted=[...new Set(sellTypes.filter(typeID=>");
+  assert.ok(sortAt > wantedAt, "the stock the lift just produced is asked for first");
+});

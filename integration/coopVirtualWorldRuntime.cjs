@@ -346,6 +346,47 @@ function diagnoseWarFunding(){
   mercenary:diagnoseMercenary(wars,pilots,ledger,need),
  };
 }
+// FW-038B: the settlement that actually pays a mercenary contract. Both wallets
+// are real native corporation wallets (division 1000) and the transfer is a
+// journaled two-leg operation - see coopWarMercenarySettlement.
+let warMercenarySettlementInstance=null;
+function warMercenarySettlement(){
+ if(warMercenarySettlementInstance)return warMercenarySettlementInstance;
+ const wallet=require("./coopCorpWallet"),gameStore=require("../gameStore");
+ const balanceOf=(corporationID,division)=>{
+  const read=wallet.readWallet({gameStore,corporationID});
+  if(!read||read.status!=="OK"||!read.divisions)return NaN;
+  const divisionRow=read.divisions[String(division)];
+  const value=Number(divisionRow&&divisionRow.balance);
+  return Number.isFinite(value)?value:NaN;
+ };
+ warMercenarySettlementInstance=require("./coopWarMercenarySettlement")
+  .createMercenarySettlement({
+   gameStore,division:"1000",
+   readBalance:(corporationID,division)=>balanceOf(corporationID,division),
+   applyDelta:({corporationID,division,delta,env})=>
+    wallet.applyDelta({gameStore,corporationID,division,delta,env})
+  });
+ return warMercenarySettlementInstance;
+}
+function executeMercenaryContract(request){
+ try{
+  return warMercenarySettlement().execute({
+   eventID:String(request&&request.eventID||""),
+   payerCorporationID:Number(request&&request.payerCorporationID),
+   payeeCorporationID:Number(request&&request.payeeCorporationID),
+   amountCents:Number(request&&request.amountCents),
+   dryRun:request&&request.dryRun===true
+  });
+ }catch(error){
+  return {status:"BLOCKED",reason:"WAR_MERCENARY_UNAVAILABLE",
+   detail:String(error&&error.message||error).slice(0,120)};
+ }
+}
+function diagnoseMercenarySettlement(){
+ try{return warMercenarySettlement().snapshot()}
+ catch(error){return {status:"UNAVAILABLE",reason:String(error&&error.message||error)}}
+}
 // FW-038 read-only: pair a funded faction with a navy-capable faction using the
 // real corporation wallets (division 1000). Proposes only; moves no ISK.
 function diagnoseMercenary(wars,pilots,ledger,needCents){
@@ -4510,6 +4551,10 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
    const wanted=[...new Set(sellTypes.filter(typeID=>
     liftedTypes.has(Number(typeID))||
     !types.length||types.map(Number).includes(Number(typeID))))];
+   // The stock the lift has just put aboard comes first: it is what this station is
+   // being asked for, and an allowlist of 43 types must not be walked alphabetically.
+   wanted.sort((left,right)=>(liftedTypes.has(Number(right))?1:0)-
+    (liftedTypes.has(Number(left))?1:0));
    if(!wanted.length)last="NO_ALLOWED_ORE";
    for(const typeID of wanted){
     // Several stacks of one ore type are still one merchant action. Keep going
@@ -4528,7 +4573,12 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
       // several types and one empty allowlisted type used to break the loop before the
       // minerals were ever tried (measured 2026-10-28: a drain visit settled
       // NOT_SOLD NO_REAL_NATIVE_CARGO while 56 lift rows sat in the hold).
-      hardFail=!["NO_REAL_NATIVE_CARGO","NO_ELIGIBLE_STACK","TYPE_NOT_ALLOWLISTED"].includes(last);
+      // "This station does not bid for THIS type" is the same story one step later:
+      // measured 2026-10-28 the 5 manufactured chipsets were lifted into the hauler and
+      // the batch ended NO_SEEDED_COUNTERPARTY on an unrelated ore type, so the one type
+      // this station really bids 53 700 for was never asked for at all.
+      hardFail=!["NO_REAL_NATIVE_CARGO","NO_ELIGIBLE_STACK","TYPE_NOT_ALLOWLISTED",
+        "NO_SEEDED_COUNTERPARTY"].includes(last);
       break;
      }
      settlements++;
@@ -4618,4 +4668,4 @@ function linkSpawnedIdentity({pilotID,systemID,entityID,role}={}){
   return {status:"LINK_FAILED",reason:String(error?.message||error)};
  }
 }
-module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
+module.exports={witnessedNativeBossWreck,createWarRecoveryAdmin,start,observeSession,confirmedWreck,confirmedNativeNpcWreck,nextHeadlessRetryMs,isHeadlessNativeReady,alifeOrderArbitrationEnabled,sellOnArrival,nativeWarFleetRegistry,livingWorldPhases,linkSpawnedIdentity,releaseSpawnedIdentity,diagnoseMobilization,diagnoseNavy,diagnoseCombat,diagnoseWarFunding,executeMercenaryContract,diagnoseMercenarySettlement,diagnoseNpcOrder,diagnoseNativeRaids,diagnoseWarState,warFrontChat};
