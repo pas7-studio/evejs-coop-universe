@@ -38,10 +38,13 @@ test("P1 only existing authoritative native STOCK FLEET wreck proof may declare 
 });
 test("P1 operator diagnosis reads outcome journal without Docker restart or stock mutation",()=>{
  const ps=readFileSync(new URL("../scripts/Inspect-Coop-ConvoyOutcomes.ps1",import.meta.url),"utf8");
- assert.match(ps,/docker compose -f \$compose exec -T server node -e/);
+ const probe=readFileSync(new URL("../scripts/lib/CoopContainerProbe.ps1",import.meta.url),"utf8");
+ // One read-only container call, now shared by every Inspect-Coop probe.
+ assert.match(probe,/docker compose -f \$compose @ComposeArguments exec -T server node -e/);
+ assert.match(ps,/'lib\/CoopContainerProbe\.ps1'/);
  assert.match(ps,/module\.exports\.createOutcomes\(\)\.snapshot\(\)/);
  assert.match(ps,/out\.status!=="READY"/);
- assert.doesNotMatch(ps,/docker compose\s+(?:up|down|stop|restart)|market-tools rebuild|Remove-Item/);
+ assert.doesNotMatch(ps+probe,/docker compose\s+(?:up|down|restart|stop)|market-tools rebuild|Remove-Item/);
 });
 test("P1 optional incident telemetry failure never rewrites actual warehouse or stock-fleet destruction",()=>{
  const warehouse=readFileSync(new URL("../integration/coopNativeWarehouse.cjs",import.meta.url),"utf8");

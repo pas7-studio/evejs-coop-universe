@@ -40,9 +40,12 @@ test("P1 native applied combat evidence is source of truth, never synthetic rewa
 });
 test("P1 incident diagnosis reads persistent native JSONL without modifying game or Docker",()=>{
  const inspect=readFileSync(new URL("../scripts/Inspect-Coop-ConvoyOperations.ps1",import.meta.url),"utf8");
- assert.match(inspect,/docker compose -f \$compose exec -T server node -e/);
+ const probe=readFileSync(new URL("../scripts/lib/CoopContainerProbe.ps1",import.meta.url),"utf8");
+ // One read-only container call, now shared by every Inspect-Coop probe.
+ assert.match(probe,/docker compose -f \$compose @ComposeArguments exec -T server node -e/);
+ assert.match(inspect,/'lib\/CoopContainerProbe\.ps1'/);
  assert.match(inspect,/module\.exports\.createOperations\(\)\.snapshot\(\)/);
  assert.match(inspect,/snapshot\.status!=="READY"/);
- assert.doesNotMatch(inspect,/docker compose\s+(?:up|down|restart|stop)|market-tools rebuild|Remove-Item/);
+ assert.doesNotMatch(inspect+probe,/docker compose\s+(?:up|down|restart|stop)|market-tools rebuild|Remove-Item/);
 });
 

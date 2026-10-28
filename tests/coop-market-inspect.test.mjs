@@ -46,8 +46,12 @@ test("operator-first system is the actual Manifest AIR starter system",()=>{
 });
 test("host inspector is read-only and never requests rebuild or market mutations",()=>{
  const s=readFileSync(new URL("../scripts/Inspect-Coop-Market.ps1",import.meta.url),"utf8");
- assert.match(s,/exec -T server node/);
- const commands=s.split(/\r?\n/).filter(line=>/^\s*&\s+docker\s+compose\b/.test(line));
+ // The container call itself lives in the shared read-only probe helper; this
+ // wrapper must not add a second one.
+ const probe=readFileSync(new URL("../scripts/lib/CoopContainerProbe.ps1",import.meta.url),"utf8");
+ assert.match(probe,/exec -T server node/);
+ assert.match(s,/'lib\/CoopContainerProbe\.ps1'/);
+ const commands=[s,probe].flatMap(x=>x.split(/\r?\n/)).filter(line=>/^\s*&\s+docker\s+compose\b/.test(line));
  assert.equal(commands.length,1);
  assert.doesNotMatch(commands[0],/\b(?:rebuild|up -d|down|stop|restart|AdjustSeedStock|update_file|rm -rf)\b/i);
 });

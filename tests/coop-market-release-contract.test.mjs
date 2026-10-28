@@ -34,10 +34,12 @@ test("P0 catalog and SQLite stock import are independently default-OFF",()=>{
 });
 test("P0 exact-station operator inspection is read-only, no Docker restart or external upload",()=>{
  const ps=readFileSync(new URL("../scripts/Inspect-Coop-MarketStation.ps1",import.meta.url),"utf8");
+ const probe=readFileSync(new URL("../scripts/lib/CoopContainerProbe.ps1",import.meta.url),"utf8");
  assert.match(ps,/query_only|READ-ONLY/);
- assert.match(ps,/docker compose -f \$compose exec -T server node -e/);
+ // The single docker call lives in the shared read-only probe helper.
+ assert.match(probe,/docker compose -f \$compose @ComposeArguments exec -T server node -e/);
  assert.match(ps,/StationID=0/);
- const invocations=ps.split(/\r?\n/).filter(x=>/^\s*&\s+docker\s+compose\b/.test(x));
+ const invocations=[ps,probe].flatMap(x=>x.split(/\r?\n/)).filter(x=>/^\s*&\s+docker\s+compose\b/.test(x));
  assert.equal(invocations.length,1);
  assert.doesNotMatch(invocations[0],/\b(?:stop|down|restart|up|rebuild)\b/);
 });
