@@ -103,11 +103,13 @@ are green (3/0, 3/0, 3/0, 7/0).
 WHAT IS LEFT (15 cases, 7 files):
   coop-escort-flight-stage-c 8/6        owner call: retire or reduce
   coop-wreck-client-refresh 1/3         owner call: retarget at the fork or retire
-  coop-hook-inventory 2/2               9 hooks over 400 chars vs baseline 4. The three
-    fwWarzoneSolarsystemService hooks (1239/1248/1330 chars) are the same body three
-    times and are the obvious first extraction; the other six (dungeon 1131, trade 822,
-    agent 501, wreck 451, npcBehaviorLoop 407, fwAdvantage 495) belong to five other
-    features, so this is a multi-area refactor with fork mirrors, not a quick fix
+  coop-hook-inventory 2/2               6 hooks over 400 chars vs baseline 4 (was 9).
+    The fwWarzoneSolarsystemService trio is DONE (`d2d7fd24`, fork `d734281`): the
+    three 1239/1248/1330-char copies are now warzonesResponse()/localOccupationResponse()
+    over one occupationPairs() in integration/coopWarClientView.cjs. What is left is one
+    hook per feature, each needing callbacks from its own service (dungeon 1131,
+    trade 822, agent 501, wreck 451, npcBehaviorLoop 407, fwAdvantage 495), so each
+    extraction belongs to the session that owns that gameplay path
   coop-alife-native-buyer-wiring 1/1    COOP-049 materialNeeds contract
   coop-alife13-startup-cargo-audit 1/1  assertion lives in another session's module
   coop-integration-shims 1/1            untracked test: 119 shims or one resolver hook
