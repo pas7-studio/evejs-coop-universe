@@ -8174,3 +8174,40 @@ where ownership cannot be claimed by miners.
 Consequence for the payout rung: a navy has to be physically present (live hull, linked pilot,
 role patrol) for the world to own its ground. After every recreate those hulls must be re-seeded -
 that is what the recipe in this file does, and it is the only remaining operation, not a code gap.
+
+## FW-046..FW-048 (20:0xZ): the bounty rung was blocked by three real defects, all fixed and tested
+
+What the finished war actually did at 19:14-20:01Z, measured, not inferred:
+- `war-territory-bootstrap` registered 30003837=500004 and 30045344=500011 (a real reciprocal
+  stargate), the opening produced `living-native-war-opened` + `war-bounty-reserved RESERVED`
+  (500004/1000120, 2 500 000 cents HELD), attack orders were accepted, ships fought, casualties
+  were recorded and merit was PROMOTED. So the whole chain up to the payout is real today.
+- The payout never fired, and each attempt had a concrete cause:
+
+FW-046 `coopWarBountyReserve` returned on the FIRST side it could fund, so a war carried a bounty
+for the attacker only. The deciding kill was by a DEFENDER (coop-pilot-027, 500011) while the HELD
+escrow belonged to 500004 -> `coopWarBounty` refused NO_HELD_ESCROW_FOR_FACTION. The comment above
+that loop already promised "one real reservation per campaign side". Sides are now planned by the
+pure module `coopWarBountyEscrowSides.planSideReservations`, each side funds its own bounty from its
+own wallet, gated `EVEJS_COOP_WAR_BOUNTY_BOTH_SIDES=1` (enabled on the agents stack only); without
+the flag the old stop-at-first-funded behaviour is byte-for-byte preserved.
+
+FW-047 a refused bounty was SILENT: `coopWarBounty` only emits when value moves and
+`coopWarKillMerit` dropped its return value, so a real kill with a real escrow produced merit and
+not one line about the payout. Every non-paid outcome now emits
+`living-native-war-bounty-skipped` with status, reason, pilot, faction and campaign.
+
+FW-048 attribution used the identity link's `systemID`, but that link follows the VIRTUAL pilot,
+which the world keeps advancing between systems (x5) while the native hull stays where it was
+spawned. Measured 19:59:42Z: victim 980000005122 (coop-pilot-014) had a link already at 30045343 ->
+`VICTIM_NOT_NAMED` -> stock fallback -> `NOT_UNIQUE_NAMED_PIRATE` -> no merit, no bounty, for a real
+kill. Locality is already proven physically, so a link is now accepted by entity identity (a link
+that still matches the scene wins, and `staleLinkPosition` reports the rest).
+
+Tests: 6 in tests/coop-war-bounty-sides.test.mjs, 4 in tests/coop-war-attribution-live-hull.test.mjs.
+
+Operational note: the work stack is being recreated by another session every few minutes (19:02,
+19:26, 19:35, 19:42, 19:46, 20:02), which wipes every seeded native hull. A keeper
+(`%TEMP%\opencode\keeper.cjs`) re-seeds both sides of the 30045344 <-> 30003837 border and tops both
+militia wallets up through a REAL settlement whenever they are missing; it never restarts a
+container and logs every answer to `%TEMP%\opencode\keeper.log`.
