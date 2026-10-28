@@ -111,3 +111,17 @@ test("no seeded bid at that station means no demand at all", async () => {
   const call = async () => ({ buys: [{ station_id: 60000001, price: 9000, vol_remaining: 9, source: "seed" }] });
   assert.equal(await industry.bestSeededBid({ region: 10000002, stationID: STATION, productTypeID: PRODUCT, call }), null);
 });
+
+test("a recipe that is a static-data artifact is refused, not printed", () => {
+  // Measured 2026-10-28: blueprint 60767 (Laelaps Blueprint) is 1x Tritanium -> 1 Laelaps,
+  // and the seeded market bids 33 586 560 for the hull. That is not industry, it is ISK
+  // printing: the inputs are worth a rounding error next to the product.
+  assert.equal(industry.isTrivialRecipe({ materialValue: 4600, productValue: 33586560 }), true,
+    "1 Tritanium worth ~4 600 against a 33.5M hull is an artifact");
+  assert.equal(industry.isTrivialRecipe({ materialValue: 21000000, productValue: 4661000 }), false,
+    "ammunition that needs 21M of minerals for 4.6M of product is a real, if thin, chain");
+  assert.equal(industry.isTrivialRecipe({ materialValue: 0, productValue: 4661000 }), false,
+    "a material nobody bids for is valued at zero and must never be judged trivial");
+  assert.equal(industry.isTrivialRecipe({ materialValue: 400, productValue: 1000, minRatio: 0.5 }), true);
+  assert.equal(industry.isTrivialRecipe({ materialValue: 900, productValue: 1000, minRatio: 0.1 }), false);
+});

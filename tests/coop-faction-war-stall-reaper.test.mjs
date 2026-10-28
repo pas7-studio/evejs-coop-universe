@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
-const {expireStalledCampaigns,stallMs,liveCampaignFor}=require("../integration/coopFactionWarOpening.cjs");
+const {expireStalledCampaigns,stallMs,liveCampaignFor,coolingDown}=require("../integration/coopFactionWarOpening.cjs");
 
 // A PREPARING campaign holds its target CONTESTED. When the assault deployment proof
 // never arrives, that claim starves every other front: measured on 2026-10-28, one
@@ -92,4 +92,31 @@ test("the stall window is a real setting, with a documented default",()=>{
   if(before===undefined)delete process.env.EVEJS_COOP_WAR_OPENING_STALL_MS;
   else process.env.EVEJS_COOP_WAR_OPENING_STALL_MS=before;
  }
+});
+
+test("a border released a moment ago is not re-planned every tick",()=>{
+ // Live symptom: an opening that did not survive its own write was re-opened every
+ // 30 seconds and the world published "war opened" forever.
+ const s=state();
+ expireStalledCampaigns(s,{nowMs:1000+TTL+1});
+ assert.equal(coolingDown(30003837,1000+TTL+2),true,
+  "the released target is cooling down right after expiry");
+ assert.equal(coolingDown(30003837,1000+TTL+TTL+2),false,
+  "and it is available again after the window, so the frontier cannot stay frozen");
+ assert.equal(coolingDown(99999,1000+TTL+2),false,"an untouched target never cools down");
+});
+
+test("the durable EXPIRED record arms the cooldown across a restart",()=>{
+ // The in-memory map dies with the process. Without consulting the record, a restarted
+ // world re-planned and re-announced the same front every tick (measured: "war opened"
+ // every 30 seconds while the durable row still held the expired campaign).
+ const s=state();
+ s.campaigns["c:424242"]={campaignID:"c:424242",warID:"war:500001-500004",
+  targetSystemID:424242,state:"EXPIRED",startedAt:1000,expiredAt:2000,revision:2,
+  objectiveEvidence:[],expiredReason:"NO_ASSAULT_DEPLOYMENT_PROOF"};
+ assert.equal(coolingDown(424242,2001,TTL,null),false,"memory knows nothing about it");
+ assert.equal(coolingDown(424242,2001,TTL,s),true,
+  "the expired record still says: not this window");
+ assert.equal(coolingDown(424242,2000+TTL+1,TTL,s),false,
+  "and the border is available again after the window");
 });

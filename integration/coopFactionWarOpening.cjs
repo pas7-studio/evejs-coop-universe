@@ -38,6 +38,31 @@ function stallMs() {
   return configured > 0 ? configured : DEFAULT_STALL_MS;
 }
 
+// Targets whose stale claim was just released, so a reopen attempt is not repeated on
+// every tick: MEASURED on the live world, an opened campaign that did not survive to the
+// next tick was re-planned every 30 seconds and the world published "war opened" forever.
+// In memory on purpose - it is a pacing guard, not world state.
+const recentlyExpired = new Map();
+
+function coolingDown(targetSystemID, nowMs, ttlMs = stallMs(), state = null) {
+  const target = num(targetSystemID);
+  const at = num(recentlyExpired.get(target));
+  if (at) {
+    if (num(nowMs) - at < num(ttlMs)) return true;
+    recentlyExpired.delete(target);
+  }
+  // The map above dies with the process, so the durable record is consulted too: a
+  // target whose only campaign is EXPIRED moments ago must not be re-planned on the
+  // very next tick, or the world reopens (and announces) the same front forever.
+  for (const campaign of Object.values((state && state.campaigns) || {})) {
+    if (!campaign || num(campaign.targetSystemID) !== target) continue;
+    if (campaign.state !== "EXPIRED") continue;
+    const expiredAt = num(campaign.expiredAt);
+    if (expiredAt && num(nowMs) - expiredAt < num(ttlMs)) return true;
+  }
+  return false;
+}
+
 function expireStalledCampaigns(state, { nowMs = Date.now(), ttlMs = stallMs() } = {}) {
   const campaignIDs = [];
   if (!state || !state.campaigns || !(num(ttlMs) > 0)) return { campaignIDs };
@@ -53,6 +78,7 @@ function expireStalledCampaigns(state, { nowMs = Date.now(), ttlMs = stallMs() }
     campaign.expiredAt = at;
     campaign.expiredReason = "NO_ASSAULT_DEPLOYMENT_PROOF";
     campaignIDs.push(campaign.campaignID);
+    recentlyExpired.set(num(campaign.targetSystemID), at);
     const target = state.territories && state.territories[String(campaign.targetSystemID)];
     // Only release the claim when this was the last live campaign on it.
     const stillContested = liveCampaignFor(state, campaign.targetSystemID);
@@ -362,6 +388,11 @@ function planWars({
       if (!known) {
         plannedWarOrientation.set(warID, { attackerFactionID, defenderFactionID });
       }
+      // A border released a moment ago is not re-planned on the very next tick.
+      if (coolingDown(plannedTarget, nowMs, stallMs(), state)) {
+        skipped.push({ edge, reason: "TARGET_RECENTLY_EXPIRED" });
+        continue;
+      }
       const plan = planOpeningCampaign({
         fronts: [{ frontID: front.frontID, edgeCount: 1, edges: [plannedEdge] }],
         nowMs,
@@ -609,6 +640,6 @@ module.exports = {
   gateBetween, collectPresence, territoriesForFronts, paperFunding, presenceSummary,
   fundingRequired, supplyFor,
   activeWarFor, liveCampaignFor, buildProofs, planWars, applyOpenings, applyOpening,
-  expireStalledCampaigns, stallMs,
+  expireStalledCampaigns, stallMs, coolingDown,
   createWarOpening,
 };
