@@ -1,5 +1,26 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 17:52Z - the manufactured good SOLD and the ISK reached the treasury
+
+CLOSED LOOP PROVEN: 3 chipsets manufactured at 60014935 (blueprint 1076, -3 333 Tritanium)
+were lifted into the hauler by the drain, sold into the station own seeded bid, and the
+money was swept: treasury 431 215 310.69 ISK.
+
+Sales of the manufactured good, each with a durable receipt:
+  5 x 444 @ 54 289.76 = 271 448.80 (order 4257700966927696316, volRemaining 4995)
+  3 x 444 @ 53 700.08 = 161 100.24 (order 4257762183096566204, volRemaining 4997)
+Two root causes fixed on the way:
+  - the sell policy keeps only its FIRST 20 types, so a product appended at position 44
+    was silently dropped; the env list is now ordered by priority (444 and minerals first);
+  - a sale settles by the units the market really absorbed (partial fills), never by the
+    quantity the journal declared, and a journal whose order never existed closes only on
+    three independent proofs (no order, cargo intact, balance intact) after a grace period.
+
+OPEN, measured, next: a slot repair restores a hull cargo snapshot, so a sold stack came
+back with the same cargoID (0 -> 5 after the sale of 5 at 17:37), which duplicated goods and
+made the next journal declare 5 while the bid absorbed 3. The durable cargo rows must be the
+authority on restore. Hull 980000003532 currently keeps 2 real units the market did not buy.
+
 
 ## 2026-10-28 16:55Z - OPEN: the server cannot see cargo a separate process wrote
 
