@@ -2207,3 +2207,21 @@ Why: a front whose campaign expired could never reopen: the deterministic campai
 Detail: The deterministic campaign id made the second attempt collide with the processed eventID of the expired campaign: the core answered DUPLICATE, nothing changed, and the runtime published 'war opened' every tick (measured: six lines in ten minutes for war:500001-500004:campaign:30003837 while the durable record stayed EXPIRED). nextCampaignID adds :r2/:r3 when a terminal campaign holds the base id, 
 Where: integration/coopFactionWarOpening.cjs, tests/coop-faction-war-opening.test.mjs
 Evidence: fork 501afd7; live: 6 'war opened' lines in 10 min for war:500001-500004:campaign:30003837 with the durable record EXPIRED; test coop-faction-war-opening 22/0 (fails 21/1 on the old planner); campaigns/stall-reaper green
+### 2026-10-28T22:01Z · 880797d · OPS · ops: remote play runbook (ProtonVPN port carries SSH) and market seed economy design
+
+Why: Remote play moved to ProtonVPN single port carrying SSH (relay container) plus documented runbook and market reseed design
+Detail: - docs/PUBLIC_ENDPOINT_PROTONVPN.md: topology, host/friend bring-up, verification, symptom->cause->fix table, and the dead ends we already hit (game port on the single forwarded port, extra NAT-PMP mappings, hairpin tests, prefs.ini trap). - scripts/Start-Play-Stack.ps1: starts the play stack plus the evejs-ssh-relay container and proves an SSH banner on the public port; -Action Status exits 2 whe
+Where: docs/MARKET_SEED_ECONOMY_DESIGN.md, docs/PUBLIC_ENDPOINT_PROTONVPN.md
+Evidence: scripts/Start-Play-Stack.ps1 -Action Status => stack healthy, relay Up, SSH banner on 61730; docs/PUBLIC_ENDPOINT_PROTONVPN.md, docs/MARKET_SEED_ECONOMY_DESIGN.md
+### 2026-10-28T22:03Z · 9d69888 · DOCS · docs: co-op playbook (server, host client, remote client, market seed) and seed tools
+
+Why: Publish the co-op playbook and the market seed tooling so client+server bring-up is reproducible
+Detail: - docs/COOP_PLAYBOOK.md: end-to-end methodology measured on 2026-10-28/29, verification ladder, failure map, deliberate limits. - scripts/market/: audit_market_seed.py, normalize_market_seed.py (spread invariant), volume_policy.py (classed depth), sector_policy.py (faction sectors) so a reseed is reproducible outside a chat session. - README: link the playbook.
+Where: README.md, docs/COOP_PLAYBOOK.md, scripts/market/audit_market_seed.py, scripts/market/normalize_market_seed.py, scripts/market/sector_policy.py, scripts/market/volume_policy.py
+Evidence: python scripts/market/audit_market_seed.py market.sqlite => station crossed 0, system pairs 16529 crossed 0; playbook documents measured commands
+### 2026-10-28T22:31Z · bbcab5c · L2 · fix(patrol): a failed deployment reports why, not just FAILED
+
+Why: virtual-faction-patrol reported FAILED with no reason, which hides whether the system is full or the spawn is broken
+Detail: Live events showed virtual-faction-patrol FAILED every two minutes with empty spawned/active and no reason, while the same tick's materializer said SPAWN_LIMIT_REACHED - so a full system looked like a broken spawn. reconcile() now carries per-faction failures and a top-level reason when nothing deployed. Fork: 67bd5f8.
+Where: integration/coopFactionPatrolRuntime.cjs, tests/coop-faction-patrol.test.mjs
+Evidence: fork 67bd5f8; live: 24 FAILED patrol events in the last 4000 events, all with empty spawned/active and no reason, next to living-native-materialization-attempt SPAWN_LIMIT_REACHED occupied=3 limit=3; tests coop-faction-patrol 4/0
