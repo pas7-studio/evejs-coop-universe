@@ -21,6 +21,25 @@ project **`evejs-agents`** (ports `28443/25222/28000-28002/41110`, volumes
 needs the play stack, append `NEEDS_OWNER_RESTART_WINDOW` to
 `.opencode/state.md`; never restart it yourself.
 
+**Play stack with a remote player.** The owner's friend reaches the game through
+one ProtonVPN port (`159.26.120.49:61730` → container `26000`). Provision and
+recreate that stack only with
+`scripts/Start-Play-Stack.ps1 -Action Up` (it always includes
+`compose.play-public.yaml`) and run `-Action Status` after any change; a bare
+`docker compose up -d` silently drops the binding. Proton forwards only that one
+port, so the client-side chat/market/image ports `443/5222/26001/26002` need a
+separate path, and the client port lives in `prefs.ini`, not `start.ini`.
+Details: [`docs/PUBLIC_ENDPOINT_PROTONVPN.md`](docs/PUBLIC_ENDPOINT_PROTONVPN.md).
+
+**Launching the client:** always through the launcher, `Play.bat` (or
+`scripts/Start-Play-Stack.ps1 -Action Up` first) - never `bin64\exefile.exe` directly. The
+launcher is what exports `http_proxy`/`https_proxy` and the local CA, so the client's gRPC
+calls to `*-public-gateway.evetech.net` are CONNECTed to the local HTTP/2 gateway. A direct
+launch never reaches the gateway at all (measured: zero CONNECT, zero HTTP/2 in ten minutes),
+and every gateway surface (advantage, campaigns, licences, corp goals, insurgency) reports
+`ServerException(500, "invalid character on request")` instead. Symptoms, the exact variables,
+and how to prove a launch was correct: [`docs/CLIENT_LAUNCH.md`](docs/CLIENT_LAUNCH.md).
+
 For gameplay validation, **read `docs/GAMEPLAY_TESTING.md` first**; it supersedes old setup and backend runbooks for an existing world. For the mining →
 hauler → station → sale loop use [`docs/COOP_LOOP_ACCEPTANCE.md`](docs/COOP_LOOP_ACCEPTANCE.md):
 its gates, the exact events each stage must emit, and the acceptance command. For code changes, consult `README.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE.md`,
