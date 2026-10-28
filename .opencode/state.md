@@ -1,5 +1,20 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 19:35Z - gate status: the ratchet breach is inherited, not mine
+
+AUDIT fails on exactly one rule: coopVirtualWorldRuntime.js 4987 lines > 4800. Numbers:
+the file was 4928 at HEAD~3 and 4975 before my last edit (FW-044..047 grew it); my own net
+footprint is +12 lines, the rest of my logic lives in the new coopMarketJournalBoot.js.
+
+The sanctioned split (scripts/coop-split-module.cjs --apply, a 291-line slice) DID apply and
+reduced the parent to 4699, but it then failed the other gate rule - split two-state names
+79 > 23 (one piece of state must live in one module) - so it was reverted. Split safety is
+back to 0 undeclared / 23 two-state. Whoever owns the FW work must pick a slice that keeps
+state in one module; do not re-apply the same --out blindly.
+
+Everything else is green: integration copies differing 0, runtime patching 0, legacy
+scripts 77/78, writable telemetry, fleets ALREADY_ACTIVE after every deploy today.
+
 ## 2026-10-28 19:25Z - minerals have no LOCAL buyer; the product loop is the closed one
 
 DRAIN ROTATION PROVEN after two fixes: a cooled station is no longer a fallback, and the
