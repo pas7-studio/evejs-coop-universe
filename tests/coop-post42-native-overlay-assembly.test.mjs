@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import {fileURLToPath} from "node:url";
 import {createRequire} from "node:module";
+import {trackedModuleNames} from "./_support/trackedModules.mjs";
 
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),"..");
 const require=createRequire(import.meta.url);
@@ -15,9 +16,9 @@ const nativeModules=[
 ];
 
 test("native installer copies every delivered coop source exactly once",()=>{
- const bundled=fs.readdirSync(path.join(root,"integration"))
-  .filter(n=>/^coop[A-Za-z0-9]+\.cjs$/.test(n))
-  .map(n=>n.slice(0,-4)).sort();
+ // Committed modules only: an uncommitted scratch module cannot be deployed and must not
+ // fail this gate for every other session.
+ const bundled=trackedModuleNames(root,"integration");
  assert.equal(new Set(installer.names).size,installer.names.length);
  assert.deepEqual(installer.names.slice().sort(),bundled);
 });

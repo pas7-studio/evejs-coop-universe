@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {readFileSync,readdirSync} from "node:fs";
+import {readFileSync} from "node:fs";
+import {trackedModuleNames} from "./_support/trackedModules.mjs";
 import {resolve,dirname} from "node:path";
 import {fileURLToPath} from "node:url";
 import {createRequire} from "node:module";
@@ -14,9 +15,9 @@ const specSource=readFileSync(resolve(root,"scripts/overlay-spec.cjs"),"utf8");
 // runtime - a hook requiring the missing module throws inside stock code - so it is
 // checked from the source tree on every run.
 const names=Array.from(require(resolve(root,"scripts/overlay-spec.cjs")).names,String);
-const bundled=readdirSync(resolve(root,"integration"))
- .filter(name=>/^coop[A-Za-z0-9]+\.cjs$/.test(name))
- .map(name=>name.slice(0,-4));
+// "Bundled" means committed: a module another session has not added to git yet cannot be
+// deployed, so it must not fail this repo-wide gate. The comparison is still exact.
+const bundled=trackedModuleNames(root,"integration");
 
 test("every bundled coop integration source is installed by the native overlay",()=>{
  assert.equal(new Set(names).size,names.length,"duplicate installer modules");
