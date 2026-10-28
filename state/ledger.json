@@ -84,6 +84,16 @@
       "title": "overlay engineering doctrine and upgrade safety",
       "status": "PARTIAL: doctrine + read-only drift check landed 2026-10-25; first real upstream SHA upgrade not yet rehearsed",
       "evidence": []
+    },
+    {
+      "id": "COOP-024",
+      "title": "NPC courier contracts (player hires an NPC hauler)",
+      "status": "PARTIAL: design + pure decision core landed 2026-10-25; no native accept, no flight, default OFF",
+      "evidence": [
+        "integration/coopCourierDispatch.cjs",
+        "tests/coop-courier-dispatch.test.mjs",
+        "docs/NPC_COURIER_CONTRACTS.md"
+      ]
     }
   ]
 }
