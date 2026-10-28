@@ -56,7 +56,7 @@ function fixture(fn,{fee=0,randomized=false,failNative=false,io=null}={}){
 }
 test("one station ore stack becomes genuine owned mineral rows and durable receipt",()=>fixture(f=>{
  const a=f.create().processItem(f.session,f.opts);
- assert.equal(a.success,true);
+ assert.equal(a.success,true,JSON.stringify(a).slice(0,300));
  assert.deepEqual(a.data.outputByTypeID,{"34":50});
  assert.equal(a.data.outputOwnerID,7001);
  assert.equal(f.rows.get(9801).quantity,10);
