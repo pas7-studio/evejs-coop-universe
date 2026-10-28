@@ -3158,3 +3158,23 @@ NEXT (exact): (1) get a defender-side wreck in 30045344 (attackers already outnu
 (2) gate the garrison refill on a funded chest and refuse when empty, so the defender can really
 stay at zero across the two 60 s samples; (3) observe CAPTURE_TERRITORY + militaryControllerFactionID
 flip in war_state; (4) only then payout/merit for the owner's character.
+
+## Harness quality pass: pinned verifiers + last hand-written gate (2026-10-28, OPS)
+Two duplicated mechanisms in `scripts/` are now single implementations.
+`scripts/lib/pinned-source.cjs` (84L) holds the git-blob hash of the CRLF-canonical text,
+`readPinned` (disk bytes for the patch + hash for the pin), `assertReversible` (change,
+idempotency at the last stage, byte-exact reversal per line ending) and the
+`node script.cjs <root>` CLI. Five `verify-alife*.cjs` keep their own pins, messages and
+exported names. Evidence: mismatch output byte-identical, `tests/coop-pinned-source.test.mjs`
+8/8 including a real `git hash-object` oracle.
+`Run-Alife-Economy-Tests.ps1` dropped 183L -> 13L: 38 tests, the
+`-IncludeExistingEconomyTests` switch, ten NOT_RUN manifests, the `not ok` failure dump and
+the 95-scenario banner are a row in `scripts/lib/gates.json` (purely additive: no existing
+row changed). Before/after runs of the real suite are identical apart from the report path,
+durations and the inspected stack-frame line.
+NEXT candidates (not started): the `src/services/*` verifier copies are done, so the same
+treatment fits the five `Inspect-Coop-*.ps1` (identical base64-over-docker probe, only the
+module and banner differ), the ~50 test files that hand-roll env save/restore, and - only
+after the other session commits `space/coopStationDrain.js` + `miningNpcOperations.js` -
+the engine perf pass on `coopVirtualWorldRuntime.js` (477 `require()` calls, per-tick sorts).
+`node scripts/coop-engine-audit.cjs` still prints AUDIT_REGRESSION from that in-flight work.
