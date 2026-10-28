@@ -60,7 +60,16 @@ function tryFire(root,db,faultProbe=null){
  return createAtomicAmmoBank({
   root:path.join(root,"journal"),atomicRows:openAdapter(db),
   compatible:()=>true,clock:()=>1000000,
-  store:{listNativeCargoForEntity:()=>Object.values(loadCargo(db))},
+  // The bank proves the physical hull and every fitted module against the
+  // native store before it opens the transaction, so the fixture must expose
+  // the same npcEntities/npcModules rows it seeded.
+  store:{
+   listNativeCargoForEntity:()=>Object.values(loadCargo(db)),
+   getNativeEntity:id=>{
+    const row=db.prepare('SELECT json FROM "npcEntities" WHERE key=?').get("entities"+SEP+id);
+    return row?JSON.parse(row.json):null;},
+   listNativeModulesForEntity:id=>db.prepare('SELECT json FROM "npcModules"').all()
+    .map(row=>JSON.parse(row.json)).filter(module=>Number(module.entityID)===Number(id))},
   faultProbe
  }).consume({entity:structuredClone(ship),entries:structuredClone(entries),whenMs:1000});
 }

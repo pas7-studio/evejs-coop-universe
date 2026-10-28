@@ -35,7 +35,10 @@ function fixture(){
  let calls=0,fault=null,readbackFail=false;
  const atomicRows={transact(tables,fn){
   ++calls;
-  assert.deepEqual(tables,["npcEntities","npcModules","npcCargo"]);
+  // Only npcCargo joins the transaction: npcEntities/npcModules carry transient
+  // rows that the transient-cargo contract forbids, so the bank proves the hull
+  // and its fitted modules from the store BEFORE opening the transaction.
+  assert.deepEqual(tables,["npcCargo"]);
   const next=structuredClone(state);
   const tx={get(t,k){return next[t][k]??null;},
    put(t,k,v){next[t][k]=structuredClone(v);},
@@ -46,10 +49,14 @@ function fixture(){
   if(fault==="postcommit")throw Error("SQLITE_COMMIT_UNKNOWN");
   return result;
  }};
- const store={listNativeCargoForEntity(id){
-  if(readbackFail)throw Error("NATIVE_STORE_READ_FAIL");
-  return Object.values(state.npcCargo.cargo).filter(x=>x.entityID===id);
- }};
+ const store={
+  getNativeEntity:id=>state.npcEntities["entities"+SEP+id]||null,
+  listNativeModulesForEntity:id=>Object.values(state.npcModules)
+   .filter(module=>Number(module.entityID)===Number(id)),
+  listNativeCargoForEntity(id){
+   if(readbackFail)throw Error("NATIVE_STORE_READ_FAIL");
+   return Object.values(state.npcCargo.cargo).filter(x=>x.entityID===id);
+  }};
  const bank=createAtomicAmmoBank({root,atomicRows,store,
   compatible:()=>true,clock:()=>1500});
  return {root,entity,entries,bank,state:()=>state,calls:()=>calls,
@@ -90,7 +97,10 @@ test("SQLite rollback leaves no charge consumed and quarantines uncertain journa
   assert.equal(f.state().npcCargo.cargo["501"].quantity,5);
   assert.equal(f.state().npcCargo.cargo["502"].quantity,5);
   assert.equal(fire(f,{whenMs:1100}).success,false);
-  assert.equal(f.calls(),1);
+  // One rolled-back debit attempt, then the read-only fence probe that
+  // recovers the provably uncommitted PREPARED journal.
+  assert.equal(f.calls(),2);
+  assert.equal(f.state().npcCargo.cargo["501"].quantity,5);
  }finally{f.cleanup();}
 });
 test("unknown post-COMMIT result never triggers another debit or refund",()=>{
@@ -100,7 +110,11 @@ test("unknown post-COMMIT result never triggers another debit or refund",()=>{
   assert.equal(f.state().npcCargo.cargo["501"].quantity,4);
   assert.equal(f.state().npcCargo.cargo["502"].quantity,4);
   assert.equal(fire(f,{whenMs:1100}).success,false);
-  assert.equal(f.calls(),1);
+  // The fence proves the debit landed, so the recovery probe refuses to abort
+  // the journal and never writes a second debit. Its read is the second call.
+  assert.equal(f.calls(),2);
+  assert.equal(f.state().npcCargo.cargo["501"].quantity,4);
+  assert.equal(f.state().npcCargo.cargo["502"].quantity,4);
  }finally{f.cleanup();}
 });
 test("repeating a completed bank boundary does not quarantine an otherwise healthy ship",()=>{
