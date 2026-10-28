@@ -44,13 +44,17 @@ test('presence maps a real corporation to a real faction and ignores in-flight s
  assert.equal(real.pilots.length,4);
  assert.equal(real.pilots[0].factionID,'500001');
  assert.equal(real.pilots[2].factionID,'500002');
- // a link whose native record says another system owns nothing yet
+ // FW-051: a link whose system disagrees with the hull is NOT dropped and does NOT
+ // create a claim where the link pointed; the hull counts where it physically is.
  const moved=opening.collectPresence({
   links:[{pilotID:'coop-pilot-001',entityID:101,systemID:9,role:'patrol'}],
   getNativeEntity,getFactionForCorporation,
  });
- assert.equal(moved.pilots.length,0);
- assert.equal(moved.skipped,1);
+ assert.equal(moved.pilots.length,1);
+ assert.equal(moved.pilots[0].systemID,1,'the native record decides the system, not the link');
+ assert.equal(moved.pilots[0].positionDrifted,true);
+ assert.equal(moved.drifted,1);
+ assert.equal(moved.pilots.some((p)=>p.systemID===9),false,'a drifted link never claims its stale system');
  // a corporation without a faction is not a territory claim
  const unknown=opening.collectPresence({
   links:[{pilotID:'coop-pilot-009',entityID:999,systemID:1,role:'patrol'}],
