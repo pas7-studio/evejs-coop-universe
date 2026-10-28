@@ -156,6 +156,28 @@ function readServer() {
   return services;
 }
 
+// gRPC gateway coverage: every eve_public.*Request the client can send, against the types the
+// local gateway names. Unnamed types are not fatal any more (the gateway answers a default
+// encoded 200, fork f256261) but they carry no data, so they belong in the register.
+const GATEWAY_TYPES = path.join(ROOT, "docs/client-contracts/gateway-types.json");
+const normaliseType = (name) => String(name).replace(".requests_pb2", "");
+
+function gatewayCoverage() {
+  if (!fs.existsSync(GATEWAY_TYPES)) return null;
+  const types = JSON.parse(fs.readFileSync(GATEWAY_TYPES, "utf8")).types || [];
+  const dir = path.join(SERVER_SRC, "_secondary/express/gatewayServices");
+  const named = new Set();
+  for (const file of walk(dir)) {
+    const source = fs.readFileSync(file, "utf8");
+    for (const match of source.matchAll(/"(eve_public\.[A-Za-z0-9_.]*?Request)"/g)) {
+      named.add(normaliseType(match[1]));
+    }
+  }
+  const client = [...new Set(types.map(normaliseType))];
+  const defaulted = client.filter((type) => !named.has(type) && type !== "eve_public.Request");
+  return { client, named, defaulted };
+}
+
 function classify(entry) {
   if (!entry) return "MISSING";
   const code = entry.body.split("\n")
@@ -228,6 +250,16 @@ function register(rows) {
       const module = row.module ? row.module.split("/").pop() : "";
       lines.push(`| \`${row.key}\` | ${row.sites} | ${module} | ${row.file || "-"} | ${row.reason || "**unreviewed**"} |`);
     }
+    lines.push("");
+  }
+  const gateway = gatewayCoverage();
+  if (gateway) {
+    lines.push(`## gRPC gateway types (${gateway.client.length} client request types, ` +
+      `${gateway.named.size} named by a gateway service, ${gateway.defaulted.length} defaulted)`, "");
+    lines.push("A type no gateway service names is answered with a default-encoded 200");
+    lines.push("(`fork f256261`): the client gets a valid empty message instead of a 404 it");
+    lines.push("cannot decode, and the gateway logs the type. These carry no data yet:", "");
+    for (const type of gateway.defaulted) lines.push(`- \`${type}\``);
     lines.push("");
   }
   lines.push("## Notes", "");

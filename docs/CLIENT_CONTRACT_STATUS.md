@@ -172,6 +172,114 @@ Total client calls: 542 · MISSING 0 · STUB 44 · NULLABLE 103 · OK 395
 | `wormholeMgr.WormholeJump` | 1 | movementFunctions.pyj | services\exploration\wormholes\wormholeMgrService.js | **unreviewed** |
 | `XmppChatMgr.EnsureResourceWarsChannelExists` | 1 | rwservice.pyj | services\chat\xmppChatMgrService.js | **unreviewed** |
 
+## gRPC gateway types (217 client request types, 159 named by a gateway service, 101 defaulted)
+
+A type no gateway service names is answered with a default-encoded 200
+(`fork f256261`): the client gets a valid empty message instead of a 404 it
+cannot decode, and the gateway logs the type. These carry no data yet:
+
+- `eve_public.achievement.api.GetRequest`
+- `eve_public.achievement.api.admin.AddProgressRequest`
+- `eve_public.achievement.api.admin.CompleteRequest`
+- `eve_public.achievement.api.admin.ResetRequest`
+- `eve_public.achievement.category.api.GetRequest`
+- `eve_public.achievement.definition.api.cdn.GetLatestRequest`
+- `eve_public.achievement.reward.api.ClaimRequest`
+- `eve_public.achievement.reward.api.GetUnclaimedRequest`
+- `eve_public.achievement.showcase.api.GetCharacterScoreRequest`
+- `eve_public.ai.assistant.chat.api.QueryRequest`
+- `eve_public.app.eveonline.career.goal.ClaimRewardRequest`
+- `eve_public.assetholding.asset.api.GetRequest`
+- `eve_public.assetholding.entitlement.api.GetRequest`
+- `eve_public.assetholding.entitlement.api.RedeemRequest`
+- `eve_public.assetholding.entitlement.api.admin.ExpireRequest`
+- `eve_public.auth.AuthenticateUsernameRequest`
+- `eve_public.auth.steam.AuthenticateSteamRequest`
+- `eve_public.career.goal.api.ClaimRewardRequest`
+- `eve_public.career.goal.api.admin.CompleteRequest`
+- `eve_public.career.goal.api.admin.ProgressRequest`
+- `eve_public.communitytrack.api.GetRequest`
+- `eve_public.cosmetic.character.title.api.EquipRequest`
+- `eve_public.cosmetic.character.title.api.GetEquippedForCharacterRequest`
+- `eve_public.cosmetic.character.title.api.GetOwnedRequest`
+- `eve_public.cosmetic.character.title.api.admin.GrantRequest`
+- `eve_public.cosmetic.character.title.api.admin.RevokeRequest`
+- `eve_public.cosmetic.character.title.definition.api.GetLatestRequest`
+- `eve_public.cosmetic.market.api.GetBrokerFeesRequest`
+- `eve_public.cosmetic.market.api.GetBuyerFeeRequest`
+- `eve_public.cosmetic.market.api.GetTaxRateRequest`
+- `eve_public.cosmetic.market.component.listing.api.InitiatePurchaseListingRequest`
+- `eve_public.cosmetic.market.skin.listing.api.CancelListingRequest`
+- `eve_public.cosmetic.market.skin.listing.api.GetRequest`
+- `eve_public.cosmetic.market.skin.listing.api.InitiateCreateListingRequest`
+- `eve_public.cosmetic.market.skin.listing.api.InitiatePurchaseListingRequest`
+- `eve_public.cosmetic.market.skin.listing.api.admin.SetExpirationRequest`
+- `eve_public.cosmetic.market.transaction.api.GetRequest`
+- `eve_public.cosmetic.ship.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.finite.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.finite.api.admin.GrantRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.finite.api.admin.RevokeRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.infinite.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.infinite.api.admin.GrantRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.infinite.api.admin.RevokeRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.component.license.item.api.ConsumeRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.draft.api.DeleteRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.draft.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.draft.api.GetSharedRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.draft.api.SaveRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.draft.api.UpdateRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.license.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.license.api.admin.GrantRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.license.api.admin.RevokeRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.sequencing.job.api.CompleteEarlyRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.sequencing.job.api.GetRequest`
+- `eve_public.cosmetic.ship.skin.thirdparty.sequencing.job.api.InitiateRequest`
+- `eve_public.dailygoal.api.GetRequest`
+- `eve_public.dailygoal.api.PayForCompletionRequest`
+- `eve_public.dailygoal.api.RedeemRequest`
+- `eve_public.dailygoal.api.admin.ProgressRequest`
+- `eve_public.debug.Request`
+- `eve_public.faction.activity.admin.IncrementContributionScoreRequest`
+- `eve_public.faction.activity.admin.SetContributionScoreRequest`
+- `eve_public.freelance.contributionmethod.itemdelivery.api.DeliverRequest`
+- `eve_public.goal.contribution.api.GetContributorSummariesForGoalRequest`
+- `eve_public.goal.contribution.api.GetMyContributorSummaryForGoalRequest`
+- `eve_public.internal_gateway.ConsumeEventsRequest`
+- `eve_public.internal_gateway.Request`
+- `eve_public.operation.recommendation.GetRequest`
+- `eve_public.payment.code.api.RedeemRequest`
+- `eve_public.payment.schedule.api.GetActiveByTypeRequest`
+- `eve_public.payment.schedule.api.GetRequest`
+- `eve_public.presence.api.GetAllianceRequest`
+- `eve_public.presence.api.GetCorporationRequest`
+- `eve_public.presence.api.GetFactionRequest`
+- `eve_public.ship.unlock.ClaimRewardRequest`
+- `eve_public.skill.plan.CreateRequest`
+- `eve_public.skill.plan.DeleteRequest`
+- `eve_public.skill.plan.GetRequest`
+- `eve_public.skill.plan.SetActiveRequest`
+- `eve_public.skill.plan.SetDescriptionRequest`
+- `eve_public.skill.plan.SetNameRequest`
+- `eve_public.skill.plan.SetSkillRequirementsRequest`
+- `eve_public.solarsystem.api.GetRequest`
+- `eve_public.sovereignty.hub.upgrade.api.GetRequest`
+- `eve_public.sovereignty.mercenaryden.api.admin.ModifyAnarchyLevelRequest`
+- `eve_public.sovereignty.mercenaryden.api.admin.ModifyDevelopmentLevelRequest`
+- `eve_public.sovereignty.skyhook.api.admin.ScheduleTheftVulnerabilityWindowRequest`
+- `eve_public.stargate.lock.api.admin.ApplyRequest`
+- `eve_public.stargate.lock.api.admin.DeleteRequest`
+- `eve_public.stargate.lock.api.admin.GetAllRequest`
+- `eve_public.station.api.GetRequest`
+- `eve_public.store.category.api.GetAllRequest`
+- `eve_public.store.category.api.GetRequest`
+- `eve_public.store.offer.api.GetAllByTagRequest`
+- `eve_public.store.offer.api.GetAllRequest`
+- `eve_public.store.offer.api.GetAllTargetedRequest`
+- `eve_public.store.offer.api.GetRequest`
+- `eve_public.store.product.api.GetRequest`
+- `eve_public.user.license.api.GetRequest`
+
 ## Notes
 
 - `eve_public.campaign.api.*` (Agency -> Campaigns) is not a `RemoteSvc` call: the

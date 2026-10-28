@@ -29,3 +29,14 @@ test("the register stays in step with the checker", () => {
     assert.ok(register.includes("`" + key + "`"), key + " must appear in the register");
   }
 });
+
+test("the register also covers the gRPC gateway types", () => {
+  const register = readFileSync(path.join(root, "docs/CLIENT_CONTRACT_STATUS.md"), "utf8");
+  const section = register.match(/## gRPC gateway types \((\d+) client request types, (\d+) named[^)]*\)/);
+  assert.ok(section, "the gateway coverage section must exist");
+  const [, client, named] = section;
+  assert.ok(Number(client) > 100, "the client really sends that many types: " + client);
+  assert.ok(Number(named) > 0 && Number(named) < Number(client),
+    "some types are still defaulted, and the register says which");
+  assert.match(register, /fork f256261/, "the default-answer rule is cited");
+});
