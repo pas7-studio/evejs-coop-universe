@@ -1,5 +1,26 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 19:25Z - minerals have no LOCAL buyer; the product loop is the closed one
+
+DRAIN ROTATION PROVEN after two fixes: a cooled station is no longer a fallback, and the
+cool-down is durable (<market root>/drain-cooldowns.json) because restarts kept wiping the
+in-memory map. Measured rotation: 60000682 (18:39) -> 60003724 (19:04) -> 60014935 (19:19).
+All three settled NOT_SOLD NO_REAL_NATIVE_CARGO, and that is CORRECT:
+  - 60000682 bids for 0 of its own minerals (34/35/1228/1230: zero seeded buys),
+  - 60014935 and 60003724 bid only for 444 / ore, not for 34 or 35,
+  - 18.6k+ physical stations elsewhere in the region DO bid 4600+ for Tritanium, but they
+    are in OTHER systems; the drain can only fly inside the fleet system (30000145).
+So the 891 702 units of minerals held by the corporation cannot be sold where they are.
+The sinks are: manufacturing (proven: 5 555 + 3 333 Tritanium consumed) and cross-system
+distribution, which is NOT wired (gate travel exists but no distribution job).
+
+MARKET SELF-HEAL PROVEN: living-npc-market-journal-reconciled observed (settled=0,
+pending=0) - the world now settles its own RPC_CALLING journal from the market row.
+
+NEXT: a distribution job (haul a hangar stack to a station that really bids, then the
+proven arrival sale), or let manufacturing consume the surplus at a rate the fleet keeps up
+with. Do not call NO_REAL_NATIVE_CARGO a bug again: nothing is sellable locally.
+
 ## 2026-10-28 17:52Z - the manufactured good SOLD and the ISK reached the treasury
 
 CLOSED LOOP PROVEN: 3 chipsets manufactured at 60014935 (blueprint 1076, -3 333 Tritanium)
