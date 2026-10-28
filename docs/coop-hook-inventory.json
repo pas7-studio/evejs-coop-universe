@@ -1,12 +1,12 @@
 {
  "version": 1,
- "legacyFiles": 75,
- "wiredModules": 57,
+ "legacyFiles": 74,
+ "wiredModules": 56,
  "specFiles": 21,
  "specEntries": 67,
  "longHooks": 3,
  "longestHook": 822,
- "overlap": 10,
+ "overlap": 9,
  "overlaps": [
   {
    "file": "coop-fw-insurgency-visibility-patch.cjs",
@@ -30,12 +30,6 @@
    "file": "coop-native-trade-custody-patch.cjs",
    "shared": [
     "server/src/services/trade/tradeMgrService.js"
-   ]
-  },
-  {
-   "file": "coop-npc-expedition-wreck-patch.cjs",
-   "shared": [
-    "server/src/space/npc/nativeNpcWreckService.js"
    ]
   },
   {

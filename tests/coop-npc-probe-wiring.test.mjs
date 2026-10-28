@@ -345,25 +345,18 @@ test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and 
  assert.match(deploy,/\$LivingCoop -and \$Alife -and \$EnableNativeExploration/);
 
  const source=read("integration/coopNpcExpeditionWreckCustody.cjs");
- const patch=read("scripts/coop-npc-expedition-wreck-patch.cjs");
  const installer=read("scripts/patch-evejs-coop.cjs");
  const overlay=read("scripts/overlay-spec.cjs");
  const live=read("integration/coopVirtualWorldRuntime.cjs");
  const loot=read("integration/coopNpcExpeditionLoot.cjs");
  const gate=read("scripts/Run-NpcProbe-PinnedChecks.ps1");
  const crash=read("scripts/verify-npc-expedition-wreck-sqlite-crash.mjs");
- const pinned=read("tests/coop-npc-expedition-wreck-native-source.test.mjs");
  assert.match(source,/createNpcExpeditionWreckCustody/);
  assert.match(source,/function stage\(/);
  assert.match(source,/items\.updateInventoryItem/);
  assert.match(source,/items\.moveItemToLocation/);
  assert.match(source,/items\.transferItemToOwnerLocation/);
  assert.match(source,/function canDestroy\(/);
- assert.match(patch,/EX03B18_NATIVE_WRECK_STAGE/);
- assert.match(patch,/EX03B18_NATIVE_ORIGINAL_ITEM_PICKUP/);
- assert.match(patch,/EX03B18_NATIVE_WRECK_DECAY_GUARD/);
- assert.match(patch,/EX03B18_NATIVE_DEATH_FAILURE_FENCE/);
- assert.match(installer,/coop-npc-expedition-wreck-patch\.cjs/);
  assert.match(overlay,/"coopNpcExpeditionWreckCustody"/);
  assert.match(live,/EVEJS_COOP_NPC_EXPEDITION_WRECK==="1"/);
  assert.match(loot,/IN_NATIVE_WRECK/);
@@ -371,10 +364,11 @@ test("EX-03B18/B19 original NPC death-to-wreck itemID survives stock source and 
  assert.match(gate,/EVEJS_PINNED_NPC_STORE_SOURCE/);
  assert.match(gate,/EVEJS_COOP_NPC_EXPEDITION_WRECK='0'/);
  assert.match(gate,/tests\/coop-npc-expedition-wreck-custody\.test\.mjs/);
- assert.match(gate,/tests\/coop-npc-expedition-wreck-native-source\.test\.mjs/);
+ // That fixture pinned the retired wreck source transformer; the local gate runs the
+ // custody suite and the SQLite crash verifier instead.
+ assert.match(gate,/tests\/coop-npc-expedition-wreck-custody\.test\.mjs/);
  assert.match(gate,/'scripts\/verify-npc-expedition-wreck-sqlite-crash\.mjs'/);
  assert.match(crash,/process\.kill\(process\.pid,"SIGKILL"\)/);
  assert.match(crash,/gameStore\._sqliteTables\.has\("items"\)/);
  assert.match(crash,/gameStore\._sqliteTables\.has\("npcWrecks"\)/);
- assert.match(pinned,/EX-03B18 EXACT pinned/);
 });

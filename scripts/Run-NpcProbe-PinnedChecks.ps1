@@ -109,7 +109,6 @@ try {
     'integration/coopNpcExpeditionOperations.cjs'
     'integration/coopNpcExpeditionLoot.cjs'
     'integration/coopNpcExpeditionWreckCustody.cjs'
-    'scripts/coop-npc-expedition-wreck-patch.cjs'
     'integration/coopNpcProbeHardware.cjs'
     'integration/coopNpcProbeScanEvidence.cjs'
     'integration/coopNativeNpcProbeFlight.cjs'

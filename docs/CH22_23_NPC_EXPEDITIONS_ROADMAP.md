@@ -357,7 +357,11 @@ Critical end-to-end bug: perfect original NPC scanner proof added a remote corpo
 **Source code implemented in PR #286; native Node/SQLite SIGKILL and two independently authenticated clients are still acceptance gates, NOT verified gameplay.**
 
 - Added `integration/coopNpcExpeditionWreckCustody.cjs` to manage the **same original ItemStore itemID** across original NPC death → original physical native wreck → another player's real ship cargo. No `npcWreckItemID` allocation, duplicate item grant or fabricated warehouse reward.
-- Reversible pinned `scripts/coop-npc-expedition-wreck-patch.cjs` hooks the original `nativeNpcWreckService.js` after native wreck creation but **before** ship removal: fsynced native `npcWrecks` record → original indexed ItemStore provenance `:wreck:<originalWreckID>` + SQLite flush → whole original item move and flush → exact item/source verification.
+- RETIRED 2026-10-28: `scripts/coop-npc-expedition-wreck-patch.cjs` used to hook the original
+  `nativeNpcWreckService.js`, but four of the seven anchors it required no longer exist in the
+  engine (the wreck custody code lives in the fork now), so it could only ever fail. The
+  behaviour it aimed at - one broadcast that reaches every observer - is asserted directly in
+  `tests/coop-wreck-client-refresh.test.mjs`.
 - Patched original `nativeNpcStore.buildNativeWreckContents` and original wreck isEmpty/refresh paths to expose the same ItemStore row to stock inventory. Stock native wreck pickup handles the original itemID by original `transferItemToOwnerLocation`, not by a second `grantItemToCharacterLocation`. The stock ordinary loot fallback remains untouched.
 - A wreck containing unmatched/corrupted original expedition items cannot silently expire or cascade-delete source custody. Failure after moving original cargo but before NPC destruction is fenced for manual reconciliation; a second native wreck for the same source ship is never silently substituted.
 - **Critical source-corp correction:** the wreck loot-right/killer corporation can differ from the destroyed NPC's corporation. The native wreck now durably stores `coopNpcExpeditionSourceCorpID` separately from `corporationID`; original source ownership, not attacker rights, is the ItemStore chain-of-title authority. Ordinary stock NPC wrecks with no tagged original exploration cargo retain default destruction behavior.

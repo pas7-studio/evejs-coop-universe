@@ -37,7 +37,7 @@ const BUDGET = {
   bigFileCharsMax: 15000, // one stock file before extraction is due
   monkeyPatches: 0, // prototype reassignment / defineProperty on stock classes
   sourceRewrites: 0, // writeFileSync(__filename) / require.cache juggling
-  patchScriptsMax: 78, // frozen legacy transform library; may only shrink
+  patchScriptsMax: 77, // frozen legacy transform library; may only shrink
   integrationDriftMax: 0, // integration/*.cjs must equal the deployed copy
 };
 
