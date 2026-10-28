@@ -8,7 +8,10 @@ test("P1 new convoy outcome module is packaged without a new upstream native pat
  // Registered exactly once each: their position in the list is layout, not wiring.
  assert.equal(overlayRegistrations("coopConvoyOperations"),1,"coopConvoyOperations");
  assert.equal(overlayRegistrations("coopConvoyOutcomeProof"),1,"coopConvoyOutcomeProof");
- assert.match(patch,/"coopNpcChatter"/);
+ // The chatter module used to be asserted by grepping the legacy installer's text;
+ // the installed set lives in scripts/overlay-spec.cjs now, so ask it - and ask for
+ // exactly one registration, which the text search could not tell apart from two.
+ assert.equal(overlayRegistrations("coopNpcChatter"),1,"coopNpcChatter");
  assert.match(patch,/coop-native-station-arrival-patch\.cjs/);
  assert.doesNotMatch(patch,/coop-convoy-outcome-native-patch\.cjs/);
 });

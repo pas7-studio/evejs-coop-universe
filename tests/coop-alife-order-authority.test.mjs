@@ -24,7 +24,10 @@ test("arbitration stays off unless a flag really asks for it", () => {
 test("the runtime guard is the only place that decides order authority", () => {
   const text = readFileSync(join(root, "integration", "coopVirtualWorldRuntime.cjs"), "utf8");
   // No module may re-implement the gate with a raw env comparison.
-  assert.match(text, /function npcOrderBridge\(\)\{\n if\(!alifeOrderArbitrationEnabled\(process\.env\)\)return null;/);
+  // EOL-agnostic: this file is committed with CRLF (it is byte-identical to the
+  // engine copy), so a bare `\n` anchor silently stops matching the moment a
+  // block is written by an editor that keeps the file's own endings.
+  assert.match(text, /function npcOrderBridge\(\)\{\r?\n if\(!alifeOrderArbitrationEnabled\(process\.env\)\)return null;/);
   const raw = text.match(/process\.env\.EVEJS_COOP_NPC_ORDER_ARBITER/g) || [];
   assert.equal(raw.length, 0, "the legacy flag must be read only through the helper");
 });
