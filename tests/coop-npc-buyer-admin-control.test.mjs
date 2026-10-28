@@ -137,7 +137,7 @@ test("direct calls without a server-minted approval grant are denied",()=>run(as
  assert.equal(approved,false);
  assert.equal(f.writes,0);
 }));
-test("bad, missing and overprivileged credential files are rejected",()=>{
+test("bad, missing and overprivileged credential files are rejected",(t)=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),"coop059-secrets-"));
  try{
   const file=path.join(dir,"secret");
@@ -147,7 +147,14 @@ test("bad, missing and overprivileged credential files are rejected",()=>{
   if(typeof process.getuid==="function")
    assert.throws(()=>readOperatorKey(file),/PERMISSIONS/);
   fs.chmodSync(file,0o600);assert.equal(readOperatorKey(file).length,48);
-  fs.symlinkSync(file,path.join(dir,"link"));
+  try{fs.symlinkSync(file,path.join(dir,"link"));}
+  catch(error){
+   // Windows refuses symlinks without Developer Mode or an elevated shell; every
+   // check above already ran, so only this last case is unavailable here.
+   if(["EPERM","EACCES"].includes(error?.code))
+    return t.skip("Symlink requires Windows Developer Mode/admin");
+   throw error;
+  }
   assert.throws(()=>readOperatorKey(path.join(dir,"link")),
    /INVALID_FILE|ELOOP|symbolic link/i);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
@@ -165,7 +172,9 @@ test("server operator CLI rejects invalid action/actor/ticket before network",()
  const valid=cliArgs(["audit","--claim-key="+K,"--port=17171"]);
  assert.equal(valid.key,K);assert.equal(valid.action,"audit");
 });
-test("symbolic-link operator audit log never redirects an approved recovery",()=>run(async f=>{
+test("symbolic-link operator audit log never redirects an approved recovery",
+{skip:process.platform==="win32"&&"Symlink requires Windows Developer Mode/admin"},
+()=>run(async f=>{
  fs.symlinkSync(f.secret,f.log);
  const ticket=(await f.audit()).body.ticket;
  const before=fs.readFileSync(f.secret);

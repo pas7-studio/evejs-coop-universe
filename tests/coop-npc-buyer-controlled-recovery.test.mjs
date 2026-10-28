@@ -27,7 +27,13 @@ const receipt=()=>({phase:"NATIVE_NPC_BUY_COMMITTED",claimKey:KEY,
  fillID:FILL,orderID:ORDER,buyerCorpID:CORP,sellerID:SELLER,
  stationID:STATION,typeID:TYPE,quantity:20,priceCents:125,
  grossCents:2500,taxCents:200,netCents:2300,
- taxPolicy:"EVEJS_NATIVE_MARKET_RULES",itemID:1990000200,committedAt:1000001});
+ taxPolicy:"EVEJS_NATIVE_MARKET_RULES",itemID:1990000200,committedAt:1000001,
+ // A committed receipt must prove the wallet conservation it claims: the
+ // buyer pays gross, the seller receives net and the tax row is its own
+ // transaction derived from the fill.
+ buyerBeforeCents:10000,buyerAfterCents:7500,
+ sellerBeforeCents:500,sellerAfterCents:2800,
+ taxTransactionID:FILL+100000000000000});
 const approval=action=>({claimKey:KEY,action,approvalID:ALLOW,
  reason:"Approved native database crash recovery after reconciliation"});
 function fixture({initialState="settling",hasReceipt=false,
