@@ -27,8 +27,14 @@ test('a runaway full-throttle order is stopped and named', {skip: !fs.existsSync
   const source = fs.readFileSync(fork, 'utf8');
   assert.ok(source.includes('function stopRunawayFullThrottle('));
   assert.ok(source.includes('gap > 1e9'), 'the straight-line target is recognised by distance');
-  assert.ok(source.includes('toFiniteNumber(entity.speedFraction, 0) > 0'),
-    'a positive speed fraction is the other half of the same native order');
+  // Measured 2026-10-27: a positive speed fraction is NOT a safe half of this
+  // test - a fresh orbit or follow order sets one too, and stopping on it left 56
+  // "parked" miners in mode STOP. The guard is GOTO plus the 1e16 sentinel line;
+  // the speed fraction is reported in the event, never used to decide.
+  assert.ok(source.includes('!== "GOTO"'),
+    'only a hull flying a GOTO order can be flying the sentinel line');
+  assert.ok(source.includes('speedFraction: toFiniteNumber(entity.speedFraction, 0)'),
+    'the stopped order must report the throttle it was flying');
   assert.ok(source.includes('RUNAWAY_ORDER_STOPPED'), 'the stop must be observable');
   assert.ok(source.includes('living-mining-miners-parked'), 'parking must be observable');
 });
