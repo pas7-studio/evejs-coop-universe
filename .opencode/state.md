@@ -3337,3 +3337,33 @@ Tests: coop-war-garrison 12, coop-war-capture-by-force 8, coop-war-mobilization 
 Still open (unchanged, not blockers for the capture claim): killer identity is not attributed
 (NATIVE_VICTIM_WRECK_ONLY_NO_KILLER), and merit/payout for the owner's character is not yet
 observed. The owner's play stack `evejs` was never restarted or reconfigured.
+
+## Escort suite: 122 red cases were a platform artefact (2026-10-28, L1)
+Root cause found: every escort/manifest journal fsyncs a DIRECTORY (and, on its re-read
+paths, a handle opened read-only) to prove durability before the route advances. On Windows
+`fs.openSync(dir)` succeeds but `fsyncSync` throws EPERM, and a read-only handle cannot be
+flushed either, so the gates answered MANIFEST_DIRECTORY_DURABILITY_UNCERTAIN,
+ROUTE_CHECKPOINT_WRITE_UNCERTAIN, DEPARTURE_REPLAY_FSYNC_UNCERTAIN,
+PERSISTED_DIRECTORY_SYNC_UNCERTAIN and refused to advance - on every case, regardless of
+the code under test. The fork already had the convention (coopNpcAmmoBankAtomic,
+coopNpcWreckCustody, coopNpcManufacturingJournal, coopNpcNativeEconomyDirector); ten
+escort/manifest modules had never adopted it. Engine commit 109e131, mirrored here as
+97db7108. Linux (the deployed container) is untouched: the guard is `process.platform
+=== "win32"` only, write-path fsyncs stay strict, and the read-only re-read paths return
+what they would have returned after a successful fsync.
+Result on Windows: escort suite 290 pass / 122 fail -> 359 / 52. Also fixed
+`coop-escort-native-binding` (11 cases) whose fixture never gained
+`settlePeacefulFlight`/`readContract` after d4aa1d54: 14/14.
+
+### What is left in the escort red set, and why it is not the same bug
+52 cases, all "the feature now demands a dependency the fixture does not build":
+- `coop-escort-flight-stage-c` (13): coopNativeStationArrival.start() pauses with
+  ESCORT_DURABLE_WARP_FENCE_REQUIRED unless a durableWarpFence with
+  inspectSource/prepare/confirm is injected.
+- `coop-escort-native-predeparture` (6), `station-predeparture-gate` (6),
+  `route-recovery` (5), `bootstrap-failure` (4), `departure-witness` (3),
+  `tactics-rescue` (3), `verified-volunteers` (3): same shape - the fixture must now
+  provide the departure/route witness or fence the runtime requires when the paid-escort
+  flag is on.
+Each needs the fixture rebuilt against the contract, not an assertion relaxed. Do that
+feature by feature and record each file's new baseline; do not mass-skip.
