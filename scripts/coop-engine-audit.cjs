@@ -141,6 +141,23 @@ const gigaFailures = gigaCoop
   .filter((x) => x.lines > (GIGA_COOP_KNOWN[x.file] ?? 0))
   .map((x) => `${x.file} ${x.lines} lines > ${GIGA_COOP_KNOWN[x.file] ?? GIGA_COOP_LINES} (split it with scripts/coop-split-module.cjs)`);
 
+// 6. split safety ----------------------------------------------------------
+// A split moved code that assigned a name only the parent declared, so the running
+// server threw ReferenceError inside a live phase. UNDECLARED/COUPLING is that
+// crash class and is never allowed; TWO_STATES means one piece of state lives in
+// both modules and only a binder keeps them equal - a ratchet, so it may shrink
+// but never grow.
+const SPLIT_TWO_STATES_MAX = 23;
+const splitCheck = (() => {
+  try {
+    return execFileSync(process.execPath, [path.join(REPO, 'scripts', 'coop-split-check.cjs'), '--code-path', CODE], { encoding: 'utf8' });
+  } catch (error) {
+    return String(error.stdout || ''); // exit 1 = problems found, and they are what we print
+  }
+})();
+const splitProblems = splitCheck.split('\n').filter((line) => /^\s+(UNDECLARED|COUPLING) /.test(line));
+const splitTwoStates = splitCheck.split('\n').filter((line) => /^\s+TWO_STATES /.test(line));
+
 const totals = {
   stockFiles: stock.length,
   stockLines: stock.reduce((s, x) => s + x.lines, 0),
@@ -152,6 +169,8 @@ const totals = {
   patchScripts: patchScripts.length,
   integrationDrift: drift.length,
   gigaCoop,
+  splitProblems: splitProblems.length,
+  splitTwoStates: splitTwoStates.length,
 };
 
 const failures = [];
@@ -165,6 +184,9 @@ if (totals.patchScripts > BUDGET.patchScriptsMax) failures.push(`patch scripts $
 if (totals.integrationDrift > BUDGET.integrationDriftMax)
   failures.push(`integration drift ${totals.integrationDrift} > ${BUDGET.integrationDriftMax}`);
 failures.push(...gigaFailures);
+for (const line of splitProblems) failures.push(`unsafe split: ${line.trim()}`);
+if (totals.splitTwoStates > SPLIT_TWO_STATES_MAX)
+  failures.push(`split two-state names ${totals.splitTwoStates} > ${SPLIT_TWO_STATES_MAX} (one piece of state must live in one module)`);
 
 if (asJson) {
   console.log(JSON.stringify({ code: CODE, totals, budget: BUDGET, failures, stock, smells, drift }, null, 2));
@@ -174,6 +196,7 @@ if (asJson) {
   console.log(`biggest     ${totals.biggestFile ? `${totals.biggestFile.file} (${totals.biggestFile.lines} lines, ${totals.biggestFile.chars} chars)` : 'none'}`);
   console.log(`runtime patching: ${totals.sourceRewrites} (monkey-patch/require-cache/source-rewrite sites: ${totals.smells})`);
   console.log(`legacy patch scripts ${totals.patchScripts} (budget ${BUDGET.patchScriptsMax}), integration copies differing ${totals.integrationDrift}`);
+  console.log(`split safety: ${totals.splitProblems} undeclared/coupled name(s), ${totals.splitTwoStates} two-state name(s) (max ${SPLIT_TWO_STATES_MAX})`);
   if (gigaCoop.length) {
     console.log(`\nco-op modules over ${GIGA_COOP_LINES} lines (ratchet, may only shrink):`);
     for (const g of gigaCoop) console.log(`  ${String(g.lines).padStart(5)}L ${g.file} (ceiling ${GIGA_COOP_KNOWN[g.file] ?? GIGA_COOP_LINES})`);

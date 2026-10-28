@@ -104,7 +104,7 @@ Current state of the giant modules:
 
 | File | Lines | Split |
 |---|---|---|
-| `space/coopVirtualWorldRuntime.js` | 4 379 | **done** — pure helpers in `coopVirtualWorldRuntime.pure.js` (970 lines) |
+| `space/coopVirtualWorldRuntime.js` | 4 379 | **unsafe as done** — 56 declarations moved to `coopVirtualWorldRuntime.pure.js`, but 23 state names ended up declared in both modules; repair in progress in the engine |
 | `space/coopAdminBridge.js` | 451 | **done** — the whitelisted actions in `coopAdminBridgeActions.js` (1 067 lines) |
 | `space/coopNativeStationArrival.js` | 1 451 | not started |
 | `space/coopCourierRuntime.js` | 975 | **not a split** — 956 of its 975 lines are already one closure factory; moving them would be a rename, not a separation |
@@ -112,11 +112,43 @@ Current state of the giant modules:
 ### The runtime split, and the test migration that unblocked it
 
 `space/coopVirtualWorldRuntime.js` went from 5 349 to 4 379 lines: 56
-declarations (970 lines) that touch no module state moved into
-`space/coopVirtualWorldRuntime.pure.js` - distance and belt summaries, NPC module
-summary, raid leash, PVE wave helpers, sale notes, war presence math, the
-headless retry policy, the salvage/wreck witnesses. The parent destructures them
-back, so the runtime still exports the **same 21 names**.
+declarations (970 lines) moved into `space/coopVirtualWorldRuntime.pure.js` -
+distance and belt summaries, NPC module summary, raid leash, PVE wave helpers,
+sale notes, war presence math, the headless retry policy, the salvage/wreck
+witnesses. The parent destructures them back, so the runtime still exports the
+**same 21 names**.
+
+**This split was not safe, and the cost was real.** The splitter decided what
+could move by looking for names declared with `let`/`var` - but it only read the
+**first** name of a multi-declarator line. The parent declares its state as
+`let world=null,bridge=null,...,warpPointDirector=null;`, so `bridge`,
+`warpPointDirector` and a dozen relatives looked like free variables. Their code
+moved, and on the live stack each phase that used one threw
+`ReferenceError: warpPointDirector is not defined` the moment it ran - no crash at
+load, no `node --check` complaint, no failing test. The faction war stopped
+advancing, and an attempted recovery (restoring the pre-split single file) then
+reset a live war state row. Repair is still in progress in the engine: 23 names are
+declared in both modules and kept equal by a `bindWarRuntime()` call, which is two
+copies of one state, not a clean split.
+
+Two tools now make that class impossible:
+
+- `scripts/coop-split-check.cjs` reads both modules and reports `UNDECLARED` (a
+  name the sibling uses and never declares - the ReferenceError class),
+  `COUPLING` (a name only the parent declares) and `TWO_STATES` (the same name
+  declared in both modules). `coop-engine-audit.cjs` runs it: the first two are
+  hard failures, and `TWO_STATES` is a ratchet with a ceiling that may only be
+  lowered.
+- `scripts/coop-split-module.cjs` now reads every declarator of every
+  declaration, and after `--apply` it runs the checker and **restores both files**
+  if the split is not safe. `node --check` cannot replace that: it cannot see a
+  name that only fails when the line runs.
+
+Both share `scripts/lib/js-declarations.cjs`, a small lexer (comments, strings and
+regex literals stripped; all declarators, parameters, method-definition params,
+destructuring and catch bindings collected). `tests/coop-split-tooling.test.mjs`
+pins the behaviour, including the `actionID -> actionI` regex-backtracking bug
+that made every long identifier look like a free variable.
 
 What actually blocked the first attempt was not the code but 10 wiring tests
 asserting on the *text* of `integration/coopVirtualWorldRuntime.cjs`: after the

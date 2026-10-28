@@ -874,11 +874,43 @@ function advanceNativeWarGarrison(){
  if(!warGarrison)warGarrison=garrison.createWarGarrison({
   readWarState:()=>warStateStore().read(),
   registry:nativeWarFleetRegistry(),
+  // A hull destroyed or despawned without a confirmed wreck keeps its custody
+  // row (absence is never destruction), but its identity must not stay bound to
+  // a ghost: that starved the garrison of commanders and froze the war with
+  // NO_FREE_PILOT_IDENTITY. A link whose ship is in no live scene is reclaimed
+  // here, and only then offered as a free pilot.
   listFreePilots:()=>{
-   const linked=new Set(Object.values(identityRegistry.snapshot()?.links||{})
-    .map(l=>String(l?.pilotID)));
-   return (world?.snapshot?.().pilots||[])
+   const native=require("./runtime");
+   const links=Object.values(identityRegistry.snapshot()?.links||{});
+   const linked=new Set(links.map(l=>String(l?.pilotID)));
+   const free=(world?.snapshot?.().pilots||[])
     .map(p=>String(p?.id||"")).filter(id=>id&&!linked.has(id));
+   for(const link of links){
+    const pilotID=String(link?.pilotID||"");
+    if(!pilotID)continue;
+    const systemID=Number(link?.systemID),entityID=Number(link?.entityID);
+    let live=false;
+    try{
+     const scene=native.scenes instanceof Map?native.scenes.get(systemID):null;
+     live=Boolean(scene&&typeof scene.getEntityByID==="function"&&
+      scene.getEntityByID(entityID));
+    }catch{live=false}
+    if(live)continue;
+    try{
+     const released=releaseSpawnedIdentity({pilotID,entityID,
+      reason:"GHOST_HULL_NO_SCENE"});
+     if(released?.status==="RELEASED")free.push(pilotID);
+    }catch{}
+   }
+   return free;
+  },
+  isHullLive:(systemID,entityID)=>{
+   try{
+    const native=require("./runtime");
+    const scene=native.scenes instanceof Map?native.scenes.get(Number(systemID)):null;
+    return Boolean(scene&&typeof scene.getEntityByID==="function"&&
+     scene.getEntityByID(Number(entityID)));
+   }catch{return false}
   },
   spawnFleet:({factionID,systemID,commanderPilotID,merit})=>
    require("./coopAdminBridge").executeRequest({
@@ -1606,6 +1638,7 @@ function start(){
  }
  timer=setInterval(()=>worldPhaseCoordinator.tick(runPhase=>{
   backgroundTicks++;
+  syncWarRuntime();
   // Read-only courier pass (COOP-024). It never mutates a contract: it only
   // reports what the decision core thinks of the outstanding courier contracts,
   // so the live wiring can be verified before anything is accepted.
@@ -4329,11 +4362,24 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
   const timer=setTimeout(()=>{if(arrivalSales.get(key)===job)arrivalSales.delete(key);},5000);
   if(typeof timer?.unref==="function")timer.unref();
  });
+ // The split runtime owns nativeWarFleetRegistry() but not the module state it
+ // reads: hand it the live bridge and identity registry after they exist.
+ syncWarRuntime();
  return {status:"PENDING"};
 }
 // This is deliberately NOT an EveJS client RPC or HTTP admin endpoint.
 // The caller must be trusted in-process server code providing a separately
 // authenticated admin/RBAC decision for every inspection and mutation.
+// The split runtime reads live objects this file creates. They appear in a
+// different order than the module assumes, so hand them over on every cycle
+// instead of guessing one moment when all of them already exist.
+function syncWarRuntime(){
+ try{
+  require("./coopVirtualWorldRuntime.pure").bindWarRuntime({
+   bridge,identityRegistry,economy,nativeGateTransfer,recognitionAnnouncer,
+   nativeAmmoWitness,lossBridge,factionDirector,raidDirector,tacticsDirector,pveSiteDefenseDirector,pveWaveReinforcementsDirector,pveObjectiveDoctrineDirector,pveNativeBossDirector,warpPointDirector,nativeGunRange,warGateHandoff,warRecoverySocket,nativeOrderBridge,lootCommerce,nativeAmmoSupply,warTreasuryInstance});
+ }catch(_ignored){}
+}
 function livingWorldPhases(){return worldPhaseCoordinator?.snapshot()||{active:false,sequence:0,last:null}}
 // World-setup seam used by the admin bridge. A ship spawned outside the
 // materializer is only a real presence for the war layer once the identity

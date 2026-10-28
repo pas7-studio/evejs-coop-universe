@@ -186,13 +186,41 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
    if(!Array.isArray(existing)||existing.length>1000){
     skipped.push({haulerID,why:"cargo-unreadable"});continue;
    }
-   let used=0,valid=true;
+   let used=0,valid=true,badRow=null;
+   // Measured 2026-10-27: the hold carried the fleet's own lift-tagged minerals, and the
+   // whole hold was declared invalid (why "cargo-invalid", usedM3 0) so the hauler could
+   // never load again. Those rows legitimately belong to the CORPORATION - the same owner
+   // as the hauler itself - not to the miner's owner, so the custody rule is "not another
+   // party's cargo", not "exactly the miner's owner".
+   const allowedOwners=new Set([Number(minerOwner),Number(ship.ownerID)]);
    for(const row of existing){
     const type=resolveType(Number(row?.typeID));
     const unit=Number(type?.volume);
-    if(!integer(Number(row?.cargoID))||!integer(Number(row?.quantity))||
-      Number(row?.entityID)!==haulerID||Number(row?.ownerID)!==minerOwner||
-      row.transient!==false||!Number.isFinite(unit)||unit<=0){valid=false;break;}
+    // Each predicate is evaluated once and reported, so a refusal always names the exact
+    // condition instead of a generic "invalid" (measured: a row that looked perfect in
+    // every printed field was still refused).
+    const rowCargoID=Number(row?.cargoID);
+    const rowQuantity=Number(row?.quantity);
+    // Measured 2026-10-27: the store returns `transient` as 0/1 from SQLite, so the old
+    // `row.transient === false` refused every durable cargo row (diagnosed live:
+    // rowReadable false while integerCargoID, integerQuantity, unit 0.01 and the owner were
+    // all fine), and the fleet could never load again.
+    const rowTransient=row?.transient===true||Number(row?.transient)===1;
+    const rowReadable=integer(rowCargoID)&&integer(rowQuantity)&&
+      !rowTransient&&Number.isFinite(unit)&&unit>0;
+    const rowOurs=Number(row?.entityID)===haulerID&&
+      allowedOwners.has(Number(row?.ownerID));
+    if(!rowReadable||!rowOurs){
+     valid=false;
+     badRow={cargoID:rowCargoID||0,quantity:Number.isFinite(rowQuantity)?rowQuantity:null,
+      typeID:Number(row?.typeID)||0,ownerID:Number(row?.ownerID)||0,
+      entityID:Number(row?.entityID)||0,haulerID,
+      owners:[...allowedOwners].map(x=>Number(x)||0),
+      transient:rowTransient,unit:Number.isFinite(unit)?unit:null,
+      rowReadable,rowOurs,integerCargoID:integer(rowCargoID),
+      integerQuantity:integer(rowQuantity)};
+     break;
+    }
     used+=unit*Number(row.quantity);
    }
    if(valid&&Number.isFinite(used)&&used+volume<=capacity+1e-6){selected=ship;break;}
@@ -203,6 +231,7 @@ function strictTransferCargo(scene,fleet,miner,options,store,probe){
      Math.floor((free-1e-6)/unit));
    }
    skipped.push({haulerID,why:valid?"full":"cargo-invalid",
+    badRow,
     usedM3:Number.isFinite(used)?Math.round(used*100)/100:null,
     capacityM3:Math.round(capacity*100)/100,needM3:Math.round(volume*1000)/1000});
   }
