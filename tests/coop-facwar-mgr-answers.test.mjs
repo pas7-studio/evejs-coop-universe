@@ -70,3 +70,56 @@ test("the fork service answers all five client getters from this projection", ()
   assert.doesNotMatch(source, /militiaCorporationID:\s*1000/,
     "a corporation is read from native state, never hardcoded");
 });
+
+// statisticsController.py builds every FW table from these answers and dereferences
+// them: GetStats_Personal does topStats[0][groupCharacter][key], GetStats_Character()
+// does .items(), and the militia header is mapped through appConst.raceByFaction.
+test("the statistics tables are well formed even when nothing was attributed", () => {
+  const stats = view.emptyStats();
+  assert.deepEqual(Object.keys(stats).sort(), [...view.STAT_KEYS].sort());
+  for (const key of view.STAT_KEYS) assert.equal(stats[key], 0, key + " is honest zero");
+
+  const [top, all] = view.topAndAllStats();
+  for (const groups of [top, all]) {
+    for (const groupID of [view.GROUP_CHARACTER, view.GROUP_CORPORATION, view.GROUP_ALLIANCE]) {
+      assert.ok(groups[groupID], "group " + groupID + " must exist");
+      for (const key of view.STAT_KEYS) assert.equal(groups[groupID][key], 0);
+    }
+  }
+  assert.equal(view.GROUP_CHARACTER, 1, "inventorycommon/const.py");
+  assert.equal(view.GROUP_CORPORATION, 2);
+  assert.equal(view.GROUP_ALLIANCE, 32);
+});
+
+test("the militia table is keyed by warzone factions, never by 'you'", () => {
+  const militia = view.militiaStats({warzoneFactions: [500001, 500004]});
+  assert.deepEqual(militia.header, [500001, 500004]);
+  for (const key of view.STAT_KEYS) {
+    assert.deepEqual(Object.keys(militia.data[key]).sort(), ["500001", "500004"]);
+  }
+});
+
+test("faction info counts the ground the war record really assigns", () => {
+  const info = view.factionInfo({
+    territories: {
+      30045343: {systemID: 30045343, militaryControllerFactionID: 500004},
+      30045344: {systemID: 30045344, militaryControllerFactionID: 500004},
+      30003837: {systemID: 30003837, militaryControllerFactionID: 500001},
+    },
+  });
+  assert.equal(info[500004].systemsCount, 2);
+  assert.equal(info[500001].systemsCount, 1);
+  assert.equal(info[500004].militiaMembersCount, 0, "we do not invent membership counts");
+  assert.deepEqual(view.factionInfo(null), {}, "no war record means no claim");
+});
+
+test("the fork service wires all six statistics getters", () => {
+  const source = readFileSync(path.join(
+    process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs",
+    "Code/server/src/services/faction/facWarMgrService.js",
+  ), "utf8");
+  for (const method of ["GetStats_Character", "GetStats_Corp", "GetStats_Alliance",
+    "GetStats_TopAndAllKillsAndVPs", "GetStats_Militia", "GetStats_FactionInfo"]) {
+    assert.match(source, new RegExp(`Handle_${method}\\(`), method + " must be handled");
+  }
+});
