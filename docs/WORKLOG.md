@@ -2121,3 +2121,13 @@ Evidence: war opened 19:14:08 with HELD escrow; defender kill refused NO_HELD_ES
 Why: a stale full-state war write erased the campaign the opening had just created, and the reopen cooldown died with the process
 Where: integration/coopFactionWarCore.cjs, integration/coopFactionWarOpening.cjs, integration/coopNpcManufactureTick.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-faction-war-record-merge.test.mjs, tests/coop-faction-war-stall-reaper.test.mjs, tests/coop-npc-manufacture-tick.test.mjs
 Evidence: mergeWarRecords in coopFactionWarCore (5 tests), durable cooldown in opening (8 tests); deployed to evejs-server-1; live: 38 war-opened then none for 3.5 min, refusal detail now real reasons
+### 2026-10-28T20:48Z · 7020bea · L2 · coop: refine both proven stations; add the economy ledger
+
+Why: The refinery only worked at the fleet's dock while 454k units of the corporation's own tagged ore sat unrefined at another station, starving every recipe that needs Pyerite
+Where: integration/coopNpcRefineryTick.cjs, integration/coopWarClientView.cjs, scripts/coop-economy-ledger.cjs, scripts/coop-supervise.ps1, tests/coop-refinery-second-station.test.mjs, tests/coop-war-client-view.test.mjs
+Evidence: 15 COMMITTED refines at 60000682 after deploy; 3/3 tests in tests/coop-refinery-second-station.test.mjs; ledger BALANCED (1700 ammo = 1600 sold + 100 held, 68 chipsets = 63 + 5)
+### 2026-10-28T20:48Z · 7e12378 · L2 · state: the refinery served the wrong station; the books now close
+
+Why: the map window never opened: the warzone payload sent militia corporation IDs where the client indexes faction tables, and the tiles had no adjacencyState at all
+Where: .opencode/state.md
+Evidence: fork 8fa69e2; live payload 204 systems/1000180 -> 3 systems with faction IDs + FL/SL/BL; 36 GetAllVictoryPointStates/s storm source identified (client warzoneMap FACTION_ID_TO_COLOR[occupierID] KeyError); coop-war-client-view 9/0; image evejs-local rebuilt + recreate, server healthy
