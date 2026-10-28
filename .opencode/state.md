@@ -126,9 +126,12 @@ Owner decision 2026-10-28: delete it. Done in `a6d6b44a`; the CI-triggered EX-03
 became `scripts/Run-NpcProbe-PinnedChecks.ps1` (`bbea62c3`) so the procedure survived,
 and three more reds closed (`coop-overlay-l1-baseline` 1/1->2/0,
 `coop-feature-readiness` 7/1->8/0, `coop-crossstream-overlay-roundtrip` 1/1->2/0).
-Full probe `suite-final3.json` (2026-10-28): **6197 pass / 15 fail / 99 skip** against the
-5837 / 332 / 92 baseline (that run predates the war client-view refactor `d2d7fd24`,
-which touched no failing suite). Seven files are still red, 15 cases:
+Full probe `suite-final5.json` (2026-10-28 late): **6236 pass / 5 fail / 95 skip**
+against the 5837 / 332 / 92 baseline. Of those five, four are one untracked module
+(`integration/coopWarBountyEscrowSides.cjs`: the committed runtime requires it, so
+hook-requires and overlay-dependencies correctly report it as not installed, and its four
+flags are the bulk of FLAGS_UNDECLARED), and one is COOP-049. installer-module-coverage
+is green again after "bundled = committed". Earlier probe for reference:
 ONE case is left: coop-alife-native-buyer-wiring (COOP-049, by owner decision) - plus
 coop-installer-module-coverage whenever another session leaves a module untracked for a
 while, which is churn, not a defect of ours.
