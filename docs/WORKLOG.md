@@ -1877,3 +1877,9 @@ Why: coop-test-parity spawned 31 test files serially and idled; switched to boun
 Detail: The parity runner spawned one Node test process per file and waited for each, so re-checking the 31 recorded files took 15.3 s of mostly idle wall clock. Node already runs test *files* in parallel for `node --test`, and every file here has its own process, so the isolation the runner relies on is unchanged; only the waiting is. - child_process.spawn + await instead of blocking spawnSync, bounded t
 Where: scripts/coop-test-parity.cjs
 Evidence: 15315ms serial vs 6783ms default / 7427ms at --jobs 4; per-file snapshot JSON byte-identical (222 pass / 13 fail, 0 diffs); exit 1 path verified
+### 2026-10-28T13:13Z · 3edb447 · TEST · test(mineral-lift): assert the arrival guard where the code now keeps it
+
+Why: 0fda9c7b moved the per-arrival guard to sellOnArrival entry; two wiring assertions still matched the old gate conjunct and the file was red at HEAD
+Detail: 0fda9c7b moved the once-per-arrival guard out of the mineral-lift `if` and to the entry of sellOnArrival (`arrivalSales.get(key)` returns the running job for the same station+hauler before either lift gate is reached). Two assertions in coop-mineral-lift-wiring still looked for the old conjunct and so the file was red at HEAD with `not ok 3` and `not ok 6`. The invariants are unchanged, so the ass
+Where: tests/coop-mineral-lift-wiring.test.mjs
+Evidence: coop-mineral-lift-wiring 7/7; coop-test-parity prints PARITY_OK with no regressions
