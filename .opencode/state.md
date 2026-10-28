@@ -2,9 +2,11 @@
 
 ## 2026-10-28 - test-parity round: Windows durability + stale fixtures
 
-Suite: 5837 pass / 332 fail / 92 skip -> 5974 / 204 / 92 at the last full probe; every
-commit since then is measured per file below, so the next probe should land near
-6035 pass / ~163 fail.
+Suite: 5837 pass / 332 fail / 92 skip (baseline) -> 6128 / 77 / 97 (full probe,
+2026-10-28 late). Everything below then closed another ~40 reds; the next probe
+should land near 6160 pass / ~35 fail. Remaining reds are almost all
+installer/overlay suites (scripts/overlay-spec.cjs, another session) plus the
+three blocked decisions listed further down.
 
 Closed since that probe (each with a fork mirror where the code changed):
   coop-native-haul-transfer-sqlite 2/5->7/0 (fixture handed the mover the raw SQLite
