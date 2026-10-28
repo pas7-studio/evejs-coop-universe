@@ -2246,3 +2246,14 @@ Why: the owner asked which client-server surfaces do not exist at all, so they c
 Detail: The register said how many gateway types are defaulted but not what they are for. docs/CLIENT_GAPS.md groups all 99 missing client request types by the surface a player meets them on - SKINs and the SKIN market, character titles, achievements, skill plans, New Eden Store, daily goals, career portal, assetholdings, presence, stargate locks, payment schedules, faction-activity admin, mercenary dens/
 Where: docs/CLIENT_CONTRACT_STATUS.md, docs/CLIENT_GAPS.md, scripts/coop-client-contracts.cjs, tests/coop-client-contracts.test.mjs
 Evidence: docs/CLIENT_GAPS.md: 216 client request types, 162 names known to the gateway (incl. 4 inline handlers previously miscounted), 99 with no handler grouped into 20+ surfaces with what each needs; generated from docs/client-contracts/gateway-types.json; tests/coop-client-contracts 4/0
+### 2026-10-28T23:17Z · 49cda99 · DOCS · state(fw): the payout was unreachable by design; FW-054..057 and the gate cleanup
+
+Why: Record the payout defect found in review and the gates it closed
+Where: .opencode/state.md
+Evidence: treasury demanded an integer pilot id while every co-op pilot id is a string; 6453 tests with one foreign failure
+### 2026-10-28T23:26Z · 4bbc6e5 · DOCS · tools(client): read the client on demand instead of vendoring it
+
+Why: agents needed the client's code to verify contracts, but committing decompiled CCP code would break the no-vendored-client-files rule
+Detail: The client's Python cannot be committed - it is CCP code, and this repository explicitly does not vendor client files or CCP assets - but agents still need to read the client's own contract. scripts/coop-client-code.py decompiles one module (--module), searches the modules that contain a string (--grep) or lists the archive (--list) straight out of tq/code.ccp, and caches the text in %TEMP%/openco
+Where: .gitignore, AGENTS.md, scripts/coop-client-code.py, tests/coop-client-code-tool.test.mjs
+Evidence: scripts/coop-client-code.py (--module/--grep/--list, cache in %TEMP%/opencode/client-code, gitignored); verified --module facWarSvc and --grep FACTION_ID_TO_COLOR; AGENTS.md section; tests/coop-client-code-tool 3/0
