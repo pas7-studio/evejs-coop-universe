@@ -5,7 +5,7 @@ const require=createRequire(import.meta.url);
 const {verifiedHaulerLoss}=require("../integration/coopEscortNativeBootstrap.cjs");
 const c={contractID:"escort-30000144-77-5501",
  manifestKey:"30000144-77-1000000",
- corporationID:10001,systemID:30000144,
+ corporationID:10001,systemID:30000144,stationID:60001,
  pirateID:202,haulerID:901,incidentKey:"30000144:202:901"};
 const source={readManifest:()=>({status:"READY",record:{
  key:c.manifestKey,systemID:c.systemID,stationID:60001,

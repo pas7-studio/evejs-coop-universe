@@ -33,7 +33,7 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
  priced.offerFromNative=()=>({status:"NATIVE_QUOTE_READY"});
  priced.readNativeAccepted=()=>paidApproved?{
   status:"DURABLE_TWO_PILOT_PAID_ACCEPTANCE",
-  eventID:"convoy-30000144-77-5501",fleetID:33,
+  eventID:"convoy-30000144-77-5501",fleetID:77,
   quote:{systemID:30000144,fleetID:77,stationID:60001,
    corporationID:10001,haulerID:901},
   characters:[701,702],amountISK:20000
@@ -48,7 +48,7 @@ function fixture({volunteer=false,warpOK=true,gate=true,noticeClosureUnknown=fal
  };
  duo.readVerifiedNativePair=()=>pairApproved?{
   status:"VERIFIED_NATIVE_DUO_VOLUNTEER",eventID:"convoy-30000144-77-5501",
-  systemID:30000144,entityID:901,pilots:[{characterID:701,shipID:1701},
+  systemID:30000144,entityID:901,fleetID:77,pilots:[{characterID:701,shipID:1701},
    {characterID:702,shipID:1702}]}:{status:"NOT_FOUND"};
  const director=createStationArrival({getStations:()=>[target],
   getStation:()=>target,getCorporation:()=>({corporationID:10001}),

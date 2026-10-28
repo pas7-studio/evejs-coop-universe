@@ -12,7 +12,7 @@ function fixture(fn){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"escort-volunteer-"));
  let now=1200000,interests=new Set(),members=[701,702];
  const session=id=>({characterID:id,socket:{destroyed:false},
-  _space:{systemID:30000144,shipID:id+200,initialStateSent:true}});
+  _space:{systemID:30000144,shipID:id+1000,initialStateSent:true}});
  const players=[session(701),session(702)];
  const npc={kind:"ship",nativeNpc:true,itemID:901,transient:false};
  const ships=new Map([[901,npc],...players.map(s=>[s._space.shipID,{
