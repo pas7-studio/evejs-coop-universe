@@ -1951,3 +1951,152 @@ Why: the escort booking request carried only haulerID while the runtime and moun
 Detail: The gate sent only `haulerID` while the runtime and the mount adapter read `haulerIDs`, so a real booking was always refused: the durable duo verifier got `undefined` (NATIVE_DUO_OFFER_UNAVAILABLE) and the mount said DENIED_PREWARP_ROUTE_INVALID. Both shapes now travel together and the adapter resolves exactly one positive hauler ID. escort-pinned-native-mount 6/1 -> 7/0. Fixtures brought back to 
 Where: integration/coopEscortFlightGate.cjs, integration/coopEscortNativeMount.cjs, tests/coop-escort-native-route-recovery.test.mjs, tests/coop-escort-native-tactics-rescue.test.mjs, tests/coop-escort-refund-manifest.test.mjs
 Evidence: escort-pinned-native-mount 6/1->7/0; escort suite 391/19->397/13; AUDIT_OK; PARITY_OK
+### 2026-10-28T16:56Z · bbea62c · OPS · ci: the EX-03 pinned gate becomes a local script, not a deleted workflow
+
+Why: deleting CI also deleted the only definition of the EX-03 pinned gate procedure
+Detail: Removing .github/workflows was the owner's decision, but that directory was also the only place the EX-03 procedure existed: pinned upstream commit, npm ci, the six pinned native sources, all eight flags forced to '0', the twenty probe/expedition fixtures and the four SQLite SIGKILL verifiers. Deleting it alone would have taken coop-npc-probe-wiring from 22/0 to 15/7 and lost the procedure. script
+Where: docs/CH22_23_NPC_EXPEDITIONS_ROADMAP.md, docs/COOP_052_NATIVE_MARKET_HISTORY.md, docs/COOP_060_TWO_CLIENT_NATIVE_BUYER_E2E.md, docs/FACTION_WARFARE_IMPLEMENTATION.md, scripts/Run-NpcProbe-PinnedChecks.ps1, tests/coop-npc-probe-wiring.test.mjs
+Evidence: new scripts/Run-NpcProbe-PinnedChecks.ps1 (PS parse OK); coop-npc-probe-wiring 22/0 unchanged
+### 2026-10-28T17:11Z · 788b5f0 · TEST · test: seven overlay suites were grepping text that moved
+
+Why: single-spec refactor moved the module list to overlay-spec.cjs; seven overlay suites and two fixtures still assumed the old layout
+Detail: The single-spec refactor put the installed module list in scripts/overlay-spec.cjs and made the installer re-export it. Seven suites still searched patch-evejs-coop.cjs for `"coopSomeModule"` and failed on a file that is correct: they now assert the effective surface (installer.names / installer.specs) and leave the patch-script registrations, which really are still in the installer, as text check
+Where: tests/coop-crossstream-wiring.test.mjs, tests/coop-native-convoy-operations-overlay.test.mjs, tests/coop-native-mining-atomic-overlay.test.mjs, tests/coop-native-trade-custody-overlay.test.mjs, tests/coop-pve-duo-native-reward-custody-wiring.test.mjs, tests/coop-pve-duo-native-reward-wiring.test.mjs, tests/coop-pve-duo-reward-wiring.test.mjs
+Evidence: 7 suites green, none had a product change
+### 2026-10-28T17:15Z · c4b80be · TEST · test: four fixtures that stopped describing the code they test
+
+Why: four overlay-era fixtures described an older installer layout or an older guard shape
+Detail: coop-overlay-drift-check picked the first after-anchor patch in the spec and spliced its last anchor line into a one-line function body. That only worked while the first such patch happened to be a statement: npcData.js now comes first with a function declaration, so the fixture produced unparseable source and every classifyFile case answered ANCHOR_MISMATCH. It now selects a single-line *statemen
+Where: tests/coop-five-chat-market-reconcile.test.mjs, tests/coop-market-release-contract.test.mjs, tests/coop-native-economy-overlay-resolution.test.mjs, tests/coop-overlay-drift-check.test.mjs
+Evidence: coop-overlay-drift-check 5/0, coop-five-chat-market-reconcile 5/0, coop-market-release-contract 3/0, coop-native-economy-overlay-resolution 6/0
+### 2026-10-28T17:18Z · 4f1a763 · TEST · test: two synthetic fixtures that modelled half a native file, and a dead regex
+
+Why: specs grew hook sites and one regex was mis-escaped; the fixtures, not the modules, were wrong
+Detail: coop-npc-weapon-source-hook and coop-player-damage-overlay-integration both splice a real spec into a hand-written stand-in for a native file. As those specs grew more hook sites (six on npcBehaviorLoop.js, two on killmailTracker.js) the stand-ins modelled only the sites they were born with, so transform() correctly refused them with "Unknown or duplicate source anchor" and the suites looked like 
+Where: tests/coop-fleet-mission-join-overlay.test.mjs, tests/coop-npc-weapon-source-hook.test.mjs, tests/coop-player-damage-overlay-integration.test.mjs, tests/coop-rust-npc-market-patch.test.mjs
+Evidence: 4 suites green, AUDIT_OK
+### 2026-10-28T17:29Z · 19d5c94 · DOCS · state(fw): funded campaign with real kills reached; payout gated only by native attacker attribution
+
+Why: The escrow and the combat now exist in the same funded campaign; only attacker attribution is missing
+Where: .opencode/state.md
+Evidence: bounty-reserved RESERVED 17:18:43, war-opened, attack-orders, casualty RECORDED 17:25:12 in campaign:30045344 with NATIVE_VICTIM_WRECK_ONLY_NO_KILLER
+### 2026-10-28T17:35Z · 84096bc · L2 · fix(overlay): ten modules the runtime requires were never installed
+
+Why: ten integration modules required by coopVirtualWorldRuntime were absent from the overlay install list (MODULE_NOT_FOUND at runtime)
+Detail: coopVirtualWorldRuntime requires coopJsonFileCache and the war/mercenary/drain helpers by absolute name, and coopStationDrain, coopNpcManufacture, coopStructureAllianceGuard, coopWarCaptureByForce, coopWarMercenaryContract, coopWarMercenarySettlement, coopWarNavyCapability, coopWarObservedSystems and coopNativeNpcMarketReconcile exist in integration/ - but none of the ten was in the installer list
+Where: scripts/overlay-spec.cjs
+Evidence: 4 suites green; names 402/402 unique; AUDIT_OK
+### 2026-10-28T17:37Z · 769678d · L2 · coop: mirror the partial-fill proof; pin the sell-policy order and no-effect closure
+
+Why: A manufactured good can only be sold once: prove a partial fill into a live seed bid, and close a journal whose order never existed (three independent proofs, grace period)
+Where: integration/coopNativeNpcMarketReconcile.cjs, integration/coopVirtualWorldRuntime.pure.cjs, tests/coop-mineral-sale-await.test.mjs, tests/coop-npc-market-reconcile.test.mjs
+Evidence: journal coop-pilot-012 settled: 271448.80 ISK, receipt SETTLED_BY_MARKET_PROOF volRemaining 4995 partialFill true replayed false; 13/13 tests in tests/coop-npc-market-reconcile.test.mjs; fork be1353f
+### 2026-10-28T17:41Z · d2d7fd2 · L1 · refactor(fw): one warzone projection instead of three inline copies
+
+Why: the warzone client-view projection was inlined three times in the overlay spec (3.8k chars)
+Detail: The three fwWarzoneSolarsystemService hooks carried 1239, 1248 and 1330 characters of stock source each: the same occupation projection written three times, twice byte for byte and once with a local-system lookup bolted on. They now call warzonesResponse() / localOccupationResponse() from integration/coopWarClientView.cjs, which owns occupationPairs() - the projection itself. Same env reads, same 
+Where: integration/coopWarClientView.cjs, scripts/overlay-spec.cjs
+Evidence: fork d734281; war suites 5/0 3/0 3/0 6/0; AUDIT_OK; long hooks 9->6
+### 2026-10-28T17:53Z · 9b6e2bc · L2 · coop: mirror market-count settlement; pin it with the measured 3-of-5 sale
+
+Why: Settle a native NPC sale by the units the market really absorbed, and never by the journal's declared quantity
+Where: integration/coopNativeNpcMarketReconcile.cjs, tests/coop-npc-market-reconcile.test.mjs
+Evidence: measured 3-of-5 at 60014935: 3 x 53700.08 = 161100.24 ISK credited, receipt quantity 3 declared 5 volRemaining 4997 replayed false; 14/14 tests; fork 9548354
+### 2026-10-28T17:53Z · 52e9d1a · L1 · feat(fw): attribute war kills whose identity link is only in the live registry; record the stack-churn blocker
+
+Why: A real war kill had no attribution because the identity file lags the live registry, so the bounty escrow could never pay
+Where: .opencode/state.md, integration/coopNpcDestructionAttacker.cjs, integration/coopVirtualWorldRuntime.cjs, tests/coop-war-kill-attribution-links.test.mjs
+Evidence: 17:25:12 NOT_UNIQUE_NAMED_PIRATE vs 17:40:29 NATIVE_DESTRUCTION_ATTACKER_PROVIDED + merit PROMOTED; stack recreated at 17:31/17:5x/18:0x wiping the campaign
+### 2026-10-28T17:58Z · ed43504 · L1 · refactor(fw): two more inline hooks become module calls, and the gate goes green
+
+Why: five of nine long inline hooks extracted into their modules; the inventory gate can no longer grow
+Detail: coop-hook-inventory measured nine hooks over 400 characters. Five are gone now; this commit takes the last two that are pure policy rather than service plumbing: - npcBehaviorLoop carried the whole NPC-vs-player friendly-fire policy inline: npcPlayerVerdict, ENEMY_MILITIA -> hold fire, NOT_WAR_SHIP -> engage, otherwise fall through. npcPlayerEngages() in coopMilitiaWarPlayer owns that mapping and 
+Where: docs/coop-flags.json, docs/coop-hook-inventory.json, integration/coopMilitiaWarPlayer.cjs, integration/coopWarAdvantage.cjs, scripts/overlay-spec.cjs
+Evidence: fork 37780e5; hook-inventory 3/0; militia-war-player 11/0, war-advantage 6/0; AUDIT_OK
+### 2026-10-28T17:59Z · a7e7030 · L2 · alife08: pin that a repair keeps a hull carrying goods
+
+Why: A slot repair pruned stale hulls together with the goods they carried (13 produced, 8 sold, 2 held, 3 lost)
+Where: integration/coopNativeMiningFleetDurable.cjs, tests/coop-slot-prune-keeps-cargo.test.mjs
+Evidence: pruneStaleSlotHulls keeps and reports cargo-carrying hulls; 2/2 tests in tests/coop-slot-prune-keeps-cargo.test.mjs; fork commit pushed
+### 2026-10-28T18:01Z · a666784 · DOCS · state(fw): mirror deployed; record that an empty mirror is refused and the payout rung needs a quiet window
+
+Why: Record the mirror's real behaviour and the exact remaining precondition for a payout
+Where: .opencode/state.md
+Evidence: mirror 100 bytes empty at 17:57; MIRROR_EMPTY_TOO refused; NO_OPENABLE_FRONT every 30s
+### 2026-10-28T18:06Z · 9b06081 · L2 · coop: mirror the self-healing market journal; pin the wiring
+
+Why: The world must settle its own RPC_CALLING market journal from the market's own row instead of waiting for an operator
+Where: integration/coopVirtualWorldRuntime.cjs, tests/coop-mineral-sale-await.test.mjs
+Evidence: reconcileMarketJournalsAtBoot wired at trader start; refusal retries at most every 5 min; 7/7 tests in tests/coop-mineral-sale-await.test.mjs; fork commit pushed
+### 2026-10-28T18:10Z · 5c739c1 · DOCS · state(fw): document the store-level cause of the vanishing war state with the measured rows
+
+Why: The war state disappears because the legacy namespace blob overwrites the atomic row view; this must be fixed at store level
+Where: .opencode/state.md
+Evidence: blob 9018B with treasury+merit but empty state-v1; atomic state-v1 100B empty; treasury row absent
+### 2026-10-28T18:12Z · a741f51 · L1 · refactor: the dungeon wave adapter leaves the native file
+
+Why: a 1122-char inline adapter in stock dungeon source; wiring belongs in the module
+Detail: dungeonUniverseSiteService rebuilt a five-callback adapter object inline on every wave spawn: 1122 characters of stock source that only existed to funnel dungeonRuntime, sessionRegistry and agentMissionRuntime into onWaveSpawn. onNativeWaveSpawn() builds it in coopMissionWavePacing; the hook is 363 characters and keeps the same try/catch, so a broken adapter still only warns. Mirrored to the fork 
+Where: docs/coop-hook-inventory.json, integration/coopMissionWavePacing.cjs, scripts/overlay-spec.cjs
+Evidence: fork 6d5ba9d; mission-wave-pacing 13/0; hook-inventory longHooks 4->3
+### 2026-10-28T18:17Z · f856538 · TEST · test: the frozen runtime surface records the six exports the war work added
+
+Why: the frozen public surface predated six deliberate war exports
+Detail: coop-virtual-world-split freezes the runtime's public surface so the split cannot drop a name silently. The mercenary/war restore features added six on purpose (chooseWarRestore, diagnoseMercenarySettlement, diagnoseNavy, executeMercenaryContract, identityLinks, readWarMirror), and the frozen list still described the pre-feature 21. Recorded, not loosened: the assertion is still the exact set. 2/1
+Where: tests/coop-virtual-world-split.test.mjs
+Evidence: coop-virtual-world-split 3/0; coop-test-parity PARITY_OK
+### 2026-10-28T18:18Z · 64dc366 · TEST · test: complete the extensionless sibling shims (119 files, one mechanism)
+
+Why: 119 of 241 extensionless sibling requires had no repo shim, failing as plausible statuses instead of errors
+Detail: integration/*.cjs are the deployed .js modules renamed, so they keep the engine's require("./sibling"). Node's CJS resolver never tries .cjs, and when that throw sits inside try/catch it becomes a plausible pause status instead of an error - which is how a missing module was silently rewriting what several suites proved. The repo already carried 122 such shims; 119 required names had none. scripts
+Where: docs/coop-flags.json, integration/coopAdminBridge.js, integration/coopAlifeEconomy.js, integration/coopAlifeEconomySensor.js, integration/coopAlifeNativeBuyerRuntime.js, integration/coopAlifeNativeDeliveryEvidence.js, integration/coopAlifeNativeManufacturingRuntime.js, integration/coopAlifeNativeMiningWitness.js, integration/coopAlifeNativeResupplyBridge.js, integration/coopAlifeNews.js, integration/coopAlifeSalvageMarketRuntime.js, integration/coopAlifeStartupCargoAudit.js, integration/coopAlifeStationAuthorityRuntime.js, integration/coopCorpWallet.js, integration/coopCourierDispatch.js, integration/coopCourierRuntime.js, integration/coopEscortNativeBootstrap.js, integration/coopEscortNativeIngressSnapshot.js, integration/coopEscortWarpFence.js, integration/coopFactionWarAssault.js, integration/coopFactionWarCore.js, integration/coopFactionWarMerit.js, integration/coopFactionWarOpening.
+Evidence: escort-flight-stage-c 14/0, integration-shims 2/0; shims complete
+### 2026-10-28T18:28Z · 538bb2f · DOCS · docs(fw): add the exact finish recipe for the payout rung
+
+Why: Hand over a copy/paste recipe so the last rung can be finished in a quiet window
+Where: .opencode/state.md
+Evidence: seed + funding + events to watch, all measured today
+### 2026-10-28T18:43Z · c7569ca · DOCS · state(fw): territory bootstrap proven live; record that mining presence now decides ownership
+
+Why: The rebuilt map shows mining presence outnumbers navies, so no navy-vs-navy border exists
+Where: .opencode/state.md
+Evidence: bootstrap added 6 systems, 4 of them ORE; only 30045344 is navy-owned
+### 2026-10-28T19:01Z · daeb6b4 · DOCS · state(fw): FW-044 deployed; map was bootstrapped before the rule so a recreate is needed for it to apply
+
+Why: Explain why the armed-ownership rule has not taken effect yet
+Where: .opencode/state.md
+Evidence: territories bootstrapped 18:39 with mining weights; FW-044 applies only to an empty-map bootstrap
+### 2026-10-28T19:07Z · 7db92a5 · DOCS · state(fw): FW-045 released the mining-owned map live; ownership now requires a real garrison
+
+Why: Record that the old map was released rather than replaced, so the next bootstrap reflects real garrisons only
+Where: .opencode/state.md
+Evidence: CORRECTED_FROM_PRESENCE released:6 corrected:0 systems:[] at 19:03:40
+### 2026-10-28T19:24Z · e70e57b · L2 · state: minerals have no local buyer; rotation and market self-heal proven
+
+Why: A station cool-down must survive a restart, otherwise the drain revisits a station that buys none of its stock
+Where: .opencode/state.md
+Evidence: drain-cooldowns.json written; rotation 60000682 -> 60003724 -> 60014935 measured; 11/11 tests in tests/coop-station-drain.test.mjs; fork 099e107
+### 2026-10-28T19:34Z · 8f11fff · L1 · refactor: finish retiring the wreck source transformer
+
+Why: wreck source transformer matched four anchors that no longer exist; deletions landed in c2136f45
+Detail: The two deletions landed in another session's c2136f45, which swept the staged files; this commit is the rest: the two wiring calls in patch-evejs-coop.cjs, the file's entry in the local EX-03 gate parse list, the transformer and anchor assertions in coop-npc-probe-wiring, the audit budget 78 -> 77, and the regenerated hook-inventory baseline (legacy 74, wired 56, overlap 9). Why retire: four of t
+Where: docs/CH22_23_NPC_EXPEDITIONS_ROADMAP.md, docs/coop-hook-inventory.json, scripts/Run-NpcProbe-PinnedChecks.ps1, scripts/coop-engine-audit.cjs, scripts/overlay-spec.cjs, scripts/patch-evejs-coop.cjs, tests/coop-npc-probe-wiring.test.mjs, tests/coop-wreck-client-refresh.test.mjs
+Evidence: probe-wiring 22/0, wreck-client-refresh 1/0, hook-inventory 3/0, legacy 77
+### 2026-10-28T19:34Z · 2eeae96 · TEST · test: measure the ALIFE-13 boot order, not which function is written first
+
+Why: the ordering assertion compared offsets of a call against a call inside a function defined earlier
+Detail: Case 14 compared the offset of `auditStartupCargo({systemID` with the offset of `nativeService.materializeStoredNativeController(scene,id`. That call lives inside ensureControllers(), which is defined above the boot code, so the assertion could only ever fail once something was reordered inside the file - it never described the runtime order it claimed to protect. It now asserts the real sequence 
+Where: tests/coop-alife13-startup-cargo-audit.test.mjs
+Evidence: coop-alife13-startup-cargo-audit 23/0
+### 2026-10-28T19:35Z · 5936df3 · TEST · test: freeze the pre-split surface, not every name the repo exports today
+
+Why: an exact export list made every new export edit one test; it drifted twice in an hour
+Detail: An exact export list made each feature that added an export edit this test, and it drifted twice within an hour while the war and territory work landed (six mercenary/war names, then three territory ones). What the split actually promises is that it lost nothing, so the twenty-one pre-split names are still required and no export may be undefined; names a feature adds are that feature's to test. 2/
+Where: tests/coop-virtual-world-split.test.mjs
+Evidence: coop-virtual-world-split 3/0; PARITY_OK
+### 2026-10-28T19:38Z · b8c13e1 · TEST · test: "bundled" means committed, so one session's scratch file cannot fail the gate
+
+Why: an untracked scratch module from another session turned the install-coverage gate red
+Detail: Both coverage suites listed integration/*.cjs with readdir, so a module another session had written but not yet added to git made the repo-wide "every bundled module is installed" gate red for everyone - twice today. trackedModuleNames() asks git what is in the repository instead: an uncommitted module cannot be deployed, and a committed one missing from the install list is exactly the failure thi
+Where: tests/_support/trackedModules.mjs, tests/coop-installer-module-coverage.test.mjs, tests/coop-post42-native-overlay-assembly.test.mjs
+Evidence: installer-module-coverage 3/0, post42 3/0, 403 tracked vs names
