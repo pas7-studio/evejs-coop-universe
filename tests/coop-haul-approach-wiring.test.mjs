@@ -17,12 +17,15 @@ test('the hauler is warped only beyond the native warp minimum', () => {
   assert.ok(generator.includes('npcRuntime.warpToEntity(haulerID, minerID'));
 });
 
-test('a short approach is a real follow order, not an orbit label', () => {
-  // A one-shot scene follow loses to the NPC behaviour loop: measured mode FOLLOW with
-  // speedFraction 1 and a frozen 3 221 m gap across dozens of attempts.
-  assert.ok(generator.includes('npcService.issueManualOrder(haulerID, {type: "follow"'),
-    'a sub-warp approach must be a manual follow order the NPC loop honours');
-  assert.ok(generator.includes('FOLLOWING_MINER'));
+test('a short approach orbits the fleet asteroid and changes the hull profile', () => {
+  // Measured 2026-10-27: the hauler is spawned with behaviour profile movementMode
+  // "stop", so a one-shot follow is consumed and the hull is re-stopped (mode STOP,
+  // target 0, frozen 3 221 m gap, hauler 750 m from the rock, miner 3-6 km away).
+  assert.ok(generator.includes('movementMode: "orbit", orbitDistanceMeters: 1_000, followRangeMeters: 1_000, idleAnchorOrbit: false, issueStopOrder: false'),
+    'the hauler profile itself must change, not only its order');
+  assert.ok(generator.includes('issueManualOrder(haulerID, {type: "orbit", targetID: rockID'),
+    'the matching orbit order is what the behaviour loop honours');
+  assert.ok(generator.includes('APPROACH_ISSUED'));
 });
 
 test('the follow order is re-issued every attempt while only the warp stays rare', () => {
@@ -41,7 +44,7 @@ test('the follow order is re-issued every attempt while only the warp stays rare
 });
 
 test('a refused native order is reported, never assumed to have worked', () => {
-  for (const marker of ['WARPED_TO_MINER', 'WARP_REFUSED', 'FOLLOW_REFUSED', 'nativeReason'])
+  for (const marker of ['WARPED_TO_MINER', 'WARP_REFUSED', 'APPROACH_REFUSED', 'nativeReason'])
     assert.ok(generator.includes(marker), 'missing outcome marker ' + marker);
   assert.ok(generator.includes('...approach'), 'the telemetry must carry the measured outcome');
 });
