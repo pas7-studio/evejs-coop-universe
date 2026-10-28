@@ -196,3 +196,22 @@ test("a corrupted PAID row without its proof is never accepted",()=>{ const f=fi
  f.records.set(TABLE+":"+KEY,stored);
  assert.throws(()=>f.treasury.snapshot(),/WAR_TREASURY_CORRUPT_PAYOUT/);
 });
+
+// FW-039 guard: an orphaned HELD escrow must unblock its own campaign.
+// Measured on the work stack 2026-10-28: the campaign record was lost to a
+// container recreate while its reservation stayed HELD, so every later opening
+// refused with WAR_TREASURY_PURPOSE_UNAVAILABLE and 25 000 ISK stayed locked with
+// no campaign to spend it on.
+test('a HELD escrow is reused when its campaign no longer exists', () => {
+  const f = fixture();
+  const first = f.treasury.execute(reserve());
+  assert.equal(first.status, 'APPLIED');
+  // the campaign record disappears, the escrow stays committed
+  f.records.set(TABLE + ':coop-faction-war\u001fstate-v1',
+    { version: 1, wars: { w1: { warID: 'w1', state: 'ACTIVE', attackerFactionID: 11, defenderFactionID: 22 } }, campaigns: {} });
+  const again = f.treasury.execute(reserve({ eventID: 'fw:reserve:w1:c1:second' }));
+  assert.equal(again.status, 'DUPLICATE');
+  assert.equal(again.reused, true);
+  assert.equal(again.receipt.reservationID, 'supply-w1-c1');
+  assert.equal(again.receipt.amountCents, 12500);
+});

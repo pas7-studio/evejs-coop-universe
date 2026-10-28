@@ -3759,3 +3759,18 @@ corporation wallet. The remaining step is only the native trigger: an attributed
 campaign (or a recorded casualty, which `coopWarBounty` accepts) releases the escrow to the
 pilot's earned balance - `living-native-war-merit` already proved the attribution path works
 (5 promotions). Nothing about that is staged or faked.
+
+## FW-039: an orphaned escrow blocked its own campaign - fixed (15:5xZ)
+After the HELD escrow appeared at 15:28:40 the campaign record was lost to another session's
+container recreate while `bounty:war:500004-500011:campaign:30045344:500011` stayed HELD. Every
+later opening then refused with WAR_TREASURY_PURPOSE_UNAVAILABLE, i.e. 25 000 ISK of real money
+was locked with no war it could ever pay, and the border could never restart.
+Fix (fork, tested): RESERVE reuses a HELD reservation for the same war/campaign/faction when the
+campaign record does not exist - nothing is debited twice and the receipt names the existing
+journal - and a RESERVE naming a HELD reservation is decided there instead of being rejected up
+front. `tests/coop-war-treasury.test.mjs` 15/15 (new case: orphan reused, DUPLICATE + reused:true).
+After the redeploy the world has war:500004-500011 with no campaign yet; the next derivable front
+opens it, the escrow is reused, and the only remaining trigger is an attributed kill in that
+campaign (or a recorded casualty, which coopWarBounty accepts) to release the escrow to the pilot.
+Session ladder status: capture PROVEN, merit PROVEN, client view PROVEN, escrow PROVEN,
+payout TRIGGER PENDING (needs one live kill in a funded campaign; the seeds are in place).
