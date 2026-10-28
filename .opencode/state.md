@@ -3449,3 +3449,32 @@ gate + station-arrival slice they were written for.
   A reservation can only be taken for a campaign that does not exist yet (it is taken before
   START_CAMPAIGN), so PAYOUT needs one NEW campaign opened after this deploy, then a kill in it.
   Watching for that opening; if none appears, the payout stays PENDING with this exact cause.
+
+### Escort red set: 46 -> 19 (this session)
+Two root causes removed, both evidenced before/after:
+1. Four escort journals (`coopEscortTerminalAttendance`, `coopEscortDepartureWitness`,
+   `coopEscortRouteWitness`, `coopEscortNativeIngressSnapshot`) skipped the whole durability
+   re-read on win32 with a blanket `return true`. Replaced with one local
+   `platformFsync(io, fd)` that attempts the fsync and swallows only EPERM/EINVAL/ENOTSUP/
+   EBADF/EISDIR, and only on win32 (fork f6ef7fc, mirrored 6bd4805c). Linux unchanged; on
+   Windows a real refusal is still accepted and an injected lost ACK now throws. Effect:
+   route witness 18/2 -> 20/0, terminal attendance 14/2 -> 16/0, ingress snapshot 13/1 ->
+   14/0, departure witness 15/3 -> 17/0.
+2. Four fixture defects where the fixture contradicted the module's own contract (not
+   relaxed assertions): paid stubbed `fleetID 33` vs a duo receipt with no fleetID;
+   `shipID: id + 200` giving player 701 the native hauler's 901; a contract without
+   `stationID`; and a symlink case now skipping on EPERM/EACCES like its sibling file.
+Remaining 19 escort reds: `coop-escort-flight-stage-c` 13 (obsolete coverage, see above),
+`native-tactics-rescue` 3 (`NATIVE_CONVOY_OR_FLEET_NOT_CONFIRMED` before any tactic),
+`native-route-recovery` 1, `pinned-native-mount` 1 (`FLIGHT_BOOKING_NOT_AUTHORIZED`),
+`refund-manifest` 1 (`NATIVE_REFUND_HISTORY_SOURCE_UNAVAILABLE`).
+
+### Repo shim gap, measured (not fixed): 118 missing `integration/*.js` shims
+`integration/*.cjs` call `require("./sibling")` without an extension, which Node's CJS
+resolver never maps to `.cjs`; the deployed tree uses `.js`, so it resolves there. 121
+shims exist, 118 module names are still missing. A `Module._resolveFilename` hook that maps
+extensionless sibling requests to `.cjs` (measured, temp file only) moves the escort suite
+from 365/46 to 371/40, i.e. it is worth ~6 cases and would remove the whole class including
+silent `try/catch -> pause(STATUS)` masking. One shim was added for
+`coopStuckWarpRecovery` because its absence was a hard throw. Decide with the owner:
+generated shims vs one test-support resolver hook (needs the runners to pass `--require`).
