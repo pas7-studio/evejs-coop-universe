@@ -11,7 +11,12 @@ const repo=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const {patch:legacy,LINE,ANCHOR}=require('../scripts/coop-npc-market-buy-safety-patch.cjs');
 const {patch:corporate,NEW}=require('../scripts/coop-npc-corporate-buy-patch.cjs');
 const MARKET='server/src/services/market/marketProxyService.js';
-const base='async function matchSellOrdersForBuyer() {\n'+ANCHOR+'\n}\n';
+// The composed guard legitimately ends its NPC branches with `continue`, because the
+// real call site is inside the buy loop over sellOrder. The fixture has to model that
+// loop, otherwise the "does not throw" parse check would be asserting that a valid
+// native patch is invalid.
+const base='async function matchSellOrdersForBuyer() {\n  for (const sellOrder of sellOrders) {\n'
+ +ANCHOR+'\n  }\n}\n';
 
 for(const eol of ['\n','\r\n']){
  test('COOP-034/035 composed buyer guard is idempotent, reversible ('+(eol==='\n'?'LF':'CRLF')+')',()=>{

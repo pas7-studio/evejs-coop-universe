@@ -16,8 +16,10 @@ test("P0 combined installer preserves stock EveJS trading, custody and dialogue 
  for(const hook of ["coop-market-catalog-patch.cjs","coop-atomic-trade-patch.cjs",
   "coop-native-trade-custody-patch.cjs","coop-agent-dialogue-patch.cjs"])
   assert.ok(source.includes(hook),"latest main hook overwritten: "+hook);
+ // Module names live in the single spec and the installer re-exports the resolved list.
  for(const module of ["coopMarketCatalog","coopNativeTradeAtomic","coopNativeTradeCustody","coopAgentDialogue"])
-  assert.ok(source.includes('"'+module+'"'),"latest overlay module overwritten: "+module);
+  assert.equal(installer.names.filter(x=>x===module).length,1,
+   "latest overlay module overwritten: "+module);
 });
 test("P0 catalog and SQLite stock import are independently default-OFF",()=>{
  const ps=readFileSync(new URL("../scripts/Deploy-Coop-RuntimeProbe.ps1",import.meta.url),"utf8");

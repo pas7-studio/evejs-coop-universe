@@ -7,6 +7,9 @@ import {createRequire} from "node:module";
 const require=createRequire(import.meta.url);
 const source=fs.readFileSync(new URL("../integration/coopNpcNativeEconomyDirector.cjs",import.meta.url),"utf8");
 const installer=fs.readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
+// Installed module names live in the single spec now; the installer keeps the .js/cjs
+// path machinery this test also asserts.
+const specSource=fs.readFileSync(new URL("../scripts/overlay-spec.cjs",import.meta.url),"utf8");
 function installedFixture(t,helpers={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"evejs-native-economy-overlay-"));
  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -23,7 +26,7 @@ test("pinned installer deploys .js and registers all native economy helpers",()=
  assert.match(installer,/path\.join\(code,"server\/src\/space",name\+"\.js"\)/);
  assert.match(installer,/path\.join\(project,"integration",name\+"\.cjs"\)/);
  for(const name of ["coopNpcNativeEconomyDirector","coopNpcDemandAuthority","coopNpcEconomyUnknownRecovery"])
-  assert.ok(installer.includes('"'+name+'"'),"missing installed native helper "+name);
+  assert.ok(specSource.includes('"'+name+'"'),"missing installed native helper "+name);
 });
 test("native economy director loads its real deployed JS siblings without local .cjs files",t=>{
  const f=installedFixture(t,{

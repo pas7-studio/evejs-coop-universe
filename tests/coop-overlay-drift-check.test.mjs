@@ -11,10 +11,15 @@ const require=createRequire(import.meta.url);
 const {check,classifyFile,transform,strip,specs,PIN}=require("../scripts/patch-evejs-coop.cjs");
 
 // A synthetic source reusing a real hook line, so it exercises the same
-// strip()/anchor machinery as the pinned overlay without a checkout.
-const realPatch=specs.flatMap(spec=>spec.patches).find(patch=>patch.after===true);
+// strip()/anchor machinery as the pinned overlay without a checkout. The fixture
+// builds a one-line function around the anchor, so the anchor must be a single
+// *statement* line: a function declaration (npcData.js) or a multi-line anchor
+// (miningRuntime.js) cannot be spliced into that body.
+const realPatch=specs.flatMap(spec=>spec.patches)
+ .find(patch=>patch.after===true&&!patch.anchor.includes("\n")&&/;\s*$/.test(patch.anchor));
+assert.ok(realPatch,"the overlay must keep at least one single-line statement anchor");
 const synthetic={file:"server/src/space/synthetic.js",patches:[realPatch]};
-const anchorLine=realPatch.anchor.split("\n").pop();
+const anchorLine=realPatch.anchor;
 const pristineText=["function run(){",anchorLine,"  return true;","}",""].join("\n");
 const patchedText=["function run(){",anchorLine,realPatch.line,"  return true;","}",""].join("\n");
 
