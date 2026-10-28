@@ -80,3 +80,15 @@ test("the faction-warfare manager keeps every getter the dashboard calls", () =>
     assert.match(file, new RegExp(`Handle_${method}\\(`), method + " is called by the FW dashboard");
   }
 });
+
+test("onlineStatus.Prime sends a real rowset descriptor, not a column list",()=>{
+ // eve/client/script/ui/shared/comtool/onlineStatus.py:
+ //   self.onlineStatus[charID] = blue.DBRow(self.onlineStatus.header, [charID, True])
+ // With a list header the client raises "TypeError: expected DBRow or DBRowDescriptor as
+ // first argument" every time a contact logs in or out (measured on 140000107's client).
+ const file = source("services/online/onlineStatusService.js");
+ assert.match(file, /buildPackedRowDescriptor\(ONLINE_STATUS_COLUMNS\)/,
+  "the header must be a blue.DBRowDescriptor");
+ assert.doesNotMatch(file, /buildRowset\(ONLINE_STATUS_COLUMNS/,
+  "a list header cannot be handed to blue.DBRow");
+});
