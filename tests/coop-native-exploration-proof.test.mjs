@@ -58,7 +58,9 @@ test("incomplete, fake, duplicate or mismatched probe scan results cannot grant 
 });
 
 test("native scanner ship ID fallbacks work only with an in-space session",()=>{
- const legacy={characterID:101,activeShipID:91001,_space:{systemID}};
+ // The cached active ship must be the SAME hull the scan origin reported
+ // (origin() derives it from the character), or the fallback is a different ship.
+ const legacy={characterID:101,activeShipID:origin().shipID,_space:{systemID}};
  const complete=record({session:legacy,scanResult:scan(keyVal("ABC-001",1)),
   origin:origin(),sites,nowMs:now});
  assert.equal(complete.count,1);
