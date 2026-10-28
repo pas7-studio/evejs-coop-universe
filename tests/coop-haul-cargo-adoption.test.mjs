@@ -1269,7 +1269,9 @@ test("second restart requires reconciled native depot audit before any physical 
   audit:()=>{audited++;return {status:"OK",committed:0,invalid:0,unresolved:0}}
  }});
  assert.equal(f.result.status,"ADOPTED");
- assert.equal(audited,1);
+ // The depot is audited once while planning and AGAIN under the warehouse
+ // writer lock, so the reparent is never approved on a pre-lock snapshot.
+ assert.equal(audited,2);
  assert.equal(f.flushes,1);
  assert.equal(f.store.writes.length,1);
  assert.equal(f.target.state,"loaded");
