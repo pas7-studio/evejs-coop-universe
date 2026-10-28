@@ -16,6 +16,11 @@ Closed since that probe (each with a fork mirror where the code changed):
   coop-npc-atomic-sqlite-crash 0/2->2/0, coop-player-mining-warehouse-integration 0/5->5/0,
   coop-native-industry 6/1->7/0, coop-park-runaway-miner 2/1->3/0,
   coop-native-industry-progression 1/1->2/0
+  coop-npc-durable-ammo-debit 2/18->20/0, coop-npc-wormhole-transit 1/2->3/0
+  coop-npc-fire-outcome-witness 0/1->15/0, coop-npc-expedition-operations 0/3->3/0
+  coop-player-industry-fence 3/9->12/0, cycle 0/1->1/0, native-boundary 9/2->11/0
+  coop-skill-rate-cutover 8/13->21/0, coop-rescue-native-contract-wallet 2/6->8/0,
+  coop-war-recovery-console 6/1->7/0, coop-native-live-capacitor 0/1->3/0
 
 Still open and NOT ours to fix silently:
   - coop-escort-flight-stage-c 8/6: needs the missing ./coopAlifeNativeDeliveryEvidence
