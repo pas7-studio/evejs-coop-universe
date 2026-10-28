@@ -434,3 +434,45 @@ test('an unfunded border is skipped by name instead of aborting the batch', () =
   assert.match(opened.skipped[0].reason, /^SUPPLY_UNFUNDED:/);
   assert.equal(opened.skipped[0].warID, plan.openings[0].plan.war.warID);
 });
+
+test('a front whose campaign expired really reopens instead of announcing it forever',()=>{
+ // The campaign id is deterministic (war + target), so the second attempt produced the same
+ // id and the same processed eventID: the core answered DUPLICATE, the state did not change,
+ // and the runtime still published "war opened" every tick. Measured live: six such lines in
+ // ten minutes for war:500001-500004:campaign:30003837 while the durable record stayed EXPIRED.
+ const banks={500001:{balance:1000000},500002:{balance:1000000}};
+ const treasuryFor=()=>treasury.createWarTreasury({
+  gameStore:null,
+  readBalance:(factionID)=>banks[factionID].balance,
+  moveIsk:(factionID,amount)=>{banks[factionID].balance-=amount;},
+ });
+ const plan=opening.planWars({
+  state:core.empty(),
+  presence:presence(),
+  getStargatesForSystem,
+  getGate,
+  nowMs:1000,
+  readWarState:()=>core.empty(),
+ });
+ assert.equal(plan.status,'READY');
+ const first=opening.applyOpenings({state:core.empty(),plan,nowMs:1000});
+ assert.equal(first.status,'OPENED');
+ const campaignID=first.campaignIDs[0];
+ // the reaper's verdict
+ const expired=structuredClone(first.state);
+ expired.campaigns[campaignID]=Object.assign({},expired.campaigns[campaignID],
+  {state:'EXPIRED',expiredAt:1000,expiredReason:'NO_ASSAULT_DEPLOYMENT_PROOF',revision:2});
+ const later=1000+60*60*1000;                       // past the reopen cooldown
+ const replan=opening.planWars({
+  state:expired,presence:presence(),getStargatesForSystem,getGate,nowMs:later,
+  readWarState:()=>expired,
+ });
+ assert.equal(replan.status,'READY','the front is plannable again after the cooldown');
+ assert.notEqual(replan.openings[0].plan.campaign.campaignID,campaignID,
+  'a terminal campaign must not be reused, or the core answers DUPLICATE and nothing happens');
+ const second=opening.applyOpenings({state:expired,plan:replan,nowMs:later});
+ assert.equal(second.status,'OPENED');
+ assert.equal(second.campaignIDs.length,1);
+ assert.equal(Object.keys(second.state.campaigns).length,2,'history keeps the expired record');
+ assert.equal(second.state.campaigns[second.campaignIDs[0]].state,'PREPARING');
+});
