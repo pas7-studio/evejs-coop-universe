@@ -58,6 +58,29 @@ Expect `H2 tls established … ALPN=h2` followed by
 If the log shows `gateway request on the plain-HTTP port …`, the client reached the proxy but
 not the TLS listener — relaunch through `Play.bat`.
 
+## The remote player (SSH tunnel + Proton game port)
+
+The friend runs his own client, so the rule is identical and so is the failure: his `Play.bat`
+must export the proxy variables, and it must point at **his** tunnelled ports
+(`http://127.0.0.1:26002/`), with the host CA imported once
+([FRIEND_PC_PRIVATE_TUNNEL.md](FRIEND_PC_PRIVATE_TUNNEL.md)). The game connection goes to the
+public Proton port (`159.26.120.49:61730`), which `prefs.ini` carries, not `start.ini`.
+
+What the friend must do, in one line: **start the client with his `Play.bat`, never
+`exefile.exe`**. If he skips it, his login chat and market still work over the tunnel but the
+gateway surfaces (advantage, campaigns, licences, corp goals, insurgency) report
+`ServerException(500, "invalid character on request")` - the same symptom as a local
+direct launch.
+
+The owner can verify a friend's launch without touching the friend's machine: the gateway logs
+every call with the character that made it.
+
+```powershell
+docker logs --since 5m evejs-server-1 2>&1 |
+  Select-String "Requests.Send type=|H2 .*tls established"
+# a correct launch from the tunnel shows Requests.Send lines with his activeCharacterID
+```
+
 ## Play stack prerequisite
 
 The stack itself is started/recreated only with
