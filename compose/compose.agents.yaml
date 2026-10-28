@@ -102,6 +102,12 @@ services:
       # that same native wallet (coopWarTreasury verifies and debits it, so no
       # ISK is created). Work stack only until the owner accepts it.
       EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK: "1"
+      # FW-046 (2026-10-28): a reservation used to be taken for ONE side only, so
+      # a defender kill could never be paid (measured 19:15Z: real kill by 500011,
+      # escrow HELD for 500004, payout refused NO_HELD_ESCROW_FOR_FACTION). Each
+      # side now funds its own bounty from its own wallet; a side that cannot pay
+      # is refused per side and never blocks the other. Opt-in, work stack only.
+      EVEJS_COOP_WAR_BOUNTY_BOTH_SIDES: "1"
       # FW-005B (2026-10-28): this stack ran with REQUIRE_FUNDING=0, i.e. a
       # campaign could open with a paper supply and no escrow, so no bounty could
       # ever be paid. Require real money: a campaign now opens only if both war
