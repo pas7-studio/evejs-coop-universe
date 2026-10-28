@@ -2177,3 +2177,9 @@ Why: the register must not call a working surface a stub: gRPC surfaces are now 
 Detail: The campaigns gateway answers every request with 200 plus an empty payload (its messages are not even in the local proto root), while fwAdvantage is filled from real state and the insurgency gateway reports correct shapes with honest zero progress. A register that calls all three 'stubs' would be wrong.
 Where: docs/CLIENT_CONTRACT_STATUS.md, scripts/coop-client-contracts.cjs
 Evidence: docs/CLIENT_CONTRACT_STATUS.md regenerated: 542 calls, 0 missing, 44 stubs, 103 nullable, 395 ok; tests/coop-client-contracts 2/0
+### 2026-10-28T21:29Z · b919223 · L2 · fix(fw): the all-systems warzone mode no longer leaves systems without victory points
+
+Why: the all-systems warzone mode left systems without a victory point state, which the stats tab dereferences without a guard
+Detail: With EVEJS_COOP_FW_ALL_SYSTEMS=1 the occupation payload lists every static warzone system, but the victory point state covered only territories and campaign targets, and warzoneStats.py reads victoryPointsState.contestedFraction without a guard - an AttributeError on the first untouched system. The state now covers the same systems with an honest zero score. Measured live with the flag on: 814 sta
+Where: integration/coopWarAdvantage.cjs, tests/coop-war-advantage.test.mjs
+Evidence: fork 3033ce5; live flag-on probe: 814 states, 30045344=1200, others 0/75000; coop-war-advantage 8/0; module deployed without restart
