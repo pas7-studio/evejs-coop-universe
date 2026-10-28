@@ -1,0 +1,3357 @@
+{
+"source": "EVE client code.ccp V24.01 (build 2026-06-16), 370 modules that call RemoteSvc/ProxySvc",
+"calls": {
+"LPStoreMgr.GetAvailableOffersFromCorp": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/loyaltyPointStore/lpStoreSvc.pyj"
+]
+},
+"LPStoreMgr.TakeOfferForCharacter": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/loyaltyPointStore/lpStoreSvc.pyj"
+]
+},
+"LPStoreMgr.TakeOfferForCorporation": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/loyaltyPointStore/lpStoreSvc.pyj"
+]
+},
+"ProjectDiscovery.fix_task_id": {
+"sites": 1,
+"modules": [
+"projectdiscovery/client/projects/covid/ui/devpopup.pyj"
+]
+},
+"ProjectDiscovery.get_player_analysis_kredits": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/loyaltyPointStore/lpStoreSvc.pyj"
+]
+},
+"ProjectDiscovery.get_player_state": {
+"sites": 1,
+"modules": [
+"projectdiscovery/client/ui/projectdiscoverywindow.pyj"
+]
+},
+"ProjectDiscovery.get_player_statistics": {
+"sites": 1,
+"modules": [
+"projectdiscovery/client/ui/projectdiscoverywindow.pyj"
+]
+},
+"ProjectDiscovery.get_tutorial_completion_status": {
+"sites": 1,
+"modules": [
+"projectdiscovery/client/ui/projectdiscoverywindow.pyj"
+]
+},
+"RWManager.get_closest_rw_stations": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/station/loyaltyPointStore/lpStoreSvc.pyj",
+"resourcewars/client/iconlabelview.pyj"
+]
+},
+"RWManager.solarsystem_contains_rw_instances": {
+"sites": 2,
+"modules": [
+"resourcewars/client/firstcompletiontracker.pyj",
+"resourcewars/client/rwservice.pyj"
+]
+},
+"XmppChatMgr.EnsureResourceWarsChannelExists": {
+"sites": 1,
+"modules": [
+"resourcewars/client/rwservice.pyj"
+]
+},
+"XmppChatMgr.GMMute": {
+"sites": 1,
+"modules": [
+"chat/client/chat_service.pyj"
+]
+},
+"XmppChatMgr.GMUnmute": {
+"sites": 1,
+"modules": [
+"chat/client/chat_service.pyj"
+]
+},
+"XmppChatMgr.GrantChannelOwnership": {
+"sites": 1,
+"modules": [
+"xmppchatclient/xmppchannelsettings.pyj"
+]
+},
+"abyssalMgr.AbyssalEndGateActivation": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/movementFunctions.pyj"
+]
+},
+"abyssalMgr.AbyssalGateActivation": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/movementFunctions.pyj"
+]
+},
+"abyssal_content_manager.generate_abyss_npc_spawn_report": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/abyssal_npc_spawn_tool.pyj"
+]
+},
+"account.GetCashBalance": {
+"sites": 5,
+"modules": [
+"carbon/common/script/net/httpGate.pyj",
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_home.pyj",
+"eve/client/script/ui/shared/neocom/wallet/walletSvc.pyj"
+]
+},
+"account.GiveCash": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/personal/giveIskPanel.pyj",
+"eve/client/script/ui/shared/neocom/wallet/transferMoneyWnd.pyj"
+]
+},
+"account.GiveCashFromCorpAccount": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/transferMoneyWnd.pyj"
+]
+},
+"achievementTrackerMgr.HasEverWarped": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/camera/enterSpaceCamera.pyj"
+]
+},
+"agentMgr.GetAgents": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj",
+"eve/client/script/ui/station/agents/agents.pyj"
+]
+},
+"agentMgr.GetCompletedCareerAgentIDs": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/agents/agents.pyj"
+]
+},
+"agentMgr.GetDisabledMissions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/agents/agents.pyj"
+]
+},
+"agentMgr.GetMessagesForEpicArcMissions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/epicArcs/epicArcController.pyj"
+]
+},
+"agentMgr.GetMyEpicArcStatus": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/epicArcSvc.pyj"
+]
+},
+"agentMgr.GetMyJournalDetails": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/journal.pyj"
+]
+},
+"agentMgr.GetPlausibleMissionIDs": {
+"sites": 1,
+"modules": [
+"evemissions/client/qa_tools.pyj"
+]
+},
+"agentMgr.GetSolarSystemOfAgent": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/agents/agents.pyj"
+]
+},
+"alert.BeanCount": {
+"sites": 1,
+"modules": [
+"carbon/common/script/sys/alert.pyj"
+]
+},
+"alert.BeanDelivery": {
+"sites": 1,
+"modules": [
+"carbon/common/script/sys/alert.pyj"
+]
+},
+"alert.GetLogModeForError": {
+"sites": 1,
+"modules": [
+"carbon/common/script/sys/alert.pyj"
+]
+},
+"alert.GroupBeanDelivery": {
+"sites": 1,
+"modules": [
+"carbon/common/script/sys/alert.pyj"
+]
+},
+"alert.SendClientStackTraceAlert": {
+"sites": 1,
+"modules": [
+"carbon/common/script/sys/alert.pyj"
+]
+},
+"allianceRegistry.GetAlliance": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/alliances/all_cso_alliance.pyj"
+]
+},
+"allianceRegistry.GetAllianceMembers": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj"
+]
+},
+"allianceRegistry.GetAllianceMembersOlderThan": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpDonateEMPanel.pyj"
+]
+},
+"allianceRegistry.GetAlliancePublicInfo": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/alliances/all_cso.pyj",
+"eve/client/script/ui/services/wars/warPermit.pyj"
+]
+},
+"allianceRegistry.GetDaysInAlliance": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpDonateEMPanel.pyj",
+"eve/client/script/ui/shared/neocom/wallet/panels/personal/personalDonateEMPanel.pyj"
+]
+},
+"allianceRegistry.GetEmploymentRecord": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj"
+]
+},
+"allianceRegistry.GetRankedAlliances": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/alliances/all_cso_alliance.pyj"
+]
+},
+"alphaInjectorMgr.GetNextAvailableInjection": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/skillsvc.pyj"
+]
+},
+"authentication.AccruedTime": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/login/antiaddiction.pyj"
+]
+},
+"authentication.AmUnderage": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/login/antiaddiction.pyj"
+]
+},
+"authentication.SetLanguageID": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/gameui.pyj"
+]
+},
+"bannedwords.check_search_words_allowed": {
+"sites": 1,
+"modules": [
+"bannedwords/client/bannedwords_client.pyj"
+]
+},
+"bannedwords.check_words_allowed": {
+"sites": 1,
+"modules": [
+"bannedwords/client/bannedwords_client.pyj"
+]
+},
+"bannedwords.fetch_regexes": {
+"sites": 1,
+"modules": [
+"bannedwords/client/bannedwords_client.pyj"
+]
+},
+"beyonce.AdminGetBubbleID": {
+"sites": 1,
+"modules": [
+"eve/client/script/remote/michelle.pyj"
+]
+},
+"beyonce.GetCynoJammerState": {
+"sites": 1,
+"modules": [
+"sovDashboard/cynoJammerIcon.pyj"
+]
+},
+"beyonce.GetFormations": {
+"sites": 1,
+"modules": [
+"eve/client/script/remote/michelle.pyj"
+]
+},
+"billMgr.CharPayBill": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/walletSvc.pyj"
+]
+},
+"billMgr.GetAutomaticPaySettings": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsAutoPaidPanel.pyj",
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsAutoPaySettingsPanel.pyj",
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsPayablePanel.pyj"
+]
+},
+"billMgr.GetCorporationBills": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/war/warLandingPage.pyj",
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsAutoPaidPanel.pyj",
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsPayablePanel.pyj"
+]
+},
+"billMgr.GetCorporationBillsReceivable": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsReceivablePanel.pyj"
+]
+},
+"billMgr.PayCorporationBill": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/walletSvc.pyj"
+]
+},
+"billMgr.SendAutomaticPaySettings": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/corp/corpBillsAutoPaySettingsPanel.pyj"
+]
+},
+"bountyProxy.AddToBounty": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.CancelSellKillRight": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GMClearBountyCache": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GMReimburseBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetBountiesAndKillRights": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetKillRightsOnCharacters": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetMyBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetMyKillRights": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetTopAllianceBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetTopAllianceBountyHunters": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetTopCorpBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetTopCorporationBountyHunters": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetTopPilotBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.GetTopPilotBountyHunters": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.SearchAllianceBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.SearchCharBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.SearchCorpBounties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"bountyProxy.SellKillRight": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"browserLockdownSvc.GetDefaultHomePage": {
+"sites": 1,
+"modules": [
+"carbonui/control/browser/sites.pyj"
+]
+},
+"browserLockdownSvc.GetFlaggedSitesHash": {
+"sites": 1,
+"modules": [
+"carbonui/control/browser/sites.pyj"
+]
+},
+"browserLockdownSvc.GetFlaggedSitesList": {
+"sites": 1,
+"modules": [
+"carbonui/control/browser/sites.pyj"
+]
+},
+"browserLockdownSvc.IsBrowserInLockdown": {
+"sites": 1,
+"modules": [
+"carbonui/control/browser/sites.pyj"
+]
+},
+"cache.GetServerVersionAndBuild": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/bugReporting.pyj"
+]
+},
+"charMgr.AddContact": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/addressBook/addressbookService.pyj"
+]
+},
+"charMgr.AddOwnerNote": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.BlockOwners": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/addressBook/addressbookService.pyj"
+]
+},
+"charMgr.DeleteContacts": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/addressBook/addressbookService.pyj"
+]
+},
+"charMgr.EditContactsRelationshipID": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/addressBook/addressbookService.pyj"
+]
+},
+"charMgr.EditOwnerNote": {
+"sites": 4,
+"modules": [
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.GetCharacterCreationDate": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"charMgr.GetCharacterDescription": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/charsheet/bioPanel.pyj"
+]
+},
+"charMgr.GetCohortsForCharacter": {
+"sites": 1,
+"modules": [
+"gatekeeper/client/service.pyj"
+]
+},
+"charMgr.GetContactList": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/addressBook/addressbookService.pyj"
+]
+},
+"charMgr.GetHomeStationRow": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/charactersheet.pyj"
+]
+},
+"charMgr.GetNote": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/info/panels/panelNotes.pyj",
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.GetOwnerNote": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.GetOwnerNoteLabels": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.GetPaperdollState": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/base.pyj"
+]
+},
+"charMgr.GetPrivateInfoOnCorpChange": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/personal/personalDonateEMPanel.pyj"
+]
+},
+"charMgr.GetPublicInfo": {
+"sites": 13,
+"modules": [
+"avatardisplay/avatardisplay.pyj",
+"eve/client/script/ui/services/ccSvc.pyj",
+"eve/client/script/ui/services/crimewatchSvc.pyj",
+"eve/client/script/ui/shared/info/panels/panelStandings.pyj"
+]
+},
+"charMgr.GetPublicInfo3": {
+"sites": 5,
+"modules": [
+"eve/client/script/ui/shared/dockedUI/inControlCont.pyj",
+"eve/client/script/ui/shared/info/characterInfoWindow.pyj",
+"eve/client/script/ui/shared/info/infoContentBase.pyj",
+"nodegraph/client/getters/player.pyj"
+]
+},
+"charMgr.GetRecentShipKillsAndLosses": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj"
+]
+},
+"charMgr.GetSettingsInfo": {
+"sites": 1,
+"modules": [
+"carbonui/services/settingsSvc.pyj"
+]
+},
+"charMgr.LogSettings": {
+"sites": 1,
+"modules": [
+"carbonui/services/settingsSvc.pyj"
+]
+},
+"charMgr.RemoveOwnerNote": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.SetActivityStatus": {
+"sites": 2,
+"modules": [
+"eve/client/script/parklife/gameui.pyj"
+]
+},
+"charMgr.SetCharacterDescription": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/charsheet/bioPanel.pyj"
+]
+},
+"charMgr.SetNote": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/info/panels/panelNotes.pyj",
+"eve/client/script/ui/shared/neocom/notepad.pyj"
+]
+},
+"charMgr.UnblockOwners": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/addressBook/addressbookService.pyj"
+]
+},
+"charUnboundMgr.CancelCharacterDeletePrepare": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/login/charSelection/characterSelection.pyj"
+]
+},
+"charUnboundMgr.CreateCharacterWithDoll": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"charUnboundMgr.GetCharacterInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"charUnboundMgr.GetCharacterLockType": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/login/charSelection/characterSelection.pyj"
+]
+},
+"charUnboundMgr.GetCohortsForUser": {
+"sites": 1,
+"modules": [
+"gatekeeper/client/service.pyj"
+]
+},
+"charUnboundMgr.GetNumCharacters": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/login/characterCreationContainer.pyj",
+"eve/client/script/ui/login/characterCreationContainer_new.pyj"
+]
+},
+"charUnboundMgr.GetQAStarterSystemIDs": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"charUnboundMgr.GetValidRandomName": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/login/charcreation/steps/sections/chooseNameSection.pyj",
+"eve/client/script/ui/login/charcreation_new/steps/sections/chooseNameSection.pyj"
+]
+},
+"charUnboundMgr.SelectCharacterID": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj",
+"eve/client/script/util/webtools.pyj"
+]
+},
+"charUnboundMgr.ToggleValidation": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/login/charcreation/steps/characterCustomization.pyj",
+"eve/client/script/ui/login/charcreation_new/steps/characterCustomization.pyj"
+]
+},
+"charUnboundMgr.UpdateCharacterBloodline": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"charUnboundMgr.UpdateCharacterGender": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"charUnboundMgr.ValidateNameEx": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/login/charcreation/steps/sections/chooseNameSection.pyj",
+"eve/client/script/ui/login/charcreation_new/steps/sections/chooseNameSection.pyj"
+]
+},
+"characterEnergyMgr.GetMyEnergyState": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/characterEnergySvc.pyj"
+]
+},
+"characterMiningLedger.GetCharacterLogs": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/ledger/ledgerSvc.pyj"
+]
+},
+"chatAuthenticationService.GetAuthenticationToken": {
+"sites": 1,
+"modules": [
+"xmppchatclient/xmppchatsvc.pyj"
+]
+},
+"clientStatLogger.LogString": {
+"sites": 4,
+"modules": [
+"eve/client/script/remote/michelle.pyj",
+"eve/client/script/util/jumpMonitor.pyj"
+]
+},
+"communityTrackMgr.change_qa_mode": {
+"sites": 2,
+"modules": [
+"communitytracks/client/qa/menu.pyj"
+]
+},
+"communityTrackMgr.get_instance_attributes_public": {
+"sites": 1,
+"modules": [
+"communitytracks/client/repository.pyj"
+]
+},
+"config.GetStationSolarSystemsByOwner": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj",
+"eve/client/script/ui/shared/mapView/filters/mapFilterSettledByCorp.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj"
+]
+},
+"contextualOfferMgr.TrackOfferBuyPress": {
+"sites": 1,
+"modules": [
+"contextualOffers/client/contextualOffersSvc.pyj"
+]
+},
+"contextualOfferMgr.TrackOfferClosed": {
+"sites": 1,
+"modules": [
+"contextualOffers/client/contextualOffersSvc.pyj"
+]
+},
+"contextualOfferMgr.TrackOfferDelivered": {
+"sites": 1,
+"modules": [
+"contextualOffers/client/contextualOffersSvc.pyj"
+]
+},
+"contextualOfferMgr.TrackOfferPurchased": {
+"sites": 1,
+"modules": [
+"contextualOffers/client/contextualOffersSvc.pyj"
+]
+},
+"contextualOfferMgr.TrackOfferPurchasedSeen": {
+"sites": 1,
+"modules": [
+"contextualOffers/client/contextualOffersSvc.pyj"
+]
+},
+"contextualOfferMgr.TrackOfferSeen": {
+"sites": 1,
+"modules": [
+"contextualOffers/client/contextualOffersSvc.pyj"
+]
+},
+"contractProxy.GM_ExpireContract": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/contracts/contractentry.pyj"
+]
+},
+"contractProxy.GetContractListForOwner": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/contracts/contractPanels.pyj"
+]
+},
+"contractProxy.GetMyBids": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/contracts/contracts.pyj"
+]
+},
+"contractProxy.GetMyCurrentContractList": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/contracts/contracts.pyj"
+]
+},
+"contractProxy.GetMyExpiredContractList": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/contracts/contracts.pyj"
+]
+},
+"contractProxy.SearchContracts": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/contracts/contractsearch.pyj"
+]
+},
+"corpMiningLedger.GetObserverLedger": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/ledger/ledgerSvc.pyj"
+]
+},
+"corpMiningLedger.GetObserversWithMiningEvents": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/ledger/ledgerSvc.pyj"
+]
+},
+"corpRecProxy.CreateRecruitmentAd": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpRecProxy.DeleteRecruitmentAd": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpRecProxy.GetRecruiters": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpRecProxy.GetRecruitmentAd": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpRecProxy.GetRecruitmentAdsByCorpID": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpRecProxy.GetRecruitmentAdsForCorporation": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/bco_recruitment.pyj"
+]
+},
+"corpRecProxy.SearchCorpAds": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpRecProxy.UpdateRecruitmentAd": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpmgr.AuditMember": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_member_auditing.pyj"
+]
+},
+"corpmgr.GetAggressionSettings": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpmgr.GetAggressionSettingsForCorps": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/base_corporation.pyj"
+]
+},
+"corpmgr.GetAssetInventory": {
+"sites": 8,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterCorpAssets.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj",
+"eve/client/script/ui/shared/neocom/contracts/createContractWnd.pyj"
+]
+},
+"corpmgr.GetAssetInventoryForLocation": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_accounts.pyj"
+]
+},
+"corpmgr.GetCorporationIDForCharacter": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/info/characterInfoWindow.pyj",
+"eve/client/script/ui/shared/info/infoContentBase.pyj",
+"eve/client/script/ui/shared/neocom/contracts/createContractWnd.pyj"
+]
+},
+"corpmgr.GetCorporations": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/corporation/bco_corporations.pyj"
+]
+},
+"corpmgr.GetPublicInfo": {
+"sites": 5,
+"modules": [
+"eve/client/script/ui/services/wars/warPermit.pyj",
+"eve/client/script/ui/shared/bountyWindow.pyj",
+"eve/client/script/ui/shared/info/corporationInfoWindow.pyj",
+"eve/client/script/ui/shared/killRights.pyj"
+]
+},
+"corpmgr.SearchAssets": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_accounts.pyj"
+]
+},
+"corporationSvc.CreateMedal": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"corporationSvc.GetAllCorpMedals": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"corporationSvc.GetCorpInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj"
+]
+},
+"corporationSvc.GetEmployementRecordAndCharacterTransfers": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj"
+]
+},
+"corporationSvc.GetEmploymentRecord": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/facWarSvc.pyj",
+"fwwarzone/client/dashboard/fwWarzoneDashboard.pyj"
+]
+},
+"corporationSvc.GetMedalDetails": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"corporationSvc.GetMedalsReceived": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"corporationSvc.GetRecipientsOfMedal": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"corporationSvc.GiveMedalToCharacters": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"corporationSvc.SetMedalStatus": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/medals.pyj"
+]
+},
+"crateService.ClaimFitting": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/crate/lootItem.pyj"
+]
+},
+"crateService.ClaimLoot": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/crate/lootItem.pyj"
+]
+},
+"crateService.ClaimLootFromCrateStack": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/crate/controller.pyj"
+]
+},
+"crateService.ClaimSkillBundle": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/crate/lootItem.pyj"
+]
+},
+"crateService.GetCrateLocation": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/crate/controller.pyj"
+]
+},
+"crateService.OpenCrate": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/crate/controller.pyj"
+]
+},
+"crateService.PeekInsideFixedCrate": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/crate/controller.pyj"
+]
+},
+"devIndexManager.GetAllDevelopmentIndices": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"dogmaIM.CreateNewbieShip": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/base.pyj"
+]
+},
+"dogmaIM.GetRequiredSkillLevels": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/dna.pyj"
+]
+},
+"dungeon.DEGetArchetypes": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/inflight/dungeoneditor.pyj"
+]
+},
+"dungeon.DEGetDungeons": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/inflight/dungeoneditor.pyj"
+]
+},
+"dungeon.DEGetFactions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/inflight/dungeoneditor.pyj"
+]
+},
+"dungeon.DEGetRoomObjectPaletteData": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/inflight/dungeoneditor.pyj"
+]
+},
+"dungeon.DEGetRooms": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/inflight/dungeoneditor.pyj"
+]
+},
+"dungeonExplorationMgr.GetMyEscalatingPathDetails": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/journal.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetBulwarkMiningSiteCounts": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetCombatAnomaliesCount": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetCombatAnomalyInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetFactionWarfareBattlefieldInstances": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwWarzoneSvc.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetFactionWarfareInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetHomefrontSiteInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetIceBeltInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetIceBeltsCount": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetOreAnomaliesCount": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetOreAnomaliesCountInRange": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetOreAnomalyInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetPirateInsurgencyIceHeistInstances": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/insurgenceDashboardSvc.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetPirateInsurgencyInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetSignatureInstances": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/agencyNew/contentProviders/contentProviderSignatures.pyj",
+"eve/client/script/ui/shared/mapView/filters/mapFilterSignatures.pyj"
+]
+},
+"dungeonInstanceCacheMgr.GetTriglavianSiteInstances": {
+"sites": 1,
+"modules": [
+"evedungeons/client/anomalyTracker.pyj"
+]
+},
+"dynamicItemService.CreateDynamicItem": {
+"sites": 1,
+"modules": [
+"eve/client/script/dogma/dynamicItemSvc.pyj"
+]
+},
+"dynamicResourceCacheMgr.GetDBSMapData": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterDynamicBounty.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj"
+]
+},
+"dynamicResourceCacheMgr.GetDynamicResourceSettings": {
+"sites": 12,
+"modules": [
+"eve/client/script/ui/shared/agencyNew/contentPieces/essSystemContentPiece.pyj",
+"eve/client/script/ui/shared/agencyNew/ui/contentPageInfoConts/essSystemInfoContainer.pyj",
+"eve/client/script/ui/shared/agencyNew/ui/filters/essFiltersCont.pyj",
+"eve/client/script/ui/shared/agencyNew/ui/tooltips/ess/essBountiesOutputTooltip.pyj"
+]
+},
+"dynamicResourceCacheMgr.GetESSAgencyData": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/agencyNew/contentProviders/contentProviderESS.pyj"
+]
+},
+"dynamicResourceCacheMgr.GetESSSystemDetails": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/agencyNew/contentPieces/essSystemContentPiece.pyj"
+]
+},
+"eject.LaunchShipOrContainerFromWreckOrContainer": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/invItemFunctions.pyj"
+]
+},
+"encodedItems.DecodeItem": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/menuFunctions.pyj"
+]
+},
+"essMgr.GetDataForClientSolarSystem": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/dynamicResource/dynamicResourceSvc.pyj"
+]
+},
+"essMgr.GetMainBankTheftsForClientSolarSystem": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/dynamicResource/dynamicResourceSvc.pyj"
+]
+},
+"essMgr.GetReserveBankTheftsForClientSolarSystem": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/dynamicResource/dynamicResourceSvc.pyj"
+]
+},
+"essMgr.RequestMainBankUnlink": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/dynamicResource/dynamicResourceSvc.pyj"
+]
+},
+"essMgr.RequestReserveBankUnlink": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/dynamicResource/dynamicResourceSvc.pyj"
+]
+},
+"eveguard_report.heartbeat_started": {
+"sites": 1,
+"modules": [
+"serenity/eveguard/client/eveguard_service.pyj"
+]
+},
+"eveguard_report.heartbeat_stopped": {
+"sites": 2,
+"modules": [
+"serenity/eveguard/client/eveguard_service.pyj"
+]
+},
+"eventLog.LogClientEvent": {
+"sites": 15,
+"modules": [
+"eve/client/script/parklife/autopilot.pyj",
+"eve/client/script/ui/services/corporation/base_corporation.pyj",
+"eve/client/script/ui/services/flightControls.pyj",
+"eve/client/script/ui/shared/cloneGrade/cloneStateWindow.pyj"
+]
+},
+"eventLog.LogClientStats": {
+"sites": 2,
+"modules": [
+"eve/client/script/sys/clientStatsSvc.pyj"
+]
+},
+"eventLog.LogPlayerRequestedDisconnect": {
+"sites": 1,
+"modules": [
+"eve/client/script/sys/clientStatsSvc.pyj"
+]
+},
+"fighterMgr.CmdAbandonFighter": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.CmdScoopAbandonedFighterFromSpace": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.ExecuteMovementCommandOnFighters": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.GetFightersForShip": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.LaunchFightersFromTubes": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.LoadFightersToTube": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.RecallFightersToTubes": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fighterMgr.UnloadTubeToFighterBay": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fightersSvc.pyj"
+]
+},
+"fleetMgr.AddToWatchlist": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetMgr.BroadcastToBubble": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetMgr.BroadcastToSystem": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetMgr.ForceLeaveFleet": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetMgr.RegisterForDamageUpdates": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetMgr.RemoveFromWatchlist": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetObjectHandler.CreateFleet": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.AddFleetFinderAdvert": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.ApplyToJoinFleet": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.GetAvailableFleetAds": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.GetMyFleetFinderAdvert": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.RemoveFleetFinderAdvert": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.UpdateAdvertAllowedEntities": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.UpdateAdvertInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fleetProxy.UpdateFleetAdvertWithNewLeader": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/fleetSvc.pyj"
+]
+},
+"fwCharacterEnlistmentMgr.CreateMyDirectEnlistment": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwEnlistmentSvc.pyj"
+]
+},
+"fwCharacterEnlistmentMgr.GetCorpAllowedEnlistmentFactions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwEnlistmentSvc.pyj"
+]
+},
+"fwCharacterEnlistmentMgr.GetMyDirectEnlistmentCooldownTimestamp": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwEnlistmentSvc.pyj"
+]
+},
+"fwCharacterEnlistmentMgr.GetMyEnlistment": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/fwEnlistmentSvc.pyj",
+"eve/client/script/ui/view/hangarBehaviours/modularHangarBehaviours.pyj"
+]
+},
+"fwCharacterEnlistmentMgr.RemoveMyDirectEnlistment": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwEnlistmentSvc.pyj"
+]
+},
+"fwCharacterEnlistmentMgr.SetMyCorpAllowedEnlistmentFactions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwEnlistmentSvc.pyj"
+]
+},
+"fwVictoryPointMgr.GetAllVictoryPointStates": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwVictoryPointSvc.pyj"
+]
+},
+"fwVictoryPointMgr.GetLocalVictoryPointState": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/fwVictoryPointSvc.pyj"
+]
+},
+"fwWarzoneSolarsystem.GetAllWarzones": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwWarzoneSvc.pyj"
+]
+},
+"fwWarzoneSolarsystem.GetAllWarzonesOccupationStates": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwWarzoneSvc.pyj"
+]
+},
+"fwWarzoneSolarsystem.GetAllWarzonesOccupationStatesUncached": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwWarzoneSvc.pyj"
+]
+},
+"fwWarzoneSolarsystem.GetHQSystemIDs": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/fwWarzoneSvc.pyj"
+]
+},
+"fwWarzoneSolarsystem.GetLocalOccupationState": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/fwWarzoneSvc.pyj"
+]
+},
+"inSpaceCompressionMgr.CompressItemInSpace": {
+"sites": 1,
+"modules": [
+"itemcompression/client/itemCompression.pyj"
+]
+},
+"industryManager.CancelJob": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryManager.CompleteJob": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryManager.CompleteManyJobs": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryManager.GetJob": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryManager.GetJobCounts": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryManager.GetJobsByOwner": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryManager.InstallJob": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryMonitor.ConnectJob": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"industryMonitor.DisconnectJob": {
+"sites": 1,
+"modules": [
+"eve/client/script/industry/industrySvc.pyj"
+]
+},
+"infoGatheringMgr.GetStateAndConfig": {
+"sites": 1,
+"modules": [
+"carbon/client/script/sys/infoGatheringSvc.pyj"
+]
+},
+"infoGatheringMgr.LogInfoEventsFromClient": {
+"sites": 1,
+"modules": [
+"carbon/client/script/sys/infoGatheringSvc.pyj"
+]
+},
+"ingamereport.report_exploit_abuse": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_gambling": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_inappropriate_character_name": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_inappropriate_language": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_macro_use": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_offensive_mail": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_other": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"ingamereport.report_questionable_transaction": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/zhReport/reportSvc.pyj"
+]
+},
+"insuranceSvc.GetContractForShip": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/insurance/base_insurance.pyj"
+]
+},
+"insuranceSvc.GetInsurancePrice": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/insurance/base_insurance.pyj"
+]
+},
+"insuranceSvc.GetInsurancePrices": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/insurance/base_insurance.pyj"
+]
+},
+"insurgencySolarsystem.GetAllVisibleCampaigns": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/insurgencyCampaignSvc.pyj"
+]
+},
+"insurgencySolarsystem.GetLocalCampaignClientSnapshot": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/insurgencyCampaignSvc.pyj"
+]
+},
+"invbroker.GetItemDescriptor": {
+"sites": 1,
+"modules": [
+"eve/client/script/environment/invCache.pyj"
+]
+},
+"jumpTimers.GetTimers": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/crimewatchSvc.pyj"
+]
+},
+"keeper.ActivateAccelerationGate": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/movementFunctions.pyj"
+]
+},
+"keeper.GetCurrentDungeonForCharacter": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/dungeonTracking.pyj"
+]
+},
+"keeper.GetLevelEditor": {
+"sites": 2,
+"modules": [
+"eve/client/script/parklife/scenarioMgr.pyj",
+"eve/client/script/ui/inflight/dungeoneditor.pyj"
+]
+},
+"keeper.GetOperationSpawnpointSolarSystem": {
+"sites": 1,
+"modules": [
+"operations/client/UI/operationDestinationController.pyj"
+]
+},
+"keeper.IsOperationSite": {
+"sites": 1,
+"modules": [
+"operations/client/UI/taskObjectiveData.pyj"
+]
+},
+"killRightMgr.ActivateKillRight": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj",
+"eve/client/script/ui/shared/killRights.pyj"
+]
+},
+"killRightMgr.BuyKillRight": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/bountySvc.pyj"
+]
+},
+"kiringMgr.GetEveGuardServerAddress": {
+"sites": 1,
+"modules": [
+"serenity/eveguard/client/eveguard_service.pyj"
+]
+},
+"kiringMgr.IsMonochromeStyleEnabled": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/login/charSelection/characterSelectionUtils.pyj"
+]
+},
+"kiringMgr.ShouldKickCheater": {
+"sites": 1,
+"modules": [
+"serenity/eveguard/client/eveguard_service.pyj"
+]
+},
+"localizationServer.GetAllTextChanges": {
+"sites": 1,
+"modules": [
+"carbon/client/script/localization/localizationClient.pyj"
+]
+},
+"localizationServer.ReloadFSDPickle": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/insider.pyj"
+]
+},
+"localizationServer.UpdateLocalizationQAWrap": {
+"sites": 2,
+"modules": [
+"carbon/client/script/localization/localizationClient.pyj",
+"localization/settings/qaSettings.pyj"
+]
+},
+"lookupSvc.LookupCharacters": {
+"sites": 2,
+"modules": [
+"eve/devtools/script/svc_slash.pyj",
+"eve/devtools/script/svc_trainer.pyj"
+]
+},
+"lookupSvc.LookupCorporations": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/svc_slash.pyj"
+]
+},
+"lookupSvc.LookupEvePlayerCharacters": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_applications.pyj"
+]
+},
+"lookupSvc.LookupFactions": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/svc_slash.pyj"
+]
+},
+"lookupSvc.LookupKnownLocationsByGroup": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/util/searchOld.pyj"
+]
+},
+"lookupSvc.LookupLocationsByGroup": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/insider.pyj"
+]
+},
+"lookupSvc.LookupNoneNPCAccountOwners": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/noneNPCAccountOwnerDialog.pyj"
+]
+},
+"lookupSvc.LookupOwners": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/util/searchOld.pyj",
+"xmppchatclient/pcownerpickerdialog.pyj"
+]
+},
+"lookupSvc.LookupPCOwners": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/util/searchOld.pyj"
+]
+},
+"lookupSvc.LookupWarableCorporationsOrAlliances": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/war_cso.pyj"
+]
+},
+"machoNet.GetClusterGameStatisticsForClient": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj"
+]
+},
+"machoNet.GetTime": {
+"sites": 2,
+"modules": [
+"carbon/client/script/remote/connectionService.pyj"
+]
+},
+"machoNet.SetGlobalConfigValue": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/windowManager.pyj"
+]
+},
+"mailMgr.PokePlayerAboutChatMsgGm": {
+"sites": 1,
+"modules": [
+"xmppchatclient/xmppchatsvc.pyj"
+]
+},
+"mailingListsMgr.Create": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/mail/mailingListsSvc.pyj"
+]
+},
+"map.GetAllRoamingWeatherSystems": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj"
+]
+},
+"map.GetBeaconCount": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterCynosuralFields.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetConstellationLPData": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"map.GetCurrentSovData": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"map.GetDeadspaceAgentsMap": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterDungeons.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetDeadspaceComplexMap": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterDungeons.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetEdencomFortressSystems": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj"
+]
+},
+"map.GetEdencomMinorVictorySystems": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj"
+]
+},
+"map.GetFacWarZoneInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/facWarSvc.pyj"
+]
+},
+"map.GetHistory": {
+"sites": 18,
+"modules": [
+"eve/client/script/ui/services/facWarSvc.pyj",
+"eve/client/script/ui/services/sovSvc.pyj",
+"eve/client/script/ui/shared/mapView/filters/mapFilterFactionKills.pyj",
+"eve/client/script/ui/shared/mapView/filters/mapFilterJumps.pyj"
+]
+},
+"map.GetIncursionGlobalReport": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/agencyNew/contentProviders/contentProviderIncursions.pyj",
+"eve/client/script/ui/shared/neocom/journal.pyj"
+]
+},
+"map.GetIndustryCostModifier": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterCostIndex.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetIndustryJobsOverLast24Hours": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterJobs24Hours.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetMyExtraMapInfo": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterCorpMembers.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetMyExtraMapInfoAgents": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterMyAgents.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetRecentSovActivity": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"map.GetSolarSystemVisits": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterVisited.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetStationCount": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/mapView/filters/mapFilterStationCount.pyj",
+"eve/client/script/ui/shared/mapView/mapViewColorHandler.pyj",
+"eve/client/script/ui/shared/maps/starModeHandler.pyj"
+]
+},
+"map.GetStationInfo": {
+"sites": 6,
+"modules": [
+"eve/client/script/ui/services/facWarSvc.pyj",
+"eve/client/script/ui/services/marketsvc.pyj",
+"eve/client/script/ui/services/uisvc.pyj",
+"eve/client/script/ui/shared/mapView/filters/mapFilterServices.pyj"
+]
+},
+"map.GetSystemsInIncursions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/agencyNew/contentPieces/incursionContentPiece.pyj"
+]
+},
+"map.GetTriglavianMinorVictorySystems": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj"
+]
+},
+"marketProxy.StartupCheck": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/market/quote.pyj"
+]
+},
+"milestoneMgr.ClaimRewards": {
+"sites": 1,
+"modules": [
+"milestones/client/milestoneSvc.pyj"
+]
+},
+"milestoneMgr.ProcessCharacterLogon": {
+"sites": 1,
+"modules": [
+"milestones/client/milestoneSvc.pyj"
+]
+},
+"miningScanMgr.perform_scan": {
+"sites": 1,
+"modules": [
+"mining/client/asteroid_scanning_service.pyj"
+]
+},
+"moonExtractions.CancelExtraction": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/moonmining/schedulingSvc.pyj"
+]
+},
+"moonExtractions.FractureChunkWithStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/moonmining/schedulingSvc.pyj"
+]
+},
+"moonExtractions.GetExtractionAndEventIDFromStructureID": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/moonmining/schedulingSvc.pyj"
+]
+},
+"moonExtractions.GetExtractionsForCorp": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/moonmining/schedulingSvc.pyj"
+]
+},
+"moonExtractions.GetMoonResourcesForStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/moonmining/schedulingSvc.pyj"
+]
+},
+"moonExtractions.StartNewExtraction": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/moonmining/schedulingSvc.pyj"
+]
+},
+"multiLoginBlocker.Login": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/login/charSelection/characterSelection.pyj"
+]
+},
+"mutualWarInviteMgr.GetPendingInvitesForSession": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/mutualWarInvites.pyj"
+]
+},
+"mutualWarInviteMgr.IsCorpInvitesBlockedPlayer": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/mutualWarInvites.pyj"
+]
+},
+"mutualWarInviteMgr.RespondToInviteByPlayer": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/mutualWarInvites.pyj"
+]
+},
+"mutualWarInviteMgr.SendInviteByPlayer": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/mutualWarInvites.pyj"
+]
+},
+"mutualWarInviteMgr.SetInvitesBlockedByPlayer": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/mutualWarInvites.pyj"
+]
+},
+"mutualWarInviteMgr.WithdrawInviteByPlayer": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/mutualWarInvites.pyj"
+]
+},
+"node_graph.process_client_blackboard_request": {
+"sites": 1,
+"modules": [
+"nodegraph/client/graph.pyj"
+]
+},
+"node_graph.process_client_graph_message": {
+"sites": 1,
+"modules": [
+"nodegraph/client/graph.pyj"
+]
+},
+"node_graph.qa_start_node": {
+"sites": 1,
+"modules": [
+"nodegraph/client/log_graph.pyj"
+]
+},
+"node_graph.qa_stop_active_nodes": {
+"sites": 1,
+"modules": [
+"nodegraph/client/log_graph.pyj"
+]
+},
+"node_graph.qa_stop_node": {
+"sites": 1,
+"modules": [
+"nodegraph/client/log_graph.pyj"
+]
+},
+"node_graph.qa_stop_node_graph": {
+"sites": 1,
+"modules": [
+"nodegraph/client/log_graph.pyj"
+]
+},
+"node_graph.qa_subscribe": {
+"sites": 1,
+"modules": [
+"nodegraph/client/log_graph.pyj"
+]
+},
+"node_graph.qa_unsubscribe": {
+"sites": 1,
+"modules": [
+"nodegraph/client/log_graph.pyj"
+]
+},
+"nonDiminishingInjectionMgr.GetAvailableNonDiminishingInjections": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/nonDiminishingInjectionService.pyj"
+]
+},
+"notificationMgr.LogNotificationInteraction": {
+"sites": 1,
+"modules": [
+"notifications/client/notificationCenter.pyj"
+]
+},
+"onlineStatus.GetInitialState": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/comtool/onlineStatus.pyj"
+]
+},
+"onlineStatus.GetOnlineStatus": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/comtool/onlineStatus.pyj"
+]
+},
+"operationsManager.process_client_event": {
+"sites": 1,
+"modules": [
+"achievements/client/eventHandler.pyj"
+]
+},
+"overviewPresetMgr.GetStoredPreset": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/overview/presetservice.pyj"
+]
+},
+"overviewPresetMgr.StoreLinkAndGetID": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/control/eveEditPlainText.pyj"
+]
+},
+"paperDollServer.GetPaperDollData": {
+"sites": 9,
+"modules": [
+"avatardisplay/avatardisplay.pyj",
+"eve/client/script/environment/spaceObject/corpse.pyj",
+"eve/client/script/ui/shared/neocom/avatarHeaderPreview.pyj",
+"eve/client/script/ui/shared/preview.pyj"
+]
+},
+"paperDollServer.GetPaperDollDataBatch": {
+"sites": 1,
+"modules": [
+"evephotosvc/scenePortraitQueue.pyj"
+]
+},
+"paperDollServer.GetPaperDollPortraitDataFor": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj",
+"evephotosvc/scenePortraitRenderer.pyj"
+]
+},
+"paperDollServer.UpdateExistingCharacterFull": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"paperDollServer.UpdateExistingCharacterLimited": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/ccSvc.pyj"
+]
+},
+"peaceTreatyMgr.GetPeaceTreatiesForSession": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/war_cso.pyj"
+]
+},
+"petitioner.AddPetitionRating": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.CancelPetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.ClaimPetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.ClosePetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.CreatePetition": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj",
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.DeletePetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.EscalatePetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetCategories": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetCategoryHierarchicalInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.GetCategoryProperties": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.GetClaimedPetitions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetClientPickerInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.GetLog": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetMyPetitionsEx": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetPetitionMessages": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetPetitionQueue": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetQueues": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetUnreadMessages": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.GetUserCatalogCountry": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.GetZendeskJwtLink": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.IsZendeskEnabled": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.MarkAsRead": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.MayPetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.PetitioneeChat": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.PetitionerChat": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.PropertyPopulationInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petitionWindow.pyj"
+]
+},
+"petitioner.UnClaimPetition": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"petitioner.UpdatePetitionRating": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/petition.pyj"
+]
+},
+"pingService.Ping": {
+"sites": 1,
+"modules": [
+"carbon/client/script/remote/connectionService.pyj"
+]
+},
+"planetMgr.DeleteLaunch": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/journal.pyj"
+]
+},
+"planetMgr.GetMyLaunchesDetails": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/planet/planetUISvc.pyj"
+]
+},
+"planetMgr.GetPlanetsForChar": {
+"sites": 1,
+"modules": [
+"eve/client/script/environment/planetSvc.pyj"
+]
+},
+"posMgr.GetControlTowers": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/inflight/moonmining.pyj"
+]
+},
+"publicQaToolsServer.CanGiveItemForMultifit": {
+"sites": 1,
+"modules": [
+"eve/client/script/util/publicQaToolsClient.pyj"
+]
+},
+"publicQaToolsServer.MoveMeTo": {
+"sites": 2,
+"modules": [
+"eve/client/script/util/publicQaToolsClient.pyj"
+]
+},
+"publicQaToolsServer.SlashCmd": {
+"sites": 1,
+"modules": [
+"eve/client/script/util/publicQaToolsClient.pyj"
+]
+},
+"pvpFilamentMgr.AbyssalPVPEndGateActivation": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/movementFunctions.pyj"
+]
+},
+"pvpFilamentMgr.GetActiveEvents": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.GetAllEvents": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.GetCharacterStatistics": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.GetLeaderboard": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.GetMostRecentEvent": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.GetNextEventDate": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.JoinPVPQueue": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"pvpFilamentMgr.LeavePVPQueue": {
+"sites": 1,
+"modules": [
+"pvpFilaments/client/pvpFilamentSvc.pyj"
+]
+},
+"raffleMgr.QA_SeedRaffles": {
+"sites": 1,
+"modules": [
+"raffles/client/insider.pyj"
+]
+},
+"randomJumpMgr.ActivateRandomJumpFilament": {
+"sites": 1,
+"modules": [
+"randomJump/client/randomJumpSvc.pyj"
+]
+},
+"repackagingSvc.RepackageItems": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/invItemFunctions.pyj"
+]
+},
+"rewardMgr.GetDelayedRewardsByGroupIDs": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/incursionSvc.pyj"
+]
+},
+"rewardMgr.GetRewardLPLogs": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/wallet/panels/personal/lpIncursionsPanel.pyj"
+]
+},
+"scanMgr.GetSystemScanMgr": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/scanSvc.pyj"
+]
+},
+"scanMgr.SignalTrackerRegister": {
+"sites": 2,
+"modules": [
+"eve/client/script/parklife/sensorSuiteService.pyj",
+"eve/devtools/script/svc_slash.pyj"
+]
+},
+"seasonManager.process_client_event": {
+"sites": 1,
+"modules": [
+"achievements/client/eventHandler.pyj"
+]
+},
+"serviceGatewayMgr.qa_disable_hijack_mode": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/quasarHijackWnd.pyj"
+]
+},
+"serviceGatewayMgr.qa_enable_hijack_mode": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/quasarHijackWnd.pyj"
+]
+},
+"serviceGatewayMgr.qa_is_hijack_mode_enabled": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/quasarHijackWnd.pyj"
+]
+},
+"sharedSettingsMgr.GetStoredSharedSetting": {
+"sites": 1,
+"modules": [
+"sharedSettings/util.pyj"
+]
+},
+"sharedSettingsMgr.StoreSettingLinkAndGetID": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/control/eveEditPlainText.pyj"
+]
+},
+"ship.GetShipFittingInfo": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/crate/controller.pyj"
+]
+},
+"shipCasterLandingPadMgr.GetAllLandingPads": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/shipcasterSvc.pyj"
+]
+},
+"shipCasterLandingPadMgr.GetFactionLandingPads": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/shipcasterSvc.pyj"
+]
+},
+"shipCasterLauncherMgr.GetFactionsWithShipcaster": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/shipcasterSvc.pyj"
+]
+},
+"shipCosmeticsMgr.ActivateSkinLicense": {
+"sites": 1,
+"modules": [
+"cosmetics/client/cosmeticsSvc.pyj"
+]
+},
+"shipCosmeticsMgr.ApplySkinToShip": {
+"sites": 2,
+"modules": [
+"cosmetics/client/cosmeticsSvc.pyj",
+"eve/client/script/ui/cosmetics/ship/shipUtil.pyj"
+]
+},
+"shipCosmeticsMgr.GMExpireSkinLicense": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/skins/devMenuFunctions.pyj"
+]
+},
+"shipCosmeticsMgr.GetEnabledCosmetics": {
+"sites": 1,
+"modules": [
+"shipcosmetics/client/fittingsgateway/quasar.pyj"
+]
+},
+"shipCosmeticsMgr.GetFirstPartySkinData": {
+"sites": 1,
+"modules": [
+"cosmetics/client/cosmeticsSvc.pyj"
+]
+},
+"shipCosmeticsMgr.GiveSkin": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/shared/skins/devMenuFunctions.pyj"
+]
+},
+"shipCosmeticsMgr.RemoveSkin": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/skins/devMenuFunctions.pyj"
+]
+},
+"shipKillCounter.GetItemKillCountPlayer": {
+"sites": 3,
+"modules": [
+"eve/client/script/ui/services/menusvc.pyj",
+"eve/client/script/ui/shared/info/shipInfoPanels/panelOverview.pyj",
+"eve/client/script/ui/view/hangarBehaviours/baseHangarBehaviours.pyj"
+]
+},
+"shipStanceMgr.SetShipStance": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/inflight/shipstance.pyj"
+]
+},
+"shipcasterTravelMgr.CmdJumpThroughShipcaster": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/shipcasterSvc.pyj"
+]
+},
+"slash.SlashCmd": {
+"sites": 92,
+"modules": [
+"assetholding/client/qa.pyj",
+"dailygoals/client/qa.pyj",
+"eve/client/script/parklife/fightersSvc.pyj",
+"eve/client/script/ui/control/entries/certificate.pyj"
+]
+},
+"solarsystemInterferenceMgr.GetAllInterferenceBands": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/solarsystemInterferenceSvc.pyj"
+]
+},
+"solarsystemInterferenceMgr.GetLocalInterferenceState": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/solarsystemInterferenceSvc.pyj"
+]
+},
+"sovMgr.AcquireSkyhooks": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"sovMgr.DestroySkyhooks": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"sovMgr.GetInfrastructureHubInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"sovMgr.GetSystemSovereigntyInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/sovSvc.pyj"
+]
+},
+"standingMgr.GetStandingCompositions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/standingsvc.pyj"
+]
+},
+"standingMgr.GetStandingTransactions": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/standingsvc.pyj"
+]
+},
+"starterShipcasterTravelMgr.CanCharacterJump": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/shipcasterSvc.pyj"
+]
+},
+"starterShipcasterTravelMgr.CmdJumpThroughStarterShipcaster": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/shipcasterSvc.pyj"
+]
+},
+"station.GetGuests": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/base.pyj"
+]
+},
+"stationSvc.GetAllianceSystems": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/mapView/mapViewData.pyj",
+"eve/client/script/ui/shared/maps/starMapSvc.pyj"
+]
+},
+"stationSvc.GetSolarSystem": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/insider.pyj"
+]
+},
+"stationSvc.GetStation": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj",
+"eve/common/script/util/notificationUtil.pyj"
+]
+},
+"stationSvc.GetStationItemBits": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/base.pyj"
+]
+},
+"stationSvc.GetStationsForOwner": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/loyaltyPointStore/lpStoreSvc.pyj"
+]
+},
+"stationSvc.GetSystemsForAlliance": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/Alliances/all_ui_systems.pyj"
+]
+},
+"storeManager.buy_offer": {
+"sites": 1,
+"modules": [
+"vgs/client/vgsClient.pyj"
+]
+},
+"storeManager.can_purchase_offer": {
+"sites": 1,
+"modules": [
+"nodegraph/client/conditions/new_eden_store.pyj"
+]
+},
+"storeManager.get_categories": {
+"sites": 1,
+"modules": [
+"vgs/client/vgsClient.pyj"
+]
+},
+"storeManager.get_offers": {
+"sites": 1,
+"modules": [
+"vgs/client/vgsClient.pyj"
+]
+},
+"storeManager.get_products": {
+"sites": 1,
+"modules": [
+"vgs/client/vgsClient.pyj"
+]
+},
+"structureAssetSafety.GetItemsInSafetyForCharacter": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetySvc.pyj"
+]
+},
+"structureAssetSafety.GetItemsInSafetyForCorp": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetySvc.pyj"
+]
+},
+"structureAssetSafety.GetStructuresICanDeliverTo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetyDeliverWindow.pyj"
+]
+},
+"structureAssetSafety.GetWrapNames": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetySvc.pyj"
+]
+},
+"structureAssetSafety.MoveCorpAssetsToSafety": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetySvc.pyj"
+]
+},
+"structureAssetSafety.MoveEjectTimeGM": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetyEntry.pyj"
+]
+},
+"structureAssetSafety.MovePersonalAssetsToSafety": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetySvc.pyj"
+]
+},
+"structureAssetSafety.MoveSafetyWrapToStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/assets/assetSafetyDeliverWindow.pyj"
+]
+},
+"structureCargoDelivery.DropOffItems": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/structure/dropbox/dropboxController.pyj"
+]
+},
+"structureCompressionMgr.CompressItemInStructure": {
+"sites": 1,
+"modules": [
+"itemcompression/client/itemCompression.pyj"
+]
+},
+"structureCompressionMgr.DecompressGasInStructure": {
+"sites": 1,
+"modules": [
+"itemcompression/client/gasDecompression.pyj"
+]
+},
+"structureCompressionMgr.GetMyGasDecompressionEfficiency": {
+"sites": 3,
+"modules": [
+"itemcompression/client/gasDecompression.pyj",
+"itemcompression/client/ui/decompression_window.pyj"
+]
+},
+"structureControl.BoardStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureControl.pyj"
+]
+},
+"structureControl.EjectFromStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureControl.pyj"
+]
+},
+"structureControl.GetStructurePilot": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureControl.pyj"
+]
+},
+"structureControl.ReleaseControl": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureControl.pyj"
+]
+},
+"structureControl.TakeControl": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureControl.pyj"
+]
+},
+"structureCynoBeaconMgr.CmdBridgeToStructureBeacon": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/cynoTravelSvc.pyj"
+]
+},
+"structureCynoBeaconMgr.CmdGroupJumpToStructureBeacon": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/cynoTravelSvc.pyj"
+]
+},
+"structureCynoBeaconMgr.CmdJumpToStructureBeacon": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/cynoTravelSvc.pyj"
+]
+},
+"structureDeliveries.Deliver": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/invItemFunctions.pyj"
+]
+},
+"structureDeployment.Anchor": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDeployment.pyj"
+]
+},
+"structureDeployment.CancelUnanchor": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDeployment.pyj"
+]
+},
+"structureDeployment.RenameStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/menuFunctions.pyj"
+]
+},
+"structureDeployment.Unanchor": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDeployment.pyj"
+]
+},
+"structureDirectory.GetJumpBridgesWithMyAccess": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/maps/mapSvc.pyj"
+]
+},
+"structureDirectory.GetNearbyJumpBridges": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDeployment.pyj"
+]
+},
+"structureDirectory.GetStructureDescription": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/info/panels/panelDescription.pyj",
+"eve/client/script/ui/structure/structureBrowser/entries/structureEntryMyCorp.pyj"
+]
+},
+"structureDirectory.SetStructureDescription": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/structure/structureBrowser/entries/structureEntryMyCorp.pyj"
+]
+},
+"structureDocking.Dock": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDocking.pyj"
+]
+},
+"structureDocking.Undock": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDocking.pyj"
+]
+},
+"structureGuests.GetGuests": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureGuests.pyj"
+]
+},
+"structureHangarViewMgr.GetMyHangarViewState": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureHangarViewSvc.pyj"
+]
+},
+"structureJumpBridgeMgr.CmdJumpThroughStructureStargate": {
+"sites": 2,
+"modules": [
+"eve/client/script/parklife/autopilot.pyj",
+"eve/client/script/ui/services/menusvc.pyj"
+]
+},
+"structureJumpBridgeMgr.GetJbStructureDestination": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureDirectory.pyj"
+]
+},
+"structureJumpBridgeMgr.GetLinkedStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj"
+]
+},
+"structureSettings.CharacterCheckService": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/marketMenu.pyj"
+]
+},
+"structureSettings.CharacterGetService": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/marketsvc.pyj"
+]
+},
+"structureSettings.CharacterGetServices": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/structure/structureServices.pyj"
+]
+},
+"structureSettings.CharacterHasService": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/structure/structureSettings.pyj"
+]
+},
+"structureSettings.CharacterHasSetting": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/services/structure/structureSettings.pyj",
+"eve/client/script/ui/station/undockQuestions.pyj"
+]
+},
+"structureVulnerability.UpdateReinforceTimesFromClient": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/structure/structureBrowser/reinforcementTimeWnd.pyj"
+]
+},
+"subscriptionMgr.GetCloneGrade": {
+"sites": 1,
+"modules": [
+"omega/client/clone_grade_svc.pyj"
+]
+},
+"subscriptionMgr.GetSubscriptionTime": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/charsheet/plexPanel.pyj"
+]
+},
+"survey.ClaimSurveyRewards": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/surveySvc.pyj"
+]
+},
+"survey.GetActiveSurveyID": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/surveySvc.pyj"
+]
+},
+"survey.PerformSurveyChecks": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/surveySvc.pyj"
+]
+},
+"taleMgr.GetGlobalWorldEventTales": {
+"sites": 1,
+"modules": [
+"taleclient/tale_service.pyj"
+]
+},
+"taleMgr.get_active_tales_by_template": {
+"sites": 1,
+"modules": [
+"taleclient/tale_service.pyj"
+]
+},
+"trademgr.InitiateTrade": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/station/pvptrade/pvptradesvc.pyj"
+]
+},
+"userSvc.ActivateCharacterReSculpt": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/menuFunctions.pyj"
+]
+},
+"userSvc.ActivateMultiTraining": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/activateMultiTraining.pyj"
+]
+},
+"userSvc.ActivateSoulboundMultiTraining": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/activateMultiTraining.pyj"
+]
+},
+"userSvc.CastDownvote": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/systemMenu/customersatisficationcont.pyj"
+]
+},
+"userSvc.CastUpvote": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/systemMenu/customersatisficationcont.pyj"
+]
+},
+"userSvc.ClaimRedeemTokens": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/redeemsvc.pyj"
+]
+},
+"userSvc.CreateRedeemTokenQA": {
+"sites": 1,
+"modules": [
+"redeem/client/insider.pyj"
+]
+},
+"userSvc.GetCreateDate": {
+"sites": 1,
+"modules": [
+"newFeatures/newFeatureNotify.pyj"
+]
+},
+"userSvc.GetRedeemTokens": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/redeemsvc.pyj"
+]
+},
+"userSvc.GetSessionPlaytimeMinutes": {
+"sites": 1,
+"modules": [
+"regionalui/utils.pyj"
+]
+},
+"userSvc.GetUpdatedMultiCharacterTraining": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/activateMultiTraining.pyj"
+]
+},
+"userSvc.GetUserName": {
+"sites": 1,
+"modules": [
+"eve/devtools/script/connectiontest.pyj"
+]
+},
+"userSvc.GetUserToken": {
+"sites": 1,
+"modules": [
+"eve/common/script/util/urlUtil.pyj"
+]
+},
+"userSvc.ReportBot": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/infoContentBase.pyj"
+]
+},
+"userSvc.ReportISKSpammer": {
+"sites": 2,
+"modules": [
+"chat/client/chat_service.pyj",
+"eve/client/script/ui/services/menuSvcExtras/devFunctions.pyj"
+]
+},
+"userSvc.ReverseRedeem": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/redeemsvc.pyj"
+]
+},
+"userSvc.TrashRedeemTokens": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/redeemsvc.pyj"
+]
+},
+"userSvc.UserLogOffCharacter": {
+"sites": 1,
+"modules": [
+"eve/client/script/parklife/gameui.pyj"
+]
+},
+"vaultManager.get_account_balance": {
+"sites": 1,
+"modules": [
+"vgs/client/vgsClient.pyj"
+]
+},
+"voidSpaceMgr.VoidSpaceEndGateActivation": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/movementFunctions.pyj"
+]
+},
+"voidSpaceMgr.VoidSpacePlayerJump": {
+"sites": 1,
+"modules": [
+"voidspace/client/void_space_service.pyj"
+]
+},
+"warStatisticMgr.GetKillMail": {
+"sites": 5,
+"modules": [
+"eve/client/script/ui/shared/fittingScreen/ghostControllerMixin.pyj",
+"eve/client/script/ui/shared/killReportUtil.pyj",
+"eve/client/script/ui/shared/neocom/corporation/war/warKillEntry.pyj",
+"notifications/client/controls/notificationEntry.pyj"
+]
+},
+"warpVectorMgr.UseVector": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/menuFunctions.pyj"
+]
+},
+"warsInfoMgr.GetPublicWarInfo": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/structure/structureIcon.pyj"
+]
+},
+"warsInfoMgr.GetTop50": {
+"sites": 2,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_wars.pyj"
+]
+},
+"warsInfoMgr.GetWarsByOwnerID": {
+"sites": 4,
+"modules": [
+"eve/client/script/ui/shared/info/infosvc.pyj",
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_wars.pyj",
+"eve/client/script/ui/shared/neocom/corporation/war/warHistoryCont.pyj"
+]
+},
+"warsInfoMgr.GetWarsByOwners": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/wars/war_cso.pyj"
+]
+},
+"warsInfoMgr.GetWarsForStructure": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/info/panels/panelWarHQ.pyj"
+]
+},
+"warsInfoMgr.GetWarsRequiringAssistance": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/shared/neocom/corporation/corp_ui_wars.pyj"
+]
+},
+"wormholeMgr.GetWormholePolarization": {
+"sites": 1,
+"modules": [
+"spacecomponents/client/components/jumpPolarization.pyj"
+]
+},
+"wormholeMgr.WormholeJump": {
+"sites": 1,
+"modules": [
+"eve/client/script/ui/services/menuSvcExtras/movementFunctions.pyj"
+]
+}
+}
+}

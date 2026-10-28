@@ -32,6 +32,12 @@ client. The repository is the only shared memory. Read in this order:
   you touched (`--files a,b --record`, then run it without `--record`). The
   whole-suite baseline is still bound to the pinned checkout and is not a gate:
   `docs/FORK_PATCH_AUDIT_20261028.md` says why and what the 541 red cases are.
+- **Before touching a client-facing answer**, read `docs/CLIENT_CONTRACT_STATUS.md`: it is
+  generated from the client's own call list (`docs/client-contracts/calls.json`, 542 calls
+  taken from the pinned client bytecode) and the server handlers, and it names every
+  placeholder the client currently tolerates and why. `node scripts/coop-client-contracts.cjs
+  --check` fails when a client call that used to be answered starts getting a placeholder
+  answer - that is exactly how the faction-warfare window broke.
 - **The manual `scripts/Run-*.ps1` source gates** are five-line wrappers over
   one runner (`scripts/lib/CoopGate.ps1`) and one data table
   (`scripts/lib/gates.json`). Add or change a gate in the table, never in a
