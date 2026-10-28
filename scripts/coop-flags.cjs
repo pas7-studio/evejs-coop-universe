@@ -20,6 +20,20 @@ const BASELINE = path.join(repo, "docs", "coop-flags.json");
 const KEY = /\bEVEJS_[A-Z0-9_]+\b/g;
 const SOURCES = ["integration", "scripts", "patches"];
 
+// The baseline describes the COMMITTED tree. A file another session has not added to
+// git cannot be deployed, so its flags must not be declared here: they would go stale
+// the moment the file changes, and a scratch file would decide what the gate accepts.
+function trackedFiles() {
+  try {
+    const listing = require("node:child_process").execFileSync(
+      "git", ["ls-files", "--", ...SOURCES], { cwd: repo, encoding: "utf8" },
+    );
+    return new Set(listing.split("\n").map((line) => line.trim()).filter(Boolean));
+  } catch (_error) {
+    return null; // no git: scan everything rather than nothing
+  }
+}
+
 function walk(dir) {
   const out = [];
   if (!fs.existsSync(dir)) return out;
@@ -33,9 +47,11 @@ function walk(dir) {
 
 function scan() {
   const readers = new Map();
+  const tracked = trackedFiles();
   for (const dir of SOURCES) {
     for (const file of walk(path.join(repo, dir))) {
       const rel = path.relative(repo, file).replace(/\\/g, "/");
+      if (tracked && !tracked.has(rel)) continue;
       const text = fs.readFileSync(file, "utf8");
       for (const match of text.match(KEY) || []) {
         const key = match;
