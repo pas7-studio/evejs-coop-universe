@@ -3478,3 +3478,20 @@ from 365/46 to 371/40, i.e. it is worth ~6 cases and would remove the whole clas
 silent `try/catch -> pause(STATUS)` masking. One shim was added for
 `coopStuckWarpRecovery` because its absence was a hard throw. Decide with the owner:
 generated shims vs one test-support resolver hook (needs the runners to pass `--require`).
+
+### Escort red set: 19 -> 13 (all remaining reds are one file)
+A real product bug, found by the tests: `coopEscortFlightGate` asked
+`authorizeBooking` for `{haulerID}`, but the runtime forwarded `route.haulerIDs?.[0]`
+(undefined) to the native duo verifier and the mount adapter rejected the route as
+`DENIED_PREWARP_ROUTE_INVALID`. No genuine native booking could ever be funded; a
+fixture bypassing the gate hid it. Both shapes now travel (fork 3f8b907, mirrored
+be188253), the adapter still resolves exactly one positive hauler ID.
+`escort-pinned-native-mount` 6/1 -> 7/0.
+Three more fixtures restored to the module contracts: `native-tactics-rescue` route
+needed `playerFleetID` (10/10), `native-route-recovery` cargo rows needed `ownerID`
+or the deposit is skipped as DEPOSIT_OWNER_UNPROVEN (43/43), `refund-manifest`
+runtime needed `readContract` (3/3).
+Escort suite now 397 pass / 13 fail, and all 13 are `coop-escort-flight-stage-c`,
+which is obsolete coverage (see earlier measurement): it predates mandatory
+discovery + paid consent and is covered green elsewhere. Owner decision pending:
+retire it or reduce it to the gate + station-arrival slice.
