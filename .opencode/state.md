@@ -1,3 +1,27 @@
+# State — co-op loop (mining → haul → station → sale)
+
+
+## 2026-10-28 16:55Z - OPEN: the server cannot see cargo a separate process wrote
+
+PROVEN TODAY: fleet restored (ALREADY_ACTIVE 3+1 / 2+1), departures unblocked (no more
+MANIFEST_FLEET_CONFLICT), ore SOLD 1193 x 17470 @ 1946.98 = 2 322 747 ISK, treasury swept
+22 926 059.42 -> corporation balance 302 998 099.09 ISK, manufacturing produces 5 chipsets
+from 5 555 Tritanium with a receipt, and 444 is now on the operator sell policy.
+
+OPEN, precisely: the 5 chipsets sit in hull 980000003532 (and 5 in orphan 980000003529),
+visible from a fresh node process inside the container. In the SERVER process the same
+call is inconsistent: at 16:44 the batch event reported carried=[444,35] (so it saw them),
+but its ask order still started with ore, and at 16:54 carried was EMPTY and only the
+manifest type was asked. Both manufactured stacks were written by a SEPARATE node process
+(/tmp/mf.cjs inside the container), so the next diagnostic is a direct in-process compare:
+call listNativeCargoForEntity(980000003532) through the admin bridge and diff it against
+the fresh-process probe. Do not guess: the server must see a row before any sale of it.
+
+Also open: the fleet route still ends in ALIFE13 MANIFEST_WAREHOUSE_RECEIPT_CONFLICT when
+a declared row is only partly sold (saleFillCoversRow demands the fills equal the row
+exactly), so a partly liquidated haul is unprovable and the fleet stays loaded. The drain
+now rescues that case, but the route itself needs a partial-fill rule with its own test.
+
 ﻿# State — co-op loop (mining → haul → station → sale)
 
 ## 2026-10-28 15:20Z - the loop sells again; the last hop is the chipsets in a hold
