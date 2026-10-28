@@ -8436,3 +8436,31 @@ Progression), so the candidate surfaces are the Agency -> Campaigns page
 (`publicGatewayLocal` answers every `eve_public.campaign.api.*` request with a 200 and an EMPTY
 payload) and the insurgency campaign layer (`insurgencyCampaignSvc` ->
 `insurgencySolarsystem.GetLocalCampaignClientSnapshot` / `GetAllVisibleCampaigns`).
+
+## 2026-10-29T01:45Z - "Campaign" tab = Agency -> Campaigns: empty by design, not a broken call
+
+Owner clarified: the tab with nothing in it is Agency -> Campaigns. The client page is
+`eve/client/script/ui/shared/agencyNew/contentPages/contentPageCampaigns.py`, driven by
+`campaigns/client/messengers/campaigns_messenger.py`, which sends gRPC
+`eve_public.campaign.api.GetAllRequest` / `GetRequest` / `GetStatsRequest` /
+`GetParticipantStatsRequest` / `GetAllUnredeemedRewardsRequest` / `GetLimitsRequest` plus the
+objective Commit/Resign/RedeemRewards trio. `campaignGatewayService.js` answers EVERY one of
+them with `statusCode 200` and an EMPTY payload, and `publicGatewayLocal.js` does not even
+define the campaign messages in its proto root - so the client decodes an empty GetAll and
+renders no campaigns. This is a stub, not a null-handler: nothing throws, there is simply
+nothing to list.
+
+Making it show our war campaigns is a FEATURE, not a contract fix. It needs the campaign
+proto schema (7 files: campaign, campaign/api, campaign/objective, campaign/objective/api,
+campaign/contributionmethod/definition, career, public), added to the server proto root, and
+then a real `GetResponse.attributes` per campaign: localized title/subtitle/descriptions as
+`sequential` ids, logo/icon, dashboard/objective background paths, issuer, annotations,
+objectives with their own attributes, contribution-method configuration, version + etag,
+state enum and FILETIME timestamps. Our war record already has the substance (campaign id,
+faction pair, target/source system, state, revision, objective evidence), so the mapping is
+honest - but the definition surface is the largest single proto in the client.
+
+Done instead in this pass (real, verified): `insurgencySolarsystem.GetLocalCampaignClientSnapshot`
+now answers the snapshot of the system you stand in when a LIVE campaign really covers it
+(fork `841345f`); it still answers `(systemID, null)` when the covered campaign is EXPIRED or
+OCCUPIED, which is every front in the world right now.
