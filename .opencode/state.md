@@ -8761,3 +8761,30 @@ territory map now reads 30003837 = 500011 (a real capture by force), 30003836 = 
 30045343 = 500020, 30045344 = 500011; the expired campaign got a successor `...:30045343:r2` in
 PREPARING with fresh escrow. The bounty payout itself still waits for an attributed kill in a funded
 campaign - the watcher is armed and will report it with the exact numbers.
+
+## FW-058..FW-060 (23:4xZ): the review plan, implemented
+
+FW-058 the chest journal (`coopWarChestFunding`) had a hard 2048-entry ceiling enforced by
+`validateJournal` THROWING - the whole chest became unusable and every later war would answer
+WAR_CHEST_JOURNAL_INVALID instead of "full". Terminal rows are now compacted oldest-first into a
+bounded identity archive; a pruned event is still DUPLICATE (no entry, so nothing can be debited
+twice), the same id for another purpose is still a conflict, a PREPARED levy is never pruned because
+`recover()` owns it, and a replay is decided by IDENTITY rather than by the amount (the levy plan is
+recomputed from live balances and may legitimately differ).
+
+FW-059 a payout has two legs (release the escrow, credit the pilot) and a failure between them left
+`ESCROW_RELEASED_NOT_CREDITED` with no retry: the ISK was out of the escrow and never in the pilot's
+balance. A reconcile pass now finishes any PAID escrow whose credit did not happen, keyed by
+`war-bounty:<campaign>:<proof>` so it is exactly-once, and emits
+`living-native-war-bounty-credit-reconciled`.
+
+FW-060 five direct tests on the garrison gates (every flag must be exactly "1", no assault means no
+hull, a disabled world never reaches the spawner, a full garrison costs nothing, a starved side asks
+for at most one hull and reports the native answer it got).
+
+OPERATIONAL HAZARD, measured today: commit `3249ba8` (another session) replaced
+`coopVirtualWorldRuntime.js` from a copy that predated FW-053/053B and silently dropped
+`refundExpiredCampaigns`, `reconcileTerminalEscrow` and their call sites - the refund proven live at
+22:48:21Z was no longer in the tree. It is re-applied in `c4ddfba`. After ANY commit by the parallel
+session that touches a file this work also touches, re-check the exports:
+`grep -c "refundExpiredCampaigns\|reconcileBountyCredits" coopVirtualWorldRuntime.js`.
