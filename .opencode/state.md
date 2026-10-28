@@ -1,5 +1,40 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-29 20:10Z - the loop is closed: the world decides, builds, hauls and sells
+
+THE MISSING LINK WAS NOT ECONOMICS, IT WAS A CALLER. The server source contained
+ZERO references to space/coopNpcManufacture.js: neither install() nor tick() was ever
+called, so every job came from scripts/manufacture-npc-item.cjs run by hand and an
+INSTALLED job could never finish in-world. space/coopNpcManufactureTick.js is that
+caller (one hook line beside the refinery tick, EVEJS_COOP_NPC_MANUFACTURE).
+
+Its economic rule: a good is produced only when a station really bids for it, the run
+count is bounded by the buyer's remaining seeded volume AND by the materials physically
+in the hangar, one job per recipe at a time, and the best PAYER wins by expected
+revenue. Refusals are named: NO_REAL_BUYER, BUYER_ALREADY_COVERED, MATERIALS_MISSING,
+BELOW_PRICE_FLOOR, JOB_ALREADY_INSTALLED, RECIPE_* , MARKET_UNREACHABLE.
+
+OBSERVED END TO END (no operator, no client):
+  19:51:30 attempt {blueprints:2, candidates:2, ready:2} -> installed 5 runs at 60000682
+            because its seeded bid 54 289.76 pays more than 60014935's 53 700.08;
+  20:05:48 living-npc-station-sold 5 x 444 @ 54 289.76 = 271 449 ISK at 60000682;
+  20:07:31 the world completed the next 5-unit job and immediately installed another.
+Treasury 607 026 750.61 ISK; 11 jobs / 53 units produced since the receipts began.
+
+SECOND FIX: an empty drain trip used to cool its station for 30 minutes, so a trip with
+nothing to load blocked the corporation's own best customer (60000682 had a 54 289.76
+bid). shouldCoolDown() now separates a REFUSAL from an EMPTY HOLD.
+
+Tests: 11/11 tests/coop-npc-manufacture-tick.test.mjs, 12/12
+tests/coop-station-drain.test.mjs. Fork c453c9a + b1826ad; repo d54d0577 + worklog.
+Gate: AUDIT_OK on every rule except the inherited coopVirtualWorldRuntime line ratchet
+(4988 > 4800, FW work from other sessions; my own footprint there is +12 lines).
+
+NEXT: the minerals surplus (891 702 units) now has a real internal consumer at a rate
+the fleet can feed. When the hangars at 60000682 / 60014935 run dry of Tritanium the
+manufacturer will report MATERIALS_MISSING with the exact shortfall - that is the signal
+to check whether refinery output reaches the same hangar, not to lower the rule.
+
 ## 2026-10-28 19:35Z - gate status: the ratchet breach is inherited, not mine
 
 AUDIT fails on exactly one rule: coopVirtualWorldRuntime.js 4987 lines > 4800. Numbers:
