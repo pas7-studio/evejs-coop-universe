@@ -8,6 +8,17 @@ const require=createRequire(import.meta.url);
 const {createFireOutcomeWitness,enabled}=require("../integration/coopNpcFireOutcomeWitness.cjs");
 const {inspectShip,createAtomicAmmoBank}=require("../integration/coopNpcAmmoBankAtomic.cjs");
 const entity={kind:"ship",nativeNpc:true,itemID:101,ownerID:900};
+// The bank proves the physical hull and every fitted module against the native
+// store BEFORE it opens the transaction, so a cargo-only stub is not a store.
+function nativeStore(state, sep=""){
+ return {
+  getNativeEntity:id=>state.npcEntities["entities"+sep+id]||null,
+  listNativeModulesForEntity:id=>Object.values(state.npcModules||{})
+   .filter(module=>Number(module.entityID)===Number(id)),
+  listNativeCargoForEntity:id=>Object.values(state.npcCargo.cargo)
+   .filter(row=>Number(row.entityID)===Number(id))
+ };
+}
 function fixture(fn,{phase="COMMITTED",outcome=null}={}){
  const root=fs.mkdtempSync(path.join(os.tmpdir(),"coop-fire-outcome-"));
  const dir=path.join(root,"bank-ships");
@@ -143,7 +154,7 @@ test("attested legitimate turret miss permits next durable native debit boundary
     put(t,k,value){state[t][k]=structuredClone(value);}};
    const bank=createAtomicAmmoBank({root:f.root,
     atomicRows:{transact(tables,fn){transactions++;return fn(tx);}},
-    store:{listNativeCargoForEntity:()=>Object.values(state.npcCargo.cargo)},
+    store:nativeStore(state),
     compatible:()=>true,clock:()=>3000});
    const native={...entity,nativeCargoItems:[{itemID:501,typeID:35,moduleID:401,quantity:4,stacksize:4}]};
    const result=bank.consume({entity:native,whenMs:1100,
@@ -209,7 +220,7 @@ function checkPriorBankFence({dropJournal=false,dropFence=false,staleBoundary=fa
      return callback({get:(table,key)=>state[table][key]??null,
       put(){writes++;throw Error("WRITES_FORBIDDEN_WHEN_PRIOR_PROOF_MISMATCH");}});
     }},
-    store:{listNativeCargoForEntity:()=>Object.values(state.npcCargo.cargo)},
+    store:nativeStore(state),
     compatible:()=>true,clock:()=>3000
    });
    const fired=bank.consume({
@@ -251,10 +262,20 @@ test("once receipt witnesses a native bank, turning the flag OFF cannot downgrad
   delete process.env.EVEJS_COOP_NPC_BANK_OUTCOME_WITNESS;
   try{
    let calls=0;
+   // The hull must still be provable: the downgrade refusal is answered from the
+   // ship journal, but only for a real, fully fitted native ship.
+   const sep="\u001f";
+   const state={
+    npcEntities:{["entities"+sep+"101"]:{entityID:101,ownerID:900,systemID:30000144}},
+    npcModules:{["modules"+sep+"401"]:{moduleID:401,entityID:101,ownerID:900,
+     typeID:123,categoryID:7,flagID:27}},
+    npcCargo:{cargo:{}}
+   };
    const bank=createAtomicAmmoBank({root:f.root,
     atomicRows:{transact(){calls++;throw Error("SHOULD_NOT_REACH_DB");}},
-    store:{listNativeCargoForEntity:()=>[]},compatible:()=>true});
-   const result=bank.consume({entity,whenMs:1100,
+    store:nativeStore(state),compatible:()=>true});
+   const result=bank.consume({entity:{...entity,
+    nativeCargoItems:[{itemID:501,typeID:35,moduleID:401,quantity:4,stacksize:4}]},whenMs:1100,
     entries:[{moduleItem:{itemID:401,typeID:123,flagID:27},
      chargeItem:{itemID:501,typeID:35,quantity:4}}]});
    assert.equal(result.success,false);
@@ -287,7 +308,7 @@ test("SQLite outcome-mode latch blocks flag downgrade even after journal root is
     atomicRows:{transact:(_,callback)=>callback({
      get:(t,k)=>data[t][k]??null,put(){writes++;throw Error("NO_WRITE_ALLOWED");}
     })},
-    store:{listNativeCargoForEntity:()=>Object.values(data.npcCargo.cargo)},
+    store:nativeStore(data),
     compatible:()=>true});
    const result=bank.consume({entity,whenMs:1100,
     entries:[{moduleItem:{itemID:401,typeID:123,flagID:27},
