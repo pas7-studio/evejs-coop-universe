@@ -2195,3 +2195,9 @@ Why: agents kept launching exefile.exe directly, which silently disables every g
 Detail: Play.bat is not a wrapper: it exports http_proxy/https_proxy and the local CA, which is what routes the client's HTTPS calls to *-public-gateway.evetech.net into the local HTTP/2 gateway. Launched straight from exefile.exe the client reaches the gateway zero times (measured: no CONNECT, no HTTP/2 in ten minutes) and every gateway surface reports ServerException(500, "invalid character on request")
 Where: AGENTS.md, docs/CLIENT_LAUNCH.md
 Evidence: docs/CLIENT_LAUNCH.md + AGENTS.md pointer; direct launch = 0 CONNECT/0 H2/0 proxy requests in 10 min; via Play.bat = H2 tls established ALPN=h2 + POST /eve_public.gateway.Requests/Send; gateway then served licence 200, plex balance 2222, corruption/suppression 200, corp+daily goals 200
+### 2026-10-28T21:56Z · 132d5d0 · OPS · ops: the public endpoint carries SSH, and the play stack has one entry point
+
+Why: one Proton port could not carry five client services; the endpoint now carries one SSH session and the play stack has a single up/status entry point
+Detail: ProtonVPN forwards a single port, so it now carries one SSH session that the friend uses to forward 443/5222/26000/26001/26002 to his own loopback - all five client services arrive, instead of only the game port and a hand-built tunnel for the rest. The host side is the evejs-ssh-relay container (0.0.0.0:61730 -> hardened sshd 127.0.0.1:55346). Start-Play-Stack.ps1 becomes the single entry point: 
+Where: AGENTS.md, docs/PUBLIC_ENDPOINT_PROTONVPN.md, scripts/Start-Play-Stack.ps1
+Evidence: docs/PUBLIC_ENDPOINT_PROTONVPN.md + scripts/Start-Play-Stack.ps1 (130 lines) + AGENTS.md; relay evejs-ssh-relay 0.0.0.0:61730 -> sshd 127.0.0.1:55346
