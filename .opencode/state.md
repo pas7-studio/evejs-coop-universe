@@ -4067,3 +4067,15 @@ That is the honest state: five real defects fixed today (N5 funded garrison, cus
 capture and mobilisation, FW-036 navy capability, FW-037 per-border refusals, FW-039 orphaned
 escrow, FW-040 attribution links, FW-041/042 durability of the war record, FW-043 territory
 bootstrap, FW-044 armed ownership), and the payout rung still needs one uninterrupted window.
+
+## FW-045 applied live (19:03Z): the mining-weighted map was released, not faked
+`living-native-war-territory-bootstrap CORRECTED_FROM_PRESENCE added:0 corrected:0 released:6`
+- every territory the old rule had given to a mining-only presence was released, because a system
+  with no armed garrison is not held by anyone. Nothing was invented to replace it: the same event
+  carries `systems:[]`, i.e. at that moment no faction had an armed pilot in those systems either.
+The map is now genuinely EMPTY under the new rule, so the next bootstrap registers only what is
+really garrisoned (armed pilot + resolved native hull). That is the first state in the whole day
+where ownership cannot be claimed by miners.
+Consequence for the payout rung: a navy has to be physically present (live hull, linked pilot,
+role patrol) for the world to own its ground. After every recreate those hulls must be re-seeded -
+that is what the recipe in this file does, and it is the only remaining operation, not a code gap.
