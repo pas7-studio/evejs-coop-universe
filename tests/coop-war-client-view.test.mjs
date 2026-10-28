@@ -87,3 +87,84 @@ test('the campaign objective structure reaches the client snapshot',()=>{
  assert.equal(view.objectiveStructureID({objectiveEvidence:null}),0);
  assert.equal(view.objectiveStructureID(null),0);
 });
+
+test('an occupied system keeps its sovereign owner and names its occupier',()=>{
+ // Measured on the live world: 30045343 was captured by 500004, and the map payload
+ // said owner=occupier=500004, so the client could not show that 500001 lost it.
+ const state=warState();
+ state.territories['30000145']={systemID:30000145,originalOwnerFactionID:500014,
+  militaryControllerFactionID:500010,state:'OCCUPIED',revision:3,changedAt:3};
+ const view30000145=view.occupationStates(state)['30000145'];
+ assert.equal(view30000145.ownerID,500014,'the static sovereign owner is not overwritten');
+ assert.equal(view30000145.occupierID,500010,'the military controller is the occupier');
+ assert.equal(view30000145.contested,true,'a captured system is not a secure one');
+ assert.equal(view30000145.militaryState,'OCCUPIED');
+});
+
+// The client indexes faction-keyed tables with these values, so a militia corporation
+// where a faction belongs is a KeyError in the warzone map, not a cosmetic difference.
+// Measured on the live world: 204 occupation states carried 1000180/1000181, the map's
+// militia colouring raised, never completed and re-ran at ~36 victory-point calls a
+// second, and the map window never opened.
+const keyVal = (pairs) => Object.fromEntries(pairs);
+const dictOf = (entries) => ({ type: 'dict', entries });
+
+function frontier(){
+ const state = core.empty();
+ state.wars['war:500001-500004'] = {warID:'war:500001-500004',state:'ACTIVE',
+  attackerFactionID:500004,defenderFactionID:500001,declaredAt:1};
+ const territory = (systemID, owner, controller) => {
+  state.territories[String(systemID)] = {systemID,originalOwnerFactionID:owner,
+   militaryControllerFactionID:controller,state:controller === owner ? 'SECURE' : 'OCCUPIED',
+   revision:1,changedAt:1};
+ };
+ territory(30045343, 500001, 500001);   // Caldari ground
+ territory(30045344, 500004, 500004);   // Gallente ground, across the border
+ territory(30045345, 500004, 500004);   // one jump behind it
+ territory(30045346, 500004, 500004);   // two jumps behind it
+ territory(30045347, 500001, 500004);   // taken by Gallente
+ return state;
+}
+const gates = {
+ 30045343: [{destinationSolarSystemID:30045344}],
+ 30045344: [{destinationSolarSystemID:30045343},{destinationSolarSystemID:30045345}],
+ 30045345: [{destinationSolarSystemID:30045344},{destinationSolarSystemID:30045346}],
+ 30045346: [{destinationSolarSystemID:30045345}],
+ 30045347: [],
+};
+
+test('warzone occupation states carry factions, never militia corporations',()=>{
+ const response = view.warzonesResponse(keyVal, dictOf, {2:[500001,500004]},
+  {state: frontier(), getStargatesForSystem: (id) => gates[id] || []});
+ const ours = response.entries.find(([warzoneID]) => warzoneID === 2)[1].entries;
+ const ids = new Set();
+ for (const [, state] of ours) { ids.add(state.occupierID); ids.add(state.ownerID); }
+ assert.ok(!ids.has(1000180) && !ids.has(1000181), 'no militia corporation may appear');
+ for (const id of ids) assert.ok([500001,500004].includes(id), 'every id is a warzone faction: ' + id);
+});
+
+test('the client gets the two fields it reads without a default',()=>{
+ // warzoneMap.py: FACTION_ID_TO_COLOR[occupierID] and
+ // ADJACENCY_STATE_TO_ICON_PATH[adjacencyState] - both are hard lookups.
+ const response = view.warzonesResponse(keyVal, dictOf, {2:[500001,500004]},
+  {state: frontier(), getStargatesForSystem: (id) => gates[id] || []});
+ const ours = Object.fromEntries(response.entries.find(([id]) => id === 2)[1].entries);
+ assert.ok(ours[30045344], 'the border system is listed');
+ assert.equal(ours[30045344].occupierID, 500004);
+ assert.equal(ours[30045343].adjacencyState, 'FL', 'ground that touches the other side is the front line');
+ assert.equal(ours[30045344].adjacencyState, 'FL');
+ assert.equal(ours[30045345].adjacencyState, 'SL', 'one jump behind the front is the second line');
+ assert.equal(ours[30045346].adjacencyState, 'BL', 'two jumps behind it is the back line');
+ for (const state of Object.values(ours)) assert.ok(['FL','SL','BL'].includes(state.adjacencyState));
+});
+
+test('a captured system names the faction it was taken from as the attacker',()=>{
+ const state = frontier();
+ const response = view.warzonesResponse(keyVal, dictOf, {2:[500001,500004]},
+  {state, getStargatesForSystem: (id) => gates[id] || []});
+ const ours = Object.fromEntries(response.entries.find(([id]) => id === 2)[1].entries);
+ assert.equal(ours[30045347].ownerID, 500001, 'the sovereign owner is kept');
+ assert.equal(ours[30045347].occupierID, 500004, 'the controller holds it');
+ assert.equal(ours[30045347].attackerID, 500001, 'the war does not invent a third faction');
+ assert.equal(ours[30045347].contested, true);
+});
