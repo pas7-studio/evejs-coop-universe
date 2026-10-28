@@ -1,0 +1,218 @@
+{
+  "files": {
+    "coop-admin-bridge-raid-diagnose": {
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-admin-bridge-structure": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-admin-bridge-war-patrol": {
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-war-combat-diagnose": {
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-alife-economy-wiring": {
+      "pass": 6,
+      "fail": 1,
+      "skipped": 0,
+      "failing": [
+        "pinned overlay actually installs both new observer modules"
+      ]
+    },
+    "coop-alife-native-buyer-wiring": {
+      "pass": 5,
+      "fail": 2,
+      "skipped": 0,
+      "failing": [
+        "A-Life station authority is genuinely read-only, never virtual inventory",
+        "all new native economy source modules are copied by the pinned overlay"
+      ]
+    },
+    "coop-alife-native-manufacturing-runtime": {
+      "pass": 12,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-alife-native-mining-wiring": {
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-alife-native-resupply-wiring": {
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-alife-order-authority": {
+      "pass": 4,
+      "fail": 1,
+      "skipped": 0,
+      "failing": [
+        "the runtime guard is the only place that decides order authority"
+      ]
+    },
+    "coop-alife-station-wiring": {
+      "pass": 6,
+      "fail": 1,
+      "skipped": 0,
+      "failing": [
+        "pinned overlay contains both authority modules before the local test runner"
+      ]
+    },
+    "coop-convoy-native-outcomes-overlay": {
+      "pass": 4,
+      "fail": 1,
+      "skipped": 0,
+      "failing": [
+        "P1 new convoy outcome module is packaged without a new upstream native patch"
+      ]
+    },
+    "coop-headless-retry": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-headless-startup-evidence": {
+      "pass": 1,
+      "fail": 2,
+      "skipped": 0,
+      "failing": [
+        "compiled native runtime emits early evidence and explicit failure before any boot request",
+        "inconsistent headless/virtual-world flags produce an explicit warning without fake boot"
+      ]
+    },
+    "coop-living-world-phase-coordinator": {
+      "pass": 19,
+      "fail": 3,
+      "skipped": 0,
+      "failing": [
+        "a promise-returning phase is not awaited or relabeled as a native settlement",
+        "only real original systemIDs classify as dynamic reconciliation",
+        "registry remains pure and has no second timer or native game writers"
+      ]
+    },
+    "coop-mineral-lift-wiring": {
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-native-row-path": {
+      "pass": 7,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-npc-expedition-native-bridge": {
+      "pass": 9,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-npc-probe-wiring": {
+      "pass": 19,
+      "fail": 3,
+      "skipped": 0,
+      "failing": [
+        "EX-03B2 is separately disabled unless explicit native probe launch flag",
+        "EX-03B4 original scout hardware is a conditional source-authored fitting",
+        "EX-03B5 source expiry and recovery use original gameStore single-table durability barrier"
+      ]
+    },
+    "coop-npc-route-hold": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-npc-spawn-pools": {
+      "pass": 6,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-npc-squad-scout-relay": {
+      "pass": 16,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-npc-warp-point": {
+      "pass": 10,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-stage-j-auto-market-wiring": {
+      "pass": 0,
+      "fail": 5,
+      "skipped": 0,
+      "failing": [
+        "A-Life executes salvage market inside the existing tick and has no new timers",
+        "native Rust pending orders accept only independently gated original salvage identity",
+        "native salvage market uses original stock, Rust escrow and a separate confirmed finance receipt",
+        "salvage A-Life telemetry never claims native settlement for blocked attempts",
+        "single pinned reversible overlay carries all Stage J salvage market dependencies"
+      ]
+    },
+    "coop-war-front-report": {
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "loop-verdict": {
+      "pass": 14,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "lw04b-main-forward-port-regression": {
+      "pass": 4,
+      "fail": 1,
+      "skipped": 0,
+      "failing": [
+        "current-main installer contains no duplicate Living Agent or manufacturing admission"
+      ]
+    },
+    "lw04b-single-tick-manufacturing-wiring": {
+      "pass": 3,
+      "fail": 1,
+      "skipped": 0,
+      "failing": [
+        "original installer contains one manufacturing admission and no duplicate Living Agent"
+      ]
+    },
+    "coop-source-text-helper": {
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    },
+    "coop-virtual-world-split": {
+      "pass": 3,
+      "fail": 0,
+      "skipped": 0,
+      "failing": []
+    }
+  },
+  "recordedAt": "2026-10-28T00:14:35.605Z",
+  "projectRev": "7d7be391905f1c6ceefbc50b921a87ea73e49b54"
+}

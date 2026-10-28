@@ -166,6 +166,61 @@ Do not "fix" a broken text assertion by freezing the archived copy at the old
 text: an archive that disagrees with the engine is worse than a big file.
 
 
+## Tests that still speak to the pinned checkout
+
+Since D1 ("we own the fork") `C:\Games\EveCoop\upstream-evejs` is our branch
+`coop/pas7std`, not `c3ea396`. A large part of the suite still asks about the
+*pinned* tree through the legacy installer: 164 of 659 test files reference
+`scripts/patch-evejs-coop.cjs`, `scripts/overlay-spec.cjs` or `PIN`, and 93 of
+them classify source files as `PRISTINE`/`PATCHED`/`DRIFTED`. On this machine they
+fail with answers like:
+
+```
+EX03B18_PINNED_WRECK_SOURCE_DRIFT:server/src/space/npc/nativeNpcWreckService.js
+```
+
+That is a correct answer to a question that no longer describes the deployment:
+the file really is not the pinned one, because we changed it on purpose and
+committed the change in the fork.
+
+**How to read a red suite right now**
+
+1. Gate: `node scripts/coop-engine-audit.cjs` → `AUDIT_OK` and
+   `node scripts/coop-perf-audit.cjs` → `PERF_OK`. These measure *our* burden.
+2. Parity: run exactly the files a change touches and compare with the same run
+   before the change (that is how both splits today were accepted: 187/21 before
+   and after, every failure pre-existing).
+3. Everything else that fails on `_DRIFT`, "pinned", "installed by the overlay" or
+   "installer contains no duplicate" is describing the pin, not the game.
+
+`docs/evidence/test-baseline.json` was recorded on 2026-10-25 (82 files, 538 pass,
+0 fail) against the pinned checkout, so `scripts/coop-test-baseline.cjs` currently
+reports hundreds of "new failures" that are all pin drift. It cannot be used as a
+regression gate again until it is re-recorded — and re-recording is an owner
+decision, because it freezes whatever is red today, including other sessions'
+unfinished work.
+
+Measured on 2026-10-28 (`node --test "tests/*.test.mjs"`): **6 174 cases, 5 543
+pass, 541 fail, 90 skip**. Of the 541 failures 109 name the pin, the overlay, the
+installer or a source hash directly; the rest are the native/SQLite cases that
+need the deployed modules and the containers those tests were written against.
+None of them is a newly broken co-op unit.
+
+The working gate for a change is therefore scoped:
+`scripts/coop-test-parity.cjs` stores the *names* of the failing cases for the
+files a change touches (`--files a,b,c --record`) and fails on any case that
+passed in the snapshot and fails now, so a fix and a new break cannot cancel out:
+
+```bash
+node scripts/coop-test-parity.cjs --files coop-npc-probe-wiring,loop-verdict --record
+node scripts/coop-test-parity.cjs            # re-check every recorded file
+```
+
+Porting the 164 files is a separate, mechanical job: point the source assertions
+at the fork's own files (drop the hash equality), keep every behavioural case, and
+retire only the tests that prove the *transform* is reversible — the fork does not
+need a transform.
+
 ## Performance traps: look for them statically, then prove with a profile
 
 `node scripts/coop-perf-audit.cjs` ranks co-op modules by shapes that are cheap
