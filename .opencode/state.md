@@ -3399,3 +3399,29 @@ Result on Windows: escort suite 290 pass / 122 fail -> 359 / 52. Also fixed
   flag is on.
 Each needs the fixture rebuilt against the contract, not an assertion relaxed. Do that
 feature by feature and record each file's new baseline; do not mass-skip.
+
+### Windows fsync guard, second batch (fork 7adf5d5, mirrored a6fabf64)
+Same rule applied to the seven modules that still fsynced a directory unguarded: opportunity
+board, escort volunteers, contract mutation fence, job agent selection, job notifications,
+salvage consent, salvage provenance. Each gets one local `guard(io, fd)` (they take `io` as a
+dependency, so it cannot close over the default fs) and only the directory call sites use it.
+Effect: coop-native-opportunity-board 6/10 -> 15/1, coop-escort-native-predeparture 5/6 ->
+11/0, escort suite 359/52 -> 365/46. Unchanged (checked before and after):
+coop-installer-module-coverage 2/1, coop-npc-job-board 19/1,
+coop-salvage-postpickup-settlement 3/6, coop-native-haul-manifest 8/4.
+Known inconsistency to unify once `scripts/overlay-spec.cjs` is not being edited by another
+session: this guard exists in two shapes - `process.platform === "win32"` plus the errno set
+(most modules) and the errno set alone (`coopNativeStationTripJournal`, which documents the
+same limitation). One shared helper module is the right answer; it needs an overlay entry.
+
+### coop-escort-flight-stage-c (13 red) is obsolete coverage, not a fixture tweak
+Measured, not assumed: injecting `warpFence: createWarpFence({root,clock})` and
+`EVEJS_COOP_ESCORT_WARP_FENCE=1` (passing `durableWarpFence:` does nothing - the module builds
+it from that flag) moves 2 of 13. The next blocker is
+ESCORT_DISCOVERY_AND_PAID_CONSENT_REQUIRED, i.e. `start()` now also demands
+EVEJS_COOP_OPPORTUNITY_BOARD + EVEJS_COOP_EVENT_VOLUNTEERS + EVEJS_COOP_ESCORT_PAID_ACCEPT and
+a real opportunity-board event before any paid departure. Those preconditions are covered by
+files that are already green (native-priced-acceptance 11/11, durable-warp-fence 10/10,
+native-funds 22/22, options-board 15/1). Do not rewrite this fixture into a full discovery
+simulation: decide with the owner whether these 13 cases are retired or reduced to the flight
+gate + station-arrival slice they were written for.
