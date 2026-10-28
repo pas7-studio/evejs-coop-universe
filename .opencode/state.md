@@ -3178,3 +3178,22 @@ module and banner differ), the ~50 test files that hand-roll env save/restore, a
 after the other session commits `space/coopStationDrain.js` + `miningNpcOperations.js` -
 the engine perf pass on `coopVirtualWorldRuntime.js` (477 `require()` calls, per-tick sorts).
 `node scripts/coop-engine-audit.cjs` still prints AUDIT_REGRESSION from that in-flight work.
+
+## Harness quality pass 2: read-only probes (2026-10-28, OPS)
+The four `Inspect-Coop-{ConvoyOperations,ConvoyOutcomes,Market,MarketStation}.ps1` now
+dot-source `scripts/lib/CoopContainerProbe.ps1` (69L) instead of repeating the
+base64 + `docker compose exec -T server node -e` plumbing. `Inspect-Coop-Training` is
+deliberately untouched (it inspects container env, not a module). Proven without a
+container: a PowerShell `docker` function recorded the exact argv of all four before
+and after; 12 cases (success / Docker exit 5 / missing compose) are identical in argv,
+decoded payload, banners and thrown text. `tests/coop-container-probe.test.mjs` pins it.
+Net lines went UP (+59) because the helper is documented and each wrapper is now named
+data; the win is one container invocation instead of four.
+Engine is UNBLOCKED again: the other session committed, `node scripts/coop-engine-audit.cjs`
+prints AUDIT_OK and `coopVirtualWorldRuntime.js` is 4506L (ceiling 4800).
+Perf must stay profile-first (`docs/PERFORMANCE_REVIEW.md`: no optimisation without a
+profile row naming the caller). A micro-benchmark of `require()` on this shared box gave
+70us/call and then 0us/call on re-run, so it proves nothing - do not act on it. The next
+three targets are already ranked there (buildConfiguredConcordStartupRules memo,
+structureState.cloneValue, coopGameStoreAtomic reconcileObject); a real profile needs the
+agents stack, which another session is currently running (do not restart it).
