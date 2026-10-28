@@ -2240,3 +2240,9 @@ Evidence: war-state RESTORED each boot, mirror 11037 B, durable recovery OK, tre
 Why: faction patrols could never deploy (POOL_EMPTY) because the concord pool profiles are typed 'concord' while the spawner asked for 'npc', and pirates were blocked by the player-only 95% capacitor rule for module online
 Where: integration/coopVirtualWorldRuntime.cjs
 Evidence: fork 3249ba8 + 72c3640; live after rebuild: virtual-faction-patrol status AT_CAP active=[980000046081,980000046082] + virtual-faction-patrol-route OK waypoints=8 in 30045344; warp-point refusal reason moved from NOT_ENOUGH_CAPACITOR to the normal TARGET_NOT_LOCKED; tests coop-faction-patrol 4, coop-npc-online-capacitor 4, coop-npc-entity-type 3
+### 2026-10-28T23:09Z · fc401fd · DOCS · docs(gaps): the list of client surfaces that do not exist yet, with what each needs
+
+Why: the owner asked which client-server surfaces do not exist at all, so they can be developed later; the answer has to be measured and grouped by player-facing feature
+Detail: The register said how many gateway types are defaulted but not what they are for. docs/CLIENT_GAPS.md groups all 99 missing client request types by the surface a player meets them on - SKINs and the SKIN market, character titles, achievements, skill plans, New Eden Store, daily goals, career portal, assetholdings, presence, stargate locks, payment schedules, faction-activity admin, mercenary dens/
+Where: docs/CLIENT_CONTRACT_STATUS.md, docs/CLIENT_GAPS.md, scripts/coop-client-contracts.cjs, tests/coop-client-contracts.test.mjs
+Evidence: docs/CLIENT_GAPS.md: 216 client request types, 162 names known to the gateway (incl. 4 inline handlers previously miscounted), 99 with no handler grouped into 20+ surfaces with what each needs; generated from docs/client-contracts/gateway-types.json; tests/coop-client-contracts 4/0

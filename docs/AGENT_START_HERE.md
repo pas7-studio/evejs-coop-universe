@@ -32,6 +32,10 @@ client. The repository is the only shared memory. Read in this order:
   you touched (`--files a,b --record`, then run it without `--record`). The
   whole-suite baseline is still bound to the pinned checkout and is not a gate:
   `docs/FORK_PATCH_AUDIT_20261028.md` says why and what the 541 red cases are.
+- **What does not exist yet**: `docs/CLIENT_GAPS.md` lists every client request type with no
+  handler (99 of the client's 216), grouped by the surface a player meets, with what each one
+  needs to be built. It is generated from the same client bytecode as the register, and a test
+  keeps the two in step.
 - **Before touching a client-facing answer**, read `docs/CLIENT_CONTRACT_STATUS.md`: it is
   generated from the client's own call list (`docs/client-contracts/calls.json`, 542 calls
   taken from the pinned client bytecode) and the server handlers, and it names every
