@@ -57,7 +57,7 @@ test("without a native transfer the run waits at the gate and says so", () => {
   const result = crossing.tick({
     sceneForSystem: () => fakeScene({ itemID: ENTITY, position: { x: 0, y: 0, z: 0 }, radius: 100 }),
     getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
-    now: 2000,
+    now: 20000,
   });
   const entry = result.advanced[0];
   assert.equal(entry.phase, "AT_GATE");
@@ -66,9 +66,9 @@ test("without a native transfer the run waits at the gate and says so", () => {
 });
 
 test("a refused crossing is retried a bounded number of times, then blocked with the reason", () => {
-  let now = 3000;
+  let now = 20000;
   for (let attempt = 0; attempt < crossing.MAX_ATTEMPTS; attempt += 1) {
-    now += 1000;
+    now += 11000;
     crossing.tick({
       sceneForSystem: () => fakeScene({ itemID: ENTITY, position: { x: 0, y: 0, z: 0 }, radius: 100 }),
       getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
@@ -105,4 +105,75 @@ test("a hull that is not in the source scene blocks instead of guessing", () => 
   const entry = result.advanced.find((row) => Number(row.entityID) === 980000000777);
   assert.equal(entry.phase, "BLOCKED");
   assert.equal(entry.lastReason, "SHIP_NOT_IN_SOURCE_SCENE");
+});
+
+test("the adapter receives the proven gate pair, not a stargate record", () => {
+  // Measured 2026-10-29: handing the adapter the stargate row made every attempt fail
+  // NATIVE_GATE_PREFLIGHT_REJECTED, because it re-reads both gates by ID and got null.
+  const seen = [];
+  crossing.plan({ entityID: 980000000888, pilotID: "coop-pilot-009", gate: GATE, now: 500000 });
+  crossing.tick({
+    sceneForSystem: () => ({
+      getEntityByID: (id) => (Number(id) === 980000000888
+        ? { itemID: id, position: { x: 0, y: 0, z: 0 }, radius: 100 } : null),
+    }),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    transfer: (args) => { seen.push(args.gate); return { success: false, errorMsg: "STOP" }; },
+    now: 500001,
+  });
+  assert.deepEqual(seen[0], { sourceGateID: GATE.sourceGateID,
+    destinationGateID: GATE.destinationGateID,
+    sourceSystemID: GATE.sourceSystemID, destinationSystemID: GATE.destinationSystemID });
+});
+
+test("a hull a few kilometres out is closed with a follow order, not a warp", () => {
+  // Measured 2026-10-29: the hauler sat 4 642 m from the gate, the native warp refused a
+  // target that close, and the run re-warped for ever. A follow order is the documented
+  // final approach; the run must reach AT_GATE and then CROSS.
+  const follows = [];
+  const warps = [];
+  crossing.plan({ entityID: 980000000999, pilotID: "coop-pilot-002", gate: GATE, now: 700000 });
+  const scene = () => ({ getEntityByID: (id) => (Number(id) === 980000000999
+    ? { itemID: id, position: { x: 4642 + 3000 + 100, y: 0, z: 0 }, radius: 100 } : null) });
+  const gate = () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 });
+  const first = crossing.tick({ sceneForSystem: scene, getGate: gate,
+    warpToGate: (id, g) => { warps.push(g); return true; },
+    followGate: (id, g) => { follows.push(g); return true; },
+    now: 700001 });
+  assert.deepEqual(warps, [], "no warp for a close target");
+  assert.deepEqual(follows, [GATE.sourceGateID], "the follow order closes the last kilometres");
+  const mine = first.advanced.find((row) => Number(row.entityID) === 980000000999);
+  assert.equal(mine.phase, "APPROACH");
+  assert.equal(mine.lastReason, "FOLLOW_GATE");
+});
+
+test("a durable ship whose scene was rebuilt is revived instead of abandoned", () => {
+  // Measured 2026-10-29: after a restart the returning hauler was still in the store in
+  // Jita while the live scene had no such entity, so the run blocked and the fleet was left
+  // a hauler short. The store record is proof enough to bring the same hull back.
+  const revived = [];
+  crossing.plan({ entityID: 980000000555, pilotID: "coop-pilot-002", gate: GATE, now: 800000 });
+  const result = crossing.tick({
+    sceneForSystem: () => ({ getEntityByID: () => null }),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    materialize: (scene, id) => { revived.push(id); return { success: true }; },
+    now: 800001,
+  });
+  const mine = result.advanced.find((row) => Number(row.entityID) === 980000000555);
+  assert.ok(revived.includes(980000000555), "the same hull is brought back from its record");
+  assert.equal(mine.phase, "APPROACH", "the run continues once the hull is live again");
+  assert.equal(mine.lastReason, "REMATERIALIZED_FROM_STORE");
+});
+
+test("a ship that cannot be revived still blocks with the honest reason", () => {
+  crossing.plan({ entityID: 980000000556, pilotID: "coop-pilot-002", gate: GATE, now: 810000 });
+  const result = crossing.tick({
+    sceneForSystem: () => ({ getEntityByID: () => null }),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    materialize: () => ({ success: false, errorMsg: "NPC_NOT_FOUND" }),
+    now: 810001,
+  });
+  const mine = result.advanced.find((row) => Number(row.entityID) === 980000000556);
+  assert.equal(mine.phase, "BLOCKED");
+  assert.equal(mine.lastReason, "SHIP_NOT_IN_SOURCE_SCENE");
 });

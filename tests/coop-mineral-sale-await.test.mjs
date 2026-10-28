@@ -72,11 +72,15 @@ test("the world settles its own market journal instead of staying blocked", { sk
   // Measured 2026-10-28: one crashed partial fill left a journal at RPC_CALLING and every
   // later sale of that pilot was refused with UNRESOLVED_MARKET_JOURNAL until an operator
   // ran the reconcile tool. The proof is read-only, so the world does it itself.
-  assert.ok(source.includes("function reconcileMarketJournalsAtBoot("));
+  assert.ok(/function reconcileMarketJournalsAtBoot\(|const reconcileMarketJournalsAtBoot=/.test(source),
+    "the world owns the reconcile call site");
   assert.ok(source.includes('reconcileMarketJournalsAtBoot(true);'),
     "a journal refusal retries the reconcile instead of blocking for ever");
   const boot = fs.readFileSync(path.join(path.dirname(fork), "coopMarketJournalBoot.js"), "utf8");
   assert.ok(boot.includes('require("./coopNativeNpcMarketReconcile").reconcileJournals({'));
-  assert.ok(source.includes('inspectOrder:orderID=>marketClient.call("GetOrder",{order_id:String(orderID)})'),
+  // The wiring moved into the boot module so the engine file keeps its line budget; the
+  // rule it must keep is that settlement reads the market's own order row.
+  const wiring = fs.readFileSync(path.join(path.dirname(fork), "coopMarketJournalBoot.js"), "utf8");
+  assert.ok(/inspectOrder:\s*\(orderID\)\s*=>\s*marketClient\.call\("GetOrder"/.test(wiring),
     "settlement reads the market's own row and never re-sends a fill");
 });
