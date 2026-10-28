@@ -3787,3 +3787,24 @@ opens it, the escrow is reused, and the only remaining trigger is an attributed 
 campaign (or a recorded casualty, which coopWarBounty accepts) to release the escrow to the pilot.
 Session ladder status: capture PROVEN, merit PROVEN, client view PROVEN, escrow PROVEN,
 payout TRIGGER PENDING (needs one live kill in a funded campaign; the seeds are in place).
+
+## Payout trigger: still pending, with the exact next diagnostic (17:0xZ)
+Current measured state on `evejs-agents` (after another session's recreate, healthy):
+  war_state: `war:500004-500011`, **no campaigns**, territories 30003837=500004 and 30045344=500011
+  presence  : 30003837 {500004:3, 500012:2, 500019:1}, 30045344 {500011:3, 500012:1, 500019:1}
+  funding   : both parties CAN_FIELD and both are funded (1000120 = 100 000 ISK after a real
+              mercenary transfer, 1000138 = 25 000 ISK), escrow `bounty:...:500011` REUSABLE
+              since FW-039; `war_funding_diagnose` mercenary answers
+              `{status:"REFUSED", reason:"NO_FUNDED_NAVY_PAIR", refusals:[{500004,
+              reason:"ALREADY_SELF_SUFFICIENT"}]}` - i.e. no hire is needed any more.
+So every precondition for a funded campaign exists, yet the opening phase produces **no event at
+all** since 15:29:10 (not even a refusal), which means `advanceNativeWarOpening` returns before
+`planWars`: the untested suspects are `visitedSystems` (the tick passes only
+`[...visitedSystems].slice(0,12)`, and a system present in the war state's presence list is not
+necessarily in that set) and the `warOpening.tick` early returns (`NO_LINK`/`NO_SYSTEMS`).
+Observability fix shipped this session (fork): the opening refusal event now dedups on
+`reason + JSON.stringify(per-border skips)` and carries `skipped[]`, because a border that
+changed from NO_NAVY to "no money" kept the same top-level NO_OPENABLE_FRONT and was invisible.
+Next exact step for whoever continues: publish/log the opening phase's early-return reason
+(`warSkip("opening", ...)` already exists for all of them but only fires on a state change) and
+check `visitedSystems` membership for 30003837/30045344 at the moment the phase runs.
