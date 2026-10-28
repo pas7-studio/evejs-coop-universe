@@ -57,13 +57,22 @@ test('native type missing from new SDE never converts into a new typeID',async()
 test('incomplete current SDE is never treated as a full valid comparison',async()=>{
  const f=fixtures();try{fs.rmSync(path.join(f.sdeDir,'typeDogma.jsonl'));const r=await run(f);assert.equal(r.status,'BLOCKED_MISSING_SDE_TABLES');assert.deepEqual(r.missingTables,['typeDogma'])}finally{f.clear()}
 });
-test('bad JSON, duplicate IDs, symlinks and malformed keys fail closed',async()=>{
+test('bad JSON, duplicate IDs, symlinks and malformed keys fail closed',async(t)=>{
  const f=fixtures();try{
   const filename=path.join(f.sdeDir,'types.jsonl');
   fs.appendFileSync(filename,JSON.stringify(f.data.types[0])+'\n');await assert.rejects(run(f),/DUPLICATE_KEY/);
   f.save();fs.appendFileSync(filename,'{bad\n');await assert.rejects(run(f),/BAD_JSONL/);
   f.save();f.data.types[0]._key='invalid';f.save();await assert.rejects(run(f),/INVALID_KEY/);
-  f.data.types[0]._key=587;f.save();const target=path.join(f.root,'duplicate.jsonl');fs.renameSync(filename,target);fs.symlinkSync(target,filename);await assert.rejects(run(f),/UNSAFE_SDE_FILE/);
+  f.data.types[0]._key=587;f.save();const target=path.join(f.root,'duplicate.jsonl');
+  fs.renameSync(filename,target);
+  try{fs.symlinkSync(target,filename);}
+  catch(error){
+   // Windows refuses symlinks without Developer Mode or an elevated shell; every
+   // check above already ran, so only this last case is unavailable here.
+   if(['EPERM','EACCES'].includes(error?.code))return t.skip('Symlink requires Windows Developer Mode/admin');
+   throw error;
+  }
+  await assert.rejects(run(f),/UNSAFE_SDE_FILE/);
  }finally{f.clear()}
 });
 test('unknown argument and non-absolute paths are denied',async()=>{

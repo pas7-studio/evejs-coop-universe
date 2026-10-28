@@ -61,12 +61,21 @@ test('duplicate, missing, malformed and invalid JSONL identifiers fail closed', 
   } finally { f.cleanup(); }
 });
 
-test('symlink and unknown tables rejected; source remains byte-identical', async () => {
+test('symlink and unknown tables rejected; source remains byte-identical', async (t) => {
   const f = setup();
   try {
     write(f.baseline, 'groups', [{ _key: 1 }]);
-    fs.symlinkSync(path.join(f.baseline, 'groups.jsonl'), path.join(f.current, 'groups.jsonl'));
-    await assert.rejects(tableRecords(f.current, 'groups'), /INVALID_DATA_FILE/);
+    let symlinked = true;
+    try {
+      fs.symlinkSync(path.join(f.baseline, 'groups.jsonl'), path.join(f.current, 'groups.jsonl'));
+    } catch (error) {
+      // Windows refuses symlinks without Developer Mode or an elevated shell.
+      if (!['EPERM', 'EACCES'].includes(error?.code)) throw error;
+      symlinked = false;
+      t.diagnostic('symlink requires Windows Developer Mode/admin');
+    }
+    if (symlinked)
+      await assert.rejects(tableRecords(f.current, 'groups'), /INVALID_DATA_FILE/);
     await assert.rejects(tableRecords(f.baseline, '../secret'), /UNKNOWN_TABLE/);
     assert.deepEqual(sortedCanonical({ z: 1, a: { y: 2, x: 3 } }), { a: { x: 3, y: 2 }, z: 1 });
     assert.equal(parseKey({ _key: 'abc' }), 'abc');
