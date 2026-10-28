@@ -1883,3 +1883,9 @@ Why: 0fda9c7b moved the per-arrival guard to sellOnArrival entry; two wiring ass
 Detail: 0fda9c7b moved the once-per-arrival guard out of the mineral-lift `if` and to the entry of sellOnArrival (`arrivalSales.get(key)` returns the running job for the same station+hauler before either lift gate is reached). Two assertions in coop-mineral-lift-wiring still looked for the old conjunct and so the file was red at HEAD with `not ok 3` and `not ok 6`. The invariants are unchanged, so the ass
 Where: tests/coop-mineral-lift-wiring.test.mjs
 Evidence: coop-mineral-lift-wiring 7/7; coop-test-parity prints PARITY_OK with no regressions
+### 2026-10-28T13:17Z · 3ed7621 · TEST · test: two assertions that match a location the code left
+
+Why: two wiring assertions were red at HEAD for location/EOL reasons: bare LF anchor against a CRLF file, and a greped legacy-installer string that moved to overlay-spec.cjs
+Detail: Both files were red at HEAD for reasons unrelated to behaviour. coop-alife-order-authority anchored the npcOrderBridge guard with a bare `\n`, but integration/coopVirtualWorldRuntime.cjs is committed with CRLF (it is byte-identical to the engine copy), so the anchor only matched when a block happened to be written with LF. The anchor is now EOL-agnostic, which is what docs/DEVELOPMENT_DOCTRINE.md 
+Where: tests/coop-alife-order-authority.test.mjs, tests/coop-convoy-native-outcomes-overlay.test.mjs
+Evidence: coop-alife-order-authority 5/5, coop-convoy-native-outcomes-overlay 5/5; coop-test-parity PARITY_OK with both reported FIXED
