@@ -8420,3 +8420,19 @@ the client reads without a default, citing the client module that would throw.
 
 Fork `9a2a113`, repo `8e0025d2`..`8666d97`. Image rebuilt, server healthy.
 Still unobserved: the four FW surfaces IN the client (needs one login + four clicks).
+
+## 2026-10-29T01:30Z - OWNER-VERIFIED IN CLIENT (first since the map broke)
+
+The owner reports, after the 20:49/21:15 rebuilds: the global map shows both factions' sectors
+correctly in the war, and the faction-warfare window renders - contested and owned sectors are
+visible. This is the first observed client evidence for the FW work; the cause chain was
+militia-corporation ids where the client indexes faction tables (KeyError in
+`warzoneMap`/`starModeHandler` -> colouring never completed -> 36 victory-point calls a second),
+a missing `adjacencyState`, and five `facWarMgr` getters that answered null.
+
+Remaining, owner-reported: one tab in that window ("Campaign") still shows nothing. The client has
+no such tab in `fwWarzoneDashboard.py` (WarzoneControl/WarzoneDetails/Objectives/Statistics/
+Progression), so the candidate surfaces are the Agency -> Campaigns page
+(`publicGatewayLocal` answers every `eve_public.campaign.api.*` request with a 200 and an EMPTY
+payload) and the insurgency campaign layer (`insurgencyCampaignSvc` ->
+`insurgencySolarsystem.GetLocalCampaignClientSnapshot` / `GetAllVisibleCampaigns`).

@@ -2153,3 +2153,9 @@ Why: statistics tab asked six facWarMgr getters the server never answered, and a
 Detail: The client's own bytecode is the specification. These cases name the field each module reads without a default and fail if the server renames or drops it: the map rowsets the client Indexes (stationID, fromID, solarSystemID/value1/value2), the war rowset column (warID), the warzone occupation KeyVal, and every facWarMgr getter the dashboard and the statistics tab call. Fork: 9a2a113.
 Where: tests/coop-client-contract-payloads.test.mjs
 Evidence: fork 9a2a113; live: topAndAll groups 1/2/32, militia keyed 500001/500004, factionInfo systemsCount 1/2 from real territories; tests coop-facwar-mgr-answers 10, coop-client-contract-payloads 7, coop-war-client-view 10; image rebuilt, server healthy
+### 2026-10-28T21:12Z · 4ab5b87 · L2 · ops(fw): put 30003836 on the agents virtual route
+
+Why: owner-verified in the client: the global map shows both factions' sectors in the war and the faction-warfare window finally renders
+Detail: The mobiliser refuses a campaign whose side system is not tracked (SYSTEM_NOT_TRACKED), and the 500001/500011 border uses 30003836 as its source. Adding it to EVEJS_COOP_VIRTUAL_ROUTE makes the world track it so a real mustering can be evaluated there.
+Where: compose/compose.agents.yaml
+Evidence: owner report 2026-10-29: 'global map started showing sectors of both factions correctly in war, and the war tab - I finally see everything as it should'; warzone payload 3 systems with faction ids + FL/SL + attackerID; fork 331cffa/9a2a113
