@@ -11,14 +11,17 @@ const hook=require("../scripts/coop-player-damage-native-patch.cjs");
 const read=p=>fs.readFileSync(path.join(root,p),"utf8");
 test("combat witness is copied into the same authoritative space module directory",()=>{
   const code=read("scripts/patch-evejs-coop.cjs");
-  assert.match(code,/"coopPlayerCombatWitness"/);
-  assert.match(code,/space\/combat\/killmailTracker\.js/);
+  // The module list lives in scripts/overlay-spec.cjs and the installer re-exports it.
+  assert.ok(installer.names.includes("coopPlayerCombatWitness"));
+  assert.ok(installer.specs.some(s=>s.file==="server/src/space/combat/killmailTracker.js"));
   const spec=installer.specs.find(s=>s.file==="server/src/space/combat/killmailTracker.js");
   assert.ok(spec);
   assert.ok(fs.existsSync(path.join(root,"integration/coopPlayerCombatWitness.cjs")));
   assert.match(code,/coop-player-damage-native-patch\.cjs/);
 });
 test("pinned native hook is exactly reversible through transactional installer transform",()=>{
+  // killmailTracker.js carries two hook sites now: the damage witness inside
+  // noteDamage, and the FW structure-killmail call before the ledger is deleted.
   const text=[
     "function noteDamage(attackerEntity, targetEntity, appliedDamage, options = {}) {",
     "  const ledger = { attackers: {}, damageTaken: 0 };",
@@ -27,10 +30,20 @@ test("pinned native hook is exactly reversible through transactional installer t
     "  ledger.attackers[attackerKey] = currentEntry;",
     "  ledger.damageTaken = toFiniteNumber(ledger.damageTaken, 0) + damageAmount;",
     "  ledger.lastUpdatedAtMs = whenMs;",
+    "}",
+    "function recordKillmailFromDestruction(targetEntity, destroyResult, options = {}) {",
+    "  const ledgerKey = String(targetEntity && targetEntity.id);",
+    "  const record = ledgersByVictim.get(ledgerKey);",
+    "  ledgersByVictim.delete(ledgerKey);",
+    "  return record;",
     "}"
   ].join("\n");
   const spec=installer.specs.find(s=>s.file==="server/src/space/combat/killmailTracker.js");
-  assert.equal(hook.patch(text),installer.transform(text,spec,false));
+  // The installer composes two hooks onto this file: the damage witness, then the FW
+  // structure-killmail call. State that composition exactly instead of pretending one
+  // patch function equals the whole transform.
+  const structure=require("../scripts/coop-war-structure-killmail-patch.cjs");
+  assert.equal(installer.transform(text,spec,false),structure.patch(hook.patch(text)));
   const patched=installer.transform(text,spec,false);
   assert.equal(installer.transform(patched,spec,false),patched);
   assert.equal(installer.transform(patched,spec,true),text);

@@ -11,7 +11,9 @@ test("P0 custody hook registered in current native overlay without replacing ato
  for(const file of [inventoryPath,tradePath])
   assert.ok(installer.specs.some(x=>x.file===file));
  const installed=fs.readFileSync(path.join(import.meta.dirname,"../scripts/patch-evejs-coop.cjs"),"utf8");
- assert.match(installed,/"coopNativeTradeCustody"/);
+ // The install list lives in scripts/overlay-spec.cjs since the single-spec refactor and
+ // the installer re-exports it, so the effective surface is the assertion here.
+ assert.ok(installer.names.includes("coopNativeTradeCustody"));
  assert.match(installed,/coop-native-trade-custody-patch\.cjs/);
  assert.match(installed,/coop-atomic-trade-patch\.cjs/);
  assert.match(installed,/coop-agent-dialogue-patch\.cjs/);

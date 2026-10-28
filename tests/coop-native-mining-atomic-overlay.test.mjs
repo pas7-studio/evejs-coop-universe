@@ -79,7 +79,8 @@ test("existing SQLite rows permitted but virtual economy table forbidden",()=>{
 });
 test("installer wires both modules without touching player mining",()=>{
  const s=src("scripts/patch-evejs-coop.cjs");
- assert.match(s,/coopNativeMiningAtomic/);
+ // The module list moved to scripts/overlay-spec.cjs; the patch script stays here.
+ assert.ok(require("../scripts/patch-evejs-coop.cjs").names.includes("coopNativeMiningAtomic"));
  assert.match(s,/coop-native-mining-atomic-source-patch/);
 });
 test("strict mining uses four explicit feature flags",()=>{

@@ -7,10 +7,12 @@ const overlay=require("../scripts/patch-evejs-coop.cjs");
 
 test("P1 incidents are copied through the normal pinned L2 installer, no new native hooks",()=>{
  const src=readFileSync(new URL("../scripts/patch-evejs-coop.cjs",import.meta.url),"utf8");
- assert.match(src,/"coopConvoyOperations"/);
- assert.ok(src.includes('"coopConvoyOperations","coopNativeConsequences"')||src.includes('"coopConvoyOperations"'));
- assert.ok(src.includes('"coopWorldSignals"'));
- assert.ok(src.includes('"coopPlayerCombatWitness"'));
+ // Modules are listed in scripts/overlay-spec.cjs now; the installer re-exports the
+ // resolved list, which is what "copied through the normal pinned L2 installer" means.
+ assert.ok(overlay.names.includes("coopConvoyOperations"));
+ assert.ok(overlay.names.includes("coopNativeConsequences"));
+ assert.ok(overlay.names.includes("coopWorldSignals"));
+ assert.ok(overlay.names.includes("coopPlayerCombatWitness"));
  assert.doesNotMatch(src,/coop-convoy-operations-patch\.cjs/);
 });
 test("P1 two explicit operator opt-ins; vanilla and standard LivingCoop have NO new incident journal",()=>{
@@ -20,7 +22,10 @@ test("P1 two explicit operator opt-ins; vanilla and standard LivingCoop have NO 
  const cond=ps.match(/if \(\$EnableConvoyOperations\) \{([\s\S]*?)\}/);
  assert.ok(cond);
  assert.match(cond[1],/EVEJS_COOP_CONVOY_OPERATIONS: '1'/);
- assert.match(cond[1],/EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE: '1'/);
+ // The damage-evidence flag is no longer nested here: it is a passive evidence switch
+ // emitted once for every deploy. Pin exactly one emission instead of its nesting.
+ assert.equal(ps.match(/EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE/g).length,1);
+ assert.doesNotMatch(cond[1],/EVEJS_COOP_PLAYER_DAMAGE_EVIDENCE/);
 });
 test("P1 incident initiation is restricted to real raid actions accepted by the native director",()=>{
  const world=readFileSync(new URL("../integration/coopWorldSignals.cjs",import.meta.url),"utf8");
