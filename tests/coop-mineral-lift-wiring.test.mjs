@@ -28,8 +28,13 @@ test('minerals are loaded only after a merchant identity really exists', () => {
 test('the lift runs once per arrival and only when its own flag is on', () => {
   const calls = source.split('ensureMineralLift()?.lift').length - 1;
   assert.equal(calls, 1);
-  assert.match(source,
-    /if\(process\.env\.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&\s*!arrivalSales\.has\(Number\(stationID\)/);
+  // The once-per-arrival guard moved to the top of sellOnArrival: a second
+  // arrival of the same (station, hauler) returns the running job before either
+  // lift gate is reached, which covers more than the old conjunct on the gate.
+  const guard = source.indexOf('const running=arrivalSales.get(key);');
+  const gate = source.indexOf('if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"){', guard);
+  assert.ok(guard > 0, 'the per-arrival job guard must exist');
+  assert.ok(gate > guard, 'the lift gate must sit behind the per-arrival guard');
 });
 
 test('the sale keeps the lifted mineral types even when the allowlist lacks them', () => {
@@ -55,7 +60,7 @@ test('the lifted-type set is declared at function scope, before its gate', () =>
   // A block-scoped declaration here cost three deliveries and zero sales on the work
   // stack: every arrival raised `liftedTypes is not defined` before the sale ran.
   const decl = source.indexOf('const liftedTypes=new Set();');
-  const gate = source.indexOf('if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"&&');
+  const gate = source.indexOf('if(process.env.EVEJS_COOP_NPC_MINERAL_LIFT==="1"){', decl);
   assert.ok(decl > 0 && gate > 0);
   assert.ok(decl < gate, 'the declaration must sit outside the lift gate');
 });
