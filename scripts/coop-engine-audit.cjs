@@ -121,6 +121,26 @@ const patchScripts = fs.existsSync(scriptsDir)
   ? fs.readdirSync(scriptsDir).filter((f) => f.endsWith('.cjs') && /patch/i.test(f))
   : [];
 
+// 5. giga-file ratchet -----------------------------------------------------
+// A co-op module in one scope above ~2 000 lines cannot be tested in isolation
+// and every edit risks a hidden coupling. This is a ratchet, not a style rule:
+// a new 2 000-line module fails immediately, and a known one may only shrink
+// (the ceiling is lowered when it is split, never raised to make room).
+const GIGA_COOP_LINES = 2000;
+const GIGA_COOP_KNOWN = {
+  // Split once already (5 349 -> 4 379); the rest is state-coupled. ~10% headroom
+  // for other sessions' telemetry work; lower this whenever the file shrinks.
+  'server/src/space/coopVirtualWorldRuntime.js': 4800,
+};
+const gigaCoop = jsFiles
+  .filter(isCoopModule)
+  .map((p) => ({ file: rel(p), lines: fs.readFileSync(p, 'utf8').split('\n').length }))
+  .filter((x) => x.lines > GIGA_COOP_LINES)
+  .sort((a, b) => b.lines - a.lines);
+const gigaFailures = gigaCoop
+  .filter((x) => x.lines > (GIGA_COOP_KNOWN[x.file] ?? 0))
+  .map((x) => `${x.file} ${x.lines} lines > ${GIGA_COOP_KNOWN[x.file] ?? GIGA_COOP_LINES} (split it with scripts/coop-split-module.cjs)`);
+
 const totals = {
   stockFiles: stock.length,
   stockLines: stock.reduce((s, x) => s + x.lines, 0),
@@ -131,6 +151,7 @@ const totals = {
   sourceRewrites,
   patchScripts: patchScripts.length,
   integrationDrift: drift.length,
+  gigaCoop,
 };
 
 const failures = [];
@@ -143,6 +164,7 @@ if (totals.sourceRewrites > BUDGET.sourceRewrites) failures.push(`source-level p
 if (totals.patchScripts > BUDGET.patchScriptsMax) failures.push(`patch scripts ${totals.patchScripts} > ${BUDGET.patchScriptsMax}`);
 if (totals.integrationDrift > BUDGET.integrationDriftMax)
   failures.push(`integration drift ${totals.integrationDrift} > ${BUDGET.integrationDriftMax}`);
+failures.push(...gigaFailures);
 
 if (asJson) {
   console.log(JSON.stringify({ code: CODE, totals, budget: BUDGET, failures, stock, smells, drift }, null, 2));
@@ -152,6 +174,10 @@ if (asJson) {
   console.log(`biggest     ${totals.biggestFile ? `${totals.biggestFile.file} (${totals.biggestFile.lines} lines, ${totals.biggestFile.chars} chars)` : 'none'}`);
   console.log(`runtime patching: ${totals.sourceRewrites} (monkey-patch/require-cache/source-rewrite sites: ${totals.smells})`);
   console.log(`legacy patch scripts ${totals.patchScripts} (budget ${BUDGET.patchScriptsMax}), integration copies differing ${totals.integrationDrift}`);
+  if (gigaCoop.length) {
+    console.log(`\nco-op modules over ${GIGA_COOP_LINES} lines (ratchet, may only shrink):`);
+    for (const g of gigaCoop) console.log(`  ${String(g.lines).padStart(5)}L ${g.file} (ceiling ${GIGA_COOP_KNOWN[g.file] ?? GIGA_COOP_LINES})`);
+  }
   if (stock.length) {
     console.log('\nstock files by co-op surface (extraction candidates first):');
     for (const s of stock.slice(0, 8)) console.log(`  ${String(s.chars).padStart(5)}c ${String(s.lines).padStart(3)}L ${s.file} (${s.hookCalls} hook calls)`);

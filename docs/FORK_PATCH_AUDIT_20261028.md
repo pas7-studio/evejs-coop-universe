@@ -90,7 +90,15 @@ node scripts/coop-split-module.cjs --file <rel> --out <rel> --apply
 Rules the tool enforces: only declarations that reference **no** mutable module
 state (`let`/`var`) and no non-movable sibling move; the parent keeps a
 destructuring `require`, so exports and call sites never change; a failed
-`node --check` restores the original file.
+`node --check` restores the original file; `--out` must stay in the parent's
+directory; the `require()` back into the parent is inserted where the first
+extracted declaration was, so a moved `const` is initialised before the parent
+reads it.
+
+`scripts/coop-engine-audit.cjs` keeps this from rotting: any co-op module above
+2 000 lines that is not on the frozen list fails with `AUDIT_REGRESSION`, and a
+frozen one may only shrink. The ratchet is what stops the next 5 000-line file
+from appearing.
 
 Current state of the giant modules:
 
