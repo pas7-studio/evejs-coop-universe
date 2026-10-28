@@ -1,5 +1,36 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 12:00Z - CLOSED LOOP PROVEN: ore sold, ISK reached the corporation
+
+PROVEN LIVE on `evejs-agents` (headless, no client), same world that had been stuck since 02:05Z:
+
+  ore mined -> hauler loaded -> delivered -> refined (fee from the corp wallet)
+   -> minerals lifted -> SOLD 5000 Scordite @ 4605.77 = 23 028 850 ISK -> pilot ledger
+   -> corp treasury sweep -> corporation wallet.
+
+  Measured: 11:55:47 living-npc-station-target-cleared, 11:55:48 living-npc-station-sold
+  (station 60003724, hauler 980000000032, 5000 units, 23 028 850 ISK). 11:39:34
+  living-corp-treasury-swept moved 26 018 500 ISK; corp wallet 38 743 827.69 -> 64 762 327.69
+  (the ~47k gap is the refinery fees the corporation paid in between). No pending market
+  journals: /var/lib/evejs/coop-native-market/tx is empty.
+
+TWO BLOCKERS CLOSED (both were real, neither was a "market is broken" story):
+  1. The journal left at RPC_CALLING (coop-pilot-012) was settled from the MARKET'S OWN PROOF,
+     never by repeating the fill: order 4257762183096583224 is state filled, vol_entered 5000,
+     vol_remaining 0, issued 15 ms after the journal. New space/coopNativeNpcMarketReconcile.js
+     + scripts/reconcile-npc-market-journal.cjs (dry run, then --apply; durable receipt in
+     reconciled/; replayed false). Fork 441fcc4 + 356dcce.
+  2. The sale then failed with NATIVE_NPC_BUSY because the fleet's own asteroid orbit leaves
+     controller.currentTargetID set on the hauler. The sale now releases only a static,
+     non-combat target (a ship target, an attack order, a fresh aggressor or a warping hull
+     still refuses). Fork 78b1681.
+
+ALSO MEASURED (still open, no longer blocking): after ~9 hours without sales the corporation
+owns 705 484 units (442 350 ore + 263 134 minerals) against demand 82 502 and a 200 000 floor,
+so the demand governor mostly HOLDs and mining only trickles. Each station arrival sells what
+that arrival lifts, so stock drains one trip at a time; a restart also resets the governor's
+trickle timer, which is what let mining resume at 11:41.
+
 ## 2026-10-28 01:35Z - the loop runs live; the sale needs one operator decision
 
 PROVEN LIVE on `evejs-agents` in this session (no client, headless world):

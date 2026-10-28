@@ -1782,3 +1782,20 @@ Why: Split checker: BINDER_NEVER_CALLED - a binder function nobody invokes leave
 Detail: The binder call is what keeps two copies of one state equal; if the function that holds it is never called, the copies exist and never refresh - the same freeze as the missing names, one step later. BINDER_NEVER_CALLED is now a hard finding, and a module-scope binder call still counts as running. Engine files were not touched: another session is mid-edit on coopVirtualWorldRuntime.js (mtime 15:50)
 Where: scripts/coop-split-check.cjs, tests/coop-split-tooling.test.mjs
 Evidence: tests/coop-split-tooling.test.mjs 10/10; checker on current engine 0 hard findings, 23 two-state; audit drift 1 left deliberately (another session mid-edit on the runtime)
+### 2026-10-28T11:50Z · f4a7afa · L1 · test(FW-036): a system is observed only when the roster proves a live hull there
+
+Why: the war layer only observed systems a client had flown into, so a spawned war fleet could never open or advance a front
+Where: integration/coopWarObservedSystems.cjs, tests/coop-war-observed-systems.test.mjs
+Evidence: node --test tests/coop-war-observed-systems.test.mjs -> 5 pass; fork commit 26d107a + FW-036 helper
+### 2026-10-28T11:40Z · b42e53f · L1 · coop: settle an ambiguous market journal from the market's own proof
+
+Why: A sell journal left at phase RPC_CALLING halted the native NPC market for ever by doctrine (never repeat a possibly completed fill), so every arrival deposited its ore instead of selling and no ISK reached the pilot or the corporation.
+Detail: Reconciliation reads the market daemon's own order row and never re-sends FillOrder. The fill is accepted only when the row is state filled, carries exactly our quantity, has nothing remaining, matches station/type/price and was issued within two minutes of the journal timestamp; the ledger is credited exactly once and a durable receipt under reconciled/ names the proof before the ledger is written.
+Where: integration/coopNativeNpcMarketReconcile.cjs, scripts/reconcile-npc-market-journal.cjs, tests/coop-npc-market-reconcile.test.mjs (fork 441fcc4 + 356dcce)
+Evidence: agents world: order 4257762183096583224 state filled, vol_entered 5000, vol_remaining 0, issued 15 ms after journal 1793135288695; dry run then --apply settled 5000 @ 5203.7 = 26 018 500 ISK with replayed false; treasury swept exactly that amount (38 743 827.69 -> 64 762 327.69); 8 tests pass
+### 2026-10-28T11:52Z · 21570bd · L1 · coop: mirror the station target release and pin it
+
+Why: After the market journal was reconciled the arrival still refused the sale, now with NATIVE_NPC_BUSY, because the fleet's own asteroid orbit leaves controller.currentTargetID set on the hauler.
+Detail: The sale releases that target first and only that kind of target: a ship target, an attack order, a fresh aggressor, a hull still warping or any non-static target keeps the refusal. The release is named living-npc-station-target-cleared with the released ID.
+Where: integration/coopVirtualWorldRuntime.cjs, tests/coop-npc-station-sale-target.test.mjs (fork 78b1681)
+Evidence: agents 11:42 station-sale-skipped NATIVE_NPC_BUSY with target 5020484740197; after the fix 11:55:47 living-npc-station-target-cleared then 11:55:48 living-npc-station-sold 5000 Scordite @ 4605.77 = 23 028 850 ISK; 3 tests pass
