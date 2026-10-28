@@ -8590,3 +8590,25 @@ zero non-gRPC `H2` requests).
 
 The friend (140000107) is connected through the SSH relay and his gateway calls are served
 (18 `Requests.Send` in five minutes, all 200).
+
+## 2026-10-29T03:20Z - gateway coverage measured, and a reason-less FAILED closed
+
+The client's bytecode names **217 `eve_public.*Request` types**; the local gateway services name
+**159** of them. The remaining 101 (achievements, community tracks, character titles, career
+rewards, assetholding, AI assistant) are answered with a default-encoded empty message, so they
+no longer throw, and the gateway logs each by name. `docs/CLIENT_CONTRACT_STATUS.md` now lists
+them, generated from `docs/client-contracts/gateway-types.json` - a work queue, not a mystery.
+
+Second find from the live event stream: `virtual-faction-patrol` reported **FAILED every two
+minutes** in 30045343/30045344 with `spawned: []`, `active: []` and **no reason**, while the
+materializer in the same tick reported `SPAWN_LIMIT_REACHED (occupied 3, limit 3)`. A full system
+was indistinguishable from a broken spawn. `reconcile()` now returns per-faction `failures` and a
+top-level `reason` when nothing deployed (fork `67bd5f8`, module already copied into the running
+container; takes effect on the next restart).
+
+State of the client-facing layer right now: 325 client calls, 324 answers, **zero** "Unhandled
+method" lines, three gateway types served by the new default rule, and the only remaining client
+alerts are `IOError: [Errno 9] Bad file descriptor` - a client tasklet writing into a closed
+stdout (the launcher's window), not a server answer.
+
+Pending restart: the patrol reason (already in the container) and nothing else.
