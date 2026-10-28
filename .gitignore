@@ -1,4 +1,7 @@
 # Never commit proprietary game or runtime artifacts
+# Decompiled EVE client text: python scripts/coop-client-code.py keeps it in %TEMP%
+client-code/
+**/client-code/
 .env
 .env.*
 !.env.example

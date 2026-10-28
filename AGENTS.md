@@ -30,6 +30,12 @@ side is the `evejs-ssh-relay` container (`0.0.0.0:61730` -> hardened sshd
 change. The client port lives in `prefs.ini`, not `start.ini`.
 Details: [`docs/PUBLIC_ENDPOINT_PROTONVPN.md`](docs/PUBLIC_ENDPOINT_PROTONVPN.md).
 
+**Reading the client itself:** `python scripts/coop-client-code.py --module <path>` prints one
+decompiled client module, `--grep <text>` searches the ones that contain it, `--list` lists
+the archive. The text is cached in `%TEMP%\opencode\client-code` and must never be committed:
+the client is CCP code, and the repository only keeps what is derived from it
+(`docs/client-contracts/*.json`, `docs/CLIENT_CONTRACT_STATUS.md`, `docs/CLIENT_GAPS.md`).
+
 **Launching the client:** always through the launcher, `Play.bat` (or
 `scripts/Start-Play-Stack.ps1 -Action Up` first) - never `bin64\exefile.exe` directly. The
 launcher is what exports `http_proxy`/`https_proxy` and the local CA, so the client's gRPC
