@@ -1,5 +1,29 @@
 ﻿# State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-28 14:15Z - the fleet is repaired; the produced goods still need a named, near ship
+
+FIXED (fork 9d96fb3): both 30000145 slots refused to restore for ever with
+ALIFE08_REPAIR_MARKER_MISMATCH. Cause: every failed boot repair spawned another wing, so slot
+30000145-1 marked 120 miners + 118 haulers around a 2+1 witness (105+55 on -2). The repair now
+prunes hulls the slot marks but does not own (physical destroy for live ones, durable cascade for
+phantoms) and then checks the witness. Result: ALREADY_ACTIVE 3+1 and 2+1, mining resumed.
+
+MANUFACTURING (fork 6c66f05): blueprint 1076 seeded at 60014935, 5-run job consumed 5 555
+Tritanium (72 399 -> 66 844) and produced 5 x typeID 444 with a receipt. A second attempt at
+60000682 was refused honestly with MATERIALS_MISSING (no Tritanium in that hangar) - the module
+never fabricates inputs.
+
+WHERE THE 5 CHIPSETS ARE: in the cargo hold of hull 980000003529 (spawned by the repair). That
+hull has NO identity link, so the sale refuses with HAULER_NOT_NAMED, and it sits 8.6e11 m from
+the station. 23 real seeded bids exist for typeID 444 (best 54 374 at 60000361, 54 289.76 at
+60000682).
+
+NEXT (one of these, both small):
+  1. linkSpawnedIdentity for 980000003529 -> role hauler, then scripts/sell-station-goods.cjs
+     at a station that bids for 444 - or
+  2. run the manufacture where the hangar really holds Tritanium AND the station bids for 444,
+     then let the drain lift and sell it automatically (that path is already proven).
+
 ## 2026-10-28 13:50Z - manufactured goods EXIST; selling them waits on a fleet restore
 
 PROVEN on `evejs-agents` (no client):
@@ -3519,3 +3543,18 @@ orientation flip only rescues a border whose blocker belongs to a DIFFERENT fact
 So PAYOUT is not blocked by code any more: it needs ONE campaign to finish (freeing a target)
 and then a NEW campaign to open under REQUIRE_FUNDING=1, where the reservation itself will be
 recorded as `living-native-war-bounty-reserved`. Nothing about that is faked in this repo.
+
+### Mirror-resolution gap is now a tool, not folklore
+`integration/*.cjs` keep the engine's extensionless `require("./sibling")`. Node never
+resolves that to `.cjs`, so a missing `.js` shim throws MODULE_NOT_FOUND - or, inside
+`try/catch`, becomes a plausible pause status that silently rewrites what a test proves.
+Three such gaps were already paid for in this session (`coopStuckWarpRecovery`,
+`coopAlifeNativeDeliveryEvidence`, and the sandbox tests that forwards `require(id)` from
+the test directory instead of the integration directory).
+- `scripts/coop-integration-shims.cjs --check|--write` lists/creates the shims and rejects a
+  shim that forwards to a different module object; `tests/coop-integration-shims.test.mjs`
+  pins it (currently ~120 names missing, so the test is red until `--write` runs).
+- `tests/_support/integrationSandbox.mjs#loadIntegration(name, overrides)` compiles a module
+  with a require that resolves a bare sibling to `integration/<name>.cjs`; used by
+  `coop-native-station-arrival` and `coop-native-haul-manifest-station`. Remaining
+  hand-rolled `new Function("require",...)` sandboxes should move to it.
