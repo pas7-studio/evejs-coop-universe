@@ -31,11 +31,14 @@ NEXT: confirm the 444 sale on that arrival, then wire the automatic manufacture 
 
 ## 2026-10-28 - test-parity round: Windows durability + stale fixtures
 
-Suite: 5837 pass / 332 fail / 92 skip (baseline) -> 6128 / 77 / 97 (full probe,
-2026-10-28 late). Everything below then closed another ~40 reds; the next probe
-should land near 6160 pass / ~35 fail. Remaining reds are almost all
-installer/overlay suites (scripts/overlay-spec.cjs, another session) plus the
-three blocked decisions listed further down.
+Suite: 5837 pass / 332 fail / 92 skip (baseline) -> 6157 / 52 / 99 (full probe
+`suite-final.json`, 2026-10-28). That 52 includes one transient red
+(coop-escort-native-funds, edited and reverted mid-probe; re-measured 22/0), so the
+steady figure is 6158 / 51. 30 files still red, and 42 of the 51 cases are the
+installer/overlay family waiting on scripts/overlay-spec.cjs (another session). The
+rest: coop-escort-flight-stage-c 8/6, COOP-049 buyer-wiring 6/1, alife13 22/1,
+coop-virtual-world-split 2/1 (PARITY_REGRESSION from another session), and the
+untracked coop-integration-shims 1/1.
 
 Closed since that probe (each with a fork mirror where the code changed):
   coop-native-haul-transfer-sqlite 2/5->7/0 (fixture handed the mover the raw SQLite
