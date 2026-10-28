@@ -3425,3 +3425,27 @@ files that are already green (native-priced-acceptance 11/11, durable-warp-fence
 native-funds 22/22, options-board 15/1). Do not rewrite this fixture into a full discovery
 simulation: decide with the owner whether these 13 cases are retired or reduced to the flight
 gate + station-arrival slice they were written for.
+
+## After the capture: merit works, the client sees the occupation, the bounty is the last rung (13:5xZ)
+- Player-visible effect of the capture, from the real client view module on the live state:
+  `occupationStates` for 30045344 = {ownerID:500011, occupierID:500011, contested:false,
+  militaryState:"OCCUPIED"} (it was 500001/CONTESTED), and the captured campaign is no longer
+  listed by `liveCampaigns`.
+- Kill merit really runs: `living-native-war-merit` PROMOTED coop-pilot-026/027/045/050/055 with
+  kind "warship-kill" +25 and demoted victims with "force-lost" -10, e.g. 13:27:00.799
+  coop-pilot-050 recruit -> pilot. `killCreditAssigned:true` still never appears in a casualty
+  receipt: attribution stays NATIVE_VICTIM_WRECK_ONLY_NO_KILLER, and a passing merit promotion is
+  not a final-blow claim.
+- Bounty PAYOUT is the only unproven rung, and it is blocked by money, not by combat:
+  `war_funding_diagnose` answers NO_REAL_FACTION_INCOME on every side because the refinery
+  treasury sweep already moved the pilots' real earnings into the corporation wallet
+  (`living-corp-treasury-swept` 250 000 ISK), and FW-005B's levy reads only PILOT balances. With
+  no levy there is no chest entry, so at campaign open `warBountyReserve` refuses and no HELD
+  escrow ever exists to pay a killer.
+  Fix attempted and deployed (env-gated, agents stack only): EVEJS_COOP_WAR_BOUNTY_WALLET_FALLBACK=1
+  lets the reservation be backed by that same native corporation wallet. `coopWarTreasury` RESERVE
+  verifies the corporation/faction, writes a real journal entry and debits division 1000, refusing
+  when the money is not there - so nothing is minted, only spent from where real settlements put it.
+  A reservation can only be taken for a campaign that does not exist yet (it is taken before
+  START_CAMPAIGN), so PAYOUT needs one NEW campaign opened after this deploy, then a kill in it.
+  Watching for that opening; if none appears, the payout stays PENDING with this exact cause.
