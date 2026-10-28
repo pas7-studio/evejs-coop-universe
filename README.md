@@ -156,6 +156,10 @@ and no feature here exists only as an undocumented string edit inside a checkout
 - [docs/GAMEPLAY_TESTING.md](docs/GAMEPLAY_TESTING.md) — how to prove actual gameplay
 - [docs/RELEASE_GATES.md](docs/RELEASE_GATES.md) — what must be true before "playable"
 - [docs/UPSTREAM.md](docs/UPSTREAM.md) — upstreams, compatibility, contribution policy
+- [docs/PUBLIC_ENDPOINT_PROTONVPN.md](docs/PUBLIC_ENDPOINT_PROTONVPN.md) — remote player:
+  ProtonVPN port carries SSH, host/friend bring-up, symptom→fix table
+- [docs/MARKET_SEED_ECONOMY_DESIGN.md](docs/MARKET_SEED_ECONOMY_DESIGN.md) — market seed audit,
+  invariants, faction sectors, executed reseed
 
 ## Rules of this repository
 
