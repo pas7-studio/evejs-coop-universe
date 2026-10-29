@@ -2533,3 +2533,14 @@ Evidence: fork 0595472; live after a 750 000 ISK purchase: both actors read stat
 Why: operation.recommendation.Get and communitytrack.api.Get had no answer at all; empty lists or a fabricated operation id would have misled the client
 Where: .opencode/state.md, docs/CLIENT_GAPS.md
 Evidence: fork 3166539; live: recommendation 200 with 0 recs, communitytrack 5 'no community track instance exists in this world'; register 15 unhandled
+### 2026-10-29T18:29Z · 8fa6eb9 · TEST · state(fw): the payout rung proven in-process; only the live observation remains
+
+Why: Prove the payout rung reproducibly instead of waiting for a live kill
+Where: .opencode/state.md
+Evidence: end-to-end test: HELD -> PAID -> credited 5000 ISK, replay ALREADY_PAID, 4 tests PASS; war suite 586/0
+### 2026-10-29T18:29Z · d250259 · L2 · tests: the flatbuffer writer round-trips scalars, strings and table vectors
+
+Why: our own achievement catalogue needs a flatbuffer writer, and the titles file hand-assembled one table - that does not scale to 18 tables
+Detail: 2/2 tests, with a reader written separately from the builder.
+Where: tests/coop-flatbuffer.test.mjs
+Evidence: fork flatbuffer writer + 2/2 round-trip tests; schema of 18 achievement tables extracted from the client builders into docs/client-contracts/achievement-flatbuffer.json
