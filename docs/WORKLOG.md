@@ -2302,3 +2302,19 @@ Evidence: fork b0c0+, live payload 104 bytes (was 0), 200; tests/coop-career-get
 Why: A hull could not cross back although everything about it was provable: the gate distance was measured by the wrong authority, a follow order re-locked its own target, and the identity link had been pruned
 Where: integration/coopLoopTick.cjs, integration/coopNativeMiningFleetDurable.cjs, integration/coopNpcGateCrossing.cjs, scripts/coop-distribution-hull.cjs, scripts/coop-hull-identity.cjs, tests/coop-fleet-hauler-shortfall.test.mjs, tests/coop-npc-gate-crossing.test.mjs
 Evidence: live ARRIVED SAME_NATIVE_SHIP_ARRIVED 980000004164 30000142->30000145 attempts=1 after 11 191 km warp; store systemID 30000145, 4 modules; 79/79 loop tests
+### 2026-10-29T03:26Z · e525eab · L2 · state(fw): FW-064..066 - stop the loop, unlock won campaigns, validate payability
+
+Why: Campaign validation found a churn loop and escrow locked behind a won campaign
+Where: .opencode/state.md
+Evidence: 30045343 expired 4 times; two HELD rows refunded 03:23:09Z after OCCUPIED became terminal; validator 11/11
+### 2026-10-29T09:39Z · 0acc995 · L2 · state(fw): payout diagnose, both-sides supply rule, acceptance run, and the measured next blocker
+
+Why: Make the payout rung diagnosable and accept-testable, and stop opening wars only one side can pay
+Where: .opencode/state.md
+Evidence: war_payout_diagnose live; acceptance run: war-opened PASS, escrow-reserved PASS, assault-begun PENDING
+### 2026-10-29T09:48Z · a95ba48 · L2 · docs/tests: presence, faction admin, skill plans and goal contributions are live
+
+Why: four client surfaces the owner chose had no handler: character presence, the /advantage admin knobs, the newer skill plan package and the generic goal contribution package
+Detail: Five of the six surfaces the owner asked for now answer real data on the running play stack, each measured with a container probe against the gateway registry: - presence: character membership from the live session, then the durable character record, then the corporation record; unknown character is NOT_FOUND. - faction activity admin: a writable per system+faction ledger applied to the derived sc
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-faction-activity-admin.test.mjs, tests/coop-goal-contribution.test.mjs, tests/coop-presence-membership.test.mjs, tests/coop-skill-plan-alias.test.mjs
+Evidence: fork 0d1205f + 2b137c5; live probes: presence 200 corporation 1000044 / no_alliance true; admin +777->777, -777->0, outside war refused status 3; skill.plan.GetAll 200 in its own package; goal contributions 200 + status 3 without a goal; register 100->86 unhandled; 24/24 new tests; CONTRACTS_OK
