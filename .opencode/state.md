@@ -1,5 +1,33 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 06:45Z (UTC) - co-op missions: implemented, never once fired; spawner API located
+
+**Missions.** `docs/COOP_MISSION_VERIFICATION_PLAN.md` is the verification plan. The measurement behind
+it: 88 mission test files with **835 assertions green / 0 failing / 12 skipped**, and **zero**
+courier/escort/rescue/mission/duo/pve events in the play stack's entire 37 MB event history - the world
+has only ever run the living loop (mining, hauling, war, NPC industry). So the mission code is in the
+"green tests, unproven in game" state. The plan orders the work: courier first (fully server-side, no
+new content, no second client), then fleet mission join/turn-in, then escort solo legs and party legs,
+then rescue/PvE/story once sites exist.
+
+**Site spawner (the reason every scanning surface is empty).** The dungeon system is NOT missing; only
+its seeding is:
+  - `services/dungeon/dungeonUniverseSiteService.handleSceneCreated(scene)` iterates
+    `dungeonRuntime.listActiveInstancesBySystem(systemID)` and materializes those instances as scene
+    entities with `signalTrackerAnomalySite: true` - i.e. exactly what the probe scanner reads;
+  - `dungeonRuntime.createInstance({templateID, siteKey, systemID, ...})` is the API that creates one,
+    and `dungeonAuthority.getTemplateByID` / `listTemplatesByFamily` supply real templates
+    (SDE `dungeons.jsonl`, 1404 rows, plus the build-3396210 reserve/insurgency sets in
+    `dungeonInstanceCacheMgrService`);
+  - nothing in this world ever calls `createInstance`, so `listActiveInstancesBySystem` is always empty.
+
+Next step is therefore a seeder, not new plumbing: pick templates per system (security band + the
+system's faction/archetype fit), call `dungeonRuntime.createInstance` with a deterministic `siteKey`,
+and let `handleSceneCreated` + the existing signature providers deliver them. Wormholes are the same
+shape against `wormholeRuntimeState`, and the Invasions tab needs the same sites inside the campaign
+systems that `insurgencySolarsystemService` currently only lists (two hardcoded snapshots, no sites).
+
+
 ## 2026-10-30 06:10Z (UTC) - why every scanning surface is empty: nothing spawns a site
 
 Measured with the real providers, no session needed

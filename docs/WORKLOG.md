@@ -2716,3 +2716,8 @@ Evidence: live: 28 trips / 1965747 ISK / 319108 units, freight check RECONCILED 
 Why: every scanning surface is empty; measured that no anomaly, signature or wormhole exists in any system, while the SDE carries 1404 real dungeon definitions
 Where: .opencode/state.md
 Evidence: signatureRuntime 0/0/0 for 30000142, 30000144, 30000145, 30045344; providers and dungeonSiteAdapter present; dungeons.jsonl 1404 rows
+### 2026-10-29T22:41Z · cb01cfa · L3 · fw: FW-104 deployed - real kills keep faction and campaign attribution after release
+
+Why: A kill the merit ledger accepted was reported unpayable because its released identity could no longer name a faction
+Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, tests/coop-war-bounty.test.mjs
+Evidence: fork d7cb19d; live 22:33:15Z merit UPDATED + BOUNTY_PILOT_FACTION_UNKNOWN; fallback reads the pilot's own ASSIGN row; bounty 8/8 and coop-war-*+coop-fw-* 540 pass
