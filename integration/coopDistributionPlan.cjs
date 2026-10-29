@@ -11,7 +11,9 @@
 //
 // It reads the market database READ-ONLY: the market daemon is a separate process and its RPC
 // timed out live on 2026-10-29, which must never turn a decision into a stall.
-const { plan, planBundle } = require("./coopNpcDistribution.cjs");
+// The installed tree contains coopNpcDistribution.js, not .cjs: an explicit .cjs sibling fails
+// there (the same rule every other archived copy follows), so the deployed form is extensionless.
+const { plan, planBundle } = require("./coopNpcDistribution");
 
 const pos = (x) => (Number.isSafeInteger(Number(x)) && Number(x) > 0 ? Number(x) : 0);
 const num = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
