@@ -84,3 +84,29 @@ Mining Laser Upgrade I (11), Shield Extender (19), Multispectrum Hardener (20),
   MCP server restarts.
 - Wreck `9988400116382` in 30000141 still holds singleton module copies the bridge
   cannot delete. Do not loot it; it expires on its own.
+
+## FW-108 (fork a424285): a gate route finder - the missing piece under the economy
+`coopNpcGateTravel.tick` has always accepted a multi-hop `route[]`, but NOTHING in the server
+built one: no BFS, no route helper, no caller passing more than two systems. So "sell the loot
+where it is actually bought" was undescribable, let alone executable.
+
+New pure module `coopGateRoutes.shortestGateRoute({fromSystemID,toSystemID,neighbours,maxHops})`:
+deterministic BFS over an adjacency function, bounded, no store reads, no ship movement.
+`UNREACHABLE`, `NO_GATE_GRAPH` and `INVALID_SYSTEM` are answers - never a guessed path.
+The `living-npc-sale-type` refusal now annotates up to three real seeded buyers with their
+system and gate distance, so a dead sale states the journey instead of a dead end.
+
+Measured with the REAL SDE inside the running server (23:4xZ):
+```
+front  30003837 -> Jita 30000142   ROUTE  10 hops  (30003837,30045344,30045338,...)
+source 30045344 -> Jita 30000142   ROUTE   9 hops
+Perimeter 30000144 -> Jita         ROUTE   1 hop
+```
+Suite `tests/coop-gate-routes.test.mjs` 6/6.
+
+## Next (the one thing left for real war income)
+Give the loot chain a destination: when the station it is docked at quotes none of the carried
+types, hand the hull a `shortestGateRoute` to a station that does (Jita 60003760 today) and drive
+`coopNpcGateTravel` hop by hop until it docks and sells. Everything it needs now exists - the
+seeded-buyer list from FW-106, the route finder from FW-108, and the multi-hop travel director.
+Until that lands, the war pays only from money a faction already holds (FW-105/FW-107).

@@ -2505,11 +2505,15 @@ function start(){
   // through the same persistent-site seeder (rate limited: new system or every 10 minutes).
   if(process.env.EVEJS_COOP_UNIVERSE_SITES!=="0"&&visitedSystems.size)runPhase("universe-sites",()=>{
    const result=require("./coopUniverseSites").reconcile({visitedSystems,nowMs:Date.now()});
-   if(result.status==="RECONCILED")console.log(`[CoopUniverseSites] systems=${result.systemIDs.length} desired=${result.desired} created=${result.created}`);
+   if(result.status==="RECONCILED")console.log(`[CoopUniverseSites] systems=${result.systemIDs.length} desired=${result.desired} created=${result.created} spawned=${result.materialized} anomalies=${JSON.stringify(result.anomalies)}`);
    else if(result.status==="FAILED")console.warn(`[CoopUniverseSites] ${result.reason}`);
   });
   if(process.env.EVEJS_COOP_ADMIN_BRIDGE==="1")runPhase("admin-bridge",()=>{
-    require("./coopAdminBridge").drain({log:console.log});
+    const adminBridge=require("./coopAdminBridge");
+    // The world tick can be a minute apart, so admin calls must not wait for it:
+    // startFastDrain is idempotent and answers one request per ~1 s.
+    adminBridge.startFastDrain({log:console.log});
+    adminBridge.drain({log:console.log});
   });
   if(process.env.EVEJS_COOP_COURIER_DISPATCH==="1")runPhase("courier-dispatch",()=>{
    if(!courierDispatch)courierDispatch=require("./coopCourierRuntime").createCourierDispatch({
@@ -5357,11 +5361,37 @@ function sellOnArrival({systemID,stationID,haulerID,types=[],scene=null}={}){
       // unrelated type and the settlement only carried the LAST status, which hid which
       // type the market was actually asked for (measured 2026-10-28).
       try{
+       // FW-108: when the market refuses because THIS station does not bid for the type,
+       // say how far the station that does bid really is. Measured 2026-10-30: combat loot
+       // is quoted only by Jita 60003760 while the front's region quotes it nowhere, so
+       // "no counterparty" hid a several-jump journey that nothing in the server could
+       // describe - there was no route finder at all.
+       let buyers=(result&&Array.isArray(result.seededBuyers)?result.seededBuyers:[])
+        .slice(0,3).map(b=>{
+         let buyerSystemID=0;
+         try{
+          const station=worldData.getStationByID(Number(b.stationID));
+          buyerSystemID=Number(station&&station.solarSystemID)||0;
+         }catch(_error){buyerSystemID=0}
+         let hops=null;
+         if(buyerSystemID>0&&pos(Number(systemID))){
+          try{
+           const found=require("./coopGateRoutes").shortestGateRoute({
+            fromSystemID:Number(systemID),toSystemID:buyerSystemID,
+            neighbours:id=>worldData.getStargatesForSystem(id)
+             .map(g=>Number(g&&g.destinationSolarSystemID)).filter(x=>x>0)});
+           hops=Number.isFinite(found.hops)?found.hops:null;
+          }catch(_error){hops=null}
+         }
+         return {stationID:Number(b.stationID),price:Number(b.price)||0,
+          volume:Number(b.volume)||0,systemID:buyerSystemID,hops};
+        });
        require("./coopRuntimeProbe").observe("living-npc-sale-type",null,
         {spaceState:{systemID:Number(systemID)}},
         {stationID:Number(stationID),haulerID:Number(haulerID),typeID:Number(typeID),
          status:last,good:carriedGood.includes(typeID),carried:carried.has(Number(typeID)),
-         lifted:liftedTypes.has(Number(typeID))});
+         lifted:liftedTypes.has(Number(typeID)),
+         ...(buyers.length?{seededBuyers:buyers}:{})});
       }catch(_error){/* telemetry must never stop a sale */}
       // "Nothing of THIS type aboard" is not a failure of the haul: the hold carries
       // several types and one empty allowlisted type used to break the loop before the
