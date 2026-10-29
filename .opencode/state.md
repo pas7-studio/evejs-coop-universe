@@ -9411,3 +9411,19 @@ Live: 0 owned -> grant 200 -> 1 owned -> Get activated=false unactivated=2 -> Ac
 Next steps (unchanged plan, `.opencode/state.md` above): step 2 Apply/Unapply onto a real ship
 item id (2 types), step 3 drafts (5 + capacity), step 4 sequencing jobs (3) with real item
 consumption, step 5 component licences (7).
+
+### 2026-10-29T16:20Z - SKIN designer step 2 done (apply/unapply, 2 more types)
+
+Fork `c4fb38b`. Apply records the licence on a ship that really exists (inventory lookup,
+owner must be the character, category must be a ship) and only for an activated licence;
+Unapply removes exactly that record and refuses a different skin on that ship; an applied row
+whose licence is gone is dropped on read, so a revoke cannot leave a claim behind. The ship
+lookup is injectable, which is how the ownership rules are proven without a database.
+
+Live on character 140000001 with its real ship 9988400000001: apply without a ship 3,
+unknown ship 5 'no such ship', real ship 200 -> applied {9988400000001: a1b2c3d4e5f60718},
+unapply 200 -> empty. Register 56 unhandled.
+
+Remaining SKIN work: drafts (Get/Save/Update/Delete/GetShared/GetSaveCapacity), sequencing
+jobs (Initiate/Get/CompleteEarly) with real item consumption, component licences
+(finite/infinite Get + admin Grant/Revoke), `component.license.item.Consume`.

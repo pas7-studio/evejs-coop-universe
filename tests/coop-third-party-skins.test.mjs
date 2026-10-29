@@ -31,8 +31,17 @@ function fakeCharacterState(initial = {}) {
   };
 }
 
-const make = (state, env = {EVEJS_COOP_THIRD_PARTY_SKINS: "1"}) =>
-  createThirdPartySkins({characterState: state, clock: () => NOW, env});
+const make = (state, env = {EVEJS_COOP_THIRD_PARTY_SKINS: "1"}, shipLookup = null) =>
+  createThirdPartySkins({characterState: state, clock: () => NOW, env, shipLookup});
+
+// 5001 belongs to character 7, 5002 to character 8; 5003 is not a ship.
+const ships = (characterID, shipID) => {
+  const owner = {5001: 7, 5002: 8, 5003: 7}[shipID];
+  if (!owner) return {status: "SHIP_NOT_FOUND"};
+  if (owner !== characterID) return {status: "SHIP_NOT_OWNED"};
+  if (shipID === 5003) return {status: "NOT_A_SHIP"};
+  return {status: "OK"};
+};
 
 test("a character with no grant owns nothing", () => {
   const skins = make(fakeCharacterState({"7": {characterID: 7}}));
@@ -165,4 +174,59 @@ test("gateway: grant answers with the licence, Get reads it, a foreign id is ref
   const again = service.handleRequest(`${API}.ActivateRequest`,
     envelope(encode(`${API}.ActivateRequest`, {license: {skin: {hex: HEX}}})));
   assert.equal(again.statusCode, 9, "a licence is not activated twice");
+});
+
+test("apply records a real ship of this character, and only for an activated licence", () => {
+  const state = fakeCharacterState({"7": {characterID: 7}});
+  const skins = make(state, {EVEJS_COOP_THIRD_PARTY_SKINS: "1"}, ships);
+  skins.grant(7, {skin: HEX, unactivated: 1});
+  // ship checks are injected through the same module boundary the server uses
+  const result = skins.apply(7, {skin: HEX, shipID: 5001});
+  assert.equal(result.status, "LICENCE_NOT_ACTIVATED", "an unactivated licence cannot be worn");
+  skins.activate(7, HEX);
+  assert.equal(skins.apply(7, {skin: HEX, shipID: 5009}).status, "SHIP_NOT_FOUND",
+    "an unknown ship is refused");
+  assert.equal(skins.apply(7, {skin: HEX, shipID: 5002}).status, "SHIP_NOT_OWNED",
+    "somebody else's ship is refused");
+  assert.equal(skins.apply(7, {skin: HEX, shipID: 5003}).status, "NOT_A_SHIP");
+  assert.equal(skins.apply(7, {skin: HEX, shipID: 0}).status, "SHIP_REQUIRED");
+  assert.equal(skins.apply(7, {skin: "zzz", shipID: 5001}).status, "SKIN_REQUIRED");
+  assert.deepEqual(skins.appliedFor(7), {}, "nothing was recorded by the refusals");
+  assert.equal(skins.apply(7, {skin: HEX, shipID: 5001}).status, "APPLIED");
+  assert.deepEqual(skins.appliedFor(7), {"5001": HEX});
+});
+
+test("unapply removes exactly the applied record it names", () => {
+  const state = fakeCharacterState({
+    "7": {
+      characterID: 7,
+      thirdPartySkins: {
+        version: 1,
+        licences: {[HEX]: {skin: HEX, activated: true, unactivated: 0, firstAcquiredMs: NOW}},
+        applied: {"6001": HEX},
+      },
+    },
+  });
+  const skins = make(state, {EVEJS_COOP_THIRD_PARTY_SKINS: "1"}, ships);
+  assert.deepEqual(skins.appliedFor(7), {"6001": HEX});
+  assert.equal(skins.unapply(7, {shipID: 6002}).status, "NOT_APPLIED");
+  assert.equal(skins.unapply(7, {shipID: 6001, skin: "ffffffff"}).status, "SKIN_MISMATCH");
+  assert.equal(skins.unapply(7, {shipID: 6001}).status, "UNAPPLIED");
+  assert.deepEqual(skins.appliedFor(7), {});
+});
+
+test("an applied record for a licence that no longer exists is dropped on read", () => {
+  const state = fakeCharacterState({
+    "7": {
+      characterID: 7,
+      thirdPartySkins: {
+        version: 1,
+        licences: {},
+        applied: {"6001": HEX},
+      },
+    },
+  });
+  const skins = make(state);
+  assert.deepEqual(skins.appliedFor(7), {},
+    "no licence, no applied skin: the appearance claim must not survive a revoke");
 });
