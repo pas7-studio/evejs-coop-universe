@@ -2696,3 +2696,23 @@ Evidence: fork commit 52b73a3; tests/coop-ore-mission-mining-objective.test.mjs 
 Why: the fitting search returned nothing in any language and the premium shop had no cosmetic offers at all
 Where: docs/COOP_LOOP_RESULTS.md, integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs, tests/coop-war-garrison.test.mjs, tests/coop-war-mobilizer-diagnose.test.mjs
 Evidence: marketGroups tree 2102 groups/19 roots served (fork ba09545); store catalog measured 9 categories/15 offers, zero SKINs; skin_license fulfilment added (fork 763c293)
+### 2026-10-29T21:52Z · a722d33 · L3 · state: fitting search root cause fixed; premium shop carries no SKIN offers yet
+
+Why: Mission offers are filtered by materializability so a dungeon with no rooms/rocks/encounters/ore is never handed out; audit of the 3378-mission pool shows 0 unbuildable today (1223 transport, 2111 encounters, 37 mining, 5 ore-derived)
+Where: .opencode/state.md, docs/WORKLOG.md
+Evidence: fork commit 8ac7ff5; predicate verified against live missionAuthority records (1432/2504/2925/17130 true); image rebuilt; play stack healthy; relay OK
+### 2026-10-29T21:57Z · 8018748 · L3 · fw: FW-102/103 deployed - garrison musters the attacker in its source; diagnosis visible
+
+Why: A PREPARING front could never deploy: the garrison staffed both sides in the target while staging needs the attacker in the source, and war_diagnose could not show why
+Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarGarrison.cjs
+Evidence: fork 3c327f2+8502e8e; live 30045344 garrison spawns 21:46:51Z/21:50:06Z; staging reason advanced to NO_ATTACKER_SHIP_IN_SOURCE:30045344; garrison 17/17, diagnose 3/3, coop-war-*+coop-fw-* 538 pass
+### 2026-10-29T22:14Z · 21d9c82 · L2 · ledger: only a settled sale is a payment row; deliveries counted apart (28 trips / 1 965 747 ISK RECONCILED)
+
+Why: The freight ledger wrote payment rows for deliveries that no settlement could back, and two BUSY refusals blocked loaded hulls for good
+Where: docs/COOP_LOOP_RESULTS.md, integration/coopDistributionRun.cjs, scripts/coop-economy-ledger.cjs, scripts/coop-gateway-gap-audit.py, scripts/freight-check.cjs, tests/coop-distribution-run.test.mjs, tests/coop-freight-check.test.mjs
+Evidence: live: 28 trips / 1965747 ISK / 319108 units, freight check RECONCILED (7 deliveries counted apart); 33 run+check tests
+### 2026-10-29T22:34Z · e283289 · DOCS · state(fw): first real assault and real warship kills on the play stack; registry note corrected
+
+Why: every scanning surface is empty; measured that no anomaly, signature or wormhole exists in any system, while the SDE carries 1404 real dungeon definitions
+Where: .opencode/state.md
+Evidence: signatureRuntime 0/0/0 for 30000142, 30000144, 30000145, 30045344; providers and dungeonSiteAdapter present; dungeons.jsonl 1404 rows

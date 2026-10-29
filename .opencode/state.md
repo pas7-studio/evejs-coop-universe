@@ -1,5 +1,41 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 06:10Z (UTC) - why every scanning surface is empty: nothing spawns a site
+
+Measured with the real providers, no session needed
+(`services/exploration/signatures/signatureRuntime`, systems 30000142 Jita, 30000144 Perimeter,
+30000145 New Caldari, 30045344):
+
+    SYSTEM 30000142 anomalies=0 signatures=0 statics=0
+    SYSTEM 30000144 anomalies=0 signatures=0 statics=0
+    SYSTEM 30000145 anomalies=0 signatures=0 statics=0
+    SYSTEM 30045344 anomalies=0 signatures=0 statics=0
+
+So the Invasions tab, combat/exploration anomalies, deadspace and wormholes are empty for one reason,
+not six: the probe-scanner feeds are built from the SCENE and from the wormhole runtime, and this world
+never puts anything there.
+
+The pipeline exists and is wired:
+  - `buildSignalTrackerAnomalyEntries(systemID)` = `miningAnomalyProvider` + `sceneAnomalySiteProvider`;
+  - signatures = `sceneSignatureSiteProvider` + `wormholeSignatureProvider`;
+  - `sceneAnomalySiteProvider.listAnomalySites` selects scene entities flagged
+    `signalTrackerAnomalySite === true` (or `signalTrackerSiteKind === "anomaly"`) with an itemID;
+  - wormholes come from `services/exploration/wormholes/wormholeRuntimeState` (no wormhole is created);
+  - `signaturePlacement.js` and `dungeonSiteAdapter.js` already provide the placement/definition glue.
+
+The real definitions are on disk: `/var/lib/evejs/sde/eve-online-static-data-3396210-jsonl/
+dungeons.jsonl` has **1404 dungeons** with `name` (localized), `factionID`, `archetypeID`,
+`allowedShipsList` - i.e. "Pith Merchant Depot" style combat/exploration sites, not invented names.
+
+Next step (a spawner, not a gateway handler): for a system, pick the dungeon rows whose faction matches
+the system's occupants and whose archetype fits the security band, place them with
+`signaturePlacement`, add the entities to the scene with `signalTrackerAnomalySite: true` (and
+`signalTrackerSiteKind: "anomaly"`), and let the existing providers/notifications do the rest. Wormholes
+are a separate spawner against `wormholeRuntimeState` with real wormhole classes. Invasions are
+`insurgencySolarsystemService`, which currently returns two hardcoded campaign snapshots and no sites -
+that tab needs the campaign's systems to actually contain the sites above.
+
+
 ## 2026-10-30 05:35Z (UTC) - fitting-window search fixed; premium shop has no SKINs at all
 
 **Fitting window search (any language).** The native client indexes `marketProxy.GetMarketGroups` by

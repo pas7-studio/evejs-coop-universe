@@ -11,6 +11,19 @@ a default-encoded empty message and a warning that names the type, so the client
 "no data" answer instead of a 404 it cannot decode. What that means in game is that the surface
 opens and shows nothing (or zeros) — it does not throw.
 
+## Scanning surfaces are empty because no site is ever spawned
+
+Measured on the running server (`signatureRuntime` for Jita/Perimeter/New Caldari/30045344):
+`anomalies=0 signatures=0 statics=0` in every system. The probe scanner, the Agency's combat and
+exploration anomalies, deadspace and wormholes all read those feeds, so all of them are empty for one
+reason: nothing ever puts a site into a scene.
+
+The pipeline is present and wired - `sceneAnomalySiteProvider` selects scene entities flagged
+`signalTrackerAnomalySite`, wormholes come from `wormholeRuntimeState`, `signaturePlacement` and
+`dungeonSiteAdapter` hold the glue - and the definitions are real: the SDE export on the data volume
+carries 1404 dungeons with localized names, `factionID` and `archetypeID`. What is missing is the
+spawner that chooses them per system and registers them as scene sites.
+
 ## The 44 RemoteSvc placeholders, classified
 
 `node scripts/coop-placeholder-audit.cjs` reads the pinned server source and groups the placeholders
