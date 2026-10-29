@@ -35,6 +35,11 @@ docker exec evejs-agents-server-1 sh -c "cd /app/server && node _ledger.cjs"
 
 ## What is proven
 
+- **A refinery backlog of 2 798 972 ore units was cleared**: the candidate list took the first
+  eight rows in insertion order, so the tiny leftovers starved the big stacks for hours. After
+  the fix (biggest first) ore at 60000682 fell to 771 462 units and minerals there grew to
+  4 243 400 units in minutes - the material the freight fleet now sells.
+
 - **A gate crossing both ways**, by the native adapter's own verdict (`SAME_NATIVE_SHIP_ARRIVED`),
   with the durable store and the identity link moving with the hull.
 - **A real sale to a real buyer**: settlements of 44 104, 77 349, 560 000, 668 088, 1 027 563,
