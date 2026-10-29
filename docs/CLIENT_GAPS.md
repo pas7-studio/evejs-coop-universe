@@ -2,9 +2,9 @@
 
 Generated from the pinned client's own bytecode, not from guesswork: `docs/client-contracts/gateway-types.json`
 holds every `eve_public.*Request` string the client (V24.01, compiled 2026-06-16) can send —
-**217** of them. The local gateway knows **131** names (gateway services plus four inline handlers:
+**217** of them. The local gateway knows **135** names (gateway services plus four inline handlers:
 `user.license.api.Get`, `plex.vault.api.Balance`, `cosmetic.ship.api.Get`,
-`cosmetic.ship.api.GetAllInBubble`). The remaining **86** have no handler at all.
+`cosmetic.ship.api.GetAllInBubble`). The remaining **82** have no handler at all.
 
 They are not fatal any more: since fork `f256261` an unknown `eve_public.*Request` is answered with
 a default-encoded empty message and a warning that names the type, so the client gets a valid
@@ -43,7 +43,7 @@ This file is the work queue for those surfaces. Refresh the numbers with
 | **Achievements** (`achievement.*`, 9) | definitions (flatbuffer CDN), progress, completion, rewards, showcase | the achievements page opens empty; the definition fetch fails inside the client (`FlatbufferContentProvider … L500`) because there is no checkpoint URL to download | an achievement definition flatbuffer (schema is in the client at `achievement_system/client/model/flatbuffer`), a progress store updated by real events, and a CDN path that serves the blob with a matching CRC |
 | ~~Skill plans~~ (`skill.plan.*`, 7) | create/delete/get/set active/name/description/requirements | **done** (`2b137c5`): both packages answer from the same persisted per-character plan document, with a startup shape guard | - |
 | **New Eden Store** (`store.*`, 7) | categories, offers (all/targeted/by tag), products | the store opens with no offers (PLEX balance itself is real: 2222) | offer/category definitions and a purchase path that spends real PLEX and grants the entitlement |
-| **Daily goals** (`dailygoal.*`, 4) | goal list, pay-for-completion, redeem, admin progress | `GetAllWithRewards` answers an empty list; `Get`, `Redeem`, `PayForCompletion` and admin `Progress` are missing, so a goal can be neither shown nor paid | a definition catalog, a per-character progress feed from real events, and a payout from a funded account (corp/treasury). Not started: inventing progress or money would be fake state |
+| **Daily goals** (`dailygoal.*`) | goal list, pay-for-completion, redeem, admin progress | **done except pay-for-completion** (`57d0f47`): four goals whose progress is measured from the real mining ledger, the killmail ledger, accepted stargate jumps and goals actually redeemed; rewards are skill points; `PayForCompletion` is refused (UNIMPLEMENTED) because an ISK completion would need a funded account | a funded payout path if instant-completion is ever wanted |
 | ~~Goal contributions~~ (`goal.contribution.*`, 2) | contributor summaries, my summary | **done** (`2b137c5`): read from the one goal store, same record the corporation-goal package uses | - |
 | **Career portal** (`career.goal.*`, `app.eveonline.career.goal.*`, 4) | progress, completion, claim reward | the career portal raises `AttributeError: 'NoneType' object has no attribute 'progress'` on the client side because progress is missing | a career path definition plus your progress and claim state |
 | **Assetholding / entitlements** (`assetholding.*`, 4) | asset holdings, entitlements, redeem, admin expire | ESS/main-bank entitlement UI shows nothing | entitlement rows bound to real structures and an ISK/PLEX redemption path |

@@ -8997,3 +8997,35 @@ capture_fw_complex, ...), so progress must be expressed in one of those native s
 So the three requirements are: (1) localization ids that really exist, (2) progress from a real
 native counter, (3) a payout from a funded account with a persisted claim row. None of the three is
 available today; writing "progress: 0, reward: X" would be invented state, which the doctrine bans.
+
+## 2026-10-29T10:40Z - daily goals are live (measured, not invented)
+
+Owner asked for daily goals "interesting and varied", so all four remaining types were built
+(fork `57d0f47`, `82a4b87`):
+
+| goal | category | target | reward | progress source |
+| --- | --- | --- | --- | --- |
+| Mine Ore | daily | 5 000 units | 2 000 SP | character mining ledger (native mining cycle) |
+| Kill NPCs | daily | 5 kills | 3 000 SP | killmail ledger, NPC victim, final blow ours |
+| Jump Through | daily | 10 jumps | 2 000 SP | accepted gate jumps, one hook in `startStargateJump` |
+| Complete other goals | daily bonus | 2 goals | 5 000 SP | goals this character actually redeemed today |
+
+Localization: a daily goal carries only **numeric message ids**, and the client renders them with
+`GetByMessageID` from its own FSD pickle — so a made-up id is an empty card. The ids now in use were
+read out of `W:/EVE Online - 3396210/ResFiles/2c/2c3038b3c38e91a1_50675f6f907417dee3dc7857db899bf2`
+(the en-us pickle the client actually loads): 656416 "Mine Ore", 1037684 "Kill NPCs", 532900 "Jump
+Through", 696804 "Complete other goals", 696803 "Complete Goal", 528203 "Mine ore to help with the
+materials shortage.", 550642 "Destroy NPCs", 36 "" (empty, used as help text).
+`tests/coop-daily-goals.test.mjs` re-reads that pickle when present and fails if an id drifts.
+
+Rewards are SP via the campaign-crate path (`updateCharacterRecord` + `emitSkillSessionState`), so
+nothing is minted. `PayForCompletion` is UNIMPLEMENTED on purpose: instant completion in ISK would
+need a funded sponsor account that the co-op world does not have for players.
+
+Measured live: `GetAllCurrent` 200 with 4 goals (451 bytes); incomplete redeem refused
+`goal is not complete (0/5000)`; QA `ProgressRequest` completed the mining goal; `Redeem` granted
+2000 SP (freeSkillPoints 0 -> 2000 on the character record); second redeem `goal already redeemed`;
+bonus goal then 1/2; `PayForCompletion` status 12 with its reason; jump hook recorded.
+
+**Not verified:** how the cards look in the real client (the owner is not in game). The wire contract
+is proven, the visual is not.

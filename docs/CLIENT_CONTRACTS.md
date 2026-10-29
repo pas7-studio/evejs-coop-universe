@@ -42,6 +42,8 @@ answers today, and the fork commit that made it true.
 | faction activity admin | `/advantage` increment/set contribution, then reads the same score back | `eve_public/faction/activity/admin_pb2` | writes one per system+faction ledger that `coopWarAdvantage` applies to the derived score, so the panel and the victory-point bar agree; a pair outside the war is refused with the reason | fixed `0d1205f` |
 | skill plans | the newer UI calls `eve_public.skill.plan.*` (create/get/set name/description/requirements/active/delete) | `eve_public/skill/plan/plan_pb2` | the same storage answers both packages; startup compares both shapes and refuses to run if the client changes one | fixed `2b137c5` |
 | goal contributors | `goal.contribution.api.*` asks who contributed to a goal and how much this character did | `eve_public/goal/contribution/api/requests_pb2` | read from the one goal store, reported as `total_sum_of_progress_added`; a missing goal id is `INVALID_ARGUMENT` | fixed `2b137c5` |
+| daily goals | `GetAllCurrent` then formats each goal: name/description ids, category, career, contribution type, target, active window and a payment whose asset is a 16 byte uuid | `dailygoals/client/utils.pyj` `format_goal_from_payload` | four goals measured from real records (mining ledger, killmails, accepted gate jumps, redeemed goals), SP reward, per UTC day | fixed `57d0f47` |
+| daily goal redeem | redeem pays once and refuses an incomplete goal; `PayForCompletion` is a separate call | `dailygoals/client/goalMessenger.pyj` | `Redeem` marks the claim before paying SP (so it can never pay twice) and answers FAILED_PRECONDITION with `n/target`; pay-for-completion is UNIMPLEMENTED, not faked | fixed `57d0f47` |
 
 ## Checking a contract from a cloud session
 
