@@ -2404,3 +2404,9 @@ Evidence: live: return crossing ARRIVED home, second load 164504 units lifted an
 Why: the third-party SKIN designer had no licence store at all, so every licence list was empty and a skin could never be owned or activated
 Where: integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, integration/coopWarKillMerit.cjs
 Evidence: fork 469cbff, e93d044; live: GetOwned 0 -> admin grant 200 (hex a1b2c3d4e5f60718) -> 1 owned -> Get activated=false unactivated=2 -> Activate 200 (activated=true, unactivated=1) -> second Activate 9 'already activated' -> Revoke 200 -> 0; foreign character licence refused 5; register 59->56; 8/8 tests
+### 2026-10-29T15:04Z · 5a7a415 · L2 · docs/tests: SKIN licences can be applied to a real ship now
+
+Why: a third-party skin could be owned but never worn: Apply/Unapply had no handler, so the skin designer's final step did nothing
+Detail: Apply/Unapply record a third-party skin on a ship the character really owns and never on anything else; an applied row whose licence is gone is dropped on read. 11/11 skin tests.
+Where: .opencode/state.md, docs/CLIENT_GAPS.md, tests/coop-third-party-skins.test.mjs
+Evidence: fork c4fb38b; live: apply without ship 3, unknown ship 5 'no such ship', real ship 9988400000001 200 and applied map holds the hex, unapply 200 and map empty; 11/11 tests; register 56 unhandled
