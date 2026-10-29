@@ -10,13 +10,17 @@ const forkRoot = process.env.EVEJS_FORK_ROOT || "C:/Games/EveCoop/upstream-evejs
 const source = () => readFileSync(path.join(forkRoot,
   "Code/server/src/_secondary/express/gatewayServices/compatibilityGatewayService.js"), "utf8");
 
-test("career GetAll answers one zero-progress row per definition", () => {
+test("career GetAll answers one row per definition, from the module that owns the catalogue", () => {
   const text = source();
   assert.match(text, /eve_public\.career\.goal\.api\.GetAllRequest/);
-  assert.match(text, /not_completed: true/);
-  assert.match(text, /progress: 0/);
-  assert.match(text, /CAREER_GOAL_DEFINITION_STUBS\.map/,
-    "one row per definition, never a hand-written list that can drift");
+  // The row set is the catalogue owner's snapshot, not a list written here: a hand-written list
+  // drifts the moment a definition is added, and the portal iterates the definitions.
+  assert.match(text, /careerGoalSnapshotFor\(getActiveCharacterID\(requestEnvelope\)\)/);
+  assert.match(text, /space\/coopCareerGoals/, "the catalogue has exactly one owner");
+  // Every row must carry what the portal dereferences: progress, and whether it is still open.
+  assert.match(text, /progress: entry\.progress/);
+  assert.match(text, /not_completed: !entry\.completed/);
+  assert.match(text, /goal: \{ uuid: uuidStringToBytes\(entry\.definition\.goalID\) \}/);
 });
 
 test("the response message is declared locally, not looked up eagerly", () => {
