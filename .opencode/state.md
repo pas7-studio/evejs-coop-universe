@@ -9968,3 +9968,29 @@ Recommended order for that task:
 Everything else left in the register (15) is either infrastructure (ai assistant, internal_gateway,
 debug), authentication (must not be faked) or content that does not exist yet (component bundles,
 freelance item delivery, sovereignty admin).
+
+## FW-089/FW-090 + the payout rung is PROVEN in one process (18:2xZ)
+
+FW-089: the silence after a successful attribution was itself a finding - the merit function returned
+before it could say why and its caller only wrote a console warning. Every early return now emits
+`living-native-war-merit-skipped` with its reason, and the bridge from the destruction callback reports
+the decision it got (`living-native-war-merit-bridge`), including the bounty status.
+
+FW-090: a replayed payout answered NO_HELD_ESCROW_FOR_FACTION - which reads as "this war has no money"
+although the money went out on the first call. A settled row for the same campaign/faction/proof/pilot is
+now ALREADY_PAID with its amount, and no money is touched.
+
+THE PROOF THIS RUNG NEEDED, without waiting for a live world:
+`tests/coop-war-payout-end-to-end.test.mjs` wires the REAL treasury, chest and bounty modules exactly as
+the runtime wires them (state row, treasury row, corporation wallet, casualty ledger row, fleet-registry
+campaign lookup) and moves 5 000 ISK out of a HELD escrow into the killer's earned balance:
+`HELD -> PAID`, `paidToPilotID=coop-pilot-007`, credit exactly once, `earnedAfter=5000`. A replay answers
+ALREADY_PAID and credits once; an unfunded side pays nothing (`NO_HELD_ESCROW_FOR_FACTION`); a kill with no
+campaign pays nothing (`NO_REAL_CAMPAIGN_FOR_EVENT`). 4 tests, all PASS.
+
+War suite: 586 tests, 0 failures.
+
+WHAT REMAINS is therefore only the live observation, not a code gap: `bounty-paid` in the wild needs a
+kill inside a funded campaign, and the live world keeps ending campaigns (capture or 45-minute expiry)
+before one lands. The tools are in place: `scripts/coop-war-acceptance.cjs`,
+`war_payout_diagnose`, `living-native-destruction-identity`, `living-native-war-merit-bridge`.
