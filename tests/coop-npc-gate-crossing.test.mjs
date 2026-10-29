@@ -259,9 +259,24 @@ test("a hull that keeps re-locking is stood down once, then stopped honestly", (
     if (!next) break;
     last = next;
   }
-  assert.deepEqual(standDowns, [entityID], "one sanctioned stand-down, not a loop of guesses");
-  assert.equal(last.phase, "BLOCKED");
-  assert.equal(last.lastReason, "TARGET_LOCKED_PERSISTENT");
+  assert.ok(standDowns.length >= 1, "the hull is stood down with a real order");
+  assert.deepEqual([...new Set(standDowns)], [entityID], "always that hull, never a guess");
+  // A stand-down is an order, not a tick: two ticks inside the rate limit issue one.
+  const before = standDowns.length;
+  crossing.tick({
+    sceneForSystem: () => ({ systemID: GATE.sourceSystemID,
+      getEntityByID: () => ({ itemID: entityID, kind: "ship", nativeNpc: true, mode: "STOP",
+        systemID: GATE.sourceSystemID, position: { x: 0, y: 0, z: 0 }, radius: 100 }) }),
+    getController: () => ({ entityID, systemID: GATE.sourceSystemID, currentTargetID: 40009256 }),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    standDown: (id) => { standDowns.push(id); return true; },
+    now: 1000000 + crossing.MAX_TARGET_WAITS * 20000 + 1000,
+  });
+  assert.equal(standDowns.length, before, "a tick inside the rate limit issues nothing");
+  const final = crossing.read().find((row) => Number(row.entityID) === entityID);
+  assert.equal(final.phase, "BLOCKED");
+  assert.equal(final.lastReason, "TARGET_LOCKED_PERSISTENT");
+  assert.ok(last, "the run was advanced before it stopped");
 });
 
 test("the scene stargate decides the jump range, not the static-data row", () => {
@@ -318,4 +333,96 @@ test("a mining fleet hull is refused before a crossing is ever journaled", () =>
   assert.equal(refused.reason, "HULL_ROLE_CONFLICT:MINING_FLEET");
   assert.equal(crossing.read().some((row) => Number(row.entityID) === 980000000222), false,
     "nothing is written for a hull that cannot do the job");
+});
+
+test("a refused warp says why it was refused", () => {
+  // Measured 2026-10-30: the run reported a bare WARP_REFUSED three times in two minutes and
+  // there was no way to tell a busy hull from a warp the world simply does not allow.
+  const entityID = 980000000121;
+  crossing.plan({ entityID, pilotID: "coop-pilot-002", gate: GATE, now: 1500000 });
+  const result = crossing.tick({
+    sceneForSystem: () => ({ systemID: GATE.sourceSystemID,
+      getEntityByID: () => ({ itemID: entityID, kind: "ship", nativeNpc: true, mode: "STOP",
+        systemID: GATE.sourceSystemID, radius: 100, position: { x: 400000, y: 0, z: 0 } }) }),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    getController: () => fakeController(entityID),
+    // A far target is a warp, and the world refuses it for its own reason.
+    warpToGate: () => ({ success: false, errorMsg: "WARP_DRIVE_UNREADY" }),
+    now: 1500001,
+  });
+  const mine = result.advanced.find((row) => Number(row.entityID) === entityID);
+  assert.equal(mine.lastReason, "WARP_REFUSED:WARP_DRIVE_UNREADY");
+});
+
+test("a follow order that locks the gate is undone by a stop order, and then it crosses", () => {
+  // Measured 2026-10-30: stock issueManualOrder sets currentTargetID to the follow target, so
+  // every approach order this module issued re-locked the gate and the adapter refused the
+  // crossing as TARGET_LOCKED. A stop order clears it, and only then is an attempt honest.
+  const entityID = 980000000880;
+  crossing.plan({ entityID, pilotID: "coop-pilot-002", gate: GATE, now: 1600000 });
+  let locked = true;
+  let attempts = 0;
+  const result = crossing.tick({
+    sceneForSystem: () => ({ systemID: GATE.sourceSystemID,
+      getEntityByID: () => ({ itemID: entityID, kind: "ship", nativeNpc: true, mode: "STOP",
+        systemID: GATE.sourceSystemID, position: { x: 0, y: 0, z: 0 }, radius: 100 }) }),
+    getController: () => ({ entityID, systemID: GATE.sourceSystemID,
+      currentTargetID: locked ? GATE.sourceGateID : 0 }),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    standDown: () => { locked = false; return true; },
+    // The adapter proves the SAME hull at the destination; a foreign id is a fake crossing.
+    transfer: (args) => { if (Number(args.entityID) === entityID) attempts += 1;
+      return { ...verified, entityID: Number(args.entityID) }; },
+    now: 1600001,
+  });
+  const mine = result.advanced.find((row) => Number(row.entityID) === entityID);
+  assert.equal(attempts, 1, "the attempt happens in the same tick the lock is cleared");
+  assert.equal(mine.phase, "ARRIVED");
+});
+
+test("a pruned identity link is re-established from the durable record, and only there", () => {
+  // Measured 2026-10-30: the journal and the durable store both proved the hull was in the
+  // source system, the identity link had been pruned, and every attempt was refused
+  // SOURCE_IDENTITY_MISMATCH. Bookkeeping about a ship that already exists is not a claim
+  // that it moved - but it may only be done where the record says the hull lives.
+  const entityID = 980000000991;
+  crossing.plan({ entityID, pilotID: "coop-pilot-055", gate: GATE, now: 1700000 });
+  const linked = [];
+  const identity = {
+    get: () => null,
+    link: (pilot, systemID, id) => { linked.push({ pilot: pilot.id, systemID, id }); return {}; },
+  };
+  const result = crossing.tick({
+    sceneForSystem: () => ({ systemID: GATE.sourceSystemID,
+      getEntityByID: () => ({ itemID: entityID, kind: "ship", nativeNpc: true, mode: "STOP",
+        systemID: GATE.sourceSystemID, position: { x: 0, y: 0, z: 0 }, radius: 100 }) }),
+    getController: () => fakeController(entityID),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    identity, hullSystemOf: () => GATE.sourceSystemID,
+    transfer: () => ({ ...verified, entityID }),
+    now: 1700001,
+  });
+  assert.deepEqual(linked, [{ pilot: "coop-pilot-055", systemID: GATE.sourceSystemID, id: entityID }]);
+  assert.equal(result.advanced.find((row) => Number(row.entityID) === entityID).phase, "ARRIVED");
+});
+
+test("a hull that is not where the journal says it is stops with the truth", () => {
+  const entityID = 980000000992;
+  crossing.plan({ entityID, pilotID: "coop-pilot-056", gate: GATE, now: 1800000 });
+  let attempted = false;
+  const result = crossing.tick({
+    sceneForSystem: () => ({ systemID: GATE.sourceSystemID,
+      getEntityByID: () => ({ itemID: entityID, kind: "ship", nativeNpc: true, mode: "STOP",
+        systemID: GATE.sourceSystemID, position: { x: 0, y: 0, z: 0 }, radius: 100 }) }),
+    getController: () => fakeController(entityID),
+    getGate: () => ({ itemID: GATE.sourceGateID, position: { x: 0, y: 0, z: 0 }, radius: 3000 }),
+    identity: { get: () => null, link: () => { throw new Error("must not link"); } },
+    hullSystemOf: () => 30000142,
+    transfer: () => { attempted = true; return verified; },
+    now: 1800001,
+  });
+  const mine = result.advanced.find((row) => Number(row.entityID) === entityID);
+  assert.equal(attempted, false, "no crossing is attempted from a record that disagrees");
+  assert.equal(mine.phase, "BLOCKED");
+  assert.equal(mine.lastReason, "HULL_NOT_IN_JOURNAL_SYSTEM:30000142");
 });

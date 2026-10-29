@@ -30,7 +30,7 @@ function memoryDb() {
   };
 }
 
-function makeStore({ haulersInSlot = [], haulersElsewhere = [] } = {}) {
+function makeStore({ haulersInSlot = [], haulersElsewhere = [], leftMarker = null } = {}) {
   const entities = new Map();
   const controllers = new Map();
   const add = (id, marker, systemID, profile) => {
@@ -41,7 +41,8 @@ function makeStore({ haulersInSlot = [], haulersElsewhere = [] } = {}) {
   };
   for (const id of MINERS) add(id, durable.roleMarker(SYSTEM, SLOT, "miner"), SYSTEM, "ore_mining_retriever");
   for (const id of haulersInSlot) add(id, durable.roleMarker(SYSTEM, SLOT, "hauler"), SYSTEM, "ore_mining_impel_hauler");
-  for (const id of haulersElsewhere) add(id, durable.roleMarker(SYSTEM, SLOT, "hauler"), 30000142, "ore_mining_impel_hauler");
+  for (const id of haulersElsewhere)
+    add(id, leftMarker || durable.roleMarker(SYSTEM, SLOT, "hauler"), 30000142, "ore_mining_impel_hauler");
   return {
     listNativeEntitiesForSystem: (systemID) => [...entities.values()]
       .filter((row) => Number(row.systemID) === Number(systemID)),
@@ -51,6 +52,8 @@ function makeStore({ haulersInSlot = [], haulersElsewhere = [] } = {}) {
     upsertNativeController: () => ({ success: true }),
     listNativeCargoForEntity: () => [],
     listNativeModulesForEntity: () => [],
+    // The durable store can list every system; the away-hull rule depends on that.
+    listNativeEntities: () => [...entities.values()],
     _add: add,
     _entities: entities,
   };
@@ -70,7 +73,8 @@ function run({ store, spawn, haulerIDs = [OLD_HAULER] }) {
 
 test("a hauler that left the slot through a real crossing is replaced, not mourned", () => {
   process.env.EVEJS_COOP_FLEET_COMPOSITION = "1";
-  const store = makeStore({ haulersElsewhere: [OLD_HAULER] });
+  const store = makeStore({ haulersElsewhere: [OLD_HAULER],
+    leftMarker: "coop-distribution-1-hauler" });
   let spawned = null;
   const result = run({
     store,
@@ -99,4 +103,17 @@ test("a whole slot is left alone when nothing is missing", () => {
     spawn: () => { called = true; return { success: true, data: {} }; } });
   assert.equal(result, null, "no repair is invented for a healthy slot");
   assert.equal(called, false, "and nothing is spawned");
+});
+
+test("a hauler that is out on a real trip is not replaced, and not declared broken", () => {
+  // The same durable hull, still carrying the slot's marker, physically in another system.
+  // Spawning a duplicate would double the fleet; NEEDS_OPERATOR_REPAIR would send an
+  // operator hunting a hull that is doing its job.
+  process.env.EVEJS_COOP_FLEET_COMPOSITION = "1";
+  const store = makeStore({ haulersElsewhere: [OLD_HAULER] });
+  let called = false;
+  const result = run({ store, spawn: () => { called = true; return { success: true, data: {} }; } });
+  assert.equal(called, false, "nothing is spawned for a hull that still exists");
+  assert.equal(result.status, "HAULER_AWAY");
+  assert.deepEqual(result.awayHaulers, [OLD_HAULER]);
 });
