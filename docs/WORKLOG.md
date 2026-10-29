@@ -2528,3 +2528,8 @@ Why: transaction.api.Get had no handler and the purchase stored no transaction r
 Detail: 8/8 listing tests, including the transaction rows and the gateway answer.
 Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-skin-listings.test.mjs
 Evidence: fork 0595472; live after a 750 000 ISK purchase: both actors read status 200/state 3/timestamp, buyer GetAll 1 matching id, unknown 5; status enum read from the client descriptor; 8/8 tests; register 17 unhandled
+### 2026-10-29T18:24Z · 3b95f57 · L2 · docs: note the two honest empty-catalogue answers
+
+Why: operation.recommendation.Get and communitytrack.api.Get had no answer at all; empty lists or a fabricated operation id would have misled the client
+Where: .opencode/state.md, docs/CLIENT_GAPS.md
+Evidence: fork 3166539; live: recommendation 200 with 0 recs, communitytrack 5 'no community track instance exists in this world'; register 15 unhandled
