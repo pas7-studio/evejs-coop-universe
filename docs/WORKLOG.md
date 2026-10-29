@@ -2555,3 +2555,14 @@ Why: the client's achievements page had no definition checkpoint, so it opened e
 Detail: 6 tests read the ACHV buffer the way the client's repository does (both roots present, uuid hex ids, message ids not text, the SpReward union member behind Reward.Payload, the cumulative contribution method the achievements name) and one checks the gateway checkpoint describes exactly the bytes we serve. 3 more cover the payout: an undeclared achievement pays nothing, a declared one pays 3 500 SP 
 Where: docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-achievement-content.test.mjs, tests/coop-achievements.test.mjs
 Evidence: fork 395cb66: ACHV catalogue + definition.api.cdn.GetLatest + paid rewards; live on evejs-agents: checkpoint 200 crc=2179836517, TLS GET 200 1880 bytes ACHV crc match, claim moved freeSkillPoints 0->3500 and emptied unclaimed
+### 2026-10-29T19:00Z · 2709215 · L2 · alife23b: durable freight ledger and its balance-sheet section
+
+Why: Freight earnings were invisible in the balance sheet, so the loop's most active income stream could not be audited
+Where: integration/coopDistributionRun.cjs, scripts/coop-economy-ledger.cjs, tests/coop-distribution-run.test.mjs
+Evidence: ledger prints a FREIGHT section; 25/25 distribution-run tests incl. one row per settled sale
+### 2026-10-29T19:09Z · f52b67c · L2 · tests: parse our achievement catalogue with the client's own reader, not ours
+
+Why: the client's own flatbuffer reader decoded our achievement target and reward as garbage because we wrote uint32 where the client reads uint64
+Detail: Our reader and our writer agreed on a uint32 target while the client reads uint64, and the client decoded 1 as 618475290625. scripts/coop-verify-flatbuffer-client.cjs now runs the client's generated module (fetched from the local archive at run time, never committed) against the buffer and prints the numbers it really sees; tests/coop-achievement-client-reader.test.mjs fails when that reader canno
+Where: docs/client-contracts/achievement-flatbuffer.json, scripts/coop-flatbuffer-schema.py, scripts/coop-verify-flatbuffer-client.cjs, tests/coop-achievement-client-reader.test.mjs, tests/coop-achievement-content.test.mjs
+Evidence: fork 3a01b5b; scripts/coop-verify-flatbuffer-client.cjs prints targets=1/100 sp=1000/2500 via the client's generated module; 17 tests green incl. the client-reader test
