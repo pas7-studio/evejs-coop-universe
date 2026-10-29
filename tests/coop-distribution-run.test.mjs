@@ -372,3 +372,36 @@ test("a settled sale is written to the freight ledger, where the money is accoun
   assert.equal(mine[0].toStationID, 60003760);
   assert.equal(mine[0].status, "SOLD");
 });
+
+test("a trip that loads at two stations walks the stops before it crosses", async () => {
+  // The bundle takes each stack where it really sits, so one trip can need two stations.
+  const twentieth = 980000004189;
+  const trip = { ...TRIP, fromStationID: 60000682, items: [
+    { stationID: 60000682, typeID: 34, quantity: 1000, price: 4, m3PerUnit: 0.01 },
+    { stationID: 60014935, typeID: 35, quantity: 500, price: 15, m3PerUnit: 0.01 },
+  ], demand: { 34: { price: 4, volume: 1000 }, 35: { price: 15, volume: 500 } } };
+  const planned = await run.tick(twentieth, { planTrip: () => ({ status: "OK", trip }), now: 23000 });
+  assert.equal(planned.status, "PLANNED");
+  assert.equal(run.read(twentieth).stops.length, 2, "two stops, in the order the bundle chose");
+  // First stop: lift what sits there.
+  const lifted = [];
+  const first = await run.tick(twentieth, {
+    distanceTo: () => 100,
+    lift: async (args) => { lifted.push(args.stationID);
+      return { status: "LIFTED", lifted: [{ typeID: 34, quantity: 1000, price: 4 }] }; },
+    now: 23001 });
+  assert.equal(first.status, "NEXT_STOP");
+  assert.deepEqual(lifted, [60000682]);
+  assert.equal(run.read(twentieth).stopIndex, 1);
+  // Second stop: lift, then the crossing is planned for the whole load.
+  let crossed = false;
+  const second = await run.tick(twentieth, {
+    distanceTo: () => 100,
+    lift: async (args) => { lifted.push(args.stationID);
+      return { status: "LIFTED", lifted: [{ typeID: 35, quantity: 500, price: 15 }] }; },
+    planCrossing: () => { crossed = true; return { status: "PLANNED" }; },
+    now: 23002 });
+  assert.deepEqual(lifted, [60000682, 60014935]);
+  assert.equal(crossed, true, "the hull only leaves the system once every stop is loaded");
+  assert.equal(second.status, "CROSS");
+});
