@@ -2741,3 +2741,8 @@ Evidence: getSpawnProfile combat_anomaly/combat/data/combat_hacking: slotsPerSys
 Why: A real kill could never pay because the war only escrowed money its pilots earned, while a real corporation wallet was never consulted
 Where: .opencode/state.md, integration/coopVirtualWorldRuntime.cjs, integration/coopWarBounty.cjs, tests/coop-war-bounty.test.mjs
 Evidence: fork 36abb4f; play stack holds no treasury row; wallets 1000120=0, 1000035=0, 1000129=3432.75 ISK; bounty 10/10, coop-war-*+coop-fw-* 542 pass
+### 2026-10-29T23:06Z · 72f6128 · L2 · alife27b: accumulate every stop's lift in the trip journal, tested
+
+Why: The trip journal dropped every stop's cargo except the last, so the ledger under-reported loads
+Where: integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs
+Evidence: live: freshly planned trips are full (389999/550000/309999 units); ore 2798972->110192 and minerals 5282348 at 60000682; 31/31 run tests

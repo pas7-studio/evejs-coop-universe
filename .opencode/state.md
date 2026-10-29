@@ -1,5 +1,36 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 22:50Z (UTC) - the refining backlog is cleared and the holds fill again
+
+MEASURED LIVE at 60000682:
+  ore      2 798 972 -> **110 192 units** (the backlog the refinery starved on)
+  minerals     246 365 -> **5 282 348 units**
+Freshly planned trips (after clearing the finished journals):
+  980000000002  53 lines / 389 999 units / 3 900 m3
+  980000000005  96 lines / 550 000 units / 5 500 m3
+  980000004164  39 lines / 309 999 units / 3 100 m3
+
+Root cause of the backlog: candidates() took the FIRST EIGHT rows in insertion order, and those
+were always the tiny leftovers, so the large stacks never got a turn (1 951 'leftover too
+small' skips were the symptom, not the cause). Sorting by quantity fixed it.
+
+Also fixed: the trip journal kept only the LAST stop's lift, so the ledger reported 'lines: 1'
+for trips that loaded at four stations. Every stop is accumulated now (liftedAll).
+
+Turnover at this shape: the fleet moves ~1.5 M units a cycle, so 5.28 M minerals are about
+3-4 cycles of freight - the loop is now fed, and the next ceiling is how often the hulls can
+turn around.
+
+Tests: distribution-run 31, refinery 4.
+
+NEXT:
+  1. cut turnaround: the return leg flies home empty through the same gate the cargo came in
+     through - measure how much of a cycle is empty flight;
+  2. the runtime line ratchet (5153, other sessions);
+  3. blueprint acquisition stays the strategic ceiling (measured: market_orders has 0 rows, so
+     nothing can be bought);
+  4. keep the balance sheet current: docs/COOP_LOOP_RESULTS.md carries the numbers.
+
 ## 2026-10-30 08:40Z (UTC) - sites now reach the systems we play in (measured)
 
 `space/coopUniverseSites.js` (fork `2c5ad6e`, `8770594`) feeds the *visited* systems into the engine's own
@@ -74,6 +105,19 @@ One call instead of a dozen: batch admin actions, grant a full fitting at once, 
   22542 / 5239 / 8433 / 54291 / 6003; 3x 2454 Hobgoblin in hangar (drones are not slot-fitted).
 - Wreck 9988400116382 still floats in 30000141 with 3 singleton module copies the bridge cannot delete.
 - Fork commits today: `52b73a3` (ORE cover-mining), `8ac7ff5` (mission materializability filter).
+
+## Owner requirement on latency (2026-10-30)
+`waitMs` of 45–60 s is **not acceptable**. The batched tools must answer in **≤5 s**:
+one `docker exec` per tool call, one bridge round-trip for the whole batch (send the action list in a
+single `Q_ACTIONS` payload and have the bridge apply it in one tick), and the tool must return a
+per-action line from that single answer. A 20 s per-item round-trip is the bug to design out, not a
+number to tune.
+
+## Outstanding item for the owner
+His Venture still wants a **second mining laser** (2 high slots): one EP-S Scoped Mining Laser is
+fitted, the second could not be granted because the admin bridge stopped answering after the last
+container restart (it answered while he was logged in). `admin_give_fit` must cover this case in one
+call once it exists.
 
 ## Next step
 Implement tool 1 and 2 in `mcp/lib/serverTools.cjs`, register them in `mcpServer.cjs` if it keeps a
