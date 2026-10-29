@@ -1,5 +1,34 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 15:20Z (UTC) - the cycle RUNS: repeated real sales, hold emptied, hull home
+
+PROVEN LIVE, one hull, no client, one continuous loop:
+  sale 560 000 -> home (crossing ARRIVED) -> load -> cross -> sale 668 088 -> (partial)
+  -> sale 1 027 563 -> sale 543 492 -> home -> load -> cross again.
+The hold was empty before every return, and every payment came from a seeded bid at 60003760.
+
+Faults fixed to get here (tests: coop-distribution-run 17, coop-distribution-plan 5):
+  - the market cooldown is PER PILOT (5 s here): 2.5 s polls only collected COOLDOWN, so the
+    poll now waits longer than the cooldown;
+  - one settlement is not a finished load: 37 428 units settled while 35 629 stayed aboard and
+    the hull went home with them. A trip ends only when the HOLD is empty;
+  - a loaded hull has less room: the planner uses FREE volume and refuses HOLD_ALREADY_FULL
+    instead of overbooking the ship.
+
+The economic loop is therefore closed AND self-sustaining for one hull: it cycles without an
+operator, decides from the real hangars and the real seeded book, and only claims what the
+native adapter, the lift receipts and the market settlements actually prove.
+
+NEXT (in order):
+  1. several distribution hulls (the run already iterates every coop-distribution-* marker;
+     the Jita fleet hulls are the obvious candidates once they are re-marked);
+  2. choose cargo by MARGIN per trip, not by total revenue (a hold of ammunition beats a
+     hold of ore at 4 ISK, and the planner cannot yet prefer it);
+  3. the manufacturer still reports NO_REAL_BUYER at local stations - produce the goods Jita
+     bids for and let this run carry them;
+  4. relocate-on-arrival for the identity file (the registry refresh covers the live case);
+  5. the runtime line ratchet (5153, other sessions).
+
 ## 2026-10-30 14:35Z (UTC) - the cycle turns: home again, second load aboard
 
 PROVEN LIVE: after the 560 000 ISK sale the hull crossed BACK to 30000145

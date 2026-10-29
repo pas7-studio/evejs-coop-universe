@@ -2410,3 +2410,8 @@ Why: a third-party skin could be owned but never worn: Apply/Unapply had no hand
 Detail: Apply/Unapply record a third-party skin on a ship the character really owns and never on anything else; an applied row whose licence is gone is dropped on read. 11/11 skin tests.
 Where: .opencode/state.md, docs/CLIENT_GAPS.md, tests/coop-third-party-skins.test.mjs
 Evidence: fork c4fb38b; live: apply without ship 3, unknown ship 5 'no such ship', real ship 9988400000001 200 and applied map holds the hex, unapply 200 and map empty; 11/11 tests; register 56 unhandled
+### 2026-10-29T15:17Z · f8ef4a0 · L2 · alife21f: cooldown-aware polling, partial-sale continuation, free-hold planning
+
+Why: A hull sold one settlement and left with most of its cargo, and a per-pilot market cooldown made the retries look like failures
+Where: integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs
+Evidence: live repeated sales 560000, 668088, 1027563, 543492 ISK for hull 980000004164 with the hold emptied and the hull cycling home; 17/17 run tests, 5/5 plan tests
