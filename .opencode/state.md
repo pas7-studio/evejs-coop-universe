@@ -1,5 +1,36 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 00:40Z (UTC) - the crossing works in both directions
+
+PROVEN LIVE: hauler 980000004164 crossed Jita 30000142 -> New Caldari 30000145 through gate
+pair 50001250/50002198 on the FIRST attempt (SAME_NATIVE_SHIP_ARRIVED), 5 s after an
+11 191 km warp. Durable store moved to 30000145 with its 4 modules. Together with the
+earlier 30000145 -> 30000142 arrival this is a working round trip of one real hull.
+
+What it took, all pinned by tests (19 in coop-npc-gate-crossing, 79 across the loop suites):
+  - the SCENE stargate is the authority for jump range (the static-data row made five
+    attempts fail NPC_NOT_AT_PHYSICAL_GATE);
+  - a follow order LOCKS its target (stock issueManualOrder sets currentTargetID), so the
+    run stands the hull down with a native stop order at the gate and crosses in that tick;
+  - a warp has a minimum range (WARP_DISTANCE_TOO_CLOSE at 16 km): warp only past 200 km;
+  - a pruned identity link is re-established from the durable record before the attempt,
+    and a hull whose record disagrees with the journal stops with HULL_NOT_IN_JOURNAL_SYSTEM;
+  - the co-op owns its own transfer built from a fresh read of the identity file, because
+    the shared war adapter carries the registry as it was at boot.
+
+Fleet health: both slots ALREADY_ACTIVE (30000145-1 miners=5 haulers=1, 30000145-2
+miners=3 haulers=1). The loop has its own beat (EVEJS_COOP_LOOP_DRIVER=1, 45 s) because the
+stock hook went quiet for eight minutes on 2026-10-29 while a crossing waited.
+
+Where the hull is now: 30000145, marker coop-distribution-1-hauler, 0 cargo, 4 modules.
+That is the RIGHT side for the first real freight run: station 60000682 in 30000145 holds
+498 596 Tritanium, and Jita 60003760 bids Tritanium 4 x 4 000 000.
+
+NEXT (not started): the LOAD step. Nothing yet lifts a hangar stack into this hull, so a
+distribution run would carry air. Order of work: station departure at 60000682 -> lift a real
+Tritanium stack bounded by the hold -> gate leg (proven) -> station arrival at 60003760 ->
+sell through the proven station-sale path -> report the trip in the ledger.
+
 ## 2026-10-28 23:00Z (UTC) - FIRST LIVE GATE CROSSING, and what it cost
 
 PROVEN: hauler 980000004164 crossed New Caldari 30000145 -> Jita 30000142 through gate
