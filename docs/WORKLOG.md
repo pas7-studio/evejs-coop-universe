@@ -2415,3 +2415,14 @@ Evidence: fork c4fb38b; live: apply without ship 3, unknown ship 5 'no such ship
 Why: A hull sold one settlement and left with most of its cargo, and a per-pilot market cooldown made the retries look like failures
 Where: integration/coopDistributionPlan.cjs, integration/coopDistributionRun.cjs, tests/coop-distribution-run.test.mjs
 Evidence: live repeated sales 560000, 668088, 1027563, 543492 ISK for hull 980000004164 with the hold emptied and the hull cycling home; 17/17 run tests, 5/5 plan tests
+### 2026-10-29T15:36Z · f9a34b2 · L1 · state(fw): attribution proven live at 14:47:30Z; the last hop is the campaign lookup and identity witness
+
+Why: Make an unarmed war patrol and a late campaign lookup impossible to hide
+Where: .opencode/state.md
+Evidence: warmerit PROMOTED 14:47:30Z; bounty refused NO_REAL_CAMPAIGN_FOR_EVENT on the same wreck
+### 2026-10-29T15:54Z · 5f94192 · L2 · docs/tests: SKIN design drafts are stored and served from the client's own bytes
+
+Why: the skin editor could not save a design at all: every draft.api call had no handler, so Save/GetAllSaved/Get were dead
+Detail: Seven draft.api calls answer real rows; the layout is kept verbatim and capacity is enforced, not just reported. 7/7 new tests.
+Where: .opencode/state.md, docs/CLIENT_CONTRACTS.md, docs/CLIENT_GAPS.md, tests/coop-third-party-skin-drafts.test.mjs
+Evidence: fork 157ed2c; live on 140000001 through the registry: capacity 20, save 200 (16-byte id, yaw 90 round trip), stored layout byte-identical, getall 200/1, get 200, get shared 200, update 200 layout replaced, missing get 5, delete 200 then 5 with 0 left; 7/7 tests; register 51 unhandled
