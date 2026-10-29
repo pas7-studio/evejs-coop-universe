@@ -135,3 +135,17 @@ test("a station with no local buyer still builds for a buyer one gate away", asy
   assert.ok(/living-npc-manufacture-buyer-elsewhere/.test(source),
     "and it says so, instead of looking like a station with no demand");
 });
+
+test("a job built for a distant buyer says whose demand it answers", () => {
+  // Measured 2026-10-30: every local station bid for nothing while Jita paid 560 000 for the
+  // same goods, and the installed job did not record which demand it existed for.
+  const source = require("node:fs").readFileSync(
+    require("node:path").join(process.cwd(), "integration/coopNpcManufactureTick.cjs"), "utf8");
+  assert.ok(/buyer: bid\.where === "elsewhere"/.test(source),
+    "the candidate carries the buyer's system and station");
+  assert.ok(/buyerSystemID/.test(source), "and the install reports it");
+  const manufacture = require("node:fs").readFileSync(
+    require("node:path").join(process.cwd(), "integration/coopNpcManufacture.cjs"), "utf8");
+  assert.ok(/buyerSystemID: pos\(buyer && buyer\.systemID\)/.test(manufacture),
+    "the durable job record keeps the buyer");
+});
