@@ -1,5 +1,38 @@
 # State — co-op loop (mining → haul → station → sale)
 
+## 2026-10-30 20:55Z (UTC) - nine proven trips, and a book that checks itself
+
+MEASURED LIVE (balance sheet, inside the container):
+  sales            160 fills, 165 357 081 ISK
+  freight          9 trips, 394 635 ISK, 112 468 units (4 without a captured price)
+  freight check    RECONCILED
+    30000145->30000142  9 trips, 394 635 ISK
+
+What was fixed to get there:
+  - a stall of half an hour was found by watching the FLEET, not the code: four hulls said
+    FLYING_TO_ORIGIN and loaded nothing. The run now counts the wait per stop, reports
+    living-distribution-run-waiting every fifth beat with the measured distance, the stop and
+    the hull's system, and gives up with STALLED_AT_STOP after 40 beats;
+  - one empty stop no longer kills a loaded trip: NO_LOCAL_BID / NO_MINERAL_STOCK /
+    STACK_CHANGED / DOES_NOT_FIT_HOLD are recorded in skippedStops and the run moves on
+    (LOADED_PARTIAL when it was the last stop);
+  - the sell budget counts SETTLED answers, not polls: two hulls had been blocked
+    SALE_STOPPED:CALL_LIMIT by a merely slow market while carrying cargo. After the fix both
+    sold everything and ended DONE;
+  - scripts/freight-check.cjs proves each freight row against a real SOLD settlement and the
+    ledger prints RECONCILED / UNRECONCILED beside the totals.
+
+Tests: distribution-run 27, freight-check 3, manufacture 14, gate-crossing 20, identity 5.
+
+Fleet: four coop-distribution-* hulls; three finished their loads this round, one is planning
+again. Every trip is multi-stop (3-5 stations) and every settled sale is in the ledger.
+
+NEXT:
+  1. ask why 4 of 9 trips sold without a captured price (SOLD_VERIFIED_BY_HOLD) - the amount
+     should be readable from the settlement before the five-second window closes;
+  2. the runtime line ratchet (5153, other sessions);
+  3. the mining side: its slots still carry ore that only the drain sells.
+
 ## 2026-10-30 02:05Z (UTC) - overview panel: server proven, presets rewritten, gate added
 
 Server side of the overview is now measured, not argued. New read-only admin action

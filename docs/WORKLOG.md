@@ -2639,3 +2639,13 @@ Why: the overview panel needed a measured server-side answer and a preset set th
 Detail: The panel hides a row when 'slimItem.groupID not in filterGroups', and one slim item without the field aborts michelle.AddBalls2 for every following ball - so 'every ball carries a group' is a property the server has to keep, not a one-off fix. This asks the running container through the read-only scene_slim_diagnose action and fails when any entity is unclassified or a ship reports group 0. Measu
 Where: scripts/coop-overview-check.cjs
 Evidence: fork 554066a scene_slim_diagnose; OVERVIEW_CHECK_OK 32 dynamic/233 static/0 unclassified; coop-overview.yaml installed with 7 presets x semantic groups
+### 2026-10-29T20:55Z · 320c537 · OPS · tests: the sovereigntry upgrade Get answers from the installed row
+
+Why: ProtonVPN forwarded port moved to 130.195.241.6:37471; relay re-created on the new port and Start-Relay now recreates it when the published port no longer matches
+Where: tests/coop-sov-upgrade-get.test.mjs
+Evidence: Start-Play-Stack.ps1 -Action Status: ssh banner on 37471 OK (SSH-2.0-OpenSSH_for_Windows_10.4); relay Up 0.0.0.0:37471->37471; evejs play stack healthy
+### 2026-10-29T20:56Z · 30ca9b6 · L2 · alife25c: settled-only sell budget; freight reconciliation printed and tested
+
+Why: A slow market could strand a loaded hull because the sell budget counted polls instead of settlements, and the ledger could not prove its own freight rows
+Where: integration/coopDistributionRun.cjs, integration/coopFactionWarOpening.cjs, scripts/Start-Play-Stack.ps1, tests/coop-distribution-run.test.mjs, tests/coop-war-target-cooldown.test.mjs
+Evidence: live: 9 trips / 394635 ISK / 112468 units, freight check RECONCILED, two previously blocked hulls completed; 27+3 tests
